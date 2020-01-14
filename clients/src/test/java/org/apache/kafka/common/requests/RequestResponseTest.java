@@ -230,15 +230,20 @@ public class RequestResponseTest {
         checkErrorResponse(createMetadataRequest(3, Collections.singletonList("topic1")), new UnknownServerException(), true);
         checkResponse(createMetadataResponse(), 4, true);
         checkErrorResponse(createMetadataRequest(4, Collections.singletonList("topic1")), new UnknownServerException(), true);
-        checkRequest(OffsetFetchRequest.Builder.allTopicPartitions("group1").build(), true);
-        checkErrorResponse(OffsetFetchRequest.Builder.allTopicPartitions("group1").build(), new NotCoordinatorException("Not Coordinator"), true);
-        checkRequest(createOffsetFetchRequest(0), true);
-        checkRequest(createOffsetFetchRequest(1), true);
-        checkRequest(createOffsetFetchRequest(2), true);
-        checkRequest(OffsetFetchRequest.Builder.allTopicPartitions("group1").build(), true);
-        checkErrorResponse(createOffsetFetchRequest(0), new UnknownServerException(), true);
-        checkErrorResponse(createOffsetFetchRequest(1), new UnknownServerException(), true);
-        checkErrorResponse(createOffsetFetchRequest(2), new UnknownServerException(), true);
+        checkRequest(createOffsetFetchRequestForAllPartition("group1", false), true);
+        checkRequest(createOffsetFetchRequestForAllPartition("group1", true), true);
+        checkErrorResponse(createOffsetFetchRequestForAllPartition("group1", false), new NotCoordinatorException("Not Coordinator"), true);
+        checkErrorResponse(createOffsetFetchRequestForAllPartition("group1", true), new NotCoordinatorException("Not Coordinator"), true);
+        checkRequest(createOffsetFetchRequest(0, false), true);
+        checkRequest(createOffsetFetchRequest(1, false), true);
+        checkRequest(createOffsetFetchRequest(2, false), true);
+        checkRequest(createOffsetFetchRequest(7, true), true);
+        checkRequest(createOffsetFetchRequestForAllPartition("group1", false), true);
+        checkRequest(createOffsetFetchRequestForAllPartition("group1", true), true);
+        checkErrorResponse(createOffsetFetchRequest(0, false), new UnknownServerException(), true);
+        checkErrorResponse(createOffsetFetchRequest(1, false), new UnknownServerException(), true);
+        checkErrorResponse(createOffsetFetchRequest(2, false), new UnknownServerException(), true);
+        checkErrorResponse(createOffsetFetchRequest(7, true), new UnknownServerException(), true);
         checkResponse(createOffsetFetchResponse(), 0, true);
         checkRequest(createProduceRequest(2), true);
         checkErrorResponse(createProduceRequest(2), new UnknownServerException(), true);
@@ -794,13 +799,18 @@ public class RequestResponseTest {
 
     @Test
     public void testOffsetFetchRequestBuilderToString() {
-        String allTopicPartitionsString = OffsetFetchRequest.Builder.allTopicPartitions("someGroup").toString();
+        List<Boolean> stableFlags = Arrays.asList(true, false);
+        for (Boolean requireStable : stableFlags) {
+            String allTopicPartitionsString = new OffsetFetchRequest.Builder("someGroup", requireStable, null).toString();
 
-        assertTrue(allTopicPartitionsString.contains("groupId='someGroup', topics=null"));
-        String string = new OffsetFetchRequest.Builder("group1",
-            Collections.singletonList(new TopicPartition("test11", 1))).toString();
-        assertTrue(string.contains("test11"));
-        assertTrue(string.contains("group1"));
+            assertTrue(allTopicPartitionsString.contains("groupId='someGroup', topics=null, requireStable="
+                                                             + requireStable.toString()));
+            String string = new OffsetFetchRequest.Builder("group1",
+                requireStable, Collections.singletonList(new TopicPartition("test11", 1))).toString();
+            assertTrue(string.contains("test11"));
+            assertTrue(string.contains("group1"));
+            assertTrue(string.contains("requireStable=" + requireStable.toString()));
+        }
     }
 
     @Test
@@ -1221,9 +1231,13 @@ public class RequestResponseTest {
         );
     }
 
-    private OffsetFetchRequest createOffsetFetchRequest(int version) {
-        return new OffsetFetchRequest.Builder("group1", Collections.singletonList(new TopicPartition("test11", 1)))
+    private OffsetFetchRequest createOffsetFetchRequest(int version, boolean requireStable) {
+        return new OffsetFetchRequest.Builder("group1", requireStable, Collections.singletonList(new TopicPartition("test11", 1)))
                 .build((short) version);
+    }
+
+    private OffsetFetchRequest createOffsetFetchRequestForAllPartition(String groupId, boolean requireStable) {
+        return new OffsetFetchRequest.Builder(groupId, requireStable, null).build();
     }
 
     private OffsetFetchResponse createOffsetFetchResponse() {

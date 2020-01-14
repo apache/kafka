@@ -1960,7 +1960,7 @@ public class ConsumerCoordinatorTest {
         client.updateMetadata(metadataResponse);
 
         // Load offsets from previous epoch
-        client.prepareResponse(offsetFetchResponse(t1p, Errors.NONE, "", 100L, 3));
+        client.prepareResponse(offsetFetchResponse(t1p, Errors.NONE, "", 100L, Optional.of(3)));
         coordinator.refreshCommittedOffsetsIfNeeded(time.timer(Long.MAX_VALUE));
 
         // Offset gets loaded, but requires validation
@@ -2033,6 +2033,24 @@ public class ConsumerCoordinatorTest {
         } catch (GroupAuthorizationException e) {
             assertEquals(groupId, e.groupId());
         }
+    }
+
+    @Test
+    public void testRefreshOffsetWithPendingTransactions() {
+        client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
+        coordinator.ensureCoordinatorReady(time.timer(Long.MAX_VALUE));
+
+        subscriptions.assignFromUser(singleton(t1p));
+        client.prepareResponse(offsetFetchResponse(t1p, Errors.UNSTABLE_OFFSET_COMMIT, "", -1L));
+        client.prepareResponse(offsetFetchResponse(t1p, Errors.NONE, "", 100L));
+        assertEquals(Collections.singleton(t1p), subscriptions.missingFetchPositions());
+        coordinator.refreshCommittedOffsetsIfNeeded(time.timer(0L));
+        assertEquals(Collections.singleton(t1p), subscriptions.missingFetchPositions());
+        coordinator.refreshCommittedOffsetsIfNeeded(time.timer(0L));
+
+        assertEquals(Collections.emptySet(), subscriptions.missingFetchPositions());
+        assertTrue(subscriptions.hasAllFetchPositions());
+        assertEquals(100L, subscriptions.position(t1p).offset);
     }
 
     @Test(expected = KafkaException.class)
@@ -2616,24 +2634,19 @@ public class ConsumerCoordinatorTest {
     }
 
     private OffsetFetchResponse offsetFetchResponse(TopicPartition tp, Errors partitionLevelError, String metadata, long offset) {
-        OffsetFetchResponse.PartitionData data = new OffsetFetchResponse.PartitionData(offset,
-                Optional.empty(), metadata, partitionLevelError);
-        return new OffsetFetchResponse(Errors.NONE, singletonMap(tp, data));
+        return offsetFetchResponse(tp, partitionLevelError, metadata, offset, Optional.empty());
     }
 
-    private OffsetFetchResponse offsetFetchResponse(TopicPartition tp, Errors partitionLevelError, String metadata, long offset, int epoch) {
+    private OffsetFetchResponse offsetFetchResponse(TopicPartition tp, Errors partitionLevelError, String metadata, long offset, Optional<Integer> epoch) {
         OffsetFetchResponse.PartitionData data = new OffsetFetchResponse.PartitionData(offset,
-                Optional.of(epoch), metadata, partitionLevelError);
+                epoch, metadata, partitionLevelError);
         return new OffsetFetchResponse(Errors.NONE, singletonMap(tp, data));
     }
 
     private OffsetCommitCallback callback(final AtomicBoolean success) {
-        return new OffsetCommitCallback() {
-            @Override
-            public void onComplete(Map<TopicPartition, OffsetAndMetadata> offsets, Exception exception) {
-                if (exception == null)
-                    success.set(true);
-            }
+        return (offsets, exception) -> {
+            if (exception == null)
+                success.set(true);
         };
     }
 

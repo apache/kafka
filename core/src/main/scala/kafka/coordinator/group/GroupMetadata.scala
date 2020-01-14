@@ -677,10 +677,17 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
     }
   }
 
-  def activeProducers = pendingTransactionalOffsetCommits.keySet
+  def activeProducers: collection.Set[Long] = pendingTransactionalOffsetCommits.keySet
 
-  def hasPendingOffsetCommitsFromProducer(producerId: Long) =
+  def hasPendingOffsetCommitsFromProducer(producerId: Long): Boolean =
     pendingTransactionalOffsetCommits.contains(producerId)
+
+  def hasPendingOffsetCommitsForTopicPartition(topicPartition: TopicPartition): Boolean = {
+    pendingOffsetCommits.contains(topicPartition) ||
+      pendingTransactionalOffsetCommits.exists(
+        _._2.contains(topicPartition)
+      )
+  }
 
   def removeAllOffsets(): immutable.Map[TopicPartition, OffsetAndMetadata] = removeOffsets(offsets.keySet.toSeq)
 

@@ -754,7 +754,7 @@ class GroupCoordinator(val brokerId: Int,
     }
   }
 
-  def handleFetchOffsets(groupId: String, partitions: Option[Seq[TopicPartition]] = None):
+  def handleFetchOffsets(groupId: String, requireStable: Boolean, partitions: Option[Seq[TopicPartition]] = None):
   (Errors, Map[TopicPartition, OffsetFetchResponse.PartitionData]) = {
 
     validateGroupStatus(groupId, ApiKeys.OFFSET_FETCH) match {
@@ -762,7 +762,7 @@ class GroupCoordinator(val brokerId: Int,
       case None =>
         // return offsets blindly regardless the current group state since the group may be using
         // Kafka commit storage without automatic group management
-        (Errors.NONE, groupManager.getOffsets(groupId, partitions))
+        (Errors.NONE, groupManager.getOffsets(groupId, requireStable, partitions))
     }
   }
 

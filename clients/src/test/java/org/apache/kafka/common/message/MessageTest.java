@@ -450,27 +450,39 @@ public final class MessageTest {
         String groupId = "groupId";
         String topicName = "topic";
 
+        List<OffsetFetchRequestTopic> topics = Collections.singletonList(
+            new OffsetFetchRequestTopic()
+                .setName(topicName)
+                .setPartitionIndexes(Collections.singletonList(5)));
         testAllMessageRoundTrips(new OffsetFetchRequestData()
                                      .setTopics(new ArrayList<>())
                                      .setGroupId(groupId));
 
         testAllMessageRoundTrips(new OffsetFetchRequestData()
                                      .setGroupId(groupId)
-                                     .setTopics(Collections.singletonList(
-                                         new OffsetFetchRequestTopic()
-                                             .setName(topicName)
-                                             .setPartitionIndexes(Collections.singletonList(5))))
-        );
+                                     .setTopics(topics));
 
         OffsetFetchRequestData allPartitionData = new OffsetFetchRequestData()
                                                       .setGroupId(groupId)
                                                       .setTopics(null);
+
+        OffsetFetchRequestData requireStableData = new OffsetFetchRequestData()
+                                                       .setGroupId(groupId)
+                                                       .setTopics(topics)
+                                                       .setRequireStable(true);
+
         for (short version = 0; version <= ApiKeys.OFFSET_FETCH.latestVersion(); version++) {
+            final short finalVersion = version;
             if (version < 2) {
-                final short finalVersion = version;
                 assertThrows(SchemaException.class, () -> testAllMessageRoundTripsFromVersion(finalVersion, allPartitionData));
             } else {
                 testAllMessageRoundTripsFromVersion(version, allPartitionData);
+            }
+
+            if (version < 7) {
+                assertThrows(UnsupportedVersionException.class, () -> testAllMessageRoundTripsFromVersion(finalVersion, requireStableData));
+            } else {
+                testAllMessageRoundTripsFromVersion(finalVersion, requireStableData);
             }
         }
 
