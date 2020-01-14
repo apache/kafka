@@ -1263,8 +1263,8 @@ public class ConsumerCoordinatorTest {
         client.prepareResponse(syncGroupResponse(singletonList(t1p), Errors.NONE));
         coordinator.poll(time.timer(Long.MAX_VALUE));
 
-        assertEquals(singleton(topic1), coordinator.subscriptions().subscription());
-        assertEquals(singleton(topic1), coordinator.subscriptions().groupSubscription());
+        assertEquals(singleton(topic1), subscriptions.subscription());
+        assertEquals(singleton(topic1), subscriptions.groupSubscription());
     }
 
     @Test

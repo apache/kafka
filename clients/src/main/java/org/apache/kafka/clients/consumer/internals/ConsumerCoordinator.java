@@ -1397,8 +1397,4 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     RebalanceProtocol getProtocol() {
         return protocol;
     }
-
-    SubscriptionState subscriptions() {
-        return subscriptions;
-    }
 }
