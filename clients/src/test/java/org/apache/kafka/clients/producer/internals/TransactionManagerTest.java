@@ -971,7 +971,7 @@ public class TransactionManagerTest {
         assertTrue(sendOffsetsResult.isCompleted());
         assertFalse(sendOffsetsResult.isSuccessful());
         assertTrue(sendOffsetsResult.error() instanceof FencedInstanceIdException);
-        assertFatalError(FencedInstanceIdException.class);
+        assertAbortableError(FencedInstanceIdException.class);
     }
 
     @Test
@@ -1002,7 +1002,7 @@ public class TransactionManagerTest {
         assertTrue(sendOffsetsResult.isCompleted());
         assertFalse(sendOffsetsResult.isSuccessful());
         assertTrue(sendOffsetsResult.error() instanceof UnknownMemberIdException);
-        assertFatalError(UnknownMemberIdException.class);
+        assertAbortableError(UnknownMemberIdException.class);
     }
 
     @Test
@@ -1033,7 +1033,7 @@ public class TransactionManagerTest {
         assertTrue(sendOffsetsResult.isCompleted());
         assertFalse(sendOffsetsResult.isSuccessful());
         assertTrue(sendOffsetsResult.error() instanceof IllegalGenerationException);
-        assertFatalError(IllegalGenerationException.class);
+        assertAbortableError(IllegalGenerationException.class);
     }
 
     @Test
