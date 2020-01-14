@@ -114,6 +114,21 @@ public interface Authorizer extends Configurable, Closeable {
      * This is an asynchronous API that enables the caller to avoid blocking during the update. Implementations of this
      * API can return completed futures using {@link java.util.concurrent.CompletableFuture#completedFuture(Object)}
      * to process the update synchronously on the request thread.
+     * <p>
+     * <b>Concurrent updates:</b>
+     * <ul>
+     *     <li>If ACLs are created using {@link #createAcls(AuthorizableRequestContext, List)} while a delete is in
+     *     progress, these ACLs may or may not be considered for deletion depending on the order of updates.
+     *     The returned {@link AclDeleteResult} indicates which ACLs were deleted.</li>
+     *     <li>If the provided filters use resource pattern type
+     *     {@link org.apache.kafka.common.resource.PatternType#MATCH} that needs to filter all resources to determine
+     *     matching ACLs, only ACLs that have already been propagated to the broker processing the ACL update will be
+     *     deleted. This may not include some ACLs that were persisted, but not yet propagated to all brokers. The
+     *     returned {@link AclDeleteResult} indicates which ACLs were deleted.</li>
+     *     <li>If the provided filters use other resource pattern types that perform a direct match, all matching ACLs
+     *     from previously completed {@link #createAcls(AuthorizableRequestContext, List)} )} are guaranteed
+     *     to be deleted.</li>
+     * </ul>
      *
      * @param requestContext Request context if the ACL is being deleted by a broker to handle
      *        a client request to delete ACLs. This may be null if ACLs are deleted directly in ZooKeeper

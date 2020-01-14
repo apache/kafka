@@ -318,6 +318,21 @@ public interface Admin extends AutoCloseable {
      * This operation is not transactional so it may succeed for some ACLs while fail for others.
      * <p>
      * This operation is supported by brokers with version 0.11.0.0 or higher.
+     * <p>
+     * <b>Concurrent updates:</b>
+     * <ul>
+     *     <li>If ACLs are created using {@link #createAcls(Collection)} while a delete is in progress,
+     *     these ACLs may or may not be considered for deletion depending on the order of updates. The
+     *     returned {@link DeleteAclsResult} indicates which ACLs were deleted.</li>
+     *     <li>If the provided filters use resource pattern type
+     *     {@link org.apache.kafka.common.resource.PatternType#MATCH} that needs to filter all resources to determine
+     *     matching ACLs, only ACLs that have already been propagated to the broker processing the ACL update will be
+     *     deleted. This may not include some ACLs that were persisted, but not yet propagated to all brokers. The
+     *     returned {@link DeleteAclsResult} indicates which ACLs were deleted.</li>
+     *     <li>If the provided filters use other resource pattern types that perform a direct match, all matching ACLs
+     *     from previously completed {@link #createAcls(Collection)} are guaranteed to be deleted.</li>
+     * </ul>
+     * </p>
      *
      * @param filters The filters to use.
      * @param options The options to use when deleting the ACLs.
