@@ -1582,7 +1582,7 @@ class LogCleanerTest {
       log.appendAsFollower(messageWithOffset(1015, 1015, 11L))
 
       val (nextDirtyOffset, _) = cleaner.clean(LogToClean(log.topicPartition, log, 0L, log.activeSegment.baseOffset, needCompactionNow = true))
-      assertEquals("Missing offsets should be skipped until next segment baseOffset", log.activeSegment.baseOffset, nextDirtyOffset)
+      assertEquals("Cleaning point should pass offset gap", log.activeSegment.baseOffset, nextDirtyOffset)
     }
 
 
@@ -1600,7 +1600,7 @@ class LogCleanerTest {
       log.appendAsFollower(messageWithOffset(1015, 1015, 30L))
 
       val (nextDirtyOffset, _) = cleaner.clean(LogToClean(log.topicPartition, log, 0L, log.activeSegment.baseOffset, needCompactionNow = true))
-      assertEquals("Missing offsets should be skipped until next segment baseOffset", log.activeSegment.baseOffset, nextDirtyOffset)
+      assertEquals("Cleaning point should pass offset gap in multiple segments", log.activeSegment.baseOffset, nextDirtyOffset)
     }
   }
 
