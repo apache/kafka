@@ -1933,7 +1933,7 @@ class SocketServerTest {
     @volatile var clientConnSocket: Socket = _
     @volatile var buffer: Option[ByteBuffer] = None
 
-    executor.submit((() => {
+    executor.submit(CoreUtils.runnable({
       try {
         clientConnSocket = serverSocket.accept()
         val serverOut = serverConnSocket.getOutputStream
@@ -1953,7 +1953,7 @@ class SocketServerTest {
       }
     }): Runnable)
 
-    executor.submit((() => {
+    executor.submit(CoreUtils.runnable({
       var b: Int = -1
       val serverIn = serverConnSocket.getInputStream
       while ({b = serverIn.read(); b != -1}) {

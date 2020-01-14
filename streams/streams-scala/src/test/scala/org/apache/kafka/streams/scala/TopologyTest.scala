@@ -31,15 +31,17 @@ import org.apache.kafka.streams.kstream.{
   Initializer,
   JoinWindows,
   KeyValueMapper,
+  Predicate,
+  Reducer,
+  Transformer,
+  TransformerSupplier,
+  ValueJoiner,
+  ValueMapper,
   KGroupedStream => KGroupedStreamJ,
   KStream => KStreamJ,
   KTable => KTableJ,
   Materialized => MaterializedJ,
-  Reducer,
-  StreamJoined => StreamJoinedJ,
-  Transformer,
-  ValueJoiner,
-  ValueMapper
+  StreamJoined => StreamJoinedJ
 }
 import org.apache.kafka.streams.processor.{AbstractProcessor, ProcessorContext, ProcessorSupplier}
 import org.apache.kafka.streams.scala.ImplicitConversions._
@@ -172,8 +174,12 @@ class TopologyTest {
       )
 
       splits.groupByKey
-        .cogroup((k: String, v: Int, a: Long) => a + v)
-        .aggregate(() => 0L)
+        .cogroup(new Aggregator[String, Int, Long] {
+          def apply(k: String, v: Int, a: Long): Long = a + v
+        })
+        .aggregate(new Initializer[Long] {
+          override def apply(): Long = 0L
+        })
 
       streamBuilder.build().describe()
     }
@@ -181,7 +187,6 @@ class TopologyTest {
     // should match
     assertEquals(getTopologyScala, getTopologyJava)
   }
-
   @Test def shouldBuildIdenticalTopologyInJavaNScalaCogroup(): Unit = {
 
     // build the Scala topology
@@ -194,10 +199,10 @@ class TopologyTest {
       val textLines2 = streamBuilder.stream[String, String]("inputTopic2")
 
       textLines1
-        .mapValues(v => v.length)
+        .mapValues(v => v.length: Integer)
         .groupByKey
-        .cogroup((_, v1, v2: Long) => v1 + v2)
-        .cogroup(textLines2.groupByKey, (_, v: String, a) => v.length + a)
+        .cogroup[Long]((_, v1, v2: Long) => v1 + v2)
+        .cogroup[String](textLines2.groupByKey, (_, v: String, a) => v.length + a)
         .aggregate(0L)
 
       streamBuilder.build().describe()
@@ -217,9 +222,15 @@ class TopologyTest {
       )
 
       splits.groupByKey
-        .cogroup((k: String, v: Int, a: Long) => a + v)
-        .cogroup(textLines2.groupByKey(), (k: String, v: String, a: Long) => v.length + a)
-        .aggregate(() => 0L)
+        .cogroup(new Aggregator[String, Int, Long] {
+          def apply(k: String, v: Int, a: Long): Long = a + v
+        })
+        .cogroup(textLines2.groupByKey, new Aggregator[String, String, Long] {
+          def apply(k: String, v: String, a: Long): Long = v.length + a
+        })
+        .aggregate(new Initializer[Long] {
+          override def apply(): Long = 0L
+        })
 
       streamBuilder.build().describe()
     }
