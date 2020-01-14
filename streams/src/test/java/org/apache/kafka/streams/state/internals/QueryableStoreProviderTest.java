@@ -46,43 +46,45 @@ public class QueryableStoreProviderTest {
         globalStateStores = new HashMap<>();
         storeProvider =
             new QueryableStoreProvider(
-                    Collections.<StateStoreProvider>singletonList(theStoreProvider), new GlobalStateStoreProvider(globalStateStores));
+                Collections.singletonList(theStoreProvider),
+                new GlobalStateStoreProvider(globalStateStores)
+            );
     }
 
     @Test(expected = InvalidStateStoreException.class)
     public void shouldThrowExceptionIfKVStoreDoesntExist() {
-        storeProvider.getStore("not-a-store", QueryableStoreTypes.keyValueStore());
+        storeProvider.getStore("not-a-store", QueryableStoreTypes.keyValueStore(), false);
     }
 
     @Test(expected = InvalidStateStoreException.class)
     public void shouldThrowExceptionIfWindowStoreDoesntExist() {
-        storeProvider.getStore("not-a-store", QueryableStoreTypes.windowStore());
+        storeProvider.getStore("not-a-store", QueryableStoreTypes.windowStore(), false);
     }
 
     @Test
     public void shouldReturnKVStoreWhenItExists() {
-        assertNotNull(storeProvider.getStore(keyValueStore, QueryableStoreTypes.keyValueStore()));
+        assertNotNull(storeProvider.getStore(keyValueStore, QueryableStoreTypes.keyValueStore(), false));
     }
 
     @Test
     public void shouldReturnWindowStoreWhenItExists() {
-        assertNotNull(storeProvider.getStore(windowStore, QueryableStoreTypes.windowStore()));
+        assertNotNull(storeProvider.getStore(windowStore, QueryableStoreTypes.windowStore(), false));
     }
 
     @Test(expected = InvalidStateStoreException.class)
     public void shouldThrowExceptionWhenLookingForWindowStoreWithDifferentType() {
-        storeProvider.getStore(windowStore, QueryableStoreTypes.keyValueStore());
+        storeProvider.getStore(windowStore, QueryableStoreTypes.keyValueStore(), false);
     }
 
     @Test(expected = InvalidStateStoreException.class)
     public void shouldThrowExceptionWhenLookingForKVStoreWithDifferentType() {
-        storeProvider.getStore(keyValueStore, QueryableStoreTypes.windowStore());
+        storeProvider.getStore(keyValueStore, QueryableStoreTypes.windowStore(), false);
     }
 
     @Test
     public void shouldFindGlobalStores() {
         globalStateStores.put("global", new NoOpReadOnlyStore<>());
-        assertNotNull(storeProvider.getStore("global", QueryableStoreTypes.keyValueStore()));
+        assertNotNull(storeProvider.getStore("global", QueryableStoreTypes.keyValueStore(), false));
     }
 
 

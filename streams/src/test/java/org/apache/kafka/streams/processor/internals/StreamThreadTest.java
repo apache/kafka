@@ -629,7 +629,7 @@ public class StreamThreadTest {
 
         assertEquals(1, clientSupplier.producers.size());
         final Producer globalProducer = clientSupplier.producers.get(0);
-        for (final Task task : thread.tasks().values()) {
+        for (final Task task : thread.activeTasks().values()) {
             assertSame(globalProducer, ((RecordCollectorImpl) ((StreamTask) task).recordCollector()).producer());
         }
         assertSame(clientSupplier.consumer, thread.consumer);
@@ -670,7 +670,7 @@ public class StreamThreadTest {
 
         thread.runOnce();
 
-        assertEquals(thread.tasks().size(), clientSupplier.producers.size());
+        assertEquals(thread.activeTasks().size(), clientSupplier.producers.size());
         assertSame(clientSupplier.consumer, thread.consumer);
         assertSame(clientSupplier.restoreConsumer, thread.restoreConsumer);
     }
@@ -706,7 +706,7 @@ public class StreamThreadTest {
         thread.shutdown();
         thread.run();
 
-        for (final Task task : thread.tasks().values()) {
+        for (final Task task : thread.activeTasks().values()) {
             assertTrue(((MockProducer) ((RecordCollectorImpl) ((StreamTask) task).recordCollector()).producer()).closed());
         }
     }
@@ -941,7 +941,7 @@ public class StreamThreadTest {
         thread.rebalanceListener.onPartitionsAssigned(assignedPartitions);
 
         thread.runOnce();
-        assertThat(thread.tasks().size(), equalTo(1));
+        assertThat(thread.activeTasks().size(), equalTo(1));
         final MockProducer producer = clientSupplier.producers.get(0);
 
         // change consumer subscription from "pattern" to "manual" to be able to call .addRecords()
@@ -968,7 +968,7 @@ public class StreamThreadTest {
             fail("Should have thrown TaskMigratedException");
         } catch (final TaskMigratedException expected) {
             assertTrue("StreamsThread removed the fenced zombie task already, should wait for rebalance to close all zombies together.",
-                        thread.tasks().containsKey(task1));
+                        thread.activeTasks().containsKey(task1));
         }
 
         assertThat(producer.commitCount(), equalTo(1L));
@@ -1003,14 +1003,14 @@ public class StreamThreadTest {
 
         thread.runOnce();
 
-        assertThat(thread.tasks().size(), equalTo(1));
+        assertThat(thread.activeTasks().size(), equalTo(1));
 
         clientSupplier.producers.get(0).fenceProducer();
         thread.rebalanceListener.onPartitionsRevoked(assignedPartitions);
         assertTrue(clientSupplier.producers.get(0).transactionInFlight());
         assertFalse(clientSupplier.producers.get(0).transactionCommitted());
         assertTrue(clientSupplier.producers.get(0).closed());
-        assertTrue(thread.tasks().isEmpty());
+        assertTrue(thread.activeTasks().isEmpty());
     }
 
     @Test
@@ -1042,7 +1042,7 @@ public class StreamThreadTest {
 
         thread.runOnce();
 
-        assertThat(thread.tasks().size(), equalTo(1));
+        assertThat(thread.activeTasks().size(), equalTo(1));
 
         clientSupplier.producers.get(0).fenceProducerOnClose();
         thread.rebalanceListener.onPartitionsRevoked(assignedPartitions);
@@ -1050,7 +1050,7 @@ public class StreamThreadTest {
         assertFalse(clientSupplier.producers.get(0).transactionInFlight());
         assertTrue(clientSupplier.producers.get(0).transactionCommitted());
         assertFalse(clientSupplier.producers.get(0).closed());
-        assertTrue(thread.tasks().isEmpty());
+        assertTrue(thread.activeTasks().isEmpty());
     }
 
     private static class StateListenerStub implements StreamThread.StateListener {

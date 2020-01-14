@@ -23,17 +23,15 @@ import org.apache.kafka.streams.state.QueryableStoreType;
 import java.util.ArrayList;
 import java.util.List;
 
-import static java.util.Collections.singletonList;
-
 /**
  * A wrapper over all of the {@link StateStoreProvider}s in a Topology
  */
 public class QueryableStoreProvider {
 
-    private final List<StateStoreProvider> storeProviders;
+    private final List<StreamThreadStateStoreProvider> storeProviders;
     private final GlobalStateStoreProvider globalStoreProvider;
 
-    public QueryableStoreProvider(final List<StateStoreProvider> storeProviders,
+    public QueryableStoreProvider(final List<StreamThreadStateStoreProvider> storeProviders,
                                   final GlobalStateStoreProvider globalStateStoreProvider) {
         this.storeProviders = new ArrayList<>(storeProviders);
         this.globalStoreProvider = globalStateStoreProvider;
@@ -45,24 +43,28 @@ public class QueryableStoreProvider {
      *
      * @param storeName          name of the store
      * @param queryableStoreType accept stores passing {@link QueryableStoreType#accepts(StateStore)}
+     * @param includeStaleStores     if true, include standbys and recovering stores;
+     *                                        if false, only include running actives.
      * @param <T>                The expected type of the returned store
      * @return A composite object that wraps the store instances.
      */
     public <T> T getStore(final String storeName,
-                          final QueryableStoreType<T> queryableStoreType) {
+                          final QueryableStoreType<T> queryableStoreType,
+                          final boolean includeStaleStores) {
         final List<T> globalStore = globalStoreProvider.stores(storeName, queryableStoreType);
         if (!globalStore.isEmpty()) {
-            return queryableStoreType.create(new WrappingStoreProvider(singletonList(globalStoreProvider)), storeName);
+            return queryableStoreType.create(globalStoreProvider, storeName);
         }
         final List<T> allStores = new ArrayList<>();
-        for (final StateStoreProvider storeProvider : storeProviders) {
-            allStores.addAll(storeProvider.stores(storeName, queryableStoreType));
+        for (final StreamThreadStateStoreProvider storeProvider : storeProviders) {
+            allStores.addAll(storeProvider.stores(storeName, queryableStoreType, includeStaleStores));
         }
         if (allStores.isEmpty()) {
             throw new InvalidStateStoreException("The state store, " + storeName + ", may have migrated to another instance.");
         }
         return queryableStoreType.create(
-                new WrappingStoreProvider(storeProviders),
-                storeName);
+            new WrappingStoreProvider(storeProviders, includeStaleStores),
+            storeName
+        );
     }
 }
