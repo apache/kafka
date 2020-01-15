@@ -28,7 +28,10 @@ public class ConsumerGroupMetadata {
     final private String memberId;
     final Optional<String> groupInstanceId;
 
-    public ConsumerGroupMetadata(String groupId, int generationId, String memberId, Optional<String> groupInstanceId) {
+    public ConsumerGroupMetadata(String groupId,
+                                 int generationId,
+                                 String memberId,
+                                 Optional<String> groupInstanceId) {
         this.groupId = groupId;
         this.generationId = generationId;
         this.memberId = memberId;

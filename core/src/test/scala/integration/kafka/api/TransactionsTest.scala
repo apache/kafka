@@ -234,7 +234,7 @@ class TransactionsTest extends KafkaServerTestHarness {
 
   @Test
   def testSendOffsetsWithGroupMetadata() = {
-    sendOffset((producer, groupId, consumer) =>
+    sendOffset((producer, _, consumer) =>
       producer.sendOffsetsToTransaction(TestUtils.consumerPositions(consumer).asJava, consumer.groupMetadata()))
   }
 

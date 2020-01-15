@@ -693,6 +693,12 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                IllegalGenerationException,
                UnknownMemberIdException,
                FencedInstanceIdException {
+        if (!cachedGroupMetadata.groupId().equals(groupMetadata.groupId())) {
+            // Generally this logic should only be triggered once during first call.
+            log.warn("Cached consumer groupId changed from {} to {}. If the old group id is not empty, this indicates an abuse of this API",
+                cachedGroupMetadata.groupId(), groupMetadata.groupId());
+            cachedGroupMetadata = groupMetadata;
+        }
         sendOffsetsToTransactionInternal(offsets, groupMetadata, true);
     }
 
