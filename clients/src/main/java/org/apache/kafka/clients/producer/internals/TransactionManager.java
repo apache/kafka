@@ -1493,15 +1493,16 @@ public class TransactionManager {
                 } else if (error == Errors.GROUP_AUTHORIZATION_FAILED) {
                     abortableError(GroupAuthorizationException.forGroupId(builder.data.groupId()));
                     break;
-                } else if (!enableGroupFencing && isGroupFencingException(error)) {
-                    fatalError(new KafkaException("Unexpected group fencing" +
-                        " exception encountered when the group fencing mechanism is not enabled: " + error.message()));
+                } else if (isGroupFencingException(error)) {
+                    if (enableGroupFencing) {
+                        abortableError(error.exception());
+                    } else {
+                        fatalError(new IllegalStateException("Unexpected group fencing" +
+                            " exception encountered when the group fencing mechanism is not enabled: " + error.message()));
+                    }
                     break;
                 } else if (isFatalException(error)) {
                     fatalError(error.exception());
-                    break;
-                } else if (isGroupFencingException(error)) {
-                    abortableError(error.exception());
                     break;
                 } else {
                     fatalError(new KafkaException("Unexpected error in TxnOffsetCommitResponse: " + error.message()));

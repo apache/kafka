@@ -629,11 +629,13 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      * and should also not commit offsets manually (via {@link KafkaConsumer#commitSync(Map) sync} or
      * {@link KafkaConsumer#commitAsync(Map, OffsetCommitCallback) async} commits).
      *
-     * @throws IllegalStateException if no transactional.id has been configured or no transaction has been started
+     * @throws IllegalStateException if no transactional.id has been configured, no transaction has been started,
+     *                               or encounters unexpected group fencing exception which should only be returned from
+     *                               new {@link KafkaProducer#sendOffsetsToTransaction(Map, ConsumerGroupMetadata) sendOffsets}.
      * @throws ProducerFencedException fatal error indicating another producer with the same transactional.id is active
      * @throws org.apache.kafka.common.errors.UnsupportedVersionException fatal error indicating the broker
      *         does not support transactions (i.e. if its version is lower than 0.11.0.0)
-     * @throws org.apache.kafka.common.errors.UnsupportedForMessageFormatException  fatal error indicating the message
+     * @throws org.apache.kafka.common.errors.UnsupportedForMessageFormatException fatal error indicating the message
      *         format used for the offsets topic on the broker does not support transactions
      * @throws org.apache.kafka.common.errors.AuthorizationException fatal error indicating that the configured
      *         transactional.id is not authorized. See the exception for more details
@@ -660,20 +662,23 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      * <p>
      * This method should be used when you need to batch consumed and produced messages
      * together, typically in a consume-transform-produce pattern. Thus, the specified
-     * {@code consumerGroupId} should be the same as config parameter {@code group.id} of the used
-     * {@link KafkaConsumer consumer}. Note, that the consumer should have {@code enable.auto.commit=false}
-     * and should also not commit offsets manually (via {@link KafkaConsumer#commitSync(Map) sync} or
+     * {@code groupMetadata} should be extracted from the used {@link KafkaConsumer consumer} via
+     * {@link KafkaConsumer#groupMetadata()} to leverage consumer group metadata for proper fencing.
+     * Note, that the consumer should have {@code enable.auto.commit=false} and should
+     * also not commit offsets manually (via {@link KafkaConsumer#commitSync(Map) sync} or
      * {@link KafkaConsumer#commitAsync(Map, OffsetCommitCallback) async} commits).
      *
      * This API won't deprecate the existing {@link KafkaProducer#sendOffsetsToTransaction(Map, String) sendOffsets} API as standalone
-     * mode EOS applications are still relying on it. If the broker doesn't support the new underlying transactional API, the call will be automatically
-     * downgraded to ignore consumer metadata, while in the meantime a warning shall be logged.
+     * mode EOS applications are still relying on it. If the broker version is lower than 2.5.0 which doesn't support the new underlying protocol,
+     * the application will crash with UnsupportedVersionException.
      *
-     * @throws IllegalStateException if no transactional.id has been configured or no transaction has been started
+     * @throws IllegalStateException if no transactional.id has been configured or no transaction has been started.
      * @throws ProducerFencedException fatal error indicating another producer with the same transactional.id is active
      * @throws org.apache.kafka.common.errors.UnsupportedVersionException fatal error indicating the broker
-     *         does not support transactions (i.e. if its version is lower than 0.11.0.0)
-     * @throws org.apache.kafka.common.errors.UnsupportedForMessageFormatException  fatal error indicating the message
+     *         does not support transactions (i.e. if its version is lower than 0.11.0.0) or
+     *         the broker doesn't support latest version of transactional API with consumer group metadata (i.e. if its version is
+     *         lower than 2.5.0).
+     * @throws org.apache.kafka.common.errors.UnsupportedForMessageFormatException fatal error indicating the message
      *         format used for the offsets topic on the broker does not support transactions
      * @throws org.apache.kafka.common.errors.AuthorizationException fatal error indicating that the configured
      *         transactional.id is not authorized. See the exception for more details

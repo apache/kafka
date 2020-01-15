@@ -2288,7 +2288,7 @@ class GroupCoordinatorTest {
       case _ =>
     }
 
-     groupCoordinator.handleFetchOffsets(groupIds(1), requireStable, Some(partitions)) match {
+    groupCoordinator.handleFetchOffsets(groupIds(1), requireStable, Some(partitions)) match {
       case (error, partData) =>
         errors.append(error)
         partitionData.append(partData)
