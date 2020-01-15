@@ -1191,10 +1191,6 @@ public class StreamThread extends Thread {
         return taskManager.activeTasks();
     }
 
-    public Map<TaskId, StandbyTask> standbyTasks() {
-        return taskManager.standbyTasks();
-    }
-
     public List<StreamTask> allStreamsTasks() {
         return taskManager.allStreamsTasks();
     }

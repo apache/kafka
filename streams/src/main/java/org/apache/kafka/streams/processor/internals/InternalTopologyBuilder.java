@@ -602,10 +602,6 @@ public class InternalTopologyBuilder {
         nodeGroups = null;
     }
 
-    public Map<String, String> getStoreToChangelogTopic() {
-        return storeToChangelogTopic;
-    }
-
     public Map<String, String> getChangelogTopicToStore() {
         return changelogTopicToStore;
     }

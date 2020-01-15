@@ -63,10 +63,8 @@ import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.ClassRule;
-import org.junit.Rule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
-import org.junit.rules.TemporaryFolder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -118,9 +116,6 @@ public class QueryableStateIntegrationTest {
     private static final long DEFAULT_TIMEOUT_MS = 120 * 1000;
 
     private static final int NUM_BROKERS = 1;
-
-    @Rule
-    public TemporaryFolder folder = new TemporaryFolder();
 
     @ClassRule
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS);
@@ -278,6 +273,7 @@ public class QueryableStateIntegrationTest {
         }
     }
 
+    @Deprecated // using KafkaStreams#metadataForKey
     private void verifyAllKVKeys(final List<KafkaStreams> streamsList,
                                  final KafkaStreams streams,
                                  final KafkaStreamsTest.StateListenerStub stateListener,
@@ -524,6 +520,7 @@ public class QueryableStateIntegrationTest {
                 WINDOW_SIZE,
                 DEFAULT_TIMEOUT_MS,
                 true);
+            retryOnExceptionWithTimeout(DEFAULT_TIMEOUT_MS, () -> verifyOffsetLagFetch(streamsList, stores, Arrays.asList(8, 0)));
         } finally {
             for (final KafkaStreams streams : streamsList) {
                 streams.close();
@@ -543,7 +540,7 @@ public class QueryableStateIntegrationTest {
         // create stream threads
         final String storeName = "word-count-store";
         final String windowStoreName = "windowed-word-count-store";
-        final Set<String> stores = mkSet(storeName, windowStoreName);
+        final Set<String> stores = mkSet(storeName + "-" + streamThree, windowStoreName + "-" + streamThree);
         for (int i = 0; i < numThreads; i++) {
             final Properties props = (Properties) streamsConfiguration.clone();
             props.put(StreamsConfig.APPLICATION_SERVER_CONFIG, "localhost:" + i);
@@ -558,6 +555,7 @@ public class QueryableStateIntegrationTest {
             streamsList.add(streams);
         }
         startApplicationAndWaitUntilRunning(streamsList, ofSeconds(60));
+        verifyOffsetLagFetch(streamsList, stores, Arrays.asList(8, 8));
 
         try {
             waitUntilAtLeastNumRecordProcessed(outputTopicThree, 1);
@@ -583,6 +581,7 @@ public class QueryableStateIntegrationTest {
                     DEFAULT_TIMEOUT_MS,
                     false);
             }
+            verifyOffsetLagFetch(streamsList, stores, Arrays.asList(8, 8));
 
             // kill N-1 threads
             for (int i = 1; i < streamsList.size(); i++) {
@@ -592,6 +591,7 @@ public class QueryableStateIntegrationTest {
             }
 
             waitForApplicationState(streamsList.subList(1, numThreads), State.NOT_RUNNING, Duration.ofSeconds(60));
+            verifyOffsetLagFetch(streamsList, stores, Arrays.asList(8, 0));
 
             // Now, confirm that all the keys are still queryable on the remaining thread, regardless of the state
             verifyAllKVKeys(
