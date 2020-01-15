@@ -683,21 +683,21 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      * @throws KafkaException if the producer has encountered a previous fatal or abortable error, or for any
      *         other unexpected error
      */
-     public void sendOffsetsToTransaction(Map<TopicPartition, OffsetAndMetadata> offsets, ConsumerGroupMetadata groupMetadata)
-         throws ProducerFencedException,
-                IllegalGenerationException,
-                UnknownMemberIdException,
-                FencedInstanceIdException {
-         sendOffsetsToTransactionInternal(offsets, groupMetadata, true);
-     }
+    public void sendOffsetsToTransaction(Map<TopicPartition, OffsetAndMetadata> offsets, ConsumerGroupMetadata groupMetadata)
+        throws ProducerFencedException,
+               IllegalGenerationException,
+               UnknownMemberIdException,
+               FencedInstanceIdException {
+        sendOffsetsToTransactionInternal(offsets, groupMetadata, true);
+    }
 
-     private void sendOffsetsToTransactionInternal(Map<TopicPartition, OffsetAndMetadata> offsets, ConsumerGroupMetadata consumerGroupMetadata, boolean enableGroupFencing) {
-         throwIfNoTransactionManager();
-         throwIfProducerClosed();
-         TransactionalRequestResult result = transactionManager.sendOffsetsToTransaction(offsets, consumerGroupMetadata, enableGroupFencing);
-         sender.wakeup();
-         result.await();
-     }
+    private void sendOffsetsToTransactionInternal(Map<TopicPartition, OffsetAndMetadata> offsets, ConsumerGroupMetadata consumerGroupMetadata, boolean enableGroupFencing) {
+        throwIfNoTransactionManager();
+        throwIfProducerClosed();
+        TransactionalRequestResult result = transactionManager.sendOffsetsToTransaction(offsets, consumerGroupMetadata, enableGroupFencing);
+        sender.wakeup();
+        result.await();
+    }
 
     /**
      * Commits the ongoing transaction. This method will flush any unsent records before actually committing the transaction.

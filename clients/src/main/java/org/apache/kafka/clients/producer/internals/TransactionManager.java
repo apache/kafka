@@ -1497,8 +1497,7 @@ public class TransactionManager {
                     fatalError(new KafkaException("Unexpected group fencing" +
                         " exception encountered when the group fencing mechanism is not enabled: " + error.message()));
                     break;
-                }
-                else if (isFatalException(error)) {
+                } else if (isFatalException(error)) {
                     fatalError(error.exception());
                     break;
                 } else if (isGroupFencingException(error)) {
