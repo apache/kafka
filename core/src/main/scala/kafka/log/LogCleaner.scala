@@ -334,8 +334,7 @@ class LogCleaner(initialConfig: CleanerConfig,
     @throws(classOf[LogCleaningException])
     private def cleanFilthiestLog(): Boolean = {
       val preCleanStats = new PreCleanStats()
-      val ltc =cleanerManager.grabFilthiestCompactedLog(time, preCleanStats)
-      val cleaned = ltc match {
+      val cleaned = cleanerManager.grabFilthiestCompactedLog(time, preCleanStats) match {
         case None =>
           false
         case Some(cleanable) =>
@@ -542,10 +541,12 @@ private[log] class Cleaner(val id: Int,
    * @param log The log being cleaned
    * @param segments The group of segments being cleaned
    * @param map The offset map to use for cleaning segments
+   * @param currentTime The current time in milliseconds
    * @param deleteHorizonMs The time to retain delete tombstones
    * @param stats Collector for cleaning statistics
    * @param transactionMetadata State of ongoing transactions which is carried between the cleaning
    *                            of the grouped segments
+   * @param trackedHorizon The delete horizon used for tombstones whose version is less than 2
    */
   private[log] def cleanSegments(log: Log,
                                  segments: Seq[LogSegment],
@@ -579,8 +580,8 @@ private[log] class Cleaner(val id: Int,
           s"${if(retainDeletesAndTxnMarkers) "retaining" else "discarding"} deletes.")
 
         try {
-          val containsTombstones: Boolean = cleanInto(log.topicPartition, currentSegment.log, cleaned, map, retainDeletesAndTxnMarkers, log.config.maxMessageSize,
-                                             transactionMetadata, lastOffsetOfActiveProducers, stats, log.config.deleteRetentionMs, currentTime = currentTime)
+          val containsTombstones: Boolean = cleanInto(log.topicPartition, currentSegment.log, cleaned, map, retainDeletesAndTxnMarkers, log.config.deleteRetentionMs,
+                    log.config.maxMessageSize, transactionMetadata, lastOffsetOfActiveProducers, stats, currentTime = currentTime)
           log.containsTombstones = containsTombstones
         } catch {
           case e: LogSegmentOffsetOverflowException =>
@@ -622,7 +623,8 @@ private[log] class Cleaner(val id: Int,
    * @param sourceRecords The dirty log segment
    * @param dest The cleaned log segment
    * @param map The key=>offset mapping
-   * @param retainDeletesAndTxnMarkers Should tombstones and markers be retained while cleaning this segment
+   * @param retainDeletesAndTxnMarkers Should tombstones (lower than version 2) and markers be retained while cleaning this segment
+   * @param tombstoneRetentionMs How long we should retend the tombstones whose version is greater than equal to 2
    * @param maxLogMessageSize The maximum message size of the corresponding topic
    * @param stats Collector for cleaning statistics
    * @param tombstoneRetentionMs Defines how long a tombstone should be kept as defined by log configuration
@@ -632,11 +634,11 @@ private[log] class Cleaner(val id: Int,
                              dest: LogSegment,
                              map: OffsetMap,
                              retainDeletesAndTxnMarkers: Boolean,
+                             tombstoneRetentionMs: Long,
                              maxLogMessageSize: Int,
                              transactionMetadata: CleanedTransactionMetadata,
                              lastRecordsOfActiveProducers: Map[Long, LastRecord],
                              stats: CleanerStats,
-                             tombstoneRetentionMs: Long,
                              currentTime: Long = RecordBatch.NO_TIMESTAMP): Boolean = {
     var containsTombstones: Boolean = false
 
