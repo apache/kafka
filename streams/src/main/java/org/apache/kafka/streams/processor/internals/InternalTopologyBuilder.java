@@ -1057,11 +1057,12 @@ public class InternalTopologyBuilder {
 
     private RepartitionTopicConfig buildRepartitionTopicConfig(final String internalTopic,
                                                                final Optional<Integer> numberOfPartitions) {
-        if (numberOfPartitions.isPresent()) {
-            return new ImmutableRepartitionTopicConfig(internalTopic, numberOfPartitions.get(), Collections.emptyMap());
-        } else {
-            return new RepartitionTopicConfig(internalTopic, Collections.emptyMap());
-        }
+        return numberOfPartitions
+            .map(partitions -> (RepartitionTopicConfig) new ImmutableRepartitionTopicConfig(internalTopic,
+                                                                                            partitions,
+                                                                                            Collections.emptyMap()))
+
+            .orElse(new RepartitionTopicConfig(internalTopic, Collections.emptyMap()));
     }
 
     private void setRegexMatchedTopicsToSourceNodes() {
