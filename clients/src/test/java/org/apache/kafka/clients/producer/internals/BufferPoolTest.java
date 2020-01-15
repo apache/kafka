@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.producer.internals;
 
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.MockTime;
@@ -232,7 +233,7 @@ public class BufferPoolTest {
         // both the allocate() called by threads t1 and t2 should have been interrupted and the waiters queue should be empty
         assertEquals(pool.queued(), 0);
     }
-    
+
     @Test
     public void testCleanupMemoryAvailabilityOnMetricsException() throws Exception {
         BufferPool bufferPool = spy(new BufferPool(2, 1, new Metrics(), time, metricGroup));
@@ -377,4 +378,58 @@ public class BufferPoolTest {
         }
     }
 
+    @Test
+    public void testCloseAllocations() throws Exception {
+        BufferPool pool = new BufferPool(10, 1, metrics, Time.SYSTEM, metricGroup);
+        ByteBuffer buffer = pool.allocate(1, maxBlockTimeMs);
+
+        // Close the buffer pool. This should prevent any further allocations.
+        pool.close();
+
+        try {
+            pool.allocate(1, maxBlockTimeMs);
+            fail("Should have thrown KafkaException");
+        } catch (KafkaException e) {
+            // Expected.
+        }
+
+        // Ensure deallocation still works.
+        pool.deallocate(buffer);
+    }
+
+    @Test
+    public void testCloseNotifyWaiters() throws Exception {
+        BufferPool pool = new BufferPool(10, 1, metrics, Time.SYSTEM, metricGroup);
+        ByteBuffer buffer = pool.allocate(10, Long.MAX_VALUE);
+
+        CountDownLatch waiter1 = asyncAllocateClose(pool, 10);
+        CountDownLatch waiter2 = asyncAllocateClose(pool, 10);
+
+        assertEquals("Allocation shouldn't have happened yet, waiting on memory", 2L, waiter1.getCount() + waiter2.getCount());
+
+        // Close the buffer pool. This should notify all waiters.
+        pool.close();
+
+        assertTrue("Allocation should fail soon after close", waiter1.await(1, TimeUnit.SECONDS) && waiter2.await(1, TimeUnit.SECONDS));
+
+        pool.deallocate(buffer);
+    }
+
+    private CountDownLatch asyncAllocateClose(final BufferPool pool, final int size) {
+        final CountDownLatch completed = new CountDownLatch(1);
+        Thread thread = new Thread() {
+            public void run() {
+                try {
+                    pool.allocate(size, maxBlockTimeMs);
+                    fail("Unexpected allocation");
+                } catch (KafkaException e) {
+                    completed.countDown();
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+            }
+        };
+        thread.start();
+        return completed;
+    }
 }
