@@ -596,7 +596,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
         final Serde<V> valueSerde = repartitionedInternal.valueSerde() == null ? valSerde : repartitionedInternal.valueSerde();
 
         final UnoptimizableRepartitionNodeBuilder<KR, V> unoptimizableRepartitionNodeBuilder = UnoptimizableRepartitionNode
-            .repartitionNodeBuilder();
+            .unoptimizableRepartitionNodeBuilder();
 
         final InternalTopicProperties internalTopicProperties = repartitionedInternal.toInternalTopicProperties();
 

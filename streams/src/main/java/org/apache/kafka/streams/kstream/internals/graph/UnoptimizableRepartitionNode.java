@@ -29,7 +29,7 @@ public class UnoptimizableRepartitionNode<K, V> extends BaseRepartitionNode<K, V
 
     private UnoptimizableRepartitionNode(final String nodeName,
                                          final String sourceName,
-                                         final ProcessorParameters processorParameters,
+                                         final ProcessorParameters<K, V> processorParameters,
                                          final Serde<K> keySerde,
                                          final Serde<V> valueSerde,
                                          final String sinkName,
@@ -83,7 +83,7 @@ public class UnoptimizableRepartitionNode<K, V> extends BaseRepartitionNode<K, V
         return "UnoptimizableRepartitionNode{" + super.toString() + " }";
     }
 
-    public static <K, V> UnoptimizableRepartitionNodeBuilder<K, V> repartitionNodeBuilder() {
+    public static <K, V> UnoptimizableRepartitionNodeBuilder<K, V> unoptimizableRepartitionNodeBuilder() {
         return new UnoptimizableRepartitionNodeBuilder<>();
     }
 
