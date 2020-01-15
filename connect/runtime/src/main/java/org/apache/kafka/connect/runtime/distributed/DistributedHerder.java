@@ -1620,7 +1620,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                 statusBackingStore.flush();
                 log.info("Finished flushing status backing store in preparation for rebalance");
             } else {
-                log.info("Wasn't unable to resume work after last rebalance, can skip stopping connectors and tasks");
+                log.info("Wasn't able to resume work after last rebalance, can skip stopping connectors and tasks");
             }
         }
     }
