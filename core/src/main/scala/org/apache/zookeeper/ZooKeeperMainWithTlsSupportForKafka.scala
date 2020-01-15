@@ -19,7 +19,11 @@ package org.apache.zookeeper
 
 import kafka.admin.ZkSecurityMigrator
 import org.apache.zookeeper.admin.ZooKeeperAdmin
+import org.apache.zookeeper.cli.CommandNotFoundException
+import org.apache.zookeeper.cli.MalformedCommandException
 import org.apache.zookeeper.client.ZKClientConfig
+
+import scala.collection.JavaConverters._
 
 object ZooKeeperMainWithTlsSupportForKafka {
   val zkTlsConfigFileOption = "-zk-tls-config-file"
@@ -44,6 +48,32 @@ object ZooKeeperMainWithTlsSupportForKafka {
 
 class ZooKeeperMainWithTlsSupportForKafka(args: Array[String], val zkClientConfig: Option[ZKClientConfig])
   extends ZooKeeperMain(args) with Watcher {
+
+  override def processZKCmd (co: ZooKeeperMain.MyCommandOptions): Boolean = {
+    // Unfortunately the usage() method is static, so it can't be overridden.
+    // This method is where usage() gets called.  We don't cover all possible calls
+    // to usage() -- we would have to implement the entire method to do that -- but
+    // the short implementation below covers most cases.
+    val args = co.getArgArray
+    val cmd = co.getCommand
+    if (args.length < 1) {
+      kafkaTlsUsage
+      throw new MalformedCommandException("No command entered")
+    }
+
+    if (!ZooKeeperMain.commandMap.containsKey(cmd)) {
+      kafkaTlsUsage
+      throw new CommandNotFoundException(s"Command not found $cmd")
+    }
+    super.processZKCmd(co)
+  }
+
+  def kafkaTlsUsage(): Unit = {
+    System.err.println("ZooKeeper -server host:port [-zk-tls-config-file <file>] cmd args")
+    asScalaSet(ZooKeeperMain.commandMap.keySet).toList.sorted.foreach(cmd =>
+      System.err.println(s"\t$cmd ${ZooKeeperMain.commandMap.get(cmd)}"))
+  }
+
   override def connectToZK(newHost: String) = {
     // ZooKeeperAdmin has no constructor that supports passing in both readOnly and ZkClientConfig,
     // and readOnly ends up being set to false when passing in a ZkClientConfig instance;

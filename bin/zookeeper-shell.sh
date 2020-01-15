@@ -16,7 +16,7 @@
 
 if [ $# -lt 1 ];
 then
-	echo "USAGE: $0 zookeeper_host:port[/path] [args...]"
+	echo "USAGE: $0 zookeeper_host:port[/path] [-zk-tls-config-file file] [args...]"
 	exit 1
 fi
 
