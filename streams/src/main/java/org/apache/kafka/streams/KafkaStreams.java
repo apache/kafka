@@ -1232,14 +1232,14 @@ public class KafkaStreams implements AutoCloseable {
         final Map<String, Map<Integer, LagInfo>> localStorePartitionLags = new TreeMap<>();
 
         final Collection<TopicPartition> allPartitions = new LinkedList<>();
-        final Map<TopicPartition, Long> changelogPositions = new HashMap<>();
+        final Map<TopicPartition, Long> allChangelogPositions = new HashMap<>();
 
         // Obtain the current positions, of all the active-restoring and standby tasks
         for (final StreamThread streamThread : threads) {
             for (final StandbyTask standbyTask : streamThread.allStandbyTasks()) {
                 allPartitions.addAll(standbyTask.changelogPartitions());
                 // Note that not all changelog partitions, will have positions; since some may not have started
-                changelogPositions.putAll(standbyTask.getChangelogPositions());
+                allChangelogPositions.putAll(standbyTask.changelogPositions());
             }
 
             final Set<TaskId> restoringTaskIds = streamThread.restoringTaskIds();
@@ -1251,15 +1251,15 @@ public class KafkaStreams implements AutoCloseable {
                 final Map<TopicPartition, Long> restoredOffsets = activeTask.restoredOffsets();
                 for (final TopicPartition topicPartition : taskChangelogPartitions) {
                     if (isRestoring && restoredOffsets.containsKey(topicPartition)) {
-                        changelogPositions.put(topicPartition, restoredOffsets.get(topicPartition));
+                        allChangelogPositions.put(topicPartition, restoredOffsets.get(topicPartition));
                     } else {
-                        changelogPositions.put(topicPartition, latestSentinel);
+                        allChangelogPositions.put(topicPartition, latestSentinel);
                     }
                 }
             }
         }
 
-        log.debug("Current changelog positions: {}", changelogPositions);
+        log.debug("Current changelog positions: {}", allChangelogPositions);
         final Map<TopicPartition, ListOffsetsResultInfo> allEndOffsets;
         try {
             allEndOffsets = adminClient.listOffsets(
@@ -1276,7 +1276,7 @@ public class KafkaStreams implements AutoCloseable {
             // This will yield the correct relative order of lagginess for the tasks in the cluster,
             // but it is an over-estimate of how much work remains to restore the task from scratch.
             final long earliestOffset = 0L;
-            final long changelogPosition = changelogPositions.getOrDefault(entry.getKey(), earliestOffset);
+            final long changelogPosition = allChangelogPositions.getOrDefault(entry.getKey(), earliestOffset);
             final long latestOffset = entry.getValue().offset();
             final LagInfo lagInfo = new LagInfo(changelogPosition == latestSentinel ? latestOffset : changelogPosition, latestOffset);
             final String storeName = streamsMetadataState.getStoreForChangelogTopic(entry.getKey().topic());

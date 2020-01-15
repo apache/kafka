@@ -75,7 +75,7 @@ public class ProcessorStateManager implements StateManager {
     private final boolean eosEnabled;
     private final File baseDir;
     private OffsetCheckpoint checkpointFile;
-    private final Map<TopicPartition, Long> checkpointFileCache = new ConcurrentHashMap<>();
+    private final Map<TopicPartition, Long> checkpointFileCache = new HashMap<>();
     private final Map<TopicPartition, Long> initialLoadedCheckpoints;
 
     /**
@@ -102,7 +102,7 @@ public class ProcessorStateManager implements StateManager {
             partitionForTopic.put(source.topic(), source);
         }
         offsetLimits = new HashMap<>();
-        standbyRestoredOffsets = new HashMap<>();
+        standbyRestoredOffsets = new ConcurrentHashMap<>();
         this.isStandby = isStandby;
         restoreCallbacks = isStandby ? new ConcurrentHashMap<>() : null;
         recordConverters = isStandby ? new HashMap<>() : null;
@@ -459,7 +459,7 @@ public class ProcessorStateManager implements StateManager {
         return result;
     }
 
-    Map<TopicPartition, Long> getStandbyRestoredOffsets() {
+    Map<TopicPartition, Long> standbyRestoredOffsets() {
         return Collections.unmodifiableMap(standbyRestoredOffsets);
     }
 }
