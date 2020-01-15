@@ -644,23 +644,19 @@ private[log] class Cleaner(val id: Int,
 
     val logCleanerFilter: RecordFilter = new RecordFilter {
       var discardBatchRecords: Boolean = _
-      var isControlBatchEmpty: Boolean = _
-
-      override def isControlBatchEmpty(batch: RecordBatch) : Boolean = {
-        // we piggy-back on the tombstone retention logic to delay deletion of transaction markers.
-        // note that we will never delete a marker until all the records from that transaction are removed.
-        val canDiscardBatch = shouldDiscardBatch(batch, transactionMetadata, retainTxnMarkers = retainDeletesAndTxnMarkers)
-        isControlBatchEmpty = canDiscardBatch
-        isControlBatchEmpty
-      }
+      var isBatchEmpty: Boolean = _
 
       override def checkBatchRetention(batch: RecordBatch, newBatchDeleteHorizonMs : Long): BatchRetention = {
-        val canDiscardBatch = isControlBatchEmpty 
+        val canDiscardBatch = isBatchEmpty 
 
         if (batch.isControlBatch) {
-          discardBatchRecords = canDiscardBatch && 
+          if (batch.magic() < 2) {
+            discardBatchRecords = canDiscardBatch && !retainDeletesAndTxnMarkers
+          } else {
+            discardBatchRecords = canDiscardBatch && 
               ((batch.deleteHorizonSet() && batch.deleteHorizonMs() < currentTime) ||
                newBatchDeleteHorizonMs != RecordBatch.NO_TIMESTAMP && newBatchDeleteHorizonMs < currentTime)
+          }
         } else {
           discardBatchRecords = canDiscardBatch
         }
@@ -707,12 +703,14 @@ private[log] class Cleaner(val id: Int,
       }
 
       override def retrieveDeleteHorizon(batch: RecordBatch) : Long = {
+        isBatchEmpty = shouldDiscardBatch(batch, transactionMetadata)
+
         if (batch.deleteHorizonSet())
           return batch.deleteHorizonMs() // means that we keep the old timestamp stored
 
         // check that the control batch has been emptied of records
         // if not, then we do not set a delete horizon until that is true
-        if (batch.isControlBatch() && !isControlBatchEmpty)
+        if (batch.isControlBatch() && !isBatchEmpty)
           return -1L
         return time.milliseconds() + tombstoneRetentionMs;
       }
@@ -791,8 +789,7 @@ private[log] class Cleaner(val id: Int,
   }
 
   private def shouldDiscardBatch(batch: RecordBatch,
-                                 transactionMetadata: CleanedTransactionMetadata,
-                                 retainTxnMarkers: Boolean): Boolean = {
+                                 transactionMetadata: CleanedTransactionMetadata): Boolean = {
     if (batch.isControlBatch)
       transactionMetadata.onControlBatchRead(batch)
     else

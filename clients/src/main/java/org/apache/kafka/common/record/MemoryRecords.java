@@ -165,7 +165,6 @@ public class MemoryRecords extends AbstractRecords {
             // which indicates if the control batch is empty or not
             // we do this to avoid calling CleanedTransactionMetadata#onControlBatchRead
             // more than once since each call is relatively expensive
-            filter.isControlBatchEmpty(batch);
             long deleteHorizonMs = filter.retrieveDeleteHorizon(batch);
             final BatchRetention batchRetention;
             if (!batch.deleteHorizonSet())
@@ -191,7 +190,7 @@ public class MemoryRecords extends AbstractRecords {
 
             final BatchIterationResult iterationResult = iterateOverBatch(batch, decompressionBufferSupplier, filterResult, filter,
                                                                           batchMagic, writeOriginalBatch, maxOffset, retainedRecords,
-                                                                          containsTombstonesOrMarker, deleteHorizonMs);
+                                                                          deleteHorizonMs);
             containsTombstonesOrMarker = iterationResult.containsTombstonesOrMarker();
             writeOriginalBatch = iterationResult.shouldWriteOriginalBatch();
             maxOffset = iterationResult.maxOffset();
@@ -249,8 +248,8 @@ public class MemoryRecords extends AbstractRecords {
                                                          boolean writeOriginalBatch,
                                                          long maxOffset,
                                                          List<Record> retainedRecords,
-                                                         boolean containsTombstonesOrMarker,
                                                          long newBatchDeleteHorizonMs) {
+        boolean containsTombstonesOrMarker = false;
         try (final CloseableIterator<Record> iterator = batch.streamingIterator(decompressionBufferSupplier)) {
             while (iterator.hasNext()) {
                 Record record = iterator.next();
