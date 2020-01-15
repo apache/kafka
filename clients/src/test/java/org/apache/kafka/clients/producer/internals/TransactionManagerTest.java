@@ -19,6 +19,9 @@ package org.apache.kafka.clients.producer.internals;
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.common.errors.FencedInstanceIdException;
+import org.apache.kafka.common.errors.IllegalGenerationException;
+import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.utils.ProducerIdAndEpoch;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.Cluster;
@@ -938,6 +941,99 @@ public class TransactionManagerTest {
         assertFalse(sendOffsetsResult.isSuccessful());
         assertTrue(sendOffsetsResult.error() instanceof UnsupportedForMessageFormatException);
         assertFatalError(UnsupportedForMessageFormatException.class);
+    }
+
+    @Test
+    public void testFencedInstanceIdInTxnOffsetCommit() {
+        final String consumerGroupId = "consumer";
+        final long pid = 13131L;
+        final short epoch = 1;
+        final TopicPartition tp = new TopicPartition("foo", 0);
+
+        doInitTransactions(pid, epoch);
+
+        transactionManager.beginTransaction();
+        TransactionalRequestResult sendOffsetsResult = transactionManager.sendOffsetsToTransaction(
+            singletonMap(tp, new OffsetAndMetadata(39L)), consumerGroupId);
+
+        prepareAddOffsetsToTxnResponse(Errors.NONE, consumerGroupId, pid, epoch);
+        sender.runOnce();  // AddOffsetsToTxn Handled, TxnOffsetCommit Enqueued
+        sender.runOnce();  // FindCoordinator Enqueued
+
+        prepareFindCoordinatorResponse(Errors.NONE, false, CoordinatorType.GROUP, consumerGroupId);
+        sender.runOnce();  // FindCoordinator Returned
+
+        prepareTxnOffsetCommitResponse(consumerGroupId, pid, epoch, singletonMap(tp, Errors.FENCED_INSTANCE_ID));
+        sender.runOnce();  // TxnOffsetCommit Handled
+
+        assertTrue(transactionManager.hasError());
+        assertTrue(transactionManager.lastError() instanceof FencedInstanceIdException);
+        assertTrue(sendOffsetsResult.isCompleted());
+        assertFalse(sendOffsetsResult.isSuccessful());
+        assertTrue(sendOffsetsResult.error() instanceof FencedInstanceIdException);
+        assertAbortableError(FencedInstanceIdException.class);
+    }
+
+    @Test
+    public void testUnknownMemberIdInTxnOffsetCommit() {
+        final String consumerGroupId = "consumer";
+        final long pid = 13131L;
+        final short epoch = 1;
+        final TopicPartition tp = new TopicPartition("foo", 0);
+
+        doInitTransactions(pid, epoch);
+
+        transactionManager.beginTransaction();
+        TransactionalRequestResult sendOffsetsResult = transactionManager.sendOffsetsToTransaction(
+            singletonMap(tp, new OffsetAndMetadata(39L)), consumerGroupId);
+
+        prepareAddOffsetsToTxnResponse(Errors.NONE, consumerGroupId, pid, epoch);
+        sender.runOnce();  // AddOffsetsToTxn Handled, TxnOffsetCommit Enqueued
+        sender.runOnce();  // FindCoordinator Enqueued
+
+        prepareFindCoordinatorResponse(Errors.NONE, false, CoordinatorType.GROUP, consumerGroupId);
+        sender.runOnce();  // FindCoordinator Returned
+
+        prepareTxnOffsetCommitResponse(consumerGroupId, pid, epoch, singletonMap(tp, Errors.UNKNOWN_MEMBER_ID));
+        sender.runOnce();  // TxnOffsetCommit Handled
+
+        assertTrue(transactionManager.hasError());
+        assertTrue(transactionManager.lastError() instanceof UnknownMemberIdException);
+        assertTrue(sendOffsetsResult.isCompleted());
+        assertFalse(sendOffsetsResult.isSuccessful());
+        assertTrue(sendOffsetsResult.error() instanceof UnknownMemberIdException);
+        assertAbortableError(UnknownMemberIdException.class);
+    }
+
+    @Test
+    public void testIllegalGenerationInTxnOffsetCommit() {
+        final String consumerGroupId = "consumer";
+        final long pid = 13131L;
+        final short epoch = 1;
+        final TopicPartition tp = new TopicPartition("foo", 0);
+
+        doInitTransactions(pid, epoch);
+
+        transactionManager.beginTransaction();
+        TransactionalRequestResult sendOffsetsResult = transactionManager.sendOffsetsToTransaction(
+            singletonMap(tp, new OffsetAndMetadata(39L)), consumerGroupId);
+
+        prepareAddOffsetsToTxnResponse(Errors.NONE, consumerGroupId, pid, epoch);
+        sender.runOnce();  // AddOffsetsToTxn Handled, TxnOffsetCommit Enqueued
+        sender.runOnce();  // FindCoordinator Enqueued
+
+        prepareFindCoordinatorResponse(Errors.NONE, false, CoordinatorType.GROUP, consumerGroupId);
+        sender.runOnce();  // FindCoordinator Returned
+
+        prepareTxnOffsetCommitResponse(consumerGroupId, pid, epoch, singletonMap(tp, Errors.ILLEGAL_GENERATION));
+        sender.runOnce();  // TxnOffsetCommit Handled
+
+        assertTrue(transactionManager.hasError());
+        assertTrue(transactionManager.lastError() instanceof IllegalGenerationException);
+        assertTrue(sendOffsetsResult.isCompleted());
+        assertFalse(sendOffsetsResult.isSuccessful());
+        assertTrue(sendOffsetsResult.error() instanceof IllegalGenerationException);
+        assertAbortableError(IllegalGenerationException.class);
     }
 
     @Test
