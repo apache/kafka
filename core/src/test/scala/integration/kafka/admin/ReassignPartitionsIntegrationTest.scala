@@ -146,6 +146,12 @@ class ReassignPartitionsIntegrationTest extends ZooKeeperTestHarness with RackAw
         Map(topicPartition -> reassignmentEntry(Seq(-1, broker3))).asJava
       ).all()
       JTestUtils.assertFutureThrows(future, classOf[InvalidReplicaAssignmentException])
+
+      // Test reassignment with extra broker ids
+      future = client.alterPartitionReassignments(
+        Map(topicPartition -> reassignmentEntry(Seq(6, broker2, broker3))).asJava
+      ).all()
+      JTestUtils.assertFutureThrows(future, classOf[InvalidReplicaAssignmentException])
     }
   }
 }
