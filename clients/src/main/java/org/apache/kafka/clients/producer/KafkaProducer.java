@@ -646,7 +646,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                                          String consumerGroupId) throws ProducerFencedException {
         if (!cachedGroupMetadata.groupId().equals(consumerGroupId)) {
             // Generally this logic should only be triggered once during first call.
-            log.warn("Cached consumer groupId changed from {} to {}. If the old group id is set, this indicates a problem",
+            log.warn("Cached consumer groupId changed from {} to {}. If the old group id is not empty, this indicates an abuse of this API",
                 cachedGroupMetadata.groupId(), consumerGroupId);
             cachedGroupMetadata = new ConsumerGroupMetadata(consumerGroupId,
                 JoinGroupRequest.UNKNOWN_GENERATION_ID, JoinGroupRequest.UNKNOWN_MEMBER_ID, Optional.empty());
@@ -670,7 +670,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      *
      * This API won't deprecate the existing {@link KafkaProducer#sendOffsetsToTransaction(Map, String) sendOffsets} API as standalone
      * mode EOS applications are still relying on it. If the broker version is lower than 2.5.0 which doesn't support the new underlying protocol,
-     * the application will crash with UnsupportedVersionException.
+     * this API call will throw UnsupportedVersionException.
      *
      * @throws IllegalStateException if no transactional.id has been configured or no transaction has been started.
      * @throws ProducerFencedException fatal error indicating another producer with the same transactional.id is active

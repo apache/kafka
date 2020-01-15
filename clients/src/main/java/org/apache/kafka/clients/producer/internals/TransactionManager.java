@@ -35,7 +35,6 @@ import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.EndTxnRequestData;
 import org.apache.kafka.common.message.FindCoordinatorRequestData;
 import org.apache.kafka.common.message.InitProducerIdRequestData;
-import org.apache.kafka.common.message.TxnOffsetCommitRequestData;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.DefaultRecordBatch;
 import org.apache.kafka.common.record.RecordBatch;
@@ -997,18 +996,23 @@ public class TransactionManager {
             pendingTxnOffsetCommits.put(entry.getKey(), committedOffset);
         }
 
-        TxnOffsetCommitRequestData data = new TxnOffsetCommitRequestData()
-                                              .setTransactionalId(transactionalId)
-                                              .setGroupId(groupMetadata.groupId())
-                                              .setProducerId(producerIdAndEpoch.producerId)
-                                              .setProducerEpoch(producerIdAndEpoch.epoch)
-                                              .setTopics(TxnOffsetCommitRequest.getTopics(pendingTxnOffsetCommits));
+        final  TxnOffsetCommitRequest.Builder builder;
         if (enableGroupFencing) {
-            data.setMemberId(groupMetadata.memberId())
-                .setGenerationId(groupMetadata.generationId())
-                .setGroupInstanceId(groupMetadata.groupInstanceId().orElse(null));
+            builder = new TxnOffsetCommitRequest.Builder(transactionalId,
+                groupMetadata.groupId(),
+                producerIdAndEpoch.producerId,
+                producerIdAndEpoch.epoch,
+                pendingTxnOffsetCommits,
+                groupMetadata.memberId(),
+                groupMetadata.generationId(),
+                groupMetadata.groupInstanceId());
+        } else {
+            builder = new TxnOffsetCommitRequest.Builder(transactionalId,
+                groupMetadata.groupId(),
+                producerIdAndEpoch.producerId,
+                producerIdAndEpoch.epoch,
+                pendingTxnOffsetCommits);
         }
-        TxnOffsetCommitRequest.Builder builder = new TxnOffsetCommitRequest.Builder(data);
         return new TxnOffsetCommitHandler(result, builder, enableGroupFencing);
     }
 

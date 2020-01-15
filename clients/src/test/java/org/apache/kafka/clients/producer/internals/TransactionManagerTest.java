@@ -1025,7 +1025,7 @@ public class TransactionManagerTest {
 
         transactionManager.beginTransaction();
 
-        final boolean enableGroupFencing = false;
+        final boolean enableGroupFencing = true;
         TransactionalRequestResult sendOffsetsResult = transactionManager.sendOffsetsToTransaction(
             singletonMap(tp, new OffsetAndMetadata(39L)), groupMetadata(consumerGroupId), enableGroupFencing);
 
