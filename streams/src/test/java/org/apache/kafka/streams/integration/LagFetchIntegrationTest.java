@@ -114,8 +114,7 @@ public class LagFetchIntegrationTest {
         IntegrationTestUtils.purgeLocalStreamsState(streamsConfiguration);
     }
 
-    @Test
-    public void shouldBeAbleToFetchValidLagsDuringRebalancing() throws Exception {
+    private void shouldFetchLagsDuringRebalancing(final String optimization) throws Exception {
         final CountDownLatch latchTillActiveIsRunning = new CountDownLatch(1);
         final CountDownLatch latchTillStandbyIsRunning = new CountDownLatch(1);
         final CountDownLatch latchTillStandbyHasPartitionsAssigned = new CountDownLatch(1);
@@ -138,13 +137,14 @@ public class LagFetchIntegrationTest {
             final File stateDir = folder.newFolder("state-" + i);
             props.put(StreamsConfig.APPLICATION_SERVER_CONFIG, "localhost:" + i);
             props.put(StreamsConfig.CLIENT_ID_CONFIG, "instance-" + i);
+            props.put(StreamsConfig.TOPOLOGY_OPTIMIZATION, optimization);
             props.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);
             props.put(StreamsConfig.STATE_DIR_CONFIG, stateDir.getAbsolutePath());
 
             final StreamsBuilder builder = new StreamsBuilder();
             final KTable<String, Long> t1 = builder.table(inputTopicName, Materialized.as(stateStoreName));
             t1.toStream().to(outputTopicName);
-            final KafkaStreamsWrapper streams = new KafkaStreamsWrapper(builder.build(), props);
+            final KafkaStreamsWrapper streams = new KafkaStreamsWrapper(builder.build(props), props);
             streamsList.add(streams);
         }
 
@@ -215,7 +215,17 @@ public class LagFetchIntegrationTest {
     }
 
     @Test
-    public void shouldBeAbleToFetchValidLagsDuringRestoration() throws Exception {
+    public void shouldFetchLagsDuringRebalancingWithOptimization() throws Exception {
+        shouldFetchLagsDuringRebalancing(StreamsConfig.OPTIMIZE);
+    }
+
+    @Test
+    public void shouldFetchLagsDuringRebalancingWithNoOptimization() throws Exception {
+        shouldFetchLagsDuringRebalancing(StreamsConfig.NO_OPTIMIZATION);
+    }
+
+    @Test
+    public void shouldFetchLagsDuringRestoration() throws Exception {
         IntegrationTestUtils.produceKeyValuesSynchronously(
             inputTopicName,
             mkSet(new KeyValue<>("k1", 1L), new KeyValue<>("k2", 2L), new KeyValue<>("k3", 3L), new KeyValue<>("k4", 4L), new KeyValue<>("k5", 5L)),
