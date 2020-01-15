@@ -16,9 +16,11 @@
  */
 package org.apache.kafka.streams;
 
+import java.util.LinkedList;
+import java.util.TreeMap;
+import java.util.concurrent.ExecutionException;
 import java.util.function.Function;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.ListOffsetsResult.ListOffsetsResultInfo;
 import org.apache.kafka.clients.admin.OffsetSpec;
@@ -137,7 +139,6 @@ import static org.apache.kafka.streams.internals.ApiUtils.prepareMillisCheckFail
 public class KafkaStreams implements AutoCloseable {
 
     private static final String JMX_PREFIX = "kafka.streams";
-    private static final long UNKNOWN_POSITION = -1;
 
     // processId is expected to be unique across JVMs and to be used
     // in userData of the subscription request to allow assignor be aware
@@ -1221,71 +1222,67 @@ public class KafkaStreams implements AutoCloseable {
      * values returned are just estimates and meant to be used for making soft decisions on whether the data in the store
      * partition is fresh enough for querying.
      *
+     * Note: Each invocation of this method issues a call to the Kafka brokers. Thus its advisable to limit the frequency
+     * of invocation to once every few seconds.
+     *
      * @return map of store names to another map of partition to {@link LagInfo}s
      */
     public Map<String, Map<Integer, LagInfo>> allLocalStorePartitionLags() {
-        final Map<String, Map<Integer, LagInfo>> localStorePartitionLags = new HashMap<>();
-        final Map<TopicPartition, Long> standbyChangelogPositions = new HashMap<>();
-        final Map<TopicPartition, Long> activeChangelogPositions = new HashMap<>();
+        final long latestSentinel = -2L;
+        final Map<String, Map<Integer, LagInfo>> localStorePartitionLags = new TreeMap<>();
+
+        final Collection<TopicPartition> allPartitions = new LinkedList<>();
+        final Map<TopicPartition, Long> changelogPositions = new HashMap<>();
 
         // Obtain the current positions, of all the active-restoring and standby tasks
-        for (final StreamThread streamThread : this.threads) {
+        for (final StreamThread streamThread : threads) {
             for (final StandbyTask standbyTask : streamThread.allStandbyTasks()) {
-                final Map<TopicPartition, Long> checkpointedOffsets = standbyTask.checkpointedOffsets();
-                standbyTask.changelogPartitions().forEach(topicPartition ->
-                    standbyChangelogPositions.put(topicPartition, checkpointedOffsets.getOrDefault(topicPartition, UNKNOWN_POSITION)));
+                allPartitions.addAll(standbyTask.changelogPartitions());
+                // Note that not all changelog partitions, will have positions; since some may not have started
+                changelogPositions.putAll(standbyTask.getChangelogPositions());
             }
 
             final Set<TaskId> restoringTaskIds = streamThread.restoringTaskIds();
             for (final StreamTask activeTask : streamThread.allStreamsTasks()) {
+                final Collection<TopicPartition> taskChangelogPartitions = activeTask.changelogPartitions();
+                allPartitions.addAll(taskChangelogPartitions);
+
                 final boolean isRestoring = restoringTaskIds.contains(activeTask.id());
                 final Map<TopicPartition, Long> restoredOffsets = activeTask.restoredOffsets();
-                activeTask.changelogPartitions().forEach(topicPartition -> {
-                    if (isRestoring) {
-                        activeChangelogPositions.put(topicPartition, restoredOffsets.getOrDefault(topicPartition, UNKNOWN_POSITION));
+                for (final TopicPartition topicPartition : taskChangelogPartitions) {
+                    if (isRestoring && restoredOffsets.containsKey(topicPartition)) {
+                        changelogPositions.put(topicPartition, restoredOffsets.get(topicPartition));
                     } else {
-                        activeChangelogPositions.put(topicPartition, UNKNOWN_POSITION);
+                        changelogPositions.put(topicPartition, latestSentinel);
                     }
-                });
+                }
             }
         }
 
-        log.info("Current changelog positions, for active: " + activeChangelogPositions + " standby:" + standbyChangelogPositions);
-        final Map<TopicPartition, OffsetSpec> offsetSpecMap = Stream.concat(
-            activeChangelogPositions.keySet().stream(), standbyChangelogPositions.keySet().stream())
-            .collect(Collectors.toMap(Function.identity(), tp -> OffsetSpec.latest()));
-        final Map<TopicPartition, ListOffsetsResultInfo> allEndOffsets = new HashMap<>();
+        log.debug("Current changelog positions: {}", changelogPositions);
+        final Map<TopicPartition, ListOffsetsResultInfo> allEndOffsets;
         try {
-            allEndOffsets.putAll(adminClient.listOffsets(offsetSpecMap).all().get());
-        } catch (final Exception e) {
+            allEndOffsets = adminClient.listOffsets(
+                allPartitions.stream()
+                    .collect(Collectors.toMap(Function.identity(), tp -> OffsetSpec.latest()))
+            ).all().get();
+        } catch (final RuntimeException | InterruptedException | ExecutionException e) {
             throw new StreamsException("Unable to obtain end offsets from kafka", e);
         }
-        log.info("Current end offsets :" + allEndOffsets);
-        allEndOffsets.forEach((topicPartition, offsetsResultInfo) -> {
-            final String storeName = streamsMetadataState.getStoreForChangelogTopic(topicPartition.topic());
-            final long offsetPosition;
-            if (activeChangelogPositions.containsKey(topicPartition)) {
-                // if unknown, assume it's positioned at the tail of changelog partition
-                offsetPosition = activeChangelogPositions.get(topicPartition) == UNKNOWN_POSITION ?
-                    offsetsResultInfo.offset() : activeChangelogPositions.get(topicPartition);
-            } else if (standbyChangelogPositions.containsKey(topicPartition)) {
-                // if unknown, assume it's positioned at the head of changelog partition
-                offsetPosition = standbyChangelogPositions.get(topicPartition) == UNKNOWN_POSITION ?
-                    0 : standbyChangelogPositions.get(topicPartition);
-            } else {
-                throw new IllegalStateException("Topic Partition " + topicPartition + " should be either active or standby");
-            }
-
-            final LagInfo lagInfo = new LagInfo(offsetPosition, offsetsResultInfo.offset());
-            final Map<Integer, LagInfo> partitionToOffsetLag = localStorePartitionLags.getOrDefault(storeName, new HashMap<>());
-            if (!partitionToOffsetLag.containsKey(topicPartition.partition())) {
-                partitionToOffsetLag.put(topicPartition.partition(), lagInfo);
-            } else {
-                throw new IllegalStateException("Encountered the same store partition" + storeName + ","
-                    + topicPartition.partition() + " more than once");
-            }
-            localStorePartitionLags.put(storeName, partitionToOffsetLag);
-        });
+        log.debug("Current end offsets :{}", allEndOffsets);
+        for (final Map.Entry<TopicPartition, ListOffsetsResultInfo> entry : allEndOffsets.entrySet()) {
+            // Avoiding an extra admin API lookup by computing lags for not-yet-started restorations
+            // from zero instead of the real "earliest offset" for the changelog.
+            // This will yield the correct relative order of lagginess for the tasks in the cluster,
+            // but it is an over-estimate of how much work remains to restore the task from scratch.
+            final long earliestOffset = 0L;
+            final long changelogPosition = changelogPositions.getOrDefault(entry.getKey(), earliestOffset);
+            final long latestOffset = entry.getValue().offset();
+            final LagInfo lagInfo = new LagInfo(changelogPosition == latestSentinel ? latestOffset : changelogPosition, latestOffset);
+            final String storeName = streamsMetadataState.getStoreForChangelogTopic(entry.getKey().topic());
+            localStorePartitionLags.computeIfAbsent(storeName, ignored -> new TreeMap<>())
+                .put(entry.getKey().partition(), lagInfo);
+        }
 
         return Collections.unmodifiableMap(localStorePartitionLags);
     }

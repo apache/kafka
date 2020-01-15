@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import java.util.Collections;
 import java.util.concurrent.ConcurrentHashMap;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
@@ -456,5 +457,9 @@ public class ProcessorStateManager implements StateManager {
         }
 
         return result;
+    }
+
+    Map<TopicPartition, Long> getStandbyRestoredOffsets() {
+        return Collections.unmodifiableMap(standbyRestoredOffsets);
     }
 }
