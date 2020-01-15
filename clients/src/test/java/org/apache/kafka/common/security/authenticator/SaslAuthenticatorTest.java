@@ -1591,7 +1591,7 @@ public class SaslAuthenticatorTest {
                     "but instead we got our generated message echoed back, implying re-auth succeeded when it " +
                     "should not have: " + e,
                     e.getMessage().matches(
-                            ".*\\<\\[" + expectedResponseTextRegex + "]>.*\\<\\[" + receivedResponseTextRegex + "]>"));
+                            ".*\\<\\[" + expectedResponseTextRegex + "]>.*\\<\\[" + receivedResponseTextRegex + ".*?]>"));
             server.verifyReauthenticationMetrics(1, 0); // unchanged
         } finally { 
             selector.close();

@@ -20,8 +20,10 @@
   // Version 1 is the same as version 0.
   //
   // Version 2 adds the committed leader epoch.
-  "validVersions": "0-2",
-  "flexibleVersions": "none",
+  //
+  // Version 3 adds the member.id, group.instance.id and generation.id.
+  "validVersions": "0-3",
+  "flexibleVersions": "3+",
   "fields": [
     { "name": "TransactionalId", "type": "string", "versions": "0+",
       "about": "The ID of the transaction." },
@@ -31,8 +33,15 @@
       "about": "The current producer ID in use by the transactional ID." },
     { "name": "ProducerEpoch", "type": "int16", "versions": "0+",
       "about": "The current epoch associated with the producer ID." },
+    { "name": "GenerationId", "type": "int32", "versions": "3+", "default": "-1",
+      "about": "The generation of the consumer." },
+    { "name": "MemberId", "type": "string", "versions": "3+", "default": "",
+      "about": "The member ID assigned by the group coordinator." },
+    { "name": "GroupInstanceId", "type": "string", "versions": "3+",
+      "nullableVersions": "3+", "default": "null",
+      "about": "The unique identifier of the consumer instance provided by end user." },
     { "name": "Topics", "type" : "[]TxnOffsetCommitRequestTopic", "versions": "0+",
-      "about": "Each topic that we want to committ offsets for.", "fields": [
+      "about": "Each topic that we want to commit offsets for.", "fields": [
       { "name": "Name", "type": "string", "versions": "0+", "entityType": "topicName",
         "about": "The topic name." },
       { "name": "Partitions", "type": "[]TxnOffsetCommitRequestPartition", "versions": "0+",

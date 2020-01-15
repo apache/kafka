@@ -1216,7 +1216,7 @@ class KafkaApis(val requestChannel: RequestChannel,
           } else {
             // versions 1 and above read offsets from Kafka
             if (offsetFetchRequest.isAllPartitions) {
-              val (error, allPartitionData) = groupCoordinator.handleFetchOffsets(offsetFetchRequest.groupId)
+              val (error, allPartitionData) = groupCoordinator.handleFetchOffsets(offsetFetchRequest.groupId, offsetFetchRequest.requireStable)
               if (error != Errors.NONE)
                 offsetFetchRequest.getErrorResponse(requestThrottleMs, error)
               else {
@@ -1227,8 +1227,7 @@ class KafkaApis(val requestChannel: RequestChannel,
             } else {
               val (authorizedPartitions, unauthorizedPartitions) =
                 partitionAuthorized[TopicPartition](offsetFetchRequest.partitions.asScala.toList, tp => tp.topic)
-              val (error, authorizedPartitionData) = groupCoordinator.handleFetchOffsets(offsetFetchRequest.groupId,
-                Some(authorizedPartitions))
+              val (error, authorizedPartitionData) = groupCoordinator.handleFetchOffsets(offsetFetchRequest.groupId, offsetFetchRequest.requireStable, Some(authorizedPartitions))
               if (error != Errors.NONE)
                 offsetFetchRequest.getErrorResponse(requestThrottleMs, error)
               else {
@@ -1412,10 +1411,10 @@ class KafkaApis(val requestChannel: RequestChannel,
       // the group.instance.id field, so static members could accidentally become "dynamic", which leads to wrong states.
       sendResponseCallback(JoinGroupResult(
         List.empty,
-        JoinGroupResponse.UNKNOWN_MEMBER_ID,
-        JoinGroupResponse.UNKNOWN_GENERATION_ID,
-        JoinGroupResponse.UNKNOWN_PROTOCOL,
-        JoinGroupResponse.UNKNOWN_MEMBER_ID,
+        JoinGroupRequest.UNKNOWN_MEMBER_ID,
+        JoinGroupRequest.UNKNOWN_GENERATION_ID,
+        JoinGroupRequest.UNKNOWN_PROTOCOL,
+        JoinGroupRequest.UNKNOWN_MEMBER_ID,
         Errors.UNSUPPORTED_VERSION
       ))
     } else if (!authorize(request, READ, GROUP, joinGroupRequest.data.groupId)) {
@@ -1424,10 +1423,10 @@ class KafkaApis(val requestChannel: RequestChannel,
           new JoinGroupResponseData()
             .setThrottleTimeMs(requestThrottleMs)
             .setErrorCode(Errors.GROUP_AUTHORIZATION_FAILED.code)
-            .setGenerationId(JoinGroupResponse.UNKNOWN_GENERATION_ID)
-            .setProtocolName(JoinGroupResponse.UNKNOWN_PROTOCOL)
-            .setLeader(JoinGroupResponse.UNKNOWN_MEMBER_ID)
-            .setMemberId(JoinGroupResponse.UNKNOWN_MEMBER_ID)
+            .setGenerationId(JoinGroupRequest.UNKNOWN_GENERATION_ID)
+            .setProtocolName(JoinGroupRequest.UNKNOWN_PROTOCOL)
+            .setLeader(JoinGroupRequest.UNKNOWN_MEMBER_ID)
+            .setMemberId(JoinGroupRequest.UNKNOWN_MEMBER_ID)
             .setMembers(util.Collections.emptyList())
         )
       )
@@ -2184,6 +2183,9 @@ class KafkaApis(val requestChannel: RequestChannel,
           txnOffsetCommitRequest.data.groupId,
           txnOffsetCommitRequest.data.producerId,
           txnOffsetCommitRequest.data.producerEpoch,
+          txnOffsetCommitRequest.data.memberId,
+          Option(txnOffsetCommitRequest.data.groupInstanceId),
+          txnOffsetCommitRequest.data.generationId,
           offsetMetadata,
           sendResponseCallback)
       }

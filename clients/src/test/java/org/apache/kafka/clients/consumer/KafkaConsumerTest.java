@@ -1904,7 +1904,7 @@ public class KafkaConsumerTest {
         final ConsumerGroupMetadata groupMetadataOnStart = consumer.groupMetadata();
         assertEquals(groupId, groupMetadataOnStart.groupId());
         assertEquals(JoinGroupRequest.UNKNOWN_MEMBER_ID, groupMetadataOnStart.memberId());
-        assertEquals(JoinGroupResponse.UNKNOWN_GENERATION_ID, groupMetadataOnStart.generationId());
+        assertEquals(JoinGroupRequest.UNKNOWN_GENERATION_ID, groupMetadataOnStart.generationId());
         assertEquals(groupInstanceId, groupMetadataOnStart.groupInstanceId());
 
         consumer.subscribe(singleton(topic), getConsumerRebalanceListener(consumer));

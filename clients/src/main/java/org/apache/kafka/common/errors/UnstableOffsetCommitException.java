@@ -14,22 +14,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.protocol.types;
-
-import org.apache.kafka.common.KafkaException;
+package org.apache.kafka.common.errors;
 
 /**
- *  Thrown if the protocol schema validation fails while parsing request or response.
+ * Exception thrown when there are unstable offsets for the requested topic partitions.
  */
-public class SchemaException extends KafkaException {
+public class UnstableOffsetCommitException extends RetriableException {
 
     private static final long serialVersionUID = 1L;
 
-    public SchemaException(String message) {
+    public UnstableOffsetCommitException(String message) {
         super(message);
-    }
-
-    public SchemaException(String message, Throwable cause) {
-        super(message, cause);
     }
 }

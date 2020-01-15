@@ -601,6 +601,27 @@ class GroupMetadataTest {
     assertFalse(member.isAwaitingSync)
   }
 
+  @Test
+  def testHasPendingNonTxnOffsets(): Unit = {
+    val partition = new TopicPartition("foo", 0)
+    val offset = offsetAndMetadata(37)
+
+    group.prepareOffsetCommit(Map(partition -> offset))
+    assertTrue(group.hasPendingOffsetCommitsForTopicPartition(partition))
+  }
+
+  @Test
+  def testHasPendingTxnOffsets(): Unit = {
+    val txnPartition = new TopicPartition("foo", 1)
+    val offset = offsetAndMetadata(37)
+    val producerId = 5
+
+    group.prepareTxnOffsetCommit(producerId, Map(txnPartition -> offset))
+    assertTrue(group.hasPendingOffsetCommitsForTopicPartition(txnPartition))
+
+    assertFalse(group.hasPendingOffsetCommitsForTopicPartition(new TopicPartition("non-exist", 0)))
+  }
+
   private def assertState(group: GroupMetadata, targetState: GroupState): Unit = {
     val states: Set[GroupState] = Set(Stable, PreparingRebalance, CompletingRebalance, Dead)
     val otherStates = states - targetState

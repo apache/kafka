@@ -26,8 +26,8 @@ import kafka.log._
 import kafka.metrics.KafkaMetricsGroup
 import kafka.server._
 import kafka.server.checkpoints.OffsetCheckpoints
-import kafka.utils.CoreUtils.{inReadLock, inWriteLock}
 import kafka.utils._
+import kafka.utils.CoreUtils.{inReadLock, inWriteLock}
 import kafka.zk.{AdminZkClient, KafkaZkClient}
 import org.apache.kafka.common.{IsolationLevel, TopicPartition}
 import org.apache.kafka.common.errors._
@@ -173,6 +173,19 @@ case class SimpleAssignmentState(replicas: Seq[Int]) extends AssignmentState
 
 /**
  * Data structure that represents a topic partition. The leader maintains the AR, ISR, CUR, RAR
+ *
+ * Concurrency notes:
+ * 1) Partition is thread-safe. Operations on partitions may be invoked concurrently from different
+ *    request handler threads
+ * 2) ISR updates are synchronized using a read-write lock. Read lock is used to check if an update
+ *    is required to avoid acquiring write lock in the common case of replica fetch when no update
+ *    is performed. ISR update condition is checked a second time under write lock before performing
+ *    the update
+ * 3) Various other operations like leader changes are processed while holding the ISR write lock.
+ *    This can introduce delays in produce and replica fetch requests, but these operations are typically
+ *    infrequent.
+ * 4) HW updates are synchronized using ISR read lock. @Log lock is acquired during the update with
+ *    locking order Partition lock -> Log lock.
  */
 class Partition(val topicPartition: TopicPartition,
                 val replicaLagTimeMaxMs: Long,
@@ -664,19 +677,26 @@ class Partition(val topicPartition: TopicPartition,
    * This function can be triggered when a replica's LEO has incremented.
    */
   private def maybeExpandIsr(followerReplica: Replica, followerFetchTimeMs: Long): Unit = {
-    inWriteLock(leaderIsrUpdateLock) {
-      // check if this replica needs to be added to the ISR
-      leaderLogIfLocal.foreach { leaderLog =>
-        val leaderHighwatermark = leaderLog.highWatermark
-        if (!inSyncReplicaIds.contains(followerReplica.brokerId) && isFollowerInSync(followerReplica, leaderHighwatermark)) {
+    val needsIsrUpdate = inReadLock(leaderIsrUpdateLock) {
+      needsExpandIsr(followerReplica)
+    }
+    if (needsIsrUpdate) {
+      inWriteLock(leaderIsrUpdateLock) {
+        // check if this replica needs to be added to the ISR
+        if (needsExpandIsr(followerReplica)) {
           val newInSyncReplicaIds = inSyncReplicaIds + followerReplica.brokerId
-          info(s"Expanding ISR from ${inSyncReplicaIds.mkString(",")} " +
-            s"to ${newInSyncReplicaIds.mkString(",")}")
-
+          info(s"Expanding ISR from ${inSyncReplicaIds.mkString(",")} to ${newInSyncReplicaIds.mkString(",")}")
           // update ISR in ZK and cache
           expandIsr(newInSyncReplicaIds)
         }
       }
+    }
+  }
+
+  private def needsExpandIsr(followerReplica: Replica): Boolean = {
+    leaderLogIfLocal.exists { leaderLog =>
+      val leaderHighwatermark = leaderLog.highWatermark
+      !inSyncReplicaIds.contains(followerReplica.brokerId) && isFollowerInSync(followerReplica, leaderHighwatermark)
     }
   }
 
@@ -814,7 +834,10 @@ class Partition(val topicPartition: TopicPartition,
   private def tryCompleteDelayedRequests(): Unit = delayedOperations.checkAndCompleteAll()
 
   def maybeShrinkIsr(): Unit = {
-    val leaderHWIncremented = inWriteLock(leaderIsrUpdateLock) {
+    val needsIsrUpdate = inReadLock(leaderIsrUpdateLock) {
+      needsShrinkIsr()
+    }
+    val leaderHWIncremented = needsIsrUpdate && inWriteLock(leaderIsrUpdateLock) {
       leaderLogIfLocal match {
         case Some(leaderLog) =>
           val outOfSyncReplicaIds = getOutOfSyncReplicas(replicaLagTimeMaxMs)
@@ -848,6 +871,15 @@ class Partition(val topicPartition: TopicPartition,
     // some delayed operations may be unblocked after HW changed
     if (leaderHWIncremented)
       tryCompleteDelayedRequests()
+  }
+
+  private def needsShrinkIsr(): Boolean = {
+    if (isLeader) {
+      val outOfSyncReplicaIds = getOutOfSyncReplicas(replicaLagTimeMaxMs)
+      outOfSyncReplicaIds.nonEmpty
+    } else {
+      false
+    }
   }
 
   private def isFollowerOutOfSync(replicaId: Int,
@@ -1151,13 +1183,13 @@ class Partition(val topicPartition: TopicPartition,
     maybeUpdateIsrAndVersion(newIsr, zkVersionOpt)
   }
 
-  private def shrinkIsr(newIsr: Set[Int]): Unit = {
+  private[cluster] def shrinkIsr(newIsr: Set[Int]): Unit = {
     val newLeaderAndIsr = new LeaderAndIsr(localBrokerId, leaderEpoch, newIsr.toList, zkVersion)
     val zkVersionOpt = stateStore.shrinkIsr(controllerEpoch, newLeaderAndIsr)
     maybeUpdateIsrAndVersion(newIsr, zkVersionOpt)
   }
 
-  private def maybeUpdateIsrAndVersion(isr: Set[Int], zkVersionOpt: Option[Int]): Unit = {
+  private[cluster] def maybeUpdateIsrAndVersion(isr: Set[Int], zkVersionOpt: Option[Int]): Unit = {
     zkVersionOpt match {
       case Some(newVersion) =>
         inSyncReplicaIds = isr

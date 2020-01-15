@@ -79,11 +79,14 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
 
 public class KStreamImplTest {
 
     private final Consumed<String, String> stringConsumed = Consumed.with(Serdes.String(), Serdes.String());
+    @SuppressWarnings("deprecation")
+    private final org.apache.kafka.streams.kstream.Serialized<String, String> stringSerialized =
+        org.apache.kafka.streams.kstream.Serialized.with(Serdes.String(), Serdes.String());
+
     private final MockProcessorSupplier<String, String> processorSupplier = new MockProcessorSupplier<>();
     private final TransformerSupplier<String, String, KeyValue<String, String>> transformerSupplier =
         () -> new Transformer<String, String, KeyValue<String, String>>() {
@@ -164,8 +167,10 @@ public class KStreamImplTest {
             public void close() {}
         };
 
-    private KStream<String, String> testStream;
     private StreamsBuilder builder;
+    private KStream<String, String> testStream;
+    private KTable<String, String> testTable;
+    private GlobalKTable<String, String> testGlobalTable;
 
     private final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.String(), Serdes.String());
 
@@ -175,6 +180,8 @@ public class KStreamImplTest {
     public void before() {
         builder = new StreamsBuilder();
         testStream = builder.stream("source");
+        testTable = builder.table("topic");
+        testGlobalTable = builder.globalTable("global");
     }
 
     @Test
@@ -605,120 +612,635 @@ public class KStreamImplTest {
         assertThat(exception.getMessage(), equalTo("produced can't be null"));
     }
 
-    @Test(expected = NullPointerException.class)
-    public void shouldNotAllowNullOtherStreamOnJoin() {
-        testStream.join(null, MockValueJoiner.TOSTRING_JOINER, JoinWindows.of(ofMillis(10)));
-    }
-
-    @Test(expected = NullPointerException.class)
-    public void shouldNotAllowNullValueJoinerOnJoin() {
-        testStream.join(testStream, null, JoinWindows.of(ofMillis(10)));
-    }
-
-    @Test(expected = NullPointerException.class)
-    public void shouldNotAllowNullJoinWindowsOnJoin() {
-        testStream.join(testStream, MockValueJoiner.TOSTRING_JOINER, null);
-    }
-
-    @Test(expected = NullPointerException.class)
-    public void shouldNotAllowNullTableOnTableJoin() {
-        testStream.leftJoin(null, MockValueJoiner.TOSTRING_JOINER);
-    }
-
-    @Test(expected = NullPointerException.class)
-    public void shouldNotAllowNullValueMapperOnTableJoin() {
-        testStream.leftJoin(builder.table("topic", stringConsumed), null);
-    }
-
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldNotAllowNullSelectorOnGroupBy() {
-        testStream.groupBy(null);
+        final NullPointerException exception = assertThrows(
+            NullPointerException.class,
+            () -> testStream.groupBy(null));
+        assertThat(exception.getMessage(), equalTo("keySelector can't be null"));
     }
 
-    @Test(expected = NullPointerException.class)
+    @SuppressWarnings("deprecation")
+    @Test
+    public void shouldNotAllowNullSelectorOnGroupByWithSerialized() {
+        final NullPointerException exception = assertThrows(
+            NullPointerException.class,
+            () -> testStream.groupBy(null, stringSerialized));
+        assertThat(exception.getMessage(), equalTo("keySelector can't be null"));
+    }
+
+    @Test
+    public void shouldNotAllowNullSelectorOnGroupByWithGrouped() {
+        final NullPointerException exception = assertThrows(
+            NullPointerException.class,
+            () -> testStream.groupBy(null, Grouped.as("name")));
+        assertThat(exception.getMessage(), equalTo("keySelector can't be null"));
+    }
+
+    @SuppressWarnings("deprecation")
+    @Test
+    public void shouldNotAllowNullSerializedOnGroupBy() {
+        final NullPointerException exception = assertThrows(
+            NullPointerException.class,
+            () -> testStream.groupBy((k, v) -> k, (org.apache.kafka.streams.kstream.Serialized<String, String>) null));
+        assertThat(exception.getMessage(), equalTo("serialized can't be null"));
+    }
+
+    @Test
+    public void shouldNotAllowNullGroupedOnGroupBy() {
+        final NullPointerException exception = assertThrows(
+            NullPointerException.class,
+            () -> testStream.groupBy((k, v) -> k, (Grouped<String, String>) null));
+        assertThat(exception.getMessage(), equalTo("grouped can't be null"));
+    }
+
+    @SuppressWarnings("deprecation")
+    @Test
+    public void shouldNotAllowNullSerializedOnGroupByKey() {
+        final NullPointerException exception = assertThrows(
+            NullPointerException.class,
+            () -> testStream.groupByKey((org.apache.kafka.streams.kstream.Serialized<String, String>) null));
+        assertThat(exception.getMessage(), equalTo("serialized can't be null"));
+    }
+
+    @Test
+    public void shouldNotAllowNullGroupedOnGroupByKey() {
+        final NullPointerException exception = assertThrows(
+            NullPointerException.class,
+            () -> testStream.groupByKey((Grouped<String, String>) null));
+        assertThat(exception.getMessage(), equalTo("grouped can't be null"));
+    }
+
+    @Test
+    public void shouldNotAllowNullOtherStreamOnJoin() {
+        final NullPointerException exception = assertThrows(
+            NullPointerException.class,
+            () -> testStream.join(null, MockValueJoiner.TOSTRING_JOINER, JoinWindows.of(ofMillis(10))));
+        assertThat(exception.getMessage(), equalTo("otherStream can't be null"));
+    }
+
+    @SuppressWarnings("deprecation")
+    @Test
+    public void shouldNotAllowNullOtherStreamOnJoinWithJoined() {
+        final NullPointerException exception = assertThrows(
+            NullPointerException.class,
+            () -> testStream.join(
+                null,
+                MockValueJoiner.TOSTRING_JOINER,
+                JoinWindows.of(ofMillis(10)),
+                Joined.as("name")));
+        assertThat(exception.getMessage(), equalTo("otherStream can't be null"));
+    }
+
+    @Test
+    public void shouldNotAllowNullOtherStreamOnJoinWithStreamJoined() {
+        final NullPointerException exception = assertThrows(
+            NullPointerException.class,
+            () -> testStream.join(
+                null,
+                MockValueJoiner.TOSTRING_JOINER,
+                JoinWindows.of(ofMillis(10)),
+                StreamJoined.as("name")));
+        assertThat(exception.getMessage(), equalTo("otherStream can't be null"));
+    }
+
+    @Test
+    public void shouldNotAllowNullValueJoinerOnJoin() {
+        final NullPointerException exception = assertThrows(
+            NullPointerException.class,
+            () -> testStream.join(testStream, null, JoinWindows.of(ofMillis(10))));
+        assertThat(exception.getMessage(), equalTo("joiner can't be null"));
+    }
+
+    @SuppressWarnings("deprecation")
+    @Test
+    public void shouldNotAllowNullValueJoinerOnJoinWithJoined() {
+        final NullPointerException exception = assertThrows(
+            NullPointerException.class,
+            () -> testStream.join(
+                testStream,
+                null,
+                JoinWindows.of(ofMillis(10)),
+                Joined.as("name")));
+        assertThat(exception.getMessage(), equalTo("joiner can't be null"));
+    }
+
+    @Test
+    public void shouldNotAllowNullValueJoinerOnJoinWithStreamJoined() {
+        final NullPointerException exception = assertThrows(
+            NullPointerException.class,
+            () -> testStream.join(
+                testStream,
+                null,
+                JoinWindows.of(ofMillis(10)),
+                StreamJoined.as("name")));
+        assertThat(exception.getMessage(), equalTo("joiner can't be null"));
+    }
+
+    @Test
+    public void shouldNotAllowNullJoinWindowsOnJoin() {
+        final NullPointerException exception = assertThrows(
+            NullPointerException.class,
+            () -> testStream.join(testStream, MockValueJoiner.TOSTRING_JOINER, null));
+        assertThat(exception.getMessage(), equalTo("windows can't be null"));
+    }
+
+    @SuppressWarnings("deprecation")
+    @Test
+    public void shouldNotAllowNullJoinWindowsOnJoinWithJoined() {
+        final NullPointerException exception = assertThrows(
+            NullPointerException.class,
+            () -> testStream.join(
+                testStream,
+                MockValueJoiner.TOSTRING_JOINER,
+                null,
+                Joined.as("name")));
+        assertThat(exception.getMessage(), equalTo("windows can't be null"));
+    }
+
+    @Test
+    public void shouldNotAllowNullJoinWindowsOnJoinWithStreamJoined() {
+        final NullPointerException exception = assertThrows(
+            NullPointerException.class,
+            () -> testStream.join(
+                testStream,
+                MockValueJoiner.TOSTRING_JOINER,
+                null,
+                StreamJoined.as("name")));
+        assertThat(exception.getMessage(), equalTo("windows can't be null"));
+    }
+
+    @SuppressWarnings("deprecation")
+    @Test
+    public void shouldNotAllowNullJoinedOnJoin() {
+        final NullPointerException exception = assertThrows(
+            NullPointerException.class,
+            () -> testStream.join(
+                testStream,
+                MockValueJoiner.TOSTRING_JOINER,
+                JoinWindows.of(ofMillis(10)),
+                (Joined<String, String, String>) null));
+        assertThat(exception.getMessage(), equalTo("joined can't be null"));
+    }
+
+    @Test
+    public void shouldNotAllowNullStreamJoinedOnJoin() {
+        final NullPointerException exception = assertThrows(
+            NullPointerException.class,
+            () -> testStream.join(
+                testStream,
+                MockValueJoiner.TOSTRING_JOINER,
+                JoinWindows.of(ofMillis(10)),
+                (StreamJoined<String, String, String>) null));
+        assertThat(exception.getMessage(), equalTo("streamJoined can't be null"));
+    }
+
+    @Test
+    public void shouldNotAllowNullOtherStreamOnLeftJoin() {
+        final NullPointerException exception = assertThrows(
+            NullPointerException.class,
+            () -> testStream.leftJoin(null, MockValueJoiner.TOSTRING_JOINER, JoinWindows.of(ofMillis(10))));
+        assertThat(exception.getMessage(), equalTo("otherStream can't be null"));
+    }
+
+    @SuppressWarnings("deprecation")
+    @Test
+    public void shouldNotAllowNullOtherStreamOnLeftJoinWithJoined() {
+        final NullPointerException exception = assertThrows(
+            NullPointerException.class,
+            () -> testStream.leftJoin(
+                null,
+                MockValueJoiner.TOSTRING_JOINER,
+                JoinWindows.of(ofMillis(10)),
+                Joined.as("name")));
+        assertThat(exception.getMessage(), equalTo("otherStream can't be null"));
+    }
+
+    @Test
+    public void shouldNotAllowNullOtherStreamOnLeftJoinWithStreamJoined() {
+        final NullPointerException exception = assertThrows(
+            NullPointerException.class,
+            () -> testStream.leftJoin(
+                null,
+                MockValueJoiner.TOSTRING_JOINER,
+                JoinWindows.of(ofMillis(10)),
+                StreamJoined.as("name")));
+        assertThat(exception.getMessage(), equalTo("otherStream can't be null"));
+    }
+
+    @Test
+    public void shouldNotAllowNullValueJoinerOnLeftJoin() {
+        final NullPointerException exception = assertThrows(
+            NullPointerException.class,
+            () -> testStream.leftJoin(testStream, null, JoinWindows.of(ofMillis(10))));
+        assertThat(exception.getMessage(), equalTo("joiner can't be null"));
+    }
+
+    @SuppressWarnings("deprecation")
+    @Test
+    public void shouldNotAllowNullValueJoinerOnLeftJoinWithJoined() {
+        final NullPointerException exception = assertThrows(
+            NullPointerException.class,
+            () -> testStream.leftJoin(
+                testStream,
+                null,
+                JoinWindows.of(ofMillis(10)),
+                Joined.as("name")));
+        assertThat(exception.getMessage(), equalTo("joiner can't be null"));
+    }
+
+    @Test
+    public void shouldNotAllowNullValueJoinerOnLeftJoinWithStreamJoined() {
+        final NullPointerException exception = assertThrows(
+            NullPointerException.class,
+            () -> testStream.leftJoin(
+                testStream,
+                null,
+                JoinWindows.of(ofMillis(10)),
+                StreamJoined.as("name")));
+        assertThat(exception.getMessage(), equalTo("joiner can't be null"));
+    }
+
+    @Test
+    public void shouldNotAllowNullJoinWindowsOnLeftJoin() {
+        final NullPointerException exception = assertThrows(
+            NullPointerException.class,
+            () -> testStream.leftJoin(testStream, MockValueJoiner.TOSTRING_JOINER, null));
+        assertThat(exception.getMessage(), equalTo("windows can't be null"));
+    }
+
+    @SuppressWarnings("deprecation")
+    @Test
+    public void shouldNotAllowNullJoinWindowsOnLeftJoinWithJoined() {
+        final NullPointerException exception = assertThrows(
+            NullPointerException.class,
+            () -> testStream.leftJoin(
+                testStream,
+                MockValueJoiner.TOSTRING_JOINER,
+                null,
+                Joined.as("name")));
+        assertThat(exception.getMessage(), equalTo("windows can't be null"));
+    }
+
+    @Test
+    public void shouldNotAllowNullJoinWindowsOnLeftJoinWithStreamJoined() {
+        final NullPointerException exception = assertThrows(
+            NullPointerException.class,
+            () -> testStream.leftJoin(
+                testStream,
+                MockValueJoiner.TOSTRING_JOINER,
+                null,
+                StreamJoined.as("name")));
+        assertThat(exception.getMessage(), equalTo("windows can't be null"));
+    }
+
+    @SuppressWarnings("deprecation")
+    @Test
+    public void shouldNotAllowNullJoinedOnLeftJoin() {
+        final NullPointerException exception = assertThrows(
+            NullPointerException.class,
+            () -> testStream.leftJoin(
+                testStream,
+                MockValueJoiner.TOSTRING_JOINER,
+                JoinWindows.of(ofMillis(10)),
+                (Joined<String, String, String>) null));
+        assertThat(exception.getMessage(), equalTo("joined can't be null"));
+    }
+
+    @Test
+    public void shouldNotAllowNullStreamJoinedOnLeftJoin() {
+        final NullPointerException exception = assertThrows(
+            NullPointerException.class,
+            () -> testStream.leftJoin(
+                testStream,
+                MockValueJoiner.TOSTRING_JOINER,
+                JoinWindows.of(ofMillis(10)),
+                (StreamJoined<String, String, String>) null));
+        assertThat(exception.getMessage(), equalTo("streamJoined can't be null"));
+    }
+
+    @Test
+    public void shouldNotAllowNullOtherStreamOnOuterJoin() {
+        final NullPointerException exception = assertThrows(
+            NullPointerException.class,
+            () -> testStream.outerJoin(null, MockValueJoiner.TOSTRING_JOINER, JoinWindows.of(ofMillis(10))));
+        assertThat(exception.getMessage(), equalTo("otherStream can't be null"));
+    }
+
+    @SuppressWarnings("deprecation")
+    @Test
+    public void shouldNotAllowNullOtherStreamOnOuterJoinWithJoined() {
+        final NullPointerException exception = assertThrows(
+            NullPointerException.class,
+            () -> testStream.outerJoin(
+                null,
+                MockValueJoiner.TOSTRING_JOINER,
+                JoinWindows.of(ofMillis(10)),
+                Joined.as("name")));
+        assertThat(exception.getMessage(), equalTo("otherStream can't be null"));
+    }
+
+    @Test
+    public void shouldNotAllowNullOtherStreamOnOuterJoinWithStreamJoined() {
+        final NullPointerException exception = assertThrows(
+            NullPointerException.class,
+            () -> testStream.outerJoin(
+                null,
+                MockValueJoiner.TOSTRING_JOINER,
+                JoinWindows.of(ofMillis(10)),
+                StreamJoined.as("name")));
+        assertThat(exception.getMessage(), equalTo("otherStream can't be null"));
+    }
+
+    @Test
+    public void shouldNotAllowNullValueJoinerOnOuterJoin() {
+        final NullPointerException exception = assertThrows(
+            NullPointerException.class,
+            () -> testStream.outerJoin(testStream, null, JoinWindows.of(ofMillis(10))));
+        assertThat(exception.getMessage(), equalTo("joiner can't be null"));
+    }
+
+    @SuppressWarnings("deprecation")
+    @Test
+    public void shouldNotAllowNullValueJoinerOnOuterJoinWithJoined() {
+        final NullPointerException exception = assertThrows(
+            NullPointerException.class,
+            () -> testStream.outerJoin(
+                testStream,
+                null,
+                JoinWindows.of(ofMillis(10)),
+                Joined.as("name")));
+        assertThat(exception.getMessage(), equalTo("joiner can't be null"));
+    }
+
+    @Test
+    public void shouldNotAllowNullValueJoinerOnOuterJoinWithStreamJoined() {
+        final NullPointerException exception = assertThrows(
+            NullPointerException.class,
+            () -> testStream.outerJoin(
+                testStream,
+                null,
+                JoinWindows.of(ofMillis(10)),
+                StreamJoined.as("name")));
+        assertThat(exception.getMessage(), equalTo("joiner can't be null"));
+    }
+
+    @Test
+    public void shouldNotAllowNullJoinWindowsOnOuterJoin() {
+        final NullPointerException exception = assertThrows(
+            NullPointerException.class,
+            () -> testStream.outerJoin(testStream, MockValueJoiner.TOSTRING_JOINER, null));
+        assertThat(exception.getMessage(), equalTo("windows can't be null"));
+    }
+
+    @SuppressWarnings("deprecation")
+    @Test
+    public void shouldNotAllowNullJoinWindowsOnOuterJoinWithJoined() {
+        final NullPointerException exception = assertThrows(
+            NullPointerException.class,
+            () -> testStream.outerJoin(
+                testStream,
+                MockValueJoiner.TOSTRING_JOINER,
+                null,
+                Joined.as("name")));
+        assertThat(exception.getMessage(), equalTo("windows can't be null"));
+    }
+
+    @Test
+    public void shouldNotAllowNullJoinWindowsOnOuterJoinWithStreamJoined() {
+        final NullPointerException exception = assertThrows(
+            NullPointerException.class,
+            () -> testStream.outerJoin(
+                testStream,
+                MockValueJoiner.TOSTRING_JOINER,
+                null,
+                StreamJoined.as("name")));
+        assertThat(exception.getMessage(), equalTo("windows can't be null"));
+    }
+
+    @SuppressWarnings("deprecation")
+    @Test
+    public void shouldNotAllowNullJoinedOnOuterJoin() {
+        final NullPointerException exception = assertThrows(
+            NullPointerException.class,
+            () -> testStream.outerJoin(
+                testStream,
+                MockValueJoiner.TOSTRING_JOINER,
+                JoinWindows.of(ofMillis(10)),
+                (Joined<String, String, String>) null));
+        assertThat(exception.getMessage(), equalTo("joined can't be null"));
+    }
+
+    @Test
+    public void shouldNotAllowNullStreamJoinedOnOuterJoin() {
+        final NullPointerException exception = assertThrows(
+            NullPointerException.class,
+            () -> testStream.outerJoin(
+                testStream,
+                MockValueJoiner.TOSTRING_JOINER,
+                JoinWindows.of(ofMillis(10)),
+                (StreamJoined<String, String, String>) null));
+        assertThat(exception.getMessage(), equalTo("streamJoined can't be null"));
+    }
+
+    @Test
+    public void shouldNotAllowNullTableOnTableJoin() {
+        final NullPointerException exception = assertThrows(
+            NullPointerException.class,
+            () -> testStream.join(null, MockValueJoiner.TOSTRING_JOINER));
+        assertThat(exception.getMessage(), equalTo("table can't be null"));
+    }
+
+    @Test
+    public void shouldNotAllowNullTableOnTableJoinWithJoiner() {
+        final NullPointerException exception = assertThrows(
+            NullPointerException.class,
+            () -> testStream.join(null, MockValueJoiner.TOSTRING_JOINER, Joined.as("name")));
+        assertThat(exception.getMessage(), equalTo("table can't be null"));
+    }
+
+    @Test
+    public void shouldNotAllowNullValueMapperOnTableJoin() {
+        final NullPointerException exception = assertThrows(
+            NullPointerException.class,
+            () -> testStream.join(testTable, null));
+        assertThat(exception.getMessage(), equalTo("joiner can't be null"));
+    }
+
+    @Test
+    public void shouldNotAllowNullValueMapperOnTableJoinWithJoiner() {
+        final NullPointerException exception = assertThrows(
+            NullPointerException.class,
+            () -> testStream.join(testTable, null, Joined.as("name")));
+        assertThat(exception.getMessage(), equalTo("joiner can't be null"));
+    }
+
+    @Test
+    public void shouldNotAllowNullJoinedOnTableJoin() {
+        final NullPointerException exception = assertThrows(
+            NullPointerException.class,
+            () -> testStream.join(testTable, MockValueJoiner.TOSTRING_JOINER, null));
+        assertThat(exception.getMessage(), equalTo("joined can't be null"));
+    }
+
+    @Test
+    public void shouldNotAllowNullTableOnTableLeftJoin() {
+        final NullPointerException exception = assertThrows(
+            NullPointerException.class,
+            () -> testStream.leftJoin(null, MockValueJoiner.TOSTRING_JOINER));
+        assertThat(exception.getMessage(), equalTo("table can't be null"));
+    }
+
+    @Test
+    public void shouldNotAllowNullTableOnTableLeftJoinWithJoined() {
+        final NullPointerException exception = assertThrows(
+            NullPointerException.class,
+            () -> testStream.leftJoin(null, MockValueJoiner.TOSTRING_JOINER, Joined.as("name")));
+        assertThat(exception.getMessage(), equalTo("table can't be null"));
+    }
+
+    @Test
+    public void shouldNotAllowNullValueMapperOnTableLeftJoin() {
+        final NullPointerException exception = assertThrows(
+            NullPointerException.class,
+            () -> testStream.leftJoin(testTable, null));
+        assertThat(exception.getMessage(), equalTo("joiner can't be null"));
+    }
+
+    @Test
+    public void shouldNotAllowNullValueMapperOnTableLeftJoinWithJoined() {
+        final NullPointerException exception = assertThrows(
+            NullPointerException.class,
+            () -> testStream.leftJoin(testTable, null, Joined.as("name")));
+        assertThat(exception.getMessage(), equalTo("joiner can't be null"));
+    }
+
+    @Test
+    public void shouldNotAllowNullJoinedOnTableLeftJoin() {
+        final NullPointerException exception = assertThrows(
+            NullPointerException.class,
+            () -> testStream.leftJoin(testTable, MockValueJoiner.TOSTRING_JOINER, null));
+        assertThat(exception.getMessage(), equalTo("joined can't be null"));
+    }
+
+    @Test
     public void shouldNotAllowNullTableOnJoinWithGlobalTable() {
-        testStream.join(null,
-                        MockMapper.selectValueMapper(),
-                        MockValueJoiner.TOSTRING_JOINER);
+        final NullPointerException exception = assertThrows(
+            NullPointerException.class,
+            () -> testStream.join(null, MockMapper.selectValueMapper(), MockValueJoiner.TOSTRING_JOINER));
+        assertThat(exception.getMessage(), equalTo("globalTable can't be null"));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
+    public void shouldNotAllowNullTableOnJoinWithGlobalTableWithNamed() {
+        final NullPointerException exception = assertThrows(
+            NullPointerException.class,
+            () -> testStream.join(
+                null,
+                MockMapper.selectValueMapper(),
+                MockValueJoiner.TOSTRING_JOINER,
+                Named.as("name")));
+        assertThat(exception.getMessage(), equalTo("globalTable can't be null"));
+    }
+
+    @Test
     public void shouldNotAllowNullMapperOnJoinWithGlobalTable() {
-        testStream.join(builder.globalTable("global", stringConsumed),
-                        null,
-                        MockValueJoiner.TOSTRING_JOINER);
+        final NullPointerException exception = assertThrows(
+            NullPointerException.class,
+            () -> testStream.join(testGlobalTable, null, MockValueJoiner.TOSTRING_JOINER));
+        assertThat(exception.getMessage(), equalTo("keySelector can't be null"));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
+    public void shouldNotAllowNullMapperOnJoinWithGlobalTableWithNamed() {
+        final NullPointerException exception = assertThrows(
+            NullPointerException.class,
+            () -> testStream.join(
+                testGlobalTable,
+                null,
+                MockValueJoiner.TOSTRING_JOINER,
+                Named.as("name")));
+        assertThat(exception.getMessage(), equalTo("keySelector can't be null"));
+    }
+
+    @Test
     public void shouldNotAllowNullJoinerOnJoinWithGlobalTable() {
-        testStream.join(builder.globalTable("global", stringConsumed),
-                        MockMapper.selectValueMapper(),
-                        null);
+        final NullPointerException exception = assertThrows(
+            NullPointerException.class,
+            () -> testStream.join(testGlobalTable, MockMapper.selectValueMapper(), null));
+        assertThat(exception.getMessage(), equalTo("joiner can't be null"));
     }
 
-    @Test(expected = NullPointerException.class)
-    public void shouldNotAllowNullTableOnJLeftJoinWithGlobalTable() {
-        testStream.leftJoin(null,
-                            MockMapper.selectValueMapper(),
-                            MockValueJoiner.TOSTRING_JOINER);
+    @Test
+    public void shouldNotAllowNullJoinerOnJoinWithGlobalTableWithNamed() {
+        final NullPointerException exception = assertThrows(
+            NullPointerException.class,
+            () -> testStream.join(
+                testGlobalTable,
+                MockMapper.selectValueMapper(),
+                null,
+                Named.as("name")));
+        assertThat(exception.getMessage(), equalTo("joiner can't be null"));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
+    public void shouldNotAllowNullTableOnLeftJoinWithGlobalTable() {
+        final NullPointerException exception = assertThrows(
+            NullPointerException.class,
+            () -> testStream.leftJoin(null, MockMapper.selectValueMapper(), MockValueJoiner.TOSTRING_JOINER));
+        assertThat(exception.getMessage(), equalTo("globalTable can't be null"));
+    }
+
+    @Test
+    public void shouldNotAllowNullTableOnLeftJoinWithGlobalTableWithNamed() {
+        final NullPointerException exception = assertThrows(
+            NullPointerException.class,
+            () -> testStream.leftJoin(
+                null,
+                MockMapper.selectValueMapper(),
+                MockValueJoiner.TOSTRING_JOINER,
+                Named.as("name")));
+        assertThat(exception.getMessage(), equalTo("globalTable can't be null"));
+    }
+
+    @Test
     public void shouldNotAllowNullMapperOnLeftJoinWithGlobalTable() {
-        testStream.leftJoin(builder.globalTable("global", stringConsumed),
-                        null,
-                        MockValueJoiner.TOSTRING_JOINER);
+        final NullPointerException exception = assertThrows(
+            NullPointerException.class,
+            () -> testStream.leftJoin(testGlobalTable, null, MockValueJoiner.TOSTRING_JOINER));
+        assertThat(exception.getMessage(), equalTo("keySelector can't be null"));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
+    public void shouldNotAllowNullMapperOnLeftJoinWithGlobalTableWithNamed() {
+        final NullPointerException exception = assertThrows(
+            NullPointerException.class,
+            () -> testStream.leftJoin(
+                testGlobalTable,
+                null,
+                MockValueJoiner.TOSTRING_JOINER,
+                Named.as("name")));
+        assertThat(exception.getMessage(), equalTo("keySelector can't be null"));
+    }
+
+    @Test
     public void shouldNotAllowNullJoinerOnLeftJoinWithGlobalTable() {
-        testStream.leftJoin(builder.globalTable("global", stringConsumed),
-                        MockMapper.selectValueMapper(),
-                        null);
+        final NullPointerException exception = assertThrows(
+            NullPointerException.class,
+            () -> testStream.leftJoin(testGlobalTable, MockMapper.selectValueMapper(), null));
+        assertThat(exception.getMessage(), equalTo("joiner can't be null"));
     }
 
     @Test
-    public void shouldThrowNullPointerOnLeftJoinWithTableWhenJoinedIsNull() {
-        final KTable<String, String> table = builder.table("blah", stringConsumed);
-        try {
-            testStream.leftJoin(table,
-                                MockValueJoiner.TOSTRING_JOINER,
-                                null);
-            fail("Should have thrown NullPointerException");
-        } catch (final NullPointerException e) {
-            // ok
-        }
-    }
-
-    @Test
-    public void shouldThrowNullPointerOnJoinWithTableWhenJoinedIsNull() {
-        final KTable<String, String> table = builder.table("blah", stringConsumed);
-        try {
-            testStream.join(table,
-                            MockValueJoiner.TOSTRING_JOINER,
-                            null);
-            fail("Should have thrown NullPointerException");
-        } catch (final NullPointerException e) {
-            // ok
-        }
-    }
-
-    @Test(expected = NullPointerException.class)
-    public void shouldThrowNullPointerOnJoinWithStreamWhenStreamJoinedIsNull() {
-        testStream.join(
-            testStream,
-            MockValueJoiner.TOSTRING_JOINER,
-            JoinWindows.of(ofMillis(10)),
-            (StreamJoined<String, String, String>) null);
-    }
-
-    @Test(expected = NullPointerException.class)
-    public void shouldThrowNullPointerOnOuterJoinStreamJoinedIsNull() {
-        testStream.outerJoin(
-            testStream,
-            MockValueJoiner.TOSTRING_JOINER,
-            JoinWindows.of(ofMillis(10)),
-            (StreamJoined<String, String, String>) null);
+    public void shouldNotAllowNullJoinerOnLeftJoinWithGlobalTableWithNamed() {
+        final NullPointerException exception = assertThrows(
+            NullPointerException.class,
+            () -> testStream.leftJoin(
+                testGlobalTable,
+                MockMapper.selectValueMapper(),
+                null,
+                Named.as("name")));
+        assertThat(exception.getMessage(), equalTo("joiner can't be null"));
     }
 
     @SuppressWarnings("unchecked")
