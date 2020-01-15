@@ -287,7 +287,7 @@ class TransactionsTest extends KafkaServerTestHarness {
           debug(s"aborted transaction Last committed record: ${new String(records.last.value(), "UTF-8")}. Num " +
             s"records written to $topic2: $recordsProcessed")
           TestUtils.resetToCommittedPositions(consumer)
-       }
+        }
       }
     } finally {
       consumer.close()

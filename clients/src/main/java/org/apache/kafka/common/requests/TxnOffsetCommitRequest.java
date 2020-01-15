@@ -50,13 +50,14 @@ public class TxnOffsetCommitRequest extends AbstractRequest {
                        final long producerId,
                        final short producerEpoch,
                        final Map<TopicPartition, CommittedOffset> pendingTxnOffsetCommits) {
-            super(ApiKeys.TXN_OFFSET_COMMIT);
-            this.data = new TxnOffsetCommitRequestData()
-                            .setTransactionalId(transactionalId)
-                            .setGroupId(consumerGroupId)
-                            .setProducerId(producerId)
-                            .setProducerEpoch(producerEpoch)
-                            .setTopics(getTopics(pendingTxnOffsetCommits));
+            this(transactionalId,
+                consumerGroupId,
+                producerId,
+                producerEpoch,
+                pendingTxnOffsetCommits,
+                JoinGroupRequest.UNKNOWN_MEMBER_ID,
+                JoinGroupRequest.UNKNOWN_GENERATION_ID,
+                Optional.empty());
         }
 
         public Builder(final String transactionalId,

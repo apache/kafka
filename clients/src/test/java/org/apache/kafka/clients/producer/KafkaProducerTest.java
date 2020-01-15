@@ -720,10 +720,10 @@ public class KafkaProducerTest {
         client.prepareResponse(addOffsetsToTxnResponse(Errors.NONE));
         client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, host1));
         String groupId = "group";
-        client.prepareResponse((request) ->
+        client.prepareResponse(request ->
             ((TxnOffsetCommitRequest) request).data.groupId().equals(groupId),
             txnOffsetsCommitResponse(Collections.singletonMap(
-                new TopicPartition("topic", 0), Errors.NONE)), true);
+                new TopicPartition("topic", 0), Errors.NONE)));
         client.prepareResponse(endTxnResponse(Errors.NONE));
 
         try (Producer<String, String> producer = new KafkaProducer<>(configs, new StringSerializer(),
@@ -760,13 +760,13 @@ public class KafkaProducerTest {
         String memberId = "member";
         int generationId = 5;
         String groupInstanceId = "instance";
-        client.prepareResponse((request) -> {
-                TxnOffsetCommitRequestData data = ((TxnOffsetCommitRequest) request).data;
-                return data.groupId().equals(groupId) &&
-                    data.memberId().equals(memberId) &&
-                    data.generationId() == generationId &&
-                    data.groupInstanceId().equals(groupInstanceId);
-            },
+        client.prepareResponse(request -> {
+            TxnOffsetCommitRequestData data = ((TxnOffsetCommitRequest) request).data;
+            return data.groupId().equals(groupId) &&
+                       data.memberId().equals(memberId) &&
+                       data.generationId() == generationId &&
+                       data.groupInstanceId().equals(groupInstanceId);
+        },
             txnOffsetsCommitResponse(Collections.singletonMap(
                 new TopicPartition("topic", 0), Errors.NONE)));
         client.prepareResponse(endTxnResponse(Errors.NONE));

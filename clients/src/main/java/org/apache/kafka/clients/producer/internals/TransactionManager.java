@@ -1525,15 +1525,15 @@ public class TransactionManager {
         }
     }
 
-    private boolean isFatalException(Errors error) {
-        return error == Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED
-                || error == Errors.INVALID_PRODUCER_EPOCH
-                || error == Errors.UNSUPPORTED_FOR_MESSAGE_FORMAT;
-    }
-
     private boolean isGroupFencingException(Errors error) {
         return error == Errors.FENCED_INSTANCE_ID
                    || error == Errors.UNKNOWN_MEMBER_ID
                    || error == Errors.ILLEGAL_GENERATION;
+    }
+
+    private boolean isFatalException(Errors error) {
+        return error == Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED
+                   || error == Errors.INVALID_PRODUCER_EPOCH
+                   || error == Errors.UNSUPPORTED_FOR_MESSAGE_FORMAT;
     }
 }

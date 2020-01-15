@@ -954,6 +954,9 @@ public class TransactionManagerTest {
         final long pid = 13131L;
         final short epoch = 1;
         final TopicPartition tp = new TopicPartition("foo", 0);
+        final String memberId = "member";
+        final String fencedMemberId = "fenced_member";
+        final String instanceId = "instance";
 
         doInitTransactions(pid, epoch);
 
@@ -961,7 +964,8 @@ public class TransactionManagerTest {
 
         final boolean enableGroupFencing = true;
         TransactionalRequestResult sendOffsetsResult = transactionManager.sendOffsetsToTransaction(
-            singletonMap(tp, new OffsetAndMetadata(39L)), groupMetadata(consumerGroupId), enableGroupFencing);
+            singletonMap(tp, new OffsetAndMetadata(39L)),
+            new ConsumerGroupMetadata(consumerGroupId, 5, fencedMemberId, Optional.of(instanceId)), enableGroupFencing);
 
         prepareAddOffsetsToTxnResponse(Errors.NONE, consumerGroupId, pid, epoch);
         sender.runOnce();  // AddOffsetsToTxn Handled, TxnOffsetCommit Enqueued
@@ -970,7 +974,15 @@ public class TransactionManagerTest {
         prepareFindCoordinatorResponse(Errors.NONE, false, CoordinatorType.GROUP, consumerGroupId);
         sender.runOnce();  // FindCoordinator Returned
 
-        prepareTxnOffsetCommitResponse(consumerGroupId, pid, epoch, singletonMap(tp, Errors.FENCED_INSTANCE_ID));
+        client.prepareResponse(request -> {
+            TxnOffsetCommitRequest txnOffsetCommitRequest = (TxnOffsetCommitRequest) request;
+            assertEquals(consumerGroupId, txnOffsetCommitRequest.data.groupId());
+            assertEquals(pid, txnOffsetCommitRequest.data.producerId());
+            assertEquals(epoch, txnOffsetCommitRequest.data.producerEpoch());
+            return txnOffsetCommitRequest.data.groupInstanceId().equals(instanceId)
+                && !txnOffsetCommitRequest.data.memberId().equals(memberId);
+        }, new TxnOffsetCommitResponse(0, singletonMap(tp, Errors.FENCED_INSTANCE_ID)));
+
         sender.runOnce();  // TxnOffsetCommit Handled
 
         assertTrue(transactionManager.hasError());
@@ -1020,6 +1032,8 @@ public class TransactionManagerTest {
         final long pid = 13131L;
         final short epoch = 1;
         final TopicPartition tp = new TopicPartition("foo", 0);
+        final String memberId = "member";
+        final String unknownMemberId = "unknownMember";
 
         doInitTransactions(pid, epoch);
 
@@ -1027,7 +1041,8 @@ public class TransactionManagerTest {
 
         final boolean enableGroupFencing = true;
         TransactionalRequestResult sendOffsetsResult = transactionManager.sendOffsetsToTransaction(
-            singletonMap(tp, new OffsetAndMetadata(39L)), groupMetadata(consumerGroupId), enableGroupFencing);
+            singletonMap(tp, new OffsetAndMetadata(39L)),
+            new ConsumerGroupMetadata(consumerGroupId, 5, unknownMemberId, Optional.empty()), enableGroupFencing);
 
         prepareAddOffsetsToTxnResponse(Errors.NONE, consumerGroupId, pid, epoch);
         sender.runOnce();  // AddOffsetsToTxn Handled, TxnOffsetCommit Enqueued
@@ -1036,7 +1051,13 @@ public class TransactionManagerTest {
         prepareFindCoordinatorResponse(Errors.NONE, false, CoordinatorType.GROUP, consumerGroupId);
         sender.runOnce();  // FindCoordinator Returned
 
-        prepareTxnOffsetCommitResponse(consumerGroupId, pid, epoch, singletonMap(tp, Errors.UNKNOWN_MEMBER_ID));
+        client.prepareResponse(request -> {
+            TxnOffsetCommitRequest txnOffsetCommitRequest = (TxnOffsetCommitRequest) request;
+            assertEquals(consumerGroupId, txnOffsetCommitRequest.data.groupId());
+            assertEquals(pid, txnOffsetCommitRequest.data.producerId());
+            assertEquals(epoch, txnOffsetCommitRequest.data.producerEpoch());
+            return !txnOffsetCommitRequest.data.memberId().equals(memberId);
+        }, new TxnOffsetCommitResponse(0, singletonMap(tp, Errors.UNKNOWN_MEMBER_ID)));
         sender.runOnce();  // TxnOffsetCommit Handled
 
         assertTrue(transactionManager.hasError());
@@ -1086,6 +1107,8 @@ public class TransactionManagerTest {
         final long pid = 13131L;
         final short epoch = 1;
         final TopicPartition tp = new TopicPartition("foo", 0);
+        final int generationId = 5;
+        final int illegalGenerationId = 1;
 
         doInitTransactions(pid, epoch);
 
@@ -1093,7 +1116,9 @@ public class TransactionManagerTest {
 
         final boolean enableGroupFencing = true;
         TransactionalRequestResult sendOffsetsResult = transactionManager.sendOffsetsToTransaction(
-            singletonMap(tp, new OffsetAndMetadata(39L)), groupMetadata(consumerGroupId), enableGroupFencing);
+            singletonMap(tp, new OffsetAndMetadata(39L)),
+            new ConsumerGroupMetadata(consumerGroupId, illegalGenerationId, JoinGroupRequest.UNKNOWN_MEMBER_ID,
+                Optional.empty()), enableGroupFencing);
 
         prepareAddOffsetsToTxnResponse(Errors.NONE, consumerGroupId, pid, epoch);
         sender.runOnce();  // AddOffsetsToTxn Handled, TxnOffsetCommit Enqueued
@@ -1103,6 +1128,13 @@ public class TransactionManagerTest {
         sender.runOnce();  // FindCoordinator Returned
 
         prepareTxnOffsetCommitResponse(consumerGroupId, pid, epoch, singletonMap(tp, Errors.ILLEGAL_GENERATION));
+        client.prepareResponse(request -> {
+            TxnOffsetCommitRequest txnOffsetCommitRequest = (TxnOffsetCommitRequest) request;
+            assertEquals(consumerGroupId, txnOffsetCommitRequest.data.groupId());
+            assertEquals(pid, txnOffsetCommitRequest.data.producerId());
+            assertEquals(epoch, txnOffsetCommitRequest.data.producerEpoch());
+            return txnOffsetCommitRequest.data.generationId() != generationId;
+        }, new TxnOffsetCommitResponse(0, singletonMap(tp, Errors.ILLEGAL_GENERATION)));
         sender.runOnce();  // TxnOffsetCommit Handled
 
         assertTrue(transactionManager.hasError());
@@ -2408,7 +2440,7 @@ public class TransactionManagerTest {
         assertFalse(addOffsetsResult.isCompleted());  // We should only be done after both RPCs complete successfully.
 
         txnOffsetCommitResponse.put(tp1, Errors.NONE);
-        prepareTxnOffsetCommitResponse(consumerGroupId, pid, epoch, txnOffsetCommitResponse);
+        prepareTxnOffsetCommitResponse(consumerGroupId, pid, epoch, groupInstanceId, memberId, generationId, txnOffsetCommitResponse);
         sender.runOnce();  // Send TxnOffsetCommitRequest again.
 
         assertTrue(addOffsetsResult.isCompleted());
