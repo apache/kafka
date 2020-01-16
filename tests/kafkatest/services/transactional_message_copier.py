@@ -47,7 +47,7 @@ class TransactionalMessageCopier(KafkaPathResolverMixin, BackgroundThreadService
 
     def __init__(self, context, num_nodes, kafka, transactional_id, consumer_group,
                  input_topic, input_partition, output_topic, max_messages = -1,
-                 transaction_size = 1000, enable_random_aborts=True):
+                 transaction_size = 1000, enable_random_aborts=True, use_group_metadata=False):
         super(TransactionalMessageCopier, self).__init__(context, num_nodes)
         self.kafka = kafka
         self.transactional_id = transactional_id
@@ -62,6 +62,7 @@ class TransactionalMessageCopier(KafkaPathResolverMixin, BackgroundThreadService
         self.remaining = -1
         self.stop_timeout_sec = 60
         self.enable_random_aborts = enable_random_aborts
+        self.use_group_metadata = use_group_metadata
         self.loggers = {
             "org.apache.kafka.clients.producer": "TRACE",
             "org.apache.kafka.clients.consumer": "TRACE"
@@ -122,6 +123,9 @@ class TransactionalMessageCopier(KafkaPathResolverMixin, BackgroundThreadService
 
         if self.enable_random_aborts:
             cmd += " --enable-random-aborts"
+
+        if self.use_group_metadata:
+            cmd += " --use_group_metadata"
 
         if self.max_messages > 0:
             cmd += " --max-messages %s" % str(self.max_messages)

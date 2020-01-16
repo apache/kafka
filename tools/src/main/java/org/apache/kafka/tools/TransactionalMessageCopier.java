@@ -35,8 +35,9 @@ import org.apache.kafka.common.errors.OutOfOrderSequenceException;
 import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.utils.Exit;
 
-import java.io.IOException;
 import java.time.Duration;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
@@ -136,6 +137,21 @@ public class TransactionalMessageCopier {
                 .metavar("ENABLE-RANDOM-ABORTS")
                 .dest("enableRandomAborts")
                 .help("Whether or not to enable random transaction aborts (for system testing)");
+
+        parser.addArgument("--group-mode")
+                .action(storeTrue())
+                .type(Boolean.class)
+                .metavar("GROUP-MODE")
+                .dest("groupMode")
+                .help("Whether to let consumer subscribe to the input topic or do manual assign. If we do" +
+                          " subscription based consumption, the input partition shall be ignored");
+
+        parser.addArgument("--use-group-metadata")
+                .action(storeTrue())
+                .type(Boolean.class)
+                .metavar("USE-GROUP-METADATA")
+                .dest("useGroupMetadata")
+                .help("Whether to use the new transactional commit API with group metadata");
 
         return parser;
     }
@@ -242,22 +258,29 @@ public class TransactionalMessageCopier {
         return toJsonString(shutdownData);
     }
 
-    public static void main(String[] args) throws IOException {
+    public static void main(String[] args) {
         Namespace parsedArgs = argParser().parseArgsOrFail(args);
         Integer numMessagesPerTransaction = parsedArgs.getInt("messagesPerTransaction");
         final String transactionalId = parsedArgs.getString("transactionalId");
         final String outputTopic = parsedArgs.getString("outputTopic");
 
         String consumerGroup = parsedArgs.getString("consumerGroup");
-        TopicPartition inputPartition = new TopicPartition(parsedArgs.getString("inputTopic"), parsedArgs.getInt("inputPartition"));
 
         final KafkaProducer<String, String> producer = createProducer(parsedArgs);
         final KafkaConsumer<String, String> consumer = createConsumer(parsedArgs);
 
-        consumer.assign(singleton(inputPartition));
-
         long maxMessages = parsedArgs.getInt("maxMessages") == -1 ? Long.MAX_VALUE : parsedArgs.getInt("maxMessages");
-        maxMessages = Math.min(messagesRemaining(consumer, inputPartition), maxMessages);
+
+        Boolean groupMode = parsedArgs.getBoolean("groupMode");
+        String topicName = parsedArgs.getString("inputTopic");
+        if (groupMode) {
+            consumer.subscribe(Collections.singleton(topicName));
+        } else {
+            TopicPartition inputPartition = new TopicPartition(topicName, parsedArgs.getInt("inputPartition"));
+            consumer.assign(singleton(inputPartition));
+            maxMessages = Math.min(messagesRemaining(consumer, inputPartition), maxMessages);
+        }
+
         final boolean enableRandomAborts = parsedArgs.getBoolean("enableRandomAborts");
 
         producer.initTransactions();
@@ -275,6 +298,7 @@ public class TransactionalMessageCopier {
             System.out.println(shutDownString(numMessagesProcessed.get(), remainingMessages.get(), transactionalId));
         });
 
+        final boolean useGroupMetadata = parsedArgs.getBoolean("useGroupMetadata");
         try {
             Random random = new Random();
             while (0 < remainingMessages.get()) {
@@ -293,7 +317,12 @@ public class TransactionalMessageCopier {
                             messagesInCurrentTransaction++;
                         }
                     }
-                    producer.sendOffsetsToTransaction(consumerPositions(consumer), consumerGroup);
+
+                    if (useGroupMetadata) {
+                        producer.sendOffsetsToTransaction(consumerPositions(consumer), consumer.groupMetadata());
+                    } else {
+                        producer.sendOffsetsToTransaction(consumerPositions(consumer), consumerGroup);
+                    }
 
                     if (enableRandomAborts && random.nextInt() % 3 == 0) {
                         throw new KafkaException("Aborting transaction");
