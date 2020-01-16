@@ -21,7 +21,6 @@ import org.apache.kafka.clients.RequestCompletionHandler;
 import org.apache.kafka.clients.consumer.CommitFailedException;
 import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
-import org.apache.kafka.common.utils.ProducerIdAndEpoch;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
@@ -59,6 +58,7 @@ import org.apache.kafka.common.requests.TxnOffsetCommitRequest.CommittedOffset;
 import org.apache.kafka.common.requests.TxnOffsetCommitResponse;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.PrimitiveRef;
+import org.apache.kafka.common.utils.ProducerIdAndEpoch;
 import org.slf4j.Logger;
 
 import java.util.ArrayList;
@@ -75,9 +75,6 @@ import java.util.SortedSet;
 import java.util.TreeSet;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
-
-import static org.apache.kafka.common.record.RecordBatch.NO_PRODUCER_EPOCH;
-import static org.apache.kafka.common.record.RecordBatch.NO_PRODUCER_ID;
 
 /**
  * A class which maintains state for transactions. Also keeps the state necessary to ensure idempotent production.
@@ -217,8 +214,10 @@ public class TransactionManager {
 
         private boolean isTransitionValid(State source, State target) {
             switch (target) {
+                case UNINITIALIZED:
+                    return source == READY;
                 case INITIALIZING:
-                    return source == UNINITIALIZED || source == READY;
+                    return source == UNINITIALIZED;
                 case READY:
                     return source == INITIALIZING || source == COMMITTING_TRANSACTION || source == ABORTING_TRANSACTION;
                 case IN_TRANSACTION:
@@ -256,7 +255,7 @@ public class TransactionManager {
     }
 
     public TransactionManager(LogContext logContext, String transactionalId, int transactionTimeoutMs, long retryBackoffMs) {
-        this.producerIdAndEpoch = new ProducerIdAndEpoch(NO_PRODUCER_ID, NO_PRODUCER_EPOCH);
+        this.producerIdAndEpoch = ProducerIdAndEpoch.NONE;
         this.transactionalId = transactionalId;
         this.log = logContext.logger(TransactionManager.class);
         this.transactionTimeoutMs = transactionTimeoutMs;
@@ -278,12 +277,7 @@ public class TransactionManager {
 
     public synchronized TransactionalRequestResult initializeTransactions() {
         return handleCachedTransactionRequestResult(() -> {
-            if (currentState != State.UNINITIALIZED)
-                throw new KafkaException("The `initializeTransactions` API should only be called once " +
-                        "after the producer is instantiated");
-
             transitionTo(State.INITIALIZING);
-            setProducerIdAndEpoch(ProducerIdAndEpoch.NONE);
             InitProducerIdRequestData requestData = new InitProducerIdRequestData()
                     .setTransactionalId(transactionalId)
                     .setTransactionTimeoutMs(transactionTimeoutMs);
@@ -460,7 +454,7 @@ public class TransactionManager {
     /**
      * Set the producer id and epoch atomically.
      */
-    void setProducerIdAndEpoch(ProducerIdAndEpoch producerIdAndEpoch) {
+    private void setProducerIdAndEpoch(ProducerIdAndEpoch producerIdAndEpoch) {
         log.info("ProducerId set to {} with epoch {}", producerIdAndEpoch.producerId, producerIdAndEpoch.epoch);
         this.producerIdAndEpoch = producerIdAndEpoch;
     }
@@ -482,29 +476,31 @@ public class TransactionManager {
      * would not have any way of knowing this happened. So for the transactional producer, it's best to return the
      * produce error to the user and let them abort the transaction and close the producer explicitly.
      */
-    synchronized void resetProducerId() {
+    synchronized void resetIdempotentProducerId() {
         if (isTransactional())
             throw new IllegalStateException("Cannot reset producer state for a transactional producer. " +
                     "You must either abort the ongoing transaction or reinitialize the transactional producer instead");
         setProducerIdAndEpoch(ProducerIdAndEpoch.NONE);
         topicPartitionBookkeeper.reset();
         this.partitionsWithUnresolvedSequences.clear();
+        transitionTo(State.UNINITIALIZED);
     }
 
-    synchronized void resetProducerIdIfNeeded() {
-        if (shouldResetProducerStateAfterResolvingSequences())
-            // Check if the previous run expired batches which requires a reset of the producer state.
-            resetProducerId();
+    synchronized void resetIdempotentProducerIdIfNeeded() {
+        if (!isTransactional()) {
+            if (shouldResetProducerStateAfterResolvingSequences()) {
+                // Check if the previous run expired batches which requires a reset of the producer state.
+                resetIdempotentProducerId();
+            }
 
-        if (!isTransactional()
-                && currentState != State.INITIALIZING
-                && !hasProducerId()) {
-            transitionTo(State.INITIALIZING);
-            InitProducerIdRequestData requestData = new InitProducerIdRequestData()
-                    .setTransactionalId(null)
-                    .setTransactionTimeoutMs(Integer.MAX_VALUE);
-            InitProducerIdHandler handler = new InitProducerIdHandler(new InitProducerIdRequest.Builder(requestData));
-            enqueueRequest(handler);
+            if (currentState != State.INITIALIZING && !hasProducerId()) {
+                transitionTo(State.INITIALIZING);
+                InitProducerIdRequestData requestData = new InitProducerIdRequestData()
+                        .setTransactionalId(null)
+                        .setTransactionTimeoutMs(Integer.MAX_VALUE);
+                InitProducerIdHandler handler = new InitProducerIdHandler(new InitProducerIdRequest.Builder(requestData));
+                enqueueRequest(handler);
+            }
         }
     }
 
@@ -637,7 +633,7 @@ public class TransactionManager {
             // Reset the producerId since we have hit an irrecoverable exception and cannot make any guarantees
             // about the previously committed message. Note that this will discard the producer id and sequence
             // numbers for all existing partitions.
-            resetProducerId();
+            resetIdempotentProducerId();
         } else {
             removeInFlightBatch(batch);
             if (adjustSequenceNumbers)
@@ -713,9 +709,6 @@ public class TransactionManager {
     // Checks if there are any partitions with unresolved partitions which may now be resolved. Returns true if
     // the producer id needs a reset, false otherwise.
     private boolean shouldResetProducerStateAfterResolvingSequences() {
-        if (isTransactional())
-            // We should not reset producer state if we are transactional. We will transition to a fatal error instead.
-            return false;
         for (Iterator<TopicPartition> iter = partitionsWithUnresolvedSequences.iterator(); iter.hasNext(); ) {
             TopicPartition topicPartition = iter.next();
             if (!hasInflightBatches(topicPartition)) {

@@ -312,7 +312,10 @@ public class Sender implements Runnable {
                     return;
                 }
 
-                transactionManager.resetProducerIdIfNeeded();
+                // Check whether we need a new producerId. If so, we will enqueue an InitProducerId
+                // request which will be sent below
+                transactionManager.resetIdempotentProducerIdIfNeeded();
+
                 if (maybeSendAndPollTransactionalRequest()) {
                     return;
                 }
@@ -374,7 +377,7 @@ public class Sender implements Runnable {
         expiredBatches.addAll(expiredInflightBatches);
 
         // Reset the producer id if an expired batch has previously been sent to the broker. Also update the metrics
-        // for expired batches. see the documentation of @TransactionState.resetProducerId to understand why
+        // for expired batches. see the documentation of @TransactionState.resetIdempotentProducerId to understand why
         // we need to reset the producer id here.
         if (!expiredBatches.isEmpty())
             log.trace("Expired {} batches in accumulator", expiredBatches.size());

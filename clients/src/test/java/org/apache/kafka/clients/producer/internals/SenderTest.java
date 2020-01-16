@@ -1166,8 +1166,9 @@ public class SenderTest {
     public void testResetOfProducerStateShouldAllowQueuedBatchesToDrain() throws Exception {
         final long producerId = 343434L;
         TransactionManager transactionManager = new TransactionManager();
-        transactionManager.setProducerIdAndEpoch(new ProducerIdAndEpoch(producerId, (short) 0));
         setupWithTransactionState(transactionManager);
+        prepareAndReceiveInitProducerId(producerId, Errors.NONE);
+        assertTrue(transactionManager.hasProducerId());
 
         int maxRetries = 10;
         Metrics m = new Metrics();
@@ -1209,8 +1210,9 @@ public class SenderTest {
     public void testCloseWithProducerIdReset() throws Exception {
         final long producerId = 343434L;
         TransactionManager transactionManager = new TransactionManager();
-        transactionManager.setProducerIdAndEpoch(new ProducerIdAndEpoch(producerId, (short) 0));
         setupWithTransactionState(transactionManager);
+        prepareAndReceiveInitProducerId(producerId, Errors.NONE);
+        assertTrue(transactionManager.hasProducerId());
 
         Metrics m = new Metrics();
         SenderMetricsRegistry senderMetrics = new SenderMetricsRegistry(m);
@@ -1246,8 +1248,9 @@ public class SenderTest {
     @Test
     public void testForceCloseWithProducerIdReset() throws Exception {
         TransactionManager transactionManager = new TransactionManager();
-        transactionManager.setProducerIdAndEpoch(new ProducerIdAndEpoch(1L, (short) 0));
         setupWithTransactionState(transactionManager);
+        prepareAndReceiveInitProducerId(1L, Errors.NONE);
+        assertTrue(transactionManager.hasProducerId());
 
         Metrics m = new Metrics();
         SenderMetricsRegistry senderMetrics = new SenderMetricsRegistry(m);
@@ -1279,8 +1282,9 @@ public class SenderTest {
     public void testBatchesDrainedWithOldProducerIdShouldFailWithOutOfOrderSequenceOnSubsequentRetry() throws Exception {
         final long producerId = 343434L;
         TransactionManager transactionManager = new TransactionManager();
-        transactionManager.setProducerIdAndEpoch(new ProducerIdAndEpoch(producerId, (short) 0));
         setupWithTransactionState(transactionManager);
+        prepareAndReceiveInitProducerId(producerId, Errors.NONE);
+        assertTrue(transactionManager.hasProducerId());
 
         int maxRetries = 10;
         Metrics m = new Metrics();
@@ -1761,8 +1765,9 @@ public class SenderTest {
     public void testSequenceNumberIncrement() throws InterruptedException {
         final long producerId = 343434L;
         TransactionManager transactionManager = new TransactionManager();
-        transactionManager.setProducerIdAndEpoch(new ProducerIdAndEpoch(producerId, (short) 0));
         setupWithTransactionState(transactionManager);
+        prepareAndReceiveInitProducerId(producerId, Errors.NONE);
+        assertTrue(transactionManager.hasProducerId());
 
         int maxRetries = 10;
         Metrics m = new Metrics();
@@ -1804,8 +1809,9 @@ public class SenderTest {
     public void testAbortRetryWhenProducerIdChanges() throws InterruptedException {
         final long producerId = 343434L;
         TransactionManager transactionManager = new TransactionManager();
-        transactionManager.setProducerIdAndEpoch(new ProducerIdAndEpoch(producerId, (short) 0));
         setupWithTransactionState(transactionManager);
+        prepareAndReceiveInitProducerId(producerId, Errors.NONE);
+        assertTrue(transactionManager.hasProducerId());
 
         int maxRetries = 10;
         Metrics m = new Metrics();
@@ -1824,8 +1830,8 @@ public class SenderTest {
         assertEquals(0, client.inFlightRequestCount());
         assertFalse("Client ready status should be false", client.isReady(node, time.milliseconds()));
 
-        transactionManager.resetProducerId();
-        transactionManager.setProducerIdAndEpoch(new ProducerIdAndEpoch(producerId + 1, (short) 0));
+        transactionManager.resetIdempotentProducerId();
+        prepareAndReceiveInitProducerId(producerId + 1, Errors.NONE);
         sender.runOnce(); // receive error
         sender.runOnce(); // reconnect
         sender.runOnce(); // nothing to do, since the pid has changed. We should check the metrics for errors.
@@ -1842,8 +1848,9 @@ public class SenderTest {
     public void testResetWhenOutOfOrderSequenceReceived() throws InterruptedException {
         final long producerId = 343434L;
         TransactionManager transactionManager = new TransactionManager();
-        transactionManager.setProducerIdAndEpoch(new ProducerIdAndEpoch(producerId, (short) 0));
         setupWithTransactionState(transactionManager);
+        prepareAndReceiveInitProducerId(producerId, Errors.NONE);
+        assertTrue(transactionManager.hasProducerId());
 
         int maxRetries = 10;
         Metrics m = new Metrics();
@@ -1872,7 +1879,9 @@ public class SenderTest {
         TopicPartition tp = new TopicPartition("testSplitBatchAndSend", 1);
         TransactionManager txnManager = new TransactionManager();
         ProducerIdAndEpoch producerIdAndEpoch = new ProducerIdAndEpoch(123456L, (short) 0);
-        txnManager.setProducerIdAndEpoch(producerIdAndEpoch);
+        setupWithTransactionState(txnManager);
+        prepareAndReceiveInitProducerId(123456L, Errors.NONE);
+        assertTrue(txnManager.hasProducerId());
         testSplitBatchAndSend(txnManager, producerIdAndEpoch, tp);
     }
 
