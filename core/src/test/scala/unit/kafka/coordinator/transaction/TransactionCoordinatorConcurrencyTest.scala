@@ -344,7 +344,7 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
 
   class LoadTxnPartitionAction(txnTopicPartitionId: Int) extends Action {
     override def run(): Unit = {
-      transactionCoordinator.handleTxnImmigration(txnTopicPartitionId, coordinatorEpoch)
+      transactionCoordinator.onElection(txnTopicPartitionId, coordinatorEpoch)
     }
     override def await(): Unit = {
       allTransactions.foreach { txn =>
@@ -358,7 +358,7 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
   class UnloadTxnPartitionAction(txnTopicPartitionId: Int) extends Action {
     val txnRecords: mutable.ArrayBuffer[SimpleRecord] = mutable.ArrayBuffer[SimpleRecord]()
     override def run(): Unit = {
-      transactionCoordinator.handleTxnEmigration(txnTopicPartitionId, coordinatorEpoch)
+      transactionCoordinator.onResignation(txnTopicPartitionId, Some(coordinatorEpoch))
     }
     override def await(): Unit = {
       allTransactions.foreach { txn =>
