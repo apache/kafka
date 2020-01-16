@@ -21,8 +21,7 @@ package unit.kafka.admin
 import java.util.concurrent.ExecutionException
 import java.util.{Collections, Properties}
 
-import kafka.admin.{AdminClientReassignCommandService, AdminOperationException, BrokerMetadata, RackAwareMode, ZkClientReassignCommandService}
-import kafka.log.LogConfig.{FollowerReplicationThrottledReplicasProp, LeaderReplicationThrottledReplicasProp}
+import kafka.admin.{AdminClientReassignCommandService, BrokerMetadata, ZkClientReassignCommandService}
 import kafka.server.{ConfigType, KafkaServer}
 import kafka.utils.{Logging, TestUtils}
 import kafka.zk.{AdminZkClient, KafkaZkClient, ZooKeeperTestHarness}
@@ -30,7 +29,6 @@ import org.apache.kafka.clients.admin.{Admin, MockAdminClient}
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException
 import org.apache.kafka.common.{Node, TopicPartition, TopicPartitionInfo}
 import org.easymock.EasyMock.{replay, _}
-import org.easymock.{Capture, CaptureType, EasyMock}
 import org.junit.{After, Test}
 import org.junit.Assert.{assertEquals, assertFalse}
 
@@ -55,15 +53,15 @@ class ReassignPartitionsServiceClientZkTest extends ZooKeeperTestHarness with Lo
 
   // Test update topic configs and broker configs
   @Test
-  def testShouldOverrideTopicConfigs() : Unit = {
+  def testUpdateShouldOverrideEmptyTopicConfigs() : Unit = {
     val testTopicName = "TOPIC0"
     val configUpdatesMap = Map("property1" -> "0", "property2" -> "1")
 
-    // Test 1: Have empty properties, this should just set the ones we expect.
+    // Test: Have empty properties, this should just set the ones we expect.
     val test1Properties = new Properties()
-    configUpdatesMap.foreach({ case (k,v) => test1Properties.setProperty(k : String, v : String)})
-    val mockZkClient : KafkaZkClient = createMock(classOf[KafkaZkClient])
-    val mockAdminZkClient : AdminZkClient= createMock(classOf[AdminZkClient])
+    configUpdatesMap.foreach({ case (k, v) => test1Properties.setProperty(k: String, v: String) })
+    val mockZkClient: KafkaZkClient = createMock(classOf[KafkaZkClient])
+    val mockAdminZkClient: AdminZkClient = createMock(classOf[AdminZkClient])
     expect(mockAdminZkClient.fetchEntityConfig(ConfigType.Topic, testTopicName)).andReturn(new Properties)
     expect(mockAdminZkClient.changeTopicConfig(testTopicName, test1Properties))
     replay(mockZkClient)
@@ -72,18 +70,24 @@ class ReassignPartitionsServiceClientZkTest extends ZooKeeperTestHarness with Lo
     val service = new ZkClientReassignCommandService(mockZkClient, Some(mockAdminZkClient))
 
     service.UpdateTopicConfigs("TOPIC0", configUpdatesMap)
+  }
 
-    // Test 2: Hove other Properties that are completely disjoint from the ones we're updating.
-    reset(mockZkClient)
-    reset(mockAdminZkClient)
-    var test2Properties = new Properties
+  @Test
+  def testUpdateShouldNotOverrideOtherTopicConfigs() : Unit = {
+    val testTopicName = "TOPIC0"
+    val configUpdatesMap = Map("property1" -> "0", "property2" -> "1")
+
+    // Test: Hove other Properties that are completely disjoint from the ones we're updating.
+    val mockZkClient: KafkaZkClient = createMock(classOf[KafkaZkClient])
+    val mockAdminZkClient: AdminZkClient = createMock(classOf[AdminZkClient])
+    val test2Properties = new Properties
     val test2XtraPropertiesMap = Map("otherProp1" -> "otherVal1", "otherProp2" -> "otherVal2")
-    for ((k,v) <- test2XtraPropertiesMap) {
+    for ((k, v) <- test2XtraPropertiesMap) {
       test2Properties.setProperty(k, v)
     }
     val test2ExpectedPropertiesMap = configUpdatesMap ++ test2XtraPropertiesMap
-    var test2ExpectedProperties = new Properties
-    for ((k,v) <- test2ExpectedPropertiesMap) {
+    val test2ExpectedProperties = new Properties
+    for ((k, v) <- test2ExpectedPropertiesMap) {
       test2ExpectedProperties.setProperty(k, v)
     }
 
@@ -95,13 +99,20 @@ class ReassignPartitionsServiceClientZkTest extends ZooKeeperTestHarness with Lo
     val serviceTest2 = new ZkClientReassignCommandService(mockZkClient, Some(mockAdminZkClient))
 
     serviceTest2.UpdateTopicConfigs("TOPIC0", configUpdatesMap)
+  }
 
-    // Test 3. Overwrite some properties.
-    reset(mockZkClient)
-    reset(mockAdminZkClient)
-    var test3Properties = new Properties
+  @Test
+  def testUpdateShouldOverrideExistingTopicConfigs() : Unit = {
+    val testTopicName = "TOPIC0"
+    val configUpdatesMap = Map("property1" -> "0", "property2" -> "1")
+
+    // Test. Overwrite existing properties.
+    val mockZkClient: KafkaZkClient = createMock(classOf[KafkaZkClient])
+    val mockAdminZkClient: AdminZkClient = createMock(classOf[AdminZkClient])
+
+    val test3Properties = new Properties
     val test3PropertiesMap = Map("otherProp1" -> "otherVal1", "property2" -> "origVal2")
-    var test3ExpectedProperties = new Properties()
+    val test3ExpectedProperties = new Properties()
     for ((k,v) <- test3PropertiesMap) {
       test3Properties.setProperty(k, v)
       test3ExpectedProperties.setProperty(k, v)
@@ -123,15 +134,15 @@ class ReassignPartitionsServiceClientZkTest extends ZooKeeperTestHarness with Lo
   // Test update broker configs. This behaves similarly to the topic test but the
   // interface is slightly different.
   @Test
-  def testShouldOverrideBrokerConfigs() : Unit = {
+  def testUpdateShouldOverrideEmptyBrokerConfigs() : Unit = {
     val testBrokerId = 17
     val configUpdatesMap = Map("property1" -> "0", "property2" -> "1")
 
     // Test 1: Have empty properties, this should just set the ones we expect.
     val test1Properties = new Properties()
-    configUpdatesMap.foreach({ case (k,v) => test1Properties.setProperty(k : String, v : String)})
-    val mockZkClient : KafkaZkClient = createMock(classOf[KafkaZkClient])
-    val mockAdminZkClient : AdminZkClient= createMock(classOf[AdminZkClient])
+    configUpdatesMap.foreach({ case (k, v) => test1Properties.setProperty(k: String, v: String) })
+    val mockZkClient: KafkaZkClient = createMock(classOf[KafkaZkClient])
+    val mockAdminZkClient: AdminZkClient = createMock(classOf[AdminZkClient])
     expect(mockAdminZkClient.fetchEntityConfig(ConfigType.Broker, testBrokerId.toString)).andReturn(new Properties)
     expect(mockAdminZkClient.changeBrokerConfig(Seq(testBrokerId), test1Properties))
     replay(mockZkClient)
@@ -140,20 +151,27 @@ class ReassignPartitionsServiceClientZkTest extends ZooKeeperTestHarness with Lo
     val service = new ZkClientReassignCommandService(mockZkClient, Some(mockAdminZkClient))
 
     service.UpdateBrokerConfigs(testBrokerId, configUpdatesMap)
+  }
 
-    // Test 2: Hove other Properties that are completely disjoint from the ones we're updating.
-    reset(mockZkClient)
-    reset(mockAdminZkClient)
-    var test2Properties = new Properties
+  @Test
+  def testUpdateShouldNotOverrideOtherBrokerConfigs() : Unit = {
+    val testBrokerId = 17
+    val configUpdatesMap = Map("property1" -> "0", "property2" -> "1")
+
+    // Test: Hove other Properties that are completely disjoint from the ones we're updating.
+    val test2Properties = new Properties
     val test2XtraPropertiesMap = Map("otherProp1" -> "otherVal1", "otherProp2" -> "otherVal2")
-    for ((k,v) <- test2XtraPropertiesMap) {
+    for ((k, v) <- test2XtraPropertiesMap) {
       test2Properties.setProperty(k, v)
     }
     val test2ExpectedPropertiesMap = configUpdatesMap ++ test2XtraPropertiesMap
-    var test2ExpectedProperties = new Properties
-    for ((k,v) <- test2ExpectedPropertiesMap) {
+    val test2ExpectedProperties = new Properties
+    for ((k, v) <- test2ExpectedPropertiesMap) {
       test2ExpectedProperties.setProperty(k, v)
     }
+
+    val mockZkClient: KafkaZkClient = createMock(classOf[KafkaZkClient])
+    val mockAdminZkClient: AdminZkClient = createMock(classOf[AdminZkClient])
 
     expect(mockAdminZkClient.fetchEntityConfig(ConfigType.Broker, testBrokerId.toString)).andReturn(test2Properties)
     expect(mockAdminZkClient.changeBrokerConfig(Seq(testBrokerId), test2ExpectedProperties))
@@ -163,13 +181,17 @@ class ReassignPartitionsServiceClientZkTest extends ZooKeeperTestHarness with Lo
     val serviceTest2 = new ZkClientReassignCommandService(mockZkClient, Some(mockAdminZkClient))
 
     serviceTest2.UpdateBrokerConfigs(testBrokerId, configUpdatesMap)
+  }
 
-    // Test 3. Overwrite some properties.
-    reset(mockZkClient)
-    reset(mockAdminZkClient)
-    var test3Properties = new Properties
+  @Test
+  def testUpdateShouldOverrideExistingBrokerConfigs() : Unit = {
+    val testBrokerId = 17
+    val configUpdatesMap = Map("property1" -> "0", "property2" -> "1")
+
+    // Test. Overwrite some existing broker properties.
+    val test3Properties = new Properties
     val test3PropertiesMap = Map("otherProp1" -> "otherVal1", "property2" -> "origVal2")
-    var test3ExpectedProperties = new Properties()
+    val test3ExpectedProperties = new Properties()
     for ((k,v) <- test3PropertiesMap) {
       test3Properties.setProperty(k, v)
       test3ExpectedProperties.setProperty(k, v)
@@ -177,6 +199,8 @@ class ReassignPartitionsServiceClientZkTest extends ZooKeeperTestHarness with Lo
     for ((k,v) <- configUpdatesMap) {
       test3ExpectedProperties.setProperty(k, v)
     }
+    val mockZkClient: KafkaZkClient = createMock(classOf[KafkaZkClient])
+    val mockAdminZkClient: AdminZkClient = createMock(classOf[AdminZkClient])
 
     expect(mockAdminZkClient.fetchEntityConfig(ConfigType.Broker, testBrokerId.toString)).andReturn(test3Properties)
     expect(mockAdminZkClient.changeBrokerConfig(Seq(testBrokerId), test3ExpectedProperties))
@@ -243,7 +267,7 @@ class ReassignPartitionsServiceClientAdminTest {
   }
 
   @Test
-  def testGetBrokerMetadatasRackedBrokers() : Unit = {
+  def testGetBrokerMetadatasRackAwareDisabledRackedBrokersWithValidRacks() : Unit = {
     // Don't use the standard Test Cluster but one that's all got rack data
     val brokerIds = List(0, 1, 2, 3)
     val portBase = 9000
@@ -255,9 +279,32 @@ class ReassignPartitionsServiceClientAdminTest {
     // Test the flavors of rack-aware with valid rack info
     val brokerMetadataRackDisabled = serviceClient.getBrokerMetadatas(kafka.admin.RackAwareMode.Disabled, None)
     assertEquals(brokerIds.map(id => new BrokerMetadata(id, None)), brokerMetadataRackDisabled)
+  }
 
+  @Test
+  def testGetBrokerMetadatasRackAwareEnforcedRackedBrokersWithValidRacks() : Unit = {
+    // Don't use the standard Test Cluster but one that's all got rack data
+    val brokerIds = List(0, 1, 2, 3)
+    val portBase = 9000
+    val brokerList = brokerIds.map { id => new Node(id, s"broker-$id", portBase, s"rack-$id"); }
+    val mockAdmin = new MockAdminClient(brokerList.asJava, brokerList(2))
+
+    val serviceClient = new AdminClientReassignCommandService(mockAdmin)
+
+    // Test the flavors of rack-aware with valid rack info
     val brokerMetadataRackAware = serviceClient.getBrokerMetadatas(kafka.admin.RackAwareMode.Enforced, None)
     assertEquals(brokerIds.map(id => new BrokerMetadata(id, Some(s"rack-$id"))), brokerMetadataRackAware)
+  }
+
+  @Test
+  def testGetBrokerMetadatasRackAwareSafeRackedBrokersWithValidRacks() : Unit = {
+    // Don't use the standard Test Cluster but one that's all got rack data
+    val brokerIds = List(0, 1, 2, 3)
+    val portBase = 9000
+    val brokerList = brokerIds.map { id => new Node(id, s"broker-$id", portBase, s"rack-$id"); }
+    val mockAdmin = new MockAdminClient(brokerList.asJava, brokerList(2))
+
+    val serviceClient = new AdminClientReassignCommandService(mockAdmin)
 
     // RackAwareMode Safe should return rack info for this example
     val brokerMetadataRackSafe = serviceClient.getBrokerMetadatas(kafka.admin.RackAwareMode.Safe, None)
@@ -265,24 +312,36 @@ class ReassignPartitionsServiceClientAdminTest {
   }
 
   @Test
-  def testGetBrokerMetadatasMixedRackData() : Unit = {
+  def testGetBrokerMetadatasMixedRackDataRackAwareDisabled() : Unit = {
     val mockAdmin = setUpTestCluster()
     val serviceClient = new AdminClientReassignCommandService(mockAdmin)
 
     // Test the flavors of rack-aware with not-all-valid rack info
     val brokerMetadataRackDisabled = serviceClient.getBrokerMetadatas(kafka.admin.RackAwareMode.Disabled, None)
     assertEquals(brokerIds.map(id => new BrokerMetadata(id, None)), brokerMetadataRackDisabled)
+  }
+
+  @Test
+  def testGetBrokerMetadatasMixedRackDataRackAwareEnforced() : Unit = {
+    val mockAdmin = setUpTestCluster()
+    val serviceClient = new AdminClientReassignCommandService(mockAdmin)
 
     // Enforced rack mode should throw here
     val badRackResult = Try(serviceClient.getBrokerMetadatas(kafka.admin.RackAwareMode.Enforced, None))
     assert(badRackResult.isFailure)
-    badRackResult match {
-        // Shouldn't succeed
+    assert(badRackResult match {
+      // Shouldn't succeed
       case Success(v) => false
-        // Expect an AdminOperationException
+      // Expect an AdminOperationException
       case Failure(e: kafka.admin.AdminOperationException) => true
       case Failure(e) => false
-    }
+    })
+  }
+
+  @Test
+  def testGetBrokerMetadatasMixedRackDataRackAwareSafe() : Unit = {
+    val mockAdmin = setUpTestCluster()
+    val serviceClient = new AdminClientReassignCommandService(mockAdmin)
 
     // RackAwareMode Safe should return *no* rack info for this example.
     val brokerMetadataRackSafe = serviceClient.getBrokerMetadatas(kafka.admin.RackAwareMode.Safe, None)
@@ -290,17 +349,31 @@ class ReassignPartitionsServiceClientAdminTest {
   }
 
   @Test
-  def testGetBrokerMetadatasLimitedSet() : Unit = {
+  def testGetBrokerMetadatasLimitedSetAll() : Unit = {
     val mockAdmin = setUpTestCluster()
     val serviceClient = new AdminClientReassignCommandService(mockAdmin)
     val interestingBrokers = Array(4, 6)
 
     // Test limiting
     val brokerMetadataLimited = serviceClient.getBrokerMetadatas(kafka.admin.RackAwareMode.Disabled, Some(interestingBrokers))
-    assert(brokerMetadataLimited.forall{ n => interestingBrokers.contains(n.id) })
+    assert(brokerMetadataLimited.forall { n => interestingBrokers.contains(n.id) })
+  }
 
-    val brokerMetadataFullList =  serviceClient.getBrokerMetadatas(kafka.admin.RackAwareMode.Disabled, Some(List.empty[Int]))
-    assertEquals(brokerIds, brokerMetadataFullList.collect ({ case m: BrokerMetadata  => m.id}))
+
+  @Test
+  def testGetBrokerMetadatasLimitedSetEmptyList() : Unit = {
+    val mockAdmin = setUpTestCluster()
+    val serviceClient = new AdminClientReassignCommandService(mockAdmin)
+
+    val brokerMetadataFullList = serviceClient.getBrokerMetadatas(kafka.admin.RackAwareMode.Disabled, Some(List.empty[Int]))
+    assertEquals(brokerIds, brokerMetadataFullList.collect({ case m: BrokerMetadata => m.id }))
+  }
+
+
+  @Test
+  def testGetBrokerMetadatasLimitedSetNone() : Unit = {
+    val mockAdmin = setUpTestCluster()
+    val serviceClient = new AdminClientReassignCommandService(mockAdmin)
 
     val brokerMetadataFullNone =  serviceClient.getBrokerMetadatas(kafka.admin.RackAwareMode.Disabled, None)
     assertEquals(brokerIds, brokerMetadataFullNone.collect ({ case m: BrokerMetadata => m.id}))
@@ -312,23 +385,36 @@ class ReassignPartitionsServiceClientAdminTest {
   def testUpdateTopicConfigs() : Unit = ???
 
   @Test
-  def testGetPartitionsForTopics() : Unit = {
+  def testGetPartitionsForTopicsAll() : Unit = {
     val mockAdmin = setUpTestCluster()
     val serviceClient = new AdminClientReassignCommandService(mockAdmin)
 
     // Test 1: Fetch all known topics
     val topicQuery1 = Set("test1", "test2", "test3")
     val topicResult1 = serviceClient.getPartitionsForTopics(topicQuery1)
-    assertEquals(topicResult1("test1"), Seq(1,2))
+    assertEquals(topicResult1("test1"), Seq(1, 2))
     assertEquals(topicResult1("test2"), Seq(1))
-    assertEquals(topicResult1("test3"), Seq(1,2,3))
+    assertEquals(topicResult1("test3"), Seq(1, 2, 3))
+  }
+
+  @Test
+  def testGetPartitionsForTopicsLimitedTopics() : Unit = {
+    val mockAdmin = setUpTestCluster()
+    val serviceClient = new AdminClientReassignCommandService(mockAdmin)
 
     // Test 2: Fetch not all topics
     val topicQuery2 = Set("test2", "test3")
     val topicResult2 = serviceClient.getPartitionsForTopics(topicQuery2)
     assertEquals(topicResult2("test2"), Seq(1))
-    assertEquals(topicResult2("test3"), Seq(1,2,3))
+    assertEquals(topicResult2("test3"), Seq(1, 2, 3))
     assertFalse(topicResult2.contains("test1"))
+  }
+
+
+  @Test
+  def testGetPartitionsForTopicsNonexistentTopic() : Unit = {
+    val mockAdmin = setUpTestCluster()
+    val serviceClient = new AdminClientReassignCommandService(mockAdmin)
 
     // Test 3: Attempt to fetch an invalid topic
     val topicQuery3 = Set("test1", "test4")
@@ -344,7 +430,7 @@ class ReassignPartitionsServiceClientAdminTest {
   }
 
   @Test
-  def testGetReplicaAssignmentForTopics() : Unit = {
+  def testGetReplicaAssignmentForTopicsAllTopics() : Unit = {
     val mockAdmin = setUpTestCluster()
     val serviceClient = new AdminClientReassignCommandService(mockAdmin)
 
@@ -357,15 +443,27 @@ class ReassignPartitionsServiceClientAdminTest {
     assertEquals(topicResult1(new TopicPartition("test3", 1)), Seq(1, 4, 6))
     assertEquals(topicResult1(new TopicPartition("test3", 2)), Seq(1, 4, 6))
     assertEquals(topicResult1(new TopicPartition("test3", 3)), Seq(1, 4, 6))
+  }
+
+  @Test
+  def testGetReplicaAssignmentForTopicsLimitedSet() : Unit = {
+    val mockAdmin = setUpTestCluster()
+    val serviceClient = new AdminClientReassignCommandService(mockAdmin)
 
     // Test 2: Fetch not all topics
     val topicQuery2 = Set("test2", "test3")
     val topicResult2 = serviceClient.getReplicaAssignmentForTopics(topicQuery2)
-    assertEquals(topicResult1(new TopicPartition("test2", 1)), Seq(6, 7, 1))
-    assertEquals(topicResult1(new TopicPartition("test3", 1)), Seq(1, 4, 6))
-    assertEquals(topicResult1(new TopicPartition("test3", 2)), Seq(1, 4, 6))
-    assertEquals(topicResult1(new TopicPartition("test3", 3)), Seq(1, 4, 6))
+    assertEquals(topicResult2(new TopicPartition("test2", 1)), Seq(6, 7, 1))
+    assertEquals(topicResult2(new TopicPartition("test3", 1)), Seq(1, 4, 6))
+    assertEquals(topicResult2(new TopicPartition("test3", 2)), Seq(1, 4, 6))
+    assertEquals(topicResult2(new TopicPartition("test3", 3)), Seq(1, 4, 6))
     assertFalse(topicResult2.contains(new TopicPartition("test1", 1)))
+  }
+
+  @Test
+  def testGetReplicaAssignmentForTopicsNonexistentTopic() : Unit = {
+    val mockAdmin = setUpTestCluster()
+    val serviceClient = new AdminClientReassignCommandService(mockAdmin)
 
     // Test 3: Attempt to fetch an invalid topic
     val topicQuery3 = Set("test1", "test4")
