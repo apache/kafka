@@ -164,12 +164,19 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
 
     <Match>
         <!-- Uncallable anonymous methods are left behind after inlining by scalac 2.12, fixed in 2.13 -->
-        <Source name="AdminZkClient.scala"/>
-        <Package name="kafka.zk"/>
+        <Source name="ReassignPartitionsCommand.scala"/>
+        <Package name="kafka.admin"/>
         <Bug pattern="UMAC_UNCALLABLE_METHOD_OF_ANONYMOUS_CLASS"/>
     </Match>
 
     <Match>
+        <!-- Uncallable anonymous methods are left behind after inlining by scalac 2.12, fixed in 2.13 -->
+        <Source name="AdminZkClient.scala"/>
+        <Package name="kafka.zk"/>
+        <Bug pattern="UMAC_UNCALLABLE_METHOD_OF_ANONYMOUS_CLASS"/>
+      </Match>
+
+<Match>
         <!-- Suppress a warning about some static initializers in Schema using instances of a
              subclass. -->
         <Or>
