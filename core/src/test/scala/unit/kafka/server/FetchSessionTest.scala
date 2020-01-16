@@ -54,7 +54,7 @@ class FetchSessionTest {
 
   private def dummyCreate(size: Int)() = {
     val cacheMap = new FetchSession.CACHE_MAP(size)
-    for (i <- 0 to (size - 1)) {
+    for (i <- 0 until size) {
       cacheMap.add(new CachedPartition("test", i))
     }
     cacheMap
@@ -127,6 +127,66 @@ class FetchSessionTest {
   }
 
   val EMPTY_PART_LIST = Collections.unmodifiableList(new util.ArrayList[TopicPartition]())
+
+
+  @Test
+  def testCachedLeaderEpoch(): Unit = {
+    val time = new MockTime()
+    val cache = new FetchSessionCache(10, 1000)
+    val fetchManager = new FetchManager(time, cache)
+
+    val tp0 = new TopicPartition("foo", 0)
+    val tp1 = new TopicPartition("foo", 1)
+    val tp2 = new TopicPartition("bar", 1)
+
+    def cachedLeaderEpochs(context: FetchContext): Map[TopicPartition, Optional[Integer]] = {
+      val mapBuilder = Map.newBuilder[TopicPartition, Optional[Integer]]
+      context.foreachPartition((tp, data) => mapBuilder += tp -> data.currentLeaderEpoch)
+      mapBuilder.result()
+    }
+
+    val request1 = new util.LinkedHashMap[TopicPartition, FetchRequest.PartitionData]
+    request1.put(tp0, new FetchRequest.PartitionData(0, 0, 100, Optional.empty()))
+    request1.put(tp1, new FetchRequest.PartitionData(10, 0, 100, Optional.of(1)))
+    request1.put(tp2, new FetchRequest.PartitionData(10, 0, 100, Optional.of(2)))
+
+    val context1 = fetchManager.newContext(JFetchMetadata.INITIAL, request1, EMPTY_PART_LIST, false)
+    val epochs1 = cachedLeaderEpochs(context1)
+    assertEquals(Optional.empty(), epochs1(tp0))
+    assertEquals(Optional.of(1), epochs1(tp1))
+    assertEquals(Optional.of(2), epochs1(tp2))
+
+    val response = new util.LinkedHashMap[TopicPartition, FetchResponse.PartitionData[Records]]
+    response.put(tp0, new FetchResponse.PartitionData(Errors.NONE, 100, 100,
+      100, null, null))
+    response.put(tp1, new FetchResponse.PartitionData(
+      Errors.NONE, 10, 10, 10, null, null))
+    response.put(tp2, new FetchResponse.PartitionData(
+      Errors.NONE, 5, 5, 5, null, null))
+
+    val sessionId = context1.updateAndGenerateResponseData(response).sessionId()
+
+    // With no changes, the cached epochs should remain the same
+    val request2 = new util.LinkedHashMap[TopicPartition, FetchRequest.PartitionData]
+    val context2 = fetchManager.newContext(new JFetchMetadata(sessionId, 1), request2, EMPTY_PART_LIST, false)
+    val epochs2 = cachedLeaderEpochs(context2)
+    assertEquals(Optional.empty(), epochs1(tp0))
+    assertEquals(Optional.of(1), epochs2(tp1))
+    assertEquals(Optional.of(2), epochs2(tp2))
+    context2.updateAndGenerateResponseData(response).sessionId()
+
+    // Now verify we can change the leader epoch and the context is updated
+    val request3 = new util.LinkedHashMap[TopicPartition, FetchRequest.PartitionData]
+    request3.put(tp0, new FetchRequest.PartitionData(0, 0, 100, Optional.of(6)))
+    request3.put(tp1, new FetchRequest.PartitionData(10, 0, 100, Optional.empty()))
+    request3.put(tp2, new FetchRequest.PartitionData(10, 0, 100, Optional.of(3)))
+
+    val context3 = fetchManager.newContext(new JFetchMetadata(sessionId, 2), request3, EMPTY_PART_LIST, false)
+    val epochs3 = cachedLeaderEpochs(context3)
+    assertEquals(Optional.of(6), epochs3(tp0))
+    assertEquals(Optional.empty(), epochs3(tp1))
+    assertEquals(Optional.of(3), epochs3(tp2))
+  }
 
   @Test
   def testFetchRequests(): Unit = {
