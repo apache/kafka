@@ -109,10 +109,6 @@ public class ToStructByRegexTransformTest {
         testForm.configure(configMap);
         SourceRecord result = testForm.apply(new SourceRecord(null, null, "", 0, null, testData));
 
-        System.out.println(result.value());
-
-        //{AuthedRemoteUser=-, Ms=101989, IP=10.66.73.112, Request=/api/v1/service_config, Method=OPTIONS, DateTime=08/Aug/2019:18:15:29 +0900, Response=200, RemoteUser=-, Referrer=http://local.test.com/, UserAgent=Mozilla/5.0 (Macintosh; Intel Mac OS X 10_14_5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/75.0.3770.142 Safari/537.36, BytesSent=-, Protocol=HTTP/1.1}
-
         assertThat(((Map<String,?>)result.value()).get("IP"), is("111.61.73.113"));
         assertThat(((Map<String,?>)result.value()).get("RemoteUser"), is("-"));
         assertThat(((Map<String,?>)result.value()).get("AuthedRemoteUser"), is("-"));
