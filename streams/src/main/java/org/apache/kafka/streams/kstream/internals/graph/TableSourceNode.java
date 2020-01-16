@@ -81,7 +81,7 @@ public class TableSourceNode<K, V> extends StreamSourceNode<K, V> {
     @Override
     @SuppressWarnings("unchecked")
     public void writeToTopology(final InternalTopologyBuilder topologyBuilder) {
-        final String topicName = getTopicNames().iterator().next();
+        final String topicName = topicNames().iterator().next();
 
         // TODO: we assume source KTables can only be timestamped-key-value stores for now.
         // should be expanded for other types of stores as well.
