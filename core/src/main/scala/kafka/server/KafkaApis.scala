@@ -195,16 +195,16 @@ class KafkaApis(val requestChannel: RequestChannel,
       // leadership changes
       updatedLeaders.foreach { partition =>
         if (partition.topic == GROUP_METADATA_TOPIC_NAME)
-          groupCoordinator.handleGroupImmigration(partition.partitionId)
+          groupCoordinator.onElection(partition.partitionId)
         else if (partition.topic == TRANSACTION_STATE_TOPIC_NAME)
-          txnCoordinator.handleTxnImmigration(partition.partitionId, partition.getLeaderEpoch)
+          txnCoordinator.onElection(partition.partitionId, partition.getLeaderEpoch)
       }
 
       updatedFollowers.foreach { partition =>
         if (partition.topic == GROUP_METADATA_TOPIC_NAME)
-          groupCoordinator.handleGroupEmigration(partition.partitionId)
+          groupCoordinator.onResignation(partition.partitionId)
         else if (partition.topic == TRANSACTION_STATE_TOPIC_NAME)
-          txnCoordinator.handleTxnEmigration(partition.partitionId, partition.getLeaderEpoch)
+          txnCoordinator.onResignation(partition.partitionId, Some(partition.getLeaderEpoch))
       }
     }
 
@@ -235,15 +235,16 @@ class KafkaApis(val requestChannel: RequestChannel,
       sendResponseExemptThrottle(request, new StopReplicaResponse(new StopReplicaResponseData().setErrorCode(Errors.STALE_BROKER_EPOCH.code)))
     } else {
       val (result, error) = replicaManager.stopReplicas(stopReplicaRequest)
-      // Clearing out the cache for groups that belong to an offsets topic partition for which this broker was the leader,
-      // since this broker is no longer a replica for that offsets topic partition.
-      // This is required to handle the following scenario :
-      // Consider old replicas : {[1,2,3], Leader = 1} is reassigned to new replicas : {[2,3,4], Leader = 2}, broker 1 does not receive a LeaderAndIsr
-      // request to become a follower due to which cache for groups that belong to an offsets topic partition for which broker 1 was the leader,
-      // is not cleared.
+      // Clear the coordinator caches in case we were the leader. In the case of a reassignment, we
+      // cannot rely on the LeaderAndIsr API for this since it is only sent to active replicas.
       result.foreach { case (topicPartition, error) =>
-        if (error == Errors.NONE && stopReplicaRequest.deletePartitions && topicPartition.topic == GROUP_METADATA_TOPIC_NAME) {
-          groupCoordinator.handleGroupEmigration(topicPartition.partition)
+        if (error == Errors.NONE && stopReplicaRequest.deletePartitions) {
+          if (topicPartition.topic == GROUP_METADATA_TOPIC_NAME) {
+            groupCoordinator.onResignation(topicPartition.partition)
+          } else if (topicPartition.topic == TRANSACTION_STATE_TOPIC_NAME) {
+            // The StopReplica API does not pass through the leader epoch
+            txnCoordinator.onResignation(topicPartition.partition, coordinatorEpoch = None)
+          }
         }
       }
 
