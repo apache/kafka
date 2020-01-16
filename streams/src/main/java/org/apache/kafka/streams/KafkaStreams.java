@@ -16,7 +16,14 @@
  */
 package org.apache.kafka.streams;
 
+import java.util.LinkedList;
+import java.util.TreeMap;
+import java.util.concurrent.ExecutionException;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.ListOffsetsResult.ListOffsetsResultInfo;
+import org.apache.kafka.clients.admin.OffsetSpec;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
@@ -45,12 +52,15 @@ import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StreamPartitioner;
+import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.ThreadMetadata;
 import org.apache.kafka.streams.processor.internals.DefaultKafkaClientSupplier;
 import org.apache.kafka.streams.processor.internals.GlobalStreamThread;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.processor.internals.ProcessorTopology;
+import org.apache.kafka.streams.processor.internals.StandbyTask;
 import org.apache.kafka.streams.processor.internals.StateDirectory;
+import org.apache.kafka.streams.processor.internals.StreamTask;
 import org.apache.kafka.streams.processor.internals.StreamThread;
 import org.apache.kafka.streams.processor.internals.StreamsMetadataState;
 import org.apache.kafka.streams.processor.internals.ThreadStateTransitionValidator;
@@ -1205,5 +1215,75 @@ public class KafkaStreams implements AutoCloseable {
             threadMetadata.add(thread.threadMetadata());
         }
         return threadMetadata;
+    }
+
+    /**
+     * Returns {@link LagInfo}, for all store partitions (active or standby) local to this Streams instance. Note that the
+     * values returned are just estimates and meant to be used for making soft decisions on whether the data in the store
+     * partition is fresh enough for querying.
+     *
+     * Note: Each invocation of this method issues a call to the Kafka brokers. Thus its advisable to limit the frequency
+     * of invocation to once every few seconds.
+     *
+     * @return map of store names to another map of partition to {@link LagInfo}s
+     */
+    public Map<String, Map<Integer, LagInfo>> allLocalStorePartitionLags() {
+        final long latestSentinel = -2L;
+        final Map<String, Map<Integer, LagInfo>> localStorePartitionLags = new TreeMap<>();
+
+        final Collection<TopicPartition> allPartitions = new LinkedList<>();
+        final Map<TopicPartition, Long> allChangelogPositions = new HashMap<>();
+
+        // Obtain the current positions, of all the active-restoring and standby tasks
+        for (final StreamThread streamThread : threads) {
+            for (final StandbyTask standbyTask : streamThread.allStandbyTasks()) {
+                allPartitions.addAll(standbyTask.changelogPartitions());
+                // Note that not all changelog partitions, will have positions; since some may not have started
+                allChangelogPositions.putAll(standbyTask.changelogPositions());
+            }
+
+            final Set<TaskId> restoringTaskIds = streamThread.restoringTaskIds();
+            for (final StreamTask activeTask : streamThread.allStreamsTasks()) {
+                final Collection<TopicPartition> taskChangelogPartitions = activeTask.changelogPartitions();
+                allPartitions.addAll(taskChangelogPartitions);
+
+                final boolean isRestoring = restoringTaskIds.contains(activeTask.id());
+                final Map<TopicPartition, Long> restoredOffsets = activeTask.restoredOffsets();
+                for (final TopicPartition topicPartition : taskChangelogPartitions) {
+                    if (isRestoring && restoredOffsets.containsKey(topicPartition)) {
+                        allChangelogPositions.put(topicPartition, restoredOffsets.get(topicPartition));
+                    } else {
+                        allChangelogPositions.put(topicPartition, latestSentinel);
+                    }
+                }
+            }
+        }
+
+        log.debug("Current changelog positions: {}", allChangelogPositions);
+        final Map<TopicPartition, ListOffsetsResultInfo> allEndOffsets;
+        try {
+            allEndOffsets = adminClient.listOffsets(
+                allPartitions.stream()
+                    .collect(Collectors.toMap(Function.identity(), tp -> OffsetSpec.latest()))
+            ).all().get();
+        } catch (final RuntimeException | InterruptedException | ExecutionException e) {
+            throw new StreamsException("Unable to obtain end offsets from kafka", e);
+        }
+        log.debug("Current end offsets :{}", allEndOffsets);
+        for (final Map.Entry<TopicPartition, ListOffsetsResultInfo> entry : allEndOffsets.entrySet()) {
+            // Avoiding an extra admin API lookup by computing lags for not-yet-started restorations
+            // from zero instead of the real "earliest offset" for the changelog.
+            // This will yield the correct relative order of lagginess for the tasks in the cluster,
+            // but it is an over-estimate of how much work remains to restore the task from scratch.
+            final long earliestOffset = 0L;
+            final long changelogPosition = allChangelogPositions.getOrDefault(entry.getKey(), earliestOffset);
+            final long latestOffset = entry.getValue().offset();
+            final LagInfo lagInfo = new LagInfo(changelogPosition == latestSentinel ? latestOffset : changelogPosition, latestOffset);
+            final String storeName = streamsMetadataState.getStoreForChangelogTopic(entry.getKey().topic());
+            localStorePartitionLags.computeIfAbsent(storeName, ignored -> new TreeMap<>())
+                .put(entry.getKey().partition(), lagInfo);
+        }
+
+        return Collections.unmodifiableMap(localStorePartitionLags);
     }
 }

@@ -1191,6 +1191,18 @@ public class StreamThread extends Thread {
         return taskManager.activeTasks();
     }
 
+    public List<StreamTask> allStreamsTasks() {
+        return taskManager.allStreamsTasks();
+    }
+
+    public List<StandbyTask> allStandbyTasks() {
+        return taskManager.allStandbyTasks();
+    }
+
+    public Set<TaskId> restoringTaskIds() {
+        return taskManager.restoringTaskIds();
+    }
+
     public Map<TaskId, Task> allTasks() {
         final Map<TaskId, Task> result = new TreeMap<>();
         result.putAll(taskManager.standbyTasks());

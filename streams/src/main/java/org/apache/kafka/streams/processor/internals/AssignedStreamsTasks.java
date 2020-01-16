@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.processor.internals;
 
 import java.util.ArrayList;
+import java.util.concurrent.ConcurrentHashMap;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.LogContext;
@@ -34,8 +35,8 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
 
 class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements RestoringTasks {
-    private final Map<TaskId, StreamTask> suspended = new HashMap<>();
-    private final Map<TaskId, StreamTask> restoring = new HashMap<>();
+    private final Map<TaskId, StreamTask> suspended = new ConcurrentHashMap<>();
+    private final Map<TaskId, StreamTask> restoring = new ConcurrentHashMap<>();
     private final Set<TopicPartition> restoredPartitions = new HashSet<>();
     private final Map<TopicPartition, StreamTask> restoringByPartition = new HashMap<>();
     private final Set<TaskId> prevActiveTasks = new HashSet<>();
