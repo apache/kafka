@@ -1207,7 +1207,7 @@ public class InternalTopologyBuilder {
         return applicationId + "-" + topic;
     }
 
-    boolean shouldUsePatternSubscription() {
+    boolean usesPatternSubscription() {
         return (!nodeToSourcePatterns.isEmpty());
     }
 

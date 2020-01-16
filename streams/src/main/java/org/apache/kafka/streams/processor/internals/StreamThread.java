@@ -717,7 +717,7 @@ public class StreamThread extends Thread {
     }
 
     private void subscribeConsumer() {
-        if (builder.shouldUsePatternSubscription()) {
+        if (builder.usesPatternSubscription()) {
             consumer.subscribe(builder.sourceTopicPattern(), rebalanceListener);
         } else {
             consumer.subscribe(builder.sourceTopicCollection(), rebalanceListener);
