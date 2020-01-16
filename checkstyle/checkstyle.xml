@@ -35,7 +35,10 @@
       <property name="processJavadoc" value="true" />
     </module>
     <module name="RedundantImport"/>
-    <module name="IllegalImport" />
+    <module name="IllegalImport">
+      <property name="regexp" value="true"/>
+      <property name="illegalPkgs" value="sun\.nio\.[^c].*" />
+    </module>
     <module name="EqualsHashCode"/>
     <module name="SimplifyBooleanExpression"/>
     <module name="OneStatementPerLine"/>

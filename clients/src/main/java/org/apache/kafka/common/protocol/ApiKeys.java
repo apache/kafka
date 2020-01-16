@@ -93,6 +93,10 @@ import org.apache.kafka.common.requests.OffsetsForLeaderEpochRequest;
 import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse;
 import org.apache.kafka.common.requests.ProduceRequest;
 import org.apache.kafka.common.requests.ProduceResponse;
+import org.apache.kafka.common.requests.RDMAConsumeAddressRequest;
+import org.apache.kafka.common.requests.RDMAConsumeAddressResponse;
+import org.apache.kafka.common.requests.RDMAProduceAddressRequest;
+import org.apache.kafka.common.requests.RDMAProduceAddressResponse;
 import org.apache.kafka.common.requests.RenewDelegationTokenRequest;
 import org.apache.kafka.common.requests.RenewDelegationTokenResponse;
 import org.apache.kafka.common.requests.SaslAuthenticateRequest;
@@ -190,8 +194,9 @@ public enum ApiKeys {
     DESCRIBE_DELEGATION_TOKEN(41, "DescribeDelegationToken", DescribeDelegationTokenRequest.schemaVersions(), DescribeDelegationTokenResponse.schemaVersions()),
     DELETE_GROUPS(42, "DeleteGroups", DeleteGroupsRequest.schemaVersions(), DeleteGroupsResponse.schemaVersions()),
     ELECT_PREFERRED_LEADERS(43, "ElectPreferredLeaders", ElectPreferredLeadersRequestData.SCHEMAS,
-            ElectPreferredLeadersResponseData.SCHEMAS);
-
+            ElectPreferredLeadersResponseData.SCHEMAS),
+    CONSUMER_RDMA_REGISTER(44, "RdmaConsumerAddressRequest", RDMAConsumeAddressRequest.schemaVersions(), RDMAConsumeAddressResponse.schemaVersions()),
+    PRODUCER_RDMA_REGISTER(45, "RdmaProducerAddressRequest", RDMAProduceAddressRequest.schemaVersions(), RDMAProduceAddressResponse.schemaVersions());
     private static final ApiKeys[] ID_TO_TYPE;
     private static final int MIN_API_KEY = 0;
     public static final int MAX_API_KEY;

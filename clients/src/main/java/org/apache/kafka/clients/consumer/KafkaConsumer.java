@@ -19,12 +19,15 @@ package org.apache.kafka.clients.consumer;
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.ClientDnsLookup;
 import org.apache.kafka.clients.ClientUtils;
+import org.apache.kafka.clients.ExclusiveRdmaClient;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.NetworkClient;
+import org.apache.kafka.clients.RdmaClient;
 import org.apache.kafka.clients.consumer.internals.ConsumerCoordinator;
 import org.apache.kafka.clients.consumer.internals.ConsumerInterceptors;
 import org.apache.kafka.clients.consumer.internals.ConsumerMetrics;
 import org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient;
+import org.apache.kafka.clients.consumer.internals.ConsumerRDMAClient;
 import org.apache.kafka.clients.consumer.internals.Fetcher;
 import org.apache.kafka.clients.consumer.internals.Heartbeat;
 import org.apache.kafka.clients.consumer.internals.NoOpConsumerRebalanceListener;
@@ -59,22 +62,23 @@ import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 
 import java.net.InetSocketAddress;
+
 import java.time.Duration;
-import java.util.Collection;
+import java.util.Objects;
 import java.util.Collections;
-import java.util.ConcurrentModificationException;
+import java.util.Collection;
+import java.util.Map;
 import java.util.HashMap;
+import java.util.Set;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
-import java.util.Objects;
 import java.util.Properties;
-import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.ConcurrentModificationException;
 import java.util.regex.Pattern;
 
 /**
@@ -572,6 +576,9 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
 
     private final Time time;
     private final ConsumerNetworkClient client;
+
+    private final ConsumerRDMAClient rdmaClient;
+
     private final SubscriptionState subscriptions;
     private final Metadata metadata;
     private final long retryBackoffMs;
@@ -675,7 +682,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                 if (!config.originals().containsKey(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG))
                     enableAutoCommit = false;
                 else if (enableAutoCommit)
-                    throw new InvalidConfigurationException(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG + " cannot be set to true when default group id (null) is used.");
+                    throw new InvalidConfigurationException(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG +
+                            " cannot be set to true when default group id (null) is used.");
             } else if (groupId.isEmpty())
                 log.warn("Support for using the empty group id by consumers is deprecated and will be removed in the next major release.");
 
@@ -731,28 +739,16 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
 
             NetworkClient netClient = new NetworkClient(
                     new Selector(config.getLong(ConsumerConfig.CONNECTIONS_MAX_IDLE_MS_CONFIG), metrics, time, metricGrpPrefix, channelBuilder, logContext),
-                    this.metadata,
-                    clientId,
-                    100, // a fixed large enough value will suffice for max in-flight requests
-                    config.getLong(ConsumerConfig.RECONNECT_BACKOFF_MS_CONFIG),
-                    config.getLong(ConsumerConfig.RECONNECT_BACKOFF_MAX_MS_CONFIG),
-                    config.getInt(ConsumerConfig.SEND_BUFFER_CONFIG),
-                    config.getInt(ConsumerConfig.RECEIVE_BUFFER_CONFIG),
+                    this.metadata, clientId, 100, // a fixed large enough value will suffice for max in-flight requests
+                    config.getLong(ConsumerConfig.RECONNECT_BACKOFF_MS_CONFIG), config.getLong(ConsumerConfig.RECONNECT_BACKOFF_MAX_MS_CONFIG),
+                    config.getInt(ConsumerConfig.SEND_BUFFER_CONFIG), config.getInt(ConsumerConfig.RECEIVE_BUFFER_CONFIG),
                     config.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG),
                     ClientDnsLookup.forConfig(config.getString(ConsumerConfig.CLIENT_DNS_LOOKUP_CONFIG)),
-                    time,
-                    true,
-                    new ApiVersions(),
-                    throttleTimeSensor,
-                    logContext);
+                    time, true, new ApiVersions(), throttleTimeSensor, logContext);
             this.client = new ConsumerNetworkClient(
-                    logContext,
-                    netClient,
-                    metadata,
-                    time,
-                    retryBackoffMs,
+                    logContext, netClient, metadata, time, retryBackoffMs,
                     config.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG),
-                    heartbeatIntervalMs); //Will avoid blocking an extended period of time to prevent heartbeat thread starvation
+                    heartbeatIntervalMs); // Will avoid blocking an extended period of time to prevent heartbeat thread starvation
             OffsetResetStrategy offsetResetStrategy = OffsetResetStrategy.valueOf(config.getString(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG).toUpperCase(Locale.ROOT));
             this.subscriptions = new SubscriptionState(offsetResetStrategy);
             this.assignors = config.getConfiguredInstances(
@@ -763,43 +759,40 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             int sessionTimeoutMs = config.getInt(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG);
             // no coordinator will be constructed for the default (null) group id
             this.coordinator = groupId == null ? null :
-                new ConsumerCoordinator(logContext,
-                        this.client,
-                        groupId,
-                        maxPollIntervalMs,
-                        sessionTimeoutMs,
+                new ConsumerCoordinator(logContext, this.client, groupId, maxPollIntervalMs, sessionTimeoutMs,
                         new Heartbeat(time, sessionTimeoutMs, heartbeatIntervalMs, maxPollIntervalMs, retryBackoffMs),
-                        assignors,
-                        this.metadata,
-                        this.subscriptions,
-                        metrics,
-                        metricGrpPrefix,
-                        this.time,
-                        retryBackoffMs,
-                        enableAutoCommit,
+                        assignors, this.metadata, this.subscriptions, metrics, metricGrpPrefix, this.time,
+                        retryBackoffMs, enableAutoCommit,
                         config.getInt(ConsumerConfig.AUTO_COMMIT_INTERVAL_MS_CONFIG),
                         this.interceptors,
                         config.getBoolean(ConsumerConfig.EXCLUDE_INTERNAL_TOPICS_CONFIG),
                         config.getBoolean(ConsumerConfig.LEAVE_GROUP_ON_CLOSE_CONFIG));
-            this.fetcher = new Fetcher<>(
-                    logContext,
-                    this.client,
+
+            if (this.coordinator != null) {
+                System.out.println("Kafka consumer created a background thread for HeartBeats ");
+            } else {
+                System.out.println("Kafka consumer is a single threaded");
+            }
+            this.rdmaClient = makeRdmaClient(config, clientId, logContext);
+
+            int cacheSize = config.getInt(ConsumerConfig.RDMA_CACHE_SIZE);
+            int wrapAroundLimit = config.getInt(ConsumerConfig.RDMA_CACHE_WRAP_LIMIT);
+            boolean withSlots = config.getBoolean(ConsumerConfig.WITH_SLOTS);
+            long frequencyOfRdmaUpdate = config.getLong(ConsumerConfig.SLOT_UPDATE_TIMEOUT);
+            long addressUpdateTimeoutInMs = config.getLong(ConsumerConfig.TCP_TIMEOUT);
+            
+            this.fetcher = new Fetcher<>(logContext, this.client,
                     config.getInt(ConsumerConfig.FETCH_MIN_BYTES_CONFIG),
                     config.getInt(ConsumerConfig.FETCH_MAX_BYTES_CONFIG),
                     config.getInt(ConsumerConfig.FETCH_MAX_WAIT_MS_CONFIG),
                     config.getInt(ConsumerConfig.MAX_PARTITION_FETCH_BYTES_CONFIG),
                     config.getInt(ConsumerConfig.MAX_POLL_RECORDS_CONFIG),
                     config.getBoolean(ConsumerConfig.CHECK_CRCS_CONFIG),
-                    this.keyDeserializer,
-                    this.valueDeserializer,
-                    this.metadata,
-                    this.subscriptions,
-                    metrics,
-                    metricsRegistry.fetcherMetrics,
-                    this.time,
-                    this.retryBackoffMs,
-                    this.requestTimeoutMs,
-                    isolationLevel);
+                    this.keyDeserializer, this.valueDeserializer, this.metadata, this.subscriptions,
+                    metrics, metricsRegistry.fetcherMetrics, this.time, this.retryBackoffMs, this.requestTimeoutMs,
+                    isolationLevel, this.rdmaClient, cacheSize, wrapAroundLimit, withSlots, frequencyOfRdmaUpdate,
+                    addressUpdateTimeoutInMs
+                    );
 
             config.logUnused();
             AppInfoParser.registerAppInfo(JMX_PREFIX, clientId, metrics);
@@ -810,6 +803,21 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             // now propagate the exception
             throw new KafkaException("Failed to construct kafka consumer", t);
         }
+    }
+
+    private ConsumerRDMAClient makeRdmaClient(ConsumerConfig config, String clientId, LogContext logContext) throws Exception {
+        int maxSendSize = config.getInt(ConsumerConfig.RDMA_SEND_SIZE);
+        int maxReceiveSize = config.getInt(ConsumerConfig.RDMA_RECV_SIZE);
+        int requestQuota = config.getInt(ConsumerConfig.RDMA_QUOTA_SIZE);
+        int completionQueueSize = config.getInt(ConsumerConfig.RDMA_QUEUE_SIZE);
+        int wcBatch = config.getInt(ConsumerConfig.WC_BATCH);
+        int contendedLimit = config.getInt(ConsumerConfig.RDMA_CONTENTION_LIMIT);
+
+        // long tcpTimeout = config.getLong(ConsumerConfig.TCP_TIMEOUT);
+
+        RdmaClient rdmaNetwork = new ExclusiveRdmaClient(clientId, logContext, new RdmaClient.RDMAQPparams(maxSendSize, maxReceiveSize),
+                requestQuota, completionQueueSize, wcBatch, contendedLimit);
+        return new ConsumerRDMAClient(rdmaNetwork, clientId, time);
     }
 
     // visible for testing
@@ -829,7 +837,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                   long requestTimeoutMs,
                   int defaultApiTimeoutMs,
                   List<PartitionAssignor> assignors,
-                  String groupId) {
+                  String groupId,
+                  ConsumerRDMAClient rdmaClient) {
         this.log = logContext.logger(getClass());
         this.clientId = clientId;
         this.coordinator = coordinator;
@@ -847,6 +856,30 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         this.defaultApiTimeoutMs = defaultApiTimeoutMs;
         this.assignors = assignors;
         this.groupId = groupId;
+        // for rdma
+        this.rdmaClient = rdmaClient;
+    }
+
+    KafkaConsumer(LogContext logContext,
+                  String clientId,
+                  ConsumerCoordinator coordinator,
+                  Deserializer<K> keyDeserializer,
+                  Deserializer<V> valueDeserializer,
+                  Fetcher<K, V> fetcher,
+                  ConsumerInterceptors<K, V> interceptors,
+                  Time time,
+                  ConsumerNetworkClient client,
+                  Metrics metrics,
+                  SubscriptionState subscriptions,
+                  Metadata metadata,
+                  long retryBackoffMs,
+                  long requestTimeoutMs,
+                  int defaultApiTimeoutMs,
+                  List<PartitionAssignor> assignors,
+                  String groupId) {
+        this(logContext, clientId, coordinator, keyDeserializer, valueDeserializer, fetcher, interceptors,
+                time, client, metrics, subscriptions, metadata, retryBackoffMs, requestTimeoutMs,
+                defaultApiTimeoutMs, assignors, groupId, null);
     }
 
     /**
@@ -1219,6 +1252,59 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         }
     }
 
+
+
+
+    public ConsumerRecords<K, V> RDMApoll(final Duration timeout) {
+        return RDMApoll(time.timer(timeout), true);
+    }
+
+    private ConsumerRecords<K, V> RDMApoll(final Timer timer, final boolean includeMetadataInTimeout) {
+        acquireAndEnsureOpen();
+        try {
+            if (this.subscriptions.hasNoSubscriptionOrUserAssignment()) {
+                throw new IllegalStateException("Consumer is not subscribed to any topics or assigned any partitions");
+            }
+
+            // poll for new data until the timeout expires
+            do {
+
+                //client.maybeTriggerWakeup(); // don't need as rdma thread is always up
+                if (includeMetadataInTimeout) {
+
+                    if (!updateAssignmentMetadataIfNeeded(timer)) {
+                        return ConsumerRecords.empty();
+                    }
+                } else {
+                    while (!updateAssignmentMetadataIfNeeded(time.timer(Long.MAX_VALUE))) {
+                        log.warn("Still waiting for metadata");
+                    }
+                }
+
+                final Map<TopicPartition, List<ConsumerRecord<K, V>>> records = pollForRDMAFetches(timer);
+                if (!records.isEmpty()) {
+                    // before returning the fetched records, we can send off the next round of fetches
+                    // and avoid block waiting for their responses to enable pipelining while the user
+                    // is handling the fetched records.
+                    //
+                    // NOTE: since the consumed position has already been updated, we must not allow
+                    // wakeups or any other errors to be triggered prior to returning the fetched records.
+
+                    if (fetcher.sendRdmaFetches() > 0 || rdmaClient.hasPendingRequests()) {
+                        rdmaClient.pollNoWakeup();
+                    }
+
+                    return this.interceptors.onConsume(new ConsumerRecords<>(records));
+                }
+            } while (timer.notExpired());
+
+            return ConsumerRecords.empty();
+        } finally {
+            release();
+        }
+    }
+
+
     /**
      * Visible for testing
      */
@@ -1259,6 +1345,37 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             return !fetcher.hasCompletedFetches();
         });
         timer.update(pollTimer.currentTimeMs());
+
+        // after the long poll, we should check whether the group needs to rebalance
+        // prior to returning data so that the group can stabilize faster
+        if (coordinator != null && coordinator.rejoinNeededOrPending()) {
+            return Collections.emptyMap();
+        }
+
+        return fetcher.fetchedRecords();
+    }
+
+
+    private Map<TopicPartition, List<ConsumerRecord<K, V>>> pollForRDMAFetches(Timer timer) {
+    //    long pollTimeout = coordinator == null ? timer.remainingMs() :
+   //             Math.min(coordinator.timeToNextPoll(timer.currentTimeMs()), timer.remainingMs());
+//
+        // if data is available already, return it immediately
+        final Map<TopicPartition, List<ConsumerRecord<K, V>>> records = fetcher.fetchedRecords();
+        if (!records.isEmpty()) {
+            return records;
+        }
+
+
+   //     if (!cachedSubscriptionHashAllFetchPositions && pollTimeout > retryBackoffMs) {
+     //       pollTimeout = retryBackoffMs;
+   //     }
+
+        rdmaClient.pollNoWakeup();
+        fetcher.sendRdmaFetches();
+        rdmaClient.pollNoWakeup();
+
+        timer.update(time.milliseconds());
 
         // after the long poll, we should check whether the group needs to rebalance
         // prior to returning data so that the group can stabilize faster

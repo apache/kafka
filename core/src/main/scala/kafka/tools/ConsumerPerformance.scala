@@ -123,7 +123,9 @@ object ConsumerPerformance extends LazyLogging {
     var lastConsumedTime = currentTimeMillis
 
     while (messagesRead < count && currentTimeMillis - lastConsumedTime <= timeout) {
-      val records = consumer.poll(Duration.ofMillis(100)).asScala
+
+      val records = if (config.withRdma) consumer.RDMApoll(Duration.ofMillis(100)).asScala
+                                    else consumer.poll(Duration.ofMillis(100)).asScala
       currentTimeMillis = System.currentTimeMillis
       if (records.nonEmpty)
         lastConsumedTime = currentTimeMillis
@@ -242,6 +244,7 @@ object ConsumerPerformance extends LazyLogging {
       .describedAs("config file")
       .ofType(classOf[String])
     val printMetricsOpt = parser.accepts("print-metrics", "Print out the metrics.")
+    val withRdmaOpt = parser.accepts("with-rdma", "use rdma fetch.")
     val showDetailedStatsOpt = parser.accepts("show-detailed-stats", "If set, stats are reported for each reporting " +
       "interval as configured by reporting-interval")
     val recordFetchTimeoutOpt = parser.accepts("timeout", "The maximum allowed time in milliseconds between returned records.")
@@ -257,6 +260,8 @@ object ConsumerPerformance extends LazyLogging {
     CommandLineUtils.checkRequiredArgs(parser, options, topicOpt, numMessagesOpt, bootstrapServersOpt)
 
     val printMetrics = options.has(printMetricsOpt)
+
+    val withRdma = options.has(withRdmaOpt)
 
     val props = if (options.has(consumerConfigOpt))
       Utils.loadProps(options.valueOf(consumerConfigOpt))

@@ -40,10 +40,14 @@ import scala.concurrent.ExecutionException
 
 abstract class BaseProducerSendTest extends KafkaServerTestHarness {
 
+  protected def propertyOverrides(properties: Properties) {}
+
+
   def generateConfigs = {
     val overridingProps = new Properties()
     val numServers = 2
     overridingProps.put(KafkaConfig.NumPartitionsProp, 4.toString)
+    propertyOverrides(overridingProps)
     TestUtils.createBrokerConfigs(numServers, zkConnect, false, interBrokerSecurityProtocol = Some(securityProtocol),
       trustStoreFile = trustStoreFile, saslProperties = serverSaslProperties).map(KafkaConfig.fromProps(_, overridingProps))
   }

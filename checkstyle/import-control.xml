@@ -162,6 +162,9 @@
 
   <subpackage name="clients">
     <allow pkg="org.slf4j" />
+    <allow pkg="com.ibm.disni.verbs" />
+    <allow class="org.apache.kafka.clients.consumer.internals.ConsumerRDMAClient" />
+    <allow class="org.apache.kafka.clients.producer.internals.ProducerBatch" />
     <allow pkg="org.apache.kafka.common" />
     <allow pkg="org.apache.kafka.clients" exact-match="true"/>
     <allow pkg="org.apache.kafka.test" />
@@ -173,6 +176,10 @@
     <subpackage name="producer">
       <allow pkg="org.apache.kafka.clients.consumer" />
       <allow pkg="org.apache.kafka.clients.producer" />
+      <allow class="sun.nio.ch.DirectBuffer" />
+      <subpackage name="internals">
+        <allow class="sun.nio.ch.DirectBuffer" />
+      </subpackage>
     </subpackage>
 
     <subpackage name="admin">

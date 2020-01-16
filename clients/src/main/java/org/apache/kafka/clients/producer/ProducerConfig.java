@@ -240,6 +240,43 @@ public class ProducerConfig extends AbstractConfig {
             "The default is <code>null</code>, which means transactions cannot be used. " +
             "Note that, by default, transactions require a cluster of at least three brokers which is the recommended setting for production; for development you can change this, by adjusting broker setting <code>transaction.state.log.replication.factor</code>.";
 
+
+
+    /** <code> num.rdmanetwork.maxsendsize </code> */
+    public static final String RDMA_SEND_SIZE = "num.rdmanetwork.maxsendsize";
+    public static final String RDMA_SEND_SIZE_DOC = "maximum send requests per rdma connection";
+
+    /** <code> num.rdmanetwork.maxrecvsize </code> */
+    public static final String RDMA_RECV_SIZE = "num.rdmanetwork.maxrecvsize";
+    public static final String RDMA_RECV_SIZE_DOC = "maximum recv requests per rdma connection";
+
+    /** <code> num.rdmanetwork.maxrequestquota </code> */
+    public static final String RDMA_QUOTA_SIZE = "num.rdmanetwork.maxrequestquota";
+    public static final String RDMA_QUOTA_SIZE_DOC = "maximum outstanding requests per rdma connection";
+
+    /** <code> num.rdmanetwork.maxcomplqueuesize </code> */
+    public static final String RDMA_QUEUE_SIZE = "num.rdmanetwork.maxcomplqueuesize";
+    public static final String RDMA_QUEUE_SIZE_DOC = "maximum queue size per rdma connection per direction. I use separate queue for send and receive";
+
+    /** <code> num.rdmanetwork.wcbatch </code> */
+    public static final String WC_BATCH = "num.rdmanetwork.wcbatch";
+    public static final String WC_BATCH_DOC = "How many completion poll at a time";
+
+    /** <code> num.rdmanetwork.contention </code> */
+    public static final String RDMA_CONTENTION_LIMIT = "num.rdmanetwork.contention";
+    public static final String RDMA_CONTENTION_LIMIT_DOC = "After how many requests in waiting queue consider the connection contended";
+
+    /** <code> num.rdmaproduce.tcptimeout </code> */
+    public static final String TCP_TIMEOUT = "num.rdmaproduce.tcptimeout";
+    public static final String TCP_TIMEOUT_DOC = "The number of ms wait before sending next get address request";
+
+
+    /** <code> num.rdmafetch.cachesize </code> */
+    public static final String RDMA_CACHE_SIZE = "num.rdmaproduce.cachesize";
+    public static final String RDMA_CACHE_SIZE_DOC = "the size of a single cache used for rdma batches";
+
+
+
     static {
         CONFIG = new ConfigDef().define(BOOTSTRAP_SERVERS_CONFIG, Type.LIST, Collections.emptyList(), new ConfigDef.NonNullValidator(), Importance.HIGH, CommonClientConfigs.BOOTSTRAP_SERVERS_DOC)
                                 .define(CLIENT_DNS_LOOKUP_CONFIG,
@@ -358,7 +395,55 @@ public class ProducerConfig extends AbstractConfig {
                                         null,
                                         new ConfigDef.NonEmptyString(),
                                         Importance.LOW,
-                                        TRANSACTIONAL_ID_DOC);
+                                        TRANSACTIONAL_ID_DOC)
+                                .define(RDMA_SEND_SIZE,
+                                        Type.INT,
+                                        80,
+                                        atLeast(1),
+                                        Importance.LOW,
+                                        RDMA_SEND_SIZE_DOC)
+                                .define(RDMA_RECV_SIZE,
+                                        Type.INT,
+                                        80,
+                                        atLeast(1),
+                                        Importance.LOW,
+                                        RDMA_RECV_SIZE_DOC)
+                                .define(RDMA_QUOTA_SIZE,
+                                        Type.INT,
+                                        78,
+                                        atLeast(1),
+                                        Importance.LOW,
+                                        RDMA_QUOTA_SIZE_DOC)
+                                .define(RDMA_QUEUE_SIZE,
+                                        Type.INT,
+                                        200,
+                                        atLeast(1),
+                                        Importance.LOW,
+                                        RDMA_QUEUE_SIZE_DOC)
+                                .define(WC_BATCH,
+                                        Type.INT,
+                                        16,
+                                        atLeast(1),
+                                        Importance.LOW,
+                                        WC_BATCH_DOC)
+                                .define(RDMA_CONTENTION_LIMIT,
+                                        Type.INT,
+                                        100,
+                                        atLeast(1),
+                                        Importance.LOW,
+                                        RDMA_CONTENTION_LIMIT_DOC)
+                                .define(TCP_TIMEOUT,
+                                        Type.LONG,
+                                        5000,
+                                        atLeast(1),
+                                        Importance.LOW,
+                                        TCP_TIMEOUT_DOC)
+                                .define(RDMA_CACHE_SIZE,
+                                        Type.INT,
+                                        16 * 1024 * 1024, // 16 MiB
+                                        atLeast(1 * 1024), // 1 KiB
+                                        Importance.LOW,
+                                        RDMA_CACHE_SIZE_DOC);
     }
 
     @Override

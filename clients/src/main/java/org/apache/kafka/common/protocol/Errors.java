@@ -97,9 +97,11 @@ import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.errors.UnsupportedByAuthenticationException;
 import org.apache.kafka.common.errors.UnsupportedCompressionTypeException;
 import org.apache.kafka.common.errors.UnsupportedForMessageFormatException;
+import org.apache.kafka.common.errors.UnsupportedRdmaException;
 import org.apache.kafka.common.errors.UnsupportedSaslMechanismException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.errors.StaleBrokerEpochException;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -302,7 +304,9 @@ public enum Errors {
             MemberIdRequiredException::new),
     PREFERRED_LEADER_NOT_AVAILABLE(80, "The preferred leader was not available",
             PreferredLeaderNotAvailableException::new),
-    GROUP_MAX_SIZE_REACHED(81, "The consumer group has reached its max size.", GroupMaxSizeReachedException::new);
+    GROUP_MAX_SIZE_REACHED(81, "The consumer group has reached its max size.", GroupMaxSizeReachedException::new),
+    UNSUPPORTED_RDMA(82, "Rdma has not been enabled.",
+            UnsupportedRdmaException::new);
 
     private static final Logger log = LoggerFactory.getLogger(Errors.class);
 

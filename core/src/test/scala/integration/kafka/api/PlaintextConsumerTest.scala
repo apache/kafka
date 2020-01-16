@@ -1242,6 +1242,87 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     assertEquals(null, timestampOffsets.get(new TopicPartition(topic3, 1)))
   }
 
+
+
+
+  @Test
+  def testRDMAReadAddress() {
+    val numParts = 2
+    val topic1 = "part-test-topic-1"
+    val topic2 = "part-test-topic-2"
+    val topic3 = "part-test-topic-3"
+
+    createTopic(topic1, numParts, 1)
+    createTopic(topic2, numParts, 1)
+    createTopic(topic3, numParts, 1)
+
+    val consumer = createConsumer()
+
+    val producer = createProducer()
+    val GetAddressToSearch = new util.HashMap[TopicPartition, java.lang.Long]()
+    var i = 0
+    for (topic <- List(topic1, topic2, topic3)) {
+      for (part <- 0 until numParts) {
+        val tp = new TopicPartition(topic, part)
+        // In sendRecords(), each message will have key, value and timestamp equal to the sequence number.
+        sendRecords(producer, numRecords = 100, tp)
+        GetAddressToSearch.put(tp, i )
+        i += 1
+      }
+    }
+
+   // val targetTP = new TopicPartition(topic1,0);
+   // consumer.assign(List(targetTP).asJava)
+    consumer.subscribe(Set(topic1).asJava)
+
+    val records = consumer.RDMApoll(Duration.ofMillis(20000))
+    assertEquals(200, records.count)
+
+
+  }
+
+  @Test
+  def testPoll() {
+    val numParts = 1
+    val topic1 = "part-test-topic-1"
+    val topic2 = "part-test-topic-2"
+    val topic3 = "part-test-topic-3"
+
+    createTopic(topic1, numParts, 1)
+    createTopic(topic2, numParts, 1)
+    createTopic(topic3, numParts, 1)
+
+    val consumer = createConsumer()
+
+    val producer = createProducer()
+   /* val GetAddressToSearch = new util.HashMap[TopicPartition, java.lang.Long]()
+    var i = 0
+    for (topic <- List(topic1, topic2, topic3)) {
+      for (part <- 0 until numParts) {
+        val tp = new TopicPartition(topic, part)
+        // In sendRecords(), each message will have key, value and timestamp equal to the sequence number.
+        sendRecords(producer, numRecords = 100, tp)
+        GetAddressToSearch.put(tp, i )
+        i += 1
+      }
+    }*/
+   val tp = new TopicPartition(topic1, 0)
+    sendRecords(producer, numRecords = 100, tp)
+
+    // val targetTP = new TopicPartition(topic1,0);
+    // consumer.assign(List(targetTP).asJava)
+    consumer.subscribe(Set(topic1).asJava)
+
+    val records = consumer.poll(Duration.ofMillis(20000))
+   // assertEquals(100, records.count)
+
+    sendRecords(producer, numRecords = 100, tp)
+    val records2 = consumer.poll(Duration.ofMillis(20000))
+    assertEquals(100, records2.count)
+  }
+
+
+
   @Test
   def testEarliestOrLatestOffsets() {
     val topic0 = "topicWithNewMessageFormat"

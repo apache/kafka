@@ -24,6 +24,7 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.{Collections, Optional, Properties}
 
+import com.ibm.disni.verbs.IbvMr
 import kafka.admin.{AdminUtils, RackAwareMode}
 import kafka.api.{ApiVersion, KAFKA_0_11_0_IV0}
 import kafka.cluster.Partition
@@ -67,6 +68,9 @@ import scala.collection._
 import scala.collection.mutable.ArrayBuffer
 import scala.util.{Failure, Success, Try}
 
+
+
+// Note for RDMA. the class is accessed by multiple threads!
 /**
  * Logic to handle the various Kafka requests
  */
@@ -87,15 +91,85 @@ class KafkaApis(val requestChannel: RequestChannel,
                 brokerTopicStats: BrokerTopicStats,
                 val clusterId: String,
                 time: Time,
-                val tokenManager: DelegationTokenManager) extends Logging {
+                val tokenManager: DelegationTokenManager, val rdmaManager: RDMAManager) extends Logging {
 
   type FetchResponseStats = Map[TopicPartition, RecordConversionStats]
   this.logIdent = "[KafkaApi-%d] ".format(brokerId)
   val adminZkClient = new AdminZkClient(zkClient)
 
+  // manager for registration of RDMA producers
+  val producerRdmaManager: ProducerRdmaManager = new ProducerRdmaManager
+
+
   def close() {
     info("Shutdown complete.")
   }
+
+
+  def rdmaHandle(request: RequestChannel.RdmaRequest): Unit =
+  {
+    try{
+      handleRdmaProduceRequest(request)
+
+    } catch {
+      case e: FatalExitError => throw e
+      case e: Throwable => // continue
+    } finally {
+      //request.apiLocalCompleteTimeNanos = time.nanoseconds
+    }
+  }
+
+  // rdmaRequests Must be processed in order. Otherwise we can get wrong length of memoryRecords.
+  // I guarantee that by introducing RequestChannel queue per requestHandler
+  def handleRdmaProduceRequest(rdmaRequest: RequestChannel.RdmaRequest): Unit = {
+    val imm_data: Int = rdmaRequest.imm_data
+    val segment = producerRdmaManager.GetSegmentFromProducerId(imm_data)
+
+    val internalTopicsAllowed = segment.clientId == AdminUtils.AdminClientId
+
+    val len: Int = rdmaRequest.byte_len // warning!  softroce has a bug here! SoftRoce always returns 0;
+
+    val position: Int = segment.position.getAndAdd(len).toInt // segment.position is atomic long. can be normal volatile long
+    val buffer: ByteBuffer = segment.buffer.duplicate().position(position).limit(position+len).asInstanceOf[ByteBuffer].slice()
+    val records: MemoryRecords = MemoryRecords.readableRecords(buffer)
+
+    // the callback for sending a produce response
+    def sendResponseCallback(responseStatus: Map[TopicPartition, PartitionResponse]) {
+      val mergedResponseStatus = responseStatus
+      var errorInResponse = false
+
+      mergedResponseStatus.foreach { case (topicPartition, status) =>
+        if (status.error != Errors.NONE) {
+          errorInResponse = true
+          debug("Rdma Produce request with correlation id %d from client %s on partition %s failed due to %s".format(
+            -1,
+            segment.clientId,
+            topicPartition,
+            status.error.exceptionName))
+        }
+      }
+
+      sendRdmaResponse(rdmaRequest, errorInResponse);
+    }
+    // call the replica manager to append messages to the replicas
+    val bytesPerPartition: Map[TopicPartition, (Int, MemoryRecords) ] = Map((segment.tp -> (position,records)))
+
+    replicaManager.appendRdmaRecords(
+      timeout = segment.timeout,
+      requiredAcks = segment.acks,
+      internalTopicsAllowed = internalTopicsAllowed,
+      segment.isFromLeader,
+      bytesPerPartition,
+      responseCallback = sendResponseCallback)
+
+  }
+
+  def sendRdmaResponse(request: RequestChannel.RdmaRequest, errorInResponse: Boolean): Unit = {
+    val immdata: Int = if(errorInResponse) (-request.imm_data) else (request.imm_data);
+    val response: RequestChannel.RdmaResponse = new RequestChannel.RdmaResponse(request,immdata);
+    requestChannel.sendRdmaResponse(response)
+  }
+
 
   /**
    * Top-level method that handles all requests and multiplexes to the right api
@@ -149,6 +223,8 @@ class KafkaApis(val requestChannel: RequestChannel,
         case ApiKeys.DESCRIBE_DELEGATION_TOKEN => handleDescribeTokensRequest(request)
         case ApiKeys.DELETE_GROUPS => handleDeleteGroupsRequest(request)
         case ApiKeys.ELECT_PREFERRED_LEADERS => handleElectPreferredReplicaLeader(request)
+        case ApiKeys.PRODUCER_RDMA_REGISTER => handleRDMAProducerAddressRequest(request)
+        case ApiKeys.CONSUMER_RDMA_REGISTER => handleRDMAConsumerAddressRequest(request)
       }
     } catch {
       case e: FatalExitError => throw e
@@ -514,6 +590,157 @@ class KafkaApis(val requestChannel: RequestChannel,
       produceRequest.clearPartitionRecords()
     }
   }
+
+  def handleRDMAProducerAddressRequest(request: RequestChannel.Request): Unit ={
+    val correlationId = request.header.correlationId // user-defined value
+    val clientId = request.header.clientId
+    val rdmaAddressRequest = request.body[RDMAProduceAddressRequest]
+
+    val isFromLeader: Boolean =  rdmaAddressRequest.isFromLeader
+
+    val authorizedRequestInfo = rdmaAddressRequest.partitions.asScala
+    val authorizedUpdateRequestInfo = rdmaAddressRequest.partitionsToUpdate().asScala
+
+
+    def process( tps: Iterable[TopicPartition], requestNewFile: Boolean): Map[TopicPartition, RDMAProduceAddressResponse.PartitionResponse] = {
+
+      val responseMap = tps.map { (topicPartition) =>
+
+        def buildErrorResponse(e: Errors): (TopicPartition, RDMAProduceAddressResponse.PartitionResponse) = {
+          topicPartition -> new RDMAProduceAddressResponse.PartitionResponse(e)
+        }
+
+        try {
+          if(!rdmaManager.isWithRdma){
+            throw new UnsupportedRdmaException("Rdma manager is not activated")
+          }
+          val foundOpt = replicaManager.fetchRDMAProducerAddress(topicPartition,rdmaAddressRequest.acks(),requestNewFile,isFromLeader)
+
+          val response = foundOpt match {
+            case Some(found) =>
+
+              val mr : IbvMr = rdmaManager.getIbvBuffer(found.bytebuffer)
+
+              val producerImmId = producerRdmaManager.createProducerIdForSegment(topicPartition,found.baseOffset,found.startPosition,
+                clientId,found.bytebuffer,request,rdmaAddressRequest.acks(),rdmaAddressRequest.timeout(),isFromLeader)
+
+              new RDMAProduceAddressResponse.PartitionResponse(Errors.NONE,found.baseOffset,found.offset,
+                mr.getAddr()+found.startPosition,  mr.getRkey(), producerImmId, mr.getLength()-found.startPosition.toInt) //found.endPosition-found.startPosition
+            case None =>
+              new RDMAProduceAddressResponse.PartitionResponse(Errors.UNKNOWN_TOPIC_OR_PARTITION)
+          }
+          (topicPartition -> response)
+        } catch {
+          // NOTE: These exceptions are special cased since these error messages are typically transient or the client
+          // would have received a clear exception and there is no value in logging the entire stack trace for the same
+          case e @ (_ : UnknownTopicOrPartitionException |
+                    _ : NotLeaderForPartitionException |
+                    _ : UnknownLeaderEpochException |
+                    _ : FencedLeaderEpochException |
+                    _ : KafkaStorageException |
+                    _ : UnsupportedForMessageFormatException |
+                    _ : UnsupportedRdmaException) =>
+            debug(s"RDMA Address request with correlation id $correlationId from client $clientId on " +
+              s"partition $topicPartition failed due to ${e.getMessage}")
+            buildErrorResponse(Errors.forException(e))
+
+
+          case e: Throwable =>
+            error("Error while responding to RDMA address request", e)
+            buildErrorResponse(Errors.forException(e))
+        }
+      }
+      return responseMap.toMap
+    }
+
+    val responseMap = process(authorizedRequestInfo,false) ++ process(authorizedUpdateRequestInfo,true)
+
+
+    sendResponseMaybeThrottle(request, requestThrottleMs =>
+      new RDMAProduceAddressResponse(rdmaManager.getHostName,rdmaManager.getPort,responseMap.asJava))
+  }
+
+
+
+  def handleRDMAConsumerAddressRequest(request: RequestChannel.Request): Unit ={
+    val correlationId = request.header.correlationId // user-defined value
+    val clientId = request.header.clientId
+    val rdmaAddressRequest = request.body[RDMAConsumeAddressRequest]
+
+    val (authorizedRequestInfo, unauthorizedRequestInfo) = rdmaAddressRequest.fetchAddresses.asScala.partition {
+      case (topicPartition, _) => authorize(request.session, Describe, Resource(Topic, topicPartition.topic, LITERAL))
+    }
+
+    val unauthorizedResponseStatus = unauthorizedRequestInfo.mapValues(_ => {
+      new RDMAConsumeAddressResponse.PartitionData(Errors.TOPIC_AUTHORIZATION_FAILED)
+    })
+
+
+    // forget partitions
+    rdmaAddressRequest.getToForget.forEach({
+      case (topicPartition, baseOffset) =>  rdmaManager.removeSlot(clientId,topicPartition,baseOffset)
+    })
+
+    val responseMap = authorizedRequestInfo.map { case (topicPartition, partitionData) =>
+
+      def buildErrorResponse(e: Errors): (TopicPartition, RDMAConsumeAddressResponse.PartitionData) = {
+        (topicPartition, new RDMAConsumeAddressResponse.PartitionData(e))
+      }
+
+      try {
+        if(!rdmaManager.isWithRdma){
+          throw new UnsupportedRdmaException("Rdma manager is not activated")
+        }
+        val fetchOnlyFromLeader = rdmaAddressRequest.replicaId != RDMAConsumeAddressRequest.DEBUGGING_REPLICA_ID
+
+        val foundOpt = replicaManager.fetchRDMAConsumerAddress(clientId,topicPartition,
+          partitionData.startOffset,partitionData.currentLeaderEpoch,fetchOnlyFromLeader)
+
+        val response = foundOpt match {
+          case Some(found) =>
+
+          //  ConsumerAddressReadInfo
+
+            val mr : IbvMr = rdmaManager.getIbvBuffer(found.readInfo.bytebuffer)
+            debug(s"Register ${found.readInfo.bytebuffer.limit()} bytes");
+            // Todo think about getting the slot during fetchRDMAConsumerAddress call
+            val slot : Slot = rdmaManager.getOptSlot(clientId,topicPartition,found.readInfo.baseOffset).getOrElse(rdmaManager.fakeSlot)
+
+            new RDMAConsumeAddressResponse.PartitionData(Errors.NONE,
+              mr.getAddr(), found.readInfo.baseOffset, found.readInfo.startPosition,
+              found.waterMarkPosition,found.waterMarkOffset,
+              found.lsoPosition,found.lsoOffset, found.readInfo.endPosition,
+              mr.getRkey(),found.fileIsSealed,
+              slot.getAddress, rdmaManager.getConsumerRkey
+            )
+          case None =>
+            new RDMAConsumeAddressResponse.PartitionData(Errors.INVALID_TOPIC_EXCEPTION)
+        }
+        (topicPartition, response)
+      } catch {
+        // NOTE: These exceptions are special cased since these error messages are typically transient or the client
+        // would have received a clear exception and there is no value in logging the entire stack trace for the same
+        case e @ (_ : UnknownTopicOrPartitionException |
+                  _ : NotLeaderForPartitionException |
+                  _ : UnknownLeaderEpochException |
+                  _ : FencedLeaderEpochException |
+                  _ : KafkaStorageException |
+                  _ : UnsupportedForMessageFormatException |
+                  _ : UnsupportedRdmaException) =>
+          debug(s"RDMA Address request with correlation id $correlationId from client $clientId on " +
+            s"partition $topicPartition failed due to ${e.getMessage}")
+          buildErrorResponse(Errors.forException(e))
+
+
+        case e: Throwable =>
+          error("Error while responding to RDMA address request", e)
+          buildErrorResponse(Errors.forException(e))
+      }
+    }
+    //responseMap ++ unauthorizedResponseStatus
+    sendResponseMaybeThrottle(request, requestThrottleMs => new RDMAConsumeAddressResponse(rdmaManager.getHostName,rdmaManager.getPort,requestThrottleMs, responseMap.asJava))
+  }
+
 
   /**
    * Handle a fetch request

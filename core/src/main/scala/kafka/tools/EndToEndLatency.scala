@@ -19,11 +19,11 @@ package kafka.tools
 
 import java.nio.charset.StandardCharsets
 import java.time.Duration
-import java.util.{Collections, Arrays, Properties}
+import java.util.{Arrays, Collections, Properties}
 
-import kafka.utils.Exit
+import kafka.utils.{CommandLineUtils}
 import org.apache.kafka.clients.admin.NewTopic
-import org.apache.kafka.clients.{admin, CommonClientConfigs}
+import org.apache.kafka.clients.{CommonClientConfigs, admin}
 import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer}
 import org.apache.kafka.clients.producer._
 import org.apache.kafka.common.TopicPartition
@@ -50,43 +50,15 @@ object EndToEndLatency {
   private val defaultNumPartitions: Int = 1
 
   def main(args: Array[String]) {
-    if (args.length != 5 && args.length != 6) {
-      System.err.println("USAGE: java " + getClass.getName + " broker_list topic num_messages producer_acks message_size_bytes [optional] properties_file")
-      Exit.exit(1)
-    }
 
-    val brokerList = args(0)
-    val topic = args(1)
-    val numMessages = args(2).toInt
-    val producerAcks = args(3)
-    val messageLen = args(4).toInt
-    val propsFile = if (args.length > 5) Some(args(5)).filter(_.nonEmpty) else None
+    val config = new TestConfig(args)
 
-    if (!List("1", "all").contains(producerAcks))
-      throw new IllegalArgumentException("Latency testing requires synchronous acknowledgement. Please use 1 or all")
+    val consumer = new KafkaConsumer[Array[Byte], Array[Byte]](config.consumerProps)
+    val producer = new KafkaProducer[Array[Byte], Array[Byte]](config.producerProps)
 
-    def loadPropsWithBootstrapServers: Properties = {
-      val props = propsFile.map(Utils.loadProps).getOrElse(new Properties())
-      props.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, brokerList)
-      props
-    }
-
-    val consumerProps = loadPropsWithBootstrapServers
-    consumerProps.put(ConsumerConfig.GROUP_ID_CONFIG, "test-group-" + System.currentTimeMillis())
-    consumerProps.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false")
-    consumerProps.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "latest")
-    consumerProps.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArrayDeserializer")
-    consumerProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArrayDeserializer")
-    consumerProps.put(ConsumerConfig.FETCH_MAX_WAIT_MS_CONFIG, "0") //ensure we have no temporal batching
-    val consumer = new KafkaConsumer[Array[Byte], Array[Byte]](consumerProps)
-
-    val producerProps = loadPropsWithBootstrapServers
-    producerProps.put(ProducerConfig.LINGER_MS_CONFIG, "0") //ensure writes are synchronous
-    producerProps.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, Long.MaxValue.toString)
-    producerProps.put(ProducerConfig.ACKS_CONFIG, producerAcks.toString)
-    producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer")
-    producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer")
-    val producer = new KafkaProducer[Array[Byte], Array[Byte]](producerProps)
+    val topic =  config.topic
+    val messageLen = config.messageLen
+    val numMessages = config.numMessages
 
     def finalise() {
       consumer.commitSync()
@@ -97,7 +69,7 @@ object EndToEndLatency {
     // create topic if it does not exist
     if (!consumer.listTopics().containsKey(topic)) {
       try {
-        createTopic(topic, loadPropsWithBootstrapServers)
+        createTopic(topic, config.createTopicProps)
       } catch {
         case t: Throwable =>
           finalise()
@@ -112,26 +84,34 @@ object EndToEndLatency {
     consumer.assignment().asScala.foreach(consumer.position)
 
     var totalTime = 0.0
-    val latencies = new Array[Long](numMessages)
+    val latencies = new Array[Double](numMessages)
     val random = new Random(0)
-
+    println("Iteration \t Latency, us")
     for (i <- 0 until numMessages) {
       val message = randomBytesOfLen(random, messageLen)
       val begin = System.nanoTime
 
-      //Send message (of random bytes) synchronously then immediately poll for it
-      producer.send(new ProducerRecord[Array[Byte], Array[Byte]](topic, message)).get()
-      val recordIter = consumer.poll(Duration.ofMillis(timeout)).iterator
+      // Send message (of random bytes) synchronously then immediately poll for it
+      if (config.withRdmaProduce){
+        producer.RDMAsend(new ProducerRecord[Array[Byte], Array[Byte]](topic, message)).get()
+      }else{
+        producer.send(new ProducerRecord[Array[Byte], Array[Byte]](topic, message)).get()
+      }
+
+      val recordIter = if (config.withRdmaConsume)
+                            consumer.RDMApoll(Duration.ofMillis(timeout)).iterator
+                       else
+                            consumer.poll(Duration.ofMillis(timeout)).iterator
 
       val elapsed = System.nanoTime - begin
 
-      //Check we got results
+      // Check we got results
       if (!recordIter.hasNext) {
         finalise()
         throw new RuntimeException(s"poll() timed out before finding a result (timeout:[$timeout])")
       }
 
-      //Check result matches the original record
+      // Check result matches the original record
       val sent = new String(message, StandardCharsets.UTF_8)
       val read = new String(recordIter.next().value(), StandardCharsets.UTF_8)
       if (!read.equals(sent)) {
@@ -139,26 +119,26 @@ object EndToEndLatency {
         throw new RuntimeException(s"The message read [$read] did not match the message sent [$sent]")
       }
 
-      //Check we only got the one message
+      // Check we only got the one message
       if (recordIter.hasNext) {
         val count = 1 + recordIter.asScala.size
         throw new RuntimeException(s"Only one result was expected during this test. We found [$count]")
       }
 
-      //Report progress
+      // Report progress
       if (i % 1000 == 0)
-        println(i + "\t" + elapsed / 1000.0 / 1000.0)
+        println(i + "\t" + elapsed / 1000.0 )
       totalTime += elapsed
-      latencies(i) = elapsed / 1000 / 1000
+      latencies(i) = elapsed / 1000.0
     }
 
-    //Results
-    println("Avg latency: %.4f ms\n".format(totalTime / numMessages / 1000.0 / 1000.0))
+    // Results
+    println("Avg latency: %.4f us\n".format(totalTime / numMessages / 1000.0 / 1000.0))
     Arrays.sort(latencies)
     val p50 = latencies((latencies.length * 0.5).toInt)
     val p99 = latencies((latencies.length * 0.99).toInt)
     val p999 = latencies((latencies.length * 0.999).toInt)
-    println("Percentiles: 50th = %d, 99th = %d, 99.9th = %d".format(p50, p99, p999))
+    println("Percentiles: 50th = %.4f, 99th = %.4f, 99.9th = %.4f".format(p50, p99, p999))
 
     finalise()
   }
@@ -175,5 +155,98 @@ object EndToEndLatency {
     val newTopic = new NewTopic(topic, defaultNumPartitions, defaultReplicationFactor)
     try adminClient.createTopics(Collections.singleton(newTopic)).all().get()
     finally Utils.closeQuietly(adminClient, "AdminClient")
+  }
+
+  import kafka.utils.CommandDefaultOptions
+
+  class TestConfig(args: Array[String]) extends CommandDefaultOptions(args) {
+
+    val bootstrapServersOpt = parser.accepts("broker-list", "REQUIRED: The server(s) to connect to.")
+      .withRequiredArg()
+      .describedAs("host")
+      .ofType(classOf[String])
+
+    val topicOpt = parser.accepts("topic", "REQUIRED: The topic to consume from.")
+      .withRequiredArg
+      .describedAs("topic")
+      .ofType(classOf[String])
+
+    val numMessagesOpt = parser.accepts("messages", "REQUIRED: The number of messages to send or consume")
+      .withRequiredArg
+      .describedAs("count")
+      .ofType(classOf[java.lang.Integer])
+
+    val acksOpt = parser.accepts("producer_acks", "REQUIRED: how many acks to wait.")
+      .withRequiredArg
+      .describedAs("acks")
+      .ofType(classOf[String])
+
+    val fetchSizeOpt = parser.accepts("size", "The amount of data to produce/fetch in a single test.")
+      .withRequiredArg
+      .describedAs("size")
+      .ofType(classOf[java.lang.Integer])
+      .defaultsTo(100)
+
+    val consumerConfigOpt = parser.accepts("consumer.config", "Consumer config properties file.")
+      .withRequiredArg
+      .describedAs("consumer config file")
+      .ofType(classOf[String])
+
+    val producerConfigOpt = parser.accepts("producer.config", "Producer config properties file.")
+      .withRequiredArg
+      .describedAs("producer config file")
+      .ofType(classOf[String])
+
+    val withRdmaConsumeOpt = parser.accepts("with-rdma-consume", "use rdma for fetching.")
+    val withRdmaProduceOpt = parser.accepts("with-rdma-produce", "use rdma for producing.")
+
+    options = parser.parse(args: _*)
+
+    CommandLineUtils.printHelpAndExitIfNeeded(this, "This tool helps in end to end latency")
+
+    CommandLineUtils.checkRequiredArgs(parser, options, topicOpt, numMessagesOpt, bootstrapServersOpt,acksOpt,fetchSizeOpt)
+
+
+    val withRdmaConsume = options.has(withRdmaConsumeOpt)
+    val withRdmaProduce = options.has(withRdmaProduceOpt)
+
+
+
+    val consumerProps = if (options.has(consumerConfigOpt))
+      Utils.loadProps(options.valueOf(consumerConfigOpt))
+    else
+      new Properties
+
+    consumerProps.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, options.valueOf(bootstrapServersOpt))
+    consumerProps.put(ConsumerConfig.GROUP_ID_CONFIG, "test-group-" + System.currentTimeMillis())
+    consumerProps.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false")
+    consumerProps.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "latest")
+    consumerProps.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArrayDeserializer")
+    consumerProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArrayDeserializer")
+    consumerProps.put(ConsumerConfig.FETCH_MAX_WAIT_MS_CONFIG, "0") // ensure we have no temporal batching
+
+
+    val createTopicProps =  new Properties
+    createTopicProps.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, options.valueOf(bootstrapServersOpt))
+
+
+
+    val producerProps = if (options.has(producerConfigOpt))
+      Utils.loadProps(options.valueOf(producerConfigOpt))
+    else
+      new Properties
+
+    producerProps.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, options.valueOf(bootstrapServersOpt))
+    producerProps.put(ProducerConfig.LINGER_MS_CONFIG, "0") // ensure writes are synchronous
+    producerProps.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, Long.MaxValue.toString)
+    producerProps.put(ProducerConfig.ACKS_CONFIG, options.valueOf(acksOpt))
+    producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer")
+    producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer")
+
+    val acks = options.valueOf(acksOpt)
+    val topic = options.valueOf(topicOpt)
+    val numMessages = options.valueOf(numMessagesOpt).intValue
+    val messageLen = options.valueOf(fetchSizeOpt).intValue
+
   }
 }

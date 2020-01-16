@@ -19,6 +19,7 @@ package kafka.log
 
 import java.io.{File, IOException}
 import java.lang.{Long => JLong}
+import java.nio.ByteBuffer
 import java.nio.file.{Files, NoSuchFileException}
 import java.text.NumberFormat
 import java.util.Map.{Entry => JEntry}
@@ -34,15 +35,16 @@ import kafka.message.{BrokerCompressionCodec, CompressionCodec, NoCompressionCod
 import kafka.metrics.KafkaMetricsGroup
 import kafka.server.checkpoints.LeaderEpochCheckpointFile
 import kafka.server.epoch.LeaderEpochFileCache
-import kafka.server.{BrokerTopicStats, FetchDataInfo, LogDirFailureChannel, LogOffsetMetadata, OffsetAndEpoch}
+import kafka.server.{BrokerTopicStats, FetchDataInfo, LogDirFailureChannel, LogOffsetMetadata, OffsetAndEpoch, Slot}
 import kafka.utils._
 import org.apache.kafka.common.errors._
-import org.apache.kafka.common.record.FileRecords.TimestampAndOffset
+import org.apache.kafka.common.record.FileRecords.{LogOffsetPosition, TimestampAndOffset}
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests.FetchResponse.AbortedTransaction
 import org.apache.kafka.common.requests.{EpochEndOffset, ListOffsetRequest}
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{KafkaException, TopicPartition}
+import sun.nio.ch.DirectBuffer
 
 import scala.collection.JavaConverters._
 import scala.collection.mutable.{ArrayBuffer, ListBuffer}
@@ -56,6 +58,19 @@ object LogAppendInfo {
     LogAppendInfo(None, -1, RecordBatch.NO_TIMESTAMP, -1L, RecordBatch.NO_TIMESTAMP, logStartOffset,
       RecordConversionStats.EMPTY, NoCompressionCodec, NoCompressionCodec, -1, -1, offsetsMonotonic = false, -1L)
 }
+
+
+
+
+// rdma patch
+case class AddressReplicateInfo(bytebuffer: ByteBuffer, // Mapped
+                           startPosition: Long, // offset in file in bytes
+                           endPosition: Long,
+                                baseOffset:Long,
+                                offset: Long)  // file size at the moment
+
+
+
 
 /**
  * Struct to hold various quantities we compute about each message set before appending to the log
@@ -87,7 +102,8 @@ case class LogAppendInfo(var firstOffset: Option[Long],
                          shallowCount: Int,
                          validBytes: Int,
                          offsetsMonotonic: Boolean,
-                         lastOffsetOfFirstBatch: Long) {
+                         lastOffsetOfFirstBatch: Long,
+                         var toReplicateWithRdma: Option[AddressReplicateInfo] = None) {
   /**
    * Get the first offset if it exists, else get the last offset of the first batch
    * For magic versions 2 and newer, this method will return first offset. For magic versions
@@ -274,6 +290,8 @@ class Log(@volatile var dir: File,
    * prevent the log start offset (which is exposed in fetch responses) from getting ahead of the high watermark.
    */
   @volatile private var replicaHighWatermark: Option[Long] = None
+
+  @volatile private var replicaHighWatermarkPosition: Option[Long] = None
 
   /* the actual segments of the log */
   private val segments: ConcurrentNavigableMap[java.lang.Long, LogSegment] = new ConcurrentSkipListMap[java.lang.Long, LogSegment]
@@ -822,8 +840,8 @@ class Log(@volatile var dir: File,
    * @return Information about the appended messages including the first and last offset.
    */
   def appendAsLeader(records: MemoryRecords, leaderEpoch: Int, isFromClient: Boolean = true,
-                     interBrokerProtocolVersion: ApiVersion = ApiVersion.latestVersion): LogAppendInfo = {
-    append(records, isFromClient, interBrokerProtocolVersion, assignOffsets = true, leaderEpoch)
+                     interBrokerProtocolVersion: ApiVersion = ApiVersion.latestVersion, withRdmaReplication:Boolean = false): LogAppendInfo = {
+    append(records, isFromClient, interBrokerProtocolVersion, assignOffsets = true, leaderEpoch,withRdmaReplication)
   }
 
   /**
@@ -836,6 +854,19 @@ class Log(@volatile var dir: File,
   def appendAsFollower(records: MemoryRecords): LogAppendInfo = {
     append(records, isFromClient = false, interBrokerProtocolVersion = ApiVersion.latestVersion, assignOffsets = false, leaderEpoch = -1)
   }
+
+
+  // rdma patch
+  def rdmaAppendAsLeader(expected_position: Int, records: MemoryRecords, leaderEpoch: Int, isFromClient: Boolean = true,
+                         interBrokerProtocolVersion: ApiVersion = ApiVersion.latestVersion): LogAppendInfo = {
+    rdmaAppend(expected_position, records, isFromClient, interBrokerProtocolVersion, assignOffsets = true, leaderEpoch)
+  }
+
+  // rdma patch
+  def rdmaAppendAsFollower(expected_position: Int, records: MemoryRecords): LogAppendInfo = {
+    rdmaAppend(expected_position, records, false, interBrokerProtocolVersion = ApiVersion.latestVersion, assignOffsets = false, leaderEpoch = -1)
+  }
+
 
   /**
    * Append this message set to the active segment of the log, rolling over to a fresh segment if necessary.
@@ -853,7 +884,7 @@ class Log(@volatile var dir: File,
    * @throws UnexpectedAppendOffsetException If the first or last offset in append is less than next offset
    * @return Information about the appended messages including the first and last offset.
    */
-  private def append(records: MemoryRecords, isFromClient: Boolean, interBrokerProtocolVersion: ApiVersion, assignOffsets: Boolean, leaderEpoch: Int): LogAppendInfo = {
+  private def append(records: MemoryRecords, isFromClient: Boolean, interBrokerProtocolVersion: ApiVersion, assignOffsets: Boolean, leaderEpoch: Int, withRdmaReplication:Boolean = false): LogAppendInfo = {
     maybeHandleIOException(s"Error while appending records to $topicPartition in dir ${dir.getParent}") {
       val appendInfo = analyzeAndValidateRecords(records, isFromClient = isFromClient)
 
@@ -912,7 +943,8 @@ class Log(@volatile var dir: File,
               }
             }
           }
-        } else {
+        }
+        else {
           // we are taking the offsets we are given
           if (!appendInfo.offsetsMonotonic)
             throw new OffsetsOutOfOrderException(s"Out of order offsets found in append to $topicPartition: " +
@@ -982,6 +1014,9 @@ class Log(@volatile var dir: File,
           shallowOffsetOfMaxTimestamp = appendInfo.offsetOfMaxTimestamp,
           records = validRecords)
 
+
+        updateWrittenSlots(segment.baseOffset, segment.size)
+
         // Increment the log end offset. We do this immediately after the append because a
         // write to the transaction index below may fail and we want to ensure that the offsets
         // of future appends still grow monotonically. The resulting transaction index inconsistency
@@ -989,6 +1024,17 @@ class Log(@volatile var dir: File,
         // ProducerStateManager will not be updated and the last stable offset will not advance
         // if the append to the transaction index fails.
         updateLogEndOffset(appendInfo.lastOffset + 1)
+
+
+        if(isFromClient && withRdmaReplication) {
+          val buf = segment.getMappedBuffer()
+          val start_pos = logOffsetMetadata.relativePositionInSegment
+          val end_pos = segment.size
+          //nextOffsetMetadata
+          val baseOffset = segment.baseOffset
+          appendInfo.toReplicateWithRdma = Some(AddressReplicateInfo(buf, start_pos, end_pos,baseOffset,appendInfo.firstOffset.get))
+        }
+
 
         // update the producer state
         for ((_, producerAppendInfo) <- updatedProducers) {
@@ -1024,6 +1070,187 @@ class Log(@volatile var dir: File,
     }
   }
 
+
+  // rdma patch
+  private def rdmaAppend(expected_position: Int, records: MemoryRecords, isFromClient: Boolean, interBrokerProtocolVersion: ApiVersion, assignOffsets: Boolean, leaderEpoch: Int, withRdmaReplication:Boolean = false): LogAppendInfo =
+    maybeHandleIOException(s"Error while appending records to $topicPartition in dir ${dir.getParent}") {
+
+    val appendInfo = analyzeAndValidateRecords(records, isFromClient = isFromClient)
+
+    val validBytes = appendInfo.validBytes
+    if (validBytes < 0)
+      throw new CorruptRecordException(s"RDMA Cannot append record batch with illegal length $validBytes to " +
+        s"log for $topicPartition. A possible cause is a corrupted produce request.")
+    if (validBytes != records.sizeInBytes) {
+      throw new CorruptRecordException(s"RDMA Cannot append record batch with illegal length $validBytes to " +
+        s"log for $topicPartition. A possible cause is a corrupted produce request.")
+    }
+
+    // trim any invalid bytes or partial messages before appending it to the on-disk log
+    var validRecords = records
+
+    // they are valid, insert them in the log
+    lock synchronized {
+
+      val segment = activeSegment
+      val current_position = segment.size
+
+      if(expected_position != current_position){
+        throw new CorruptRecordException(s"RDMA unexpected current log position $current_position != $expected_position to " +
+          s"log for $topicPartition. A possible cause is a corrupted produce request.")
+      }
+
+      checkIfMemoryMappedBufferClosed()
+      if (assignOffsets) {
+        // assign offsets to the message set
+        val offset = new LongRef(nextOffsetMetadata.messageOffset)
+        appendInfo.firstOffset = Some(offset.value)
+        val now = time.milliseconds
+        val validateAndOffsetAssignResult = try {
+          LogValidator.validateMessagesAndAssignOffsets(validRecords,
+            offset,
+            time,
+            now,
+            appendInfo.sourceCodec,
+            appendInfo.targetCodec,
+            config.compact,
+            config.messageFormatVersion.recordVersion.value,
+            config.messageTimestampType,
+            config.messageTimestampDifferenceMaxMs,
+            leaderEpoch,
+            isFromClient,
+            interBrokerProtocolVersion)
+        } catch {
+          case e: IOException =>
+            throw new KafkaException(s"Error validating messages while appending to log $name", e)
+        }
+        validRecords = validateAndOffsetAssignResult.validatedRecords
+        appendInfo.maxTimestamp = validateAndOffsetAssignResult.maxTimestamp
+        appendInfo.offsetOfMaxTimestamp = validateAndOffsetAssignResult.shallowOffsetOfMaxTimestamp
+        appendInfo.lastOffset = offset.value - 1
+        appendInfo.recordConversionStats = validateAndOffsetAssignResult.recordConversionStats
+        if (config.messageTimestampType == TimestampType.LOG_APPEND_TIME)
+          appendInfo.logAppendTime = now
+
+
+      }
+      else {
+        // we are taking the offsets we are given
+        if (!appendInfo.offsetsMonotonic)
+          throw new OffsetsOutOfOrderException(s"Out of order offsets found in append to $topicPartition: " +
+            records.records.asScala.map(_.offset))
+
+        if (appendInfo.firstOrLastOffsetOfFirstBatch < nextOffsetMetadata.messageOffset) {
+          // we may still be able to recover if the log is empty
+          // one example: fetching from log start offset on the leader which is not batch aligned,
+          // which may happen as a result of AdminClient#deleteRecords()
+          val firstOffset = appendInfo.firstOffset match {
+            case Some(offset) => offset
+            case None => records.batches.asScala.head.baseOffset()
+          }
+
+          val firstOrLast = if (appendInfo.firstOffset.isDefined) "First offset" else "Last offset of the first batch"
+          throw new UnexpectedAppendOffsetException(
+            s"Unexpected offset in append to $topicPartition. $firstOrLast " +
+              s"${appendInfo.firstOrLastOffsetOfFirstBatch} is less than the next offset ${nextOffsetMetadata.messageOffset}. " +
+              s"First 10 offsets in append: ${records.records.asScala.take(10).map(_.offset)}, last offset in" +
+              s" append: ${appendInfo.lastOffset}. Log start offset = $logStartOffset",
+            firstOffset, appendInfo.lastOffset)
+        }
+      }
+
+      // update the epoch cache with the epoch stamped onto the message by the leader
+      validRecords.batches.asScala.foreach { batch =>
+        if (batch.magic >= RecordBatch.MAGIC_VALUE_V2) {
+          maybeAssignEpochStartOffset(batch.partitionLeaderEpoch, batch.baseOffset)
+        } else {
+          // In partial upgrade scenarios, we may get a temporary regression to the message format. In
+          // order to ensure the safety of leader election, we clear the epoch cache so that we revert
+          // to truncation by high watermark after the next leader election.
+          leaderEpochCache.filter(_.nonEmpty).foreach { cache =>
+            warn(s"Clearing leader epoch cache after unexpected append with message format v${batch.magic}")
+            cache.clearAndFlush()
+          }
+        }
+      }
+
+      // check messages set size may be exceed config.segmentSize
+      // Should be impossible for rdma
+      if (validRecords.sizeInBytes > config.segmentSize) {
+        throw new RecordBatchTooLargeException(s"Rdma Message batch size is ${validRecords.sizeInBytes} bytes in append " +
+          s"to partition $topicPartition, which exceeds the maximum configured segment size of ${config.segmentSize}.")
+      }
+
+
+       // now that we have valid records, offsets assigned, and timestamps updated, we need to
+      // validate the idempotent/transactional state of the producers and collect some metadata
+      val (updatedProducers, completedTxns, maybeDuplicate) = analyzeAndValidateProducerState(validRecords, isFromClient)
+      assert(maybeDuplicate.isEmpty)
+
+      val logOffsetMetadata = LogOffsetMetadata(
+        messageOffset = appendInfo.firstOrLastOffsetOfFirstBatch,
+        segmentBaseOffset = segment.baseOffset,
+        relativePositionInSegment = segment.size)
+
+      segment.rdmaAppend(expected_position ,largestOffset = appendInfo.lastOffset,
+        largestTimestamp = appendInfo.maxTimestamp,
+        shallowOffsetOfMaxTimestamp = appendInfo.offsetOfMaxTimestamp,
+        records = validRecords)
+
+      updateWrittenSlots(segment.baseOffset, segment.size)
+
+      // Increment the log end offset. We do this immediately after the append because a
+      // write to the transaction index below may fail and we want to ensure that the offsets
+      // of future appends still grow monotonically. The resulting transaction index inconsistency
+      // will be cleaned up after the log directory is recovered. Note that the end offset of the
+      // ProducerStateManager will not be updated and the last stable offset will not advance
+      // if the append to the transaction index fails.
+      updateLogEndOffset(appendInfo.lastOffset + 1)
+
+
+      if(isFromClient && withRdmaReplication) {
+        val buf = segment.getMappedBuffer()
+        val start_pos = logOffsetMetadata.relativePositionInSegment
+        val end_pos = segment.size
+        //nextOffsetMetadata
+        val baseOffset = segment.baseOffset
+        appendInfo.toReplicateWithRdma = Some(AddressReplicateInfo(buf, start_pos, end_pos,baseOffset,appendInfo.firstOffset.get))
+      }
+
+      // update the producer state
+      for ((_, producerAppendInfo) <- updatedProducers) {
+        producerAppendInfo.maybeCacheTxnFirstOffsetMetadata(logOffsetMetadata)
+        producerStateManager.update(producerAppendInfo)
+      }
+
+      // update the transaction index with the true last stable offset. The last offset visible
+      // to consumers using READ_COMMITTED will be limited by this value and the high watermark.
+      for (completedTxn <- completedTxns) {
+        val lastStableOffset = producerStateManager.lastStableOffset(completedTxn)
+        segment.updateTxnIndex(completedTxn, lastStableOffset)
+        producerStateManager.completeTxn(completedTxn)
+      }
+
+      // always update the last producer id map offset so that the snapshot reflects the current offset
+      // even if there isn't any idempotent data being written
+      producerStateManager.updateMapEndOffset(appendInfo.lastOffset + 1)
+
+      // update the first unstable offset (which is used to compute LSO)
+      updateFirstUnstableOffset()
+
+      debug(s"rdma Appended message set with last offset: ${appendInfo.lastOffset}, " +
+        s"first offset: ${appendInfo.firstOffset}, " +
+        s"next offset: ${nextOffsetMetadata.messageOffset}, " +
+        s"and messages: $validRecords")
+
+
+      if (unflushedMessages >= config.flushInterval)
+        flush()
+
+      appendInfo
+    }
+  }
+
   def maybeAssignEpochStartOffset(leaderEpoch: Int, startOffset: Long): Unit = {
     leaderEpochCache.foreach { cache =>
       cache.assign(leaderEpoch, startOffset)
@@ -1042,15 +1269,119 @@ class Log(@volatile var dir: File,
     }
   }
 
-  def onHighWatermarkIncremented(highWatermark: Long): Unit = {
+
+  def onHighWatermarkIncremented(messageOffset: Long): Unit = {
     lock synchronized {
-      replicaHighWatermark = Some(highWatermark)
-      producerStateManager.onHighWatermarkUpdated(highWatermark)
+      replicaHighWatermark = Some(messageOffset)
+      producerStateManager.onHighWatermarkUpdated(messageOffset)
       updateFirstUnstableOffset()
     }
   }
 
-  private def updateFirstUnstableOffset(): Unit = lock synchronized {
+  def onHighWatermarkIncremented(newHighWatermark: LogOffsetMetadata): Unit = {
+    lock synchronized {
+      replicaHighWatermark = Some(newHighWatermark.messageOffset)
+      replicaHighWatermarkPosition = Some(newHighWatermark.relativePositionInSegment)
+      producerStateManager.onHighWatermarkUpdated(newHighWatermark.messageOffset)
+
+      updateWatermarkSlots(newHighWatermark)
+      updateFirstUnstableOffset
+      updateLSOSlots
+    }
+  }
+
+  object DescendingAlphabetOrdering extends Ordering[Slot] {
+    def compare(element1: Slot, element2: Slot) = element1.baseOffset.compareTo(element2.baseOffset)
+  }
+
+  // rdma patch
+  val activeSlots = new mutable.TreeSet[Slot]()(DescendingAlphabetOrdering)
+
+
+  // rdma patch
+  // it is only one method which requires additional lock as I mute lists.
+  def addSlot(slot : Slot): Unit = lock synchronized {
+    activeSlots+=slot
+  }
+
+  // rdma patch
+  def clearSlots(): Unit = lock synchronized{
+    activeSlots.clear()
+  }
+
+
+  @nonthreadsafe
+  def updateWrittenSlots(baseOffset: Long, position: Long): Unit ={
+    activeSlots.foreach { slot =>
+      if(slot.baseOffset == baseOffset) {
+        slot.setWrittenPosition(position)
+        //info(s"Written Slot ${slot}")
+      }
+    }
+  }
+
+  // rdma patch
+  // must be called from lock
+  @nonthreadsafe
+  def updateWatermarkSlots(newHighWatermark: LogOffsetMetadata): Unit = {
+    if(activeSlots.nonEmpty){
+
+      activeSlots.retain { _.valid }
+
+      activeSlots.foreach{ slot =>
+        if(slot.baseOffset == newHighWatermark.segmentBaseOffset) {
+          debug(s"updateWatermarkSlots set wm to ${newHighWatermark.relativePositionInSegment} ${slot.buffer.asInstanceOf[DirectBuffer].address()}")
+          slot.setWatermarkPosition(newHighWatermark.relativePositionInSegment)
+        }
+        else if(slot.baseOffset < newHighWatermark.segmentBaseOffset) {
+          val segment = segments.floorEntry(slot.baseOffset).getValue
+          debug(s"updateWatermarkSlots2 set wm to ${segment.size}   ${slot.buffer.asInstanceOf[DirectBuffer].address()}")
+          slot.setWatermarkPosition(segment.size)
+        }
+        slot.setWatermarkOffset(newHighWatermark.messageOffset)
+      }
+
+      activeSlots.retain( slot =>  slot.baseOffset >= newHighWatermark.segmentBaseOffset)
+    }
+  }
+
+  // rdma patch
+  // must be called from lock
+  @nonthreadsafe
+  def updateLSOSlots( ): Unit = {
+    return; // Should be removed. I have not debugged the code below
+    if(activeSlots.nonEmpty) {
+
+      val offset: Long = firstUnstableOffset match {
+        case Some(offsetMetadata) if offsetMetadata.messageOffset < replicaHighWatermark.getOrElse(0L) => offsetMetadata.messageOffset
+        case _ => replicaHighWatermark.getOrElse(0L)
+      }
+
+      val position = firstUnstableOffset match {
+        case Some(offsetMetadata) if offsetMetadata.messageOffset < replicaHighWatermark.getOrElse(0L) => offsetMetadata.relativePositionInSegment
+        case _ => replicaHighWatermarkPosition.getOrElse(0L)
+      }
+
+      val segmentBaseOffset = segments.floorKey(offset)
+
+      activeSlots.foreach { slot =>
+        if (slot.baseOffset == segmentBaseOffset) {
+          slot.setLSOPosition(position)
+        }
+        else if (slot.baseOffset < segmentBaseOffset) {
+          val segment = segments.floorEntry(slot.baseOffset).getValue
+          slot.setLSOPosition(segment.size)
+        }
+        slot.setLSOOffset(offset)
+        debug(s"updateLUOSlots Slot ${slot}")
+      }
+      // we can safely remove them here as HWM is always higher than LSO
+      activeSlots.retain(slot => slot.baseOffset >= segmentBaseOffset)
+    }
+  }
+
+
+  private def updateFirstUnstableOffset(): Unit =  {
     checkIfMemoryMappedBufferClosed()
     val updatedFirstStableOffset = producerStateManager.firstUnstableOffset match {
       case Some(logOffsetMetadata) if logOffsetMetadata.messageOffsetOnly || logOffsetMetadata.messageOffset < logStartOffset =>
@@ -1064,9 +1395,9 @@ class Log(@volatile var dir: File,
     if (updatedFirstStableOffset != this.firstUnstableOffset) {
       debug(s"First unstable offset updated to $updatedFirstStableOffset")
       this.firstUnstableOffset = updatedFirstStableOffset
+      updateLSOSlots()
     }
   }
-
   /**
    * Increment the log start offset if the provided offset is larger.
    */
@@ -1453,6 +1784,52 @@ class Log(@volatile var dir: File,
     ret.toSeq.sortBy(-_)
   }
 
+  // rdma patch
+  @threadsafe
+  def fetchAddress(requestNewFile: Boolean): AddressReadInfo = {
+    val currentNextOffsetMetadata = nextOffsetMetadata
+    val segment = if(requestNewFile)
+      roll() // it uses lock inside
+    else
+      activeSegment // is thread safe
+
+    val buffer = segment.getMappedBuffer() // is thread safe
+
+    val physicalPosition = segment.size
+    val till_the_end = buffer.limit
+
+    val info: AddressReadInfo =  new AddressReadInfo(buffer,segment.baseOffset,currentNextOffsetMetadata.messageOffset,physicalPosition,till_the_end)
+    info
+  }
+
+  // rdma patch
+  def fetchAddressByOffset(startOffset: Long): Option[AddressReadInfo] = {
+    val currentNextOffsetMetadata = nextOffsetMetadata
+    val next = currentNextOffsetMetadata.messageOffset
+
+    val segmentEntry = segments.floorEntry(startOffset) // is threadsafe
+
+    if (startOffset > next || segmentEntry == null || startOffset < logStartOffset)
+      throw new OffsetOutOfRangeException(s"Received fetchAddressByOffset for offset $startOffset for partition $topicPartition, " +
+        s"but we only have log segments in the range $logStartOffset to $next.")
+
+    val segment = segmentEntry.getValue // is thread safe
+
+    val buffer = segment.getMappedBuffer() // is thread safe
+    val offsetPosition:LogOffsetPosition = segment.getOffsetPosition(startOffset)  // is threadsafe
+
+    if( offsetPosition == null){
+      return None
+    }
+    trace(s"Found the offset: Position: ${offsetPosition.position}, Offset: ${offsetPosition.offset}," +
+      s"Length: ${offsetPosition.size}, FileSize: ${segment.size}")
+
+    val rdmaAddressInfo =  new AddressReadInfo(buffer,segment.baseOffset,offsetPosition.offset,offsetPosition.position,segment.size)
+
+    return Some(rdmaAddressInfo)
+  }
+
+
   /**
    * Given a message offset, find its corresponding offset metadata in the log.
    * If the message offset is out of range, return None to the caller.
@@ -1695,6 +2072,20 @@ class Log(@volatile var dir: File,
           }
 
           Option(segments.lastEntry).foreach(_.getValue.onBecomeInactiveSegment())
+
+          // rdma patch
+          Option(segments.lastEntry).foreach { entry =>
+            val baseOffset = entry.getKey
+            activeSlots.foreach{ slot =>
+              if(slot.baseOffset == baseOffset) {
+               // val segment = entry.getValue
+                slot.setSealed()
+              //  assert(slot.getWritePosition() == segment.size)
+              }
+            }
+          }
+
+
         }
 
         // take a snapshot of the producer state to facilitate recovery. It is useful to have the snapshot

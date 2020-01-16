@@ -16,13 +16,25 @@
  */
 package org.apache.kafka.clients.producer.internals;
 
+import java.util.Collections;
+import java.util.List;
 import java.util.ArrayList;
+import java.util.Map;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.Optional;
+
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.ClientRequest;
 import org.apache.kafka.clients.ClientResponse;
+import org.apache.kafka.clients.ClientRDMARequest;
+import org.apache.kafka.clients.ClientRDMAResponse;
 import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.NetworkClientUtils;
+import org.apache.kafka.clients.ProduceRDMAWriteRequest;
+import org.apache.kafka.clients.RdmaClient;
+import org.apache.kafka.clients.RDMARequestCompletionHandler;
 import org.apache.kafka.clients.RequestCompletionHandler;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
@@ -52,6 +64,8 @@ import org.apache.kafka.common.requests.InitProducerIdRequest;
 import org.apache.kafka.common.requests.InitProducerIdResponse;
 import org.apache.kafka.common.requests.ProduceRequest;
 import org.apache.kafka.common.requests.ProduceResponse;
+import org.apache.kafka.common.requests.RDMAProduceAddressRequest;
+import org.apache.kafka.common.requests.RDMAProduceAddressResponse;
 import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
@@ -59,11 +73,6 @@ import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 
 import java.io.IOException;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
 
 import static org.apache.kafka.common.record.RecordBatch.NO_TIMESTAMP;
 
@@ -123,6 +132,10 @@ public class Sender implements Runnable {
     // A per-partition queue of batches ordered by creation time for tracking the in-flight batches
     private final Map<TopicPartition, List<ProducerBatch>> inFlightBatches;
 
+    private final RdmaClient rdmaClient;
+
+    private Integer pendingRdma = 0;
+
     public Sender(LogContext logContext,
                   KafkaClient client,
                   Metadata metadata,
@@ -137,6 +150,25 @@ public class Sender implements Runnable {
                   long retryBackoffMs,
                   TransactionManager transactionManager,
                   ApiVersions apiVersions) {
+        this(logContext, client, metadata, accumulator, guaranteeMessageOrder, maxRequestSize, acks, retries,
+                metricsRegistry, time, requestTimeoutMs, retryBackoffMs, transactionManager, apiVersions, null);
+    }
+
+    public Sender(LogContext logContext,
+                  KafkaClient client,
+                  Metadata metadata,
+                  RecordAccumulator accumulator,
+                  boolean guaranteeMessageOrder,
+                  int maxRequestSize,
+                  short acks,
+                  int retries,
+                  SenderMetricsRegistry metricsRegistry,
+                  Time time,
+                  int requestTimeoutMs,
+                  long retryBackoffMs,
+                  TransactionManager transactionManager,
+                  ApiVersions apiVersions,
+                  RdmaClient rdmaClient) {
         this.log = logContext.logger(Sender.class);
         this.client = client;
         this.accumulator = accumulator;
@@ -153,6 +185,7 @@ public class Sender implements Runnable {
         this.apiVersions = apiVersions;
         this.transactionManager = transactionManager;
         this.inFlightBatches = new HashMap<>();
+        this.rdmaClient = rdmaClient;
     }
 
     public List<ProducerBatch> inFlightBatches(TopicPartition tp) {
@@ -308,12 +341,24 @@ public class Sender implements Runnable {
         }
 
         long currentTimeMs = time.milliseconds();
-        long pollTimeout = sendProducerData(currentTimeMs);
+        long currentTimeNanos = time.nanoseconds();
+
+
+        long pollTimeout = sendProducerData(currentTimeMs, currentTimeNanos);
+
+        long currentTimeNanos2 = time.nanoseconds();
+
+        if (pendingRdma != 0) {
+            pollTimeout = 0;
+        }
+
+        rdmaClient.poll(0, currentTimeNanos2);
         client.poll(pollTimeout, currentTimeMs);
     }
 
-    private long sendProducerData(long now) {
+    private long sendProducerData(long now, long nowNanos) {
         Cluster cluster = metadata.fetch();
+
         // get the list of partitions with data ready to send
         RecordAccumulator.ReadyCheckResult result = this.accumulator.ready(cluster, now);
 
@@ -330,16 +375,20 @@ public class Sender implements Runnable {
             this.metadata.requestUpdate();
         }
 
+
         // remove any nodes we aren't ready to send to
         Iterator<Node> iter = result.readyNodes.iterator();
         long notReadyTimeout = Long.MAX_VALUE;
         while (iter.hasNext()) {
             Node node = iter.next();
-            if (!this.client.ready(node, now)) {
+            if (rdmaClient.isContended(node)) {
+                iter.remove();
+            } else if (!this.client.ready(node, now)) {
                 iter.remove();
                 notReadyTimeout = Math.min(notReadyTimeout, this.client.pollDelayMs(node, now));
             }
         }
+
 
         // create produce requests
         Map<Integer, List<ProducerBatch>> batches = this.accumulator.drain(cluster, result.readyNodes, this.maxRequestSize, now);
@@ -352,6 +401,23 @@ public class Sender implements Runnable {
             }
         }
 
+
+        Map<Node, RecordAccumulator.GetAddressRequestInfo> getAddressRequestInfoMap = new HashMap<>();
+        // rdma batches
+        Map<Integer, List<ProduceRDMAWriteRequest>> rdmabatches = this.accumulator.drainRdma(cluster, result.readyNodes,  this.maxRequestSize, now, getAddressRequestInfoMap);
+
+        if (!getAddressRequestInfoMap.isEmpty()) {
+            requestProduserAddressAsync(getAddressRequestInfoMap, now);
+        }
+
+        if (guaranteeMessageOrder) {
+            // Mute all the partitions drained
+            for (List<ProduceRDMAWriteRequest>  requests: rdmabatches.values()) {
+                for (ProduceRDMAWriteRequest req : requests)
+                    this.accumulator.mutePartition(req.getBatch().topicPartition);
+            }
+        }
+
         accumulator.resetNextBatchExpiryTime();
         List<ProducerBatch> expiredInflightBatches = getExpiredInflightBatches(now);
         List<ProducerBatch> expiredBatches = this.accumulator.expiredBatches(now);
@@ -360,8 +426,9 @@ public class Sender implements Runnable {
         // Reset the producer id if an expired batch has previously been sent to the broker. Also update the metrics
         // for expired batches. see the documentation of @TransactionState.resetProducerId to understand why
         // we need to reset the producer id here.
-        if (!expiredBatches.isEmpty())
+        if (!expiredBatches.isEmpty()) {
             log.trace("Expired {} batches in accumulator", expiredBatches.size());
+        }
         for (ProducerBatch expiredBatch : expiredBatches) {
             String errorMessage = "Expiring " + expiredBatch.recordCount + " record(s) for " + expiredBatch.topicPartition
                 + ":" + (now - expiredBatch.createdMs) + " ms has passed since batch creation";
@@ -389,9 +456,79 @@ public class Sender implements Runnable {
             // otherwise the select time will be the time difference between now and the metadata expiry time;
             pollTimeout = 0;
         }
+
         sendProduceRequests(batches, now);
+
+        if (pendingRdma != 0) {
+            rdmaClient.poll(0, nowNanos);
+        }
+
+        sendRdmaProduceRequests(rdmabatches, nowNanos);
+
         return pollTimeout;
     }
+
+    private void requestProduserAddressAsync(Map<Node, RecordAccumulator.GetAddressRequestInfo> getAddressRequestInfoMap, long now) {
+
+        for (Map.Entry<Node, RecordAccumulator.GetAddressRequestInfo> entry : getAddressRequestInfoMap.entrySet()) {
+
+            RecordAccumulator.GetAddressRequestInfo addrInfo = entry.getValue();
+
+            List<TopicPartition> tplist = addrInfo.unknownRdmaTopicPartitions;
+            List<TopicPartition> toUpdate = addrInfo.newFileRequired;
+
+            RequestCompletionHandler callback = new RequestCompletionHandler() {
+                public void onComplete(ClientResponse response) {
+                    handleAddressResponse(response,  time.milliseconds());
+                }
+            };
+
+            String nodeId = entry.getKey().idString();
+
+            RDMAProduceAddressRequest.Builder requestBuilder = new RDMAProduceAddressRequest.Builder(acks, tplist, toUpdate, requestTimeoutMs);
+
+
+            ClientRequest clientRequest = client.newClientRequest(nodeId, requestBuilder, now, true,
+                    requestTimeoutMs, callback);
+            client.send(clientRequest, now);
+
+        }
+    }
+
+
+    private  Map<Node, List<TopicPartition>> groupGetAddressRequests(Cluster cluster, List<TopicPartition> tps) {
+
+        final Map<Node, List<TopicPartition>> getAddressByNode = new HashMap<>();
+
+
+        for (TopicPartition tp: tps) {
+
+            Node node = cluster.leaderFor(tp);
+
+            List<TopicPartition> topicData =
+                    getAddressByNode.computeIfAbsent(node,  n -> new ArrayList<>());
+
+            topicData.add(tp);
+        }
+        return getAddressByNode;
+
+    }
+
+
+    void handleAddressResponse(ClientResponse response, long now) {
+        RDMAProduceAddressResponse lor = (RDMAProduceAddressResponse) response.responseBody();
+
+        try {
+            boolean connected = this.rdmaClient.connect(response.destination(), lor.rdmaHost(), lor.rdmaPort(), Optional.empty());
+            if (connected) {
+                System.out.println("Connected rdma");
+            }
+        } catch (Exception e) {
+
+        }
+        this.accumulator.updateAddresses(lor.responses());
+    }
+
 
     private boolean maybeSendTransactionalRequest() {
         if (transactionManager.isCompleting() && accumulator.hasIncomplete()) {
@@ -567,6 +704,30 @@ public class Sender implements Runnable {
             }
         }
     }
+
+    private void handleRdmaProduceResponse(ClientRDMAResponse response,  ProducerBatch  batch, long now) {
+
+        int correlationId =  -1;
+        long receivedTimeMs = response.receivedTimeMs;
+
+        log.trace("Received produce response from node {} with correlation id {}", response.destination(), correlationId);
+        // if we have a response, parse it
+        if (response.hasResponse()) {
+
+            // get special request
+            ProduceRDMAWriteRequest request = (ProduceRDMAWriteRequest) response.getRequest();
+            ProduceResponse.PartitionResponse partResp = new ProduceResponse.PartitionResponse(Errors.NONE, request.baseOffset, NO_TIMESTAMP, ProduceResponse.INVALID_OFFSET);
+
+            completeBatch(batch, partResp, correlationId, now, receivedTimeMs);
+
+            this.sensors.recordLatency(response.destination(), response.requestLatencyNanos() / 1000000L);
+        } else {
+            // this is the acks = 0 case, just complete all requests
+            completeBatch(batch, new ProduceResponse.PartitionResponse(Errors.NONE), correlationId, now, 0L);
+        }
+
+    }
+
 
     /**
      * Complete or retry the given batch of records.
@@ -744,6 +905,14 @@ public class Sender implements Runnable {
     }
 
     /**
+     * Transfer the record batches into a list of produce requests on a per-node basis
+     */
+    private void sendRdmaProduceRequests(Map<Integer, List<ProduceRDMAWriteRequest>> collated, long nowNanos) {
+        for (Map.Entry<Integer, List<ProduceRDMAWriteRequest>> entry : collated.entrySet())
+            sendRdmaProduceRequest(nowNanos, entry.getKey(), entry.getValue());
+    }
+
+    /**
      * Create a produce request from the given record batches
      */
     private void sendProduceRequest(long now, int destination, short acks, int timeout, List<ProducerBatch> batches) {
@@ -790,11 +959,61 @@ public class Sender implements Runnable {
         };
 
         String nodeId = Integer.toString(destination);
+
         ClientRequest clientRequest = client.newClientRequest(nodeId, requestBuilder, now, acks != 0,
                 requestTimeoutMs, callback);
         client.send(clientRequest, now);
         log.trace("Sent produce request to {}: {}", nodeId, requestBuilder);
     }
+
+    private void sendRdmaProduceRequest(long nowNanos, int destination, List<ProduceRDMAWriteRequest> requests) {
+        // todo fix now
+        if (requests.isEmpty())
+            return;
+
+       /* // find the minimum magic version used when creating the record sets
+        byte minUsedMagic = apiVersions.maxUsableProduceMagic();
+        for (ProduceRDMAWriteRequest request : requests) {
+            ProducerBatch batch = request.getBatch();
+            if (batch.magic() < minUsedMagic)
+                minUsedMagic = batch.magic();
+        }
+
+
+        String transactionalId = null;
+        if (transactionManager != null && transactionManager.isTransactional()) {
+            transactionalId = transactionManager.transactionalId();
+        }*/
+
+        String nodeId = Integer.toString(destination);
+
+        for (ProduceRDMAWriteRequest request : requests) {
+            ProducerBatch batch = request.getBatch();
+
+        /*    if (!batch.records().hasMatchingMagic(minUsedMagic)){
+                // request.updateBuffer(batch.records().downConvert(minUsedMagic, 0, time).records() );
+                log.info("Unexpected conversion!  {}: {}", nodeId, requests.size());
+            }*/
+
+            RDMARequestCompletionHandler callback = new RDMARequestCompletionHandler() {
+                public void onComplete(ClientRDMAResponse response) {
+                    pendingRdma--;
+                    handleRdmaProduceResponse(response, batch, time.milliseconds());
+                }
+            };
+
+            boolean completeOnSend = acks == 0; // fire and forget option.
+            boolean completeOnRecv = acks != 0;
+
+            ClientRDMARequest clientRequest =  rdmaClient.newClientRdmaRequest(nodeId, request, nowNanos, requestTimeoutMs, completeOnSend, completeOnRecv, callback);
+
+            rdmaClient.send(clientRequest, nowNanos);
+            pendingRdma++;
+        }
+
+       // log.trace("Rdma Sent produce request to {}: {}", nodeId, requests.size());
+    }
+
 
     /**
      * Wake up the selector associated with this send thread

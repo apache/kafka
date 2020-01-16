@@ -33,6 +33,7 @@ import kafka.coordinator.transaction.TransactionCoordinator
 import kafka.log.{LogConfig, LogManager}
 import kafka.metrics.{KafkaMetricsGroup, KafkaMetricsReporter}
 import kafka.network.SocketServer
+import kafka.network.RDMAServer
 import kafka.security.CredentialProvider
 import kafka.security.auth.Authorizer
 import kafka.utils._
@@ -118,6 +119,8 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
 
   var authorizer: Option[Authorizer] = None
   var socketServer: SocketServer = null
+  var rdmaserver: RDMAServer = null
+  var rdmaManager: RDMAManager = null
   var dataPlaneRequestHandlerPool: KafkaRequestHandlerPool = null
   var controlPlaneRequestHandlerPool: KafkaRequestHandlerPool = null
 
@@ -252,6 +255,12 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
         socketServer = new SocketServer(config, metrics, time, credentialProvider)
         socketServer.startup(startupProcessors = false)
 
+        rdmaserver = new RDMAServer(config, metrics, time, socketServer.dataPlaneRequestChannel)
+        rdmaserver.startup(startupProcessors = false)
+
+
+        rdmaManager = new RDMAManager(config.brokerId, rdmaserver,config.maxNumberOfRdmaSlotClients,config.maxNumberOfSlotsPerClient)
+
         /* start replica manager */
         replicaManager = createReplicaManager(isShuttingDown)
         replicaManager.startup()
@@ -296,7 +305,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
         /* start processing requests */
         dataPlaneRequestProcessor = new KafkaApis(socketServer.dataPlaneRequestChannel, replicaManager, adminManager, groupCoordinator, transactionCoordinator,
           kafkaController, zkClient, config.brokerId, config, metadataCache, metrics, authorizer, quotaManagers,
-          fetchManager, brokerTopicStats, clusterId, time, tokenManager)
+          fetchManager, brokerTopicStats, clusterId, time, tokenManager,rdmaManager)
 
         dataPlaneRequestHandlerPool = new KafkaRequestHandlerPool(config.brokerId, socketServer.dataPlaneRequestChannel, dataPlaneRequestProcessor, time,
           config.numIoThreads, s"${SocketServer.DataPlaneMetricPrefix}RequestHandlerAvgIdlePercent", SocketServer.DataPlaneThreadPrefix)
@@ -304,9 +313,9 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
         socketServer.controlPlaneRequestChannelOpt.foreach { controlPlaneRequestChannel =>
           controlPlaneRequestProcessor = new KafkaApis(controlPlaneRequestChannel, replicaManager, adminManager, groupCoordinator, transactionCoordinator,
             kafkaController, zkClient, config.brokerId, config, metadataCache, metrics, authorizer, quotaManagers,
-            fetchManager, brokerTopicStats, clusterId, time, tokenManager)
+            fetchManager, brokerTopicStats, clusterId, time, tokenManager,rdmaManager)
 
-          controlPlaneRequestHandlerPool = new KafkaRequestHandlerPool(config.brokerId, socketServer.controlPlaneRequestChannelOpt.get, controlPlaneRequestProcessor, time,
+          controlPlaneRequestHandlerPool = new KafkaRequestHandlerPool(config.brokerId, socketServer.controlPlaneRequestChannelOpt.get,controlPlaneRequestProcessor, time,
             1, s"${SocketServer.ControlPlaneMetricPrefix}RequestHandlerAvgIdlePercent", SocketServer.ControlPlaneThreadPrefix)
         }
 
@@ -327,6 +336,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
 
         socketServer.startDataPlaneProcessors()
         socketServer.startControlPlaneProcessor()
+        rdmaserver.startRDMAProcessors()
         brokerState.newState(RunningAsBroker)
         shutdownLatch = new CountDownLatch(1)
         startupComplete.set(true)
@@ -351,8 +361,8 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
   }
 
   protected def createReplicaManager(isShuttingDown: AtomicBoolean): ReplicaManager =
-    new ReplicaManager(config, metrics, time, zkClient, kafkaScheduler, logManager, isShuttingDown, quotaManagers,
-      brokerTopicStats, metadataCache, logDirFailureChannel)
+    new ReplicaManager(config, metrics, time, zkClient, kafkaScheduler,logManager, isShuttingDown, quotaManagers,
+      brokerTopicStats, metadataCache, logDirFailureChannel, None, rdmaManager)
 
   private def initZkClient(time: Time): Unit = {
     info(s"Connecting to zookeeper on ${config.zkConnect}")
@@ -398,12 +408,19 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
         s" advertised listeners are already registered by broker ${broker.id}")
     }
 
+    val rdmaListener  = config.RDMAListener.map{ endpoint =>
+      if (endpoint.port == 0)
+        endpoint.copy(port = rdmaserver.getPort())
+      else
+        endpoint
+    }
+
     val listeners = config.advertisedListeners.map { endpoint =>
       if (endpoint.port == 0)
         endpoint.copy(port = socketServer.boundPort(endpoint.listenerName))
       else
         endpoint
-    }
+    } ++ rdmaListener
 
     val updatedEndpoints = listeners.map(endpoint =>
       if (endpoint.host == null || endpoint.host.trim.isEmpty)

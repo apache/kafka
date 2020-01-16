@@ -31,7 +31,9 @@ public enum SecurityProtocol {
     /** SASL authenticated, non-encrypted channel */
     SASL_PLAINTEXT(2, "SASL_PLAINTEXT"),
     /** SASL authenticated, SSL channel */
-    SASL_SSL(3, "SASL_SSL");
+    SASL_SSL(3, "SASL_SSL"),
+    /** RDMA channel */
+    RDMA(4, "RDMA");
 
     private static final Map<Short, SecurityProtocol> CODE_TO_SECURITY_PROTOCOL;
     private static final List<String> NAMES;

@@ -158,6 +158,10 @@ public abstract class AbstractResponse extends AbstractRequestResponse {
                 return new DeleteGroupsResponse(struct);
             case ELECT_PREFERRED_LEADERS:
                 return new ElectPreferredLeadersResponse(struct, version);
+            case CONSUMER_RDMA_REGISTER:
+                return new RDMAConsumeAddressResponse(struct);
+            case PRODUCER_RDMA_REGISTER:
+                return new RDMAProduceAddressResponse(struct);
             default:
                 throw new AssertionError(String.format("ApiKey %s is not currently handled in `parseResponse`, the " +
                         "code should be updated to do so.", apiKey));

@@ -43,6 +43,7 @@ import org.scalatest.Assertions.assertThrows
 import org.easymock.{Capture, EasyMock, IAnswer}
 
 import scala.collection.JavaConverters._
+import sun.nio.ch.DirectBuffer
 
 class PartitionTest {
 
@@ -134,6 +135,32 @@ class PartitionTest {
   }
 
   @Test
+  def testGetAddress(): Unit = {
+    val leaderEpoch = 8
+
+    val log = logManager.getOrCreateLog(topicPartition, logConfig)
+    log.appendAsLeader(MemoryRecords.withRecords(0L, CompressionType.NONE, 0,
+      new SimpleRecord("k1".getBytes, "v1".getBytes),
+      new SimpleRecord("k2".getBytes, "v2".getBytes)
+    ), leaderEpoch = 0)
+    log.appendAsLeader(MemoryRecords.withRecords(0L, CompressionType.NONE, 5,
+      new SimpleRecord("k3".getBytes, "v3".getBytes),
+      new SimpleRecord("k4".getBytes, "v4".getBytes)
+    ), leaderEpoch = 5)
+    assertEquals(4, log.logEndOffset)
+
+    val startoffset = 0
+    val res = log.fetchAddressByOffset(startoffset)
+    val res2 = log.fetchAddressByOffset(startoffset)
+
+    assert(!res.isEmpty)
+    assert(!res2.isEmpty)
+
+    assert(res.get.bytebuffer.asInstanceOf[DirectBuffer].address() == res2.get.bytebuffer.asInstanceOf[DirectBuffer].address())
+
+  }
+
+  @Test
   def testMakeLeaderDoesNotUpdateEpochCacheForOldFormats(): Unit = {
     val leaderEpoch = 8
 
@@ -173,7 +200,7 @@ class PartitionTest {
     val log2 = logManager.getOrCreateLog(topicPartition, logConfig, isFuture = true)
     val currentReplica = new Replica(brokerId, topicPartition, time, log = Some(log1))
     val futureReplica = new Replica(Request.FutureLocalReplicaId, topicPartition, time, log = Some(log2))
-    val partition = Partition(topicPartition, time, replicaManager)
+    val partition = Partition(topicPartition, time, null, replicaManager)
 
     partition.addReplicaIfNotExists(futureReplica)
     partition.addReplicaIfNotExists(currentReplica)
@@ -239,7 +266,7 @@ class PartitionTest {
 
     val currentReplica = new Replica(brokerId, topicPartition, time, log = Some(log1))
     val futureReplica = new Replica(Request.FutureLocalReplicaId, topicPartition, time, log = Some(log2))
-    val partition = Partition(topicPartition, time, replicaManager)
+    val partition = Partition(topicPartition, time, null, replicaManager)
 
     partition.addReplicaIfNotExists(futureReplica)
     partition.addReplicaIfNotExists(currentReplica)
@@ -491,7 +518,7 @@ class PartitionTest {
       new SimpleRecord(20,"k4".getBytes, "v2".getBytes),
       new SimpleRecord(21,"k5".getBytes, "v3".getBytes)))
 
-    val partition = Partition(topicPartition, time, replicaManager)
+    val partition = Partition(topicPartition, time, null, replicaManager)
     assertTrue("Expected first makeLeader() to return 'leader changed'",
       partition.makeLeader(controllerId, new LeaderAndIsrRequest.PartitionState(controllerEpoch, leader, leaderEpoch, isr, 1, replicas, true), 0))
     assertEquals("Current leader epoch", leaderEpoch, partition.getLeaderEpoch)
@@ -643,6 +670,7 @@ class PartitionTest {
       interBrokerProtocolVersion = ApiVersion.latestVersion,
       localBrokerId = brokerId,
       time,
+      null,
       replicaManager,
       logManager,
       zkClient)
@@ -677,7 +705,7 @@ class PartitionTest {
   def testAppendRecordsAsFollowerBelowLogStartOffset(): Unit = {
     val log = logManager.getOrCreateLog(topicPartition, logConfig)
     val replica = new Replica(brokerId, topicPartition, time, log = Some(log))
-    val partition = Partition(topicPartition, time, replicaManager)
+    val partition = Partition(topicPartition, time, null, replicaManager)
     partition.addReplicaIfNotExists(replica)
     assertEquals(Some(replica), partition.localReplica)
 
@@ -739,6 +767,7 @@ class PartitionTest {
       interBrokerProtocolVersion = ApiVersion.latestVersion,
       localBrokerId = brokerId,
       time,
+      null,
       replicaManager,
       logManager,
       zkClient)
@@ -806,7 +835,7 @@ class PartitionTest {
   def testGetReplica(): Unit = {
     val log = logManager.getOrCreateLog(topicPartition, logConfig)
     val replica = new Replica(brokerId, topicPartition, time, log = Some(log))
-    val partition = Partition(topicPartition, time, replicaManager)
+    val partition = Partition(topicPartition, time, null, replicaManager)
 
     assertEquals(None, partition.localReplica)
     assertThrows[ReplicaNotAvailableException] {
@@ -820,7 +849,7 @@ class PartitionTest {
 
   @Test
   def testAppendRecordsToFollowerWithNoReplicaThrowsException(): Unit = {
-    val partition = Partition(topicPartition, time, replicaManager)
+    val partition = Partition(topicPartition, time, null, replicaManager)
     assertThrows[ReplicaNotAvailableException] {
       partition.appendRecordsToFollowerOrFutureReplica(
            createRecords(List(new SimpleRecord("k1".getBytes, "v1".getBytes)), baseOffset = 0L), isFuture = false)
@@ -829,7 +858,7 @@ class PartitionTest {
 
   @Test
   def testMakeFollowerWithNoLeaderIdChange(): Unit = {
-    val partition = Partition(topicPartition, time, replicaManager)
+    val partition = Partition(topicPartition, time, null, replicaManager)
 
     // Start off as follower
     var partitionStateInfo = new LeaderAndIsrRequest.PartitionState(0, 1, 1,
@@ -865,7 +894,7 @@ class PartitionTest {
     val batch3 = TestUtils.records(records = List(new SimpleRecord("k6".getBytes, "v1".getBytes),
                                                   new SimpleRecord("k7".getBytes, "v2".getBytes)))
 
-    val partition = Partition(topicPartition, time, replicaManager)
+    val partition = Partition(topicPartition, time, null, replicaManager)
     assertTrue("Expected first makeLeader() to return 'leader changed'",
                partition.makeLeader(controllerId, new LeaderAndIsrRequest.PartitionState(controllerEpoch, leader, leaderEpoch, isr, 1, replicas, true), 0))
     assertEquals("Current leader epoch", leaderEpoch, partition.getLeaderEpoch)
@@ -952,6 +981,7 @@ class PartitionTest {
         interBrokerProtocolVersion = ApiVersion.latestVersion,
         localBrokerId = brokerId,
         time,
+        null,
         replicaManager,
         logManager,
         zkClient)
