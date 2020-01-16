@@ -162,9 +162,14 @@ class CachedPartition(val topic: String,
 
   override def equals(that: Any): Boolean =
     that match {
-      case that: CachedPartition => that.canEqual(this) &&
-        this.topic.equals(that.topic) &&
-        this.partition.equals(that.partition)
+      case that: CachedPartition =>
+        if (this eq that) {
+          true
+        } else {
+          that.canEqual(this) &&
+            this.partition.equals(that.partition) &&
+            this.topic.equals(that.topic)
+        }
       case _ => false
     }
 
