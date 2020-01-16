@@ -24,6 +24,8 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.ProcessorStateException;
+import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager.StateStoreMetadata;
@@ -32,17 +34,23 @@ import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
 import org.apache.kafka.test.MockBatchingStateRestoreListener;
 import org.apache.kafka.test.MockKeyValueStore;
 import org.apache.kafka.test.TestUtils;
+import org.easymock.EasyMock;
+import org.easymock.EasyMockRunner;
+import org.easymock.Mock;
+import org.easymock.MockType;
 import org.hamcrest.Matchers;
 import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
+import org.junit.runner.RunWith;
 
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
@@ -63,10 +71,11 @@ import static org.hamcrest.core.Is.is;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
-// TODO K9113: fix tests
+@RunWith(EasyMockRunner.class)
 public class ProcessorStateManagerTest {
 
     private final String applicationId = "test-application";
@@ -97,6 +106,11 @@ public class ProcessorStateManagerTest {
     private OffsetCheckpoint checkpoint;
     private StateDirectory stateDirectory;
 
+    @Mock(type = MockType.NICE)
+    private StateStore store;
+    @Mock(type = MockType.NICE)
+    private StateStoreMetadata storeMetadata;
+
     @Before
     public void setup() {
         baseDir = TestUtils.tempDirectory();
@@ -110,6 +124,11 @@ public class ProcessorStateManagerTest {
         }), new MockTime(), true);
         checkpointFile = new File(stateDirectory.directoryForTask(taskId), CHECKPOINT_FILE_NAME);
         checkpoint = new OffsetCheckpoint(checkpointFile);
+
+        EasyMock.expect(storeMetadata.changelogPartition()).andReturn(persistentStorePartition).anyTimes();
+        EasyMock.expect(storeMetadata.store()).andReturn(store).anyTimes();
+        EasyMock.expect(store.name()).andReturn(persistentStoreName).anyTimes();
+        EasyMock.replay(storeMetadata, store);
     }
 
     @After
@@ -119,16 +138,18 @@ public class ProcessorStateManagerTest {
 
     @Test
     public void shouldReturnBaseDir() {
-        final ProcessorStateManager stateMgr = getStandByStateManager();
+        final ProcessorStateManager stateMgr = getStateManager(AbstractTask.TaskType.ACTIVE);
         assertEquals(stateDirectory.directoryForTask(taskId), stateMgr.baseDir());
     }
 
+    // except this test for all other tests active / standby state managers acts the same, so
+    // for all others we always use ACTIVE unless explained specifically.
     @Test
     public void shouldReportTaskType() {
-        ProcessorStateManager stateMgr = getStandByStateManager();
+        ProcessorStateManager stateMgr = getStateManager(AbstractTask.TaskType.STANDBY);
         assertEquals(AbstractTask.TaskType.STANDBY, stateMgr.taskType());
 
-        stateMgr = getActiveStateManager();
+        stateMgr = getStateManager(AbstractTask.TaskType.ACTIVE);
         assertEquals(AbstractTask.TaskType.ACTIVE, stateMgr.taskType());
     }
 
@@ -153,12 +174,32 @@ public class ProcessorStateManagerTest {
     }
 
     @Test
+    public void shouldFindSingleStoreForChangelog() {
+        final ProcessorStateManager stateMgr = new ProcessorStateManager(
+            taskId,
+            Collections.emptySet(),
+            AbstractTask.TaskType.STANDBY,
+            stateDirectory,
+            mkMap(
+                mkEntry(persistentStoreName, persistentStoreTopicName),
+                mkEntry(persistentStoreTwoName, persistentStoreTopicName)
+            ),
+            changelogReader,
+            logContext);
+
+        stateMgr.registerStore(persistentStore, persistentStore.stateRestoreCallback);
+        stateMgr.registerStore(persistentStoreTwo, persistentStore.stateRestoreCallback);
+
+        assertThrows(IllegalStateException.class, () -> stateMgr.checkpoint(Collections.singletonMap(persistentStorePartition, 0L)));
+    }
+
+    @Test
     public void shouldRestoreStoreWithRestoreCallback() {
         final MockBatchingStateRestoreListener batchingRestoreCallback = new MockBatchingStateRestoreListener();
 
         final KeyValue<byte[], byte[]> expectedKeyValue = KeyValue.pair(keyBytes, valueBytes);
 
-        final ProcessorStateManager stateMgr = getStandByStateManager();
+        final ProcessorStateManager stateMgr = getStateManager(AbstractTask.TaskType.ACTIVE);
 
         try {
             stateMgr.registerStore(persistentStore, batchingRestoreCallback);
@@ -176,7 +217,7 @@ public class ProcessorStateManagerTest {
 
     @Test
     public void shouldRestoreNonTimestampedStoreWithNoConverter() {
-        final ProcessorStateManager stateMgr = getStandByStateManager();
+        final ProcessorStateManager stateMgr = getStateManager(AbstractTask.TaskType.ACTIVE);
 
         try {
             stateMgr.registerStore(persistentStore, persistentStore.stateRestoreCallback);
@@ -187,6 +228,7 @@ public class ProcessorStateManagerTest {
 
             assertThat(persistentStore.keys.size(), is(1));
             assertTrue(persistentStore.keys.contains(key));
+            // we just check non timestamped value length
             assertEquals(9, persistentStore.values.get(0).length);
         } finally {
             stateMgr.close(true);
@@ -195,7 +237,7 @@ public class ProcessorStateManagerTest {
 
     @Test
     public void shouldnRestoreTimestampedStoreWithConverter() {
-        final ProcessorStateManager stateMgr = getStandByStateManager();
+        final ProcessorStateManager stateMgr = getStateManager(AbstractTask.TaskType.ACTIVE);
         final MockKeyValueStore store = getConverterStore();
 
         try {
@@ -207,6 +249,7 @@ public class ProcessorStateManagerTest {
 
             assertThat(store.keys.size(), is(1));
             assertTrue(store.keys.contains(key));
+            // we just check timestamped value length
             assertEquals(17, store.values.get(0).length);
         } finally {
             stateMgr.close(true);
@@ -215,7 +258,7 @@ public class ProcessorStateManagerTest {
 
     @Test
     public void shouldRegisterPersistentStores() {
-        final ProcessorStateManager stateMgr = getActiveStateManager();
+        final ProcessorStateManager stateMgr = getStateManager(AbstractTask.TaskType.ACTIVE);
 
         try {
             stateMgr.registerStore(persistentStore, persistentStore.stateRestoreCallback);
@@ -227,7 +270,7 @@ public class ProcessorStateManagerTest {
 
     @Test
     public void shouldRegisterNonPersistentStore() {
-        final ProcessorStateManager stateMgr = getActiveStateManager();
+        final ProcessorStateManager stateMgr = getStateManager(AbstractTask.TaskType.ACTIVE);
 
         try {
             stateMgr.registerStore(nonPersistentStore, nonPersistentStore.stateRestoreCallback);
@@ -267,7 +310,7 @@ public class ProcessorStateManagerTest {
         );
         checkpoint.write(offsets);
 
-        final ProcessorStateManager stateMgr = getActiveStateManager();
+        final ProcessorStateManager stateMgr = getStateManager(AbstractTask.TaskType.ACTIVE);
 
         try {
             stateMgr.registerStore(persistentStore, persistentStore.stateRestoreCallback);
@@ -299,7 +342,7 @@ public class ProcessorStateManagerTest {
 
     @Test
     public void shouldGetRegisteredStore() {
-        final ProcessorStateManager stateMgr = getActiveStateManager();
+        final ProcessorStateManager stateMgr = getStateManager(AbstractTask.TaskType.ACTIVE);
         try {
             stateMgr.registerStore(persistentStore, persistentStore.stateRestoreCallback);
             stateMgr.registerStore(nonPersistentStore, nonPersistentStore.stateRestoreCallback);
@@ -320,9 +363,9 @@ public class ProcessorStateManagerTest {
         final HashMap<TopicPartition, Long> ackedOffsets = new HashMap<>();
         ackedOffsets.put(persistentStorePartition, 123L);
         ackedOffsets.put(nonPersistentStorePartition, 456L);
-        ackedOffsets.put(new TopicPartition("otherTopic", 1), 789L);
+        ackedOffsets.put(new TopicPartition("nonRegisteredTopic", 1), 789L);
 
-        final ProcessorStateManager stateMgr = getActiveStateManager();
+        final ProcessorStateManager stateMgr = getStateManager(AbstractTask.TaskType.ACTIVE);
         try {
             // make sure the checkpoint file is not written yet
             assertFalse(checkpointFile.exists());
@@ -358,7 +401,7 @@ public class ProcessorStateManagerTest {
         final Map<TopicPartition, Long> offsets = singletonMap(persistentStorePartition, 99L);
         checkpoint.write(offsets);
 
-        final ProcessorStateManager stateMgr = getActiveStateManager();
+        final ProcessorStateManager stateMgr = getStateManager(AbstractTask.TaskType.ACTIVE);
         try {
             stateMgr.registerStore(persistentStore, persistentStore.stateRestoreCallback);
             stateMgr.initStoresFromCheckpointedOffsets();
@@ -386,7 +429,7 @@ public class ProcessorStateManagerTest {
 
     @Test
     public void shouldWriteCheckpointForPersistentStore() throws IOException {
-        final ProcessorStateManager stateMgr = getStandByStateManager();
+        final ProcessorStateManager stateMgr = getStateManager(AbstractTask.TaskType.ACTIVE);
 
         try {
             stateMgr.registerStore(persistentStore, persistentStore.stateRestoreCallback);
@@ -408,7 +451,7 @@ public class ProcessorStateManagerTest {
 
     @Test
     public void shouldNotWriteCheckpointForNonPersistent() throws IOException {
-        final ProcessorStateManager stateMgr = getStandByStateManager();
+        final ProcessorStateManager stateMgr = getStateManager(AbstractTask.TaskType.ACTIVE);
 
         try {
             stateMgr.registerStore(nonPersistentStore, nonPersistentStore.stateRestoreCallback);
@@ -451,76 +494,98 @@ public class ProcessorStateManagerTest {
 
     @Test
     public void shouldThrowIllegalArgumentExceptionIfStoreNameIsSameAsCheckpointFileName() {
-        final ProcessorStateManager stateManager = getStandByStateManager();
+        final ProcessorStateManager stateManager = getStateManager(AbstractTask.TaskType.ACTIVE);
 
-        try {
-            stateManager.registerStore(new MockKeyValueStore(CHECKPOINT_FILE_NAME, true), null);
-            fail("should have thrown illegal argument exception when store name same as checkpoint file");
-        } catch (final IllegalArgumentException e) {
-            // pass
-        }
+        assertThrows(IllegalArgumentException.class, () ->
+            stateManager.registerStore(new MockKeyValueStore(CHECKPOINT_FILE_NAME, true), null));
     }
 
     @Test
     public void shouldThrowIllegalArgumentExceptionOnRegisterWhenStoreHasAlreadyBeenRegistered() {
-        final ProcessorStateManager stateManager = getStandByStateManager();
+        final ProcessorStateManager stateManager = getStateManager(AbstractTask.TaskType.ACTIVE);
 
         stateManager.registerStore(persistentStore, persistentStore.stateRestoreCallback);
 
-        try {
-            stateManager.registerStore(persistentStore, persistentStore.stateRestoreCallback);
-            fail("should have thrown illegal argument exception when store with same name already registered");
-        } catch (final IllegalArgumentException e) {
-            // pass
-        }
-
+        assertThrows(IllegalArgumentException.class, () ->
+            stateManager.registerStore(persistentStore, persistentStore.stateRestoreCallback));
     }
 
     @Test
     public void shouldThrowProcessorStateExceptionOnFlushIfStoreThrowsAnException() {
-        final ProcessorStateManager stateManager = getActiveStateManager();
-
+        final RuntimeException exception = new RuntimeException("KABOOM!");
+        final ProcessorStateManager stateManager = getStateManager(AbstractTask.TaskType.ACTIVE);
         final MockKeyValueStore stateStore = new MockKeyValueStore(persistentStoreName, true) {
             @Override
             public void flush() {
-                throw new RuntimeException("KABOOM!");
+                throw exception;
             }
         };
         stateManager.registerStore(stateStore, stateStore.stateRestoreCallback);
 
-        try {
-            stateManager.flush();
-            fail("Should throw ProcessorStateException if store flush throws exception");
-        } catch (final ProcessorStateException e) {
-            // pass
-        }
+        final ProcessorStateException thrown = assertThrows(ProcessorStateException.class, stateManager::flush);
+        assertEquals(exception, thrown.getCause());
+    }
+
+    @Test
+    public void shouldPreserveStreamsExceptionOnFlushIfStoreThrows() {
+        final StreamsException exception = new StreamsException("KABOOM!");
+        final ProcessorStateManager stateManager = getStateManager(AbstractTask.TaskType.ACTIVE);
+        final MockKeyValueStore stateStore = new MockKeyValueStore(persistentStoreName, true) {
+            @Override
+            public void flush() {
+                throw exception;
+            }
+        };
+        stateManager.registerStore(stateStore, stateStore.stateRestoreCallback);
+
+        final StreamsException thrown = assertThrows(StreamsException.class, stateManager::flush);
+        assertEquals(exception, thrown);
     }
 
     @Test
     public void shouldThrowProcessorStateExceptionOnCloseIfStoreThrowsAnException() {
-        final ProcessorStateManager stateManager = getActiveStateManager();
-
+        final RuntimeException exception = new RuntimeException("KABOOM!");
+        final ProcessorStateManager stateManager = getStateManager(AbstractTask.TaskType.ACTIVE);
         final MockKeyValueStore stateStore = new MockKeyValueStore(persistentStoreName, true) {
             @Override
             public void close() {
-                throw new RuntimeException("KABOOM!");
+                throw exception;
             }
         };
         stateManager.registerStore(stateStore, stateStore.stateRestoreCallback);
 
-        try {
-            stateManager.close(true);
-            fail("Should throw ProcessorStateException if store close throws exception");
-        } catch (final ProcessorStateException e) {
-            // pass
-        }
+        final ProcessorStateException thrown = assertThrows(ProcessorStateException.class, () -> stateManager.close(true));
+        assertEquals(exception, thrown.getCause());
+    }
+
+    @Test
+    public void shouldPreserveStreamsExceptionOnCloseIfStoreThrows() {
+        final StreamsException exception = new StreamsException("KABOOM!");
+        final ProcessorStateManager stateManager = getStateManager(AbstractTask.TaskType.ACTIVE);
+        final MockKeyValueStore stateStore = new MockKeyValueStore(persistentStoreName, true) {
+            @Override
+            public void close() {
+                throw exception;
+            }
+        };
+        stateManager.registerStore(stateStore, stateStore.stateRestoreCallback);
+
+        final StreamsException thrown = assertThrows(StreamsException.class, () -> stateManager.close(true));
+        assertEquals(exception, thrown);
+    }
+
+    @Test
+    public void shouldThrowIfRestoringUnregisteredStore() {
+        final ProcessorStateManager stateManager = getStateManager(AbstractTask.TaskType.ACTIVE);
+
+        assertThrows(IllegalStateException.class, () -> stateManager.restore(storeMetadata, Collections.emptyList()));
     }
 
     @SuppressWarnings("OptionalGetWithoutIsPresent")
     @Test
     public void shouldLogAWarningIfCheckpointThrowsAnIOException() {
         final LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
-        final ProcessorStateManager stateMgr = getActiveStateManager();
+        final ProcessorStateManager stateMgr = getStateManager(AbstractTask.TaskType.ACTIVE);
 
         stateMgr.registerStore(persistentStore, persistentStore.stateRestoreCallback);
 
@@ -544,7 +609,7 @@ public class ProcessorStateManagerTest {
 
     @Test
     public void shouldThrowIfLoadCheckpointThrows() throws IOException {
-        final ProcessorStateManager stateMgr = getActiveStateManager();
+        final ProcessorStateManager stateMgr = getStateManager(AbstractTask.TaskType.ACTIVE);
 
         stateMgr.registerStore(persistentStore, persistentStore.stateRestoreCallback);
         final File file = new File(stateMgr.baseDir(), CHECKPOINT_FILE_NAME);
@@ -555,7 +620,7 @@ public class ProcessorStateManagerTest {
 
         try {
             stateMgr.initStoresFromCheckpointedOffsets();
-            fail("should have thrown procesor state exception when IO exception happens");
+            fail("should have thrown processor state exception when IO exception happens");
         } catch (ProcessorStateException e) {
             // pass
         }
@@ -563,7 +628,7 @@ public class ProcessorStateManagerTest {
 
     @Test
     public void shouldThrowIfRestoreCallbackThrows() {
-        final ProcessorStateManager stateMgr = getActiveStateManager();
+        final ProcessorStateManager stateMgr = getStateManager(AbstractTask.TaskType.ACTIVE);
 
         stateMgr.registerStore(persistentStore, new MockBatchingStateRestoreListener() {
             @Override
@@ -576,14 +641,14 @@ public class ProcessorStateManagerTest {
 
         try {
             stateMgr.restore(storeMetadata, singletonList(consumerRecord));
-            fail("should have thrown procesor state exception when IO exception happens");
+            fail("should have thrown processor state exception when IO exception happens");
         } catch (ProcessorStateException e) {
             // pass
         }
     }
 
     @Test
-    public void shouldFlushAllStoresEvenIfStoreThrowsException() {
+    public void shouldFlushGoodStoresEvenSomeThrowsException() {
         final AtomicBoolean flushedStore = new AtomicBoolean(false);
 
         final MockKeyValueStore stateStore1 = new MockKeyValueStore(persistentStoreName, true) {
@@ -598,7 +663,7 @@ public class ProcessorStateManagerTest {
                 flushedStore.set(true);
             }
         };
-        final ProcessorStateManager stateManager = getActiveStateManager();
+        final ProcessorStateManager stateManager = getStateManager(AbstractTask.TaskType.ACTIVE);
 
         stateManager.registerStore(stateStore1, stateStore1.stateRestoreCallback);
         stateManager.registerStore(stateStore2, stateStore2.stateRestoreCallback);
@@ -626,7 +691,7 @@ public class ProcessorStateManagerTest {
                 closedStore.set(true);
             }
         };
-        final ProcessorStateManager stateManager = getActiveStateManager();
+        final ProcessorStateManager stateManager = getStateManager(AbstractTask.TaskType.ACTIVE);
 
         stateManager.registerStore(stateStore1, stateStore1.stateRestoreCallback);
         stateManager.registerStore(stateStore2, stateStore2.stateRestoreCallback);
@@ -638,26 +703,11 @@ public class ProcessorStateManagerTest {
         Assert.assertTrue(closedStore.get());
     }
 
-    private ProcessorStateManager getActiveStateManager() {
+    private ProcessorStateManager getStateManager(final AbstractTask.TaskType taskType) {
         return new ProcessorStateManager(
             taskId,
             emptySet(),
-            AbstractTask.TaskType.ACTIVE,
-            stateDirectory,
-            mkMap(
-                mkEntry(persistentStoreName, persistentStoreTopicName),
-                mkEntry(persistentStoreTwoName, persistentStoreTwoTopicName),
-                mkEntry(nonPersistentStoreName, nonPersistentStoreTopicName)
-            ),
-            changelogReader,
-            logContext);
-    }
-
-    private ProcessorStateManager getStandByStateManager() {
-        return new ProcessorStateManager(
-            taskId,
-            emptySet(),
-            AbstractTask.TaskType.STANDBY,
+            taskType,
             stateDirectory,
             mkMap(
                 mkEntry(persistentStoreName, persistentStoreTopicName),
