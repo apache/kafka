@@ -20,7 +20,6 @@ import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.RecordBatchTooLargeException;
-import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.record.AbstractRecords;
 import org.apache.kafka.common.record.CompressionRatioEstimator;
@@ -32,6 +31,7 @@ import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.requests.ProduceResponse;
+import org.apache.kafka.common.utils.Time;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -73,17 +73,16 @@ public final class ProducerBatch {
     private long lastAttemptMs;
     private long lastAppendTime;
     private long drainedMs;
-    private String expiryErrorMessage;
     private boolean retry;
-    private boolean reopened = false;
+    private boolean reopened;
 
-    public ProducerBatch(TopicPartition tp, MemoryRecordsBuilder recordsBuilder, long now) {
-        this(tp, recordsBuilder, now, false);
+    public ProducerBatch(TopicPartition tp, MemoryRecordsBuilder recordsBuilder, long createdMs) {
+        this(tp, recordsBuilder, createdMs, false);
     }
 
-    public ProducerBatch(TopicPartition tp, MemoryRecordsBuilder recordsBuilder, long now, boolean isSplitBatch) {
-        this.createdMs = now;
-        this.lastAttemptMs = now;
+    public ProducerBatch(TopicPartition tp, MemoryRecordsBuilder recordsBuilder, long createdMs, boolean isSplitBatch) {
+        this.createdMs = createdMs;
+        this.lastAttemptMs = createdMs;
         this.recordsBuilder = recordsBuilder;
         this.topicPartition = tp;
         this.lastAppendTime = createdMs;
@@ -111,7 +110,8 @@ public final class ProducerBatch {
             FutureRecordMetadata future = new FutureRecordMetadata(this.produceFuture, this.recordCount,
                                                                    timestamp, checksum,
                                                                    key == null ? -1 : key.length,
-                                                                   value == null ? -1 : value.length);
+                                                                   value == null ? -1 : value.length,
+                                                                   Time.SYSTEM);
             // we have to keep every future returned to the users in case the batch needs to be
             // split to several new batches and resent.
             thunks.add(new Thunk(callback, future));
@@ -135,7 +135,8 @@ public final class ProducerBatch {
             FutureRecordMetadata future = new FutureRecordMetadata(this.produceFuture, this.recordCount,
                                                                    timestamp, thunk.future.checksumOrNull(),
                                                                    key == null ? -1 : key.remaining(),
-                                                                   value == null ? -1 : value.remaining());
+                                                                   value == null ? -1 : value.remaining(),
+                                                                   Time.SYSTEM);
             // Chain the future to the original thunk.
             thunk.future.chain(future);
             this.thunks.add(thunk);
@@ -158,7 +159,24 @@ public final class ProducerBatch {
     }
 
     /**
-     * Complete the request. If the batch was previously aborted, this is a no-op.
+     * Return `true` if {@link #done(long, long, RuntimeException)} has been invoked at least once, `false` otherwise.
+     */
+    public boolean isDone() {
+        return finalState() != null;
+    }
+
+    /**
+     * Finalize the state of a batch. Final state, once set, is immutable. This function may be called
+     * once or twice on a batch. It may be called twice if
+     * 1. An inflight batch expires before a response from the broker is received. The batch's final
+     * state is set to FAILED. But it could succeed on the broker and second time around batch.done() may
+     * try to set SUCCEEDED final state.
+     * 2. If a transaction abortion happens or if the producer is closed forcefully, the final state is
+     * ABORTED but again it could succeed if broker responds with a success.
+     *
+     * Attempted transitions from [FAILED | ABORTED] --> SUCCEEDED are logged.
+     * Attempted transitions from one failure state to the same or a different failed state are ignored.
+     * Attempted transitions from SUCCEEDED to the same or a failed state throw an exception.
      *
      * @param baseOffset The base offset of the messages assigned by the server
      * @param logAppendTime The log append time or -1 if CreateTime is being used
@@ -166,26 +184,34 @@ public final class ProducerBatch {
      * @return true if the batch was completed successfully and false if the batch was previously aborted
      */
     public boolean done(long baseOffset, long logAppendTime, RuntimeException exception) {
-        final FinalState finalState;
-        if (exception == null) {
+        final FinalState tryFinalState = (exception == null) ? FinalState.SUCCEEDED : FinalState.FAILED;
+
+        if (tryFinalState == FinalState.SUCCEEDED) {
             log.trace("Successfully produced messages to {} with base offset {}.", topicPartition, baseOffset);
-            finalState = FinalState.SUCCEEDED;
         } else {
-            log.trace("Failed to produce messages to {}.", topicPartition, exception);
-            finalState = FinalState.FAILED;
+            log.trace("Failed to produce messages to {} with base offset {}.", topicPartition, baseOffset, exception);
         }
 
-        if (!this.finalState.compareAndSet(null, finalState)) {
-            if (this.finalState.get() == FinalState.ABORTED) {
-                log.debug("ProduceResponse returned for {} after batch had already been aborted.", topicPartition);
-                return false;
+        if (this.finalState.compareAndSet(null, tryFinalState)) {
+            completeFutureAndFireCallbacks(baseOffset, logAppendTime, exception);
+            return true;
+        }
+
+        if (this.finalState.get() != FinalState.SUCCEEDED) {
+            if (tryFinalState == FinalState.SUCCEEDED) {
+                // Log if a previously unsuccessful batch succeeded later on.
+                log.debug("ProduceResponse returned {} for {} after batch with base offset {} had already been {}.",
+                    tryFinalState, topicPartition, baseOffset, this.finalState.get());
             } else {
-                throw new IllegalStateException("Batch has already been completed in final state " + this.finalState.get());
+                // FAILED --> FAILED and ABORTED --> FAILED transitions are ignored.
+                log.debug("Ignored state transition {} -> {} for {} batch with base offset {}",
+                    this.finalState.get(), tryFinalState, topicPartition, baseOffset);
             }
+        } else {
+            // A SUCCESSFUL batch must not attempt another state change.
+            throw new IllegalStateException("A " + this.finalState.get() + " batch must not attempt another state change to " + tryFinalState);
         }
-
-        completeFutureAndFireCallbacks(baseOffset, logAppendTime, exception);
-        return true;
+        return false;
     }
 
     private void completeFutureAndFireCallbacks(long baseOffset, long logAppendTime, RuntimeException exception) {
@@ -299,37 +325,12 @@ public final class ProducerBatch {
         return "ProducerBatch(topicPartition=" + topicPartition + ", recordCount=" + recordCount + ")";
     }
 
-    /**
-     * A batch whose metadata is not available should be expired if one of the following is true:
-     * <ol>
-     *     <li> the batch is not in retry AND request timeout has elapsed after it is ready (full or linger.ms has reached).
-     *     <li> the batch is in retry AND request timeout has elapsed after the backoff period ended.
-     * </ol>
-     * This methods closes this batch and sets {@code expiryErrorMessage} if the batch has timed out.
-     */
-    boolean maybeExpire(int requestTimeoutMs, long retryBackoffMs, long now, long lingerMs, boolean isFull) {
-        if (!this.inRetry() && isFull && requestTimeoutMs < (now - this.lastAppendTime))
-            expiryErrorMessage = (now - this.lastAppendTime) + " ms has passed since last append";
-        else if (!this.inRetry() && requestTimeoutMs < (createdTimeMs(now) - lingerMs))
-            expiryErrorMessage = (createdTimeMs(now) - lingerMs) + " ms has passed since batch creation plus linger time";
-        else if (this.inRetry() && requestTimeoutMs < (waitedTimeMs(now) - retryBackoffMs))
-            expiryErrorMessage = (waitedTimeMs(now) - retryBackoffMs) + " ms has passed since last attempt plus backoff time";
-
-        boolean expired = expiryErrorMessage != null;
-        if (expired)
-            abortRecordAppends();
-        return expired;
+    boolean hasReachedDeliveryTimeout(long deliveryTimeoutMs, long now) {
+        return deliveryTimeoutMs <= now - this.createdMs;
     }
 
-    /**
-     * If {@link #maybeExpire(int, long, long, long, boolean)} returned true, the sender will fail the batch with
-     * the exception returned by this method.
-     * @return An exception indicating the batch expired.
-     */
-    TimeoutException timeoutException() {
-        if (expiryErrorMessage == null)
-            throw new IllegalStateException("Batch has not expired");
-        return new TimeoutException("Expiring " + recordCount + " record(s) for " + topicPartition + ": " + expiryErrorMessage);
+    public FinalState finalState() {
+        return this.finalState.get();
     }
 
     int attempts() {
@@ -345,10 +346,6 @@ public final class ProducerBatch {
 
     long queueTimeMs() {
         return drainedMs - createdMs;
-    }
-
-    long createdTimeMs(long nowMs) {
-        return Math.max(0, nowMs - createdMs);
     }
 
     long waitedTimeMs(long nowMs) {
@@ -467,5 +464,4 @@ public final class ProducerBatch {
     public boolean sequenceHasBeenReset() {
         return reopened;
     }
-
 }

@@ -23,20 +23,18 @@ import org.apache.kafka.streams.processor.StreamPartitioner;
 
 public class DefaultStreamPartitioner<K, V> implements StreamPartitioner<K, V> {
 
-    private final Serializer<K> keySerializer;
     private final Cluster cluster;
-    private final String topic;
+    private final Serializer<K> keySerializer;
     private final DefaultPartitioner defaultPartitioner;
 
-    public DefaultStreamPartitioner(final Serializer<K> keySerializer, final Cluster cluster, final String topic) {
-        this.keySerializer = keySerializer;
+    public DefaultStreamPartitioner(final Serializer<K> keySerializer, final Cluster cluster) {
         this.cluster = cluster;
-        this.topic = topic;
+        this.keySerializer = keySerializer;
         this.defaultPartitioner = new DefaultPartitioner();
     }
 
     @Override
-    public Integer partition(final K key, final V value, final int numPartitions) {
+    public Integer partition(final String topic, final K key, final V value, final int numPartitions) {
         final byte[] keyBytes = keySerializer.serialize(topic, key);
         return defaultPartitioner.partition(topic, key, keyBytes, value, null, cluster);
     }

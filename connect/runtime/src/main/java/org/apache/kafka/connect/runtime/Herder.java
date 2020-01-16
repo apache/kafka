@@ -17,6 +17,7 @@
 package org.apache.kafka.connect.runtime;
 
 import org.apache.kafka.connect.runtime.isolation.Plugins;
+import org.apache.kafka.connect.runtime.rest.InternalRequestSignature;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigInfos;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
@@ -120,8 +121,22 @@ public interface Herder {
      * @param connName connector to update
      * @param configs list of configurations
      * @param callback callback to invoke upon completion
+     * @param requestSignature the signature of the request made for this task (re-)configuration;
+     *                         may be null if no signature was provided
      */
-    void putTaskConfigs(String connName, List<Map<String, String>> configs, Callback<Void> callback);
+    void putTaskConfigs(String connName, List<Map<String, String>> configs, Callback<Void> callback, InternalRequestSignature requestSignature);
+
+    /**
+     * Get a list of connectors currently running in this cluster.
+     * @returns A list of connector names
+     */
+    Collection<String> connectors();
+
+    /**
+     * Get the definition and status of a connector.
+     * @param connName name of the connector
+     */
+    ConnectorInfo connectorInfo(String connName);
 
     /**
      * Lookup the current status of a connector.
@@ -156,6 +171,15 @@ public interface Herder {
     void restartConnector(String connName, Callback<Void> cb);
 
     /**
+     * Restart the connector.
+     * @param delayMs delay before restart
+     * @param connName name of the connector
+     * @param cb callback to invoke upon completion
+     * @returns The id of the request
+     */
+    HerderRequest restartConnector(long delayMs, String connName, Callback<Void> cb);
+
+    /**
      * Pause the connector. This call will asynchronously suspend processing by the connector and all
      * of its tasks.
      * @param connector name of the connector
@@ -182,6 +206,11 @@ public interface Herder {
      * @return the cluster ID of the Kafka cluster backing this connect cluster
      */
     String kafkaClusterId();
+
+    enum ConfigReloadAction {
+        NONE,
+        RESTART
+    }
 
     class Created<T> {
         private final boolean created;

@@ -153,13 +153,13 @@ public class WriteTxnMarkersRequest extends AbstractRequest {
     private final List<TxnMarkerEntry> markers;
 
     private WriteTxnMarkersRequest(short version, List<TxnMarkerEntry> markers) {
-        super(version);
+        super(ApiKeys.WRITE_TXN_MARKERS, version);
 
         this.markers = markers;
     }
 
     public WriteTxnMarkersRequest(Struct struct, short version) {
-        super(version);
+        super(ApiKeys.WRITE_TXN_MARKERS, version);
         List<TxnMarkerEntry> markers = new ArrayList<>();
         Object[] markersArray = struct.getArray(TXN_MARKERS_KEY_NAME);
         for (Object markerObj : markersArray) {
@@ -204,7 +204,7 @@ public class WriteTxnMarkersRequest extends AbstractRequest {
             markerStruct.set(COORDINATOR_EPOCH_KEY_NAME, entry.coordinatorEpoch);
             markerStruct.set(TRANSACTION_RESULT_KEY_NAME, entry.result.id);
 
-            Map<String, List<Integer>> mappedPartitions = CollectionUtils.groupDataByTopic(entry.partitions);
+            Map<String, List<Integer>> mappedPartitions = CollectionUtils.groupPartitionsByTopic(entry.partitions);
             Object[] partitionsArray = new Object[mappedPartitions.size()];
             int j = 0;
             for (Map.Entry<String, List<Integer>> topicAndPartitions : mappedPartitions.entrySet()) {

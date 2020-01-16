@@ -20,7 +20,6 @@ import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.streams.errors.StreamsException;
-import org.apache.kafka.streams.processor.internals.StreamPartitionAssignor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -37,7 +36,10 @@ import java.util.Set;
  * Join operations requires that topics of the joining entities are copartitoned, i.e., being partitioned by the same key and having the same
  * number of partitions. Copartitioning is ensured by having the same number of partitions on
  * joined topics, and by using the serialization and Producer's default partitioner.
+ *
+ * @deprecated since 2.4 release; will be removed in 3.0.0 via KAFKA-7785
  */
+@Deprecated
 public class DefaultPartitionGrouper implements PartitionGrouper {
 
     private static final Logger log = LoggerFactory.getLogger(DefaultPartitionGrouper.class);
@@ -48,20 +50,20 @@ public class DefaultPartitionGrouper implements PartitionGrouper {
      * @param metadata      metadata of the consuming cluster
      * @return The map from generated task ids to the assigned partitions
      */
-    public Map<TaskId, Set<TopicPartition>> partitionGroups(Map<Integer, Set<String>> topicGroups, Cluster metadata) {
-        Map<TaskId, Set<TopicPartition>> groups = new HashMap<>();
+    public Map<TaskId, Set<TopicPartition>> partitionGroups(final Map<Integer, Set<String>> topicGroups, final Cluster metadata) {
+        final Map<TaskId, Set<TopicPartition>> groups = new HashMap<>();
 
-        for (Map.Entry<Integer, Set<String>> entry : topicGroups.entrySet()) {
-            Integer topicGroupId = entry.getKey();
-            Set<String> topicGroup = entry.getValue();
+        for (final Map.Entry<Integer, Set<String>> entry : topicGroups.entrySet()) {
+            final Integer topicGroupId = entry.getKey();
+            final Set<String> topicGroup = entry.getValue();
 
-            int maxNumPartitions = maxNumPartitions(metadata, topicGroup);
+            final int maxNumPartitions = maxNumPartitions(metadata, topicGroup);
 
             for (int partitionId = 0; partitionId < maxNumPartitions; partitionId++) {
-                Set<TopicPartition> group = new HashSet<>(topicGroup.size());
+                final Set<TopicPartition> group = new HashSet<>(topicGroup.size());
 
-                for (String topic : topicGroup) {
-                    List<PartitionInfo> partitions = metadata.partitionsForTopic(topic);
+                for (final String topic : topicGroup) {
+                    final List<PartitionInfo> partitions = metadata.partitionsForTopic(topic);
                     if (partitionId < partitions.size()) {
                         group.add(new TopicPartition(topic, partitionId));
                     }
@@ -76,18 +78,18 @@ public class DefaultPartitionGrouper implements PartitionGrouper {
     /**
      * @throws StreamsException if no metadata can be received for a topic
      */
-    protected int maxNumPartitions(Cluster metadata, Set<String> topics) {
+    protected int maxNumPartitions(final Cluster metadata, final Set<String> topics) {
         int maxNumPartitions = 0;
-        for (String topic : topics) {
-            List<PartitionInfo> partitions = metadata.partitionsForTopic(topic);
-
+        for (final String topic : topics) {
+            final List<PartitionInfo> partitions = metadata.partitionsForTopic(topic);
             if (partitions.isEmpty()) {
-                log.info("Skipping assigning topic {} to tasks since its metadata is not available yet", topic);
-                return StreamPartitionAssignor.NOT_AVAILABLE;
-            } else {
-                int numPartitions = partitions.size();
-                if (numPartitions > maxNumPartitions)
-                    maxNumPartitions = numPartitions;
+                log.error("Empty partitions for topic {}", topic);
+                throw new RuntimeException("Empty partitions for topic " + topic);
+            }
+
+            final int numPartitions = partitions.size();
+            if (numPartitions > maxNumPartitions) {
+                maxNumPartitions = numPartitions;
             }
         }
         return maxNumPartitions;

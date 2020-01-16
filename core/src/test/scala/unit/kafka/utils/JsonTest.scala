@@ -18,19 +18,26 @@ package kafka.utils
 
 import java.nio.charset.StandardCharsets
 
-import org.junit.Assert._
-import org.junit.Test
+import com.fasterxml.jackson.annotation.JsonProperty
+import com.fasterxml.jackson.core.JsonParseException
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.node._
+import kafka.utils.JsonTest.TestObject
 import kafka.utils.json.JsonValue
+import org.junit.Assert._
+import org.junit.Test
 
 import scala.collection.JavaConverters._
 import scala.collection.Map
 
+object JsonTest {
+  case class TestObject(@JsonProperty("foo") foo: String, @JsonProperty("bar") bar: Int)
+}
+
 class JsonTest {
 
   @Test
-  def testJsonParse() {
+  def testJsonParse(): Unit = {
     val jnf = JsonNodeFactory.instance
 
     assertEquals(Json.parseFull("{}"), Some(JsonValue(new ObjectNode(jnf))))
@@ -59,7 +66,7 @@ class JsonTest {
   }
 
   @Test
-  def testLegacyEncodeAsString() {
+  def testLegacyEncodeAsString(): Unit = {
     assertEquals("null", Json.legacyEncodeAsString(null))
     assertEquals("1", Json.legacyEncodeAsString(1))
     assertEquals("1", Json.legacyEncodeAsString(1L))
@@ -81,7 +88,7 @@ class JsonTest {
   }
 
   @Test
-  def testEncodeAsString() {
+  def testEncodeAsString(): Unit = {
     assertEquals("null", Json.encodeAsString(null))
     assertEquals("1", Json.encodeAsString(1))
     assertEquals("1", Json.encodeAsString(1L))
@@ -104,7 +111,7 @@ class JsonTest {
   }
 
   @Test
-  def testEncodeAsBytes() {
+  def testEncodeAsBytes(): Unit = {
     assertEquals("null", new String(Json.encodeAsBytes(null), StandardCharsets.UTF_8))
     assertEquals("1", new String(Json.encodeAsBytes(1), StandardCharsets.UTF_8))
     assertEquals("1", new String(Json.encodeAsBytes(1L), StandardCharsets.UTF_8))
@@ -125,5 +132,23 @@ class JsonTest {
     assertEquals(""""str1\\,str2"""", new String(Json.encodeAsBytes("""str1\,str2"""), StandardCharsets.UTF_8))
     assertEquals(""""\"quoted\""""", new String(Json.encodeAsBytes(""""quoted""""), StandardCharsets.UTF_8))
   }
-  
+
+  @Test
+  def testParseTo() = {
+    val foo = "baz"
+    val bar = 1
+
+    val result = Json.parseStringAs[TestObject](s"""{"foo": "$foo", "bar": $bar}""")
+
+    assertTrue(result.isRight)
+    assertEquals(TestObject(foo, bar), result.right.get)
+  }
+
+  @Test
+  def testParseToWithInvalidJson() = {
+    val result = Json.parseStringAs[TestObject]("{invalid json}")
+
+    assertTrue(result.isLeft)
+    assertEquals(classOf[JsonParseException], result.left.get.getClass)
+  }
 }

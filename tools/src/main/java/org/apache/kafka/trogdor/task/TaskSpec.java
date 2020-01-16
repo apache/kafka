@@ -21,6 +21,8 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
 import org.apache.kafka.trogdor.common.JsonUtil;
 
+import java.util.Collections;
+import java.util.Map;
 import java.util.Objects;
 
 
@@ -65,6 +67,13 @@ public abstract class TaskSpec {
     }
 
     /**
+     * Get the deadline time of this task in ms
+     */
+    public final long endMs() {
+        return startMs + durationMs;
+    }
+
+    /**
      * Get the duration of this task in ms.
      */
     @JsonProperty
@@ -101,5 +110,9 @@ public abstract class TaskSpec {
     @Override
     public String toString() {
         return JsonUtil.toJsonString(this);
+    }
+
+    protected Map<String, String> configOrEmptyMap(Map<String, String> config) {
+        return (config == null) ? Collections.<String, String>emptyMap() : config;
     }
 }

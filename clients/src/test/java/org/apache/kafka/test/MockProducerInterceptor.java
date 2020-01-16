@@ -51,7 +51,7 @@ public class MockProducerInterceptor implements ClusterResourceListener, Produce
         Object o = configs.get(APPEND_STRING_PROP);
         if (o == null)
             throw new ConfigException("Mock producer interceptor expects configuration " + APPEND_STRING_PROP);
-        if (o != null && o instanceof String)
+        if (o instanceof String)
             appendStr = (String) o;
 
         // clientId also must be in configs

@@ -18,13 +18,14 @@ package kafka.api
 
 import java.util
 
-import kafka.admin.AdminClient
 import kafka.server.KafkaConfig
-import kafka.utils.{JaasTestUtils, TestUtils, ZkUtils}
-import org.apache.kafka.clients.admin.AdminClientConfig
+import kafka.utils.{JaasTestUtils, TestUtils}
+import kafka.zk.ConfigEntityChangeNotificationZNode
+import org.apache.kafka.clients.admin.{AdminClient, AdminClientConfig}
 import org.apache.kafka.common.config.SaslConfigs
 import org.apache.kafka.common.security.auth.SecurityProtocol
-import org.apache.kafka.common.security.scram.ScramMechanism
+import org.apache.kafka.common.security.scram.ScramCredential
+import org.apache.kafka.common.security.scram.internals.ScramMechanism
 import org.apache.kafka.common.security.token.delegation.DelegationToken
 import org.junit.Before
 
@@ -46,18 +47,19 @@ class DelegationTokenEndToEndAuthorizationTest extends EndToEndAuthorizationTest
 
   this.serverConfig.setProperty(KafkaConfig.DelegationTokenMasterKeyProp, "testKey")
 
-  override def configureSecurityBeforeServersStart() {
+  override def configureSecurityBeforeServersStart(): Unit = {
     super.configureSecurityBeforeServersStart()
-    zkClient.makeSurePersistentPathExists(ZkUtils.ConfigChangesPath)
+    zkClient.makeSurePersistentPathExists(ConfigEntityChangeNotificationZNode.path)
     // Create broker admin credentials before starting brokers
     createScramCredentials(zkConnect, kafkaPrincipal, kafkaPassword)
   }
 
-  override def configureSecurityAfterServersStart() {
+  override def configureSecurityAfterServersStart(): Unit = {
     super.configureSecurityAfterServersStart()
 
     // create scram credential for user "scram-user"
     createScramCredentials(zkConnect, clientPrincipal, clientPassword)
+    waitForScramCredentials(clientPrincipal)
 
     //create a token with "scram-user" credentials
     val token = createDelegationToken()
@@ -66,10 +68,18 @@ class DelegationTokenEndToEndAuthorizationTest extends EndToEndAuthorizationTest
     val clientLoginContext = JaasTestUtils.tokenClientLoginModule(token.tokenInfo().tokenId(), token.hmacAsBase64String())
     producerConfig.put(SaslConfigs.SASL_JAAS_CONFIG, clientLoginContext)
     consumerConfig.put(SaslConfigs.SASL_JAAS_CONFIG, clientLoginContext)
+    adminClientConfig.put(SaslConfigs.SASL_JAAS_CONFIG, clientLoginContext)
+  }
+
+  private def waitForScramCredentials(clientPrincipal: String): Unit = {
+    servers.foreach { server =>
+      val cache = server.credentialProvider.credentialCache.cache(kafkaClientSaslMechanism, classOf[ScramCredential])
+      TestUtils.waitUntilTrue(() => cache.get(clientPrincipal) != null, s"SCRAM credentials not created for $clientPrincipal")
+    }
   }
 
   @Before
-  override def setUp() {
+  override def setUp(): Unit = {
     startSasl(jaasSections(kafkaServerSaslMechanisms, Option(kafkaClientSaslMechanism), Both))
     super.setUp()
   }
@@ -83,14 +93,15 @@ class DelegationTokenEndToEndAuthorizationTest extends EndToEndAuthorizationTest
     val clientLoginContext = jaasClientLoginModule(kafkaClientSaslMechanism)
     config.put(SaslConfigs.SASL_JAAS_CONFIG, clientLoginContext)
 
-    val adminClient = AdminClient.create(config.asScala.toMap)
-    var (error, token)  = adminClient.createToken(List())
-
-    //wait for token to reach all the brokers
-    TestUtils.waitUntilTrue(() => servers.forall(server => !server.tokenCache.tokens().isEmpty),
-      "Timed out waiting for token to propagate to all servers")
-    adminClient.close()
-
-    token
+    val adminClient = AdminClient.create(config)
+    try {
+      val token = adminClient.createDelegationToken().delegationToken().get()
+      //wait for token to reach all the brokers
+      TestUtils.waitUntilTrue(() => servers.forall(server => !server.tokenCache.tokens().isEmpty),
+        "Timed out waiting for token to propagate to all servers")
+      token
+    } finally {
+      adminClient.close()
+    }
   }
 }

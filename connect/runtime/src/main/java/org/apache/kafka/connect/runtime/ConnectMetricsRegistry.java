@@ -20,8 +20,10 @@ import org.apache.kafka.common.MetricNameTemplate;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 public class ConnectMetricsRegistry {
@@ -34,12 +36,19 @@ public class ConnectMetricsRegistry {
     public static final String SINK_TASK_GROUP_NAME = "sink-task-metrics";
     public static final String WORKER_GROUP_NAME = "connect-worker-metrics";
     public static final String WORKER_REBALANCE_GROUP_NAME = "connect-worker-rebalance-metrics";
+    public static final String TASK_ERROR_HANDLING_GROUP_NAME = "task-error-metrics";
 
     private final List<MetricNameTemplate> allTemplates = new ArrayList<>();
     public final MetricNameTemplate connectorStatus;
     public final MetricNameTemplate connectorType;
     public final MetricNameTemplate connectorClass;
     public final MetricNameTemplate connectorVersion;
+    public final MetricNameTemplate connectorTotalTaskCount;
+    public final MetricNameTemplate connectorRunningTaskCount;
+    public final MetricNameTemplate connectorPausedTaskCount;
+    public final MetricNameTemplate connectorFailedTaskCount;
+    public final MetricNameTemplate connectorUnassignedTaskCount;
+    public final MetricNameTemplate connectorDestroyedTaskCount;
     public final MetricNameTemplate taskStatus;
     public final MetricNameTemplate taskRunningRatio;
     public final MetricNameTemplate taskPauseRatio;
@@ -86,6 +95,7 @@ public class ConnectMetricsRegistry {
     public final MetricNameTemplate taskStartupSuccessPercentage;
     public final MetricNameTemplate taskStartupFailureTotal;
     public final MetricNameTemplate taskStartupFailurePercentage;
+    public final MetricNameTemplate connectProtocol;
     public final MetricNameTemplate leaderName;
     public final MetricNameTemplate epoch;
     public final MetricNameTemplate rebalanceCompletedTotal;
@@ -93,6 +103,16 @@ public class ConnectMetricsRegistry {
     public final MetricNameTemplate rebalanceTimeMax;
     public final MetricNameTemplate rebalanceTimeAvg;
     public final MetricNameTemplate rebalanceTimeSinceLast;
+    public final MetricNameTemplate recordProcessingFailures;
+    public final MetricNameTemplate recordProcessingErrors;
+    public final MetricNameTemplate recordsSkipped;
+    public final MetricNameTemplate retries;
+    public final MetricNameTemplate errorsLogged;
+    public final MetricNameTemplate dlqProduceRequests;
+    public final MetricNameTemplate dlqProduceFailures;
+    public final MetricNameTemplate lastErrorTimestamp;
+
+    public Map<MetricNameTemplate, TaskStatus.State> connectorStatusMetrics;
 
     public ConnectMetricsRegistry() {
         this(new LinkedHashSet<String>());
@@ -279,9 +299,35 @@ public class ConnectMetricsRegistry {
         taskStartupFailurePercentage = createTemplate("task-startup-failure-percentage", WORKER_GROUP_NAME,
                                                       "The average percentage of this worker's tasks starts that failed.", workerTags);
 
+        Set<String> workerConnectorTags = new LinkedHashSet<>(tags);
+        workerConnectorTags.add(CONNECTOR_TAG_NAME);
+        connectorTotalTaskCount = createTemplate("connector-total-task-count", WORKER_GROUP_NAME,
+            "The number of tasks of the connector on the worker.", workerConnectorTags);
+        connectorRunningTaskCount = createTemplate("connector-running-task-count", WORKER_GROUP_NAME,
+            "The number of running tasks of the connector on the worker.", workerConnectorTags);
+        connectorPausedTaskCount = createTemplate("connector-paused-task-count", WORKER_GROUP_NAME,
+            "The number of paused tasks of the connector on the worker.", workerConnectorTags);
+        connectorFailedTaskCount = createTemplate("connector-failed-task-count", WORKER_GROUP_NAME,
+            "The number of failed tasks of the connector on the worker.", workerConnectorTags);
+        connectorUnassignedTaskCount = createTemplate("connector-unassigned-task-count",
+            WORKER_GROUP_NAME,
+            "The number of unassigned tasks of the connector on the worker.", workerConnectorTags);
+        connectorDestroyedTaskCount = createTemplate("connector-destroyed-task-count",
+            WORKER_GROUP_NAME,
+            "The number of destroyed tasks of the connector on the worker.", workerConnectorTags);
+
+        connectorStatusMetrics = new HashMap<>();
+        connectorStatusMetrics.put(connectorRunningTaskCount, TaskStatus.State.RUNNING);
+        connectorStatusMetrics.put(connectorPausedTaskCount, TaskStatus.State.PAUSED);
+        connectorStatusMetrics.put(connectorFailedTaskCount, TaskStatus.State.FAILED);
+        connectorStatusMetrics.put(connectorUnassignedTaskCount, TaskStatus.State.UNASSIGNED);
+        connectorStatusMetrics.put(connectorDestroyedTaskCount, TaskStatus.State.DESTROYED);
+        connectorStatusMetrics = Collections.unmodifiableMap(connectorStatusMetrics);
+
         /***** Worker rebalance level *****/
         Set<String> rebalanceTags = new LinkedHashSet<>(tags);
 
+        connectProtocol = createTemplate("connect-protocol", WORKER_REBALANCE_GROUP_NAME, "The Connect protocol used by this cluster", rebalanceTags);
         leaderName = createTemplate("leader-name", WORKER_REBALANCE_GROUP_NAME, "The name of the group leader.", rebalanceTags);
         epoch = createTemplate("epoch", WORKER_REBALANCE_GROUP_NAME, "The epoch or generation number of this worker.", rebalanceTags);
         rebalanceCompletedTotal = createTemplate("completed-rebalances-total", WORKER_REBALANCE_GROUP_NAME,
@@ -294,6 +340,28 @@ public class ConnectMetricsRegistry {
                                           "The average time in milliseconds spent by this worker to rebalance.", rebalanceTags);
         rebalanceTimeSinceLast = createTemplate("time-since-last-rebalance-ms", WORKER_REBALANCE_GROUP_NAME,
                                                 "The time in milliseconds since this worker completed the most recent rebalance.", rebalanceTags);
+
+        /***** Task Error Handling Metrics *****/
+        Set<String> taskErrorHandlingTags = new LinkedHashSet<>(tags);
+        taskErrorHandlingTags.add(CONNECTOR_TAG_NAME);
+        taskErrorHandlingTags.add(TASK_TAG_NAME);
+
+        recordProcessingFailures = createTemplate("total-record-failures", TASK_ERROR_HANDLING_GROUP_NAME,
+                "The number of record processing failures in this task.", taskErrorHandlingTags);
+        recordProcessingErrors = createTemplate("total-record-errors", TASK_ERROR_HANDLING_GROUP_NAME,
+                "The number of record processing errors in this task. ", taskErrorHandlingTags);
+        recordsSkipped = createTemplate("total-records-skipped", TASK_ERROR_HANDLING_GROUP_NAME,
+                "The number of records skipped due to errors.", taskErrorHandlingTags);
+        retries = createTemplate("total-retries", TASK_ERROR_HANDLING_GROUP_NAME,
+                "The number of operations retried.", taskErrorHandlingTags);
+        errorsLogged = createTemplate("total-errors-logged", TASK_ERROR_HANDLING_GROUP_NAME,
+                "The number of errors that were logged.", taskErrorHandlingTags);
+        dlqProduceRequests = createTemplate("deadletterqueue-produce-requests", TASK_ERROR_HANDLING_GROUP_NAME,
+                "The number of attempted writes to the dead letter queue.", taskErrorHandlingTags);
+        dlqProduceFailures = createTemplate("deadletterqueue-produce-failures", TASK_ERROR_HANDLING_GROUP_NAME,
+                "The number of failed writes to the dead letter queue.", taskErrorHandlingTags);
+        lastErrorTimestamp = createTemplate("last-error-timestamp", TASK_ERROR_HANDLING_GROUP_NAME,
+                "The epoch timestamp when this task last encountered an error.", taskErrorHandlingTags);
     }
 
     private MetricNameTemplate createTemplate(String name, String group, String doc, Set<String> tags) {
@@ -336,5 +404,9 @@ public class ConnectMetricsRegistry {
 
     public String workerRebalanceGroupName() {
         return WORKER_REBALANCE_GROUP_NAME;
+    }
+
+    public String taskErrorHandlingGroupName() {
+        return TASK_ERROR_HANDLING_GROUP_NAME;
     }
 }

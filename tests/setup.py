@@ -38,7 +38,7 @@ class PyTest(TestCommand):
     def run_tests(self):
         # import here, cause outside the eggs aren't loaded
         import pytest
-        print self.pytest_args
+        print(self.pytest_args)
         errno = pytest.main(self.pytest_args)
         sys.exit(errno)
 
@@ -51,7 +51,7 @@ setup(name="kafkatest",
       license="apache2.0",
       packages=find_packages(),
       include_package_data=True,
-      install_requires=["ducktape==0.7.1", "requests>=2.5.0"],
+      install_requires=["ducktape==0.7.6", "requests==2.20.0"],
       tests_require=["pytest", "mock"],
       cmdclass={'test': PyTest},
       )

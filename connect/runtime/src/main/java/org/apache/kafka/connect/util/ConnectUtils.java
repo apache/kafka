@@ -16,9 +16,9 @@
  */
 package org.apache.kafka.connect.util;
 
-import org.apache.kafka.clients.admin.AdminClient;
+import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.common.KafkaFuture;
-import org.apache.kafka.common.record.InvalidRecordException;
+import org.apache.kafka.common.InvalidRecordException;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.runtime.WorkerConfig;
@@ -40,12 +40,13 @@ public final class ConnectUtils {
     }
 
     public static String lookupKafkaClusterId(WorkerConfig config) {
-        try (AdminClient adminClient = AdminClient.create(config.originals())) {
+        log.info("Creating Kafka admin client");
+        try (Admin adminClient = Admin.create(config.originals())) {
             return lookupKafkaClusterId(adminClient);
         }
     }
 
-    static String lookupKafkaClusterId(AdminClient adminClient) {
+    static String lookupKafkaClusterId(Admin adminClient) {
         log.debug("Looking up Kafka cluster ID");
         try {
             KafkaFuture<String> clusterIdFuture = adminClient.describeCluster().clusterId();
@@ -53,13 +54,15 @@ public final class ConnectUtils {
                 log.info("Kafka cluster version is too old to return cluster ID");
                 return null;
             }
+            log.debug("Fetching Kafka cluster ID");
             String kafkaClusterId = clusterIdFuture.get();
             log.info("Kafka cluster ID: {}", kafkaClusterId);
             return kafkaClusterId;
         } catch (InterruptedException e) {
             throw new ConnectException("Unexpectedly interrupted when looking up Kafka cluster info", e);
         } catch (ExecutionException e) {
-            throw new ConnectException("Failed to connect to and describe Kafka cluster", e);
+            throw new ConnectException("Failed to connect to and describe Kafka cluster. "
+                                       + "Check worker's broker connection and security properties.", e);
         }
     }
 }

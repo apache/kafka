@@ -38,7 +38,7 @@ import static org.junit.Assert.assertTrue;
 public class MergedSortedCacheWrappedWindowStoreKeyValueIteratorTest {
     private static final SegmentedCacheFunction SINGLE_SEGMENT_CACHE_FUNCTION = new SegmentedCacheFunction(null, -1) {
         @Override
-        public long segmentId(Bytes key) {
+        public long segmentId(final Bytes key) {
             return 0;
         }
     };
@@ -53,11 +53,8 @@ public class MergedSortedCacheWrappedWindowStoreKeyValueIteratorTest {
     private final TimeWindow cacheWindow = new TimeWindow(10, 20);
     private final Iterator<KeyValue<Bytes, LRUCacheEntry>> cacheKvs = Collections.singleton(
         KeyValue.pair(
-            SINGLE_SEGMENT_CACHE_FUNCTION.cacheKey(
-                WindowStoreUtils.toBinaryKey(
-                    cacheKey, cacheWindow.start(), 0,
-                    new StateSerdes<>("dummy", Serdes.String(), Serdes.String())
-                )
+            SINGLE_SEGMENT_CACHE_FUNCTION.cacheKey(WindowKeySchema.toStoreKeyBinary(
+                    new Windowed<>(cacheKey, cacheWindow), 0, new StateSerdes<>("dummy", Serdes.String(), Serdes.ByteArray()))
             ),
             new LRUCacheEntry(cacheKey.getBytes())
         )).iterator();
@@ -65,44 +62,43 @@ public class MergedSortedCacheWrappedWindowStoreKeyValueIteratorTest {
 
     @Test
     public void shouldHaveNextFromStore() {
-        final MergedSortedCacheWindowStoreKeyValueIterator mergeIterator
-            = createIterator(storeKvs, Collections.<KeyValue<Bytes, LRUCacheEntry>>emptyIterator());
+        final MergedSortedCacheWindowStoreKeyValueIterator mergeIterator =
+            createIterator(storeKvs, Collections.emptyIterator());
         assertTrue(mergeIterator.hasNext());
     }
 
     @Test
     public void shouldGetNextFromStore() {
-        final MergedSortedCacheWindowStoreKeyValueIterator mergeIterator
-            = createIterator(storeKvs, Collections.<KeyValue<Bytes, LRUCacheEntry>>emptyIterator());
+        final MergedSortedCacheWindowStoreKeyValueIterator mergeIterator =
+            createIterator(storeKvs, Collections.emptyIterator());
         assertThat(convertKeyValuePair(mergeIterator.next()), equalTo(KeyValue.pair(new Windowed<>(storeKey, storeWindow), storeKey)));
     }
 
     @Test
     public void shouldPeekNextKeyFromStore() {
-        final MergedSortedCacheWindowStoreKeyValueIterator mergeIterator
-            = createIterator(storeKvs, Collections.<KeyValue<Bytes, LRUCacheEntry>>emptyIterator());
+        final MergedSortedCacheWindowStoreKeyValueIterator mergeIterator =
+            createIterator(storeKvs, Collections.emptyIterator());
         assertThat(convertWindowedKey(mergeIterator.peekNextKey()), equalTo(new Windowed<>(storeKey, storeWindow)));
     }
 
     @Test
     public void shouldHaveNextFromCache() {
-        final MergedSortedCacheWindowStoreKeyValueIterator mergeIterator
-            = createIterator(Collections.<KeyValue<Windowed<Bytes>, byte[]>>emptyIterator(),
-                             cacheKvs);
+        final MergedSortedCacheWindowStoreKeyValueIterator mergeIterator =
+            createIterator(Collections.emptyIterator(), cacheKvs);
         assertTrue(mergeIterator.hasNext());
     }
 
     @Test
     public void shouldGetNextFromCache() {
-        final MergedSortedCacheWindowStoreKeyValueIterator mergeIterator
-            = createIterator(Collections.<KeyValue<Windowed<Bytes>, byte[]>>emptyIterator(), cacheKvs);
+        final MergedSortedCacheWindowStoreKeyValueIterator mergeIterator =
+            createIterator(Collections.emptyIterator(), cacheKvs);
         assertThat(convertKeyValuePair(mergeIterator.next()), equalTo(KeyValue.pair(new Windowed<>(cacheKey, cacheWindow), cacheKey)));
     }
 
     @Test
     public void shouldPeekNextKeyFromCache() {
-        final MergedSortedCacheWindowStoreKeyValueIterator mergeIterator
-            = createIterator(Collections.<KeyValue<Windowed<Bytes>, byte[]>>emptyIterator(), cacheKvs);
+        final MergedSortedCacheWindowStoreKeyValueIterator mergeIterator =
+            createIterator(Collections.emptyIterator(), cacheKvs);
         assertThat(convertWindowedKey(mergeIterator.peekNextKey()), equalTo(new Windowed<>(cacheKey, cacheWindow)));
     }
 
@@ -129,11 +125,11 @@ public class MergedSortedCacheWrappedWindowStoreKeyValueIteratorTest {
         final Iterator<KeyValue<Windowed<Bytes>, byte[]>> storeKvs,
         final Iterator<KeyValue<Bytes, LRUCacheEntry>> cacheKvs
     ) {
-        final DelegatingPeekingKeyValueIterator<Windowed<Bytes>, byte[]> storeIterator
-            = new DelegatingPeekingKeyValueIterator<>("store", new KeyValueIteratorStub<>(storeKvs));
+        final DelegatingPeekingKeyValueIterator<Windowed<Bytes>, byte[]> storeIterator =
+            new DelegatingPeekingKeyValueIterator<>("store", new KeyValueIteratorStub<>(storeKvs));
 
-        final PeekingKeyValueIterator<Bytes, LRUCacheEntry> cacheIterator
-            = new DelegatingPeekingKeyValueIterator<>("cache", new KeyValueIteratorStub<>(cacheKvs));
+        final PeekingKeyValueIterator<Bytes, LRUCacheEntry> cacheIterator =
+            new DelegatingPeekingKeyValueIterator<>("cache", new KeyValueIteratorStub<>(cacheKvs));
         return new MergedSortedCacheWindowStoreKeyValueIterator(
             cacheIterator,
             storeIterator,

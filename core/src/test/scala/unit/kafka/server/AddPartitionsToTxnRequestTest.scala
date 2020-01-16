@@ -25,13 +25,13 @@ import org.apache.kafka.common.requests.{AddPartitionsToTxnRequest, AddPartition
 import org.junit.{Before, Test}
 import org.junit.Assert._
 
-import scala.collection.JavaConversions._
+import scala.collection.JavaConverters._
 
 class AddPartitionsToTxnRequestTest extends BaseRequestTest {
   private val topic1 = "foobartopic"
   val numPartitions = 3
 
-  override def propertyOverrides(properties: Properties): Unit =
+  override def brokerPropertyOverrides(properties: Properties): Unit =
     properties.put(KafkaConfig.AutoCreateTopicsEnableProp, false.toString)
 
   @Before
@@ -69,7 +69,7 @@ class AddPartitionsToTxnRequestTest extends BaseRequestTest {
     val transactionalId = "foobar"
     val producerId = 1000L
     val producerEpoch: Short = 0
-    val builder = new AddPartitionsToTxnRequest.Builder(transactionalId, producerId, producerEpoch, partitions)
+    val builder = new AddPartitionsToTxnRequest.Builder(transactionalId, producerId, producerEpoch, partitions.asJava)
     builder.build()
   }
 }

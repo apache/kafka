@@ -16,15 +16,15 @@
  */
 package kafka.coordinator.transaction
 
-import kafka.common.KafkaException
 import kafka.zk.KafkaZkClient
+import org.apache.kafka.common.KafkaException
 import org.easymock.{Capture, EasyMock, IAnswer}
 import org.junit.{After, Test}
 import org.junit.Assert._
 
 class ProducerIdManagerTest {
 
-  private val zkClient = EasyMock.createNiceMock(classOf[KafkaZkClient])
+  private val zkClient: KafkaZkClient = EasyMock.createNiceMock(classOf[KafkaZkClient])
 
   @After
   def tearDown(): Unit = {
@@ -32,7 +32,7 @@ class ProducerIdManagerTest {
   }
 
   @Test
-  def testGetProducerId() {
+  def testGetProducerId(): Unit = {
     var zkVersion: Option[Int] = None
     var data: Array[Byte] = null
     EasyMock.expect(zkClient.getDataAndVersion(EasyMock.anyString)).andAnswer(new IAnswer[(Option[Array[Byte]], Int)] {
@@ -75,7 +75,7 @@ class ProducerIdManagerTest {
   }
 
   @Test(expected = classOf[KafkaException])
-  def testExceedProducerIdLimit() {
+  def testExceedProducerIdLimit(): Unit = {
     EasyMock.expect(zkClient.getDataAndVersion(EasyMock.anyString)).andAnswer(new IAnswer[(Option[Array[Byte]], Int)] {
       override def answer(): (Option[Array[Byte]], Int) = {
         val json = ProducerIdManager.generateProducerIdBlockJson(

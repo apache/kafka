@@ -136,7 +136,6 @@ class TransactionsTest(Test):
                                    kafka=self.kafka,
                                    topic=topic_to_read,
                                    group_id=group_id,
-                                   new_consumer=True,
                                    message_validator=is_int,
                                    from_beginning=True,
                                    isolation_level="read_committed")

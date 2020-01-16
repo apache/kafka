@@ -30,6 +30,7 @@ from kafkatest.version import DEV_BRANCH
 class ZookeeperService(KafkaPathResolverMixin, Service):
     ROOT = "/mnt/zookeeper"
     DATA = os.path.join(ROOT, "data")
+    HEAP_DUMP_FILE = os.path.join(ROOT, "zk_heap_dump.bin")
 
     logs = {
         "zk_log": {
@@ -37,7 +38,10 @@ class ZookeeperService(KafkaPathResolverMixin, Service):
             "collect_default": True},
         "zk_data": {
             "path": DATA,
-            "collect_default": False}
+            "collect_default": False},
+        "zk_heap_dump_file": {
+            "path": HEAP_DUMP_FILE,
+            "collect_default": True}
     }
 
     def __init__(self, context, num_nodes, zk_sasl = False):
@@ -76,8 +80,10 @@ class ZookeeperService(KafkaPathResolverMixin, Service):
         self.logger.info(config_file)
         node.account.create_file("%s/zookeeper.properties" % ZookeeperService.ROOT, config_file)
 
-        start_cmd = "export KAFKA_OPTS=\"%s\";" % (self.kafka_opts + ' ' + self.security_system_properties) \
+        heap_kafka_opts = "-XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=%s" % self.logs["zk_heap_dump_file"]["path"]
+        other_kafka_opts = self.kafka_opts + ' ' + self.security_system_properties \
             if self.security_config.zk_sasl else self.kafka_opts
+        start_cmd = "export KAFKA_OPTS=\"%s %s\";" % (heap_kafka_opts, other_kafka_opts)
         start_cmd += "%s " % self.path.script("zookeeper-server-start.sh", node)
         start_cmd += "%s/zookeeper.properties &>> %s &" % (ZookeeperService.ROOT, self.logs["zk_log"]["path"])
         node.account.ssh(start_cmd)
@@ -103,7 +109,7 @@ class ZookeeperService(KafkaPathResolverMixin, Service):
         idx = self.idx(node)
         self.logger.info("Stopping %s node %d on %s" % (type(self).__name__, idx, node.account.hostname))
         node.account.kill_java_processes(self.java_class_name(), allow_fail=False)
-        node.account.kill_java_processes(self.java_query_class_name(), allow_fail=False)
+        node.account.kill_java_processes(self.java_cli_class_name(), allow_fail=False)
         wait_until(lambda: not self.alive(node), timeout_sec=5, err_msg="Timed out waiting for zookeeper to stop.")
 
     def clean_node(self, node):
@@ -113,7 +119,7 @@ class ZookeeperService(KafkaPathResolverMixin, Service):
                              (self.__class__.__name__, node.account))
         node.account.kill_java_processes(self.java_class_name(),
                                          clean_shutdown=False, allow_fail=True)
-        node.account.kill_java_processes(self.java_query_class_name(),
+        node.account.kill_java_processes(self.java_cli_class_name(),
                                          clean_shutdown=False, allow_fail=False)
         node.account.ssh("rm -rf -- %s" % ZookeeperService.ROOT, allow_fail=False)
 
@@ -134,23 +140,26 @@ class ZookeeperService(KafkaPathResolverMixin, Service):
                        (self.path.script("zookeeper-security-migration.sh", node), zk_acl, self.connect_setting())
         node.account.ssh(la_migra_cmd)
 
+    def _check_chroot(self, chroot):
+        if chroot and not chroot.startswith("/"):
+            raise Exception("ZK chroot must start with '/', invalid chroot: %s" % chroot)
+
     def query(self, path, chroot=None):
         """
         Queries zookeeper for data associated with 'path' and returns all fields in the schema
         """
-        if chroot and not chroot.startswith("/"):
-            raise Exception("ZK chroot must start with '/', invalid chroot: %s" % chroot)
+        self._check_chroot(chroot)
 
         chroot_path = ('' if chroot is None else chroot) + path
 
         kafka_run_class = self.path.script("kafka-run-class.sh", DEV_BRANCH)
         cmd = "%s %s -server %s get %s" % \
-              (kafka_run_class, self.java_query_class_name(), self.connect_setting(), chroot_path)
+              (kafka_run_class, self.java_cli_class_name(), self.connect_setting(), chroot_path)
         self.logger.debug(cmd)
 
         node = self.nodes[0]
         result = None
-        for line in node.account.ssh_capture(cmd):
+        for line in node.account.ssh_capture(cmd, allow_fail=True):
             # loop through all lines in the output, but only hold on to the first match
             if result is None:
                 match = re.match("^({.+})$", line)
@@ -158,10 +167,25 @@ class ZookeeperService(KafkaPathResolverMixin, Service):
                     result = match.groups()[0]
         return result
 
+    def create(self, path, chroot=None):
+        """
+        Create an znode at the given path
+        """
+        self._check_chroot(chroot)
+
+        chroot_path = ('' if chroot is None else chroot) + path
+
+        kafka_run_class = self.path.script("kafka-run-class.sh", DEV_BRANCH)
+        cmd = "%s %s -server %s create %s ''" % \
+              (kafka_run_class, self.java_cli_class_name(), self.connect_setting(), chroot_path)
+        self.logger.debug(cmd)
+        output = self.nodes[0].account.ssh_output(cmd)
+        self.logger.debug(output)
+
     def java_class_name(self):
         """ The class name of the Zookeeper quorum peers. """
         return "org.apache.zookeeper.server.quorum.QuorumPeerMain"
 
-    def java_query_class_name(self):
+    def java_cli_class_name(self):
         """ The class name of the Zookeeper tool within Kafka. """
-        return "kafka.tools.ZooKeeperMainWrapper"
+        return "org.apache.zookeeper.ZooKeeperMain"

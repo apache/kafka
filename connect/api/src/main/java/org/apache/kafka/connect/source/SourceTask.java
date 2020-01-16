@@ -17,6 +17,7 @@
 package org.apache.kafka.connect.source;
 
 import org.apache.kafka.connect.connector.Task;
+import org.apache.kafka.clients.producer.RecordMetadata;
 
 import java.util.List;
 import java.util.Map;
@@ -83,11 +84,18 @@ public abstract class SourceTask implements Task {
      * could set a flag that will force {@link #poll()} to exit immediately and invoke
      * {@link java.nio.channels.Selector#wakeup() wakeup()} to interrupt any ongoing requests.
      */
+    @Override
     public abstract void stop();
 
     /**
      * <p>
-     * Commit an individual {@link SourceRecord} when the callback from the producer client is received, or if a record is filtered by a transformation.
+     * Commit an individual {@link SourceRecord} when the callback from the producer client is received. This method is
+     * also called when a record is filtered by a transformation, and thus will never be ACK'd by a broker.
+     * </p>
+     * <p>
+     * This is an alias for {@link commitRecord(SourceRecord, RecordMetadata)} for backwards compatibility. The default
+     * implementation of {@link commitRecord(SourceRecord, RecordMetadata)} just calls this method. It is not necessary
+     * to override both methods.
      * </p>
      * <p>
      * SourceTasks are not required to implement this functionality; Kafka Connect will record offsets
@@ -95,10 +103,37 @@ public abstract class SourceTask implements Task {
      * in their own system.
      * </p>
      *
-     * @param record {@link SourceRecord} that was successfully sent via the producer.
+     * @param record {@link SourceRecord} that was successfully sent via the producer or filtered by a transformation
      * @throws InterruptedException
+     * @see commitRecord(SourceRecord, RecordMetadata)
      */
     public void commitRecord(SourceRecord record) throws InterruptedException {
         // This space intentionally left blank.
+    }
+
+    /**
+     * <p>
+     * Commit an individual {@link SourceRecord} when the callback from the producer client is received. This method is
+     * also called when a record is filtered by a transformation, and thus will never be ACK'd by a broker. In this case
+     * {@code metadata} will be null.
+     * </p>
+     * <p>
+     * SourceTasks are not required to implement this functionality; Kafka Connect will record offsets
+     * automatically. This hook is provided for systems that also need to store offsets internally
+     * in their own system.
+     * </p>
+     * <p>
+     * The default implementation just calls @{link commitRecord(SourceRecord)}, which is a nop by default. It is
+     * not necessary to implement both methods.
+     * </p>
+     *
+     * @param record {@link SourceRecord} that was successfully sent via the producer or filtered by a transformation
+     * @param metadata {@link RecordMetadata} record metadata returned from the broker, or null if the record was filtered
+     * @throws InterruptedException
+     */
+    public void commitRecord(SourceRecord record, RecordMetadata metadata)
+            throws InterruptedException {
+        // by default, just call other method for backwards compatability
+        commitRecord(record);
     }
 }

@@ -23,17 +23,23 @@ import net.sourceforge.argparse4j.inf.ArgumentParserException;
 import net.sourceforge.argparse4j.inf.Namespace;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Scheduler;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.trogdor.common.Node;
 import org.apache.kafka.trogdor.common.Platform;
 import org.apache.kafka.trogdor.rest.CoordinatorStatusResponse;
 import org.apache.kafka.trogdor.rest.CreateTaskRequest;
-import org.apache.kafka.trogdor.rest.CreateTaskResponse;
+import org.apache.kafka.trogdor.rest.DestroyTaskRequest;
 import org.apache.kafka.trogdor.rest.JsonRestServer;
 import org.apache.kafka.trogdor.rest.StopTaskRequest;
-import org.apache.kafka.trogdor.rest.StopTaskResponse;
+import org.apache.kafka.trogdor.rest.TaskRequest;
+import org.apache.kafka.trogdor.rest.TaskState;
+import org.apache.kafka.trogdor.rest.TasksRequest;
 import org.apache.kafka.trogdor.rest.TasksResponse;
+import org.apache.kafka.trogdor.rest.UptimeResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.util.concurrent.ThreadLocalRandom;
 
 import static net.sourceforge.argparse4j.impl.Arguments.store;
 
@@ -44,6 +50,8 @@ import static net.sourceforge.argparse4j.impl.Arguments.store;
  */
 public final class Coordinator {
     private static final Logger log = LoggerFactory.getLogger(Coordinator.class);
+
+    public static final int DEFAULT_PORT = 8889;
 
     /**
      * The start time of the Coordinator in milliseconds.
@@ -60,18 +68,21 @@ public final class Coordinator {
      */
     private final JsonRestServer restServer;
 
+    private final Time time;
+
     /**
      * Create a new Coordinator.
      *
      * @param platform      The platform object to use.
      * @param scheduler     The scheduler to use for this Coordinator.
      * @param restServer    The REST server to use.
-     * @param resource      The AgentRestResoure to use.
+     * @param resource      The AgentRestResource to use.
      */
     public Coordinator(Platform platform, Scheduler scheduler, JsonRestServer restServer,
-                       CoordinatorRestResource resource) {
-        this.startTimeMs = scheduler.time().milliseconds();
-        this.taskManager = new TaskManager(platform, scheduler);
+                       CoordinatorRestResource resource, long firstWorkerId) {
+        this.time = scheduler.time();
+        this.startTimeMs = time.milliseconds();
+        this.taskManager = new TaskManager(platform, scheduler, firstWorkerId);
         this.restServer = restServer;
         resource.setCoordinator(this);
     }
@@ -84,16 +95,28 @@ public final class Coordinator {
         return new CoordinatorStatusResponse(startTimeMs);
     }
 
-    public CreateTaskResponse createTask(CreateTaskRequest request) throws Exception {
-        return new CreateTaskResponse(taskManager.createTask(request.id(), request.spec()));
+    public UptimeResponse uptime() {
+        return new UptimeResponse(startTimeMs, time.milliseconds());
     }
 
-    public StopTaskResponse stopTask(StopTaskRequest request) throws Exception {
-        return new StopTaskResponse(taskManager.stopTask(request.id()));
+    public void createTask(CreateTaskRequest request) throws Throwable {
+        taskManager.createTask(request.id(), request.spec());
     }
 
-    public TasksResponse tasks() throws Exception {
-        return taskManager.tasks();
+    public void stopTask(StopTaskRequest request) throws Throwable {
+        taskManager.stopTask(request.id());
+    }
+
+    public void destroyTask(DestroyTaskRequest request) throws Throwable {
+        taskManager.destroyTask(request.id());
+    }
+
+    public TasksResponse tasks(TasksRequest request) throws Exception {
+        return taskManager.tasks(request);
+    }
+
+    public TaskState task(TaskRequest request) throws Exception {
+        return taskManager.task(request);
     }
 
     public void beginShutdown(boolean stopAgents) throws Exception {
@@ -111,14 +134,14 @@ public final class Coordinator {
             .newArgumentParser("trogdor-coordinator")
             .defaultHelp(true)
             .description("The Trogdor fault injection coordinator");
-        parser.addArgument("--coordinator.config")
+        parser.addArgument("--coordinator.config", "-c")
             .action(store())
             .required(true)
             .type(String.class)
             .dest("config")
             .metavar("CONFIG")
             .help("The configuration file to use.");
-        parser.addArgument("--node-name")
+        parser.addArgument("--node-name", "-n")
             .action(store())
             .required(true)
             .type(String.class)
@@ -146,20 +169,17 @@ public final class Coordinator {
         CoordinatorRestResource resource = new CoordinatorRestResource();
         log.info("Starting coordinator process.");
         final Coordinator coordinator = new Coordinator(platform, Scheduler.SYSTEM,
-            restServer, resource);
+            restServer, resource, ThreadLocalRandom.current().nextLong(0, Long.MAX_VALUE / 2));
         restServer.start(resource);
-        Runtime.getRuntime().addShutdownHook(new Thread() {
-            @Override
-            public void run() {
-                log.warn("Running coordinator shutdown hook.");
-                try {
-                    coordinator.beginShutdown(false);
-                    coordinator.waitForShutdown();
-                } catch (Exception e) {
-                    log.error("Got exception while running coordinator shutdown hook.", e);
-                }
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            log.warn("Running coordinator shutdown hook.");
+            try {
+                coordinator.beginShutdown(false);
+                coordinator.waitForShutdown();
+            } catch (Exception e) {
+                log.error("Got exception while running coordinator shutdown hook.", e);
             }
-        });
+        }));
         coordinator.waitForShutdown();
     }
 };

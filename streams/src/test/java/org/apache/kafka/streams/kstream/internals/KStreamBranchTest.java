@@ -16,96 +16,75 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
+import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serdes;
-import org.apache.kafka.streams.Consumed;
+import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.StreamsBuilder;
+import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.Predicate;
-import org.apache.kafka.test.KStreamTestDriver;
+import org.apache.kafka.streams.TestInputTopic;
+import org.apache.kafka.test.MockProcessor;
 import org.apache.kafka.test.MockProcessorSupplier;
-import org.junit.Rule;
+import org.apache.kafka.test.StreamsTestUtils;
 import org.junit.Test;
 
-import java.lang.reflect.Array;
+import java.util.List;
+import java.util.Properties;
 
 import static org.junit.Assert.assertEquals;
 
 public class KStreamBranchTest {
 
-    private String topicName = "topic";
-
-    @Rule
-    public final KStreamTestDriver driver = new KStreamTestDriver();
+    private final String topicName = "topic";
+    private final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.String(), Serdes.String());
 
     @SuppressWarnings("unchecked")
     @Test
     public void testKStreamBranch() {
         final StreamsBuilder builder = new StreamsBuilder();
 
-        Predicate<Integer, String> isEven = new Predicate<Integer, String>() {
-            @Override
-            public boolean test(Integer key, String value) {
-                return (key % 2) == 0;
-            }
-        };
-        Predicate<Integer, String> isMultipleOfThree = new Predicate<Integer, String>() {
-            @Override
-            public boolean test(Integer key, String value) {
-                return (key % 3) == 0;
-            }
-        };
-        Predicate<Integer, String> isOdd = new Predicate<Integer, String>() {
-            @Override
-            public boolean test(Integer key, String value) {
-                return (key % 2) != 0;
-            }
-        };
+        final Predicate<Integer, String> isEven = (key, value) -> (key % 2) == 0;
+        final Predicate<Integer, String> isMultipleOfThree = (key, value) -> (key % 3) == 0;
+        final Predicate<Integer, String> isOdd = (key, value) -> (key % 2) != 0;
 
         final int[] expectedKeys = new int[]{1, 2, 3, 4, 5, 6};
 
-        KStream<Integer, String> stream;
-        KStream<Integer, String>[] branches;
-        MockProcessorSupplier<Integer, String>[] processors;
+        final KStream<Integer, String> stream;
+        final KStream<Integer, String>[] branches;
 
         stream = builder.stream(topicName, Consumed.with(Serdes.Integer(), Serdes.String()));
         branches = stream.branch(isEven, isMultipleOfThree, isOdd);
 
         assertEquals(3, branches.length);
 
-        processors = (MockProcessorSupplier<Integer, String>[]) Array.newInstance(MockProcessorSupplier.class, branches.length);
+        final MockProcessorSupplier<Integer, String> supplier = new MockProcessorSupplier<>();
         for (int i = 0; i < branches.length; i++) {
-            processors[i] = new MockProcessorSupplier<>();
-            branches[i].process(processors[i]);
+            branches[i].process(supplier);
         }
 
-        driver.setUp(builder);
-        for (int expectedKey : expectedKeys) {
-            driver.process(topicName, expectedKey, "V" + expectedKey);
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+            final TestInputTopic<Integer, String> inputTopic = driver.createInputTopic(topicName, new IntegerSerializer(), new StringSerializer());
+            for (final int expectedKey : expectedKeys) {
+                inputTopic.pipeInput(expectedKey, "V" + expectedKey);
+            }
         }
 
-        assertEquals(3, processors[0].processed.size());
-        assertEquals(1, processors[1].processed.size());
-        assertEquals(2, processors[2].processed.size());
+        final List<MockProcessor<Integer, String>> processors = supplier.capturedProcessors(3);
+        assertEquals(3, processors.get(0).processed.size());
+        assertEquals(1, processors.get(1).processed.size());
+        assertEquals(2, processors.get(2).processed.size());
     }
 
+    @SuppressWarnings("unchecked")
     @Test
     public void testTypeVariance() {
-        Predicate<Number, Object> positive = new Predicate<Number, Object>() {
-            @Override
-            public boolean test(Number key, Object value) {
-                return key.doubleValue() > 0;
-            }
-        };
+        final Predicate<Number, Object> positive = (key, value) -> key.doubleValue() > 0;
 
-        Predicate<Number, Object> negative = new Predicate<Number, Object>() {
-            @Override
-            public boolean test(Number key, Object value) {
-                return key.doubleValue() < 0;
-            }
-        };
+        final Predicate<Number, Object> negative = (key, value) -> key.doubleValue() < 0;
 
-        @SuppressWarnings("unchecked")
-        final KStream<Integer, String>[] branches = new StreamsBuilder()
+        new StreamsBuilder()
             .<Integer, String>stream("empty")
             .branch(positive, negative);
     }

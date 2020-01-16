@@ -23,12 +23,12 @@ import org.apache.kafka.common.errors.PolicyViolationException;
 import java.util.Map;
 
 /**
- * An interface for enforcing a policy on alter configs requests.
+ * <p>An interface for enforcing a policy on alter configs requests.
  *
- * Common use cases are requiring that the replication factor, min.insync.replicas and/or retention settings for a
+ * <p>Common use cases are requiring that the replication factor, <code>min.insync.replicas</code> and/or retention settings for a
  * topic remain within an allowable range.
  *
- * If <code>alter.config.policy.class.name</code> is defined, Kafka will create an instance of the specified class
+ * <p>If <code>alter.config.policy.class.name</code> is defined, Kafka will create an instance of the specified class
  * using the default constructor and will then pass the broker configs to its <code>configure()</code> method. During
  * broker shutdown, the <code>close()</code> method will be invoked so that resources can be released (if necessary).
  */

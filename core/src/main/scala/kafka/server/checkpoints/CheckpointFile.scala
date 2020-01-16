@@ -45,7 +45,7 @@ class CheckpointFile[T](val file: File,
   try Files.createFile(file.toPath) // create the file if it doesn't exist
   catch { case _: FileAlreadyExistsException => }
 
-  def write(entries: Seq[T]) {
+  def write(entries: Iterable[T]): Unit = {
     lock synchronized {
       try {
         // write to temp file and then swap with the existing file
@@ -84,7 +84,7 @@ class CheckpointFile[T](val file: File,
       new IOException(s"Malformed line in checkpoint file (${file.getAbsolutePath}): $line'")
     lock synchronized {
       try {
-        val reader = new BufferedReader(new InputStreamReader(new FileInputStream(file), StandardCharsets.UTF_8))
+        val reader = Files.newBufferedReader(path)
         var line: String = null
         try {
           line = reader.readLine()

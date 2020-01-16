@@ -17,6 +17,10 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.RecordContext;
+import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
+import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 
 /**
@@ -26,22 +30,28 @@ import org.apache.kafka.streams.state.internals.ThreadCache;
  */
 public interface InternalProcessorContext extends ProcessorContext {
 
+    @Override
+    StreamsMetricsImpl metrics();
+
     /**
      * Returns the current {@link RecordContext}
      * @return the current {@link RecordContext}
      */
-    RecordContext recordContext();
+    ProcessorRecordContext recordContext();
 
     /**
-     * @param recordContext the {@link RecordContext} for the record about to be processes
+     * @param recordContext the {@link ProcessorRecordContext} for the record about to be processes
      */
-    void setRecordContext(RecordContext recordContext);
+    void setRecordContext(ProcessorRecordContext recordContext);
 
     /**
      * @param currentNode the current {@link ProcessorNode}
      */
     void setCurrentNode(ProcessorNode currentNode);
 
+    /**
+     * Get the current {@link ProcessorNode}
+     */
     ProcessorNode currentNode();
 
     /**
@@ -52,10 +62,21 @@ public interface InternalProcessorContext extends ProcessorContext {
     /**
      * Mark this context as being initialized
      */
-    void initialized();
+    void initialize();
 
     /**
      * Mark this context as being uninitialized
      */
     void uninitialize();
+
+    /**
+     * Get a correctly typed state store, given a handle on the original builder.
+     * @param builder
+     * @param <T>
+     * @return
+     */
+    @SuppressWarnings("unchecked")
+    default <T extends StateStore> T getStateStore(final StoreBuilder<T> builder) {
+        return (T) getStateStore(builder.name());
+    }
 }

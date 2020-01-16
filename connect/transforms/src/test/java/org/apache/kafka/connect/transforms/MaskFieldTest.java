@@ -71,6 +71,7 @@ public class MaskFieldTest {
         final List<String> maskFields = new ArrayList<>(value.keySet());
         maskFields.remove("magic");
 
+        @SuppressWarnings("unchecked")
         final Map<String, Object> updatedValue = (Map) transform(maskFields).apply(record(null, value)).value();
 
         assertEquals(42, updatedValue.get("magic"));

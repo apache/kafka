@@ -30,7 +30,7 @@ public class WrappingStoreProvider implements StateStoreProvider {
 
     private final List<StateStoreProvider> storeProviders;
 
-    public WrappingStoreProvider(final List<StateStoreProvider> storeProviders) {
+    WrappingStoreProvider(final List<StateStoreProvider> storeProviders) {
         this.storeProviders = storeProviders;
     }
 
@@ -42,11 +42,11 @@ public class WrappingStoreProvider implements StateStoreProvider {
      * @param <T>       The type of the Store, for example, {@link org.apache.kafka.streams.state.ReadOnlyKeyValueStore}
      * @return  a List of all the stores with the storeName and are accepted by {@link QueryableStoreType#accepts(StateStore)}
      */
-    public <T> List<T> stores(final String storeName, QueryableStoreType<T> type) {
+    public <T> List<T> stores(final String storeName,
+                              final QueryableStoreType<T> type) {
         final List<T> allStores = new ArrayList<>();
-        for (StateStoreProvider provider : storeProviders) {
-            final List<T> stores =
-                provider.stores(storeName, type);
+        for (final StateStoreProvider provider : storeProviders) {
+            final List<T> stores = provider.stores(storeName, type);
             allStores.addAll(stores);
         }
         if (allStores.isEmpty()) {

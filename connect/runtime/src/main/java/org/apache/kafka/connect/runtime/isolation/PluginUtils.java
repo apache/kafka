@@ -35,6 +35,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.regex.Pattern;
 
 /**
  * Connect plugin utility methods.
@@ -43,7 +44,7 @@ public class PluginUtils {
     private static final Logger log = LoggerFactory.getLogger(PluginUtils.class);
 
     // Be specific about javax packages and exclude those existing in Java SE and Java EE libraries.
-    private static final String BLACKLIST = "^(?:"
+    private static final Pattern BLACKLIST = Pattern.compile("^(?:"
             + "java"
             + "|javax\\.accessibility"
             + "|javax\\.activation"
@@ -120,20 +121,31 @@ public class PluginUtils {
             + "|org\\.xml\\.sax"
             + "|org\\.apache\\.kafka"
             + "|org\\.slf4j"
-            + ")\\..*$";
+            + ")\\..*$");
 
-    private static final String WHITELIST = "^org\\.apache\\.kafka\\.connect\\.(?:"
+    // If the base interface or class that will be used to identify Connect plugins resides within
+    // the same java package as the plugins that need to be loaded in isolation (and thus are
+    // added to the WHITELIST), then this base interface or class needs to be excluded in the
+    // regular expression pattern
+    private static final Pattern WHITELIST = Pattern.compile("^org\\.apache\\.kafka\\.(?:connect\\.(?:"
             + "transforms\\.(?!Transformation$).*"
             + "|json\\..*"
             + "|file\\..*"
+            + "|mirror\\..*"
+            + "|mirror-client\\..*"
             + "|converters\\..*"
             + "|storage\\.StringConverter"
-            + ")$";
+            + "|storage\\.SimpleHeaderConverter"
+            + "|rest\\.basic\\.auth\\.extension\\.BasicAuthSecurityRestExtension"
+            + "|connector\\.policy\\.(?!ConnectorClientConfigOverridePolicy$).*"
+            + ")"
+            + "|common\\.config\\.provider\\.(?!ConfigProvider$).*"
+            + ")$");
 
     private static final DirectoryStream.Filter<Path> PLUGIN_PATH_FILTER = new DirectoryStream
             .Filter<Path>() {
         @Override
-        public boolean accept(Path path) throws IOException {
+        public boolean accept(Path path) {
             return Files.isDirectory(path) || isArchive(path) || isClassFile(path);
         }
     };
@@ -146,7 +158,7 @@ public class PluginUtils {
      * @return true if this class should be loaded in isolation, false otherwise.
      */
     public static boolean shouldLoadInIsolation(String name) {
-        return !(name.matches(BLACKLIST) && !name.matches(WHITELIST));
+        return !(BLACKLIST.matcher(name).matches() && !WHITELIST.matcher(name).matches());
     }
 
     /**
@@ -232,16 +244,29 @@ public class PluginUtils {
 
                 Path adjacent = neighbors.next();
                 if (Files.isSymbolicLink(adjacent)) {
-                    Path symlink = Files.readSymbolicLink(adjacent);
-                    // if symlink is absolute resolve() returns the absolute symlink itself
-                    Path parent = adjacent.getParent();
-                    if (parent == null) {
-                        continue;
-                    }
-                    Path absolute = parent.resolve(symlink).toRealPath();
-                    if (Files.exists(absolute)) {
-                        adjacent = absolute;
-                    } else {
+                    try {
+                        Path symlink = Files.readSymbolicLink(adjacent);
+                        // if symlink is absolute resolve() returns the absolute symlink itself
+                        Path parent = adjacent.getParent();
+                        if (parent == null) {
+                            continue;
+                        }
+                        Path absolute = parent.resolve(symlink).toRealPath();
+                        if (Files.exists(absolute)) {
+                            adjacent = absolute;
+                        } else {
+                            continue;
+                        }
+                    } catch (IOException e) {
+                        // See https://issues.apache.org/jira/browse/KAFKA-6288 for a reported
+                        // failure. Such a failure at this stage is not easily reproducible and
+                        // therefore an exception is caught and ignored after issuing a
+                        // warning. This allows class scanning to continue for non-broken plugins.
+                        log.warn(
+                                "Resolving symbolic link '{}' failed. Ignoring this path.",
+                                adjacent,
+                                e
+                        );
                         continue;
                     }
                 }
@@ -341,8 +366,8 @@ public class PluginUtils {
     }
 
     private static class DirectoryEntry {
-        DirectoryStream<Path> stream;
-        Iterator<Path> iterator;
+        final DirectoryStream<Path> stream;
+        final Iterator<Path> iterator;
 
         DirectoryEntry(DirectoryStream<Path> stream) {
             this.stream = stream;

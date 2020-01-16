@@ -21,6 +21,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.errors.DeserializationExceptionHandler;
 import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.processor.internals.metrics.ThreadMetrics;
 
 import java.io.IOException;
 import java.util.HashMap;
@@ -54,7 +55,7 @@ public class GlobalStateUpdateTask implements GlobalStateMaintainer {
 
     /**
      * @throws IllegalStateException If store gets registered after initialized is already finished
-     * @throws StreamsException if the store's change log does not contain the partition
+     * @throws StreamsException      If the store's change log does not contain the partition
      */
     @Override
     public Map<TopicPartition, Long> initialize() {
@@ -63,10 +64,18 @@ public class GlobalStateUpdateTask implements GlobalStateMaintainer {
         for (final String storeName : storeNames) {
             final String sourceTopic = storeNameToTopic.get(storeName);
             final SourceNode source = topology.source(sourceTopic);
-            deserializers.put(sourceTopic, new RecordDeserializer(source, deserializationExceptionHandler, logContext));
+            deserializers.put(
+                sourceTopic,
+                new RecordDeserializer(
+                    source,
+                    deserializationExceptionHandler,
+                    logContext,
+                    ThreadMetrics.skipRecordSensor(Thread.currentThread().getName(), processorContext.metrics())
+                )
+            );
         }
         initTopology();
-        processorContext.initialized();
+        processorContext.initialize();
         return stateMgr.checkpointed();
     }
 
@@ -81,7 +90,8 @@ public class GlobalStateUpdateTask implements GlobalStateMaintainer {
                 new ProcessorRecordContext(deserialized.timestamp(),
                     deserialized.offset(),
                     deserialized.partition(),
-                    deserialized.topic());
+                    deserialized.topic(),
+                    deserialized.headers());
             processorContext.setRecordContext(recordContext);
             processorContext.setCurrentNode(sourceNodeAndDeserializer.sourceNode());
             sourceNodeAndDeserializer.sourceNode().process(deserialized.key(), deserialized.value());
@@ -91,16 +101,19 @@ public class GlobalStateUpdateTask implements GlobalStateMaintainer {
     }
 
     public void flushState() {
+        // this could theoretically throw a ProcessorStateException caused by a ProducerFencedException,
+        // but in practice this shouldn't happen for global state update tasks, since the stores are not
+        // logged and there are no downstream operators after global stores.
         stateMgr.flush();
         stateMgr.checkpoint(offsets);
     }
 
     public void close() throws IOException {
-        stateMgr.close(offsets);
+        stateMgr.close(true);
     }
 
     private void initTopology() {
-        for (ProcessorNode node : this.topology.processors()) {
+        for (final ProcessorNode node : this.topology.processors()) {
             processorContext.setCurrentNode(node);
             try {
                 node.init(this.processorContext);

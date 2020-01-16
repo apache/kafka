@@ -16,22 +16,29 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
+import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.To;
+import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
+import org.apache.kafka.streams.processor.internals.metrics.ThreadMetrics;
+import org.apache.kafka.streams.state.ValueAndTimestamp;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import static org.apache.kafka.streams.state.ValueAndTimestamp.getValueOrNull;
 
 class KTableKTableInnerJoin<K, R, V1, V2> extends KTableKTableAbstractJoin<K, R, V1, V2> {
+    private static final Logger LOG = LoggerFactory.getLogger(KTableKTableInnerJoin.class);
 
-    private final KeyValueMapper<K, V1, K> keyValueMapper = new KeyValueMapper<K, V1, K>() {
-        @Override
-        public K apply(final K key, final V1 value) {
-            return key;
-        }
-    };
+    private final KeyValueMapper<K, V1, K> keyValueMapper = (key, value) -> key;
 
-    KTableKTableInnerJoin(KTableImpl<K, ?, V1> table1, KTableImpl<K, ?, V2> table2, ValueJoiner<? super V1, ? super V2, ? extends R> joiner) {
+    KTableKTableInnerJoin(final KTableImpl<K, ?, V1> table1,
+                          final KTableImpl<K, ?, V2> table2,
+                          final ValueJoiner<? super V1, ? super V2, ? extends R> joiner) {
         super(table1, table2, joiner);
     }
 
@@ -47,7 +54,8 @@ class KTableKTableInnerJoin<K, R, V1, V2> extends KTableKTableAbstractJoin<K, R,
 
     private class KTableKTableInnerJoinValueGetterSupplier extends KTableKTableAbstractJoinValueGetterSupplier<K, R, V1, V2> {
 
-        KTableKTableInnerJoinValueGetterSupplier(KTableValueGetterSupplier<K, V1> valueGetterSupplier1, KTableValueGetterSupplier<K, V2> valueGetterSupplier2) {
+        KTableKTableInnerJoinValueGetterSupplier(final KTableValueGetterSupplier<K, V1> valueGetterSupplier1,
+                                                 final KTableValueGetterSupplier<K, V2> valueGetterSupplier2) {
             super(valueGetterSupplier1, valueGetterSupplier2);
         }
 
@@ -59,14 +67,18 @@ class KTableKTableInnerJoin<K, R, V1, V2> extends KTableKTableAbstractJoin<K, R,
     private class KTableKTableJoinProcessor extends AbstractProcessor<K, Change<V1>> {
 
         private final KTableValueGetter<K, V2> valueGetter;
+        private StreamsMetricsImpl metrics;
+        private Sensor skippedRecordsSensor;
 
-        KTableKTableJoinProcessor(KTableValueGetter<K, V2> valueGetter) {
+        KTableKTableJoinProcessor(final KTableValueGetter<K, V2> valueGetter) {
             this.valueGetter = valueGetter;
         }
 
         @Override
-        public void init(ProcessorContext context) {
+        public void init(final ProcessorContext context) {
             super.init(context);
+            metrics = (StreamsMetricsImpl) context.metrics();
+            skippedRecordsSensor = ThreadMetrics.skipRecordSensor(Thread.currentThread().getName(), metrics);
             valueGetter.init(context);
         }
 
@@ -74,26 +86,40 @@ class KTableKTableInnerJoin<K, R, V1, V2> extends KTableKTableAbstractJoin<K, R,
         public void process(final K key, final Change<V1> change) {
             // we do join iff keys are equal, thus, if key is null we cannot join and just ignore the record
             if (key == null) {
+                LOG.warn(
+                    "Skipping record due to null key. change=[{}] topic=[{}] partition=[{}] offset=[{}]",
+                    change, context().topic(), context().partition(), context().offset()
+                );
+                skippedRecordsSensor.record();
                 return;
             }
 
             R newValue = null;
+            final long resultTimestamp;
             R oldValue = null;
 
-            final V2 value2 = valueGetter.get(key);
-            if (value2 == null) {
+            final ValueAndTimestamp<V2> valueAndTimestampRight = valueGetter.get(key);
+            final V2 valueRight = getValueOrNull(valueAndTimestampRight);
+            if (valueRight == null) {
                 return;
             }
 
+            resultTimestamp = Math.max(context().timestamp(), valueAndTimestampRight.timestamp());
+
             if (change.newValue != null) {
-                newValue = joiner.apply(change.newValue, value2);
+                newValue = joiner.apply(change.newValue, valueRight);
             }
 
             if (sendOldValues && change.oldValue != null) {
-                oldValue = joiner.apply(change.oldValue, value2);
+                oldValue = joiner.apply(change.oldValue, valueRight);
             }
 
-            context().forward(key, new Change<>(newValue, oldValue));
+            context().forward(key, new Change<>(newValue, oldValue), To.all().withTimestamp(resultTimestamp));
+        }
+
+        @Override
+        public void close() {
+            valueGetter.close();
         }
     }
 
@@ -115,20 +141,30 @@ class KTableKTableInnerJoin<K, R, V1, V2> extends KTableKTableAbstractJoin<K, R,
         }
 
         @Override
-        public R get(final K key) {
-            final V1 value1 = valueGetter1.get(key);
+        public ValueAndTimestamp<R> get(final K key) {
+            final ValueAndTimestamp<V1> valueAndTimestamp1 = valueGetter1.get(key);
+            final V1 value1 = getValueOrNull(valueAndTimestamp1);
 
             if (value1 != null) {
-                V2 value2 = valueGetter2.get(keyValueMapper.apply(key, value1));
+                final ValueAndTimestamp<V2> valueAndTimestamp2 = valueGetter2.get(keyValueMapper.apply(key, value1));
+                final V2 value2 = getValueOrNull(valueAndTimestamp2);
 
                 if (value2 != null) {
-                    return joiner.apply(value1, value2);
+                    return ValueAndTimestamp.make(
+                        joiner.apply(value1, value2),
+                        Math.max(valueAndTimestamp1.timestamp(), valueAndTimestamp2.timestamp()));
                 } else {
                     return null;
                 }
             } else {
                 return null;
             }
+        }
+
+        @Override
+        public void close() {
+            valueGetter1.close();
+            valueGetter2.close();
         }
     }
 }

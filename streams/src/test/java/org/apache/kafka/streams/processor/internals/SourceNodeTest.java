@@ -18,12 +18,11 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
-import org.apache.kafka.common.serialization.ExtendedDeserializer;
+import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.test.MockSourceNode;
 import org.junit.Test;
 
 import java.nio.charset.StandardCharsets;
-import java.util.Map;
 
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -31,7 +30,7 @@ import static org.hamcrest.MatcherAssert.assertThat;
 public class SourceNodeTest {
     @Test
     public void shouldProvideTopicHeadersAndDataToKeyDeserializer() {
-        final SourceNode<String, String> sourceNode = new MockSourceNode<>(new String[]{""}, new TheExtendedDeserializer(), new TheExtendedDeserializer());
+        final SourceNode<String, String> sourceNode = new MockSourceNode<>(new String[]{""}, new TheDeserializer(), new TheDeserializer());
         final RecordHeaders headers = new RecordHeaders();
         final String deserializeKey = sourceNode.deserializeKey("topic", headers, "data".getBytes(StandardCharsets.UTF_8));
         assertThat(deserializeKey, is("topic" + headers + "data"));
@@ -39,27 +38,21 @@ public class SourceNodeTest {
 
     @Test
     public void shouldProvideTopicHeadersAndDataToValueDeserializer() {
-        final SourceNode<String, String> sourceNode = new MockSourceNode<>(new String[]{""}, new TheExtendedDeserializer(), new TheExtendedDeserializer());
+        final SourceNode<String, String> sourceNode = new MockSourceNode<>(new String[]{""}, new TheDeserializer(), new TheDeserializer());
         final RecordHeaders headers = new RecordHeaders();
         final String deserializedValue = sourceNode.deserializeValue("topic", headers, "data".getBytes(StandardCharsets.UTF_8));
         assertThat(deserializedValue, is("topic" + headers + "data"));
     }
 
-    public static class TheExtendedDeserializer implements ExtendedDeserializer<String> {
+    public static class TheDeserializer implements Deserializer<String> {
         @Override
         public String deserialize(final String topic, final Headers headers, final byte[] data) {
             return topic + headers + new String(data, StandardCharsets.UTF_8);
         }
 
         @Override
-        public void configure(final Map<String, ?> configs, final boolean isKey) { }
-
-        @Override
         public String deserialize(final String topic, final byte[] data) {
             return deserialize(topic, null, data);
         }
-
-        @Override
-        public void close() { }
     }
 }

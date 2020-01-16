@@ -28,24 +28,26 @@ import org.junit.Test;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.PrintStream;
 import java.io.UnsupportedEncodingException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 
 import static org.hamcrest.CoreMatchers.equalTo;
-import static org.junit.Assert.assertThat;
+import static org.hamcrest.MatcherAssert.assertThat;
 
 public class PrintedTest {
 
     private final PrintStream originalSysOut = System.out;
     private final ByteArrayOutputStream sysOut = new ByteArrayOutputStream();
-    private final Printed<String, Integer> sysOutPrinter = Printed.toSysOut();
+    private Printed<String, Integer> sysOutPrinter;
 
     @Before
     public void before() {
         System.setOut(new PrintStream(sysOut));
+        sysOutPrinter = Printed.toSysOut();
     }
 
     @After
@@ -62,7 +64,7 @@ public class PrintedTest {
         final Processor<String, Integer> processor = processorSupplier.get();
         processor.process("hi", 1);
         processor.close();
-        try (final FileInputStream stream = new FileInputStream(file)) {
+        try (final InputStream stream = Files.newInputStream(file.toPath())) {
             final byte[] data = new byte[stream.available()];
             stream.read(data);
             assertThat(new String(data, StandardCharsets.UTF_8.name()), equalTo("[processor]: hi, 1\n"));
@@ -72,7 +74,10 @@ public class PrintedTest {
     @Test
     public void shouldCreateProcessorThatPrintsToStdOut() throws UnsupportedEncodingException {
         final ProcessorSupplier<String, Integer> supplier = new PrintedInternal<>(sysOutPrinter).build("processor");
-        supplier.get().process("good", 2);
+        final Processor<String, Integer> processor = supplier.get();
+
+        processor.process("good", 2);
+        processor.close();
         assertThat(sysOut.toString(StandardCharsets.UTF_8.name()), equalTo("[processor]: good, 2\n"));
     }
 
@@ -83,6 +88,7 @@ public class PrintedTest {
                 .get();
 
         processor.process("hello", 3);
+        processor.close();
         assertThat(sysOut.toString(StandardCharsets.UTF_8.name()), equalTo("[label]: hello, 3\n"));
     }
 
@@ -97,6 +103,7 @@ public class PrintedTest {
                 })).build("processor")
                 .get();
         processor.process("hello", 1);
+        processor.close();
         assertThat(sysOut.toString(StandardCharsets.UTF_8.name()), equalTo("[processor]: hello -> 1\n"));
     }
 

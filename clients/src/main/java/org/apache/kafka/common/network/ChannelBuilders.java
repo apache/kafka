@@ -26,13 +26,17 @@ import org.apache.kafka.common.security.authenticator.DefaultKafkaPrincipalBuild
 import org.apache.kafka.common.security.auth.KafkaPrincipalBuilder;
 import org.apache.kafka.common.security.authenticator.CredentialCache;
 import org.apache.kafka.common.security.kerberos.KerberosShortNamer;
-import org.apache.kafka.common.security.token.delegation.DelegationTokenCache;
+import org.apache.kafka.common.security.ssl.SslPrincipalMapper;
+import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 public class ChannelBuilders {
-
     private ChannelBuilders() { }
 
     /**
@@ -51,6 +55,7 @@ public class ChannelBuilders {
             AbstractConfig config,
             ListenerName listenerName,
             String clientSaslMechanism,
+            Time time,
             boolean saslHandshakeRequestEnable) {
 
         if (securityProtocol == SecurityProtocol.SASL_PLAINTEXT || securityProtocol == SecurityProtocol.SASL_SSL) {
@@ -60,7 +65,7 @@ public class ChannelBuilders {
                 throw new IllegalArgumentException("`clientSaslMechanism` must be non-null in client mode if `securityProtocol` is `" + securityProtocol + "`");
         }
         return create(securityProtocol, Mode.CLIENT, contextType, config, listenerName, false, clientSaslMechanism,
-                saslHandshakeRequestEnable, null, null);
+                saslHandshakeRequestEnable, null, null, time);
     }
 
     /**
@@ -75,9 +80,10 @@ public class ChannelBuilders {
                                                       SecurityProtocol securityProtocol,
                                                       AbstractConfig config,
                                                       CredentialCache credentialCache,
-                                                      DelegationTokenCache tokenCache) {
+                                                      DelegationTokenCache tokenCache,
+                                                      Time time) {
         return create(securityProtocol, Mode.SERVER, JaasContext.Type.SERVER, config, listenerName,
-                isInterBrokerListener, null, true, credentialCache, tokenCache);
+                isInterBrokerListener, null, true, credentialCache, tokenCache, time);
     }
 
     private static ChannelBuilder create(SecurityProtocol securityProtocol,
@@ -89,7 +95,8 @@ public class ChannelBuilders {
                                          String clientSaslMechanism,
                                          boolean saslHandshakeRequestEnable,
                                          CredentialCache credentialCache,
-                                         DelegationTokenCache tokenCache) {
+                                         DelegationTokenCache tokenCache,
+                                         Time time) {
         Map<String, ?> configs;
         if (listenerName == null)
             configs = config.values();
@@ -105,19 +112,32 @@ public class ChannelBuilders {
             case SASL_SSL:
             case SASL_PLAINTEXT:
                 requireNonNullMode(mode, securityProtocol);
-                JaasContext jaasContext = JaasContext.load(contextType, listenerName, configs);
+                Map<String, JaasContext> jaasContexts;
+                if (mode == Mode.SERVER) {
+                    @SuppressWarnings("unchecked")
+                    List<String> enabledMechanisms = (List<String>) configs.get(BrokerSecurityConfigs.SASL_ENABLED_MECHANISMS_CONFIG);
+                    jaasContexts = new HashMap<>(enabledMechanisms.size());
+                    for (String mechanism : enabledMechanisms)
+                        jaasContexts.put(mechanism, JaasContext.loadServerContext(listenerName, mechanism, configs));
+                } else {
+                    // Use server context for inter-broker client connections and client context for other clients
+                    JaasContext jaasContext = contextType == JaasContext.Type.CLIENT ? JaasContext.loadClientContext(configs) :
+                            JaasContext.loadServerContext(listenerName, clientSaslMechanism, configs);
+                    jaasContexts = Collections.singletonMap(clientSaslMechanism, jaasContext);
+                }
                 channelBuilder = new SaslChannelBuilder(mode,
-                        jaasContext,
+                        jaasContexts,
                         securityProtocol,
                         listenerName,
                         isInterBrokerListener,
                         clientSaslMechanism,
                         saslHandshakeRequestEnable,
                         credentialCache,
-                        tokenCache);
+                        tokenCache,
+                        time);
                 break;
             case PLAINTEXT:
-                channelBuilder = new PlaintextChannelBuilder();
+                channelBuilder = new PlaintextChannelBuilder(listenerName);
                 break;
             default:
                 throw new IllegalArgumentException("Unexpected securityProtocol " + securityProtocol);
@@ -149,12 +169,13 @@ public class ChannelBuilders {
     public static KafkaPrincipalBuilder createPrincipalBuilder(Map<String, ?> configs,
                                                                TransportLayer transportLayer,
                                                                Authenticator authenticator,
-                                                               KerberosShortNamer kerberosShortNamer) {
+                                                               KerberosShortNamer kerberosShortNamer,
+                                                               SslPrincipalMapper sslPrincipalMapper) {
         Class<?> principalBuilderClass = (Class<?>) configs.get(BrokerSecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG);
         final KafkaPrincipalBuilder builder;
 
         if (principalBuilderClass == null || principalBuilderClass == DefaultKafkaPrincipalBuilder.class) {
-            builder = new DefaultKafkaPrincipalBuilder(kerberosShortNamer);
+            builder = new DefaultKafkaPrincipalBuilder(kerberosShortNamer, sslPrincipalMapper);
         } else if (KafkaPrincipalBuilder.class.isAssignableFrom(principalBuilderClass)) {
             builder = (KafkaPrincipalBuilder) Utils.newInstance(principalBuilderClass);
         } else if (org.apache.kafka.common.security.auth.PrincipalBuilder.class.isAssignableFrom(principalBuilderClass)) {

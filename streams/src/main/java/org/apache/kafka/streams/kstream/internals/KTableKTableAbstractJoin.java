@@ -28,9 +28,9 @@ abstract class KTableKTableAbstractJoin<K, R, V1, V2> implements KTableProcessor
 
     boolean sendOldValues = false;
 
-    KTableKTableAbstractJoin(KTableImpl<K, ?, V1> table1,
-                             KTableImpl<K, ?, V2> table2,
-                             ValueJoiner<? super V1, ? super V2, ? extends R> joiner) {
+    KTableKTableAbstractJoin(final KTableImpl<K, ?, V1> table1,
+                             final KTableImpl<K, ?, V2> table2,
+                             final ValueJoiner<? super V1, ? super V2, ? extends R> joiner) {
         this.table1 = table1;
         this.table2 = table2;
         this.valueGetterSupplier1 = table1.valueGetterSupplier();

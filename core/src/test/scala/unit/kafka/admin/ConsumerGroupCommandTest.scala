@@ -17,22 +17,23 @@
 
 package kafka.admin
 
+import java.time.Duration
 import java.util.concurrent.{ExecutorService, Executors, TimeUnit}
 import java.util.{Collections, Properties}
 
-import kafka.admin.ConsumerGroupCommand.{ConsumerGroupCommandOptions, ConsumerGroupService, KafkaConsumerGroupService, ZkConsumerGroupService}
-import kafka.consumer.{OldConsumer, Whitelist}
+import kafka.admin.ConsumerGroupCommand.{ConsumerGroupCommandOptions, ConsumerGroupService}
 import kafka.integration.KafkaServerTestHarness
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
+import org.apache.kafka.clients.admin.AdminClientConfig
 import org.apache.kafka.clients.consumer.{KafkaConsumer, RangeAssignor}
-import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.{PartitionInfo, TopicPartition}
 import org.apache.kafka.common.errors.WakeupException
 import org.apache.kafka.common.serialization.StringDeserializer
 import org.junit.{After, Before}
 
-import scala.collection.mutable.ArrayBuffer
 import scala.collection.JavaConverters._
+import scala.collection.mutable.ArrayBuffer
 
 class ConsumerGroupCommandTest extends KafkaServerTestHarness {
   import ConsumerGroupCommandTest._
@@ -40,8 +41,6 @@ class ConsumerGroupCommandTest extends KafkaServerTestHarness {
   val topic = "foo"
   val group = "test.group"
 
-  @deprecated("This field will be removed in a future release", "0.11.0.0")
-  private val oldConsumers = new ArrayBuffer[OldConsumer]
   private var consumerGroupService: List[ConsumerGroupService] = List()
   private var consumerGroupExecutors: List[AbstractConsumerGroupExecutor] = List()
 
@@ -53,34 +52,36 @@ class ConsumerGroupCommandTest extends KafkaServerTestHarness {
   }
 
   @Before
-  override def setUp() {
+  override def setUp(): Unit = {
     super.setUp()
-    adminZkClient.createTopic(topic, 1, 1)
+    createTopic(topic, 1, 1)
   }
 
   @After
   override def tearDown(): Unit = {
     consumerGroupService.foreach(_.close())
     consumerGroupExecutors.foreach(_.shutdown())
-    oldConsumers.foreach(_.stop())
     super.tearDown()
   }
 
-  @deprecated("This test has been deprecated and will be removed in a future release.", "0.11.1.0")
-  def createOldConsumer(): Unit = {
-    val consumerProps = new Properties
-    consumerProps.setProperty("group.id", group)
-    consumerProps.setProperty("zookeeper.connect", zkConnect)
-    oldConsumers += new OldConsumer(Whitelist(topic), consumerProps)
-  }
+  def committedOffsets(topic: String = topic, group: String = group): Map[TopicPartition, Long] = {
+    val props = new Properties
+    props.put("bootstrap.servers", brokerList)
+    props.put("group.id", group)
+    val consumer = new KafkaConsumer(props, new StringDeserializer, new StringDeserializer)
+    try {
+      val partitions: Set[TopicPartition] = consumer.partitionsFor(topic)
+        .asScala.toSet.map {partitionInfo : PartitionInfo => new TopicPartition(partitionInfo.topic, partitionInfo.partition)}
 
-  def stopRandomOldConsumer(): Unit = {
-    oldConsumers.head.stop()
+      consumer.committed(partitions.asJava).asScala.filter(_._2 != null).mapValues(_.offset()).toMap
+    } finally {
+      consumer.close()
+    }
   }
 
   def getConsumerGroupService(args: Array[String]): ConsumerGroupService = {
     val opts = new ConsumerGroupCommandOptions(args)
-    val service = if (opts.useOldConsumer) new ZkConsumerGroupService(opts) else new KafkaConsumerGroupService(opts)
+    val service = new ConsumerGroupService(opts, Map(AdminClientConfig.RETRIES_CONFIG -> Int.MaxValue.toString))
     consumerGroupService = service :: consumerGroupService
     service
   }
@@ -88,8 +89,10 @@ class ConsumerGroupCommandTest extends KafkaServerTestHarness {
   def addConsumerGroupExecutor(numConsumers: Int,
                                topic: String = topic,
                                group: String = group,
-                               strategy: String = classOf[RangeAssignor].getName): ConsumerGroupExecutor = {
-    val executor = new ConsumerGroupExecutor(brokerList, numConsumers, group, topic, strategy)
+                               strategy: String = classOf[RangeAssignor].getName,
+                               customPropsOpt: Option[Properties] = None,
+                               syncCommit: Boolean = false): ConsumerGroupExecutor = {
+    val executor = new ConsumerGroupExecutor(brokerList, numConsumers, group, topic, strategy, customPropsOpt, syncCommit)
     addExecutor(executor)
     executor
   }
@@ -110,9 +113,11 @@ class ConsumerGroupCommandTest extends KafkaServerTestHarness {
 
 object ConsumerGroupCommandTest {
 
-  abstract class AbstractConsumerRunnable(broker: String, groupId: String) extends Runnable {
+  abstract class AbstractConsumerRunnable(broker: String, groupId: String, customPropsOpt: Option[Properties] = None,
+                                          syncCommit: Boolean = false) extends Runnable {
     val props = new Properties
     configure(props)
+    customPropsOpt.foreach(props.asScala ++= _.asScala)
     val consumer = new KafkaConsumer(props)
 
     def configure(props: Properties): Unit = {
@@ -124,11 +129,14 @@ object ConsumerGroupCommandTest {
 
     def subscribe(): Unit
 
-    def run() {
+    def run(): Unit = {
       try {
         subscribe()
-        while (true)
-          consumer.poll(Long.MaxValue)
+        while (true) {
+          consumer.poll(Duration.ofMillis(Long.MaxValue))
+          if (syncCommit)
+            consumer.commitSync()
+        }
       } catch {
         case _: WakeupException => // OK
       } finally {
@@ -136,13 +144,14 @@ object ConsumerGroupCommandTest {
       }
     }
 
-    def shutdown() {
+    def shutdown(): Unit = {
       consumer.wakeup()
     }
   }
 
-  class ConsumerRunnable(broker: String, groupId: String, topic: String, strategy: String)
-    extends AbstractConsumerRunnable(broker, groupId) {
+  class ConsumerRunnable(broker: String, groupId: String, topic: String, strategy: String,
+                         customPropsOpt: Option[Properties] = None, syncCommit: Boolean = false)
+    extends AbstractConsumerRunnable(broker, groupId, customPropsOpt, syncCommit) {
 
     override def configure(props: Properties): Unit = {
       super.configure(props)
@@ -166,23 +175,24 @@ object ConsumerGroupCommandTest {
     private val executor: ExecutorService = Executors.newFixedThreadPool(numThreads)
     private val consumers = new ArrayBuffer[AbstractConsumerRunnable]()
 
-    def submit(consumerThread: AbstractConsumerRunnable) {
+    def submit(consumerThread: AbstractConsumerRunnable): Unit = {
       consumers += consumerThread
       executor.submit(consumerThread)
     }
 
-    def shutdown() {
+    def shutdown(): Unit = {
       consumers.foreach(_.shutdown())
       executor.shutdown()
       executor.awaitTermination(5000, TimeUnit.MILLISECONDS)
     }
   }
 
-  class ConsumerGroupExecutor(broker: String, numConsumers: Int, groupId: String, topic: String, strategy: String)
+  class ConsumerGroupExecutor(broker: String, numConsumers: Int, groupId: String, topic: String, strategy: String,
+                              customPropsOpt: Option[Properties] = None, syncCommit: Boolean = false)
     extends AbstractConsumerGroupExecutor(numConsumers) {
 
     for (_ <- 1 to numConsumers) {
-      submit(new ConsumerRunnable(broker, groupId, topic, strategy))
+      submit(new ConsumerRunnable(broker, groupId, topic, strategy, customPropsOpt, syncCommit))
     }
 
   }

@@ -39,7 +39,7 @@ public class OffsetCheckpointTest {
         final OffsetCheckpoint checkpoint = new OffsetCheckpoint(f);
 
         try {
-            Map<TopicPartition, Long> offsets = new HashMap<>();
+            final Map<TopicPartition, Long> offsets = new HashMap<>();
             offsets.put(new TopicPartition(topic, 0), 0L);
             offsets.put(new TopicPartition(topic, 1), 1L);
             offsets.put(new TopicPartition(topic, 2), 2L);

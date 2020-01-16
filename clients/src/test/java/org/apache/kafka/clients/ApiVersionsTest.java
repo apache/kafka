@@ -18,10 +18,7 @@ package org.apache.kafka.clients;
 
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.record.RecordBatch;
-import org.apache.kafka.common.requests.ApiVersionsResponse;
 import org.junit.Test;
-
-import java.util.Collections;
 
 import static org.junit.Assert.assertEquals;
 
@@ -35,8 +32,7 @@ public class ApiVersionsTest {
         apiVersions.update("0", NodeApiVersions.create());
         assertEquals(RecordBatch.CURRENT_MAGIC_VALUE, apiVersions.maxUsableProduceMagic());
 
-        apiVersions.update("1", NodeApiVersions.create(Collections.singleton(
-                new ApiVersionsResponse.ApiVersion(ApiKeys.PRODUCE.id, (short) 0, (short) 2))));
+        apiVersions.update("1", NodeApiVersions.create(ApiKeys.PRODUCE.id, (short) 0, (short) 2));
         assertEquals(RecordBatch.MAGIC_VALUE_V1, apiVersions.maxUsableProduceMagic());
 
         apiVersions.remove("1");

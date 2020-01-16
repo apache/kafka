@@ -18,40 +18,31 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Deserializer;
-import org.apache.kafka.common.serialization.ExtendedDeserializer;
 
 import java.nio.ByteBuffer;
-import java.util.Map;
 
-import static org.apache.kafka.common.serialization.ExtendedDeserializer.Wrapper.ensureExtended;
-
-public class ChangedDeserializer<T> implements ExtendedDeserializer<Change<T>> {
+public class ChangedDeserializer<T> implements Deserializer<Change<T>> {
 
     private static final int NEWFLAG_SIZE = 1;
 
-    private ExtendedDeserializer<T> inner;
+    private Deserializer<T> inner;
 
-    public ChangedDeserializer(Deserializer<T> inner) {
-        this.inner = ensureExtended(inner);
+    public ChangedDeserializer(final Deserializer<T> inner) {
+        this.inner = inner;
     }
 
-    public ExtendedDeserializer<T> inner() {
+    public Deserializer<T> inner() {
         return inner;
     }
 
-    public void setInner(Deserializer<T> inner) {
-        this.inner = ensureExtended(inner);
+    public void setInner(final Deserializer<T> inner) {
+        this.inner = inner;
     }
 
     @Override
-    public void configure(Map<String, ?> configs, boolean isKey) {
-        // do nothing
-    }
+    public Change<T> deserialize(final String topic, final Headers headers, final byte[] data) {
 
-    @Override
-    public Change<T> deserialize(String topic, Headers headers, byte[] data) {
-
-        byte[] bytes = new byte[data.length - NEWFLAG_SIZE];
+        final byte[] bytes = new byte[data.length - NEWFLAG_SIZE];
 
         System.arraycopy(data, 0, bytes, 0, bytes.length);
 
@@ -63,7 +54,7 @@ public class ChangedDeserializer<T> implements ExtendedDeserializer<Change<T>> {
     }
 
     @Override
-    public Change<T> deserialize(String topic, byte[] data) {
+    public Change<T> deserialize(final String topic, final byte[] data) {
         return deserialize(topic, null, data);
     }
 

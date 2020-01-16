@@ -35,7 +35,7 @@ import static org.junit.Assert.fail;
 public class SchemaProjectorTest {
 
     @Test
-    public void testPrimitiveTypeProjection() throws Exception {
+    public void testPrimitiveTypeProjection() {
         Object projected;
         projected = SchemaProjector.project(Schema.BOOLEAN_SCHEMA, false, Schema.BOOLEAN_SCHEMA);
         assertEquals(false, projected);
@@ -79,7 +79,7 @@ public class SchemaProjectorTest {
     }
 
     @Test
-    public void testNumericTypeProjection() throws Exception {
+    public void testNumericTypeProjection() {
         Schema[] promotableSchemas = {Schema.INT8_SCHEMA, Schema.INT16_SCHEMA, Schema.INT32_SCHEMA, Schema.INT64_SCHEMA, Schema.FLOAT32_SCHEMA, Schema.FLOAT64_SCHEMA};
         Schema[] promotableOptionalSchemas = {Schema.OPTIONAL_INT8_SCHEMA, Schema.OPTIONAL_INT16_SCHEMA, Schema.OPTIONAL_INT32_SCHEMA, Schema.OPTIONAL_INT64_SCHEMA,
                                               Schema.OPTIONAL_FLOAT32_SCHEMA, Schema.OPTIONAL_FLOAT64_SCHEMA};
@@ -146,7 +146,7 @@ public class SchemaProjectorTest {
     }
 
     @Test
-    public void testPrimitiveOptionalProjection() throws Exception {
+    public void testPrimitiveOptionalProjection() {
         verifyOptionalProjection(Schema.OPTIONAL_BOOLEAN_SCHEMA, Type.BOOLEAN, false, true, false, true);
         verifyOptionalProjection(Schema.OPTIONAL_BOOLEAN_SCHEMA, Type.BOOLEAN, false, true, false, false);
 
@@ -208,7 +208,7 @@ public class SchemaProjectorTest {
     }
 
     @Test
-    public void testStructAddField() throws Exception {
+    public void testStructAddField() {
         Schema source = SchemaBuilder.struct()
                 .field("field", Schema.INT32_SCHEMA)
                 .build();
@@ -240,7 +240,7 @@ public class SchemaProjectorTest {
     }
 
     @Test
-    public void testStructRemoveField() throws Exception {
+    public void testStructRemoveField() {
         Schema source = SchemaBuilder.struct()
                 .field("field", Schema.INT32_SCHEMA)
                 .field("field2", Schema.INT32_SCHEMA)
@@ -264,7 +264,7 @@ public class SchemaProjectorTest {
     }
 
     @Test
-    public void testStructDefaultValue() throws Exception {
+    public void testStructDefaultValue() {
         Schema source = SchemaBuilder.struct().optional()
                 .field("field", Schema.INT32_SCHEMA)
                 .field("field2", Schema.INT32_SCHEMA)
@@ -289,7 +289,7 @@ public class SchemaProjectorTest {
     }
 
     @Test
-    public void testNestedSchemaProjection() throws Exception {
+    public void testNestedSchemaProjection() {
         Schema sourceFlatSchema = SchemaBuilder.struct()
                 .field("field", Schema.INT32_SCHEMA)
                 .build();
@@ -326,8 +326,8 @@ public class SchemaProjectorTest {
                                                                      targetNestedSchema);
         assertEquals(1, targetNestedStruct.get("first"));
         assertEquals("abc", targetNestedStruct.get("second"));
-        assertEquals(Arrays.asList(1, 2), (List<Integer>) targetNestedStruct.get("array"));
-        assertEquals(Collections.singletonMap(5, "def"), (Map<Integer, String>) targetNestedStruct.get("map"));
+        assertEquals(Arrays.asList(1, 2), targetNestedStruct.get("array"));
+        assertEquals(Collections.singletonMap(5, "def"), targetNestedStruct.get("map"));
 
         Struct projectedStruct = (Struct) targetNestedStruct.get("nested");
         assertEquals(113, projectedStruct.get("field"));
@@ -335,7 +335,7 @@ public class SchemaProjectorTest {
     }
 
     @Test
-    public void testLogicalTypeProjection() throws Exception {
+    public void testLogicalTypeProjection() {
         Schema[] logicalTypeSchemas = {Decimal.schema(2), Date.SCHEMA, Time.SCHEMA, Timestamp.SCHEMA};
         Object projected;
 
@@ -351,6 +351,17 @@ public class SchemaProjectorTest {
 
         projected = SchemaProjector.project(Timestamp.SCHEMA, 34567L, Timestamp.SCHEMA);
         assertEquals(34567L, projected);
+
+        java.util.Date date = new java.util.Date();
+
+        projected = SchemaProjector.project(Date.SCHEMA, date, Date.SCHEMA);
+        assertEquals(date, projected);
+
+        projected = SchemaProjector.project(Time.SCHEMA, date, Time.SCHEMA);
+        assertEquals(date, projected);
+
+        projected = SchemaProjector.project(Timestamp.SCHEMA, date, Timestamp.SCHEMA);
+        assertEquals(date, projected);
 
         Schema namedSchema = SchemaBuilder.int32().name("invalidLogicalTypeName").build();
         for (Schema logicalTypeSchema: logicalTypeSchemas) {
@@ -378,25 +389,25 @@ public class SchemaProjectorTest {
     }
 
     @Test
-    public void testArrayProjection() throws Exception {
+    public void testArrayProjection() {
         Schema source = SchemaBuilder.array(Schema.INT32_SCHEMA).build();
 
         Object projected = SchemaProjector.project(source, Arrays.asList(1, 2, 3), source);
-        assertEquals(Arrays.asList(1, 2, 3), (List<Integer>) projected);
+        assertEquals(Arrays.asList(1, 2, 3), projected);
 
         Schema optionalSource = SchemaBuilder.array(Schema.INT32_SCHEMA).optional().build();
         Schema target = SchemaBuilder.array(Schema.INT32_SCHEMA).defaultValue(Arrays.asList(1, 2, 3)).build();
         projected = SchemaProjector.project(optionalSource, Arrays.asList(4, 5), target);
-        assertEquals(Arrays.asList(4, 5), (List<Integer>) projected);
+        assertEquals(Arrays.asList(4, 5), projected);
         projected = SchemaProjector.project(optionalSource, null, target);
-        assertEquals(Arrays.asList(1, 2, 3), (List<Integer>) projected);
+        assertEquals(Arrays.asList(1, 2, 3), projected);
 
         Schema promotedTarget = SchemaBuilder.array(Schema.INT64_SCHEMA).defaultValue(Arrays.asList(1L, 2L, 3L)).build();
         projected = SchemaProjector.project(optionalSource, Arrays.asList(4, 5), promotedTarget);
         List<Long> expectedProjected = Arrays.asList(4L, 5L);
-        assertEquals(expectedProjected, (List<Long>) projected);
+        assertEquals(expectedProjected, projected);
         projected = SchemaProjector.project(optionalSource, null, promotedTarget);
-        assertEquals(Arrays.asList(1L, 2L, 3L), (List<Long>) projected);
+        assertEquals(Arrays.asList(1L, 2L, 3L), projected);
 
         Schema noDefaultValueTarget = SchemaBuilder.array(Schema.INT32_SCHEMA).build();
         try {
@@ -416,21 +427,21 @@ public class SchemaProjectorTest {
     }
 
     @Test
-    public void testMapProjection() throws Exception {
+    public void testMapProjection() {
         Schema source = SchemaBuilder.map(Schema.INT32_SCHEMA, Schema.INT32_SCHEMA).optional().build();
 
         Schema target = SchemaBuilder.map(Schema.INT32_SCHEMA, Schema.INT32_SCHEMA).defaultValue(Collections.singletonMap(1, 2)).build();
         Object projected = SchemaProjector.project(source, Collections.singletonMap(3, 4), target);
-        assertEquals(Collections.singletonMap(3, 4), (Map<Integer, Integer>) projected);
+        assertEquals(Collections.singletonMap(3, 4), projected);
         projected = SchemaProjector.project(source, null, target);
-        assertEquals(Collections.singletonMap(1, 2), (Map<Integer, Integer>) projected);
+        assertEquals(Collections.singletonMap(1, 2), projected);
 
         Schema promotedTarget = SchemaBuilder.map(Schema.INT64_SCHEMA, Schema.FLOAT32_SCHEMA).defaultValue(
                 Collections.singletonMap(3L, 4.5F)).build();
         projected = SchemaProjector.project(source, Collections.singletonMap(3, 4), promotedTarget);
-        assertEquals(Collections.singletonMap(3L, 4.F), (Map<Long, Float>) projected);
+        assertEquals(Collections.singletonMap(3L, 4.F), projected);
         projected = SchemaProjector.project(source, null, promotedTarget);
-        assertEquals(Collections.singletonMap(3L, 4.5F), (Map<Long, Float>) projected);
+        assertEquals(Collections.singletonMap(3L, 4.5F), projected);
 
         Schema noDefaultValueTarget = SchemaBuilder.map(Schema.INT32_SCHEMA, Schema.INT32_SCHEMA).build();
         try {
@@ -450,7 +461,7 @@ public class SchemaProjectorTest {
     }
 
     @Test
-    public void testMaybeCompatible() throws Exception {
+    public void testMaybeCompatible() {
         Schema source = SchemaBuilder.int32().name("source").build();
         Schema target = SchemaBuilder.int32().name("target").build();
 

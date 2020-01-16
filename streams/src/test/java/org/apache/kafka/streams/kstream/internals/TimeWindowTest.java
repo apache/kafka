@@ -16,8 +16,13 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
+import org.apache.kafka.streams.kstream.TimeWindows;
 import org.junit.Test;
 
+import java.util.Map;
+
+import static java.time.Duration.ofMillis;
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
@@ -116,5 +121,16 @@ public class TimeWindowTest {
     @Test(expected = IllegalArgumentException.class)
     public void cannotCompareTimeWindowWithDifferentWindowType() {
         window.overlap(sessionWindow);
+    }
+
+    @Test
+    public void shouldReturnMatchedWindowsOrderedByTimestamp() {
+        final TimeWindows windows = TimeWindows.of(ofMillis(12L)).advanceBy(ofMillis(5L));
+        final Map<Long, TimeWindow> matched = windows.windowsFor(21L);
+
+        final Long[] expected = matched.keySet().toArray(new Long[matched.size()]);
+        assertEquals(expected[0].longValue(), 10L);
+        assertEquals(expected[1].longValue(), 15L);
+        assertEquals(expected[2].longValue(), 20L);
     }
 }

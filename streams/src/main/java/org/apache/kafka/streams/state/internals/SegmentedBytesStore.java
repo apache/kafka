@@ -62,8 +62,8 @@ public interface SegmentedBytesStore extends StateStore {
     /**
      * Gets all the key-value pairs that belong to the windows within in the given time range.
      *
-     * @param timeFrom the beginning of the time slot from which to search
-     * @param timeTo   the end of the time slot from which to search
+     * @param from the beginning of the time slot from which to search
+     * @param to   the end of the time slot from which to search
      * @return an iterator over windowed key-value pairs {@code <Windowed<K>, value>}
      * @throws InvalidStateStoreException if the store is not initialized
      * @throws NullPointerException if null is used for any key
@@ -97,13 +97,6 @@ public interface SegmentedBytesStore extends StateStore {
     byte[] get(Bytes key);
 
     interface KeySchema {
-
-        /**
-         * Initialized the schema with a topic.
-         *
-         * @param topic a topic name
-         */
-        void init(final String topic);
 
         /**
          * Given a range of record keys and a time, construct a Segmented key that represents
@@ -161,7 +154,7 @@ public interface SegmentedBytesStore extends StateStore {
 
         /**
          * Create an implementation of {@link HasNextCondition} that knows when
-         * to stop iterating over the Segments. Used during {@link SegmentedBytesStore#fetch(Bytes, Bytes, long, long)} operations
+         * to stop iterating over the KeyValueSegments. Used during {@link SegmentedBytesStore#fetch(Bytes, Bytes, long, long)} operations
          * @param binaryKeyFrom the first key in the range
          * @param binaryKeyTo   the last key in the range
          * @param from          starting time range
@@ -178,6 +171,6 @@ public interface SegmentedBytesStore extends StateStore {
          * @param to
          * @return  List of segments to search
          */
-        List<Segment> segmentsToSearch(Segments segments, long from, long to);
+        <S extends Segment> List<S> segmentsToSearch(Segments<S> segments, long from, long to);
     }
 }

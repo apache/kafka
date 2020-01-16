@@ -17,6 +17,7 @@
 
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.BatchingStateRestoreCallback;
@@ -25,7 +26,7 @@ import org.apache.kafka.test.MockBatchingStateRestoreListener;
 import org.apache.kafka.test.MockStateRestoreListener;
 import org.junit.Test;
 
-import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 import java.util.Collection;
 import java.util.Collections;
 
@@ -33,7 +34,7 @@ import static org.apache.kafka.test.MockStateRestoreListener.RESTORE_BATCH;
 import static org.apache.kafka.test.MockStateRestoreListener.RESTORE_END;
 import static org.apache.kafka.test.MockStateRestoreListener.RESTORE_START;
 import static org.hamcrest.core.Is.is;
-import static org.junit.Assert.assertThat;
+import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertTrue;
 
 
@@ -45,9 +46,12 @@ public class CompositeRestoreListenerTest {
         noListenBatchingStateRestoreCallback =
         new MockNoListenBatchingStateRestoreCallback();
     private final MockStateRestoreListener reportingStoreListener = new MockStateRestoreListener();
-    private final byte[] key = "key".getBytes(Charset.forName("UTF-8"));
-    private final byte[] value = "value".getBytes(Charset.forName("UTF-8"));
+    private final byte[] key = "key".getBytes(StandardCharsets.UTF_8);
+    private final byte[] value = "value".getBytes(StandardCharsets.UTF_8);
     private final Collection<KeyValue<byte[], byte[]>> records = Collections.singletonList(KeyValue.pair(key, value));
+    private final Collection<ConsumerRecord<byte[], byte[]>> consumerRecords = Collections.singletonList(
+        new ConsumerRecord<>("", 0, 0L, key, value)
+    );
     private final String storeName = "test_store";
     private final long startOffset = 0L;
     private final long endOffset = 1L;
@@ -61,7 +65,7 @@ public class CompositeRestoreListenerTest {
     @Test
     public void shouldRestoreInNonBatchMode() {
         setUpCompositeRestoreListener(stateRestoreCallback);
-        compositeRestoreListener.restoreAll(records);
+        compositeRestoreListener.restoreBatch(consumerRecords);
         assertThat(stateRestoreCallback.restoredKey, is(key));
         assertThat(stateRestoreCallback.restoredValue, is(value));
     }
@@ -69,7 +73,7 @@ public class CompositeRestoreListenerTest {
     @Test
     public void shouldRestoreInBatchMode() {
         setUpCompositeRestoreListener(batchingStateRestoreCallback);
-        compositeRestoreListener.restoreAll(records);
+        compositeRestoreListener.restoreBatch(consumerRecords);
         assertThat(batchingStateRestoreCallback.getRestoredRecords(), is(records));
     }
 
@@ -126,7 +130,7 @@ public class CompositeRestoreListenerTest {
         compositeRestoreListener = new CompositeRestoreListener(batchingStateRestoreCallback);
         compositeRestoreListener.setUserRestoreListener(null);
 
-        compositeRestoreListener.restoreAll(records);
+        compositeRestoreListener.restoreBatch(consumerRecords);
         compositeRestoreListener.onRestoreStart(topicPartition, storeName, startOffset, endOffset);
         compositeRestoreListener.onBatchRestored(topicPartition, storeName, batchOffset, numberRestored);
         compositeRestoreListener.onRestoreEnd(topicPartition, storeName, numberRestored);
@@ -140,7 +144,7 @@ public class CompositeRestoreListenerTest {
         compositeRestoreListener = new CompositeRestoreListener(noListenBatchingStateRestoreCallback);
         compositeRestoreListener.setUserRestoreListener(null);
 
-        compositeRestoreListener.restoreAll(records);
+        compositeRestoreListener.restoreBatch(consumerRecords);
         compositeRestoreListener.onRestoreStart(topicPartition, storeName, startOffset, endOffset);
         compositeRestoreListener.onBatchRestored(topicPartition, storeName, batchOffset, numberRestored);
         compositeRestoreListener.onRestoreEnd(topicPartition, storeName, numberRestored);
@@ -151,33 +155,37 @@ public class CompositeRestoreListenerTest {
     @Test(expected = UnsupportedOperationException.class)
     public void shouldThrowExceptionWhenSinglePutDirectlyCalled() {
         compositeRestoreListener = new CompositeRestoreListener(noListenBatchingStateRestoreCallback);
-        compositeRestoreListener.setUserRestoreListener(null);
-
         compositeRestoreListener.restore(key, value);
     }
 
-    private void assertStateRestoreListenerOnStartNotification(MockStateRestoreListener restoreListener) {
+    @Test(expected = UnsupportedOperationException.class)
+    public void shouldThrowExceptionWhenRestoreAllDirectlyCalled() {
+        compositeRestoreListener = new CompositeRestoreListener(noListenBatchingStateRestoreCallback);
+        compositeRestoreListener.restoreAll(Collections.emptyList());
+    }
+
+    private void assertStateRestoreListenerOnStartNotification(final MockStateRestoreListener restoreListener) {
         assertTrue(restoreListener.storeNameCalledStates.containsKey(RESTORE_START));
         assertThat(restoreListener.restoreTopicPartition, is(topicPartition));
         assertThat(restoreListener.restoreStartOffset, is(startOffset));
         assertThat(restoreListener.restoreEndOffset, is(endOffset));
     }
 
-    private void assertStateRestoreListenerOnBatchCompleteNotification(MockStateRestoreListener restoreListener) {
+    private void assertStateRestoreListenerOnBatchCompleteNotification(final MockStateRestoreListener restoreListener) {
         assertTrue(restoreListener.storeNameCalledStates.containsKey(RESTORE_BATCH));
         assertThat(restoreListener.restoreTopicPartition, is(topicPartition));
         assertThat(restoreListener.restoredBatchOffset, is(batchOffset));
         assertThat(restoreListener.numBatchRestored, is(numberRestored));
     }
 
-    private void assertStateRestoreOnEndNotification(MockStateRestoreListener restoreListener) {
+    private void assertStateRestoreOnEndNotification(final MockStateRestoreListener restoreListener) {
         assertTrue(restoreListener.storeNameCalledStates.containsKey(RESTORE_END));
         assertThat(restoreListener.restoreTopicPartition, is(topicPartition));
         assertThat(restoreListener.totalNumRestored, is(numberRestored));
     }
 
 
-    private void setUpCompositeRestoreListener(StateRestoreCallback stateRestoreCallback) {
+    private void setUpCompositeRestoreListener(final StateRestoreCallback stateRestoreCallback) {
         compositeRestoreListener = new CompositeRestoreListener(stateRestoreCallback);
         compositeRestoreListener.setUserRestoreListener(reportingStoreListener);
     }

@@ -22,6 +22,13 @@ def file_exists(node, file):
     except:
         return False
 
+def path_exists(node, path):
+    """Quick and dirty check for existence of remote path."""
+    try:
+        node.account.ssh("ls " + path, allow_fail=False)
+        return True
+    except:
+        return False
 
 def line_count(node, file):
     """Return the line count of file on node"""

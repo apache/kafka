@@ -16,20 +16,18 @@
   */
 package kafka.server
 
-import java.nio.ByteBuffer
 import java.util
 
-import kafka.admin.AdminClient
 import kafka.api.{KafkaSasl, SaslSetup}
 import kafka.utils.{JaasTestUtils, TestUtils}
-import org.apache.kafka.clients.admin.AdminClientConfig
-import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.utils.SecurityUtils
-import org.junit.Assert._
-import org.junit.{After, Before, Test}
+import org.apache.kafka.clients.admin.{Admin, AdminClient, AdminClientConfig}
+import org.apache.kafka.common.errors.DelegationTokenDisabledException
 import org.apache.kafka.common.security.auth.SecurityProtocol
+import org.junit.{After, Before, Test}
+import org.scalatest.Assertions.intercept
 
 import scala.collection.JavaConverters._
+import scala.concurrent.ExecutionException
 
 class DelegationTokenRequestsWithDisableTokenFeatureTest extends BaseRequestTest with SaslSetup {
   override protected def securityProtocol = SecurityProtocol.SASL_PLAINTEXT
@@ -37,9 +35,9 @@ class DelegationTokenRequestsWithDisableTokenFeatureTest extends BaseRequestTest
   private val kafkaServerSaslMechanisms = List("PLAIN")
   protected override val serverSaslProperties = Some(kafkaServerSaslProperties(kafkaServerSaslMechanisms, kafkaClientSaslMechanism))
   protected override val clientSaslProperties = Some(kafkaClientSaslProperties(kafkaClientSaslMechanism))
-  var adminClient: AdminClient = null
+  var adminClient: Admin = null
 
-  override def numBrokers = 1
+  override def brokerCount = 1
 
   @Before
   override def setUp(): Unit = {
@@ -58,23 +56,19 @@ class DelegationTokenRequestsWithDisableTokenFeatureTest extends BaseRequestTest
 
   @Test
   def testDelegationTokenRequests(): Unit = {
-    adminClient = AdminClient.create(createAdminConfig.asScala.toMap)
+    adminClient = AdminClient.create(createAdminConfig)
 
-    val renewer1 = List(SecurityUtils.parseKafkaPrincipal("User:" + JaasTestUtils.KafkaPlainUser))
-    val createResponse = adminClient.createToken(renewer1)
-    assertEquals(Errors.DELEGATION_TOKEN_AUTH_DISABLED, createResponse._1)
+    val createResult = adminClient.createDelegationToken()
+    intercept[ExecutionException](createResult.delegationToken().get()).getCause.isInstanceOf[DelegationTokenDisabledException]
 
-    val describeResponse = adminClient.describeToken(List())
-    assertEquals(Errors.DELEGATION_TOKEN_AUTH_DISABLED, describeResponse._1)
+    val describeResult = adminClient.describeDelegationToken()
+    intercept[ExecutionException](describeResult.delegationTokens().get()).getCause.isInstanceOf[DelegationTokenDisabledException]
 
-    //test renewing tokens
-    val renewResponse = adminClient.renewToken(ByteBuffer.wrap("".getBytes()))
-    assertEquals(Errors.DELEGATION_TOKEN_AUTH_DISABLED, renewResponse._1)
+    val renewResult = adminClient.renewDelegationToken("".getBytes())
+    intercept[ExecutionException](renewResult.expiryTimestamp().get()).getCause.isInstanceOf[DelegationTokenDisabledException]
 
-    //test expire tokens tokens
-    val expireResponse = adminClient.expireToken(ByteBuffer.wrap("".getBytes()))
-    assertEquals(Errors.DELEGATION_TOKEN_AUTH_DISABLED, expireResponse._1)
-
+    val expireResult = adminClient.expireDelegationToken("".getBytes())
+    intercept[ExecutionException](expireResult.expiryTimestamp().get()).getCause.isInstanceOf[DelegationTokenDisabledException]
   }
 
   @After

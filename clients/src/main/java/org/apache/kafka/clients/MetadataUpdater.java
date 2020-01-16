@@ -16,12 +16,16 @@
  */
 package org.apache.kafka.clients;
 
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.errors.AuthenticationException;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.requests.RequestHeader;
 
+import java.io.Closeable;
 import java.util.List;
+import java.util.Optional;
 
 /**
  * The interface used by `NetworkClient` to request cluster metadata info to be updated and to retrieve the cluster nodes
@@ -29,7 +33,7 @@ import java.util.List;
  * <p>
  * This class is not thread-safe!
  */
-interface MetadataUpdater {
+public interface MetadataUpdater extends Closeable {
 
     /**
      * Gets the current cluster info without blocking.
@@ -45,7 +49,7 @@ interface MetadataUpdater {
      * Starts a cluster metadata update if needed and possible. Returns the time until the metadata update (which would
      * be 0 if an update has been started as a result of this call).
      *
-     * If the implementation relies on `NetworkClient` to send requests, `handleCompletedMetadataResponse` will be
+     * If the implementation relies on `NetworkClient` to send requests, `handleSuccessfulResponse` will be
      * invoked after the metadata response is received.
      *
      * The semantics of `needed` and `possible` are implementation-dependent and may take into account a number of
@@ -54,32 +58,36 @@ interface MetadataUpdater {
     long maybeUpdate(long now);
 
     /**
-     * If `request` is a metadata request, handles it and return `true`. Otherwise, returns `false`.
+     * Handle a server disconnect.
      *
      * This provides a mechanism for the `MetadataUpdater` implementation to use the NetworkClient instance for its own
      * requests with special handling for disconnections of such requests.
-     * @param destination
-     */
-    void handleDisconnection(String destination);
-
-    /**
-     * Handle authentication failure. Propagate the authentication exception if awaiting metadata.
      *
-     * @param exception authentication exception from broker
+     * @param now Current time in milliseconds
+     * @param nodeId The id of the node that disconnected
+     * @param maybeAuthException Optional authentication error
      */
-    void handleAuthenticationFailure(AuthenticationException exception);
+    void handleServerDisconnect(long now, String nodeId, Optional<AuthenticationException> maybeAuthException);
 
     /**
-     * If `request` is a metadata request, handles it and returns `true`. Otherwise, returns `false`.
+     * Handle a metadata request failure.
+     *
+     * @param now Current time in milliseconds
+     * @param maybeFatalException Optional fatal error (e.g. {@link UnsupportedVersionException})
+     */
+    void handleFailedRequest(long now, Optional<KafkaException> maybeFatalException);
+
+    /**
+     * Handle responses for metadata requests.
      *
      * This provides a mechanism for the `MetadataUpdater` implementation to use the NetworkClient instance for its own
      * requests with special handling for completed receives of such requests.
      */
-    void handleCompletedMetadataResponse(RequestHeader requestHeader, long now, MetadataResponse metadataResponse);
+    void handleSuccessfulResponse(RequestHeader requestHeader, long now, MetadataResponse metadataResponse);
 
     /**
-     * Schedules an update of the current cluster metadata info. A subsequent call to `maybeUpdate` would trigger the
-     * start of the update if possible (see `maybeUpdate` for more information).
+     * Close this updater.
      */
-    void requestUpdate();
+    @Override
+    void close();
 }

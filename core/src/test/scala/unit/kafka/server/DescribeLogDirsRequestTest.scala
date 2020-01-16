@@ -26,9 +26,8 @@ import org.junit.Test
 import java.io.File
 
 class DescribeLogDirsRequestTest extends BaseRequestTest {
-
-  override def numBrokers: Int = 1
-  override def logDirCount: Int = 2
+  override val logDirCount = 2
+  override val brokerCount: Int = 1
 
   val topic = "topic"
   val partitionNum = 2
@@ -41,7 +40,7 @@ class DescribeLogDirsRequestTest extends BaseRequestTest {
     val offlineDir = new File(servers.head.config.logDirs.tail.head).getAbsolutePath
     servers.head.replicaManager.handleLogDirFailure(offlineDir)
     createTopic(topic, partitionNum, 1)
-    TestUtils.produceMessages(servers, topic, 10)
+    TestUtils.generateAndProduceMessages(servers, topic, 10)
 
     val request = new DescribeLogDirsRequest.Builder(null).build()
     val response = connectAndSend(request, ApiKeys.DESCRIBE_LOG_DIRS, controllerSocketServer)
@@ -58,7 +57,8 @@ class DescribeLogDirsRequestTest extends BaseRequestTest {
     val log1 = servers.head.logManager.getLog(tp1).get
     assertEquals(log0.size, replicaInfo0.size)
     assertEquals(log1.size, replicaInfo1.size)
-    assertTrue(servers.head.logManager.getLog(tp0).get.logEndOffset > 0)
+    val logEndOffset = servers.head.logManager.getLog(tp0).get.logEndOffset
+    assertTrue(s"LogEndOffset '$logEndOffset' should be > 0", logEndOffset > 0)
     assertEquals(servers.head.replicaManager.getLogEndOffsetLag(tp0, log0.logEndOffset, false), replicaInfo0.offsetLag)
     assertEquals(servers.head.replicaManager.getLogEndOffsetLag(tp1, log1.logEndOffset, false), replicaInfo1.offsetLag)
   }

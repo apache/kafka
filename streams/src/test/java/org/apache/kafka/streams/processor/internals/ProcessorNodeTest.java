@@ -16,40 +16,55 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import java.util.Arrays;
+import java.util.Properties;
+import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.streams.StreamsBuilder;
+import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.TestInputTopic;
+import org.apache.kafka.streams.Topology;
+import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.errors.DefaultProductionExceptionHandler;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.state.StateSerdes;
-import org.apache.kafka.test.MockProcessorContext;
+import org.apache.kafka.test.InternalMockProcessorContext;
+import org.apache.kafka.test.StreamsTestUtils;
 import org.junit.Test;
 
 import java.util.Collections;
-import java.util.Map;
 import java.util.LinkedHashMap;
+import java.util.Map;
 
+import static org.hamcrest.CoreMatchers.containsString;
+import static org.hamcrest.CoreMatchers.instanceOf;
+import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertThrows;
+import static org.junit.Assert.assertTrue;
 
 public class ProcessorNodeTest {
 
     @SuppressWarnings("unchecked")
-    @Test (expected = StreamsException.class)
+    @Test(expected = StreamsException.class)
     public void shouldThrowStreamsExceptionIfExceptionCaughtDuringInit() {
         final ProcessorNode node = new ProcessorNode("name", new ExceptionalProcessor(), Collections.emptySet());
         node.init(null);
     }
 
     @SuppressWarnings("unchecked")
-    @Test (expected = StreamsException.class)
+    @Test(expected = StreamsException.class)
     public void shouldThrowStreamsExceptionIfExceptionCaughtDuringClose() {
         final ProcessorNode node = new ProcessorNode("name", new ExceptionalProcessor(), Collections.emptySet());
         node.close();
     }
 
-    private static class ExceptionalProcessor implements Processor {
+    private static class ExceptionalProcessor implements Processor<Object, Object> {
         @Override
         public void init(final ProcessorContext context) {
             throw new RuntimeException();
@@ -61,17 +76,12 @@ public class ProcessorNodeTest {
         }
 
         @Override
-        public void punctuate(final long timestamp) {
-            throw new RuntimeException();
-        }
-
-        @Override
         public void close() {
             throw new RuntimeException();
         }
     }
 
-    private static class NoOpProcessor implements Processor {
+    private static class NoOpProcessor implements Processor<Object, Object> {
         @Override
         public void init(final ProcessorContext context) {
 
@@ -83,26 +93,9 @@ public class ProcessorNodeTest {
         }
 
         @Override
-        public void punctuate(final long timestamp) {
-
-        }
-
-        @Override
         public void close() {
 
         }
-    }
-
-    private void testSpecificMetrics(final Metrics metrics, final String groupName,
-                                     final String opName,
-                                     final Map<String, String> metricTags) {
-        assertNotNull(metrics.metrics().get(metrics.metricName(opName + "-latency-avg", groupName,
-                "The average latency of " + opName + " operation.", metricTags)));
-        assertNotNull(metrics.metrics().get(metrics.metricName(opName + "-latency-max", groupName,
-                "The max latency of " + opName + " operation.", metricTags)));
-        assertNotNull(metrics.metrics().get(metrics.metricName(opName + "-rate", groupName,
-                "The average number of occurrence of " + opName + " operation per second.", metricTags)));
-
     }
 
     @Test
@@ -110,39 +103,93 @@ public class ProcessorNodeTest {
         final StateSerdes anyStateSerde = StateSerdes.withBuiltinTypes("anyName", Bytes.class, Bytes.class);
 
         final Metrics metrics = new Metrics();
-        final MockProcessorContext context = new MockProcessorContext(anyStateSerde,  new RecordCollectorImpl(null, null, new LogContext("processnode-test "), new DefaultProductionExceptionHandler()), metrics);
-        final ProcessorNode node = new ProcessorNode("name", new NoOpProcessor(), Collections.emptySet());
+        final InternalMockProcessorContext context = new InternalMockProcessorContext(
+            anyStateSerde,
+            new RecordCollectorImpl(
+                null,
+                new LogContext("processnode-test "),
+                new DefaultProductionExceptionHandler(),
+                metrics.sensor("skipped-records")
+            ),
+            metrics
+        );
+        final ProcessorNode<Object, Object> node = new ProcessorNode<>("name", new NoOpProcessor(), Collections.<String>emptySet());
         node.init(context);
 
-        String[] latencyOperations = {"process", "punctuate", "create", "destroy"};
-        String throughputOperation =  "forward";
-        String groupName = "stream-processor-node-metrics";
+        final String threadId = Thread.currentThread().getName();
+        final String[] latencyOperations = {"process", "punctuate", "create", "destroy"};
+        final String throughputOperation = "forward";
+        final String groupName = "stream-processor-node-metrics";
         final Map<String, String> metricTags = new LinkedHashMap<>();
         metricTags.put("processor-node-id", node.name());
         metricTags.put("task-id", context.taskId().toString());
+        metricTags.put("client-id", threadId);
 
-
-        for (String operation : latencyOperations) {
-            assertNotNull(metrics.getSensor(operation));
-        }
-        assertNotNull(metrics.getSensor(throughputOperation));
-
-        for (String opName : latencyOperations) {
-            testSpecificMetrics(metrics, groupName, opName, metricTags);
+        for (final String opName : latencyOperations) {
+            StreamsTestUtils.getMetricByNameFilterByTags(metrics.metrics(), opName + "-latency-avg", groupName, metricTags);
+            StreamsTestUtils.getMetricByNameFilterByTags(metrics.metrics(), opName + "-latency-max", groupName, metricTags);
+            StreamsTestUtils.getMetricByNameFilterByTags(metrics.metrics(), opName + "-rate", groupName, metricTags);
+            StreamsTestUtils.getMetricByNameFilterByTags(metrics.metrics(), opName + "-total", groupName, metricTags);
         }
         assertNotNull(metrics.metrics().get(metrics.metricName(throughputOperation + "-rate", groupName,
-                "The average number of occurrence of " + throughputOperation + " operation per second.", metricTags)));
+                                                               "The average number of occurrence of " + throughputOperation + " operation per second.",
+                                                               metricTags)));
 
         // test "all"
         metricTags.put("processor-node-id", "all");
-        for (String opName : latencyOperations) {
-            testSpecificMetrics(metrics, groupName, opName, metricTags);
+        for (final String opName : latencyOperations) {
+            StreamsTestUtils.getMetricByNameFilterByTags(metrics.metrics(), opName + "-latency-avg", groupName, metricTags);
+            StreamsTestUtils.getMetricByNameFilterByTags(metrics.metrics(), opName + "-latency-max", groupName, metricTags);
+            StreamsTestUtils.getMetricByNameFilterByTags(metrics.metrics(), opName + "-rate", groupName, metricTags);
+            StreamsTestUtils.getMetricByNameFilterByTags(metrics.metrics(), opName + "-total", groupName, metricTags);
         }
-        assertNotNull(metrics.metrics().get(metrics.metricName(throughputOperation + "-rate", groupName,
-                "The average number of occurrence of " + throughputOperation + " operation per second.", metricTags)));
+        assertNotNull(metrics.metrics().get(metrics.metricName(throughputOperation + "-rate",
+                                                               groupName,
+                                                               "The average number of occurrence of " + throughputOperation + " operation per second.",
+                                                               metricTags)));
 
-
-        context.close();
+        final JmxReporter reporter = new JmxReporter("kafka.streams");
+        metrics.addReporter(reporter);
+        assertTrue(reporter.containsMbean(String.format("kafka.streams:type=%s,client-id=%s,task-id=%s,processor-node-id=%s",
+                groupName, threadId, context.taskId().toString(), node.name())));
     }
 
+    @Test
+    public void testTopologyLevelClassCastException() {
+        final Properties props = new Properties();
+        props.put(StreamsConfig.APPLICATION_ID_CONFIG, "test");
+        props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy:1234");
+        // Serdes configuration is missing (default will be used which don't match the DSL below), which will trigger the new exception
+        final StreamsBuilder builder = new StreamsBuilder();
+
+        builder.<String, String>stream("streams-plaintext-input")
+            .flatMapValues(value -> {
+                return Arrays.asList("");
+            });
+        final Topology topology = builder.build();
+
+        final TopologyTestDriver testDriver = new TopologyTestDriver(topology, props);
+        final TestInputTopic<String, String> topic = testDriver.createInputTopic("streams-plaintext-input", new StringSerializer(), new StringSerializer());
+
+        final StreamsException se = assertThrows(StreamsException.class, () -> topic.pipeInput("a-key", "a value"));
+        final String msg = se.getMessage();
+        assertTrue("Error about class cast with serdes", msg.contains("ClassCastException"));
+        assertTrue("Error about class cast with serdes", msg.contains("Serdes"));
+    }
+
+    private static class ClassCastProcessor extends ExceptionalProcessor {
+        @Override
+        public void process(final Object key, final Object value) {
+            throw new ClassCastException("Incompatible types simulation exception.");
+        }
+    }
+
+    @Test
+    public void testTopologyLevelClassCastExceptionDirect() {
+        final ProcessorNode<Object, Object> node = new ProcessorNode<Object, Object>("name", new ClassCastProcessor(), Collections.<String>emptySet());
+        final StreamsException se = assertThrows(StreamsException.class, () -> node.process("aKey", "aValue"));
+        assertThat(se.getCause(), instanceOf(ClassCastException.class));
+        assertThat(se.getMessage(), containsString("default Serdes"));
+        assertThat(se.getMessage(), containsString("input types"));
+    }
 }

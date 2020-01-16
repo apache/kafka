@@ -20,6 +20,7 @@ import org.apache.kafka.common.internals.Topic;
 
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 
 /**
  * InternalTopicConfig captures the properties required for configuring
@@ -29,7 +30,7 @@ public abstract class InternalTopicConfig {
     final String name;
     final Map<String, String> topicConfigs;
 
-    private int numberOfPartitions = -1;
+    private Optional<Integer> numberOfPartitions = Optional.empty();
 
     InternalTopicConfig(final String name, final Map<String, String> topicConfigs) {
         Objects.requireNonNull(name, "name can't be null");
@@ -40,7 +41,7 @@ public abstract class InternalTopicConfig {
     }
 
     /**
-     * Get the configured properties for this topic. If rententionMs is set then
+     * Get the configured properties for this topic. If retentionMs is set then
      * we add additionalRetentionMs to work out the desired retention when cleanup.policy=compact,delete
      *
      * @param additionalRetentionMs - added to retention to allow for clock drift etc
@@ -52,18 +53,15 @@ public abstract class InternalTopicConfig {
         return name;
     }
 
-    public int numberOfPartitions() {
-        if (numberOfPartitions == -1) {
-            throw new IllegalStateException("Number of partitions not specified.");
-        }
+    public Optional<Integer> numberOfPartitions() {
         return numberOfPartitions;
     }
 
-    void setNumberOfPartitions(final int numberOfPartitions) {
+    public void setNumberOfPartitions(final int numberOfPartitions) {
         if (numberOfPartitions < 1) {
             throw new IllegalArgumentException("Number of partitions must be at least 1.");
         }
-        this.numberOfPartitions = numberOfPartitions;
+        this.numberOfPartitions = Optional.of(numberOfPartitions);
     }
 
     @Override

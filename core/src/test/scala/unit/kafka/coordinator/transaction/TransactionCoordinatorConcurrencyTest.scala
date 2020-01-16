@@ -22,21 +22,20 @@ import kafka.coordinator.AbstractCoordinatorConcurrencyTest
 import kafka.coordinator.AbstractCoordinatorConcurrencyTest._
 import kafka.coordinator.transaction.TransactionCoordinatorConcurrencyTest._
 import kafka.log.Log
-import kafka.server.{ DelayedOperationPurgatory, FetchDataInfo, KafkaConfig, LogOffsetMetadata, MetadataCache }
+import kafka.server.{DelayedOperationPurgatory, FetchDataInfo, FetchLogEnd, KafkaConfig, LogOffsetMetadata, MetadataCache}
 import kafka.utils.timer.MockTimer
-import kafka.utils.{ Pool, TestUtils}
-
-import org.apache.kafka.clients.{ ClientResponse, NetworkClient }
-import org.apache.kafka.common.{ Node, TopicPartition }
+import kafka.utils.{Pool, TestUtils}
+import org.apache.kafka.clients.{ClientResponse, NetworkClient}
+import org.apache.kafka.common.{Node, TopicPartition}
 import org.apache.kafka.common.internals.Topic.TRANSACTION_STATE_TOPIC_NAME
-import org.apache.kafka.common.protocol.{ ApiKeys, Errors }
-import org.apache.kafka.common.record.{ CompressionType, FileRecords, MemoryRecords, SimpleRecord }
+import org.apache.kafka.common.metrics.Metrics
+import org.apache.kafka.common.protocol.{ApiKeys, Errors}
+import org.apache.kafka.common.record.{CompressionType, FileRecords, MemoryRecords, SimpleRecord}
 import org.apache.kafka.common.requests._
-import org.apache.kafka.common.utils.{ LogContext, MockTime }
-
-import org.easymock.EasyMock
+import org.apache.kafka.common.utils.{LogContext, MockTime}
+import org.easymock.{EasyMock, IAnswer}
 import org.junit.Assert._
-import org.junit.{ After, Before, Test }
+import org.junit.{After, Before, Test}
 
 import scala.collection.Map
 import scala.collection.mutable
@@ -62,7 +61,7 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
     (0 until numPartitions).map { i => (i, mutable.ArrayBuffer[SimpleRecord]()) }.toMap
 
   @Before
-  override def setUp() {
+  override def setUp(): Unit = {
     super.setUp()
 
     EasyMock.expect(zkClient.getTopicPartitionCount(TRANSACTION_STATE_TOPIC_NAME))
@@ -70,7 +69,7 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
       .anyTimes()
     EasyMock.replay(zkClient)
 
-    txnStateManager = new TransactionStateManager(0, zkClient, scheduler, replicaManager, txnConfig, time)
+    txnStateManager = new TransactionStateManager(0, zkClient, scheduler, replicaManager, txnConfig, time, new Metrics())
     for (i <- 0 until numPartitions)
       txnStateManager.addLoadedTransactionsToCache(i, coordinatorEpoch, new Pool[String, TransactionMetadata]())
 
@@ -83,13 +82,13 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
       new MockTimer,
       reaperEnabled = false)
     val brokerNode = new Node(0, "host", 10)
-    val metadataCache = EasyMock.createNiceMock(classOf[MetadataCache])
+    val metadataCache: MetadataCache = EasyMock.createNiceMock(classOf[MetadataCache])
     EasyMock.expect(metadataCache.getPartitionLeaderEndpoint(
       EasyMock.anyString(),
       EasyMock.anyInt(),
       EasyMock.anyObject())
     ).andReturn(Some(brokerNode)).anyTimes()
-    val networkClient = EasyMock.createNiceMock(classOf[NetworkClient])
+    val networkClient: NetworkClient = EasyMock.createNiceMock(classOf[NetworkClient])
     txnMarkerChannelManager = new TransactionMarkerChannelManager(
       KafkaConfig.fromProps(serverProps),
       metadataCache,
@@ -116,7 +115,7 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
   }
 
   @After
-  override def tearDown() {
+  override def tearDown(): Unit = {
     try {
       EasyMock.reset(zkClient, replicaManager)
       transactionCoordinator.shutdown()
@@ -181,7 +180,7 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
         val request = requestAndHandler.request.asInstanceOf[WriteTxnMarkersRequest.Builder].build()
         val response = createResponse(request)
         requestAndHandler.handler.onComplete(new ClientResponse(new RequestHeader(ApiKeys.PRODUCE, 0, "client", 1),
-          null, null, 0, 0, false, null, response))
+          null, null, 0, 0, false, null, null, response))
       }
     }
   }
@@ -248,20 +247,32 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
 
   private def prepareTxnLog(partitionId: Int): Unit = {
 
-    val logMock =  EasyMock.mock(classOf[Log])
-    val fileRecordsMock = EasyMock.mock(classOf[FileRecords])
+    val logMock: Log =  EasyMock.mock(classOf[Log])
+    val fileRecordsMock: FileRecords = EasyMock.mock(classOf[FileRecords])
 
     val topicPartition = new TopicPartition(TRANSACTION_STATE_TOPIC_NAME, partitionId)
     val startOffset = replicaManager.getLogEndOffset(topicPartition).getOrElse(20L)
-    val records = MemoryRecords.withRecords(startOffset, CompressionType.NONE, txnRecordsByPartition(partitionId): _*)
+    val records = MemoryRecords.withRecords(startOffset, CompressionType.NONE, txnRecordsByPartition(partitionId).toArray: _*)
     val endOffset = startOffset + records.records.asScala.size
 
     EasyMock.expect(logMock.logStartOffset).andStubReturn(startOffset)
-    EasyMock.expect(logMock.read(EasyMock.eq(startOffset), EasyMock.anyInt(), EasyMock.eq(None),
-      EasyMock.eq(true), EasyMock.eq(IsolationLevel.READ_UNCOMMITTED)))
+    EasyMock.expect(logMock.read(EasyMock.eq(startOffset),
+      maxLength = EasyMock.anyInt(),
+      isolation = EasyMock.eq(FetchLogEnd),
+      minOneMessage = EasyMock.eq(true)))
       .andReturn(FetchDataInfo(LogOffsetMetadata(startOffset), fileRecordsMock))
-    EasyMock.expect(fileRecordsMock.readInto(EasyMock.anyObject(classOf[ByteBuffer]), EasyMock.anyInt()))
-      .andReturn(records.buffer)
+
+    EasyMock.expect(fileRecordsMock.sizeInBytes()).andStubReturn(records.sizeInBytes)
+
+    val bufferCapture = EasyMock.newCapture[ByteBuffer]
+    fileRecordsMock.readInto(EasyMock.capture(bufferCapture), EasyMock.anyInt())
+    EasyMock.expectLastCall().andAnswer(new IAnswer[Unit] {
+      override def answer: Unit = {
+        val buffer = bufferCapture.getValue
+        buffer.put(records.buffer.duplicate)
+        buffer.flip()
+      }
+    })
 
     EasyMock.replay(logMock, fileRecordsMock)
     synchronized {
@@ -333,7 +344,7 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
 
   class LoadTxnPartitionAction(txnTopicPartitionId: Int) extends Action {
     override def run(): Unit = {
-      transactionCoordinator.handleTxnImmigration(txnTopicPartitionId, coordinatorEpoch)
+      transactionCoordinator.onElection(txnTopicPartitionId, coordinatorEpoch)
     }
     override def await(): Unit = {
       allTransactions.foreach { txn =>
@@ -347,7 +358,7 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
   class UnloadTxnPartitionAction(txnTopicPartitionId: Int) extends Action {
     val txnRecords: mutable.ArrayBuffer[SimpleRecord] = mutable.ArrayBuffer[SimpleRecord]()
     override def run(): Unit = {
-      transactionCoordinator.handleTxnEmigration(txnTopicPartitionId, coordinatorEpoch)
+      transactionCoordinator.onResignation(txnTopicPartitionId, Some(coordinatorEpoch))
     }
     override def await(): Unit = {
       allTransactions.foreach { txn =>

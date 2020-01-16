@@ -133,7 +133,7 @@ public final class Kibosh {
 
         @JsonCreator
         public KiboshControlFile(@JsonProperty("faults") List<KiboshFaultSpec> faults) {
-            this.faults = faults;
+            this.faults = faults == null ? new ArrayList<KiboshFaultSpec>() : faults;
         }
 
         @JsonProperty

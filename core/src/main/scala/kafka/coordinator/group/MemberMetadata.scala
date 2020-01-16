@@ -20,14 +20,17 @@ package kafka.coordinator.group
 import java.util
 
 import kafka.utils.nonthreadsafe
-import org.apache.kafka.common.protocol.Errors
-
 
 case class MemberSummary(memberId: String,
+                         groupInstanceId: Option[String],
                          clientId: String,
                          clientHost: String,
                          metadata: Array[Byte],
                          assignment: Array[Byte])
+
+private object MemberMetadata {
+  def plainProtocolSet(supportedProtocols: List[(String, Array[Byte])]) = supportedProtocols.map(_._1).toSet
+}
 
 /**
  * Member metadata contains the following metadata:
@@ -50,8 +53,9 @@ case class MemberSummary(memberId: String,
  *                            and the group transitions to stable
  */
 @nonthreadsafe
-private[group] class MemberMetadata(val memberId: String,
+private[group] class MemberMetadata(var memberId: String,
                                     val groupId: String,
+                                    val groupInstanceId: Option[String],
                                     val clientId: String,
                                     val clientHost: String,
                                     val rebalanceTimeoutMs: Int,
@@ -61,11 +65,14 @@ private[group] class MemberMetadata(val memberId: String,
 
   var assignment: Array[Byte] = Array.empty[Byte]
   var awaitingJoinCallback: JoinGroupResult => Unit = null
-  var awaitingSyncCallback: (Array[Byte], Errors) => Unit = null
+  var awaitingSyncCallback: SyncGroupResult => Unit = null
   var latestHeartbeat: Long = -1
   var isLeaving: Boolean = false
+  var isNew: Boolean = false
+  val isStaticMember: Boolean = groupInstanceId.isDefined
 
-  def protocols = supportedProtocols.map(_._1).toSet
+  def isAwaitingJoin = awaitingJoinCallback != null
+  def isAwaitingSync = awaitingSyncCallback != null
 
   /**
    * Get metadata corresponding to the provided protocol.
@@ -75,6 +82,19 @@ private[group] class MemberMetadata(val memberId: String,
       case Some((_, metadata)) => metadata
       case None =>
         throw new IllegalArgumentException("Member does not support protocol")
+    }
+  }
+
+  def shouldKeepAlive(deadlineMs: Long): Boolean = {
+    if (isNew) {
+      // New members are expired after the static join timeout
+      latestHeartbeat + GroupCoordinator.NewMemberJoinTimeoutMs > deadlineMs
+    } else if (isAwaitingJoin || isAwaitingSync) {
+      // Don't remove members as long as they have a request in purgatory
+      true
+    } else {
+      // Otherwise check for session expiration
+      latestHeartbeat + sessionTimeoutMs > deadlineMs
     }
   }
 
@@ -95,11 +115,11 @@ private[group] class MemberMetadata(val memberId: String,
   }
 
   def summary(protocol: String): MemberSummary = {
-    MemberSummary(memberId, clientId, clientHost, metadata(protocol), assignment)
+    MemberSummary(memberId, groupInstanceId, clientId, clientHost, metadata(protocol), assignment)
   }
 
   def summaryNoMetadata(): MemberSummary = {
-    MemberSummary(memberId, clientId, clientHost, Array.empty[Byte], Array.empty[Byte])
+    MemberSummary(memberId, groupInstanceId, clientId, clientHost, Array.empty[Byte], Array.empty[Byte])
   }
 
   /**
@@ -117,6 +137,7 @@ private[group] class MemberMetadata(val memberId: String,
   override def toString: String = {
     "MemberMetadata(" +
       s"memberId=$memberId, " +
+      s"groupInstanceId=$groupInstanceId, " +
       s"clientId=$clientId, " +
       s"clientHost=$clientHost, " +
       s"sessionTimeoutMs=$sessionTimeoutMs, " +
@@ -124,5 +145,4 @@ private[group] class MemberMetadata(val memberId: String,
       s"supportedProtocols=${supportedProtocols.map(_._1)}, " +
       ")"
   }
-
 }

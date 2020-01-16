@@ -34,4 +34,28 @@ class LoggingTest extends Logging {
     val instance = mbs.getObjectInstance(log4jControllerName)
     assertEquals("kafka.utils.Log4jController", instance.getClassName)
   }
+
+  @Test
+  def testLogNameOverride(): Unit = {
+    class TestLogging(overriddenLogName: String) extends Logging {
+      // Expose logger
+      def log = logger
+      override def loggerName = overriddenLogName
+    }
+    val overriddenLogName = "OverriddenLogName"
+    val logging = new TestLogging(overriddenLogName)
+
+    assertEquals(overriddenLogName, logging.log.underlying.getName)
+  }
+
+  @Test
+  def testLogName(): Unit = {
+    class TestLogging extends Logging {
+      // Expose logger
+      def log = logger
+    }
+    val logging = new TestLogging
+
+    assertEquals(logging.getClass.getName, logging.log.underlying.getName)
+  }
 }

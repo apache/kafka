@@ -92,7 +92,7 @@ public class MockScheduler implements Scheduler, MockTime.MockTimeListener {
             public Void apply(final Long now) {
                 executor.submit(new Callable<Void>() {
                     @Override
-                    public Void call() throws Exception {
+                    public Void call() {
                         // Note: it is possible that we'll execute Callable#call right after
                         // the future is cancelled.  This is a valid sequence of events
                         // that the author of the Callable needs to be able to handle.

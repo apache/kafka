@@ -49,8 +49,8 @@ public class MaterializedInternalTest {
 
         EasyMock.replay(nameProvider);
 
-        final MaterializedInternal<Object, Object, StateStore> materialized
-                = new MaterializedInternal<>(Materialized.with(null, null), nameProvider, prefix);
+        final MaterializedInternal<Object, Object, StateStore> materialized =
+            new MaterializedInternal<>(Materialized.with(null, null), nameProvider, prefix);
 
         assertThat(materialized.storeName(), equalTo(generatedName));
         EasyMock.verify(nameProvider);
@@ -59,8 +59,8 @@ public class MaterializedInternalTest {
     @Test
     public void shouldUseProvidedStoreNameWhenSet() {
         final String storeName = "store-name";
-        final MaterializedInternal<Object, Object, StateStore> materialized
-                = new MaterializedInternal<>(Materialized.as(storeName), nameProvider, prefix);
+        final MaterializedInternal<Object, Object, StateStore> materialized =
+            new MaterializedInternal<>(Materialized.as(storeName), nameProvider, prefix);
         assertThat(materialized.storeName(), equalTo(storeName));
     }
 
@@ -69,8 +69,8 @@ public class MaterializedInternalTest {
         final String storeName = "other-store-name";
         EasyMock.expect(supplier.name()).andReturn(storeName).anyTimes();
         EasyMock.replay(supplier);
-        final MaterializedInternal<Object, Object, KeyValueStore<Bytes, byte[]>> materialized
-                = new MaterializedInternal<>(Materialized.as(supplier), nameProvider, prefix);
+        final MaterializedInternal<Object, Object, KeyValueStore<Bytes, byte[]>> materialized =
+            new MaterializedInternal<>(Materialized.as(supplier), nameProvider, prefix);
         assertThat(materialized.storeName(), equalTo(storeName));
     }
 }

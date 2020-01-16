@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.connect.data;
 
-import org.apache.kafka.common.utils.Base64;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.data.Schema.Type;
 import org.apache.kafka.connect.errors.DataException;
@@ -31,6 +30,7 @@ import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.text.StringCharacterIterator;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.Calendar;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
@@ -38,6 +38,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.TimeZone;
+import java.util.regex.Pattern;
 
 /**
  * Utility for converting from one Connect value to a different form. This is useful when the caller expects a value of a particular type
@@ -66,10 +67,10 @@ public class Values {
     private static final Schema MAP_SELECTOR_SCHEMA = SchemaBuilder.map(Schema.STRING_SCHEMA, Schema.STRING_SCHEMA).build();
     private static final Schema STRUCT_SELECTOR_SCHEMA = SchemaBuilder.struct().build();
     private static final String TRUE_LITERAL = Boolean.TRUE.toString();
-    private static final String FALSE_LITERAL = Boolean.TRUE.toString();
+    private static final String FALSE_LITERAL = Boolean.FALSE.toString();
     private static final long MILLIS_PER_DAY = 24 * 60 * 60 * 1000;
     private static final String NULL_VALUE = "null";
-    private static final String ISO_8601_DATE_FORMAT_PATTERN = "YYYY-MM-DD";
+    private static final String ISO_8601_DATE_FORMAT_PATTERN = "yyyy-MM-dd";
     private static final String ISO_8601_TIME_FORMAT_PATTERN = "HH:mm:ss.SSS'Z'";
     private static final String ISO_8601_TIMESTAMP_FORMAT_PATTERN = ISO_8601_DATE_FORMAT_PATTERN + "'T'" + ISO_8601_TIME_FORMAT_PATTERN;
 
@@ -83,6 +84,10 @@ public class Values {
     private static final int ISO_8601_DATE_LENGTH = ISO_8601_DATE_FORMAT_PATTERN.length();
     private static final int ISO_8601_TIME_LENGTH = ISO_8601_TIME_FORMAT_PATTERN.length() - 2; // subtract single quotes
     private static final int ISO_8601_TIMESTAMP_LENGTH = ISO_8601_TIMESTAMP_FORMAT_PATTERN.length() - 4; // subtract single quotes
+
+    private static final Pattern TWO_BACKSLASHES = Pattern.compile("\\\\");
+
+    private static final Pattern DOUBLEQOUTE = Pattern.compile("\"");
 
     /**
      * Convert the specified value to an {@link Type#BOOLEAN} value. The supplied schema is required if the value is a logical
@@ -483,7 +488,7 @@ public class Values {
                                 Calendar calendar = Calendar.getInstance(UTC);
                                 calendar.setTime((java.util.Date) value);
                                 calendar.set(Calendar.YEAR, 1970);
-                                calendar.set(Calendar.MONTH, 1);
+                                calendar.set(Calendar.MONTH, 0); // Months are zero-based
                                 calendar.set(Calendar.DAY_OF_MONTH, 1);
                                 return Time.toLogical(toSchema, (int) calendar.getTimeInMillis());
                             }
@@ -644,7 +649,7 @@ public class Values {
                 sb.append(value);
             }
         } else if (value instanceof byte[]) {
-            value = Base64.encoder().encodeToString((byte[]) value);
+            value = Base64.getEncoder().encodeToString((byte[]) value);
             if (embedded) {
                 sb.append('"').append(value).append('"');
             } else {
@@ -704,10 +709,11 @@ public class Values {
     }
 
     protected static String escape(String value) {
-        return value.replaceAll("\\\\", "\\\\\\\\").replaceAll("\"", "\\\\\"");
+        String replace1 = TWO_BACKSLASHES.matcher(value).replaceAll("\\\\\\\\");
+        return DOUBLEQOUTE.matcher(replace1).replaceAll("\\\\\"");
     }
 
-    protected static DateFormat dateFormatFor(java.util.Date value) {
+    public static DateFormat dateFormatFor(java.util.Date value) {
         if (value.getTime() < MILLIS_PER_DAY) {
             return new SimpleDateFormat(ISO_8601_TIME_FORMAT_PATTERN);
         }
@@ -749,9 +755,15 @@ public class Values {
                 Schema elementSchema = null;
                 while (parser.hasNext()) {
                     if (parser.canConsume(ARRAY_END_DELIMITER)) {
-                        Schema listSchema = elementSchema == null ? null : SchemaBuilder.array(elementSchema).schema();
+                        Schema listSchema = null;
+                        if (elementSchema != null) {
+                            listSchema = SchemaBuilder.array(elementSchema).schema();
+                        }
                         result = alignListEntriesWithSchema(listSchema, result);
                         return new SchemaAndValue(listSchema, result);
+                    }
+                    if (parser.canConsume(COMMA_DELIMITER)) {
+                        throw new DataException("Unable to parse an empty array element: " + parser.original());
                     }
                     SchemaAndValue element = parse(parser, true);
                     elementSchema = commonSchemaFor(elementSchema, element);
@@ -760,9 +772,9 @@ public class Values {
                 }
                 // Missing either a comma or an end delimiter
                 if (COMMA_DELIMITER.equals(parser.previous())) {
-                    throw new DataException("Malformed array: missing element after ','");
+                    throw new DataException("Array is missing element after ',': " + parser.original());
                 }
-                throw new DataException("Malformed array: missing terminating ']'");
+                throw new DataException("Array is missing terminating ']': " + parser.original());
             }
 
             if (parser.canConsume(MAP_BEGIN_DELIMITER)) {
@@ -771,17 +783,22 @@ public class Values {
                 Schema valueSchema = null;
                 while (parser.hasNext()) {
                     if (parser.canConsume(MAP_END_DELIMITER)) {
-                        Schema mapSchema =
-                                keySchema == null || valueSchema == null ? null : SchemaBuilder.map(keySchema, valueSchema).schema();
+                        Schema mapSchema = null;
+                        if (keySchema != null && valueSchema != null) {
+                            mapSchema = SchemaBuilder.map(keySchema, valueSchema).schema();
+                        }
                         result = alignMapKeysAndValuesWithSchema(mapSchema, result);
                         return new SchemaAndValue(mapSchema, result);
                     }
+                    if (parser.canConsume(COMMA_DELIMITER)) {
+                        throw new DataException("Unable to parse a map entry has no key or value: " + parser.original());
+                    }
                     SchemaAndValue key = parse(parser, true);
                     if (key == null || key.value() == null) {
-                        throw new DataException("Malformed map entry: null key");
+                        throw new DataException("Map entry may not have a null key: " + parser.original());
                     }
                     if (!parser.canConsume(ENTRY_DELIMITER)) {
-                        throw new DataException("Malformed map entry: missing '='");
+                        throw new DataException("Map entry is missing '=': " + parser.original());
                     }
                     SchemaAndValue value = parse(parser, true);
                     Object entryValue = value != null ? value.value() : null;
@@ -792,9 +809,9 @@ public class Values {
                 }
                 // Missing either a comma or an end delimiter
                 if (COMMA_DELIMITER.equals(parser.previous())) {
-                    throw new DataException("Malformed map: missing element after ','");
+                    throw new DataException("Map is missing element after ',': " + parser.original());
                 }
-                throw new DataException("Malformed array: missing terminating ']'");
+                throw new DataException("Map is missing terminating ']': " + parser.original());
             }
         } catch (DataException e) {
             LOG.debug("Unable to parse the value as a map; reverting to string", e);
@@ -855,7 +872,7 @@ public class Values {
                 }
             } else if (tokenLength == ISO_8601_TIMESTAMP_LENGTH) {
                 try {
-                    return new SchemaAndValue(Time.SCHEMA, new SimpleDateFormat(ISO_8601_TIMESTAMP_FORMAT_PATTERN).parse(token));
+                    return new SchemaAndValue(Timestamp.SCHEMA, new SimpleDateFormat(ISO_8601_TIMESTAMP_FORMAT_PATTERN).parse(token));
                 } catch (ParseException e) {
                     // not a valid date
                 }

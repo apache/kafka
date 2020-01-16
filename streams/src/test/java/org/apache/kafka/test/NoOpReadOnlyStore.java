@@ -23,15 +23,12 @@ import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 
 import java.io.File;
 
-public class NoOpReadOnlyStore<K, V>
-        implements ReadOnlyKeyValueStore<K, V>, StateStore {
-
+public class NoOpReadOnlyStore<K, V> implements ReadOnlyKeyValueStore<K, V>, StateStore {
     private final String name;
     private final boolean rocksdbStore;
     private boolean open = true;
     public boolean initialized;
     public boolean flushed;
-
 
     public NoOpReadOnlyStore() {
         this("", false);
@@ -95,7 +92,7 @@ public class NoOpReadOnlyStore<K, V>
 
     @Override
     public boolean persistent() {
-        return false;
+        return rocksdbStore;
     }
 
     @Override

@@ -28,7 +28,7 @@
   <p>
   Topics are added and modified using the topic tool:
   <pre class="brush: bash;">
-  &gt; bin/kafka-topics.sh --zookeeper zk_host:port/chroot --create --topic my_topic_name
+  &gt; bin/kafka-topics.sh --bootstrap-server broker_host:port --create --topic my_topic_name \
         --partitions 20 --replication-factor 3 --config x=y
   </pre>
   The replication factor controls how many servers will replicate each message that is written. If you have a replication factor of 3 then up to 2 servers can fail before you will lose access to your data. We recommend you use a replication factor of 2 or 3 so that you can transparently bounce machines without interrupting data consumption.
@@ -45,22 +45,22 @@
   <p>
   To add partitions you can do
   <pre class="brush: bash;">
-  &gt; bin/kafka-topics.sh --zookeeper zk_host:port/chroot --alter --topic my_topic_name
+  &gt; bin/kafka-topics.sh --bootstrap-server broker_host:port --alter --topic my_topic_name \
         --partitions 40
   </pre>
   Be aware that one use case for partitions is to semantically partition data, and adding partitions doesn't change the partitioning of existing data so this may disturb consumers if they rely on that partition. That is if data is partitioned by <code>hash(key) % number_of_partitions</code> then this partitioning will potentially be shuffled by adding partitions but Kafka will not attempt to automatically redistribute data in any way.
   <p>
   To add configs:
   <pre class="brush: bash;">
-  &gt; bin/kafka-configs.sh --zookeeper zk_host:port/chroot --entity-type topics --entity-name my_topic_name --alter --add-config x=y
+  &gt; bin/kafka-configs.sh --bootstrap-server broker_host:port --entity-type topics --entity-name my_topic_name --alter --add-config x=y
   </pre>
   To remove a config:
   <pre class="brush: bash;">
-  &gt; bin/kafka-configs.sh --zookeeper zk_host:port/chroot --entity-type topics --entity-name my_topic_name --alter --delete-config x
+  &gt; bin/kafka-configs.sh --bootstrap-server broker_host:port --entity-type topics --entity-name my_topic_name --alter --delete-config x
   </pre>
   And finally deleting a topic:
   <pre class="brush: bash;">
-  &gt; bin/kafka-topics.sh --zookeeper zk_host:port/chroot --delete --topic my_topic_name
+  &gt; bin/kafka-topics.sh --bootstrap-server broker_host:port --delete --topic my_topic_name
   </pre>
   <p>
   Kafka does not currently support reducing the number of partitions for a topic.
@@ -127,12 +127,7 @@
         --producer.config producer.properties --whitelist my-topic
   </pre>
   Note that we specify the list of topics with the <code>--whitelist</code> option. This option allows any regular expression using <a href="http://docs.oracle.com/javase/7/docs/api/java/util/regex/Pattern.html">Java-style regular expressions</a>. So you could mirror two topics named <i>A</i> and <i>B</i> using <code>--whitelist 'A|B'</code>. Or you could mirror <i>all</i> topics using <code>--whitelist '*'</code>. Make sure to quote any regular expression to ensure the shell doesn't try to expand it as a file path. For convenience we allow the use of ',' instead of '|' to specify a list of topics.
-  <p>
-  Sometimes it is easier to say what it is that you <i>don't</i> want. Instead of using <code>--whitelist</code> to say what you want
-  to mirror you can use <code>--blacklist</code> to say what to exclude. This also takes a regular expression argument.
-  However, <code>--blacklist</code> is not supported when the new consumer has been enabled (i.e. when <code>bootstrap.servers</code>
-  has been defined in the consumer configuration).
-  <p>
+
   Combining mirroring with the configuration <code>auto.create.topics.enable=true</code> makes it possible to have a replica cluster that will automatically create and replicate all data in a source cluster even as new topics are added.
 
   <h4><a id="basic_ops_consumer_lag" href="#basic_ops_consumer_lag">Checking consumer position</a></h4>
@@ -140,31 +135,15 @@
   <pre class="brush: bash;">
   &gt; bin/kafka-consumer-groups.sh --bootstrap-server localhost:9092 --describe --group my-group
 
-  Note: This will only show information about consumers that use the Java consumer API (non-ZooKeeper-based consumers).
-
   TOPIC                          PARTITION  CURRENT-OFFSET  LOG-END-OFFSET  LAG        CONSUMER-ID                                       HOST                           CLIENT-ID
   my-topic                       0          2               4               2          consumer-1-029af89c-873c-4751-a720-cefd41a669d6   /127.0.0.1                     consumer-1
   my-topic                       1          2               3               1          consumer-1-029af89c-873c-4751-a720-cefd41a669d6   /127.0.0.1                     consumer-1
   my-topic                       2          2               3               1          consumer-2-42c1abd4-e3b2-425d-a8bb-e1ea49b29bb2   /127.0.0.1                     consumer-2
   </pre>
 
-  This tool also works with ZooKeeper-based consumers:
-  <pre class="brush: bash;">
-  &gt; bin/kafka-consumer-groups.sh --zookeeper localhost:2181 --describe --group my-group
-
-  Note: This will only show information about consumers that use ZooKeeper (not those using the Java consumer API).
-
-  TOPIC                          PARTITION  CURRENT-OFFSET  LOG-END-OFFSET  LAG        CONSUMER-ID
-  my-topic                       0          2               4               2          my-group_consumer-1
-  my-topic                       1          2               3               1          my-group_consumer-1
-  my-topic                       2          2               3               1          my-group_consumer-2
-  </pre>
-
   <h4><a id="basic_ops_consumer_group" href="#basic_ops_consumer_group">Managing Consumer Groups</a></h4>
 
-  With the ConsumerGroupCommand tool, we can list, describe, or delete consumer groups. Note that deletion is only available when the group metadata is stored in
-  ZooKeeper. When using the <a href="http://kafka.apache.org/documentation.html#newconsumerapi">new consumer API</a> (where
-  the broker handles coordination of partition handling and rebalance), the group is deleted when the last committed offset for that group expires.
+  With the ConsumerGroupCommand tool, we can list, describe, or delete the consumer groups. The consumer group can be deleted manually, or automatically when the last committed offset for that group expires. Manual deletion works only if the group does not have any active members.
 
   For example, to list all consumer groups across all topics:
 
@@ -188,7 +167,7 @@
   topic3          2          243655          398812          155157          consumer4-117fe4d3-c6c1-4178-8ee9-eb4a3954bee0 /127.0.0.1      consumer4
   </pre>
 
-  There are a number of additional "describe" options that can be used to provide more detailed information about a consumer group that uses the new consumer API:
+  There are a number of additional "describe" options that can be used to provide more detailed information about a consumer group:
   <ul>
     <li>--members: This option provides the list of all active members in the consumer group.
       <pre class="brush: bash;">
@@ -222,6 +201,76 @@
       </pre>
     </li>
   </ul>
+
+  To manually delete one or multiple consumer groups, the "--delete" option can be used:
+  <pre class="brush: bash;">
+  &gt; bin/kafka-consumer-groups.sh --bootstrap-server localhost:9092 --delete --group my-group --group my-other-group
+
+  Deletion of requested consumer groups ('my-group', 'my-other-group') was successful.
+  </pre>
+
+  <p>
+  To reset offsets of a consumer group, "--reset-offsets" option can be used.
+  This option supports one consumer group at the time. It requires defining following scopes: --all-topics or --topic. One scope must be selected, unless you use '--from-file' scenario. Also, first make sure that the consumer instances are inactive.
+  See  <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-122%3A+Add+Reset+Consumer+Group+Offsets+tooling">KIP-122</a> for more details.
+
+  <p>
+  It has 3 execution options:
+  <ul>
+    <li>
+      (default) to display which offsets to reset.
+    </li>
+    <li>
+      --execute : to execute --reset-offsets process.
+    </li>
+    <li>
+      --export : to export the results to a CSV format.
+    </li>
+  </ul>
+
+  <p>
+  --reset-offsets also has following scenarios to choose from (atleast one scenario must be selected):
+  <ul>
+    <li>
+      --to-datetime &lt;String: datetime&gt; : Reset offsets to offsets from datetime. Format: 'YYYY-MM-DDTHH:mm:SS.sss'
+    </li>
+    <li>
+      --to-earliest : Reset offsets to earliest offset.
+    </li>
+    <li>
+      --to-latest : Reset offsets to latest offset.
+    </li>
+    <li>
+      --shift-by &lt;Long: number-of-offsets&gt; : Reset offsets shifting current offset by 'n', where 'n' can be positive or negative.
+    </li>
+    <li>
+      --from-file : Reset offsets to values defined in CSV file.
+    </li>
+    <li>
+      --to-current : Resets offsets to current offset.
+    </li>
+    <li>
+      --by-duration &lt;String: duration&gt; : Reset offsets to offset by duration from current timestamp. Format: 'PnDTnHnMnS'
+    </li>
+    <li>
+      --to-offset : Reset offsets to a specific offset.
+    </li>
+  </ul>
+
+  Please note, that out of range offsets will be adjusted to available offset end. For example, if offset end is at 10 and offset shift request is
+  of 15, then, offset at 10 will actually be selected.
+
+  <p>
+  For example, to reset offsets of a consumer group to the latest offset:
+
+  <pre class="brush: bash;">
+  &gt; bin/kafka-consumer-groups.sh --bootstrap-server localhost:9092 --reset-offsets --group consumergroup1 --topic topic1 --to-latest
+
+  TOPIC                          PARTITION  NEW-OFFSET
+  topic1                         0          0
+  </pre>
+
+  <p>
 
   If you are using the old high-level consumer and storing the group metadata in ZooKeeper (i.e. <code>offsets.storage=zookeeper</code>), pass
   <code>--zookeeper</code> instead of <code>bootstrap-server</code>:
@@ -393,7 +442,7 @@
   </pre>
   You can also verify the increase in replication factor with the kafka-topics tool:
   <pre class="brush: bash;">
-  > bin/kafka-topics.sh --zookeeper localhost:2181 --topic foo --describe
+  > bin/kafka-topics.sh --bootstrap-server localhost:9092 --topic foo --describe
   Topic:foo	PartitionCount:1	ReplicationFactor:3	Configs:
     Topic: foo	Partition: 0	Leader: 5	Replicas: 5,6,7	Isr: 5,6,7
   </pre>
@@ -404,7 +453,7 @@
   There are two interfaces that can be used to engage a throttle. The simplest, and safest, is to apply a throttle when invoking the kafka-reassign-partitions.sh, but kafka-configs.sh can also be used to view and alter the throttle values directly.
   <p></p>
   So for example, if you were to execute a rebalance, with the below command, it would move partitions at no more than 50MB/s.
-  <pre class="brush: bash;">$ bin/kafka-reassign-partitions.sh --zookeeper myhost:2181--execute --reassignment-json-file bigger-cluster.json —throttle 50000000</pre>
+  <pre class="brush: bash;">$ bin/kafka-reassign-partitions.sh --zookeeper localhost:2181 --execute --reassignment-json-file bigger-cluster.json —throttle 50000000</pre>
   When you execute this script you will see the throttle engage:
   <pre class="brush: bash;">
   The throttle limit was set to 50000000 B/s
@@ -591,14 +640,8 @@
   <h3><a id="config" href="#config">6.3 Kafka Configuration</a></h3>
 
   <h4><a id="clientconfig" href="#clientconfig">Important Client Configurations</a></h4>
-  The most important old Scala producer configurations control
-  <ul>
-      <li>acks</li>
-      <li>compression</li>
-      <li>sync vs async production</li>
-      <li>batch size (for async producers)</li>
-  </ul>
-  The most important new Java producer configurations control
+
+  The most important producer configurations are:
   <ul>
       <li>acks</li>
       <li>compression</li>
@@ -633,9 +676,7 @@
 
   From a security perspective, we recommend you use the latest released version of JDK 1.8 as older freely available versions have disclosed security vulnerabilities.
 
-  LinkedIn is currently running JDK 1.8 u5 (looking to upgrade to a newer version) with the G1 collector. If you decide to use the G1 collector (the current default) and you are still on JDK 1.7, make sure you are on u51 or newer. LinkedIn tried out u21 in testing, but they had a number of problems with the GC implementation in that version.
-
-  LinkedIn's tuning looks like this:
+  LinkedIn is currently running JDK 1.8 u5 (looking to upgrade to a newer version) with the G1 collector. LinkedIn's tuning looks like this:
   <pre class="brush: text;">
   -Xmx6g -Xms6g -XX:MetaspaceSize=96m -XX:+UseG1GC
   -XX:MaxGCPauseMillis=20 -XX:InitiatingHeapOccupancyPercent=35 -XX:G1HeapRegionSize=16M
@@ -664,10 +705,11 @@
   <p>
   We have seen a few issues running on Windows and Windows is not currently a well supported platform though we would be happy to change that.
   <p>
-  It is unlikely to require much OS-level tuning, but there are two potentially important OS-level configurations:
+  It is unlikely to require much OS-level tuning, but there are three potentially important OS-level configurations:
   <ul>
-      <li>File descriptor limits: Kafka uses file descriptors for log segments and open connections.  If a broker hosts many partitions, consider that the broker needs at least (number_of_partitions)*(partition_size/segment_size) to track all log segments in addition to the number of connections the broker makes.  We recommend at least 100000 allowed file descriptors for the broker processes as a starting point.
+      <li>File descriptor limits: Kafka uses file descriptors for log segments and open connections.  If a broker hosts many partitions, consider that the broker needs at least (number_of_partitions)*(partition_size/segment_size) to track all log segments in addition to the number of connections the broker makes. We recommend at least 100000 allowed file descriptors for the broker processes as a starting point. Note: The mmap() function adds an extra reference to the file associated with the file descriptor fildes which is not removed by a subsequent close() on that file descriptor. This reference is removed when there are no more mappings to the file.
       <li>Max socket buffer size: can be increased to enable high-performance data transfer between data centers as <a href="http://www.psc.edu/index.php/networking/641-tcp-tune">described here</a>.
+      <li>Maximum number of memory map areas a process may have (aka vm.max_map_count). <a href="http://kernel.org/doc/Documentation/sysctl/vm.txt">See the Linux kernel documentation</a>. You should keep an eye at this OS-level property when considering the maximum number of partitions a broker may have. By default, on a number of Linux systems, the value of vm.max_map_count is somewhere around 65535. Each log segment, allocated per partition, requires a pair of index/timeindex files, and each of these files consumes 1 map area. In other words, each log segment uses 2 map areas. Thus, each partition requires minimum 2 map areas, as long as it hosts a single log segment. That is to say, creating 50000 partitions on a broker will result allocation of 100000 map areas and likely cause broker crash with OutOfMemoryError (Map failed) on a system with default vm.max_map_count. Keep in mind that the number of log segments per partition varies depending on the segment size, load intensity, retention policy and, generally, tends to be more than one.
   </ul>
   <p>
 
@@ -738,12 +780,22 @@
 
   <h3><a id="monitoring" href="#monitoring">6.6 Monitoring</a></h3>
 
-  Kafka uses Yammer Metrics for metrics reporting in the server and Scala clients. The Java clients use Kafka Metrics, a built-in metrics registry that minimizes transitive dependencies pulled into client applications. Both expose metrics via JMX and can be configured to report stats using pluggable stats reporters to hook up to your monitoring system.
+  Kafka uses Yammer Metrics for metrics reporting in the server. The Java clients use Kafka Metrics, a built-in metrics registry that minimizes transitive dependencies pulled into client applications. Both expose metrics via JMX and can be configured to report stats using pluggable stats reporters to hook up to your monitoring system.
   <p>
   All Kafka rate metrics have a corresponding cumulative count metric with suffix <code>-total</code>. For example,
   <code>records-consumed-rate</code> has a corresponding metric named <code>records-consumed-total</code>.
   <p>
   The easiest way to see the available metrics is to fire up jconsole and point it at a running kafka client or server; this will allow browsing all metrics with JMX.
+
+  <h4><a id="remote_jmx" href="#remote_jmx">Security Considerations for Remote Monitoring using JMX</a></h4>
+  Apache Kafka disables remote JMX by default. You can enable remote monitoring using JMX by setting the environment variable
+  <code>JMX_PORT</code> for processes started using the CLI or standard Java system properties to enable remote JMX programmatically.
+  You must enable security when enabling remote JMX in production scenarios to ensure that unauthorized users cannot monitor or
+  control your broker or application as well as the platform on which these are running. Note that authentication is disabled for
+  JMX by default in Kafka and security configs must be overridden for production deployments by setting the environment variable
+  <code>KAFKA_JMX_OPTS</code> for processes started using the CLI or by setting appropriate Java system properties. See
+  <a href=https://docs.oracle.com/javase/8/docs/technotes/guides/management/agent.html">Monitoring and Management Using JMX Technology</a>
+  for details on securing JMX.
   <p>
   We do graphing and alerting on the following metrics:
   <table class="data-table">
@@ -758,8 +810,13 @@
         <td></td>
       </tr>
       <tr>
-        <td>Byte in rate</td>
+        <td>Byte in rate from clients</td>
         <td>kafka.server:type=BrokerTopicMetrics,name=BytesInPerSec</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td>Byte in rate from other brokers</td>
+        <td>kafka.server:type=BrokerTopicMetrics,name=ReplicationBytesInPerSec</td>
         <td></td>
       </tr>
       <tr>
@@ -794,8 +851,33 @@
         <td>Number of records which required message format conversion.</td>
       </tr>
       <tr>
-        <td>Byte out rate</td>
+        <td>Byte out rate to clients</td>
         <td>kafka.server:type=BrokerTopicMetrics,name=BytesOutPerSec</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td>Byte out rate to other brokers</td>
+        <td>kafka.server:type=BrokerTopicMetrics,name=ReplicationBytesOutPerSec</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td>Message validation failure rate due to no key specified for compacted topic</td>
+        <td>kafka.server:type=BrokerTopicMetrics,name=NoKeyCompactedTopicRecordsPerSec</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td>Message validation failure rate due to invalid magic number</td>
+        <td>kafka.server:type=BrokerTopicMetrics,name=InvalidMagicNumberRecordsPerSec</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td>Message validation failure rate due to incorrect crc checksum</td>
+        <td>kafka.server:type=BrokerTopicMetrics,name=InvalidMessageCrcRecordsPerSec</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td>Message validation failure rate due to non-continuous offset or sequence number in batch</td>
+        <td>kafka.server:type=BrokerTopicMetrics,name=InvalidOffsetOrSequenceRecordsPerSec</td>
         <td></td>
       </tr>
       <tr>
@@ -811,6 +893,11 @@
       <tr>
         <td># of under minIsr partitions (|ISR| &lt min.insync.replicas)</td>
         <td>kafka.server:type=ReplicaManager,name=UnderMinIsrPartitionCount</td>
+        <td>0</td>
+      </tr>
+      <tr>
+        <td># of at minIsr partitions (|ISR| = min.insync.replicas)</td>
+        <td>kafka.server:type=ReplicaManager,name=AtMinIsrPartitionCount</td>
         <td>0</td>
       </tr>
       <tr>
@@ -832,6 +919,26 @@
         <td>Unclean leader election rate</td>
         <td>kafka.controller:type=ControllerStats,name=UncleanLeaderElectionsPerSec</td>
         <td>0</td>
+      </tr>
+      <tr>
+        <td>Pending topic deletes</td>
+        <td>kafka.controller:type=KafkaController,name=TopicsToDeleteCount</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td>Pending replica deletes</td>
+        <td>kafka.controller:type=KafkaController,name=ReplicasToDeleteCount</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td>Ineligible pending topic deletes</td>
+        <td>kafka.controller:type=KafkaController,name=TopicsIneligibleToDeleteCount</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td>Ineligible pending replica deletes</td>
+        <td>kafka.controller:type=KafkaController,name=ReplicasIneligibleToDeleteCount</td>
+        <td></td>
       </tr>
       <tr>
         <td>Partition counts</td>
@@ -908,16 +1015,23 @@
       </tr>
       <tr>
         <td>Number of messages the consumer lags behind the producer by. Published by the consumer, not broker.</td>
-        <td>
-          <p><em>Old consumer:</em> kafka.consumer:type=ConsumerFetcherManager,name=MaxLag,clientId=([-.\w]+)</p>
-          <p><em>New consumer:</em> kafka.consumer:type=consumer-fetch-manager-metrics,client-id={client-id} Attribute: records-lag-max</p>
-        </td>
+        <td>kafka.consumer:type=consumer-fetch-manager-metrics,client-id={client-id} Attribute: records-lag-max</td>
         <td></td>
       </tr>
       <tr>
         <td>The average fraction of time the network processors are idle</td>
         <td>kafka.network:type=SocketServer,name=NetworkProcessorAvgIdlePercent</td>
         <td>between 0 and 1, ideally &gt 0.3</td>
+      </tr>
+      <tr>
+        <td>The number of connections disconnected on a processor due to a client not re-authenticating and then using the connection beyond its expiration time for anything other than re-authentication</td>
+        <td>kafka.server:type=socket-server-metrics,listener=[SASL_PLAINTEXT|SASL_SSL],networkProcessor=&lt;#&gt;,name=expired-connections-killed-count</td>
+        <td>ideally 0 when re-authentication is enabled, implying there are no longer any older, pre-2.2.0 clients connecting to this (listener, processor) combination</td>
+      </tr>
+      <tr>
+        <td>The total number of connections disconnected, across all processors, due to a client not re-authenticating and then using the connection beyond its expiration time for anything other than re-authentication</td>
+        <td>kafka.network:type=SocketServer,name=ExpiredConnectionsKilledCount</td>
+        <td>ideally 0 when re-authentication is enabled, implying there are no longer any older, pre-2.2.0 clients connecting to this broker</td>
       </tr>
       <tr>
         <td>The average fraction of time the request handler threads are idle</td>
@@ -955,6 +1069,26 @@
         <td>Connection status of broker's ZooKeeper session which may be one of
             Disconnected|SyncConnected|AuthFailed|ConnectedReadOnly|SaslAuthenticated|Expired.</td>
       </tr>
+      <tr>
+        <td>Max time to load group metadata</td>
+        <td>kafka.server:type=group-coordinator-metrics,name=partition-load-time-max</td>
+        <td>maximum time, in milliseconds, it took to load offsets and group metadata from the consumer offset partitions loaded in the last 30 seconds</td>
+      </tr>
+      <tr>
+        <td>Avg time to load group metadata</td>
+        <td>kafka.server:type=group-coordinator-metrics,name=partition-load-time-avg</td>
+        <td>average time, in milliseconds, it took to load offsets and group metadata from the consumer offset partitions loaded in the last 30 seconds</td>
+      </tr>
+      <tr>
+        <td>Max time to load transaction metadata</td>
+        <td>kafka.server:type=transaction-coordinator-metrics,name=partition-load-time-max</td>
+        <td>maximum time, in milliseconds, it took to load transaction metadata from the consumer offset partitions loaded in the last 30 seconds</td>
+      </tr>
+      <tr>
+        <td>Avg time to load transaction metadata</td>
+        <td>kafka.server:type=transaction-coordinator-metrics,name=partition-load-time-avg</td>
+        <td>average time, in milliseconds, it took to load transaction metadata from the consumer offset partitions loaded in the last 30 seconds</td>
+      </tr>
   </tbody></table>
 
   <h4><a id="selector_monitoring" href="#selector_monitoring">Common monitoring metrics for producer/consumer/connect/streams</a></h4>
@@ -974,8 +1108,18 @@
         <td>kafka.[producer|consumer|connect]:type=[producer|consumer|connect]-metrics,client-id=([-.\w]+)</td>
       </tr>
       <tr>
+        <td>connection-close-total</td>
+        <td>Total connections closed in the window.</td>
+        <td>kafka.[producer|consumer|connect]:type=[producer|consumer|connect]-metrics,client-id=([-.\w]+)</td>
+      </tr>
+      <tr>
         <td>connection-creation-rate</td>
         <td>New connections established per second in the window.</td>
+        <td>kafka.[producer|consumer|connect]:type=[producer|consumer|connect]-metrics,client-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>connection-creation-total</td>
+        <td>Total new connections established in the window.</td>
         <td>kafka.[producer|consumer|connect]:type=[producer|consumer|connect]-metrics,client-id=([-.\w]+)</td>
       </tr>
       <tr>
@@ -984,13 +1128,28 @@
         <td>kafka.[producer|consumer|connect]:type=[producer|consumer|connect]-metrics,client-id=([-.\w]+)</td>
       </tr>
       <tr>
+        <td>network-io-total</td>
+        <td>The total number of network operations (reads or writes) on all connections.</td>
+        <td>kafka.[producer|consumer|connect]:type=[producer|consumer|connect]-metrics,client-id=([-.\w]+)</td>
+      </tr>
+      <tr>
         <td>outgoing-byte-rate</td>
         <td>The average number of outgoing bytes sent per second to all servers.</td>
         <td>kafka.[producer|consumer|connect]:type=[producer|consumer|connect]-metrics,client-id=([-.\w]+)</td>
       </tr>
       <tr>
+        <td>outgoing-byte-total</td>
+        <td>The total number of outgoing bytes sent to all servers.</td>
+        <td>kafka.[producer|consumer|connect]:type=[producer|consumer|connect]-metrics,client-id=([-.\w]+)</td>
+      </tr>
+      <tr>
         <td>request-rate</td>
         <td>The average number of requests sent per second.</td>
+        <td>kafka.[producer|consumer|connect]:type=[producer|consumer|connect]-metrics,client-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>request-total</td>
+        <td>The total number of requests sent.</td>
         <td>kafka.[producer|consumer|connect]:type=[producer|consumer|connect]-metrics,client-id=([-.\w]+)</td>
       </tr>
       <tr>
@@ -1009,13 +1168,28 @@
         <td>kafka.[producer|consumer|connect]:type=[producer|consumer|connect]-metrics,client-id=([-.\w]+)</td>
       </tr>
       <tr>
+        <td>incoming-byte-total</td>
+        <td>Total bytes read off all sockets.</td>
+        <td>kafka.[producer|consumer|connect]:type=[producer|consumer|connect]-metrics,client-id=([-.\w]+)</td>
+      </tr>
+      <tr>
         <td>response-rate</td>
-        <td>Responses received sent per second.</td>
+        <td>Responses received per second.</td>
+        <td>kafka.[producer|consumer|connect]:type=[producer|consumer|connect]-metrics,client-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>response-total</td>
+        <td>Total responses received.</td>
         <td>kafka.[producer|consumer|connect]:type=[producer|consumer|connect]-metrics,client-id=([-.\w]+)</td>
       </tr>
       <tr>
         <td>select-rate</td>
         <td>Number of times the I/O layer checked for new I/O to perform per second.</td>
+        <td>kafka.[producer|consumer|connect]:type=[producer|consumer|connect]-metrics,client-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>select-total</td>
+        <td>Total number of times the I/O layer checked for new I/O to perform.</td>
         <td>kafka.[producer|consumer|connect]:type=[producer|consumer|connect]-metrics,client-id=([-.\w]+)</td>
       </tr>
       <tr>
@@ -1045,12 +1219,57 @@
       </tr>
       <tr>
         <td>successful-authentication-rate</td>
-        <td>Connections that were successfully authenticated using SASL or SSL.</td>
+        <td>Connections per second that were successfully authenticated using SASL or SSL.</td>
+        <td>kafka.[producer|consumer|connect]:type=[producer|consumer|connect]-metrics,client-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>successful-authentication-total</td>
+        <td>Total connections that were successfully authenticated using SASL or SSL.</td>
         <td>kafka.[producer|consumer|connect]:type=[producer|consumer|connect]-metrics,client-id=([-.\w]+)</td>
       </tr>
       <tr>
         <td>failed-authentication-rate</td>
-        <td>Connections that failed authentication.</td>
+        <td>Connections per second that failed authentication.</td>
+        <td>kafka.[producer|consumer|connect]:type=[producer|consumer|connect]-metrics,client-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>failed-authentication-total</td>
+        <td>Total connections that failed authentication.</td>
+        <td>kafka.[producer|consumer|connect]:type=[producer|consumer|connect]-metrics,client-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>successful-reauthentication-rate</td>
+        <td>Connections per second that were successfully re-authenticated using SASL.</td>
+        <td>kafka.[producer|consumer|connect]:type=[producer|consumer|connect]-metrics,client-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>successful-reauthentication-total</td>
+        <td>Total connections that were successfully re-authenticated using SASL.</td>
+        <td>kafka.[producer|consumer|connect]:type=[producer|consumer|connect]-metrics,client-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>reauthentication-latency-max</td>
+        <td>The maximum latency in ms observed due to re-authentication.</td>
+        <td>kafka.[producer|consumer|connect]:type=[producer|consumer|connect]-metrics,client-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>reauthentication-latency-avg</td>
+        <td>The average latency in ms observed due to re-authentication.</td>
+        <td>kafka.[producer|consumer|connect]:type=[producer|consumer|connect]-metrics,client-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>failed-reauthentication-rate</td>
+        <td>Connections per second that failed re-authentication.</td>
+        <td>kafka.[producer|consumer|connect]:type=[producer|consumer|connect]-metrics,client-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>failed-reauthentication-total</td>
+        <td>Total connections that failed re-authentication.</td>
+        <td>kafka.[producer|consumer|connect]:type=[producer|consumer|connect]-metrics,client-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>successful-authentication-no-reauth-total</td>
+        <td>Total connections that were successfully authenticated by older, pre-2.2.0 SASL clients that do not support re-authentication.  May only be non-zero </td>
         <td>kafka.[producer|consumer|connect]:type=[producer|consumer|connect]-metrics,client-id=([-.\w]+)</td>
       </tr>
     </tbody>
@@ -1070,42 +1289,62 @@
       <tr>
         <td>outgoing-byte-rate</td>
         <td>The average number of outgoing bytes sent per second for a node.</td>
-        <td>kafka.producer:type=[consumer|producer|connect]-node-metrics,client-id=([-.\w]+),node-id=([0-9]+)</td>
+        <td>kafka.[producer|consumer|connect]:type=[consumer|producer|connect]-node-metrics,client-id=([-.\w]+),node-id=([0-9]+)</td>
+      </tr>
+      <tr>
+        <td>outgoing-byte-total</td>
+        <td>The total number of outgoing bytes sent for a node.</td>
+        <td>kafka.[producer|consumer|connect]:type=[consumer|producer|connect]-node-metrics,client-id=([-.\w]+),node-id=([0-9]+)</td>
       </tr>
       <tr>
         <td>request-rate</td>
         <td>The average number of requests sent per second for a node.</td>
-        <td>kafka.producer:type=[consumer|producer|connect]-node-metrics,client-id=([-.\w]+),node-id=([0-9]+)</td>
+        <td>kafka.[producer|consumer|connect]:type=[consumer|producer|connect]-node-metrics,client-id=([-.\w]+),node-id=([0-9]+)</td>
+      </tr>
+      <tr>
+        <td>request-total</td>
+        <td>The total number of requests sent for a node.</td>
+        <td>kafka.[producer|consumer|connect]:type=[consumer|producer|connect]-node-metrics,client-id=([-.\w]+),node-id=([0-9]+)</td>
       </tr>
       <tr>
         <td>request-size-avg</td>
         <td>The average size of all requests in the window for a node.</td>
-        <td>kafka.producer:type=[consumer|producer|connect]-node-metrics,client-id=([-.\w]+),node-id=([0-9]+)</td>
+        <td>kafka.[producer|consumer|connect]:type=[consumer|producer|connect]-node-metrics,client-id=([-.\w]+),node-id=([0-9]+)</td>
       </tr>
       <tr>
         <td>request-size-max</td>
         <td>The maximum size of any request sent in the window for a node.</td>
-        <td>kafka.producer:type=[consumer|producer|connect]-node-metrics,client-id=([-.\w]+),node-id=([0-9]+)</td>
+        <td>kafka.[producer|consumer|connect]:type=[consumer|producer|connect]-node-metrics,client-id=([-.\w]+),node-id=([0-9]+)</td>
       </tr>
       <tr>
         <td>incoming-byte-rate</td>
-        <td>The average number of responses received per second for a node.</td>
-        <td>kafka.producer:type=[consumer|producer|connect]-node-metrics,client-id=([-.\w]+),node-id=([0-9]+)</td>
+        <td>The average number of bytes received per second for a node.</td>
+        <td>kafka.[producer|consumer|connect]:type=[consumer|producer|connect]-node-metrics,client-id=([-.\w]+),node-id=([0-9]+)</td>
+      </tr>
+      <tr>
+        <td>incoming-byte-total</td>
+        <td>The total number of bytes received for a node.</td>
+        <td>kafka.[producer|consumer|connect]:type=[consumer|producer|connect]-node-metrics,client-id=([-.\w]+),node-id=([0-9]+)</td>
       </tr>
       <tr>
         <td>request-latency-avg</td>
         <td>The average request latency in ms for a node.</td>
-        <td>kafka.producer:type=[consumer|producer|connect]-node-metrics,client-id=([-.\w]+),node-id=([0-9]+)</td>
+        <td>kafka.[producer|consumer|connect]:type=[consumer|producer|connect]-node-metrics,client-id=([-.\w]+),node-id=([0-9]+)</td>
       </tr>
       <tr>
         <td>request-latency-max</td>
         <td>The maximum request latency in ms for a node.</td>
-        <td>kafka.producer:type=[consumer|producer|connect]-node-metrics,client-id=([-.\w]+),node-id=([0-9]+)</td>
+        <td>kafka.[producer|consumer|connect]:type=[consumer|producer|connect]-node-metrics,client-id=([-.\w]+),node-id=([0-9]+)</td>
       </tr>
       <tr>
         <td>response-rate</td>
-        <td>Responses received sent per second for a node.</td>
-        <td>kafka.producer:type=[consumer|producer|connect]-node-metrics,client-id=([-.\w]+),node-id=([0-9]+)</td>
+        <td>Responses received per second for a node.</td>
+        <td>kafka.[producer|consumer|connect]:type=[consumer|producer|connect]-node-metrics,client-id=([-.\w]+),node-id=([0-9]+)</td>
+      </tr>
+      <tr>
+        <td>response-total</td>
+        <td>Total responses received for a node.</td>
+        <td>kafka.[producer|consumer|connect]:type=[consumer|producer|connect]-node-metrics,client-id=([-.\w]+),node-id=([0-9]+)</td>
       </tr>
     </tbody>
   </table>
@@ -1148,11 +1387,41 @@
   <!--#include virtual="generated/producer_metrics.html" -->
 
 
-  <h4><a id="new_consumer_monitoring" href="#new_consumer_monitoring">New consumer monitoring</a></h4>
+  <h4><a id="consumer_monitoring" href="#consumer_monitoring">consumer monitoring</a></h4>
 
-  The following metrics are available on new consumer instances.
+  The following metrics are available on consumer instances.
 
-  <h5><a id="new_consumer_group_monitoring" href="#new_consumer_group_monitoring">Consumer Group Metrics</a></h5>
+  <table class="data-table">
+    <tbody>
+      <tr>
+        <th>Metric/Attribute name</th>
+        <th>Description</th>
+        <th>Mbean name</th>
+      </tr>
+      <tr>
+        <td>time-between-poll-avg</td>
+        <td>The average delay between invocations of poll().</td>
+        <td>kafka.consumer:type=consumer-metrics,client-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>time-between-poll-max</td>
+        <td>The max delay between invocations of poll().</td>
+        <td>kafka.consumer:type=consumer-metrics,client-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>last-poll-seconds-ago</td>
+        <td>The number of seconds since the last poll() invocation.</td>
+        <td>kafka.consumer:type=consumer-metrics,client-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>poll-idle-ratio-avg</td>
+        <td>The average fraction of time the consumer's poll() is idle as opposed to waiting for the user code to process records.</td>
+        <td>kafka.consumer:type=consumer-metrics,client-id=([-.\w]+)</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h5><a id="consumer_group_monitoring" href="#consumer_group_monitoring">Consumer Group Metrics</a></h5>
   <table class="data-table">
     <tbody>
       <tr>
@@ -1176,6 +1445,11 @@
         <td>kafka.consumer:type=consumer-coordinator-metrics,client-id=([-.\w]+)</td>
       </tr>
       <tr>
+        <td>commit-total</td>
+        <td>The total number of commit calls</td>
+        <td>kafka.consumer:type=consumer-coordinator-metrics,client-id=([-.\w]+)</td>
+      </tr>
+      <tr>
         <td>assigned-partitions</td>
         <td>The number of partitions currently assigned to this consumer</td>
         <td>kafka.consumer:type=consumer-coordinator-metrics,client-id=([-.\w]+)</td>
@@ -1188,6 +1462,11 @@
       <tr>
         <td>heartbeat-rate</td>
         <td>The average number of heartbeats per second</td>
+        <td>kafka.consumer:type=consumer-coordinator-metrics,client-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>heartbeat-total</td>
+        <td>The total number of heartbeats</td>
         <td>kafka.consumer:type=consumer-coordinator-metrics,client-id=([-.\w]+)</td>
       </tr>
       <tr>
@@ -1206,6 +1485,11 @@
         <td>kafka.consumer:type=consumer-coordinator-metrics,client-id=([-.\w]+)</td>
       </tr>
       <tr>
+        <td>join-total</td>
+        <td>The total number of group joins</td>
+        <td>kafka.consumer:type=consumer-coordinator-metrics,client-id=([-.\w]+)</td>
+      </tr>
+      <tr>
         <td>sync-time-avg</td>
         <td>The average time taken for a group sync</td>
         <td>kafka.consumer:type=consumer-coordinator-metrics,client-id=([-.\w]+)</td>
@@ -1221,14 +1505,89 @@
         <td>kafka.consumer:type=consumer-coordinator-metrics,client-id=([-.\w]+)</td>
       </tr>
       <tr>
+        <td>sync-total</td>
+        <td>The total number of group syncs</td>
+        <td>kafka.consumer:type=consumer-coordinator-metrics,client-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>rebalance-latency-avg</td>
+        <td>The average time taken for a group rebalance</td>
+        <td>kafka.consumer:type=consumer-coordinator-metrics,client-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>rebalance-latency-max</td>
+        <td>The max time taken for a group rebalance</td>
+        <td>kafka.consumer:type=consumer-coordinator-metrics,client-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>rebalance-latency-total</td>
+        <td>The total time taken for group rebalances so far</td>
+        <td>kafka.consumer:type=consumer-coordinator-metrics,client-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>rebalance-total</td>
+        <td>The total number of group rebalances participated</td>
+        <td>kafka.consumer:type=consumer-coordinator-metrics,client-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>rebalance-rate-per-hour</td>
+        <td>The number of group rebalance participated per hour</td>
+        <td>kafka.consumer:type=consumer-coordinator-metrics,client-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>failed-rebalance-total</td>
+        <td>The total number of failed group rebalances</td>
+        <td>kafka.consumer:type=consumer-coordinator-metrics,client-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>failed-rebalance-rate-per-hour</td>
+        <td>The number of failed group rebalance event per hour</td>
+        <td>kafka.consumer:type=consumer-coordinator-metrics,client-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>last-rebalance-seconds-ago</td>
+        <td>The number of seconds since the last rebalance event</td>
+        <td>kafka.consumer:type=consumer-coordinator-metrics,client-id=([-.\w]+)</td>
+      </tr>
+      <tr>
         <td>last-heartbeat-seconds-ago</td>
         <td>The number of seconds since the last controller heartbeat</td>
+        <td>kafka.consumer:type=consumer-coordinator-metrics,client-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>partitions-revoked-latency-avg</td>
+        <td>The average time taken by the on-partitions-revoked rebalance listener callback</td>
+        <td>kafka.consumer:type=consumer-coordinator-metrics,client-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>partitions-revoked-latency-max</td>
+        <td>The max time taken by the on-partitions-revoked rebalance listener callback</td>
+        <td>kafka.consumer:type=consumer-coordinator-metrics,client-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>partitions-assigned-latency-avg</td>
+        <td>The average time taken by the on-partitions-assigned rebalance listener callback</td>
+        <td>kafka.consumer:type=consumer-coordinator-metrics,client-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>partitions-assigned-latency-max</td>
+        <td>The max time taken by the on-partitions-assigned rebalance listener callback</td>
+        <td>kafka.consumer:type=consumer-coordinator-metrics,client-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>partitions-lost-latency-avg</td>
+        <td>The average time taken by the on-partitions-lost rebalance listener callback</td>
+        <td>kafka.consumer:type=consumer-coordinator-metrics,client-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>partitions-lost-latency-max</td>
+        <td>The max time taken by the on-partitions-lost rebalance listener callback</td>
         <td>kafka.consumer:type=consumer-coordinator-metrics,client-id=([-.\w]+)</td>
       </tr>
     </tbody>
   </table>
 
-  <h5><a id="new_consumer_fetch_monitoring" href="#new_consumer_fetch_monitoring">Consumer Fetch Metrics</a></h5>
+  <h5><a id="consumer_fetch_monitoring" href="#consumer_fetch_monitoring">Consumer Fetch Metrics</a></h5>
 
   <!--#include virtual="generated/consumer_metrics.html" -->
 
@@ -1246,7 +1605,8 @@
   the info level records only the thread-level metrics.
 
   <p>
-    Note that the metrics have a 3-layer hierarchy. At the top level there are per-thread metrics. Each thread has tasks, with their
+    Note that the metrics have a 4-layer hierarchy. At the top level there are client-level metrics for each started
+    Kafka Streams client. Each client has stream threads, with their own metrics. Each stream thread has tasks, with their
     own metrics. Each task has a number of processor nodes, with their own metrics. Each task also has a number of state stores
     and record caches, all with their own metrics.
   </p>
@@ -1256,8 +1616,45 @@
 
 <pre>metrics.recording.level="info"</pre>
 
+<h5><a id="kafka_streams_client_monitoring" href="#kafka_streams_client_monitoring">Client Metrics</a></h5>
+All the following metrics have a recording level of <code>info</code>:
+<table class="data-table">
+  <tbody>
+  <tr>
+    <th>Metric/Attribute name</th>
+    <th>Description</th>
+    <th>Mbean name</th>
+  </tr>
+  <tr>
+    <td>version</td>
+    <td>The version of the Kafka Streams client.</td>
+    <td>kafka.streams:type=stream-metrics,client-id=([-.\w]+)</td>
+  </tr>
+  <tr>
+    <td>commit-id</td>
+    <td>The version control commit ID of the Kafka Streams client.</td>
+    <td>kafka.streams:type=stream-metrics,client-id=([-.\w]+)</td>
+  </tr>
+  <tr>
+    <td>application-id</td>
+    <td>The application ID of the Kafka Streams client.</td>
+    <td>kafka.streams:type=stream-metrics,client-id=([-.\w]+)</td>
+  </tr>
+  <tr>
+    <td>topology-description</td>
+    <td>The description of the topology executed in the Kafka Streams client.</td>
+    <td>kafka.streams:type=stream-metrics,client-id=([-.\w]+)</td>
+  </tr>
+  <tr>
+    <td>state</td>
+    <td>The state of the Kafka Streams client.</td>
+    <td>kafka.streams:type=stream-metrics,client-id=([-.\w]+)</td>
+  </tr>
+  </tbody>
+</table>
+
 <h5><a id="kafka_streams_thread_monitoring" href="#kafka_streams_thread_monitoring">Thread Metrics</a></h5>
-All the following metrics have a recording level of ``info``:
+All the following metrics have a recording level of <code>info</code>:
 <table class="data-table">
     <tbody>
       <tr>
@@ -1307,22 +1704,42 @@ All the following metrics have a recording level of ``info``:
        </tr>
        <tr>
         <td>commit-rate</td>
-        <td>The average number of commits per second across all tasks.</td>
+        <td>The average number of commits per second.</td>
         <td>kafka.streams:type=stream-metrics,client-id=([-.\w]+)</td>
        </tr>
+      <tr>
+        <td>commit-total</td>
+        <td>The total number of commit calls across all tasks.</td>
+        <td>kafka.streams:type=stream-metrics,client-id=([-.\w]+)</td>
+      </tr>
        <tr>
         <td>poll-rate</td>
-        <td>The average number of polls per second across all tasks.</td>
+        <td>The average number of polls per second.</td>
         <td>kafka.streams:type=stream-metrics,client-id=([-.\w]+)</td>
        </tr>
+      <tr>
+        <td>poll-total</td>
+        <td>The total number of poll calls across all tasks.</td>
+        <td>kafka.streams:type=stream-metrics,client-id=([-.\w]+)</td>
+      </tr>
        <tr>
         <td>process-rate</td>
-        <td>The average number of process calls per second across all tasks.</td>
+        <td>The average number of process calls per second.</td>
         <td>kafka.streams:type=stream-metrics,client-id=([-.\w]+)</td>
        </tr>
+      <tr>
+        <td>process-total</td>
+        <td>The total number of process calls across all tasks.</td>
+        <td>kafka.streams:type=stream-metrics,client-id=([-.\w]+)</td>
+      </tr>
        <tr>
         <td>punctuate-rate</td>
-        <td>The average number of punctuates per second across all tasks.</td>
+        <td>The average number of punctuates per second.</td>
+        <td>kafka.streams:type=stream-metrics,client-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>punctuate-total</td>
+        <td>The total number of punctuate calls across all tasks.</td>
         <td>kafka.streams:type=stream-metrics,client-id=([-.\w]+)</td>
       </tr>
       <tr>
@@ -1331,20 +1748,35 @@ All the following metrics have a recording level of ``info``:
         <td>kafka.streams:type=stream-metrics,client-id=([-.\w]+)</td>
       </tr>
       <tr>
+        <td>task-created-total</td>
+        <td>The total number of tasks created.</td>
+        <td>kafka.streams:type=stream-metrics,client-id=([-.\w]+)</td>
+      </tr>
+      <tr>
         <td>task-closed-rate</td>
         <td>The average number of tasks closed per second.</td>
         <td>kafka.streams:type=stream-metrics,client-id=([-.\w]+)</td>
       </tr>
       <tr>
+        <td>task-closed-total</td>
+        <td>The total number of tasks closed.</td>
+        <td>kafka.streams:type=stream-metrics,client-id=([-.\w]+)</td>
+      </tr>
+      <tr>
         <td>skipped-records-rate</td>
-        <td>The average number of skipped records per second. </td>
+        <td>The average number of skipped records per second.</td>
+        <td>kafka.streams:type=stream-metrics,client-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>skipped-records-total</td>
+        <td>The total number of skipped records.</td>
         <td>kafka.streams:type=stream-metrics,client-id=([-.\w]+)</td>
       </tr>
  </tbody>
 </table>
 
 <h5><a id="kafka_streams_task_monitoring" href="#kafka_streams_task_monitoring">Task Metrics</a></h5>
-All the following metrics have a recording level of ``debug``:
+All the following metrics have a recording level of <code>debug</code>:
  <table class="data-table">
       <tbody>
       <tr>
@@ -1367,11 +1799,26 @@ All the following metrics have a recording level of ``debug``:
         <td>The average number of commit calls per second. </td>
         <td>kafka.streams:type=stream-task-metrics,client-id=([-.\w]+),task-id=([-.\w]+)</td>
       </tr>
+      <tr>
+        <td>commit-total</td>
+        <td>The total number of commit calls. </td>
+        <td>kafka.streams:type=stream-task-metrics,client-id=([-.\w]+),task-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>record-lateness-avg</td>
+        <td>The average observed lateness of records.</td>
+        <td>kafka.streams:type=stream-task-metrics,client-id=([-.\w]+),task-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>record-lateness-max</td>
+        <td>The max observed lateness of records.</td>
+        <td>kafka.streams:type=stream-task-metrics,client-id=([-.\w]+),task-id=([-.\w]+)</td>
+      </tr>
  </tbody>
 </table>
 
  <h5><a id="kafka_streams_node_monitoring" href="#kafka_streams_node_monitoring">Processor Node Metrics</a></h5>
-All the following metrics have a recording level of ``debug``:
+ All the following metrics have a recording level of <code>debug</code>:
  <table class="data-table">
       <tbody>
       <tr>
@@ -1425,8 +1872,18 @@ All the following metrics have a recording level of ``debug``:
         <td>kafka.streams:type=stream-processor-node-metrics,client-id=([-.\w]+),task-id=([-.\w]+),processor-node-id=([-.\w]+)</td>
       </tr>
       <tr>
+        <td>process-total</td>
+        <td>The total number of process operations called. </td>
+        <td>kafka.streams:type=stream-processor-node-metrics,client-id=([-.\w]+),task-id=([-.\w]+),processor-node-id=([-.\w]+)</td>
+      </tr>
+      <tr>
         <td>punctuate-rate</td>
         <td>The average number of punctuate operations per second. </td>
+        <td>kafka.streams:type=stream-processor-node-metrics,client-id=([-.\w]+),task-id=([-.\w]+),processor-node-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>punctuate-total</td>
+        <td>The total number of punctuate operations called. </td>
         <td>kafka.streams:type=stream-processor-node-metrics,client-id=([-.\w]+),task-id=([-.\w]+),processor-node-id=([-.\w]+)</td>
       </tr>
       <tr>
@@ -1435,8 +1892,18 @@ All the following metrics have a recording level of ``debug``:
         <td>kafka.streams:type=stream-processor-node-metrics,client-id=([-.\w]+),task-id=([-.\w]+),processor-node-id=([-.\w]+)</td>
       </tr>
       <tr>
+        <td>create-total</td>
+        <td>The total number of create operations called. </td>
+        <td>kafka.streams:type=stream-processor-node-metrics,client-id=([-.\w]+),task-id=([-.\w]+),processor-node-id=([-.\w]+)</td>
+      </tr>
+      <tr>
         <td>destroy-rate</td>
         <td>The average number of destroy operations per second. </td>
+        <td>kafka.streams:type=stream-processor-node-metrics,client-id=([-.\w]+),task-id=([-.\w]+),processor-node-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>destroy-total</td>
+        <td>The total number of destroy operations called. </td>
         <td>kafka.streams:type=stream-processor-node-metrics,client-id=([-.\w]+),task-id=([-.\w]+),processor-node-id=([-.\w]+)</td>
       </tr>
       <tr>
@@ -1444,13 +1911,43 @@ All the following metrics have a recording level of ``debug``:
         <td>The average rate of records being forwarded downstream, from source nodes only, per second. </td>
         <td>kafka.streams:type=stream-processor-node-metrics,client-id=([-.\w]+),task-id=([-.\w]+),processor-node-id=([-.\w]+)</td>
       </tr>
+      <tr>
+        <td>forward-total</td>
+        <td>The total number of of records being forwarded downstream, from source nodes only. </td>
+        <td>kafka.streams:type=stream-processor-node-metrics,client-id=([-.\w]+),task-id=([-.\w]+),processor-node-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>suppression-emit-rate</td>
+        <td>
+          The rate at which records that have been emitted downstream from suppression operation nodes.
+          Compare with the <code>process-rate</code> metric to determine how many updates are being suppressed.
+        </td>
+        <td>kafka.streams:type=stream-processor-node-metrics,client-id=([-.\w]+),task-id=([-.\w]+),processor-node-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>suppression-emit-total</td>
+        <td>
+          The total number of records that have been emitted downstream from suppression operation nodes.
+          Compare with the <code>process-total</code> metric to determine how many updates are being suppressed.
+        </td>
+        <td>kafka.streams:type=stream-processor-node-metrics,client-id=([-.\w]+),task-id=([-.\w]+),processor-node-id=([-.\w]+)</td>
+      </tr>
  </tbody>
  </table>
 
  <h5><a id="kafka_streams_store_monitoring" href="#kafka_streams_store_monitoring">State Store Metrics</a></h5>
-All the following metrics have a recording level of ``debug``:
+ All the following metrics have a recording level of <code>debug</code>. Note that the <code>store-scope</code> value is specified in <code>StoreSupplier#metricsScope()</code> for user's customized
+ state stores; for built-in state stores, currently we have:
+  <ul>
+    <li><code>in-memory-state</code></li>
+    <li><code>in-memory-lru-state</code></li>
+    <li><code>in-memory-window-state</code></li>
+    <li><code>rocksdb-state</code> (for RocksDB backed key-value store)</li>
+    <li><code>rocksdb-window-state</code> (for RocksDB backed window store)</li>
+    <li><code>rocksdb-session-state</code> (for RocksDB backed session store)</li>
+  </ul>
 
- <table class="data-table">
+  <table class="data-table">
       <tbody>
       <tr>
         <th>Metric/Attribute name</th>
@@ -1460,143 +1957,290 @@ All the following metrics have a recording level of ``debug``:
       <tr>
         <td>put-latency-avg</td>
         <td>The average put execution time in ns. </td>
-        <td>kafka.streams:type=stream-[store-type]-state-metrics,client-id=([-.\w]+),task-id=([-.\w]+),[store-type]-state-id=([-.\w]+)</td>
+        <td>kafka.streams:type=stream-[store-scope]-metrics,client-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
       </tr>
       <tr>
         <td>put-latency-max</td>
         <td>The maximum put execution time in ns. </td>
-        <td>kafka.streams:type=stream-[store-type]-state-metrics,client-id=([-.\w]+),task-id=([-.\w]+),[store-type]-state-id=([-.\w]+)</td>
+        <td>kafka.streams:type=stream-[store-scope]-metrics,client-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
       </tr>
       <tr>
         <td>put-if-absent-latency-avg</td>
         <td>The average put-if-absent execution time in ns. </td>
-        <td>kafka.streams:type=stream-[store-type]-state-metrics,client-id=([-.\w]+),task-id=([-.\w]+),[store-type]-state-id=([-.\w]+)</td>
+        <td>kafka.streams:type=stream-[store-scope]-metrics,client-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
       </tr>
       <tr>
         <td>put-if-absent-latency-max</td>
         <td>The maximum put-if-absent execution time in ns. </td>
-        <td>kafka.streams:type=stream-[store-type]-state-metrics,client-id=([-.\w]+),task-id=([-.\w]+),[store-type]-state-id=([-.\w]+)</td>
+        <td>kafka.streams:type=stream-[store-scope]-metrics,client-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
       </tr>
       <tr>
         <td>get-latency-avg</td>
         <td>The average get execution time in ns. </td>
-        <td>kafka.streams:type=stream-[store-type]-state-metrics,client-id=([-.\w]+),task-id=([-.\w]+),[store-type]-state-id=([-.\w]+)</td>
+        <td>kafka.streams:type=stream-[store-scope]-metrics,client-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
       </tr>
       <tr>
         <td>get-latency-max</td>
         <td>The maximum get execution time in ns. </td>
-        <td>kafka.streams:type=stream-[store-type]-state-metrics,client-id=([-.\w]+),task-id=([-.\w]+),[store-type]-state-id=([-.\w]+)</td>
+        <td>kafka.streams:type=stream-[store-scope]-metrics,client-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
       </tr>
       <tr>
         <td>delete-latency-avg</td>
         <td>The average delete execution time in ns. </td>
-        <td>kafka.streams:type=stream-[store-type]-state-metrics,client-id=([-.\w]+),task-id=([-.\w]+),[store-type]-state-id=([-.\w]+)</td>
+        <td>kafka.streams:type=stream-[store-scope]-metrics,client-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
       </tr>
       <tr>
         <td>delete-latency-max</td>
         <td>The maximum delete execution time in ns. </td>
-        <td>kafka.streams:type=stream-[store-type]-state-metrics,client-id=([-.\w]+),task-id=([-.\w]+),[store-type]-state-id=([-.\w]+)</td>
+        <td>kafka.streams:type=stream-[store-scope]-metrics,client-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
       </tr>
       <tr>
         <td>put-all-latency-avg</td>
         <td>The average put-all execution time in ns. </td>
-        <td>kafka.streams:type=stream-[store-type]-state-metrics,client-id=([-.\w]+),task-id=([-.\w]+),[store-type]-state-id=([-.\w]+)</td>
+        <td>kafka.streams:type=stream-[store-scope]-metrics,client-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
       </tr>
       <tr>
         <td>put-all-latency-max</td>
         <td>The maximum put-all execution time in ns. </td>
-        <td>kafka.streams:type=stream-[store-type]-state-metrics,client-id=([-.\w]+),task-id=([-.\w]+),[store-type]-state-id=([-.\w]+)</td>
+        <td>kafka.streams:type=stream-[store-scope]-metrics,client-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
       </tr>
       <tr>
         <td>all-latency-avg</td>
         <td>The average all operation execution time in ns. </td>
-        <td>kafka.streams:type=stream-[store-type]-state-metrics,client-id=([-.\w]+),task-id=([-.\w]+),[store-type]-state-id=([-.\w]+)</td>
+        <td>kafka.streams:type=stream-[store-scope]-metrics,client-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
       </tr>
       <tr>
         <td>all-latency-max</td>
         <td>The maximum all operation execution time in ns. </td>
-        <td>kafka.streams:type=stream-[store-type]-state-metrics,client-id=([-.\w]+),task-id=([-.\w]+),[store-type]-state-id=([-.\w]+)</td>
+        <td>kafka.streams:type=stream-[store-scope]-metrics,client-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
       </tr>
       <tr>
         <td>range-latency-avg</td>
         <td>The average range execution time in ns. </td>
-        <td>kafka.streams:type=stream-[store-type]-state-metrics,client-id=([-.\w]+),task-id=([-.\w]+),[store-type]-state-id=([-.\w]+)</td>
+        <td>kafka.streams:type=stream-[store-scope]-metrics,client-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
       </tr>
       <tr>
         <td>range-latency-max</td>
         <td>The maximum range execution time in ns. </td>
-        <td>kafka.streams:type=stream-[store-type]-state-metrics,client-id=([-.\w]+),task-id=([-.\w]+),[store-type]-state-id=([-.\w]+)</td>
+        <td>kafka.streams:type=stream-[store-scope]-metrics,client-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
       </tr>
        <tr>
         <td>flush-latency-avg</td>
         <td>The average flush execution time in ns. </td>
-        <td>kafka.streams:type=stream-[store-type]-state-metrics,client-id=([-.\w]+),task-id=([-.\w]+),[store-type]-state-id=([-.\w]+)</td>
+        <td>kafka.streams:type=stream-[store-scope]-metrics,client-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
       </tr>
       <tr>
         <td>flush-latency-max</td>
         <td>The maximum flush execution time in ns. </td>
-        <td>kafka.streams:type=stream-[store-type]-state-metrics,client-id=([-.\w]+),task-id=([-.\w]+),[store-type]-state-id=([-.\w]+)</td>
+        <td>kafka.streams:type=stream-[store-scope]-metrics,client-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
       </tr>
       <tr>
         <td>restore-latency-avg</td>
         <td>The average restore execution time in ns. </td>
-        <td>kafka.streams:type=stream-[store-type]-state-metrics,client-id=([-.\w]+),task-id=([-.\w]+),[store-type]-state-id=([-.\w]+)</td>
+        <td>kafka.streams:type=stream-[store-scope]-metrics,client-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
       </tr>
       <tr>
         <td>restore-latency-max</td>
         <td>The maximum restore execution time in ns. </td>
-        <td>kafka.streams:type=stream-[store-type]-state-metrics,client-id=([-.\w]+),task-id=([-.\w]+),[store-type]-state-id=([-.\w]+)</td>
+        <td>kafka.streams:type=stream-[store-scope]-metrics,client-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
       </tr>
       <tr>
         <td>put-rate</td>
         <td>The average put rate for this store.</td>
-        <td>kafka.streams:type=stream-[store-type]-state-metrics,client-id=([-.\w]+),task-id=([-.\w]+),[store-type]-state-id=([-.\w]+)</td>
+        <td>kafka.streams:type=stream-[store-scope]-metrics,client-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>put-total</td>
+        <td>The total number of put calls for this store.</td>
+        <td>kafka.streams:type=stream-[store-scope]-metrics,client-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
       </tr>
       <tr>
         <td>put-if-absent-rate</td>
         <td>The average put-if-absent rate for this store.</td>
-        <td>kafka.streams:type=stream-[store-type]-state-metrics,client-id=([-.\w]+),task-id=([-.\w]+),[store-type]-state-id=([-.\w]+)</td>
+        <td>kafka.streams:type=stream-[store-scope]-metrics,client-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>put-if-absent-total</td>
+        <td>The total number of put-if-absent calls for this store.</td>
+        <td>kafka.streams:type=stream-[store-scope]-metrics,client-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
       </tr>
       <tr>
         <td>get-rate</td>
         <td>The average get rate for this store.</td>
-        <td>kafka.streams:type=stream-[store-type]-state-metrics,client-id=([-.\w]+),task-id=([-.\w]+),[store-type]-state-id=([-.\w]+)</td>
+        <td>kafka.streams:type=stream-[store-scope]-metrics,client-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>get-total</td>
+        <td>The total number of get calls for this store.</td>
+        <td>kafka.streams:type=stream-[store-scope]-metrics,client-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
       </tr>
       <tr>
         <td>delete-rate</td>
         <td>The average delete rate for this store.</td>
-        <td>kafka.streams:type=stream-[store-type]-state-metrics,client-id=([-.\w]+),task-id=([-.\w]+),[store-type]-state-id=([-.\w]+)</td>
+        <td>kafka.streams:type=stream-[store-scope]-metrics,client-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>delete-total</td>
+        <td>The total number of delete calls for this store.</td>
+        <td>kafka.streams:type=stream-[store-scope]-metrics,client-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
       </tr>
       <tr>
         <td>put-all-rate</td>
         <td>The average put-all rate for this store.</td>
-        <td>kafka.streams:type=stream-[store-type]-state-metrics,client-id=([-.\w]+),task-id=([-.\w]+),[store-type]-state-id=([-.\w]+)</td>
+        <td>kafka.streams:type=stream-[store-scope]-metrics,client-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>put-all-total</td>
+        <td>The total number of put-all calls for this store.</td>
+        <td>kafka.streams:type=stream-[store-scope]-metrics,client-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
       </tr>
       <tr>
         <td>all-rate</td>
         <td>The average all operation rate for this store.</td>
-        <td>kafka.streams:type=stream-[store-type]-state-metrics,client-id=([-.\w]+),task-id=([-.\w]+),[store-type]-state-id=([-.\w]+)</td>
+        <td>kafka.streams:type=stream-[store-scope]-metrics,client-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>all-total</td>
+        <td>The total number of all operation calls for this store.</td>
+        <td>kafka.streams:type=stream-[store-scope]-metrics,client-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
       </tr>
       <tr>
         <td>range-rate</td>
         <td>The average range rate for this store.</td>
-        <td>kafka.streams:type=stream-[store-type]-state-metrics,client-id=([-.\w]+),task-id=([-.\w]+),[store-type]-state-id=([-.\w]+)</td>
+        <td>kafka.streams:type=stream-[store-scope]-metrics,client-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>range-total</td>
+        <td>The total number of range calls for this store.</td>
+        <td>kafka.streams:type=stream-[store-scope]-metrics,client-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
       </tr>
       <tr>
         <td>flush-rate</td>
         <td>The average flush rate for this store.</td>
-        <td>kafka.streams:type=stream-[store-type]-state-metrics,client-id=([-.\w]+),task-id=([-.\w]+),[store-type]-state-id=([-.\w]+)</td>
+        <td>kafka.streams:type=stream-[store-scope]-metrics,client-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>flush-total</td>
+        <td>The total number of flush calls for this store.</td>
+        <td>kafka.streams:type=stream-[store-scope]-metrics,client-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
       </tr>
       <tr>
         <td>restore-rate</td>
         <td>The average restore rate for this store.</td>
-        <td>kafka.streams:type=stream-[store-type]-state-metrics,client-id=([-.\w]+),task-id=([-.\w]+),[store-type]-state-id=([-.\w]+)</td>
+        <td>kafka.streams:type=stream-[store-scope]-metrics,client-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>restore-total</td>
+        <td>The total number of restore calls for this store.</td>
+        <td>kafka.streams:type=stream-[store-scope]-metrics,client-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
       </tr>
     </tbody>
  </table>
 
+  <h5><a id="kafka_streams_rocksdb_monitoring" href="#kafka_streams_rocksdb_monitoring">RocksDB Metrics</a></h5>
+  All the following metrics have a recording level of <code>debug</code>.
+  The metrics are collected every minute from the RocksDB state stores.
+  If a state store consists of multiple RocksDB instances as it is the case for aggregations over time and session windows,
+  each metric reports an aggregation over the RocksDB instances of the state store.
+  Note that the <code>store-scope</code> for built-in RocksDB state stores are currently the following:
+  <ul>
+    <li><code>rocksdb-state</code> (for RocksDB backed key-value store)</li>
+    <li><code>rocksdb-window-state</code> (for RocksDB backed window store)</li>
+    <li><code>rocksdb-session-state</code> (for RocksDB backed session store)</li>
+  </ul>
+
+  <table class="data-table">
+    <tbody>
+    <tr>
+      <th>Metric/Attribute name</th>
+      <th>Description</th>
+      <th>Mbean name</th>
+    </tr>
+    <tr>
+      <td>bytes-written-rate</td>
+      <td>The average number of bytes written per second to the RocksDB state store.</td>
+      <td>kafka.streams:type=stream-state-metrics,client-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
+    </tr>
+    <tr>
+      <td>bytes-written-total</td>
+      <td>The total number of bytes written to the RocksDB state store.</td>
+      <td>kafka.streams:type=stream-state-metrics,client-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
+    </tr>
+    <tr>
+      <td>bytes-read-rate</td>
+      <td>The average number of bytes read per second from the RocksDB state store.</td>
+      <td>kafka.streams:type=stream-state-metrics,client-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
+    </tr>
+    <tr>
+      <td>bytes-read-total</td>
+      <td>The total number of bytes read from the RocksDB state store.</td>
+      <td>kafka.streams:type=stream-state-metrics,client-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
+    </tr>
+    <tr>
+      <td>memtable-bytes-flushed-rate</td>
+      <td>The average number of bytes flushed per second from the memtable to disk.</td>
+      <td>kafka.streams:type=stream-state-metrics,client-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
+    </tr>
+    <tr>
+      <td>memtable-bytes-flushed-total</td>
+      <td>The total number of bytes flushed from the memtable to disk.</td>
+      <td>kafka.streams:type=stream-state-metrics,client-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
+    </tr>
+    <tr>
+      <td>memtable-hit-ratio</td>
+      <td>The ratio of memtable hits relative to all lookups to the memtable.</td>
+      <td>kafka.streams:type=stream-state-metrics,client-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
+    </tr>
+    <tr>
+      <td>block-cache-data-hit-ratio</td>
+      <td>The ratio of block cache hits for data blocks relative to all lookups for data blocks to the block cache.</td>
+      <td>kafka.streams:type=stream-state-metrics,client-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
+    </tr>
+    <tr>
+      <td>block-cache-index-hit-ratio</td>
+      <td>The ratio of block cache hits for index blocks relative to all lookups for index blocks to the block cache.</td>
+      <td>kafka.streams:type=stream-state-metrics,client-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
+    </tr>
+    <tr>
+      <td>block-cache-filter-hit-ratio</td>
+      <td>The ratio of block cache hits for filter blocks relative to all lookups for filter blocks to the block cache.</td>
+      <td>kafka.streams:type=stream-state-metrics,client-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
+    </tr>
+    <tr>
+      <td>write-stall-duration-avg</td>
+      <td>The average duration of write stalls in ms.</td>
+      <td>kafka.streams:type=stream-state-metrics,client-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
+    </tr>
+    <tr>
+      <td>write-stall-duration-total</td>
+      <td>The total duration of write stalls in ms.</td>
+      <td>kafka.streams:type=stream-state-metrics,client-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
+    </tr>
+    <tr>
+      <td>bytes-read-compaction-rate</td>
+      <td>The average number of bytes read per second during compaction.</td>
+      <td>kafka.streams:type=stream-state-metrics,client-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
+    </tr>
+    <tr>
+      <td>bytes-written-compaction-rate</td>
+      <td>The average number of bytes written per second during compaction.</td>
+      <td>kafka.streams:type=stream-state-metrics,client-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
+    </tr>
+    <tr>
+      <td>number-open-files</td>
+      <td>The number of current open files.</td>
+      <td>kafka.streams:type=stream-state-metrics,client-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
+    </tr>
+    <tr>
+      <td>number-file-errors-total</td>
+      <td>The total number of file errors occurred.</td>
+      <td>kafka.streams:type=stream-state-metrics,client-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
+    </tr>
+    </tbody>
+  </table>
+
   <h5><a id="kafka_streams_cache_monitoring" href="#kafka_streams_cache_monitoring">Record Cache Metrics</a></h5>
-All the following metrics have a recording level of ``debug``:
+  All the following metrics have a recording level of <code>debug</code>:
 
   <table class="data-table">
       <tbody>
@@ -1623,19 +2267,54 @@ All the following metrics have a recording level of ``debug``:
     </tbody>
  </table>
 
+  <h5><a id="kafka_streams_buffer_monitoring" href="#kafka_streams_buffer_monitoring">Suppression Buffer Metrics</a></h5>
+  All the following metrics have a recording level of <code>debug</code>:
+
+  <table class="data-table">
+      <tbody>
+      <tr>
+        <td>suppression-buffer-size-current</td>
+        <td>The current total size, in bytes, of the buffered data.</td>
+        <td>kafka.streams:type=stream-buffer-metrics,client-id=([-.\w]+),task-id=([-.\w]+),buffer-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>suppression-buffer-size-avg</td>
+        <td>The average total size, in bytes, of the buffered data over the sampling window.</td>
+        <td>kafka.streams:type=stream-buffer-metrics,client-id=([-.\w]+),task-id=([-.\w]+),buffer-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>suppression-buffer-size-max</td>
+        <td>The maximum total size, in bytes, of the buffered data over the sampling window.</td>
+        <td>kafka.streams:type=stream-buffer-metrics,client-id=([-.\w]+),task-id=([-.\w]+),buffer-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>suppression-buffer-count-current</td>
+        <td>The current number of records buffered.</td>
+        <td>kafka.streams:type=stream-buffer-metrics,client-id=([-.\w]+),task-id=([-.\w]+),buffer-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>suppression-buffer-size-avg</td>
+        <td>The average number of records buffered over the sampling window.</td>
+        <td>kafka.streams:type=stream-buffer-metrics,client-id=([-.\w]+),task-id=([-.\w]+),buffer-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>suppression-buffer-size-max</td>
+        <td>The maximum number of records buffered over the sampling window.</td>
+        <td>kafka.streams:type=stream-buffer-metrics,client-id=([-.\w]+),task-id=([-.\w]+),buffer-id=([-.\w]+)</td>
+      </tr>
+    </tbody>
+ </table>
+
   <h4><a id="others_monitoring" href="#others_monitoring">Others</a></h4>
 
   We recommend monitoring GC time and other stats and various server stats such as CPU utilization, I/O service time, etc.
 
   On the client side, we recommend monitoring the message/byte rate (global and per topic), request rate/size/time, and on the consumer side, max lag in messages among all partitions and min fetch request rate. For a consumer to keep up, max lag needs to be less than a threshold and min fetch rate needs to be larger than 0.
 
-  <h4><a id="basic_ops_audit" href="#basic_ops_audit">Audit</a></h4>
-  The final alerting we do is on the correctness of the data delivery. We audit that every message that is sent is consumed by all consumers and measure the lag for this to occur. For important topics we alert if a certain completeness is not achieved in a certain time period. The details of this are discussed in KAFKA-260.
-
   <h3><a id="zk" href="#zk">6.7 ZooKeeper</a></h3>
 
   <h4><a id="zkversion" href="#zkversion">Stable version</a></h4>
-  The current stable branch is 3.4 and the latest release of that branch is 3.4.9.
+  The current stable branch is 3.5. Kafka is regularly updated to include the latest release in the 3.5 series.
 
   <h4><a id="zkops" href="#zkops">Operationalizing ZooKeeper</a></h4>
   Operationally, we do the following for a healthy ZooKeeper installation:

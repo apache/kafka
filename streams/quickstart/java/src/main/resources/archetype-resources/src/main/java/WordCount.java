@@ -51,33 +51,11 @@ public class WordCount {
         final StreamsBuilder builder = new StreamsBuilder();
 
         builder.<String, String>stream("streams-plaintext-input")
-               .flatMapValues(new ValueMapper<String, Iterable<String>>() {
-                    @Override
-                    public Iterable<String> apply(String value) {
-                        return Arrays.asList(value.toLowerCase(Locale.getDefault()).split("\\W+"));
-                    }
-                })
-               .groupBy(new KeyValueMapper<String, String, String>() {
-                   @Override
-                   public String apply(String key, String value) {
-                       return value;
-                   }
-                })
-               .count(Materialized.<String, Long, KeyValueStore<Bytes, byte[]>>as("counts-store"))
-               .toStream()
-               .to("streams-wordcount-output", Produced.with(Serdes.String(), Serdes.Long()));
-
-
-        /* ------- use the code below for Java 8 and comment the above ----
-
-        builder.<String, String>stream("streams-plaintext-input")
                .flatMapValues(value -> Arrays.asList(value.toLowerCase(Locale.getDefault()).split("\\W+")))
                .groupBy((key, value) -> value)
                .count(Materialized.<String, Long, KeyValueStore<Bytes, byte[]>>as("counts-store"))
                .toStream()
                .to("streams-wordcount-output", Produced.with(Serdes.String(), Serdes.Long()));
-
-           ----------------------------------------------------------------- */
 
         final Topology topology = builder.build();
         final KafkaStreams streams = new KafkaStreams(topology, props);

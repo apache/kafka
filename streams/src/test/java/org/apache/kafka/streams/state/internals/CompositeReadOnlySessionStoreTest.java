@@ -107,10 +107,11 @@ public class CompositeReadOnlySessionStoreTest {
 
     @Test(expected = InvalidStateStoreException.class)
     public void shouldThrowInvalidStateStoreExceptionOnRebalance() {
-        final CompositeReadOnlySessionStore<String, String> store
-                = new CompositeReadOnlySessionStore<>(new StateStoreProviderStub(true),
-                                                      QueryableStoreTypes.<String, String>sessionStore(),
-                                                      "whateva");
+        final CompositeReadOnlySessionStore<String, String> store =
+            new CompositeReadOnlySessionStore<>(
+                new StateStoreProviderStub(true),
+                QueryableStoreTypes.sessionStore(),
+                "whateva");
 
         store.fetch("a");
     }
@@ -121,7 +122,7 @@ public class CompositeReadOnlySessionStoreTest {
         try {
             sessionStore.fetch("key");
             fail("Should have thrown InvalidStateStoreException with session store");
-        } catch (InvalidStateStoreException e) { }
+        } catch (final InvalidStateStoreException e) { }
     }
 
     @Test(expected = NullPointerException.class)

@@ -17,7 +17,7 @@
 
 package kafka.cluster
 
-import kafka.common.KafkaException
+import org.apache.kafka.common.{Endpoint => JEndpoint, KafkaException}
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.Utils
@@ -70,5 +70,9 @@ case class EndPoint(host: String, port: Int, listenerName: ListenerName, securit
       else
         Utils.formatAddress(host, port)
     listenerName.value + "://" + hostport
+  }
+
+  def toJava: JEndpoint = {
+    new JEndpoint(listenerName.value, securityProtocol, host, port)
   }
 }

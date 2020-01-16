@@ -16,22 +16,24 @@
  */
 package org.apache.kafka.common.config;
 
+import java.util.stream.Collectors;
 import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.utils.Utils;
 
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.BiConsumer;
+import java.util.function.Supplier;
+import java.util.regex.Pattern;
 
 /**
  * This class is used for specifying the set of expected configurations. For each configuration, you can specify
@@ -54,10 +56,10 @@ import java.util.Set;
  * defs.define(&quot;config_with_validator&quot;, Type.INT, 42, Range.atLeast(0), &quot;Configuration with user provided validator.&quot;);
  * defs.define(&quot;config_with_dependents&quot;, Type.INT, &quot;Configuration with dependents.&quot;, &quot;group&quot;, 1, &quot;Config With Dependents&quot;, Arrays.asList(&quot;config_with_default&quot;,&quot;config_with_validator&quot;));
  *
- * Map&lt;String, String&gt; props = new HashMap&lt;&gt();
+ * Map&lt;String, String&gt; props = new HashMap&lt;&gt;();
  * props.put(&quot;config_with_default&quot;, &quot;some value&quot;);
  * props.put(&quot;config_with_dependents&quot;, &quot;some other value&quot;);
- * 
+ *
  * Map&lt;String, Object&gt; configs = defs.parse(props);
  * // will return &quot;some value&quot;
  * String someConfig = (String) configs.get(&quot;config_with_default&quot;);
@@ -73,6 +75,9 @@ import java.util.Set;
  * functionality for accessing configs.
  */
 public class ConfigDef {
+
+    private static final Pattern COMMA_WITH_WHITESPACE = Pattern.compile("\\s*,\\s*");
+
     /**
      * A unique Java object which represents the lack of a default value.
      */
@@ -183,7 +188,7 @@ public class ConfigDef {
      */
     public ConfigDef define(String name, Type type, Object defaultValue, Validator validator, Importance importance, String documentation,
                             String group, int orderInGroup, Width width, String displayName, Recommender recommender) {
-        return define(name, type, defaultValue, validator, importance, documentation, group, orderInGroup, width, displayName, Collections.<String>emptyList(), recommender);
+        return define(name, type, defaultValue, validator, importance, documentation, group, orderInGroup, width, displayName, Collections.emptyList(), recommender);
     }
 
     /**
@@ -260,7 +265,7 @@ public class ConfigDef {
      */
     public ConfigDef define(String name, Type type, Object defaultValue, Importance importance, String documentation,
                             String group, int orderInGroup, Width width, String displayName, Recommender recommender) {
-        return define(name, type, defaultValue, null, importance, documentation, group, orderInGroup, width, displayName, Collections.<String>emptyList(), recommender);
+        return define(name, type, defaultValue, null, importance, documentation, group, orderInGroup, width, displayName, Collections.emptyList(), recommender);
     }
 
     /**
@@ -333,7 +338,7 @@ public class ConfigDef {
      */
     public ConfigDef define(String name, Type type, Importance importance, String documentation, String group, int orderInGroup,
                             Width width, String displayName, Recommender recommender) {
-        return define(name, type, NO_DEFAULT_VALUE, null, importance, documentation, group, orderInGroup, width, displayName, Collections.<String>emptyList(), recommender);
+        return define(name, type, NO_DEFAULT_VALUE, null, importance, documentation, group, orderInGroup, width, displayName, Collections.emptyList(), recommender);
     }
 
     /**
@@ -595,23 +600,15 @@ public class ConfigDef {
         if (!configKeys.containsKey(name)) {
             return;
         }
-        
         ConfigKey key = configKeys.get(name);
         ConfigValue value = configs.get(name);
-        
         if (key.recommender != null) {
             try {
                 List<Object> recommendedValues = key.recommender.validValues(name, parsed);
                 List<Object> originalRecommendedValues = value.recommendedValues();
                 if (!originalRecommendedValues.isEmpty()) {
                     Set<Object> originalRecommendedValueSet = new HashSet<>(originalRecommendedValues);
-                    Iterator<Object> it = recommendedValues.iterator();
-                    while (it.hasNext()) {
-                        Object o = it.next();
-                        if (!originalRecommendedValueSet.contains(o)) {
-                            it.remove();
-                        }
-                    }
+                    recommendedValues.removeIf(o -> !originalRecommendedValueSet.contains(o));
                 }
                 value.recommendedValues(recommendedValues);
                 value.visible(key.recommender.visible(name, parsed));
@@ -705,15 +702,22 @@ public class ConfigDef {
                         if (trimmed.isEmpty())
                             return Collections.emptyList();
                         else
-                            return Arrays.asList(trimmed.split("\\s*,\\s*", -1));
+                            return Arrays.asList(COMMA_WITH_WHITESPACE.split(trimmed, -1));
                     else
                         throw new ConfigException(name, value, "Expected a comma separated list.");
                 case CLASS:
                     if (value instanceof Class)
                         return value;
-                    else if (value instanceof String)
-                        return Class.forName(trimmed, true, Utils.getContextOrKafkaClassLoader());
-                    else
+                    else if (value instanceof String) {
+                        ClassLoader contextOrKafkaClassLoader = Utils.getContextOrKafkaClassLoader();
+                        // Use loadClass here instead of Class.forName because the name we use here may be an alias
+                        // and not match the name of the class that gets loaded. If that happens, Class.forName can
+                        // throw an exception.
+                        Class<?> klass = contextOrKafkaClassLoader.loadClass(trimmed);
+                        // Invoke forName here with the true name of the requested class to cause class
+                        // initialization to take place.
+                        return Class.forName(klass.getName(), true, contextOrKafkaClassLoader);
+                    } else
                         throw new ConfigException(name, value, "Expected a Class instance or class name.");
                 default:
                     throw new IllegalStateException("Unknown type.");
@@ -845,6 +849,11 @@ public class ConfigDef {
         private final Number min;
         private final Number max;
 
+        /**
+         *  A numeric range with inclusive upper bound and inclusive lower bound
+         * @param min  the lower bound
+         * @param max  the upper bound
+         */
         private Range(Number min, Number max) {
             this.min = min;
             this.max = max;
@@ -860,7 +869,7 @@ public class ConfigDef {
         }
 
         /**
-         * A numeric range that checks both the upper and lower bound
+         * A numeric range that checks both the upper (inclusive) and lower bound
          */
         public static Range between(Number min, Number max) {
             return new Range(min, max);
@@ -877,7 +886,9 @@ public class ConfigDef {
         }
 
         public String toString() {
-            if (min == null)
+            if (min == null && max == null)
+                return "[...]";
+            else if (min == null)
                 return "[...," + max + "]";
             else if (max == null)
                 return "[" + min + ",...]";
@@ -937,13 +948,70 @@ public class ConfigDef {
         }
     }
 
+    public static class CaseInsensitiveValidString implements Validator {
+
+        final Set<String> validStrings;
+
+        private CaseInsensitiveValidString(List<String> validStrings) {
+            this.validStrings = validStrings.stream()
+                .map(s -> s.toUpperCase(Locale.ROOT))
+                .collect(Collectors.toSet());
+        }
+
+        public static CaseInsensitiveValidString in(String... validStrings) {
+            return new CaseInsensitiveValidString(Arrays.asList(validStrings));
+        }
+
+        @Override
+        public void ensureValid(String name, Object o) {
+            String s = (String) o;
+            if (s == null || !validStrings.contains(s.toUpperCase(Locale.ROOT))) {
+                throw new ConfigException(name, o, "String must be one of (case insensitive): " + Utils.join(validStrings, ", "));
+            }
+        }
+
+        public String toString() {
+            return "(case insensitive) [" + Utils.join(validStrings, ", ") + "]";
+        }
+    }
+
     public static class NonNullValidator implements Validator {
         @Override
         public void ensureValid(String name, Object value) {
             if (value == null) {
-                // Pass in the string null to avoid the findbugs warning
+                // Pass in the string null to avoid the spotbugs warning
                 throw new ConfigException(name, "null", "entry must be non null");
             }
+        }
+
+        public String toString() {
+            return "non-null string";
+        }
+    }
+
+    public static class LambdaValidator implements Validator {
+        BiConsumer<String, Object> ensureValid;
+        Supplier<String> toStringFunction;
+
+        private LambdaValidator(BiConsumer<String, Object> ensureValid,
+                                Supplier<String> toStringFunction) {
+            this.ensureValid = ensureValid;
+            this.toStringFunction = toStringFunction;
+        }
+
+        public static LambdaValidator with(BiConsumer<String, Object> ensureValid,
+                                           Supplier<String> toStringFunction) {
+            return new LambdaValidator(ensureValid, toStringFunction);
+        }
+
+        @Override
+        public void ensureValid(String name, Object value) {
+            ensureValid.accept(name, value);
+        }
+
+        @Override
+        public String toString() {
+            return toStringFunction.get();
         }
     }
 
@@ -963,6 +1031,19 @@ public class ConfigDef {
             for (Validator validator: validators) {
                 validator.ensureValid(name, value);
             }
+        }
+
+        @Override
+        public String toString() {
+            if (validators == null) return "";
+            StringBuilder desc = new StringBuilder();
+            for (Validator v: validators) {
+                if (desc.length() > 0) {
+                    desc.append(',').append(' ');
+                }
+                desc.append(String.valueOf(v));
+            }
+            return desc.toString();
         }
     }
 
@@ -1014,6 +1095,10 @@ public class ConfigDef {
                 throw new ConfigException(name, value, "String may not contain control sequences but had the following ASCII chars: " + Utils.join(foundIllegalCharacters, ", "));
             }
         }
+
+        public String toString() {
+            return "non-empty string without ISO control characters";
+        }
     }
 
     public static class ConfigKey {
@@ -1056,6 +1141,10 @@ public class ConfigDef {
         public boolean hasDefault() {
             return !NO_DEFAULT_VALUE.equals(this.defaultValue);
         }
+
+        public Type type() {
+            return type;
+        }
     }
 
     protected List<String> headers() {
@@ -1091,16 +1180,40 @@ public class ConfigDef {
     }
 
     public String toHtmlTable() {
+        return toHtmlTable(Collections.<String, String>emptyMap());
+    }
+
+    private void addHeader(StringBuilder builder, String headerName) {
+        builder.append("<th>");
+        builder.append(headerName);
+        builder.append("</th>\n");
+    }
+
+    private void addColumnValue(StringBuilder builder, String value) {
+        builder.append("<td>");
+        builder.append(value);
+        builder.append("</td>");
+    }
+
+    /**
+     * Converts this config into an HTML table that can be embedded into docs.
+     * If <code>dynamicUpdateModes</code> is non-empty, a "Dynamic Update Mode" column
+     * will be included n the table with the value of the update mode. Default
+     * mode is "read-only".
+     * @param dynamicUpdateModes Config name -&gt; update mode mapping
+     */
+    public String toHtmlTable(Map<String, String> dynamicUpdateModes) {
+        boolean hasUpdateModes = !dynamicUpdateModes.isEmpty();
         List<ConfigKey> configs = sortedConfigs();
         StringBuilder b = new StringBuilder();
         b.append("<table class=\"data-table\"><tbody>\n");
         b.append("<tr>\n");
         // print column headers
         for (String headerName : headers()) {
-            b.append("<th>");
-            b.append(headerName);
-            b.append("</th>\n");
+            addHeader(b, headerName);
         }
+        if (hasUpdateModes)
+            addHeader(b, "Dynamic Update Mode");
         b.append("</tr>\n");
         for (ConfigKey key : configs) {
             if (key.internalConfig) {
@@ -1109,9 +1222,14 @@ public class ConfigDef {
             b.append("<tr>\n");
             // print column values
             for (String headerName : headers()) {
-                b.append("<td>");
-                b.append(getConfigValue(key, headerName));
+                addColumnValue(b, getConfigValue(key, headerName));
                 b.append("</td>");
+            }
+            if (hasUpdateModes) {
+                String updateMode = dynamicUpdateModes.get(key.name);
+                if (updateMode == null)
+                    updateMode = "read-only";
+                addColumnValue(b, updateMode);
             }
             b.append("</tr>\n");
         }
@@ -1212,32 +1330,30 @@ public class ConfigDef {
         }
 
         List<ConfigKey> configs = new ArrayList<>(configKeys.values());
-        Collections.sort(configs, new Comparator<ConfigKey>() {
-            @Override
-            public int compare(ConfigKey k1, ConfigKey k2) {
-                int cmp = k1.group == null
-                        ? (k2.group == null ? 0 : -1)
-                        : (k2.group == null ? 1 : Integer.compare(groupOrd.get(k1.group), groupOrd.get(k2.group)));
-                if (cmp == 0) {
-                    cmp = Integer.compare(k1.orderInGroup, k2.orderInGroup);
-                    if (cmp == 0) {
-                        // first take anything with no default value
-                        if (!k1.hasDefault() && k2.hasDefault()) {
-                            cmp = -1;
-                        } else if (!k2.hasDefault() && k1.hasDefault()) {
-                            cmp = 1;
-                        } else {
-                            cmp = k1.importance.compareTo(k2.importance);
-                            if (cmp == 0) {
-                                return k1.name.compareTo(k2.name);
-                            }
-                        }
-                    }
-                }
-                return cmp;
-            }
-        });
+        Collections.sort(configs, (k1, k2) -> compare(k1, k2, groupOrd));
         return configs;
+    }
+
+    private int compare(ConfigKey k1, ConfigKey k2, Map<String, Integer> groupOrd) {
+        int cmp = k1.group == null
+            ? (k2.group == null ? 0 : -1)
+            : (k2.group == null ? 1 : Integer.compare(groupOrd.get(k1.group), groupOrd.get(k2.group)));
+        if (cmp == 0) {
+            cmp = Integer.compare(k1.orderInGroup, k2.orderInGroup);
+            if (cmp == 0) {
+                // first take anything with no default value
+                if (!k1.hasDefault() && k2.hasDefault())
+                    cmp = -1;
+                else if (!k2.hasDefault() && k1.hasDefault())
+                    cmp = 1;
+                else {
+                    cmp = k1.importance.compareTo(k2.importance);
+                    if (cmp == 0)
+                        return k1.name.compareTo(k2.name);
+                }
+            }
+        }
+        return cmp;
     }
 
     public void embed(final String keyPrefix, final String groupPrefix, final int startingOrd, final ConfigDef child) {
@@ -1265,10 +1381,14 @@ public class ConfigDef {
      */
     private static Validator embeddedValidator(final String keyPrefix, final Validator base) {
         if (base == null) return null;
-        return new ConfigDef.Validator() {
-            @Override
+        return new Validator() {
             public void ensureValid(String name, Object value) {
                 base.ensureValid(name.substring(keyPrefix.length()), value);
+            }
+
+            @Override
+            public String toString() {
+                return base.toString();
             }
         };
     }
@@ -1315,6 +1435,56 @@ public class ConfigDef {
                 return base.visible(unprefixed(name), unprefixed(parsedConfig));
             }
         };
+    }
+
+    public String toHtml() {
+        return toHtml(Collections.<String, String>emptyMap());
+    }
+
+    /**
+     * Converts this config into an HTML list that can be embedded into docs.
+     * If <code>dynamicUpdateModes</code> is non-empty, a "Dynamic Update Mode" label
+     * will be included in the config details with the value of the update mode. Default
+     * mode is "read-only".
+     * @param dynamicUpdateModes Config name -&gt; update mode mapping
+     */
+    public String toHtml(Map<String, String> dynamicUpdateModes) {
+        boolean hasUpdateModes = !dynamicUpdateModes.isEmpty();
+        List<ConfigKey> configs = sortedConfigs();
+        StringBuilder b = new StringBuilder();
+        b.append("<ul class=\"config-list\">\n");
+
+        for (ConfigKey key : configs) {
+            if (key.internalConfig) {
+                continue;
+            }
+            b.append("<li>");
+            b.append("<b>");
+            b.append(key.name);
+            b.append("</b>: ");
+            b.append(key.documentation);
+            b.append("<br/>");
+            // details
+            b.append("<ul class=\"horizontal-list\">");
+            for (String detail : headers()) {
+                if (detail.equals("Name") || detail.equals("Description")) continue;
+                addConfigDetail(b, detail, getConfigValue(key, detail));
+            }
+            if (hasUpdateModes) {
+                String updateMode = dynamicUpdateModes.get(key.name);
+                if (updateMode == null)
+                    updateMode = "read-only";
+                addConfigDetail(b, "Update Mode", updateMode);
+            }
+            b.append("</ul>");
+            b.append("</li>\n");
+        }
+        b.append("</ul>\n");
+        return b.toString();
+    }
+
+    private static void addConfigDetail(StringBuilder builder, String name, String value) {
+        builder.append("<li><b>" + name + "</b>: " + value + "</li>");
     }
 
 }

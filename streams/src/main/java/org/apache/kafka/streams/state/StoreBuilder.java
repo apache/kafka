@@ -33,6 +33,12 @@ public interface StoreBuilder<T extends StateStore> {
     StoreBuilder<T> withCachingEnabled();
 
     /**
+     * Disable caching on the store.
+     * @return  this
+     */
+    StoreBuilder<T> withCachingDisabled();
+
+    /**
      * Maintain a changelog for any changes made to the store.
      * Use the provided config to set the config of the changelog topic.
      * @param config  config applied to the changelog topic
@@ -54,7 +60,6 @@ public interface StoreBuilder<T extends StateStore> {
      * @return the built {@link StateStore}
      */
     T build();
-
 
     /**
      * Returns a Map containing any log configs that will be used when creating the changelog for the {@link StateStore}.

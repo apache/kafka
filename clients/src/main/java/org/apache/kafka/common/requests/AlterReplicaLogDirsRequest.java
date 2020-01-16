@@ -55,8 +55,13 @@ public class AlterReplicaLogDirsRequest extends AbstractRequest {
                             TOPIC_NAME,
                             new Field("partitions", new ArrayOf(INT32), "List of partition ids of the topic."))))))));
 
+    /**
+     * The version number is bumped to indicate that on quota violation brokers send out responses before throttling.
+     */
+    private static final Schema ALTER_REPLICA_LOG_DIRS_REQUEST_V1 = ALTER_REPLICA_LOG_DIRS_REQUEST_V0;
+
     public static Schema[] schemaVersions() {
-        return new Schema[]{ALTER_REPLICA_LOG_DIRS_REQUEST_V0};
+        return new Schema[]{ALTER_REPLICA_LOG_DIRS_REQUEST_V0, ALTER_REPLICA_LOG_DIRS_REQUEST_V1};
     }
 
     private final Map<TopicPartition, String> partitionDirs;
@@ -86,7 +91,7 @@ public class AlterReplicaLogDirsRequest extends AbstractRequest {
     }
 
     public AlterReplicaLogDirsRequest(Struct struct, short version) {
-        super(version);
+        super(ApiKeys.ALTER_REPLICA_LOG_DIRS, version);
         partitionDirs = new HashMap<>();
         for (Object logDirStructObj : struct.getArray(LOG_DIRS_KEY_NAME)) {
             Struct logDirStruct = (Struct) logDirStructObj;
@@ -103,7 +108,7 @@ public class AlterReplicaLogDirsRequest extends AbstractRequest {
     }
 
     public AlterReplicaLogDirsRequest(Map<TopicPartition, String> partitionDirs, short version) {
-        super(version);
+        super(ApiKeys.ALTER_REPLICA_LOG_DIRS, version);
         this.partitionDirs = partitionDirs;
     }
 
@@ -112,7 +117,7 @@ public class AlterReplicaLogDirsRequest extends AbstractRequest {
         Map<String, List<TopicPartition>> dirPartitions = new HashMap<>();
         for (Map.Entry<TopicPartition, String> entry: partitionDirs.entrySet()) {
             if (!dirPartitions.containsKey(entry.getValue()))
-                dirPartitions.put(entry.getValue(), new ArrayList<TopicPartition>());
+                dirPartitions.put(entry.getValue(), new ArrayList<>());
             dirPartitions.get(entry.getValue()).add(entry.getKey());
         }
 
@@ -123,7 +128,7 @@ public class AlterReplicaLogDirsRequest extends AbstractRequest {
             logDirStruct.set(LOG_DIR_KEY_NAME, logDirEntry.getKey());
 
             List<Struct> topicStructArray = new ArrayList<>();
-            for (Map.Entry<String, List<Integer>> topicEntry: CollectionUtils.groupDataByTopic(logDirEntry.getValue()).entrySet()) {
+            for (Map.Entry<String, List<Integer>> topicEntry: CollectionUtils.groupPartitionsByTopic(logDirEntry.getValue()).entrySet()) {
                 Struct topicStruct = logDirStruct.instance(TOPICS_KEY_NAME);
                 topicStruct.set(TOPIC_NAME, topicEntry.getKey());
                 topicStruct.set(PARTITIONS_KEY_NAME, topicEntry.getValue().toArray());
@@ -147,6 +152,7 @@ public class AlterReplicaLogDirsRequest extends AbstractRequest {
         short versionId = version();
         switch (versionId) {
             case 0:
+            case 1:
                 return new AlterReplicaLogDirsResponse(throttleTimeMs, responseMap);
             default:
                 throw new IllegalArgumentException(

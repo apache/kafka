@@ -18,67 +18,74 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Deserializer;
-import org.apache.kafka.common.serialization.ExtendedDeserializer;
 import org.apache.kafka.streams.kstream.internals.ChangedDeserializer;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 
 import java.util.List;
 
-import static org.apache.kafka.common.serialization.ExtendedDeserializer.Wrapper.ensureExtended;
-
 public class SourceNode<K, V> extends ProcessorNode<K, V> {
 
     private final List<String> topics;
 
     private ProcessorContext context;
-    private ExtendedDeserializer<K> keyDeserializer;
-    private ExtendedDeserializer<V> valDeserializer;
+    private Deserializer<K> keyDeserializer;
+    private Deserializer<V> valDeserializer;
     private final TimestampExtractor timestampExtractor;
 
-    public SourceNode(String name, List<String> topics, TimestampExtractor timestampExtractor, Deserializer<K> keyDeserializer, Deserializer<V> valDeserializer) {
+    public SourceNode(final String name,
+                      final List<String> topics,
+                      final TimestampExtractor timestampExtractor,
+                      final Deserializer<K> keyDeserializer,
+                      final Deserializer<V> valDeserializer) {
         super(name);
         this.topics = topics;
         this.timestampExtractor = timestampExtractor;
-        this.keyDeserializer = ensureExtended(keyDeserializer);
-        this.valDeserializer = ensureExtended(valDeserializer);
+        this.keyDeserializer = keyDeserializer;
+        this.valDeserializer = valDeserializer;
     }
 
-    public SourceNode(String name, List<String> topics, Deserializer<K> keyDeserializer, Deserializer<V> valDeserializer) {
+    public SourceNode(final String name,
+                      final List<String> topics,
+                      final Deserializer<K> keyDeserializer,
+                      final Deserializer<V> valDeserializer) {
         this(name, topics, null, keyDeserializer, valDeserializer);
     }
 
-    K deserializeKey(String topic, Headers headers, byte[] data) {
+    K deserializeKey(final String topic, final Headers headers, final byte[] data) {
         return keyDeserializer.deserialize(topic, headers, data);
     }
 
-    V deserializeValue(String topic, Headers headers, byte[] data) {
+    V deserializeValue(final String topic, final Headers headers, final byte[] data) {
         return valDeserializer.deserialize(topic, headers, data);
     }
 
     @SuppressWarnings("unchecked")
     @Override
-    public void init(ProcessorContext context) {
+    public void init(final InternalProcessorContext context) {
         super.init(context);
         this.context = context;
 
         // if deserializers are null, get the default ones from the context
-        if (this.keyDeserializer == null)
-            this.keyDeserializer = ensureExtended((Deserializer<K>) context.keySerde().deserializer());
-        if (this.valDeserializer == null)
-            this.valDeserializer = ensureExtended((Deserializer<V>) context.valueSerde().deserializer());
+        if (this.keyDeserializer == null) {
+            this.keyDeserializer = (Deserializer<K>) context.keySerde().deserializer();
+        }
+        if (this.valDeserializer == null) {
+            this.valDeserializer = (Deserializer<V>) context.valueSerde().deserializer();
+        }
 
         // if value deserializers are for {@code Change} values, set the inner deserializer when necessary
         if (this.valDeserializer instanceof ChangedDeserializer &&
-                ((ChangedDeserializer) this.valDeserializer).inner() == null)
+                ((ChangedDeserializer) this.valDeserializer).inner() == null) {
             ((ChangedDeserializer) this.valDeserializer).setInner(context.valueSerde().deserializer());
+        }
     }
 
 
     @Override
     public void process(final K key, final V value) {
         context.forward(key, value);
-        nodeMetrics.sourceNodeForwardSensor.record();
+        sourceNodeForwardSensor().record();
     }
 
     /**
@@ -92,10 +99,10 @@ public class SourceNode<K, V> extends ProcessorNode<K, V> {
     /**
      * @return a string representation of this node starting with the given indent, useful for debugging.
      */
-    public String toString(String indent) {
+    public String toString(final String indent) {
         final StringBuilder sb = new StringBuilder(super.toString(indent));
         sb.append(indent).append("\ttopics:\t\t[");
-        for (String topic : topics) {
+        for (final String topic : topics) {
             sb.append(topic);
             sb.append(", ");
         }

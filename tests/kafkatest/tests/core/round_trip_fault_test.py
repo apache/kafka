@@ -16,6 +16,7 @@
 import time
 from ducktape.tests.test import Test
 from kafkatest.services.trogdor.network_partition_fault_spec import NetworkPartitionFaultSpec
+from kafkatest.services.trogdor.degraded_network_fault_spec import DegradedNetworkFaultSpec
 from kafkatest.services.kafka import KafkaService
 from kafkatest.services.trogdor.process_stop_fault_spec import ProcessStopFaultSpec
 from kafkatest.services.trogdor.round_trip_workload import RoundTripWorkloadService, RoundTripWorkloadSpec
@@ -25,6 +26,8 @@ from kafkatest.services.zookeeper import ZookeeperService
 
 
 class RoundTripFaultTest(Test):
+    topic_name_index = 0
+
     def __init__(self, test_context):
         """:type test_context: ducktape.tests.test.TestContext"""
         super(RoundTripFaultTest, self).__init__(test_context)
@@ -33,12 +36,15 @@ class RoundTripFaultTest(Test):
         self.workload_service = RoundTripWorkloadService(test_context, self.kafka)
         self.trogdor = TrogdorService(context=self.test_context,
                                       client_services=[self.zk, self.kafka, self.workload_service])
+        topic_name = "round_trip_topic%d" % RoundTripFaultTest.topic_name_index
+        RoundTripFaultTest.topic_name_index = RoundTripFaultTest.topic_name_index + 1
+        active_topics={topic_name : {"partitionAssignments":{"0": [0,1,2]}}}
         self.round_trip_spec = RoundTripWorkloadSpec(0, TaskSpec.MAX_DURATION_MS,
                                      self.workload_service.client_node,
                                      self.workload_service.bootstrap_servers,
                                      target_messages_per_sec=10000,
-                                     partition_assignments={0: [0,1,2]},
-                                     max_messages=100000)
+                                     max_messages=100000,
+                                     active_topics=active_topics)
 
     def setUp(self):
         self.zk.start()
@@ -87,3 +93,14 @@ class RoundTripFaultTest(Test):
         workload1.wait_for_done(timeout_sec=600)
         stop1.stop()
         stop1.wait_for_done()
+
+    def test_produce_consume_with_latency(self):
+        workload1 = self.trogdor.create_task("workload1", self.round_trip_spec)
+        time.sleep(2)
+        spec = DegradedNetworkFaultSpec(0, 60000)
+        for node in self.kafka.nodes + self.zk.nodes:
+            spec.add_node_spec(node.name, "eth0", latencyMs=100, rateLimitKbit=3000)
+        slow1 = self.trogdor.create_task("slow1", spec)
+        workload1.wait_for_done(timeout_sec=600)
+        slow1.stop()
+        slow1.wait_for_done()

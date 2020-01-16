@@ -41,7 +41,7 @@ public class GlobalStateManagerStub implements GlobalStateManager {
     }
 
     @Override
-    public void setGlobalProcessorContext(InternalProcessorContext processorContext) {}
+    public void setGlobalProcessorContext(final InternalProcessorContext processorContext) {}
 
     @Override
     public Set<String> initialize() {
@@ -66,7 +66,7 @@ public class GlobalStateManagerStub implements GlobalStateManager {
     public void flush() {}
 
     @Override
-    public void close(final Map<TopicPartition, Long> offsets) throws IOException {
+    public void close(final boolean clean) throws IOException {
         this.offsets.putAll(offsets);
         closed = true;
     }

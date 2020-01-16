@@ -36,7 +36,7 @@ public interface HeaderConverter extends Configurable, Closeable {
     SchemaAndValue toConnectHeader(String topic, String headerKey, byte[] value);
 
     /**
-     * Convert the {@link Header}'s {@link Header#valueAsBytes() value} into its byte array representation.
+     * Convert the {@link Header}'s {@link Header#value() value} into its byte array representation.
      * @param topic the name of the topic for the record containing the header
      * @param headerKey the header's key; may not be null
      * @param schema the schema for the header's value; may be null

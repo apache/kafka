@@ -19,7 +19,6 @@ package org.apache.kafka.common.network;
 import java.io.EOFException;
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.nio.channels.ReadableByteChannel;
 import java.nio.channels.ScatteringByteChannel;
 import org.apache.kafka.common.memory.MemoryPool;
 import org.slf4j.Logger;
@@ -90,33 +89,6 @@ public class NetworkReceive implements Receive {
     }
 
     public long readFrom(ScatteringByteChannel channel) throws IOException {
-        return readFromReadableChannel(channel);
-    }
-
-    @Override
-    public boolean requiredMemoryAmountKnown() {
-        return requestedBufferSize != -1;
-    }
-
-    @Override
-    public boolean memoryAllocated() {
-        return buffer != null;
-    }
-
-
-    @Override
-    public void close() throws IOException {
-        if (buffer != null && buffer != EMPTY_BUFFER) {
-            memoryPool.release(buffer);
-            buffer = null;
-        }
-    }
-
-    // Need a method to read from ReadableByteChannel because BlockingChannel requires read with timeout
-    // See: http://stackoverflow.com/questions/2866557/timeout-for-socketchannel-doesnt-work
-    // This can go away after we get rid of BlockingChannel
-    @Deprecated
-    public long readFromReadableChannel(ReadableByteChannel channel) throws IOException {
         int read = 0;
         if (size.hasRemaining()) {
             int bytesRead = channel.read(size);
@@ -151,8 +123,35 @@ public class NetworkReceive implements Receive {
         return read;
     }
 
+    @Override
+    public boolean requiredMemoryAmountKnown() {
+        return requestedBufferSize != -1;
+    }
+
+    @Override
+    public boolean memoryAllocated() {
+        return buffer != null;
+    }
+
+
+    @Override
+    public void close() throws IOException {
+        if (buffer != null && buffer != EMPTY_BUFFER) {
+            memoryPool.release(buffer);
+            buffer = null;
+        }
+    }
+
     public ByteBuffer payload() {
         return this.buffer;
+    }
+
+    /**
+     * Returns the total size of the receive including payload and size buffer
+     * for use in metrics. This is consistent with {@link NetworkSend#size()}
+     */
+    public int size() {
+        return payload().limit() + size.limit();
     }
 
 }

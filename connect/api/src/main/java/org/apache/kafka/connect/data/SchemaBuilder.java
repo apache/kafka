@@ -336,12 +336,14 @@ public class SchemaBuilder implements Schema {
      * Get the list of fields for this Schema. Throws a DataException if this schema is not a struct.
      * @return the list of fields for this Schema
      */
+    @Override
     public List<Field> fields() {
         if (type != Type.STRUCT)
             throw new DataException("Cannot list fields on non-struct type");
         return new ArrayList<>(fields.values());
     }
 
+    @Override
     public Field field(String fieldName) {
         if (type != Type.STRUCT)
             throw new DataException("Cannot look up fields on non-struct type");

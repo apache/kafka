@@ -18,7 +18,6 @@ package org.apache.kafka.connect.runtime;
 
 import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.connector.ConnectorContext;
-import org.apache.kafka.connect.runtime.ConnectMetrics.LiteralSupplier;
 import org.apache.kafka.connect.runtime.ConnectMetrics.MetricGroup;
 import org.apache.kafka.connect.sink.SinkConnector;
 import org.apache.kafka.connect.source.SourceConnector;
@@ -77,6 +76,9 @@ public class WorkerConnector {
         try {
             this.config = connectorConfig.originalsStrings();
             log.debug("{} Initializing connector {} with config {}", this, connName, config);
+            if (isSinkConnector()) {
+                SinkConnectorConfig.validate(config);
+            }
 
             connector.initialize(new ConnectorContext() {
                 @Override
@@ -86,7 +88,7 @@ public class WorkerConnector {
 
                 @Override
                 public void raiseError(Exception e) {
-                    log.error("{} Connector raised an error", this, e);
+                    log.error("{} Connector raised an error", WorkerConnector.this, e);
                     onFailure(e);
                     ctx.raiseError(e);
                 }
@@ -138,6 +140,7 @@ public class WorkerConnector {
         return state == State.STARTED;
     }
 
+    @SuppressWarnings("fallthrough")
     private void pause() {
         try {
             switch (state) {
@@ -228,7 +231,7 @@ public class WorkerConnector {
                        '}';
     }
 
-    class ConnectorMetricsGroup implements ConnectorStatus.Listener {
+    class ConnectorMetricsGroup implements ConnectorStatus.Listener, AutoCloseable {
         /**
          * Use {@link AbstractStatus.State} since it has all of the states we want,
          * unlike {@link WorkerConnector.State}.
@@ -253,12 +256,7 @@ public class WorkerConnector {
             metricGroup.addImmutableValueMetric(registry.connectorType, connectorType());
             metricGroup.addImmutableValueMetric(registry.connectorClass, connector.getClass().getName());
             metricGroup.addImmutableValueMetric(registry.connectorVersion, connector.version());
-            metricGroup.addValueMetric(registry.connectorStatus, new LiteralSupplier<String>() {
-                @Override
-                public String metricValue(long now) {
-                    return state.toString().toLowerCase(Locale.getDefault());
-                }
-            });
+            metricGroup.addValueMetric(registry.connectorStatus, now -> state.toString().toLowerCase(Locale.getDefault()));
         }
 
         public void close() {

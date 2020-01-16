@@ -18,9 +18,9 @@ package kafka.coordinator.transaction
 
 import java.nio.charset.StandardCharsets
 
-import kafka.common.KafkaException
 import kafka.utils.{Json, Logging}
 import kafka.zk.{KafkaZkClient, ProducerIdBlockZNode}
+import org.apache.kafka.common.KafkaException
 
 import scala.collection.JavaConverters._
 
@@ -150,7 +150,7 @@ class ProducerIdManager(val brokerId: Int, val zkClient: KafkaZkClient) extends 
     }
   }
 
-  def shutdown() {
+  def shutdown(): Unit = {
     info(s"Shutdown complete: last producerId assigned $nextProducerId")
   }
 }

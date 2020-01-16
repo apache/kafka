@@ -93,9 +93,7 @@ public class ResourceFilter {
     public boolean matches(Resource other) {
         if ((name != null) && (!name.equals(other.name())))
             return false;
-        if ((resourceType != ResourceType.ANY) && (!resourceType.equals(other.resourceType())))
-            return false;
-        return true;
+        return (resourceType == ResourceType.ANY) || (resourceType.equals(other.resourceType()));
     }
 
     /**

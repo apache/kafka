@@ -14,6 +14,7 @@
 
 from kafkatest import __version__ as __kafkatest_version__
 
+import math
 import re
 import time
 
@@ -112,3 +113,72 @@ def node_is_reachable(src_node, dst_node):
     :return:                True only if dst is reachable from src.
     """
     return 0 == src_node.account.ssh("nc -w 3 -z %s 22" % dst_node.account.hostname, allow_fail=True)
+
+
+def annotate_missing_msgs(missing, acked, consumed, msg):
+    missing_list = list(missing)
+    msg += "%s acked message did not make it to the Consumer. They are: " %\
+        len(missing_list)
+    if len(missing_list) < 20:
+        msg += str(missing_list) + ". "
+    else:
+        msg += ", ".join(str(m) for m in missing_list[:20])
+        msg += "...plus %s more. Total Acked: %s, Total Consumed: %s. " \
+            % (len(missing_list) - 20, len(set(acked)), len(set(consumed)))
+    return msg
+
+def annotate_data_lost(data_lost, msg, number_validated):
+    print_limit = 10
+    if len(data_lost) > 0:
+        msg += "The first %s missing messages were validated to ensure they are in Kafka's data files. " \
+            "%s were missing. This suggests data loss. Here are some of the messages not found in the data files: %s\n" \
+            % (number_validated, len(data_lost), str(data_lost[0:print_limit]) if len(data_lost) > print_limit else str(data_lost))
+    else:
+        msg += "We validated that the first %s of these missing messages correctly made it into Kafka's data files. " \
+            "This suggests they were lost on their way to the consumer." % number_validated
+    return msg
+
+def validate_delivery(acked, consumed, idempotence_enabled=False, check_lost_data=None, may_truncate_acked_records=False):
+    """Check that each acked message was consumed."""
+    success = True
+    msg = ""
+
+    # Correctness of the set difference operation depends on using equivalent
+    # message_validators in producer and consumer
+    missing = set(acked) - set(consumed)
+    
+    # Were all acked messages consumed?
+    if len(missing) > 0:
+        msg = annotate_missing_msgs(missing, acked, consumed, msg)
+        
+        # Did we miss anything due to data loss?
+        if check_lost_data:
+            max_truncate_count = 100 if may_truncate_acked_records else 0
+            max_validate_count = max(1000, max_truncate_count)
+
+            to_validate = list(missing)[0:min(len(missing), max_validate_count)]
+            data_lost = check_lost_data(to_validate)
+
+            # With older versions of message format before KIP-101, data loss could occur due to truncation.
+            # These records won't be in the data logs. Tolerate limited data loss for this case.
+            if len(missing) < max_truncate_count and len(data_lost) == len(missing):
+               msg += "The %s missing messages were not present in Kafka's data files. This suggests data loss " \
+                   "due to truncation, which is possible with older message formats and hence are ignored " \
+                   "by this test. The messages lost: %s\n" % (len(data_lost), str(data_lost))
+            else:
+                msg = annotate_data_lost(data_lost, msg, len(to_validate))
+                success = False
+        else:
+            success = False
+
+    # Are there duplicates?
+    if len(set(consumed)) != len(consumed):
+        num_duplicates = abs(len(set(consumed)) - len(consumed))
+
+        if idempotence_enabled:
+            success = False
+            msg += "Detected %d duplicates even though idempotence was enabled.\n" % num_duplicates
+        else:
+            msg += "(There are also %d duplicate messages in the log - but that is an acceptable outcome)\n" % num_duplicates
+
+    return success, msg

@@ -16,30 +16,41 @@
  */
 package kafka.admin
 
+import java.io.File
 import java.util.Properties
 
 import kafka.admin.ReassignPartitionsCommand.Throttle
 import kafka.log.LogConfig
 import kafka.log.LogConfig._
-import kafka.server.{ConfigType, DynamicConfig}
+import kafka.server.{ConfigType, DynamicConfig, KafkaConfig, KafkaServer}
 import kafka.utils.CoreUtils._
 import kafka.utils.TestUtils._
 import kafka.utils.{CoreUtils, Logging, TestUtils}
 import kafka.zk.{AdminZkClient, KafkaZkClient, ZooKeeperTestHarness}
 import org.easymock.EasyMock._
 import org.easymock.{Capture, CaptureType, EasyMock}
-import org.junit.{Before, Test}
-import org.junit.Assert.{assertEquals, assertNull}
+import org.junit.{After, Before, Test}
+import org.junit.Assert.{assertEquals, assertFalse, assertNull, assertTrue}
+import org.scalatest.Assertions.fail
 
-import scala.collection.{Seq, mutable}
 import scala.collection.JavaConverters._
 import org.apache.kafka.common.TopicPartition
 
+import scala.collection.mutable
+import scala.collection.Seq
+
 class ReassignPartitionsCommandTest extends ZooKeeperTestHarness with Logging {
+  var servers: Seq[KafkaServer] = Seq()
   var calls = 0
 
+  @After
+  override def tearDown(): Unit = {
+    TestUtils.shutdownServers(servers)
+    super.tearDown()
+  }
+
   @Test
-  def shouldFindMovingReplicas() {
+  def shouldFindMovingReplicas(): Unit = {
     val control = new TopicPartition("topic1", 1) -> Seq(100, 102)
     val assigner = new ReassignPartitionsCommand(null, null, null, null, null)
 
@@ -62,7 +73,7 @@ class ReassignPartitionsCommandTest extends ZooKeeperTestHarness with Logging {
   }
 
   @Test
-  def shouldFindMovingReplicasWhenProposedIsSubsetOfExisting() {
+  def shouldFindMovingReplicasWhenProposedIsSubsetOfExisting(): Unit = {
     val assigner = new ReassignPartitionsCommand(null, null, null, null, null)
 
     //Given we have more existing partitions than we are proposing
@@ -97,7 +108,7 @@ class ReassignPartitionsCommandTest extends ZooKeeperTestHarness with Logging {
   }
 
   @Test
-  def shouldFindMovingReplicasMultiplePartitions() {
+  def shouldFindMovingReplicasMultiplePartitions(): Unit = {
     val control = new TopicPartition("topic1", 2) -> Seq(100, 102)
     val assigner = new ReassignPartitionsCommand(null, null, null, null, null)
 
@@ -122,7 +133,7 @@ class ReassignPartitionsCommandTest extends ZooKeeperTestHarness with Logging {
   }
 
   @Test
-  def shouldFindMovingReplicasMultipleTopics() {
+  def shouldFindMovingReplicasMultipleTopics(): Unit = {
     val control = new TopicPartition("topic1", 1) -> Seq(100, 102)
     val assigner = new ReassignPartitionsCommand(null, null, null, null, null)
 
@@ -154,7 +165,7 @@ class ReassignPartitionsCommandTest extends ZooKeeperTestHarness with Logging {
   }
 
   @Test
-  def shouldFindMovingReplicasMultipleTopicsAndPartitions() {
+  def shouldFindMovingReplicasMultipleTopicsAndPartitions(): Unit = {
     val assigner = new ReassignPartitionsCommand(null, null, null, null, null)
 
     //Given
@@ -197,7 +208,7 @@ class ReassignPartitionsCommandTest extends ZooKeeperTestHarness with Logging {
   }
 
   @Test
-  def shouldFindTwoMovingReplicasInSamePartition() {
+  def shouldFindTwoMovingReplicasInSamePartition(): Unit = {
     val control = new TopicPartition("topic1", 1) -> Seq(100, 102)
     val assigner = new ReassignPartitionsCommand(null, null, null, null, null)
 
@@ -259,7 +270,7 @@ class ReassignPartitionsCommandTest extends ZooKeeperTestHarness with Logging {
 
     //Setup
     val zk = stubZKClient(existing)
-    val admin = createMock(classOf[AdminZkClient])
+    val admin: AdminZkClient = createMock(classOf[AdminZkClient])
     val propsCapture: Capture[Properties] = newCapture(CaptureType.ALL)
     val assigner = new ReassignPartitionsCommand(zk, None, proposed, Map.empty, admin)
     expect(admin.fetchEntityConfig(anyString(), anyString())).andStubReturn(new Properties)
@@ -285,7 +296,7 @@ class ReassignPartitionsCommandTest extends ZooKeeperTestHarness with Logging {
 
     //Setup
     val zk = stubZKClient(existing)
-    val admin = createMock(classOf[AdminZkClient])
+    val admin: AdminZkClient = createMock(classOf[AdminZkClient])
     val propsCapture: Capture[Properties] = newCapture(CaptureType.ALL)
     val assigner = new ReassignPartitionsCommand(zk, None, proposed, Map.empty, admin)
     expect(admin.changeBrokerConfig(anyObject().asInstanceOf[List[Int]], capture(propsCapture))).anyTimes()
@@ -319,7 +330,7 @@ class ReassignPartitionsCommandTest extends ZooKeeperTestHarness with Logging {
 
     //Setup
     val zk = stubZKClient(existing)
-    val admin = createMock(classOf[AdminZkClient])
+    val admin: AdminZkClient = createMock(classOf[AdminZkClient])
     val propsCapture: Capture[Properties] = newCapture(CaptureType.ALL)
     val assigner = new ReassignPartitionsCommand(zk, None, proposed, Map.empty, admin)
     expect(admin.changeBrokerConfig(anyObject().asInstanceOf[List[Int]], capture(propsCapture))).anyTimes()
@@ -355,7 +366,7 @@ class ReassignPartitionsCommandTest extends ZooKeeperTestHarness with Logging {
 
     //Setup
     val zk = stubZKClient(brokers = brokers)
-    val admin = createMock(classOf[AdminZkClient])
+    val admin: AdminZkClient = createMock(classOf[AdminZkClient])
     val propsCapture: Capture[Properties] = newCapture(CaptureType.ALL)
     expect(admin.fetchEntityConfig(is(ConfigType.Topic), anyString())).andStubReturn(new Properties)
     expect(admin.changeBrokerConfig(anyObject().asInstanceOf[Seq[Int]], capture(propsCapture))).anyTimes()
@@ -390,7 +401,7 @@ class ReassignPartitionsCommandTest extends ZooKeeperTestHarness with Logging {
 
     //Setup
     val zk = stubZKClient(brokers = Seq(100, 101))
-    val admin = createMock(classOf[AdminZkClient])
+    val admin: AdminZkClient = createMock(classOf[AdminZkClient])
     val propsCapture: Capture[Properties] = newCapture(CaptureType.ALL)
     expect(admin.fetchEntityConfig(is(ConfigType.Broker), anyString())).andStubReturn(new Properties)
     expect(admin.fetchEntityConfig(is(ConfigType.Topic), is("topic1"))).andStubReturn(copyOf(existingConfigs))
@@ -414,6 +425,140 @@ class ReassignPartitionsCommandTest extends ZooKeeperTestHarness with Logging {
     assertEquals(2, propsCapture.getValues.size) //2 topics
   }
 
+  @Test
+  def testPartitionReassignmentWithLeaderInNewReplicas(): Unit = {
+    val expectedReplicaAssignment = Map(0  -> List(0, 1, 2))
+    val topic = "test"
+    // create brokers
+    servers = TestUtils.createBrokerConfigs(4, zkConnect, false).map(b => TestUtils.createServer(KafkaConfig.fromProps(b)))
+    // create the topic
+    TestUtils.createTopic(zkClient, topic, expectedReplicaAssignment, servers)
+    // reassign partition 0
+    val newReplicas = Seq(0, 2, 3)
+    val partitionToBeReassigned = 0
+    val topicAndPartition = new TopicPartition(topic, partitionToBeReassigned)
+    val reassignPartitionsCommand = new ReassignPartitionsCommand(zkClient, None, Map(topicAndPartition -> newReplicas), adminZkClient = adminZkClient)
+    assertTrue("Partition reassignment attempt failed for [test, 0]", reassignPartitionsCommand.reassignPartitions())
+    // wait until reassignment is completed
+    TestUtils.waitUntilTrue(() => {
+        ReassignPartitionsCommand.checkIfPartitionReassignmentSucceeded(zkClient, Map(topicAndPartition -> newReplicas))
+          .getOrElse(topicAndPartition, fail(s"Failed to get reassignment status for $topicAndPartition")) == ReassignmentCompleted
+      },
+      "Partition reassignment should complete")
+    val assignedReplicas = zkClient.getReplicasForPartition(new TopicPartition(topic, partitionToBeReassigned))
+    // in sync replicas should not have any replica that is not in the new assigned replicas
+    checkForPhantomInSyncReplicas(zkClient, topic, partitionToBeReassigned, assignedReplicas)
+    assertEquals("Partition should have been reassigned to 0, 2, 3", newReplicas, assignedReplicas)
+    ensureNoUnderReplicatedPartitions(zkClient, topic, partitionToBeReassigned, assignedReplicas, servers)
+    TestUtils.waitUntilTrue(() => getBrokersWithPartitionDir(servers, topic, 0) == newReplicas.toSet,
+                            "New replicas should exist on brokers")
+  }
+
+  @Test
+  def testPartitionReassignmentWithLeaderNotInNewReplicas(): Unit = {
+    val expectedReplicaAssignment = Map(0  -> List(0, 1, 2))
+    val topic = "test"
+    // create brokers
+    servers = TestUtils.createBrokerConfigs(4, zkConnect, false).map(b => TestUtils.createServer(KafkaConfig.fromProps(b)))
+    // create the topic
+    TestUtils.createTopic(zkClient, topic, expectedReplicaAssignment, servers)
+    // reassign partition 0
+    val newReplicas = Seq(1, 2, 3)
+    val partitionToBeReassigned = 0
+    val topicAndPartition = new TopicPartition(topic, partitionToBeReassigned)
+    val reassignPartitionsCommand = new ReassignPartitionsCommand(zkClient, None, Map(topicAndPartition -> newReplicas), adminZkClient = adminZkClient)
+    assertTrue("Partition reassignment failed for test, 0", reassignPartitionsCommand.reassignPartitions())
+    // wait until reassignment is completed
+    TestUtils.waitUntilTrue(() => {
+        ReassignPartitionsCommand.checkIfPartitionReassignmentSucceeded(zkClient, Map(topicAndPartition -> newReplicas))
+          .getOrElse(topicAndPartition, fail(s"Failed to get reassignment status for $topicAndPartition")) == ReassignmentCompleted
+      },
+      "Partition reassignment should complete")
+    val assignedReplicas = zkClient.getReplicasForPartition(new TopicPartition(topic, partitionToBeReassigned))
+    assertEquals("Partition should have been reassigned to 0, 2, 3", newReplicas, assignedReplicas)
+    checkForPhantomInSyncReplicas(zkClient, topic, partitionToBeReassigned, assignedReplicas)
+    ensureNoUnderReplicatedPartitions(zkClient, topic, partitionToBeReassigned, assignedReplicas, servers)
+    TestUtils.waitUntilTrue(() => getBrokersWithPartitionDir(servers, topic, 0) == newReplicas.toSet,
+                            "New replicas should exist on brokers")
+  }
+
+  @Test
+  def testPartitionReassignmentNonOverlappingReplicas(): Unit = {
+    val expectedReplicaAssignment = Map(0  -> List(0, 1))
+    val topic = "test"
+    // create brokers
+    servers = TestUtils.createBrokerConfigs(4, zkConnect, false).map(b => TestUtils.createServer(KafkaConfig.fromProps(b)))
+    // create the topic
+    TestUtils.createTopic(zkClient, topic, expectedReplicaAssignment, servers)
+    // reassign partition 0
+    val newReplicas = Seq(2, 3)
+    val partitionToBeReassigned = 0
+    val topicAndPartition = new TopicPartition(topic, partitionToBeReassigned)
+    val reassignPartitionsCommand = new ReassignPartitionsCommand(zkClient, None, Map(topicAndPartition -> newReplicas),  adminZkClient = adminZkClient)
+    assertTrue("Partition reassignment failed for test, 0", reassignPartitionsCommand.reassignPartitions())
+    // wait until reassignment is completed
+    TestUtils.waitUntilTrue(() => {
+        ReassignPartitionsCommand.checkIfPartitionReassignmentSucceeded(zkClient, Map(topicAndPartition -> newReplicas))
+          .getOrElse(topicAndPartition, fail(s"Failed to get reassignment status for $topicAndPartition")) == ReassignmentCompleted
+      },
+      "Partition reassignment should complete")
+    val assignedReplicas = zkClient.getReplicasForPartition(new TopicPartition(topic, partitionToBeReassigned))
+    assertEquals("Partition should have been reassigned to 2, 3", newReplicas, assignedReplicas)
+    checkForPhantomInSyncReplicas(zkClient, topic, partitionToBeReassigned, assignedReplicas)
+    ensureNoUnderReplicatedPartitions(zkClient, topic, partitionToBeReassigned, assignedReplicas, servers)
+    TestUtils.waitUntilTrue(() => getBrokersWithPartitionDir(servers, topic, 0) == newReplicas.toSet,
+                            "New replicas should exist on brokers")
+  }
+
+  @Test
+  def testReassigningNonExistingPartition(): Unit = {
+    val topic = "test"
+    // create brokers
+    servers = TestUtils.createBrokerConfigs(4, zkConnect, false).map(b => TestUtils.createServer(KafkaConfig.fromProps(b)))
+    // reassign partition 0
+    val newReplicas = Seq(2, 3)
+    val partitionToBeReassigned = 0
+    val topicAndPartition = new TopicPartition(topic, partitionToBeReassigned)
+    val reassignPartitionsCommand = new ReassignPartitionsCommand(zkClient, None, Map(topicAndPartition -> newReplicas), adminZkClient = adminZkClient)
+    assertFalse("Partition reassignment failed for test, 0", reassignPartitionsCommand.reassignPartitions())
+    val reassignedPartitions = zkClient.getPartitionReassignment
+    assertFalse("Partition should not be reassigned", reassignedPartitions.contains(topicAndPartition))
+  }
+
+  @Test
+  def testResumePartitionReassignmentThatWasCompleted(): Unit = {
+    val initialAssignment = Map(0  -> List(0, 2))
+    val topic = "test"
+    // create the topic
+    adminZkClient.createTopicWithAssignment(topic, config = new Properties, initialAssignment)
+    // put the partition in the reassigned path as well
+    // reassign partition 0
+    val newReplicas = Seq(0, 1)
+    val partitionToBeReassigned = 0
+    val topicAndPartition = new TopicPartition(topic, partitionToBeReassigned)
+    val reassignPartitionsCommand = new ReassignPartitionsCommand(zkClient, None, Map(topicAndPartition -> newReplicas), adminZkClient = adminZkClient)
+    reassignPartitionsCommand.reassignPartitions()
+    // create brokers
+    servers = TestUtils.createBrokerConfigs(2, zkConnect, false).map(b => TestUtils.createServer(KafkaConfig.fromProps(b)))
+
+    // wait until reassignment completes
+    TestUtils.waitUntilTrue(() => !zkClient.reassignPartitionsInProgress(),
+                            "Partition reassignment should complete")
+    val assignedReplicas = zkClient.getReplicasForPartition(new TopicPartition(topic, partitionToBeReassigned))
+    assertEquals("Partition should have been reassigned to 0, 1", newReplicas, assignedReplicas)
+    checkForPhantomInSyncReplicas(zkClient, topic, partitionToBeReassigned, assignedReplicas)
+    // ensure that there are no under replicated partitions
+    ensureNoUnderReplicatedPartitions(zkClient, topic, partitionToBeReassigned, assignedReplicas, servers)
+    TestUtils.waitUntilTrue(() => getBrokersWithPartitionDir(servers, topic, 0) == newReplicas.toSet,
+                            "New replicas should exist on brokers")
+  }
+
+  private def getBrokersWithPartitionDir(servers: Iterable[KafkaServer], topic: String, partitionId: Int): Set[Int] = {
+    servers.filter(server => new File(server.config.logDirs.head, topic + "-" + partitionId).exists)
+           .map(_.config.brokerId)
+           .toSet
+  }
+
   //Override eq as is for brevity
   def is[T](v: T): T = EasyMock.eq(v)
 
@@ -424,7 +569,7 @@ class ReassignPartitionsCommandTest extends ZooKeeperTestHarness with Logging {
 
   def stubZKClient(existingAssignment: Map[TopicPartition, Seq[Int]] = Map[TopicPartition, Seq[Int]](),
                    brokers: Seq[Int] = Seq[Int]()): KafkaZkClient = {
-    val zkClient = createMock(classOf[KafkaZkClient])
+    val zkClient: KafkaZkClient = createMock(classOf[KafkaZkClient])
     expect(zkClient.getReplicaAssignmentForTopics(anyObject().asInstanceOf[Set[String]])).andStubReturn(existingAssignment)
     expect(zkClient.getAllBrokersInCluster).andStubReturn(brokers.map(TestUtils.createBroker(_, "", 1)))
     replay(zkClient)

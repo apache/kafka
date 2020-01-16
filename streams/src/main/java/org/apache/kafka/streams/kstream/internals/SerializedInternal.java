@@ -17,19 +17,18 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.serialization.Serde;
-import org.apache.kafka.streams.kstream.Serialized;
 
-class SerializedInternal<K, V> extends Serialized<K, V> {
-    SerializedInternal(final Serialized<K, V> serialized) {
+@Deprecated
+public class SerializedInternal<K, V> extends org.apache.kafka.streams.kstream.Serialized<K, V> {
+    public SerializedInternal(final org.apache.kafka.streams.kstream.Serialized<K, V> serialized) {
         super(serialized);
     }
 
-    Serde<K> keySerde() {
+    public Serde<K> keySerde() {
         return keySerde;
     }
 
-    Serde<V> valueSerde() {
+    public Serde<V> valueSerde() {
         return valueSerde;
     }
-
 }

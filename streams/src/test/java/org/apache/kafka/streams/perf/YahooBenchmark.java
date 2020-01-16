@@ -17,7 +17,6 @@
 package org.apache.kafka.streams.perf;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
@@ -27,20 +26,18 @@ import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.serialization.StringSerializer;
-import org.apache.kafka.streams.Consumed;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.kstream.ForeachAction;
+import org.apache.kafka.streams.kstream.Consumed;
+import org.apache.kafka.streams.kstream.Grouped;
+import org.apache.kafka.streams.kstream.Joined;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
-import org.apache.kafka.streams.kstream.KeyValueMapper;
-import org.apache.kafka.streams.kstream.Predicate;
-import org.apache.kafka.streams.kstream.Serialized;
+import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.TimeWindows;
-import org.apache.kafka.streams.kstream.ValueJoiner;
-import org.apache.kafka.streams.kstream.ValueMapper;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -65,23 +62,26 @@ public class YahooBenchmark {
     static class ProjectedEvent {
         /* attributes need to be public for serializer to work */
         /* main attributes */
-        public String eventType;
-        public String adID;
+        String eventType;
+        String adID;
 
         /* other attributes */
-        public long eventTime;
-        public String userID = UUID.randomUUID().toString(); // not used
-        public String pageID = UUID.randomUUID().toString(); // not used
-        public String addType = "banner78";  // not used
-        public String ipAddress = "1.2.3.4"; // not used
+        long eventTime;
+        /* not used
+        public String userID = UUID.randomUUID().toString();
+        public String pageID = UUID.randomUUID().toString();
+        public String addType = "banner78";
+        public String ipAddress = "1.2.3.4";
+         */
     }
 
     static class CampaignAd {
         /* attributes need to be public for serializer to work */
-        public String adID;
-        public String campaignID;
+        String adID;
+        String campaignID;
     }
 
+    @SuppressWarnings("WeakerAccess")
     public YahooBenchmark(final SimpleBenchmark parent, final String campaignsTopic, final String eventsTopic) {
         this.parent = parent;
         this.campaignsTopic = campaignsTopic;
@@ -89,76 +89,59 @@ public class YahooBenchmark {
     }
 
     // just for Yahoo benchmark
-    private boolean maybeSetupPhaseCampaigns(final String topic, final String clientId,
+    private boolean maybeSetupPhaseCampaigns(final String topic,
+                                             final String clientId,
                                              final boolean skipIfAllTests,
-                                             final int numCampaigns, final int adsPerCampaign,
+                                             final int numCampaigns,
+                                             final int adsPerCampaign,
                                              final List<String> ads) {
         parent.resetStats();
         // initialize topics
-        if (parent.loadPhase) {
-            if (skipIfAllTests) {
-                // if we run all tests, the produce test will have already loaded the data
-                if (parent.testName.equals(SimpleBenchmark.ALL_TESTS)) {
-                    // Skipping loading phase since previously loaded
-                    return true;
-                }
-            }
-            System.out.println("Initializing topic " + topic);
+        System.out.println("Initializing topic " + topic);
 
-            Properties props = new Properties();
-            props.put(ProducerConfig.CLIENT_ID_CONFIG, clientId);
-            props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, parent.kafka);
-            props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
-            props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
+        final Properties props = new Properties();
+        props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, parent.props.get(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG));
+        props.put(ProducerConfig.CLIENT_ID_CONFIG, clientId);
+        props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
+        props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
 
-            KafkaProducer<String, String> producer = new KafkaProducer<>(props);
+        try (final KafkaProducer<String, String> producer = new KafkaProducer<>(props)) {
             for (int c = 0; c < numCampaigns; c++) {
-                String campaignID = UUID.randomUUID().toString();
+                final String campaignID = UUID.randomUUID().toString();
                 for (int a = 0; a < adsPerCampaign; a++) {
-                    String adId = UUID.randomUUID().toString();
-                    String concat = adId + ":" + campaignID;
+                    final String adId = UUID.randomUUID().toString();
+                    final String concat = adId + ":" + campaignID;
                     producer.send(new ProducerRecord<>(topic, adId, concat));
                     ads.add(adId);
-                    parent.processedRecords.getAndIncrement();
+                    parent.processedRecords++;
                     parent.processedBytes += concat.length() + adId.length();
                 }
             }
-            return true;
         }
-        return false;
+        return true;
     }
 
     // just for Yahoo benchmark
-    private boolean maybeSetupPhaseEvents(final String topic, final String clientId,
-                                          final boolean skipIfAllTests, final int numRecords,
-                                          final List<String> ads) {
+    private void maybeSetupPhaseEvents(final String topic,
+                                       final String clientId,
+                                       final int numRecords,
+                                       final List<String> ads) {
         parent.resetStats();
-        String[] eventTypes = new String[]{"view", "click", "purchase"};
-        Random rand = new Random();
-        // initialize topics
-        if (parent.loadPhase) {
-            if (skipIfAllTests) {
-                // if we run all tests, the produce test will have already loaded the data
-                if (parent.testName.equals(SimpleBenchmark.ALL_TESTS)) {
-                    // Skipping loading phase since previously loaded
-                    return true;
-                }
-            }
-            System.out.println("Initializing topic " + topic);
+        final String[] eventTypes = new String[]{"view", "click", "purchase"};
+        final Random rand = new Random(System.currentTimeMillis());
+        System.out.println("Initializing topic " + topic);
 
-            Properties props = new Properties();
-            props.put(ProducerConfig.CLIENT_ID_CONFIG, clientId);
-            props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, parent.kafka);
-            props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
-            props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class);
+        final Properties props = new Properties();
+        props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, parent.props.get(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG));
+        props.put(ProducerConfig.CLIENT_ID_CONFIG, clientId);
+        props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
+        props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class);
 
-            KafkaProducer<String, byte[]> producer = new KafkaProducer<>(props);
+        final long startTime = System.currentTimeMillis();
 
-            long startTime = System.currentTimeMillis();
-
-            ProjectedEvent event = new ProjectedEvent();
-
-            Map<String, Object> serdeProps = new HashMap<>();
+        try (final KafkaProducer<String, byte[]> producer = new KafkaProducer<>(props)) {
+            final ProjectedEvent event = new ProjectedEvent();
+            final Map<String, Object> serdeProps = new HashMap<>();
             final Serializer<ProjectedEvent> projectedEventSerializer = new JsonPOJOSerializer<>();
             serdeProps.put("JsonPOJOClass", ProjectedEvent.class);
             projectedEventSerializer.configure(serdeProps, false);
@@ -167,41 +150,31 @@ public class YahooBenchmark {
                 event.eventType = eventTypes[rand.nextInt(eventTypes.length - 1)];
                 event.adID = ads.get(rand.nextInt(ads.size() - 1));
                 event.eventTime = System.currentTimeMillis();
-                byte[] value = projectedEventSerializer.serialize(topic, event);
+                final byte[] value = projectedEventSerializer.serialize(topic, event);
                 producer.send(new ProducerRecord<>(topic, event.adID, value));
-                parent.processedRecords.getAndIncrement();
+                parent.processedRecords++;
                 parent.processedBytes += value.length + event.adID.length();
             }
-            producer.close();
-
-            long endTime = System.currentTimeMillis();
-
-
-            parent.printResults("Producer Performance [records/latency/rec-sec/MB-sec write]: ", endTime - startTime);
-            return true;
         }
-        return false;
+
+        final long endTime = System.currentTimeMillis();
+
+        parent.printResults("Producer Performance [records/latency/rec-sec/MB-sec write]: ", endTime - startTime);
     }
 
 
     public void run() {
-        int numCampaigns = 100;
-        int adsPerCampaign = 10;
+        final int numCampaigns = 100;
+        final int adsPerCampaign = 10;
 
-        List<String> ads = new ArrayList<>(numCampaigns * adsPerCampaign);
-        if (maybeSetupPhaseCampaigns(campaignsTopic, "simple-benchmark-produce-campaigns", false,
-            numCampaigns, adsPerCampaign, ads)) {
-            maybeSetupPhaseEvents(eventsTopic, "simple-benchmark-produce-events", false,
-                parent.numRecords, ads);
-            return;
-        }
+        final List<String> ads = new ArrayList<>(numCampaigns * adsPerCampaign);
+        maybeSetupPhaseCampaigns(campaignsTopic, "simple-benchmark-produce-campaigns", false, numCampaigns, adsPerCampaign, ads);
+        maybeSetupPhaseEvents(eventsTopic, "simple-benchmark-produce-events", parent.numRecords, ads);
 
-        CountDownLatch latch = new CountDownLatch(1);
-        Properties props = parent.setStreamProperties("simple-benchmark-yahoo" + new Random().nextInt());
-        //TODO remove this config or set to smaller value when KIP-91 is merged
-        props.put(StreamsConfig.producerPrefix(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG), 60000);
+        final CountDownLatch latch = new CountDownLatch(1);
+        parent.setStreamProperties("simple-benchmark-yahoo" + new Random().nextInt());
 
-        final KafkaStreams streams = createYahooBenchmarkStreams(props, campaignsTopic, eventsTopic, latch, parent.numRecords);
+        final KafkaStreams streams = createYahooBenchmarkStreams(parent.props, campaignsTopic, eventsTopic, latch, parent.numRecords);
         parent.runGenericBenchmark(streams, "Streams Yahoo Performance [records/latency/rec-sec/MB-sec counted]: ", latch);
 
     }
@@ -212,74 +185,61 @@ public class YahooBenchmark {
         /**
          * Default constructor needed by Kafka
          */
-        public JsonPOJOSerializer() {
-        }
+        @SuppressWarnings("WeakerAccess")
+        public JsonPOJOSerializer() {}
 
         @Override
-        public void configure(Map<String, ?> props, boolean isKey) {
-        }
-
-        @Override
-        public byte[] serialize(String topic, T data) {
-            if (data == null)
+        public byte[] serialize(final String topic, final T data) {
+            if (data == null) {
                 return null;
+            }
 
             try {
                 return objectMapper.writeValueAsBytes(data);
-            } catch (Exception e) {
+            } catch (final Exception e) {
                 throw new SerializationException("Error serializing JSON message", e);
             }
         }
-
-        @Override
-        public void close() {
-        }
-
     }
 
     // Note: these are also in the streams example package, eventuall use 1 file
     private class JsonPOJODeserializer<T> implements Deserializer<T> {
-        private ObjectMapper objectMapper = new ObjectMapper();
+        private final ObjectMapper objectMapper = new ObjectMapper();
 
         private Class<T> tClass;
 
         /**
          * Default constructor needed by Kafka
          */
-        public JsonPOJODeserializer() {
-        }
+        @SuppressWarnings("WeakerAccess")
+        public JsonPOJODeserializer() {}
 
         @SuppressWarnings("unchecked")
         @Override
-        public void configure(Map<String, ?> props, boolean isKey) {
+        public void configure(final Map<String, ?> props, final boolean isKey) {
             tClass = (Class<T>) props.get("JsonPOJOClass");
         }
 
         @Override
-        public T deserialize(String topic, byte[] bytes) {
-            if (bytes == null)
+        public T deserialize(final String topic, final byte[] bytes) {
+            if (bytes == null) {
                 return null;
+            }
 
-            T data;
+            final T data;
             try {
                 data = objectMapper.readValue(bytes, tClass);
-            } catch (Exception e) {
+            } catch (final Exception e) {
                 throw new SerializationException(e);
             }
 
             return data;
         }
-
-        @Override
-        public void close() {
-
-        }
     }
-
 
     private KafkaStreams createYahooBenchmarkStreams(final Properties streamConfig, final String campaignsTopic, final String eventsTopic,
                                                      final CountDownLatch latch, final int numRecords) {
-        Map<String, Object> serdeProps = new HashMap<>();
+        final Map<String, Object> serdeProps = new HashMap<>();
         final Serializer<ProjectedEvent> projectedEventSerializer = new JsonPOJOSerializer<>();
         serdeProps.put("JsonPOJOClass", ProjectedEvent.class);
         projectedEventSerializer.configure(serdeProps, false);
@@ -293,75 +253,53 @@ public class YahooBenchmark {
                                                                                      Serdes.serdeFrom(projectedEventSerializer, projectedEventDeserializer)));
         final KTable<String, String> kCampaigns = builder.table(campaignsTopic, Consumed.with(Serdes.String(), Serdes.String()));
 
-
-        KStream<String, ProjectedEvent> filteredEvents = kEvents
+        final KStream<String, ProjectedEvent> filteredEvents = kEvents
             // use peek to quick when last element is processed
-            .peek(new ForeachAction<String, ProjectedEvent>() {
-                @Override
-                public void apply(String key, ProjectedEvent value) {
-                    parent.processedRecords.getAndIncrement();
-                    if (parent.processedRecords.get() % 1000000 == 0) {
-                        System.out.println("Processed " + parent.processedRecords.get());
-                    }
-                    if (parent.processedRecords.get() >= numRecords) {
-                        latch.countDown();
-                    }
+            .peek((key, value) -> {
+                parent.processedRecords++;
+                if (parent.processedRecords % 1000000 == 0) {
+                    System.out.println("Processed " + parent.processedRecords);
+                }
+                if (parent.processedRecords >= numRecords) {
+                    latch.countDown();
                 }
             })
             // only keep "view" events
-            .filter(new Predicate<String, ProjectedEvent>() {
-                @Override
-                public boolean test(final String key, final ProjectedEvent value) {
-                    return value.eventType.equals("view");
-                }
-            })
+            .filter((key, value) -> value.eventType.equals("view"))
             // select just a few of the columns
-            .mapValues(new ValueMapper<ProjectedEvent, ProjectedEvent>() {
-                @Override
-                public ProjectedEvent apply(ProjectedEvent value) {
-                    ProjectedEvent event = new ProjectedEvent();
-                    event.adID = value.adID;
-                    event.eventTime = value.eventTime;
-                    event.eventType = value.eventType;
-                    return event;
-                }
+            .mapValues(value -> {
+                final ProjectedEvent event = new ProjectedEvent();
+                event.adID = value.adID;
+                event.eventTime = value.eventTime;
+                event.eventType = value.eventType;
+                return event;
             });
 
         // deserialize the add ID and campaign ID from the stored value in Kafka
-        KTable<String, CampaignAd> deserCampaigns = kCampaigns.mapValues(new ValueMapper<String, CampaignAd>() {
-            @Override
-            public CampaignAd apply(String value) {
-                String[] parts = value.split(":");
-                CampaignAd cAdd = new CampaignAd();
-                cAdd.adID = parts[0];
-                cAdd.campaignID = parts[1];
-                return cAdd;
-            }
+        final KTable<String, CampaignAd> deserCampaigns = kCampaigns.mapValues(value -> {
+            final String[] parts = value.split(":");
+            final CampaignAd cAdd = new CampaignAd();
+            cAdd.adID = parts[0];
+            cAdd.campaignID = parts[1];
+            return cAdd;
         });
 
         // join the events with the campaigns
-        KStream<String, String> joined = filteredEvents.join(deserCampaigns,
-            new ValueJoiner<ProjectedEvent, CampaignAd, String>() {
-                @Override
-                public String apply(ProjectedEvent value1, CampaignAd value2) {
-                    return value2.campaignID;
-                }
-            }, Serdes.String(), Serdes.serdeFrom(projectedEventSerializer, projectedEventDeserializer));
-
+        final KStream<String, String> joined = filteredEvents.join(
+            deserCampaigns,
+            (value1, value2) -> value2.campaignID,
+            Joined.with(Serdes.String(), Serdes.serdeFrom(projectedEventSerializer, projectedEventDeserializer), null)
+        );
 
         // key by campaign rather than by ad as original
-        KStream<String, String> keyedByCampaign = joined
-            .selectKey(new KeyValueMapper<String, String, String>() {
-                @Override
-                public String apply(String key, String value) {
-                    return value;
-                }
-            });
+        final KStream<String, String> keyedByCampaign = joined
+            .selectKey((key, value) -> value);
 
         // calculate windowed counts
         keyedByCampaign
-            .groupByKey(Serialized.with(Serdes.String(), Serdes.String()))
-            .count(TimeWindows.of(10 * 1000), "time-windows");
+            .groupByKey(Grouped.with(Serdes.String(), Serdes.String()))
+            .windowedBy(TimeWindows.of(Duration.ofMillis(10 * 1000)))
+            .count(Materialized.as("time-windows"));
 
         return new KafkaStreams(builder.build(), streamConfig);
     }

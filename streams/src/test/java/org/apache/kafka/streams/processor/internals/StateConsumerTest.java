@@ -27,6 +27,7 @@ import org.junit.Before;
 import org.junit.Test;
 
 import java.io.IOException;
+import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -52,7 +53,7 @@ public class StateConsumerTest {
         partitionOffsets.put(topicOne, 20L);
         partitionOffsets.put(topicTwo, 30L);
         stateMaintainer = new StateMaintainerStub(partitionOffsets);
-        stateConsumer = new GlobalStreamThread.StateConsumer(logContext, consumer, stateMaintainer, time, 10L, FLUSH_INTERVAL);
+        stateConsumer = new GlobalStreamThread.StateConsumer(logContext, consumer, stateMaintainer, time, Duration.ofMillis(10L), FLUSH_INTERVAL);
     }
 
     @Test
@@ -103,15 +104,6 @@ public class StateConsumerTest {
         stateConsumer.initialize();
         consumer.addRecord(new ConsumerRecord<>("topic-one", 1, 20L, new byte[0], new byte[0]));
         time.sleep(FLUSH_INTERVAL / 2);
-        stateConsumer.pollAndUpdate();
-        assertFalse(stateMaintainer.flushed);
-    }
-
-    @Test
-    public void shouldNotFlushWhenFlushIntervalIsZero() {
-        stateConsumer = new GlobalStreamThread.StateConsumer(logContext, consumer, stateMaintainer, time, 10L, -1);
-        stateConsumer.initialize();
-        time.sleep(100);
         stateConsumer.pollAndUpdate();
         assertFalse(stateMaintainer.flushed);
     }

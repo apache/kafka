@@ -17,64 +17,77 @@
 
 package kafka.server
 
-import java.lang.{Long => JLong}
 import java.net.InetAddress
+import java.nio.charset.StandardCharsets
 import java.util
+import java.util.Random
+import java.util.{Collections, Optional}
+import java.util.Arrays.asList
 
-import kafka.api.{ApiVersion, KAFKA_0_10_2_IV0}
-import kafka.cluster.Replica
+import kafka.api.{ApiVersion, KAFKA_0_10_2_IV0, KAFKA_2_2_IV1}
 import kafka.controller.KafkaController
-import kafka.coordinator.group.GroupCoordinator
+import kafka.coordinator.group.{GroupCoordinator, GroupSummary, MemberSummary}
 import kafka.coordinator.transaction.TransactionCoordinator
-import kafka.log.{Log, TimestampOffset}
+import kafka.log.AppendOrigin
 import kafka.network.RequestChannel
-import kafka.security.auth.Authorizer
+import kafka.network.RequestChannel.SendResponse
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.utils.{MockTime, TestUtils}
 import kafka.zk.KafkaZkClient
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.UnsupportedVersionException
+import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.memory.MemoryPool
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
-import org.apache.kafka.common.record.RecordBatch
+import org.apache.kafka.common.record.FileRecords.TimestampAndOffset
+import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.requests.WriteTxnMarkersRequest.TxnMarkerEntry
-import org.apache.kafka.common.requests._
+import org.apache.kafka.common.requests.{FetchMetadata => JFetchMetadata, _}
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
-import org.apache.kafka.common.utils.Utils
 import org.easymock.{Capture, EasyMock, IAnswer}
-import org.junit.Assert.{assertEquals, assertTrue}
+import EasyMock._
+import org.apache.kafka.common.message.{DescribeGroupsRequestData, HeartbeatRequestData, JoinGroupRequestData, OffsetCommitRequestData, OffsetCommitResponseData, OffsetDeleteRequestData, SyncGroupRequestData, TxnOffsetCommitRequestData}
+import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocol
+import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity
+import org.apache.kafka.common.message.OffsetDeleteRequestData.{OffsetDeleteRequestPartition, OffsetDeleteRequestTopic, OffsetDeleteRequestTopicCollection}
+import org.apache.kafka.common.message.UpdateMetadataRequestData.{UpdateMetadataBroker, UpdateMetadataEndpoint, UpdateMetadataPartitionState}
+import org.apache.kafka.common.replica.ClientMetadata
+import org.apache.kafka.server.authorizer.Authorizer
+import org.junit.Assert.{assertArrayEquals, assertEquals, assertNull, assertTrue}
 import org.junit.{After, Test}
 
 import scala.collection.JavaConverters._
-import scala.collection.Map
+import scala.collection.{Map, Seq, mutable}
 
 class KafkaApisTest {
 
-  private val requestChannel = EasyMock.createNiceMock(classOf[RequestChannel])
-  private val requestChannelMetrics = EasyMock.createNiceMock(classOf[RequestChannel.Metrics])
-  private val replicaManager = EasyMock.createNiceMock(classOf[ReplicaManager])
-  private val groupCoordinator = EasyMock.createNiceMock(classOf[GroupCoordinator])
-  private val adminManager = EasyMock.createNiceMock(classOf[AdminManager])
-  private val txnCoordinator = EasyMock.createNiceMock(classOf[TransactionCoordinator])
-  private val controller = EasyMock.createNiceMock(classOf[KafkaController])
-  private val zkClient = EasyMock.createNiceMock(classOf[KafkaZkClient])
+  private val requestChannel: RequestChannel = EasyMock.createNiceMock(classOf[RequestChannel])
+  private val requestChannelMetrics: RequestChannel.Metrics = EasyMock.createNiceMock(classOf[RequestChannel.Metrics])
+  private val replicaManager: ReplicaManager = EasyMock.createNiceMock(classOf[ReplicaManager])
+  private val groupCoordinator: GroupCoordinator = EasyMock.createNiceMock(classOf[GroupCoordinator])
+  private val adminManager: AdminManager = EasyMock.createNiceMock(classOf[AdminManager])
+  private val txnCoordinator: TransactionCoordinator = EasyMock.createNiceMock(classOf[TransactionCoordinator])
+  private val controller: KafkaController = EasyMock.createNiceMock(classOf[KafkaController])
+  private val zkClient: KafkaZkClient = EasyMock.createNiceMock(classOf[KafkaZkClient])
   private val metrics = new Metrics()
   private val brokerId = 1
   private val metadataCache = new MetadataCache(brokerId)
   private val authorizer: Option[Authorizer] = None
-  private val clientQuotaManager = EasyMock.createNiceMock(classOf[ClientQuotaManager])
-  private val clientRequestQuotaManager = EasyMock.createNiceMock(classOf[ClientRequestQuotaManager])
-  private val replicaQuotaManager = EasyMock.createNiceMock(classOf[ReplicationQuotaManager])
-  private val quotas = QuotaManagers(clientQuotaManager, clientQuotaManager, clientRequestQuotaManager, replicaQuotaManager, replicaQuotaManager, replicaQuotaManager)
+  private val clientQuotaManager: ClientQuotaManager = EasyMock.createNiceMock(classOf[ClientQuotaManager])
+  private val clientRequestQuotaManager: ClientRequestQuotaManager = EasyMock.createNiceMock(classOf[ClientRequestQuotaManager])
+  private val replicaQuotaManager: ReplicationQuotaManager = EasyMock.createNiceMock(classOf[ReplicationQuotaManager])
+  private val quotas = QuotaManagers(clientQuotaManager, clientQuotaManager, clientRequestQuotaManager,
+    replicaQuotaManager, replicaQuotaManager, replicaQuotaManager, None)
+  private val fetchManager: FetchManager = EasyMock.createNiceMock(classOf[FetchManager])
   private val brokerTopicStats = new BrokerTopicStats
   private val clusterId = "clusterId"
   private val time = new MockTime
 
   @After
-  def tearDown() {
+  def tearDown(): Unit = {
     quotas.shutdown()
     metrics.close()
   }
@@ -96,11 +109,109 @@ class KafkaApisTest {
       metrics,
       authorizer,
       quotas,
+      fetchManager,
       brokerTopicStats,
       clusterId,
       time,
       null
     )
+  }
+
+  @Test
+  def testOffsetCommitWithInvalidPartition(): Unit = {
+    val topic = "topic"
+    setupBasicMetadataCache(topic, numPartitions = 1)
+
+    def checkInvalidPartition(invalidPartitionId: Int): Unit = {
+      EasyMock.reset(replicaManager, clientRequestQuotaManager, requestChannel)
+
+      val (offsetCommitRequest, request) = buildRequest(new OffsetCommitRequest.Builder(
+        new OffsetCommitRequestData()
+          .setGroupId("groupId")
+          .setTopics(Collections.singletonList(
+            new OffsetCommitRequestData.OffsetCommitRequestTopic()
+              .setName(topic)
+              .setPartitions(Collections.singletonList(
+                new OffsetCommitRequestData.OffsetCommitRequestPartition()
+                  .setPartitionIndex(invalidPartitionId)
+                  .setCommittedOffset(15)
+                  .setCommittedLeaderEpoch(RecordBatch.NO_PARTITION_LEADER_EPOCH)
+                  .setCommittedMetadata(""))
+              )
+          ))
+      ))
+
+      val capturedResponse = expectNoThrottling()
+      EasyMock.replay(replicaManager, clientRequestQuotaManager, requestChannel)
+      createKafkaApis().handleOffsetCommitRequest(request)
+
+      val response = readResponse(ApiKeys.OFFSET_COMMIT, offsetCommitRequest, capturedResponse)
+        .asInstanceOf[OffsetCommitResponse]
+      assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION,
+        Errors.forCode(response.data().topics().get(0).partitions().get(0).errorCode()))
+    }
+
+    checkInvalidPartition(-1)
+    checkInvalidPartition(1) // topic has only one partition
+  }
+
+  @Test
+  def testTxnOffsetCommitWithInvalidPartition(): Unit = {
+    val topic = "topic"
+    setupBasicMetadataCache(topic, numPartitions = 1)
+
+    def checkInvalidPartition(invalidPartitionId: Int): Unit = {
+      EasyMock.reset(replicaManager, clientRequestQuotaManager, requestChannel)
+
+      val invalidTopicPartition = new TopicPartition(topic, invalidPartitionId)
+      val partitionOffsetCommitData = new TxnOffsetCommitRequest.CommittedOffset(15L, "", Optional.empty())
+      val (offsetCommitRequest, request) = buildRequest(new TxnOffsetCommitRequest.Builder(
+        new TxnOffsetCommitRequestData()
+          .setTransactionalId("txnlId")
+          .setGroupId("groupId")
+          .setProducerId(15L)
+          .setProducerEpoch(0.toShort)
+          .setTopics(TxnOffsetCommitRequest.getTopics(
+            Map(invalidTopicPartition -> partitionOffsetCommitData).asJava))
+      ))
+
+      val capturedResponse = expectNoThrottling()
+      EasyMock.replay(replicaManager, clientRequestQuotaManager, requestChannel)
+      createKafkaApis().handleTxnOffsetCommitRequest(request)
+
+      val response = readResponse(ApiKeys.TXN_OFFSET_COMMIT, offsetCommitRequest, capturedResponse)
+        .asInstanceOf[TxnOffsetCommitResponse]
+      assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION, response.errors().get(invalidTopicPartition))
+    }
+
+    checkInvalidPartition(-1)
+    checkInvalidPartition(1) // topic has only one partition
+  }
+
+  @Test
+  def testAddPartitionsToTxnWithInvalidPartition(): Unit = {
+    val topic = "topic"
+    setupBasicMetadataCache(topic, numPartitions = 1)
+
+    def checkInvalidPartition(invalidPartitionId: Int): Unit = {
+      EasyMock.reset(replicaManager, clientRequestQuotaManager, requestChannel)
+
+      val invalidTopicPartition = new TopicPartition(topic, invalidPartitionId)
+
+      val (addPartitionsToTxnRequest, request) = buildRequest(new AddPartitionsToTxnRequest.Builder(
+        "txnlId", 15L, 0.toShort, List(invalidTopicPartition).asJava))
+
+      val capturedResponse = expectNoThrottling()
+      EasyMock.replay(replicaManager, clientRequestQuotaManager, requestChannel)
+      createKafkaApis().handleAddPartitionToTxnRequest(request)
+
+      val response = readResponse(ApiKeys.ADD_PARTITIONS_TO_TXN, addPartitionsToTxnRequest, capturedResponse)
+        .asInstanceOf[AddPartitionsToTxnResponse]
+      assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION, response.errors().get(invalidTopicPartition))
+    }
+
+    checkInvalidPartition(-1)
+    checkInvalidPartition(1) // topic has only one partition
   }
 
   @Test(expected = classOf[UnsupportedVersionException])
@@ -131,7 +242,7 @@ class KafkaApisTest {
   @Test
   def shouldRespondWithUnsupportedForMessageFormatOnHandleWriteTxnMarkersWhenMagicLowerThanRequired(): Unit = {
     val topicPartition = new TopicPartition("t", 0)
-    val (writeTxnMarkersRequest, request) = createWriteTxnMarkersRequest(Utils.mkList(topicPartition))
+    val (writeTxnMarkersRequest, request) = createWriteTxnMarkersRequest(asList(topicPartition))
     val expectedErrors = Map(topicPartition -> Errors.UNSUPPORTED_FOR_MESSAGE_FORMAT).asJava
     val capturedResponse: Capture[RequestChannel.Response] = EasyMock.newCapture()
 
@@ -150,7 +261,7 @@ class KafkaApisTest {
   @Test
   def shouldRespondWithUnknownTopicWhenPartitionIsNotHosted(): Unit = {
     val topicPartition = new TopicPartition("t", 0)
-    val (writeTxnMarkersRequest, request) = createWriteTxnMarkersRequest(Utils.mkList(topicPartition))
+    val (writeTxnMarkersRequest, request) = createWriteTxnMarkersRequest(asList(topicPartition))
     val expectedErrors = Map(topicPartition -> Errors.UNKNOWN_TOPIC_OR_PARTITION).asJava
     val capturedResponse: Capture[RequestChannel.Response] = EasyMock.newCapture()
 
@@ -170,7 +281,7 @@ class KafkaApisTest {
   def shouldRespondWithUnsupportedMessageFormatForBadPartitionAndNoErrorsForGoodPartition(): Unit = {
     val tp1 = new TopicPartition("t", 0)
     val tp2 = new TopicPartition("t1", 0)
-    val (writeTxnMarkersRequest, request) = createWriteTxnMarkersRequest(Utils.mkList(tp1, tp2))
+    val (writeTxnMarkersRequest, request) = createWriteTxnMarkersRequest(asList(tp1, tp2))
     val expectedErrors = Map(tp1 -> Errors.UNSUPPORTED_FOR_MESSAGE_FORMAT, tp2 -> Errors.NONE).asJava
 
     val capturedResponse: Capture[RequestChannel.Response] = EasyMock.newCapture()
@@ -184,7 +295,7 @@ class KafkaApisTest {
     EasyMock.expect(replicaManager.appendRecords(EasyMock.anyLong(),
       EasyMock.anyShort(),
       EasyMock.eq(true),
-      EasyMock.eq(false),
+      EasyMock.eq(AppendOrigin.Coordinator),
       EasyMock.anyObject(),
       EasyMock.capture(responseCallback),
       EasyMock.anyObject(),
@@ -206,10 +317,44 @@ class KafkaApisTest {
   }
 
   @Test
+  def shouldResignCoordinatorsIfStopReplicaReceivedWithDeleteFlag(): Unit = {
+    val controllerId = 0
+    val controllerEpoch = 5
+    val brokerEpoch = 230498320L
+
+    val groupMetadataPartition = new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0)
+    val txnStatePartition = new TopicPartition(Topic.TRANSACTION_STATE_TOPIC_NAME, 0)
+
+    val (_, request) = buildRequest(new StopReplicaRequest.Builder(
+      ApiKeys.STOP_REPLICA.latestVersion,
+      controllerId,
+      controllerEpoch,
+      brokerEpoch,
+      true,
+      Set(groupMetadataPartition, txnStatePartition).asJava))
+
+    EasyMock.expect(replicaManager.stopReplicas(anyObject())).andReturn(
+      (mutable.Map(groupMetadataPartition -> Errors.NONE, txnStatePartition -> Errors.NONE), Errors.NONE))
+    EasyMock.expect(controller.brokerEpoch).andStubReturn(brokerEpoch)
+
+    txnCoordinator.onResignation(txnStatePartition.partition, None)
+    EasyMock.expectLastCall()
+
+    groupCoordinator.onResignation(groupMetadataPartition.partition)
+    EasyMock.expectLastCall()
+
+    EasyMock.replay(controller, replicaManager, txnCoordinator, groupCoordinator)
+
+    createKafkaApis().handleStopReplicaRequest(request)
+
+    EasyMock.verify(txnCoordinator, groupCoordinator)
+  }
+
+  @Test
   def shouldRespondWithUnknownTopicOrPartitionForBadPartitionAndNoErrorsForGoodPartition(): Unit = {
     val tp1 = new TopicPartition("t", 0)
     val tp2 = new TopicPartition("t1", 0)
-    val (writeTxnMarkersRequest, request) = createWriteTxnMarkersRequest(Utils.mkList(tp1, tp2))
+    val (writeTxnMarkersRequest, request) = createWriteTxnMarkersRequest(asList(tp1, tp2))
     val expectedErrors = Map(tp1 -> Errors.UNKNOWN_TOPIC_OR_PARTITION, tp2 -> Errors.NONE).asJava
 
     val capturedResponse: Capture[RequestChannel.Response] = EasyMock.newCapture()
@@ -223,7 +368,7 @@ class KafkaApisTest {
     EasyMock.expect(replicaManager.appendRecords(EasyMock.anyLong(),
       EasyMock.anyShort(),
       EasyMock.eq(true),
-      EasyMock.eq(false),
+      EasyMock.eq(AppendOrigin.Coordinator),
       EasyMock.anyObject(),
       EasyMock.capture(responseCallback),
       EasyMock.anyObject(),
@@ -247,14 +392,14 @@ class KafkaApisTest {
   @Test
   def shouldAppendToLogOnWriteTxnMarkersWhenCorrectMagicVersion(): Unit = {
     val topicPartition = new TopicPartition("t", 0)
-    val request = createWriteTxnMarkersRequest(Utils.mkList(topicPartition))._2
+    val request = createWriteTxnMarkersRequest(asList(topicPartition))._2
     EasyMock.expect(replicaManager.getMagic(topicPartition))
       .andReturn(Some(RecordBatch.MAGIC_VALUE_V2))
 
     EasyMock.expect(replicaManager.appendRecords(EasyMock.anyLong(),
       EasyMock.anyShort(),
       EasyMock.eq(true),
-      EasyMock.eq(false),
+      EasyMock.eq(AppendOrigin.Coordinator),
       EasyMock.anyObject(),
       EasyMock.anyObject(),
       EasyMock.anyObject(),
@@ -267,90 +412,162 @@ class KafkaApisTest {
   }
 
   @Test
-  def testReadUncommittedConsumerListOffsetLimitedAtHighWatermark(): Unit = {
-    testConsumerListOffsetLimit(IsolationLevel.READ_UNCOMMITTED)
+  def testLeaderReplicaIfLocalRaisesFencedLeaderEpoch(): Unit = {
+    testListOffsetFailedGetLeaderReplica(Errors.FENCED_LEADER_EPOCH)
   }
 
   @Test
-  def testReadCommittedConsumerListOffsetLimitedAtLastStableOffset(): Unit = {
-    testConsumerListOffsetLimit(IsolationLevel.READ_COMMITTED)
+  def testLeaderReplicaIfLocalRaisesUnknownLeaderEpoch(): Unit = {
+    testListOffsetFailedGetLeaderReplica(Errors.UNKNOWN_LEADER_EPOCH)
   }
 
-  private def testConsumerListOffsetLimit(isolationLevel: IsolationLevel): Unit = {
+  @Test
+  def testLeaderReplicaIfLocalRaisesNotLeaderForPartition(): Unit = {
+    testListOffsetFailedGetLeaderReplica(Errors.NOT_LEADER_FOR_PARTITION)
+  }
+
+  @Test
+  def testLeaderReplicaIfLocalRaisesUnknownTopicOrPartition(): Unit = {
+    testListOffsetFailedGetLeaderReplica(Errors.UNKNOWN_TOPIC_OR_PARTITION)
+  }
+
+  @Test
+  def testDescribeGroups(): Unit = {
+    val groupId = "groupId"
+    val random = new Random()
+    val metadata = new Array[Byte](10)
+    random.nextBytes(metadata)
+    val assignment = new Array[Byte](10)
+    random.nextBytes(assignment)
+
+    val memberSummary = MemberSummary("memberid", Some("instanceid"), "clientid", "clienthost", metadata, assignment)
+    val groupSummary = GroupSummary("Stable", "consumer", "roundrobin", List(memberSummary))
+
+    EasyMock.reset(groupCoordinator, replicaManager, clientRequestQuotaManager, requestChannel)
+
+    val (describeGroupsRequest, request) = buildRequest(new DescribeGroupsRequest.Builder(
+      new DescribeGroupsRequestData().setGroups(List(groupId).asJava)
+    ))
+
+    val capturedResponse = expectNoThrottling()
+    EasyMock.expect(groupCoordinator.handleDescribeGroup(EasyMock.eq(groupId)))
+      .andReturn((Errors.NONE, groupSummary))
+    EasyMock.replay(groupCoordinator, replicaManager, clientRequestQuotaManager, requestChannel)
+
+    createKafkaApis().handleDescribeGroupRequest(request)
+
+    val response = readResponse(ApiKeys.DESCRIBE_GROUPS, describeGroupsRequest, capturedResponse)
+      .asInstanceOf[DescribeGroupsResponse]
+
+    val group = response.data().groups().get(0)
+    assertEquals(Errors.NONE, Errors.forCode(group.errorCode()))
+    assertEquals(groupId, group.groupId())
+    assertEquals(groupSummary.state, group.groupState())
+    assertEquals(groupSummary.protocolType, group.protocolType())
+    assertEquals(groupSummary.protocol, group.protocolData())
+    assertEquals(groupSummary.members.size, group.members().size())
+
+    val member = group.members().get(0)
+    assertEquals(memberSummary.memberId, member.memberId())
+    assertEquals(memberSummary.groupInstanceId.orNull, member.groupInstanceId())
+    assertEquals(memberSummary.clientId, member.clientId())
+    assertEquals(memberSummary.clientHost, member.clientHost())
+    assertArrayEquals(memberSummary.metadata, member.memberMetadata())
+    assertArrayEquals(memberSummary.assignment, member.memberAssignment())
+  }
+
+  @Test
+  def testOffsetDeleteWithInvalidPartition(): Unit = {
+    val group = "groupId"
+    val topic = "topic"
+    setupBasicMetadataCache(topic, numPartitions = 1)
+
+    def checkInvalidPartition(invalidPartitionId: Int): Unit = {
+      EasyMock.reset(groupCoordinator, replicaManager, clientRequestQuotaManager, requestChannel)
+
+      val topics = new OffsetDeleteRequestTopicCollection()
+      topics.add(new OffsetDeleteRequestTopic()
+        .setName(topic)
+        .setPartitions(Collections.singletonList(
+          new OffsetDeleteRequestPartition().setPartitionIndex(invalidPartitionId))))
+      val (offsetDeleteRequest, request) = buildRequest(new OffsetDeleteRequest.Builder(
+        new OffsetDeleteRequestData()
+          .setGroupId(group)
+          .setTopics(topics)
+      ))
+
+      val capturedResponse = expectNoThrottling()
+      EasyMock.expect(groupCoordinator.handleDeleteOffsets(EasyMock.eq(group), EasyMock.eq(Seq.empty)))
+        .andReturn((Errors.NONE, Map.empty))
+      EasyMock.replay(groupCoordinator, replicaManager, clientRequestQuotaManager, requestChannel)
+
+      createKafkaApis().handleOffsetDeleteRequest(request)
+
+      val response = readResponse(ApiKeys.OFFSET_DELETE, offsetDeleteRequest, capturedResponse)
+        .asInstanceOf[OffsetDeleteResponse]
+
+      assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION,
+        Errors.forCode(response.data.topics.find(topic).partitions.find(invalidPartitionId).errorCode()))
+    }
+
+    checkInvalidPartition(-1)
+    checkInvalidPartition(1) // topic has only one partition
+  }
+
+  @Test
+  def testOffsetDeleteWithInvalidGroup(): Unit = {
+    val group = "groupId"
+
+    EasyMock.reset(groupCoordinator, replicaManager, clientRequestQuotaManager, requestChannel)
+
+    val (offsetDeleteRequest, request) = buildRequest(new OffsetDeleteRequest.Builder(
+      new OffsetDeleteRequestData()
+        .setGroupId(group)
+    ))
+
+    val capturedResponse = expectNoThrottling()
+    EasyMock.expect(groupCoordinator.handleDeleteOffsets(EasyMock.eq(group), EasyMock.eq(Seq.empty)))
+      .andReturn((Errors.GROUP_ID_NOT_FOUND, Map.empty))
+    EasyMock.replay(groupCoordinator, replicaManager, clientRequestQuotaManager, requestChannel)
+
+    createKafkaApis().handleOffsetDeleteRequest(request)
+
+    val response = readResponse(ApiKeys.OFFSET_DELETE, offsetDeleteRequest, capturedResponse)
+      .asInstanceOf[OffsetDeleteResponse]
+
+    assertEquals(Errors.GROUP_ID_NOT_FOUND, Errors.forCode(response.data.errorCode()))
+  }
+
+  private def testListOffsetFailedGetLeaderReplica(error: Errors): Unit = {
     val tp = new TopicPartition("foo", 0)
-    val timestamp: JLong = time.milliseconds()
-    val limitOffset = 15L
+    val isolationLevel = IsolationLevel.READ_UNCOMMITTED
+    val currentLeaderEpoch = Optional.of[Integer](15)
 
-    val capturedResponse = EasyMock.newCapture[RequestChannel.Response]()
-    val capturedThrottleCallback = EasyMock.newCapture[Int => Unit]()
-    val replica = EasyMock.mock(classOf[Replica])
-    val log = EasyMock.mock(classOf[Log])
-    EasyMock.expect(replicaManager.getLeaderReplicaIfLocal(tp)).andReturn(replica)
-    if (isolationLevel == IsolationLevel.READ_UNCOMMITTED)
-      EasyMock.expect(replica.highWatermark).andReturn(LogOffsetMetadata(messageOffset = limitOffset))
-    else
-      EasyMock.expect(replica.lastStableOffset).andReturn(LogOffsetMetadata(messageOffset = limitOffset))
-    EasyMock.expect(replicaManager.getLog(tp)).andReturn(Some(log))
-    EasyMock.expect(log.fetchOffsetsByTimestamp(timestamp)).andReturn(Some(TimestampOffset(timestamp = timestamp, offset = limitOffset)))
-    expectThrottleCallbackAndInvoke(capturedThrottleCallback)
-    EasyMock.expect(requestChannel.sendResponse(EasyMock.capture(capturedResponse)))
-    EasyMock.replay(replicaManager, clientRequestQuotaManager, requestChannel, replica, log)
+    EasyMock.expect(replicaManager.fetchOffsetForTimestamp(
+      EasyMock.eq(tp),
+      EasyMock.eq(ListOffsetRequest.EARLIEST_TIMESTAMP),
+      EasyMock.eq(Some(isolationLevel)),
+      EasyMock.eq(currentLeaderEpoch),
+      fetchOnlyFromLeader = EasyMock.eq(true))
+    ).andThrow(error.exception)
 
+    val capturedResponse = expectNoThrottling()
+    EasyMock.replay(replicaManager, clientRequestQuotaManager, requestChannel)
+
+    val targetTimes = Map(tp -> new ListOffsetRequest.PartitionData(ListOffsetRequest.EARLIEST_TIMESTAMP,
+      currentLeaderEpoch))
     val builder = ListOffsetRequest.Builder.forConsumer(true, isolationLevel)
-      .setTargetTimes(Map(tp -> timestamp).asJava)
+      .setTargetTimes(targetTimes.asJava)
     val (listOffsetRequest, request) = buildRequest(builder)
     createKafkaApis().handleListOffsetRequest(request)
 
-    val response = readResponse(ApiKeys.LIST_OFFSETS, listOffsetRequest, capturedResponse).asInstanceOf[ListOffsetResponse]
+    val response = readResponse(ApiKeys.LIST_OFFSETS, listOffsetRequest, capturedResponse)
+      .asInstanceOf[ListOffsetResponse]
     assertTrue(response.responseData.containsKey(tp))
 
     val partitionData = response.responseData.get(tp)
-    assertEquals(Errors.NONE, partitionData.error)
+    assertEquals(error, partitionData.error)
     assertEquals(ListOffsetResponse.UNKNOWN_OFFSET, partitionData.offset)
-    assertEquals(ListOffsetResponse.UNKNOWN_TIMESTAMP, partitionData.timestamp)
-  }
-
-  @Test
-  def testReadUncommittedConsumerListOffsetEarliestOffsetEqualsHighWatermark(): Unit = {
-    testConsumerListOffsetEarliestOffsetEqualsLimit(IsolationLevel.READ_UNCOMMITTED)
-  }
-
-  @Test
-  def testReadCommittedConsumerListOffsetEarliestOffsetEqualsLastStableOffset(): Unit = {
-    testConsumerListOffsetEarliestOffsetEqualsLimit(IsolationLevel.READ_COMMITTED)
-  }
-
-  private def testConsumerListOffsetEarliestOffsetEqualsLimit(isolationLevel: IsolationLevel): Unit = {
-    val tp = new TopicPartition("foo", 0)
-    val limitOffset = 15L
-
-    val capturedResponse = EasyMock.newCapture[RequestChannel.Response]()
-    val capturedThrottleCallback = EasyMock.newCapture[Int => Unit]()
-    val replica = EasyMock.mock(classOf[Replica])
-    val log = EasyMock.mock(classOf[Log])
-    EasyMock.expect(replicaManager.getLeaderReplicaIfLocal(tp)).andReturn(replica)
-    if (isolationLevel == IsolationLevel.READ_UNCOMMITTED)
-      EasyMock.expect(replica.highWatermark).andReturn(LogOffsetMetadata(messageOffset = limitOffset))
-    else
-      EasyMock.expect(replica.lastStableOffset).andReturn(LogOffsetMetadata(messageOffset = limitOffset))
-    EasyMock.expect(replicaManager.getLog(tp)).andReturn(Some(log))
-    EasyMock.expect(log.fetchOffsetsByTimestamp(ListOffsetRequest.EARLIEST_TIMESTAMP))
-      .andReturn(Some(TimestampOffset(timestamp = ListOffsetResponse.UNKNOWN_TIMESTAMP, offset = limitOffset)))
-    expectThrottleCallbackAndInvoke(capturedThrottleCallback)
-    EasyMock.expect(requestChannel.sendResponse(EasyMock.capture(capturedResponse)))
-    EasyMock.replay(replicaManager, clientRequestQuotaManager, requestChannel, replica, log)
-
-    val builder = ListOffsetRequest.Builder.forConsumer(true, isolationLevel)
-      .setTargetTimes(Map(tp -> (ListOffsetRequest.EARLIEST_TIMESTAMP: JLong)).asJava)
-    val (listOffsetRequest, request) = buildRequest(builder)
-    createKafkaApis().handleListOffsetRequest(request)
-
-    val response = readResponse(ApiKeys.LIST_OFFSETS, listOffsetRequest, capturedResponse).asInstanceOf[ListOffsetResponse]
-    assertTrue(response.responseData.containsKey(tp))
-
-    val partitionData = response.responseData.get(tp)
-    assertEquals(Errors.NONE, partitionData.error)
-    assertEquals(limitOffset, partitionData.offset)
     assertEquals(ListOffsetResponse.UNKNOWN_TIMESTAMP, partitionData.timestamp)
   }
 
@@ -387,30 +604,295 @@ class KafkaApisTest {
   }
 
   /**
+   * Verifies that sending a fetch request with version 9 works correctly when
+   * ReplicaManager.getLogConfig returns None.
+   */
+  @Test
+  def testFetchRequestV9WithNoLogConfig(): Unit = {
+    val tp = new TopicPartition("foo", 0)
+    setupBasicMetadataCache(tp.topic, numPartitions = 1)
+    val hw = 3
+    val timestamp = 1000
+
+    expect(replicaManager.getLogConfig(EasyMock.eq(tp))).andReturn(None)
+
+    replicaManager.fetchMessages(anyLong, anyInt, anyInt, anyInt, anyBoolean,
+      anyObject[Seq[(TopicPartition, FetchRequest.PartitionData)]], anyObject[ReplicaQuota],
+      anyObject[Seq[(TopicPartition, FetchPartitionData)] => Unit](), anyObject[IsolationLevel],
+      anyObject[Option[ClientMetadata]])
+    expectLastCall[Unit].andAnswer(new IAnswer[Unit] {
+      def answer: Unit = {
+        val callback = getCurrentArguments.apply(7).asInstanceOf[(Seq[(TopicPartition, FetchPartitionData)] => Unit)]
+        val records = MemoryRecords.withRecords(CompressionType.NONE,
+          new SimpleRecord(timestamp, "foo".getBytes(StandardCharsets.UTF_8)))
+        callback(Seq(tp -> new FetchPartitionData(Errors.NONE, hw, 0, records,
+          None, None, Option.empty)))
+      }
+    })
+
+    val fetchData = Map(tp -> new FetchRequest.PartitionData(0, 0, 1000,
+      Optional.empty())).asJava
+    val fetchMetadata = new JFetchMetadata(0, 0)
+    val fetchContext = new FullFetchContext(time, new FetchSessionCache(1000, 100),
+      fetchMetadata, fetchData, false)
+    expect(fetchManager.newContext(anyObject[JFetchMetadata],
+      anyObject[util.Map[TopicPartition, FetchRequest.PartitionData]],
+      anyObject[util.List[TopicPartition]],
+      anyBoolean)).andReturn(fetchContext)
+
+    val capturedResponse = expectNoThrottling()
+    EasyMock.expect(clientQuotaManager.maybeRecordAndGetThrottleTimeMs(
+      anyObject[RequestChannel.Request](), anyDouble, anyLong)).andReturn(0)
+
+    EasyMock.replay(replicaManager, clientQuotaManager, clientRequestQuotaManager, requestChannel, fetchManager)
+
+    val builder = new FetchRequest.Builder(9, 9, -1, 100, 0, fetchData)
+    val (fetchRequest, request) = buildRequest(builder)
+    createKafkaApis().handleFetchRequest(request)
+
+    val response = readResponse(ApiKeys.FETCH, fetchRequest, capturedResponse)
+      .asInstanceOf[FetchResponse[BaseRecords]]
+    assertTrue(response.responseData.containsKey(tp))
+
+    val partitionData = response.responseData.get(tp)
+    assertEquals(Errors.NONE, partitionData.error)
+    assertEquals(hw, partitionData.highWatermark)
+    assertEquals(-1, partitionData.lastStableOffset)
+    assertEquals(0, partitionData.logStartOffset)
+    assertEquals(timestamp,
+      partitionData.records.asInstanceOf[MemoryRecords].batches.iterator.next.maxTimestamp)
+    assertNull(partitionData.abortedTransactions)
+  }
+
+  @Test
+  def testJoinGroupProtocolsOrder(): Unit = {
+    val protocols = List(
+      new JoinGroupRequestProtocol().setName("first").setMetadata("first".getBytes()),
+      new JoinGroupRequestProtocol().setName("second").setMetadata("second".getBytes())
+    )
+
+    EasyMock.expect(groupCoordinator.handleJoinGroup(
+      anyString,
+      anyString,
+      anyObject(classOf[Option[String]]),
+      anyBoolean,
+      anyString,
+      anyString,
+      anyInt,
+      anyInt,
+      anyString,
+      EasyMock.eq(protocols.map(protocol => (protocol.name, protocol.metadata))),
+      anyObject()
+    ))
+
+    createKafkaApis().handleJoinGroupRequest(
+      buildRequest(
+        new JoinGroupRequest.Builder(
+          new JoinGroupRequestData()
+            .setGroupId("test")
+            .setMemberId("test")
+            .setProtocolType("consumer")
+            .setProtocols(new JoinGroupRequestData.JoinGroupRequestProtocolCollection(protocols.iterator.asJava))
+        )
+      )._2)
+
+    EasyMock.replay(groupCoordinator)
+  }
+
+  @Test
+  def rejectJoinGroupRequestWhenStaticMembershipNotSupported(): Unit = {
+    val capturedResponse = expectNoThrottling()
+    EasyMock.replay(clientRequestQuotaManager, requestChannel)
+
+    val (joinGroupRequest, requestChannelRequest) = buildRequest(new JoinGroupRequest.Builder(
+      new JoinGroupRequestData()
+        .setGroupId("test")
+        .setMemberId("test")
+        .setGroupInstanceId("instanceId")
+        .setProtocolType("consumer")
+        .setProtocols(new JoinGroupRequestData.JoinGroupRequestProtocolCollection)
+    ))
+    createKafkaApis(KAFKA_2_2_IV1).handleJoinGroupRequest(requestChannelRequest)
+
+    val response = readResponse(ApiKeys.JOIN_GROUP, joinGroupRequest, capturedResponse).asInstanceOf[JoinGroupResponse]
+    assertEquals(Errors.UNSUPPORTED_VERSION, response.error())
+    EasyMock.replay(groupCoordinator)
+  }
+
+  @Test
+  def rejectSyncGroupRequestWhenStaticMembershipNotSupported(): Unit = {
+    val capturedResponse = expectNoThrottling()
+    EasyMock.replay(clientRequestQuotaManager, requestChannel)
+
+    val (syncGroupRequest, requestChannelRequest) = buildRequest(new SyncGroupRequest.Builder(
+      new SyncGroupRequestData()
+        .setGroupId("test")
+        .setMemberId("test")
+        .setGroupInstanceId("instanceId")
+        .setGenerationId(1)
+    ))
+    createKafkaApis(KAFKA_2_2_IV1).handleSyncGroupRequest(requestChannelRequest)
+
+    val response = readResponse(ApiKeys.SYNC_GROUP, syncGroupRequest, capturedResponse).asInstanceOf[SyncGroupResponse]
+    assertEquals(Errors.UNSUPPORTED_VERSION, response.error())
+    EasyMock.replay(groupCoordinator)
+  }
+
+  @Test
+  def rejectHeartbeatRequestWhenStaticMembershipNotSupported(): Unit = {
+    val capturedResponse = expectNoThrottling()
+    EasyMock.replay(clientRequestQuotaManager, requestChannel)
+
+    val (heartbeatRequest, requestChannelRequest) = buildRequest(new HeartbeatRequest.Builder(
+      new HeartbeatRequestData()
+        .setGroupId("test")
+        .setMemberId("test")
+        .setGroupInstanceId("instanceId")
+        .setGenerationId(1)
+    ))
+    createKafkaApis(KAFKA_2_2_IV1).handleHeartbeatRequest(requestChannelRequest)
+
+    val response = readResponse(ApiKeys.HEARTBEAT, heartbeatRequest, capturedResponse).asInstanceOf[HeartbeatResponse]
+    assertEquals(Errors.UNSUPPORTED_VERSION, response.error())
+    EasyMock.replay(groupCoordinator)
+  }
+
+  @Test
+  def rejectOffsetCommitRequestWhenStaticMembershipNotSupported(): Unit = {
+    val capturedResponse = expectNoThrottling()
+    EasyMock.replay(clientRequestQuotaManager, requestChannel)
+
+    val (offsetCommitRequest, requestChannelRequest) = buildRequest(new OffsetCommitRequest.Builder(
+      new OffsetCommitRequestData()
+        .setGroupId("test")
+        .setMemberId("test")
+        .setGroupInstanceId("instanceId")
+        .setGenerationId(100)
+        .setTopics(Collections.singletonList(
+          new OffsetCommitRequestData.OffsetCommitRequestTopic()
+            .setName("test")
+            .setPartitions(Collections.singletonList(
+              new OffsetCommitRequestData.OffsetCommitRequestPartition()
+                .setPartitionIndex(0)
+                .setCommittedOffset(100)
+                .setCommittedLeaderEpoch(RecordBatch.NO_PARTITION_LEADER_EPOCH)
+                .setCommittedMetadata("")
+            ))
+        ))
+    ))
+    createKafkaApis(KAFKA_2_2_IV1).handleOffsetCommitRequest(requestChannelRequest)
+
+    val expectedTopicErrors = Collections.singletonList(
+      new OffsetCommitResponseData.OffsetCommitResponseTopic()
+        .setName("test")
+        .setPartitions(Collections.singletonList(
+          new OffsetCommitResponseData.OffsetCommitResponsePartition()
+            .setPartitionIndex(0)
+            .setErrorCode(Errors.UNSUPPORTED_VERSION.code())
+        ))
+    )
+    val response = readResponse(ApiKeys.OFFSET_COMMIT, offsetCommitRequest, capturedResponse).asInstanceOf[OffsetCommitResponse]
+    assertEquals(expectedTopicErrors, response.data.topics())
+    EasyMock.replay(groupCoordinator)
+  }
+
+  @Test
+  def testMultipleLeaveGroup(): Unit = {
+    val groupId = "groupId"
+
+    val leaveMemberList = List(
+      new MemberIdentity()
+        .setMemberId("member-1")
+        .setGroupInstanceId("instance-1"),
+      new MemberIdentity()
+        .setMemberId("member-2")
+        .setGroupInstanceId("instance-2")
+    )
+
+    EasyMock.expect(groupCoordinator.handleLeaveGroup(
+      EasyMock.eq(groupId),
+      EasyMock.eq(leaveMemberList),
+      anyObject()
+    ))
+
+    val (_, leaveRequest) = buildRequest(
+      new LeaveGroupRequest.Builder(
+        groupId,
+        leaveMemberList.asJava)
+    )
+
+    createKafkaApis().handleLeaveGroupRequest(leaveRequest)
+
+    EasyMock.replay(groupCoordinator)
+  }
+
+  @Test
+  def testSingleLeaveGroup(): Unit = {
+    val groupId = "groupId"
+    val memberId = "member"
+
+    val singleLeaveMember = List(
+      new MemberIdentity()
+        .setMemberId(memberId)
+    )
+
+    EasyMock.expect(groupCoordinator.handleLeaveGroup(
+      EasyMock.eq(groupId),
+      EasyMock.eq(singleLeaveMember),
+      anyObject()
+    ))
+
+    val (_, leaveRequest) = buildRequest(
+      new LeaveGroupRequest.Builder(
+        groupId,
+        singleLeaveMember.asJava)
+    )
+
+    createKafkaApis().handleLeaveGroupRequest(leaveRequest)
+
+    EasyMock.replay(groupCoordinator)
+  }
+
+  /**
    * Return pair of listener names in the metadataCache: PLAINTEXT and LISTENER2 respectively.
    */
   private def updateMetadataCacheWithInconsistentListeners(): (ListenerName, ListenerName) = {
-    import UpdateMetadataRequest.{Broker => UBroker}
-    import UpdateMetadataRequest.{EndPoint => UEndPoint}
     val plaintextListener = ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT)
     val anotherListener = new ListenerName("LISTENER2")
-    val brokers = Set(
-      new UBroker(0, Seq(new UEndPoint("broker0", 9092, SecurityProtocol.PLAINTEXT, plaintextListener),
-        new UEndPoint("broker0", 9093, SecurityProtocol.PLAINTEXT, anotherListener)).asJava, "rack"),
-      new UBroker(1, Seq(new UEndPoint("broker1", 9092, SecurityProtocol.PLAINTEXT, plaintextListener)).asJava,
-        "rack")
+    val brokers = Seq(
+      new UpdateMetadataBroker()
+        .setId(0)
+        .setRack("rack")
+        .setEndpoints(Seq(
+          new UpdateMetadataEndpoint()
+            .setHost("broker0")
+            .setPort(9092)
+            .setSecurityProtocol(SecurityProtocol.PLAINTEXT.id)
+            .setListener(plaintextListener.value),
+          new UpdateMetadataEndpoint()
+            .setHost("broker0")
+            .setPort(9093)
+            .setSecurityProtocol(SecurityProtocol.PLAINTEXT.id)
+            .setListener(anotherListener.value)
+        ).asJava),
+      new UpdateMetadataBroker()
+        .setId(1)
+        .setRack("rack")
+        .setEndpoints(Seq(
+          new UpdateMetadataEndpoint()
+            .setHost("broker1")
+            .setPort(9092)
+            .setSecurityProtocol(SecurityProtocol.PLAINTEXT.id)
+            .setListener(plaintextListener.value)).asJava)
     )
     val updateMetadataRequest = new UpdateMetadataRequest.Builder(ApiKeys.UPDATE_METADATA.latestVersion, 0,
-      0, Map.empty[TopicPartition, UpdateMetadataRequest.PartitionState].asJava, brokers.asJava).build()
-    metadataCache.updateCache(correlationId = 0, updateMetadataRequest)
+      0, 0, Seq.empty[UpdateMetadataPartitionState].asJava, brokers.asJava).build()
+    metadataCache.updateMetadata(correlationId = 0, updateMetadataRequest)
     (plaintextListener, anotherListener)
   }
 
   private def sendMetadataRequestWithInconsistentListeners(requestListener: ListenerName): MetadataResponse = {
-    val capturedResponse = EasyMock.newCapture[RequestChannel.Response]()
-    val capturedThrottleCallback = EasyMock.newCapture[Int => Unit]()
-    expectThrottleCallbackAndInvoke(capturedThrottleCallback)
-    EasyMock.expect(requestChannel.sendResponse(EasyMock.capture(capturedResponse)))
+    val capturedResponse = expectNoThrottling()
     EasyMock.replay(clientRequestQuotaManager, requestChannel)
 
     val (metadataRequest, requestChannelRequest) = buildRequest(MetadataRequest.Builder.allTopics, requestListener)
@@ -422,22 +904,23 @@ class KafkaApisTest {
   private def testConsumerListOffsetLatest(isolationLevel: IsolationLevel): Unit = {
     val tp = new TopicPartition("foo", 0)
     val latestOffset = 15L
+    val currentLeaderEpoch = Optional.empty[Integer]()
 
-    val capturedResponse = EasyMock.newCapture[RequestChannel.Response]()
-    val capturedThrottleCallback = EasyMock.newCapture[Int => Unit]()
-    val replica = EasyMock.mock(classOf[Replica])
-    val log = EasyMock.mock(classOf[Log])
-    EasyMock.expect(replicaManager.getLeaderReplicaIfLocal(tp)).andReturn(replica)
-    if (isolationLevel == IsolationLevel.READ_UNCOMMITTED)
-      EasyMock.expect(replica.highWatermark).andReturn(LogOffsetMetadata(messageOffset = latestOffset))
-    else
-      EasyMock.expect(replica.lastStableOffset).andReturn(LogOffsetMetadata(messageOffset = latestOffset))
-    expectThrottleCallbackAndInvoke(capturedThrottleCallback)
-    EasyMock.expect(requestChannel.sendResponse(EasyMock.capture(capturedResponse)))
-    EasyMock.replay(replicaManager, clientRequestQuotaManager, requestChannel, replica, log)
+    EasyMock.expect(replicaManager.fetchOffsetForTimestamp(
+      EasyMock.eq(tp),
+      EasyMock.eq(ListOffsetRequest.LATEST_TIMESTAMP),
+      EasyMock.eq(Some(isolationLevel)),
+      EasyMock.eq(currentLeaderEpoch),
+      fetchOnlyFromLeader = EasyMock.eq(true))
+    ).andReturn(Some(new TimestampAndOffset(ListOffsetResponse.UNKNOWN_TIMESTAMP, latestOffset, currentLeaderEpoch)))
 
+    val capturedResponse = expectNoThrottling()
+    EasyMock.replay(replicaManager, clientRequestQuotaManager, requestChannel)
+
+    val targetTimes = Map(tp -> new ListOffsetRequest.PartitionData(ListOffsetRequest.LATEST_TIMESTAMP,
+      currentLeaderEpoch))
     val builder = ListOffsetRequest.Builder.forConsumer(true, isolationLevel)
-      .setTargetTimes(Map(tp -> (ListOffsetRequest.LATEST_TIMESTAMP: JLong)).asJava)
+      .setTargetTimes(targetTimes.asJava)
     val (listOffsetRequest, request) = buildRequest(builder)
     createKafkaApis().handleListOffsetRequest(request)
 
@@ -451,7 +934,7 @@ class KafkaApisTest {
   }
 
   private def createWriteTxnMarkersRequest(partitions: util.List[TopicPartition]) = {
-    val requestBuilder = new WriteTxnMarkersRequest.Builder(Utils.mkList(
+    val requestBuilder = new WriteTxnMarkersRequest.Builder(asList(
       new TxnMarkerEntry(1, 1.toShort, 0, TransactionResult.COMMIT, partitions)))
     buildRequest(requestBuilder)
   }
@@ -466,31 +949,60 @@ class KafkaApisTest {
     val header = RequestHeader.parse(buffer)
     val context = new RequestContext(header, "1", InetAddress.getLocalHost, KafkaPrincipal.ANONYMOUS,
       listenerName, SecurityProtocol.PLAINTEXT)
-    (request, new RequestChannel.Request(processor = 1, context = context, startTimeNanos =  0,
-      MemoryPool.NONE, buffer, requestChannelMetrics))
+    (request, new RequestChannel.Request(processor = 1, context = context, startTimeNanos = 0, MemoryPool.NONE, buffer,
+      requestChannelMetrics))
   }
 
   private def readResponse(api: ApiKeys, request: AbstractRequest, capturedResponse: Capture[RequestChannel.Response]): AbstractResponse = {
-    val send = capturedResponse.getValue.responseSend.get
+    val response = capturedResponse.getValue
+    assertTrue(s"Unexpected response type: ${response.getClass}", response.isInstanceOf[SendResponse])
+    val sendResponse = response.asInstanceOf[SendResponse]
+    val send = sendResponse.responseSend
     val channel = new ByteBufferChannel(send.size)
     send.writeTo(channel)
     channel.close()
     channel.buffer.getInt() // read the size
-    ResponseHeader.parse(channel.buffer)
+    ResponseHeader.parse(channel.buffer, api.responseHeaderVersion(request.version()))
     val struct = api.responseSchema(request.version).read(channel.buffer)
-    AbstractResponse.parseResponse(api, struct)
+    AbstractResponse.parseResponse(api, struct, request.version)
   }
 
-  private def expectThrottleCallbackAndInvoke(capturedThrottleCallback: Capture[Int => Unit]): Unit = {
-    EasyMock.expect(clientRequestQuotaManager.maybeRecordAndThrottle(
-      EasyMock.anyObject[RequestChannel.Request](),
-      EasyMock.capture(capturedThrottleCallback)))
-      .andAnswer(new IAnswer[Unit] {
-        override def answer(): Unit = {
-          val callback = capturedThrottleCallback.getValue
-          callback(0)
-        }
-      })
+  private def expectNoThrottling(): Capture[RequestChannel.Response] = {
+    EasyMock.expect(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(EasyMock.anyObject[RequestChannel.Request]()))
+      .andReturn(0)
+    EasyMock.expect(clientRequestQuotaManager.throttle(EasyMock.anyObject[RequestChannel.Request](), EasyMock.eq(0),
+      EasyMock.anyObject[RequestChannel.Response => Unit]()))
+
+    val capturedResponse = EasyMock.newCapture[RequestChannel.Response]()
+    EasyMock.expect(requestChannel.sendResponse(EasyMock.capture(capturedResponse)))
+    capturedResponse
   }
 
+  private def setupBasicMetadataCache(topic: String, numPartitions: Int): Unit = {
+    val replicas = List(0.asInstanceOf[Integer]).asJava
+
+    def createPartitionState(partition: Int) = new UpdateMetadataPartitionState()
+      .setTopicName(topic)
+      .setPartitionIndex(partition)
+      .setControllerEpoch(1)
+      .setLeader(0)
+      .setLeaderEpoch(1)
+      .setReplicas(replicas)
+      .setZkVersion(0)
+      .setReplicas(replicas)
+
+    val plaintextListener = ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT)
+    val broker = new UpdateMetadataBroker()
+      .setId(0)
+      .setRack("rack")
+      .setEndpoints(Seq(new UpdateMetadataEndpoint()
+        .setHost("broker0")
+        .setPort(9092)
+        .setSecurityProtocol(SecurityProtocol.PLAINTEXT.id)
+        .setListener(plaintextListener.value)).asJava)
+    val partitionStates = (0 until numPartitions).map(createPartitionState)
+    val updateMetadataRequest = new UpdateMetadataRequest.Builder(ApiKeys.UPDATE_METADATA.latestVersion, 0,
+      0, 0, partitionStates.asJava, Seq(broker).asJava).build()
+    metadataCache.updateMetadata(correlationId = 0, updateMetadataRequest)
+  }
 }
