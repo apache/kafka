@@ -33,11 +33,11 @@ import org.slf4j.Logger;
 
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -59,15 +59,17 @@ public class StoreChangelogReader implements ChangelogReader {
         REGISTERED("REGISTERED"),
 
         // initialized and restoring
-        RESTORING("RESTORING"),
+        RESTORING("RESTORING", 0),
 
         // completed restoring (only for active restoring task, standby task should never be completed)
-        COMPLETED("COMPLETED");
+        COMPLETED("COMPLETED", 1);
 
         public final String name;
+        private final List<Integer> prevStates;
 
-        ChangelogState(final String name) {
+        ChangelogState(final String name, final Integer... prevStates) {
             this.name = name;
+            this.prevStates = Arrays.asList(prevStates);
         }
     }
 
@@ -124,6 +126,13 @@ public class StoreChangelogReader implements ChangelogReader {
 
         private void clear() {
             this.bufferedRecords.clear();
+        }
+
+        private void transitTo(final ChangelogState newState) {
+            if (newState.prevStates.contains(changelogState.ordinal()))
+                changelogState = newState;
+            else
+                throw new IllegalStateException("Invalid transition from " + changelogState + " to " + newState);
         }
 
         @Override
@@ -416,11 +425,9 @@ public class StoreChangelogReader implements ChangelogReader {
                     changelogMetadata.restoreEndOffset == null ? Long.MAX_VALUE : changelogMetadata.restoreEndOffset,
                     changelogMetadata.restoreLimitOffset == null ? Long.MAX_VALUE : changelogMetadata.restoreLimitOffset
                 );
-                final Iterator<ConsumerRecord<byte[], byte[]>> iterator = records.iterator();
 
-                // filter polled records for null-keys and also possibly update buffer limit index
-                while (iterator.hasNext()) {
-                    final ConsumerRecord<byte[], byte[]> record = iterator.next();
+                for (final ConsumerRecord<byte[], byte[]> record : records) {
+                    // filter polled records for null-keys and also possibly update buffer limit index
                     if (record.key() == null) {
                         log.warn("Read changelog record with null key from changelog {} at offset {}, " +
                             "skipping it for restoration", changelogMetadata.storeMetadata.changelogPartition(), record.offset());
@@ -490,7 +497,7 @@ public class StoreChangelogReader implements ChangelogReader {
             log.info("Finished restoring changelog {} to store {} with a total number of {} records",
                 partition, storeName, changelogMetadata.totalRestored);
 
-            changelogMetadata.changelogState = ChangelogState.COMPLETED;
+            changelogMetadata.transitTo(ChangelogState.COMPLETED);
             pauseChangelogsFromRestoreConsumer(Collections.singleton(partition));
 
             try {
@@ -631,7 +638,7 @@ public class StoreChangelogReader implements ChangelogReader {
         addChangelogsToRestoreConsumer(newPartitionsToRestore.stream().map(metadata -> metadata.storeMetadata.changelogPartition())
             .collect(Collectors.toSet()));
 
-        newPartitionsToRestore.forEach(metadata -> metadata.changelogState = ChangelogState.RESTORING);
+        newPartitionsToRestore.forEach(metadata -> metadata.transitTo(ChangelogState.RESTORING));
 
         // if it is in the active restoring mode, we immediately pause those standby changelogs
         // here we just blindly pause all (including the existing and newly added)
@@ -784,5 +791,9 @@ public class StoreChangelogReader implements ChangelogReader {
     // for testing only
     ChangelogMetadata changelogMetadata(final TopicPartition partition) {
         return changelogs.get(partition);
+    }
+
+    ChangelogReaderState state() {
+        return state;
     }
 }
