@@ -27,18 +27,22 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * The set of requests which have been sent, or are being sent, but have not yet
- * received a response. This class is not thread-safe as it pertains to
- * modification of internal data structures, however, the {@link #count()}
- * method will return a relatively accurate value even when accessed in a
- * multi-threaded way.
+ * received a response.
+ *
+ * <p>
+ * This class is not thread-safe as it pertains to modification of internal data
+ * structures. Since there are no internal locking mechanisms, the value
+ * returned by {@link #count()} may be slightly out of sync with the actual
+ * number of request stored in the internal data structure at any instant in
+ * time.
+ * </p>
  */
 final class InFlightRequests {
 
     private final int maxInFlightRequestsPerConnection;
     private final Map<String, Deque<NetworkClient.InFlightRequest>> requests = new HashMap<>();
 
-    // Will only be modified by a single thread, but may be accessed by many
-    // threads that wish to read the count
+    // Single writer thread, multiple reader threads
     private final AtomicInteger inFlightRequestCount = new AtomicInteger(0);
 
     public InFlightRequests(int maxInFlightRequestsPerConnection) {
@@ -59,9 +63,8 @@ final class InFlightRequests {
      */
     private Deque<NetworkClient.InFlightRequest> requestQueue(String node) {
         Deque<NetworkClient.InFlightRequest> reqs = requests.get(node);
-        if (reqs == null || reqs.isEmpty()) {
+        if (reqs == null || reqs.isEmpty())
             throw new IllegalStateException("There are no in-flight requests for node " + node);
-        }
         return reqs;
     }
 
@@ -154,7 +157,7 @@ final class InFlightRequests {
             return Collections.emptyList();
         } else {
             final Deque<NetworkClient.InFlightRequest> clearedRequests = requests.remove(node);
-            inFlightRequestCount.addAndGet(-clearedRequests.size());
+            inFlightRequestCount.getAndAdd(-clearedRequests.size());
             return () -> clearedRequests.descendingIterator();
         }
     }
