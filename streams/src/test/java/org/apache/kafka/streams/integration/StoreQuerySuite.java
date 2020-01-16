@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.integration;
 
-import org.apache.kafka.streams.KafkaStreamsTest;
 import org.apache.kafka.streams.state.internals.CompositeReadOnlyKeyValueStoreTest;
 import org.apache.kafka.streams.state.internals.CompositeReadOnlySessionStoreTest;
 import org.apache.kafka.streams.state.internals.CompositeReadOnlyWindowStoreTest;
@@ -42,8 +41,6 @@ import org.junit.runners.Suite;
                         GlobalStateStoreProviderTest.class,
                         StreamThreadStateStoreProviderTest.class,
                         WrappingStoreProviderTest.class,
-                        KafkaStreamsTest.class,
-                        LagFetchIntegrationTest.class,
                         QueryableStateIntegrationTest.class,
                     })
 public class StoreQuerySuite {
