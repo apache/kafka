@@ -26,7 +26,7 @@ interface ChangelogRegister {
     /**
      * Register a state store for restoration.
      *
-     * @param partition the state store's shcangelog partition for restoring
+     * @param partition the state store's changelog partition for restoring
      * @param stateManager the state manager used for restoring (one per task)
      */
     void register(final TopicPartition partition, final ProcessorStateManager stateManager);

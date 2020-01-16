@@ -206,9 +206,9 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
                         subscriptions.position(entry.getKey(), newPosition);
                     }
                 }
+                entry.getValue().clear();
             }
         }
-        this.records.clear();
         return new ConsumerRecords<>(results);
     }
 

@@ -291,7 +291,7 @@ public class ProcessorStateManager implements StateManager {
     // used by the changelog reader only
     StateStoreMetadata storeMetadata(final TopicPartition partition) {
         for (final StateStoreMetadata storeMetadata : stores.values()) {
-            if (storeMetadata.changelogPartition != null && storeMetadata.changelogPartition.equals(partition)) {
+            if (partition.equals(storeMetadata.changelogPartition)) {
                 return storeMetadata;
             }
         }
@@ -369,19 +369,24 @@ public class ProcessorStateManager implements StateManager {
      */
     @Override
     public void close(final boolean clean) throws ProcessorStateException {
-        ProcessorStateException firstException = null;
+        RuntimeException firstException = null;
         // attempting to close the stores, just in case they
         // are not closed by a ProcessorNode yet
         if (!stores.isEmpty()) {
             log.debug("Closing its state manager and all the registered state stores: {}", stores);
             for (final Map.Entry<String, StateStoreMetadata> entry : stores.entrySet()) {
                 final StateStore store = entry.getValue().stateStore;
-                log.trace("Closing storage engine {}", store.name());
+                log.trace("Closing store {}", store.name());
                 try {
                     store.close();
                 } catch (final RuntimeException exception) {
                     if (firstException == null) {
-                        firstException = new ProcessorStateException(format("%sFailed to close state store %s", logPrefix, store.name()), exception);
+                        // do NOT wrap the error if it is actually caused by Streams itself
+                        if (exception instanceof StreamsException)
+                            firstException = exception;
+                        else
+                            firstException = new ProcessorStateException(
+                                format("%sFailed to close state store %s", logPrefix, store.name()), exception);
                     }
                     log.error("Failed to close state store {}: ", store.name(), exception);
                 }
@@ -429,8 +434,7 @@ public class ProcessorStateManager implements StateManager {
 
     private StateStoreMetadata findStore(final TopicPartition changelogPartition) {
         final List<StateStoreMetadata> found = stores.values().stream()
-            .filter(metadata -> metadata.changelogPartition != null &&
-                                metadata.changelogPartition.equals(changelogPartition))
+            .filter(metadata -> changelogPartition.equals(metadata.changelogPartition))
             .collect(Collectors.toList());
 
         if (found.size() > 1) {
