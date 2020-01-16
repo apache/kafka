@@ -3028,7 +3028,9 @@ public class KafkaAdminClient extends AdminClient {
                 new ConstantNodeIdProvider(context.node().get().id())) {
             @Override
             OffsetFetchRequest.Builder createRequest(int timeoutMs) {
-                return new OffsetFetchRequest.Builder(context.groupId(), context.options().topicPartitions());
+                // Set the flag to false as for admin client request,
+                // we don't need to wait for any pending offset state to clear.
+                return new OffsetFetchRequest.Builder(context.groupId(), false, context.options().topicPartitions());
             }
 
             @Override

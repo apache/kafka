@@ -56,7 +56,9 @@ public class WrappingStoreProviderTest {
         stubProviderTwo.addStore("window", new NoOpWindowStore());
 
         wrappingStoreProvider = new WrappingStoreProvider(
-                Arrays.<StateStoreProvider>asList(stubProviderOne, stubProviderTwo));
+            Arrays.asList(stubProviderOne, stubProviderTwo),
+            false
+        );
     }
 
     @Test
