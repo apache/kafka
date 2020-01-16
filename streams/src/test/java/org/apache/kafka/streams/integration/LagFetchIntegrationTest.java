@@ -64,7 +64,6 @@ import org.junit.ClassRule;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
-import org.junit.rules.TemporaryFolder;
 import org.junit.rules.TestName;
 
 @Category({IntegrationTest.class})
@@ -75,8 +74,6 @@ public class LagFetchIntegrationTest {
 
     private static final long CONSUMER_TIMEOUT_MS = 60000;
 
-    @Rule
-    public TemporaryFolder folder = new TemporaryFolder();
     private final MockTime mockTime = CLUSTER.time;
     private Properties streamsConfiguration;
     private Properties consumerConfiguration;
@@ -134,12 +131,11 @@ public class LagFetchIntegrationTest {
         // create stream threads
         for (int i = 0; i < 2; i++) {
             final Properties props = (Properties) streamsConfiguration.clone();
-            final File stateDir = folder.newFolder("state-" + i);
             props.put(StreamsConfig.APPLICATION_SERVER_CONFIG, "localhost:" + i);
             props.put(StreamsConfig.CLIENT_ID_CONFIG, "instance-" + i);
             props.put(StreamsConfig.TOPOLOGY_OPTIMIZATION, optimization);
             props.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);
-            props.put(StreamsConfig.STATE_DIR_CONFIG, stateDir.getAbsolutePath());
+            props.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory(stateStoreName + i).getAbsolutePath());
 
             final StreamsBuilder builder = new StreamsBuilder();
             final KTable<String, Long> t1 = builder.table(inputTopicName, Materialized.as(stateStoreName));
@@ -238,7 +234,7 @@ public class LagFetchIntegrationTest {
 
         // create stream threads
         final Properties props = (Properties) streamsConfiguration.clone();
-        final File stateDir = folder.newFolder("state");
+        final File stateDir = TestUtils.tempDirectory(stateStoreName + "0");
         props.put(StreamsConfig.APPLICATION_SERVER_CONFIG, "localhost:0");
         props.put(StreamsConfig.CLIENT_ID_CONFIG, "instance-0");
         props.put(StreamsConfig.STATE_DIR_CONFIG, stateDir.getAbsolutePath());
