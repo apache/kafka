@@ -17,8 +17,6 @@
 
 package org.apache.kafka.streams.processor.internals;
 
-import java.util.ArrayList;
-import java.util.List;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.DeleteRecordsResult;
 import org.apache.kafka.clients.admin.DeletedRecords;
@@ -42,9 +40,11 @@ import org.junit.runner.RunWith;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -509,14 +509,21 @@ public class TaskManagerTest {
     }
 
     @Test
-    public void shouldCommitActiveAndStandbyTasks() {
+    public void shouldCommitActiveTasks() {
         expect(active.commit()).andReturn(1);
-        expect(standby.commit()).andReturn(2);
-
         replay();
 
-        assertThat(taskManager.commitAll(), equalTo(3));
-        verify(active, standby);
+        assertThat(taskManager.commitAllActive(), equalTo(1));
+        verify(active);
+    }
+
+    @Test
+    public void shouldCommitActiveAndStandbyTasks() {
+        expect(standby.commit()).andReturn(2);
+        replay();
+
+        assertThat(taskManager.commitAllStandby(), equalTo(2));
+        verify(standby);
     }
 
     @Test
@@ -528,7 +535,7 @@ public class TaskManagerTest {
         replay();
 
         try {
-            taskManager.commitAll();
+            taskManager.commitAllActive();
             fail("should have thrown first exception");
         } catch (final Exception e) {
             // ok
@@ -542,7 +549,7 @@ public class TaskManagerTest {
         replay();
 
         try {
-            taskManager.commitAll();
+            taskManager.commitAllStandby();
             fail("should have thrown exception");
         } catch (final Exception e) {
             // ok
@@ -562,8 +569,8 @@ public class TaskManagerTest {
         expect(adminClient.deleteRecords(recordsToDelete)).andReturn(deleteRecordsResult).times(2);
         replay();
 
-        taskManager.maybePurgeCommitedRecords();
-        taskManager.maybePurgeCommitedRecords();
+        taskManager.maybePurgeCommittedRecords();
+        taskManager.maybePurgeCommittedRecords();
         verify(active, adminClient);
     }
 
@@ -577,9 +584,9 @@ public class TaskManagerTest {
         expect(adminClient.deleteRecords(recordsToDelete)).andReturn(deleteRecordsResult).once();
         replay();
 
-        taskManager.maybePurgeCommitedRecords();
+        taskManager.maybePurgeCommittedRecords();
         // second call should be no-op as the previous one is not done yet
-        taskManager.maybePurgeCommitedRecords();
+        taskManager.maybePurgeCommittedRecords();
         verify(active, adminClient);
     }
 
@@ -595,8 +602,8 @@ public class TaskManagerTest {
         expect(adminClient.deleteRecords(recordsToDelete)).andReturn(deleteRecordsResult).times(2);
         replay();
 
-        taskManager.maybePurgeCommitedRecords();
-        taskManager.maybePurgeCommitedRecords();
+        taskManager.maybePurgeCommittedRecords();
+        taskManager.maybePurgeCommittedRecords();
         verify(active, adminClient);
     }
 

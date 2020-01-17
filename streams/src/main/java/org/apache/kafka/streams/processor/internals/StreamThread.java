@@ -29,6 +29,8 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.ProducerFencedException;
+import org.apache.kafka.common.errors.UnknownProducerIdException;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.utils.LogContext;
@@ -443,6 +445,7 @@ public class StreamThread extends Thread {
     private final long commitTimeMs;
     private final int maxPollTimeMs;
     private final String originalReset;
+    private final boolean eosBetaEnabled;
     private final TaskManager taskManager;
     private final AtomicInteger assignmentErrorCode;
 
@@ -498,9 +501,12 @@ public class StreamThread extends Thread {
         Producer<byte[], byte[]> threadProducer = null;
         final boolean eosEnabled = StreamsConfig.EXACTLY_ONCE.equals(config.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG));
         if (!eosEnabled) {
-            final Map<String, Object> producerConfigs = config.getProducerConfigs(getThreadProducerClientId(threadId));
             log.info("Creating shared producer client");
+            final Map<String, Object> producerConfigs = config.getProducerConfigs(getThreadProducerClientId(threadId));
             threadProducer = clientSupplier.getProducer(producerConfigs);
+            if ("exactly_once_beta".equals(config.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG))) {
+                threadProducer.initTransactions();
+            }
         }
 
         final ThreadCache cache = new ThreadCache(logContext, cacheSizeBytes, streamsMetrics);
@@ -618,9 +624,11 @@ public class StreamThread extends Thread {
 
         this.pollTime = Duration.ofMillis(config.getLong(StreamsConfig.POLL_MS_CONFIG));
         final int dummyThreadIdx = 1;
-        this.maxPollTimeMs = new InternalConsumerConfig(config.getMainConsumerConfigs("dummyGroupId", "dummyClientId", dummyThreadIdx))
+        this.maxPollTimeMs =
+            new InternalConsumerConfig(config.getMainConsumerConfigs("dummyGroupId", "dummyClientId", dummyThreadIdx))
                 .getInt(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG);
         this.commitTimeMs = config.getLong(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG);
+        this.eosBetaEnabled = "exactly_once_beta".equals(config.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG));
 
         this.numIterations = 1;
     }
@@ -705,7 +713,10 @@ public class StreamThread extends Thread {
                         "This implies that this thread missed a rebalance and dropped out of the consumer group. " +
                         "Will try to rejoin the consumer group. Below is the detailed description of the task:\n{}",
                     ignoreAndRejoinGroup.migratedTask().id(), ignoreAndRejoinGroup.migratedTask().toString(">"));
-
+                enforceRebalance();
+            } catch (final ProducerFencedException | UnknownProducerIdException ignoreAndRejoinGroup) {
+                log.warn("This thread missed a rebalance and dropped out of the consumer group. " +
+                        "Will try to rejoin the consumer group.", ignoreAndRejoinGroup);
                 enforceRebalance();
             }
         }
@@ -798,6 +809,12 @@ public class StreamThread extends Thread {
                         final int committed = taskManager.maybeCommitActiveTasksPerUserRequested();
 
                         if (committed > 0) {
+                            if (eosBetaEnabled) {
+                                taskManager.commitAllActive();
+                                producer.commitTransaction();
+                                producer.beginTransaction();
+                            }
+
                             final long commitLatency = advanceNowAndComputeLatency();
                             commitSensor.record(commitLatency / (double) committed, now);
                         }
@@ -955,18 +972,26 @@ public class StreamThread extends Thread {
                     taskManager.activeTaskIds(), taskManager.standbyTaskIds(), now - lastCommitMs, commitTimeMs);
             }
 
-            committed = taskManager.commitAll();
+            committed = taskManager.commitAllActive();
             if (committed > 0) {
+                if (eosBetaEnabled) {
+                    producer.commitTransaction();
+                    producer.beginTransaction();
+                }
+            }
+            if (committed > 0 || taskManager.commitAllStandby() > 0) {
                 final long intervalCommitLatency = advanceNowAndComputeLatency();
                 commitSensor.record(intervalCommitLatency / (double) committed, now);
-
-                // try to purge the committed records for repartition topics if possible
-                taskManager.maybePurgeCommitedRecords();
 
                 if (log.isDebugEnabled()) {
                     log.debug("Committed all active tasks {} and standby tasks {} in {}ms",
                         taskManager.activeTaskIds(), taskManager.standbyTaskIds(), intervalCommitLatency);
                 }
+            }
+
+            if (committed > 0) {
+                // try to purge the committed records for repartition topics if possible
+                taskManager.maybePurgeCommittedRecords();
             }
 
             if (committed == -1) {
@@ -979,6 +1004,11 @@ public class StreamThread extends Thread {
         } else {
             committed = taskManager.maybeCommitActiveTasksPerUserRequested();
             if (committed > 0) {
+                if (eosBetaEnabled) {
+                    taskManager.commitAllActive();
+                    producer.commitTransaction();
+                    producer.beginTransaction();
+                }
                 final long requestCommitLatency = advanceNowAndComputeLatency();
                 commitSensor.record(requestCommitLatency / (double) committed, now);
             }
@@ -1162,8 +1192,9 @@ public class StreamThread extends Thread {
         return this;
     }
 
-    private void updateThreadMetadata(final Map<TaskId, StreamTask> activeTasks,
-                                      final Map<TaskId, StandbyTask> standbyTasks) {
+    // visible for testing
+    void updateThreadMetadata(final Map<TaskId, StreamTask> activeTasks,
+                              final Map<TaskId, StandbyTask> standbyTasks) {
         final Set<String> producerClientIds = new HashSet<>();
         final Set<TaskMetadata> activeTasksMetadata = new HashSet<>();
         for (final Map.Entry<TaskId, StreamTask> task : activeTasks.entrySet()) {

@@ -49,6 +49,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
+import java.util.UUID;
 
 import static org.apache.kafka.common.IsolationLevel.READ_COMMITTED;
 import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
@@ -286,6 +287,8 @@ public class StreamsConfig extends AbstractConfig {
      */
     @SuppressWarnings("WeakerAccess")
     public static final String EXACTLY_ONCE = "exactly_once";
+
+    static final String EXACTLY_ONCE_BETA = "exactly_once_beta";
 
     /**
      * Config value for parameter {@link #BUILT_IN_METRICS_VERSION_CONFIG "built.in.metrics.version"} for built-in metrics from version 0.10.0. to 2.4
@@ -598,7 +601,7 @@ public class StreamsConfig extends AbstractConfig {
             .define(PROCESSING_GUARANTEE_CONFIG,
                     Type.STRING,
                     AT_LEAST_ONCE,
-                    in(AT_LEAST_ONCE, EXACTLY_ONCE),
+                    in(AT_LEAST_ONCE, EXACTLY_ONCE, EXACTLY_ONCE_BETA),
                     Importance.MEDIUM,
                     PROCESSING_GUARANTEE_DOC)
             .define(SECURITY_PROTOCOL_CONFIG,
@@ -905,7 +908,8 @@ public class StreamsConfig extends AbstractConfig {
     protected StreamsConfig(final Map<?, ?> props,
                             final boolean doLog) {
         super(CONFIG, props, doLog);
-        eosEnabled = EXACTLY_ONCE.equals(getString(PROCESSING_GUARANTEE_CONFIG));
+        final String processingGuarantee = getString(PROCESSING_GUARANTEE_CONFIG);
+        eosEnabled = EXACTLY_ONCE.equals(processingGuarantee) || EXACTLY_ONCE_BETA.equals(processingGuarantee);
         if (props.containsKey(PARTITION_GROUPER_CLASS_CONFIG)) {
             log.warn("Configuration parameter `{}` is deprecated and will be removed in 3.0.0 release.", PARTITION_GROUPER_CLASS_CONFIG);
         }
@@ -916,7 +920,8 @@ public class StreamsConfig extends AbstractConfig {
         final Map<String, Object> configUpdates =
             CommonClientConfigs.postProcessReconnectBackoffConfigs(this, parsedValues);
 
-        final boolean eosEnabled = EXACTLY_ONCE.equals(parsedValues.get(PROCESSING_GUARANTEE_CONFIG));
+        final String processingGuarantee = (String) parsedValues.get(PROCESSING_GUARANTEE_CONFIG);
+        final boolean eosEnabled = EXACTLY_ONCE.equals(processingGuarantee) || EXACTLY_ONCE_BETA.equals(processingGuarantee);
         if (eosEnabled && !originals().containsKey(COMMIT_INTERVAL_MS_CONFIG)) {
             log.debug("Using {} default value of {} as exactly once is enabled.",
                     COMMIT_INTERVAL_MS_CONFIG, EOS_DEFAULT_COMMIT_INTERVAL_MS);
@@ -1171,6 +1176,10 @@ public class StreamsConfig extends AbstractConfig {
 
         // generate producer configs from original properties and overridden maps
         final Map<String, Object> props = new HashMap<>(eosEnabled ? PRODUCER_EOS_OVERRIDES : PRODUCER_DEFAULT_OVERRIDES);
+        if ("exactly_once_beta".equals(getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG))) {
+            props.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, getString(StreamsConfig.APPLICATION_ID_CONFIG) + "-" + UUID.randomUUID());
+        }
+
         props.putAll(getClientCustomProps());
         props.putAll(clientProvidedProps);
 

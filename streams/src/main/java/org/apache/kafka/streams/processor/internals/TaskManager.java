@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import java.util.ArrayList;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.DeleteRecordsResult;
 import org.apache.kafka.clients.admin.RecordsToDelete;
@@ -32,6 +31,7 @@ import org.apache.kafka.streams.state.HostInfo;
 import org.slf4j.Logger;
 
 import java.io.File;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -539,8 +539,12 @@ public class TaskManager {
      *                               or if the task producer got fenced (EOS)
      * @return number of committed offsets, or -1 if we are in the middle of a rebalance and cannot commit
      */
-    int commitAll() {
-        return rebalanceInProgress ? -1 : active.commit() + standby.commit();
+    int commitAllActive() {
+        return rebalanceInProgress ? -1 : active.commit();
+    }
+
+    int commitAllStandby() {
+        return rebalanceInProgress ? -1 : standby.commit();
     }
 
     /**
@@ -565,7 +569,7 @@ public class TaskManager {
         return rebalanceInProgress ? -1 : active.maybeCommitPerUserRequested();
     }
 
-    void maybePurgeCommitedRecords() {
+    void maybePurgeCommittedRecords() {
         // we do not check any possible exceptions since none of them are fatal
         // that should cause the application to fail, and we will try delete with
         // newer offsets anyways.

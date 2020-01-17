@@ -203,7 +203,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
 
         // initialize transactions if eos is turned on, which will block if the previous transaction has not
         // completed yet; do not start the first transaction until the topology has been initialized later
-        if (eosEnabled) {
+        if (eosEnabled && !eosBetaEnabled) {
             initializeTransactions();
         }
     }
@@ -288,7 +288,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
     public void initializeTopology() {
         initTopology();
 
-        if (eosEnabled) {
+        if (eosEnabled && !eosBetaEnabled) {
             try {
                 this.producer.beginTransaction();
             } catch (final ProducerFencedException | UnknownProducerIdException e) {
@@ -315,12 +315,14 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
     public void resume() {
         log.debug("Resuming");
         if (eosEnabled) {
-            if (producer != null) {
-                throw new IllegalStateException("Task producer should be null.");
+            if (!eosBetaEnabled) {
+                if (producer != null) {
+                    throw new IllegalStateException("Task producer should be null.");
+                }
+                producer = producerSupplier.get();
+                initializeTransactions();
+                recordCollector.init(producer);
             }
-            producer = producerSupplier.get();
-            initializeTransactions();
-            recordCollector.init(producer);
 
             try {
                 stateMgr.clearCheckpoints();
@@ -432,7 +434,10 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
      * @throws TaskMigratedException if the task producer got fenced (EOS only)
      */
     @Override
-    public void punctuate(final ProcessorNode node, final long timestamp, final PunctuationType type, final Punctuator punctuator) {
+    public void punctuate(final ProcessorNode node,
+                          final long timestamp,
+                          final PunctuationType type,
+                          final Punctuator punctuator) {
         if (processorContext.currentNode() != null) {
             throw new IllegalStateException(String.format("%sCurrent node is not null", logPrefix));
         }
@@ -506,11 +511,13 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         try {
             if (eosEnabled) {
                 producer.sendOffsetsToTransaction(consumedOffsetsAndMetadata, applicationId);
-                producer.commitTransaction();
-                transactionInFlight = false;
-                if (startNewTransaction) {
-                    producer.beginTransaction();
-                    transactionInFlight = true;
+                if (!eosBetaEnabled) {
+                    producer.commitTransaction();
+                    transactionInFlight = false;
+                    if (startNewTransaction) {
+                        producer.beginTransaction();
+                        transactionInFlight = true;
+                    }
                 }
             } else {
                 consumer.commitSync(consumedOffsetsAndMetadata);
@@ -621,7 +628,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
             try {
                 commit(false, partitionTimes);
             } finally {
-                if (eosEnabled) {
+                if (eosEnabled && !eosBetaEnabled) {
                     stateMgr.checkpoint(activeTaskCheckpointableOffsets());
 
                     try {
@@ -640,7 +647,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
             // In the case of unclean close we still need to make sure all the stores are flushed before closing any
             super.flushState();
 
-            if (eosEnabled) {
+            if (eosEnabled && !eosBetaEnabled) {
                 maybeAbortTransactionAndCloseRecordCollector(isZombie);
             }
         }

@@ -152,13 +152,28 @@ public class StreamThreadTest {
     private final TaskId task3 = new TaskId(1, 1);
 
     private Properties configProps(final boolean enableEoS) {
+        return configProps(enableEoS, false);
+    }
+
+    private Properties configProps(final boolean enableEoS,
+                                   final boolean eosBeta) {
+        if (!enableEoS && eosBeta) {
+            throw new IllegalArgumentException("eosBeta can only be enabled is enableEoS is true");
+        }
+        String processingGuarantees = StreamsConfig.AT_LEAST_ONCE;
+        if (enableEoS) {
+            processingGuarantees = StreamsConfig.EXACTLY_ONCE;
+        }
+        if (eosBeta) {
+            processingGuarantees = "exactly_once_beta";
+        }
         return mkProperties(mkMap(
             mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, APPLICATION_ID),
             mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:2171"),
             mkEntry(StreamsConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG, "3"),
             mkEntry(StreamsConfig.DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG, MockTimestampExtractor.class.getName()),
             mkEntry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getAbsolutePath()),
-            mkEntry(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, enableEoS ? StreamsConfig.EXACTLY_ONCE : StreamsConfig.AT_LEAST_ONCE)
+            mkEntry(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, processingGuarantees)
         ));
     }
 
@@ -589,11 +604,116 @@ public class StreamThreadTest {
         EasyMock.verify(taskManager);
     }
 
+    @Test
+    public void shouldCommitAndStartNewTransactionAfterTheCommitIntervalWithEosBetaEnabled() {
+        final long commitInterval = 0L;
+        final Properties props = configProps(true, true);
+        props.setProperty(StreamsConfig.STATE_DIR_CONFIG, stateDir);
+        props.setProperty(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, Long.toString(commitInterval));
+
+        final StreamsConfig config = new StreamsConfig(props);
+        final Consumer<byte[], byte[]> consumer = EasyMock.createNiceMock(Consumer.class);
+        final Producer<byte[], byte[]> producer = EasyMock.createNiceMock(Producer.class);
+
+        producer.commitTransaction();
+        producer.beginTransaction();
+        EasyMock.expectLastCall();
+        EasyMock.replay(producer);
+
+        final TaskManager taskManager = mockTaskManagerCommit(consumer, 1, 1);
+
+        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, CLIENT_ID, StreamsConfig.METRICS_LATEST);
+        final StreamThread thread = new StreamThread(
+            mockTime,
+            config,
+            producer,
+            consumer,
+            consumer,
+            null,
+            taskManager,
+            streamsMetrics,
+            internalTopologyBuilder,
+            CLIENT_ID,
+            new LogContext(""),
+            new AtomicInteger()
+        );
+        mockTime.sleep(commitInterval + 1);
+        thread.setNow(mockTime.milliseconds());
+        thread.maybeCommit();
+
+        EasyMock.verify(taskManager, producer);
+    }
+
+    @Test
+    public void shouldCommitAllTasksOnUserCommitRequestWithEosBetaEnabled() {
+        final Properties props = configProps(true, true);
+        props.setProperty(StreamsConfig.STATE_DIR_CONFIG, stateDir);
+
+        final StreamsConfig config = new StreamsConfig(props);
+        final Consumer<byte[], byte[]> consumer = EasyMock.createNiceMock(Consumer.class);
+        final Producer<byte[], byte[]> producer = EasyMock.createNiceMock(Producer.class);
+
+        final TaskManager taskManager = EasyMock.createNiceMock(TaskManager.class);
+        EasyMock.expect(taskManager.hasActiveRunningTasks()).andReturn(true);
+        EasyMock.expect(taskManager.process(mockTime.milliseconds())).andReturn(1);
+
+        // StreamThread#runOnce is structured that it will
+        //  - check `maybeCommitActiveTasksPerUserRequested()` 3 times
+        //  - do one commit when leaving the loop
+        // because we return "1" each time `maybeCommitActiveTasksPerUserRequested()` is called,
+        // we end up with 4 commits in this test
+
+        EasyMock.expect(taskManager.maybeCommitActiveTasksPerUserRequested()).andReturn(1).times(3);
+        EasyMock.expect(taskManager.commitAllActive()).andReturn(1).times(4);
+
+        producer.commitTransaction();
+        producer.beginTransaction();
+        producer.commitTransaction();
+        producer.beginTransaction();
+        producer.commitTransaction();
+        producer.beginTransaction();
+        producer.commitTransaction();
+        producer.beginTransaction();
+        EasyMock.expectLastCall();
+
+        EasyMock.replay(taskManager, consumer, producer);
+
+        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, CLIENT_ID, StreamsConfig.METRICS_LATEST);
+        final StreamThread thread = new StreamThread(
+            mockTime,
+            config,
+            producer,
+            consumer,
+            consumer,
+            null,
+            taskManager,
+            streamsMetrics,
+            internalTopologyBuilder,
+            CLIENT_ID,
+            new LogContext(""),
+            new AtomicInteger()
+        ) {
+            @Override
+            void updateThreadMetadata(final Map<TaskId, StreamTask> activeTasks,
+                                      final Map<TaskId, StandbyTask> standbyTasks) {
+                // we overwrite this to avoid complex mocking and to avoid exception due to missing mocks
+            }
+        };
+
+        thread.setState(StreamThread.State.STARTING);
+        thread.setState(StreamThread.State.PARTITIONS_REVOKED);
+        thread.setState(StreamThread.State.PARTITIONS_ASSIGNED);
+        thread.setState(StreamThread.State.RUNNING);
+        thread.runOnce();
+
+        EasyMock.verify(taskManager, producer);
+    }
+
     private TaskManager mockTaskManagerCommit(final Consumer<byte[], byte[]> consumer,
                                               final int numberOfCommits,
                                               final int commits) {
         final TaskManager taskManager = EasyMock.createNiceMock(TaskManager.class);
-        EasyMock.expect(taskManager.commitAll()).andReturn(commits).times(numberOfCommits);
+        EasyMock.expect(taskManager.commitAllActive()).andReturn(commits).times(numberOfCommits);
         EasyMock.replay(taskManager, consumer);
         return taskManager;
     }
@@ -605,6 +725,23 @@ public class StreamThreadTest {
 
         final StreamThread thread = createStreamThread(CLIENT_ID, config, false);
 
+        shouldInjectSharedProducerForAllTasksUsingClientSupplierOnCreate(thread);
+    }
+
+    @Test
+    public void shouldInjectSharedProducerForAllTasksUsingClientSupplierOnCreateIfEosBetaEnabled() {
+        internalTopologyBuilder.addSource(null, "source1", null, null, null, topic1);
+        internalStreamsBuilder.buildAndOptimizeTopology();
+
+        final StreamThread thread = createStreamThread(
+            CLIENT_ID,
+            new StreamsConfig(configProps(true, true)),
+            true);
+
+        shouldInjectSharedProducerForAllTasksUsingClientSupplierOnCreate(thread);
+    }
+
+    private void shouldInjectSharedProducerForAllTasksUsingClientSupplierOnCreate(final StreamThread thread) {
         thread.setState(StreamThread.State.STARTING);
         thread.rebalanceListener.onPartitionsRevoked(Collections.emptyList());
 
@@ -637,7 +774,7 @@ public class StreamThreadTest {
     }
 
     @Test
-    public void shouldInjectProducerPerTaskUsingClientSupplierOnCreateIfEosEnable() {
+    public void shouldInjectProducerPerTaskUsingClientSupplierOnCreateIfEosAlphaEnable() {
         internalTopologyBuilder.addSource(null, "source1", null, null, null, topic1);
 
         final StreamThread thread = createStreamThread(CLIENT_ID, new StreamsConfig(configProps(true)), true);
@@ -676,7 +813,7 @@ public class StreamThreadTest {
     }
 
     @Test
-    public void shouldCloseAllTaskProducersOnCloseIfEosEnabled() {
+    public void shouldCloseAllTaskProducersOnCloseIfEosAlphaEnabled() {
         internalTopologyBuilder.addSource(null, "source1", null, null, null, topic1);
 
         final StreamThread thread = createStreamThread(CLIENT_ID, new StreamsConfig(configProps(true)), true);
