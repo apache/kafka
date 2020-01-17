@@ -17,8 +17,6 @@
 
 package org.apache.kafka.streams.processor.internals;
 
-import java.util.ArrayList;
-import java.util.List;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.DeleteRecordsResult;
 import org.apache.kafka.clients.admin.DeletedRecords;
@@ -43,18 +41,25 @@ import org.junit.runner.RunWith;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.regex.Pattern;
 
 import static java.util.Arrays.asList;
+import static java.util.Collections.emptyMap;
+import static java.util.Collections.singletonList;
+import static org.easymock.EasyMock.anyObject;
 import static org.easymock.EasyMock.checkOrder;
+import static org.easymock.EasyMock.eq;
 import static org.easymock.EasyMock.expect;
 import static org.easymock.EasyMock.expectLastCall;
+import static org.easymock.EasyMock.same;
 import static org.easymock.EasyMock.verify;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.IsEqual.equalTo;
@@ -154,7 +159,7 @@ public class TaskManagerTest {
     public void shouldUpdateSubscriptionFromAssignment() {
         mockTopologyBuilder();
         expect(subscriptionUpdates.getUpdates()).andReturn(Utils.mkSet(topic1));
-        topologyBuilder.updateSubscribedTopics(EasyMock.eq(Utils.mkSet(topic1, topic2)), EasyMock.anyString());
+        topologyBuilder.updateSubscribedTopics(eq(Utils.mkSet(topic1, topic2)), EasyMock.anyString());
         expectLastCall().once();
 
         EasyMock.replay(activeTaskCreator,
@@ -164,8 +169,8 @@ public class TaskManagerTest {
         taskManager.updateSubscriptionsFromAssignment(asList(t1p1, t2p1));
 
         verify(activeTaskCreator,
-                        topologyBuilder,
-                        subscriptionUpdates);
+               topologyBuilder,
+               subscriptionUpdates);
     }
 
     @Test
@@ -180,26 +185,26 @@ public class TaskManagerTest {
         taskManager.updateSubscriptionsFromAssignment(asList(t1p1));
 
         verify(activeTaskCreator,
-                        topologyBuilder,
-                        subscriptionUpdates);
+               topologyBuilder,
+               subscriptionUpdates);
     }
 
     @Test
     public void shouldUpdateSubscriptionFromMetadata() {
         mockTopologyBuilder();
         expect(subscriptionUpdates.getUpdates()).andReturn(Utils.mkSet(topic1));
-        topologyBuilder.updateSubscribedTopics(EasyMock.eq(Utils.mkSet(topic1, topic2)), EasyMock.anyString());
+        topologyBuilder.updateSubscribedTopics(eq(Utils.mkSet(topic1, topic2)), EasyMock.anyString());
         expectLastCall().once();
 
         EasyMock.replay(activeTaskCreator,
-                topologyBuilder,
-                subscriptionUpdates);
+                        topologyBuilder,
+                        subscriptionUpdates);
 
         taskManager.updateSubscriptionsFromMetadata(Utils.mkSet(topic1, topic2));
 
         verify(activeTaskCreator,
-                topologyBuilder,
-                subscriptionUpdates);
+               topologyBuilder,
+               subscriptionUpdates);
     }
 
     @Test
@@ -208,23 +213,23 @@ public class TaskManagerTest {
         expect(subscriptionUpdates.getUpdates()).andReturn(Utils.mkSet(topic1));
 
         EasyMock.replay(activeTaskCreator,
-                topologyBuilder,
-                subscriptionUpdates);
+                        topologyBuilder,
+                        subscriptionUpdates);
 
         taskManager.updateSubscriptionsFromMetadata(Utils.mkSet(topic1));
 
         verify(activeTaskCreator,
-                topologyBuilder,
-                subscriptionUpdates);
+               topologyBuilder,
+               subscriptionUpdates);
     }
 
     @Test
     public void shouldReturnCachedTaskIdsFromDirectory() throws IOException {
         final File[] taskFolders = asList(testFolder.newFolder("0_1"),
-                                                testFolder.newFolder("0_2"),
-                                                testFolder.newFolder("0_3"),
-                                                testFolder.newFolder("1_1"),
-                                                testFolder.newFolder("dummy")).toArray(new File[0]);
+                                          testFolder.newFolder("0_2"),
+                                          testFolder.newFolder("0_3"),
+                                          testFolder.newFolder("1_1"),
+                                          testFolder.newFolder("dummy")).toArray(new File[0]);
 
         assertTrue((new File(taskFolders[0], StateManagerUtil.CHECKPOINT_FILE_NAME)).createNewFile());
         assertTrue((new File(taskFolders[1], StateManagerUtil.CHECKPOINT_FILE_NAME)).createNewFile());
@@ -244,15 +249,15 @@ public class TaskManagerTest {
 
     @Test
     public void shouldCloseActiveUnAssignedSuspendedTasksWhenClosingRevokedTasks() {
-        mockSingleActiveTask();
+        expect(activeTaskCreator.createTasks(anyObject(), eq(taskId0Assignment))).andReturn(singletonList(streamTask));
 
         expect(active.closeNotAssignedSuspendedTasks(taskId0Assignment.keySet())).andReturn(null).once();
         expect(restoreConsumer.assignment()).andReturn(Collections.emptySet());
 
         replay();
 
-        taskManager.setAssignmentMetadata(taskId0Assignment, Collections.<TaskId, Set<TopicPartition>>emptyMap());
-        taskManager.setAssignmentMetadata(Collections.<TaskId, Set<TopicPartition>>emptyMap(), Collections.<TaskId, Set<TopicPartition>>emptyMap());
+        taskManager.setAssignmentMetadata(taskId0Assignment, emptyMap());
+        taskManager.setAssignmentMetadata(emptyMap(), emptyMap());
 
         taskManager.closeRevokedSuspendedTasks();
 
@@ -263,13 +268,13 @@ public class TaskManagerTest {
     public void shouldCloseStandbyUnassignedTasksWhenCreatingNewTasks() {
         expect(streamTask.id()).andReturn(taskId0);
         EasyMock.replay(streamTask);
-        expect(activeTaskCreator.createTasks(EasyMock.anyObject(), EasyMock.eq(taskId0Assignment)))
-                .andReturn(Collections.singletonList(streamTask));
+        expect(activeTaskCreator.createTasks(anyObject(), eq(taskId0Assignment)))
+            .andReturn(singletonList(streamTask));
 
         expect(standby.closeRevokedStandbyTasks(taskId0Assignment)).andReturn(Collections.emptyList()).once();
         replay();
 
-        taskManager.setAssignmentMetadata(taskId0Assignment, Collections.<TaskId, Set<TopicPartition>>emptyMap());
+        taskManager.setAssignmentMetadata(taskId0Assignment, emptyMap());
         taskManager.setPartitionsToTaskId(taskId0PartitionToTaskId);
         taskManager.createTasks(taskId0Partitions);
 
@@ -278,32 +283,33 @@ public class TaskManagerTest {
 
     @Test
     public void shouldAddNonResumedSuspendedTasks() {
-        mockSingleActiveTask();
+        expect(activeTaskCreator.createTasks(anyObject(), eq(taskId0Assignment))).andReturn(singletonList(streamTask));
         expect(active.maybeResumeSuspendedTask(taskId0, taskId0Partitions)).andReturn(false);
         expect(streamTask.id()).andReturn(taskId0);
         EasyMock.replay(streamTask);
-        active.addNewTask(EasyMock.same(streamTask));
+        active.addNewTask(same(streamTask));
         replay();
 
         // Need to call this twice so task manager doesn't consider all partitions "new"
-        taskManager.setAssignmentMetadata(taskId0Assignment, Collections.<TaskId, Set<TopicPartition>>emptyMap());
-        taskManager.setAssignmentMetadata(taskId0Assignment, Collections.<TaskId, Set<TopicPartition>>emptyMap());
+        taskManager.setAssignmentMetadata(taskId0Assignment, emptyMap());
+        taskManager.setAssignmentMetadata(taskId0Assignment, emptyMap());
 
         taskManager.setPartitionsToTaskId(taskId0PartitionToTaskId);
         taskManager.createTasks(taskId0Partitions);
 
-        verify(activeTaskCreator, active);
+        verify(activeTaskCreator);
+        verify(active);
     }
 
     @Test
     public void shouldAddNewActiveTasks() {
-        mockSingleActiveTask();
+        expect(activeTaskCreator.createTasks(anyObject(), eq(taskId0Assignment))).andReturn(singletonList(streamTask));
         expect(streamTask.id()).andReturn(taskId0);
         EasyMock.replay(streamTask);
-        active.addNewTask(EasyMock.same(streamTask));
+        active.addNewTask(same(streamTask));
         replay();
 
-        taskManager.setAssignmentMetadata(taskId0Assignment, Collections.<TaskId, Set<TopicPartition>>emptyMap());
+        taskManager.setAssignmentMetadata(taskId0Assignment, emptyMap());
         taskManager.setPartitionsToTaskId(taskId0PartitionToTaskId);
         taskManager.createTasks(taskId0Partitions);
 
@@ -317,8 +323,8 @@ public class TaskManagerTest {
         replay();
 
         // Need to call this twice so task manager doesn't consider all partitions "new"
-        taskManager.setAssignmentMetadata(taskId0Assignment, Collections.<TaskId, Set<TopicPartition>>emptyMap());
-        taskManager.setAssignmentMetadata(taskId0Assignment, Collections.<TaskId, Set<TopicPartition>>emptyMap());
+        taskManager.setAssignmentMetadata(taskId0Assignment, emptyMap());
+        taskManager.setAssignmentMetadata(taskId0Assignment, emptyMap());
         taskManager.setPartitionsToTaskId(taskId0PartitionToTaskId);
         taskManager.createTasks(taskId0Partitions);
 
@@ -330,15 +336,15 @@ public class TaskManagerTest {
     public void shouldPauseActivePartitions() {
         expect(streamTask.id()).andReturn(taskId0);
         EasyMock.replay(streamTask);
-        expect(activeTaskCreator.createTasks(EasyMock.anyObject(), EasyMock.eq(taskId0Assignment)))
-                .andReturn(Collections.singletonList(streamTask));
+        expect(activeTaskCreator.createTasks(anyObject(), eq(taskId0Assignment)))
+            .andReturn(singletonList(streamTask));
 
         expect(consumer.assignment()).andReturn(taskId0Partitions).times(2);
         consumer.pause(taskId0Partitions);
         expectLastCall();
         replay();
 
-        taskManager.setAssignmentMetadata(taskId0Assignment, Collections.<TaskId, Set<TopicPartition>>emptyMap());
+        taskManager.setAssignmentMetadata(taskId0Assignment, emptyMap());
         taskManager.setPartitionsToTaskId(taskId0PartitionToTaskId);
         taskManager.createTasks(taskId0Partitions);
         verify(consumer);
@@ -358,10 +364,10 @@ public class TaskManagerTest {
     @SuppressWarnings("unchecked")
     public void shouldUnassignChangelogPartitionsOnSuspend() {
         expect(active.suspendOrCloseTasks(revokedTasks, new ArrayList<>()))
-                .andAnswer(() -> {
-                    ((List) EasyMock.getCurrentArguments()[1]).add(t1p0);
-                    return null;
-                });
+            .andAnswer(() -> {
+                ((List) EasyMock.getCurrentArguments()[1]).add(t1p0);
+                return null;
+            });
         expect(restoreConsumer.assignment()).andReturn(Collections.singleton(t1p0));
 
         restoreConsumer.assign(Collections.emptySet());
@@ -677,19 +683,12 @@ public class TaskManagerTest {
         expect(active.hasRestoringTasks()).andReturn(true).once();
         final StandbyTask task = EasyMock.createNiceMock(StandbyTask.class);
         expect(active.allTasksRunning()).andReturn(true);
-        expect(standby.running()).andReturn(Collections.singletonList(task));
+        expect(standby.running()).andReturn(singletonList(task));
         expect(task.checkpointedOffsets()).andReturn(Collections.singletonMap(t1p0, offset));
         restoreConsumer.assign(taskId0Partitions);
 
         expectLastCall();
         EasyMock.replay(task);
-    }
-
-    private void mockSingleActiveTask() {
-        expect(activeTaskCreator.createTasks(EasyMock.<Consumer<byte[], byte[]>>anyObject(),
-                                                  EasyMock.eq(taskId0Assignment)))
-                .andReturn(Collections.singletonList(streamTask));
-
     }
 
     private void mockTopologyBuilder() {

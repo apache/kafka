@@ -68,8 +68,8 @@ public class TaskManager {
     // following information is updated during rebalance phase by the partition assignor
     private Map<TopicPartition, TaskId> partitionsToTaskId = new HashMap<>();
     private Map<TopicPartition, Task> partitionToTask = new HashMap<>();
-    private Map<TaskId, Set<TopicPartition>> assignedActiveTasks = new HashMap<>();
-    private Map<TaskId, Set<TopicPartition>> assignedStandbyTasks = new HashMap<>();
+    private Map<TaskId, Set<TopicPartition>> activeTasksToCreate = new HashMap<>();
+    private Map<TaskId, Set<TopicPartition>> standbyTasksToCreate = new HashMap<>();
     private Map<TaskId, Set<TopicPartition>> addedActiveTasks = new HashMap<>();
     private Map<TaskId, Set<TopicPartition>> addedStandbyTasks = new HashMap<>();
     private Map<TaskId, Set<TopicPartition>> revokedActiveTasks = new HashMap<>();
@@ -125,27 +125,27 @@ public class TaskManager {
                                       final Map<TaskId, Set<TopicPartition>> standbyTasks) {
         addedActiveTasks.clear();
         for (final Map.Entry<TaskId, Set<TopicPartition>> entry : activeTasks.entrySet()) {
-            if (!assignedActiveTasks.containsKey(entry.getKey())) {
+            if (!activeTasksToCreate.containsKey(entry.getKey())) {
                 addedActiveTasks.put(entry.getKey(), entry.getValue());
             }
         }
 
         addedStandbyTasks.clear();
         for (final Map.Entry<TaskId, Set<TopicPartition>> entry : standbyTasks.entrySet()) {
-            if (!assignedStandbyTasks.containsKey(entry.getKey())) {
+            if (!standbyTasksToCreate.containsKey(entry.getKey())) {
                 addedStandbyTasks.put(entry.getKey(), entry.getValue());
             }
         }
 
         revokedActiveTasks.clear();
-        for (final Map.Entry<TaskId, Set<TopicPartition>> entry : assignedActiveTasks.entrySet()) {
+        for (final Map.Entry<TaskId, Set<TopicPartition>> entry : activeTasksToCreate.entrySet()) {
             if (!activeTasks.containsKey(entry.getKey())) {
                 revokedActiveTasks.put(entry.getKey(), entry.getValue());
             }
         }
 
         revokedStandbyTasks.clear();
-        for (final Map.Entry<TaskId, Set<TopicPartition>> entry : assignedStandbyTasks.entrySet()) {
+        for (final Map.Entry<TaskId, Set<TopicPartition>> entry : standbyTasksToCreate.entrySet()) {
             if (!standbyTasks.containsKey(entry.getKey())) {
                 revokedStandbyTasks.put(entry.getKey(), entry.getValue());
             }
@@ -161,13 +161,13 @@ public class TaskManager {
                       "\taddedStandbyTasks {},\n" +
                       "\trevokedActiveTasks {},\n" +
                       "\trevokedStandbyTasks {}",
-                  assignedActiveTasks, assignedStandbyTasks,
+                  activeTasksToCreate, standbyTasksToCreate,
                   activeTasks, standbyTasks,
                   addedActiveTasks, addedStandbyTasks,
                   revokedActiveTasks, revokedStandbyTasks);
 
-        assignedActiveTasks = activeTasks;
-        assignedStandbyTasks = standbyTasks;
+        activeTasksToCreate = activeTasks;
+        standbyTasksToCreate = standbyTasks;
     }
 
 
@@ -176,7 +176,7 @@ public class TaskManager {
             throw new IllegalStateException(logPrefix + "consumer has not been initialized while adding stream tasks. This should not happen.");
         }
 
-        if (!assignment.isEmpty() && !assignedActiveTasks().isEmpty()) {
+        if (!assignment.isEmpty() && !activeTasksToCreate.isEmpty()) {
             resumeSuspended(assignment);
         }
         if (!addedActiveTasks.isEmpty()) {
@@ -476,11 +476,11 @@ public class TaskManager {
 
     // the following functions are for testing only
     Map<TaskId, Set<TopicPartition>> assignedActiveTasks() {
-        return tasks.values().stream().filter(t -> t instanceof StreamTask).collect(Collectors.toMap(Task::id, Task::partitions));
+        return activeTasksToCreate;
     }
 
     Map<TaskId, Set<TopicPartition>> assignedStandbyTasks() {
-        return tasks.values().stream().filter(t -> t instanceof StandbyTask).collect(Collectors.toMap(Task::id, Task::partitions));
+        return standbyTasksToCreate;
     }
 
     StreamTask activeTask(final TopicPartition partition) {
