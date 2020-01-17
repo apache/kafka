@@ -1658,7 +1658,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       val hasClusterAuthorization = authorize(request, CREATE, CLUSTER, CLUSTER_NAME, logIfDenied = false)
       val topics = createTopicsRequest.data.topics.asScala.map(_.name)
       val authorizedTopics = if (hasClusterAuthorization) topics.toSet else filterAuthorized(request, CREATE, TOPIC, topics.toSeq)
-      val authorizedForDescribeConfigs = filterAuthorized(request, DESCRIBE_CONFIGS, TOPIC, topics.toSeq)
+      val authorizedForDescribeConfigs = filterAuthorized(request, DESCRIBE_CONFIGS, TOPIC, topics.toSeq, logIfDenied = false)
         .map(name => name -> results.find(name)).toMap
 
       results.asScala.foreach(topic => {
