@@ -26,7 +26,7 @@ public class ConsumerGroupMetadata {
     final private String groupId;
     final private int generationId;
     final private String memberId;
-    final Optional<String> groupInstanceId;
+    final private Optional<String> groupInstanceId;
 
     public ConsumerGroupMetadata(String groupId,
                                  int generationId,
@@ -52,5 +52,14 @@ public class ConsumerGroupMetadata {
 
     public Optional<String> groupInstanceId() {
         return groupInstanceId;
+    }
+
+    @Override
+    public String toString() {
+        return String.format("GroupMetadata(groupId = %s, generationId = %d, memberId = %s, groupInstanceId = %s)",
+            groupId,
+            generationId,
+            memberId,
+            groupInstanceId.orElse(""));
     }
 }

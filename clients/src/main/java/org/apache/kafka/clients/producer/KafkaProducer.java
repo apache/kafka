@@ -21,6 +21,7 @@ import org.apache.kafka.clients.ClientDnsLookup;
 import org.apache.kafka.clients.ClientUtils;
 import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.NetworkClient;
+import org.apache.kafka.clients.consumer.CommitFailedException;
 import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
@@ -44,14 +45,12 @@ import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.AuthorizationException;
 import org.apache.kafka.common.errors.FencedInstanceIdException;
-import org.apache.kafka.common.errors.IllegalGenerationException;
 import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.errors.RecordTooLargeException;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.errors.TimeoutException;
-import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
@@ -259,7 +258,6 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     private final ProducerInterceptors<K, V> interceptors;
     private final ApiVersions apiVersions;
     private final TransactionManager transactionManager;
-    private ConsumerGroupMetadata cachedGroupMetadata;
 
     /**
      * A producer is instantiated by providing a set of key-value pairs as configuration. Valid configuration strings
@@ -409,8 +407,6 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                     apiVersions,
                     transactionManager,
                     new BufferPool(this.totalMemorySize, config.getInt(ProducerConfig.BATCH_SIZE_CONFIG), metrics, time, PRODUCER_METRIC_GROUP_NAME));
-            this.cachedGroupMetadata = new ConsumerGroupMetadata(
-                    "", JoinGroupRequest.UNKNOWN_GENERATION_ID, JoinGroupRequest.UNKNOWN_MEMBER_ID, Optional.empty());
 
             List<InetSocketAddress> addresses = ClientUtils.parseAndValidateAddresses(
                     config.getList(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG),
@@ -644,14 +640,9 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      */
     public void sendOffsetsToTransaction(Map<TopicPartition, OffsetAndMetadata> offsets,
                                          String consumerGroupId) throws ProducerFencedException {
-        if (!cachedGroupMetadata.groupId().equals(consumerGroupId)) {
-            // Generally this logic should only be triggered once during first call.
-            log.warn("Cached consumer groupId changed from {} to {}. If the old group id is not empty, this indicates an abuse of this API",
-                cachedGroupMetadata.groupId(), consumerGroupId);
-            cachedGroupMetadata = new ConsumerGroupMetadata(consumerGroupId,
-                JoinGroupRequest.UNKNOWN_GENERATION_ID, JoinGroupRequest.UNKNOWN_MEMBER_ID, Optional.empty());
-        }
-        sendOffsetsToTransactionInternal(offsets, cachedGroupMetadata, false);
+        sendOffsetsToTransactionInternal(offsets, new ConsumerGroupMetadata(
+            consumerGroupId, JoinGroupRequest.UNKNOWN_GENERATION_ID,
+            JoinGroupRequest.UNKNOWN_MEMBER_ID, Optional.empty()));
     }
 
     /**
@@ -668,10 +659,6 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      * also not commit offsets manually (via {@link KafkaConsumer#commitSync(Map) sync} or
      * {@link KafkaConsumer#commitAsync(Map, OffsetCommitCallback) async} commits).
      *
-     * This API won't deprecate the existing {@link KafkaProducer#sendOffsetsToTransaction(Map, String) sendOffsets} API as standalone
-     * mode EOS applications are still relying on it. If the broker version is lower than 2.5.0 which doesn't support the new underlying protocol,
-     * this API call will throw UnsupportedVersionException.
-     *
      * @throws IllegalStateException if no transactional.id has been configured or no transaction has been started.
      * @throws ProducerFencedException fatal error indicating another producer with the same transactional.id is active
      * @throws org.apache.kafka.common.errors.UnsupportedVersionException fatal error indicating the broker
@@ -682,30 +669,22 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      *         format used for the offsets topic on the broker does not support transactions
      * @throws org.apache.kafka.common.errors.AuthorizationException fatal error indicating that the configured
      *         transactional.id is not authorized. See the exception for more details
-     * @throws org.apache.kafka.common.errors.IllegalGenerationException if the passed in consumer metadata has illegal generation
-     * @throws org.apache.kafka.common.errors.UnknownMemberIdException if the passed in consumer metadata has unknown member.id
+     * @throws org.apache.kafka.clients.consumer.CommitFailedException if the commit failed and cannot be retried.
      * @throws org.apache.kafka.common.errors.FencedInstanceIdException if the passed in consumer metadata has a fenced group.instance.id
      * @throws KafkaException if the producer has encountered a previous fatal or abortable error, or for any
      *         other unexpected error
      */
     public void sendOffsetsToTransaction(Map<TopicPartition, OffsetAndMetadata> offsets, ConsumerGroupMetadata groupMetadata)
         throws ProducerFencedException,
-               IllegalGenerationException,
-               UnknownMemberIdException,
+               CommitFailedException,
                FencedInstanceIdException {
-        if (!cachedGroupMetadata.groupId().equals(groupMetadata.groupId())) {
-            // Generally this logic should only be triggered once during first call.
-            log.warn("Cached consumer groupId changed from {} to {}. If the old group id is not empty, this indicates an abuse of this API",
-                cachedGroupMetadata.groupId(), groupMetadata.groupId());
-            cachedGroupMetadata = groupMetadata;
-        }
-        sendOffsetsToTransactionInternal(offsets, groupMetadata, true);
+        sendOffsetsToTransactionInternal(offsets, groupMetadata);
     }
 
-    private void sendOffsetsToTransactionInternal(Map<TopicPartition, OffsetAndMetadata> offsets, ConsumerGroupMetadata consumerGroupMetadata, boolean enableGroupFencing) {
+    private void sendOffsetsToTransactionInternal(Map<TopicPartition, OffsetAndMetadata> offsets, ConsumerGroupMetadata consumerGroupMetadata) {
         throwIfNoTransactionManager();
         throwIfProducerClosed();
-        TransactionalRequestResult result = transactionManager.sendOffsetsToTransaction(offsets, consumerGroupMetadata, enableGroupFencing);
+        TransactionalRequestResult result = transactionManager.sendOffsetsToTransaction(offsets, consumerGroupMetadata);
         sender.wakeup();
         result.await();
     }

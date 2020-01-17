@@ -27,10 +27,7 @@ import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.errors.FencedInstanceIdException;
-import org.apache.kafka.common.errors.IllegalGenerationException;
 import org.apache.kafka.common.errors.ProducerFencedException;
-import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Time;
@@ -178,11 +175,9 @@ public class MockProducer<K, V> implements Producer<K, V> {
 
     @Override
     public void sendOffsetsToTransaction(Map<TopicPartition, OffsetAndMetadata> offsets,
-                                         ConsumerGroupMetadata groupMetadata) throws ProducerFencedException,
-                                                                                     IllegalGenerationException,
-                                                                                     UnknownMemberIdException,
-                                                                                     FencedInstanceIdException {
-        sendOffsetsToTransaction(offsets, groupMetadata.groupId());
+                                         ConsumerGroupMetadata groupMetadata) throws ProducerFencedException {
+        String groupId = groupMetadata != null ? groupMetadata.groupId() : null;
+        sendOffsetsToTransaction(offsets, groupId);
     }
 
     @Override

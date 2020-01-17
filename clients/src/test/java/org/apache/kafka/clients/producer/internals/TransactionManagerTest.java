@@ -18,11 +18,10 @@ package org.apache.kafka.clients.producer.internals;
 
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.MockClient;
+import org.apache.kafka.clients.consumer.CommitFailedException;
 import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.errors.FencedInstanceIdException;
-import org.apache.kafka.common.errors.IllegalGenerationException;
-import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.requests.JoinGroupRequest;
 import org.apache.kafka.common.utils.ProducerIdAndEpoch;
 import org.apache.kafka.clients.producer.RecordMetadata;
@@ -829,7 +828,7 @@ public class TransactionManagerTest {
 
         final String consumerGroupId = "myconsumergroup";
         TransactionalRequestResult addOffsetsResult = transactionManager.sendOffsetsToTransaction(
-            offsets, groupMetadata(consumerGroupId), true);
+            offsets, groupMetadata(consumerGroupId));
 
         assertFalse(transactionManager.hasPendingOffsetCommits());
 
@@ -928,7 +927,7 @@ public class TransactionManagerTest {
 
         transactionManager.beginTransaction();
         TransactionalRequestResult sendOffsetsResult = transactionManager.sendOffsetsToTransaction(
-                singletonMap(tp, new OffsetAndMetadata(39L)), groupMetadata(consumerGroupId), false);
+                singletonMap(tp, new OffsetAndMetadata(39L)), groupMetadata(consumerGroupId));
 
         prepareAddOffsetsToTxnResponse(Errors.NONE, consumerGroupId, pid, epoch);
         sender.runOnce();  // AddOffsetsToTxn Handled, TxnOffsetCommit Enqueued
@@ -962,10 +961,9 @@ public class TransactionManagerTest {
 
         transactionManager.beginTransaction();
 
-        final boolean enableGroupFencing = true;
         TransactionalRequestResult sendOffsetsResult = transactionManager.sendOffsetsToTransaction(
             singletonMap(tp, new OffsetAndMetadata(39L)),
-            new ConsumerGroupMetadata(consumerGroupId, 5, fencedMemberId, Optional.of(instanceId)), enableGroupFencing);
+            new ConsumerGroupMetadata(consumerGroupId, 5, fencedMemberId, Optional.of(instanceId)));
 
         prepareAddOffsetsToTxnResponse(Errors.NONE, consumerGroupId, pid, epoch);
         sender.runOnce();  // AddOffsetsToTxn Handled, TxnOffsetCommit Enqueued
@@ -990,40 +988,7 @@ public class TransactionManagerTest {
         assertTrue(sendOffsetsResult.isCompleted());
         assertFalse(sendOffsetsResult.isSuccessful());
         assertTrue(sendOffsetsResult.error() instanceof FencedInstanceIdException);
-        assertAbortableError(FencedInstanceIdException.class);
-    }
-
-    @Test
-    public void shouldNotEncounterFencedInstanceIdInSendOffsetsByGroupId() {
-        final String consumerGroupId = "consumer";
-        final long pid = 13131L;
-        final short epoch = 1;
-        final TopicPartition tp = new TopicPartition("foo", 0);
-
-        doInitTransactions(pid, epoch);
-
-        transactionManager.beginTransaction();
-
-        final boolean enableGroupFencing = false;
-        TransactionalRequestResult sendOffsetsResult = transactionManager.sendOffsetsToTransaction(
-            singletonMap(tp, new OffsetAndMetadata(39L)), groupMetadata(consumerGroupId), enableGroupFencing);
-
-        prepareAddOffsetsToTxnResponse(Errors.NONE, consumerGroupId, pid, epoch);
-        sender.runOnce();  // AddOffsetsToTxn Handled, TxnOffsetCommit Enqueued
-        sender.runOnce();  // FindCoordinator Enqueued
-
-        prepareFindCoordinatorResponse(Errors.NONE, false, CoordinatorType.GROUP, consumerGroupId);
-        sender.runOnce();  // FindCoordinator Returned
-
-        prepareTxnOffsetCommitResponse(consumerGroupId, pid, epoch, singletonMap(tp, Errors.FENCED_INSTANCE_ID));
-        sender.runOnce();  // TxnOffsetCommit Handled
-
-        assertTrue(transactionManager.hasError());
-        assertTrue(transactionManager.lastError() instanceof IllegalStateException);
-        assertTrue(sendOffsetsResult.isCompleted());
-        assertFalse(sendOffsetsResult.isSuccessful());
-        assertTrue(sendOffsetsResult.error() instanceof IllegalStateException);
-        assertFatalError(IllegalStateException.class);
+        assertFatalError(FencedInstanceIdException.class);
     }
 
     @Test
@@ -1039,10 +1004,9 @@ public class TransactionManagerTest {
 
         transactionManager.beginTransaction();
 
-        final boolean enableGroupFencing = true;
         TransactionalRequestResult sendOffsetsResult = transactionManager.sendOffsetsToTransaction(
             singletonMap(tp, new OffsetAndMetadata(39L)),
-            new ConsumerGroupMetadata(consumerGroupId, 5, unknownMemberId, Optional.empty()), enableGroupFencing);
+            new ConsumerGroupMetadata(consumerGroupId, 5, unknownMemberId, Optional.empty()));
 
         prepareAddOffsetsToTxnResponse(Errors.NONE, consumerGroupId, pid, epoch);
         sender.runOnce();  // AddOffsetsToTxn Handled, TxnOffsetCommit Enqueued
@@ -1061,44 +1025,11 @@ public class TransactionManagerTest {
         sender.runOnce();  // TxnOffsetCommit Handled
 
         assertTrue(transactionManager.hasError());
-        assertTrue(transactionManager.lastError() instanceof UnknownMemberIdException);
+        assertTrue(transactionManager.lastError() instanceof CommitFailedException);
         assertTrue(sendOffsetsResult.isCompleted());
         assertFalse(sendOffsetsResult.isSuccessful());
-        assertTrue(sendOffsetsResult.error() instanceof UnknownMemberIdException);
-        assertAbortableError(UnknownMemberIdException.class);
-    }
-
-    @Test
-    public void shouldNotEncounterUnknownMemberIdInTxnOffsetCommitByGroupId() {
-        final String consumerGroupId = "consumer";
-        final long pid = 13131L;
-        final short epoch = 1;
-        final TopicPartition tp = new TopicPartition("foo", 0);
-
-        doInitTransactions(pid, epoch);
-
-        transactionManager.beginTransaction();
-
-        final boolean enableGroupFencing = false;
-        TransactionalRequestResult sendOffsetsResult = transactionManager.sendOffsetsToTransaction(
-            singletonMap(tp, new OffsetAndMetadata(39L)), groupMetadata(consumerGroupId), enableGroupFencing);
-
-        prepareAddOffsetsToTxnResponse(Errors.NONE, consumerGroupId, pid, epoch);
-        sender.runOnce();  // AddOffsetsToTxn Handled, TxnOffsetCommit Enqueued
-        sender.runOnce();  // FindCoordinator Enqueued
-
-        prepareFindCoordinatorResponse(Errors.NONE, false, CoordinatorType.GROUP, consumerGroupId);
-        sender.runOnce();  // FindCoordinator Returned
-
-        prepareTxnOffsetCommitResponse(consumerGroupId, pid, epoch, singletonMap(tp, Errors.UNKNOWN_MEMBER_ID));
-        sender.runOnce();  // TxnOffsetCommit Handled
-
-        assertTrue(transactionManager.hasError());
-        assertTrue(transactionManager.lastError() instanceof IllegalStateException);
-        assertTrue(sendOffsetsResult.isCompleted());
-        assertFalse(sendOffsetsResult.isSuccessful());
-        assertTrue(sendOffsetsResult.error() instanceof IllegalStateException);
-        assertFatalError(IllegalStateException.class);
+        assertTrue(sendOffsetsResult.error() instanceof CommitFailedException);
+        assertAbortableError(CommitFailedException.class);
     }
 
     @Test
@@ -1114,11 +1045,10 @@ public class TransactionManagerTest {
 
         transactionManager.beginTransaction();
 
-        final boolean enableGroupFencing = true;
         TransactionalRequestResult sendOffsetsResult = transactionManager.sendOffsetsToTransaction(
             singletonMap(tp, new OffsetAndMetadata(39L)),
             new ConsumerGroupMetadata(consumerGroupId, illegalGenerationId, JoinGroupRequest.UNKNOWN_MEMBER_ID,
-                Optional.empty()), enableGroupFencing);
+                Optional.empty()));
 
         prepareAddOffsetsToTxnResponse(Errors.NONE, consumerGroupId, pid, epoch);
         sender.runOnce();  // AddOffsetsToTxn Handled, TxnOffsetCommit Enqueued
@@ -1138,44 +1068,11 @@ public class TransactionManagerTest {
         sender.runOnce();  // TxnOffsetCommit Handled
 
         assertTrue(transactionManager.hasError());
-        assertTrue(transactionManager.lastError() instanceof IllegalGenerationException);
+        assertTrue(transactionManager.lastError() instanceof CommitFailedException);
         assertTrue(sendOffsetsResult.isCompleted());
         assertFalse(sendOffsetsResult.isSuccessful());
-        assertTrue(sendOffsetsResult.error() instanceof IllegalGenerationException);
-        assertAbortableError(IllegalGenerationException.class);
-    }
-
-    @Test
-    public void shouldNotEncounterIllegalGenerationInTxnOffsetCommitByGroupId() {
-        final String consumerGroupId = "consumer";
-        final long pid = 13131L;
-        final short epoch = 1;
-        final TopicPartition tp = new TopicPartition("foo", 0);
-
-        doInitTransactions(pid, epoch);
-
-        transactionManager.beginTransaction();
-
-        final boolean enableGroupFencing = false;
-        TransactionalRequestResult sendOffsetsResult = transactionManager.sendOffsetsToTransaction(
-            singletonMap(tp, new OffsetAndMetadata(39L)), groupMetadata(consumerGroupId), enableGroupFencing);
-
-        prepareAddOffsetsToTxnResponse(Errors.NONE, consumerGroupId, pid, epoch);
-        sender.runOnce();  // AddOffsetsToTxn Handled, TxnOffsetCommit Enqueued
-        sender.runOnce();  // FindCoordinator Enqueued
-
-        prepareFindCoordinatorResponse(Errors.NONE, false, CoordinatorType.GROUP, consumerGroupId);
-        sender.runOnce();  // FindCoordinator Returned
-
-        prepareTxnOffsetCommitResponse(consumerGroupId, pid, epoch, singletonMap(tp, Errors.ILLEGAL_GENERATION));
-        sender.runOnce();  // TxnOffsetCommit Handled
-
-        assertTrue(transactionManager.hasError());
-        assertTrue(transactionManager.lastError() instanceof IllegalStateException);
-        assertTrue(sendOffsetsResult.isCompleted());
-        assertFalse(sendOffsetsResult.isSuccessful());
-        assertTrue(sendOffsetsResult.error() instanceof IllegalStateException);
-        assertFatalError(IllegalStateException.class);
+        assertTrue(sendOffsetsResult.error() instanceof CommitFailedException);
+        assertAbortableError(CommitFailedException.class);
     }
 
     @Test
@@ -1328,7 +1225,7 @@ public class TransactionManagerTest {
 
         transactionManager.beginTransaction();
         TransactionalRequestResult sendOffsetsResult = transactionManager.sendOffsetsToTransaction(
-                singletonMap(new TopicPartition("foo", 0), new OffsetAndMetadata(39L)), groupMetadata(consumerGroupId), false);
+                singletonMap(new TopicPartition("foo", 0), new OffsetAndMetadata(39L)), groupMetadata(consumerGroupId));
 
         prepareAddOffsetsToTxnResponse(Errors.NONE, consumerGroupId, pid, epoch);
         sender.runOnce();  // AddOffsetsToTxn Handled, TxnOffsetCommit Enqueued
@@ -1360,7 +1257,7 @@ public class TransactionManagerTest {
 
         transactionManager.beginTransaction();
         TransactionalRequestResult sendOffsetsResult = transactionManager.sendOffsetsToTransaction(
-                singletonMap(tp1, new OffsetAndMetadata(39L)), groupMetadata(consumerGroupId), false);
+                singletonMap(tp1, new OffsetAndMetadata(39L)), groupMetadata(consumerGroupId));
 
         prepareAddOffsetsToTxnResponse(Errors.NONE, consumerGroupId, pid, epoch);
         sender.runOnce();  // AddOffsetsToTxn Handled, TxnOffsetCommit Enqueued
@@ -1396,7 +1293,7 @@ public class TransactionManagerTest {
 
         transactionManager.beginTransaction();
         TransactionalRequestResult sendOffsetsResult = transactionManager.sendOffsetsToTransaction(
-                singletonMap(tp, new OffsetAndMetadata(39L)), groupMetadata(consumerGroupId), false);
+                singletonMap(tp, new OffsetAndMetadata(39L)), groupMetadata(consumerGroupId));
 
         prepareAddOffsetsToTxnResponse(Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED, consumerGroupId, pid, epoch);
         sender.runOnce();  // AddOffsetsToTxn Handled
@@ -1421,7 +1318,7 @@ public class TransactionManagerTest {
 
         transactionManager.beginTransaction();
         TransactionalRequestResult sendOffsetsResult = transactionManager.sendOffsetsToTransaction(
-                singletonMap(tp, new OffsetAndMetadata(39L)), groupMetadata(consumerGroupId), false);
+                singletonMap(tp, new OffsetAndMetadata(39L)), groupMetadata(consumerGroupId));
 
         prepareAddOffsetsToTxnResponse(Errors.NONE, consumerGroupId, pid, epoch);
         sender.runOnce();  // AddOffsetsToTxn Handled, TxnOffsetCommit Enqueued
@@ -1878,7 +1775,7 @@ public class TransactionManagerTest {
         assertThrows(ProducerFencedException.class, () -> transactionManager.beginCommit());
         assertThrows(ProducerFencedException.class, () -> transactionManager.beginAbort());
         assertThrows(ProducerFencedException.class, () -> transactionManager.sendOffsetsToTransaction(
-            Collections.emptyMap(), groupMetadata("dummyId"), false));
+            Collections.emptyMap(), groupMetadata("dummyId")));
     }
 
     @Test
@@ -2285,7 +2182,7 @@ public class TransactionManagerTest {
         final String consumerGroupId = "myconsumergroup";
 
         TransactionalRequestResult addOffsetsResult = transactionManager.sendOffsetsToTransaction(
-            offsets, groupMetadata(consumerGroupId), false);
+            offsets, groupMetadata(consumerGroupId));
         prepareAddOffsetsToTxnResponse(Errors.NONE, consumerGroupId, pid, epoch);
 
         sender.runOnce();  // send AddOffsetsToTxnResult
@@ -2357,7 +2254,7 @@ public class TransactionManagerTest {
         offsets.put(tp1, new OffsetAndMetadata(1));
         final String consumerGroupId = "myconsumergroup";
 
-        transactionManager.sendOffsetsToTransaction(offsets, groupMetadata(consumerGroupId), false);
+        transactionManager.sendOffsetsToTransaction(offsets, groupMetadata(consumerGroupId));
 
         TransactionalRequestResult abortResult = transactionManager.beginAbort();
 
@@ -2383,7 +2280,7 @@ public class TransactionManagerTest {
         offsets.put(tp1, new OffsetAndMetadata(1));
         final String consumerGroupId = "myconsumergroup";
 
-        transactionManager.sendOffsetsToTransaction(offsets, groupMetadata(consumerGroupId), false);
+        transactionManager.sendOffsetsToTransaction(offsets, groupMetadata(consumerGroupId));
 
         TransactionalRequestResult abortResult = transactionManager.beginAbort();
 
@@ -2414,7 +2311,7 @@ public class TransactionManagerTest {
         final int generationId = 5;
 
         TransactionalRequestResult addOffsetsResult = transactionManager.sendOffsetsToTransaction(
-            offsets, new ConsumerGroupMetadata(consumerGroupId, generationId, memberId, Optional.of(groupInstanceId)), true);
+            offsets, new ConsumerGroupMetadata(consumerGroupId, generationId, memberId, Optional.of(groupInstanceId)));
         prepareAddOffsetsToTxnResponse(Errors.NONE, consumerGroupId, pid, epoch);
 
         sender.runOnce();  // send AddOffsetsToTxnResult
