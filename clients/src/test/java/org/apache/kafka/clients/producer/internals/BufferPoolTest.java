@@ -33,7 +33,6 @@ import java.util.concurrent.Callable;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -399,11 +398,13 @@ public class BufferPoolTest {
 
     @Test
     public void testCloseNotifyWaiters() throws Exception {
+        final int numWorkers = 2;
+
         BufferPool pool = new BufferPool(1, 1, metrics, Time.SYSTEM, metricGroup);
         ByteBuffer buffer = pool.allocate(1, Long.MAX_VALUE);
 
-        CountDownLatch completed = new CountDownLatch(2);
-        ExecutorService executor = Executors.newFixedThreadPool(2);
+        CountDownLatch completed = new CountDownLatch(numWorkers);
+        ExecutorService executor = Executors.newFixedThreadPool(numWorkers);
         Callable<Void> work = new Callable<Void>() {
                 public Void call() throws Exception {
                     assertThrows(KafkaException.class, () -> pool.allocate(1, maxBlockTimeMs));
@@ -411,16 +412,16 @@ public class BufferPoolTest {
                     return null;
                 }
             };
-        Future<Void> waiter1 = executor.submit(work);
-        Future<Void> waiter2 = executor.submit(work);
+        for (int i = 0; i < numWorkers; ++i) {
+            executor.submit(work);
+        }
 
-        assertEquals("Allocation shouldn't have happened yet, waiting on memory", 2L, completed.getCount());
+        assertEquals("Allocation shouldn't have happened yet, waiting on memory", numWorkers, completed.getCount());
 
         // Close the buffer pool. This should notify all waiters.
         pool.close();
 
-        waiter1.get(200, TimeUnit.MILLISECONDS);
-        waiter2.get(200, TimeUnit.MILLISECONDS);
+        completed.await(200, TimeUnit.MILLISECONDS);
 
         pool.deallocate(buffer);
     }
