@@ -29,7 +29,11 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Deque;
 import java.util.List;
+import java.util.concurrent.Callable;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -37,6 +41,7 @@ import java.util.concurrent.locks.Condition;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -386,12 +391,7 @@ public class BufferPoolTest {
         // Close the buffer pool. This should prevent any further allocations.
         pool.close();
 
-        try {
-            pool.allocate(1, maxBlockTimeMs);
-            fail("Should have thrown KafkaException");
-        } catch (KafkaException e) {
-            // Expected.
-        }
+        assertThrows(KafkaException.class, () -> pool.allocate(1, maxBlockTimeMs));
 
         // Ensure deallocation still works.
         pool.deallocate(buffer);
@@ -399,37 +399,30 @@ public class BufferPoolTest {
 
     @Test
     public void testCloseNotifyWaiters() throws Exception {
-        BufferPool pool = new BufferPool(10, 1, metrics, Time.SYSTEM, metricGroup);
-        ByteBuffer buffer = pool.allocate(10, Long.MAX_VALUE);
+        BufferPool pool = new BufferPool(1, 1, metrics, Time.SYSTEM, metricGroup);
+        ByteBuffer buffer = pool.allocate(1, Long.MAX_VALUE);
 
-        CountDownLatch waiter1 = asyncAllocateClose(pool, 10);
-        CountDownLatch waiter2 = asyncAllocateClose(pool, 10);
+        CountDownLatch completed = new CountDownLatch(2);
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        Callable<Void> work = new Callable<Void>() {
+                public Void call() throws Exception {
+                    assertThrows(KafkaException.class, () -> pool.allocate(1, maxBlockTimeMs));
+                    completed.countDown();
+                    return null;
+                }
+            };
+        Future<Void> waiter1 = executor.submit(work);
+        Future<Void> waiter2 = executor.submit(work);
 
-        assertEquals("Allocation shouldn't have happened yet, waiting on memory", 2L, waiter1.getCount() + waiter2.getCount());
+        assertEquals("Allocation shouldn't have happened yet, waiting on memory", 2L, completed.getCount());
 
         // Close the buffer pool. This should notify all waiters.
         pool.close();
 
-        assertTrue("Allocation should fail soon after close", waiter1.await(1, TimeUnit.SECONDS) && waiter2.await(1, TimeUnit.SECONDS));
+        waiter1.get(200, TimeUnit.MILLISECONDS);
+        waiter2.get(200, TimeUnit.MILLISECONDS);
 
         pool.deallocate(buffer);
     }
 
-    private CountDownLatch asyncAllocateClose(final BufferPool pool, final int size) {
-        final CountDownLatch completed = new CountDownLatch(1);
-        Thread thread = new Thread() {
-            public void run() {
-                try {
-                    pool.allocate(size, maxBlockTimeMs);
-                    fail("Unexpected allocation");
-                } catch (KafkaException e) {
-                    completed.countDown();
-                } catch (InterruptedException e) {
-                    e.printStackTrace();
-                }
-            }
-        };
-        thread.start();
-        return completed;
-    }
 }
