@@ -14,24 +14,41 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.message;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 
-public enum MessageSpecType {
-    @JsonProperty("request")
-    REQUEST,
+import java.util.Objects;
+import java.util.regex.Pattern;
 
-    @JsonProperty("response")
-    RESPONSE,
+public class CodeSpec {
 
-    @JsonProperty("header")
-    HEADER,
+    private static final Pattern VALID_CODE_NAMES = Pattern.compile("[A-Z]([A-Za-z0-9_]*)");
 
-    @JsonProperty("data")
-    DATA,
+    private final String name;
+    private final Long value;
+    private final String about;
 
-    @JsonProperty("codes")
-    CODES;
+    public CodeSpec(@JsonProperty("name") String name,
+                    @JsonProperty("value") Long value,
+                    @JsonProperty("about") String about) {
+        this.name = Objects.requireNonNull(name);
+        if (!VALID_CODE_NAMES.matcher(this.name).matches()) {
+            throw new RuntimeException("Invalid code name " + this.name);
+        }
+        this.value = value;
+        this.about = about == null ? "" : about;
+    }
+
+    public String name() {
+        return name;
+    }
+
+    public Long value() {
+        return value;
+    }
+
+    public String about() {
+        return about;
+    }
 }

@@ -34,7 +34,20 @@
         { "name": "LowWatermark", "type": "int64", "versions": "0+",
           "about": "The partition low water mark." },
         { "name": "ErrorCode", "type": "int16", "versions": "0+",
-          "about": "The deletion error code, or 0 if the deletion succeeded." }
+          "about": "The deletion error code, or 0 if the deletion succeeded.",
+          "domain": {
+            "name": "ErrorCodes",
+            "values": [
+              { "name": "NONE", "validVersions": "0+" },
+              { "name": "TOPIC_AUTHORIZATION_FAILED", "validVersions": "0+" },
+              { "name": "UNKNOWN_TOPIC_OR_PARTITION", "validVersions": "0+" },
+              { "name": "INVALID_TOPIC_EXCEPTION", "validVersions": "0+" },
+              { "name": "NOT_LEADER_FOR_PARTITION", "validVersions": "0+" },
+              { "name": "OFFSET_OUT_OF_RANGE", "validVersions": "0+" },
+              { "name": "POLICY_VIOLATION", "validVersions": "0+" },
+              { "name": "KAFKA_STORAGE_ERROR", "validVersions": "0+" }
+            ]
+          }}
       ]}
     ]}
   ]

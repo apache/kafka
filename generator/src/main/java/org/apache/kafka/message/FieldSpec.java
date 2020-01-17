@@ -55,6 +55,7 @@ public final class FieldSpec {
     private final Optional<Versions> flexibleVersions;
 
     private final Optional<Integer> tag;
+    private final DomainSpec domain;
 
     private boolean zeroCopy;
 
@@ -72,7 +73,8 @@ public final class FieldSpec {
                      @JsonProperty("taggedVersions") String taggedVersions,
                      @JsonProperty("flexibleVersions") String flexibleVersions,
                      @JsonProperty("tag") Integer tag,
-                     @JsonProperty("zeroCopy") boolean zeroCopy) {
+                     @JsonProperty("zeroCopy") boolean zeroCopy,
+                     @JsonProperty("domain") DomainSpec domain) {
         this.name = Objects.requireNonNull(name);
         if (!VALID_FIELD_NAMES.matcher(this.name).matches()) {
             throw new RuntimeException("Invalid field name " + this.name);
@@ -127,6 +129,8 @@ public final class FieldSpec {
             throw new RuntimeException("Invalid zeroCopy value for " + name +
                 ". Only fields of type bytes can use zeroCopy flag.");
         }
+
+        this.domain = domain;
     }
 
     private void checkTagInvariants() {
@@ -262,5 +266,10 @@ public final class FieldSpec {
     @JsonProperty("zeroCopy")
     public boolean zeroCopy() {
         return zeroCopy;
+    }
+
+    @JsonProperty("domain")
+    public DomainSpec getDomain() {
+        return domain;
     }
 }

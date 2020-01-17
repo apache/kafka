@@ -14,24 +14,33 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.message;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonSubTypes;
+import com.fasterxml.jackson.annotation.JsonTypeInfo;
 
-public enum MessageSpecType {
-    @JsonProperty("request")
-    REQUEST,
+@JsonTypeInfo(
+        use = JsonTypeInfo.Id.NAME,
+        include = JsonTypeInfo.As.EXISTING_PROPERTY,
+        property = "type",
+        defaultImpl = MessageSpec.class,
+        visible = true
+)
+@JsonSubTypes({
+        @JsonSubTypes.Type(value = MessageSpec.class, name = "request"),
+        @JsonSubTypes.Type(value = MessageSpec.class, name = "response"),
+        @JsonSubTypes.Type(value = MessageSpec.class, name = "header"),
+        @JsonSubTypes.Type(value = MessageSpec.class, name = "data"),
+        @JsonSubTypes.Type(value = CodesSpec.class, name = "codes")
+})
+public abstract class DeclarationSpec {
 
-    @JsonProperty("response")
-    RESPONSE,
+    public DeclarationSpec() {
+    }
 
-    @JsonProperty("header")
-    HEADER,
+    @JsonProperty("type")
+    public abstract MessageSpecType type();
 
-    @JsonProperty("data")
-    DATA,
-
-    @JsonProperty("codes")
-    CODES;
+    public abstract String generatedClassName();
 }
