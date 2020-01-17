@@ -29,11 +29,12 @@ import org.apache.kafka.streams.processor.TaskId;
 import org.slf4j.Logger;
 
 import java.io.File;
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.LinkedHashMap;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -43,6 +44,8 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
 import static java.util.Collections.singleton;
+import static org.apache.kafka.streams.processor.internals.Task.State.RESTORING;
+import static org.apache.kafka.streams.processor.internals.Task.State.RUNNING;
 
 public class TaskManager {
     // initialize the task list
@@ -120,124 +123,52 @@ public class TaskManager {
         return adminClient;
     }
 
+    public void handleAssignment(final Map<TaskId, Set<TopicPartition>> activeTasks,
+                                 final Map<TaskId, Set<TopicPartition>> standbyTasks) {
+        final Map<TaskId, Set<TopicPartition>> activeTasksToCreate = new TreeMap<>(activeTasks);
 
-    public void setAssignmentMetadata(final Map<TaskId, Set<TopicPartition>> activeTasks,
-                                      final Map<TaskId, Set<TopicPartition>> standbyTasks) {
-        addedActiveTasks.clear();
-        for (final Map.Entry<TaskId, Set<TopicPartition>> entry : activeTasks.entrySet()) {
-            if (!activeTasksToCreate.containsKey(entry.getKey())) {
-                addedActiveTasks.put(entry.getKey(), entry.getValue());
-            }
-        }
+        final Map<TaskId, Set<TopicPartition>> standbyTasksToCreate = new TreeMap<>(standbyTasks);
 
-        addedStandbyTasks.clear();
-        for (final Map.Entry<TaskId, Set<TopicPartition>> entry : standbyTasks.entrySet()) {
-            if (!standbyTasksToCreate.containsKey(entry.getKey())) {
-                addedStandbyTasks.put(entry.getKey(), entry.getValue());
-            }
-        }
-
-        revokedActiveTasks.clear();
-        for (final Map.Entry<TaskId, Set<TopicPartition>> entry : activeTasksToCreate.entrySet()) {
-            if (!activeTasks.containsKey(entry.getKey())) {
-                revokedActiveTasks.put(entry.getKey(), entry.getValue());
-            }
-        }
-
-        revokedStandbyTasks.clear();
-        for (final Map.Entry<TaskId, Set<TopicPartition>> entry : standbyTasksToCreate.entrySet()) {
-            if (!standbyTasks.containsKey(entry.getKey())) {
-                revokedStandbyTasks.put(entry.getKey(), entry.getValue());
-            }
-        }
-
-        log.debug("Assigning metadata with: " +
-                      "\tpreviousAssignedActiveTasks: {},\n" +
-                      "\tpreviousAssignedStandbyTasks: {}\n" +
-                      "The updated task states are: \n" +
-                      "\tassignedActiveTasks {},\n" +
-                      "\tassignedStandbyTasks {},\n" +
-                      "\taddedActiveTasks {},\n" +
-                      "\taddedStandbyTasks {},\n" +
-                      "\trevokedActiveTasks {},\n" +
-                      "\trevokedStandbyTasks {}",
-                  activeTasksToCreate, standbyTasksToCreate,
-                  activeTasks, standbyTasks,
-                  addedActiveTasks, addedStandbyTasks,
-                  revokedActiveTasks, revokedStandbyTasks);
-
-        activeTasksToCreate = activeTasks;
-        standbyTasksToCreate = standbyTasks;
-    }
-
-
-    void createTasks(final Collection<TopicPartition> assignment) {
-        if (consumer == null) {
-            throw new IllegalStateException(logPrefix + "consumer has not been initialized while adding stream tasks. This should not happen.");
-        }
-
-        if (!assignment.isEmpty() && !activeTasksToCreate.isEmpty()) {
-            resumeSuspended(assignment);
-        }
-        if (!addedActiveTasks.isEmpty()) {
-            addNewActiveTasks(addedActiveTasks);
-        }
-        if (!addedStandbyTasks.isEmpty()) {
-            addNewStandbyTasks(addedStandbyTasks);
-        }
-
-        // need to clear restore consumer if it was reading standbys but we have active tasks that may need restoring
-        if (!addedActiveTasks.isEmpty() && restoreConsumerAssignedStandbys) {
-            restoreConsumer.unsubscribe();
-            restoreConsumerAssignedStandbys = false;
-        }
-
-        // Pause all the new partitions until the underlying state store is ready for all the active tasks.
-        log.debug("Pausing all active task partitions until the underlying state stores are ready");
-        pausePartitions();
-    }
-
-    private void resumeSuspended(final Collection<TopicPartition> assignment) {
-        final Set<TaskId> suspendedTasks = partitionsToTaskSet(assignment);
-        suspendedTasks.removeAll(addedActiveTasks.keySet());
-
-        log.debug("Suspended tasks to be resumed: {}", suspendedTasks);
-
-        for (final TaskId taskId : suspendedTasks) {
-            final Set<TopicPartition> partitions = tasks.get(taskId).partitions();
-            try {
-                if (!active.maybeResumeSuspendedTask(taskId, partitions)) {
-                    // recreate if resuming the suspended task failed because the associated partitions changed
-                    addedActiveTasks.put(taskId, partitions);
+        // first rectify all existing tasks
+        final LinkedHashMap<TaskId, RuntimeException> taskCloseExceptions = new LinkedHashMap<>();
+        final Iterator<Task> iterator = tasks.values().iterator();
+        while (iterator.hasNext()) {
+            final Task task = iterator.next();
+            if (activeTasks.containsKey(task.id()) && task instanceof StreamTask) {
+                task.resume();
+                activeTasksToCreate.remove(task.id());
+            } else if (standbyTasks.containsKey(task.id()) && task instanceof StandbyTask) {
+                task.resume();
+                standbyTasksToCreate.remove(task.id());
+            } else /* we previously task, and we don't have it anymore, or it has changed active/standby state */ {
+                try {
+                    task.closeClean();
+                } catch (final RuntimeException e) {
+                    log.error(
+                        "Failed to close {} cleanly. Attempting to close remaining tasks before re-throwing.",
+                        task
+                    );
+                    taskCloseExceptions.put(task.id(), e);
                 }
-            } catch (final StreamsException e) {
-                log.error("Failed to resume a suspended active task {} due to the following error:", taskId, e);
-                throw e;
+                iterator.remove();
             }
         }
-    }
 
-    private void addNewActiveTasks(final Map<TaskId, Set<TopicPartition>> newActiveTasks) {
-        log.debug("New active tasks to be created: {}", newActiveTasks);
-
-        for (final StreamTask task : taskCreator.createTasks(consumer, newActiveTasks)) {
-            active.addNewTask(task);
-            final Task previous = tasks.put(task.id(), task);
-            if (previous != null) {
-                throw new IllegalStateException("Found prior version of a newly created task:" + task + ": " + previous);
-            }
+        if (!taskCloseExceptions.isEmpty()) {
+            final Map.Entry<TaskId, RuntimeException> first = taskCloseExceptions.entrySet().iterator().next();
+            throw new RuntimeException(
+                "Unexpected failure to close " + taskCloseExceptions.size() +
+                    " task(s) [" + taskCloseExceptions.keySet() + "]. " +
+                    "First exception (for task "+first.getKey()+") follows.", first.getValue()
+            );
         }
-    }
 
-    private void addNewStandbyTasks(final Map<TaskId, Set<TopicPartition>> newStandbyTasks) {
-        log.debug("New standby tasks to be created: {}", newStandbyTasks);
+        for (final StreamTask task : taskCreator.createTasks(consumer, activeTasksToCreate)) {
+            tasks.put(task.id(), task);
+        }
 
-        for (final StandbyTask task : standbyTaskCreator.createTasks(consumer, newStandbyTasks)) {
-            standby.addNewTask(task);
-            final Task previous = tasks.put(task.id(), task);
-            if (previous != null) {
-                throw new IllegalStateException("Found prior version of a newly created task:" + task + ": " + previous);
-            }
+        for (final StandbyTask task : standbyTaskCreator.createTasks(consumer, standbyTasksToCreate)) {
+            tasks.put(task.id(), task);
         }
     }
 
@@ -273,118 +204,36 @@ public class TaskManager {
     }
 
     /**
-     * Closes standby tasks that were not reassigned at the end of a rebalance.
-     *
-     * @return list of changelog topic partitions from revoked tasks
-     * @throws TaskMigratedException if the task producer got fenced (EOS only)
-     */
-    List<TopicPartition> closeRevokedStandbyTasks() {
-        final List<TopicPartition> revokedChangelogs = standby.closeRevokedStandbyTasks(revokedStandbyTasks);
-        final Iterator<Task> iterator = tasks.values().iterator();
-        while (iterator.hasNext()) {
-            final Task next = iterator.next();
-            if (next instanceof StandbyTask) {
-                // TODO, right now the delegate is actually closing the task
-//                next.close(true);
-                next.transitionTo(Task.State.CLOSED);
-                // TODO: apparently, there's no test coverage here
-                iterator.remove();
-            }
-        }
-
-        // If the restore consumer is assigned any standby partitions they must be removed
-        removeChangelogsFromRestoreConsumer(revokedChangelogs, true);
-
-        return revokedChangelogs;
-    }
-
-    /**
-     * Closes suspended active tasks that were not reassigned at the end of a rebalance.
-     *
-     * @throws TaskMigratedException if the task producer got fenced (EOS only)
-     */
-    void closeRevokedSuspendedTasks() {
-        // changelogs should have already been removed during suspend
-        final RuntimeException exception = active.closeNotAssignedSuspendedTasks(revokedActiveTasks.keySet());
-        final Iterator<Task> iterator = tasks.values().iterator();
-        while (iterator.hasNext()) {
-            final Task next = iterator.next();
-            if (next instanceof StreamTask) {
-                // TODO, right now the delegate is actually closing the task
-//                next.close(true);
-                next.transitionTo(Task.State.CLOSED);
-                // TODO: apparently, there's no test coverage here
-                iterator.remove();
-            }
-        }
-
-        // At this point all revoked tasks should have been closed, we can just throw the exception
-        if (exception != null) {
-            throw exception;
-        }
-    }
-
-    /**
      * Similar to shutdownTasksAndState, however does not close the task managers, in the hope that
      * soon the tasks will be assigned again.
-     * @return list of suspended tasks
      * @throws TaskMigratedException if the task producer got fenced (EOS only)
      */
-    Set<TaskId> suspendActiveTasksAndState(final Collection<TopicPartition> revokedPartitions) {
-        final AtomicReference<RuntimeException> firstException = new AtomicReference<>(null);
-        final List<TopicPartition> revokedChangelogs = new ArrayList<>();
-
+    void handleRevocation(final Collection<TopicPartition> revokedPartitions) {
         final Set<TaskId> revokedTasks = partitionsToTaskSet(revokedPartitions);
-
-        final RuntimeException firstExceptionFromCall = active.suspendOrCloseTasks(revokedTasks, revokedChangelogs);
-        firstException.compareAndSet(null, firstExceptionFromCall);
-        for (final Task next : tasks.values()) {
-            if (revokedTasks.contains(next.id())) {
-                next.transitionTo(Task.State.REVOKED);
-            }
+        for (final TaskId taskId : revokedTasks) {
+            final Task task = tasks.get(taskId);
+            task.suspend();
         }
-
-        changelogReader.remove(revokedChangelogs);
-        removeChangelogsFromRestoreConsumer(revokedChangelogs, false);
-
-        final Exception exception = firstException.get();
-        if (exception != null) {
-            throw new StreamsException(logPrefix + "failed to suspend stream tasks", exception);
-        }
-        return active.suspendedTaskIds();
     }
 
     /**
      * Closes active tasks as zombies, as these partitions have been lost and are no longer owned.
      * NOTE this method assumes that when it is called, EVERY task/partition has been lost and must
      * be closed as a zombie.
-     * @return list of lost tasks
      */
-    Set<TaskId> closeLostTasks() {
-        final Set<TaskId> lostTasks = activeTaskIds();
-        log.debug("Closing lost active tasks as zombies: {}", lostTasks);
+    void closeLostTasks() {
+        log.debug("Closing lost active tasks as zombies.");
 
-        final RuntimeException exception = active.closeAllTasksAsZombies();
         final Iterator<Task> iterator = tasks.values().iterator();
         while (iterator.hasNext()) {
-            final Task next = iterator.next();
-            next.transitionTo(Task.State.CLOSED);
+            final Task task = iterator.next();
+            // Even though we've apparently dropped out of the group, we can continue safely to maintain our
+            // standby tasks while we rejoin.
+            if (task instanceof StreamTask) {
+                task.closeDirty();
+            }
             iterator.remove();
         }
-
-        log.debug("Clearing the store changelog reader: {}", changelogReader);
-        changelogReader.clear();
-
-        if (!restoreConsumerAssignedStandbys) {
-            log.debug("Clearing the restore consumer's assignment: {}", restoreConsumer.assignment());
-            restoreConsumer.unsubscribe();
-        }
-
-        if (exception != null) {
-            throw exception;
-        }
-
-        return lostTasks;
     }
 
     void shutdown(final boolean clean) {
@@ -399,7 +248,7 @@ public class TaskManager {
         final Iterator<Task> iterator = tasks.values().iterator();
         while (iterator.hasNext()) {
             final Task next = iterator.next();
-            next.transitionTo(Task.State.REVOKED);
+            next.transitionTo(Task.State.SUSPENDED);
             next.transitionTo(Task.State.CLOSED);
             iterator.remove();
         }
@@ -421,7 +270,7 @@ public class TaskManager {
     public Set<TaskId> previousRunningTaskIds() {
         return tasks.values()
                     .stream()
-                    .filter(t -> t instanceof StreamTask && t.state() == Task.State.REVOKED)
+                    .filter(t -> t instanceof StreamTask && t.state() == Task.State.SUSPENDED)
                     .map(Task::id)
                     .collect(Collectors.toSet());
     }
@@ -438,38 +287,6 @@ public class TaskManager {
         return tasks.values()
                     .stream()
                     .filter(t -> t instanceof StandbyTask)
-                    .map(Task::id)
-                    .collect(Collectors.toSet());
-    }
-
-    Set<TaskId> revokedActiveTaskIds() {
-        return tasks.values()
-                    .stream()
-                    .filter(t -> t instanceof StreamTask && t.state() == Task.State.REVOKED)
-                    .map(Task::id)
-                    .collect(Collectors.toSet());
-    }
-
-    Set<TaskId> revokedStandbyTaskIds() {
-        return tasks.values()
-                    .stream()
-                    .filter(t -> t instanceof StandbyTask && t.state() == Task.State.REVOKED)
-                    .map(Task::id)
-                    .collect(Collectors.toSet());
-    }
-
-    Set<TaskId> previousActiveTaskIds() {
-        return tasks.values()
-                    .stream()
-                    .filter(t -> t instanceof StreamTask && t.state() == Task.State.REVOKED)
-                    .map(Task::id)
-                    .collect(Collectors.toSet());
-    }
-
-    Set<TaskId> previousStandbyTaskIds() {
-        return tasks.values()
-                    .stream()
-                    .filter(t -> t instanceof StandbyTask && t.state() == Task.State.REVOKED)
                     .map(Task::id)
                     .collect(Collectors.toSet());
     }
@@ -521,26 +338,38 @@ public class TaskManager {
         return taskCreator.builder();
     }
 
-    void pausePartitions() {
-        log.trace("Pausing partitions: {}", consumer.assignment());
-        consumer.pause(consumer.assignment());
-    }
-
     /**
      * @throws IllegalStateException If store gets registered after initialized is already finished
      * @throws StreamsException if the store's change log does not contain the partition
      */
     boolean updateNewAndRestoringTasks() {
-        active.initializeNewTasks();
-        standby.initializeNewTasks();
-
-        if (active.hasRestoringTasks()) {
-            changelogReader.restore();
-            active.updateRestored(changelogReader.completedChangelogs());
-        } else {
-            active.clearRestoringPartitions();
+        final List<Task> restoringTasks = new LinkedList<>();
+        for (final Task task : tasks.values()) {
+            task.initializeIfNeeded();
+            if (task.state() == RESTORING) {
+                restoringTasks.add(task);
+            }
         }
 
+        if (!restoringTasks.isEmpty()) {
+            changelogReader.restore();
+            final Set<TopicPartition> restored = changelogReader.completedChangelogs();
+            for (final Task task : restoringTasks) {
+                if (restored.containsAll(task.changelogPartitions())) {
+                    task.startRunning();
+                }
+            }
+        }
+
+        for (final Task task : tasks.values()) {
+            // TODO, can we make StandbyTasks partitions always empty (since they don't process any inputs)?
+            // If so, we can simplify this logic here, as the resume would be a no-op.
+            if (task instanceof StreamTask && task.state() == RUNNING) {
+                consumer.resume(task.partitions());
+            }
+        }
+
+        // NOTE: left off here...
         if (active.allTasksRunning()) {
             final Set<TopicPartition> assignment = consumer.assignment();
             log.trace("Resuming partitions {}", assignment);
@@ -691,16 +520,6 @@ public class TaskManager {
         builder.append(indent).append("\tStandby tasks:\n");
         builder.append(standby.toString(indent + "\t\t"));
         return builder.toString();
-    }
-
-    // this should be safe to call whether the restore consumer is assigned standby or active restoring partitions
-    // as the removal will be a no-op
-    private void removeChangelogsFromRestoreConsumer(final Collection<TopicPartition> changelogs, final boolean areStandbyPartitions) {
-        if (!changelogs.isEmpty() && areStandbyPartitions == restoreConsumerAssignedStandbys) {
-            final Set<TopicPartition> updatedAssignment = new HashSet<>(restoreConsumer.assignment());
-            updatedAssignment.removeAll(changelogs);
-            restoreConsumer.assign(updatedAssignment);
-        }
     }
 
     private Set<TaskId> partitionsToTaskSet(final Collection<TopicPartition> partitions) {

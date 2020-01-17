@@ -25,9 +25,13 @@ import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
+import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
+import org.apache.kafka.streams.state.internals.ThreadCache;
 import org.easymock.EasyMock;
 import org.easymock.EasyMockRunner;
 import org.easymock.Mock;
@@ -52,8 +56,11 @@ import java.util.UUID;
 import java.util.regex.Pattern;
 
 import static java.util.Arrays.asList;
+import static java.util.Collections.emptyList;
 import static java.util.Collections.emptyMap;
 import static java.util.Collections.singletonList;
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.easymock.EasyMock.anyObject;
 import static org.easymock.EasyMock.checkOrder;
 import static org.easymock.EasyMock.eq;
@@ -283,15 +290,31 @@ public class TaskManagerTest {
 
     @Test
     public void shouldAddNonResumedSuspendedTasks() {
+        final StreamsConfig streamsConfig = new StreamsConfig(
+            mkMap(
+                mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, "nothing"),
+                mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "nothing")
+            )
+        );
+        final StreamsMetricsImpl metrics = new MockStreamsMetrics(new Metrics());
+        final ThreadCache cache = EasyMock.createNiceMock(ThreadCache.class);
+        final ProcessorStateManager stateManager = EasyMock.createNiceMock(ProcessorStateManager.class);
+        final RecordCollector recordCollector = EasyMock.createNiceMock(RecordCollector.class);
+        final ProcessorTopology topology = EasyMock.createNiceMock(ProcessorTopology.class);
+        expect(topology.source(eq(t1p0.topic()))).andReturn(EasyMock.createNiceMock(SourceNode.class));
+        expect(topology.globalStateStores()).andReturn(emptyList());
+        EasyMock.replay(topology);
+        final StreamTask streamTask = new StreamTask(taskId0, taskId0Partitions, topology, consumer, streamsConfig, metrics, stateDirectory, cache, null, stateManager, recordCollector);
         expect(activeTaskCreator.createTasks(anyObject(), eq(taskId0Assignment))).andReturn(singletonList(streamTask));
         expect(active.maybeResumeSuspendedTask(taskId0, taskId0Partitions)).andReturn(false);
-        expect(streamTask.id()).andReturn(taskId0);
-        EasyMock.replay(streamTask);
         active.addNewTask(same(streamTask));
         replay();
 
         // Need to call this twice so task manager doesn't consider all partitions "new"
         taskManager.setAssignmentMetadata(taskId0Assignment, emptyMap());
+        taskManager.setPartitionsToTaskId(taskId0PartitionToTaskId);
+        taskManager.createTasks(taskId0Partitions);
+
         taskManager.setAssignmentMetadata(taskId0Assignment, emptyMap());
 
         taskManager.setPartitionsToTaskId(taskId0PartitionToTaskId);
@@ -356,7 +379,7 @@ public class TaskManagerTest {
         expect(restoreConsumer.assignment()).andReturn(Collections.emptySet());
         replay();
 
-        taskManager.suspendActiveTasksAndState(revokedPartitions);
+        taskManager.handleRevocation(revokedPartitions);
         verify(active);
     }
 
@@ -374,7 +397,7 @@ public class TaskManagerTest {
         expectLastCall();
         replay();
 
-        taskManager.suspendActiveTasksAndState(Collections.emptySet());
+        taskManager.handleRevocation(Collections.emptySet());
         verify(restoreConsumer);
     }
 
@@ -384,7 +407,7 @@ public class TaskManagerTest {
 
         replay();
         try {
-            taskManager.suspendActiveTasksAndState(revokedPartitions);
+            taskManager.handleRevocation(revokedPartitions);
             fail("Should have thrown streams exception");
         } catch (final StreamsException e) {
             // expected

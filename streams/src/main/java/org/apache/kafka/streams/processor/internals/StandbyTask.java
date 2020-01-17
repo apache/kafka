@@ -73,27 +73,40 @@ public class StandbyTask extends AbstractTask {
     }
 
     @Override
+    public void initializeIfNeeded() {
+        if (state() == State.CREATED) {
+            initializeMetadata();
+            initializeStateStores();
+            transitionTo(State.RUNNING);
+        }
+    }
+
+    @Override
     public void initializeMetadata() {}
 
     @Override
-    public boolean initializeStateStores() {
+    public void initializeStateStores() {
         registerStateStores();
         processorContext.initialize();
         taskInitialized = true;
+    }
+
+    @Override
+    public boolean hasChangelogs() {
         return true;
     }
 
     @Override
     public void initializeTopology() {}
 
-    /**
-     * <pre>
-     * - update offset limits
-     * </pre>
-     */
+    @Override
+    public void suspend() {
+        log.debug("No-op suspend.");
+    }
+
     @Override
     public void resume() {
-        log.debug("Resuming");
+        log.debug("No-op resume");
     }
 
     /**
@@ -118,14 +131,23 @@ public class StandbyTask extends AbstractTask {
         stateMgr.checkpoint(Collections.emptyMap());
     }
 
+    @Override
+    public void closeClean() {
+        close(true);
+    }
+
+    @Override
+    public void closeDirty() {
+        close(false);
+    }
+
     /**
      * <pre>
      * - {@link #commit()}
      * - close state
      * <pre>
      */
-    @Override
-    public void close(final boolean clean) {
+    private void close(final boolean clean) {
         closeTaskSensor.record();
         if (!taskInitialized) {
             return;

@@ -604,7 +604,7 @@ public class StreamThread extends Thread {
         changelogReader.setMainConsumer(consumer);
         taskManager.setConsumer(consumer);
 
-        return new StreamThread(
+        final StreamThread streamThread = new StreamThread(
             time,
             config,
             activeTaskCreator.threadProducer,
@@ -617,8 +617,9 @@ public class StreamThread extends Thread {
             builder,
             threadId,
             logContext,
-            assignmentErrorCode)
-            .updateThreadMetadata(getSharedAdminClientId(clientId));
+            assignmentErrorCode);
+
+        return streamThread.updateThreadMetadata(getSharedAdminClientId(clientId));
     }
 
     public StreamThread(final Time time,

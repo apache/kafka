@@ -1168,10 +1168,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
 
         final Cluster fakeCluster = Cluster.empty().withPartitions(topicToPartitionInfo);
         streamsMetadataState.onChange(partitionsByHost, fakeCluster);
-        taskManager.setPartitionsToTaskId(partitionsToTaskId);
-        taskManager.setAssignmentMetadata(activeTasks, info.standbyTasks());
-        taskManager.updateSubscriptionsFromAssignment(partitions);
-        taskManager.setRebalanceInProgress(false);
+        taskManager.handleAssignment(activeTasks, info.standbyTasks());
     }
 
     private static void validateActiveTaskEncoding(final List<TopicPartition> partitions, final AssignmentInfo info, final String logPrefix) {
