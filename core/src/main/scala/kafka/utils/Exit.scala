@@ -34,11 +34,19 @@ object Exit {
     throw new AssertionError("halt should not return, but it did.")
   }
 
+  def addShutdownHook(runnable: Runnable, name: Option[String] = None): Unit = {
+    JExit.addShutdownHook(runnable, name.orNull)
+  }
+
   def setExitProcedure(exitProcedure: (Int, Option[String]) => Nothing): Unit =
     JExit.setExitProcedure(functionToProcedure(exitProcedure))
 
   def setHaltProcedure(haltProcedure: (Int, Option[String]) => Nothing): Unit =
     JExit.setHaltProcedure(functionToProcedure(haltProcedure))
+
+  def setShutdownHookAdder(shutdownHookAdder: (Runnable, Option[String]) => Unit): Unit = {
+    JExit.setShutdownHookAdder(functionToShutdownHookAdder(shutdownHookAdder))
+  }
 
   def resetExitProcedure(): Unit =
     JExit.resetExitProcedure()
@@ -46,8 +54,14 @@ object Exit {
   def resetHaltProcedure(): Unit =
     JExit.resetHaltProcedure()
 
+  def resetShutdownHookAdder(): Unit =
+    JExit.resetShutdownHookAdder()
+
   private def functionToProcedure(procedure: (Int, Option[String]) => Nothing) = new JExit.Procedure {
     def execute(statusCode: Int, message: String): Unit = procedure(statusCode, Option(message))
   }
 
+  private def functionToShutdownHookAdder(procedure: (Runnable, Option[String]) => Unit) = new JExit.ShutdownHookAdder {
+    def addShutdownHook(runnable: Runnable, name: String): Unit = procedure(runnable, Option(name))
+  }
 }
