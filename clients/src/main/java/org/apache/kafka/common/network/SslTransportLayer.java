@@ -316,9 +316,9 @@ public class SslTransportLayer implements TransportLayer {
                     netWriteBuffer.compact();
                     netWriteBuffer = Utils.ensureCapacity(netWriteBuffer, currentNetWriteBufferSize);
                     netWriteBuffer.flip();
-                    if (netWriteBuffer.limit() >= currentNetWriteBufferSize) {
+                    if (netWriteBuffer.limit() > currentNetWriteBufferSize) {
                         throw new IllegalStateException("Buffer overflow when available data size (" + netWriteBuffer.limit() +
-                                                        ") >= network buffer size (" + currentNetWriteBufferSize + ")");
+                                                        ") > network buffer size (" + currentNetWriteBufferSize + ")");
                     }
                 } else if (handshakeResult.getStatus() == Status.BUFFER_UNDERFLOW) {
                     throw new IllegalStateException("Should not have received BUFFER_UNDERFLOW during handshake WRAP.");
@@ -350,7 +350,7 @@ public class SslTransportLayer implements TransportLayer {
                 if (handshakeResult.getStatus() == Status.BUFFER_UNDERFLOW) {
                     int currentNetReadBufferSize = netReadBufferSize();
                     netReadBuffer = Utils.ensureCapacity(netReadBuffer, currentNetReadBufferSize);
-                    if (netReadBuffer.position() >= currentNetReadBufferSize) {
+                    if (netReadBuffer.position() > currentNetReadBufferSize) {
                         throw new IllegalStateException("Buffer underflow when there is available data");
                     }
                 } else if (handshakeResult.getStatus() == Status.CLOSED) {
@@ -547,9 +547,9 @@ public class SslTransportLayer implements TransportLayer {
                 } else if (unwrapResult.getStatus() == Status.BUFFER_OVERFLOW) {
                     int currentApplicationBufferSize = applicationBufferSize();
                     appReadBuffer = Utils.ensureCapacity(appReadBuffer, currentApplicationBufferSize);
-                    if (appReadBuffer.position() >= currentApplicationBufferSize) {
+                    if (appReadBuffer.position() > currentApplicationBufferSize) {
                         throw new IllegalStateException("Buffer overflow when available data size (" + appReadBuffer.position() +
-                                                        ") >= application buffer size (" + currentApplicationBufferSize + ")");
+                                                        ") > application buffer size (" + currentApplicationBufferSize + ")");
                     }
 
                     // appReadBuffer will extended upto currentApplicationBufferSize
@@ -562,7 +562,7 @@ public class SslTransportLayer implements TransportLayer {
                 } else if (unwrapResult.getStatus() == Status.BUFFER_UNDERFLOW) {
                     int currentNetReadBufferSize = netReadBufferSize();
                     netReadBuffer = Utils.ensureCapacity(netReadBuffer, currentNetReadBufferSize);
-                    if (netReadBuffer.position() >= currentNetReadBufferSize) {
+                    if (netReadBuffer.position() > currentNetReadBufferSize) {
                         throw new IllegalStateException("Buffer underflow when available data size (" + netReadBuffer.position() +
                                                         ") > packet buffer size (" + currentNetReadBufferSize + ")");
                     }
@@ -667,8 +667,8 @@ public class SslTransportLayer implements TransportLayer {
             netWriteBuffer.compact();
             netWriteBuffer = Utils.ensureCapacity(netWriteBuffer, currentNetWriteBufferSize);
             netWriteBuffer.flip();
-            if (netWriteBuffer.limit() >= currentNetWriteBufferSize)
-                throw new IllegalStateException("SSL BUFFER_OVERFLOW when available data size (" + netWriteBuffer.limit() + ") >= network buffer size (" + currentNetWriteBufferSize + ")");
+            if (netWriteBuffer.limit() > currentNetWriteBufferSize)
+                throw new IllegalStateException("SSL BUFFER_OVERFLOW when available data size (" + netWriteBuffer.limit() + ") > network buffer size (" + currentNetWriteBufferSize + ")");
         } else if (wrapResult.getStatus() == Status.BUFFER_UNDERFLOW) {
             throw new IllegalStateException("SSL BUFFER_UNDERFLOW during write");
         } else if (wrapResult.getStatus() == Status.CLOSED) {
