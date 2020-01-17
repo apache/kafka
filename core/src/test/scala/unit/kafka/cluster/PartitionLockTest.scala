@@ -82,7 +82,7 @@ class PartitionLockTest extends Logging {
    */
   @Test
   def testNoLockContentionWithoutIsrUpdate(): Unit = {
-    concurrentProduceFetchWithReadLockOnly(appendSemaphore)
+    concurrentProduceFetchWithReadLockOnly()
   }
 
   /**
@@ -95,7 +95,7 @@ class PartitionLockTest extends Logging {
     val active = new AtomicBoolean(true)
 
     val future = scheduleShrinkIsr(active, mockTimeSleepMs = 0)
-    concurrentProduceFetchWithReadLockOnly(appendSemaphore)
+    concurrentProduceFetchWithReadLockOnly()
     active.set(false)
     future.get(15, TimeUnit.SECONDS)
   }
@@ -111,7 +111,7 @@ class PartitionLockTest extends Logging {
 
     val future = scheduleShrinkIsr(active, mockTimeSleepMs = 10000)
     TestUtils.waitUntilTrue(() => shrinkIsrSemaphore.hasQueuedThreads, "shrinkIsr not invoked")
-    concurrentProduceFetchWithWriteLock(appendSemaphore, shrinkIsrSemaphore)
+    concurrentProduceFetchWithWriteLock()
     active.set(false)
     future.get(15, TimeUnit.SECONDS)
   }
@@ -122,7 +122,7 @@ class PartitionLockTest extends Logging {
    * Verify that follower state updates complete even though an append holding read lock is in progress.
    * Then release the permit for the final append and verify that all appends and follower updates complete.
    */
-  private def concurrentProduceFetchWithReadLockOnly(appendSemaphore: Semaphore): Unit = {
+  private def concurrentProduceFetchWithReadLockOnly(): Unit = {
     val appendFutures = scheduleAppends()
     val stateUpdateFutures = scheduleUpdateFollowers(numProducers * numRecordsPerProducer - 1)
 
@@ -130,7 +130,7 @@ class PartitionLockTest extends Logging {
     stateUpdateFutures.foreach(_.get(15, TimeUnit.SECONDS))
 
     appendSemaphore.release(1)
-    scheduleUpdateFollowers(1).foreach(_.get(15, TimeUnit.SECONDS))
+    scheduleUpdateFollowers(1).foreach(_.get(15, TimeUnit.SECONDS)) // just to make sure follower state update still works
     appendFutures.foreach(_.get(15, TimeUnit.SECONDS))
   }
 
@@ -140,16 +140,16 @@ class PartitionLockTest extends Logging {
    * holding read lock will prevent other threads acquiring the read or write lock. So release sufficient
    * permits for all appends to complete before verifying state updates.
    */
-  private def concurrentProduceFetchWithWriteLock(appendSemaphore: Semaphore,
-                                                  shrinkIsrSemaphore: Semaphore): Unit = {
+  private def concurrentProduceFetchWithWriteLock(): Unit = {
 
     val appendFutures = scheduleAppends()
     val stateUpdateFutures = scheduleUpdateFollowers(numProducers * numRecordsPerProducer)
 
     assertFalse(stateUpdateFutures.exists(_.isDone))
-    shrinkIsrSemaphore.release()
     appendSemaphore.release(numProducers * numRecordsPerProducer)
+    assertFalse(appendFutures.exists(_.isDone))
 
+    shrinkIsrSemaphore.release()
     stateUpdateFutures.foreach(_.get(15, TimeUnit.SECONDS))
     appendFutures.foreach(_.get(15, TimeUnit.SECONDS))
   }
