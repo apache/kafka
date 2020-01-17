@@ -585,16 +585,16 @@ public class StreamsConfigTest {
     @Test
     public void shouldSetDifferentDefaultsIfEosAlphEnabled() {
         props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, EXACTLY_ONCE);
-        shouldSetDifferentDefaultsIfEosEnabled(false);
+        verifyEosConfig();
     }
 
     @Test
     public void shouldSetDifferentDefaultsIfEosBetaEnabled() {
         props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, EXACTLY_ONCE_BETA);
-        shouldSetDifferentDefaultsIfEosEnabled(true);
+        verifyEosConfig();
     }
 
-    private void shouldSetDifferentDefaultsIfEosEnabled(final boolean eosBeta) {
+    private void verifyEosConfig() {
         final StreamsConfig streamsConfig = new StreamsConfig(props);
 
         final Map<String, Object> consumerConfigs = streamsConfig.getMainConsumerConfigs(groupId, clientId, threadIdx);
@@ -604,10 +604,10 @@ public class StreamsConfigTest {
         assertTrue((Boolean) producerConfigs.get(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG));
         assertThat(producerConfigs.get(ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG), equalTo(Integer.MAX_VALUE));
         assertThat(streamsConfig.getLong(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG), equalTo(100L));
-        if (eosBeta) {
-            assertThat((String) producerConfigs.get(ProducerConfig.TRANSACTIONAL_ID_CONFIG), startsWith(streamsConfig.getString(APPLICATION_ID_CONFIG)));
-        } else {
+        if (StreamsConfig.EXACTLY_ONCE.equals(streamsConfig.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG))) {
             assertThat(producerConfigs.get(ProducerConfig.TRANSACTIONAL_ID_CONFIG), is(nullValue()));
+        } else {
+            assertThat((String) producerConfigs.get(ProducerConfig.TRANSACTIONAL_ID_CONFIG), startsWith(streamsConfig.getString(APPLICATION_ID_CONFIG)));
         }
     }
 

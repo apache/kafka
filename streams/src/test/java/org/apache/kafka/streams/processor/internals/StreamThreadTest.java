@@ -644,6 +644,71 @@ public class StreamThreadTest {
         EasyMock.verify(taskManager, producer);
     }
 
+    @Test
+    public void shouldCommitAllTasksOnUserCommitRequestWithEosBetaEnabled() {
+        final Properties props = configProps(true, true);
+        props.setProperty(StreamsConfig.STATE_DIR_CONFIG, stateDir);
+
+        final StreamsConfig config = new StreamsConfig(props);
+        final Consumer<byte[], byte[]> consumer = EasyMock.createNiceMock(Consumer.class);
+        final Producer<byte[], byte[]> producer = EasyMock.createNiceMock(Producer.class);
+
+        final TaskManager taskManager = EasyMock.createNiceMock(TaskManager.class);
+        EasyMock.expect(taskManager.hasActiveRunningTasks()).andReturn(true);
+        EasyMock.expect(taskManager.process(mockTime.milliseconds())).andReturn(1);
+
+        // StreamThread#runOnce is structured that it will
+        //  - check `maybeCommitActiveTasksPerUserRequested()` 3 times
+        //  - do one commit when leaving the loop
+        // because we return "1" each time `maybeCommitActiveTasksPerUserRequested()` is called,
+        // we end up with 4 commits in this test
+
+        EasyMock.expect(taskManager.maybeCommitActiveTasksPerUserRequested()).andReturn(1).times(3);
+        EasyMock.expect(taskManager.commitAllActive()).andReturn(1).times(4);
+
+        producer.commitTransaction();
+        producer.beginTransaction();
+        producer.commitTransaction();
+        producer.beginTransaction();
+        producer.commitTransaction();
+        producer.beginTransaction();
+        producer.commitTransaction();
+        producer.beginTransaction();
+        EasyMock.expectLastCall();
+
+        EasyMock.replay(taskManager, consumer, producer);
+
+        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, CLIENT_ID, StreamsConfig.METRICS_LATEST);
+        final StreamThread thread = new StreamThread(
+            mockTime,
+            config,
+            producer,
+            consumer,
+            consumer,
+            null,
+            taskManager,
+            streamsMetrics,
+            internalTopologyBuilder,
+            CLIENT_ID,
+            new LogContext(""),
+            new AtomicInteger()
+        ) {
+            @Override
+            void updateThreadMetadata(final Map<TaskId, StreamTask> activeTasks,
+                                      final Map<TaskId, StandbyTask> standbyTasks) {
+                // we overwrite this to avoid complex mocking and to avoid exception due to missing mocks
+            }
+        };
+
+        thread.setState(StreamThread.State.STARTING);
+        thread.setState(StreamThread.State.PARTITIONS_REVOKED);
+        thread.setState(StreamThread.State.PARTITIONS_ASSIGNED);
+        thread.setState(StreamThread.State.RUNNING);
+        thread.runOnce();
+
+        EasyMock.verify(taskManager, producer);
+    }
+
     private TaskManager mockTaskManagerCommit(final Consumer<byte[], byte[]> consumer,
                                               final int numberOfCommits,
                                               final int commits) {

@@ -557,7 +557,7 @@ public class TaskManager {
         return rebalanceInProgress ? -1 : active.maybeCommitPerUserRequested();
     }
 
-    void maybePurgeCommitedRecords() {
+    void maybePurgeCommittedRecords() {
         // we do not check any possible exceptions since none of them are fatal
         // that should cause the application to fail, and we will try delete with
         // newer offsets anyways.

@@ -988,7 +988,7 @@ public class StreamThread extends Thread {
 
             if (committed > 0) {
                 // try to purge the committed records for repartition topics if possible
-                taskManager.maybePurgeCommitedRecords();
+                taskManager.maybePurgeCommittedRecords();
             }
 
             if (committed == -1) {
@@ -1001,6 +1001,11 @@ public class StreamThread extends Thread {
         } else {
             committed = taskManager.maybeCommitActiveTasksPerUserRequested();
             if (committed > 0) {
+                if (eosBetaEnabled) {
+                    taskManager.commitAllActive();
+                    producer.commitTransaction();
+                    producer.beginTransaction();
+                }
                 final long requestCommitLatency = advanceNowAndComputeLatency();
                 commitSensor.record(requestCommitLatency / (double) committed, now);
             }
@@ -1184,8 +1189,9 @@ public class StreamThread extends Thread {
         return this;
     }
 
-    private void updateThreadMetadata(final Map<TaskId, StreamTask> activeTasks,
-                                      final Map<TaskId, StandbyTask> standbyTasks) {
+    // visible for testing
+    void updateThreadMetadata(final Map<TaskId, StreamTask> activeTasks,
+                              final Map<TaskId, StandbyTask> standbyTasks) {
         final Set<String> producerClientIds = new HashSet<>();
         final Set<TaskMetadata> activeTasksMetadata = new HashSet<>();
         for (final Map.Entry<TaskId, StreamTask> task : activeTasks.entrySet()) {
