@@ -176,7 +176,7 @@ public class ProcessorStateManager implements StateManager {
         log.debug("Created state store manager for task {}", taskId);
     }
 
-    public void initStoresFromCheckpointedOffsets() {
+    public void initializeStoreOffsetsFromCheckpoint() {
         try {
             final Map<TopicPartition, Long> loadedCheckpoints = checkpointFile.read();
 

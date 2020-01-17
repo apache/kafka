@@ -36,6 +36,7 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
+import org.apache.kafka.test.MockKeyValueStore;
 import org.apache.kafka.test.MockKeyValueStoreBuilder;
 import org.apache.kafka.test.MockRestoreConsumer;
 import org.apache.kafka.test.MockTimestampExtractor;
@@ -55,11 +56,11 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import static java.util.Arrays.asList;
 import static java.util.Collections.singletonList;
+import static java.util.Collections.singletonMap;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkProperties;
@@ -73,39 +74,38 @@ import static org.junit.Assert.fail;
 @RunWith(EasyMockRunner.class)
 public class StandbyTaskTest {
 
+    private final String threadName = "threadName";
     private final String threadId = Thread.currentThread().getName();
-    private final TaskId taskId = new TaskId(0, 1);
-    private StandbyTask task;
+    private final TaskId taskId = new TaskId(0, 0);
 
-    private final String applicationId = "test-application";
     private final String storeName1 = "store1";
     private final String storeName2 = "store2";
+    private final String globalStoreName = "globalStore";
+    private final String applicationId = "test-application";
     private final String storeChangelogTopicName1 = ProcessorStateManager.storeChangelogTopic(applicationId, storeName1);
     private final String storeChangelogTopicName2 = ProcessorStateManager.storeChangelogTopic(applicationId, storeName2);
-    private final String globalStoreName = "ktable1";
 
-    private final TopicPartition partition = new TopicPartition(storeChangelogTopicName1, 1);
-    private final Set<TopicPartition> topicPartitions = Collections.emptySet();
+    private final TopicPartition partition = new TopicPartition(storeChangelogTopicName1, 0);
+    private final MockKeyValueStore store1 = (MockKeyValueStore) new MockKeyValueStoreBuilder(storeName1, false).build();
+    private final MockKeyValueStore store2 = (MockKeyValueStore) new MockKeyValueStoreBuilder(storeName2, true).build();
     private final ProcessorTopology topology = ProcessorTopologyFactories.withLocalStores(
-        asList(new MockKeyValueStoreBuilder(storeName1, false).build(),
-               new MockKeyValueStoreBuilder(storeName2, true).build()),
-        mkMap(
-            mkEntry(storeName1, storeChangelogTopicName1),
-            mkEntry(storeName2, storeChangelogTopicName2)
-        )
+        asList(store1, store2),
+        mkMap(mkEntry(storeName1, storeChangelogTopicName1), mkEntry(storeName2, storeChangelogTopicName2))
     );
     private final TopicPartition globalTopicPartition = new TopicPartition(globalStoreName, 0);
-    private final Set<TopicPartition> ktablePartitions = Utils.mkSet(globalTopicPartition);
-    private final ProcessorTopology ktableTopology = ProcessorTopologyFactories.withLocalStores(
-        singletonList(new MockKeyValueStoreBuilder(globalTopicPartition.topic(), true)
-                          .withLoggingDisabled().build()),
-        mkMap(
-            mkEntry(globalStoreName, globalTopicPartition.topic())
-        )
+    private final MockKeyValueStore globalStore =
+        (MockKeyValueStore) new MockKeyValueStoreBuilder(globalTopicPartition.topic(), true).withLoggingDisabled().build();
+    private final ProcessorTopology globalTopology = ProcessorTopologyFactories.withLocalStores(
+        singletonList(globalStore),
+        singletonMap(globalStoreName, globalStoreName)
     );
+    private final StreamsMetricsImpl streamsMetrics =
+        new StreamsMetricsImpl(new Metrics(), threadName, StreamsConfig.METRICS_LATEST);
 
     private File baseDir;
+    private StreamsConfig config;
     private StateDirectory stateDirectory;
+    private StandbyTask task;
 
     private StreamsConfig createConfig(final File baseDir) throws IOException {
         return new StreamsConfig(mkProperties(mkMap(
@@ -123,9 +123,8 @@ public class StandbyTaskTest {
         new IntegerSerializer()
     );
 
-    private final String threadName = "threadName";
-    private final StreamsMetricsImpl streamsMetrics =
-        new StreamsMetricsImpl(new Metrics(), threadName, StreamsConfig.METRICS_LATEST);
+    @Mock(type = MockType.NICE)
+    private ChangelogReader changelogReader;
 
     @Mock(type = MockType.NICE)
     private ProcessorStateManager stateManager;
@@ -148,7 +147,8 @@ public class StandbyTaskTest {
             new PartitionInfo(storeChangelogTopicName2, 2, Node.noNode(), new Node[0], new Node[0])
         ));
         baseDir = TestUtils.tempDirectory();
-        stateDirectory = new StateDirectory(createConfig(baseDir), new MockTime(), true);
+        config = createConfig(baseDir);
+        stateDirectory = new StateDirectory(config, new MockTime(), true);
     }
 
     @After
@@ -161,22 +161,30 @@ public class StandbyTaskTest {
     }
 
     @Test
-    public void testStorePartitions() throws IOException {
+    public void shouldReturnChangelogOffsets() {
         EasyMock.expect(stateManager.changelogOffsets()).andReturn(Collections.singletonMap(partition, 50L));
+        stateManager.registerStore(store1, store1.stateRestoreCallback);
+        EasyMock.expectLastCall();
+        stateManager.registerStore(store2, store2.stateRestoreCallback);
+        EasyMock.expectLastCall();
+
         EasyMock.replay(stateManager);
 
-        final StreamsConfig config = createConfig(baseDir);
         task = new StandbyTask(taskId,
-            topicPartitions,
+            Collections.singleton(partition),
             topology,
             consumer,
             config,
             streamsMetrics,
             stateManager,
-            stateDirectory);
+            stateDirectory,
+            changelogReader);
+
         task.initializeStateStores();
 
-        assertEquals(Utils.mkSet(partition), new HashSet<>(task.restoredOffsets().keySet()));
+        assertEquals(Collections.singletonMap(partition, 50L), task.restoredOffsets());
+
+        EasyMock.verify(stateManager);
     }
 
     // TODO K9113: fix this
@@ -188,8 +196,8 @@ public class StandbyTaskTest {
 
         task = new StandbyTask(
             taskId,
-            ktablePartitions,
-            ktableTopology,
+            globalTopicPartitions,
+            globalTopology,
             consumer,
             createConfig(baseDir),
             streamsMetrics,
@@ -285,8 +293,8 @@ public class StandbyTaskTest {
 
         task = new StandbyTask(
             taskId,
-            ktablePartitions,
-            ktableTopology,
+            globalTopicPartitions,
+            globalTopology,
             consumer,
             createConfig(baseDir),
             streamsMetrics,
@@ -321,8 +329,8 @@ public class StandbyTaskTest {
 
         task = new StandbyTask(
             taskId,
-            ktablePartitions,
-            ktableTopology,
+            globalTopicPartitions,
+            globalTopology,
             consumer,
             createConfig(baseDir),
             streamsMetrics,
@@ -366,16 +374,16 @@ public class StandbyTaskTest {
         EasyMock.replay(stateManager);
 
         final TaskId taskId = new TaskId(0, 0);
-        final StreamsConfig config = createConfig(baseDir);
         task = new StandbyTask(
             taskId,
-            ktablePartitions,
-            ktableTopology,
+            Utils.mkSet(globalTopicPartition),
+            globalTopology,
             consumer,
             config,
             streamsMetrics,
             stateManager,
-            stateDirectory
+            stateDirectory,
+            changelogReader
         );
         task.initializeStateStores();
 
@@ -397,17 +405,17 @@ public class StandbyTaskTest {
             Collections.singletonList(new PartitionInfo(globalStoreName, 0, Node.noNode(), new Node[0], new Node[0]))
         );
 
-        final StreamsConfig config = createConfig(baseDir);
         final AtomicBoolean closedStateManager = new AtomicBoolean(false);
         task = new StandbyTask(
             taskId,
-            ktablePartitions,
-            ktableTopology,
+            Utils.mkSet(globalTopicPartition),
+            globalTopology,
             consumer,
             config,
             streamsMetrics,
             stateManager,
-            stateDirectory
+            stateDirectory,
+            changelogReader
         ) {
             @Override
             public void commit() {
@@ -446,17 +454,18 @@ public class StandbyTaskTest {
     }
 
     @Test
-    public void shouldRecordTaskClosedMetricOnClose() throws IOException {
+    public void shouldRecordTaskClosedMetricOnClose() {
         final MetricName metricName = setupCloseTaskMetric();
         final StandbyTask task = new StandbyTask(
             taskId,
-            ktablePartitions,
-            ktableTopology,
+            Utils.mkSet(globalTopicPartition),
+            globalTopology,
             consumer,
-            createConfig(baseDir),
+            config,
             streamsMetrics,
             stateManager,
-            stateDirectory
+            stateDirectory,
+            changelogReader
         );
 
         task.close(true);

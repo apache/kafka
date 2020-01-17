@@ -951,7 +951,7 @@ public class StreamTaskTest {
 
         EasyMock.expect(stateManager.changelogPartitions()).andReturn(Collections.emptySet());
         EasyMock.expectLastCall();
-        stateManager.close(EasyMock.eq(false));
+        stateManager.close();
         EasyMock.expectLastCall();
         EasyMock.replay(stateManager);
 

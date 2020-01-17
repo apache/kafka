@@ -211,7 +211,7 @@ public class ProcessorStateManagerTest {
             assertThat(batchingRestoreCallback.getRestoredRecords().size(), is(1));
             assertTrue(batchingRestoreCallback.getRestoredRecords().contains(expectedKeyValue));
         } finally {
-            stateMgr.close(true);
+            stateMgr.close();
         }
     }
 
@@ -231,7 +231,7 @@ public class ProcessorStateManagerTest {
             // we just check non timestamped value length
             assertEquals(9, persistentStore.values.get(0).length);
         } finally {
-            stateMgr.close(true);
+            stateMgr.close();
         }
     }
 
@@ -252,7 +252,7 @@ public class ProcessorStateManagerTest {
             // we just check timestamped value length
             assertEquals(17, store.values.get(0).length);
         } finally {
-            stateMgr.close(true);
+            stateMgr.close();
         }
     }
 
@@ -264,7 +264,7 @@ public class ProcessorStateManagerTest {
             stateMgr.registerStore(persistentStore, persistentStore.stateRestoreCallback);
             assertTrue(changelogReader.isPartitionRegistered(persistentStorePartition));
         } finally {
-            stateMgr.close(true);
+            stateMgr.close();
         }
     }
 
@@ -276,7 +276,7 @@ public class ProcessorStateManagerTest {
             stateMgr.registerStore(nonPersistentStore, nonPersistentStore.stateRestoreCallback);
             assertTrue(changelogReader.isPartitionRegistered(nonPersistentStorePartition));
         } finally {
-            stateMgr.close(true);
+            stateMgr.close();
         }
     }
 
@@ -295,7 +295,7 @@ public class ProcessorStateManagerTest {
             stateMgr.registerStore(persistentStore, persistentStore.stateRestoreCallback);
             assertFalse(changelogReader.isPartitionRegistered(persistentStorePartition));
         } finally {
-            stateMgr.close(true);
+            stateMgr.close();
         }
     }
 
@@ -316,7 +316,7 @@ public class ProcessorStateManagerTest {
             stateMgr.registerStore(persistentStore, persistentStore.stateRestoreCallback);
             stateMgr.registerStore(persistentStoreTwo, persistentStoreTwo.stateRestoreCallback);
             stateMgr.registerStore(nonPersistentStore, nonPersistentStore.stateRestoreCallback);
-            stateMgr.initStoresFromCheckpointedOffsets();
+            stateMgr.initializeStoreOffsetsFromCheckpoint();
 
             assertFalse(checkpointFile.exists());
             assertEquals(mkSet(
@@ -336,7 +336,7 @@ public class ProcessorStateManagerTest {
             assertThat(stateMgr.storeMetadata(persistentStorePartition).offset(), equalTo(checkpointOffset));
             assertThat(stateMgr.storeMetadata(nonPersistentStorePartition).offset(), equalTo(checkpointOffset));
         } finally {
-            stateMgr.close(true);
+            stateMgr.close();
         }
     }
 
@@ -351,7 +351,7 @@ public class ProcessorStateManagerTest {
             assertEquals(persistentStore, stateMgr.getStore(persistentStoreName));
             assertEquals(nonPersistentStore, stateMgr.getStore(nonPersistentStoreName));
         } finally {
-            stateMgr.close(true);
+            stateMgr.close();
         }
     }
 
@@ -389,7 +389,7 @@ public class ProcessorStateManagerTest {
             final Map<TopicPartition, Long> checkpointedOffsets = checkpoint.read();
             assertThat(checkpointedOffsets, is(singletonMap(new TopicPartition(persistentStoreTopicName, 1), 123L)));
 
-            stateMgr.close(true);
+            stateMgr.close();
 
             assertTrue(persistentStore.closed);
             assertTrue(nonPersistentStore.closed);
@@ -404,7 +404,7 @@ public class ProcessorStateManagerTest {
         final ProcessorStateManager stateMgr = getStateManager(AbstractTask.TaskType.ACTIVE);
         try {
             stateMgr.registerStore(persistentStore, persistentStore.stateRestoreCallback);
-            stateMgr.initStoresFromCheckpointedOffsets();
+            stateMgr.initializeStoreOffsetsFromCheckpoint();
 
             final StateStoreMetadata storeMetadata = stateMgr.storeMetadata(persistentStorePartition);
             assertThat(storeMetadata, notNullValue());
@@ -423,7 +423,7 @@ public class ProcessorStateManagerTest {
             assertThat(stateMgr.storeMetadata(irrelevantPartition), equalTo(null));
             assertThat(storeMetadata.offset(), equalTo(220L));
         } finally {
-            stateMgr.close(true);
+            stateMgr.close();
         }
     }
 
@@ -433,7 +433,7 @@ public class ProcessorStateManagerTest {
 
         try {
             stateMgr.registerStore(persistentStore, persistentStore.stateRestoreCallback);
-            stateMgr.initStoresFromCheckpointedOffsets();
+            stateMgr.initializeStoreOffsetsFromCheckpoint();
 
             final StateStoreMetadata storeMetadata = stateMgr.storeMetadata(persistentStorePartition);
             assertThat(storeMetadata, notNullValue());
@@ -445,7 +445,7 @@ public class ProcessorStateManagerTest {
             final Map<TopicPartition, Long> read = checkpoint.read();
             assertThat(read, equalTo(singletonMap(persistentStorePartition, 100L)));
         } finally {
-            stateMgr.close(true);
+            stateMgr.close();
         }
     }
 
@@ -455,7 +455,7 @@ public class ProcessorStateManagerTest {
 
         try {
             stateMgr.registerStore(nonPersistentStore, nonPersistentStore.stateRestoreCallback);
-            stateMgr.initStoresFromCheckpointedOffsets();
+            stateMgr.initializeStoreOffsetsFromCheckpoint();
 
             final StateStoreMetadata storeMetadata = stateMgr.storeMetadata(nonPersistentStorePartition);
             assertThat(storeMetadata, notNullValue());
@@ -465,7 +465,7 @@ public class ProcessorStateManagerTest {
             final Map<TopicPartition, Long> read = checkpoint.read();
             assertThat(read, equalTo(emptyMap()));
         } finally {
-            stateMgr.close(true);
+            stateMgr.close();
         }
     }
 
@@ -488,7 +488,7 @@ public class ProcessorStateManagerTest {
             final Map<TopicPartition, Long> read = checkpoint.read();
             assertThat(read, equalTo(emptyMap()));
         } finally {
-            stateMgr.close(true);
+            stateMgr.close();
         }
     }
 
@@ -554,7 +554,7 @@ public class ProcessorStateManagerTest {
         };
         stateManager.registerStore(stateStore, stateStore.stateRestoreCallback);
 
-        final ProcessorStateException thrown = assertThrows(ProcessorStateException.class, () -> stateManager.close(true));
+        final ProcessorStateException thrown = assertThrows(ProcessorStateException.class, () -> stateManager.close());
         assertEquals(exception, thrown.getCause());
     }
 
@@ -570,7 +570,7 @@ public class ProcessorStateManagerTest {
         };
         stateManager.registerStore(stateStore, stateStore.stateRestoreCallback);
 
-        final StreamsException thrown = assertThrows(StreamsException.class, () -> stateManager.close(true));
+        final StreamsException thrown = assertThrows(StreamsException.class, () -> stateManager.close());
         assertEquals(exception, thrown);
     }
 
@@ -619,7 +619,7 @@ public class ProcessorStateManagerTest {
         writer.close();
 
         try {
-            stateMgr.initStoresFromCheckpointedOffsets();
+            stateMgr.initializeStoreOffsetsFromCheckpoint();
             fail("should have thrown processor state exception when IO exception happens");
         } catch (ProcessorStateException e) {
             // pass
@@ -697,7 +697,7 @@ public class ProcessorStateManagerTest {
         stateManager.registerStore(stateStore2, stateStore2.stateRestoreCallback);
 
         try {
-            stateManager.close(true);
+            stateManager.close();
         } catch (final ProcessorStateException expected) { /* ignode */ }
 
         Assert.assertTrue(closedStore.get());

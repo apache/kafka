@@ -39,7 +39,7 @@ public class StateManagerStub implements StateManager {
     public void flush() {}
 
     @Override
-    public void close(final boolean clean) {}
+    public void close() {}
 
     @Override
     public StateStore getStore(final String name) {

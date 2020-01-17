@@ -479,7 +479,8 @@ public class StreamThread extends Thread {
                     config,
                     streamsMetrics,
                     stateManager,
-                    stateDirectory);
+                    stateDirectory,
+                    storeChangelogReader);
             } else {
                 log.trace(
                     "Skipped standby task {} with assigned partitions {} " +

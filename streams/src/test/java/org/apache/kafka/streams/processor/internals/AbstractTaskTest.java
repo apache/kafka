@@ -149,9 +149,6 @@ public class AbstractTaskTest {
             public void initializeMetadata() {}
 
             @Override
-            public void resume() {}
-
-            @Override
             public void commit() {}
 
             @Override
