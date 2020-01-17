@@ -2804,7 +2804,7 @@ class KafkaApis(val requestChannel: RequestChannel,
                                logIfDenied: Boolean = true): Set[String] = {
     authorizer match {
       case Some(authZ) =>
-        val resources = resourceNames.groupBy(identity).mapValues(_.size).toList
+        val resources = resourceNames.groupBy(identity).transform((_, resourceNameList) => resourceNameList.size).toList
         val actions = resources.map { case (resourceName, count) =>
           val resource = new ResourcePattern(resourceType, resourceName, PatternType.LITERAL)
           new Action(operation, resource, count, logIfAllowed, logIfDenied)
