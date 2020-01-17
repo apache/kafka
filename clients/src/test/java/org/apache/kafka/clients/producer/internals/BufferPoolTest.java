@@ -407,7 +407,7 @@ public class BufferPoolTest {
         ExecutorService executor = Executors.newFixedThreadPool(numWorkers);
         Callable<Void> work = new Callable<Void>() {
                 public Void call() throws Exception {
-                    assertThrows(KafkaException.class, () -> pool.allocate(1, maxBlockTimeMs));
+                    assertThrows(KafkaException.class, () -> pool.allocate(1, Long.MAX_VALUE));
                     completed.countDown();
                     return null;
                 }
@@ -421,7 +421,7 @@ public class BufferPoolTest {
         // Close the buffer pool. This should notify all waiters.
         pool.close();
 
-        completed.await(200, TimeUnit.MILLISECONDS);
+        completed.await(15, TimeUnit.SECONDS);
 
         pool.deallocate(buffer);
     }
