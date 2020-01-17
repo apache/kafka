@@ -36,7 +36,7 @@ import kafka.coordinator.transaction.{InitProducerIdResult, TransactionCoordinat
 import kafka.log.AppendOrigin
 import kafka.message.ZStdCompressionCodec
 import kafka.network.RequestChannel
-import kafka.security.authorizer.AuthorizerUtils
+import kafka.security.authorizer.{AclEntry, AuthorizerUtils}
 import kafka.server.QuotaFactory.{QuotaManagers, UnboundedQuota}
 import kafka.utils.{CoreUtils, Logging}
 import kafka.zk.{AdminZkClient, KafkaZkClient}
@@ -2824,7 +2824,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   private def authorizedOperations(request: RequestChannel.Request, resource: Resource): Int = {
-    val supportedOps = AuthorizerUtils.supportedOperations(resource.resourceType).toList
+    val supportedOps = AclEntry.supportedOperations(resource.resourceType).toList
     val authorizedOps = authorizer match {
       case Some(authZ) =>
         val resourcePattern = new ResourcePattern(resource.resourceType, resource.name, PatternType.LITERAL)

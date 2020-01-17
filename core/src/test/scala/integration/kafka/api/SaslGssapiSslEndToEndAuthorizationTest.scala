@@ -22,6 +22,8 @@ import kafka.utils.JaasTestUtils
 
 import scala.collection.immutable.List
 
+// Note: this test currently uses the deprecated SimpleAclAuthorizer to ensure we have test coverage
+// It must be replaced with the new AclAuthorizer when SimpleAclAuthorizer is removed
 class SaslGssapiSslEndToEndAuthorizationTest extends SaslEndToEndAuthorizationTest {
   override val clientPrincipal = JaasTestUtils.KafkaClientPrincipalUnqualifiedName
   override val kafkaPrincipal = JaasTestUtils.KafkaServerPrincipalUnqualifiedName

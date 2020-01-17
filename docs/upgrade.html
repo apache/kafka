@@ -33,6 +33,11 @@
     <li>Scala 2.11 is no longer supported. See
         <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-531%3A+Drop+support+for+Scala+2.11+in+Kafka+2.5">KIP-531</a>
         for details.</li>
+    <li>All Scala classes from the package <code>kafka.security.auth</code> have been deprecated. See
+        <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-504+-+Add+new+Java+Authorizer+Interface">KIP-504</a>
+        for details of the new Java authorizer API added in 2.4.0.  Note that <code>kafka.security.auth.Authorizer</code>
+        and <code>kafka.security.auth.SimpleAclAuthorizer</code> were deprecated in 2.4.0.
+    </li>
 </ul>
 
 <h4><a id="upgrade_2_4_0" href="#upgrade_2_4_0">Upgrading from 0.8.x, 0.9.x, 0.10.0.x, 0.10.1.x, 0.10.2.x, 0.11.0.x, 1.0.x, 1.1.x, 2.0.x or 2.1.x or 2.2.x or 2.3.x to 2.4.0</a></h4>
@@ -155,6 +160,13 @@
         will also never be called when the set of revoked partitions is empty. The callback will generally be invoked only at the end of a rebalance, and only on the set of partitions that are being moved to another consumer. The
         <code>onPartitionsAssigned</code> callback will however always be called, even with an empty set of partitions, as a way to notify users of a rebalance event (this is true for both cooperative and eager). For details on
         the new callback semantics, see the <a href="https://kafka.apache.org/24/javadoc/index.html?org/apache/kafka/clients/consumer/ConsumerRebalanceListener.html">ConsumerRebalanceListener javadocs</a>.
+    </li>
+    <li>The Scala trait <code>kafka.security.auth.Authorizer</code> has been deprecated and replaced with a new Java API
+        <code>org.apache.kafka.server.authorizer.Authorizer</code>. The authorizer implementation class
+        <code>kafka.security.auth.SimpleAclAuthorizer</code> has also been deprecated and replaced with a new
+        implementation <code>kafka.security.authorizer.AclAuthorizer</code>. <code>AclAuthorizer</code> uses features
+        supported by the new API to improve authorization logging and is compatible with <code>SimpleAclAuthorizer</code>.
+        For more details, see <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-504+-+Add+new+Java+Authorizer+Interface">KIP-504</a>.
     </li>
 </ul>
 

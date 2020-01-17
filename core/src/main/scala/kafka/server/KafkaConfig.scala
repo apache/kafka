@@ -25,7 +25,7 @@ import kafka.cluster.EndPoint
 import kafka.coordinator.group.OffsetConfig
 import kafka.coordinator.transaction.{TransactionLog, TransactionStateManager}
 import kafka.message.{BrokerCompressionCodec, CompressionCodec, ZStdCompressionCodec}
-import kafka.security.authorizer.AuthorizerWrapper
+import kafka.security.authorizer.AuthorizerUtils
 import kafka.utils.CoreUtils
 import kafka.utils.Implicits._
 import org.apache.kafka.clients.CommonClientConfigs
@@ -1183,12 +1183,7 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
     if (className == null || className.isEmpty)
       None
     else {
-      val authZ = Utils.newInstance(className, classOf[Object]) match {
-        case auth: Authorizer => auth
-        case auth: kafka.security.auth.Authorizer => new AuthorizerWrapper(auth)
-        case auth => throw new ConfigException(s"Authorizer does not implement ${classOf[Authorizer].getName} or kafka.security.auth.Authorizer .")
-      }
-      Some(authZ)
+      Some(AuthorizerUtils.createAuthorizer(className))
     }
   }
 
