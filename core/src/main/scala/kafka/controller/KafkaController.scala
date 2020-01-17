@@ -1596,11 +1596,8 @@ class KafkaController(val config: KafkaConfig,
       Some(new ApiError(Errors.INVALID_REPLICA_ASSIGNMENT,
           s"Empty replica list specified in partition reassignment."))
     else if (replicas.size != replicaSet.size) {
-      val duplicateIds = replicas.groupBy(identity).collect {
-        case (replicaId, groupedReplicaIds) if groupedReplicaIds.size > 1 => replicaId
-      }
       Some(new ApiError(Errors.INVALID_REPLICA_ASSIGNMENT,
-          s"Duplicate replica ids ($duplicateIds) in partition reassignment replica list: $replicas"))
+          s"Duplicate replica ids in partition reassignment replica list: $replicas"))
     } else if (replicas.exists(_ < 0))
       Some(new ApiError(Errors.INVALID_REPLICA_ASSIGNMENT,
           s"Invalid broker id in replica list: $replicas"))
