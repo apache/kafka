@@ -314,10 +314,7 @@ object LeaderElectionCommandTest {
   }
 
   def bootstrapServers(servers: Seq[KafkaServer]): String = {
-    servers.map { server =>
-      val port = server.socketServer.boundPort(ListenerName.normalised("PLAINTEXT"))
-      s"localhost:$port"
-    }.headOption.mkString(",")
+    TestUtils.bootstrapServers(servers, new ListenerName("PLAINTEXT"))
   }
 
   def tempTopicPartitionFile(partitions: Set[TopicPartition]): Path = {
