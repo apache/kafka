@@ -27,8 +27,6 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.message.JoinGroupResponseData.JoinGroupResponseMember
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.protocol.types.SchemaException
-import org.apache.kafka.common.record.RecordBatch.NO_PRODUCER_ID
-import org.apache.kafka.common.requests.JoinGroupRequest
 import org.apache.kafka.common.utils.Time
 
 import scala.collection.{Seq, immutable, mutable}
