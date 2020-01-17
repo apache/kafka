@@ -236,7 +236,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
      * - resume the task
      * </pre>
      */
-    @Override
     public void resume() {
         log.debug("Resuming");
         initializeMetadata();

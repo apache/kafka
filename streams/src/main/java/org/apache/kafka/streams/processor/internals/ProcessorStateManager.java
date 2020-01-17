@@ -368,7 +368,7 @@ public class ProcessorStateManager implements StateManager {
      * @throws ProcessorStateException if any error happens when closing the state stores
      */
     @Override
-    public void close(final boolean clean) throws ProcessorStateException {
+    public void close() throws ProcessorStateException {
         RuntimeException firstException = null;
         // attempting to close the stores, just in case they
         // are not closed by a ProcessorNode yet

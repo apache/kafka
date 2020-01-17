@@ -176,7 +176,7 @@ public class StandbyTaskTest {
             stateDirectory);
         task.initializeStateStores();
 
-        assertEquals(Utils.mkSet(partition), new HashSet<>(task.checkpointedOffsets().keySet()));
+        assertEquals(Utils.mkSet(partition), new HashSet<>(task.restoredOffsets().keySet()));
     }
 
     // TODO K9113: fix this

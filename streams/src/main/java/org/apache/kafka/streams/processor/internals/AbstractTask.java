@@ -204,7 +204,7 @@ public abstract class AbstractTask implements Task {
         ProcessorStateException exception = null;
         log.trace("Closing state manager");
         try {
-            stateMgr.close(clean);
+            stateMgr.close();
         } catch (final ProcessorStateException e) {
             exception = e;
         } finally {

@@ -348,7 +348,7 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
 
 
     @Override
-    public void close(final boolean clean) throws IOException {
+    public void close() throws IOException {
         try {
             if (globalStores.isEmpty()) {
                 return;

@@ -414,7 +414,7 @@ public class TaskManager {
         final Collection<StandbyTask> running = standby.running();
         final Map<TopicPartition, Long> checkpointedOffsets = new HashMap<>();
         for (final StandbyTask standbyTask : running) {
-            checkpointedOffsets.putAll(standbyTask.checkpointedOffsets());
+            checkpointedOffsets.putAll(standbyTask.restoredOffsets());
         }
 
         log.debug("Assigning and seeking restoreConsumer to {}", checkpointedOffsets);
