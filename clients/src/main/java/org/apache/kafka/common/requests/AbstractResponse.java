@@ -151,7 +151,7 @@ public abstract class AbstractResponse implements AbstractRequestResponse {
             case DELETE_ACLS:
                 return new DeleteAclsResponse(struct, version);
             case DESCRIBE_CONFIGS:
-                return new DescribeConfigsResponse(struct);
+                return new DescribeConfigsResponse(struct, version);
             case ALTER_CONFIGS:
                 return new AlterConfigsResponse(struct, version);
             case ALTER_REPLICA_LOG_DIRS:

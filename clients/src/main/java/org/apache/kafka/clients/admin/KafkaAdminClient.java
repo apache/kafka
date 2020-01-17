@@ -102,6 +102,9 @@ import org.apache.kafka.common.message.DeleteRecordsResponseData;
 import org.apache.kafka.common.message.DeleteRecordsResponseData.DeleteRecordsTopicResult;
 import org.apache.kafka.common.message.DeleteTopicsRequestData;
 import org.apache.kafka.common.message.DeleteTopicsResponseData.DeletableTopicResult;
+import org.apache.kafka.common.message.DescribeConfigsRequestData;
+import org.apache.kafka.common.message.DescribeConfigsRequestData.DescribeConfigsResource;
+import org.apache.kafka.common.message.DescribeConfigsResponseData;
 import org.apache.kafka.common.message.DescribeGroupsRequestData;
 import org.apache.kafka.common.message.DescribeGroupsResponseData.DescribedGroup;
 import org.apache.kafka.common.message.DescribeGroupsResponseData.DescribedGroupMember;
@@ -1925,7 +1928,7 @@ public class KafkaAdminClient extends AdminClient {
 
         // The non-BROKER resources which we want to describe.  These resources can be described by a
         // single, unified DescribeConfigs request.
-        final Collection<ConfigResource> unifiedRequestResources = new ArrayList<>(configResources.size());
+        final DescribeConfigsRequestData unifiedRequestResources = new DescribeConfigsRequestData();
 
         for (ConfigResource resource : configResources) {
             if (dependsOnSpecificNode(resource)) {
@@ -1933,47 +1936,44 @@ public class KafkaAdminClient extends AdminClient {
                 brokerResources.add(resource);
             } else {
                 unifiedRequestFutures.put(resource, new KafkaFutureImpl<>());
-                unifiedRequestResources.add(resource);
+                unifiedRequestResources.resources().add(new DescribeConfigsResource()
+                        .setResourceName(resource.name())
+                        .setResourceType(resource.type().id()));
             }
         }
 
         final long now = time.milliseconds();
-        if (!unifiedRequestResources.isEmpty()) {
+        if (!unifiedRequestResources.resources().isEmpty()) {
             runnable.call(new Call("describeConfigs", calcDeadlineMs(now, options.timeoutMs()),
                 new LeastLoadedNodeProvider()) {
 
                 @Override
                 DescribeConfigsRequest.Builder createRequest(int timeoutMs) {
-                    return new DescribeConfigsRequest.Builder(unifiedRequestResources)
-                            .includeSynonyms(options.includeSynonyms())
-                            .includeDocumentation(options.includeDocumentation());
+                    return new DescribeConfigsRequest.Builder(unifiedRequestResources
+                            .setIncludeSynonyms(options.includeSynonyms())
+                            .setIncludeDocumentation(options.includeDocumentation()));
                 }
 
                 @Override
                 void handleResponse(AbstractResponse abstractResponse) {
                     DescribeConfigsResponse response = (DescribeConfigsResponse) abstractResponse;
+                    Map<ConfigResource, DescribeConfigsResponseData.DescribeConfigsResult> configResponseMap = response.resultMap();
                     for (Map.Entry<ConfigResource, KafkaFutureImpl<Config>> entry : unifiedRequestFutures.entrySet()) {
                         ConfigResource configResource = entry.getKey();
                         KafkaFutureImpl<Config> future = entry.getValue();
-                        DescribeConfigsResponse.Config config = response.config(configResource);
-                        if (config == null) {
-                            future.completeExceptionally(new UnknownServerException(
-                                "Malformed broker response: missing config for " + configResource));
-                            continue;
+                        for (DescribeConfigsResponseData.DescribeConfigsResult resultData : response.data().results()) {
+                            DescribeConfigsResponseData.DescribeConfigsResult describeConfigsResult = configResponseMap.get(configResource);
+                            if (describeConfigsResult == null) {
+                                future.completeExceptionally(new UnknownServerException(
+                                        "Malformed broker response: missing config for " + configResource));
+                                continue;
+                            } else if (describeConfigsResult.errorCode() != Errors.NONE.code()) {
+                                future.completeExceptionally(Errors.forCode(describeConfigsResult.errorCode())
+                                        .exception(describeConfigsResult.errorMessage()));
+                            } else {
+                                future.complete(describeConfigResult(describeConfigsResult));
+                            }
                         }
-                        if (config.error().isFailure()) {
-                            future.completeExceptionally(config.error().exception());
-                            continue;
-                        }
-                        List<ConfigEntry> configEntries = new ArrayList<>();
-                        for (DescribeConfigsResponse.ConfigEntry configEntry : config.entries()) {
-                            configEntries.add(new ConfigEntry(configEntry.name(),
-                                    configEntry.value(), configSource(configEntry.source()),
-                                    configEntry.isSensitive(), configEntry.isReadOnly(),
-                                    configSynonyms(configEntry), configType(configEntry.type()),
-                                    configEntry.documentation()));
-                        }
-                        future.complete(new Config(configEntries));
                     }
                 }
 
@@ -1993,31 +1993,29 @@ public class KafkaAdminClient extends AdminClient {
 
                 @Override
                 DescribeConfigsRequest.Builder createRequest(int timeoutMs) {
-                    return new DescribeConfigsRequest.Builder(Collections.singleton(resource))
-                            .includeSynonyms(options.includeSynonyms())
-                            .includeDocumentation(options.includeDocumentation());
+                    return new DescribeConfigsRequest.Builder(new DescribeConfigsRequestData()
+                            .setIncludeSynonyms(options.includeSynonyms())
+                            .setIncludeDocumentation(options.includeDocumentation())
+                            .setResources(Collections.singletonList(
+                                new DescribeConfigsRequestData.DescribeConfigsResource()
+                                        .setResourceName(resource.name())
+                                        .setResourceType(resource.type().id()))));
                 }
 
                 @Override
                 void handleResponse(AbstractResponse abstractResponse) {
                     DescribeConfigsResponse response = (DescribeConfigsResponse) abstractResponse;
-                    DescribeConfigsResponse.Config config = response.configs().get(resource);
-
-                    if (config == null) {
+                    if (response.data().results().isEmpty()) {
                         brokerFuture.completeExceptionally(new UnknownServerException(
                             "Malformed broker response: missing config for " + resource));
                         return;
                     }
-                    if (config.error().isFailure())
-                        brokerFuture.completeExceptionally(config.error().exception());
+                    DescribeConfigsResponseData.DescribeConfigsResult describeConfigsResult = response.data().results().get(0);
+                    if (describeConfigsResult.errorCode() != Errors.NONE.code())
+                        brokerFuture.completeExceptionally(Errors.forCode(describeConfigsResult.errorCode())
+                                        .exception(describeConfigsResult.errorMessage()));
                     else {
-                        List<ConfigEntry> configEntries = new ArrayList<>();
-                        for (DescribeConfigsResponse.ConfigEntry configEntry : config.entries()) {
-                            configEntries.add(new ConfigEntry(configEntry.name(), configEntry.value(),
-                                configSource(configEntry.source()), configEntry.isSensitive(), configEntry.isReadOnly(),
-                                configSynonyms(configEntry), configType(configEntry.type()), configEntry.documentation()));
-                        }
-                        brokerFuture.complete(new Config(configEntries));
+                        brokerFuture.complete(describeConfigResult(describeConfigsResult));
                     }
                 }
 
@@ -2033,12 +2031,18 @@ public class KafkaAdminClient extends AdminClient {
         return new DescribeConfigsResult(allFutures);
     }
 
-    private List<ConfigEntry.ConfigSynonym> configSynonyms(DescribeConfigsResponse.ConfigEntry configEntry) {
-        List<ConfigEntry.ConfigSynonym> synonyms = new ArrayList<>(configEntry.synonyms().size());
-        for (DescribeConfigsResponse.ConfigSynonym synonym : configEntry.synonyms()) {
-            synonyms.add(new ConfigEntry.ConfigSynonym(synonym.name(), synonym.value(), configSource(synonym.source())));
-        }
-        return synonyms;
+    private Config describeConfigResult(DescribeConfigsResponseData.DescribeConfigsResult describeConfigsResult) {
+        return new Config(describeConfigsResult.configs().stream().map(config -> new ConfigEntry(
+                config.name(),
+                config.value(),
+                DescribeConfigsResponse.ConfigSource.forId(config.configSource()).source(),
+                config.isSensitive(),
+                config.readOnly(),
+                (config.synonyms().stream().map(synonym -> new ConfigEntry.ConfigSynonym(synonym.name(), synonym.value(),
+                        DescribeConfigsResponse.ConfigSource.forId(synonym.source()).source()))).collect(Collectors.toList()),
+                DescribeConfigsResponse.ConfigType.forId(config.configType()).type(),
+                config.documentation()
+        )).collect(Collectors.toList()));
     }
 
     private ConfigEntry.ConfigSource configSource(DescribeConfigsResponse.ConfigSource source) {
