@@ -47,8 +47,8 @@ import static org.junit.Assert.fail;
 
 public class AssignedStreamsTasksTest {
 
-    private final StreamTask t1 = EasyMock.createMock(StreamTask.class);
-    private final StreamTask t2 = EasyMock.createMock(StreamTask.class);
+    private final StreamTask t1 = EasyMock.createNiceMock(StreamTask.class);
+    private final StreamTask t2 = EasyMock.createNiceMock(StreamTask.class);
     private final TopicPartition tp1 = new TopicPartition("t1", 0);
     private final TopicPartition tp2 = new TopicPartition("t2", 0);
     private final TopicPartition changeLog1 = new TopicPartition("cl1", 0);

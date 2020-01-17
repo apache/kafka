@@ -23,6 +23,7 @@ import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 
 import java.util.Collection;
+import java.util.HashSet;
 import java.util.Set;
 
 public interface Task {
@@ -43,6 +44,10 @@ public interface Task {
             }
         }
     }
+
+    State state();
+
+    void transitionTo(State newState);
 
     void initializeMetadata();
 

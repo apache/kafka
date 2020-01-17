@@ -65,19 +65,21 @@ public class StandbyTask extends AbstractTask {
         closeTaskSensor = ThreadMetrics.closeTaskSensor(Thread.currentThread().getName(), metrics);
     }
 
+    @Override
     public State state() {
         return state;
     }
 
+    @Override
     public void transitionTo(final State newState) {
         State.validateTransition(state, newState);
         state = newState;
     }
 
-    // TODO K9113: remove from Task interface, only needed for StreamTask
     @Override
     public void initializeMetadata() {}
 
+    // TODO K9113: remove from Task interface, only needed for StreamTask
     @Override
     public boolean initializeStateStores() {
         registerStateStores();
