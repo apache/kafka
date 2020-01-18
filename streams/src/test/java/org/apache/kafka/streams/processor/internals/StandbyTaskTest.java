@@ -154,7 +154,7 @@ public class StandbyTaskTest {
     @After
     public void cleanup() throws IOException {
         if (task != null && !task.isClosed()) {
-            task.close(true);
+            task.closeClean();
             task = null;
         }
         Utils.delete(baseDir);
@@ -421,7 +421,7 @@ public class StandbyTaskTest {
         };
         task.initializeStateStores();
         try {
-            task.close(true);
+            task.closeClean();
             fail("should have thrown exception");
         } catch (final Exception e) {
             // expected
@@ -459,7 +459,7 @@ public class StandbyTaskTest {
             stateDirectory
         );
 
-        task.close(true);
+        task.closeClean();
 
         final double expectedCloseTaskMetric = 1.0;
         verifyCloseTaskMetric(expectedCloseTaskMetric, streamsMetrics, metricName);

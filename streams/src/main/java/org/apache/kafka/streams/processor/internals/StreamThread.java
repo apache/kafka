@@ -580,12 +580,10 @@ public class StreamThread extends Thread {
             processId,
             logPrefix,
             restoreConsumer,
-            streamsMetadataState,
             activeTaskCreator,
             standbyTaskCreator,
-            adminClient,
-            new AssignedStreamsTasks(logContext),
-            new AssignedStandbyTasks(logContext));
+            adminClient
+        );
 
         log.info("Creating consumer client");
         final String applicationId = config.getString(StreamsConfig.APPLICATION_ID_CONFIG);
@@ -1015,7 +1013,7 @@ public class StreamThread extends Thread {
                 commitSensor.record(intervalCommitLatency / (double) committed, now);
 
                 // try to purge the committed records for repartition topics if possible
-                taskManager.maybePurgeCommitedRecords();
+                taskManager.maybePurgeCommittedRecords();
 
                 if (log.isDebugEnabled()) {
                     log.debug("Committed all active tasks {} and standby tasks {} in {}ms",
@@ -1042,7 +1040,7 @@ public class StreamThread extends Thread {
     }
 
     private void maybeUpdateStandbyTasks() {
-        if (state == State.RUNNING && taskManager.hasStandbyRunningTasks()) {
+        if (state == State.RUNNING) {
             if (processStandbyRecords) {
                 changelogReader.restore();
 

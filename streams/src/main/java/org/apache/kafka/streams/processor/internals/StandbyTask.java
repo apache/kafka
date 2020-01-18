@@ -92,6 +92,11 @@ public class StandbyTask extends AbstractTask {
     }
 
     @Override
+    public void startRunning() {
+        // TODO: add changelog partitions to restore consumer?
+    }
+
+    @Override
     public boolean hasChangelogs() {
         return true;
     }

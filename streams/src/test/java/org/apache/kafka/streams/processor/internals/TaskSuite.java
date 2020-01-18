@@ -34,7 +34,6 @@ import org.junit.runners.Suite;
                         StreamTaskTest.class,
                         StandbyTaskTest.class,
                         GlobalStateTaskTest.class,
-                        AssignedStreamsTasksTest.class,
                         TaskManagerTest.class,
                         TaskMetricsTest.class,
                         StickyTaskAssignorTest.class,
