@@ -158,17 +158,14 @@ class ZooKeeperClient(connectString: String,
           inReadLock(initializationLock) {
             send(request) { response =>
               responseQueue.add(response)
-              inFlightRequests.release()
-              countDownLatch.countDown()
             }
           }
-        } catch {
-          case e: Throwable =>
-            inFlightRequests.release()
-            throw e
+       } finally {
+          inFlightRequests.release()
+          countDownLatch.countDown()
         }
       }
-      countDownLatch.await()
+      countDownLatch.await(sessionTimeoutMs, TimeUnit.MILLISECONDS)
       responseQueue.asScala.toBuffer
     }
   }
