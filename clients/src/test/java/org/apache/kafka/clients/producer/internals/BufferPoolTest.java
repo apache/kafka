@@ -425,7 +425,7 @@ public class BufferPoolTest {
 
         // Wait for the workers to be blocked in their buffer allocations.
         ready.await(15, TimeUnit.SECONDS);
-        Thread.sleep(100);
+        Thread.sleep(10);
 
         assertEquals("Allocation shouldn't have happened yet, waiting on memory", numWorkers, completed.getCount());
 
