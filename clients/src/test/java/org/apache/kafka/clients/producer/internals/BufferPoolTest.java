@@ -408,10 +408,12 @@ public class BufferPoolTest {
         BufferPool pool = new BufferPool(1, 1, metrics, Time.SYSTEM, metricGroup);
         ByteBuffer buffer = pool.allocate(1, Long.MAX_VALUE);
 
+        CountDownLatch ready = new CountDownLatch(numWorkers);
         CountDownLatch completed = new CountDownLatch(numWorkers);
         ExecutorService executor = Executors.newFixedThreadPool(numWorkers);
         Callable<Void> work = new Callable<Void>() {
                 public Void call() throws Exception {
+                    ready.countDown();
                     assertThrows(KafkaException.class, () -> pool.allocate(1, Long.MAX_VALUE));
                     completed.countDown();
                     return null;
@@ -420,6 +422,10 @@ public class BufferPoolTest {
         for (int i = 0; i < numWorkers; ++i) {
             executor.submit(work);
         }
+
+        // Wait for the workers to be blocked in their buffer allocations.
+        ready.await(15, TimeUnit.SECONDS);
+        Thread.sleep(100);
 
         assertEquals("Allocation shouldn't have happened yet, waiting on memory", numWorkers, completed.getCount());
 
