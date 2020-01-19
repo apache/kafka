@@ -20,7 +20,7 @@ import java.util.Objects;
 
 /**
  * Represents all the query options that a user can provide to state what kind of stores it is expecting. The options would be whether a user would want to enable/disable stale stores* or whether it knows the list of partitions that it specifically wants to fetch. If this information is not provided the default behavior is to fetch the stores for all the partitions available on that instance* for that particular store name.
- * It contains a list of partitions, which for a point queries can be populated from the  KeyQueryMetadata.
+ * It contains a partition, which for a point queries can be populated from the  KeyQueryMetadata.
  */
 public class StoreQueryParams {
 
