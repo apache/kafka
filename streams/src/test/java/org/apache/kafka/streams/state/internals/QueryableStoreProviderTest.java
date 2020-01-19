@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.state.internals;
 
 
+import org.apache.kafka.streams.StoreQueryParams;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.NoOpWindowStore;
@@ -53,38 +54,38 @@ public class QueryableStoreProviderTest {
 
     @Test(expected = InvalidStateStoreException.class)
     public void shouldThrowExceptionIfKVStoreDoesntExist() {
-        storeProvider.getStore("not-a-store", QueryableStoreTypes.keyValueStore(), false);
+        storeProvider.getStore("not-a-store", QueryableStoreTypes.keyValueStore(), StoreQueryParams.withAllPartitionAndStaleStoresDisabled());
     }
 
     @Test(expected = InvalidStateStoreException.class)
     public void shouldThrowExceptionIfWindowStoreDoesntExist() {
-        storeProvider.getStore("not-a-store", QueryableStoreTypes.windowStore(), false);
+        storeProvider.getStore("not-a-store", QueryableStoreTypes.windowStore(), StoreQueryParams.withAllPartitionAndStaleStoresDisabled());
     }
 
     @Test
     public void shouldReturnKVStoreWhenItExists() {
-        assertNotNull(storeProvider.getStore(keyValueStore, QueryableStoreTypes.keyValueStore(), false));
+        assertNotNull(storeProvider.getStore(keyValueStore, QueryableStoreTypes.keyValueStore(), StoreQueryParams.withAllPartitionAndStaleStoresDisabled()));
     }
 
     @Test
     public void shouldReturnWindowStoreWhenItExists() {
-        assertNotNull(storeProvider.getStore(windowStore, QueryableStoreTypes.windowStore(), false));
+        assertNotNull(storeProvider.getStore(windowStore, QueryableStoreTypes.windowStore(), StoreQueryParams.withAllPartitionAndStaleStoresDisabled()));
     }
 
     @Test(expected = InvalidStateStoreException.class)
     public void shouldThrowExceptionWhenLookingForWindowStoreWithDifferentType() {
-        storeProvider.getStore(windowStore, QueryableStoreTypes.keyValueStore(), false);
+        storeProvider.getStore(windowStore, QueryableStoreTypes.keyValueStore(), StoreQueryParams.withAllPartitionAndStaleStoresDisabled());
     }
 
     @Test(expected = InvalidStateStoreException.class)
     public void shouldThrowExceptionWhenLookingForKVStoreWithDifferentType() {
-        storeProvider.getStore(keyValueStore, QueryableStoreTypes.windowStore(), false);
+        storeProvider.getStore(keyValueStore, QueryableStoreTypes.windowStore(), StoreQueryParams.withAllPartitionAndStaleStoresDisabled());
     }
 
     @Test
     public void shouldFindGlobalStores() {
         globalStateStores.put("global", new NoOpReadOnlyStore<>());
-        assertNotNull(storeProvider.getStore("global", QueryableStoreTypes.keyValueStore(), false));
+        assertNotNull(storeProvider.getStore("global", QueryableStoreTypes.keyValueStore(), StoreQueryParams.withAllPartitionAndStaleStoresDisabled()));
     }
 
 

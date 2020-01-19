@@ -764,7 +764,7 @@ public class KafkaStreams implements AutoCloseable {
                 delegatingStateRestoreListener,
                 i + 1);
             threadState.put(threads[i].getId(), threads[i].state());
-            storeProviders.add(new StreamThreadStateStoreProvider(threads[i]));
+            storeProviders.add(new StreamThreadStateStoreProvider(threads[i], internalTopologyBuilder));
         }
 
         final StreamStateListener streamStateListener = new StreamStateListener(threadState, globalThreadState);
@@ -1166,8 +1166,8 @@ public class KafkaStreams implements AutoCloseable {
      * The returned object can be used to query the {@link StateStore} instances.
      *
      * Only permits queries on active replicas of the store (no standbys or restoring replicas).
-     * See {@link KafkaStreams#store(java.lang.String, org.apache.kafka.streams.state.QueryableStoreType, boolean)}
-     * for the option to set {@code includeStaleStores} to true and trade off consistency in favor of availability.
+     * See {@link KafkaStreams#store(String, QueryableStoreType, StoreQueryParams)}
+     * for the option to set {@code StoreQueryParams.withAllPartitionAndStaleStoresEnabled or StoreQueryParams.withPartitionAndStaleStoresEnabled(final Integer partition)} and trade off consistency in favor of availability.
      *
      * @param storeName           name of the store to find
      * @param queryableStoreType  accept only stores that are accepted by {@link QueryableStoreType#accepts(StateStore)}
@@ -1177,7 +1177,7 @@ public class KafkaStreams implements AutoCloseable {
      * {@code queryableStoreType} doesn't exist
      */
     public <T> T store(final String storeName, final QueryableStoreType<T> queryableStoreType) {
-        return store(storeName, queryableStoreType, false);
+        return store(storeName, queryableStoreType, StoreQueryParams.withAllPartitionAndStaleStoresDisabled());
     }
 
     /**
@@ -1187,10 +1187,17 @@ public class KafkaStreams implements AutoCloseable {
      *
      * @param storeName           name of the store to find
      * @param queryableStoreType  accept only stores that are accepted by {@link QueryableStoreType#accepts(StateStore)}
-     * @param includeStaleStores      If false, only permit queries on the active replica for a partition, and only if the
+     * @param storeQueryParams    If StoreQueryParams.withAllPartitionAndStaleStoresDisabled() is used, it only permit queries on the active replicas for all the partitions
+     *                            available on the local instance, and only if the
      *                            task for that partition is running. I.e., the state store is not a standby replica,
      *                            and it is not restoring from the changelog.
-     *                            If true, allow queries on standbys and restoring replicas in addition to active ones.
+     *                            If StoreQueryParams.withPartitionAndStaleStoresEnabled(final Integer partition) is used, it only permit queries on the specific provided active replicas
+     *                            for the partition provided in the parameter, and only if the
+     *                            task for that partition is running. I.e., the state store is not a standby replica,
+     *                            and it is not restoring from the changelog.
+     *                            If StoreQueryParams.withAllPartitionAndStaleStoresEnabled(), allow queries on standbys and restoring replicas in addition to active ones.
+     *                            If StoreQueryParams.withPartitionAndStaleStoresEnabled(final Integer partition), allow queries on the specific partition irrespective if it is a standby
+     *                            or a restoring replicas in addition to active ones.
      * @param <T>                 return type
      * @return A facade wrapping the local {@link StateStore} instances
      * @throws InvalidStateStoreException if Kafka Streams is (re-)initializing or a store with {@code storeName} and
@@ -1198,9 +1205,9 @@ public class KafkaStreams implements AutoCloseable {
      */
     public <T> T store(final String storeName,
                        final QueryableStoreType<T> queryableStoreType,
-                       final boolean includeStaleStores) {
+                       final StoreQueryParams storeQueryParams) {
         validateIsRunningOrRebalancing();
-        return queryableStoreProvider.getStore(storeName, queryableStoreType, includeStaleStores);
+        return queryableStoreProvider.getStore(storeName, queryableStoreType, storeQueryParams);
     }
 
     /**

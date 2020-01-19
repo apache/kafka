@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.StoreQueryParams;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.SessionWindow;
@@ -55,7 +56,7 @@ public class CompositeReadOnlySessionStoreTest {
 
 
         sessionStore = new CompositeReadOnlySessionStore<>(
-            new WrappingStoreProvider(Arrays.asList(stubProviderOne, stubProviderTwo), false),
+            new WrappingStoreProvider(Arrays.asList(stubProviderOne, stubProviderTwo), StoreQueryParams.withAllPartitionAndStaleStoresDisabled()),
             QueryableStoreTypes.sessionStore(), storeName);
     }
 
@@ -109,7 +110,7 @@ public class CompositeReadOnlySessionStoreTest {
     public void shouldThrowInvalidStateStoreExceptionOnRebalance() {
         final CompositeReadOnlySessionStore<String, String> store =
             new CompositeReadOnlySessionStore<>(
-                new WrappingStoreProvider(singletonList(new StateStoreProviderStub(true)), false),
+                new WrappingStoreProvider(singletonList(new StateStoreProviderStub(true)), StoreQueryParams.withAllPartitionAndStaleStoresDisabled()),
                 QueryableStoreTypes.sessionStore(),
                 "whateva"
             );

@@ -31,11 +31,12 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KafkaStreams.State;
 import org.apache.kafka.streams.KafkaStreamsTest;
-import org.apache.kafka.streams.KeyQueryMetadata;
 import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.LagInfo;
+import org.apache.kafka.streams.KeyQueryMetadata;
+import org.apache.kafka.streams.StoreQueryParams;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.LagInfo;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
@@ -304,7 +305,7 @@ public class QueryableStateIntegrationTest {
                     final int index = queryMetadata.getActiveHost().port();
                     final KafkaStreams streamsWithKey = pickInstanceByPort ? streamsList.get(index) : streams;
                     final ReadOnlyKeyValueStore<String, Long> store =
-                        streamsWithKey.store(storeName, QueryableStoreTypes.keyValueStore(), true);
+                        streamsWithKey.store(storeName, QueryableStoreTypes.keyValueStore(), StoreQueryParams.withAllPartitionAndStaleStoresEnabled());
                     if (store == null) {
                         nullStoreKeys.add(key);
                         continue;
@@ -363,7 +364,7 @@ public class QueryableStateIntegrationTest {
                     final int index = queryMetadata.getActiveHost().port();
                     final KafkaStreams streamsWithKey = pickInstanceByPort ? streamsList.get(index) : streams;
                     final ReadOnlyWindowStore<String, Long> store =
-                        streamsWithKey.store(storeName, QueryableStoreTypes.windowStore(), true);
+                        streamsWithKey.store(storeName, QueryableStoreTypes.windowStore(), StoreQueryParams.withAllPartitionAndStaleStoresEnabled());
                     if (store == null) {
                         nullStoreKeys.add(key);
                         continue;

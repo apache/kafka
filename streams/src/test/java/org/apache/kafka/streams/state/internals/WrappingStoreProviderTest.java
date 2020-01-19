@@ -18,6 +18,7 @@ package org.apache.kafka.streams.state.internals;
 
 
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.streams.StoreQueryParams;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.state.NoOpWindowStore;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
@@ -57,7 +58,7 @@ public class WrappingStoreProviderTest {
 
         wrappingStoreProvider = new WrappingStoreProvider(
             Arrays.asList(stubProviderOne, stubProviderTwo),
-            false
+            StoreQueryParams.withAllPartitionAndStaleStoresDisabled()
         );
     }
 

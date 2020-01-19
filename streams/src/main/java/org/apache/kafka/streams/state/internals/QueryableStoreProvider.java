@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.streams.StoreQueryParams;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.QueryableStoreType;
@@ -43,27 +44,27 @@ public class QueryableStoreProvider {
      *
      * @param storeName          name of the store
      * @param queryableStoreType accept stores passing {@link QueryableStoreType#accepts(StateStore)}
-     * @param includeStaleStores     if true, include standbys and recovering stores;
+     * @param storeQueryParams       if true, include standbys and recovering stores;
      *                                        if false, only include running actives.
      * @param <T>                The expected type of the returned store
      * @return A composite object that wraps the store instances.
      */
     public <T> T getStore(final String storeName,
                           final QueryableStoreType<T> queryableStoreType,
-                          final boolean includeStaleStores) {
+                          final StoreQueryParams storeQueryParams) {
         final List<T> globalStore = globalStoreProvider.stores(storeName, queryableStoreType);
         if (!globalStore.isEmpty()) {
             return queryableStoreType.create(globalStoreProvider, storeName);
         }
         final List<T> allStores = new ArrayList<>();
         for (final StreamThreadStateStoreProvider storeProvider : storeProviders) {
-            allStores.addAll(storeProvider.stores(storeName, queryableStoreType, includeStaleStores));
+            allStores.addAll(storeProvider.stores(storeName, queryableStoreType, storeQueryParams));
         }
         if (allStores.isEmpty()) {
             throw new InvalidStateStoreException("The state store, " + storeName + ", may have migrated to another instance.");
         }
         return queryableStoreType.create(
-            new WrappingStoreProvider(storeProviders, includeStaleStores),
+            new WrappingStoreProvider(storeProviders, storeQueryParams),
             storeName
         );
     }
