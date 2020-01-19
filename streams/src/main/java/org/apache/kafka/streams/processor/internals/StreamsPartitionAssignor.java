@@ -1259,7 +1259,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
     }
 
     private int updateMinReceivedVersion(final int usedVersion, final int minReceivedMetadataVersion) {
-        return usedVersion < minReceivedMetadataVersion ? usedVersion : minReceivedMetadataVersion;
+        return Math.min(usedVersion, minReceivedMetadataVersion);
     }
 
     private int updateMinSupportedVersion(final int supportedVersion, final int minSupportedMetadataVersion) {
