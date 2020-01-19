@@ -479,8 +479,7 @@ public class StreamThread extends Thread {
                     config,
                     streamsMetrics,
                     stateManager,
-                    stateDirectory,
-                    storeChangelogReader);
+                    stateDirectory);
             } else {
                 log.trace(
                     "Skipped standby task {} with assigned partitions {} " +
@@ -874,9 +873,6 @@ public class StreamThread extends Thread {
             } while (processed > 0);
         }
 
-        // update standby tasks and maybe commit the standby tasks as well
-        maybeUpdateStandbyTasks();
-
         maybeCommit();
     }
 
@@ -1039,19 +1035,6 @@ public class StreamThread extends Thread {
         }
 
         return committed > 0;
-    }
-
-    private void maybeUpdateStandbyTasks() {
-        if (state == State.RUNNING && taskManager.hasStandbyRunningTasks()) {
-            if (processStandbyRecords) {
-                changelogReader.restore();
-
-                processStandbyRecords = false;
-            }
-
-            // update now if the standby restoration indeed executed
-            advanceNowAndComputeLatency();
-        }
     }
 
     /**

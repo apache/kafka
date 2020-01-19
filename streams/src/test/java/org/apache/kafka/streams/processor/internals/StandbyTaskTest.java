@@ -177,8 +177,7 @@ public class StandbyTaskTest {
             config,
             streamsMetrics,
             stateManager,
-            stateDirectory,
-            changelogReader);
+            stateDirectory);
 
         task.initializeStateStores();
 
@@ -382,8 +381,7 @@ public class StandbyTaskTest {
             config,
             streamsMetrics,
             stateManager,
-            stateDirectory,
-            changelogReader
+            stateDirectory
         );
         task.initializeStateStores();
 
@@ -414,8 +412,7 @@ public class StandbyTaskTest {
             config,
             streamsMetrics,
             stateManager,
-            stateDirectory,
-            changelogReader
+            stateDirectory
         ) {
             @Override
             public void commit() {
@@ -464,8 +461,7 @@ public class StandbyTaskTest {
             config,
             streamsMetrics,
             stateManager,
-            stateDirectory,
-            changelogReader
+            stateDirectory
         );
 
         task.close(true);

@@ -34,7 +34,6 @@ import java.util.Set;
  */
 public class StandbyTask extends AbstractTask {
     private final Sensor closeTaskSensor;
-    private final ChangelogReader changelogReader;
 
     private State state = State.CREATED;
 
@@ -56,11 +55,9 @@ public class StandbyTask extends AbstractTask {
                 final StreamsConfig config,
                 final StreamsMetricsImpl metrics,
                 final ProcessorStateManager stateMgr,
-                final StateDirectory stateDirectory,
-                final ChangelogReader storeChangelogReader) {
+                final StateDirectory stateDirectory) {
         super(id, partitions, topology, consumer, true, stateMgr, stateDirectory, config);
 
-        changelogReader = storeChangelogReader;
         processorContext = new StandbyContextImpl(id, config, stateMgr, metrics);
         closeTaskSensor = ThreadMetrics.closeTaskSensor(Thread.currentThread().getName(), metrics);
     }
@@ -152,13 +149,5 @@ public class StandbyTask extends AbstractTask {
 
     Map<TopicPartition, Long> restoredOffsets() {
         return Collections.unmodifiableMap(stateMgr.changelogOffsets());
-    }
-
-    public void update() {
-        // we use the changelog reader to do the actual restoration work,
-        // and here we only need to update the offset limits when necessary
-        // TODO K9113: we do not need to update each standby tasks, instead the changelog reader
-        //             would try to update all the registered standby changelogs
-        changelogReader.restore();
     }
 }
