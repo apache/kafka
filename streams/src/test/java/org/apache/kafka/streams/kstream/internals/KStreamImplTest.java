@@ -347,14 +347,6 @@ public class KStreamImplTest {
     }
 
     @Test
-    public void shouldNotAllowNullNamedOnFlatMap() {
-        final NullPointerException exception = assertThrows(
-            NullPointerException.class,
-            () -> testStream.flatMap((k, v) -> Collections.emptyList(), null));
-        assertThat(exception.getMessage(), equalTo("named can't be null"));
-    }
-
-    @Test
     public void shouldNotAllowNullMapperOnFlatMapValues() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
