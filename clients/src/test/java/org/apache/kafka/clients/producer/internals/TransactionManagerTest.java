@@ -159,7 +159,6 @@ public class TransactionManagerTest {
 
         transactionManager.failIfNotReadyForSend();
         transactionManager.maybeAddPartitionToTransaction(tp0);
-        long nowMs = time.milliseconds();
         FutureRecordMetadata sendFuture = appendToAccumulator(tp0);
 
         prepareAddPartitionsToTxn(tp0, Errors.NONE);
@@ -827,7 +826,7 @@ public class TransactionManagerTest {
 
         final String consumerGroupId = "myconsumergroup";
         TransactionalRequestResult addOffsetsResult = transactionManager.sendOffsetsToTransaction(
-            offsets, groupMetadata(consumerGroupId));
+            offsets, new ConsumerGroupMetadata(consumerGroupId));
 
         assertFalse(transactionManager.hasPendingOffsetCommits());
 
@@ -926,7 +925,7 @@ public class TransactionManagerTest {
 
         transactionManager.beginTransaction();
         TransactionalRequestResult sendOffsetsResult = transactionManager.sendOffsetsToTransaction(
-                singletonMap(tp, new OffsetAndMetadata(39L)), groupMetadata(consumerGroupId));
+                singletonMap(tp, new OffsetAndMetadata(39L)), new ConsumerGroupMetadata(consumerGroupId));
 
         prepareAddOffsetsToTxnResponse(Errors.NONE, consumerGroupId, pid, epoch);
         sender.runOnce();  // AddOffsetsToTxn Handled, TxnOffsetCommit Enqueued
@@ -1224,7 +1223,7 @@ public class TransactionManagerTest {
 
         transactionManager.beginTransaction();
         TransactionalRequestResult sendOffsetsResult = transactionManager.sendOffsetsToTransaction(
-                singletonMap(new TopicPartition("foo", 0), new OffsetAndMetadata(39L)), groupMetadata(consumerGroupId));
+                singletonMap(new TopicPartition("foo", 0), new OffsetAndMetadata(39L)), new ConsumerGroupMetadata(consumerGroupId));
 
         prepareAddOffsetsToTxnResponse(Errors.NONE, consumerGroupId, pid, epoch);
         sender.runOnce();  // AddOffsetsToTxn Handled, TxnOffsetCommit Enqueued
@@ -1256,7 +1255,7 @@ public class TransactionManagerTest {
 
         transactionManager.beginTransaction();
         TransactionalRequestResult sendOffsetsResult = transactionManager.sendOffsetsToTransaction(
-                singletonMap(tp1, new OffsetAndMetadata(39L)), groupMetadata(consumerGroupId));
+                singletonMap(tp1, new OffsetAndMetadata(39L)), new ConsumerGroupMetadata(consumerGroupId));
 
         prepareAddOffsetsToTxnResponse(Errors.NONE, consumerGroupId, pid, epoch);
         sender.runOnce();  // AddOffsetsToTxn Handled, TxnOffsetCommit Enqueued
@@ -1292,7 +1291,7 @@ public class TransactionManagerTest {
 
         transactionManager.beginTransaction();
         TransactionalRequestResult sendOffsetsResult = transactionManager.sendOffsetsToTransaction(
-                singletonMap(tp, new OffsetAndMetadata(39L)), groupMetadata(consumerGroupId));
+                singletonMap(tp, new OffsetAndMetadata(39L)), new ConsumerGroupMetadata(consumerGroupId));
 
         prepareAddOffsetsToTxnResponse(Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED, consumerGroupId, pid, epoch);
         sender.runOnce();  // AddOffsetsToTxn Handled
@@ -1317,7 +1316,7 @@ public class TransactionManagerTest {
 
         transactionManager.beginTransaction();
         TransactionalRequestResult sendOffsetsResult = transactionManager.sendOffsetsToTransaction(
-                singletonMap(tp, new OffsetAndMetadata(39L)), groupMetadata(consumerGroupId));
+                singletonMap(tp, new OffsetAndMetadata(39L)), new ConsumerGroupMetadata(consumerGroupId));
 
         prepareAddOffsetsToTxnResponse(Errors.NONE, consumerGroupId, pid, epoch);
         sender.runOnce();  // AddOffsetsToTxn Handled, TxnOffsetCommit Enqueued
@@ -1774,7 +1773,7 @@ public class TransactionManagerTest {
         assertThrows(ProducerFencedException.class, () -> transactionManager.beginCommit());
         assertThrows(ProducerFencedException.class, () -> transactionManager.beginAbort());
         assertThrows(ProducerFencedException.class, () -> transactionManager.sendOffsetsToTransaction(
-            Collections.emptyMap(), groupMetadata("dummyId")));
+            Collections.emptyMap(), new ConsumerGroupMetadata("dummyId")));
     }
 
     @Test
@@ -2181,7 +2180,7 @@ public class TransactionManagerTest {
         final String consumerGroupId = "myconsumergroup";
 
         TransactionalRequestResult addOffsetsResult = transactionManager.sendOffsetsToTransaction(
-            offsets, groupMetadata(consumerGroupId));
+            offsets, new ConsumerGroupMetadata(consumerGroupId));
         prepareAddOffsetsToTxnResponse(Errors.NONE, consumerGroupId, pid, epoch);
 
         sender.runOnce();  // send AddOffsetsToTxnResult
@@ -2253,7 +2252,7 @@ public class TransactionManagerTest {
         offsets.put(tp1, new OffsetAndMetadata(1));
         final String consumerGroupId = "myconsumergroup";
 
-        transactionManager.sendOffsetsToTransaction(offsets, groupMetadata(consumerGroupId));
+        transactionManager.sendOffsetsToTransaction(offsets, new ConsumerGroupMetadata(consumerGroupId));
 
         TransactionalRequestResult abortResult = transactionManager.beginAbort();
 
@@ -2279,7 +2278,7 @@ public class TransactionManagerTest {
         offsets.put(tp1, new OffsetAndMetadata(1));
         final String consumerGroupId = "myconsumergroup";
 
-        transactionManager.sendOffsetsToTransaction(offsets, groupMetadata(consumerGroupId));
+        transactionManager.sendOffsetsToTransaction(offsets, new ConsumerGroupMetadata(consumerGroupId));
 
         TransactionalRequestResult abortResult = transactionManager.beginAbort();
 
@@ -3073,10 +3072,6 @@ public class TransactionManagerTest {
             assertEquals(generationId, txnOffsetCommitRequest.data.generationId());
             return true;
         }, new TxnOffsetCommitResponse(0, txnOffsetCommitResponse));
-    }
-
-    private ConsumerGroupMetadata groupMetadata(String consumerGroupId) {
-        return new ConsumerGroupMetadata(consumerGroupId, JoinGroupRequest.UNKNOWN_GENERATION_ID, JoinGroupRequest.UNKNOWN_MEMBER_ID, Optional.empty());
     }
 
     private ProduceResponse produceResponse(TopicPartition tp, long offset, Errors error, int throttleTimeMs) {

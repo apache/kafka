@@ -24,7 +24,6 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.ProducerFencedException;
-import org.apache.kafka.common.requests.JoinGroupRequest;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.test.MockSerializer;
 import org.junit.After;
@@ -35,7 +34,6 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 
@@ -54,6 +52,7 @@ public class MockProducerTest {
     private MockProducer<byte[], byte[]> producer;
     private final ProducerRecord<byte[], byte[]> record1 = new ProducerRecord<>(topic, "key1".getBytes(), "value1".getBytes());
     private final ProducerRecord<byte[], byte[]> record2 = new ProducerRecord<>(topic, "key2".getBytes(), "value2".getBytes());
+    private final String groupId = "group";
 
     private void buildMockProducer(boolean autoComplete) {
         this.producer = new MockProducer<>(autoComplete, new MockSerializer(), new MockSerializer());
@@ -154,7 +153,6 @@ public class MockProducerTest {
     @Test(expected = IllegalStateException.class)
     public void shouldThrowOnSendOffsetsToTransactionIfTransactionsNotInitialized() {
         buildMockProducer(true);
-        String groupId = null;
         producer.sendOffsetsToTransaction(null, groupId);
     }
 
@@ -163,7 +161,6 @@ public class MockProducerTest {
         buildMockProducer(true);
         producer.initTransactions();
         try {
-            String groupId = null;
             producer.sendOffsetsToTransaction(null, groupId);
             fail("Should have thrown as producer has no open transaction");
         } catch (IllegalStateException e) { }
@@ -283,7 +280,6 @@ public class MockProducerTest {
         producer.initTransactions();
         producer.fenceProducer();
         try {
-            String groupId = null;
             producer.sendOffsetsToTransaction(null, groupId);
             fail("Should have thrown as producer is fenced off");
         } catch (ProducerFencedException e) { }
@@ -295,7 +291,7 @@ public class MockProducerTest {
         producer.initTransactions();
         producer.fenceProducer();
         try {
-            producer.sendOffsetsToTransaction(null, groupMetadata(null));
+            producer.sendOffsetsToTransaction(null, new ConsumerGroupMetadata(groupId));
             fail("Should have thrown as producer is fenced off");
         } catch (ProducerFencedException e) { }
     }
@@ -462,7 +458,7 @@ public class MockProducerTest {
         producer.beginTransaction();
 
         try {
-            producer.sendOffsetsToTransaction(Collections.emptyMap(), groupMetadata(null));
+            producer.sendOffsetsToTransaction(Collections.emptyMap(), new ConsumerGroupMetadata(null));
             fail("Should have thrown NullPointerException");
         } catch (NullPointerException e) { }
     }
@@ -481,7 +477,7 @@ public class MockProducerTest {
         buildMockProducer(true);
         producer.initTransactions();
         producer.beginTransaction();
-        producer.sendOffsetsToTransaction(Collections.emptyMap(), groupMetadata("groupId"));
+        producer.sendOffsetsToTransaction(Collections.emptyMap(), new ConsumerGroupMetadata("groupId"));
         assertFalse(producer.sentOffsets());
     }
 
@@ -515,7 +511,7 @@ public class MockProducerTest {
                 put(new TopicPartition(topic, 0), new OffsetAndMetadata(42L, null));
             }
         };
-        producer.sendOffsetsToTransaction(groupCommit, groupMetadata("groupId"));
+        producer.sendOffsetsToTransaction(groupCommit, new ConsumerGroupMetadata("groupId"));
         assertTrue(producer.sentOffsets());
     }
 
@@ -539,7 +535,7 @@ public class MockProducerTest {
         producer.beginTransaction();
         assertFalse(producer.sentOffsets());
 
-        producer.sendOffsetsToTransaction(groupCommit, groupMetadata("groupId"));
+        producer.sendOffsetsToTransaction(groupCommit, new ConsumerGroupMetadata("groupId"));
         producer.commitTransaction(); // commit should not reset "sentOffsets" flag
         assertTrue(producer.sentOffsets());
 
@@ -567,7 +563,7 @@ public class MockProducerTest {
             }
         };
         producer.sendOffsetsToTransaction(groupCommit1, group);
-        producer.sendOffsetsToTransaction(groupCommit2, groupMetadata(group));
+        producer.sendOffsetsToTransaction(groupCommit2, new ConsumerGroupMetadata(group));
 
         assertTrue(producer.consumerGroupOffsetsHistory().isEmpty());
 
@@ -605,7 +601,7 @@ public class MockProducerTest {
         assertTrue(producer.consumerGroupOffsetsHistory().isEmpty());
 
         producer.beginTransaction();
-        producer.sendOffsetsToTransaction(groupCommit, groupMetadata(group));
+        producer.sendOffsetsToTransaction(groupCommit, new ConsumerGroupMetadata(group));
         producer.abortTransaction();
 
         producer.beginTransaction();
@@ -651,10 +647,19 @@ public class MockProducerTest {
                 put(new TopicPartition(topic, 1), new OffsetAndMetadata(73L, null));
             }
         };
-        producer.sendOffsetsToTransaction(groupCommit, groupMetadata(group));
+        producer.sendOffsetsToTransaction(groupCommit, new ConsumerGroupMetadata(group));
         producer.commitTransaction();
 
         producer.beginTransaction();
+
+        String group2 = "g2";
+        Map<TopicPartition, OffsetAndMetadata> groupCommit2 = new HashMap<TopicPartition, OffsetAndMetadata>() {
+            {
+                put(new TopicPartition(topic, 2), new OffsetAndMetadata(53L, null));
+                put(new TopicPartition(topic, 3), new OffsetAndMetadata(84L, null));
+            }
+        };
+        producer.sendOffsetsToTransaction(groupCommit, new ConsumerGroupMetadata(group2));
         producer.abortTransaction();
 
         Map<String, Map<TopicPartition, OffsetAndMetadata>> expectedResult = new HashMap<>();
@@ -698,7 +703,6 @@ public class MockProducerTest {
         buildMockProducer(true);
         producer.close();
         try {
-            String groupId = null;
             producer.sendOffsetsToTransaction(null, groupId);
             fail("Should have thrown as producer is already closed");
         } catch (IllegalStateException e) { }
@@ -709,7 +713,7 @@ public class MockProducerTest {
         buildMockProducer(true);
         producer.close();
         try {
-            producer.sendOffsetsToTransaction(null, groupMetadata(null));
+            producer.sendOffsetsToTransaction(null, new ConsumerGroupMetadata(groupId));
             fail("Should have thrown as producer is already closed");
         } catch (IllegalStateException e) { }
     }
@@ -789,10 +793,5 @@ public class MockProducerTest {
         } catch (Exception e) {
             return true;
         }
-    }
-
-    private ConsumerGroupMetadata groupMetadata(String groupId) {
-        return new ConsumerGroupMetadata(groupId, JoinGroupRequest.UNKNOWN_GENERATION_ID,
-            JoinGroupRequest.UNKNOWN_MEMBER_ID, Optional.empty());
     }
 }

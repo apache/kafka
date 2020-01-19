@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.clients.consumer;
 
+import org.apache.kafka.common.requests.JoinGroupRequest;
+
 import java.util.Optional;
 
 /**
@@ -36,6 +38,13 @@ public class ConsumerGroupMetadata {
         this.generationId = generationId;
         this.memberId = memberId;
         this.groupInstanceId = groupInstanceId;
+    }
+
+    public ConsumerGroupMetadata(String groupId) {
+        this(groupId,
+            JoinGroupRequest.UNKNOWN_GENERATION_ID,
+            JoinGroupRequest.UNKNOWN_MEMBER_ID,
+            Optional.empty());
     }
 
     public String groupId() {
