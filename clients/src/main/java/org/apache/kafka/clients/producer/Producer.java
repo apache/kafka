@@ -22,10 +22,7 @@ import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.errors.FencedInstanceIdException;
-import org.apache.kafka.common.errors.IllegalGenerationException;
 import org.apache.kafka.common.errors.ProducerFencedException;
-import org.apache.kafka.common.errors.UnknownMemberIdException;
 
 import java.io.Closeable;
 import java.time.Duration;
@@ -61,10 +58,7 @@ public interface Producer<K, V> extends Closeable {
      * See {@link KafkaProducer#sendOffsetsToTransaction(Map, ConsumerGroupMetadata)}
      */
     void sendOffsetsToTransaction(Map<TopicPartition, OffsetAndMetadata> offsets,
-                                  ConsumerGroupMetadata groupMetadata) throws ProducerFencedException,
-                                                                              IllegalGenerationException,
-                                                                              UnknownMemberIdException,
-                                                                              FencedInstanceIdException;
+                                  ConsumerGroupMetadata groupMetadata) throws ProducerFencedException;
 
     /**
      * See {@link KafkaProducer#commitTransaction()}
