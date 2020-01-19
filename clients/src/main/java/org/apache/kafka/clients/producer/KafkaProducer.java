@@ -21,7 +21,6 @@ import org.apache.kafka.clients.ClientDnsLookup;
 import org.apache.kafka.clients.ClientUtils;
 import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.NetworkClient;
-import org.apache.kafka.clients.consumer.CommitFailedException;
 import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
@@ -44,7 +43,6 @@ import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.AuthorizationException;
-import org.apache.kafka.common.errors.FencedInstanceIdException;
 import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.ProducerFencedException;
@@ -634,13 +632,13 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      * @throws org.apache.kafka.common.errors.UnsupportedForMessageFormatException fatal error indicating the message
      *         format used for the offsets topic on the broker does not support transactions
      * @throws org.apache.kafka.common.errors.AuthorizationException fatal error indicating that the configured
-     *         transactional.id is not authorized. See the exception for more details
+     *         transactional.id is not authorized, or the consumer group id is not authorized.
      * @throws KafkaException if the producer has encountered a previous fatal or abortable error, or for any
      *         other unexpected error
      */
     public void sendOffsetsToTransaction(Map<TopicPartition, OffsetAndMetadata> offsets,
                                          String consumerGroupId) throws ProducerFencedException {
-        sendOffsetsToTransactionInternal(offsets, new ConsumerGroupMetadata(
+        sendOffsetsToTransaction(offsets, new ConsumerGroupMetadata(
             consumerGroupId, JoinGroupRequest.UNKNOWN_GENERATION_ID,
             JoinGroupRequest.UNKNOWN_MEMBER_ID, Optional.empty()));
     }
@@ -668,23 +666,17 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      * @throws org.apache.kafka.common.errors.UnsupportedForMessageFormatException fatal error indicating the message
      *         format used for the offsets topic on the broker does not support transactions
      * @throws org.apache.kafka.common.errors.AuthorizationException fatal error indicating that the configured
-     *         transactional.id is not authorized. See the exception for more details
-     * @throws org.apache.kafka.clients.consumer.CommitFailedException if the commit failed and cannot be retried.
-     * @throws org.apache.kafka.common.errors.FencedInstanceIdException if the passed in consumer metadata has a fenced group.instance.id
+     *         transactional.id is not authorized, or the consumer group id is not authorized.
+     * @throws org.apache.kafka.clients.consumer.CommitFailedException  if the commit failed and cannot be retried
+     *         (e.g. if the consumer has been kicked out of the group). Users should handle this by aborting the transaction.
      * @throws KafkaException if the producer has encountered a previous fatal or abortable error, or for any
      *         other unexpected error
      */
-    public void sendOffsetsToTransaction(Map<TopicPartition, OffsetAndMetadata> offsets, ConsumerGroupMetadata groupMetadata)
-        throws ProducerFencedException,
-               CommitFailedException,
-               FencedInstanceIdException {
-        sendOffsetsToTransactionInternal(offsets, groupMetadata);
-    }
-
-    private void sendOffsetsToTransactionInternal(Map<TopicPartition, OffsetAndMetadata> offsets, ConsumerGroupMetadata consumerGroupMetadata) {
+    public void sendOffsetsToTransaction(Map<TopicPartition, OffsetAndMetadata> offsets,
+                                         ConsumerGroupMetadata groupMetadata) throws ProducerFencedException {
         throwIfNoTransactionManager();
         throwIfProducerClosed();
-        TransactionalRequestResult result = transactionManager.sendOffsetsToTransaction(offsets, consumerGroupMetadata);
+        TransactionalRequestResult result = transactionManager.sendOffsetsToTransaction(offsets, groupMetadata);
         sender.wakeup();
         result.await();
     }

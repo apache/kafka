@@ -21,7 +21,6 @@ import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.consumer.CommitFailedException;
 import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
-import org.apache.kafka.common.errors.FencedInstanceIdException;
 import org.apache.kafka.common.requests.JoinGroupRequest;
 import org.apache.kafka.common.utils.ProducerIdAndEpoch;
 import org.apache.kafka.clients.producer.RecordMetadata;
@@ -984,11 +983,11 @@ public class TransactionManagerTest {
         sender.runOnce();  // TxnOffsetCommit Handled
 
         assertTrue(transactionManager.hasError());
-        assertTrue(transactionManager.lastError() instanceof FencedInstanceIdException);
+        assertTrue(transactionManager.lastError() instanceof CommitFailedException);
         assertTrue(sendOffsetsResult.isCompleted());
         assertFalse(sendOffsetsResult.isSuccessful());
-        assertTrue(sendOffsetsResult.error() instanceof FencedInstanceIdException);
-        assertFatalError(FencedInstanceIdException.class);
+        assertTrue(sendOffsetsResult.error() instanceof CommitFailedException);
+        assertAbortableError(CommitFailedException.class);
     }
 
     @Test

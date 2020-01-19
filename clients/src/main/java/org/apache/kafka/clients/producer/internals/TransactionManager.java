@@ -1482,9 +1482,9 @@ public class TransactionManager {
                 } else if (error == Errors.GROUP_AUTHORIZATION_FAILED) {
                     abortableError(GroupAuthorizationException.forGroupId(builder.data.groupId()));
                     break;
-                } else if (error == Errors.UNKNOWN_MEMBER_ID
-                        || error == Errors.ILLEGAL_GENERATION) {
-                    abortableError(new CommitFailedException("Txn offset Commit failed due to consumer group metadata mismatch" + error.exception().getMessage()));
+                } else if (isGroupMetadataMisMatch(error)) {
+                    abortableError(new CommitFailedException("Transaction offset Commit failed " +
+                        "due to consumer group metadata mismatch: " + error.exception().getMessage()));
                     break;
                 } else if (isFatalException(error)) {
                     fatalError(error.exception());
@@ -1506,10 +1506,15 @@ public class TransactionManager {
         }
     }
 
+    private boolean isGroupMetadataMisMatch(Errors error) {
+        return error == Errors.FENCED_INSTANCE_ID
+                   || error == Errors.UNKNOWN_MEMBER_ID
+                   || error == Errors.ILLEGAL_GENERATION;
+    }
+
     private boolean isFatalException(Errors error) {
         return error == Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED
                    || error == Errors.INVALID_PRODUCER_EPOCH
-                   || error == Errors.UNSUPPORTED_FOR_MESSAGE_FORMAT
-                   || error == Errors.FENCED_INSTANCE_ID;
+                   || error == Errors.UNSUPPORTED_FOR_MESSAGE_FORMAT;
     }
 }
