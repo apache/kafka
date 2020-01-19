@@ -359,7 +359,7 @@ public class RecordCollectorImpl implements RecordCollector {
 
     @Override
     public Map<TopicPartition, Long> offsets() {
-        return Collections.unmodifiableMap(offsets);
+        return Collections.unmodifiableMap(new HashMap<>(offsets));
     }
 
     // for testing only

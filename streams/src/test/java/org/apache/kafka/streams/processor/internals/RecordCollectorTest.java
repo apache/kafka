@@ -120,20 +120,22 @@ public class RecordCollectorTest {
         collector.send(topic, "999", "0", headers, 1, null, stringSerializer, stringSerializer);
         collector.send(topic, "999", "0", headers, 2, null, stringSerializer, stringSerializer);
 
-        final Map<TopicPartition, Long> offsets = collector.offsets();
+        Map<TopicPartition, Long> offsets = collector.offsets();
 
-        assertEquals((Long) 2L, offsets.get(new TopicPartition(topic, 0)));
-        assertEquals((Long) 1L, offsets.get(new TopicPartition(topic, 1)));
-        assertEquals((Long) 0L, offsets.get(new TopicPartition(topic, 2)));
+        assertEquals(2L, (long) offsets.get(new TopicPartition(topic, 0)));
+        assertEquals(1L, (long) offsets.get(new TopicPartition(topic, 1)));
+        assertEquals(0L, (long) offsets.get(new TopicPartition(topic, 2)));
         assertEquals(6, producer.history().size());
 
         collector.send(topic, "999", "0", null, 0, null, stringSerializer, stringSerializer);
         collector.send(topic, "999", "0", null, 1, null, stringSerializer, stringSerializer);
         collector.send(topic, "999", "0", headers, 2, null, stringSerializer, stringSerializer);
 
-        assertEquals((Long) 3L, offsets.get(new TopicPartition(topic, 0)));
-        assertEquals((Long) 2L, offsets.get(new TopicPartition(topic, 1)));
-        assertEquals((Long) 1L, offsets.get(new TopicPartition(topic, 2)));
+        offsets = collector.offsets();
+
+        assertEquals(3L, (long) offsets.get(new TopicPartition(topic, 0)));
+        assertEquals(2L, (long) offsets.get(new TopicPartition(topic, 1)));
+        assertEquals(1L, (long) offsets.get(new TopicPartition(topic, 2)));
         assertEquals(9, producer.history().size());
     }
 
@@ -153,14 +155,37 @@ public class RecordCollectorTest {
 
         final Map<TopicPartition, Long> offsets = collector.offsets();
 
-        assertEquals((Long) 4L, offsets.get(new TopicPartition(topic, 0)));
-        assertEquals((Long) 2L, offsets.get(new TopicPartition(topic, 1)));
-        assertEquals((Long) 0L, offsets.get(new TopicPartition(topic, 2)));
+        assertEquals(4L, (long) offsets.get(new TopicPartition(topic, 0)));
+        assertEquals(2L, (long) offsets.get(new TopicPartition(topic, 1)));
+        assertEquals(0L, (long) offsets.get(new TopicPartition(topic, 2)));
         assertEquals(9, producer.history().size());
 
-        // should not all offsets to be modified
+        // returned offsets should not be modified
         final TopicPartition topicPartition = new TopicPartition(topic, 0);
         assertThrows(UnsupportedOperationException.class, () -> offsets.put(topicPartition, 50L));
+    }
+
+    @Test
+    public void shouldSendWithNoPartition() {
+        final Headers headers = new RecordHeaders(new Header[]{new RecordHeader("key", "value".getBytes())});
+
+        collector.send(topic, "3", "0", headers, null, null, stringSerializer, stringSerializer);
+        collector.send(topic, "9", "0", headers, null, null, stringSerializer, stringSerializer);
+        collector.send(topic, "27", "0", headers, null, null, stringSerializer, stringSerializer);
+        collector.send(topic, "81", "0", headers, null, null, stringSerializer, stringSerializer);
+        collector.send(topic, "243", "0", headers, null, null, stringSerializer, stringSerializer);
+        collector.send(topic, "28", "0", headers, null, null, stringSerializer, stringSerializer);
+        collector.send(topic, "82", "0", headers, null, null, stringSerializer, stringSerializer);
+        collector.send(topic, "244", "0", headers, null, null, stringSerializer, stringSerializer);
+        collector.send(topic, "245", "0", headers, null, null, stringSerializer, stringSerializer);
+
+        final Map<TopicPartition, Long> offsets = collector.offsets();
+
+        // with mock producer without specific partition, we would use default producer partitioner with murmur hash
+        assertEquals(3L, (long) offsets.get(new TopicPartition(topic, 0)));
+        assertEquals(2L, (long) offsets.get(new TopicPartition(topic, 1)));
+        assertEquals(1L, (long) offsets.get(new TopicPartition(topic, 2)));
+        assertEquals(9, producer.history().size());
     }
 
     @Test
@@ -174,7 +199,7 @@ public class RecordCollectorTest {
             id -> new MockProducer<>(cluster, false, new DefaultPartitioner(), byteArraySerializer, byteArraySerializer)
         );
 
-        final Map<TopicPartition, Long> offsets = collector.offsets();
+        Map<TopicPartition, Long> offsets = collector.offsets();
 
         collector.send(topic, "999", "0", null, 0, null, stringSerializer, stringSerializer);
         collector.send(topic, "999", "0", null, 1, null, stringSerializer, stringSerializer);
@@ -184,6 +209,7 @@ public class RecordCollectorTest {
 
         collector.flush();
 
+        offsets = collector.offsets();
         assertEquals((Long) 0L, offsets.get(new TopicPartition(topic, 0)));
         assertEquals((Long) 0L, offsets.get(new TopicPartition(topic, 1)));
         assertEquals((Long) 0L, offsets.get(new TopicPartition(topic, 2)));
@@ -291,7 +317,7 @@ public class RecordCollectorTest {
     }
 
     @Test
-    public void shouldThrowTaskMigratedExceptionOnSubsequentCallWhenProducerForgottenInCallback() {
+    public void shouldThrowTaskMigratedExceptionOnSubsequentCallWhenProducerUnknownInCallback() {
         final KafkaException exception = new UnknownProducerIdException("KABOOM!");
         final RecordCollector collector = new RecordCollectorImpl(
             taskId,
@@ -806,6 +832,9 @@ public class RecordCollectorTest {
             }
         );
 
+        // this call is to begin an inflight txn
+        collector.send(topic, "3", "0", null, null, stringSerializer, stringSerializer, streamPartitioner);
+
         collector.close();
     }
 
@@ -825,11 +854,12 @@ public class RecordCollectorTest {
             }
         );
 
-        assertThrows(StreamsException.class, () -> collector.send(topic, "3", "0", null, null, stringSerializer, stringSerializer, streamPartitioner));
+        final StreamsException thrown = assertThrows(StreamsException.class, () -> collector.send(topic, "3", "0", null, null, stringSerializer, stringSerializer, streamPartitioner));
+        assertTrue(thrown.getMessage().startsWith("Could not get partition information for topic"));
     }
 
     @Test
-    public void testRecordHeaderPassThroughSerializer() {
+    public void shouldPassThroughRecordHeaderToSerializer() {
         final CustomStringSerializer keySerializer = new CustomStringSerializer();
         final CustomStringSerializer valueSerializer = new CustomStringSerializer();
         keySerializer.configure(Collections.emptyMap(), true);
