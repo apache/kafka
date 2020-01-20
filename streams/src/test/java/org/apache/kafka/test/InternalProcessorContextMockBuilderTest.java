@@ -61,7 +61,7 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 
-public class InternalProcessorContextMockTest {
+public class InternalProcessorContextMockBuilderTest {
 
     @Test
     public void shouldReturnDefaultApplicationId() {
@@ -76,7 +76,7 @@ public class InternalProcessorContextMockTest {
     @Test
     public void shouldUpdateApplicationId() {
         final String applicationId = "new_application_id";
-        final InternalProcessorContext mock = builder()
+        final InternalProcessorContext mock = new InternalProcessorContextMockBuilder()
                 .applicationId(applicationId)
                 .build();
 
@@ -96,7 +96,7 @@ public class InternalProcessorContextMockTest {
     @Test
     public void shouldUpdateTaskId() {
         final TaskId taskId = new TaskId(23, 3);
-        final InternalProcessorContext mock = builder()
+        final InternalProcessorContext mock = new InternalProcessorContextMockBuilder()
                 .taskId(taskId)
                 .build();
 
@@ -116,7 +116,7 @@ public class InternalProcessorContextMockTest {
     @Test
     public void shouldUpdateKeySerde() {
         final Serde<String> keySerde = Serdes.String();
-        final InternalProcessorContext mock = builder()
+        final InternalProcessorContext mock = new InternalProcessorContextMockBuilder()
                 .keySerde(keySerde)
                 .build();
 
@@ -136,7 +136,7 @@ public class InternalProcessorContextMockTest {
     @Test
     public void shouldUpdateValueSerde() {
         final Serde<String> valueSerde = Serdes.String();
-        final InternalProcessorContext mock = builder()
+        final InternalProcessorContext mock = new InternalProcessorContextMockBuilder()
                 .valueSerde(valueSerde)
                 .build();
 
@@ -156,7 +156,7 @@ public class InternalProcessorContextMockTest {
     @Test
     public void shouldUpdateStateDir() {
         final File stateDir = new File("/");
-        final InternalProcessorContext mock = builder()
+        final InternalProcessorContext mock = new InternalProcessorContextMockBuilder()
                 .stateDir(stateDir)
                 .build();
 
@@ -176,7 +176,7 @@ public class InternalProcessorContextMockTest {
     @Test
     public void shouldUpdateMetrics() {
         final StreamsMetricsImpl metrics = new StreamsMetricsImpl(new Metrics(), "client_id", StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG);
-        final InternalProcessorContext mock = builder()
+        final InternalProcessorContext mock = new InternalProcessorContextMockBuilder()
                 .metrics(metrics)
                 .build();
 
@@ -368,7 +368,7 @@ public class InternalProcessorContextMockTest {
         final String key = "key";
         final String value = "value";
         appConfigs.put(key, value);
-        final InternalProcessorContext mock = builder()
+        final InternalProcessorContext mock = new InternalProcessorContextMockBuilder()
                 .appConfigs(appConfigs)
                 .build();
 
@@ -415,7 +415,7 @@ public class InternalProcessorContextMockTest {
         final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, "test", "");
         final ThreadCache cache = new ThreadCache(new LogContext("testCache "), 0, streamsMetrics);
 
-        final InternalProcessorContext mock = builder()
+        final InternalProcessorContext mock = new InternalProcessorContextMockBuilder()
                 .cache(cache)
                 .build();
 
@@ -451,14 +451,10 @@ public class InternalProcessorContextMockTest {
     }
 
     private static InternalProcessorContext mock() {
-        return builder().build();
+        return new InternalProcessorContextMockBuilder().build();
     }
 
     private static InternalProcessorContext mock(final ProcessorContext processorContext) {
-        return new InternalProcessorContextMock.Builder((MockProcessorContext) processorContext).build();
-    }
-
-    private static InternalProcessorContextMock.Builder builder() {
-        return new InternalProcessorContextMock.Builder();
+        return new InternalProcessorContextMockBuilder((MockProcessorContext) processorContext).build();
     }
 }
