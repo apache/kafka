@@ -496,7 +496,6 @@ class ConsoleConsumerTest {
     }
   }
 
-
   @Test
   def testReadLastNMessages(): Unit = {
     val topic = "test"
@@ -521,5 +520,31 @@ class ConsoleConsumerTest {
     val formatter = mock(classOf[MessageFormatter])
     ConsoleConsumer.process(-1, formatter, consumer, System.out, skipMessageOnError = false)
     verify(formatter, times(Math.abs(lastN))).writeTo(any(), any())
+  }
+
+  @Test
+  def testLastNExceedingTotalMessageCount(): Unit = {
+    val topic = "test"
+    val tp1 = new TopicPartition(topic, 0)
+    val startOffset: java.lang.Long = 0L
+    val totalMessages: java.lang.Long = 10L
+    val lastN = Long.MinValue
+
+    val mockConsumer = new MockConsumer[Array[Byte], Array[Byte]](OffsetResetStrategy.EARLIEST)
+    val partitionInfo = new PartitionInfo(topic, 0, null, new Array[Node](0), new Array[Node](0))
+
+    mockConsumer.updatePartitions(topic, List(partitionInfo).asJava)
+    mockConsumer.updateBeginningOffsets(Map(tp1 -> startOffset).asJava)
+    mockConsumer.updateEndOffsets(Map(tp1 -> totalMessages).asJava)
+
+    val consumer = new ConsumerWrapper(Some(topic), Some(0), Some(lastN.toString), None, mockConsumer)
+
+    0 until totalMessages.intValue foreach { i =>
+      mockConsumer.addRecord(new ConsumerRecord[Array[Byte], Array[Byte]](topic, 0, i, "key".getBytes, "value".getBytes))
+    }
+
+    val formatter = mock(classOf[MessageFormatter])
+    ConsoleConsumer.process(-1, formatter, consumer, System.out, skipMessageOnError = false)
+    verify(formatter, times(totalMessages.toInt)).writeTo(any(), any())
   }
 }
