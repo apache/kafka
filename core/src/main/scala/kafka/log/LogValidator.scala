@@ -19,19 +19,48 @@ package kafka.log
 import java.nio.ByteBuffer
 
 import kafka.api.{ApiVersion, KAFKA_2_1_IV0}
-import kafka.common.LongRef
+import kafka.common.{LongRef, RecordValidationException}
 import kafka.message.{CompressionCodec, NoCompressionCodec, ZStdCompressionCodec}
 import kafka.server.BrokerTopicStats
 import kafka.utils.Logging
+import org.apache.kafka.common.errors.{CorruptRecordException, InvalidTimestampException, UnsupportedCompressionTypeException, UnsupportedForMessageFormatException}
+import org.apache.kafka.common.record.{AbstractRecords, BufferSupplier, CompressionType, MemoryRecords, Record, RecordBatch, RecordConversionStats, TimestampType}
+import org.apache.kafka.common.InvalidRecordException
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.errors.{InvalidTimestampException, UnsupportedCompressionTypeException, UnsupportedForMessageFormatException}
-import org.apache.kafka.common.record.{AbstractRecords, BufferSupplier, CompressionType, InvalidRecordException, MemoryRecords, Record, RecordBatch, RecordConversionStats, TimestampType}
+import org.apache.kafka.common.protocol.Errors
+import org.apache.kafka.common.requests.ProduceResponse.RecordError
 import org.apache.kafka.common.utils.Time
 
 import scala.collection.{Seq, mutable}
 import scala.collection.JavaConverters._
+import scala.collection.mutable.ArrayBuffer
 
-private[kafka] object LogValidator extends Logging {
+/**
+ * The source of an append to the log. This is used when determining required validations.
+ */
+private[kafka] sealed trait AppendOrigin
+private[kafka] object AppendOrigin {
+
+  /**
+   * The log append came through replication from the leader. This typically implies minimal validation.
+   * Particularly, we do not decompress record batches in order to validate records individually.
+   */
+  case object Replication extends AppendOrigin
+
+  /**
+   * The log append came from either the group coordinator or the transaction coordinator. We validate
+   * producer epochs for normal log entries (specifically offset commits from the group coordinator) and
+   * we validate coordinate end transaction markers from the transaction coordinator.
+   */
+  case object Coordinator extends AppendOrigin
+
+  /**
+   * The log append came from the client, which implies full validation.
+   */
+  case object Client extends AppendOrigin
+}
+
+private[log] object LogValidator extends Logging {
 
   /**
    * Update the offsets for this message set and do further validation on messages including:
@@ -48,37 +77,37 @@ private[kafka] object LogValidator extends Logging {
    * Returns a ValidationAndOffsetAssignResult containing the validated message set, maximum timestamp, the offset
    * of the shallow message with the max timestamp and a boolean indicating whether the message sizes may have changed.
    */
-  private[kafka] def validateMessagesAndAssignOffsets(records: MemoryRecords,
-                                                      topicPartition: TopicPartition,
-                                                      offsetCounter: LongRef,
-                                                      time: Time,
-                                                      now: Long,
-                                                      sourceCodec: CompressionCodec,
-                                                      targetCodec: CompressionCodec,
-                                                      compactedTopic: Boolean,
-                                                      magic: Byte,
-                                                      timestampType: TimestampType,
-                                                      timestampDiffMaxMs: Long,
-                                                      partitionLeaderEpoch: Int,
-                                                      isFromClient: Boolean,
-                                                      interBrokerProtocolVersion: ApiVersion,
-                                                      brokerTopicStats: BrokerTopicStats): ValidationAndOffsetAssignResult = {
+  private[log] def validateMessagesAndAssignOffsets(records: MemoryRecords,
+                                                    topicPartition: TopicPartition,
+                                                    offsetCounter: LongRef,
+                                                    time: Time,
+                                                    now: Long,
+                                                    sourceCodec: CompressionCodec,
+                                                    targetCodec: CompressionCodec,
+                                                    compactedTopic: Boolean,
+                                                    magic: Byte,
+                                                    timestampType: TimestampType,
+                                                    timestampDiffMaxMs: Long,
+                                                    partitionLeaderEpoch: Int,
+                                                    origin: AppendOrigin,
+                                                    interBrokerProtocolVersion: ApiVersion,
+                                                    brokerTopicStats: BrokerTopicStats): ValidationAndOffsetAssignResult = {
     if (sourceCodec == NoCompressionCodec && targetCodec == NoCompressionCodec) {
       // check the magic value
       if (!records.hasMatchingMagic(magic))
         convertAndAssignOffsetsNonCompressed(records, topicPartition, offsetCounter, compactedTopic, time, now, timestampType,
-          timestampDiffMaxMs, magic, partitionLeaderEpoch, isFromClient, brokerTopicStats)
+          timestampDiffMaxMs, magic, partitionLeaderEpoch, origin, brokerTopicStats)
       else
         // Do in-place validation, offset assignment and maybe set timestamp
         assignOffsetsNonCompressed(records, topicPartition, offsetCounter, now, compactedTopic, timestampType, timestampDiffMaxMs,
-          partitionLeaderEpoch, isFromClient, magic, brokerTopicStats)
+          partitionLeaderEpoch, origin, magic, brokerTopicStats)
     } else {
       validateMessagesAndAssignOffsetsCompressed(records, topicPartition, offsetCounter, time, now, sourceCodec, targetCodec, compactedTopic,
-        magic, timestampType, timestampDiffMaxMs, partitionLeaderEpoch, isFromClient, interBrokerProtocolVersion, brokerTopicStats)
+        magic, timestampType, timestampDiffMaxMs, partitionLeaderEpoch, origin, interBrokerProtocolVersion, brokerTopicStats)
     }
   }
 
-  private[kafka] def getFirstBatchAndMaybeValidateNoMoreBatches(records: MemoryRecords, sourceCodec: CompressionCodec): RecordBatch = {
+  private def getFirstBatchAndMaybeValidateNoMoreBatches(records: MemoryRecords, sourceCodec: CompressionCodec): RecordBatch = {
     val batchIterator = records.batches.iterator
 
     if (!batchIterator.hasNext) {
@@ -97,14 +126,19 @@ private[kafka] object LogValidator extends Logging {
     batch
   }
 
-  private def validateBatch(topicPartition: TopicPartition, firstBatch: RecordBatch, batch: RecordBatch, isFromClient: Boolean, toMagic: Byte, brokerTopicStats: BrokerTopicStats): Unit = {
+  private def validateBatch(topicPartition: TopicPartition,
+                            firstBatch: RecordBatch,
+                            batch: RecordBatch,
+                            origin: AppendOrigin,
+                            toMagic: Byte,
+                            brokerTopicStats: BrokerTopicStats): Unit = {
     // batch magic byte should have the same magic as the first batch
     if (firstBatch.magic() != batch.magic()) {
       brokerTopicStats.allTopicsStats.invalidMagicNumberRecordsPerSec.mark()
       throw new InvalidRecordException(s"Batch magic ${batch.magic()} is not the same as the first batch'es magic byte ${firstBatch.magic()} in topic partition $topicPartition.")
     }
 
-    if (isFromClient) {
+    if (origin == AppendOrigin.Client) {
       if (batch.magic >= RecordBatch.MAGIC_VALUE_V2) {
         val countFromOffsets = batch.lastOffset - batch.baseOffset + 1
         if (countFromOffsets <= 0) {
@@ -126,15 +160,15 @@ private[kafka] object LogValidator extends Logging {
         }
       }
 
+      if (batch.isControlBatch) {
+        brokerTopicStats.allTopicsStats.invalidOffsetOrSequenceRecordsPerSec.mark()
+        throw new InvalidRecordException(s"Clients are not allowed to write control records in topic partition $topicPartition.")
+      }
+
       if (batch.hasProducerId && batch.baseSequence < 0) {
         brokerTopicStats.allTopicsStats.invalidOffsetOrSequenceRecordsPerSec.mark()
         throw new InvalidRecordException(s"Invalid sequence number ${batch.baseSequence} in record batch " +
           s"with producerId ${batch.producerId} in topic partition $topicPartition.")
-      }
-
-      if (batch.isControlBatch) {
-        brokerTopicStats.allTopicsStats.invalidOffsetOrSequenceRecordsPerSec.mark()
-        throw new InvalidRecordException(s"Clients are not allowed to write control records in topic partition $topicPartition.")
       }
     }
 
@@ -145,11 +179,13 @@ private[kafka] object LogValidator extends Logging {
       throw new UnsupportedForMessageFormatException(s"Idempotent records cannot be used with magic version $toMagic")
   }
 
-  private def validateRecord(batch: RecordBatch, topicPartition: TopicPartition, record: Record, now: Long, timestampType: TimestampType,
-                             timestampDiffMaxMs: Long, compactedTopic: Boolean, brokerTopicStats: BrokerTopicStats): Unit = {
+  private def validateRecord(batch: RecordBatch, topicPartition: TopicPartition, record: Record, batchIndex: Int, now: Long,
+                             timestampType: TimestampType, timestampDiffMaxMs: Long, compactedTopic: Boolean,
+                             brokerTopicStats: BrokerTopicStats): Option[ApiRecordError] = {
     if (!record.hasMagic(batch.magic)) {
       brokerTopicStats.allTopicsStats.invalidMagicNumberRecordsPerSec.mark()
-      throw new InvalidRecordException(s"Log record $record's magic does not match outer magic ${batch.magic} in topic partition $topicPartition.")
+      return Some(ApiRecordError(Errors.INVALID_RECORD, new RecordError(batchIndex,
+        s"Record $record's magic does not match outer magic ${batch.magic} in topic partition $topicPartition.")))
     }
 
     // verify the record-level CRC only if this is one of the deep entries of a compressed message
@@ -162,12 +198,13 @@ private[kafka] object LogValidator extends Logging {
       } catch {
         case e: InvalidRecordException =>
           brokerTopicStats.allTopicsStats.invalidMessageCrcRecordsPerSec.mark()
-          throw new InvalidRecordException(e.getMessage + s" in topic partition $topicPartition.")
+          throw new CorruptRecordException(e.getMessage + s" in topic partition $topicPartition.")
       }
     }
 
-    validateKey(record, topicPartition, compactedTopic, brokerTopicStats)
-    validateTimestamp(batch, record, now, timestampType, timestampDiffMaxMs)
+    validateKey(record, batchIndex, topicPartition, compactedTopic, brokerTopicStats).orElse {
+      validateTimestamp(batch, record, batchIndex, now, timestampType, timestampDiffMaxMs)
+    }
   }
 
   private def convertAndAssignOffsetsNonCompressed(records: MemoryRecords,
@@ -180,7 +217,7 @@ private[kafka] object LogValidator extends Logging {
                                                    timestampDiffMaxMs: Long,
                                                    toMagicValue: Byte,
                                                    partitionLeaderEpoch: Int,
-                                                   isFromClient: Boolean,
+                                                   origin: AppendOrigin,
                                                    brokerTopicStats: BrokerTopicStats): ValidationAndOffsetAssignResult = {
     val startNanos = time.nanoseconds
     val sizeInBytesAfterConversion = AbstractRecords.estimateSizeInBytes(toMagicValue, offsetCounter.value,
@@ -198,12 +235,18 @@ private[kafka] object LogValidator extends Logging {
     val firstBatch = getFirstBatchAndMaybeValidateNoMoreBatches(records, NoCompressionCodec)
 
     for (batch <- records.batches.asScala) {
-      validateBatch(topicPartition, firstBatch, batch, isFromClient, toMagicValue, brokerTopicStats)
+      validateBatch(topicPartition, firstBatch, batch, origin, toMagicValue, brokerTopicStats)
 
-      for (record <- batch.asScala) {
-        validateRecord(batch, topicPartition, record, now, timestampType, timestampDiffMaxMs, compactedTopic, brokerTopicStats)
-        builder.appendWithOffset(offsetCounter.getAndIncrement(), record)
+      val recordErrors = new ArrayBuffer[ApiRecordError](0)
+      for ((record, batchIndex) <- batch.asScala.view.zipWithIndex) {
+        validateRecord(batch, topicPartition, record, batchIndex, now, timestampType,
+          timestampDiffMaxMs, compactedTopic, brokerTopicStats).foreach(recordError => recordErrors += recordError)
+        // we fail the batch if any record fails, so we stop appending if any record fails
+        if (recordErrors.isEmpty)
+          builder.appendWithOffset(offsetCounter.getAndIncrement(), record)
       }
+
+      processRecordErrors(recordErrors)
     }
 
     val convertedRecords = builder.build()
@@ -227,7 +270,7 @@ private[kafka] object LogValidator extends Logging {
                                          timestampType: TimestampType,
                                          timestampDiffMaxMs: Long,
                                          partitionLeaderEpoch: Int,
-                                         isFromClient: Boolean,
+                                         origin: AppendOrigin,
                                          magic: Byte,
                                          brokerTopicStats: BrokerTopicStats): ValidationAndOffsetAssignResult = {
     var maxTimestamp = RecordBatch.NO_TIMESTAMP
@@ -237,19 +280,24 @@ private[kafka] object LogValidator extends Logging {
     val firstBatch = getFirstBatchAndMaybeValidateNoMoreBatches(records, NoCompressionCodec)
 
     for (batch <- records.batches.asScala) {
-      validateBatch(topicPartition, firstBatch, batch, isFromClient, magic, brokerTopicStats)
+      validateBatch(topicPartition, firstBatch, batch, origin, magic, brokerTopicStats)
 
       var maxBatchTimestamp = RecordBatch.NO_TIMESTAMP
       var offsetOfMaxBatchTimestamp = -1L
 
-      for (record <- batch.asScala) {
-        validateRecord(batch, topicPartition, record, now, timestampType, timestampDiffMaxMs, compactedTopic, brokerTopicStats)
+      val recordErrors = new ArrayBuffer[ApiRecordError](0)
+      for ((record, batchIndex) <- batch.asScala.view.zipWithIndex) {
+        validateRecord(batch, topicPartition, record, batchIndex, now, timestampType,
+          timestampDiffMaxMs, compactedTopic, brokerTopicStats).foreach(recordError => recordErrors += recordError)
+
         val offset = offsetCounter.getAndIncrement()
         if (batch.magic > RecordBatch.MAGIC_VALUE_V0 && record.timestamp > maxBatchTimestamp) {
           maxBatchTimestamp = record.timestamp
           offsetOfMaxBatchTimestamp = offset
         }
       }
+
+      processRecordErrors(recordErrors)
 
       if (batch.magic > RecordBatch.MAGIC_VALUE_V0 && maxBatchTimestamp > maxTimestamp) {
         maxTimestamp = maxBatchTimestamp
@@ -303,13 +351,30 @@ private[kafka] object LogValidator extends Logging {
                                                  timestampType: TimestampType,
                                                  timestampDiffMaxMs: Long,
                                                  partitionLeaderEpoch: Int,
-                                                 isFromClient: Boolean,
+                                                 origin: AppendOrigin,
                                                  interBrokerProtocolVersion: ApiVersion,
                                                  brokerTopicStats: BrokerTopicStats): ValidationAndOffsetAssignResult = {
 
     if (targetCodec == ZStdCompressionCodec && interBrokerProtocolVersion < KAFKA_2_1_IV0)
       throw new UnsupportedCompressionTypeException("Produce requests to inter.broker.protocol.version < 2.1 broker " +
         "are not allowed to use ZStandard compression")
+
+    def validateRecordCompression(batchIndex: Int, record: Record): Option[ApiRecordError] = {
+      if (sourceCodec != NoCompressionCodec && record.isCompressed)
+        Some(ApiRecordError(Errors.INVALID_RECORD, new RecordError(batchIndex,
+          s"Compressed outer record should not have an inner record with a compression attribute set: $record")))
+      else None
+    }
+
+    def validateOffset(batchIndex: Int, record: Record, expectedOffset: Long): Option[ApiRecordError] = {
+      // inner records offset should always be continuous
+      if (record.offset != expectedOffset) {
+        brokerTopicStats.allTopicsStats.invalidOffsetOrSequenceRecordsPerSec.mark()
+        Some(ApiRecordError(Errors.INVALID_RECORD, new RecordError(batchIndex,
+          s"Inner record $record inside the compressed record batch does not have " +
+            s"incremental offsets, expected offset is $expectedOffset in topic partition $topicPartition.")))
+      } else None
+    }
 
     // No in place assignment situation 1
     var inPlaceAssignment = sourceCodec == targetCodec
@@ -337,7 +402,7 @@ private[kafka] object LogValidator extends Logging {
 
     val batches = records.batches.asScala
     for (batch <- batches) {
-      validateBatch(topicPartition, firstBatch, batch, isFromClient, toMagic, brokerTopicStats)
+      validateBatch(topicPartition, firstBatch, batch, origin, toMagic, brokerTopicStats)
       uncompressedSizeInBytes += AbstractRecords.recordBatchHeaderSizeInBytes(toMagic, batch.compressionType())
 
       // if we are on version 2 and beyond, and we know we are going for in place assignment,
@@ -348,26 +413,28 @@ private[kafka] object LogValidator extends Logging {
         batch.streamingIterator(BufferSupplier.NO_CACHING)
 
       try {
-        for (record <- batch.asScala) {
-          if (sourceCodec != NoCompressionCodec && record.isCompressed)
-            throw new InvalidRecordException("Compressed outer record should not have an inner record with a " +
-              s"compression attribute set: $record")
-          validateRecord(batch, topicPartition, record, now, timestampType, timestampDiffMaxMs, compactedTopic, brokerTopicStats)
-
-          uncompressedSizeInBytes += record.sizeInBytes()
-          if (batch.magic > RecordBatch.MAGIC_VALUE_V0 && toMagic > RecordBatch.MAGIC_VALUE_V0) {
-            // inner records offset should always be continuous
-            val expectedOffset = expectedInnerOffset.getAndIncrement()
-            if (record.offset != expectedOffset) {
-              brokerTopicStats.allTopicsStats.invalidOffsetOrSequenceRecordsPerSec.mark()
-              throw new InvalidRecordException(s"Inner record $record inside the compressed record batch does not have incremental offsets, expected offset is $expectedOffset in topic partition $topicPartition.")
+        val recordErrors = new ArrayBuffer[ApiRecordError](0)
+        for ((record, batchIndex) <- batch.asScala.view.zipWithIndex) {
+          val expectedOffset = expectedInnerOffset.getAndIncrement()
+          val recordError = validateRecordCompression(batchIndex, record).orElse {
+            validateRecord(batch, topicPartition, record, batchIndex, now,
+              timestampType, timestampDiffMaxMs, compactedTopic, brokerTopicStats).orElse {
+              if (batch.magic > RecordBatch.MAGIC_VALUE_V0 && toMagic > RecordBatch.MAGIC_VALUE_V0) {
+                if (record.timestamp > maxTimestamp)
+                  maxTimestamp = record.timestamp
+                validateOffset(batchIndex, record, expectedOffset)
+              } else None
             }
-            if (record.timestamp > maxTimestamp)
-              maxTimestamp = record.timestamp
           }
 
-          validatedRecords += record
+          recordError match {
+            case Some(e) => recordErrors += e
+            case None =>
+              uncompressedSizeInBytes += record.sizeInBytes()
+              validatedRecords += record
+          }
         }
+        processRecordErrors(recordErrors)
       } finally {
         recordsIterator.close()
       }
@@ -381,8 +448,8 @@ private[kafka] object LogValidator extends Logging {
         val first = records.batches.asScala.head
         (first.producerId, first.producerEpoch, first.baseSequence, first.isTransactional)
       }
-      buildRecordsAndAssignOffsets(toMagic, offsetCounter, time, timestampType, CompressionType.forId(targetCodec.codec), now,
-        validatedRecords, producerId, producerEpoch, sequence, isTransactional, partitionLeaderEpoch, isFromClient,
+      buildRecordsAndAssignOffsets(toMagic, offsetCounter, time, timestampType, CompressionType.forId(targetCodec.codec),
+        now, validatedRecords, producerId, producerEpoch, sequence, isTransactional, partitionLeaderEpoch,
         uncompressedSizeInBytes)
     } else {
       // we can update the batch only and write the compressed payload as is;
@@ -422,7 +489,6 @@ private[kafka] object LogValidator extends Logging {
                                            baseSequence: Int,
                                            isTransactional: Boolean,
                                            partitionLeaderEpoch: Int,
-                                           isFromClient: Boolean,
                                            uncompressedSizeInBytes: Int): ValidationAndOffsetAssignResult = {
     val startNanos = time.nanoseconds
     val estimatedSize = AbstractRecords.estimateSizeInBytes(magic, offsetCounter.value, compressionType,
@@ -455,30 +521,49 @@ private[kafka] object LogValidator extends Logging {
       recordConversionStats = recordConversionStats)
   }
 
-  private def validateKey(record: Record, topicPartition: TopicPartition, compactedTopic: Boolean, brokerTopicStats: BrokerTopicStats) {
+  private def validateKey(record: Record,
+                          batchIndex: Int,
+                          topicPartition: TopicPartition,
+                          compactedTopic: Boolean,
+                          brokerTopicStats: BrokerTopicStats): Option[ApiRecordError] = {
     if (compactedTopic && !record.hasKey) {
       brokerTopicStats.allTopicsStats.noKeyCompactedTopicRecordsPerSec.mark()
-      throw new InvalidRecordException(s"Compacted topic cannot accept message without key in topic partition $topicPartition.")
-    }
+      Some(ApiRecordError(Errors.INVALID_RECORD, new RecordError(batchIndex,
+        s"Compacted topic cannot accept message without key in topic partition $topicPartition.")))
+    } else None
   }
 
-  /**
-   * This method validates the timestamps of a message.
-   * If the message is using create time, this method checks if it is within acceptable range.
-   */
   private def validateTimestamp(batch: RecordBatch,
                                 record: Record,
+                                batchIndex: Int,
                                 now: Long,
                                 timestampType: TimestampType,
-                                timestampDiffMaxMs: Long): Unit = {
+                                timestampDiffMaxMs: Long): Option[ApiRecordError] = {
     if (timestampType == TimestampType.CREATE_TIME
       && record.timestamp != RecordBatch.NO_TIMESTAMP
       && math.abs(record.timestamp - now) > timestampDiffMaxMs)
-      throw new InvalidTimestampException(s"Timestamp ${record.timestamp} of message with offset ${record.offset} is " +
-        s"out of range. The timestamp should be within [${now - timestampDiffMaxMs}, ${now + timestampDiffMaxMs}]")
-    if (batch.timestampType == TimestampType.LOG_APPEND_TIME)
-      throw new InvalidTimestampException(s"Invalid timestamp type in message $record. Producer should not set " +
-        s"timestamp type to LogAppendTime.")
+      Some(ApiRecordError(Errors.INVALID_TIMESTAMP, new RecordError(batchIndex,
+        s"Timestamp ${record.timestamp} of message with offset ${record.offset} is " +
+          s"out of range. The timestamp should be within [${now - timestampDiffMaxMs}, " +
+          s"${now + timestampDiffMaxMs}]")))
+    else if (batch.timestampType == TimestampType.LOG_APPEND_TIME)
+      Some(ApiRecordError(Errors.INVALID_TIMESTAMP, new RecordError(batchIndex,
+        s"Invalid timestamp type in message $record. Producer should not set timestamp " +
+          "type to LogAppendTime.")))
+    else None
+  }
+
+  private def processRecordErrors(recordErrors: Seq[ApiRecordError]): Unit = {
+    if (recordErrors.nonEmpty) {
+      val errors = recordErrors.map(_.recordError)
+      if (recordErrors.exists(_.apiError == Errors.INVALID_TIMESTAMP)) {
+        throw new RecordValidationException(new InvalidTimestampException(
+          "One or more records have been rejected due to invalid timestamp"), errors)
+      } else {
+        throw new RecordValidationException(new InvalidRecordException(
+          "One or more records have been rejected"), errors)
+      }
+    }
   }
 
   case class ValidationAndOffsetAssignResult(validatedRecords: MemoryRecords,
@@ -487,4 +572,5 @@ private[kafka] object LogValidator extends Logging {
                                              messageSizeMaybeChanged: Boolean,
                                              recordConversionStats: RecordConversionStats)
 
+  private case class ApiRecordError(apiError: Errors, recordError: RecordError)
 }

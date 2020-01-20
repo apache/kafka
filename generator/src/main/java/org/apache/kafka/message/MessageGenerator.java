@@ -55,9 +55,14 @@ public final class MessageGenerator {
 
     static final String ARRAYS_CLASS = "java.util.Arrays";
 
+    static final String OBJECTS_CLASS = "java.util.Objects";
+
     static final String LIST_CLASS = "java.util.List";
 
     static final String ARRAYLIST_CLASS = "java.util.ArrayList";
+
+    static final String IMPLICIT_LINKED_HASH_COLLECTION_CLASS =
+        "org.apache.kafka.common.utils.ImplicitLinkedHashCollection";
 
     static final String IMPLICIT_LINKED_HASH_MULTI_COLLECTION_CLASS =
         "org.apache.kafka.common.utils.ImplicitLinkedHashMultiCollection";
@@ -75,6 +80,8 @@ public final class MessageGenerator {
 
     static final String ARRAYOF_CLASS = "org.apache.kafka.common.protocol.types.ArrayOf";
 
+    static final String COMPACT_ARRAYOF_CLASS = "org.apache.kafka.common.protocol.types.CompactArrayOf";
+
     static final String STRUCT_CLASS = "org.apache.kafka.common.protocol.types.Struct";
 
     static final String BYTES_CLASS = "org.apache.kafka.common.utils.Bytes";
@@ -84,6 +91,26 @@ public final class MessageGenerator {
     static final String REQUEST_SUFFIX = "Request";
 
     static final String RESPONSE_SUFFIX = "Response";
+
+    static final String BYTE_UTILS_CLASS = "org.apache.kafka.common.utils.ByteUtils";
+
+    static final String STANDARD_CHARSETS = "java.nio.charset.StandardCharsets";
+
+    static final String TAGGED_FIELDS_SECTION_CLASS = "org.apache.kafka.common.protocol.types.Field.TaggedFieldsSection";
+
+    static final String OBJECT_SERIALIZATION_CACHE_CLASS = "org.apache.kafka.common.protocol.ObjectSerializationCache";
+
+    static final String RAW_TAGGED_FIELD_CLASS = "org.apache.kafka.common.protocol.types.RawTaggedField";
+
+    static final String RAW_TAGGED_FIELD_WRITER_CLASS = "org.apache.kafka.common.protocol.types.RawTaggedFieldWriter";
+
+    static final String TREE_MAP_CLASS = "java.util.TreeMap";
+
+    static final String BYTE_BUFFER_CLASS = "java.nio.ByteBuffer";
+
+    static final String NAVIGABLE_MAP_CLASS = "java.util.NavigableMap";
+
+    static final String MAP_ENTRY_CLASS = "java.util.Map.Entry";
 
     /**
      * The Jackson serializer we use for JSON objects.
@@ -98,10 +125,10 @@ public final class MessageGenerator {
         JSON_SERDE.setSerializationInclusion(JsonInclude.Include.NON_EMPTY);
     }
 
-    public static void processDirectories(String outputDir, String inputDir) throws Exception {
+    public static void processDirectories(String packageName, String outputDir, String inputDir) throws Exception {
         Files.createDirectories(Paths.get(outputDir));
         int numProcessed = 0;
-        ApiMessageTypeGenerator messageTypeGenerator = new ApiMessageTypeGenerator();
+        ApiMessageTypeGenerator messageTypeGenerator = new ApiMessageTypeGenerator(packageName);
         HashSet<String> outputFileNames = new HashSet<>();
         try (DirectoryStream<Path> directoryStream = Files
                 .newDirectoryStream(Paths.get(inputDir), JSON_GLOB)) {
@@ -113,7 +140,7 @@ public final class MessageGenerator {
                     outputFileNames.add(javaName);
                     Path outputPath = Paths.get(outputDir, javaName);
                     try (BufferedWriter writer = Files.newBufferedWriter(outputPath)) {
-                        MessageDataGenerator generator = new MessageDataGenerator();
+                        MessageDataGenerator generator = new MessageDataGenerator(packageName);
                         generator.generate(spec);
                         generator.write(writer);
                     }
@@ -198,16 +225,28 @@ public final class MessageGenerator {
         }
     }
 
-    private final static String USAGE = "MessageGenerator: [output Java file] [input JSON file]";
+    /**
+     * Return the number of bytes needed to encode an integer in unsigned variable-length format.
+     */
+    static int sizeOfUnsignedVarint(int value) {
+        int bytes = 1;
+        while ((value & 0xffffff80) != 0L) {
+            bytes += 1;
+            value >>>= 7;
+        }
+        return bytes;
+    }
+
+    private final static String USAGE = "MessageGenerator: [output Java package] [output Java file] [input JSON file]";
 
     public static void main(String[] args) throws Exception {
         if (args.length == 0) {
             System.out.println(USAGE);
             System.exit(0);
-        } else if (args.length != 2) {
+        } else if (args.length != 3) {
             System.out.println(USAGE);
             System.exit(1);
         }
-        processDirectories(args[0], args[1]);
+        processDirectories(args[0], args[1], args[2]);
     }
 }

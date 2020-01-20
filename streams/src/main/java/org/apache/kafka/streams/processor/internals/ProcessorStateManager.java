@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import java.util.Collections;
+import java.util.concurrent.ConcurrentHashMap;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.FixedOrderMap;
@@ -100,9 +102,9 @@ public class ProcessorStateManager implements StateManager {
             partitionForTopic.put(source.topic(), source);
         }
         offsetLimits = new HashMap<>();
-        standbyRestoredOffsets = new HashMap<>();
+        standbyRestoredOffsets = new ConcurrentHashMap<>();
         this.isStandby = isStandby;
-        restoreCallbacks = isStandby ? new HashMap<>() : null;
+        restoreCallbacks = isStandby ? new ConcurrentHashMap<>() : null;
         recordConverters = isStandby ? new HashMap<>() : null;
         this.storeToChangelogTopic = new HashMap<>(storeToChangelogTopic);
 
@@ -247,15 +249,18 @@ public class ProcessorStateManager implements StateManager {
         standbyRestoredOffsets.put(storePartition, lastOffset + 1);
     }
 
-    void putOffsetLimit(final TopicPartition partition,
-                        final long limit) {
-        log.trace("Updating store offset limit for partition {} to {}", partition, limit);
-        offsetLimits.put(partition, limit);
+    void putOffsetLimits(final Map<TopicPartition, Long> offsets) {
+        log.trace("Updating store offset limit with {}", offsets);
+        offsetLimits.putAll(offsets);
     }
 
-    long offsetLimit(final TopicPartition partition) {
+    private long offsetLimit(final TopicPartition partition) {
         final Long limit = offsetLimits.get(partition);
         return limit != null ? limit : Long.MAX_VALUE;
+    }
+
+    ChangelogReader changelogReader() {
+        return changelogReader;
     }
 
     @Override
@@ -349,9 +354,7 @@ public class ProcessorStateManager implements StateManager {
 
         updateCheckpointFileCache(checkpointableOffsetsFromProcessing);
 
-        log.trace("Checkpointable offsets updated with active acked offsets: {}", checkpointFileCache);
-
-        log.trace("Writing checkpoint: {}", checkpointFileCache);
+        log.debug("Writing checkpoint: {}", checkpointFileCache);
         try {
             checkpointFile.write(checkpointFileCache);
         } catch (final IOException e) {
@@ -454,5 +457,9 @@ public class ProcessorStateManager implements StateManager {
         }
 
         return result;
+    }
+
+    Map<TopicPartition, Long> standbyRestoredOffsets() {
+        return Collections.unmodifiableMap(standbyRestoredOffsets);
     }
 }

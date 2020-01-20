@@ -24,10 +24,14 @@ import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.connect.connector.ConnectRecord;
 import org.apache.kafka.connect.data.ConnectSchema;
+import org.apache.kafka.connect.data.Date;
 import org.apache.kafka.connect.data.Field;
 import org.apache.kafka.connect.data.Schema;
+import org.apache.kafka.connect.data.Schema.Type;
 import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.data.Struct;
+import org.apache.kafka.connect.data.Time;
+import org.apache.kafka.connect.data.Timestamp;
 import org.apache.kafka.connect.data.Values;
 import org.apache.kafka.connect.errors.DataException;
 import org.apache.kafka.connect.transforms.util.SchemaUtil;
@@ -107,7 +111,7 @@ public abstract class Cast<R extends ConnectRecord<R>> implements Transformation
         final SimpleConfig config = new SimpleConfig(CONFIG_DEF, props);
         casts = parseFieldTypes(config.getList(SPEC_CONFIG));
         wholeValueCastType = casts.get(WHOLE_VALUE_CAST);
-        schemaUpdateCache = new SynchronizedCache<>(new LRUCache<Schema, Schema>(16));
+        schemaUpdateCache = new SynchronizedCache<>(new LRUCache<>(16));
     }
 
     @Override
@@ -222,7 +226,18 @@ public abstract class Cast<R extends ConnectRecord<R>> implements Transformation
             default:
                 throw new DataException("Unexpected type in Cast transformation: " + type);
         }
+    }
 
+    private static Object encodeLogicalType(Schema schema, Object value) {
+        switch (schema.name()) {
+            case Date.LOGICAL_NAME:
+                return Date.fromLogical(schema, (java.util.Date) value);
+            case Time.LOGICAL_NAME:
+                return Time.fromLogical(schema, (java.util.Date) value);
+            case Timestamp.LOGICAL_NAME:
+                return Timestamp.fromLogical(schema, (java.util.Date) value);
+        }
+        return value;
     }
 
     private static Object castValueToType(Schema schema, Object value, Schema.Type targetType) {
@@ -237,6 +252,11 @@ public abstract class Cast<R extends ConnectRecord<R>> implements Transformation
             }
             // Ensure the type we are trying to cast from is supported
             validCastType(inferredType, FieldType.INPUT);
+
+            // Perform logical type encoding to their internal representation.
+            if (schema != null && schema.name() != null && targetType != Type.STRING) {
+                value = encodeLogicalType(schema, value);
+            }
 
             switch (targetType) {
                 case INT8:

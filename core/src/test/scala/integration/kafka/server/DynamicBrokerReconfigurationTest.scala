@@ -254,13 +254,13 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
 
   @Test
   def testUpdatesUsingConfigProvider(): Unit = {
-    val PollingIntervalVal = "${file:polling.interval:interval}"
-    val PollingIntervalUpdateVal = "${file:polling.interval:updinterval}"
-    val SslTruststoreTypeVal = "${file:ssl.truststore.type:storetype}"
-    val SslKeystorePasswordVal = "${file:ssl.keystore.password:password}"
+    val PollingIntervalVal = f"$${file:polling.interval:interval}"
+    val PollingIntervalUpdateVal = f"$${file:polling.interval:updinterval}"
+    val SslTruststoreTypeVal = f"$${file:ssl.truststore.type:storetype}"
+    val SslKeystorePasswordVal = f"$${file:ssl.keystore.password:password}"
 
     val configPrefix = listenerPrefix(SecureExternal)
-    var brokerConfigs = describeConfig(adminClients.head, servers).entries.asScala
+    val brokerConfigs = describeConfig(adminClients.head, servers).entries.asScala
     // the following are values before updated
     assertTrue("Initial value of polling interval", brokerConfigs.find(_.name == TestMetricsReporter.PollingIntervalProp) == None)
     assertTrue("Initial value of ssl truststore type", brokerConfigs.find(_.name == configPrefix+KafkaConfig.SslTruststoreTypeProp) == None)
@@ -1187,7 +1187,7 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
     val bootstrapServers = TestUtils.bootstrapServers(servers, new ListenerName(listenerName))
     config.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers)
     config.put(AdminClientConfig.METADATA_MAX_AGE_CONFIG, "10")
-    val adminClient = AdminClient.create(config)
+    val adminClient = Admin.create(config)
     adminClients += adminClient
     adminClient
   }

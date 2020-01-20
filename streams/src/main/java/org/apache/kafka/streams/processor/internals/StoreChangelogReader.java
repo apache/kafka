@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import java.util.Map.Entry;
+import java.util.concurrent.ConcurrentHashMap;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
@@ -47,7 +47,7 @@ public class StoreChangelogReader implements ChangelogReader {
     private final StateRestoreListener userStateRestoreListener;
     private final Map<TopicPartition, Long> restoreToOffsets = new HashMap<>();
     private final Map<String, List<PartitionInfo>> partitionInfo = new HashMap<>();
-    private final Map<TopicPartition, StateRestorer> stateRestorers = new HashMap<>();
+    private final Map<TopicPartition, StateRestorer> stateRestorers = new ConcurrentHashMap<>();
     private final Set<TopicPartition> needsRestoring = new HashSet<>();
     private final Set<TopicPartition> needsInitializing = new HashSet<>();
     private final Set<TopicPartition> completedRestorers = new HashSet<>();
@@ -70,6 +70,8 @@ public class StoreChangelogReader implements ChangelogReader {
             stateRestorers.put(restorer.partition(), restorer);
 
             log.trace("Added restorer for changelog {}", restorer.partition());
+        } else {
+            log.debug("Skip re-adding restorer for changelog {}", restorer.partition());
         }
 
         needsInitializing.add(restorer.partition());
@@ -80,9 +82,8 @@ public class StoreChangelogReader implements ChangelogReader {
             initialize(active);
         }
 
-        if (needsRestoring.isEmpty()) {
-            restoreConsumer.unsubscribe();
-            return completed();
+        if (checkForCompletedRestoration()) {
+            return completedRestorers;
         }
 
         try {
@@ -117,11 +118,9 @@ public class StoreChangelogReader implements ChangelogReader {
 
         needsRestoring.removeAll(completedRestorers);
 
-        if (needsRestoring.isEmpty()) {
-            restoreConsumer.unsubscribe();
-        }
+        checkForCompletedRestoration();
 
-        return completed();
+        return completedRestorers;
     }
 
     private void initialize(final RestoringTasks active) {
@@ -208,6 +207,8 @@ public class StoreChangelogReader implements ChangelogReader {
                         restorer.checkpoint(),
                         restoreToOffsets.get(partition));
                 restorer.setStartingOffset(restoreConsumer.position(partition));
+
+                log.debug("Calling restorer for partition {}", partition);
                 restorer.restoreStarted();
             } else {
                 log.trace("Did not find checkpoint from changelog {} for store {}, rewinding to beginning.", partition, restorer.storeName());
@@ -256,10 +257,6 @@ public class StoreChangelogReader implements ChangelogReader {
                   endOffset);
     }
 
-    private Collection<TopicPartition> completed() {
-        return completedRestorers;
-    }
-
     private void refreshChangelogInfo() {
         try {
             partitionInfo.putAll(restoreConsumer.listTopics());
@@ -281,13 +278,43 @@ public class StoreChangelogReader implements ChangelogReader {
     }
 
     @Override
-    public void reset() {
+    public void remove(final List<TopicPartition> revokedPartitions) {
+        for (final TopicPartition partition : revokedPartitions) {
+            partitionInfo.remove(partition.topic());
+            stateRestorers.remove(partition);
+            needsRestoring.remove(partition);
+            restoreToOffsets.remove(partition);
+            needsInitializing.remove(partition);
+            completedRestorers.remove(partition);
+        }
+    }
+
+    @Override
+    public void clear() {
         partitionInfo.clear();
         stateRestorers.clear();
         needsRestoring.clear();
         restoreToOffsets.clear();
         needsInitializing.clear();
         completedRestorers.clear();
+    }
+
+    @Override
+    public boolean isEmpty() {
+        return stateRestorers.isEmpty()
+            && needsRestoring.isEmpty()
+            && restoreToOffsets.isEmpty()
+            && needsInitializing.isEmpty()
+            && completedRestorers.isEmpty();
+    }
+
+    @Override
+    public String toString() {
+        return "RestoreToOffset: " + restoreToOffsets + "\n" +
+               "StateRestorers: " + stateRestorers + "\n" +
+               "NeedsRestoring: " + needsRestoring + "\n" +
+               "NeedsInitializing: " + needsInitializing + "\n" +
+               "CompletedRestorers: " + completedRestorers + "\n";
     }
 
     private long processNext(final List<ConsumerRecord<byte[], byte[]>> records,
@@ -330,7 +357,14 @@ public class StoreChangelogReader implements ChangelogReader {
         return nextPosition;
     }
 
-
+    private boolean checkForCompletedRestoration() {
+        if (needsRestoring.isEmpty()) {
+            log.info("Finished restoring all active tasks");
+            restoreConsumer.unsubscribe();
+            return true;
+        }
+        return false;
+    }
 
     private boolean hasPartition(final TopicPartition topicPartition) {
         final List<PartitionInfo> partitions = partitionInfo.get(topicPartition.topic());

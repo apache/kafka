@@ -32,7 +32,9 @@ import org.apache.kafka.common.utils.Time
 import scala.collection.{Seq, immutable, mutable}
 import scala.collection.JavaConverters._
 
-private[group] sealed trait GroupState
+private[group] sealed trait GroupState {
+  val validPreviousStates: Set[GroupState]
+}
 
 /**
  * Group is preparing to rebalance
@@ -47,7 +49,9 @@ private[group] sealed trait GroupState
  *             all members have left the group => Empty
  *             group is removed by partition emigration => Dead
  */
-private[group] case object PreparingRebalance extends GroupState
+private[group] case object PreparingRebalance extends GroupState {
+  val validPreviousStates: Set[GroupState] = Set(Stable, CompletingRebalance, Empty)
+}
 
 /**
  * Group is awaiting state assignment from the leader
@@ -62,7 +66,9 @@ private[group] case object PreparingRebalance extends GroupState
  *             member failure detected => PreparingRebalance
  *             group is removed by partition emigration => Dead
  */
-private[group] case object CompletingRebalance extends GroupState
+private[group] case object CompletingRebalance extends GroupState {
+  val validPreviousStates: Set[GroupState] = Set(PreparingRebalance)
+}
 
 /**
  * Group is stable
@@ -78,7 +84,9 @@ private[group] case object CompletingRebalance extends GroupState
  *             follower join-group with new metadata => PreparingRebalance
  *             group is removed by partition emigration => Dead
  */
-private[group] case object Stable extends GroupState
+private[group] case object Stable extends GroupState {
+  val validPreviousStates: Set[GroupState] = Set(CompletingRebalance)
+}
 
 /**
  * Group has no more members and its metadata is being removed
@@ -91,7 +99,9 @@ private[group] case object Stable extends GroupState
  *         allow offset fetch requests
  * transition: Dead is a final state before group metadata is cleaned up, so there are no transitions
  */
-private[group] case object Dead extends GroupState
+private[group] case object Dead extends GroupState {
+  val validPreviousStates: Set[GroupState] = Set(Stable, PreparingRebalance, CompletingRebalance, Empty, Dead)
+}
 
 /**
   * Group has no more members, but lingers until all offsets have expired. This state
@@ -108,16 +118,12 @@ private[group] case object Dead extends GroupState
   *             group is removed by partition emigration => Dead
   *             group is removed by expiration => Dead
   */
-private[group] case object Empty extends GroupState
+private[group] case object Empty extends GroupState {
+  val validPreviousStates: Set[GroupState] = Set(PreparingRebalance)
+}
 
 
 private object GroupMetadata {
-  private val validPreviousStates: Map[GroupState, Set[GroupState]] =
-    Map(Dead -> Set(Stable, PreparingRebalance, CompletingRebalance, Empty, Dead),
-      CompletingRebalance -> Set(PreparingRebalance),
-      Stable -> Set(CompletingRebalance),
-      PreparingRebalance -> Set(Stable, CompletingRebalance, Empty),
-      Empty -> Set(PreparingRebalance))
 
   def loadGroup(groupId: String,
                 initialState: GroupState,
@@ -164,7 +170,7 @@ case class GroupSummary(state: String,
 /**
   * We cache offset commits along with their commit record offset. This enables us to ensure that the latest offset
   * commit is always materialized when we have a mix of transactional and regular offset commits. Without preserving
-  * information of the commit record offset, compaction of the offsets topic it self may result in the wrong offset commit
+  * information of the commit record offset, compaction of the offsets topic itself may result in the wrong offset commit
   * being materialized.
   */
 case class CommitRecordMetadataAndOffset(appendedBatchOffset: Option[Long], offsetAndMetadata: OffsetAndMetadata) {
@@ -396,7 +402,7 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
       false
   }
 
-  def canRebalance = GroupMetadata.validPreviousStates(PreparingRebalance).contains(state)
+  def canRebalance = PreparingRebalance.validPreviousStates.contains(state)
 
   def transitionTo(groupState: GroupState): Unit = {
     assertValidTransition(groupState)
@@ -671,10 +677,17 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
     }
   }
 
-  def activeProducers = pendingTransactionalOffsetCommits.keySet
+  def activeProducers: collection.Set[Long] = pendingTransactionalOffsetCommits.keySet
 
-  def hasPendingOffsetCommitsFromProducer(producerId: Long) =
+  def hasPendingOffsetCommitsFromProducer(producerId: Long): Boolean =
     pendingTransactionalOffsetCommits.contains(producerId)
+
+  def hasPendingOffsetCommitsForTopicPartition(topicPartition: TopicPartition): Boolean = {
+    pendingOffsetCommits.contains(topicPartition) ||
+      pendingTransactionalOffsetCommits.exists(
+        _._2.contains(topicPartition)
+      )
+  }
 
   def removeAllOffsets(): immutable.Map[TopicPartition, OffsetAndMetadata] = removeOffsets(offsets.keySet.toSeq)
 
@@ -764,9 +777,9 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
   def hasOffsets = offsets.nonEmpty || pendingOffsetCommits.nonEmpty || pendingTransactionalOffsetCommits.nonEmpty
 
   private def assertValidTransition(targetState: GroupState): Unit = {
-    if (!GroupMetadata.validPreviousStates(targetState).contains(state))
+    if (!targetState.validPreviousStates.contains(state))
       throw new IllegalStateException("Group %s should be in the %s states before moving to %s state. Instead it is in %s state"
-        .format(groupId, GroupMetadata.validPreviousStates(targetState).mkString(","), targetState, state))
+        .format(groupId, targetState.validPreviousStates.mkString(","), targetState, state))
   }
 
   override def toString: String = {

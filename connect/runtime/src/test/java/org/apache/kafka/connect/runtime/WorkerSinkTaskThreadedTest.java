@@ -23,6 +23,7 @@ import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.data.Schema;
@@ -572,8 +573,8 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
                         return records;
                     }
                 });
-        EasyMock.expect(keyConverter.toConnectData(TOPIC, RAW_KEY)).andReturn(new SchemaAndValue(KEY_SCHEMA, KEY)).anyTimes();
-        EasyMock.expect(valueConverter.toConnectData(TOPIC, RAW_VALUE)).andReturn(new SchemaAndValue(VALUE_SCHEMA, VALUE)).anyTimes();
+        EasyMock.expect(keyConverter.toConnectData(TOPIC, emptyHeaders(), RAW_KEY)).andReturn(new SchemaAndValue(KEY_SCHEMA, KEY)).anyTimes();
+        EasyMock.expect(valueConverter.toConnectData(TOPIC, emptyHeaders(), RAW_VALUE)).andReturn(new SchemaAndValue(VALUE_SCHEMA, VALUE)).anyTimes();
 
         final Capture<SinkRecord> recordCapture = EasyMock.newCapture();
         EasyMock.expect(transformationChain.apply(EasyMock.capture(recordCapture))).andAnswer(
@@ -606,8 +607,8 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
                         return records;
                     }
                 });
-        EasyMock.expect(keyConverter.toConnectData(TOPIC, RAW_KEY)).andReturn(new SchemaAndValue(KEY_SCHEMA, KEY));
-        EasyMock.expect(valueConverter.toConnectData(TOPIC, RAW_VALUE)).andReturn(new SchemaAndValue(VALUE_SCHEMA, VALUE));
+        EasyMock.expect(keyConverter.toConnectData(TOPIC, emptyHeaders(), RAW_KEY)).andReturn(new SchemaAndValue(KEY_SCHEMA, KEY));
+        EasyMock.expect(valueConverter.toConnectData(TOPIC, emptyHeaders(), RAW_VALUE)).andReturn(new SchemaAndValue(VALUE_SCHEMA, VALUE));
         sinkTask.put(EasyMock.anyObject(Collection.class));
         return EasyMock.expectLastCall();
     }
@@ -651,8 +652,8 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
         consumer.seek(TOPIC_PARTITION, startOffset);
         EasyMock.expectLastCall();
 
-        EasyMock.expect(keyConverter.toConnectData(TOPIC, RAW_KEY)).andReturn(new SchemaAndValue(KEY_SCHEMA, KEY));
-        EasyMock.expect(valueConverter.toConnectData(TOPIC, RAW_VALUE)).andReturn(new SchemaAndValue(VALUE_SCHEMA, VALUE));
+        EasyMock.expect(keyConverter.toConnectData(TOPIC, emptyHeaders(), RAW_KEY)).andReturn(new SchemaAndValue(KEY_SCHEMA, KEY));
+        EasyMock.expect(valueConverter.toConnectData(TOPIC, emptyHeaders(), RAW_VALUE)).andReturn(new SchemaAndValue(VALUE_SCHEMA, VALUE));
         sinkTask.put(EasyMock.anyObject(Collection.class));
         return EasyMock.expectLastCall();
     }
@@ -692,6 +693,10 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
             }
         });
         return capturedCallback;
+    }
+
+    private RecordHeaders emptyHeaders() {
+        return new RecordHeaders();
     }
 
     private static abstract class TestSinkTask extends SinkTask {

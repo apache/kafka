@@ -39,9 +39,9 @@ import org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperator;
 import org.apache.kafka.connect.runtime.errors.Stage;
 import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.kafka.connect.source.SourceTask;
+import org.apache.kafka.connect.storage.CloseableOffsetStorageReader;
 import org.apache.kafka.connect.storage.Converter;
 import org.apache.kafka.connect.storage.HeaderConverter;
-import org.apache.kafka.connect.storage.OffsetStorageReader;
 import org.apache.kafka.connect.storage.OffsetStorageWriter;
 import org.apache.kafka.connect.util.ConnectUtils;
 import org.apache.kafka.connect.util.ConnectorTaskId;
@@ -75,7 +75,7 @@ class WorkerSourceTask extends WorkerTask {
     private final HeaderConverter headerConverter;
     private final TransformationChain<SourceRecord> transformationChain;
     private KafkaProducer<byte[], byte[]> producer;
-    private final OffsetStorageReader offsetReader;
+    private final CloseableOffsetStorageReader offsetReader;
     private final OffsetStorageWriter offsetWriter;
     private final Time time;
     private final SourceTaskMetricsGroup sourceTaskMetricsGroup;
@@ -105,7 +105,7 @@ class WorkerSourceTask extends WorkerTask {
                             HeaderConverter headerConverter,
                             TransformationChain<SourceRecord> transformationChain,
                             KafkaProducer<byte[], byte[]> producer,
-                            OffsetStorageReader offsetReader,
+                            CloseableOffsetStorageReader offsetReader,
                             OffsetStorageWriter offsetWriter,
                             WorkerConfig workerConfig,
                             ClusterConfigState configState,
@@ -170,6 +170,12 @@ class WorkerSourceTask extends WorkerTask {
     @Override
     protected void releaseResources() {
         sourceTaskMetricsGroup.close();
+    }
+
+    @Override
+    public void cancel() {
+        super.cancel();
+        offsetReader.close();
     }
 
     @Override
@@ -278,10 +284,10 @@ class WorkerSourceTask extends WorkerTask {
 
         RecordHeaders headers = retryWithToleranceOperator.execute(() -> convertHeaderFor(record), Stage.HEADER_CONVERTER, headerConverter.getClass());
 
-        byte[] key = retryWithToleranceOperator.execute(() -> keyConverter.fromConnectData(record.topic(), record.keySchema(), record.key()),
+        byte[] key = retryWithToleranceOperator.execute(() -> keyConverter.fromConnectData(record.topic(), headers, record.keySchema(), record.key()),
                 Stage.KEY_CONVERTER, keyConverter.getClass());
 
-        byte[] value = retryWithToleranceOperator.execute(() -> valueConverter.fromConnectData(record.topic(), record.valueSchema(), record.value()),
+        byte[] value = retryWithToleranceOperator.execute(() -> valueConverter.fromConnectData(record.topic(), headers, record.valueSchema(), record.value()),
                 Stage.VALUE_CONVERTER, valueConverter.getClass());
 
         if (retryWithToleranceOperator.failed()) {
@@ -300,7 +306,8 @@ class WorkerSourceTask extends WorkerTask {
     private boolean sendRecords() {
         int processed = 0;
         recordBatch(toSend.size());
-        final SourceRecordWriteCounter counter = new SourceRecordWriteCounter(toSend.size(), sourceTaskMetricsGroup);
+        final SourceRecordWriteCounter counter =
+                toSend.size() > 0 ? new SourceRecordWriteCounter(toSend.size(), sourceTaskMetricsGroup) : null;
         for (final SourceRecord preTransformRecord : toSend) {
             maybeThrowProducerSendException();
 
@@ -309,7 +316,7 @@ class WorkerSourceTask extends WorkerTask {
             final ProducerRecord<byte[], byte[]> producerRecord = convertTransformedRecord(record);
             if (producerRecord == null || retryWithToleranceOperator.failed()) {
                 counter.skipRecord();
-                commitTaskRecord(preTransformRecord);
+                commitTaskRecord(preTransformRecord, null);
                 continue;
             }
 
@@ -347,7 +354,7 @@ class WorkerSourceTask extends WorkerTask {
                                             WorkerSourceTask.this,
                                             recordMetadata.topic(), recordMetadata.partition(),
                                             recordMetadata.offset());
-                                    commitTaskRecord(preTransformRecord);
+                                    commitTaskRecord(preTransformRecord, recordMetadata);
                                 }
                             }
                         });
@@ -381,9 +388,9 @@ class WorkerSourceTask extends WorkerTask {
         return result;
     }
 
-    private void commitTaskRecord(SourceRecord record) {
+    private void commitTaskRecord(SourceRecord record, RecordMetadata metadata) {
         try {
-            task.commitRecord(record);
+            task.commitRecord(record, metadata);
         } catch (Throwable t) {
             log.error("{} Exception thrown while calling task.commitRecord()", this, t);
         }

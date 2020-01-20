@@ -18,8 +18,6 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.streams.processor.DefaultPartitionGrouper;
-import org.apache.kafka.streams.processor.PartitionGrouper;
 import org.apache.kafka.streams.processor.TaskId;
 
 import java.util.HashMap;
@@ -29,8 +27,10 @@ import java.util.Set;
 /**
  * Used for testing the assignment of a subset of a topology group, not the entire topology
  */
-public class SingleGroupPartitionGrouperStub implements PartitionGrouper {
-    private PartitionGrouper defaultPartitionGrouper = new DefaultPartitionGrouper();
+@SuppressWarnings("deprecation")
+public class SingleGroupPartitionGrouperStub implements org.apache.kafka.streams.processor.PartitionGrouper {
+    private org.apache.kafka.streams.processor.PartitionGrouper defaultPartitionGrouper =
+        new org.apache.kafka.streams.processor.DefaultPartitionGrouper();
 
     @Override
     public Map<TaskId, Set<TopicPartition>> partitionGroups(final Map<Integer, Set<String>> topicGroups, final Cluster metadata) {
@@ -40,7 +40,6 @@ public class SingleGroupPartitionGrouperStub implements PartitionGrouper {
             includedTopicGroups.put(entry.getKey(), entry.getValue());
             break; // arbitrarily use the first entry only
         }
-        final Map<TaskId, Set<TopicPartition>> result = defaultPartitionGrouper.partitionGroups(includedTopicGroups, metadata);
-        return result;
+        return defaultPartitionGrouper.partitionGroups(includedTopicGroups, metadata);
     }
 }

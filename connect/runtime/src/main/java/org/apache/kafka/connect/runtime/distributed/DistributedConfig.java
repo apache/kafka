@@ -22,15 +22,20 @@ import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.runtime.WorkerConfig;
 
+import javax.crypto.KeyGenerator;
+import javax.crypto.Mac;
+import java.security.InvalidParameterException;
+import java.security.NoSuchAlgorithmException;
+import java.util.Collections;
+import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 
 import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
 import static org.apache.kafka.common.config.ConfigDef.Range.between;
 
 public class DistributedConfig extends WorkerConfig {
-    private static final ConfigDef CONFIG;
-
     /*
      * NOTE: DO NOT CHANGE EITHER CONFIG STRINGS OR THEIR JAVA VARIABLE NAMES AS
      * THESE ARE PART OF THE PUBLIC API AND CHANGE WILL BREAK USER CODE.
@@ -138,7 +143,7 @@ public class DistributedConfig extends WorkerConfig {
      */
     public static final String CONNECT_PROTOCOL_CONFIG = "connect.protocol";
     public static final String CONNECT_PROTOCOL_DOC = "Compatibility mode for Kafka Connect Protocol";
-    public static final String CONNECT_PROTOCOL_DEFAULT = ConnectProtocolCompatibility.COMPATIBLE.toString();
+    public static final String CONNECT_PROTOCOL_DEFAULT = ConnectProtocolCompatibility.SESSIONED.toString();
 
     /**
      * <code>connect.protocol</code>
@@ -150,162 +155,220 @@ public class DistributedConfig extends WorkerConfig {
             + "period the connectors and tasks of the departed workers remain unassigned";
     public static final int SCHEDULED_REBALANCE_MAX_DELAY_MS_DEFAULT = Math.toIntExact(TimeUnit.SECONDS.toMillis(300));
 
-    static {
-        CONFIG = baseConfigDef()
-                .define(GROUP_ID_CONFIG,
-                        ConfigDef.Type.STRING,
-                        ConfigDef.Importance.HIGH,
-                        GROUP_ID_DOC)
-                .define(SESSION_TIMEOUT_MS_CONFIG,
-                        ConfigDef.Type.INT,
-                        10000,
-                        ConfigDef.Importance.HIGH,
-                        SESSION_TIMEOUT_MS_DOC)
-                .define(REBALANCE_TIMEOUT_MS_CONFIG,
-                        ConfigDef.Type.INT,
-                        60000,
-                        ConfigDef.Importance.HIGH,
-                        REBALANCE_TIMEOUT_MS_DOC)
-                .define(HEARTBEAT_INTERVAL_MS_CONFIG,
-                        ConfigDef.Type.INT,
-                        3000,
-                        ConfigDef.Importance.HIGH,
-                        HEARTBEAT_INTERVAL_MS_DOC)
-                .define(CommonClientConfigs.METADATA_MAX_AGE_CONFIG,
-                        ConfigDef.Type.LONG,
-                        5 * 60 * 1000,
-                        atLeast(0),
-                        ConfigDef.Importance.LOW,
-                        CommonClientConfigs.METADATA_MAX_AGE_DOC)
-                .define(CommonClientConfigs.CLIENT_ID_CONFIG,
-                        ConfigDef.Type.STRING,
-                        "",
-                        ConfigDef.Importance.LOW,
-                        CommonClientConfigs.CLIENT_ID_DOC)
-                .define(CommonClientConfigs.SEND_BUFFER_CONFIG,
-                        ConfigDef.Type.INT,
-                        128 * 1024,
-                        atLeast(0),
-                        ConfigDef.Importance.MEDIUM,
-                        CommonClientConfigs.SEND_BUFFER_DOC)
-                .define(CommonClientConfigs.RECEIVE_BUFFER_CONFIG,
-                        ConfigDef.Type.INT,
-                        32 * 1024,
-                        atLeast(0),
-                        ConfigDef.Importance.MEDIUM,
-                        CommonClientConfigs.RECEIVE_BUFFER_DOC)
-                .define(CommonClientConfigs.RECONNECT_BACKOFF_MS_CONFIG,
-                        ConfigDef.Type.LONG,
-                        50L,
-                        atLeast(0L),
-                        ConfigDef.Importance.LOW,
-                        CommonClientConfigs.RECONNECT_BACKOFF_MS_DOC)
-                .define(CommonClientConfigs.RECONNECT_BACKOFF_MAX_MS_CONFIG,
-                        ConfigDef.Type.LONG,
-                        1000L,
-                        atLeast(0L),
-                        ConfigDef.Importance.LOW,
-                        CommonClientConfigs.RECONNECT_BACKOFF_MAX_MS_DOC)
-                .define(CommonClientConfigs.RETRY_BACKOFF_MS_CONFIG,
-                        ConfigDef.Type.LONG,
-                        100L,
-                        atLeast(0L),
-                        ConfigDef.Importance.LOW,
-                        CommonClientConfigs.RETRY_BACKOFF_MS_DOC)
-                .define(CommonClientConfigs.REQUEST_TIMEOUT_MS_CONFIG,
-                        ConfigDef.Type.INT,
-                        40 * 1000,
-                        atLeast(0),
-                        ConfigDef.Importance.MEDIUM,
-                        CommonClientConfigs.REQUEST_TIMEOUT_MS_DOC)
-                        /* default is set to be a bit lower than the server default (10 min), to avoid both client and server closing connection at same time */
-                .define(CommonClientConfigs.CONNECTIONS_MAX_IDLE_MS_CONFIG,
-                        ConfigDef.Type.LONG,
-                        9 * 60 * 1000,
-                        ConfigDef.Importance.MEDIUM,
-                        CommonClientConfigs.CONNECTIONS_MAX_IDLE_MS_DOC)
-                // security support
-                .define(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG,
-                        ConfigDef.Type.STRING,
-                        CommonClientConfigs.DEFAULT_SECURITY_PROTOCOL,
-                        ConfigDef.Importance.MEDIUM,
-                        CommonClientConfigs.SECURITY_PROTOCOL_DOC)
-                .withClientSslSupport()
-                .withClientSaslSupport()
-                .define(WORKER_SYNC_TIMEOUT_MS_CONFIG,
-                        ConfigDef.Type.INT,
-                        3000,
-                        ConfigDef.Importance.MEDIUM,
-                        WORKER_SYNC_TIMEOUT_MS_DOC)
-                .define(WORKER_UNSYNC_BACKOFF_MS_CONFIG,
-                        ConfigDef.Type.INT,
-                        WORKER_UNSYNC_BACKOFF_MS_DEFAULT,
-                        ConfigDef.Importance.MEDIUM,
-                        WORKER_UNSYNC_BACKOFF_MS_DOC)
-                .define(OFFSET_STORAGE_TOPIC_CONFIG,
-                        ConfigDef.Type.STRING,
-                        ConfigDef.Importance.HIGH,
-                        OFFSET_STORAGE_TOPIC_CONFIG_DOC)
-                .define(OFFSET_STORAGE_PARTITIONS_CONFIG,
-                        ConfigDef.Type.INT,
-                        25,
-                        atLeast(1),
-                        ConfigDef.Importance.LOW,
-                        OFFSET_STORAGE_PARTITIONS_CONFIG_DOC)
-                .define(OFFSET_STORAGE_REPLICATION_FACTOR_CONFIG,
-                        ConfigDef.Type.SHORT,
-                        (short) 3,
-                        atLeast(1),
-                        ConfigDef.Importance.LOW,
-                        OFFSET_STORAGE_REPLICATION_FACTOR_CONFIG_DOC)
-                .define(CONFIG_TOPIC_CONFIG,
-                        ConfigDef.Type.STRING,
-                        ConfigDef.Importance.HIGH,
-                        CONFIG_TOPIC_CONFIG_DOC)
-                .define(CONFIG_STORAGE_REPLICATION_FACTOR_CONFIG,
-                        ConfigDef.Type.SHORT,
-                        (short) 3,
-                        atLeast(1),
-                        ConfigDef.Importance.LOW,
-                        CONFIG_STORAGE_REPLICATION_FACTOR_CONFIG_DOC)
-                .define(STATUS_STORAGE_TOPIC_CONFIG,
-                        ConfigDef.Type.STRING,
-                        ConfigDef.Importance.HIGH,
-                        STATUS_STORAGE_TOPIC_CONFIG_DOC)
-                .define(STATUS_STORAGE_PARTITIONS_CONFIG,
-                        ConfigDef.Type.INT,
-                        5,
-                        atLeast(1),
-                        ConfigDef.Importance.LOW,
-                        STATUS_STORAGE_PARTITIONS_CONFIG_DOC)
-                .define(STATUS_STORAGE_REPLICATION_FACTOR_CONFIG,
-                        ConfigDef.Type.SHORT,
-                        (short) 3,
-                        atLeast(1),
-                        ConfigDef.Importance.LOW,
-                        STATUS_STORAGE_REPLICATION_FACTOR_CONFIG_DOC)
-                .define(CONNECT_PROTOCOL_CONFIG,
-                        ConfigDef.Type.STRING,
-                        CONNECT_PROTOCOL_DEFAULT,
-                        ConfigDef.LambdaValidator.with(
-                            (name, value) -> {
-                                try {
-                                    ConnectProtocolCompatibility.compatibility((String) value);
-                                } catch (Throwable t) {
-                                    throw new ConfigException(name, value, "Invalid Connect protocol "
-                                            + "compatibility");
-                                }
-                            },
-                            () -> "[" + Utils.join(ConnectProtocolCompatibility.values(), ", ") + "]"),
-                        ConfigDef.Importance.LOW,
-                        CONNECT_PROTOCOL_DOC)
-                .define(SCHEDULED_REBALANCE_MAX_DELAY_MS_CONFIG,
-                        ConfigDef.Type.INT,
-                        SCHEDULED_REBALANCE_MAX_DELAY_MS_DEFAULT,
-                        between(0, Integer.MAX_VALUE),
-                        ConfigDef.Importance.LOW,
-                        SCHEDULED_REBALANCE_MAX_DELAY_MS_DOC);
-    }
+    public static final String INTER_WORKER_KEY_GENERATION_ALGORITHM_CONFIG = "inter.worker.key.generation.algorithm";
+    public static final String INTER_WORKER_KEY_GENERATION_ALGORITHM_DOC = "The algorithm to use for generating internal request keys";
+    public static final String INTER_WORKER_KEY_GENERATION_ALGORITHM_DEFAULT = "HmacSHA256";
+
+    public static final String INTER_WORKER_KEY_SIZE_CONFIG = "inter.worker.key.size";
+    public static final String INTER_WORKER_KEY_SIZE_DOC = "The size of the key to use for signing internal requests, in bits. "
+        + "If null, the default key size for the key generation algorithm will be used.";
+    public static final Long INTER_WORKER_KEY_SIZE_DEFAULT = null;
+
+    public static final String INTER_WORKER_KEY_TTL_MS_CONFIG = "inter.worker.key.ttl.ms";
+    public static final String INTER_WORKER_KEY_TTL_MS_MS_DOC = "The TTL of generated session keys used for "
+        + "internal request validation (in milliseconds)";
+    public static final int INTER_WORKER_KEY_TTL_MS_MS_DEFAULT = Math.toIntExact(TimeUnit.HOURS.toMillis(1));
+
+    public static final String INTER_WORKER_SIGNATURE_ALGORITHM_CONFIG = "inter.worker.signature.algorithm";
+    public static final String INTER_WORKER_SIGNATURE_ALGORITHM_DOC = "The algorithm used to sign internal requests";
+    public static final String INTER_WORKER_SIGNATURE_ALGORITHM_DEFAULT = "HmacSHA256";
+
+    public static final String INTER_WORKER_VERIFICATION_ALGORITHMS_CONFIG = "inter.worker.verification.algorithms";
+    public static final String INTER_WORKER_VERIFICATION_ALGORITHMS_DOC = "A list of permitted algorithms for verifying internal requests";
+    public static final List<String> INTER_WORKER_VERIFICATION_ALGORITHMS_DEFAULT = Collections.singletonList(INTER_WORKER_SIGNATURE_ALGORITHM_DEFAULT);
+
+    @SuppressWarnings("unchecked")
+    private static final ConfigDef CONFIG = baseConfigDef()
+            .define(GROUP_ID_CONFIG,
+                    ConfigDef.Type.STRING,
+                    ConfigDef.Importance.HIGH,
+                    GROUP_ID_DOC)
+            .define(SESSION_TIMEOUT_MS_CONFIG,
+                    ConfigDef.Type.INT,
+                    Math.toIntExact(TimeUnit.SECONDS.toMillis(10)),
+                    ConfigDef.Importance.HIGH,
+                    SESSION_TIMEOUT_MS_DOC)
+            .define(REBALANCE_TIMEOUT_MS_CONFIG,
+                    ConfigDef.Type.INT,
+                    Math.toIntExact(TimeUnit.MINUTES.toMillis(1)),
+                    ConfigDef.Importance.HIGH,
+                    REBALANCE_TIMEOUT_MS_DOC)
+            .define(HEARTBEAT_INTERVAL_MS_CONFIG,
+                    ConfigDef.Type.INT,
+                    Math.toIntExact(TimeUnit.SECONDS.toMillis(3)),
+                    ConfigDef.Importance.HIGH,
+                    HEARTBEAT_INTERVAL_MS_DOC)
+            .define(CommonClientConfigs.METADATA_MAX_AGE_CONFIG,
+                    ConfigDef.Type.LONG,
+                    TimeUnit.MINUTES.toMillis(5),
+                    atLeast(0),
+                    ConfigDef.Importance.LOW,
+                    CommonClientConfigs.METADATA_MAX_AGE_DOC)
+            .define(CommonClientConfigs.CLIENT_ID_CONFIG,
+                    ConfigDef.Type.STRING,
+                    "",
+                    ConfigDef.Importance.LOW,
+                    CommonClientConfigs.CLIENT_ID_DOC)
+            .define(CommonClientConfigs.SEND_BUFFER_CONFIG,
+                    ConfigDef.Type.INT,
+                    128 * 1024,
+                    atLeast(0),
+                    ConfigDef.Importance.MEDIUM,
+                    CommonClientConfigs.SEND_BUFFER_DOC)
+            .define(CommonClientConfigs.RECEIVE_BUFFER_CONFIG,
+                    ConfigDef.Type.INT,
+                    32 * 1024,
+                    atLeast(0),
+                    ConfigDef.Importance.MEDIUM,
+                    CommonClientConfigs.RECEIVE_BUFFER_DOC)
+            .define(CommonClientConfigs.RECONNECT_BACKOFF_MS_CONFIG,
+                    ConfigDef.Type.LONG,
+                    50L,
+                    atLeast(0L),
+                    ConfigDef.Importance.LOW,
+                    CommonClientConfigs.RECONNECT_BACKOFF_MS_DOC)
+            .define(CommonClientConfigs.RECONNECT_BACKOFF_MAX_MS_CONFIG,
+                    ConfigDef.Type.LONG,
+                    TimeUnit.SECONDS.toMillis(1),
+                    atLeast(0L),
+                    ConfigDef.Importance.LOW,
+                    CommonClientConfigs.RECONNECT_BACKOFF_MAX_MS_DOC)
+            .define(CommonClientConfigs.RETRY_BACKOFF_MS_CONFIG,
+                    ConfigDef.Type.LONG,
+                    100L,
+                    atLeast(0L),
+                    ConfigDef.Importance.LOW,
+                    CommonClientConfigs.RETRY_BACKOFF_MS_DOC)
+            .define(CommonClientConfigs.REQUEST_TIMEOUT_MS_CONFIG,
+                    ConfigDef.Type.INT,
+                    Math.toIntExact(TimeUnit.SECONDS.toMillis(40)),
+                    atLeast(0),
+                    ConfigDef.Importance.MEDIUM,
+                    CommonClientConfigs.REQUEST_TIMEOUT_MS_DOC)
+                    /* default is set to be a bit lower than the server default (10 min), to avoid both client and server closing connection at same time */
+            .define(CommonClientConfigs.CONNECTIONS_MAX_IDLE_MS_CONFIG,
+                    ConfigDef.Type.LONG,
+                    TimeUnit.MINUTES.toMillis(9),
+                    ConfigDef.Importance.MEDIUM,
+                    CommonClientConfigs.CONNECTIONS_MAX_IDLE_MS_DOC)
+            // security support
+            .define(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG,
+                    ConfigDef.Type.STRING,
+                    CommonClientConfigs.DEFAULT_SECURITY_PROTOCOL,
+                    ConfigDef.Importance.MEDIUM,
+                    CommonClientConfigs.SECURITY_PROTOCOL_DOC)
+            .withClientSslSupport()
+            .withClientSaslSupport()
+            .define(WORKER_SYNC_TIMEOUT_MS_CONFIG,
+                    ConfigDef.Type.INT,
+                    3000,
+                    ConfigDef.Importance.MEDIUM,
+                    WORKER_SYNC_TIMEOUT_MS_DOC)
+            .define(WORKER_UNSYNC_BACKOFF_MS_CONFIG,
+                    ConfigDef.Type.INT,
+                    WORKER_UNSYNC_BACKOFF_MS_DEFAULT,
+                    ConfigDef.Importance.MEDIUM,
+                    WORKER_UNSYNC_BACKOFF_MS_DOC)
+            .define(OFFSET_STORAGE_TOPIC_CONFIG,
+                    ConfigDef.Type.STRING,
+                    ConfigDef.Importance.HIGH,
+                    OFFSET_STORAGE_TOPIC_CONFIG_DOC)
+            .define(OFFSET_STORAGE_PARTITIONS_CONFIG,
+                    ConfigDef.Type.INT,
+                    25,
+                    atLeast(1),
+                    ConfigDef.Importance.LOW,
+                    OFFSET_STORAGE_PARTITIONS_CONFIG_DOC)
+            .define(OFFSET_STORAGE_REPLICATION_FACTOR_CONFIG,
+                    ConfigDef.Type.SHORT,
+                    (short) 3,
+                    atLeast(1),
+                    ConfigDef.Importance.LOW,
+                    OFFSET_STORAGE_REPLICATION_FACTOR_CONFIG_DOC)
+            .define(CONFIG_TOPIC_CONFIG,
+                    ConfigDef.Type.STRING,
+                    ConfigDef.Importance.HIGH,
+                    CONFIG_TOPIC_CONFIG_DOC)
+            .define(CONFIG_STORAGE_REPLICATION_FACTOR_CONFIG,
+                    ConfigDef.Type.SHORT,
+                    (short) 3,
+                    atLeast(1),
+                    ConfigDef.Importance.LOW,
+                    CONFIG_STORAGE_REPLICATION_FACTOR_CONFIG_DOC)
+            .define(STATUS_STORAGE_TOPIC_CONFIG,
+                    ConfigDef.Type.STRING,
+                    ConfigDef.Importance.HIGH,
+                    STATUS_STORAGE_TOPIC_CONFIG_DOC)
+            .define(STATUS_STORAGE_PARTITIONS_CONFIG,
+                    ConfigDef.Type.INT,
+                    5,
+                    atLeast(1),
+                    ConfigDef.Importance.LOW,
+                    STATUS_STORAGE_PARTITIONS_CONFIG_DOC)
+            .define(STATUS_STORAGE_REPLICATION_FACTOR_CONFIG,
+                    ConfigDef.Type.SHORT,
+                    (short) 3,
+                    atLeast(1),
+                    ConfigDef.Importance.LOW,
+                    STATUS_STORAGE_REPLICATION_FACTOR_CONFIG_DOC)
+            .define(CONNECT_PROTOCOL_CONFIG,
+                    ConfigDef.Type.STRING,
+                    CONNECT_PROTOCOL_DEFAULT,
+                    ConfigDef.LambdaValidator.with(
+                        (name, value) -> {
+                            try {
+                                ConnectProtocolCompatibility.compatibility((String) value);
+                            } catch (Throwable t) {
+                                throw new ConfigException(name, value, "Invalid Connect protocol "
+                                        + "compatibility");
+                            }
+                        },
+                        () -> "[" + Utils.join(ConnectProtocolCompatibility.values(), ", ") + "]"),
+                    ConfigDef.Importance.LOW,
+                    CONNECT_PROTOCOL_DOC)
+            .define(SCHEDULED_REBALANCE_MAX_DELAY_MS_CONFIG,
+                    ConfigDef.Type.INT,
+                    SCHEDULED_REBALANCE_MAX_DELAY_MS_DEFAULT,
+                    between(0, Integer.MAX_VALUE),
+                    ConfigDef.Importance.LOW,
+                    SCHEDULED_REBALANCE_MAX_DELAY_MS_DOC)
+            .define(INTER_WORKER_KEY_TTL_MS_CONFIG,
+                    ConfigDef.Type.INT,
+                    INTER_WORKER_KEY_TTL_MS_MS_DEFAULT,
+                    between(0, Integer.MAX_VALUE),
+                    ConfigDef.Importance.LOW,
+                    INTER_WORKER_KEY_TTL_MS_MS_DOC)
+            .define(INTER_WORKER_KEY_GENERATION_ALGORITHM_CONFIG,
+                    ConfigDef.Type.STRING,
+                    INTER_WORKER_KEY_GENERATION_ALGORITHM_DEFAULT,
+                    ConfigDef.LambdaValidator.with(
+                        (name, value) -> validateKeyAlgorithm(name, (String) value),
+                        () -> "Any KeyGenerator algorithm supported by the worker JVM"
+                    ),
+                    ConfigDef.Importance.LOW,
+                    INTER_WORKER_KEY_GENERATION_ALGORITHM_DOC)
+            .define(INTER_WORKER_KEY_SIZE_CONFIG,
+                    ConfigDef.Type.INT,
+                    INTER_WORKER_KEY_SIZE_DEFAULT,
+                    ConfigDef.Importance.LOW,
+                    INTER_WORKER_KEY_SIZE_DOC)
+            .define(INTER_WORKER_SIGNATURE_ALGORITHM_CONFIG,
+                    ConfigDef.Type.STRING,
+                    INTER_WORKER_SIGNATURE_ALGORITHM_DEFAULT,
+                    ConfigDef.LambdaValidator.with(
+                        (name, value) -> validateSignatureAlgorithm(name, (String) value),
+                        () -> "Any MAC algorithm supported by the worker JVM"),
+                    ConfigDef.Importance.LOW,
+                    INTER_WORKER_SIGNATURE_ALGORITHM_DOC)
+            .define(INTER_WORKER_VERIFICATION_ALGORITHMS_CONFIG,
+                    ConfigDef.Type.LIST,
+                    INTER_WORKER_VERIFICATION_ALGORITHMS_DEFAULT,
+                    ConfigDef.LambdaValidator.with(
+                        (name, value) -> validateSignatureAlgorithms(name, (List<String>) value),
+                        () -> "A list of one or more MAC algorithms, each supported by the worker JVM"
+                    ),
+                    ConfigDef.Importance.LOW,
+                    INTER_WORKER_VERIFICATION_ALGORITHMS_DOC);
 
     @Override
     public Integer getRebalanceTimeout() {
@@ -314,9 +377,65 @@ public class DistributedConfig extends WorkerConfig {
 
     public DistributedConfig(Map<String, String> props) {
         super(CONFIG, props);
+        getInternalRequestKeyGenerator(); // Check here for a valid key size + key algorithm to fail fast if either are invalid
+        validateKeyAlgorithmAndVerificationAlgorithms();
     }
 
     public static void main(String[] args) {
         System.out.println(CONFIG.toHtml());
+    }
+
+    public KeyGenerator getInternalRequestKeyGenerator() {
+        try {
+            KeyGenerator result = KeyGenerator.getInstance(getString(INTER_WORKER_KEY_GENERATION_ALGORITHM_CONFIG));
+            Optional.ofNullable(getInt(INTER_WORKER_KEY_SIZE_CONFIG)).ifPresent(result::init);
+            return result;
+        } catch (NoSuchAlgorithmException | InvalidParameterException e) {
+            throw new ConfigException(String.format(
+                "Unable to create key generator with algorithm %s and key size %d: %s",
+                getString(INTER_WORKER_KEY_GENERATION_ALGORITHM_CONFIG),
+                getInt(INTER_WORKER_KEY_SIZE_CONFIG),
+                e.getMessage()
+            ));
+        }
+    }
+
+    private void validateKeyAlgorithmAndVerificationAlgorithms() {
+        String keyAlgorithm = getString(INTER_WORKER_KEY_GENERATION_ALGORITHM_CONFIG);
+        List<String> verificationAlgorithms = getList(INTER_WORKER_VERIFICATION_ALGORITHMS_CONFIG);
+        if (!verificationAlgorithms.contains(keyAlgorithm)) {
+            throw new ConfigException(
+                INTER_WORKER_KEY_GENERATION_ALGORITHM_CONFIG,
+                keyAlgorithm,
+                String.format("Key generation algorithm must be present in %s list", INTER_WORKER_VERIFICATION_ALGORITHMS_CONFIG)
+            );
+        }
+    }
+
+    private static void validateSignatureAlgorithms(String configName, List<String> algorithms) {
+        if (algorithms.isEmpty()) {
+            throw new ConfigException(
+                configName,
+                algorithms,
+                "At least one signature verification algorithm must be provided"
+            );
+        }
+        algorithms.forEach(algorithm -> validateSignatureAlgorithm(configName, algorithm));
+    }
+
+    private static void validateSignatureAlgorithm(String configName, String algorithm) {
+        try {
+            Mac.getInstance(algorithm);
+        } catch (NoSuchAlgorithmException e) {
+            throw new ConfigException(configName, algorithm, e.getMessage());
+        }
+    }
+
+    private static void validateKeyAlgorithm(String configName, String algorithm) {
+        try {
+            KeyGenerator.getInstance(algorithm);
+        } catch (NoSuchAlgorithmException e) {
+            throw new ConfigException(configName, algorithm, e.getMessage());
+        }
     }
 }

@@ -26,12 +26,11 @@ import kafka.utils._
 import org.apache.kafka.common.errors.OffsetOutOfRangeException
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.{KafkaException, TopicPartition}
+import org.easymock.EasyMock
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
 import org.mockito.ArgumentMatchers.any
 import org.mockito.Mockito.{doAnswer, spy}
-import org.mockito.invocation.InvocationOnMock
-import org.mockito.stubbing.Answer
 
 import scala.collection.mutable
 import scala.util.{Failure, Try}
@@ -114,18 +113,16 @@ class LogManagerTest {
     logManager.shutdown()
     logManager = spy(createLogManager(dirs))
     val brokenDirs = mutable.Set[File]()
-    doAnswer(new Answer[Try[File]] {
-      override def answer(invocation: InvocationOnMock): Try[File] = {
-        // The first half of directories tried will fail, the rest goes through.
-        val logDir = invocation.getArgument[File](0)
-        if (brokenDirs.contains(logDir) || brokenDirs.size < dirs.length / 2) {
-          brokenDirs.add(logDir)
-          Failure(new Throwable("broken dir"))
-        } else {
-          invocation.callRealMethod().asInstanceOf[Try[File]]
-        }
+    doAnswer { invocation =>
+      // The first half of directories tried will fail, the rest goes through.
+      val logDir = invocation.getArgument[File](0)
+      if (brokenDirs.contains(logDir) || brokenDirs.size < dirs.length / 2) {
+        brokenDirs.add(logDir)
+        Failure(new Throwable("broken dir"))
+      } else {
+        invocation.callRealMethod().asInstanceOf[Try[File]]
       }
-    }).when(logManager).createLogDirectory(any(), any())
+    }.when(logManager).createLogDirectory(any(), any())
     logManager.startup()
 
     // Request creating a new log.
@@ -468,4 +465,101 @@ class LogManagerTest {
     log.read(offset, maxLength, isolation = FetchLogEnd, minOneMessage = true)
   }
 
+  /**
+   * Test when a configuration of a topic is updated while its log is getting initialized,
+   * the config is refreshed when log initialization is finished.
+   */
+  @Test
+  def testTopicConfigChangeUpdatesLogConfig(): Unit = {
+    val testTopicOne = "test-topic-one"
+    val testTopicTwo = "test-topic-two"
+    val testTopicOnePartition: TopicPartition = new TopicPartition(testTopicOne, 1)
+    val testTopicTwoPartition: TopicPartition = new TopicPartition(testTopicTwo, 1)
+    val mockLog: Log = EasyMock.mock(classOf[Log])
+
+    logManager.initializingLog(testTopicOnePartition)
+    logManager.initializingLog(testTopicTwoPartition)
+
+    logManager.topicConfigUpdated(testTopicOne)
+
+    val logConfig: LogConfig = null
+    var configUpdated = false
+    logManager.finishedInitializingLog(testTopicOnePartition, Some(mockLog), () => {
+      configUpdated = true
+      logConfig
+    })
+    assertTrue(configUpdated)
+
+    var configNotUpdated = true
+    logManager.finishedInitializingLog(testTopicTwoPartition, Some(mockLog), () => {
+      configNotUpdated = false
+      logConfig
+    })
+    assertTrue(configNotUpdated)
+  }
+
+  /**
+   * Test if an error occurs when creating log, log manager removes corresponding
+   * topic partition from the list of initializing partitions.
+   */
+  @Test
+  def testConfigChangeGetsCleanedUp(): Unit = {
+    val testTopicPartition: TopicPartition = new TopicPartition("test-topic", 1)
+
+    logManager.initializingLog(testTopicPartition)
+
+    val logConfig: LogConfig = null
+    var configUpdateNotCalled = true
+    logManager.finishedInitializingLog(testTopicPartition, None, () => {
+      configUpdateNotCalled = false
+      logConfig
+    })
+
+    assertTrue(logManager.partitionsInitializing.isEmpty)
+    assertTrue(configUpdateNotCalled)
+  }
+
+  /**
+   * Test when a broker configuration change happens all logs in process of initialization
+   * pick up latest config when finished with initialization.
+   */
+  @Test
+  def testBrokerConfigChangeDeliveredToAllLogs(): Unit = {
+    val testTopicOne = "test-topic-one"
+    val testTopicTwo = "test-topic-two"
+    val testTopicOnePartition: TopicPartition = new TopicPartition(testTopicOne, 1)
+    val testTopicTwoPartition: TopicPartition = new TopicPartition(testTopicTwo, 1)
+    val mockLog: Log = EasyMock.mock(classOf[Log])
+
+    logManager.initializingLog(testTopicOnePartition)
+    logManager.initializingLog(testTopicTwoPartition)
+
+    logManager.brokerConfigUpdated()
+
+    val logConfig: LogConfig = null
+    var totalChanges = 0
+    logManager.finishedInitializingLog(testTopicOnePartition, Some(mockLog), () => {
+      totalChanges += 1
+      logConfig
+    })
+    logManager.finishedInitializingLog(testTopicTwoPartition, Some(mockLog), () => {
+      totalChanges += 1
+      logConfig
+    })
+
+    assertEquals(2, totalChanges)
+  }
+
+  /**
+   * Test even if no log is getting initialized, if config change events are delivered
+   * things continue to work correctly. This test should not throw.
+   *
+   * This makes sure that events can be delivered even when no log is getting initialized.
+   */
+  @Test
+  def testConfigChangesWithNoLogGettingInitialized(): Unit = {
+    logManager.brokerConfigUpdated()
+    logManager.topicConfigUpdated("test-topic")
+    assertTrue(logManager.partitionsInitializing.isEmpty)
+  }
 }

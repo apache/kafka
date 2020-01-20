@@ -30,6 +30,7 @@ import org.apache.kafka.common.network.Selector;
 import org.apache.kafka.common.security.JaasContext;
 import org.apache.kafka.common.security.TestSecurityConfig;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
@@ -184,7 +185,8 @@ public class SaslAuthenticatorFailureDelayTest {
 
         String saslMechanism = (String) saslClientConfigs.get(SaslConfigs.SASL_MECHANISM);
         this.channelBuilder = ChannelBuilders.clientChannelBuilder(securityProtocol, JaasContext.Type.CLIENT,
-                new TestSecurityConfig(clientConfigs), null, saslMechanism, time, true);
+                new TestSecurityConfig(clientConfigs), null, saslMechanism, time, true,
+                new LogContext());
         this.selector = NetworkTestUtils.createSelector(channelBuilder, time);
     }
 

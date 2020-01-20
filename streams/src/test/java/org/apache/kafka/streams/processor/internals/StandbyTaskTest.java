@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import java.util.concurrent.atomic.AtomicInteger;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.MockConsumer;
@@ -79,6 +78,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static java.time.Duration.ofMillis;
 import static java.util.Arrays.asList;
@@ -97,6 +97,7 @@ import static org.junit.Assert.fail;
 
 public class StandbyTaskTest {
 
+    private final String threadId = Thread.currentThread().getName();
     private final TaskId taskId = new TaskId(0, 1);
     private StandbyTask task;
     private final Serializer<Integer> intSerializer = new IntegerSerializer();
@@ -160,7 +161,8 @@ public class StandbyTaskTest {
     private final byte[] recordKey = intSerializer.serialize(null, 1);
 
     private final String threadName = "threadName";
-    private final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(new Metrics(), threadName);
+    private final StreamsMetricsImpl streamsMetrics =
+        new StreamsMetricsImpl(new Metrics(), threadName, StreamsConfig.METRICS_LATEST);
 
     @Before
     public void setup() throws Exception {
@@ -253,6 +255,8 @@ public class StandbyTaskTest {
                                streamsMetrics,
                                stateDirectory);
         task.initializeStateStores();
+        assertThat(task.checkpointedOffsets(),
+                   equalTo(mkMap(mkEntry(partition1, -1L), mkEntry(partition2, -1L))));
         final Set<TopicPartition> partition = Collections.singleton(partition2);
         restoreStateConsumer.assign(partition);
 
@@ -291,7 +295,15 @@ public class StandbyTaskTest {
 
         restoreStateConsumer.seekToBeginning(partition);
         task.update(partition2, restoreStateConsumer.poll(ofMillis(100)).records(partition2));
-
+        assertThat(
+            task.checkpointedOffsets(),
+            equalTo(
+                mkMap(
+                    mkEntry(partition1, -1L),
+                    mkEntry(partition2, 31L /*the checkpoint should be 1+ the highest consumed offset*/)
+                )
+            )
+        );
         final StandbyContextImpl context = (StandbyContextImpl) task.context();
         final MockKeyValueStore store1 = (MockKeyValueStore) context.getStateMgr().getStore(storeName1);
         final MockKeyValueStore store2 = (MockKeyValueStore) context.getStateMgr().getStore(storeName2);
@@ -307,7 +319,7 @@ public class StandbyTaskTest {
 
         final TopicPartition topicPartition = new TopicPartition(changelogName, 1);
 
-        final List<TopicPartition> partitions = Collections.singletonList(topicPartition);
+        final Set<TopicPartition> partitions = Collections.singleton(topicPartition);
 
         consumer.assign(partitions);
 
@@ -408,14 +420,14 @@ public class StandbyTaskTest {
         final String changelogName = applicationId + "-" + storeName + "-changelog";
 
         final TopicPartition topicPartition = new TopicPartition(changelogName, 1);
-        final List<TopicPartition> partitions = Collections.singletonList(topicPartition);
+        final Set<TopicPartition> partitions = Collections.singleton(topicPartition);
 
         final InternalTopologyBuilder internalTopologyBuilder = new InternalTopologyBuilder().setApplicationId(applicationId);
 
         final InternalStreamsBuilder builder = new InternalStreamsBuilder(internalTopologyBuilder);
         builder.stream(Collections.singleton("topic"), new ConsumedInternal<>())
-            .groupByKey()
-            .count(Materialized.as(storeName));
+               .groupByKey()
+               .count(Materialized.as(storeName));
 
         builder.buildAndOptimizeTopology();
 
@@ -441,7 +453,6 @@ public class StandbyTaskTest {
             singletonList(makeWindowedConsumerRecord(changelogName, 10, 1, 0L, 60_000L))
         );
 
-        task.suspend();
         task.close(true, false);
 
         final File taskDir = stateDirectory.directoryForTask(taskId);
@@ -449,7 +460,7 @@ public class StandbyTaskTest {
         final Map<TopicPartition, Long> offsets = checkpoint.read();
 
         assertEquals(1, offsets.size());
-        assertEquals(new Long(11L), offsets.get(topicPartition));
+        assertEquals(Long.valueOf(11L), offsets.get(topicPartition));
     }
 
     @SuppressWarnings("unchecked")
@@ -562,9 +573,9 @@ public class StandbyTaskTest {
 
         final Consumer<byte[], byte[]> consumer = new MockConsumer<byte[], byte[]>(OffsetResetStrategy.EARLIEST) {
             @Override
-            public synchronized OffsetAndMetadata committed(final TopicPartition partition) {
+            public synchronized Map<TopicPartition, OffsetAndMetadata> committed(final Set<TopicPartition> partitions) {
                 committedCallCount.getAndIncrement();
-                return super.committed(partition);
+                return super.committed(partitions);
             }
         };
 
@@ -595,9 +606,9 @@ public class StandbyTaskTest {
 
         final Consumer<byte[], byte[]> consumer = new MockConsumer<byte[], byte[]>(OffsetResetStrategy.EARLIEST) {
             @Override
-            public synchronized OffsetAndMetadata committed(final TopicPartition partition) {
+            public synchronized Map<TopicPartition, OffsetAndMetadata> committed(final Set<TopicPartition> partitions) {
                 committedCallCount.getAndIncrement();
-                return super.committed(partition);
+                return super.committed(partitions);
             }
         };
 
@@ -718,7 +729,7 @@ public class StandbyTaskTest {
             globalTopicPartition,
             singletonList(new ConsumerRecord<>(globalTopicPartition.topic(),
                                                globalTopicPartition.partition(),
-                                        50L,
+                                               50L,
                                                serializedValue,
                                                serializedValue))
         );
@@ -781,7 +792,7 @@ public class StandbyTaskTest {
 
     private MetricName setupCloseTaskMetric() {
         final MetricName metricName = new MetricName("name", "group", "description", Collections.emptyMap());
-        final Sensor sensor = streamsMetrics.threadLevelSensor("task-closed", Sensor.RecordingLevel.INFO);
+        final Sensor sensor = streamsMetrics.threadLevelSensor(threadId, "task-closed", Sensor.RecordingLevel.INFO);
         sensor.add(metricName, new CumulativeSum());
         return metricName;
     }
@@ -811,28 +822,6 @@ public class StandbyTaskTest {
         final boolean clean = true;
         final boolean isZombie = false;
         task.close(clean, isZombie);
-
-        final double expectedCloseTaskMetric = 1.0;
-        verifyCloseTaskMetric(expectedCloseTaskMetric, streamsMetrics, metricName);
-    }
-
-    @Test
-    public void shouldRecordTaskClosedMetricOnCloseSuspended() throws IOException {
-        final MetricName metricName = setupCloseTaskMetric();
-        final StandbyTask task = new StandbyTask(
-            taskId,
-            ktablePartitions,
-            ktableTopology,
-            consumer,
-            changelogReader,
-            createConfig(baseDir),
-            streamsMetrics,
-            stateDirectory
-        );
-
-        final boolean clean = true;
-        final boolean isZombie = false;
-        task.closeSuspended(clean, isZombie, new RuntimeException());
 
         final double expectedCloseTaskMetric = 1.0;
         verifyCloseTaskMetric(expectedCloseTaskMetric, streamsMetrics, metricName);

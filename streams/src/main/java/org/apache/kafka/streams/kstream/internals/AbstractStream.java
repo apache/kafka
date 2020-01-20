@@ -28,6 +28,7 @@ import org.apache.kafka.streams.kstream.internals.graph.StreamsGraphNode;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 
+import java.util.Collection;
 import java.util.HashSet;
 import java.util.Objects;
 import java.util.Set;
@@ -84,11 +85,11 @@ public abstract class AbstractStream<K, V> {
         return builder.internalTopologyBuilder;
     }
 
-    Set<String> ensureJoinableWith(final AbstractStream<K, ?> other) {
-        final Set<String> allSourceNodes = new HashSet<>();
-        allSourceNodes.addAll(sourceNodes);
-        allSourceNodes.addAll(other.sourceNodes);
-
+    Set<String> ensureCopartitionWith(final Collection<? extends AbstractStream<K, ?>> otherStreams) {
+        final Set<String> allSourceNodes = new HashSet<>(sourceNodes);
+        for (final AbstractStream<K, ?> other: otherStreams) {
+            allSourceNodes.addAll(other.sourceNodes);
+        }
         builder.internalTopologyBuilder.copartitionSources(allSourceNodes);
 
         return allSourceNodes;

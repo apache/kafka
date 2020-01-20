@@ -18,7 +18,7 @@
 package unit.kafka.controller
 
 import kafka.cluster.{Broker, EndPoint}
-import kafka.controller.{ControllerContext, PartitionReplicaAssignment}
+import kafka.controller.{ControllerContext, ReplicaAssignment}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth.SecurityProtocol
@@ -56,51 +56,21 @@ class ControllerContextTest {
           val replica = brokers((i + leaderIndex) % brokers.size)
           replica
         }
-        context.updatePartitionReplicaAssignment(partition, replicas)
+        context.updatePartitionFullReplicaAssignment(partition, ReplicaAssignment(replicas))
         leaderIndex += 1
     }
   }
 
   @Test
-  def testUpdatePartitionReplicaAssignmentUpdatesReplicaAssignmentOnly(): Unit = {
-    val expectedReplicas = Seq(4)
-    context.updatePartitionReplicaAssignment(tp1, expectedReplicas)
-    val assignment = context.partitionReplicaAssignment(tp1)
-    val fullAssignment = context.partitionFullReplicaAssignment(tp1)
-
-    assertEquals(expectedReplicas, assignment)
-    assertEquals(expectedReplicas, fullAssignment.replicas)
-    assertEquals(Seq(), fullAssignment.addingReplicas)
-    assertEquals(Seq(), fullAssignment.removingReplicas)
-  }
-
-  @Test
-  def testUpdatePartitionReplicaAssignmentUpdatesReplicaAssignmentOnlyAndDoesNotOverwrite(): Unit = {
-    val expectedReplicas = Seq(4)
-    val expectedFullAssignment = PartitionReplicaAssignment(Seq(3), Seq(1), Seq(2))
-    context.updatePartitionFullReplicaAssignment(tp1, expectedFullAssignment)
-
-    context.updatePartitionReplicaAssignment(tp1, expectedReplicas) // update only the replicas
-
-    val assignment = context.partitionReplicaAssignment(tp1)
-    val fullAssignment = context.partitionFullReplicaAssignment(tp1)
-    assertEquals(expectedReplicas, assignment)
-    assertEquals(expectedReplicas, fullAssignment.replicas)
-    // adding/removing replicas preserved
-    assertEquals(Seq(1), fullAssignment.addingReplicas)
-    assertEquals(Seq(2), fullAssignment.removingReplicas)
-  }
-
-  @Test
   def testUpdatePartitionFullReplicaAssignmentUpdatesReplicaAssignment(): Unit = {
     val initialReplicas = Seq(4)
-    context.updatePartitionReplicaAssignment(tp1, initialReplicas) // update only the replicas
+    context.updatePartitionFullReplicaAssignment(tp1, ReplicaAssignment(initialReplicas))
     val fullAssignment = context.partitionFullReplicaAssignment(tp1)
     assertEquals(initialReplicas, fullAssignment.replicas)
     assertEquals(Seq(), fullAssignment.addingReplicas)
     assertEquals(Seq(), fullAssignment.removingReplicas)
 
-    val expectedFullAssignment = PartitionReplicaAssignment(Seq(3), Seq(1), Seq(2))
+    val expectedFullAssignment = ReplicaAssignment(Seq(3), Seq(1), Seq(2))
     context.updatePartitionFullReplicaAssignment(tp1, expectedFullAssignment)
     val updatedFullAssignment = context.partitionFullReplicaAssignment(tp1)
     assertEquals(expectedFullAssignment.replicas, updatedFullAssignment.replicas)
@@ -118,7 +88,7 @@ class ControllerContextTest {
 
   @Test
   def testPartitionFullReplicaAssignmentReturnsEmptyAssignmentIfTopicOrPartitionDoesNotExist(): Unit = {
-    val expectedEmptyAssignment = PartitionReplicaAssignment(Seq.empty, Seq.empty, Seq.empty)
+    val expectedEmptyAssignment = ReplicaAssignment(Seq.empty, Seq.empty, Seq.empty)
 
     val noTopicAssignment = context.partitionFullReplicaAssignment(new TopicPartition("NONEXISTENT", 0))
     assertEquals(expectedEmptyAssignment, noTopicAssignment)
@@ -143,47 +113,53 @@ class ControllerContextTest {
 
   @Test
   def testPartitionReplicaAssignment(): Unit = {
-    val reassigningPartition = PartitionReplicaAssignment(List(1, 2, 3, 4, 5, 6), List(2, 3, 4), List(1, 5, 6))
+    val reassigningPartition = ReplicaAssignment(List(1, 2, 3, 4, 5, 6), List(2, 3, 4), List(1, 5, 6))
     assertTrue(reassigningPartition.isBeingReassigned)
     assertEquals(List(2, 3, 4), reassigningPartition.targetReplicas)
 
-    val reassigningPartition2 = PartitionReplicaAssignment(List(1, 2, 3, 4), List(), List(1, 4))
+    val reassigningPartition2 = ReplicaAssignment(List(1, 2, 3, 4), List(), List(1, 4))
     assertTrue(reassigningPartition2.isBeingReassigned)
     assertEquals(List(2, 3), reassigningPartition2.targetReplicas)
 
-    val reassigningPartition3 = PartitionReplicaAssignment(List(1, 2, 3, 4), List(4), List(2))
+    val reassigningPartition3 = ReplicaAssignment(List(1, 2, 3, 4), List(4), List(2))
     assertTrue(reassigningPartition3.isBeingReassigned)
     assertEquals(List(1, 3, 4), reassigningPartition3.targetReplicas)
 
-    val partition = PartitionReplicaAssignment(List(1, 2, 3, 4, 5, 6), List(), List())
+    val partition = ReplicaAssignment(List(1, 2, 3, 4, 5, 6), List(), List())
     assertFalse(partition.isBeingReassigned)
     assertEquals(List(1, 2, 3, 4, 5, 6), partition.targetReplicas)
 
-    val reassigningPartition4 = PartitionReplicaAssignment.fromOldAndNewReplicas(
-      List(1, 2, 3, 4), List(4, 2, 5, 3)
-    )
+    val reassigningPartition4 = ReplicaAssignment(Seq(1, 2, 3, 4)).reassignTo(Seq(4, 2, 5, 3))
     assertEquals(List(4, 2, 5, 3, 1), reassigningPartition4.replicas)
     assertEquals(List(4, 2, 5, 3), reassigningPartition4.targetReplicas)
     assertEquals(List(5), reassigningPartition4.addingReplicas)
     assertEquals(List(1), reassigningPartition4.removingReplicas)
     assertTrue(reassigningPartition4.isBeingReassigned)
 
-    val reassigningPartition5 = PartitionReplicaAssignment.fromOldAndNewReplicas(
-      List(1, 2, 3), List(4, 5, 6)
-    )
+    val reassigningPartition5 = ReplicaAssignment(Seq(1, 2, 3)).reassignTo(Seq(4, 5, 6))
     assertEquals(List(4, 5, 6, 1, 2, 3), reassigningPartition5.replicas)
     assertEquals(List(4, 5, 6), reassigningPartition5.targetReplicas)
     assertEquals(List(4, 5, 6), reassigningPartition5.addingReplicas)
     assertEquals(List(1, 2, 3), reassigningPartition5.removingReplicas)
     assertTrue(reassigningPartition5.isBeingReassigned)
 
-    val nonReassigningPartition = PartitionReplicaAssignment.fromOldAndNewReplicas(
-      List(1, 2, 3), List(3, 1, 2)
-    )
+    val nonReassigningPartition = ReplicaAssignment(Seq(1, 2, 3)).reassignTo(Seq(3, 1, 2))
     assertEquals(List(3, 1, 2), nonReassigningPartition.replicas)
     assertEquals(List(3, 1, 2), nonReassigningPartition.targetReplicas)
     assertEquals(List(), nonReassigningPartition.addingReplicas)
     assertEquals(List(), nonReassigningPartition.removingReplicas)
     assertFalse(nonReassigningPartition.isBeingReassigned)
   }
+
+  @Test
+  def testReassignTo(): Unit = {
+    val assignment = ReplicaAssignment(Seq(1, 2, 3))
+    val firstReassign = assignment.reassignTo(Seq(4, 5, 6))
+
+    assertEquals(ReplicaAssignment(Seq(4, 5, 6, 1, 2, 3), Seq(4, 5, 6), Seq(1, 2, 3)), firstReassign)
+    assertEquals(ReplicaAssignment(Seq(7, 8, 9, 1, 2, 3), Seq(7, 8, 9), Seq(1, 2, 3)), firstReassign.reassignTo(Seq(7, 8, 9)))
+    assertEquals(ReplicaAssignment(Seq(7, 8, 9, 1, 2, 3), Seq(7, 8, 9), Seq(1, 2, 3)), assignment.reassignTo(Seq(7, 8, 9)))
+    assertEquals(assignment, firstReassign.reassignTo(Seq(1,2,3)))
+  }
+
 }

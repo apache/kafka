@@ -264,7 +264,7 @@ object ConsoleConsumer extends Logging {
       "Log lifecycle events of the consumer in addition to logging consumed " +
         "messages. (This is specific for system tests.)")
     val isolationLevelOpt = parser.accepts("isolation-level",
-      "Set to read_committed in order to filter out transactional messages which are not committed. Set to read_uncommitted" +
+      "Set to read_committed in order to filter out transactional messages which are not committed. Set to read_uncommitted " +
         "to read all messages.")
       .withRequiredArg()
       .ofType(classOf[String])
@@ -511,7 +511,7 @@ class DefaultMessageFormatter extends MessageFormatter {
 
     def write(deserializer: Option[Deserializer[_]], sourceBytes: Array[Byte], topic: String): Unit = {
       val nonNullBytes = Option(sourceBytes).getOrElse("null".getBytes(StandardCharsets.UTF_8))
-      val convertedBytes = deserializer.map(_.deserialize(topic, nonNullBytes).toString.
+      val convertedBytes = deserializer.map(_.deserialize(topic, consumerRecord.headers, nonNullBytes).toString.
         getBytes(StandardCharsets.UTF_8)).getOrElse(nonNullBytes)
       output.write(convertedBytes)
     }

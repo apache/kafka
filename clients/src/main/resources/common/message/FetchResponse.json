@@ -39,6 +39,7 @@
   // algorithm, as described in KIP-110.
   //
   "validVersions": "0-11",
+  "flexibleVersions": "none",
   "fields": [
     { "name": "ThrottleTimeMs", "type": "int32", "versions": "1+", "ignorable": true,
       "about": "The duration in milliseconds for which the request was throttled due to a quota violation, or zero if the request did not violate any quota." },

@@ -71,12 +71,11 @@ public class FileOffsetBackingStoreTest {
     @Test
     public void testGetSet() throws Exception {
         Callback<Void> setCallback = expectSuccessfulSetCallback();
-        Callback<Map<ByteBuffer, ByteBuffer>> getCallback = expectSuccessfulGetCallback();
         PowerMock.replayAll();
 
         store.set(firstSet, setCallback).get();
 
-        Map<ByteBuffer, ByteBuffer> values = store.get(Arrays.asList(buffer("key"), buffer("bad")), getCallback).get();
+        Map<ByteBuffer, ByteBuffer> values = store.get(Arrays.asList(buffer("key"), buffer("bad"))).get();
         assertEquals(buffer("value"), values.get(buffer("key")));
         assertEquals(null, values.get(buffer("bad")));
 
@@ -86,7 +85,6 @@ public class FileOffsetBackingStoreTest {
     @Test
     public void testSaveRestore() throws Exception {
         Callback<Void> setCallback = expectSuccessfulSetCallback();
-        Callback<Map<ByteBuffer, ByteBuffer>> getCallback = expectSuccessfulGetCallback();
         PowerMock.replayAll();
 
         store.set(firstSet, setCallback).get();
@@ -96,7 +94,7 @@ public class FileOffsetBackingStoreTest {
         FileOffsetBackingStore restore = new FileOffsetBackingStore();
         restore.configure(config);
         restore.start();
-        Map<ByteBuffer, ByteBuffer> values = restore.get(Arrays.asList(buffer("key")), getCallback).get();
+        Map<ByteBuffer, ByteBuffer> values = restore.get(Arrays.asList(buffer("key"))).get();
         assertEquals(buffer("value"), values.get(buffer("key")));
 
         PowerMock.verifyAll();
@@ -112,13 +110,5 @@ public class FileOffsetBackingStoreTest {
         setCallback.onCompletion(EasyMock.isNull(Throwable.class), EasyMock.isNull(Void.class));
         PowerMock.expectLastCall();
         return setCallback;
-    }
-
-    @SuppressWarnings("unchecked")
-    private Callback<Map<ByteBuffer, ByteBuffer>> expectSuccessfulGetCallback() {
-        Callback<Map<ByteBuffer, ByteBuffer>> getCallback = PowerMock.createMock(Callback.class);
-        getCallback.onCompletion(EasyMock.isNull(Throwable.class), EasyMock.anyObject(Map.class));
-        PowerMock.expectLastCall();
-        return getCallback;
     }
 }

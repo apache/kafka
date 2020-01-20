@@ -16,7 +16,9 @@
  */
 package org.apache.kafka.common.record;
 
+import org.apache.kafka.common.InvalidRecordException;
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.errors.CorruptRecordException;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.utils.ByteBufferOutputStream;
 import org.apache.kafka.common.utils.ByteUtils;
@@ -144,11 +146,11 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
     @Override
     public void ensureValid() {
         if (sizeInBytes() < RECORD_BATCH_OVERHEAD)
-            throw new InvalidRecordException("Record batch is corrupt (the size " + sizeInBytes() +
+            throw new CorruptRecordException("Record batch is corrupt (the size " + sizeInBytes() +
                     " is smaller than the minimum allowed overhead " + RECORD_BATCH_OVERHEAD + ")");
 
         if (!isValid())
-            throw new InvalidRecordException("Record is corrupt (stored crc = " + checksum()
+            throw new CorruptRecordException("Record is corrupt (stored crc = " + checksum()
                     + ", computed crc = " + computeChecksum() + ")");
     }
 
@@ -532,16 +534,16 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
         return RECORD_BATCH_OVERHEAD + DefaultRecord.recordSizeUpperBound(key, value, headers);
     }
 
-    public static int incrementSequence(int baseSequence, int increment) {
-        if (baseSequence > Integer.MAX_VALUE - increment)
-            return increment - (Integer.MAX_VALUE - baseSequence) - 1;
-        return baseSequence + increment;
+    public static int incrementSequence(int sequence, int increment) {
+        if (sequence > Integer.MAX_VALUE - increment)
+            return increment - (Integer.MAX_VALUE - sequence) - 1;
+        return sequence + increment;
     }
 
-    public static int decrementSequence(int baseSequence, int decrement) {
-        if (baseSequence < decrement)
-            return Integer.MAX_VALUE - (decrement - baseSequence) + 1;
-        return baseSequence - decrement;
+    public static int decrementSequence(int sequence, int decrement) {
+        if (sequence < decrement)
+            return Integer.MAX_VALUE - (decrement - sequence) + 1;
+        return sequence - decrement;
     }
 
     private abstract class RecordIterator implements CloseableIterator<Record> {

@@ -23,6 +23,7 @@ import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.NetworkClientUtils;
 import org.apache.kafka.clients.RequestCompletionHandler;
+import org.apache.kafka.common.utils.ProducerIdAndEpoch;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.MetricName;
@@ -320,8 +321,6 @@ public class Sender implements Runnable {
                         maybeAbortBatches(lastError);
                     client.poll(retryBackoffMs, time.milliseconds());
                     return;
-                } else if (transactionManager.hasAbortableError()) {
-                    accumulator.abortUndrainedBatches(transactionManager.lastError());
                 }
             } catch (AuthenticationException e) {
                 // This is already logged as error, but propagated here to perform any clean ups.
@@ -346,7 +345,7 @@ public class Sender implements Runnable {
             // topics which may have expired. Add the topic again to metadata to ensure it is included
             // and request metadata update, since there are messages to send to the topic.
             for (String topic : result.unknownLeaderTopics)
-                this.metadata.add(topic);
+                this.metadata.add(topic, now);
 
             log.debug("Requesting metadata update due to unknown leader topics from the batched records: {}",
                 result.unknownLeaderTopics);
@@ -426,15 +425,22 @@ public class Sender implements Runnable {
             return true;
         }
 
-        if (transactionManager.isCompleting() && accumulator.hasIncomplete()) {
-            if (transactionManager.isAborting())
-                accumulator.abortUndrainedBatches(new KafkaException("Failing batch since transaction was aborted"));
+        if (transactionManager.hasAbortableError() || transactionManager.isAborting()) {
+            if (accumulator.hasIncomplete()) {
+                RuntimeException exception = transactionManager.lastError();
+                if (exception == null) {
+                    exception = new KafkaException("Failing batch since transaction was aborted");
+                }
+                accumulator.abortUndrainedBatches(exception);
+            }
+        }
+
+        if (transactionManager.isCompleting() && !accumulator.flushInProgress()) {
             // There may still be requests left which are being retried. Since we do not know whether they had
             // been successfully appended to the broker log, we must resend them until their final status is clear.
             // If they had been appended and we did not receive the error, then our sequence number would no longer
             // be correct which would lead to an OutOfSequenceException.
-            if (!accumulator.flushInProgress())
-                accumulator.beginFlush();
+            accumulator.beginFlush();
         }
 
         TransactionManager.TxnRequestHandler nextRequestHandler = transactionManager.nextRequestHandler(accumulator.hasIncomplete());

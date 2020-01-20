@@ -36,10 +36,10 @@ import org.apache.kafka.common.internals.ClusterResourceListeners
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.Selector
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
-import org.apache.kafka.common.requests.ApiVersionsResponse.ApiVersion
 import org.apache.kafka.common.utils.LogContext
 import org.apache.kafka.common.utils.{KafkaThread, Time}
 import org.apache.kafka.common.Node
+import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersionsResponseKeyCollection
 import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse, ApiVersionsRequest, ApiVersionsResponse, MetadataRequest, MetadataResponse}
 
 import scala.collection.JavaConverters._
@@ -110,24 +110,22 @@ object BrokerApiVersionsCommand {
     @volatile var running: Boolean = true
     val pendingFutures = new ConcurrentLinkedQueue[RequestFuture[ClientResponse]]()
 
-    val networkThread = new KafkaThread("admin-client-network-thread", new Runnable {
-      override def run(): Unit = {
-        try {
-          while (running)
-            client.poll(time.timer(Long.MaxValue))
-        } catch {
-          case t : Throwable =>
-            error("admin-client-network-thread exited", t)
-        } finally {
-          pendingFutures.asScala.foreach { future =>
-            try {
-              future.raise(Errors.UNKNOWN_SERVER_ERROR)
-            } catch {
-              case _: IllegalStateException => // It is OK if the future has been completed
-            }
+    val networkThread = new KafkaThread("admin-client-network-thread", () => {
+      try {
+        while (running)
+          client.poll(time.timer(Long.MaxValue))
+      } catch {
+        case t: Throwable =>
+          error("admin-client-network-thread exited", t)
+      } finally {
+        pendingFutures.asScala.foreach { future =>
+          try {
+            future.raise(Errors.UNKNOWN_SERVER_ERROR)
+          } catch {
+            case _: IllegalStateException => // It is OK if the future has been completed
           }
-          pendingFutures.clear()
         }
+        pendingFutures.clear()
       }
     }, true)
 
@@ -160,10 +158,10 @@ object BrokerApiVersionsCommand {
       throw new RuntimeException(s"Request $api failed on brokers $bootstrapBrokers")
     }
 
-    private def getApiVersions(node: Node): List[ApiVersion] = {
+    private def getApiVersions(node: Node): ApiVersionsResponseKeyCollection = {
       val response = send(node, ApiKeys.API_VERSIONS, new ApiVersionsRequest.Builder()).asInstanceOf[ApiVersionsResponse]
-      response.error.maybeThrow()
-      response.apiVersions.asScala.toList
+      Errors.forCode(response.data.errorCode).maybeThrow()
+      response.data.apiKeys
     }
 
     /**
@@ -189,7 +187,7 @@ object BrokerApiVersionsCommand {
 
     def listAllBrokerVersionInfo(): Map[Node, Try[NodeApiVersions]] =
       findAllBrokers().map { broker =>
-        broker -> Try[NodeApiVersions](new NodeApiVersions(getApiVersions(broker).asJava))
+        broker -> Try[NodeApiVersions](new NodeApiVersions(getApiVersions(broker)))
       }.toMap
 
     def close(): Unit = {
@@ -271,14 +269,14 @@ object BrokerApiVersionsCommand {
       val metrics = new Metrics(time)
       val metadata = new Metadata(100L, 60 * 60 * 1000L, logContext,
         new ClusterResourceListeners)
-      val channelBuilder = ClientUtils.createChannelBuilder(config, time)
+      val channelBuilder = ClientUtils.createChannelBuilder(config, time, logContext)
       val requestTimeoutMs = config.getInt(CommonClientConfigs.REQUEST_TIMEOUT_MS_CONFIG)
       val retryBackoffMs = config.getLong(CommonClientConfigs.RETRY_BACKOFF_MS_CONFIG)
 
       val brokerUrls = config.getList(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG)
       val clientDnsLookup = config.getString(CommonClientConfigs.CLIENT_DNS_LOOKUP_CONFIG)
       val brokerAddresses = ClientUtils.parseAndValidateAddresses(brokerUrls, clientDnsLookup)
-      metadata.bootstrap(brokerAddresses, time.milliseconds())
+      metadata.bootstrap(brokerAddresses)
 
       val selector = new Selector(
         DefaultConnectionMaxIdleMs,

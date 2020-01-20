@@ -14,8 +14,6 @@
 # limitations under the License.
 
 from ducktape.mark.resource import cluster
-from ducktape.mark import ignore
-
 from kafkatest.tests.kafka_test import KafkaTest
 from kafkatest.services.streams import StreamsEosTestDriverService, StreamsEosTestJobRunnerService, \
     StreamsComplexEosTestJobRunnerService, StreamsEosTestVerifyRunnerService, StreamsComplexEosTestVerifyRunnerService
@@ -60,9 +58,8 @@ class StreamsEosTest(KafkaTest):
 
         self.driver.start()
 
-        processor1.clean_node_enabled = False
-
         self.add_streams(processor1)
+        processor1.clean_node_enabled = False
         self.add_streams2(processor1, processor2)
         self.add_streams3(processor1, processor2, processor3)
         self.stop_streams3(processor2, processor3, processor1)
@@ -70,6 +67,7 @@ class StreamsEosTest(KafkaTest):
         self.stop_streams3(processor1, processor3, processor2)
         self.stop_streams2(processor1, processor3)
         self.stop_streams(processor1)
+        processor1.clean_node_enabled = True
 
         self.driver.stop()
 
@@ -100,9 +98,8 @@ class StreamsEosTest(KafkaTest):
 
         self.driver.start()
 
-        processor1.clean_node_enabled = False
-
         self.add_streams(processor1)
+        processor1.clean_node_enabled = False
         self.add_streams2(processor1, processor2)
         self.add_streams3(processor1, processor2, processor3)
         self.abort_streams(processor2, processor3, processor1)
@@ -112,6 +109,7 @@ class StreamsEosTest(KafkaTest):
         self.abort_streams(processor1, processor3, processor2)
         self.stop_streams2(processor1, processor3)
         self.stop_streams(processor1)
+        processor1.clean_node_enabled = True
 
         self.driver.stop()
 
@@ -159,7 +157,7 @@ class StreamsEosTest(KafkaTest):
 
     def wait_for_startup(self, monitor, processor):
         self.wait_for(monitor, processor, "StateChange: REBALANCING -> RUNNING")
-        self.wait_for(monitor, processor, "processed 500 records from topic")
+        self.wait_for(monitor, processor, "processed [0-9]* records from topic")
 
     def wait_for(self, monitor, processor, output):
         monitor.wait_until(output,

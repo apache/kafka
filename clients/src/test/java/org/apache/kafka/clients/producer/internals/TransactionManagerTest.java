@@ -19,6 +19,7 @@ package org.apache.kafka.clients.producer.internals;
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.common.utils.ProducerIdAndEpoch;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
@@ -35,6 +36,7 @@ import org.apache.kafka.common.errors.UnsupportedForMessageFormatException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
+import org.apache.kafka.common.message.EndTxnResponseData;
 import org.apache.kafka.common.message.InitProducerIdResponseData;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
@@ -140,7 +142,7 @@ public class TransactionManagerTest {
                 new BufferPool(totalSize, batchSize, metrics, time, metricGrpName));
         this.sender = new Sender(logContext, this.client, this.metadata, this.accumulator, true, MAX_REQUEST_SIZE, ACKS_ALL,
                 MAX_RETRIES, senderMetrics, this.time, REQUEST_TIMEOUT, 50, transactionManager, apiVersions);
-        this.metadata.add("test");
+        this.metadata.add("test", time.milliseconds());
         this.client.updateMetadata(TestUtils.metadataUpdateWith(1, singletonMap("test", 2)));
     }
 
@@ -153,8 +155,8 @@ public class TransactionManagerTest {
 
         transactionManager.failIfNotReadyForSend();
         transactionManager.maybeAddPartitionToTransaction(tp0);
-        FutureRecordMetadata sendFuture = accumulator.append(tp0, time.milliseconds(), "key".getBytes(),
-                "value".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT, false).future;
+        long nowMs = time.milliseconds();
+        FutureRecordMetadata sendFuture = appendToAccumulator(tp0);
 
         prepareAddPartitionsToTxn(tp0, Errors.NONE);
         prepareProduceResponse(Errors.NONE, pid, epoch);
@@ -799,8 +801,7 @@ public class TransactionManagerTest {
         transactionManager.failIfNotReadyForSend();
         transactionManager.maybeAddPartitionToTransaction(tp0);
 
-        Future<RecordMetadata> responseFuture = accumulator.append(tp0, time.milliseconds(), "key".getBytes(),
-                "value".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT, false).future;
+        Future<RecordMetadata> responseFuture = appendToAccumulator(tp0);
 
         assertFalse(responseFuture.isDone());
         prepareAddPartitionsToTxnResponse(Errors.NONE, tp0, epoch, pid);
@@ -1204,7 +1205,7 @@ public class TransactionManagerTest {
     }
 
     @Test
-    public void testTopicAuthorizationFailureInAddPartitions() {
+    public void testTopicAuthorizationFailureInAddPartitions() throws InterruptedException {
         final long pid = 13131L;
         final short epoch = 1;
         final TopicPartition tp0 = new TopicPartition("foo", 0);
@@ -1217,6 +1218,10 @@ public class TransactionManagerTest {
         transactionManager.maybeAddPartitionToTransaction(tp0);
         transactionManager.failIfNotReadyForSend();
         transactionManager.maybeAddPartitionToTransaction(tp1);
+
+        FutureRecordMetadata firstPartitionAppend = appendToAccumulator(tp0);
+        FutureRecordMetadata secondPartitionAppend = appendToAccumulator(tp1);
+
         Map<TopicPartition, Errors> errors = new HashMap<>();
         errors.put(tp0, Errors.TOPIC_AUTHORIZATION_FAILED);
         errors.put(tp1, Errors.OPERATION_NOT_ATTEMPTED);
@@ -1234,8 +1239,60 @@ public class TransactionManagerTest {
 
         TopicAuthorizationException exception = (TopicAuthorizationException) transactionManager.lastError();
         assertEquals(singleton(tp0.topic()), exception.unauthorizedTopics());
-
         assertAbortableError(TopicAuthorizationException.class);
+        sender.runOnce();
+
+        TestUtils.assertFutureThrows(firstPartitionAppend, KafkaException.class);
+        TestUtils.assertFutureThrows(secondPartitionAppend, KafkaException.class);
+    }
+
+    @Test
+    public void testCommitWithTopicAuthorizationFailureInAddPartitionsInFlight() throws InterruptedException {
+        final long pid = 13131L;
+        final short epoch = 1;
+        final TopicPartition tp0 = new TopicPartition("foo", 0);
+        final TopicPartition tp1 = new TopicPartition("bar", 0);
+
+        doInitTransactions(pid, epoch);
+
+        // Begin a transaction, send two records, and begin commit
+        transactionManager.beginTransaction();
+        transactionManager.maybeAddPartitionToTransaction(tp0);
+        transactionManager.maybeAddPartitionToTransaction(tp1);
+        FutureRecordMetadata firstPartitionAppend = appendToAccumulator(tp0);
+        FutureRecordMetadata secondPartitionAppend = appendToAccumulator(tp1);
+        TransactionalRequestResult commitResult = transactionManager.beginCommit();
+
+        // We send the AddPartitionsToTxn request in the first sender call
+        sender.runOnce();
+        assertFalse(transactionManager.hasError());
+        assertFalse(commitResult.isCompleted());
+        assertFalse(firstPartitionAppend.isDone());
+
+        // The AddPartitionsToTxn response returns in the next call with the error
+        Map<TopicPartition, Errors> errors = new HashMap<>();
+        errors.put(tp0, Errors.TOPIC_AUTHORIZATION_FAILED);
+        errors.put(tp1, Errors.OPERATION_NOT_ATTEMPTED);
+        client.respond(body -> {
+            AddPartitionsToTxnRequest request = (AddPartitionsToTxnRequest) body;
+            assertEquals(new HashSet<>(request.partitions()), new HashSet<>(errors.keySet()));
+            return true;
+        }, new AddPartitionsToTxnResponse(0, errors));
+
+        sender.runOnce();
+        assertTrue(transactionManager.hasError());
+        assertFalse(commitResult.isCompleted());
+        assertFalse(firstPartitionAppend.isDone());
+        assertFalse(secondPartitionAppend.isDone());
+
+        // The next call aborts the records, which have not yet been sent. It should
+        // not block because there are no requests pending and we still need to cancel
+        // the pending transaction commit.
+        sender.runOnce();
+        assertTrue(commitResult.isCompleted());
+        TestUtils.assertFutureThrows(firstPartitionAppend, KafkaException.class);
+        TestUtils.assertFutureThrows(secondPartitionAppend, KafkaException.class);
+        assertTrue(commitResult.error() instanceof TopicAuthorizationException);
     }
 
     @Test
@@ -1250,8 +1307,7 @@ public class TransactionManagerTest {
         transactionManager.failIfNotReadyForSend();
         transactionManager.maybeAddPartitionToTransaction(unauthorizedPartition);
 
-        Future<RecordMetadata> responseFuture = accumulator.append(unauthorizedPartition, time.milliseconds(), "key".getBytes(),
-                "value".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT, false).future;
+        Future<RecordMetadata> responseFuture = appendToAccumulator(unauthorizedPartition);
 
         prepareAddPartitionsToTxn(singletonMap(unauthorizedPartition, Errors.TOPIC_AUTHORIZATION_FAILED));
         sender.runOnce();
@@ -1274,8 +1330,7 @@ public class TransactionManagerTest {
         transactionManager.failIfNotReadyForSend();
         transactionManager.maybeAddPartitionToTransaction(tp0);
 
-        responseFuture = accumulator.append(tp0, time.milliseconds(), "key".getBytes(),
-                "value".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT, false).future;
+        responseFuture = appendToAccumulator(tp0);
 
         prepareAddPartitionsToTxn(singletonMap(tp0, Errors.NONE));
         sender.runOnce();
@@ -1308,15 +1363,13 @@ public class TransactionManagerTest {
         transactionManager.maybeAddPartitionToTransaction(tp0);
         prepareAddPartitionsToTxn(tp0, Errors.NONE);
 
-        Future<RecordMetadata> authorizedTopicProduceFuture = accumulator.append(unauthorizedPartition, time.milliseconds(),
-                "key".getBytes(), "value".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT, false).future;
+        Future<RecordMetadata> authorizedTopicProduceFuture = appendToAccumulator(unauthorizedPartition);
         sender.runOnce();
         assertTrue(transactionManager.isPartitionAdded(tp0));
 
         transactionManager.failIfNotReadyForSend();
         transactionManager.maybeAddPartitionToTransaction(unauthorizedPartition);
-        Future<RecordMetadata> unauthorizedTopicProduceFuture = accumulator.append(unauthorizedPartition, time.milliseconds(),
-                "key".getBytes(), "value".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT, false).future;
+        Future<RecordMetadata> unauthorizedTopicProduceFuture = appendToAccumulator(unauthorizedPartition);
         prepareAddPartitionsToTxn(singletonMap(unauthorizedPartition, Errors.TOPIC_AUTHORIZATION_FAILED));
         sender.runOnce();
         assertTrue(transactionManager.hasAbortableError());
@@ -1341,8 +1394,7 @@ public class TransactionManagerTest {
         transactionManager.failIfNotReadyForSend();
         transactionManager.maybeAddPartitionToTransaction(tp0);
 
-        FutureRecordMetadata nextTransactionFuture = accumulator.append(tp0, time.milliseconds(), "key".getBytes(),
-                "value".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT, false).future;
+        FutureRecordMetadata nextTransactionFuture = appendToAccumulator(tp0);
 
         prepareAddPartitionsToTxn(singletonMap(tp0, Errors.NONE));
         sender.runOnce();
@@ -1375,8 +1427,7 @@ public class TransactionManagerTest {
         transactionManager.maybeAddPartitionToTransaction(tp0);
         prepareAddPartitionsToTxn(tp0, Errors.NONE);
 
-        Future<RecordMetadata> authorizedTopicProduceFuture = accumulator.append(tp0, time.milliseconds(),
-                "key".getBytes(), "value".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT, false).future;
+        Future<RecordMetadata> authorizedTopicProduceFuture = appendToAccumulator(tp0);
         sender.runOnce();
         assertTrue(transactionManager.isPartitionAdded(tp0));
 
@@ -1388,8 +1439,7 @@ public class TransactionManagerTest {
 
         transactionManager.failIfNotReadyForSend();
         transactionManager.maybeAddPartitionToTransaction(unauthorizedPartition);
-        Future<RecordMetadata> unauthorizedTopicProduceFuture = accumulator.append(unauthorizedPartition, time.milliseconds(),
-                "key".getBytes(), "value".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT, false).future;
+        Future<RecordMetadata> unauthorizedTopicProduceFuture = appendToAccumulator(unauthorizedPartition);
         prepareAddPartitionsToTxn(singletonMap(unauthorizedPartition, Errors.TOPIC_AUTHORIZATION_FAILED));
         sender.runOnce();
         assertTrue(transactionManager.hasAbortableError());
@@ -1418,8 +1468,7 @@ public class TransactionManagerTest {
         transactionManager.failIfNotReadyForSend();
         transactionManager.maybeAddPartitionToTransaction(tp0);
 
-        FutureRecordMetadata nextTransactionFuture = accumulator.append(tp0, time.milliseconds(), "key".getBytes(),
-                "value".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT, false).future;
+        FutureRecordMetadata nextTransactionFuture = appendToAccumulator(tp0);
 
         prepareAddPartitionsToTxn(singletonMap(tp0, Errors.NONE));
         sender.runOnce();
@@ -1471,8 +1520,7 @@ public class TransactionManagerTest {
         transactionManager.failIfNotReadyForSend();
         transactionManager.maybeAddPartitionToTransaction(tp0);
 
-        Future<RecordMetadata> responseFuture = accumulator.append(tp0, time.milliseconds(), "key".getBytes(),
-                "value".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT, false).future;
+        Future<RecordMetadata> responseFuture = appendToAccumulator(tp0);
 
         assertFalse(responseFuture.isDone());
 
@@ -1517,8 +1565,7 @@ public class TransactionManagerTest {
         transactionManager.failIfNotReadyForSend();
         transactionManager.maybeAddPartitionToTransaction(tp0);
 
-        Future<RecordMetadata> responseFuture = accumulator.append(tp0, time.milliseconds(), "key".getBytes(),
-                "value".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT, false).future;
+        Future<RecordMetadata> responseFuture = appendToAccumulator(tp0);
 
         assertFalse(responseFuture.isDone());
         prepareAddPartitionsToTxnResponse(Errors.NONE, tp0, epoch, pid);
@@ -1533,8 +1580,7 @@ public class TransactionManagerTest {
         // In the mean time, the user does a second produce to a different partition
         transactionManager.failIfNotReadyForSend();
         transactionManager.maybeAddPartitionToTransaction(tp1);
-        Future<RecordMetadata> secondResponseFuture = accumulator.append(tp0, time.milliseconds(), "key".getBytes(),
-                "value".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT, false).future;
+        Future<RecordMetadata> secondResponseFuture = appendToAccumulator(tp0);
 
         prepareAddPartitionsToTxnResponse(Errors.NONE, tp1, epoch, pid);
         prepareProduceResponse(Errors.NONE, pid, epoch);
@@ -1569,8 +1615,7 @@ public class TransactionManagerTest {
         transactionManager.failIfNotReadyForSend();
         transactionManager.maybeAddPartitionToTransaction(tp0);
 
-        Future<RecordMetadata> responseFuture = accumulator.append(tp0, time.milliseconds(), "key".getBytes(),
-                "value".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT, false).future;
+        Future<RecordMetadata> responseFuture = appendToAccumulator(tp0);
 
         assertFalse(responseFuture.isDone());
         prepareAddPartitionsToTxnResponse(Errors.NONE, tp0, epoch, pid);
@@ -1608,8 +1653,7 @@ public class TransactionManagerTest {
         transactionManager.failIfNotReadyForSend();
         transactionManager.maybeAddPartitionToTransaction(tp0);
 
-        Future<RecordMetadata> responseFuture = accumulator.append(tp0, time.milliseconds(), "key".getBytes(),
-                "value".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT, false).future;
+        Future<RecordMetadata> responseFuture = appendToAccumulator(tp0);
 
         TransactionalRequestResult commitResult = transactionManager.beginCommit();
         assertFalse(responseFuture.isDone());
@@ -1658,8 +1702,7 @@ public class TransactionManagerTest {
         transactionManager.failIfNotReadyForSend();
         transactionManager.maybeAddPartitionToTransaction(tp0);
 
-        Future<RecordMetadata> responseFuture = accumulator.append(tp0, time.milliseconds(), "key".getBytes(),
-                "value".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT, false).future;
+        Future<RecordMetadata> responseFuture = appendToAccumulator(tp0);
 
         assertFalse(responseFuture.isDone());
         prepareAddPartitionsToTxnResponse(Errors.NONE, tp0, epoch, pid);
@@ -1687,8 +1730,7 @@ public class TransactionManagerTest {
         transactionManager.failIfNotReadyForSend();
         transactionManager.maybeAddPartitionToTransaction(tp0);
 
-        Future<RecordMetadata> responseFuture = accumulator.append(tp0, time.milliseconds(), "key".getBytes(),
-                "value".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT, false).future;
+        Future<RecordMetadata> responseFuture = appendToAccumulator(tp0);
 
         assertFalse(responseFuture.isDone());
         prepareAddPartitionsToTxnResponse(Errors.NONE, tp0, epoch, pid);
@@ -1725,8 +1767,7 @@ public class TransactionManagerTest {
         transactionManager.failIfNotReadyForSend();
         transactionManager.maybeAddPartitionToTransaction(tp0);
 
-        Future<RecordMetadata> responseFuture = accumulator.append(tp0, time.milliseconds(), "key".getBytes(),
-                "value".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT, false).future;
+        Future<RecordMetadata> responseFuture = appendToAccumulator(tp0);
 
         prepareAddPartitionsToTxn(tp0, Errors.NONE);
         sender.runOnce();
@@ -1775,8 +1816,7 @@ public class TransactionManagerTest {
         transactionManager.failIfNotReadyForSend();
         transactionManager.maybeAddPartitionToTransaction(tp0);
 
-        Future<RecordMetadata> responseFuture = accumulator.append(tp0, time.milliseconds(), "key".getBytes(),
-                "value".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT, false).future;
+        Future<RecordMetadata> responseFuture = appendToAccumulator(tp0);
 
         prepareAddPartitionsToTxn(tp0, Errors.NONE);
         sender.runOnce();
@@ -1831,8 +1871,7 @@ public class TransactionManagerTest {
         transactionManager.failIfNotReadyForSend();
         transactionManager.maybeAddPartitionToTransaction(tp0);
 
-        Future<RecordMetadata> responseFuture = accumulator.append(tp0, time.milliseconds(), "key".getBytes(),
-                "value".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT, false).future;
+        Future<RecordMetadata> responseFuture = appendToAccumulator(tp0);
 
         assertFalse(responseFuture.isDone());
         sender.runOnce();  // Send AddPartitionsRequest
@@ -1860,8 +1899,7 @@ public class TransactionManagerTest {
         transactionManager.failIfNotReadyForSend();
         transactionManager.maybeAddPartitionToTransaction(tp0);
 
-        Future<RecordMetadata> responseFuture = accumulator.append(tp0, time.milliseconds(), "key".getBytes(),
-                "value".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT, false).future;
+        Future<RecordMetadata> responseFuture = appendToAccumulator(tp0);
 
         assertFalse(responseFuture.isDone());
 
@@ -1893,8 +1931,7 @@ public class TransactionManagerTest {
         transactionManager.maybeAddPartitionToTransaction(tp0);
         prepareAddPartitionsToTxnResponse(Errors.UNKNOWN_TOPIC_OR_PARTITION, tp0, producerEpoch, producerId);
 
-        Future<RecordMetadata> responseFuture = accumulator.append(tp0, time.milliseconds(), "key".getBytes(),
-                "value".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT, false).future;
+        Future<RecordMetadata> responseFuture = appendToAccumulator(tp0);
 
         sender.runOnce();  // Send AddPartitions and let it fail
         assertFalse(responseFuture.isDone());
@@ -1933,8 +1970,7 @@ public class TransactionManagerTest {
         prepareAddPartitionsToTxnResponse(Errors.NONE, tp0, producerEpoch, producerId);
         prepareProduceResponse(Errors.REQUEST_TIMED_OUT, producerId, producerEpoch);
 
-        Future<RecordMetadata> responseFuture = accumulator.append(tp0, time.milliseconds(), "key".getBytes(),
-                "value".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT, false).future;
+        Future<RecordMetadata> responseFuture = appendToAccumulator(tp0);
 
         sender.runOnce();  // Send AddPartitions
         sender.runOnce();  // Send ProduceRequest and let it fail
@@ -1969,8 +2005,7 @@ public class TransactionManagerTest {
         transactionManager.failIfNotReadyForSend();
         transactionManager.maybeAddPartitionToTransaction(tp0);
 
-        Future<RecordMetadata> responseFuture = accumulator.append(tp0, time.milliseconds(), "key".getBytes(),
-                "value".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT, false).future;
+        Future<RecordMetadata> responseFuture = appendToAccumulator(tp0);
 
         assertFalse(responseFuture.isDone());
         prepareAddPartitionsToTxnResponse(Errors.UNKNOWN_TOPIC_OR_PARTITION, tp0, epoch, pid);
@@ -2130,12 +2165,10 @@ public class TransactionManagerTest {
         transactionManager.beginTransaction();
         transactionManager.failIfNotReadyForSend();
         transactionManager.maybeAddPartitionToTransaction(tp0);
-        accumulator.append(tp0, time.milliseconds(), "key".getBytes(),
-                "value".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT, false);
+        appendToAccumulator(tp0);
         transactionManager.failIfNotReadyForSend();
         transactionManager.maybeAddPartitionToTransaction(tp1);
-        accumulator.append(tp1, time.milliseconds(), "key".getBytes(),
-                "value".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT, false);
+        appendToAccumulator(tp1);
 
         assertFalse(transactionManager.isSendToPartitionAllowed(tp0));
         assertFalse(transactionManager.isSendToPartitionAllowed(tp1));
@@ -2187,8 +2220,7 @@ public class TransactionManagerTest {
         PartitionInfo part1 = new PartitionInfo(topic, 1, node1, null, null);
         Cluster cluster = new Cluster(null, Collections.singletonList(node1), Collections.singletonList(part1),
                 Collections.emptySet(), Collections.emptySet());
-        accumulator.append(tp1, time.milliseconds(), "key".getBytes(),
-                "value".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT, false);
+        appendToAccumulator(tp1);
         Map<Integer, List<ProducerBatch>> drainedBatches = accumulator.drain(cluster, Collections.singleton(node1),
                 Integer.MAX_VALUE,
                 time.milliseconds());
@@ -2207,8 +2239,7 @@ public class TransactionManagerTest {
         doInitTransactions(pid, epoch);
         transactionManager.beginTransaction();
         // Don't execute transactionManager.maybeAddPartitionToTransaction(tp0). This should result in an error on drain.
-        accumulator.append(tp0, time.milliseconds(), "key".getBytes(),
-                "value".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT, false);
+        appendToAccumulator(tp0);
         Node node1 = new Node(0, "localhost", 1111);
         PartitionInfo part1 = new PartitionInfo(topic, 0, node1, null, null);
 
@@ -2234,8 +2265,7 @@ public class TransactionManagerTest {
         transactionManager.failIfNotReadyForSend();
         transactionManager.maybeAddPartitionToTransaction(tp0);
 
-        Future<RecordMetadata> responseFuture = accumulator.append(tp0, time.milliseconds(), "key".getBytes(),
-                "value".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT, false).future;
+        Future<RecordMetadata> responseFuture = appendToAccumulator(tp0);
 
         prepareAddPartitionsToTxnResponse(Errors.NONE, tp0, epoch, pid);
         prepareProduceResponse(Errors.NOT_LEADER_FOR_PARTITION, pid, epoch);
@@ -2263,8 +2293,7 @@ public class TransactionManagerTest {
         transactionManager.failIfNotReadyForSend();
         transactionManager.maybeAddPartitionToTransaction(tp0);
 
-        Future<RecordMetadata> responseFuture = accumulator.append(tp0, time.milliseconds(), "key".getBytes(),
-                "value".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT, false).future;
+        Future<RecordMetadata> responseFuture = appendToAccumulator(tp0);
 
         assertFalse(responseFuture.isDone());
 
@@ -2312,10 +2341,8 @@ public class TransactionManagerTest {
         transactionManager.failIfNotReadyForSend();
         transactionManager.maybeAddPartitionToTransaction(tp1);
 
-        Future<RecordMetadata> firstBatchResponse = accumulator.append(tp0, time.milliseconds(), "key".getBytes(),
-                "value".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT, false).future;
-        Future<RecordMetadata> secondBatchResponse = accumulator.append(tp1, time.milliseconds(), "key".getBytes(),
-               "value".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT, false).future;
+        Future<RecordMetadata> firstBatchResponse = appendToAccumulator(tp0);
+        Future<RecordMetadata> secondBatchResponse = appendToAccumulator(tp1);
 
         assertFalse(firstBatchResponse.isDone());
         assertFalse(secondBatchResponse.isDone());
@@ -2377,8 +2404,7 @@ public class TransactionManagerTest {
         transactionManager.failIfNotReadyForSend();
         transactionManager.maybeAddPartitionToTransaction(tp0);
 
-        Future<RecordMetadata> responseFuture = accumulator.append(tp0, time.milliseconds(), "key".getBytes(),
-                "value".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT, false).future;
+        Future<RecordMetadata> responseFuture = appendToAccumulator(tp0);
 
         assertFalse(responseFuture.isDone());
 
@@ -2444,8 +2470,7 @@ public class TransactionManagerTest {
         transactionManager.failIfNotReadyForSend();
         transactionManager.maybeAddPartitionToTransaction(tp0);
 
-        Future<RecordMetadata> responseFuture = accumulator.append(tp0, time.milliseconds(), "key".getBytes(),
-                "value".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT, false).future;
+        Future<RecordMetadata> responseFuture = appendToAccumulator(tp0);
 
         assertFalse(responseFuture.isDone());
 
@@ -2631,6 +2656,12 @@ public class TransactionManagerTest {
         verifyCommitOrAbortTranscationRetriable(TransactionResult.ABORT, TransactionResult.COMMIT);
     }
 
+    private FutureRecordMetadata appendToAccumulator(TopicPartition tp) throws InterruptedException {
+        final long nowMs = time.milliseconds();
+        return accumulator.append(tp, nowMs, "key".getBytes(), "value".getBytes(), Record.EMPTY_HEADERS,
+                null, MAX_BLOCK_TIMEOUT, false, nowMs).future;
+    }
+
     private void verifyCommitOrAbortTranscationRetriable(TransactionResult firstTransactionResult,
                                                          TransactionResult retryTransactionResult)
             throws InterruptedException {
@@ -2643,8 +2674,7 @@ public class TransactionManagerTest {
         transactionManager.failIfNotReadyForSend();
         transactionManager.maybeAddPartitionToTransaction(tp0);
 
-        accumulator.append(tp0, time.milliseconds(), "key".getBytes(),
-                "value".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT, false);
+        appendToAccumulator(tp0);
 
         prepareAddPartitionsToTxnResponse(Errors.NONE, tp0, epoch, pid);
 
@@ -2685,8 +2715,7 @@ public class TransactionManagerTest {
         transactionManager.failIfNotReadyForSend();
         transactionManager.maybeAddPartitionToTransaction(tp0);
 
-        Future<RecordMetadata> responseFuture = accumulator.append(tp0, time.milliseconds(), "key".getBytes(),
-                "value".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT, false).future;
+        Future<RecordMetadata> responseFuture = appendToAccumulator(tp0);
         assertFalse(responseFuture.isDone());
         prepareAddPartitionsToTxn(tp0, error);
         sender.runOnce();  // attempt send addPartitions.
@@ -2788,20 +2817,27 @@ public class TransactionManagerTest {
                                        final long pid,
                                        final short epoch,
                                        final boolean shouldDisconnect) {
-        client.prepareResponse(endTxnMatcher(result, pid, epoch), new EndTxnResponse(0, error), shouldDisconnect);
+        client.prepareResponse(endTxnMatcher(result, pid, epoch),
+                               new EndTxnResponse(new EndTxnResponseData()
+                                                      .setErrorCode(error.code())
+                                                      .setThrottleTimeMs(0)), shouldDisconnect);
     }
 
     private void sendEndTxnResponse(Errors error, final TransactionResult result, final long pid, final short epoch) {
-        client.respond(endTxnMatcher(result, pid, epoch), new EndTxnResponse(0, error));
+        client.respond(endTxnMatcher(result, pid, epoch), new EndTxnResponse(
+            new EndTxnResponseData()
+                .setErrorCode(error.code())
+                .setThrottleTimeMs(0)
+        ));
     }
 
     private MockClient.RequestMatcher endTxnMatcher(final TransactionResult result, final long pid, final short epoch) {
         return body -> {
             EndTxnRequest endTxnRequest = (EndTxnRequest) body;
-            assertEquals(transactionalId, endTxnRequest.transactionalId());
-            assertEquals(pid, endTxnRequest.producerId());
-            assertEquals(epoch, endTxnRequest.producerEpoch());
-            assertEquals(result, endTxnRequest.command());
+            assertEquals(transactionalId, endTxnRequest.data.transactionalId());
+            assertEquals(pid, endTxnRequest.data.producerId());
+            assertEquals(epoch, endTxnRequest.data.producerEpoch());
+            assertEquals(result, endTxnRequest.result());
             return true;
         };
     }

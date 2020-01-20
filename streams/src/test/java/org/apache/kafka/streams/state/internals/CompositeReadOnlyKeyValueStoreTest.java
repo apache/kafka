@@ -27,16 +27,16 @@ import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.NoOpReadOnlyStore;
-import org.apache.kafka.test.NoOpRecordCollector;
+import org.apache.kafka.test.MockRecordCollector;
 import org.apache.kafka.test.StateStoreProviderStub;
 import org.junit.Before;
 import org.junit.Test;
 
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 import java.util.NoSuchElementException;
 
+import static java.util.Arrays.asList;
+import static java.util.Collections.singletonList;
 import static org.apache.kafka.test.StreamsTestUtils.toList;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
@@ -63,9 +63,10 @@ public class CompositeReadOnlyKeyValueStoreTest {
         stubProviderOne.addStore("other-store", otherUnderlyingStore);
 
         theStore = new CompositeReadOnlyKeyValueStore<>(
-            new WrappingStoreProvider(Arrays.<StateStoreProvider>asList(stubProviderOne, stubProviderTwo)),
-                                        QueryableStoreTypes.<String, String>keyValueStore(),
-                                        storeName);
+            new WrappingStoreProvider(asList(stubProviderOne, stubProviderTwo), false),
+            QueryableStoreTypes.keyValueStore(),
+            storeName
+        );
     }
 
     private KeyValueStore<String, String> newStoreInstance() {
@@ -74,9 +75,11 @@ public class CompositeReadOnlyKeyValueStoreTest {
                 Serdes.String())
                 .build();
 
-        store.init(new InternalMockProcessorContext(new StateSerdes<>(ProcessorStateManager.storeChangelogTopic("appId", storeName), Serdes.String(), Serdes.String()),
-                                                    new NoOpRecordCollector()),
-                store);
+        final InternalMockProcessorContext context = new InternalMockProcessorContext(new StateSerdes<>(ProcessorStateManager.storeChangelogTopic("appId", storeName),
+            Serdes.String(), Serdes.String()), new MockRecordCollector());
+        context.setTime(1L);
+
+        store.init(context, store);
 
         return store;
     }
@@ -291,8 +294,11 @@ public class CompositeReadOnlyKeyValueStoreTest {
     }
 
     private CompositeReadOnlyKeyValueStore<Object, Object> rebalancing() {
-        return new CompositeReadOnlyKeyValueStore<>(new WrappingStoreProvider(Collections.<StateStoreProvider>singletonList(new StateStoreProviderStub(true))),
-                QueryableStoreTypes.keyValueStore(), storeName);
+        return new CompositeReadOnlyKeyValueStore<>(
+            new WrappingStoreProvider(singletonList(new StateStoreProviderStub(true)), false),
+            QueryableStoreTypes.keyValueStore(),
+            storeName
+        );
     }
 
 }

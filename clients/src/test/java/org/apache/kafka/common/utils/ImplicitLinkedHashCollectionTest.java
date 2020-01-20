@@ -493,6 +493,19 @@ public class ImplicitLinkedHashCollectionTest {
     }
 
     @Test
+    public void testInsertingTheSameObjectMultipleTimes() {
+        ImplicitLinkedHashCollection<TestElement> coll = new ImplicitLinkedHashCollection<>();
+        TestElement element = new TestElement(123);
+        assertTrue(coll.add(element));
+        assertFalse(coll.add(element));
+        assertFalse(coll.add(element));
+        assertTrue(coll.remove(element));
+        assertFalse(coll.remove(element));
+        assertTrue(coll.add(element));
+        assertFalse(coll.add(element));
+    }
+
+    @Test
     public void testEquals() {
         ImplicitLinkedHashCollection<TestElement> coll1 = new ImplicitLinkedHashCollection<>();
         coll1.add(new TestElement(1));

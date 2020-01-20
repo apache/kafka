@@ -25,12 +25,12 @@ import org.apache.kafka.streams.kstream.internals.KTableImpl;
 import org.apache.kafka.streams.kstream.internals.KTableProcessorSupplier;
 import org.apache.kafka.streams.kstream.internals.KTableValueGetter;
 import org.apache.kafka.streams.kstream.internals.KTableValueGetterSupplier;
-import org.apache.kafka.streams.kstream.internals.metrics.Sensors;
 import org.apache.kafka.streams.kstream.internals.suppress.TimeDefinitions.TimeDefinition;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
+import org.apache.kafka.streams.processor.internals.metrics.ProcessorNodeMetrics;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.internals.Maybe;
 import org.apache.kafka.streams.state.internals.TimeOrderedKeyValueBuffer;
@@ -140,7 +140,12 @@ public class KTableSuppressProcessorSupplier<K, V> implements KTableProcessorSup
         @Override
         public void init(final ProcessorContext context) {
             internalProcessorContext = (InternalProcessorContext) context;
-            suppressionEmitSensor = Sensors.suppressionEmitSensor(internalProcessorContext);
+            suppressionEmitSensor = ProcessorNodeMetrics.suppressionEmitSensor(
+                Thread.currentThread().getName(),
+                context.taskId().toString(),
+                internalProcessorContext.currentNode().name(),
+                internalProcessorContext.metrics()
+            );
 
             buffer = requireNonNull((TimeOrderedKeyValueBuffer<K, V>) context.getStateStore(storeName));
             buffer.setSerdesIfNull((Serde<K>) context.keySerde(), (Serde<V>) context.valueSerde());

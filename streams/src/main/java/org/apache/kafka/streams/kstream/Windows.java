@@ -26,9 +26,10 @@ import static org.apache.kafka.streams.kstream.internals.WindowingDefaults.DEFAU
 
 /**
  * The window specification for fixed size windows that is used to define window boundaries and grace period.
- *
- * Grace period defines how long to wait on late events, where lateness is defined as (stream_time - record_timestamp).
- *
+ * <p>
+ * Grace period defines how long to wait on out-of-order events. That is, windows will continue to accept new records until {@code stream_time >= window_end + grace_period}.
+ * Records that arrive after the grace period passed are considered <em>late</em> and will not be processed but are dropped.
+ * <p>
  * Warning: It may be unsafe to use objects of this class in set- or map-like collections,
  * since the equals and hashCode methods depend on mutable fields.
  *
@@ -118,9 +119,9 @@ public abstract class Windows<W extends Window> {
 
     /**
      * Return the window grace period (the time to admit
-     * late-arriving events after the end of the window.)
+     * out-of-order events after the end of the window.)
      *
-     * Lateness is defined as (stream_time - record_timestamp).
+     * Delay is defined as (stream_time - record_timestamp).
      */
     public abstract long gracePeriodMs();
 }

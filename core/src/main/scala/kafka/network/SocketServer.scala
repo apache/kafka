@@ -22,11 +22,11 @@ import java.net._
 import java.nio.channels._
 import java.nio.channels.{Selector => NSelector}
 import java.util
+import java.util.Optional
 import java.util.concurrent._
 import java.util.concurrent.atomic._
 import java.util.function.Supplier
 
-import com.yammer.metrics.core.Gauge
 import kafka.cluster.{BrokerEndPoint, EndPoint}
 import kafka.metrics.KafkaMetricsGroup
 import kafka.network.RequestChannel.{CloseConnectionResponse, EndThrottlingResponse, NoOpResponse, SendResponse, StartThrottlingResponse}
@@ -40,9 +40,11 @@ import org.apache.kafka.common.{Endpoint, KafkaException, Reconfigurable}
 import org.apache.kafka.common.memory.{MemoryPool, SimpleMemoryPool}
 import org.apache.kafka.common.metrics._
 import org.apache.kafka.common.metrics.stats.{CumulativeSum, Meter}
+import org.apache.kafka.common.network.ClientInformation
 import org.apache.kafka.common.network.KafkaChannel.ChannelMuteEvent
 import org.apache.kafka.common.network.{ChannelBuilder, ChannelBuilders, KafkaChannel, ListenerName, ListenerReconfigurable, Selectable, Send, Selector => KSelector}
 import org.apache.kafka.common.protocol.ApiKeys
+import org.apache.kafka.common.requests.ApiVersionsRequest
 import org.apache.kafka.common.requests.{RequestContext, RequestHeader}
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.{KafkaThread, LogContext, Time}
@@ -124,68 +126,40 @@ class SocketServer(val config: KafkaConfig,
       }
     }
 
-    newGauge(s"${DataPlaneMetricPrefix}NetworkProcessorAvgIdlePercent",
-      new Gauge[Double] {
-
-        def value = SocketServer.this.synchronized {
-          val ioWaitRatioMetricNames = dataPlaneProcessors.values.asScala.map { p =>
-            metrics.metricName("io-wait-ratio", MetricsGroup, p.metricTags)
-          }
-          ioWaitRatioMetricNames.map { metricName =>
-            Option(metrics.metric(metricName)).fold(0.0)(m => Math.min(m.metricValue.asInstanceOf[Double], 1.0))
-          }.sum / dataPlaneProcessors.size
-        }
+    newGauge(s"${DataPlaneMetricPrefix}NetworkProcessorAvgIdlePercent", () => SocketServer.this.synchronized {
+      val ioWaitRatioMetricNames = dataPlaneProcessors.values.asScala.iterator.map { p =>
+        metrics.metricName("io-wait-ratio", MetricsGroup, p.metricTags)
       }
-    )
-    newGauge(s"${ControlPlaneMetricPrefix}NetworkProcessorAvgIdlePercent",
-      new Gauge[Double] {
-
-        def value = SocketServer.this.synchronized {
-          val ioWaitRatioMetricName = controlPlaneProcessorOpt.map { p =>
-            metrics.metricName("io-wait-ratio", "socket-server-metrics", p.metricTags)
-          }
-          ioWaitRatioMetricName.map { metricName =>
-            Option(metrics.metric(metricName)).fold(0.0)(m => Math.min(m.metricValue.asInstanceOf[Double], 1.0))
-          }.getOrElse(Double.NaN)
-        }
+      ioWaitRatioMetricNames.map { metricName =>
+        Option(metrics.metric(metricName)).fold(0.0)(m => Math.min(m.metricValue.asInstanceOf[Double], 1.0))
+      }.sum / dataPlaneProcessors.size
+    })
+    newGauge(s"${ControlPlaneMetricPrefix}NetworkProcessorAvgIdlePercent", () => SocketServer.this.synchronized {
+      val ioWaitRatioMetricName = controlPlaneProcessorOpt.map { p =>
+        metrics.metricName("io-wait-ratio", "socket-server-metrics", p.metricTags)
       }
-    )
-    newGauge("MemoryPoolAvailable",
-      new Gauge[Long] {
-        def value = memoryPool.availableMemory()
+      ioWaitRatioMetricName.map { metricName =>
+        Option(metrics.metric(metricName)).fold(0.0)(m => Math.min(m.metricValue.asInstanceOf[Double], 1.0))
+      }.getOrElse(Double.NaN)
+    })
+    newGauge("MemoryPoolAvailable", () => memoryPool.availableMemory)
+    newGauge("MemoryPoolUsed", () => memoryPool.size() - memoryPool.availableMemory)
+    newGauge(s"${DataPlaneMetricPrefix}ExpiredConnectionsKilledCount", () => SocketServer.this.synchronized {
+      val expiredConnectionsKilledCountMetricNames = dataPlaneProcessors.values.asScala.iterator.map { p =>
+        metrics.metricName("expired-connections-killed-count", "socket-server-metrics", p.metricTags)
       }
-    )
-    newGauge("MemoryPoolUsed",
-      new Gauge[Long] {
-        def value = memoryPool.size() - memoryPool.availableMemory()
+      expiredConnectionsKilledCountMetricNames.map { metricName =>
+        Option(metrics.metric(metricName)).fold(0.0)(m => m.metricValue.asInstanceOf[Double])
+      }.sum
+    })
+    newGauge(s"${ControlPlaneMetricPrefix}ExpiredConnectionsKilledCount", () => SocketServer.this.synchronized {
+      val expiredConnectionsKilledCountMetricNames = controlPlaneProcessorOpt.map { p =>
+        metrics.metricName("expired-connections-killed-count", "socket-server-metrics", p.metricTags)
       }
-    )
-    newGauge(s"${DataPlaneMetricPrefix}ExpiredConnectionsKilledCount",
-      new Gauge[Double] {
-
-        def value = SocketServer.this.synchronized {
-          val expiredConnectionsKilledCountMetricNames = dataPlaneProcessors.values.asScala.map { p =>
-            metrics.metricName("expired-connections-killed-count", "socket-server-metrics", p.metricTags)
-          }
-          expiredConnectionsKilledCountMetricNames.map { metricName =>
-            Option(metrics.metric(metricName)).fold(0.0)(m => m.metricValue.asInstanceOf[Double])
-          }.sum
-        }
-      }
-    )
-    newGauge(s"${ControlPlaneMetricPrefix}ExpiredConnectionsKilledCount",
-      new Gauge[Double] {
-
-        def value = SocketServer.this.synchronized {
-          val expiredConnectionsKilledCountMetricNames = controlPlaneProcessorOpt.map { p =>
-            metrics.metricName("expired-connections-killed-count", "socket-server-metrics", p.metricTags)
-          }
-          expiredConnectionsKilledCountMetricNames.map { metricName =>
-            Option(metrics.metric(metricName)).fold(0.0)(m => m.metricValue.asInstanceOf[Double])
-          }.getOrElse(0.0)
-        }
-      }
-    )
+      expiredConnectionsKilledCountMetricNames.map { metricName =>
+        Option(metrics.metric(metricName)).fold(0.0)(m => m.metricValue.asInstanceOf[Double])
+      }.getOrElse(0.0)
+    })
     info(s"Started ${dataPlaneAcceptors.size} acceptor threads for data-plane")
     if (controlPlaneAcceptorOpt.isDefined)
       info("Started control-plane acceptor thread")
@@ -209,11 +183,9 @@ class SocketServer(val config: KafkaConfig,
       dataPlaneAcceptors.asScala.filterKeys(_ != interBrokerListener).values
     orderedAcceptors.foreach { acceptor =>
       val endpoint = acceptor.endPoint
-      debug(s"Wait for authorizer to complete start up on listener ${endpoint.listener}")
-      authorizerFutures.get(endpoint).foreach { future =>
-        future.join()
-      }
-      debug(s"Start processors on listener ${endpoint.listener}")
+      debug(s"Wait for authorizer to complete start up on listener ${endpoint.listenerName}")
+      waitForAuthorizerFuture(acceptor, authorizerFutures)
+      debug(s"Start processors on listener ${endpoint.listenerName}")
       acceptor.startProcessors(DataPlaneThreadPrefix)
     }
     info(s"Started data-plane processors for ${dataPlaneAcceptors.size} acceptors")
@@ -226,7 +198,7 @@ class SocketServer(val config: KafkaConfig,
    */
   def startControlPlaneProcessor(authorizerFutures: Map[Endpoint, CompletableFuture[Void]] = Map.empty): Unit = synchronized {
     controlPlaneAcceptorOpt.foreach { controlPlaneAcceptor =>
-      authorizerFutures.get(controlPlaneAcceptor.endPoint).foreach(_.get)
+      waitForAuthorizerFuture(controlPlaneAcceptor, authorizerFutures)
       controlPlaneAcceptor.startProcessors(ControlPlaneThreadPrefix)
       info(s"Started control-plane processor for the control-plane acceptor")
     }
@@ -377,6 +349,15 @@ class SocketServer(val config: KafkaConfig,
     if (maxConnections != oldConfig.maxConnections) {
       info(s"Updating broker-wide maxConnections: $maxConnections")
       connectionQuotas.updateBrokerMaxConnections(maxConnections)
+    }
+  }
+
+  private def waitForAuthorizerFuture(acceptor: Acceptor,
+                                      authorizerFutures: Map[Endpoint, CompletableFuture[Void]]): Unit = {
+    //we can't rely on authorizerFutures.get() due to ephemeral ports. Get the future using listener name
+    authorizerFutures.foreach { case (endpoint, future) =>
+      if (endpoint.listenerName == Optional.of(acceptor.endPoint.listenerName.value))
+        future.join()
     }
   }
 
@@ -719,12 +700,9 @@ private[kafka] class Processor(val id: Int,
     NetworkProcessorMetricTag -> id.toString
   ).asJava
 
-  newGauge(IdlePercentMetricName,
-    new Gauge[Double] {
-      def value = {
-        Option(metrics.metric(metrics.metricName("io-wait-ratio", MetricsGroup, metricTags)))
-          .fold(0.0)(m => Math.min(m.metricValue.asInstanceOf[Double], 1.0))
-      }
+  newGauge(IdlePercentMetricName, () => {
+    Option(metrics.metric(metrics.metricName("io-wait-ratio", MetricsGroup, metricTags))).fold(0.0)(m =>
+      Math.min(m.metricValue.asInstanceOf[Double], 1.0))
     },
     // for compatibility, only add a networkProcessor tag to the Yammer Metrics alias (the equivalent Selector metric
     // also includes the listener name)
@@ -742,7 +720,8 @@ private[kafka] class Processor(val id: Int,
       config,
       credentialProvider.credentialCache,
       credentialProvider.tokenCache,
-      time))
+      time,
+      logContext))
   // Visible to override for testing
   protected[network] def createSelector(channelBuilder: ChannelBuilder): KSelector = {
     channelBuilder match {
@@ -894,20 +873,32 @@ private[kafka] class Processor(val id: Int,
         openOrClosingChannel(receive.source) match {
           case Some(channel) =>
             val header = RequestHeader.parse(receive.payload)
-            if (header.apiKey() == ApiKeys.SASL_HANDSHAKE && channel.maybeBeginServerReauthentication(receive, nowNanosSupplier))
+            if (header.apiKey == ApiKeys.SASL_HANDSHAKE && channel.maybeBeginServerReauthentication(receive, nowNanosSupplier))
               trace(s"Begin re-authentication: $channel")
             else {
               val nowNanos = time.nanoseconds()
               if (channel.serverAuthenticationSessionExpired(nowNanos)) {
-                channel.disconnect()
-                debug(s"Disconnected expired channel: $channel : $header")
+                // be sure to decrease connection count and drop any in-flight responses
+                debug(s"Disconnecting expired channel: $channel : $header")
+                close(channel.id)
                 expiredConnectionsKilledCount.record(null, 1, 0)
               } else {
                 val connectionId = receive.source
                 val context = new RequestContext(header, connectionId, channel.socketAddress,
-                  channel.principal, listenerName, securityProtocol)
+                  channel.principal, listenerName, securityProtocol,
+                  channel.channelMetadataRegistry.clientInformation)
                 val req = new RequestChannel.Request(processor = id, context = context,
                   startTimeNanos = nowNanos, memoryPool, receive.payload, requestChannel.metrics)
+                // KIP-511: ApiVersionsRequest is intercepted here to catch the client software name
+                // and version. It is done here to avoid wiring things up to the api layer.
+                if (header.apiKey == ApiKeys.API_VERSIONS) {
+                  val apiVersionsRequest = req.body[ApiVersionsRequest]
+                  if (apiVersionsRequest.isValid) {
+                    channel.channelMetadataRegistry.registerClientInformation(new ClientInformation(
+                      apiVersionsRequest.data.clientSoftwareName,
+                      apiVersionsRequest.data.clientSoftwareVersion))
+                  }
+                }
                 requestChannel.sendRequest(req)
                 selector.mute(connectionId)
                 handleChannelMuteEvent(connectionId, ChannelMuteEvent.REQUEST_RECEIVED)
@@ -1100,10 +1091,6 @@ private[kafka] class Processor(val id: Int,
   /* For test usage */
   private[network] def channel(connectionId: String): Option[KafkaChannel] =
     Option(selector.channel(connectionId))
-
-  // Visible for testing
-  private[network] def numStagedReceives(connectionId: String): Int =
-    openOrClosingChannel(connectionId).map(c => selector.numStagedReceives(c)).getOrElse(0)
 
   /**
    * Wakeup the thread for selection.
