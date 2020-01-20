@@ -187,13 +187,16 @@ object AclCommand extends Logging {
 
     private def withAuthorizer()(f: Authorizer => Unit): Unit = {
       val defaultProps = Map(KafkaConfig.ZkEnableSecureAclsProp -> JaasUtils.isZkSecurityEnabled)
-      val authorizerProperties =
+      var authorizerProperties =
         if (opts.options.has(opts.authorizerPropertiesOpt)) {
           val authorizerProperties = opts.options.valuesOf(opts.authorizerPropertiesOpt).asScala
           defaultProps ++ CommandLineUtils.parseKeyValueArgs(authorizerProperties, acceptMissingValue = false).asScala
         } else {
           defaultProps
         }
+
+      val loadAclCache = opts.options.valueOf(opts.loadAclCacheOpt)
+      authorizerProperties += (AclAuthorizer.LoadAclCacheSwitchProp->loadAclCache)
 
       val authZ = AuthorizerUtils.createAuthorizer(authorizerClassName)
       try {
@@ -479,6 +482,12 @@ object AclCommand extends Logging {
       .withOptionalArg()
       .describedAs("command-config")
       .ofType(classOf[String])
+
+    val loadAclCacheOpt = parser.accepts("load-acl-cache", "If you just run AclCommand,turn off this switch to avoid loading all ACL cache.")
+      .withOptionalArg
+      .describedAs("load-acl-cache")
+      .ofType(classOf[String])
+      .defaultsTo("true")
 
     val authorizerOpt = parser.accepts("authorizer", "Fully qualified class name of the authorizer, defaults to kafka.security.auth.SimpleAclAuthorizer.")
       .withRequiredArg
