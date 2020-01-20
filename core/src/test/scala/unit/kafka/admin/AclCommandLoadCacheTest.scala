@@ -25,7 +25,7 @@ import kafka.utils.TestUtils
 import kafka.zk.ZooKeeperTestHarness
 import org.apache.kafka.common.acl.AclOperation
 import org.apache.kafka.common.acl.AclOperation.READ
-import org.apache.kafka.common.network.ListenerName
+import org.apache.kafka.common.network.{ClientInformation, ListenerName}
 import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.requests.{RequestContext, RequestHeader}
 import org.apache.kafka.common.resource.PatternType.LITERAL
@@ -35,7 +35,7 @@ import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.server.authorizer.{Action, AuthorizationResult}
 import org.junit.Assert.{assertFalse, assertTrue}
 import org.junit.{After, Before, Test}
-import org.apache.kafka.common.resource.PatternType;
+import org.apache.kafka.common.resource.PatternType
 import scala.collection.JavaConverters._
 
 class AclCommandLoadCacheTest extends ZooKeeperTestHarness {
@@ -60,7 +60,8 @@ class AclCommandLoadCacheTest extends ZooKeeperTestHarness {
   private def newRequestContext(principal: KafkaPrincipal, clientAddress: InetAddress, apiKey: ApiKeys = ApiKeys.PRODUCE): RequestContext = {
     val securityProtocol = SecurityProtocol.SASL_PLAINTEXT
     val header = new RequestHeader(apiKey, 2, "", 1) //ApiKeys apiKey, short version, String clientId, int correlation
-    new RequestContext(header, "", clientAddress, principal, ListenerName.forSecurityProtocol(securityProtocol), securityProtocol)
+    new RequestContext(header, "", clientAddress, principal, ListenerName.forSecurityProtocol(securityProtocol),
+      securityProtocol, ClientInformation.EMPTY)
   }
 
   /** every pull request run all test case,it may run some diff erro,we can improve this,I think */
