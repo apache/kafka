@@ -30,15 +30,15 @@ import org.apache.kafka.streams.errors.DeserializationExceptionHandler;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
-import org.apache.kafka.streams.processor.StateStore;
-import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.Version;
-import org.apache.kafka.streams.processor.internals.metrics.TaskMetrics;
 import org.apache.kafka.streams.processor.Cancellable;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
+import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
+import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.Version;
+import org.apache.kafka.streams.processor.internals.metrics.TaskMetrics;
 import org.apache.kafka.streams.processor.internals.metrics.ThreadMetrics;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 
@@ -145,7 +145,8 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         final DeserializationExceptionHandler defaultDeserializationExceptionHandler = config.defaultDeserializationExceptionHandler();
         for (final TopicPartition partition : partitions) {
             final SourceNode source = topology.source(partition.topic());
-            final TimestampExtractor sourceTimestampExtractor = source.getTimestampExtractor() != null ? source.getTimestampExtractor() : defaultTimestampExtractor;
+            final TimestampExtractor timestampExtractor = source.getTimestampExtractor();
+            final TimestampExtractor sourceTimestampExtractor = timestampExtractor != null ? source.getTimestampExtractor() : defaultTimestampExtractor;
             final RecordQueue queue = new RecordQueue(
                 partition,
                 source,
@@ -181,6 +182,21 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
     }
 
     @Override
+    public void initializeIfNeeded() {
+        if (state() == State.CREATED) {
+            initializeMetadata();
+            initializeStateStores();
+            transitionTo(State.RESTORING);
+        }
+    }
+
+    @Override
+    public void startRunning() {
+        initializeTopology();
+        transitionTo(State.RUNNING);
+    }
+
+    @Override
     public void initializeMetadata() {
         try {
             final Map<TopicPartition, OffsetAndMetadata> offsetsAndMetadata = consumer.committed(partitions).entrySet().stream()
@@ -205,7 +221,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
                 final long committedTimestamp = decodeTimestamp(metadata.metadata());
                 partitionGroup.setPartitionTime(partition, committedTimestamp);
                 log.debug("A committed timestamp was detected: setting the partition time of partition {}"
-                    + " to {} in stream task {}", partition, committedTimestamp, id);
+                              + " to {} in stream task {}", partition, committedTimestamp, id);
             } else {
                 log.debug("No committed timestamp was found in metadata for partition {}", partition);
             }
@@ -220,8 +236,12 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
 
 
     @Override
-    public boolean initializeStateStores() {
+    public void initializeStateStores() {
         registerStateStores();
+    }
+
+    @Override
+    public boolean hasChangelogs() {
         return changelogPartitions().isEmpty();
     }
 
@@ -251,6 +271,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
     public void resume() {
         log.debug("Resuming");
         initializeMetadata();
+        transitionTo(State.RUNNING);
     }
 
     /**
@@ -322,13 +343,13 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         } catch (final KafkaException e) {
             final String stackTrace = getStacktraceString(e);
             throw new StreamsException(format("Exception caught in process. taskId=%s, " +
-                    "processor=%s, topic=%s, partition=%d, offset=%d, stacktrace=%s",
-                id(),
-                processorContext.currentNode().name(),
-                record.topic(),
-                record.partition(),
-                record.offset(),
-                stackTrace
+                                                  "processor=%s, topic=%s, partition=%d, offset=%d, stacktrace=%s",
+                                              id(),
+                                              processorContext.currentNode().name(),
+                                              record.topic(),
+                                              record.partition(),
+                                              record.offset(),
+                                              stackTrace
             ), e);
         } finally {
             processorContext.setCurrentNode(null);
@@ -498,6 +519,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
     public void suspend() {
         log.debug("Suspending");
         suspend(true);
+        transitionTo(State.SUSPENDED);
     }
 
     /**
@@ -579,6 +601,16 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         }
     }
 
+    @Override
+    public void closeClean() {
+        close(true);
+    }
+
+    @Override
+    public void closeDirty() {
+        close(false);
+    }
+
     /**
      * <pre>
      * the following order must be followed:
@@ -594,8 +626,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
      * @throws TaskMigratedException if committing offsets failed (non-EOS)
      *                               or if the task producer got fenced (EOS)
      */
-    @Override
-    public void close(final boolean clean) {
+    private void close(final boolean clean) {
         log.debug("Closing");
 
         try {
@@ -612,7 +643,9 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
             }
         }
 
+        //TODO redundant
         taskClosed = true;
+        transitionTo(State.CLOSED);
     }
 
     /**
@@ -772,8 +805,8 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         switch (version) {
             case LATEST_MAGIC_BYTE:
                 return buffer.getLong();
-            default: 
-                log.warn("Unsupported offset metadata version found. Supported version {}. Found version {}.", 
+            default:
+                log.warn("Unsupported offset metadata version found. Supported version {}. Found version {}.",
                          LATEST_MAGIC_BYTE, version);
                 return RecordQueue.UNKNOWN;
         }

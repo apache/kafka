@@ -121,46 +121,50 @@ public class AbstractTaskTest {
             changelogReader,
             logContext);
 
-        return new AbstractTask(id,
-                                storeTopicPartitions,
-                                withLocalStores(new ArrayList<>(stateStoresToChangelogTopics.keySet()),
-                                                storeNamesToChangelogTopics),
-                                consumer,
-                                false,
-                                stateManager,
-                                stateDirectory,
-                                config) {
-
-
-            private State state = State.CREATED;
-
-            @Override
-            public State state() {
-                return state;
-            }
-
-            @Override
-            public void transitionTo(final State newState) {
-                State.validateTransition(state, newState);
-                state = newState;
-            }
-
-            @Override
-            public void initializeMetadata() {}
-
-            @Override
-            public void commit() {}
-
-            @Override
-            public void close(final boolean clean) {}
-
-            @Override
-            public boolean initializeStateStores() {
-                return false;
-            }
-
-            @Override
-            public void initializeTopology() {}
-        };
+//        return new AbstractTask(id,
+//                                storeTopicPartitions,
+//                                withLocalStores(new ArrayList<>(stateStoresToChangelogTopics.keySet()),
+//                                                storeNamesToChangelogTopics),
+//                                consumer,
+//                                false,
+//                                stateManager,
+//                                stateDirectory,
+//                                config) {
+//
+//
+//            private State state = State.CREATED;
+//
+//            @Override
+//            public State state() {
+//                return state;
+//            }
+//
+//            @Override
+//            public void transitionTo(final State newState) {
+//                State.validateTransition(state, newState);
+//                state = newState;
+//            }
+//
+//            @Override
+//            public void initializeMetadata() {}
+//
+//            @Override
+//            public void resume() {}
+//
+//            @Override
+//            public void commit() {}
+//
+//            @Override
+//            public void close(final boolean clean) {}
+//
+//            @Override
+//            public boolean initializeStateStores() {
+//                return false;
+//            }
+//
+//            @Override
+//            public void initializeTopology() {}
+//        };
+        throw new RuntimeException();
     }
 }

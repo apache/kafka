@@ -999,7 +999,7 @@ public class TopologyTestDriver implements Closeable {
      */
     public void close() {
         if (task != null) {
-            task.close(true);
+            task.closeClean();
         }
         if (globalStateTask != null) {
             try {

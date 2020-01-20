@@ -23,21 +23,20 @@ import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 
 import java.util.Collection;
-import java.util.HashSet;
 import java.util.Set;
 
 public interface Task {
     enum State {
-        CREATED, RESTORING, RUNNING, REVOKED, CLOSED;
+        CREATED, RESTORING, RUNNING, SUSPENDED, CLOSED;
 
         static void validateTransition(final State oldState, final State newState) {
             if (oldState == CREATED && newState == RESTORING) {
                 return;
-            } else if (oldState == RESTORING && (newState == RESTORING || newState == RUNNING || newState == REVOKED)) {
+            } else if (oldState == RESTORING && (newState == RESTORING || newState == RUNNING || newState == SUSPENDED)) {
                 return;
-            } else if (oldState == RUNNING && (newState == RESTORING || newState == RUNNING || newState == REVOKED)) {
+            } else if (oldState == RUNNING && (newState == RESTORING || newState == RUNNING || newState == SUSPENDED)) {
                 return;
-            } else if (oldState == REVOKED && (newState == RESTORING || newState == RUNNING || newState == REVOKED || newState == CLOSED)) {
+            } else if (oldState == SUSPENDED && (newState == RESTORING || newState == RUNNING || newState == SUSPENDED || newState == CLOSED)) {
                 return;
             } else {
                 throw new IllegalStateException("Invalid transition from " + oldState + " to " + newState);
@@ -49,15 +48,20 @@ public interface Task {
 
     void transitionTo(State newState);
 
+    void initializeIfNeeded();
+
+    void startRunning();
+
     void initializeMetadata();
 
     /**
-     * Initialize the task and return {@code true} if the task is ready to run, i.e, it has no state stores
-     * @return true if this task has no state stores that may need restoring.
+     * Initialize the task's stores
      * @throws IllegalStateException If store gets registered after initialized is already finished
      * @throws StreamsException if the store's change log does not contain the partition
      */
-    boolean initializeStateStores();
+    void initializeStateStores();
+
+    boolean hasChangelogs();
 
     boolean commitNeeded();
 
@@ -65,7 +69,21 @@ public interface Task {
 
     void commit();
 
-    void close(final boolean clean);
+    void suspend();
+
+    void resume();
+
+    /**
+     * Close a task that we still own. Commit all progress and close the task gracefully.
+     * Throws an exception if this couldn't be done.
+     */
+    void closeClean();
+
+    /**
+     * Close a task that we may not own. Discard any uncommitted progress and close the task.
+     * Never throws an exception, but just makes all attempts to release resources while closing.
+     */
+    void closeDirty();
 
     StateStore getStore(final String name);
 

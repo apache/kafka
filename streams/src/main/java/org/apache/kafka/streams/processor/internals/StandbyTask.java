@@ -74,11 +74,20 @@ public class StandbyTask extends AbstractTask {
     }
 
     @Override
-    public void initializeMetadata() {}
+    public void initializeIfNeeded() {
+        if (state() == State.CREATED) {
+            initializeMetadata();
+            initializeStateStores();
+            transitionTo(State.RUNNING);
+        }
+    }
 
     // TODO K9113: remove from Task interface, only needed for StreamTask
     @Override
-    public boolean initializeStateStores() {
+    public void initializeMetadata() {}
+
+    @Override
+    public void initializeStateStores() {
         registerStateStores();
 
         // no topology needs initialized, we can transit to RESTORING
@@ -87,12 +96,32 @@ public class StandbyTask extends AbstractTask {
 
         processorContext.initialize();
 
+        taskInitialized = true;
+    }
+
+    @Override
+    public void startRunning() {
+        // TODO: add changelog partitions to restore consumer?
+    }
+
+    @Override
+    public boolean hasChangelogs() {
         return true;
     }
 
     // TODO K9113: remove from Task interface, only needed for StreamTask
     @Override
     public void initializeTopology() {}
+
+    @Override
+    public void suspend() {
+        log.debug("No-op suspend.");
+    }
+
+    @Override
+    public void resume() {
+        log.debug("No-op resume");
+    }
 
     /**
      * <pre>
@@ -112,12 +141,21 @@ public class StandbyTask extends AbstractTask {
         log.debug("Committed");
     }
 
+    @Override
+    public void closeClean() {
+        close(true);
+    }
+
+    @Override
+    public void closeDirty() {
+        close(false);
+    }
+
     /**
      * 1. when unclean close, we do not need to commit;
      * 2. when unclean close, we do not throw any exception;
      */
-    @Override
-    public void close(final boolean clean) {
+    private void close(final boolean clean) {
         switch (state) {
             case CREATED:
                 // the task is created and not initialized, do nothing
