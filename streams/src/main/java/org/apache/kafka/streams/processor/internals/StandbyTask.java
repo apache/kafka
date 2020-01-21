@@ -153,7 +153,9 @@ public class StandbyTask extends AbstractTask {
                 break;
 
             case RUNNING:
-                if (clean) { commit(); }
+                if (clean) {
+                    commit();
+                }
 
                 try {
                     closeStateManager(clean);
@@ -171,7 +173,6 @@ public class StandbyTask extends AbstractTask {
         }
 
         closeTaskSensor.record();
-        transitionTo(State.SUSPENDED);
         transitionTo(State.CLOSED);
 
         log.debug("Closed");

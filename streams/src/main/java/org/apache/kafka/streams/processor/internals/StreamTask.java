@@ -94,7 +94,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
     private State state = State.CREATED;
 
     protected StreamTask(final TaskId taskId, final Set<TopicPartition> partitions, final StreamsConfig config) {
-        super(taskId,partitions, null, null, false, null, null, config);
+        super(taskId, partitions, null, null, false, null, null, config);
         time = null;
         threadId = null;
         eosEnabled = false;
