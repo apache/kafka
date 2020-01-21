@@ -93,6 +93,28 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
     private boolean commitRequested = false;
     private State state = State.CREATED;
 
+    protected StreamTask(final TaskId taskId, final Set<TopicPartition> partitions, final StreamsConfig config) {
+        super(taskId,partitions, null, null, false, null, null, config);
+        time = null;
+        threadId = null;
+        eosEnabled = false;
+        maxTaskIdleMs = 0L;
+        maxBufferedSize = 0;
+        streamsMetrics = null;
+        partitionGroup = null;
+        recordCollector = null;
+        recordInfo = null;
+        consumedOffsets = null;
+        streamTimePunctuationQueue = null;
+        systemTimePunctuationQueue = null;
+        closeTaskSensor = null;
+        processLatencySensor = null;
+        punctuateLatencySensor = null;
+        commitSensor = null;
+        enforcedProcessingSensor = null;
+        recordLatenessSensor = null;
+    }
+
     public StreamTask(final TaskId id,
                       final Set<TopicPartition> partitions,
                       final ProcessorTopology topology,
@@ -167,6 +189,11 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
     }
 
     @Override
+    public boolean isActive() {
+        return true;
+    }
+
+    @Override
     public State state() {
         return state;
     }
@@ -196,7 +223,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         transitionTo(State.RUNNING);
     }
 
-    @Override
     public void initializeMetadata() {
         try {
             final Map<TopicPartition, OffsetAndMetadata> offsetsAndMetadata = consumer.committed(partitions).entrySet().stream()
@@ -235,12 +261,10 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
     }
 
 
-    @Override
     public void initializeStateStores() {
         registerStateStores();
     }
 
-    @Override
     public boolean hasChangelogs() {
         return changelogPartitions().isEmpty();
     }
@@ -252,7 +276,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
      *
      * @throws TaskMigratedException if the task producer got fenced (EOS only)
      */
-    @Override
     public void initializeTopology() {
         initTopology();
 

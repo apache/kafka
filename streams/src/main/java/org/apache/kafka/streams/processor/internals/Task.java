@@ -53,20 +53,20 @@ public interface Task {
 
     void startRunning();
 
-    void initializeMetadata();
+//    void initializeMetadata();
 
     /**
      * Initialize the task's stores
      * @throws IllegalStateException If store gets registered after initialized is already finished
      * @throws StreamsException if the store's change log does not contain the partition
      */
-    void initializeStateStores();
+//    void initializeStateStores();
 
-    boolean hasChangelogs();
+//    boolean hasChangelogs();
 
     boolean commitNeeded();
 
-    void initializeTopology();
+//    void initializeTopology();
 
     void commit();
 
@@ -104,6 +104,8 @@ public interface Task {
     Collection<TopicPartition> changelogPartitions();
 
     boolean hasStateStores();
+
+    boolean isActive();
 
     String toString(final String indent);
 }

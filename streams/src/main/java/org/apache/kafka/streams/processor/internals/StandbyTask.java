@@ -62,6 +62,11 @@ public class StandbyTask extends AbstractTask {
     }
 
     @Override
+    public boolean isActive() {
+        return false;
+    }
+
+    @Override
     public State state() {
         return state;
     }
@@ -81,10 +86,8 @@ public class StandbyTask extends AbstractTask {
         }
     }
 
-    @Override
     public void initializeMetadata() {}
 
-    @Override
     public void initializeStateStores() {
         registerStateStores();
         processorContext.initialize();
@@ -96,12 +99,10 @@ public class StandbyTask extends AbstractTask {
         // TODO: add changelog partitions to restore consumer?
     }
 
-    @Override
     public boolean hasChangelogs() {
         return true;
     }
 
-    @Override
     public void initializeTopology() {}
 
     @Override

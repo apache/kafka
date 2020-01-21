@@ -310,6 +310,8 @@ public class StreamThread extends Thread {
         }
 
         abstract T createTask(final Consumer<byte[], byte[]> consumer, final TaskId id, final Set<TopicPartition> partitions);
+
+        void close() {};
     }
 
     static class TaskCreator extends AbstractTaskCreator<StreamTask> {
@@ -959,7 +961,7 @@ public class StreamThread extends Thread {
     private void addRecordsToTasks(final ConsumerRecords<byte[], byte[]> records) {
 
         for (final TopicPartition partition : records.partitions()) {
-            final StreamTask task = taskManager.activeTask(partition);
+            final StreamTask task = taskManager.streamTask(partition);
 
             if (task == null) {
                 log.error(
