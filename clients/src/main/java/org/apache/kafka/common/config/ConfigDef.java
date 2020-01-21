@@ -1457,16 +1457,16 @@ public class ConfigDef {
             if (key.internalConfig) {
                 continue;
             }
-            b.append("<li style=\"padding: 15 0 15 20; border-bottom: 1px solid black;\">");
-            b.append(String.format("<h4 style=\"margin: 0;\">" +
+            b.append("<li>\n");
+            b.append(String.format("<h4>" +
                     "<a id=\"%1$s\" href=\"#%1$s\">%1$s</a>" +
-                    "</h4>", key.name));
+                    "</h4>\n", key.name));
             b.append("<p>");
             b.append(key.documentation.replaceAll("\n", "<br>"));
-            b.append("</p>");
+            b.append("</p>\n");
 
-            b.append("<table style=\"border-width: 0;\">" +
-                    "<tbody>"); 
+            b.append("<table>" +
+                    "<tbody>\n");
             for (String detail : headers()) {
                 if (detail.equals("Name") || detail.equals("Description")) continue;
                 addConfigDetail(b, detail, getConfigValue(key, detail));
@@ -1477,18 +1477,18 @@ public class ConfigDef {
                     updateMode = "read-only";
                 addConfigDetail(b, "Update Mode:", updateMode);
             }
-            b.append("</tbody></table>");
-            b.append("</li>");
+            b.append("</tbody></table>\n");
+            b.append("</li>\n");
         }
         b.append("</ul>\n");
         return b.toString();
     }
 
     private static void addConfigDetail(StringBuilder builder, String name, String value) {
-        builder.append("<tr style=\"background-color: transparent; padding: 0 0 0 0;\">" +
-                "<th style=\"border-width: 0; background-color: transparent; text-align: right; padding: 0 0 0 0; \">" + name + ":</th>" +
-                "<td style=\"border-width: 0; background-color: transparent; text-align: left; padding: 0 0 0 10;\">" + value + "</td>" +
-                "</tr>");
+        builder.append("<tr>" +
+                "<th>" + name + ":</th>" +
+                "<td>" + value + "</td>" +
+                "</tr>\n");
     }
 
 }
