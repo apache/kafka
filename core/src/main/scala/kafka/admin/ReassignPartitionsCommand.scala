@@ -257,6 +257,7 @@ object ReassignPartitionsCommand extends Logging {
   val helpText = "This tool helps to moves topic partitions between replicas."
 
   // Two distinct public "constructors" one for ZK clients and one for AdminClient forms
+  @deprecated("Zookeeper direct access is deprecated", "Kafka 2.5" )
   def apply(zkClient: KafkaZkClient,
             adminClientOpt: Option[Admin],
             proposedPartitionAssignment: Map[TopicPartition, Seq[Int]],
@@ -423,6 +424,7 @@ object ReassignPartitionsCommand extends Logging {
   }
 
   // Package-private for testing
+  @deprecated("Zookeeper direct access is deprecated", "Kafka 2.5" )
   private[admin]
   def generateAssignment(zkClient: KafkaZkClient, brokerListToReassign: Seq[Int], topicsToMoveJsonString: String,
                          disableRackAware: Boolean): (Map[TopicPartition, Seq[Int]], Map[TopicPartition, Seq[Int]]) = {
@@ -430,7 +432,7 @@ object ReassignPartitionsCommand extends Logging {
     generateAssignment(serviceClient, brokerListToReassign, topicsToMoveJsonString, disableRackAware)
 
   }
-  
+
   def generateAssignment(adminClient: Admin, brokerListToReassign: Seq[Int], topicsToMoveJsonString: String,
                          disableRackAware: Boolean): (Map[TopicPartition, Seq[Int]], Map[TopicPartition, Seq[Int]]) = {
     val serviceClient = AdminClientReassignCommandService(adminClient)
@@ -469,6 +471,7 @@ object ReassignPartitionsCommand extends Logging {
     }
   }
 
+  @deprecated("Zookeeper direct access is deprecated", "Kafka 2.5" )
   private[admin]
   def executeAssignment(zkClient: KafkaZkClient,
                         reassignmentJsonString: String, throttle: Throttle, timeoutMs: Long = 10000L): Unit = {
@@ -629,6 +632,7 @@ object ReassignPartitionsCommand extends Logging {
   }
 
   // Package-private for testing.
+  @deprecated("Zookeeper direct access is deprecated", "Kafka 2.5" )
   private[admin] def checkIfPartitionReassignmentSucceeded(zkClient: KafkaZkClient, partitionsToBeReassigned: Map[TopicPartition, Seq[Int]])
   :Map[TopicPartition, ReassignmentStatus] = {
     val serviceClient = ZkClientReassignCommandService(zkClient)
