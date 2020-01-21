@@ -82,6 +82,7 @@ public class StandbyTask extends AbstractTask {
         if (state() == State.CREATED) {
             initializeMetadata();
             initializeStateStores();
+            transitionTo(State.RESTORING);
             transitionTo(State.RUNNING);
         }
     }
@@ -167,6 +168,7 @@ public class StandbyTask extends AbstractTask {
             closeStateManager(true);
         }
 
+        transitionTo(State.SUSPENDED);
         transitionTo(State.CLOSED);
     }
 

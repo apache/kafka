@@ -57,7 +57,7 @@ public class TaskManager {
     private final String logPrefix;
     private final Consumer<byte[], byte[]> restoreConsumer;
     private final StreamThread.AbstractTaskCreator<? extends Task> taskCreator;
-    private final StreamThread.AbstractTaskCreator<StandbyTask> standbyTaskCreator;
+    private final StreamThread.AbstractTaskCreator<? extends Task> standbyTaskCreator;
 
     private final Admin adminClient;
     private DeleteRecordsResult deleteRecordsResult;
@@ -73,7 +73,7 @@ public class TaskManager {
                 final String logPrefix,
                 final Consumer<byte[], byte[]> restoreConsumer,
                 final StreamThread.AbstractTaskCreator<? extends Task> taskCreator,
-                final StreamThread.StandbyTaskCreator standbyTaskCreator,
+                final StreamThread.AbstractTaskCreator<? extends Task> standbyTaskCreator,
                 final InternalTopologyBuilder builder,
                 final Admin adminClient) {
         this.changelogReader = changelogReader;
@@ -138,7 +138,7 @@ public class TaskManager {
             tasks.put(task.id(), task);
         }
 
-        for (final StandbyTask task : standbyTaskCreator.createTasks(consumer, standbyTasksToCreate)) {
+        for (final Task task : standbyTaskCreator.createTasks(consumer, standbyTasksToCreate)) {
             tasks.put(task.id(), task);
         }
 
@@ -494,7 +494,8 @@ public class TaskManager {
                    .append(" ")
                    .append(task.state())
                    .append(" ")
-                   .append(task.getClass().getSimpleName());
+                   .append(task.getClass().getSimpleName())
+                   .append('(').append(task.isActive() ? "active" : "standby").append(')');
         }
         return builder.toString();
     }
