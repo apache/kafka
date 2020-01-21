@@ -90,10 +90,10 @@ class ExitTest {
   @Test
   def shouldAddShutdownHookImmediately(): Unit = {
     val array:Array[Any] = Array(0, Some("other thing"))
-    // immediately invoke the code to mutate the data when a hook is added
-    def shutdownHookAdder(code: => Unit, name: Option[String]) : Unit = {
-      // invoke the code (see below, it mutates the first element)
-      code
+    // immediately invoke the statement to mutate the data when a hook is added
+    def shutdownHookAdder(statementByName: => Unit, name: Option[String]) : Unit = {
+      // invoke the statement (see below, it mutates the first element)
+      statementByName
       // mutate the second element
       array(1) = name
     }
@@ -138,6 +138,7 @@ class ExitTest {
     assertEquals(value, array(0))
     Exit.addShutdownHook(sideEffect()) // by-name parameter, not invoked
     // again make sure the first element wasn't mutated
+    assertEquals(value, array(0))
     Exit.addShutdownHook(array(0) = array(0).toString + array(0).toString) // by-name parameter, not invoked
     // again make sure the first element wasn't mutated
     assertEquals(value, array(0))

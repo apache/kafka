@@ -34,8 +34,8 @@ object Exit {
     throw new AssertionError("halt should not return, but it did.")
   }
 
-  def addShutdownHook(code: => Unit, name: Option[String] = None): Unit = {
-    JExit.addShutdownHook(() => code, name.orNull)
+  def addShutdownHook(statementByName: => Unit, name: Option[String] = None): Unit = {
+    JExit.addShutdownHook(() => statementByName, name.orNull)
   }
 
   def setExitProcedure(exitProcedure: (Int, Option[String]) => Nothing): Unit =
