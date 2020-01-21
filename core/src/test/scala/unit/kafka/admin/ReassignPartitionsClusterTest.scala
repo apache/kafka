@@ -151,18 +151,22 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
     // Given a single replica on server 100
     startBrokers(Seq(100))
     adminClient = createAdminClient(servers)
+    val serviceClient = new AdminClientReassignCommandService(adminClient)
+
     createTopic(zkClient, topicName, Map(tp0.partition() -> Seq(100)), servers = servers)
 
     // Execute no-op reassignment
     val topicJson = executeAssignmentJson(Seq(
       PartitionAssignmentJson(tp0, replicas = Seq(100), logDirectories = None)
     ))
-    ReassignPartitionsCommand.executeAssignment(zkClient, Some(adminClient), topicJson, NoThrottle)
-    waitForZkReassignmentToComplete()
+    ReassignPartitionsCommand.executeAssignment(serviceClient, topicJson, NoThrottle, 10000L)
+    waitForAdminReassignmentToComplete(serviceClient)
 
     // The replica should remain on 100
     val partitionAssignment = zkClient.getPartitionAssignmentForTopics(Set(topicName))(topicName)(tp0.partition)
     assertMoveForPartitionOccurred(Seq(100), partitionAssignment)
+
+    serviceClient.close()
   }
 
   @Test
@@ -982,6 +986,9 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
   def shouldDeleteReassignmentZnodeAfterApiReassignmentForPartitionCompletes(): Unit = {
     startBrokers(Seq(100, 101, 102))
     adminClient = createAdminClient(servers)
+    val serviceClient = new AdminClientReassignCommandService(adminClient)
+    val zkService = new ZkClientReassignCommandService(zkClient)
+
     val tpA0 = new TopicPartition("A", 0)
     val tpA1 = new TopicPartition("A", 1)
     val tpB0 = new TopicPartition("B", 0)
@@ -1002,7 +1009,8 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
       PartitionAssignmentJson(tpA0, replicas=Seq(101)),
       PartitionAssignmentJson(tpA1, replicas=Seq(101))
     ))
-    ReassignPartitionsCommand.executeAssignment(zkClient, Some(adminClient), topicJson, NoThrottle, 10000L)
+
+    ReassignPartitionsCommand.executeAssignment(zkService, topicJson, NoThrottle, 10000L)
     waitUntilTrue(() => {
       !adminClient.listPartitionReassignments().reassignments().get().isEmpty
     }, "Controller should have picked up on znode creation", 1000)
@@ -1030,6 +1038,9 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
     assertEquals(Seq(101), zkClient.getReplicasForPartition(tpA0))
     assertEquals(Seq(102), zkClient.getReplicasForPartition(tpA1))
     assertEquals(Seq(102), zkClient.getReplicasForPartition(tpB0))
+
+    zkService.close()
+    serviceClient.close()
   }
 
   @Test

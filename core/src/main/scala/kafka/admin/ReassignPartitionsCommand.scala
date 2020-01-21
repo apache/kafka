@@ -290,7 +290,7 @@ object ReassignPartitionsCommand extends Logging {
       else if(opts.options.has(opts.generateOpt))
         generateAssignment(commandService, opts)
       else if (opts.options.has(opts.executeOpt))
-        executeAssignment(commandService, adminClientOpt, opts)
+        executeAssignment(commandService, opts)
     } catch {
       case e: Throwable =>
         println("Partitions reassignment failed due to " + e.getMessage)
@@ -435,7 +435,7 @@ object ReassignPartitionsCommand extends Logging {
   }
 
   private[admin]
-  def executeAssignment(serviceClient : ReassignCommandService, adminClientOpt: Option[Admin], opts: ReassignPartitionsCommandOptions): Unit = {
+  def executeAssignment(serviceClient : ReassignCommandService, opts: ReassignPartitionsCommandOptions): Unit = {
     val reassignmentJsonFile =  opts.options.valueOf(opts.reassignmentJsonFileOpt)
     val reassignmentJsonString = Utils.readFileAsString(reassignmentJsonFile)
     val interBrokerThrottle = opts.options.valueOf(opts.interBrokerThrottleOpt)
@@ -466,7 +466,7 @@ object ReassignPartitionsCommand extends Logging {
   }
 
   private[admin]
-  def executeAssignment(zkClient: KafkaZkClient, adminClientOpt: Option[Admin],
+  def executeAssignment(zkClient: KafkaZkClient,
                         reassignmentJsonString: String, throttle: Throttle, timeoutMs: Long = 10000L): Unit = {
     val serviceClient = ZkClientReassignCommandService(zkClient)
     executeAssignment(serviceClient, reassignmentJsonString, throttle, timeoutMs)
