@@ -417,27 +417,7 @@ public class StoreChangelogReader implements ChangelogReader {
             }
 
             for (final TopicPartition partition : polledRecords.partitions()) {
-                final ChangelogMetadata changelogMetadata = restoringChangelogByPartition(partition);
-
-                // update the buffered records and limit index with the fetched records
-                final List<ConsumerRecord<byte[], byte[]>> records = polledRecords.records(partition);
-                final long limitOffset = Math.min(
-                    changelogMetadata.restoreEndOffset == null ? Long.MAX_VALUE : changelogMetadata.restoreEndOffset,
-                    changelogMetadata.restoreLimitOffset == null ? Long.MAX_VALUE : changelogMetadata.restoreLimitOffset
-                );
-
-                for (final ConsumerRecord<byte[], byte[]> record : records) {
-                    // filter polled records for null-keys and also possibly update buffer limit index
-                    if (record.key() == null) {
-                        log.warn("Read changelog record with null key from changelog {} at offset {}, " +
-                            "skipping it for restoration", changelogMetadata.storeMetadata.changelogPartition(), record.offset());
-                    } else {
-                        changelogMetadata.bufferedRecords.add(record);
-                        final long offset = record.offset();
-                        if (offset < limitOffset)
-                            changelogMetadata.bufferedLimitIndex = changelogMetadata.bufferedRecords.size();
-                    }
-                }
+                bufferChangelogRecords(restoringChangelogByPartition(partition), polledRecords.records(partition));
             }
 
             for (final TopicPartition partition: restoringChangelogs) {
@@ -447,6 +427,27 @@ public class StoreChangelogReader implements ChangelogReader {
                 // TODO: we always try to restore as a batch when some records are accumulated, which may result in
                 //       small batches; this can be optimized in the future, e.g. wait longer for larger batches.
                 restoreChangelog(changelogs.get(partition));
+            }
+        }
+    }
+
+    private void bufferChangelogRecords(final ChangelogMetadata changelogMetadata, final List<ConsumerRecord<byte[], byte[]>> records) {
+        // update the buffered records and limit index with the fetched records
+        final long limitOffset = Math.min(
+            changelogMetadata.restoreEndOffset == null ? Long.MAX_VALUE : changelogMetadata.restoreEndOffset,
+            changelogMetadata.restoreLimitOffset == null ? Long.MAX_VALUE : changelogMetadata.restoreLimitOffset
+        );
+
+        for (final ConsumerRecord<byte[], byte[]> record : records) {
+            // filter polled records for null-keys and also possibly update buffer limit index
+            if (record.key() == null) {
+                log.warn("Read changelog record with null key from changelog {} at offset {}, " +
+                    "skipping it for restoration", changelogMetadata.storeMetadata.changelogPartition(), record.offset());
+            } else {
+                changelogMetadata.bufferedRecords.add(record);
+                final long offset = record.offset();
+                if (offset < limitOffset)
+                    changelogMetadata.bufferedLimitIndex = changelogMetadata.bufferedRecords.size();
             }
         }
     }

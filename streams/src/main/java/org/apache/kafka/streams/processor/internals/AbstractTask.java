@@ -199,7 +199,7 @@ public abstract class AbstractTask implements Task {
     /**
      * @throws ProcessorStateException if there is an error while closing the state manager
      */
-    void closeStateManager(final boolean clean) throws ProcessorStateException {
+    void closeStateManager() throws ProcessorStateException {
         ProcessorStateException exception = null;
         log.trace("Closing state manager");
         try {

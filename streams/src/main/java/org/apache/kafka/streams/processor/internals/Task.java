@@ -32,7 +32,7 @@ public interface Task {
         static void validateTransition(final State oldState, final State newState) {
             if (oldState == CREATED && (newState == RESTORING || newState == CLOSED)) {
                 return;
-            } else if (oldState == RESTORING && (newState == RESTORING || newState == RUNNING || newState == SUSPENDED)) {
+            } else if (oldState == RESTORING && (newState == RESTORING || newState == RUNNING || newState == SUSPENDED || newState == CLOSED)) {
                 return;
             } else if (oldState == RUNNING && (newState == RESTORING || newState == RUNNING || newState == SUSPENDED)) {
                 return;

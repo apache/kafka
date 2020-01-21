@@ -75,13 +75,15 @@ public class StandbyTask extends AbstractTask {
 
     @Override
     public void initializeIfNeeded() {
-        if (state() == State.CREATED) {
+        if (state == State.CREATED) {
             initializeMetadata();
             initializeStateStores();
 
             // no topology needs initialized, we can transit to RUNNING
             // right after registered the stores
-            transitionTo(State.RUNNING);
+            transitionTo(State.RESTORING);
+
+            log.debug("Initialized");
         }
     }
 
@@ -124,18 +126,21 @@ public class StandbyTask extends AbstractTask {
      * <pre>
      * - flush store
      * - checkpoint store
-     * - update offset limits
      * </pre>
      */
     @Override
     public void commit() {
-        stateMgr.flush();
+        if (state == State.RESTORING) {
+            stateMgr.flush();
 
-        // since there's no written offsets we can checkpoint with empty map,
-        // and the state current offset would be used to checkpoint
-        stateMgr.checkpoint(Collections.emptyMap());
+            // since there's no written offsets we can checkpoint with empty map,
+            // and the state current offset would be used to checkpoint
+            stateMgr.checkpoint(Collections.emptyMap());
 
-        log.debug("Committed");
+            log.debug("Committed");
+        } else {
+            throw new IllegalStateException("Illegal state " + state + " while committing standby task " + id);
+        }
     }
 
     @Override
@@ -158,12 +163,12 @@ public class StandbyTask extends AbstractTask {
                 // the task is created and not initialized, do nothing
                 break;
 
-            case RUNNING:
+            case RESTORING:
                 if (clean)
                     commit();
 
                 try {
-                    closeStateManager(clean);
+                    closeStateManager();
                 } catch (final RuntimeException error) {
                     if (clean) {
                         throw error;

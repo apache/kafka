@@ -618,7 +618,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
             // the caller thread. Therefore it is always safe to proceed without try-catch
             suspend(clean);
 
-            closeStateManager(clean);
+            closeStateManager();
         } finally {
             partitionGroup.close();
             closeTaskSensor.record();
