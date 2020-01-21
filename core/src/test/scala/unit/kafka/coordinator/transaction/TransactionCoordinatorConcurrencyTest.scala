@@ -175,7 +175,7 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
     bumpProducerId = true
     transactions.foreach { txn =>
       val txnMetadata = prepareExhaustedEpochTxnMetadata(txn)
-      txnStateManager.putTransactionStateIfNotExists(txn.transactionalId, txnMetadata)
+      txnStateManager.putTransactionStateIfNotExists(txnMetadata)
 
       // Test simultaneous requests from an existing producer trying to bump the epoch and a new producer initializing
       val newProducerOp1 = new InitProducerIdOperation()
@@ -292,7 +292,7 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
     bumpProducerId = true
     transactions.foreach { txn =>
       val txnMetadata = prepareExhaustedEpochTxnMetadata(txn)
-      txnStateManager.putTransactionStateIfNotExists(txn.transactionalId, txnMetadata)
+      txnStateManager.putTransactionStateIfNotExists(txnMetadata)
 
       // Test simultaneous requests from an existing producer attempting to bump the epoch and a new producer initializing
       val bumpEpochOp = new InitProducerIdOperation(Some(new ProducerIdAndEpoch(producerId, (Short.MaxValue - 1).toShort)))
@@ -328,7 +328,7 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
     bumpProducerId = true
     transactions.foreach { txn =>
       val txnMetadata = prepareExhaustedEpochTxnMetadata(txn)
-      txnStateManager.putTransactionStateIfNotExists(txn.transactionalId, txnMetadata)
+      txnStateManager.putTransactionStateIfNotExists(txnMetadata)
 
       val bumpEpochReq = new InitProducerIdOperation(Some(new ProducerIdAndEpoch(producerId, (Short.MaxValue - 1).toShort)))
       bumpEpochReq.run(txn)
@@ -552,7 +552,7 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
 
   class LoadTxnPartitionAction(txnTopicPartitionId: Int) extends Action {
     override def run(): Unit = {
-      transactionCoordinator.handleTxnImmigration(txnTopicPartitionId, coordinatorEpoch)
+      transactionCoordinator.onElection(txnTopicPartitionId, coordinatorEpoch)
     }
     override def await(): Unit = {
       allTransactions.foreach { txn =>
@@ -566,7 +566,7 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
   class UnloadTxnPartitionAction(txnTopicPartitionId: Int) extends Action {
     val txnRecords: mutable.ArrayBuffer[SimpleRecord] = mutable.ArrayBuffer[SimpleRecord]()
     override def run(): Unit = {
-      transactionCoordinator.handleTxnEmigration(txnTopicPartitionId, coordinatorEpoch)
+      transactionCoordinator.onResignation(txnTopicPartitionId, Some(coordinatorEpoch))
     }
     override def await(): Unit = {
       allTransactions.foreach { txn =>

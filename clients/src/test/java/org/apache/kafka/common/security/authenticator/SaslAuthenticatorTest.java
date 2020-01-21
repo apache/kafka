@@ -1591,7 +1591,7 @@ public class SaslAuthenticatorTest {
                     "but instead we got our generated message echoed back, implying re-auth succeeded when it " +
                     "should not have: " + e,
                     e.getMessage().matches(
-                            ".*\\<\\[" + expectedResponseTextRegex + "]>.*\\<\\[" + receivedResponseTextRegex + "]>"));
+                            ".*\\<\\[" + expectedResponseTextRegex + "]>.*\\<\\[" + receivedResponseTextRegex + ".*?]>"));
             server.verifyReauthenticationMetrics(1, 0); // unchanged
         } finally { 
             selector.close();
@@ -2051,7 +2051,7 @@ public class SaslAuthenticatorTest {
             selector.poll(1000);
         } while (selector.completedReceives().isEmpty() && waitSeconds-- > 0);
         assertEquals(1, selector.completedReceives().size());
-        return selector.completedReceives().get(0).payload();
+        return selector.completedReceives().iterator().next().payload();
     }
 
     public static class TestServerCallbackHandler extends PlainServerCallbackHandler {

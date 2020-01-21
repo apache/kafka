@@ -18,8 +18,9 @@
   "type": "request",
   "name": "SaslHandshakeRequest",
   // Version 1 supports SASL_AUTHENTICATE.
-  "validVersions": "0-1",
-  "flexibleVersions": "none",
+  // Version 2 adds flexible version support
+  "validVersions": "0-2",
+  "flexibleVersions": "2+",
   "fields": [
     { "name": "Mechanism", "type": "string", "versions": "0+",
       "about": "The SASL mechanism chosen by the client." }

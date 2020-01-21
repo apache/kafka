@@ -962,4 +962,8 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         }
         return partitionTimes;
     }
+
+    public Map<TopicPartition, Long> restoredOffsets() {
+        return stateMgr.changelogReader().restoredOffsets();
+    }
 }

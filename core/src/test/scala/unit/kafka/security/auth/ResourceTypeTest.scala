@@ -22,6 +22,7 @@ import org.junit.Test
 import org.scalatest.Assertions.fail
 import org.apache.kafka.common.resource.{ResourceType => JResourceType}
 
+@deprecated("Scala Authorizer API classes gave been deprecated", "Since 2.5")
 class ResourceTypeTest {
 
   @Test

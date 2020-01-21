@@ -377,6 +377,18 @@ public class TaskManager {
         consumer.pause(consumer.assignment());
     }
 
+    List<StreamTask> allStreamsTasks() {
+        return active.allTasks();
+    }
+
+    Set<TaskId> restoringTaskIds() {
+        return active.restoringTaskIds();
+    }
+
+    List<StandbyTask> allStandbyTasks() {
+        return standby.allTasks();
+    }
+
     /**
      * @throws IllegalStateException If store gets registered after initialized is already finished
      * @throws StreamsException if the store's change log does not contain the partition
@@ -440,8 +452,9 @@ public class TaskManager {
         this.cluster = cluster;
     }
 
-    public void setPartitionsByHostState(final Map<HostInfo, Set<TopicPartition>> partitionsByHostState) {
-        this.streamsMetadataState.onChange(partitionsByHostState, cluster);
+    public void setHostPartitionMappings(final Map<HostInfo, Set<TopicPartition>> partitionsByHost,
+                                         final Map<HostInfo, Set<TopicPartition>> standbyPartitionsByHost) {
+        this.streamsMetadataState.onChange(partitionsByHost, standbyPartitionsByHost, cluster);
     }
 
     public void setPartitionsToTaskId(final Map<TopicPartition, TaskId> partitionsToTaskId) {

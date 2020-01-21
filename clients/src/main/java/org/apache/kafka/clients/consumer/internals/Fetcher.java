@@ -548,6 +548,8 @@ public class Fetcher<K, V> implements Closeable {
                 remainingToSearch.keySet().retainAll(value.partitionsToRetry);
             } else if (!future.isRetriable()) {
                 throw future.exception();
+            } else {
+                metadata.requestUpdate();
             }
 
             if (metadata.updateRequested())
@@ -1356,7 +1358,7 @@ public class Fetcher<K, V> implements Closeable {
         clearBufferedDataForUnassignedPartitions(currentTopicPartitions);
     }
 
-    // Visibilty for testing
+    // Visible for testing
     protected FetchSessionHandler sessionHandler(int node) {
         return sessionHandlers.get(node);
     }

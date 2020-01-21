@@ -21,6 +21,7 @@ import org.apache.kafka.common.acl.AclOperation
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
+@deprecated("Scala Authorizer API classes gave been deprecated", "Since 2.5")
 class OperationTest {
   /**
     * Test round trip conversions between org.apache.kafka.common.acl.AclOperation and
