@@ -631,12 +631,6 @@ object ReassignPartitionsCommand extends Logging {
     checkIfPartitionReassignmentSucceeded(serviceClient, partitionsToBeReassigned)
   }
 
-  private[admin] def checkIfPartitionReassignmentSucceeded(adminClient: Admin, partitionsToBeReassigned: Map[TopicPartition, Seq[Int]])
-  :Map[TopicPartition, ReassignmentStatus] = {
-    val serviceClient = AdminClientReassignCommandService(adminClient)
-    checkIfPartitionReassignmentSucceeded(serviceClient, partitionsToBeReassigned)
-  }
-
   private def checkIfReplicaReassignmentSucceeded(adminClientOpt: Option[Admin], replicaAssignment: Map[TopicPartitionReplica, String])
   :Map[TopicPartitionReplica, ReassignmentStatus] = {
 
