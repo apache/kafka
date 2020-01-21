@@ -22,6 +22,9 @@ import org.apache.kafka.connect.errors.DataException;
 import org.junit.Test;
 
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -34,6 +37,8 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 public class ValuesTest {
+
+    private static final String WHITESPACE = "\n \t \t\n";
 
     private static final long MILLIS_PER_DAY = 24 * 60 * 60 * 1000;
 
@@ -65,6 +70,149 @@ public class ValuesTest {
         STRING_LIST.add("bar");
         INT_LIST.add(1234567890);
         INT_LIST.add(-987654321);
+    }
+
+    @Test
+    public void shouldNotParseUnquotedEmbeddedMapKeysAsStrings() {
+        SchemaAndValue schemaAndValue = Values.parseString("{foo: 3}");
+        assertEquals(Type.STRING, schemaAndValue.schema().type());
+        assertEquals("{foo: 3}", schemaAndValue.value());
+    }
+
+    @Test
+    public void shouldNotParseUnquotedEmbeddedMapValuesAsStrings() {
+        SchemaAndValue schemaAndValue = Values.parseString("{3: foo}");
+        assertEquals(Type.STRING, schemaAndValue.schema().type());
+        assertEquals("{3: foo}", schemaAndValue.value());
+    }
+
+    @Test
+    public void shouldNotParseUnquotedArrayElementsAsStrings() {
+        SchemaAndValue schemaAndValue = Values.parseString("[foo]");
+        assertEquals(Type.STRING, schemaAndValue.schema().type());
+        assertEquals("[foo]", schemaAndValue.value());
+    }
+
+    @Test
+    public void shouldNotParseStringsBeginningWithNullAsStrings() {
+        SchemaAndValue schemaAndValue = Values.parseString("null=");
+        assertEquals(Type.STRING, schemaAndValue.schema().type());
+        assertEquals("null=", schemaAndValue.value());
+    }
+
+    @Test
+    public void shouldParseStringsBeginningWithTrueAsStrings() {
+        SchemaAndValue schemaAndValue = Values.parseString("true}");
+        assertEquals(Type.STRING, schemaAndValue.schema().type());
+        assertEquals("true}", schemaAndValue.value());
+    }
+
+    @Test
+    public void shouldParseStringsBeginningWithFalseAsStrings() {
+        SchemaAndValue schemaAndValue = Values.parseString("false]");
+        assertEquals(Type.STRING, schemaAndValue.schema().type());
+        assertEquals("false]", schemaAndValue.value());
+    }
+
+    @Test
+    public void shouldParseTrueAsBooleanIfSurroundedByWhitespace() {
+        SchemaAndValue schemaAndValue = Values.parseString(WHITESPACE + "true" + WHITESPACE);
+        assertEquals(Type.BOOLEAN, schemaAndValue.schema().type());
+        assertEquals(true, schemaAndValue.value());
+    }
+
+    @Test
+    public void shouldParseFalseAsBooleanIfSurroundedByWhitespace() {
+        SchemaAndValue schemaAndValue = Values.parseString(WHITESPACE + "false" + WHITESPACE);
+        assertEquals(Type.BOOLEAN, schemaAndValue.schema().type());
+        assertEquals(false, schemaAndValue.value());
+    }
+
+    @Test
+    public void shouldParseNullAsNullIfSurroundedByWhitespace() {
+        SchemaAndValue schemaAndValue = Values.parseString(WHITESPACE + "null" + WHITESPACE);
+        assertNull(schemaAndValue);
+    }
+
+    @Test
+    public void shouldParseBooleanLiteralsEmbeddedInArray() {
+        SchemaAndValue schemaAndValue = Values.parseString("[true, false]");
+        assertEquals(Type.ARRAY, schemaAndValue.schema().type());
+        assertEquals(Type.BOOLEAN, schemaAndValue.schema().valueSchema().type());
+        assertEquals(Arrays.asList(true, false), schemaAndValue.value());
+    }
+
+    @Test
+    public void shouldParseBooleanLiteralsEmbeddedInMap() {
+        SchemaAndValue schemaAndValue = Values.parseString("{true: false, false: true}");
+        assertEquals(Type.MAP, schemaAndValue.schema().type());
+        assertEquals(Type.BOOLEAN, schemaAndValue.schema().keySchema().type());
+        assertEquals(Type.BOOLEAN, schemaAndValue.schema().valueSchema().type());
+        Map<Boolean, Boolean> expectedValue = new HashMap<>();
+        expectedValue.put(true, false);
+        expectedValue.put(false, true);
+        assertEquals(expectedValue, schemaAndValue.value());
+    }
+
+    @Test
+    public void shouldNotParseAsMapWithoutCommas() {
+        SchemaAndValue schemaAndValue = Values.parseString("{6:9 4:20}");
+        assertEquals(Type.STRING, schemaAndValue.schema().type());
+        assertEquals("{6:9 4:20}", schemaAndValue.value());
+    }
+
+    @Test
+    public void shouldNotParseAsArrayWithoutCommas() {
+        SchemaAndValue schemaAndValue = Values.parseString("[0 1 2]");
+        assertEquals(Type.STRING, schemaAndValue.schema().type());
+        assertEquals("[0 1 2]", schemaAndValue.value());
+    }
+
+    @Test
+    public void shouldParseEmptyMap() {
+        SchemaAndValue schemaAndValue = Values.parseString("{}");
+        assertEquals(Type.MAP, schemaAndValue.schema().type());
+        assertEquals(Collections.emptyMap(), schemaAndValue.value());
+    }
+
+    @Test
+    public void shouldParseEmptyArray() {
+        SchemaAndValue schemaAndValue = Values.parseString("[]");
+        assertEquals(Type.ARRAY, schemaAndValue.schema().type());
+        assertEquals(Collections.emptyList(), schemaAndValue.value());
+    }
+
+    @Test
+    public void shouldNotParseAsMapWithNullKeys() {
+        SchemaAndValue schemaAndValue = Values.parseString("{null: 3}");
+        assertEquals(Type.STRING, schemaAndValue.schema().type());
+        assertEquals("{null: 3}", schemaAndValue.value());
+    }
+
+    @Test
+    public void shouldParseNull() {
+        SchemaAndValue schemaAndValue = Values.parseString("null");
+        assertNull(schemaAndValue);
+    }
+
+    @Test
+    public void shouldConvertStringOfNull() {
+        assertRoundTrip(Schema.STRING_SCHEMA, "null");
+    }
+
+    @Test
+    public void shouldParseNullMapValues() {
+        SchemaAndValue schemaAndValue = Values.parseString("{3: null}");
+        assertEquals(Type.MAP, schemaAndValue.schema().type());
+        assertEquals(Type.INT8, schemaAndValue.schema().keySchema().type());
+        assertEquals(Collections.singletonMap((byte) 3, null), schemaAndValue.value());
+    }
+
+    @Test
+    public void shouldParseNullArrayElements() {
+        SchemaAndValue schemaAndValue = Values.parseString("[null]");
+        assertEquals(Type.ARRAY, schemaAndValue.schema().type());
+        assertEquals(Collections.singletonList(null), schemaAndValue.value());
     }
 
     @Test
@@ -214,7 +362,8 @@ public class ValuesTest {
     public void shouldParseStringListWithMultipleElementTypesAndReturnListWithNoSchema() {
         String str = "[1, 2, 3, \"four\"]";
         SchemaAndValue result = Values.parseString(str);
-        assertNull(result.schema());
+        assertEquals(Type.ARRAY, result.schema().type());
+        assertNull(result.schema().valueSchema());
         List<?> list = (List<?>) result.value();
         assertEquals(4, list.size());
         assertEquals(1, ((Number) list.get(0)).intValue());
@@ -256,7 +405,7 @@ public class ValuesTest {
      */
     @Test(expected = DataException.class)
     public void shouldFailToParseStringOfMapWithIntValuesWithBlankEntry() {
-        Values.convertToList(Schema.STRING_SCHEMA, " { \"foo\" :  1234567890 ,, \"bar\" : 0,  \"baz\" : -987654321 }  ");
+        Values.convertToMap(Schema.STRING_SCHEMA, " { \"foo\" :  1234567890 ,, \"bar\" : 0,  \"baz\" : -987654321 }  ");
     }
 
     /**
@@ -264,7 +413,7 @@ public class ValuesTest {
      */
     @Test(expected = DataException.class)
     public void shouldFailToParseStringOfMalformedMap() {
-        Values.convertToList(Schema.STRING_SCHEMA, " { \"foo\" :  1234567890 , \"a\", \"bar\" : 0,  \"baz\" : -987654321 }  ");
+        Values.convertToMap(Schema.STRING_SCHEMA, " { \"foo\" :  1234567890 , \"a\", \"bar\" : 0,  \"baz\" : -987654321 }  ");
     }
 
     /**
@@ -272,7 +421,7 @@ public class ValuesTest {
      */
     @Test(expected = DataException.class)
     public void shouldFailToParseStringOfMapWithIntValuesWithOnlyBlankEntries() {
-        Values.convertToList(Schema.STRING_SCHEMA, " { ,,  , , }  ");
+        Values.convertToMap(Schema.STRING_SCHEMA, " { ,,  , , }  ");
     }
 
     /**
@@ -280,15 +429,7 @@ public class ValuesTest {
      */
     @Test(expected = DataException.class)
     public void shouldFailToParseStringOfMapWithIntValuesWithBlankEntries() {
-        Values.convertToList(Schema.STRING_SCHEMA, " { \"foo\" :  \"1234567890\" ,, \"bar\" : \"0\",  \"baz\" : \"boz\" }  ");
-    }
-
-    /**
-     * Schema for Map requires a schema for key and value, but we have no key or value and Connect has no "any" type
-     */
-    @Test(expected = DataException.class)
-    public void shouldFailToParseStringOfEmptyMap() {
-        Values.convertToList(Schema.STRING_SCHEMA, " { }  ");
+        Values.convertToMap(Schema.STRING_SCHEMA, " { \"foo\" :  \"1234567890\" ,, \"bar\" : \"0\",  \"baz\" : \"boz\" }  ");
     }
 
     @Test
