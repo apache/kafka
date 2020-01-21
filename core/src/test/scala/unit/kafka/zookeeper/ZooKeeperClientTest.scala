@@ -24,6 +24,7 @@ import java.util.concurrent.{ArrayBlockingQueue, ConcurrentLinkedQueue, CountDow
 import scala.collection.Seq
 import com.yammer.metrics.Metrics
 import com.yammer.metrics.core.{Gauge, Meter, MetricName}
+import kafka.server.KafkaConfig
 import kafka.zk.ZooKeeperTestHarness
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.utils.Time
@@ -106,19 +107,20 @@ class ZooKeeperClientTest extends ZooKeeperTestHarness {
     // TLS connectivity itself is tested in system tests rather than here to avoid having to add TLS support
     // to kafka.zk.EmbeddedZoopeeper
     val clientConfig = new ZKClientConfig()
-    val propKey = "zookeeper.clientCnxnSocket"
+    val propKey = KafkaConfig.ZkClientCnxnSocketProp
     val propVal = "org.apache.zookeeper.ClientCnxnSocketNetty"
-    clientConfig.setProperty(propKey, propVal)
+    KafkaConfig.setZooKeeperClientProperty(clientConfig, propKey, propVal)
     val client = new ZooKeeperClient(zkConnect, zkSessionTimeout, zkConnectionTimeout, Int.MaxValue, time, "testMetricGroup",
       "testMetricType", None, Some(clientConfig))
     try {
-      assertEquals(propVal, client.getClientConfig.getProperty(propKey))
+      assertEquals(Some(propVal), KafkaConfig.getZooKeeperClientProperty(client.getClientConfig, propKey))
       // For a sanity check, make sure a bad client connection socket class name generates an exception
       val badClientConfig = new ZKClientConfig()
-      badClientConfig.setProperty(propKey, propVal + "BadClassName")
-      assertTrue("Client should not have been able to connect with a bad client connection socket class",
-        Try(new ZooKeeperClient(zkConnect, zkSessionTimeout, zkConnectionTimeout, Int.MaxValue, time, "testMetricGroup",
-          "testMetricType", None, Some(badClientConfig))).isFailure)
+      KafkaConfig.setZooKeeperClientProperty(badClientConfig, propKey, propVal + "BadClassName")
+      intercept[Exception] {
+          new ZooKeeperClient(zkConnect, zkSessionTimeout, zkConnectionTimeout, Int.MaxValue, time, "testMetricGroup",
+            "testMetricType", None, Some(badClientConfig))
+      }
     } finally {
       client.close()
     }

@@ -789,32 +789,58 @@ class AclAuthorizerTest extends ZooKeeperTestHarness {
   @Test
   def testAuthorizerZkConfigDefaults(): Unit = {
     val noTlsConfigs: mutable.Map[String, Any] = mutable.Map()
-    val zkClientConfig = AclAuthorizer.zkClientConfig(noTlsConfigs)
+    val zkClientConfig = AclAuthorizer.zkClientConfigFromMap(noTlsConfigs)
     // confirm we get all the default values we expect
-    KafkaConfig.ZkSslProps.foreach(prop => prop match {
+    KafkaConfig.ZkSslConfigToSystemPropertyMap.keys.foreach(prop => prop match {
       case KafkaConfig.ZkSslProtocolProp =>
-        assertEquals(Defaults.ZkSslProtocol.toString, zkClientConfig.get.getProperty(prop))
+        assertEquals(Some(Defaults.ZkSslProtocol.toString), KafkaConfig.getZooKeeperClientProperty(zkClientConfig, prop))
       case KafkaConfig.ZkSslCrlEnableProp =>
-        assertEquals(Defaults.ZkSslCrlEnable.toString, zkClientConfig.get.getProperty(prop))
+        assertEquals(Some(Defaults.ZkSslCrlEnable.toString), KafkaConfig.getZooKeeperClientProperty(zkClientConfig, prop))
       case KafkaConfig.ZkSslOcspEnableProp =>
-        assertEquals(Defaults.ZkSslOcspEnable.toString, zkClientConfig.get.getProperty(prop))
-      case KafkaConfig.ZkSslHostnameVerificationEnableProp =>
-        assertEquals(Defaults.ZkSslHostnameVerificationEnable.toString, zkClientConfig.get.getProperty(prop))
-      case anyOtherProp => assertNull(zkClientConfig.get.getProperty(anyOtherProp))
+        assertEquals(Some(Defaults.ZkSslOcspEnable.toString), KafkaConfig.getZooKeeperClientProperty(zkClientConfig, prop))
+      case KafkaConfig.ZkSslEndpointIdentificationAlgorithmProp =>
+        // Defaults.ZkSslEndpointIdentificationAlgorithm = "HTTPS", but that gets translated to "true" in the system property
+        assertEquals(Some("true"), KafkaConfig.getZooKeeperClientProperty(zkClientConfig, prop))
+      case _ => assertEquals(None, KafkaConfig.getZooKeeperClientProperty(zkClientConfig, prop))
     })
   }
 
   @Test
-  def testAuthorizerZkConfigExplicitValues(): Unit = {
+  def testAuthorizerZkConfigExplicitValuesTrue(): Unit = {
     val prefix = "authorizer."
     val allExplicitTlsConfigs: mutable.Map[String, Any] = mutable.Map()
-    KafkaConfig.ZkSslProps.foreach(key => allExplicitTlsConfigs(s"$prefix$key") = key)
-    allExplicitTlsConfigs(s"$prefix${KafkaConfig.ZkClientSecureProp}") = "true"
-    val zkClientConfig = AclAuthorizer.zkClientConfig(allExplicitTlsConfigs)
-    KafkaConfig.ZkSslProps.foreach(prop => prop match {
-      case KafkaConfig.ZkClientSecureProp =>
-        assertEquals("true", zkClientConfig.get.getProperty(prop))
-      case anyOtherProp => assertEquals(anyOtherProp, zkClientConfig.get.getProperty(anyOtherProp))
+    KafkaConfig.ZkSslConfigToSystemPropertyMap.keys.foreach(key => allExplicitTlsConfigs(s"$prefix$key") = key match {
+      case KafkaConfig.ZkSslEndpointIdentificationAlgorithmProp => "HTTPS"
+      case KafkaConfig.ZkSslClientEnableProp | KafkaConfig.ZkSslCrlEnableProp | KafkaConfig.ZkSslOcspEnableProp => "true"
+      case _ => key
+    })
+    val zkClientConfig = AclAuthorizer.zkClientConfigFromMap(allExplicitTlsConfigs)
+    KafkaConfig.ZkSslConfigToSystemPropertyMap.keys.foreach(prop => prop match {
+      case KafkaConfig.ZkSslClientEnableProp | KafkaConfig.ZkSslCrlEnableProp | KafkaConfig.ZkSslOcspEnableProp | KafkaConfig.ZkSslEndpointIdentificationAlgorithmProp =>
+        assertEquals(Some("true"), KafkaConfig.getZooKeeperClientProperty(zkClientConfig, prop))
+      case _ => assertEquals(Some(prop), KafkaConfig.getZooKeeperClientProperty(zkClientConfig, prop))
+    })
+  }
+
+  @Test
+  def testAuthorizerZkConfigExplicitValuesFalseAndList(): Unit = {
+    val prefix = "authorizer."
+    val allExplicitTlsConfigs: mutable.Map[String, Any] = mutable.Map()
+    KafkaConfig.ZkSslConfigToSystemPropertyMap.keys.foreach(key => allExplicitTlsConfigs(s"$prefix$key") = key match {
+      case KafkaConfig.ZkSslEndpointIdentificationAlgorithmProp => ""
+      case KafkaConfig.ZkSslClientEnableProp => "true"
+      case KafkaConfig.ZkSslCrlEnableProp | KafkaConfig.ZkSslOcspEnableProp => "false"
+      case KafkaConfig.ZkSslEnabledProtocolsProp | KafkaConfig.ZkSslCipherSuitesProp => "A,B"
+      case _ => key
+    })
+    val zkClientConfig = AclAuthorizer.zkClientConfigFromMap(allExplicitTlsConfigs)
+    KafkaConfig.ZkSslConfigToSystemPropertyMap.keys.foreach(prop => prop match {
+      case KafkaConfig.ZkSslClientEnableProp =>
+        assertEquals(Some("true"), KafkaConfig.getZooKeeperClientProperty(zkClientConfig, prop))
+      case KafkaConfig.ZkSslCrlEnableProp | KafkaConfig.ZkSslOcspEnableProp | KafkaConfig.ZkSslEndpointIdentificationAlgorithmProp =>
+        assertEquals(Some("false"), KafkaConfig.getZooKeeperClientProperty(zkClientConfig, prop))
+      case KafkaConfig.ZkSslEnabledProtocolsProp | KafkaConfig.ZkSslCipherSuitesProp => assertEquals(Some("A,B"), KafkaConfig.getZooKeeperClientProperty(zkClientConfig, prop))
+      case _ => assertEquals(Some(prop), KafkaConfig.getZooKeeperClientProperty(zkClientConfig, prop))
     })
   }
 

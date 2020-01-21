@@ -28,6 +28,8 @@ import org.junit.{After, Before, Test}
 import org.junit.Assert._
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
 
+import scala.collection.JavaConverters._
+
 class KafkaTest {
 
   @Before
@@ -110,45 +112,25 @@ class KafkaTest {
   }
 
   @Test
-  def testZkSslProps(): Unit = {
-    assertEquals(15, KafkaConfig.ZkSslProps.size)
-    assertTrue(KafkaConfig.ZkSslProps.contains(KafkaConfig.ZkClientSecureProp))
-    assertTrue(KafkaConfig.ZkSslProps.contains(KafkaConfig.ZkClientCnxnSocketProp))
-    assertTrue(KafkaConfig.ZkSslProps.contains(KafkaConfig.ZkSslKeyStoreLocationProp))
-    assertTrue(KafkaConfig.ZkSslProps.contains(KafkaConfig.ZkSslKeyStorePasswordProp))
-    assertTrue(KafkaConfig.ZkSslProps.contains(KafkaConfig.ZkSslKeyStoreTypeProp))
-    assertTrue(KafkaConfig.ZkSslProps.contains(KafkaConfig.ZkSslTrustStoreLocationProp))
-    assertTrue(KafkaConfig.ZkSslProps.contains(KafkaConfig.ZkSslTrustStorePasswordProp))
-    assertTrue(KafkaConfig.ZkSslProps.contains(KafkaConfig.ZkSslTrustStoreTypeProp))
-    assertTrue(KafkaConfig.ZkSslProps.contains(KafkaConfig.ZkSslProtocolProp))
-    assertTrue(KafkaConfig.ZkSslProps.contains(KafkaConfig.ZkSslEnabledProtocolsProp))
-    assertTrue(KafkaConfig.ZkSslProps.contains(KafkaConfig.ZkSslCipherSuitesProp))
-    assertTrue(KafkaConfig.ZkSslProps.contains(KafkaConfig.ZkSslContextSupplierClassProp))
-    assertTrue(KafkaConfig.ZkSslProps.contains(KafkaConfig.ZkSslHostnameVerificationEnableProp))
-    assertTrue(KafkaConfig.ZkSslProps.contains(KafkaConfig.ZkSslCrlEnableProp))
-    assertTrue(KafkaConfig.ZkSslProps.contains(KafkaConfig.ZkSslOcspEnableProp))
-  }
-
-  @Test
-  def testZkClientSecureDefault(): Unit = {
+  def testZkSslClientEnableDefault(): Unit = {
     val propertiesFile = prepareDefaultConfig()
     val config = KafkaConfig.fromProps(Kafka.getPropsFromArgs(Array(propertiesFile)))
-    assertFalse(config.values.get(KafkaConfig.ZkClientSecureProp).asInstanceOf[Boolean])
+    assertFalse(config.values.get(KafkaConfig.ZkSslClientEnableProp).asInstanceOf[Boolean])
   }
 
   @Test
-  def testZkClientSecureExplicit(): Unit = {
+  def testZkSslClientEnableExplicit(): Unit = {
     val propertiesFile = prepareDefaultConfig()
     val expected = true
-    val config = KafkaConfig.fromProps(Kafka.getPropsFromArgs(Array(propertiesFile, "--override", s"zookeeper.client.secure=${expected}")))
-    assertEquals(expected, config.values.get(KafkaConfig.ZkClientSecureProp).asInstanceOf[Boolean])
+    val config = KafkaConfig.fromProps(Kafka.getPropsFromArgs(Array(propertiesFile, "--override", s"zookeeper.ssl.client.enable=${expected}")))
+    assertEquals(expected, config.values.get(KafkaConfig.ZkSslClientEnableProp).asInstanceOf[Boolean])
   }
 
   @Test
   def testZkSslKeyStoreLocation(): Unit = {
     val propertiesFile = prepareDefaultConfig()
     val expected = "/keyStore/location"
-    val config = KafkaConfig.fromProps(Kafka.getPropsFromArgs(Array(propertiesFile, "--override", s"zookeeper.ssl.keyStore.location=${expected}")))
+    val config = KafkaConfig.fromProps(Kafka.getPropsFromArgs(Array(propertiesFile, "--override", s"zookeeper.ssl.keystore.location=${expected}")))
     assertEquals(expected, config.values.get(KafkaConfig.ZkSslKeyStoreLocationProp).asInstanceOf[String])
   }
 
@@ -156,15 +138,15 @@ class KafkaTest {
   def testZkSslTrustStoreLocation(): Unit = {
     val propertiesFile = prepareDefaultConfig()
     val expected = "/trustStore/location"
-    val config = KafkaConfig.fromProps(Kafka.getPropsFromArgs(Array(propertiesFile, "--override", s"zookeeper.ssl.trustStore.location=${expected}")))
+    val config = KafkaConfig.fromProps(Kafka.getPropsFromArgs(Array(propertiesFile, "--override", s"zookeeper.ssl.truststore.location=${expected}")))
     assertEquals(expected, config.values.get(KafkaConfig.ZkSslTrustStoreLocationProp).asInstanceOf[String])
   }
 
   @Test
   def testZookeeperKeyStoreTrustStorePasswords(): Unit = {
     val propertiesFile = prepareDefaultConfig()
-    val config = KafkaConfig.fromProps(Kafka.getPropsFromArgs(Array(propertiesFile, "--override", "zookeeper.ssl.keyStore.password=keystore_password",
-      "--override", "zookeeper.ssl.trustStore.password=truststore_password")))
+    val config = KafkaConfig.fromProps(Kafka.getPropsFromArgs(Array(propertiesFile, "--override", "zookeeper.ssl.keystore.password=keystore_password",
+      "--override", "zookeeper.ssl.truststore.password=truststore_password")))
     assertEquals(Password.HIDDEN, config.getPassword(KafkaConfig.ZkSslKeyStorePasswordProp).toString)
     assertEquals(Password.HIDDEN, config.getPassword(KafkaConfig.ZkSslTrustStorePasswordProp).toString)
 
@@ -176,7 +158,7 @@ class KafkaTest {
   def testZkSslKeyStoreType(): Unit = {
     val propertiesFile = prepareDefaultConfig()
     val expected = "PEM"
-    val config = KafkaConfig.fromProps(Kafka.getPropsFromArgs(Array(propertiesFile, "--override", s"zookeeper.ssl.keyStore.type=${expected}")))
+    val config = KafkaConfig.fromProps(Kafka.getPropsFromArgs(Array(propertiesFile, "--override", s"zookeeper.ssl.keystore.type=${expected}")))
     assertEquals(expected, config.values.get(KafkaConfig.ZkSslKeyStoreTypeProp).asInstanceOf[String])
   }
 
@@ -184,7 +166,7 @@ class KafkaTest {
   def testZkSslTrustStoreType(): Unit = {
     val propertiesFile = prepareDefaultConfig()
     val expected = "PEM"
-    val config = KafkaConfig.fromProps(Kafka.getPropsFromArgs(Array(propertiesFile, "--override", s"zookeeper.ssl.trustStore.type=${expected}")))
+    val config = KafkaConfig.fromProps(Kafka.getPropsFromArgs(Array(propertiesFile, "--override", s"zookeeper.ssl.truststore.type=${expected}")))
     assertEquals(expected, config.values.get(KafkaConfig.ZkSslTrustStoreTypeProp).asInstanceOf[String])
   }
 
@@ -197,26 +179,26 @@ class KafkaTest {
   }
 
   @Test
-  def testZkSslEnabledProtocols(): Unit = {
-    val propertiesFile = prepareDefaultConfig()
-    val expected = "A,B"
-    val config = KafkaConfig.fromProps(Kafka.getPropsFromArgs(Array(propertiesFile, "--override", s"zookeeper.ssl.enabledProtocols=${expected}")))
-    assertEquals(expected, config.values.get(KafkaConfig.ZkSslEnabledProtocolsProp).asInstanceOf[String])
-  }
-
-  @Test
   def testZkSslProtocolDefault(): Unit = {
     val propertiesFile = prepareDefaultConfig()
     val config = KafkaConfig.fromProps(Kafka.getPropsFromArgs(Array(propertiesFile)))
-    assertEquals("TLSv1.2", config.values.get(KafkaConfig.ZkSslProtocolProp).asInstanceOf[String])
+    assertEquals("TLSv1.2", config.values.get(KafkaConfig.ZkSslProtocolProp))
+  }
+
+  @Test
+  def testZkSslEnabledProtocols(): Unit = {
+    val propertiesFile = prepareDefaultConfig()
+    val expected = List("A", "B")
+    val config = KafkaConfig.fromProps(Kafka.getPropsFromArgs(Array(propertiesFile, "--override", s"zookeeper.ssl.enabled.protocols=${expected.mkString(",")}")))
+    assertEquals(expected.asJava, config.values.get(KafkaConfig.ZkSslEnabledProtocolsProp))
   }
 
   @Test
   def testZkSslCipherSuites(): Unit = {
     val propertiesFile = prepareDefaultConfig()
-    val expected = "A,B"
-    val config = KafkaConfig.fromProps(Kafka.getPropsFromArgs(Array(propertiesFile, "--override", s"zookeeper.ssl.ciphersuites=${expected}")))
-    assertEquals(expected, config.values.get(KafkaConfig.ZkSslCipherSuitesProp).asInstanceOf[String])
+    val expected = List("A", "B")
+    val config = KafkaConfig.fromProps(Kafka.getPropsFromArgs(Array(propertiesFile, "--override", s"zookeeper.ssl.cipher.suites=${expected.mkString(",")}")))
+    assertEquals(expected.asJava, config.values.get(KafkaConfig.ZkSslCipherSuitesProp))
   }
 
   @Test
@@ -228,25 +210,25 @@ class KafkaTest {
   }
 
   @Test
-  def testZkSslHostnameVerificationEnable(): Unit = {
+  def testZkSslEndpointIdentificationAlgorithm(): Unit = {
     val propertiesFile = prepareDefaultConfig()
-    val expected = "false"
-    val config = KafkaConfig.fromProps(Kafka.getPropsFromArgs(Array(propertiesFile, "--override", s"zookeeper.ssl.hostnameVerification=${expected}")))
-    assertFalse(config.values.get(KafkaConfig.ZkSslHostnameVerificationEnableProp).asInstanceOf[Boolean])
+    val expected = ""
+    val config = KafkaConfig.fromProps(Kafka.getPropsFromArgs(Array(propertiesFile, "--override", s"zookeeper.ssl.endpoint.identification.algorithm=${expected}")))
+    assertEquals(expected, config.values.get(KafkaConfig.ZkSslEndpointIdentificationAlgorithmProp))
   }
 
   @Test
-  def testZkSslHostnameVerificationEnableDefault(): Unit = {
+  def testZkSslEndpointIdentificationAlgorithmDefault(): Unit = {
     val propertiesFile = prepareDefaultConfig()
     val config = KafkaConfig.fromProps(Kafka.getPropsFromArgs(Array(propertiesFile)))
-    assertTrue(config.values.get(KafkaConfig.ZkSslHostnameVerificationEnableProp).asInstanceOf[Boolean])
+    assertEquals("HTTPS", config.values.get(KafkaConfig.ZkSslEndpointIdentificationAlgorithmProp))
   }
 
   @Test
   def testZkSslCrlEnable(): Unit = {
     val propertiesFile = prepareDefaultConfig()
     val expected = "true"
-    val config = KafkaConfig.fromProps(Kafka.getPropsFromArgs(Array(propertiesFile, "--override", s"zookeeper.ssl.crl=${expected}")))
+    val config = KafkaConfig.fromProps(Kafka.getPropsFromArgs(Array(propertiesFile, "--override", s"zookeeper.ssl.crl.enable=${expected}")))
     assertTrue(config.values.get(KafkaConfig.ZkSslCrlEnableProp).asInstanceOf[Boolean])
   }
 
@@ -261,7 +243,7 @@ class KafkaTest {
   def testZkSslOcspEnable(): Unit = {
     val propertiesFile = prepareDefaultConfig()
     val expected = "true"
-    val config = KafkaConfig.fromProps(Kafka.getPropsFromArgs(Array(propertiesFile, "--override", s"zookeeper.ssl.ocsp=${expected}")))
+    val config = KafkaConfig.fromProps(Kafka.getPropsFromArgs(Array(propertiesFile, "--override", s"zookeeper.ssl.ocsp.enable=${expected}")))
     assertTrue(config.values.get(KafkaConfig.ZkSslOcspEnableProp).asInstanceOf[Boolean])
   }
 

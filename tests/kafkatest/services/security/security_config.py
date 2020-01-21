@@ -78,11 +78,11 @@ class SslStores(object):
 
         # also generate ZooKeeper client TLS config file for mutual authentication use case
         str = """zookeeper.clientCnxnSocket=org.apache.zookeeper.ClientCnxnSocketNetty
-zookeeper.client.secure=true
-zookeeper.ssl.trustStore.location=%s
-zookeeper.ssl.trustStore.password=%s
-zookeeper.ssl.keyStore.location=%s
-zookeeper.ssl.keyStore.password=%s
+zookeeper.ssl.client.enable=true
+zookeeper.ssl.truststore.location=%s
+zookeeper.ssl.truststore.password=%s
+zookeeper.ssl.keystore.location=%s
+zookeeper.ssl.keystore.password=%s
 """ % (SecurityConfig.TRUSTSTORE_PATH, self.truststore_passwd, SecurityConfig.KEYSTORE_PATH, self.keystore_passwd)
         node.account.create_file(SecurityConfig.ZK_CLIENT_MUTUAL_AUTH_CONFIG_PATH, str)
 

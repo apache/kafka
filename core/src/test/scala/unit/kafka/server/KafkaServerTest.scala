@@ -45,22 +45,64 @@ class KafkaServerTest extends ZooKeeperTestHarness {
   }
 
   @Test
-  def testCreatesProperZkTlsConfig(): Unit = {
+  def testCreatesProperZkTlsConfigWhenDisabled(): Unit = {
     val props = new Properties
     props.put(KafkaConfig.ZkConnectProp, zkConnect) // required, otherwise we would leave it out
 
-    // should get None if TLS is not enabled
-    props.put(KafkaConfig.ZkClientSecureProp, "false")
+    props.put(KafkaConfig.ZkSslClientEnableProp, "false")
     assertEquals(None, KafkaServer.zkClientConfigFromKafkaConfig(KafkaConfig.fromProps(props)))
+  }
+
+  @Test
+  def testCreatesProperZkTlsConfigWithTrueValues(): Unit = {
+    val props = new Properties
+    props.put(KafkaConfig.ZkConnectProp, zkConnect) // required, otherwise we would leave it out
 
     // should get correct config for all properties if TLS is enabled
-    def isBooleanProp(k: String) : Boolean =
-      k == KafkaConfig.ZkClientSecureProp || k == KafkaConfig.ZkSslHostnameVerificationEnableProp ||
-      k == KafkaConfig.ZkSslCrlEnableProp || k == KafkaConfig.ZkSslOcspEnableProp
-    KafkaConfig.ZkSslProps.foreach(k => props.put(k, if (isBooleanProp(k)) "true" else k))
+    def propertyValueToSet(k: String) : String = k match {
+      case KafkaConfig.ZkSslClientEnableProp | KafkaConfig.ZkSslCrlEnableProp | KafkaConfig.ZkSslOcspEnableProp => "true"
+      case KafkaConfig.ZkSslEndpointIdentificationAlgorithmProp => "HTTPS"
+      case _ => "some_value"
+    }
+
+    def systemPropertyValueToExpect(k: String) : String = k match {
+      case KafkaConfig.ZkSslClientEnableProp | KafkaConfig.ZkSslCrlEnableProp | KafkaConfig.ZkSslOcspEnableProp => "true"
+      case KafkaConfig.ZkSslEndpointIdentificationAlgorithmProp => "true"
+      case _ => "some_value"
+    }
+
+    KafkaConfig.ZkSslConfigToSystemPropertyMap.keys.foreach(k => props.put(k, propertyValueToSet(k)))
     val zkClientConfig: Option[ZKClientConfig] = KafkaServer.zkClientConfigFromKafkaConfig(KafkaConfig.fromProps(props))
-    KafkaConfig.ZkSslProps.foreach(k =>
-      assertEquals(if (isBooleanProp(k)) "true" else k, zkClientConfig.get.getProperty(k)))
+    KafkaConfig.ZkSslConfigToSystemPropertyMap.keys.foreach(k =>
+      assertEquals(systemPropertyValueToExpect(k), zkClientConfig.get.getProperty(KafkaConfig.ZkSslConfigToSystemPropertyMap(k))))
+  }
+
+  @Test
+  def testCreatesProperZkTlsConfigWithFalseAndListValues(): Unit = {
+    val props = new Properties
+    props.put(KafkaConfig.ZkConnectProp, zkConnect) // required, otherwise we would leave it out
+
+    // should get correct config for all properties if TLS is enabled
+    def propertyValueToSet(k: String) : String = k match {
+      case KafkaConfig.ZkSslClientEnableProp => "true"
+      case KafkaConfig.ZkSslCrlEnableProp | KafkaConfig.ZkSslOcspEnableProp => "false"
+      case KafkaConfig.ZkSslEndpointIdentificationAlgorithmProp => ""
+      case KafkaConfig.ZkSslEnabledProtocolsProp | KafkaConfig.ZkSslCipherSuitesProp => "A,B"
+      case _ => "some_value"
+    }
+
+    def systemPropertyValueToExpect(k: String) : String = k match {
+      case KafkaConfig.ZkSslClientEnableProp => "true"
+      case KafkaConfig.ZkSslCrlEnableProp | KafkaConfig.ZkSslOcspEnableProp => "false"
+      case KafkaConfig.ZkSslEndpointIdentificationAlgorithmProp => "false"
+      case KafkaConfig.ZkSslEnabledProtocolsProp | KafkaConfig.ZkSslCipherSuitesProp => "A,B"
+      case _ => "some_value"
+    }
+
+    KafkaConfig.ZkSslConfigToSystemPropertyMap.keys.foreach(k => props.put(k, propertyValueToSet(k)))
+    val zkClientConfig: Option[ZKClientConfig] = KafkaServer.zkClientConfigFromKafkaConfig(KafkaConfig.fromProps(props))
+    KafkaConfig.ZkSslConfigToSystemPropertyMap.keys.foreach(k =>
+      assertEquals(systemPropertyValueToExpect(k), zkClientConfig.get.getProperty(KafkaConfig.ZkSslConfigToSystemPropertyMap(k))))
   }
 
   def createServer(nodeId: Int, hostName: String, port: Int): KafkaServer = {

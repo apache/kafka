@@ -93,25 +93,25 @@ object KafkaServer {
   }
 
   def zkClientConfigFromKafkaConfig(config: KafkaConfig) =
-    if (!config.zkClientSecure)
+    if (!config.zkSslClientEnable)
       None
     else {
       val clientConfig = new ZKClientConfig()
-      clientConfig.setProperty(KafkaConfig.ZkClientSecureProp, "true")
-      config.zkClientCnxnSocketClassName.foreach(clientConfig.setProperty(KafkaConfig.ZkClientCnxnSocketProp, _))
-      config.zkSslKeyStoreLocation.foreach(clientConfig.setProperty(KafkaConfig.ZkSslKeyStoreLocationProp, _))
-      config.zkSslKeyStorePassword.foreach(x => clientConfig.setProperty(KafkaConfig.ZkSslKeyStorePasswordProp, x.value))
-      config.zkSslKeyStoreType.foreach(clientConfig.setProperty(KafkaConfig.ZkSslKeyStoreTypeProp, _))
-      config.zkSslTrustStoreLocation.foreach(clientConfig.setProperty(KafkaConfig.ZkSslTrustStoreLocationProp, _))
-      config.zkSslTrustStorePassword.foreach(x => clientConfig.setProperty(KafkaConfig.ZkSslTrustStorePasswordProp, x.value))
-      config.zkSslTrustStoreType.foreach(clientConfig.setProperty(KafkaConfig.ZkSslTrustStoreTypeProp, _))
-      config.ZkSslProtocol.foreach(clientConfig.setProperty(KafkaConfig.ZkSslProtocolProp, _))
-      config.ZkSslEnabledProtocols.foreach(clientConfig.setProperty(KafkaConfig.ZkSslEnabledProtocolsProp, _))
-      config.ZkSslCipherSuites.foreach(clientConfig.setProperty(KafkaConfig.ZkSslCipherSuitesProp, _))
-      config.ZkSslContextSupplierClass.foreach(clientConfig.setProperty(KafkaConfig.ZkSslContextSupplierClassProp, _))
-      config.ZkSslHostnameVerificationEnable.foreach(x => clientConfig.setProperty(KafkaConfig.ZkSslHostnameVerificationEnableProp, x.toString))
-      config.ZkSslCrlEnable.foreach(x => clientConfig.setProperty(KafkaConfig.ZkSslCrlEnableProp, x.toString))
-      config.ZkSslOcspEnable.foreach(x => clientConfig.setProperty(KafkaConfig.ZkSslOcspEnableProp, x.toString))
+      KafkaConfig.setZooKeeperClientProperty(clientConfig, KafkaConfig.ZkSslClientEnableProp, "true")
+      config.zkClientCnxnSocketClassName.foreach(KafkaConfig.setZooKeeperClientProperty(clientConfig, KafkaConfig.ZkClientCnxnSocketProp, _))
+      config.zkSslKeyStoreLocation.foreach(KafkaConfig.setZooKeeperClientProperty(clientConfig, KafkaConfig.ZkSslKeyStoreLocationProp, _))
+      config.zkSslKeyStorePassword.foreach(x => KafkaConfig.setZooKeeperClientProperty(clientConfig, KafkaConfig.ZkSslKeyStorePasswordProp, x.value))
+      config.zkSslKeyStoreType.foreach(KafkaConfig.setZooKeeperClientProperty(clientConfig, KafkaConfig.ZkSslKeyStoreTypeProp, _))
+      config.zkSslTrustStoreLocation.foreach(KafkaConfig.setZooKeeperClientProperty(clientConfig, KafkaConfig.ZkSslTrustStoreLocationProp, _))
+      config.zkSslTrustStorePassword.foreach(x => KafkaConfig.setZooKeeperClientProperty(clientConfig, KafkaConfig.ZkSslTrustStorePasswordProp, x.value))
+      config.zkSslTrustStoreType.foreach(KafkaConfig.setZooKeeperClientProperty(clientConfig, KafkaConfig.ZkSslTrustStoreTypeProp, _))
+      config.ZkSslProtocol.foreach(KafkaConfig.setZooKeeperClientProperty(clientConfig, KafkaConfig.ZkSslProtocolProp, _))
+      config.ZkSslEnabledProtocols.foreach(KafkaConfig.setZooKeeperClientProperty(clientConfig, KafkaConfig.ZkSslEnabledProtocolsProp, _))
+      config.ZkSslCipherSuites.foreach(KafkaConfig.setZooKeeperClientProperty(clientConfig, KafkaConfig.ZkSslCipherSuitesProp, _))
+      config.ZkSslContextSupplierClass.foreach(KafkaConfig.setZooKeeperClientProperty(clientConfig, KafkaConfig.ZkSslContextSupplierClassProp, _))
+      config.ZkSslEndpointIdentificationAlgorithm.foreach(KafkaConfig.setZooKeeperClientProperty(clientConfig, KafkaConfig.ZkSslEndpointIdentificationAlgorithmProp, _))
+      config.ZkSslCrlEnable.foreach(x => KafkaConfig.setZooKeeperClientProperty(clientConfig, KafkaConfig.ZkSslCrlEnableProp, x.toString))
+      config.ZkSslOcspEnable.foreach(x => KafkaConfig.setZooKeeperClientProperty(clientConfig, KafkaConfig.ZkSslOcspEnableProp, x.toString))
       Some(clientConfig)
     }
 
@@ -386,13 +386,13 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
     }
 
     val secureAclsEnabled = config.zkEnableSecureAcls
-    val tlsClientAuthEnabled = zkClientConfig.getBoolean(KafkaConfig.ZkClientSecureProp) &&
-      zkClientConfig.getProperty(KafkaConfig.ZkClientCnxnSocketProp) != null &&
-      zkClientConfig.getProperty(KafkaConfig.ZkSslKeyStoreLocationProp) != null
+    val tlsClientAuthEnabled = KafkaConfig.getZooKeeperClientProperty(zkClientConfig, KafkaConfig.ZkSslClientEnableProp).getOrElse("false") == "true" &&
+      KafkaConfig.getZooKeeperClientProperty(zkClientConfig, KafkaConfig.ZkClientCnxnSocketProp).isDefined &&
+      KafkaConfig.getZooKeeperClientProperty(zkClientConfig, KafkaConfig.ZkSslKeyStoreLocationProp).isDefined
     val isZkSecurityEnabled = tlsClientAuthEnabled || JaasUtils.isZkSecurityEnabled()
 
     if (secureAclsEnabled && !isZkSecurityEnabled)
-      throw new java.lang.SecurityException(s"${KafkaConfig.ZkEnableSecureAclsProp} is true, but ZooKeeper client TLS configuration identifying at least $KafkaConfig.ZkClientSecureProp, $KafkaConfig.ZkClientCnxnSocketProp, and $KafkaConfig.ZkSslKeyStoreLocationProp was not present and the " +
+      throw new java.lang.SecurityException(s"${KafkaConfig.ZkEnableSecureAclsProp} is true, but ZooKeeper client TLS configuration identifying at least $KafkaConfig.ZkSslClientEnableProp, $KafkaConfig.ZkClientCnxnSocketProp, and $KafkaConfig.ZkSslKeyStoreLocationProp was not present and the " +
         s"verification of the JAAS login file failed ${JaasUtils.zkSecuritySysConfigString}")
 
     // make sure chroot path exists

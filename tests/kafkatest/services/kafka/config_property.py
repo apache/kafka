@@ -39,7 +39,7 @@ LOG_CLEANER_ENABLE = "log.cleaner.enable"
 AUTO_CREATE_TOPICS_ENABLE = "auto.create.topics.enable"
 
 ZOOKEEPER_CONNECT = "zookeeper.connect"
-ZOOKEEPER_CLIENT_SECURE = "zookeeper.client.secure"
+ZOOKEEPER_SSL_CLIENT_ENABLE = "zookeeper.ssl.client.enable"
 ZOOKEEPER_CLIENT_CNXN_SOCKET = "zookeeper.clientCnxnSocket"
 ZOOKEEPER_CONNECTION_TIMEOUT_MS = "zookeeper.connection.timeout.ms"
 INTER_BROKER_PROTOCOL_VERSION = "inter.broker.protocol.version"

@@ -81,22 +81,23 @@ object AclAuthorizer {
     }
   }
 
-  def zkClientConfig(configs: mutable.Map[String, _<:Any]): Option[ZKClientConfig] = {
+  def zkClientConfigFromMap(configs: mutable.Map[String, _<:Any]): ZKClientConfig = {
     val clientConfig = new ZKClientConfig()
     def setConfigValue(unprefixedKey: String, defaultValue: Option[Any] = None): Unit = {
       val prefixedValue = configs.get(s"$configPrefix$unprefixedKey")
       prefixedValue.map(value => Some(value.toString)).getOrElse(defaultValue).foreach(defaultedValue =>
-        clientConfig.setProperty(unprefixedKey, defaultedValue.toString))
-      }
-    KafkaConfig.ZkSslProps.foreach(prop => prop match {
-        case KafkaConfig.ZkSslHostnameVerificationEnableProp =>
-          setConfigValue(prop, Some(Defaults.ZkSslHostnameVerificationEnable))
+        KafkaConfig.setZooKeeperClientProperty(clientConfig, unprefixedKey, defaultedValue.toString))
+    }
+    KafkaConfig.ZkSslConfigToSystemPropertyMap.keys.foreach(prop =>
+      prop match {
+        case KafkaConfig.ZkSslEndpointIdentificationAlgorithmProp =>
+          setConfigValue(prop, Some(Defaults.ZkSslEndpointIdentificationAlgorithm))
         case KafkaConfig.ZkSslCrlEnableProp => setConfigValue(prop, Some(Defaults.ZkSslCrlEnable))
         case KafkaConfig.ZkSslOcspEnableProp => setConfigValue(prop, Some(Defaults.ZkSslOcspEnable))
         case KafkaConfig.ZkSslProtocolProp => setConfigValue(prop, Some(Defaults.ZkSslProtocol))
         case propWithNoDefault => setConfigValue(propWithNoDefault)
     })
-    Some(clientConfig)
+    clientConfig
   }
 }
 
@@ -142,17 +143,17 @@ class AclAuthorizer extends Authorizer with Logging {
     val zkSessionTimeOutMs = configs.get(AclAuthorizer.ZkSessionTimeOutProp).map(_.toString.toInt).getOrElse(kafkaConfig.zkSessionTimeoutMs)
     val zkMaxInFlightRequests = configs.get(AclAuthorizer.ZkMaxInFlightRequests).map(_.toString.toInt).getOrElse(kafkaConfig.zkMaxInFlightRequests)
 
-    val zkClientSecure = configs.get(AclAuthorizer.configPrefix + KafkaConfig.ZkClientSecureProp).
-      map(_.toString).getOrElse(kafkaConfig.zkClientSecure.toString).toBoolean
-    val usePrefix = zkClientSecure && configs.get(AclAuthorizer.configPrefix + KafkaConfig.ZkClientSecureProp).
+    val zkSslClientEnable = configs.get(AclAuthorizer.configPrefix + KafkaConfig.ZkSslClientEnableProp).
+      map(_.toString).getOrElse(kafkaConfig.zkSslClientEnable.toString).toBoolean
+    val usePrefix = zkSslClientEnable && configs.get(AclAuthorizer.configPrefix + KafkaConfig.ZkSslClientEnableProp).
       isDefined
     val zkClientConfig =
-      if (!zkClientSecure)
+      if (!zkSslClientEnable)
         None
       else if (!usePrefix)
         KafkaServer.zkClientConfigFromKafkaConfig(kafkaConfig)
       else
-        AclAuthorizer.zkClientConfig(configs)
+        Some(AclAuthorizer.zkClientConfigFromMap(configs))
     val time = Time.SYSTEM
     zkClient = KafkaZkClient(zkUrl, kafkaConfig.zkEnableSecureAcls, zkSessionTimeOutMs, zkConnectionTimeoutMs,
       zkMaxInFlightRequests, time, "kafka.security", "AclAuthorizer", name=Some("ACL authorizer"),

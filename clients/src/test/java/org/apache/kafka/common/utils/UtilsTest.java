@@ -458,16 +458,18 @@ public class UtilsTest {
     public void testLoadProps() throws IOException {
         File tempFile = TestUtils.tempFile();
         try {
-            String testContent = "a=1\nb=2\n#a comment\n\nc=3";
+            String testContent = "a=1\nb=2\n#a comment\n\nc=3\nd=";
             Files.write(tempFile.toPath(), testContent.getBytes());
             Properties props = Utils.loadProps(tempFile.getPath());
-            assertEquals(3, props.size());
+            assertEquals(4, props.size());
             assertEquals("1", props.get("a"));
             assertEquals("2", props.get("b"));
             assertEquals("3", props.get("c"));
-            Properties restrictedProps = Utils.loadProps(tempFile.getPath(), Arrays.asList("b", "d"));
-            assertEquals(1, restrictedProps.size());
+            assertEquals("", props.get("d"));
+            Properties restrictedProps = Utils.loadProps(tempFile.getPath(), Arrays.asList("b", "d", "e"));
+            assertEquals(2, restrictedProps.size());
             assertEquals("2", restrictedProps.get("b"));
+            assertEquals("", restrictedProps.get("d"));
         } finally {
             Files.deleteIfExists(tempFile.toPath());
         }

@@ -306,10 +306,10 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         override_configs[config_property.ADVERTISED_HOSTNAME] = node.account.hostname
         override_configs[config_property.ZOOKEEPER_CONNECT] = self.zk_connect_setting()
         if self.zk_client_secure:
-            override_configs[config_property.ZOOKEEPER_CLIENT_SECURE] = 'true'
+            override_configs[config_property.ZOOKEEPER_SSL_CLIENT_ENABLE] = 'true'
             override_configs[config_property.ZOOKEEPER_CLIENT_CNXN_SOCKET] = 'org.apache.zookeeper.ClientCnxnSocketNetty'
         else:
-            override_configs[config_property.ZOOKEEPER_CLIENT_SECURE] = 'false'
+            override_configs[config_property.ZOOKEEPER_SSL_CLIENT_ENABLE] = 'false'
 
         for prop in self.server_prop_overides:
             override_configs[prop[0]] = prop[1]

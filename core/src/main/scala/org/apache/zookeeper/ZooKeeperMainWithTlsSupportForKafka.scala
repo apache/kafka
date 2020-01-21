@@ -25,6 +25,10 @@ import org.apache.zookeeper.client.ZKClientConfig
 
 import scala.collection.JavaConverters._
 
+/*
+ * This code is tested via the following system test:
+ * kafkatest.tests.core.zookeeper_tls_test.ZookeeperTlsTest.test_zk_tls
+ */
 object ZooKeeperMainWithTlsSupportForKafka {
   val zkTlsConfigFileOption = "-zk-tls-config-file"
   def main(args: Array[String]): Unit = {

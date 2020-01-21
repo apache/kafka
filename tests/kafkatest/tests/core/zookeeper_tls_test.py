@@ -68,22 +68,22 @@ class ZookeeperTlsTest(ProduceConsumeValidateTest):
         # change zk config (enable TLS, but also keep non-TLS)
         self.zk.zk_client_secure_port = True
         self.zk.restart_cluster()
-        # bounce a Kafka broker to force it to leverage Zookeeper -- a simple sanity check
+        # bounce a Kafka broker -- allows us to detect a broker restart failure as a simple sanity check
         self.kafka.stop_node(self.kafka.nodes[0])
         self.kafka.start_node(self.kafka.nodes[0])
 
     def enable_kafka_zk_tls(self):
         self.test_context.logger.debug("Configuring Kafka to use the TLS port in Zookeeper")
-        # change Kafka config (enable TLS to Zookeeper)
+        # change Kafka config (enable TLS to Zookeeper) and restart the Kafka cluster
         self.kafka.zk_client_secure = True
         self.kafka.restart_cluster()
 
     def disable_zk_non_tls(self):
         self.test_context.logger.debug("Disabling the non-TLS port in Zookeeper (as a simple sanity check)")
-        # change zk config (disable non-TLS, keep TLS)
+        # change zk config (disable non-TLS, keep TLS) and restart the ZooKeeper cluster
         self.zk.zk_client_port = False
         self.zk.restart_cluster()
-        # bounce a Kafka broker to force it to leverage Zookeeper -- a simple sanity check
+        # bounce a Kafka broker -- allows us to detect a broker restart failure as a simple sanity check
         self.kafka.stop_node(self.kafka.nodes[0])
         self.kafka.start_node(self.kafka.nodes[0])
 
@@ -94,18 +94,22 @@ class ZookeeperTlsTest(ProduceConsumeValidateTest):
 
         self.kafka.start()
 
-        # Enable TLS port in Zookeeper in adition to the regular con-TLS port
+        # Enable TLS port in Zookeeper in addition to the regular non-TLS port
+        # Bounces the ZooKeeper cluster (and a single broker as a sanity check)
         self.enable_zk_tls()
 
-        # Leverage ZK TLS port in Kafka
+        # Leverage ZooKeeper TLS port in Kafka
+        # Bounces the Kafka cluster
         self.enable_kafka_zk_tls()
         self.perform_produce_consume_validation()
 
-        # Disable ZK non-TLS port to make sure we aren't using it
+        # Disable ZooKeeper non-TLS port to make sure we aren't using it
+        # Bounces the ZooKeeper cluster (and a single broker as a sanity check)
         self.disable_zk_non_tls()
 
-        # Make sure the ZooKeeper command line is able to talk to a TLS-enabled ZooKeeepr quorum
+        # Make sure the ZooKeeper command line is able to talk to a TLS-enabled ZooKeeper quorum
         # Test both create() and query(), each of which leverages the ZooKeeper command line
+        # This tests the code in org.apache.zookeeper.ZooKeeperMainWithTlsSupportForKafka
         path="/foo"
         value="{\"bar\": 0}"
         self.zk.create(path, value=value)
@@ -129,11 +133,11 @@ class ZookeeperTlsTest(ProduceConsumeValidateTest):
         self.kafka.zk_set_acl = False
         self.kafka.restart_cluster()
         self.zk.zookeeper_migration(self.zk.nodes[0], "unsecure")
-        # Step 2: enable ZK SASL authentication, but don't take advantage of it in Kafka yet
+        # Step 2: enable ZooKeeper SASL authentication, but don't take advantage of it in Kafka yet
         self.zk.zk_sasl = True
         self.kafka.start_minikdc_if_necessary(self.zk.zk_principals)
         self.zk.restart_cluster()
-        # bounce a Kafka broker to force it to leverage Zookeeper -- a simple sanity check
+        # bounce a Kafka broker -- allows us to detect a broker restart failure as a simple sanity check
         self.kafka.stop_node(self.kafka.nodes[0])
         self.kafka.start_node(self.kafka.nodes[0])
         # Step 3: run migration tool
