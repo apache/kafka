@@ -444,7 +444,7 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
     checkThrottleConfigAddedToZK(adminZkClient, initialThrottle, servers, topicName, Set("0:100","0:101"), Set("0:102"))
 
     //Ensure that running Verify, whilst the command is executing, should have no effect
-    verifyAssignment(serviceClient, None, ReassignPartitionsCommand.formatAsReassignmentJson(newAssignment, Map.empty))
+    verifyAssignment(serviceClient, ReassignPartitionsCommand.formatAsReassignmentJson(newAssignment, Map.empty))
 
     //Check throttle config again
     checkThrottleConfigAddedToZK(adminZkClient, initialThrottle, servers, topicName, Set("0:100","0:101"), Set("0:102"))
@@ -462,7 +462,7 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
     waitForAdminReassignmentToComplete(serviceClient)
 
     //Verify should remove the throttle
-    verifyAssignment(serviceClient, None, ReassignPartitionsCommand.formatAsReassignmentJson(newAssignment, Map.empty))
+    verifyAssignment(serviceClient, ReassignPartitionsCommand.formatAsReassignmentJson(newAssignment, Map.empty))
 
     //Check removed
     checkThrottleConfigRemovedFromZK(adminZkClient, topicName, servers)

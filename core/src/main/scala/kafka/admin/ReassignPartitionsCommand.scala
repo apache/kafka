@@ -286,7 +286,7 @@ object ReassignPartitionsCommand extends Logging {
 
     try {
       if(opts.options.has(opts.verifyOpt))
-        verifyAssignment(commandService, adminClientOpt, opts)
+        verifyAssignment(commandService, opts)
       else if(opts.options.has(opts.generateOpt))
         generateAssignment(commandService, opts)
       else if (opts.options.has(opts.executeOpt))
@@ -313,14 +313,14 @@ object ReassignPartitionsCommand extends Logging {
   }
 
   private[admin]
-  def verifyAssignment(serviceClient : ReassignCommandService, adminClientOpt: Option[Admin], opts: ReassignPartitionsCommandOptions): Unit = {
+  def verifyAssignment(serviceClient : ReassignCommandService, opts: ReassignPartitionsCommandOptions): Unit = {
     val jsonFile = opts.options.valueOf(opts.reassignmentJsonFileOpt)
     val jsonString = Utils.readFileAsString(jsonFile)
-    verifyAssignment(serviceClient, adminClientOpt, jsonString)
+    verifyAssignment(serviceClient, jsonString)
   }
 
   private[admin]
-  def verifyAssignment(serviceClient : ReassignCommandService, adminClientOpt: Option[Admin], jsonString: String): Unit = {
+  def verifyAssignment(serviceClient : ReassignCommandService, jsonString: String): Unit = {
     println("Status of partition reassignment: ")
     val (partitionsToBeReassigned, replicaAssignment) = parsePartitionReassignmentData(jsonString)
     val reassignedPartitionsStatus = checkIfPartitionReassignmentSucceeded(serviceClient, partitionsToBeReassigned.toMap)
