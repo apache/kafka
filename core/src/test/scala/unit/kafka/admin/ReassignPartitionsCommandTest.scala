@@ -23,7 +23,6 @@ import kafka.admin.ReassignPartitionsCommand.Throttle
 import kafka.log.LogConfig
 import kafka.log.LogConfig._
 import kafka.server.{DynamicConfig, KafkaConfig, KafkaServer}
-import kafka.utils.CoreUtils._
 import kafka.utils.TestUtils._
 import kafka.utils.{Logging, TestUtils}
 import kafka.zk.{KafkaZkClient, ZooKeeperTestHarness}
@@ -39,7 +38,6 @@ import org.scalatest.Assertions.fail
 
 import scala.collection.JavaConverters._
 import org.apache.kafka.common.{TopicPartition, TopicPartitionReplica}
-import org.apache.zookeeper.KeeperException.UnimplementedException
 
 import scala.collection.mutable
 import scala.collection.Seq
@@ -65,36 +63,36 @@ class ReassignPartitionsCommandTest extends ZooKeeperTestHarness with Logging {
   // Base Test Service Client with minimal functionality, just enough for our tests to
   // override
   class TestServiceClientBase extends ReassignCommandService {
-    override def getBrokerIdsInCluster: Seq[Int] = throw new UnimplementedException()
+    override def getBrokerIdsInCluster: Seq[Int] = throw new UnsupportedOperationException()
 
     override def getBrokerMetadatas(rackAwareMode: RackAwareMode, brokerList: Option[Seq[Int]]): Seq[BrokerMetadata] =
-      throw new UnimplementedException()
+      throw new UnsupportedOperationException()
 
     override def updateBrokerConfigs(broker: Int, configs: collection.Map[String, String]): Boolean =
-      throw new UnimplementedException()
+      throw new UnsupportedOperationException()
 
     override def updateTopicConfigs(topic: String, configs: collection.Map[String, String]): Boolean =
-      throw new UnimplementedException()
+      throw new UnsupportedOperationException()
 
     override def getPartitionsForTopics(topics: Set[String]): collection.Map[String, Seq[Int]] =
-      throw new UnimplementedException()
+      throw new UnsupportedOperationException()
 
     override def getReplicaLogDirsForTopics(topics: collection.Set[TopicPartitionReplica]): collection.Map[TopicPartitionReplica, DescribeReplicaLogDirsResult.ReplicaLogDirInfo] =
-      throw new UnimplementedException()
+      throw new UnsupportedOperationException()
 
     override def alterPartitionAssignment(topics: collection.Map[TopicPartition, Seq[Int]], timeoutMs: Long): Unit =
-      throw new UnimplementedException()
+      throw new UnsupportedOperationException()
 
     override def alterReplicaLogDirs(topics: collection.Map[TopicPartitionReplica, String], timeoutMs: Long): collection.Set[TopicPartitionReplica] =
-      throw new UnimplementedException()
+      throw new UnsupportedOperationException()
 
     override def getReplicaAssignmentForTopics(topics: Set[String]): collection.Map[TopicPartition, Seq[Int]] =
-      throw new UnimplementedException()
+      throw new UnsupportedOperationException()
 
-    override def reassignInProgress: Boolean = throw new UnimplementedException()
+    override def reassignInProgress: Boolean = throw new UnsupportedOperationException()
 
     override def getOngoingReassignments: collection.Map[TopicPartition, Seq[Int]] =
-      throw new UnimplementedException()
+      throw new UnsupportedOperationException()
 
     override def close(): Unit = Unit
   }
