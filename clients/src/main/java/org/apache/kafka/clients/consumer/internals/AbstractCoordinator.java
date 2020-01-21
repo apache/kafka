@@ -574,7 +574,11 @@ public abstract class AbstractCoordinator implements Closeable {
         @Override
         public void handle(JoinGroupResponse joinResponse, RequestFuture<ByteBuffer> future) {
             Errors error = joinResponse.error();
-            if (error == Errors.NONE) {
+            if (isProtocolTypeInconsistent(joinResponse.data().protocolType())) {
+                log.debug("JoinGroup failed: Received inconsistent ProtocolType ({})",
+                    joinResponse.data().protocolType());
+                future.raise(Errors.INCONSISTENT_GROUP_PROTOCOL);
+            } else if (error == Errors.NONE) {
                 log.debug("Received successful JoinGroup response: {}", joinResponse);
                 sensors.joinSensor.record(response.requestLatencyMs());
 
@@ -654,6 +658,8 @@ public abstract class AbstractCoordinator implements Closeable {
                         new SyncGroupRequestData()
                                 .setGroupId(rebalanceConfig.groupId)
                                 .setMemberId(generation.memberId)
+                                .setProtocolType(protocolType())
+                                .setProtocolName(generation.protocol)
                                 .setGroupInstanceId(this.rebalanceConfig.groupInstanceId.orElse(null))
                                 .setGenerationId(generation.generationId)
                                 .setAssignments(Collections.emptyList())
@@ -681,6 +687,8 @@ public abstract class AbstractCoordinator implements Closeable {
                             new SyncGroupRequestData()
                                     .setGroupId(rebalanceConfig.groupId)
                                     .setMemberId(generation.memberId)
+                                    .setProtocolType(protocolType())
+                                    .setProtocolName(generation.protocol)
                                     .setGroupInstanceId(this.rebalanceConfig.groupInstanceId.orElse(null))
                                     .setGenerationId(generation.generationId)
                                     .setAssignments(groupAssignmentList)
@@ -704,7 +712,12 @@ public abstract class AbstractCoordinator implements Closeable {
         public void handle(SyncGroupResponse syncResponse,
                            RequestFuture<ByteBuffer> future) {
             Errors error = syncResponse.error();
-            if (error == Errors.NONE) {
+            if (isProtocolTypeInconsistent(syncResponse.data.protocolType())
+                || isProtocolNameInconsistent(syncResponse.data.protocolName())) {
+                log.debug("SyngGroup failed: Received inconsistent ProtocolType ({}) and/or ProtocolName ({})",
+                    syncResponse.data.protocolType(), syncResponse.data.protocolName());
+                future.raise(Errors.INCONSISTENT_GROUP_PROTOCOL);
+            } else if (error == Errors.NONE) {
                 sensors.syncSensor.record(response.requestLatencyMs());
                 future.complete(ByteBuffer.wrap(syncResponse.data.assignment()));
             } else {
@@ -885,6 +898,14 @@ public abstract class AbstractCoordinator implements Closeable {
 
     protected synchronized void requestRejoin() {
         this.rejoinNeeded = true;
+    }
+
+    private boolean isProtocolTypeInconsistent(String protocolType) {
+        return protocolType != null && !protocolType.equals(protocolType());
+    }
+
+    private boolean isProtocolNameInconsistent(String protocolName) {
+        return protocolName != null && !protocolName.equals(generation().protocol);
     }
 
     /**

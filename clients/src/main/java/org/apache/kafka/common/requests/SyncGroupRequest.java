@@ -81,6 +81,10 @@ public class SyncGroupRequest extends AbstractRequest {
         return groupAssignments;
     }
 
+    public boolean areProtocolTypeAndNamePresent() {
+        return version() >= 5 && (data.protocolType() == null || data.protocolName() == null);
+    }
+
     public static SyncGroupRequest parse(ByteBuffer buffer, short version) {
         return new SyncGroupRequest(ApiKeys.SYNC_GROUP.parseRequest(version, buffer), version);
     }

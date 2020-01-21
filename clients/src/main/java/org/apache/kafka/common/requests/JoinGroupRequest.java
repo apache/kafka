@@ -58,6 +58,7 @@ public class JoinGroupRequest extends AbstractRequest {
     public static final String UNKNOWN_MEMBER_ID = "";
     public static final int UNKNOWN_GENERATION_ID = -1;
     public static final String UNKNOWN_PROTOCOL = "";
+    public static final String UNKNOWN_PROTOCOL_TYPE = null;
 
     private static final int MAX_GROUP_INSTANCE_ID_LENGTH = 249;
 
