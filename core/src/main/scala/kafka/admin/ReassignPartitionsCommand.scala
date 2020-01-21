@@ -324,7 +324,7 @@ object ReassignPartitionsCommand extends Logging {
     println("Status of partition reassignment: ")
     val (partitionsToBeReassigned, replicaAssignment) = parsePartitionReassignmentData(jsonString)
     val reassignedPartitionsStatus = checkIfPartitionReassignmentSucceeded(serviceClient, partitionsToBeReassigned.toMap)
-    val replicasReassignmentStatus = checkIfReplicaReassignmentSucceeded(adminClientOpt, replicaAssignment)
+    val replicasReassignmentStatus = checkIfReplicaReassignmentSucceeded(serviceClient, replicaAssignment)
 
     reassignedPartitionsStatus.foreach { case (topicPartition, status) =>
       status match {
@@ -631,14 +631,12 @@ object ReassignPartitionsCommand extends Logging {
     checkIfPartitionReassignmentSucceeded(serviceClient, partitionsToBeReassigned)
   }
 
-  private def checkIfReplicaReassignmentSucceeded(adminClientOpt: Option[Admin], replicaAssignment: Map[TopicPartitionReplica, String])
+  private def checkIfReplicaReassignmentSucceeded(serviceClient: ReassignCommandService, replicaAssignment: Map[TopicPartitionReplica, String])
   :Map[TopicPartitionReplica, ReassignmentStatus] = {
 
     val replicaLogDirInfos = {
       if (replicaAssignment.nonEmpty) {
-        val adminClient = adminClientOpt.getOrElse(
-          throw new AdminCommandFailedException("bootstrap-server needs to be provided in order to reassign replica to the specified log directory"))
-        adminClient.describeReplicaLogDirs(replicaAssignment.keySet.asJava).all().get().asScala
+        serviceClient.getReplicaLogDirsForTopics(replicaAssignment.keySet)
       } else {
         Map.empty[TopicPartitionReplica, ReplicaLogDirInfo]
       }
