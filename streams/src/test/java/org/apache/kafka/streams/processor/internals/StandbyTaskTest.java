@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.MockConsumer;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
@@ -33,7 +34,9 @@ import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.errors.LockException;
 import org.apache.kafka.streams.errors.ProcessorStateException;
+import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.test.MockKeyValueStore;
@@ -55,15 +58,20 @@ import java.io.IOException;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static java.util.Arrays.asList;
+import static java.util.Collections.emptyList;
+import static java.util.Collections.emptySet;
 import static java.util.Collections.singletonList;
 import static java.util.Collections.singletonMap;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkProperties;
+import static org.easymock.EasyMock.mock;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
@@ -88,6 +96,7 @@ public class StandbyTaskTest {
     private final TopicPartition partition = new TopicPartition(storeChangelogTopicName1, 0);
     private final MockKeyValueStore store1 = (MockKeyValueStore) new MockKeyValueStoreBuilder(storeName1, false).build();
     private final MockKeyValueStore store2 = (MockKeyValueStore) new MockKeyValueStoreBuilder(storeName2, true).build();
+
     private final ProcessorTopology topology = ProcessorTopologyFactories.withLocalStores(
         asList(store1, store2),
         mkMap(mkEntry(storeName1, storeChangelogTopicName1), mkEntry(storeName2, storeChangelogTopicName2))
@@ -178,7 +187,6 @@ public class StandbyTaskTest {
             streamsMetrics,
             stateManager,
             stateDirectory);
-
         task.initializeStateStores();
 
         assertEquals(Collections.singletonMap(partition, 50L), task.restoredOffsets());
@@ -190,7 +198,7 @@ public class StandbyTaskTest {
     /*
     @Test
     public void shouldRestoreToKTable() throws IOException {
-        consumer.assign(Collections.singletonList(globalTopicPartition));
+        consumer.assign(singletonList(globalTopicPartition));
         consumer.commitSync(mkMap(mkEntry(globalTopicPartition, new OffsetAndMetadata(0L))));
 
         task = new StandbyTask(
@@ -303,7 +311,7 @@ public class StandbyTaskTest {
         task.initializeStateStores();
         assertThat(committedCallCount.get(), equalTo(0));
 
-        task.update(globalTopicPartition, Collections.emptyList());
+        task.update();
         // We should not make a consumer.committed() call because there are no new records.
         assertThat(committedCallCount.get(), equalTo(0));
     }
@@ -392,7 +400,7 @@ public class StandbyTaskTest {
 
     @Test
     public void shouldCloseStateMangerOnTaskCloseWhenCommitFailed() throws Exception {
-        consumer.assign(Collections.singletonList(globalTopicPartition));
+        consumer.assign(singletonList(globalTopicPartition));
         final Map<TopicPartition, OffsetAndMetadata> committedOffsets = new HashMap<>();
         committedOffsets.put(new TopicPartition(globalTopicPartition.topic(), globalTopicPartition.partition()),
                              new OffsetAndMetadata(100L));
@@ -400,7 +408,7 @@ public class StandbyTaskTest {
 
         restoreStateConsumer.updatePartitions(
             globalStoreName,
-            Collections.singletonList(new PartitionInfo(globalStoreName, 0, Node.noNode(), new Node[0], new Node[0]))
+            singletonList(new PartitionInfo(globalStoreName, 0, Node.noNode(), new Node[0], new Node[0]))
         );
 
         final AtomicBoolean closedStateManager = new AtomicBoolean(false);

@@ -226,10 +226,10 @@ public class StreamsUpgradeTest {
             final TaskManager taskManager = taskManger();
 //            taskManager.setClusterMetadata(Cluster.empty().withPartitions(topicToPartitionInfo));
 //            taskManager.setPartitionsByHostState(partitionsByHost);
-            taskManager.setPartitionsToTaskId(partitionsToTaskId);
+//            taskManager.setPartitionsToTaskId(partitionsToTaskId);
             //FIXME
 //            taskManager.setAssignmentMetadata(activeTasks, info.standbyTasks());
-            taskManager.updateSubscriptionsFromAssignment(partitions);
+            taskManager.fixmeUpdateSubscriptionsFromAssignment(partitions);
             taskManager.setRebalanceInProgress(false);
             usedSubscriptionMetadataVersionPeek.set(usedSubscriptionMetadataVersion);
         }

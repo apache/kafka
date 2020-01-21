@@ -265,7 +265,8 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                 throw new IllegalStateException("Streams partition assignor's rebalance protocol is unknown");
         }
 
-        taskManager.updateSubscriptionsFromMetadata(topics);
+//        REVIEW: is this necessary here?
+//        taskManager.updateSubscriptionsFromMetadata(topics);
         taskManager.setRebalanceInProgress(true);
 
         return activeTasks;
@@ -396,7 +397,8 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         // parse the topology to determine the repartition source topics,
         // making sure they are created with the number of partitions as
         // the maximum of the depending sub-topologies source topics' number of partitions
-        final Map<Integer, InternalTopologyBuilder.TopicsInfo> topicGroups = taskManager.builder().topicGroups();
+        final Map<Integer, InternalTopologyBuilder.TopicsInfo> topicGroups =
+            taskManager.builder().topicGroups();
 
         final Map<String, InternalTopicConfig> repartitionTopicMetadata = new HashMap<>();
         for (final InternalTopologyBuilder.TopicsInfo topicsInfo : topicGroups.values()) {

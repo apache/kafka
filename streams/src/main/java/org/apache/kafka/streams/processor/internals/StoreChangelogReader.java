@@ -409,10 +409,10 @@ public class StoreChangelogReader implements ChangelogReader {
 
             try {
                 polledRecords = restoreConsumer.poll(pollTime);
-            } catch (FencedInstanceIdException e) {
+            } catch (final FencedInstanceIdException e) {
                 // when the consumer gets fenced, all its tasks should be migrated
                 throw new TaskMigratedException("Restore consumer get fenced by instance-id polling records.", e);
-            } catch (KafkaException e) {
+            } catch (final KafkaException e) {
                 throw new StreamsException("Restore consumer get unexpected error polling records.", e);
             }
 
@@ -486,7 +486,7 @@ public class StoreChangelogReader implements ChangelogReader {
             if (changelogMetadata.stateManager.taskType() == AbstractTask.TaskType.ACTIVE) {
                 try {
                     stateRestoreListener.onBatchRestored(partition, storeName, currentOffset, numRecords);
-                } catch (Exception e) {
+                } catch (final Exception e) {
                     throw new StreamsException("State restore listener failed on batch restored", e);
                 }
             }
@@ -502,7 +502,7 @@ public class StoreChangelogReader implements ChangelogReader {
 
             try {
                 stateRestoreListener.onRestoreEnd(partition, storeName, changelogMetadata.totalRestored);
-            } catch (Exception e) {
+            } catch (final Exception e) {
                 throw new StreamsException("State restore listener failed on restore completed", e);
             }
         }
@@ -746,7 +746,7 @@ public class StoreChangelogReader implements ChangelogReader {
 
                 try {
                     stateRestoreListener.onRestoreStart(partition, storeName, startOffset, changelogMetadata.restoreEndOffset);
-                } catch (Exception e) {
+                } catch (final Exception e) {
                     throw new StreamsException("State restore listener failed on batch restored", e);
                 }
             }
@@ -773,7 +773,7 @@ public class StoreChangelogReader implements ChangelogReader {
 
         try {
             restoreConsumer.unsubscribe();
-        } catch (KafkaException e) {
+        } catch (final KafkaException e) {
             throw new StreamsException("Restore consumer get unexpected error unsubscribing", e);
         }
     }

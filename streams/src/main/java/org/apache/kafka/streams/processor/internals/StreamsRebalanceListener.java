@@ -24,7 +24,6 @@ import org.apache.kafka.streams.processor.internals.assignment.AssignorError;
 import org.slf4j.Logger;
 
 import java.util.Collection;
-import java.util.List;
 
 public class StreamsRebalanceListener implements ConsumerRebalanceListener {
 

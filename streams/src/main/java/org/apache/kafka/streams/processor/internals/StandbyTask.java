@@ -78,6 +78,9 @@ public class StandbyTask extends AbstractTask {
         if (state() == State.CREATED) {
             initializeMetadata();
             initializeStateStores();
+
+            // no topology needs initialized, we can transit to RUNNING
+            // right after registered the stores
             transitionTo(State.RUNNING);
         }
     }
@@ -90,19 +93,13 @@ public class StandbyTask extends AbstractTask {
     public void initializeStateStores() {
         registerStateStores();
 
-        // no topology needs initialized, we can transit to RESTORING
-        // right after registered the stores
-        transitionTo(State.RESTORING);
-
         processorContext.initialize();
 
         taskInitialized = true;
     }
 
     @Override
-    public void startRunning() {
-        // TODO: add changelog partitions to restore consumer?
-    }
+    public void startRunning() {}
 
     @Override
     public boolean hasChangelogs() {
@@ -161,7 +158,7 @@ public class StandbyTask extends AbstractTask {
                 // the task is created and not initialized, do nothing
                 break;
 
-            case RESTORING:
+            case RUNNING:
                 if (clean)
                     commit();
 
@@ -181,6 +178,7 @@ public class StandbyTask extends AbstractTask {
         }
 
         closeTaskSensor.record();
+        transitionTo(State.CLOSED);
 
         log.debug("Closed");
     }

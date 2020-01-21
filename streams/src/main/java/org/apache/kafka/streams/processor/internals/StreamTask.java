@@ -200,8 +200,8 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
     public void initializeMetadata() {
         try {
             final Map<TopicPartition, OffsetAndMetadata> offsetsAndMetadata = consumer.committed(partitions).entrySet().stream()
-                .filter(e -> e.getValue() != null)
-                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+                                                                                      .filter(e -> e.getValue() != null)
+                                                                                      .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
             initializeTaskTime(offsetsAndMetadata);
         } catch (final AuthorizationException e) {
             throw new ProcessorStateException(String.format("task [%s] AuthorizationException when initializing offsets for %s", id, partitions), e);
@@ -583,24 +583,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         }
     }
 
-    // TODO K9113: we should let the task itself to decide, based on the state, whether to close as suspended or as running
-    void closeSuspended(final boolean clean) {
-
-        try {
-            closeStateManager(clean);
-        } catch (final RuntimeException error) {
-            if (clean) {
-                throw error;
-            }
-        } finally {
-            partitionGroup.close();
-            recordCollector.close();
-            closeTaskSensor.record();
-
-            streamsMetrics.removeAllTaskLevelSensors(threadId, id.toString());
-        }
-    }
-
     @Override
     public void closeClean() {
         close(true);
@@ -636,16 +618,27 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
             // the caller thread. Therefore it is always safe to proceed without try-catch
             suspend(clean);
 
-            closeSuspended(clean);
-        } catch (final RuntimeException error) {
+            closeStateManager(clean);
+        } finally {
+            partitionGroup.close();
+            closeTaskSensor.record();
+            streamsMetrics.removeAllTaskLevelSensors(threadId, id.toString());
+
+            transitionTo(State.CLOSED);
+
+            // this is last because it might throw
+            closeRecordCollector(clean);
+        }
+    }
+
+    private void closeRecordCollector(final boolean clean) {
+        try {
+            recordCollector.close();
+        } catch (final RuntimeException e) {
             if (clean) {
-                throw error;
+                throw e;
             }
         }
-
-        //TODO redundant
-        taskClosed = true;
-        transitionTo(State.CLOSED);
     }
 
     /**
