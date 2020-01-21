@@ -21,9 +21,11 @@ import org.apache.kafka.common.cache.LRUCache;
 import org.apache.kafka.common.cache.SynchronizedCache;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.connect.connector.ConnectRecord;
+import org.apache.kafka.connect.data.Field;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.data.Struct;
+import org.apache.kafka.connect.errors.DataException;
 import org.apache.kafka.connect.transforms.util.NonEmptyListValidator;
 import org.apache.kafka.connect.transforms.util.SimpleConfig;
 
@@ -82,8 +84,11 @@ public class ValueToKey<R extends ConnectRecord<R>> implements Transformation<R>
         if (keySchema == null) {
             final SchemaBuilder keySchemaBuilder = SchemaBuilder.struct();
             for (String field : fields) {
-                final Schema fieldSchema = value.schema().field(field).schema();
-                keySchemaBuilder.field(field, fieldSchema);
+                final Field fieldFromValue = value.schema().field(field);
+                if (fieldFromValue == null) {
+                    throw new DataException("Field does not exist: " + field);
+                }
+                keySchemaBuilder.field(field, fieldFromValue.schema());
             }
             keySchema = keySchemaBuilder.build();
             valueToKeySchemaCache.put(value.schema(), keySchema);
