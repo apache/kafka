@@ -312,12 +312,14 @@ object ReassignPartitionsCommand extends Logging {
     }
   }
 
+  private[admin]
   def verifyAssignment(serviceClient : ReassignCommandService, adminClientOpt: Option[Admin], opts: ReassignPartitionsCommandOptions): Unit = {
     val jsonFile = opts.options.valueOf(opts.reassignmentJsonFileOpt)
     val jsonString = Utils.readFileAsString(jsonFile)
     verifyAssignment(serviceClient, adminClientOpt, jsonString)
   }
 
+  private[admin]
   def verifyAssignment(serviceClient : ReassignCommandService, adminClientOpt: Option[Admin], jsonString: String): Unit = {
     println("Status of partition reassignment: ")
     val (partitionsToBeReassigned, replicaAssignment) = parsePartitionReassignmentData(jsonString)
@@ -378,6 +380,7 @@ object ReassignPartitionsCommand extends Logging {
     }
   }
 
+  private[admin]
   def generateAssignment(serviceClient : ReassignCommandService, opts: ReassignPartitionsCommandOptions): Unit = {
     val topicsToMoveJsonFile = opts.options.valueOf(opts.topicsToMoveJsonFileOpt)
     val brokerListToReassign = opts.options.valueOf(opts.brokerListOpt).split(',').map(_.toInt)
@@ -391,6 +394,7 @@ object ReassignPartitionsCommand extends Logging {
     println("Proposed partition reassignment configuration\n%s".format(formatAsReassignmentJson(proposedAssignments, Map.empty)))
   }
 
+  private[admin]
   def generateAssignment(serviceClient : ReassignCommandService, brokerListToReassign: Seq[Int], topicsToMoveJsonString: String,
                          disableRackAware: Boolean): (Map[TopicPartition, Seq[Int]], Map[TopicPartition, Seq[Int]]) = {
     val topicsToReassign = parseTopicsData(topicsToMoveJsonString)
@@ -415,21 +419,22 @@ object ReassignPartitionsCommand extends Logging {
   }
 
   // Package-private for testing
-  private[admin] def generateAssignment(zkClient: KafkaZkClient, brokerListToReassign: Seq[Int], topicsToMoveJsonString: String,
+  private[admin]
+  def generateAssignment(zkClient: KafkaZkClient, brokerListToReassign: Seq[Int], topicsToMoveJsonString: String,
                          disableRackAware: Boolean): (Map[TopicPartition, Seq[Int]], Map[TopicPartition, Seq[Int]]) = {
     val serviceClient = ZkClientReassignCommandService(zkClient)
     generateAssignment(serviceClient, brokerListToReassign, topicsToMoveJsonString, disableRackAware)
 
   }
-
-  // Kafka-private for testing
-  private[kafka] def generateAssignment(adminClient: Admin, brokerListToReassign: Seq[Int], topicsToMoveJsonString: String,
+  
+  def generateAssignment(adminClient: Admin, brokerListToReassign: Seq[Int], topicsToMoveJsonString: String,
                          disableRackAware: Boolean): (Map[TopicPartition, Seq[Int]], Map[TopicPartition, Seq[Int]]) = {
     val serviceClient = AdminClientReassignCommandService(adminClient)
     generateAssignment(serviceClient, brokerListToReassign, topicsToMoveJsonString, disableRackAware)
 
   }
 
+  private[admin]
   def executeAssignment(serviceClient : ReassignCommandService, adminClientOpt: Option[Admin], opts: ReassignPartitionsCommandOptions): Unit = {
     val reassignmentJsonFile =  opts.options.valueOf(opts.reassignmentJsonFileOpt)
     val reassignmentJsonString = Utils.readFileAsString(reassignmentJsonFile)
@@ -439,6 +444,7 @@ object ReassignPartitionsCommand extends Logging {
     executeAssignment(serviceClient, reassignmentJsonString, Throttle(interBrokerThrottle, replicaAlterLogDirsThrottle), timeoutMs)
   }
 
+  private[admin]
   def executeAssignment(serviceClient : ReassignCommandService,
                         reassignmentJsonString: String, throttle: Throttle, timeoutMs: Long): Unit = {
     val (partitionAssignment, replicaAssignment) = parseAndValidate(serviceClient, reassignmentJsonString)
@@ -459,13 +465,14 @@ object ReassignPartitionsCommand extends Logging {
     }
   }
 
-  private[admin] def executeAssignment(zkClient: KafkaZkClient, adminClientOpt: Option[Admin],
+  private[admin]
+  def executeAssignment(zkClient: KafkaZkClient, adminClientOpt: Option[Admin],
                         reassignmentJsonString: String, throttle: Throttle, timeoutMs: Long = 10000L): Unit = {
     val serviceClient = ZkClientReassignCommandService(zkClient)
     executeAssignment(serviceClient, reassignmentJsonString, throttle, timeoutMs)
   }
 
-  private[kafka] def executeAssignment(adminClient: Admin,
+  def executeAssignment(adminClient: Admin,
                         reassignmentJsonString: String, throttle: Throttle, timeoutMs: Long): Unit = {
     val serviceClient = AdminClientReassignCommandService(adminClient)
     executeAssignment(serviceClient, reassignmentJsonString, throttle, timeoutMs)
