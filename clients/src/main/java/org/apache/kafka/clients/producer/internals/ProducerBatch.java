@@ -313,7 +313,7 @@ public final class ProducerBatch {
         clearChildrenProducerBatch();
     }
 
-    private void waitForPossibleSplittedBatches() throws InterruptedException {
+    private synchronized void waitForPossibleSplittedBatches() throws InterruptedException {
         for (ProducerBatch child : getChildrenProducerBatch()) {
             child.produceFuture.await();
             child.waitForPossibleSplittedBatches();
