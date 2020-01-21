@@ -584,8 +584,11 @@ public class SelectorTest {
         for (int i = 6; i <= 100 && maxReceiveCountAfterClose < 5; i++) {
             int receiveCount = 0;
             KafkaChannel channel = createConnectionWithPendingReceives(i);
-            selector.poll(1000);
-            assertEquals(1, selector.completedReceives().size()); // wait for first receive
+            // Poll until one or more receives complete and then close the server-side connection
+            TestUtils.waitForCondition(() -> {
+                selector.poll(1000);
+                return selector.completedReceives().size() > 0;
+            }, 5000, "Receive not completed");
             server.closeConnections();
             while (selector.disconnected().isEmpty()) {
                 selector.poll(1);
