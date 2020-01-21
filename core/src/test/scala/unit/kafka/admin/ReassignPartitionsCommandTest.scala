@@ -22,11 +22,11 @@ import java.util.Properties
 import kafka.admin.ReassignPartitionsCommand.Throttle
 import kafka.log.LogConfig
 import kafka.log.LogConfig._
-import kafka.server.{ConfigType, DynamicConfig, KafkaConfig, KafkaServer}
+import kafka.server.{DynamicConfig, KafkaConfig, KafkaServer}
 import kafka.utils.CoreUtils._
 import kafka.utils.TestUtils._
-import kafka.utils.{CoreUtils, Logging, TestUtils}
-import kafka.zk.{AdminZkClient, KafkaZkClient, ZooKeeperTestHarness}
+import kafka.utils.{Logging, TestUtils}
+import kafka.zk.{KafkaZkClient, ZooKeeperTestHarness}
 import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.clients.admin.{AdminClient, DescribeReplicaLogDirsResult}
 import org.apache.kafka.common.network.ListenerName
@@ -34,7 +34,7 @@ import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.easymock.EasyMock._
 import org.easymock.{Capture, CaptureType, EasyMock}
 import org.junit.{After, Before, Test}
-import org.junit.Assert.{assertEquals, assertFalse, assertNull, assertTrue}
+import org.junit.Assert.{assertEquals, assertFalse, assertTrue}
 import org.scalatest.Assertions.fail
 
 import scala.collection.JavaConverters._

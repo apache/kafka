@@ -28,7 +28,7 @@ import kafka.zk.{AdminZkClient, KafkaZkClient, ZooKeeperTestHarness}
 import org.apache.kafka.clients.admin.{Admin, MockAdminClient}
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException
 import org.apache.kafka.common.{Node, TopicPartition, TopicPartitionInfo}
-import org.easymock.EasyMock.{replay, _}
+import org.easymock.EasyMock._
 import org.junit.{After, Test}
 import org.junit.Assert.{assertEquals, assertFalse}
 

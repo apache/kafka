@@ -16,10 +16,8 @@
  */
 package kafka.admin
 
-import java.util.{Collections, Properties}
-import java.util.concurrent.{ExecutionException, TimeUnit}
-
-import kafka.admin.ConfigCommand.ConfigEntity
+import java.util.Properties
+import java.util.concurrent.ExecutionException
 import kafka.common.AdminCommandFailedException
 import kafka.log.LogConfig
 import kafka.log.LogConfig._
@@ -28,12 +26,12 @@ import kafka.utils._
 import kafka.utils.json.JsonValue
 import kafka.zk.{AdminZkClient, KafkaZkClient}
 import org.apache.kafka.clients.admin.DescribeReplicaLogDirsResult.ReplicaLogDirInfo
-import org.apache.kafka.clients.admin.{Admin, AdminClientConfig, AlterConfigOp, AlterReplicaLogDirsOptions, ConfigEntry, DescribeConfigsOptions, NewPartitionReassignment}
+import org.apache.kafka.clients.admin.{Admin, AdminClientConfig, AlterConfigOp, AlterReplicaLogDirsOptions, ConfigEntry, NewPartitionReassignment}
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.errors.ReplicaNotAvailableException
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.utils.{Time, Utils}
-import org.apache.kafka.common.{Node, TopicPartition, TopicPartitionReplica}
+import org.apache.kafka.common.{TopicPartition, TopicPartitionReplica}
 import org.apache.zookeeper.KeeperException.NodeExistsException
 
 import scala.collection.JavaConverters._
