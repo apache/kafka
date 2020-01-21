@@ -292,10 +292,7 @@ class ReassignPartitionsCommandTest extends ZooKeeperTestHarness with Logging {
     val control = new TopicPartition("topic1", 1) -> Seq(100, 102)
     val existing = Map(new TopicPartition("topic1", 0) -> Seq(100, 101), control)
     val proposed = Map(new TopicPartition("topic1", 0) -> Seq(101, 102), control)
-
-    //Given partition there are existing properties
-    val existingProperties = propsWith("some-key", "some-value")
-
+    
     //Then the dummy property should still be there
     class TestServiceClient extends TestServiceClientBase {
       override def UpdateTopicConfigs(topic: String, configChange: collection.Map[String, String]): Boolean = {
