@@ -21,8 +21,12 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.streams.processor.TaskId;
 
 /**
- * Indicates that a task got migrated to another thread.
- * Thus, the task raising this exception can be cleaned up and closed as "zombie".
+ * Indicates that one or more tasks got migrated to another thread.
+ *
+ * 1) if the task field is specified, then that single task should be cleaned up and closed as "zombie" while the
+ *    thread can continue as normal;
+ * 2) if no tasks are specified (i.e. taskId == null), it means that the hosted thread has been fenced and all
+ *    tasks are migrated, in which case the thread should rejoin the group
  */
 public class TaskMigratedException extends StreamsException {
 
@@ -56,12 +60,14 @@ public class TaskMigratedException extends StreamsException {
         this.taskId = taskId;
     }
 
+    public TaskMigratedException(final String message, final Throwable throwable) {
+        this(null, message + " It means all tasks belonging to this thread has been migrated", throwable);
+    }
+
     public TaskId migratedTaskId() {
         return taskId;
     }
 
-    // this is for unit test only
-    // TODO K9113: remove this after we've refactored AssignedTasksTests
     public TaskMigratedException() {
         this(null, "A task has been migrated unexpectedly", null);
     }

@@ -44,5 +44,5 @@ interface StateManager {
 
     Map<TopicPartition, Long> changelogOffsets();
 
-    void close(final boolean clean) throws IOException;
+    void close() throws IOException;
 }

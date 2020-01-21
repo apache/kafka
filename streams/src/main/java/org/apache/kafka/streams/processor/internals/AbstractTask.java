@@ -192,7 +192,7 @@ public abstract class AbstractTask implements Task {
             store.init(processorContext, store);
             log.trace("Registered state store {}", store.name());
         }
-        stateMgr.initStoresFromCheckpointedOffsets();
+        stateMgr.initializeStoreOffsetsFromCheckpoint();
         log.debug("Initialized state stores");
     }
 
@@ -203,7 +203,7 @@ public abstract class AbstractTask implements Task {
         ProcessorStateException exception = null;
         log.trace("Closing state manager");
         try {
-            stateMgr.close(clean);
+            stateMgr.close();
         } catch (final ProcessorStateException e) {
             exception = e;
         } finally {

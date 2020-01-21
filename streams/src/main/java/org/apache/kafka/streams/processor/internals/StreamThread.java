@@ -875,9 +875,6 @@ public class StreamThread extends Thread {
             } while (processed > 0);
         }
 
-        // update standby tasks and maybe commit the standby tasks as well
-        maybeUpdateStandbyTasks();
-
         maybeCommit();
     }
 
@@ -1040,19 +1037,6 @@ public class StreamThread extends Thread {
         }
 
         return committed > 0;
-    }
-
-    private void maybeUpdateStandbyTasks() {
-        if (state == State.RUNNING) {
-            if (processStandbyRecords) {
-                changelogReader.restore();
-
-                processStandbyRecords = false;
-            }
-
-            // update now if the standby restoration indeed executed
-            advanceNowAndComputeLatency();
-        }
     }
 
     /**

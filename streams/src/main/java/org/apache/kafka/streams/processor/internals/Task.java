@@ -29,7 +29,6 @@ public interface Task {
     enum State {
         CREATED, RESTORING, RUNNING, SUSPENDED, CLOSED;
 
-
         static void validateTransition(final State oldState, final State newState) {
             if (oldState == CREATED && (newState == RESTORING || newState == CLOSED)) {
                 return;

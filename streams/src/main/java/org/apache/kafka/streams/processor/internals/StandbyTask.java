@@ -34,6 +34,7 @@ import java.util.Set;
  */
 public class StandbyTask extends AbstractTask {
     private final Sensor closeTaskSensor;
+
     private State state = State.CREATED;
 
     /**
@@ -57,8 +58,8 @@ public class StandbyTask extends AbstractTask {
                 final StateDirectory stateDirectory) {
         super(id, partitions, topology, consumer, true, stateMgr, stateDirectory, config);
 
-        closeTaskSensor = ThreadMetrics.closeTaskSensor(Thread.currentThread().getName(), metrics);
         processorContext = new StandbyContextImpl(id, config, stateMgr, metrics);
+        closeTaskSensor = ThreadMetrics.closeTaskSensor(Thread.currentThread().getName(), metrics);
     }
 
     @Override
@@ -80,31 +81,28 @@ public class StandbyTask extends AbstractTask {
     @Override
     public void initializeIfNeeded() {
         if (state() == State.CREATED) {
-            initializeMetadata();
             initializeStateStores();
+            // no topology needs initialized, we can transit to RUNNING
+            // right after registered the stores
             transitionTo(State.RESTORING);
             transitionTo(State.RUNNING);
         }
     }
 
-    public void initializeMetadata() {}
-
     public void initializeStateStores() {
         registerStateStores();
+
         processorContext.initialize();
+
         taskInitialized = true;
     }
 
     @Override
-    public void startRunning() {
-        // TODO: add changelog partitions to restore consumer?
-    }
+    public void startRunning() {}
 
     public boolean hasChangelogs() {
         return true;
     }
-
-    public void initializeTopology() {}
 
     @Override
     public void suspend() {
@@ -125,17 +123,13 @@ public class StandbyTask extends AbstractTask {
      */
     @Override
     public void commit() {
-        log.trace("Committing");
-        flushAndCheckpointState();
-        commitNeeded = false;
-    }
-
-    private void flushAndCheckpointState() {
-        // this could theoretically throw a ProcessorStateException caused by a ProducerFencedException,
-        // but in practice this shouldn't happen for standby tasks, since they don't produce to changelog topics
-        // or downstream topics.
         stateMgr.flush();
+
+        // since there's no written offsets we can checkpoint with empty map,
+        // and the state current offset would be used to checkpoint
         stateMgr.checkpoint(Collections.emptyMap());
+
+        log.debug("Committed");
     }
 
     @Override
@@ -149,36 +143,41 @@ public class StandbyTask extends AbstractTask {
     }
 
     /**
-     * <pre>
-     * - {@link #commit()}
-     * - close state
-     * <pre>
+     * 1. when unclean close, we do not need to commit;
+     * 2. when unclean close, we do not throw any exception;
      */
     private void close(final boolean clean) {
-        closeTaskSensor.record();
-        if (!taskInitialized) {
-            return;
-        }
-        log.debug("Closing");
-        try {
-            if (clean) {
-                commit();
-            }
-        } finally {
-            closeStateManager(true);
+        switch (state) {
+            case CREATED:
+                // the task is created and not initialized, do nothing
+                break;
+
+            case RUNNING:
+                if (clean) { commit(); }
+
+                try {
+                    closeStateManager(clean);
+                } catch (final RuntimeException error) {
+                    if (clean) {
+                        throw error;
+                    } else {
+                        log.warn("Closing standby task " + id + " uncleanly throws an exception " + error);
+                    }
+                }
+                break;
+
+            default:
+                throw new IllegalStateException("Illegal state " + state + " while closing standby task " + id);
         }
 
+        closeTaskSensor.record();
         transitionTo(State.SUSPENDED);
         transitionTo(State.CLOSED);
+
+        log.debug("Closed");
     }
 
-    Map<TopicPartition, Long> checkpointedOffsets() {
+    Map<TopicPartition, Long> restoredOffsets() {
         return Collections.unmodifiableMap(stateMgr.changelogOffsets());
-    }
-
-    public void update() {
-        // we use the changelog reader to do the actual restoration work,
-        // and here we only need to update the offset limits when necessary
-        // TODO K9113: finish this logic with ChangeLogReader
     }
 }

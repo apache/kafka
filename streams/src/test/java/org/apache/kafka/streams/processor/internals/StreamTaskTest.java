@@ -981,7 +981,9 @@ public class StreamTaskTest {
             singletonList(stateStore),
             Collections.emptyMap());
 
-        stateManager.close(EasyMock.eq(false));
+        EasyMock.expect(stateManager.changelogPartitions()).andReturn(Collections.emptySet());
+        EasyMock.expectLastCall();
+        stateManager.close();
         EasyMock.expectLastCall();
         EasyMock.replay(stateManager);
 
