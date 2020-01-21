@@ -44,6 +44,7 @@ import scala.util.{Failure, Success, Try}
 class ReassignPartitionsServiceClientZkTest extends ZooKeeperTestHarness with Logging {
   var servers: Seq[KafkaServer] = Seq()
   var calls = 0
+  val TestTopic1Name = "test1"
 
   @After
   override def tearDown(): Unit = {
@@ -54,7 +55,6 @@ class ReassignPartitionsServiceClientZkTest extends ZooKeeperTestHarness with Lo
   // Test update topic configs and broker configs
   @Test
   def testUpdateShouldOverrideEmptyTopicConfigs() : Unit = {
-    val testTopicName = "TOPIC0"
     val configUpdatesMap = Map("property1" -> "0", "property2" -> "1")
 
     // Test: Have empty properties, this should just set the ones we expect.
@@ -62,19 +62,18 @@ class ReassignPartitionsServiceClientZkTest extends ZooKeeperTestHarness with Lo
     configUpdatesMap.foreach({ case (k, v) => test1Properties.setProperty(k: String, v: String) })
     val mockZkClient: KafkaZkClient = createMock(classOf[KafkaZkClient])
     val mockAdminZkClient: AdminZkClient = createMock(classOf[AdminZkClient])
-    expect(mockAdminZkClient.fetchEntityConfig(ConfigType.Topic, testTopicName)).andReturn(new Properties)
-    expect(mockAdminZkClient.changeTopicConfig(testTopicName, test1Properties))
+    expect(mockAdminZkClient.fetchEntityConfig(ConfigType.Topic, TestTopic1Name)).andReturn(new Properties)
+    expect(mockAdminZkClient.changeTopicConfig(TestTopic1Name, test1Properties))
     replay(mockZkClient)
     replay(mockAdminZkClient)
 
     val service = new ZkClientReassignCommandService(mockZkClient, Some(mockAdminZkClient))
 
-    service.updateTopicConfigs("TOPIC0", configUpdatesMap)
+    service.updateTopicConfigs(TestTopic1Name, configUpdatesMap)
   }
 
   @Test
   def testUpdateShouldNotOverrideOtherTopicConfigs() : Unit = {
-    val testTopicName = "TOPIC0"
     val configUpdatesMap = Map("property1" -> "0", "property2" -> "1")
 
     // Test: Hove other Properties that are completely disjoint from the ones we're updating.
@@ -91,19 +90,18 @@ class ReassignPartitionsServiceClientZkTest extends ZooKeeperTestHarness with Lo
       test2ExpectedProperties.setProperty(k, v)
     }
 
-    expect(mockAdminZkClient.fetchEntityConfig(ConfigType.Topic, testTopicName)).andReturn(test2Properties)
-    expect(mockAdminZkClient.changeTopicConfig(testTopicName, test2ExpectedProperties))
+    expect(mockAdminZkClient.fetchEntityConfig(ConfigType.Topic, TestTopic1Name)).andReturn(test2Properties)
+    expect(mockAdminZkClient.changeTopicConfig(TestTopic1Name, test2ExpectedProperties))
     replay(mockZkClient)
     replay(mockAdminZkClient)
 
     val serviceTest2 = new ZkClientReassignCommandService(mockZkClient, Some(mockAdminZkClient))
 
-    serviceTest2.updateTopicConfigs("TOPIC0", configUpdatesMap)
+    serviceTest2.updateTopicConfigs(TestTopic1Name, configUpdatesMap)
   }
 
   @Test
   def testUpdateShouldOverrideExistingTopicConfigs() : Unit = {
-    val testTopicName = "TOPIC0"
     val configUpdatesMap = Map("property1" -> "0", "property2" -> "1")
 
     // Test. Overwrite existing properties.
@@ -121,14 +119,14 @@ class ReassignPartitionsServiceClientZkTest extends ZooKeeperTestHarness with Lo
       test3ExpectedProperties.setProperty(k, v)
     }
 
-    expect(mockAdminZkClient.fetchEntityConfig(ConfigType.Topic, testTopicName)).andReturn(test3Properties)
-    expect(mockAdminZkClient.changeTopicConfig(testTopicName, test3ExpectedProperties))
+    expect(mockAdminZkClient.fetchEntityConfig(ConfigType.Topic, TestTopic1Name)).andReturn(test3Properties)
+    expect(mockAdminZkClient.changeTopicConfig(TestTopic1Name, test3ExpectedProperties))
     replay(mockZkClient)
     replay(mockAdminZkClient)
 
     val serviceTest3 = new ZkClientReassignCommandService(mockZkClient, Some(mockAdminZkClient))
 
-    serviceTest3.updateTopicConfigs("TOPIC0", configUpdatesMap)
+    serviceTest3.updateTopicConfigs(TestTopic1Name, configUpdatesMap)
   }
 
   // Test update broker configs. This behaves similarly to the topic test but the
@@ -223,18 +221,20 @@ class ReassignPartitionsServiceClientAdminTest {
   val portBase = 9000
   // Try with a set of brokers where some have rack info and some don't
   val brokerList = brokerIds.map { id => new Node(id, s"broker-$id", portBase, if (id % 2 == 0) { "" } else { s"rack-$id" }) }
+  val TestTopic1Name = "test1"
   // Topic test 1 has 2 partitions, 3RF, one partition is UR
   // XXX: MockAdminClient doesn't allow partitions with different replica sets
   val test1Partitions = List(new TopicPartitionInfo(1, brokerList(0), List(brokerList(0), brokerList(1), brokerList(2)).asJava,
     List(brokerList(0), brokerList(1)).asJava),
     new TopicPartitionInfo(2, brokerList(1), List(brokerList(0), brokerList(1), brokerList(2)).asJava,
       List(brokerList(0), brokerList(1), brokerList(2)).asJava)).asJava
-
+  val TestTopic2Name = "test2"
   // Topic test2 has just 1 partition, RF 3, 1 UR partition
   val test2Partitions = List(new TopicPartitionInfo(1, brokerList(3), List(brokerList(2), brokerList(3), brokerList(0)).asJava,
     List(brokerList(3), brokerList(0)).asJava)).asJava
 
   // Topic test3 has 3 partitions, RF3
+  val TestTopic3Name = "test3"
   val test3Partitions =  List(new TopicPartitionInfo(1, brokerList(0), List(brokerList(0), brokerList(1), brokerList(2)).asJava,
     List(brokerList(0), brokerList(1)).asJava),
     new TopicPartitionInfo(2, brokerList(1), List(brokerList(0), brokerList(1), brokerList(2)).asJava,
@@ -242,6 +242,7 @@ class ReassignPartitionsServiceClientAdminTest {
     new TopicPartitionInfo(3, brokerList(1), List(brokerList(0), brokerList(1), brokerList(2)).asJava,
       List(brokerList(0), brokerList(1), brokerList(2)).asJava)).asJava
 
+  val TestInvalidTopicName = "test4"
 
   /**
    * Set up the standardized test cluster.
@@ -250,9 +251,9 @@ class ReassignPartitionsServiceClientAdminTest {
     // Note the non-sequential, non-zero-based IDs.
     val mockAdmin = new MockAdminClient(brokerList.asJava, brokerList(2))
 
-    mockAdmin.addTopic(false, "test1", test1Partitions, Collections.emptyMap())
-    mockAdmin.addTopic(false, "test2", test2Partitions, Collections.emptyMap())
-    mockAdmin.addTopic(false, "test3", test3Partitions, Collections.emptyMap())
+    mockAdmin.addTopic(false, TestTopic1Name, test1Partitions, Collections.emptyMap())
+    mockAdmin.addTopic(false, TestTopic2Name, test2Partitions, Collections.emptyMap())
+    mockAdmin.addTopic(false, TestTopic3Name, test3Partitions, Collections.emptyMap())
 
     mockAdmin
   }
@@ -390,11 +391,11 @@ class ReassignPartitionsServiceClientAdminTest {
     val serviceClient = new AdminClientReassignCommandService(mockAdmin)
 
     // Test 1: Fetch all known topics
-    val topicQuery1 = Set("test1", "test2", "test3")
+    val topicQuery1 = Set(TestTopic1Name, TestTopic2Name, TestTopic3Name)
     val topicResult1 = serviceClient.getPartitionsForTopics(topicQuery1)
-    assertEquals(topicResult1("test1"), Seq(1, 2))
-    assertEquals(topicResult1("test2"), Seq(1))
-    assertEquals(topicResult1("test3"), Seq(1, 2, 3))
+    assertEquals(topicResult1(TestTopic1Name), Seq(1, 2))
+    assertEquals(topicResult1(TestTopic2Name), Seq(1))
+    assertEquals(topicResult1(TestTopic3Name), Seq(1, 2, 3))
   }
 
   @Test
@@ -403,11 +404,11 @@ class ReassignPartitionsServiceClientAdminTest {
     val serviceClient = new AdminClientReassignCommandService(mockAdmin)
 
     // Test 2: Fetch not all topics
-    val topicQuery2 = Set("test2", "test3")
+    val topicQuery2 = Set(TestTopic2Name, TestTopic3Name)
     val topicResult2 = serviceClient.getPartitionsForTopics(topicQuery2)
-    assertEquals(topicResult2("test2"), Seq(1))
-    assertEquals(topicResult2("test3"), Seq(1, 2, 3))
-    assertFalse(topicResult2.contains("test1"))
+    assertEquals(topicResult2(TestTopic2Name), Seq(1))
+    assertEquals(topicResult2(TestTopic3Name), Seq(1, 2, 3))
+    assertFalse(topicResult2.contains(TestTopic1Name))
   }
 
 
@@ -417,7 +418,7 @@ class ReassignPartitionsServiceClientAdminTest {
     val serviceClient = new AdminClientReassignCommandService(mockAdmin)
 
     // Test 3: Attempt to fetch an invalid topic
-    val topicQuery3 = Set("test1", "test4")
+    val topicQuery3 = Set(TestTopic1Name, TestInvalidTopicName)
     val topicResult3 = Try(serviceClient.getPartitionsForTopics(topicQuery3))
     assert(topicResult3.isFailure)
     assert(topicResult3 match {
@@ -435,14 +436,14 @@ class ReassignPartitionsServiceClientAdminTest {
     val serviceClient = new AdminClientReassignCommandService(mockAdmin)
 
     // Test 1: Fetch partitions for all known topics
-    val topicQuery1 = Set("test1", "test2", "test3")
+    val topicQuery1 = Set(TestTopic1Name, TestTopic2Name, TestTopic3Name)
     val topicResult1 = serviceClient.getReplicaAssignmentForTopics(topicQuery1)
-    assertEquals(topicResult1(new TopicPartition("test1", 1)), Seq(1, 4, 6))
-    assertEquals(topicResult1(new TopicPartition("test1", 2)), Seq(1, 4, 6))
-    assertEquals(topicResult1(new TopicPartition("test2", 1)), Seq(6, 7, 1))
-    assertEquals(topicResult1(new TopicPartition("test3", 1)), Seq(1, 4, 6))
-    assertEquals(topicResult1(new TopicPartition("test3", 2)), Seq(1, 4, 6))
-    assertEquals(topicResult1(new TopicPartition("test3", 3)), Seq(1, 4, 6))
+    assertEquals(topicResult1(new TopicPartition(TestTopic1Name, 1)), Seq(1, 4, 6))
+    assertEquals(topicResult1(new TopicPartition(TestTopic1Name, 2)), Seq(1, 4, 6))
+    assertEquals(topicResult1(new TopicPartition(TestTopic2Name, 1)), Seq(6, 7, 1))
+    assertEquals(topicResult1(new TopicPartition(TestTopic3Name, 1)), Seq(1, 4, 6))
+    assertEquals(topicResult1(new TopicPartition(TestTopic3Name, 2)), Seq(1, 4, 6))
+    assertEquals(topicResult1(new TopicPartition(TestTopic3Name, 3)), Seq(1, 4, 6))
   }
 
   @Test
@@ -451,13 +452,13 @@ class ReassignPartitionsServiceClientAdminTest {
     val serviceClient = new AdminClientReassignCommandService(mockAdmin)
 
     // Test 2: Fetch not all topics
-    val topicQuery2 = Set("test2", "test3")
+    val topicQuery2 = Set(TestTopic2Name, TestTopic3Name)
     val topicResult2 = serviceClient.getReplicaAssignmentForTopics(topicQuery2)
-    assertEquals(topicResult2(new TopicPartition("test2", 1)), Seq(6, 7, 1))
-    assertEquals(topicResult2(new TopicPartition("test3", 1)), Seq(1, 4, 6))
-    assertEquals(topicResult2(new TopicPartition("test3", 2)), Seq(1, 4, 6))
-    assertEquals(topicResult2(new TopicPartition("test3", 3)), Seq(1, 4, 6))
-    assertFalse(topicResult2.contains(new TopicPartition("test1", 1)))
+    assertEquals(topicResult2(new TopicPartition(TestTopic2Name, 1)), Seq(6, 7, 1))
+    assertEquals(topicResult2(new TopicPartition(TestTopic3Name, 1)), Seq(1, 4, 6))
+    assertEquals(topicResult2(new TopicPartition(TestTopic3Name, 2)), Seq(1, 4, 6))
+    assertEquals(topicResult2(new TopicPartition(TestTopic3Name, 3)), Seq(1, 4, 6))
+    assertFalse(topicResult2.contains(new TopicPartition(TestTopic1Name, 1)))
   }
 
   @Test
@@ -466,7 +467,7 @@ class ReassignPartitionsServiceClientAdminTest {
     val serviceClient = new AdminClientReassignCommandService(mockAdmin)
 
     // Test 3: Attempt to fetch an invalid topic
-    val topicQuery3 = Set("test1", "test4")
+    val topicQuery3 = Set(TestTopic1Name, TestInvalidTopicName)
     val topicResult3 = Try(serviceClient.getReplicaAssignmentForTopics(topicQuery3))
     assert(topicResult3.isFailure)
     assert(topicResult3 match {
