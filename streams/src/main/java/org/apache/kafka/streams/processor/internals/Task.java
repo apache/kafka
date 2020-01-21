@@ -33,11 +33,11 @@ public interface Task {
         static void validateTransition(final State oldState, final State newState) {
             if (oldState == CREATED && (newState == RESTORING || newState == CLOSED)) {
                 return;
-            } else if (oldState == RESTORING && (newState == RESTORING || newState == RUNNING || newState == SUSPENDED)) {
+            } else if (oldState == RESTORING && (newState == RUNNING || newState == SUSPENDED)) {
                 return;
-            } else if (oldState == RUNNING && (newState == RESTORING || newState == RUNNING || newState == SUSPENDED)) {
+            } else if (oldState == RUNNING && (newState == RESTORING || newState == SUSPENDED)) {
                 return;
-            } else if (oldState == SUSPENDED && (newState == RESTORING || newState == RUNNING || newState == SUSPENDED || newState == CLOSED)) {
+            } else if (oldState == SUSPENDED && (newState == RUNNING || newState == CLOSED)) {
                 return;
             } else {
                 throw new IllegalStateException("Invalid transition from " + oldState + " to " + newState);
