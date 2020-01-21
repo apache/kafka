@@ -44,6 +44,7 @@ import org.apache.kafka.common.requests.AddOffsetsToTxnResponse;
 import org.apache.kafka.common.requests.EndTxnResponse;
 import org.apache.kafka.common.requests.FindCoordinatorResponse;
 import org.apache.kafka.common.requests.InitProducerIdResponse;
+import org.apache.kafka.common.requests.JoinGroupRequest;
 import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.requests.TxnOffsetCommitRequest;
 import org.apache.kafka.common.requests.TxnOffsetCommitResponse;
@@ -779,6 +780,49 @@ public class KafkaProducerTest {
                 generationId, memberId, Optional.of(groupInstanceId));
             producer.sendOffsetsToTransaction(Collections.emptyMap(), groupMetadata);
             producer.commitTransaction();
+        }
+    }
+
+    @Test
+    public void testNullGroupMetadataInSendOffsets() {
+        verifyInvalidGroupMetadata(null);
+    }
+
+    @Test
+    public void testNullGroupIdInSendOffsets() {
+        verifyInvalidGroupMetadata(new ConsumerGroupMetadata(null));
+    }
+
+    @Test
+    public void testInvalidGenerationIdAndMemberIdCombinedInSendOffsets() {
+        verifyInvalidGroupMetadata(new ConsumerGroupMetadata("group", 2, JoinGroupRequest.UNKNOWN_MEMBER_ID, Optional.empty()));
+    }
+
+    private void verifyInvalidGroupMetadata(ConsumerGroupMetadata groupMetadata) {
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, "some.id");
+        configs.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, 10000);
+        configs.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9000");
+
+        Time time = new MockTime(1);
+        MetadataResponse initialUpdateResponse = TestUtils.metadataUpdateWith(1, singletonMap("topic", 1));
+        ProducerMetadata metadata = newMetadata(0, Long.MAX_VALUE);
+
+        MockClient client = new MockClient(time, metadata);
+        client.updateMetadata(initialUpdateResponse);
+
+        Node node = metadata.fetch().nodes().get(0);
+        client.throttle(node, 5000);
+
+        client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, host1));
+        client.prepareResponse(initProducerIdResponse(1L, (short) 5, Errors.NONE));
+
+        try (Producer<String, String> producer = new KafkaProducer<>(configs, new StringSerializer(),
+            new StringSerializer(), metadata, client, null, time)) {
+            producer.initTransactions();
+            producer.beginTransaction();
+            assertThrows(IllegalStateException.class,
+                () -> producer.sendOffsetsToTransaction(Collections.emptyMap(), groupMetadata));
         }
     }
 

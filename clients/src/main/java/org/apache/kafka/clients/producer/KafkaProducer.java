@@ -63,6 +63,7 @@ import org.apache.kafka.common.network.Selector;
 import org.apache.kafka.common.record.AbstractRecords;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.RecordBatch;
+import org.apache.kafka.common.requests.JoinGroupRequest;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.common.utils.KafkaThread;
@@ -670,6 +671,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      */
     public void sendOffsetsToTransaction(Map<TopicPartition, OffsetAndMetadata> offsets,
                                          ConsumerGroupMetadata groupMetadata) throws ProducerFencedException {
+        throwIfInvalidGroupMetadata(groupMetadata);
         throwIfNoTransactionManager();
         throwIfProducerClosed();
         TransactionalRequestResult result = transactionManager.sendOffsetsToTransaction(offsets, groupMetadata);
@@ -1264,6 +1266,17 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                 partition :
                 partitioner.partition(
                         record.topic(), record.key(), serializedKey, record.value(), serializedValue, cluster);
+    }
+
+    private void throwIfInvalidGroupMetadata(ConsumerGroupMetadata groupMetadata) {
+        if (groupMetadata == null) {
+            throw new IllegalStateException("Consumer group metadata could not be null");
+        } else if (groupMetadata.groupId() == null) {
+            throw new IllegalStateException("Passed in group metadata " + groupMetadata + " has empty group.id");
+        } else if (groupMetadata.generationId() > 0
+            && JoinGroupRequest.UNKNOWN_MEMBER_ID.equals(groupMetadata.memberId())) {
+            throw new IllegalStateException("Passed in group metadata " + groupMetadata + " has generationId > 0 but member.id ");
+        }
     }
 
     private void throwIfNoTransactionManager() {
