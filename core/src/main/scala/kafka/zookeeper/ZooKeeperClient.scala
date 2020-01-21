@@ -363,7 +363,7 @@ class ZooKeeperClient(connectString: String,
     stateChangeHandlers.values.foreach(callBeforeInitializingSession _)
 
     inWriteLock(initializationLock) {
-      if (!connectionState.isAlive) {
+      if (!connectionState.isConnected) {
         zooKeeper.close()
         info(s"Initializing a new session to $connectString.")
         // retry forever until ZooKeeper can be instantiated
