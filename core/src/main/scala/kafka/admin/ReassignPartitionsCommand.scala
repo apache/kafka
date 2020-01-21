@@ -54,7 +54,7 @@ trait ReassignCommandService extends AutoCloseable {
   def getOngoingReassignments: Map[TopicPartition, Seq[Int]]
 }
 
-case class AdminClientReassignCommandService  (adminClient : Admin) extends ReassignCommandService {
+case class AdminClientReassignCommandService(adminClient : Admin) extends ReassignCommandService {
   override def getBrokerIdsInCluster: Seq[Int] = adminClient.describeCluster().nodes().get().asScala.map(_.id()).toArray
 
   override def getBrokerMetadatas(rackAwareMode: RackAwareMode, brokerList: Option[Seq[Int]]): Seq[BrokerMetadata] = {
@@ -96,8 +96,8 @@ case class AdminClientReassignCommandService  (adminClient : Admin) extends Reas
       v._2 match {
         case "" => AlterConfigOp.OpType.DELETE
         case _ => AlterConfigOp.OpType.SET
-    })
-  }.asJavaCollection
+      })
+    }.asJavaCollection
 
     val alterResult = adminClient.incrementalAlterConfigs(Map(
     configResource -> configUpdates
@@ -151,7 +151,7 @@ case class AdminClientReassignCommandService  (adminClient : Admin) extends Reas
     for (topicData <- topicDescriptions) {
       val topic = topicData._1
       for (partition <- topicData._2.partitions.asScala) {
-        replicaList(new TopicPartition(topic, partition.partition())) = partition.replicas.asScala.map(_.id())
+        replicaList += (new TopicPartition(topic, partition.partition()) -> partition.replicas.asScala.map(_.id()))
       }
     }
     replicaList
