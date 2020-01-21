@@ -95,12 +95,12 @@ public class RocksDBStoreTest {
     public void setUp() {
         final Properties props = StreamsTestUtils.getStreamsConfig();
         props.put(StreamsConfig.ROCKSDB_CONFIG_SETTER_CLASS_CONFIG, MockRocksDbConfigSetter.class);
-        rocksDBStore = getRocksDBStore();
         dir = TestUtils.tempDirectory();
         context = new InternalMockProcessorContext(dir,
             Serdes.String(),
             Serdes.String(),
             new StreamsConfig(props));
+        rocksDBStore = getRocksDBStore();
         context.metrics().setRocksDBMetricsRecordingTrigger(new RocksDBMetricsRecordingTrigger());
     }
 
@@ -147,9 +147,7 @@ public class RocksDBStoreTest {
         reset(metricsRecorder);
         metricsRecorder.addStatistics(
             eq(DB_NAME),
-            anyObject(Statistics.class),
-            eq(mockContext.metrics()),
-            eq(mockContext.taskId())
+            anyObject(Statistics.class)
         );
         replay(metricsRecorder);
 
@@ -278,7 +276,7 @@ public class RocksDBStoreTest {
     public void shouldCallRocksDbConfigSetter() {
         MockRocksDbConfigSetter.called = false;
 
-        rocksDBStore.openDB(context);
+        rocksDBStore.init(context, rocksDBStore);
 
         assertTrue(MockRocksDbConfigSetter.called);
     }
