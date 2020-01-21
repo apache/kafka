@@ -136,7 +136,7 @@ public final class MessageDataGenerator {
 
     private void generateFieldValidation(StructSpec struct, Versions parentVersions) {
         for (FieldSpec field : struct.fields()) {
-            DomainSpec domain = field.getDomain();
+            DomainSpec domain = field.domain();
             if (domain != null) {
                 CodesSpec codes = codesRegistry.get(domain.name());
                 buffer.printf("%n");
@@ -184,6 +184,10 @@ public final class MessageDataGenerator {
                         buffer.printf("return %s;%n", expr);
                         buffer.decrementIndent();
                     }
+                    buffer.printf("default:%n");
+                    buffer.incrementIndent();
+                    buffer.printf("return false;%n");
+                    buffer.decrementIndent();
                     buffer.decrementIndent();
                     buffer.printf("}%n");
                 }
@@ -792,6 +796,16 @@ public final class MessageDataGenerator {
                                 buffer.printf("this.%s = %s;%n",
                                     field.camelCaseName(),
                                     readFieldFromStruct(field.type(), field.snakeCaseName(), field.zeroCopy()));
+                                if (field.domain() != null) {
+                                    buffer.printf("if (!is%sValid(this.%s, _version)) {%n", field.capitalizedCamelCaseName(), field.camelCaseName());
+                                    buffer.incrementIndent();
+                                    buffer.printf("throw new IllegalArgumentException(\"%s cannot have value \" + this.%s + \" (\" + %s.name(this.%s) + \") at version \" + _version);%n",
+                                            field.snakeCaseName(), field.camelCaseName(),
+                                            field.domain().name(), field.camelCaseName());
+
+                                    buffer.decrementIndent();
+                                    buffer.printf("}%n");
+                                }
                             }
                         }).
                         ifMember(presentAndTaggedVersions -> {
@@ -1355,6 +1369,16 @@ public final class MessageDataGenerator {
                 (field.type() instanceof FieldType.UUIDFieldType) ||
                 (field.type() instanceof FieldType.Float64FieldType) ||
                 (field.type() instanceof FieldType.StringFieldType)) {
+            if (field.domain() != null) {
+                buffer.printf("if (!is%sValid(this.%s, _version)) {%n",
+                        field.capitalizedCamelCaseName(), field.camelCaseName());
+                buffer.incrementIndent();
+                buffer.printf("throw new IllegalArgumentException(\"%s cannot have value \" + this.%s + \" (\" + %s.name(this.%s) + \") at version \" + _version);%n",
+                        field.snakeCaseName(), field.camelCaseName(),
+                        field.domain().name(), field.camelCaseName());
+                buffer.decrementIndent();
+                buffer.printf("}%n");
+            }
             buffer.printf("struct.set(\"%s\", this.%s);%n",
                 field.snakeCaseName(), field.camelCaseName());
         } else if (field.type().isBytes()) {

@@ -269,7 +269,7 @@ public final class FieldSpec {
     }
 
     @JsonProperty("domain")
-    public DomainSpec getDomain() {
+    public DomainSpec domain() {
         return domain;
     }
 }
