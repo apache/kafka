@@ -728,7 +728,7 @@ public final class RecordAccumulator {
                     throw new TimeoutException(String.format("Failed to flush accumulated records within %d milliseconds,"
                         + " successfully completed %d batches.", timeoutMs, numBatchesFlushed));
                 }
-                numBatchesFlushed ++;
+                numBatchesFlushed++;
             }
         } finally {
             this.flushesInProgress.decrementAndGet();
