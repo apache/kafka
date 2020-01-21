@@ -63,6 +63,11 @@ public class StandbyTask extends AbstractTask {
     }
 
     @Override
+    public boolean isActive() {
+        return false;
+    }
+
+    @Override
     public State state() {
         return state;
     }
@@ -76,9 +81,7 @@ public class StandbyTask extends AbstractTask {
     @Override
     public void initializeIfNeeded() {
         if (state == State.CREATED) {
-            initializeMetadata();
             initializeStateStores();
-
             // no topology needs initialized, we can transit to RUNNING
             // right after registered the stores
             transitionTo(State.RESTORING);
@@ -87,12 +90,7 @@ public class StandbyTask extends AbstractTask {
         }
     }
 
-    // TODO K9113: remove from Task interface, only needed for StreamTask
-    @Override
-    public void initializeMetadata() {}
-
-    @Override
-    public void initializeStateStores() {
+    private void initializeStateStores() {
         registerStateStores();
 
         processorContext.initialize();
@@ -101,16 +99,13 @@ public class StandbyTask extends AbstractTask {
     }
 
     @Override
-    public void startRunning() {}
-
-    @Override
-    public boolean hasChangelogs() {
-        return true;
+    public void startRunning() {
+        if (state == State.RESTORING) {
+            // do nothing
+        } else {
+            throw new IllegalStateException("Illegal state " + state + " while start running standby task " + id);
+        }
     }
-
-    // TODO K9113: remove from Task interface, only needed for StreamTask
-    @Override
-    public void initializeTopology() {}
 
     @Override
     public void suspend() {

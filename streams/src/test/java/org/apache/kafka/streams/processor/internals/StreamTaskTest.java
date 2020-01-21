@@ -1064,7 +1064,7 @@ public class StreamTaskTest {
     @Test(expected = ProcessorStateException.class)
     public void shouldThrowProcessorStateExceptionOnInitializeOffsetsWhenKafkaException() {
         final Consumer<byte[], byte[]> consumer = mockConsumerWithCommittedException(new KafkaException("message"));
-        final AbstractTask task = createOptimizedStatefulTask(createConfig(false), consumer);
+        final StreamTask task = createOptimizedStatefulTask(createConfig(false), consumer);
         EasyMock.replay(stateManager);
 
         task.initializeMetadata();
@@ -1074,7 +1074,7 @@ public class StreamTaskTest {
     @Test(expected = WakeupException.class)
     public void shouldThrowWakeupExceptionOnInitializeOffsetsWhenWakeupException() {
         final Consumer<byte[], byte[]> consumer = mockConsumerWithCommittedException(new WakeupException());
-        final AbstractTask task = createOptimizedStatefulTask(createConfig(false), consumer);
+        final StreamTask task = createOptimizedStatefulTask(createConfig(false), consumer);
         EasyMock.replay(stateManager);
 
         task.initializeMetadata();

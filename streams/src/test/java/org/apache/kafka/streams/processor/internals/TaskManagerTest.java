@@ -20,17 +20,15 @@ package org.apache.kafka.streams.processor.internals;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.metrics.Metrics;
-import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.internals.QuietStreamsConfig;
+import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
-import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.easymock.EasyMock;
 import org.easymock.EasyMockRunner;
 import org.easymock.Mock;
 import org.easymock.MockType;
+import org.hamcrest.Matchers;
 import org.junit.Before;
 import org.junit.Ignore;
 import org.junit.Rule;
@@ -41,6 +39,7 @@ import org.junit.runner.RunWith;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -51,6 +50,7 @@ import java.util.regex.Pattern;
 import static java.util.Arrays.asList;
 import static java.util.Collections.emptyList;
 import static java.util.Collections.emptyMap;
+import static java.util.Collections.emptySet;
 import static java.util.Collections.singletonList;
 import static java.util.Collections.singletonMap;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
@@ -89,9 +89,9 @@ public class TaskManagerTest {
     @Mock(type = MockType.NICE)
     private Consumer<byte[], byte[]> consumer;
     @Mock(type = MockType.NICE)
-    private StreamThread.TaskCreator activeTaskCreator;
+    private StreamThread.AbstractTaskCreator<Task> activeTaskCreator;
     @Mock(type = MockType.NICE)
-    private StreamThread.StandbyTaskCreator standbyTaskCreator;
+    private StreamThread.AbstractTaskCreator<Task> standbyTaskCreator;
     @Mock(type = MockType.NICE)
     private Admin adminClient;
     @Mock(type = MockType.NICE)
@@ -219,104 +219,51 @@ public class TaskManagerTest {
         assertThat(tasks, equalTo(Utils.mkSet(task01, task02, task11)));
     }
 
-    @Ignore
     @Test
-    public void shouldCloseActiveUnAssignedSuspendedTasksWhenClosingRevokedTasks() throws IOException {
+    public void shouldCloseActiveUnAssignedSuspendedTasksWhenClosingRevokedTasks() {
         final Set<TopicPartition> partitions = mkSet(t1p0);
         final Map<TaskId, Set<TopicPartition>> task00Assignment = singletonMap(taskId0, partitions);
-        final ProcessorTopology topology = EasyMock.createNiceMock(ProcessorTopology.class);
-        final SourceNode<Void, Void> dummy = new SourceNode<>("dummy", singletonList(t1p0.topic()), null, null, null);
-        expect(topology.source(eq(t1p0.topic()))).andReturn(dummy);
-        expect(topology.globalStateStores()).andReturn(emptyList());
-        expect(topology.stateStores()).andReturn(emptyList());
-        expect(topology.processors()).andReturn(emptyList()).anyTimes();
-        EasyMock.replay(topology);
-        final RecordCollector recordCollector = EasyMock.createNiceMock(RecordCollector.class);
-        expect(recordCollector.offsets()).andReturn(emptyMap()).anyTimes();
-        EasyMock.replay(recordCollector);
-        final Consumer<byte[], byte[]> consumer = EasyMock.createNiceMock(Consumer.class);
-        expect(consumer.committed(eq(partitions))).andReturn(emptyMap());
-        EasyMock.replay(consumer);
-        final ProcessorStateManager processorStateManager = EasyMock.createNiceMock(ProcessorStateManager.class);
+
+        final Task task00 = new StateMachineTask(taskId0, partitions, true);
+
         expect(changeLogReader.completedChangelogs()).andReturn(partitions);
-        expect(processorStateManager.changelogPartitions()).andReturn(partitions);
-        EasyMock.replay(changeLogReader, processorStateManager);
-
-//        final StreamTask task00 = new StreamTask(taskId0,
-//                                                 partitions,
-//                                                 topology,
-//                                                 consumer,
-//                                                 new QuietStreamsConfig(mkMap(
-//                                                     mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, "dummy"),
-//                                                     mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy")
-//                                                 )),
-//                                                 new StreamsMetricsImpl(new Metrics(), "", StreamsConfig.METRICS_LATEST),
-//                                                 stateDirectory,
-//                                                 null,
-//                                                 new MockTime(),
-//                                                 processorStateManager,
-//                                                 recordCollector
-//        );
-
-        final StreamTask task00 = EasyMock.createStrictMock(StreamTask.class);
-        expect(task00.id()).andReturn(taskId0).anyTimes();
-        expect(task00.partitions()).andReturn(partitions).anyTimes();
-        EasyMock.replay(task00);
-
         expect(activeTaskCreator.createTasks(anyObject(), eq(task00Assignment))).andReturn(singletonList(task00)).anyTimes();
+        expect(activeTaskCreator.createTasks(anyObject(), eq(emptyMap()))).andReturn(emptyList()).anyTimes();
         expect(standbyTaskCreator.createTasks(anyObject(), anyObject())).andReturn(emptyList()).anyTimes();
 
         topologyBuilder.addSubscribedTopics(anyObject(), anyString());
-        EasyMock.expectLastCall();
+        EasyMock.expectLastCall().anyTimes();
 
-        EasyMock.replay(activeTaskCreator, standbyTaskCreator, topologyBuilder);
+        EasyMock.replay(activeTaskCreator, standbyTaskCreator, topologyBuilder, changeLogReader);
 
         taskManager.handleAssignment(task00Assignment, emptyMap());
-        EasyMock.reset(task00);
-        expect(task00.id()).andReturn(taskId0).anyTimes();
-
-        task00.initializeIfNeeded();
-        EasyMock.expectLastCall();
-
-        expect(task00.state()).andReturn(Task.State.RUNNING).anyTimes();
-        expect(task00.partitions()).andReturn(partitions).anyTimes();
-        EasyMock.replay(task00);
         taskManager.updateNewAndRestoringTasks();
+        assertThat(task00.state(), Matchers.is(Task.State.RUNNING));
         taskManager.handleRevocation(partitions);
+        assertThat(task00.state(), Matchers.is(Task.State.SUSPENDED));
         taskManager.handleAssignment(emptyMap(), emptyMap());
-        System.out.println(taskManager);
-//        expect(activeTaskCreator.createTasks(anyObject(), eq(taskId0Assignment))).andReturn(singletonList(streamTask));
-//
-//        expect(active.closeNotAssignedSuspendedTasks(taskId0Assignment.keySet())).andReturn(null).once();
-//        expect(restoreConsumer.assignment()).andReturn(Collections.emptySet());
-//
-//        replay();
-//
-//        taskManager.setAssignmentMetadata(taskId0Assignment, emptyMap());
-//        taskManager.setAssignmentMetadata(emptyMap(), emptyMap());
-//
-//        taskManager.closeRevokedSuspendedTasks();
-//
-//        verify(active);
+        assertThat(task00.state(), Matchers.is(Task.State.CLOSED));
+        assertThat(taskManager.activeTasks(), Matchers.anEmptyMap());
+        assertThat(taskManager.standbyTasks(), Matchers.anEmptyMap());
     }
 
-    @Ignore
     @Test
     public void shouldCloseStandbyUnassignedTasksWhenCreatingNewTasks() {
-        throw new RuntimeException();
-//        expect(streamTask.id()).andReturn(taskId0);
-//        EasyMock.replay(streamTask);
-//        expect(activeTaskCreator.createTasks(anyObject(), eq(taskId0Assignment)))
-//            .andReturn(singletonList(streamTask));
-//
-//        expect(standby.closeRevokedStandbyTasks(taskId0Assignment)).andReturn(Collections.emptyList()).once();
-//        replay();
-//
-//        taskManager.setAssignmentMetadata(taskId0Assignment, emptyMap());
-//        taskManager.setPartitionsToTaskId(taskId0PartitionToTaskId);
-//        taskManager.createTasks(taskId0Partitions);
-//
-//        verify(active);
+        final Map<TaskId, Set<TopicPartition>> assignment = singletonMap(taskId0, taskId0Partitions);
+        final Task task00 = new StateMachineTask(taskId0, taskId0Partitions, false);
+
+        expect(changeLogReader.completedChangelogs()).andReturn(taskId0Partitions);
+        expect(activeTaskCreator.createTasks(anyObject(), eq(emptyMap()))).andReturn(emptyList()).anyTimes();
+        expect(standbyTaskCreator.createTasks(anyObject(), eq(assignment))).andReturn(singletonList(task00)).anyTimes();
+        expect(standbyTaskCreator.createTasks(anyObject(), eq(emptyMap()))).andReturn(emptyList()).anyTimes();
+        EasyMock.replay(activeTaskCreator, standbyTaskCreator, changeLogReader);
+        taskManager.handleAssignment(emptyMap(), assignment);
+        taskManager.updateNewAndRestoringTasks();
+        assertThat(task00.state(), Matchers.is(Task.State.RUNNING));
+        taskManager.handleAssignment(emptyMap(), emptyMap());
+        assertThat(task00.state(), Matchers.is(Task.State.CLOSED));
+        assertThat(taskManager.activeTasks(), Matchers.anEmptyMap());
+        assertThat(taskManager.standbyTasks(), Matchers.anEmptyMap());
     }
 
     @Ignore
@@ -810,5 +757,127 @@ public class TaskManagerTest {
         expect(activeTaskCreator.builder()).andReturn(topologyBuilder).anyTimes();
         expect(topologyBuilder.sourceTopicPattern()).andReturn(Pattern.compile("abc"));
         expect(topologyBuilder.subscriptionUpdates()).andReturn(subscriptionUpdates);
+    }
+
+    private static class StateMachineTask implements Task {
+        private final TaskId id;
+        private final Set<TopicPartition> partitions;
+        private final boolean active;
+        private State state = State.CREATED;
+
+        StateMachineTask(final TaskId id,
+                         final Set<TopicPartition> partitions,
+                         final boolean active) {
+            this.id = id;
+            this.partitions = partitions;
+            this.active = active;
+        }
+
+        @Override
+        public State state() {
+            return state;
+        }
+
+        @Override
+        public void transitionTo(final State newState) {
+            State.validateTransition(state, newState);
+            state = newState;
+        }
+
+        @Override
+        public void initializeIfNeeded() {
+            transitionTo(State.RESTORING);
+        }
+
+        @Override
+        public void startRunning() {
+            transitionTo(State.RUNNING);
+        }
+
+        @Override
+        public boolean commitNeeded() {
+            return false;
+        }
+
+        @Override
+        public void commit() {
+
+        }
+
+        @Override
+        public void suspend() {
+            transitionTo(State.SUSPENDED);
+        }
+
+        @Override
+        public void resume() {
+            transitionTo(State.RUNNING);
+        }
+
+        @Override
+        public void closeClean() {
+            if (!active) {
+                transitionTo(State.SUSPENDED);
+            }
+            transitionTo(State.CLOSED);
+        }
+
+        @Override
+        public void closeDirty() {
+            if (!active) {
+                transitionTo(State.SUSPENDED);
+            }
+            transitionTo(State.CLOSED);
+        }
+
+        @Override
+        public StateStore getStore(final String name) {
+            return null;
+        }
+
+        @Override
+        public String applicationId() {
+            return null;
+        }
+
+        @Override
+        public ProcessorTopology topology() {
+            return null;
+        }
+
+        @Override
+        public ProcessorContext context() {
+            return null;
+        }
+
+        @Override
+        public TaskId id() {
+            return id;
+        }
+
+        @Override
+        public Set<TopicPartition> partitions() {
+            return partitions;
+        }
+
+        @Override
+        public Collection<TopicPartition> changelogPartitions() {
+            return emptyList();
+        }
+
+        @Override
+        public boolean hasStateStores() {
+            return false;
+        }
+
+        @Override
+        public boolean isActive() {
+            return active;
+        }
+
+        @Override
+        public String toString(final String indent) {
+            return null;
+        }
     }
 }

@@ -56,8 +56,8 @@ public class TaskManager {
     private final ChangelogReader changelogReader;
     private final String logPrefix;
     private final Consumer<byte[], byte[]> restoreConsumer;
-    private final StreamThread.TaskCreator taskCreator;
-    private final StreamThread.AbstractTaskCreator<StandbyTask> standbyTaskCreator;
+    private final StreamThread.AbstractTaskCreator<? extends Task> taskCreator;
+    private final StreamThread.AbstractTaskCreator<? extends Task> standbyTaskCreator;
 
     private final Admin adminClient;
     private DeleteRecordsResult deleteRecordsResult;
@@ -72,8 +72,8 @@ public class TaskManager {
                 final UUID processId,
                 final String logPrefix,
                 final Consumer<byte[], byte[]> restoreConsumer,
-                final StreamThread.TaskCreator taskCreator,
-                final StreamThread.StandbyTaskCreator standbyTaskCreator,
+                final StreamThread.AbstractTaskCreator<? extends Task> taskCreator,
+                final StreamThread.AbstractTaskCreator<? extends Task> standbyTaskCreator,
                 final InternalTopologyBuilder builder,
                 final Admin adminClient) {
         this.changelogReader = changelogReader;
@@ -105,10 +105,10 @@ public class TaskManager {
         final Iterator<Task> iterator = tasks.values().iterator();
         while (iterator.hasNext()) {
             final Task task = iterator.next();
-            if (activeTasks.containsKey(task.id()) && task instanceof StreamTask) {
+            if (activeTasks.containsKey(task.id()) && task.isActive()) {
                 task.resume();
                 activeTasksToCreate.remove(task.id());
-            } else if (standbyTasks.containsKey(task.id()) && task instanceof StandbyTask) {
+            } else if (standbyTasks.containsKey(task.id()) && !task.isActive()) {
                 task.resume();
                 standbyTasksToCreate.remove(task.id());
             } else /* we previously task, and we don't have it anymore, or it has changed active/standby state */ {
@@ -134,11 +134,11 @@ public class TaskManager {
             );
         }
 
-        for (final StreamTask task : taskCreator.createTasks(consumer, activeTasksToCreate)) {
+        for (final Task task : taskCreator.createTasks(consumer, activeTasksToCreate)) {
             tasks.put(task.id(), task);
         }
 
-        for (final StandbyTask task : standbyTaskCreator.createTasks(consumer, standbyTasksToCreate)) {
+        for (final Task task : standbyTaskCreator.createTasks(consumer, standbyTasksToCreate)) {
             tasks.put(task.id(), task);
         }
 
@@ -205,7 +205,7 @@ public class TaskManager {
             final Task task = iterator.next();
             // Even though we've apparently dropped out of the group, we can continue safely to maintain our
             // standby tasks while we rejoin.
-            if (task instanceof StreamTask) {
+            if (task.isActive()) {
                 task.closeDirty();
             }
             iterator.remove();
@@ -243,7 +243,7 @@ public class TaskManager {
     public Set<TaskId> previousRunningTaskIds() {
         return tasks.values()
                     .stream()
-                    .filter(t -> t instanceof StreamTask && t.state() == Task.State.SUSPENDED)
+                    .filter(t -> t.isActive() && t.state() == Task.State.SUSPENDED)
                     .map(Task::id)
                     .collect(Collectors.toSet());
     }
@@ -251,7 +251,7 @@ public class TaskManager {
     public Set<TaskId> activeTaskIds() {
         return tasks.values()
                     .stream()
-                    .filter(t -> t instanceof StreamTask)
+                    .filter(Task::isActive)
                     .map(Task::id)
                     .collect(Collectors.toSet());
     }
@@ -264,7 +264,7 @@ public class TaskManager {
                     .collect(Collectors.toSet());
     }
 
-    StreamTask activeTask(final TopicPartition partition) {
+    StreamTask streamTask(final TopicPartition partition) {
         for (final Task task : tasks.values()) {
             if (task instanceof StreamTask && task.partitions().contains(partition)) {
                 return (StreamTask) task;
@@ -283,7 +283,7 @@ public class TaskManager {
     }
 
     Map<TaskId, StreamTask> activeTasks() {
-        return tasks.values().stream().filter(t -> t instanceof StreamTask).map(t -> (StreamTask) t).collect(Collectors.toMap(Task::id, t -> t));
+        return tasks.values().stream().filter(Task::isActive).map(t -> (StreamTask) t).collect(Collectors.toMap(Task::id, t -> t));
     }
 
     Map<TaskId, StandbyTask> standbyTasks() {
@@ -329,7 +329,7 @@ public class TaskManager {
         for (final Task task : tasks.values()) {
             // TODO, can we make StandbyTasks partitions always empty (since they don't process any inputs)?
             // If so, we can simplify this logic here, as the resume would be a no-op.
-            if (task instanceof StreamTask && task.state() == RUNNING) {
+            if (task.isActive() && task.state() == RUNNING) {
                 consumer.resume(task.partitions());
             }
 
@@ -342,7 +342,7 @@ public class TaskManager {
 
     boolean hasActiveRunningTasks() {
         for (final Task task : tasks.values()) {
-            if (task instanceof StreamTask && task.state() == RUNNING) {
+            if (task.isActive() && task.state() == RUNNING) {
                 return true;
             }
         }
@@ -494,7 +494,8 @@ public class TaskManager {
                    .append(" ")
                    .append(task.state())
                    .append(" ")
-                   .append(task.getClass().getSimpleName());
+                   .append(task.getClass().getSimpleName())
+                   .append('(').append(task.isActive() ? "active" : "standby").append(')');
         }
         return builder.toString();
     }

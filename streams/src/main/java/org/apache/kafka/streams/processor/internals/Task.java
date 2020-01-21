@@ -32,11 +32,11 @@ public interface Task {
         static void validateTransition(final State oldState, final State newState) {
             if (oldState == CREATED && (newState == RESTORING || newState == CLOSED)) {
                 return;
-            } else if (oldState == RESTORING && (newState == RESTORING || newState == RUNNING || newState == SUSPENDED || newState == CLOSED)) {
+            } else if (oldState == RESTORING && (newState == RUNNING || newState == SUSPENDED || newState == CLOSED)) {
                 return;
-            } else if (oldState == RUNNING && (newState == RESTORING || newState == RUNNING || newState == SUSPENDED)) {
+            } else if (oldState == RUNNING && (newState == RESTORING || newState == SUSPENDED)) {
                 return;
-            } else if (oldState == SUSPENDED && (newState == RESTORING || newState == RUNNING || newState == SUSPENDED || newState == CLOSED)) {
+            } else if (oldState == SUSPENDED && (newState == RUNNING || newState == CLOSED)) {
                 return;
             } else {
                 throw new IllegalStateException("Invalid transition from " + oldState + " to " + newState);
@@ -52,20 +52,20 @@ public interface Task {
 
     void startRunning();
 
-    void initializeMetadata();
+//    void initializeMetadata();
 
     /**
      * Initialize the task's stores
      * @throws IllegalStateException If store gets registered after initialized is already finished
      * @throws StreamsException if the store's change log does not contain the partition
      */
-    void initializeStateStores();
+//    void initializeStateStores();
 
-    boolean hasChangelogs();
+//    boolean hasChangelogs();
 
     boolean commitNeeded();
 
-    void initializeTopology();
+//    void initializeTopology();
 
     void commit();
 
@@ -103,6 +103,8 @@ public interface Task {
     Collection<TopicPartition> changelogPartitions();
 
     boolean hasStateStores();
+
+    boolean isActive();
 
     String toString(final String indent);
 }
