@@ -43,8 +43,8 @@ import scala.collection._
 trait ReassignCommandService extends AutoCloseable {
   def getBrokerIdsInCluster: Seq[Int]
   def getBrokerMetadatas(rackAwareMode: RackAwareMode, brokerList : Option[Seq[Int]]) : Seq[BrokerMetadata]
-  def UpdateBrokerConfigs(broker : Int, configs : Map[String, String]) : Boolean
-  def UpdateTopicConfigs(topic : String, configs: Map[String, String]) : Boolean
+  def updateBrokerConfigs(broker : Int, configs : Map[String, String]) : Boolean
+  def updateTopicConfigs(topic : String, configs: Map[String, String]) : Boolean
   def getPartitionsForTopics(topics : immutable.Set[String]) : Map[String, Seq[Int]]
   def getReplicaLogDirsForTopics(topics : Set[TopicPartitionReplica]): Map[TopicPartitionReplica, ReplicaLogDirInfo]
   def alterPartitionAssignment(topics: Map[TopicPartition, Seq[Int]], timeoutMs : Long) : Unit // XXX: Maybe not unit?
@@ -79,17 +79,17 @@ case class AdminClientReassignCommandService  (adminClient : Admin) extends Reas
   brokerMetadatas.sortBy(_.id)
   }
 
-  override def UpdateBrokerConfigs(broker : Int, configs : Map[String, String]) : Boolean = {
+  override def updateBrokerConfigs(broker : Int, configs : Map[String, String]) : Boolean = {
     val brokerResource = new ConfigResource(ConfigResource.Type.BROKER, broker.toString)
-    UpdateConfigsHelper(brokerResource, configs)
+    updateConfigsHelper(brokerResource, configs)
   }
 
-  override def UpdateTopicConfigs(topic : String, configs: Map[String, String]) : Boolean = {
+  override def updateTopicConfigs(topic : String, configs: Map[String, String]) : Boolean = {
     val topicResource = new ConfigResource(ConfigResource.Type.TOPIC, topic)
-    UpdateConfigsHelper(topicResource, configs)
+    updateConfigsHelper(topicResource, configs)
   }
 
-  def UpdateConfigsHelper(configResource: ConfigResource, configChanges: Map[String, String]) : Boolean = {
+  def updateConfigsHelper(configResource: ConfigResource, configChanges: Map[String, String]) : Boolean = {
     val configUpdates = configChanges.map{
     v => new AlterConfigOp(
       new ConfigEntry(v._1, v._2),
@@ -177,7 +177,7 @@ case class ZkClientReassignCommandService  (zkClient : KafkaZkClient, adminZkCli
   override def getBrokerMetadatas(rackAwareMode: RackAwareMode, brokerList: Option[Seq[Int]]): Seq[BrokerMetadata] =
     adminZkClient.getBrokerMetadatas(rackAwareMode, brokerList)
 
-  override def UpdateBrokerConfigs(broker : Int, configs : Map[String, String]) : Boolean = {
+  override def updateBrokerConfigs(broker : Int, configs : Map[String, String]) : Boolean = {
     var changed = false
     val brokerConfigs = adminZkClient.fetchEntityConfig(ConfigType.Broker, broker.toString)
     for ((config_name, config_val) <- configs) {
@@ -198,7 +198,7 @@ case class ZkClientReassignCommandService  (zkClient : KafkaZkClient, adminZkCli
     changed
   }
 
-  override def UpdateTopicConfigs(topic : String, configs: Map[String, String]) : Boolean = {
+  override def updateTopicConfigs(topic : String, configs: Map[String, String]) : Boolean = {
     var changed = false
     val topicConfigs = adminZkClient.fetchEntityConfig(ConfigType.Topic, topic)
     for ((config_name, config_val) <- configs) {
@@ -369,14 +369,14 @@ object ReassignPartitionsCommand extends Logging {
         val brokerConfigUpdate = immutable.Map(DynamicConfig.Broker.LeaderReplicationThrottledRateProp -> "",
           DynamicConfig.Broker.FollowerReplicationThrottledRateProp -> "",
           DynamicConfig.Broker.ReplicaAlterLogDirsIoMaxBytesPerSecondProp -> "")
-        changed = serviceClient.UpdateBrokerConfigs(brokerId, brokerConfigUpdate)
+        changed = serviceClient.updateBrokerConfigs(brokerId, brokerConfigUpdate)
       }
       //Remove the list of throttled replicas from all topics with partitions being moved
       val topics = (reassignedPartitionsStatus.keySet.map(tp => tp.topic) ++ replicasReassignmentStatus.keySet.map(replica => replica.topic)).toSeq.distinct
       for (topic <- topics) {
         val topicConfigUpdate = immutable.Map(LogConfig.LeaderReplicationThrottledReplicasProp -> "",
           LogConfig.FollowerReplicationThrottledReplicasProp -> "")
-        changed |= serviceClient.UpdateTopicConfigs(topic, topicConfigUpdate)
+        changed |= serviceClient.updateTopicConfigs(topic, topicConfigUpdate)
       }
       if (changed)
         println("Throttle was removed.")
@@ -809,7 +809,7 @@ class ReassignPartitionsCommand private (serviceClient : ReassignCommandService,
 
       val brokerConfigChanges : Map[String, String] = brokerConfigUpdate
       for (id <- brokers) {
-        serviceClient.UpdateBrokerConfigs(id, brokerConfigChanges)
+        serviceClient.updateBrokerConfigs(id, brokerConfigChanges)
       }
     }
   }
@@ -829,7 +829,7 @@ class ReassignPartitionsCommand private (serviceClient : ReassignCommandService,
 
       val topicConfigUpdate = Map(LeaderReplicationThrottledReplicasProp -> leader,
         FollowerReplicationThrottledReplicasProp -> follower)
-      serviceClient.UpdateTopicConfigs(topic, topicConfigUpdate)
+      serviceClient.updateTopicConfigs(topic, topicConfigUpdate)
 
       debug(s"Updated leader-throttled replicas for topic $topic with: $leader")
       debug(s"Updated follower-throttled replicas for topic $topic with: $follower")

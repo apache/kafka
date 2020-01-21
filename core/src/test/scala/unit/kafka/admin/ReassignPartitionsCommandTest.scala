@@ -70,10 +70,10 @@ class ReassignPartitionsCommandTest extends ZooKeeperTestHarness with Logging {
     override def getBrokerMetadatas(rackAwareMode: RackAwareMode, brokerList: Option[Seq[Int]]): Seq[BrokerMetadata] =
       throw new UnimplementedException()
 
-    override def UpdateBrokerConfigs(broker: Int, configs: collection.Map[String, String]): Boolean =
+    override def updateBrokerConfigs(broker: Int, configs: collection.Map[String, String]): Boolean =
       throw new UnimplementedException()
 
-    override def UpdateTopicConfigs(topic: String, configs: collection.Map[String, String]): Boolean =
+    override def updateTopicConfigs(topic: String, configs: collection.Map[String, String]): Boolean =
       throw new UnimplementedException()
 
     override def getPartitionsForTopics(topics: Set[String]): collection.Map[String, Seq[Int]] =
@@ -108,7 +108,7 @@ class ReassignPartitionsCommandTest extends ZooKeeperTestHarness with Logging {
     val proposed = Map(new TopicPartition("topic1", 0) -> Seq(101, 102), control)
 
     class TestServiceClient() extends TestServiceClientBase {
-      override def UpdateTopicConfigs(topic: String, configChange: collection.Map[String, String]): Boolean = {
+      override def updateTopicConfigs(topic: String, configChange: collection.Map[String, String]): Boolean = {
         assertEquals("topic1", topic)
         assertEquals(Set("0:102"), toReplicaSet(configChange.get(FollowerReplicationThrottledReplicasProp).get)) //Should only be follower-throttle the moving replica
         assertEquals(Set("0:100","0:101"), toReplicaSet(configChange.get(LeaderReplicationThrottledReplicasProp).get)) //Should leader-throttle all existing (pre move) replicas
@@ -143,7 +143,7 @@ class ReassignPartitionsCommandTest extends ZooKeeperTestHarness with Logging {
     )
 
     class TestServiceClient extends TestServiceClientBase {
-      override def UpdateTopicConfigs(topic: String, configChange: collection.Map[String, String]): Boolean = {
+      override def updateTopicConfigs(topic: String, configChange: collection.Map[String, String]): Boolean = {
         assertEquals("topic1", topic)
         assertEquals(Set("0:102","2:102"), toReplicaSet(configChange.get(FollowerReplicationThrottledReplicasProp).get)) //Should only be follower-throttle the moving replica
         assertEquals(Set("0:100","0:101","2:100","2:101"), toReplicaSet(configChange.get(LeaderReplicationThrottledReplicasProp).get)) //Should leader-throttle all existing (pre move) replicas
@@ -169,7 +169,7 @@ class ReassignPartitionsCommandTest extends ZooKeeperTestHarness with Logging {
     val proposed = Map(new TopicPartition("topic1", 0) -> Seq(101, 102), new TopicPartition("topic1", 1) -> Seq(101, 102), control)
 
     class TestServiceClient extends TestServiceClientBase {
-      override def UpdateTopicConfigs(topic: String, configChange: collection.Map[String, String]): Boolean = {
+      override def updateTopicConfigs(topic: String, configChange: collection.Map[String, String]): Boolean = {
         assertEquals("topic1", topic)
         assertEquals(Set("0:102","1:102"), toReplicaSet(configChange.get(FollowerReplicationThrottledReplicasProp).get)) //Should only be follower-throttle the moving replica
         assertEquals(Set("0:100","0:101","1:100","1:101"), toReplicaSet(configChange.get(LeaderReplicationThrottledReplicasProp).get)) //Should leader-throttle all existing (pre move) replicas
@@ -196,7 +196,7 @@ class ReassignPartitionsCommandTest extends ZooKeeperTestHarness with Logging {
 
     //Then
     class TestServiceClient extends TestServiceClientBase {
-      override def UpdateTopicConfigs(topic: String, configChange: collection.Map[String, String]): Boolean = {
+      override def updateTopicConfigs(topic: String, configChange: collection.Map[String, String]): Boolean = {
         topic match {
           case "topic1" =>
             assertEquals(Set("0:100", "0:101"), toReplicaSet(configChange.get(LeaderReplicationThrottledReplicasProp).get))
@@ -237,7 +237,7 @@ class ReassignPartitionsCommandTest extends ZooKeeperTestHarness with Logging {
 
     //Then
     class TestServiceClient extends TestServiceClientBase {
-      override def UpdateTopicConfigs(topic: String, configChange: collection.Map[String, String]): Boolean = {
+      override def updateTopicConfigs(topic: String, configChange: collection.Map[String, String]): Boolean = {
         topic match {
           case "topic1" =>
             assertEquals(Set("0:102","1:102"), toReplicaSet(configChange.get(FollowerReplicationThrottledReplicasProp).get))
@@ -269,7 +269,7 @@ class ReassignPartitionsCommandTest extends ZooKeeperTestHarness with Logging {
 
     // Then
     class TestServiceClient extends TestServiceClientBase {
-      override def UpdateTopicConfigs(topic: String, configChange: collection.Map[String, String]): Boolean = {
+      override def updateTopicConfigs(topic: String, configChange: collection.Map[String, String]): Boolean = {
         assertEquals("topic1", topic)
         assertEquals(Set("0:104","0:105"), toReplicaSet(configChange.get(FollowerReplicationThrottledReplicasProp).get)) //Should only be follower-throttle the moving replicas
         assertEquals(Set("0:100","0:101","0:102","0:103"), toReplicaSet(configChange.get(LeaderReplicationThrottledReplicasProp).get)) //Should leader-throttle all existing (pre move) replicas
@@ -295,7 +295,7 @@ class ReassignPartitionsCommandTest extends ZooKeeperTestHarness with Logging {
     
     //Then the dummy property should still be there
     class TestServiceClient extends TestServiceClientBase {
-      override def UpdateTopicConfigs(topic: String, configChange: collection.Map[String, String]): Boolean = {
+      override def updateTopicConfigs(topic: String, configChange: collection.Map[String, String]): Boolean = {
         assertEquals("topic1", topic)
         assertFalse(configChange.contains("some-key"))
         assert(configChange.contains(FollowerReplicationThrottledReplicasProp)) //Should only be follower-throttle the moving replicas
@@ -325,7 +325,7 @@ class ReassignPartitionsCommandTest extends ZooKeeperTestHarness with Logging {
     val propsCapture: Capture[mutable.Map[String, String]] = newCapture(CaptureType.ALL)
     val assigner = ReassignPartitionsCommand(service,  proposed, Map.empty[TopicPartitionReplica, String])
     expect(service.getReplicaAssignmentForTopics(anyObject.asInstanceOf[Set[String]])).andStubReturn(existing)
-    expect(service.UpdateBrokerConfigs(anyObject().asInstanceOf[Int], capture(propsCapture))).andReturn(true).anyTimes()
+    expect(service.updateBrokerConfigs(anyObject().asInstanceOf[Int], capture(propsCapture))).andReturn(true).anyTimes()
 
     replay(service)
 
@@ -353,8 +353,8 @@ class ReassignPartitionsCommandTest extends ZooKeeperTestHarness with Logging {
     val brokerPropsCapture: Capture[Map[String, String]] = newCapture(CaptureType.ALL)
     val topicPropsCapture: Capture[Map[String, String]] = newCapture(CaptureType.ALL)
     expect(service.getBrokerIdsInCluster).andStubReturn(brokers)
-    expect(service.UpdateBrokerConfigs(anyObject().asInstanceOf[Int], capture(brokerPropsCapture))).andReturn(true).anyTimes()
-    expect(service.UpdateTopicConfigs(is("topic1"), capture(topicPropsCapture))).andReturn(true).anyTimes()
+    expect(service.updateBrokerConfigs(anyObject().asInstanceOf[Int], capture(brokerPropsCapture))).andReturn(true).anyTimes()
+    expect(service.updateTopicConfigs(is("topic1"), capture(topicPropsCapture))).andReturn(true).anyTimes()
     replay(service)
 
     //When
@@ -392,11 +392,11 @@ class ReassignPartitionsCommandTest extends ZooKeeperTestHarness with Logging {
     val brokerPropsCapture: Capture[Map[String, String]] = newCapture(CaptureType.ALL)
     val topicPropsCapture: Capture[Map[String, String]] = newCapture(CaptureType.ALL)
     expect(service.getBrokerIdsInCluster).andStubReturn(brokers)
-    expect(service.UpdateBrokerConfigs(anyObject().asInstanceOf[Int], capture(brokerPropsCapture))).andReturn(true).anyTimes()
+    expect(service.updateBrokerConfigs(anyObject().asInstanceOf[Int], capture(brokerPropsCapture))).andReturn(true).anyTimes()
 
     // Should change configs of both topics
-    expect(service.UpdateTopicConfigs(is("topic1"), capture(topicPropsCapture))).andReturn(true).anyTimes()
-    expect(service.UpdateTopicConfigs(is("topic2"), capture(topicPropsCapture))).andReturn(true).anyTimes()
+    expect(service.updateTopicConfigs(is("topic1"), capture(topicPropsCapture))).andReturn(true).anyTimes()
+    expect(service.updateTopicConfigs(is("topic2"), capture(topicPropsCapture))).andReturn(true).anyTimes()
 
     replay(service)
 

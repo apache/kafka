@@ -69,7 +69,7 @@ class ReassignPartitionsServiceClientZkTest extends ZooKeeperTestHarness with Lo
 
     val service = new ZkClientReassignCommandService(mockZkClient, Some(mockAdminZkClient))
 
-    service.UpdateTopicConfigs("TOPIC0", configUpdatesMap)
+    service.updateTopicConfigs("TOPIC0", configUpdatesMap)
   }
 
   @Test
@@ -98,7 +98,7 @@ class ReassignPartitionsServiceClientZkTest extends ZooKeeperTestHarness with Lo
 
     val serviceTest2 = new ZkClientReassignCommandService(mockZkClient, Some(mockAdminZkClient))
 
-    serviceTest2.UpdateTopicConfigs("TOPIC0", configUpdatesMap)
+    serviceTest2.updateTopicConfigs("TOPIC0", configUpdatesMap)
   }
 
   @Test
@@ -128,7 +128,7 @@ class ReassignPartitionsServiceClientZkTest extends ZooKeeperTestHarness with Lo
 
     val serviceTest3 = new ZkClientReassignCommandService(mockZkClient, Some(mockAdminZkClient))
 
-    serviceTest3.UpdateTopicConfigs("TOPIC0", configUpdatesMap)
+    serviceTest3.updateTopicConfigs("TOPIC0", configUpdatesMap)
   }
 
   // Test update broker configs. This behaves similarly to the topic test but the
@@ -150,7 +150,7 @@ class ReassignPartitionsServiceClientZkTest extends ZooKeeperTestHarness with Lo
 
     val service = new ZkClientReassignCommandService(mockZkClient, Some(mockAdminZkClient))
 
-    service.UpdateBrokerConfigs(testBrokerId, configUpdatesMap)
+    service.updateBrokerConfigs(testBrokerId, configUpdatesMap)
   }
 
   @Test
@@ -180,7 +180,7 @@ class ReassignPartitionsServiceClientZkTest extends ZooKeeperTestHarness with Lo
 
     val serviceTest2 = new ZkClientReassignCommandService(mockZkClient, Some(mockAdminZkClient))
 
-    serviceTest2.UpdateBrokerConfigs(testBrokerId, configUpdatesMap)
+    serviceTest2.updateBrokerConfigs(testBrokerId, configUpdatesMap)
   }
 
   @Test
@@ -209,7 +209,7 @@ class ReassignPartitionsServiceClientZkTest extends ZooKeeperTestHarness with Lo
 
     val serviceTest3 = new ZkClientReassignCommandService(mockZkClient, Some(mockAdminZkClient))
 
-    serviceTest3.UpdateBrokerConfigs(testBrokerId, configUpdatesMap)
+    serviceTest3.updateBrokerConfigs(testBrokerId, configUpdatesMap)
   }
 
 }
