@@ -19,8 +19,7 @@ package kafka.admin
 import java.util.Properties
 
 import kafka.admin.AclCommand.AclCommandOptions
-import kafka.security.auth.Authorizer
-import kafka.security.authorizer.{AclAuthorizer, AuthorizerUtils}
+import kafka.security.authorizer.{AclAuthorizer, AclEntry}
 import kafka.server.{KafkaConfig, KafkaServer}
 import kafka.utils.{Exit, Logging, TestUtils}
 import kafka.zk.ZooKeeperTestHarness
@@ -33,7 +32,7 @@ import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.resource.PatternType.{LITERAL, PREFIXED}
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.common.utils.SecurityUtils
-import org.apache.kafka.server.authorizer.{Authorizer => JAuthorizer}
+import org.apache.kafka.server.authorizer.Authorizer
 import org.junit.{After, Before, Test}
 import org.scalatest.Assertions.intercept
 
@@ -64,13 +63,13 @@ class AclCommandTest extends ZooKeeperTestHarness with Logging {
 
   private val ResourceToOperations = Map[Set[ResourcePattern], (Set[AclOperation], Array[String])](
     TopicResources -> (Set(READ, WRITE, CREATE, DESCRIBE, DELETE, DESCRIBE_CONFIGS, ALTER_CONFIGS, ALTER),
-      Array("--operation", "Read" , "--operation", "WRITE", "--operation", "Create", "--operation", "Describe", "--operation", "Delete",
+      Array("--operation", "Read" , "--operation", "Write", "--operation", "Create", "--operation", "Describe", "--operation", "Delete",
         "--operation", "DescribeConfigs", "--operation", "AlterConfigs", "--operation", "Alter")),
     Set(ClusterResource) -> (Set(CREATE, CLUSTER_ACTION, DESCRIBE_CONFIGS, ALTER_CONFIGS, IDEMPOTENT_WRITE, ALTER, DESCRIBE),
       Array("--operation", "Create", "--operation", "ClusterAction", "--operation", "DescribeConfigs",
         "--operation", "AlterConfigs", "--operation", "IdempotentWrite", "--operation", "Alter", "--operation", "Describe")),
     GroupResources -> (Set(READ, DESCRIBE, DELETE), Array("--operation", "Read", "--operation", "Describe", "--operation", "Delete")),
-    TransactionalIdResources -> (Set(DESCRIBE, WRITE), Array("--operation", "Describe", "--operation", "WRITE")),
+    TransactionalIdResources -> (Set(DESCRIBE, WRITE), Array("--operation", "Describe", "--operation", "Write")),
     TokenResources -> (Set(DESCRIBE), Array("--operation", "Describe"))
   )
 
@@ -194,9 +193,9 @@ class AclCommandTest extends ZooKeeperTestHarness with Logging {
     AclCommand.main(cmdArgs ++ cmd :+ "--add")
 
     withAuthorizer() { authorizer =>
-      val writeAcl = new AccessControlEntry(principal.toString, AuthorizerUtils.WildcardHost, WRITE, ALLOW)
-      val describeAcl = new AccessControlEntry(principal.toString, AuthorizerUtils.WildcardHost, DESCRIBE, ALLOW)
-      val createAcl = new AccessControlEntry(principal.toString, AuthorizerUtils.WildcardHost, CREATE, ALLOW)
+      val writeAcl = new AccessControlEntry(principal.toString, AclEntry.WildcardHost, WRITE, ALLOW)
+      val describeAcl = new AccessControlEntry(principal.toString, AclEntry.WildcardHost, DESCRIBE, ALLOW)
+      val createAcl = new AccessControlEntry(principal.toString, AclEntry.WildcardHost, CREATE, ALLOW)
       TestUtils.waitAndVerifyAcls(Set(writeAcl, describeAcl, createAcl), authorizer,
         new ResourcePattern(TOPIC, "Test-", PREFIXED))
     }
@@ -212,14 +211,8 @@ class AclCommandTest extends ZooKeeperTestHarness with Logging {
   @Test(expected = classOf[IllegalArgumentException])
   def testInvalidAuthorizerProperty(): Unit = {
     val args = Array("--authorizer-properties", "zookeeper.connect " + zkConnect)
-    val aclCommandService = new AclCommand.AuthorizerService(classOf[Authorizer], new AclCommandOptions(args))
-    aclCommandService.listAcls()
-  }
-
-  @Test(expected = classOf[IllegalArgumentException])
-  def testInvalidJAuthorizerProperty() {
-    val args = Array("--authorizer-properties", "zookeeper.connect " + zkConnect)
-    val aclCommandService = new AclCommand.JAuthorizerService(classOf[JAuthorizer], new AclCommandOptions(args))
+    val aclCommandService = new AclCommand.AuthorizerService(classOf[AclAuthorizer].getName,
+      new AclCommandOptions(args))
     aclCommandService.listAcls()
   }
 
@@ -273,7 +266,7 @@ class AclCommandTest extends ZooKeeperTestHarness with Logging {
     Users.foldLeft(cmd) ((cmd, user) => cmd ++ Array(principalCmd, user.toString))
   }
 
-  private def withAuthorizer()(f: JAuthorizer => Unit): Unit = {
+  private def withAuthorizer()(f: Authorizer => Unit): Unit = {
     val kafkaConfig = KafkaConfig.fromProps(brokerProps, doLog = false)
     val authZ = new AclAuthorizer
     try {

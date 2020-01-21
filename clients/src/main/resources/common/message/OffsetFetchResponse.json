@@ -28,7 +28,9 @@
   // Version 5 adds the leader epoch to the committed offset.
   //
   // Version 6 is the first flexible version.
-  "validVersions": "0-6",
+  //
+  // Version 7 adds pending offset commit as new error response on partition level.
+  "validVersions": "0-7",
   "flexibleVersions": "6+",
   "fields": [
     { "name": "ThrottleTimeMs", "type": "int32", "versions": "3+", "ignorable": true,

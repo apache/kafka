@@ -22,6 +22,7 @@ import org.apache.kafka.common.resource.PatternType.{LITERAL, PREFIXED}
 import org.junit.Test
 import org.junit.Assert._
 
+@deprecated("Use org.apache.kafka.common.resource.ResourcePattern", "Since 2.5")
 class ResourceTest {
   @Test(expected = classOf[KafkaException])
   def shouldThrowOnTwoPartStringWithUnknownResourceType(): Unit = {

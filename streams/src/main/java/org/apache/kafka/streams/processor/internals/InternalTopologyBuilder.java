@@ -102,6 +102,9 @@ public class InternalTopologyBuilder {
     // map from state store names to this state store's corresponding changelog topic if possible
     private final Map<String, String> storeToChangelogTopic = new HashMap<>();
 
+    // map from changelog topic name to its corresponding state store.
+    private final Map<String, String> changelogTopicToStore = new HashMap<>();
+
     // all global topics
     private final Set<String> globalTopics = new HashSet<>();
 
@@ -599,12 +602,17 @@ public class InternalTopologyBuilder {
         nodeGroups = null;
     }
 
+    public Map<String, String> getChangelogTopicToStore() {
+        return changelogTopicToStore;
+    }
+
     public void connectSourceStoreAndTopic(final String sourceStoreName,
                                             final String topic) {
         if (storeToChangelogTopic.containsKey(sourceStoreName)) {
             throw new TopologyException("Source store " + sourceStoreName + " is already added.");
         }
         storeToChangelogTopic.put(sourceStoreName, topic);
+        changelogTopicToStore.put(topic, sourceStoreName);
     }
 
     public final void addInternalTopic(final String topicName) {
@@ -940,6 +948,7 @@ public class InternalTopologyBuilder {
                     if (stateStoreFactory.loggingEnabled() && !storeToChangelogTopic.containsKey(stateStoreName)) {
                         final String changelogTopic = ProcessorStateManager.storeChangelogTopic(applicationId, stateStoreName);
                         storeToChangelogTopic.put(stateStoreName, changelogTopic);
+                        changelogTopicToStore.put(changelogTopic, stateStoreName);
                     }
                     stateStoreMap.put(stateStoreName, stateStoreFactory.build());
                 } else {

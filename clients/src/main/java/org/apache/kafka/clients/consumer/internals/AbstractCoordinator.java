@@ -1315,7 +1315,7 @@ public abstract class AbstractCoordinator implements Closeable {
     protected static class Generation {
         public static final Generation NO_GENERATION = new Generation(
                 OffsetCommitRequest.DEFAULT_GENERATION_ID,
-                JoinGroupResponse.UNKNOWN_MEMBER_ID,
+                JoinGroupRequest.UNKNOWN_MEMBER_ID,
                 null);
 
         public final int generationId;

@@ -17,9 +17,14 @@
 package org.apache.kafka.streams;
 
 import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.ListOffsetsResult;
+import org.apache.kafka.clients.admin.ListOffsetsResult.ListOffsetsResultInfo;
+import org.apache.kafka.clients.admin.MockAdminClient;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.producer.MockProducer;
 import org.apache.kafka.common.Cluster;
+import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.MetricsReporter;
@@ -313,6 +318,10 @@ public class KafkaStreamsTest {
                 Thread.sleep(50L);
                 return null;
             }).anyTimes();
+
+        EasyMock.expect(thread.allStandbyTasks()).andStubReturn(Collections.emptyList());
+        EasyMock.expect(thread.restoringTaskIds()).andStubReturn(Collections.emptySet());
+        EasyMock.expect(thread.allStreamsTasks()).andStubReturn(Collections.emptyList());
     }
 
     @Test
@@ -659,15 +668,43 @@ public class KafkaStreamsTest {
     }
 
     @Test(expected = IllegalStateException.class)
-    public void shouldNotGetTaskWithKeyAndSerializerWhenNotRunning() {
+    public void shouldNotGetQueryMetadataWithSerializerWhenNotRunningOrRebalancing() {
         final KafkaStreams streams = new KafkaStreams(new StreamsBuilder().build(), props, supplier, time);
-        streams.metadataForKey("store", "key", Serdes.String().serializer());
+        streams.queryMetadataForKey("store", "key", Serdes.String().serializer());
+    }
+
+    @Test
+    public void shouldGetQueryMetadataWithSerializerWhenRunningOrRebalancing() {
+        final KafkaStreams streams = new KafkaStreams(new StreamsBuilder().build(), props, supplier, time);
+        streams.start();
+        assertEquals(KeyQueryMetadata.NOT_AVAILABLE, streams.queryMetadataForKey("store", "key", Serdes.String().serializer()));
     }
 
     @Test(expected = IllegalStateException.class)
-    public void shouldNotGetTaskWithKeyAndPartitionerWhenNotRunning() {
+    public void shouldNotGetQueryMetadataWithPartitionerWhenNotRunningOrRebalancing() {
         final KafkaStreams streams = new KafkaStreams(new StreamsBuilder().build(), props, supplier, time);
-        streams.metadataForKey("store", "key", (topic, key, value, numPartitions) -> 0);
+        streams.queryMetadataForKey("store", "key", (topic, key, value, numPartitions) -> 0);
+    }
+
+    @Test
+    public void shouldReturnEmptyLocalStorePartitionLags() {
+        // Mock all calls made to compute the offset lags,
+        final ListOffsetsResult result = EasyMock.mock(ListOffsetsResult.class);
+        final KafkaFutureImpl<Map<TopicPartition, ListOffsetsResultInfo>> allFuture = new KafkaFutureImpl<>();
+        allFuture.complete(Collections.emptyMap());
+
+        EasyMock.expect(result.all()).andReturn(allFuture);
+        final MockAdminClient mockAdminClient = EasyMock.partialMockBuilder(MockAdminClient.class)
+            .addMockedMethod("listOffsets", Map.class).createMock();
+        EasyMock.expect(mockAdminClient.listOffsets(anyObject())).andStubReturn(result);
+        final MockClientSupplier mockClientSupplier = EasyMock.partialMockBuilder(MockClientSupplier.class)
+            .addMockedMethod("getAdmin").createMock();
+        EasyMock.expect(mockClientSupplier.getAdmin(anyObject())).andReturn(mockAdminClient);
+        EasyMock.replay(result, mockAdminClient, mockClientSupplier);
+
+        final KafkaStreams streams = new KafkaStreams(new StreamsBuilder().build(), props, mockClientSupplier, time);
+        streams.start();
+        assertEquals(0, streams.allLocalStorePartitionLags().size());
     }
 
     @Test

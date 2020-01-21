@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.producer.internals;
 
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.MockTime;
@@ -28,7 +29,10 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Deque;
 import java.util.List;
+import java.util.concurrent.Callable;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -36,6 +40,7 @@ import java.util.concurrent.locks.Condition;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -232,7 +237,7 @@ public class BufferPoolTest {
         // both the allocate() called by threads t1 and t2 should have been interrupted and the waiters queue should be empty
         assertEquals(pool.queued(), 0);
     }
-    
+
     @Test
     public void testCleanupMemoryAvailabilityOnMetricsException() throws Exception {
         BufferPool bufferPool = spy(new BufferPool(2, 1, new Metrics(), time, metricGroup));
@@ -375,6 +380,50 @@ public class BufferPoolTest {
                 e.printStackTrace();
             }
         }
+    }
+
+    @Test
+    public void testCloseAllocations() throws Exception {
+        BufferPool pool = new BufferPool(10, 1, metrics, Time.SYSTEM, metricGroup);
+        ByteBuffer buffer = pool.allocate(1, maxBlockTimeMs);
+
+        // Close the buffer pool. This should prevent any further allocations.
+        pool.close();
+
+        assertThrows(KafkaException.class, () -> pool.allocate(1, maxBlockTimeMs));
+
+        // Ensure deallocation still works.
+        pool.deallocate(buffer);
+    }
+
+    @Test
+    public void testCloseNotifyWaiters() throws Exception {
+        final int numWorkers = 2;
+
+        BufferPool pool = new BufferPool(1, 1, metrics, Time.SYSTEM, metricGroup);
+        ByteBuffer buffer = pool.allocate(1, Long.MAX_VALUE);
+
+        CountDownLatch completed = new CountDownLatch(numWorkers);
+        ExecutorService executor = Executors.newFixedThreadPool(numWorkers);
+        Callable<Void> work = new Callable<Void>() {
+                public Void call() throws Exception {
+                    assertThrows(KafkaException.class, () -> pool.allocate(1, Long.MAX_VALUE));
+                    completed.countDown();
+                    return null;
+                }
+            };
+        for (int i = 0; i < numWorkers; ++i) {
+            executor.submit(work);
+        }
+
+        assertEquals("Allocation shouldn't have happened yet, waiting on memory", numWorkers, completed.getCount());
+
+        // Close the buffer pool. This should notify all waiters.
+        pool.close();
+
+        completed.await(15, TimeUnit.SECONDS);
+
+        pool.deallocate(buffer);
     }
 
 }

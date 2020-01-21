@@ -44,7 +44,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
 
 @Category(IntegrationTest.class)
-public class ConnectorCientPolicyIntegrationTest {
+public class ConnectorClientPolicyIntegrationTest {
 
     private static final int NUM_TASKS = 1;
     private static final int NUM_WORKERS = 1;

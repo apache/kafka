@@ -36,7 +36,7 @@ import kafka.coordinator.transaction.{InitProducerIdResult, TransactionCoordinat
 import kafka.log.AppendOrigin
 import kafka.message.ZStdCompressionCodec
 import kafka.network.RequestChannel
-import kafka.security.authorizer.AuthorizerUtils
+import kafka.security.authorizer.{AclEntry, AuthorizerUtils}
 import kafka.server.QuotaFactory.{QuotaManagers, UnboundedQuota}
 import kafka.utils.{CoreUtils, Logging}
 import kafka.zk.{AdminZkClient, KafkaZkClient}
@@ -195,16 +195,16 @@ class KafkaApis(val requestChannel: RequestChannel,
       // leadership changes
       updatedLeaders.foreach { partition =>
         if (partition.topic == GROUP_METADATA_TOPIC_NAME)
-          groupCoordinator.handleGroupImmigration(partition.partitionId)
+          groupCoordinator.onElection(partition.partitionId)
         else if (partition.topic == TRANSACTION_STATE_TOPIC_NAME)
-          txnCoordinator.handleTxnImmigration(partition.partitionId, partition.getLeaderEpoch)
+          txnCoordinator.onElection(partition.partitionId, partition.getLeaderEpoch)
       }
 
       updatedFollowers.foreach { partition =>
         if (partition.topic == GROUP_METADATA_TOPIC_NAME)
-          groupCoordinator.handleGroupEmigration(partition.partitionId)
+          groupCoordinator.onResignation(partition.partitionId)
         else if (partition.topic == TRANSACTION_STATE_TOPIC_NAME)
-          txnCoordinator.handleTxnEmigration(partition.partitionId, partition.getLeaderEpoch)
+          txnCoordinator.onResignation(partition.partitionId, Some(partition.getLeaderEpoch))
       }
     }
 
@@ -235,15 +235,16 @@ class KafkaApis(val requestChannel: RequestChannel,
       sendResponseExemptThrottle(request, new StopReplicaResponse(new StopReplicaResponseData().setErrorCode(Errors.STALE_BROKER_EPOCH.code)))
     } else {
       val (result, error) = replicaManager.stopReplicas(stopReplicaRequest)
-      // Clearing out the cache for groups that belong to an offsets topic partition for which this broker was the leader,
-      // since this broker is no longer a replica for that offsets topic partition.
-      // This is required to handle the following scenario :
-      // Consider old replicas : {[1,2,3], Leader = 1} is reassigned to new replicas : {[2,3,4], Leader = 2}, broker 1 does not receive a LeaderAndIsr
-      // request to become a follower due to which cache for groups that belong to an offsets topic partition for which broker 1 was the leader,
-      // is not cleared.
+      // Clear the coordinator caches in case we were the leader. In the case of a reassignment, we
+      // cannot rely on the LeaderAndIsr API for this since it is only sent to active replicas.
       result.foreach { case (topicPartition, error) =>
-        if (error == Errors.NONE && stopReplicaRequest.deletePartitions && topicPartition.topic == GROUP_METADATA_TOPIC_NAME) {
-          groupCoordinator.handleGroupEmigration(topicPartition.partition)
+        if (error == Errors.NONE && stopReplicaRequest.deletePartitions) {
+          if (topicPartition.topic == GROUP_METADATA_TOPIC_NAME) {
+            groupCoordinator.onResignation(topicPartition.partition)
+          } else if (topicPartition.topic == TRANSACTION_STATE_TOPIC_NAME) {
+            // The StopReplica API does not pass through the leader epoch
+            txnCoordinator.onResignation(topicPartition.partition, coordinatorEpoch = None)
+          }
         }
       }
 
@@ -1216,7 +1217,7 @@ class KafkaApis(val requestChannel: RequestChannel,
           } else {
             // versions 1 and above read offsets from Kafka
             if (offsetFetchRequest.isAllPartitions) {
-              val (error, allPartitionData) = groupCoordinator.handleFetchOffsets(offsetFetchRequest.groupId)
+              val (error, allPartitionData) = groupCoordinator.handleFetchOffsets(offsetFetchRequest.groupId, offsetFetchRequest.requireStable)
               if (error != Errors.NONE)
                 offsetFetchRequest.getErrorResponse(requestThrottleMs, error)
               else {
@@ -1227,8 +1228,7 @@ class KafkaApis(val requestChannel: RequestChannel,
             } else {
               val (authorizedPartitions, unauthorizedPartitions) =
                 partitionAuthorized[TopicPartition](offsetFetchRequest.partitions.asScala.toList, tp => tp.topic)
-              val (error, authorizedPartitionData) = groupCoordinator.handleFetchOffsets(offsetFetchRequest.groupId,
-                Some(authorizedPartitions))
+              val (error, authorizedPartitionData) = groupCoordinator.handleFetchOffsets(offsetFetchRequest.groupId, offsetFetchRequest.requireStable, Some(authorizedPartitions))
               if (error != Errors.NONE)
                 offsetFetchRequest.getErrorResponse(requestThrottleMs, error)
               else {
@@ -1412,10 +1412,10 @@ class KafkaApis(val requestChannel: RequestChannel,
       // the group.instance.id field, so static members could accidentally become "dynamic", which leads to wrong states.
       sendResponseCallback(JoinGroupResult(
         List.empty,
-        JoinGroupResponse.UNKNOWN_MEMBER_ID,
-        JoinGroupResponse.UNKNOWN_GENERATION_ID,
-        JoinGroupResponse.UNKNOWN_PROTOCOL,
-        JoinGroupResponse.UNKNOWN_MEMBER_ID,
+        JoinGroupRequest.UNKNOWN_MEMBER_ID,
+        JoinGroupRequest.UNKNOWN_GENERATION_ID,
+        JoinGroupRequest.UNKNOWN_PROTOCOL,
+        JoinGroupRequest.UNKNOWN_MEMBER_ID,
         Errors.UNSUPPORTED_VERSION
       ))
     } else if (!authorize(request, READ, GROUP, joinGroupRequest.data.groupId)) {
@@ -1424,10 +1424,10 @@ class KafkaApis(val requestChannel: RequestChannel,
           new JoinGroupResponseData()
             .setThrottleTimeMs(requestThrottleMs)
             .setErrorCode(Errors.GROUP_AUTHORIZATION_FAILED.code)
-            .setGenerationId(JoinGroupResponse.UNKNOWN_GENERATION_ID)
-            .setProtocolName(JoinGroupResponse.UNKNOWN_PROTOCOL)
-            .setLeader(JoinGroupResponse.UNKNOWN_MEMBER_ID)
-            .setMemberId(JoinGroupResponse.UNKNOWN_MEMBER_ID)
+            .setGenerationId(JoinGroupRequest.UNKNOWN_GENERATION_ID)
+            .setProtocolName(JoinGroupRequest.UNKNOWN_PROTOCOL)
+            .setLeader(JoinGroupRequest.UNKNOWN_MEMBER_ID)
+            .setMemberId(JoinGroupRequest.UNKNOWN_MEMBER_ID)
             .setMembers(util.Collections.emptyList())
         )
       )
@@ -1658,7 +1658,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       val hasClusterAuthorization = authorize(request, CREATE, CLUSTER, CLUSTER_NAME, logIfDenied = false)
       val topics = createTopicsRequest.data.topics.asScala.map(_.name)
       val authorizedTopics = if (hasClusterAuthorization) topics.toSet else filterAuthorized(request, CREATE, TOPIC, topics.toSeq)
-      val authorizedForDescribeConfigs = filterAuthorized(request, DESCRIBE_CONFIGS, TOPIC, topics.toSeq)
+      val authorizedForDescribeConfigs = filterAuthorized(request, DESCRIBE_CONFIGS, TOPIC, topics.toSeq, logIfDenied = false)
         .map(name => name -> results.find(name)).toMap
 
       results.asScala.foreach(topic => {
@@ -2184,6 +2184,9 @@ class KafkaApis(val requestChannel: RequestChannel,
           txnOffsetCommitRequest.data.groupId,
           txnOffsetCommitRequest.data.producerId,
           txnOffsetCommitRequest.data.producerEpoch,
+          txnOffsetCommitRequest.data.memberId,
+          Option(txnOffsetCommitRequest.data.groupInstanceId),
+          txnOffsetCommitRequest.data.generationId,
           offsetMetadata,
           sendResponseCallback)
       }
@@ -2821,7 +2824,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   private def authorizedOperations(request: RequestChannel.Request, resource: Resource): Int = {
-    val supportedOps = AuthorizerUtils.supportedOperations(resource.resourceType).toList
+    val supportedOps = AclEntry.supportedOperations(resource.resourceType).toList
     val authorizedOps = authorizer match {
       case Some(authZ) =>
         val resourcePattern = new ResourcePattern(resource.resourceType, resource.name, PatternType.LITERAL)
