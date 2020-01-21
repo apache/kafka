@@ -85,7 +85,7 @@ object ConsoleConsumer extends Logging {
   }
 
   def addShutdownHook(consumer: ConsumerWrapper, conf: ConsumerConfig): Unit = {
-    Exit.addShutdownHook(() => {
+    Exit.addShutdownHook({
         consumer.wakeup()
 
         shutdownLatch.await()

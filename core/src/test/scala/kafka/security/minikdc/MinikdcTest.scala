@@ -17,9 +17,6 @@
 
 package kafka.security.minikdc
 
-import java.io.{File, FileWriter}
-import java.nio.charset.StandardCharsets
-import java.nio.file.Files
 import java.util.Properties
 
 import kafka.utils.TestUtils

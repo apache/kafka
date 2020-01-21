@@ -200,7 +200,7 @@ object ReplicaVerificationTool extends Logging {
         fetcherId = counter.incrementAndGet())
     }
 
-    Exit.addShutdownHook(() => {
+    Exit.addShutdownHook({
         info("Stopping all fetchers")
         fetcherThreads.foreach(_.shutdown())
     })

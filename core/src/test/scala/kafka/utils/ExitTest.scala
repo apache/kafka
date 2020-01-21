@@ -20,7 +20,6 @@ package kafka.utils
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
-
 class ExitTest {
   @Test
   def shouldHaltImmediately(): Unit = {
@@ -32,7 +31,7 @@ class ExitTest {
     }
     Exit.setHaltProcedure(haltProcedure)
     val statusCode = 0
-    val message = Some("mesaage")
+    val message = Some("message")
     try {
       try {
         Exit.halt(statusCode)
@@ -65,7 +64,7 @@ class ExitTest {
     }
     Exit.setExitProcedure(exitProcedure)
     val statusCode = 0
-    val message = Some("mesaage")
+    val message = Some("message")
     try {
       try {
         Exit.exit(statusCode)
@@ -90,21 +89,36 @@ class ExitTest {
 
   @Test
   def shouldAddShutdownHookImmediately(): Unit = {
-    val array:Array[Any] = Array("a", "b")
-    def shutdownHookAdder(runnable: Runnable, name: Option[String]) : Unit = {
-      array(0) = runnable
+    val array:Array[Any] = Array(0, Some("other thing"))
+    // immediately invoke the code to mutate the data when a hook is added
+    def shutdownHookAdder(code: => Unit, name: Option[String]) : Unit = {
+      // invoke the code (see below, it mutates the first element)
+      code
+      // mutate the second element
       array(1) = name
     }
     Exit.setShutdownHookAdder(shutdownHookAdder)
-    val runnable: Runnable = () => {}
-    val message = Some("mesaage")
+    def sideEffect(): Unit = {
+      // mutate the first element
+      array(0) = array(0).asInstanceOf[Int] + 1
+    }
+    val message = Some("message")
     try {
-      Exit.addShutdownHook(runnable)
-      assertEquals(runnable, array(0))
+      Exit.addShutdownHook(sideEffect)
+      // first element should be mutated once
+      assertEquals(1, array(0))
+      // second element should be mutated as well
       assertEquals(None, array(1))
-      Exit.addShutdownHook(runnable, message)
-      assertEquals(runnable, array(0))
+      Exit.addShutdownHook(sideEffect(), message)
+      // first element should be mutated again, once
+      assertEquals(2, array(0))
+      // second element should be mutated again, too
       assertEquals(message, array(1))
+      Exit.addShutdownHook(array(0) = array(0).asInstanceOf[Int] + 1)
+      // first element should be mutated again, once
+      assertEquals(3, array(0))
+      // second element should be mutated again, too
+      assertEquals(None, array(1))
     } finally {
       Exit.resetShutdownHookAdder()
     }
@@ -112,16 +126,23 @@ class ExitTest {
 
   @Test
   def shouldNotInvokeShutdownHookImmediately(): Unit = {
-    val value = "a"
+    val value = "value"
     val array:Array[Any] = Array(value)
-    val runnable: Runnable = () => {}
-    try {
-        Exit.addShutdownHook(runnable)
-        assertEquals(value, array(0))
-        Exit.addShutdownHook(runnable, Some("mesaage"))
-        assertEquals(value, array(0))
-    } finally {
-      Exit.resetShutdownHookAdder()
+
+    def sideEffect(): Unit = {
+      // mutate the first element
+      array(0) = array(0).toString + array(0).toString
     }
+    Exit.addShutdownHook(sideEffect) // by-name parameter, not invoked
+    // make sure the first element wasn't mutated
+    assertEquals(value, array(0))
+    Exit.addShutdownHook(sideEffect()) // by-name parameter, not invoked
+    // again make sure the first element wasn't mutated
+    Exit.addShutdownHook(array(0) = array(0).toString + array(0).toString) // by-name parameter, not invoked
+    // again make sure the first element wasn't mutated
+    assertEquals(value, array(0))
+    Exit.addShutdownHook(sideEffect, Some("message")) // by-name parameter, not invoked
+    // make sure the first element still isn't mutated
+    assertEquals(value, array(0))
   }
 }
