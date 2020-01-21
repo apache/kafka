@@ -866,7 +866,7 @@ class ReassignPartitionsCommand private (serviceClient : ReassignCommandService,
         if (proposedReplicaAssignment.nonEmpty)
           serviceClient.alterReplicaLogDirs(proposedReplicaAssignment, timeoutMs)
 
-        // Create reassignment znode so that controller will send LeaderAndIsrRequest to create replica in the broker
+        // Create reassignment so that controller will send LeaderAndIsrRequest to create replica in the broker
         serviceClient.alterPartitionAssignment(validPartitions.map({case (key, value) => (new TopicPartition(key.topic, key.partition), value)}).toMap,
           timeoutMs)
 
