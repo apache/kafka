@@ -127,7 +127,7 @@ class LogConfigTest {
   @Test
   def testToHtml(): Unit = {
     val html = LogConfig.configDefCopy.toHtml
-    val expectedConfig = "<h4><a id=\"file.delete.delay.ms\" href=\"#file.delete.delay.ms\">file.delete.delay.ms</a></h4>"
+    val expectedConfig = "<h4 style=\"margin: 0;\"><a id=\"file.delete.delay.ms\" href=\"#file.delete.delay.ms\">file.delete.delay.ms</a></h4>"
     assertTrue(s"Could not find `$expectedConfig` in:\n $html", html.contains(expectedConfig))
   }
 

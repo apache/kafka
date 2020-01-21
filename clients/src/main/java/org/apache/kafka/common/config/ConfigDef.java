@@ -1452,35 +1452,43 @@ public class ConfigDef {
         boolean hasUpdateModes = !dynamicUpdateModes.isEmpty();
         List<ConfigKey> configs = sortedConfigs();
         StringBuilder b = new StringBuilder();
-
+        b.append("<ul class=\"config-list\">\n");
         for (ConfigKey key : configs) {
             if (key.internalConfig) {
                 continue;
             }
-            b.append(String.format("<h4><a id=\"%1$s\" href=\"#%1$s\">%1$s</a></h4>", key.name));
+            b.append("<li style=\"padding: 15 0 15 20; border-bottom: 1px solid black;\">");
+            b.append(String.format("<h4 style=\"margin: 0;\">" +
+                    "<a id=\"%1$s\" href=\"#%1$s\">%1$s</a>" +
+                    "</h4>", key.name));
             b.append("<p>");
             b.append(key.documentation.replaceAll("\n", "<br>"));
             b.append("</p>");
 
-            b.append("<table>" +
-                    "<tbody>");
+            b.append("<table style=\"border-width: 0;\">" +
+                    "<tbody>"); 
             for (String detail : headers()) {
                 if (detail.equals("Name") || detail.equals("Description")) continue;
-                b.append("<tr><th>" + detail + "</th><td>" + getConfigValue(key, detail) + "</td></tr>");
+                addConfigDetail(b, detail, getConfigValue(key, detail));
             }
             if (hasUpdateModes) {
                 String updateMode = dynamicUpdateModes.get(key.name);
                 if (updateMode == null)
                     updateMode = "read-only";
-                b.append("<tr><th>Update Mode</th><td>" + updateMode + "</td></tr>");
+                addConfigDetail(b, "Update Mode:", updateMode);
             }
             b.append("</tbody></table>");
+            b.append("</li>");
         }
+        b.append("</ul>\n");
         return b.toString();
     }
 
     private static void addConfigDetail(StringBuilder builder, String name, String value) {
-        builder.append("<li><b>" + name + "</b>: " + value + "</li>");
+        builder.append("<tr style=\"background-color: transparent; padding: 0 0 0 0;\">" +
+                "<th style=\"border-width: 0; background-color: transparent; text-align: right; padding: 0 0 0 0; \">" + name + ":</th>" +
+                "<td style=\"border-width: 0; background-color: transparent; text-align: left; padding: 0 0 0 10;\">" + value + "</td>" +
+                "</tr>");
     }
 
 }
