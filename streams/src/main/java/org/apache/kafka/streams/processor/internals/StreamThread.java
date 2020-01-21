@@ -582,6 +582,7 @@ public class StreamThread extends Thread {
             restoreConsumer,
             activeTaskCreator,
             standbyTaskCreator,
+            builder,
             adminClient
         );
 

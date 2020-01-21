@@ -460,7 +460,7 @@ public class StreamThreadTest {
 //                task1,
 //                assignedPartitions),
 //            Collections.emptyMap());
-        thread.taskManager().setPartitionsToTaskId(Collections.singletonMap(t1p1, task1));
+//        thread.taskManager().setPartitionsToTaskId(Collections.singletonMap(t1p1, task1));
 
         final MockConsumer<byte[], byte[]> mockConsumer = (MockConsumer<byte[], byte[]>) thread.consumer;
         mockConsumer.assign(Collections.singleton(t1p1));
@@ -670,8 +670,8 @@ public class StreamThreadTest {
         partitionsToTaskId.put(t1p1, task1);
         partitionsToTaskId.put(t1p2, task2);
 
-        thread.taskManager().setPartitionsToTaskId(partitionsToTaskId);
         //FIXME
+//        thread.taskManager().setPartitionsToTaskId(partitionsToTaskId);
 //        thread.taskManager().setAssignmentMetadata(activeTasks, Collections.emptyMap());
 
         final MockConsumer<byte[], byte[]> mockConsumer = (MockConsumer<byte[], byte[]>) thread.consumer;
@@ -820,7 +820,7 @@ public class StreamThreadTest {
                 if (shutdownOnPoll) {
                     streamThread.shutdown();
                 }
-                streamThread.taskManager().setPartitionsToTaskId(partitionsToTaskId);
+//                streamThread.taskManager().setPartitionsToTaskId(partitionsToTaskId);
                 streamThread.rebalanceListener.onPartitionsAssigned(assignedPartitions);
                 return super.poll(timeout);
             }
@@ -833,11 +833,18 @@ public class StreamThreadTest {
         final MockStreamThreadConsumer<byte[], byte[]> mockStreamThreadConsumer =
             new MockStreamThreadConsumer<>(OffsetResetStrategy.EARLIEST);
 
-        final TaskManager taskManager = new TaskManager(new MockChangelogReader(), PROCESS_ID, "log-prefix", mockStreamThreadConsumer, null, null, null);
+        final TaskManager taskManager = new TaskManager(new MockChangelogReader(),
+                                                        PROCESS_ID,
+                                                        "log-prefix",
+                                                        mockStreamThreadConsumer,
+                                                        null,
+                                                        null,
+                                                        null,
+                                                        null);
         taskManager.setConsumer(mockStreamThreadConsumer);
 //FIXME
         //        taskManager.setAssignmentMetadata(Collections.emptyMap(), Collections.emptyMap());
-        taskManager.setPartitionsToTaskId(Collections.emptyMap());
+//        taskManager.setPartitionsToTaskId(Collections.emptyMap());
 
         final StreamsMetricsImpl streamsMetrics =
             new StreamsMetricsImpl(metrics, CLIENT_ID, StreamsConfig.METRICS_LATEST);
@@ -945,7 +952,7 @@ public class StreamThreadTest {
         activeTasks.put(task1, Collections.singleton(t1p1));
         partitionsToTaskId.put(t1p1, task1);
 
-        thread.taskManager().setPartitionsToTaskId(partitionsToTaskId);
+//        thread.taskManager().setPartitionsToTaskId(partitionsToTaskId);
         //FIXME
 //        thread.taskManager().setAssignmentMetadata(activeTasks, Collections.emptyMap());
 
@@ -1008,7 +1015,7 @@ public class StreamThreadTest {
         activeTasks.put(task1, Collections.singleton(t1p1));
         partitionsToTaskId.put(t1p1, task1);
 
-        thread.taskManager().setPartitionsToTaskId(partitionsToTaskId);
+//        thread.taskManager().setPartitionsToTaskId(partitionsToTaskId);
         //FIXME
 //        thread.taskManager().setAssignmentMetadata(activeTasks, Collections.emptyMap());
 
@@ -1048,7 +1055,7 @@ public class StreamThreadTest {
         activeTasks.put(task1, Collections.singleton(t1p1));
         partitionsToTaskId.put(t1p1, task1);
 
-        thread.taskManager().setPartitionsToTaskId(partitionsToTaskId);
+//        thread.taskManager().setPartitionsToTaskId(partitionsToTaskId);
         //FIXME
 //        thread.taskManager().setAssignmentMetadata(activeTasks, Collections.emptyMap());
 
@@ -1109,7 +1116,7 @@ public class StreamThreadTest {
         activeTasks.put(task1, Collections.singleton(t1p1));
         partitionsToTaskId.put(t1p1, task1);
 
-        thread.taskManager().setPartitionsToTaskId(partitionsToTaskId);
+//        thread.taskManager().setPartitionsToTaskId(partitionsToTaskId);
         //FIXME
 //        thread.taskManager().setAssignmentMetadata(activeTasks, Collections.emptyMap());
 
@@ -1170,7 +1177,7 @@ public class StreamThreadTest {
         standbyTasks.put(task1, Collections.singleton(t1p1));
         partitionsToTaskId.put(t1p1, task1);
 
-        thread.taskManager().setPartitionsToTaskId(partitionsToTaskId);
+//        thread.taskManager().setPartitionsToTaskId(partitionsToTaskId);
         //FIXME
 //        thread.taskManager().setAssignmentMetadata(Collections.emptyMap(), standbyTasks);
 
@@ -1253,7 +1260,7 @@ public class StreamThreadTest {
         standbyTasks.put(task3, Collections.singleton(t2p1));
         partitionsToTaskId.put(t1p1, task1);
 
-        thread.taskManager().setPartitionsToTaskId(partitionsToTaskId);
+//        thread.taskManager().setPartitionsToTaskId(partitionsToTaskId);
         //FIXME
 //        thread.taskManager().setAssignmentMetadata(Collections.emptyMap(), standbyTasks);
 
@@ -1365,7 +1372,7 @@ public class StreamThreadTest {
         activeTasks.put(task1, Collections.singleton(t1p1));
         partitionsToTaskId.put(t1p1, task1);
 
-        thread.taskManager().setPartitionsToTaskId(partitionsToTaskId);
+//        thread.taskManager().setPartitionsToTaskId(partitionsToTaskId);
         //FIXME
 //        thread.taskManager().setAssignmentMetadata(activeTasks, Collections.emptyMap());
 
@@ -1490,7 +1497,7 @@ public class StreamThreadTest {
         final Map<TaskId, Set<TopicPartition>> activeTasks = new HashMap<>();
         final TaskId task0 = new TaskId(0, 0);
         activeTasks.put(task0, topicPartitionSet);
-        thread.taskManager().setPartitionsToTaskId(Collections.singletonMap(topicPartition, task0));
+//        thread.taskManager().setPartitionsToTaskId(Collections.singletonMap(topicPartition, task0));
         //FIXME
 //        thread.taskManager().setAssignmentMetadata(activeTasks, Collections.emptyMap());
 
@@ -1614,7 +1621,7 @@ public class StreamThreadTest {
 
         final TaskId task1 = new TaskId(0, t1p1.partition());
         final Set<TopicPartition> assignedPartitions = Collections.singleton(t1p1);
-        thread.taskManager().setPartitionsToTaskId(Collections.singletonMap(t1p1, task1));
+//        thread.taskManager().setPartitionsToTaskId(Collections.singletonMap(t1p1, task1));
         //FIXME
 //        thread.taskManager().setAssignmentMetadata(
 //            Collections.singletonMap(task1, assignedPartitions),
@@ -1709,7 +1716,7 @@ public class StreamThreadTest {
 //                task1,
 //                assignedPartitions),
 //            Collections.emptyMap());
-        thread.taskManager().setPartitionsToTaskId(Collections.singletonMap(t1p1, task1));
+//        thread.taskManager().setPartitionsToTaskId(Collections.singletonMap(t1p1, task1));
 
         final MockConsumer<byte[], byte[]> mockConsumer = (MockConsumer<byte[], byte[]>) thread.consumer;
         mockConsumer.assign(Collections.singleton(t1p1));

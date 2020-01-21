@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.MockConsumer;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
@@ -33,7 +34,9 @@ import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.errors.LockException;
 import org.apache.kafka.streams.errors.ProcessorStateException;
+import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.test.MockKeyValueStoreBuilder;
@@ -54,15 +57,20 @@ import java.io.IOException;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static java.util.Arrays.asList;
+import static java.util.Collections.emptyList;
+import static java.util.Collections.emptySet;
 import static java.util.Collections.singletonList;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkProperties;
+import static org.easymock.EasyMock.mock;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
@@ -85,7 +93,7 @@ public class StandbyTaskTest {
     private final String globalStoreName = "ktable1";
 
     private final TopicPartition partition = new TopicPartition(storeChangelogTopicName1, 1);
-    private final Set<TopicPartition> topicPartitions = Collections.emptySet();
+    private final Set<TopicPartition> topicPartitions = emptySet();
     private final ProcessorTopology topology = ProcessorTopologyFactories.withLocalStores(
         asList(new MockKeyValueStoreBuilder(storeName1, false).build(),
                new MockKeyValueStoreBuilder(storeName2, true).build()),
@@ -161,19 +169,71 @@ public class StandbyTaskTest {
     }
 
     @Test
+    public void shouldThrowLockExceptionIfFailedToLockStateDirectoryWhenTopologyHasStores() throws IOException {
+        stateDirectory = EasyMock.createNiceMock(StateDirectory.class);
+        EasyMock.expect(stateDirectory.lock(taskId)).andReturn(false);
+        EasyMock.replay(stateDirectory);
+
+        final StreamsConfig config = createConfig(baseDir);
+        final StandbyTask task = new StandbyTask(
+            taskId,
+            ktablePartitions,
+            ktableTopology,
+            consumer,
+            config,
+            streamsMetrics,
+            stateManager,
+            stateDirectory
+        );
+        try {
+            task.registerStateStores();
+            fail("Should have thrown LockException");
+        } catch (final LockException e) {
+            // ok
+        }
+
+    }
+
+    @Test
+    public void shouldNotAttemptToLockIfNoStores() throws IOException {
+        stateDirectory = EasyMock.createNiceMock(StateDirectory.class);
+        EasyMock.replay(stateDirectory);
+
+        final StreamsConfig config = createConfig(baseDir);
+        final ProcessorTopology mockTopology = EasyMock.createNiceMock(ProcessorTopology.class);
+        EasyMock.expect(mockTopology.stateStores()).andReturn(emptyList()).anyTimes();
+        EasyMock.replay(mockTopology);
+        final StandbyTask statelessTask = new StandbyTask(
+            taskId,
+            emptySet(),
+            mockTopology,
+            consumer,
+            config,
+            streamsMetrics,
+            stateManager,
+            stateDirectory
+        );
+
+        statelessTask.registerStateStores();
+
+        // should fail if lock is called
+        EasyMock.verify(stateDirectory);
+    }
+
+    @Test
     public void testStorePartitions() throws IOException {
         EasyMock.expect(stateManager.changelogOffsets()).andReturn(Collections.singletonMap(partition, 50L));
         EasyMock.replay(stateManager);
 
         final StreamsConfig config = createConfig(baseDir);
         task = new StandbyTask(taskId,
-            topicPartitions,
-            topology,
-            consumer,
-            config,
-            streamsMetrics,
-            stateManager,
-            stateDirectory);
+                               topicPartitions,
+                               topology,
+                               consumer,
+                               config,
+                               streamsMetrics,
+                               stateManager,
+                               stateDirectory);
         task.initializeStateStores();
 
         assertEquals(Utils.mkSet(partition), new HashSet<>(task.checkpointedOffsets().keySet()));
@@ -183,7 +243,7 @@ public class StandbyTaskTest {
     /*
     @Test
     public void shouldRestoreToKTable() throws IOException {
-        consumer.assign(Collections.singletonList(globalTopicPartition));
+        consumer.assign(singletonList(globalTopicPartition));
         consumer.commitSync(mkMap(mkEntry(globalTopicPartition, new OffsetAndMetadata(0L))));
 
         task = new StandbyTask(
@@ -296,7 +356,7 @@ public class StandbyTaskTest {
         task.initializeStateStores();
         assertThat(committedCallCount.get(), equalTo(0));
 
-        task.update(globalTopicPartition, Collections.emptyList());
+        task.update();
         // We should not make a consumer.committed() call because there are no new records.
         assertThat(committedCallCount.get(), equalTo(0));
     }
@@ -386,7 +446,7 @@ public class StandbyTaskTest {
 
     @Test
     public void shouldCloseStateMangerOnTaskCloseWhenCommitFailed() throws Exception {
-        consumer.assign(Collections.singletonList(globalTopicPartition));
+        consumer.assign(singletonList(globalTopicPartition));
         final Map<TopicPartition, OffsetAndMetadata> committedOffsets = new HashMap<>();
         committedOffsets.put(new TopicPartition(globalTopicPartition.topic(), globalTopicPartition.partition()),
                              new OffsetAndMetadata(100L));
@@ -394,7 +454,7 @@ public class StandbyTaskTest {
 
         restoreStateConsumer.updatePartitions(
             globalStoreName,
-            Collections.singletonList(new PartitionInfo(globalStoreName, 0, Node.noNode(), new Node[0], new Node[0]))
+            singletonList(new PartitionInfo(globalStoreName, 0, Node.noNode(), new Node[0], new Node[0]))
         );
 
         final StreamsConfig config = createConfig(baseDir);

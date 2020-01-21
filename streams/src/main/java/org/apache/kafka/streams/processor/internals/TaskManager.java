@@ -63,11 +63,10 @@ public class TaskManager {
     private DeleteRecordsResult deleteRecordsResult;
     private boolean rebalanceInProgress = false;  // if we are in the middle of a rebalance, it is not safe to commit
 
-    // following information is updated during rebalance phase by the partition assignor
-    private Map<TopicPartition, TaskId> partitionsToTaskId = new HashMap<>();
     private Map<TaskId, Task> tasks = new TreeMap<>();
 
     private Consumer<byte[], byte[]> consumer;
+    private final InternalTopologyBuilder builder;
 
     TaskManager(final ChangelogReader changelogReader,
                 final UUID processId,
@@ -75,6 +74,7 @@ public class TaskManager {
                 final Consumer<byte[], byte[]> restoreConsumer,
                 final StreamThread.TaskCreator taskCreator,
                 final StreamThread.StandbyTaskCreator standbyTaskCreator,
+                final InternalTopologyBuilder builder,
                 final Admin adminClient) {
         this.changelogReader = changelogReader;
         this.processId = processId;
@@ -82,7 +82,7 @@ public class TaskManager {
         this.restoreConsumer = restoreConsumer;
         this.taskCreator = taskCreator;
         this.standbyTaskCreator = standbyTaskCreator;
-
+        this.builder = builder;
         final LogContext logContext = new LogContext(logPrefix);
 
         this.log = logContext.logger(getClass());
@@ -141,6 +141,11 @@ public class TaskManager {
         for (final StandbyTask task : standbyTaskCreator.createTasks(consumer, standbyTasksToCreate)) {
             tasks.put(task.id(), task);
         }
+
+        builder.addSubscribedTopics(
+            activeTasks.values().stream().flatMap(Collection::stream).collect(Collectors.toList()),
+            logPrefix
+        );
     }
 
     /**
@@ -294,7 +299,7 @@ public class TaskManager {
     }
 
     InternalTopologyBuilder builder() {
-        return taskCreator.builder();
+        return builder;
     }
 
     /**
@@ -346,34 +351,6 @@ public class TaskManager {
 
     public void setRebalanceInProgress(final boolean rebalanceInProgress) {
         this.rebalanceInProgress = rebalanceInProgress;
-    }
-
-    public void setPartitionsToTaskId(final Map<TopicPartition, TaskId> partitionsToTaskId) {
-        this.partitionsToTaskId = partitionsToTaskId;
-    }
-
-    public void updateSubscriptionsFromAssignment(final List<TopicPartition> partitions) {
-        if (builder().sourceTopicPattern() != null) {
-            final Set<String> assignedTopics = new HashSet<>();
-            for (final TopicPartition topicPartition : partitions) {
-                assignedTopics.add(topicPartition.topic());
-            }
-
-            final Collection<String> existingTopics = builder().subscriptionUpdates().getUpdates();
-            if (!existingTopics.containsAll(assignedTopics)) {
-                assignedTopics.addAll(existingTopics);
-                builder().updateSubscribedTopics(assignedTopics, logPrefix);
-            }
-        }
-    }
-
-    public void updateSubscriptionsFromMetadata(final Set<String> topics) {
-        if (builder().sourceTopicPattern() != null) {
-            final Collection<String> existingTopics = builder().subscriptionUpdates().getUpdates();
-            if (!existingTopics.equals(topics)) {
-                builder().updateSubscribedTopics(topics, logPrefix);
-            }
-        }
     }
 
     /**
@@ -524,15 +501,19 @@ public class TaskManager {
 
     private Set<TaskId> partitionsToTaskSet(final Collection<TopicPartition> partitions) {
         final Set<TaskId> taskIds = new HashSet<>();
-        for (final TopicPartition tp : partitions) {
-            final TaskId id = partitionsToTaskId.get(tp);
-            if (id != null) {
-                taskIds.add(id);
-            } else {
-                log.error("Failed to lookup taskId for partition {}", tp);
-                throw new StreamsException("Found partition in assignment with no corresponding task");
+        for (final Task task : tasks.values()) {
+            for (final TopicPartition partition : partitions) {
+                if (task.partitions().contains(partition)) {
+                    taskIds.add(task.id());
+                    break;
+                }
             }
         }
         return taskIds;
+    }
+
+    // FIXME: inappropriately used from StreamsUpgradeTest
+    public void fixmeUpdateSubscriptionsFromAssignment(final List<TopicPartition> partitions) {
+        builder.addSubscribedTopics(partitions, logPrefix);
     }
 }

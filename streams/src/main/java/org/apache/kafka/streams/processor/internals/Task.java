@@ -31,7 +31,7 @@ public interface Task {
 
 
         static void validateTransition(final State oldState, final State newState) {
-            if (oldState == CREATED && newState == RESTORING) {
+            if (oldState == CREATED && (newState == RESTORING || newState == CLOSED)) {
                 return;
             } else if (oldState == RESTORING && (newState == RESTORING || newState == RUNNING || newState == SUSPENDED)) {
                 return;

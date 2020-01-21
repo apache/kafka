@@ -38,6 +38,7 @@ import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.errors.LockException;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.PunctuationType;
@@ -101,9 +102,9 @@ public class StreamTaskTest {
     private final TopicPartition partition2 = new TopicPartition(topic2, 1);
     private final Set<TopicPartition> partitions = mkSet(partition1, partition2);
 
-    private final MockSourceNode<Integer, Integer> source1 = new MockSourceNode<>(new String[]{topic1}, intDeserializer, intDeserializer);
-    private final MockSourceNode<Integer, Integer> source2 = new MockSourceNode<>(new String[]{topic2}, intDeserializer, intDeserializer);
-    private final MockSourceNode<Integer, Integer> source3 = new MockSourceNode<Integer, Integer>(new String[]{topic2}, intDeserializer, intDeserializer) {
+    private final MockSourceNode<Integer, Integer> source1 = new MockSourceNode<>(new String[] {topic1}, intDeserializer, intDeserializer);
+    private final MockSourceNode<Integer, Integer> source2 = new MockSourceNode<>(new String[] {topic2}, intDeserializer, intDeserializer);
+    private final MockSourceNode<Integer, Integer> source3 = new MockSourceNode<Integer, Integer>(new String[] {topic2}, intDeserializer, intDeserializer) {
         @Override
         public void process(final Integer key, final Integer value) {
             throw new RuntimeException("KABOOM!");
@@ -209,6 +210,36 @@ public class StreamTaskTest {
         } finally {
             Utils.delete(BASE_DIR);
         }
+    }
+
+    @Test
+    public void shouldThrowLockExceptionIfFailedToLockStateDirectoryWhenTopologyHasStores() throws IOException {
+        stateDirectory = EasyMock.createNiceMock(StateDirectory.class);
+        EasyMock.expect(stateDirectory.lock(taskId00)).andReturn(false);
+        EasyMock.replay(stateDirectory);
+
+        final StreamTask task = createStatefulTask(createConfig(false), false);
+
+        try {
+            task.registerStateStores();
+            fail("Should have thrown LockException");
+        } catch (final LockException e) {
+            // ok
+        }
+
+    }
+
+    @Test
+    public void shouldNotAttemptToLockIfNoStores() {
+        stateDirectory = EasyMock.createNiceMock(StateDirectory.class);
+        EasyMock.replay(stateDirectory);
+
+        final StreamTask task = createStatelessTask(createConfig(false), StreamsConfig.METRICS_LATEST);
+
+        task.registerStateStores();
+
+        // should fail if lock is called
+        EasyMock.verify(stateDirectory);
     }
 
     @Test
@@ -950,8 +981,6 @@ public class StreamTaskTest {
             singletonList(stateStore),
             Collections.emptyMap());
 
-        EasyMock.expect(stateManager.changelogPartitions()).andReturn(Collections.emptySet());
-        EasyMock.expectLastCall();
         stateManager.close(EasyMock.eq(false));
         EasyMock.expectLastCall();
         EasyMock.replay(stateManager);
@@ -975,26 +1004,6 @@ public class StreamTaskTest {
         task.closeDirty();
 
         EasyMock.verify(stateManager);
-    }
-
-    @Ignore
-    @Test
-    public void shouldBeInitializedIfChangelogPartitionsIsEmpty() {
-        final StreamTask task = createStatefulTask(createConfig(false), false);
-        EasyMock.replay(stateManager, recordCollector);
-
-        //FIXME
-//        assertTrue(task.initializeStateStores());
-    }
-
-    @Ignore
-    @Test
-    public void shouldNotBeInitializedIfChangelogPartitionsIsNonEmpty() {
-        final StreamTask task = createStatefulTask(createConfig(false), true);
-        EasyMock.replay(stateManager, recordCollector);
-
-        //FIXME
-//        assertFalse(task.initializeStateStores());
     }
 
     @Test

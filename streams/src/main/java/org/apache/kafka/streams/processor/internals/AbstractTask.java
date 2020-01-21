@@ -47,7 +47,6 @@ public abstract class AbstractTask implements Task {
     final StateDirectory stateDirectory;
 
     boolean taskInitialized;
-    boolean taskClosed;
     boolean commitNeeded;
 
     InternalProcessorContext processorContext;
@@ -222,7 +221,7 @@ public abstract class AbstractTask implements Task {
     }
 
     public boolean isClosed() {
-        return taskClosed;
+        return state() == State.CLOSED;
     }
 
     public boolean commitNeeded() {

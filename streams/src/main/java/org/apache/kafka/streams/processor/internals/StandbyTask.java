@@ -166,7 +166,7 @@ public class StandbyTask extends AbstractTask {
             closeStateManager(true);
         }
 
-        taskClosed = true;
+        transitionTo(State.CLOSED);
     }
 
     Map<TopicPartition, Long> checkpointedOffsets() {

@@ -30,7 +30,6 @@ import org.junit.runners.Suite;
  */
 @RunWith(Suite.class)
 @Suite.SuiteClasses({
-                        AbstractTaskTest.class,
                         StreamTaskTest.class,
                         StandbyTaskTest.class,
                         GlobalStateTaskTest.class,
