@@ -46,24 +46,53 @@ public class CodesDataGenerator {
     private void generateClass(String className, FieldType type, List<CodeSpec> codes) {
         buffer.printf("public final class %s {%n", className);
         buffer.incrementIndent();
+        generateConstants(type, codes);
+        generateIsValidMethod(type);
+        generateNameMethod(className, type, codes);
+        generatePrivateConstructor(className);
+        buffer.decrementIndent();
+        buffer.printf("%n");
+        buffer.printf("}%n");
+    }
+
+    private void generateConstants(FieldType type, List<CodeSpec> codes) {
         for (CodeSpec code : codes) {
+            buffer.printf("%n");
             buffer.printf("public static final %s %s = %s;%n", javaType(type), code.name(), code.value());
             String existing = values.put(code.value(), code.name());
             if (existing != null) {
                 throw new RuntimeException("Code " + existing + " and " + code.name() + " both use value " + code.value());
             }
-            buffer.printf("%n");
         }
-        generateIsValid(type);
+    }
 
+    private void generatePrivateConstructor(String className) {
+        buffer.printf("%n");
+        buffer.printf("private %s() {%n", className);
+        buffer.printf("}%n", className);
+    }
+
+    private void generateIsValidMethod(FieldType type) {
+        buffer.printf("%n");
+        buffer.printf("public static boolean isValid(%s v) {%n", javaType(type));
+        buffer.incrementIndent();
+        buffer.printf("return %s;%n", validExpr(null, values));
         buffer.decrementIndent();
         buffer.printf("}%n");
     }
 
-    private void generateIsValid(FieldType type) {
-        buffer.printf("public static boolean isValid(%s v) {%n", javaType(type));
+    private void generateNameMethod(String className, FieldType type, List<CodeSpec> codes) {
+        buffer.printf("%n");
+        buffer.printf("public static String name(%s v) {%n", javaType(type));
         buffer.incrementIndent();
-        buffer.printf("return %s;%n", validExpr(null, values));
+        buffer.printf("switch (v) {%n");
+        buffer.incrementIndent();
+        for (CodeSpec code : codes) {
+            buffer.printf("case %s: return \"%s\";%n", code.name(), code.name());
+        }
+        buffer.printf("default: throw new IllegalArgumentException(\"Unknown %s: \" + v);%n", className);
+        buffer.decrementIndent();
+        buffer.printf("}%n");
         buffer.decrementIndent();
         buffer.printf("}%n");
     }
