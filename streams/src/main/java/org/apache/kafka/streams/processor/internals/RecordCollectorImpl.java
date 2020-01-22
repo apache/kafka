@@ -132,6 +132,8 @@ public class RecordCollectorImpl implements RecordCollector {
                 producer.beginTransaction();
             } catch (final ProducerFencedException error) {
                 throw new TaskMigratedException(taskId, "Producer get fenced trying to begin a new transaction", error);
+            } catch (final KafkaException error) {
+                throw new StreamsException("Producer encounter unexpected error trying to begin a new transaction", error);
             }
             transactionInFlight = true;
         }
@@ -150,6 +152,8 @@ public class RecordCollectorImpl implements RecordCollector {
                  */
 
                 // can be ignored: transaction got already aborted by brokers/transactional-coordinator if this happens
+            } catch (final KafkaException error) {
+                throw new StreamsException("Producer encounter unexpected error trying to abort the transaction", error);
             }
             transactionInFlight = false;
         }
@@ -157,9 +161,9 @@ public class RecordCollectorImpl implements RecordCollector {
 
     public void commit(final Map<TopicPartition, OffsetAndMetadata> offsets) {
         if (eosEnabled) {
-            try {
-                maybeBeginTxn();
+            maybeBeginTxn();
 
+            try {
                 producer.sendOffsetsToTransaction(offsets, applicationId);
                 producer.commitTransaction();
                 transactionInFlight = false;
@@ -247,6 +251,7 @@ public class RecordCollectorImpl implements RecordCollector {
                             final StreamPartitioner<? super K, ? super V> partitioner) {
         final Integer partition;
 
+        // TODO K9113: we need to decide how to handle exceptions from partitionsFor
         if (partitioner != null) {
             final List<PartitionInfo> partitions = producer.partitionsFor(topic);
             if (partitions.size() > 0) {
@@ -273,9 +278,9 @@ public class RecordCollectorImpl implements RecordCollector {
                             final Serializer<V> valueSerializer) {
         checkForException();
 
-        try {
-            maybeBeginTxn();
+        maybeBeginTxn();
 
+        try {
             final byte[] keyBytes = keySerializer.serialize(topic, headers, key);
             final byte[] valBytes = valueSerializer.serialize(topic, headers, value);
 
@@ -301,7 +306,7 @@ public class RecordCollectorImpl implements RecordCollector {
             if (isRecoverable(uncaughtException)) {
                 // producer.send() call may throw a KafkaException which wraps a FencedException,
                 // in this case we should throw its wrapped inner cause so that it can be captured and re-wrapped as TaskMigrationException
-                throw new TaskMigratedException(taskId, "Producer cannot send records anymore since it got fenced", uncaughtException);
+                throw new TaskMigratedException(taskId, "Producer cannot send records anymore since it got fenced", uncaughtException.getCause());
             } else {
                 final String errorMessage = String.format(SEND_EXCEPTION_MESSAGE, topic, taskId, uncaughtException.toString());
                 throw new StreamsException(errorMessage, uncaughtException);
@@ -354,7 +359,7 @@ public class RecordCollectorImpl implements RecordCollector {
 
     @Override
     public Map<TopicPartition, Long> offsets() {
-        return Collections.unmodifiableMap(offsets);
+        return Collections.unmodifiableMap(new HashMap<>(offsets));
     }
 
     // for testing only
