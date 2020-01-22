@@ -340,9 +340,7 @@ public class SubscriptionState {
      *   of the current generation; otherwise it returns the same set as {@link #subscription()}
      */
     synchronized Set<String> metadataTopics() {
-        Set<String> topics = new HashSet<>(groupSubscription);
-        topics.addAll(subscription);
-        return topics;
+        return groupSubscription.isEmpty() ? subscription : groupSubscription;
     }
 
     synchronized boolean needsMetadata(String topic) {

@@ -102,8 +102,11 @@ public class ConsumerMetadataTest {
     @Test
     public void testNormalSubscription() {
         subscription.subscribe(Utils.mkSet("foo", "bar", "__consumer_offsets"), new NoOpConsumerRebalanceListener());
-        subscription.groupSubscribe(Utils.mkSet("baz"));
+        subscription.groupSubscribe(Utils.mkSet("baz", "foo", "bar", "__consumer_offsets"));
         testBasicSubscription(Utils.mkSet("foo", "bar", "baz"), Utils.mkSet("__consumer_offsets"));
+
+        subscription.resetGroupSubscription();
+        testBasicSubscription(Utils.mkSet("foo", "bar"), Utils.mkSet("__consumer_offsets"));
     }
 
     @Test
