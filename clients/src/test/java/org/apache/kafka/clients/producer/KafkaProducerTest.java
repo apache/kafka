@@ -19,6 +19,7 @@ package org.apache.kafka.clients.producer;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.MockClient;
+import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
 import org.apache.kafka.clients.producer.internals.ProducerInterceptors;
 import org.apache.kafka.clients.producer.internals.ProducerMetadata;
 import org.apache.kafka.clients.producer.internals.Sender;
@@ -26,19 +27,27 @@ import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
+import org.apache.kafka.common.message.EndTxnResponseData;
 import org.apache.kafka.common.message.InitProducerIdResponseData;
+import org.apache.kafka.common.message.TxnOffsetCommitRequestData;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.network.Selectable;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.requests.AddOffsetsToTxnResponse;
+import org.apache.kafka.common.requests.EndTxnResponse;
 import org.apache.kafka.common.requests.FindCoordinatorResponse;
 import org.apache.kafka.common.requests.InitProducerIdResponse;
+import org.apache.kafka.common.requests.JoinGroupRequest;
 import org.apache.kafka.common.requests.MetadataResponse;
+import org.apache.kafka.common.requests.TxnOffsetCommitRequest;
+import org.apache.kafka.common.requests.TxnOffsetCommitResponse;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.serialization.StringSerializer;
@@ -61,6 +70,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Properties;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
@@ -689,6 +699,128 @@ public class KafkaProducerTest {
         }
     }
 
+    @Test
+    public void testSendTxnOffsetsWithGroupId() {
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, "some.id");
+        configs.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, 10000);
+        configs.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9000");
+
+        Time time = new MockTime(1);
+        MetadataResponse initialUpdateResponse = TestUtils.metadataUpdateWith(1, singletonMap("topic", 1));
+        ProducerMetadata metadata = newMetadata(0, Long.MAX_VALUE);
+
+        MockClient client = new MockClient(time, metadata);
+        client.updateMetadata(initialUpdateResponse);
+
+        Node node = metadata.fetch().nodes().get(0);
+        client.throttle(node, 5000);
+
+        client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, host1));
+        client.prepareResponse(initProducerIdResponse(1L, (short) 5, Errors.NONE));
+        client.prepareResponse(addOffsetsToTxnResponse(Errors.NONE));
+        client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, host1));
+        String groupId = "group";
+        client.prepareResponse(request ->
+            ((TxnOffsetCommitRequest) request).data.groupId().equals(groupId),
+            txnOffsetsCommitResponse(Collections.singletonMap(
+                new TopicPartition("topic", 0), Errors.NONE)));
+        client.prepareResponse(endTxnResponse(Errors.NONE));
+
+        try (Producer<String, String> producer = new KafkaProducer<>(configs, new StringSerializer(),
+            new StringSerializer(), metadata, client, null, time)) {
+            producer.initTransactions();
+            producer.beginTransaction();
+            producer.sendOffsetsToTransaction(Collections.emptyMap(), groupId);
+            producer.commitTransaction();
+        }
+    }
+
+    @Test
+    public void testSendTxnOffsetsWithGroupMetadata() {
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, "some.id");
+        configs.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, 10000);
+        configs.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9000");
+
+        Time time = new MockTime(1);
+        MetadataResponse initialUpdateResponse = TestUtils.metadataUpdateWith(1, singletonMap("topic", 1));
+        ProducerMetadata metadata = newMetadata(0, Long.MAX_VALUE);
+
+        MockClient client = new MockClient(time, metadata);
+        client.updateMetadata(initialUpdateResponse);
+
+        Node node = metadata.fetch().nodes().get(0);
+        client.throttle(node, 5000);
+
+        client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, host1));
+        client.prepareResponse(initProducerIdResponse(1L, (short) 5, Errors.NONE));
+        client.prepareResponse(addOffsetsToTxnResponse(Errors.NONE));
+        client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, host1));
+        String groupId = "group";
+        String memberId = "member";
+        int generationId = 5;
+        String groupInstanceId = "instance";
+        client.prepareResponse(request -> {
+            TxnOffsetCommitRequestData data = ((TxnOffsetCommitRequest) request).data;
+            return data.groupId().equals(groupId) &&
+                       data.memberId().equals(memberId) &&
+                       data.generationId() == generationId &&
+                       data.groupInstanceId().equals(groupInstanceId);
+        },
+            txnOffsetsCommitResponse(Collections.singletonMap(
+                new TopicPartition("topic", 0), Errors.NONE)));
+        client.prepareResponse(endTxnResponse(Errors.NONE));
+
+        try (Producer<String, String> producer = new KafkaProducer<>(configs, new StringSerializer(),
+            new StringSerializer(), metadata, client, null, time)) {
+            producer.initTransactions();
+            producer.beginTransaction();
+            ConsumerGroupMetadata groupMetadata = new ConsumerGroupMetadata(groupId,
+                generationId, memberId, Optional.of(groupInstanceId));
+            producer.sendOffsetsToTransaction(Collections.emptyMap(), groupMetadata);
+            producer.commitTransaction();
+        }
+    }
+
+    @Test
+    public void testNullGroupMetadataInSendOffsets() {
+        verifyInvalidGroupMetadata(null);
+    }
+
+    @Test
+    public void testInvalidGenerationIdAndMemberIdCombinedInSendOffsets() {
+        verifyInvalidGroupMetadata(new ConsumerGroupMetadata("group", 2, JoinGroupRequest.UNKNOWN_MEMBER_ID, Optional.empty()));
+    }
+
+    private void verifyInvalidGroupMetadata(ConsumerGroupMetadata groupMetadata) {
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, "some.id");
+        configs.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, 10000);
+        configs.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9000");
+
+        Time time = new MockTime(1);
+        MetadataResponse initialUpdateResponse = TestUtils.metadataUpdateWith(1, singletonMap("topic", 1));
+        ProducerMetadata metadata = newMetadata(0, Long.MAX_VALUE);
+
+        MockClient client = new MockClient(time, metadata);
+        client.updateMetadata(initialUpdateResponse);
+
+        Node node = metadata.fetch().nodes().get(0);
+        client.throttle(node, 5000);
+
+        client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, host1));
+        client.prepareResponse(initProducerIdResponse(1L, (short) 5, Errors.NONE));
+
+        try (Producer<String, String> producer = new KafkaProducer<>(configs, new StringSerializer(),
+            new StringSerializer(), metadata, client, null, time)) {
+            producer.initTransactions();
+            producer.beginTransaction();
+            assertThrows(IllegalArgumentException.class,
+                () -> producer.sendOffsetsToTransaction(Collections.emptyMap(), groupMetadata));
+        }
+    }
+
     private InitProducerIdResponse initProducerIdResponse(long producerId, short producerEpoch, Errors error) {
         InitProducerIdResponseData responseData = new InitProducerIdResponseData()
                 .setErrorCode(error.code())
@@ -698,6 +830,19 @@ public class KafkaProducerTest {
         return new InitProducerIdResponse(responseData);
     }
 
+    private AddOffsetsToTxnResponse addOffsetsToTxnResponse(Errors error) {
+        return new AddOffsetsToTxnResponse(10, error);
+    }
+
+    private TxnOffsetCommitResponse txnOffsetsCommitResponse(Map<TopicPartition, Errors> errorMap) {
+        return new TxnOffsetCommitResponse(10, errorMap);
+    }
+
+    private EndTxnResponse endTxnResponse(Errors error) {
+        return new EndTxnResponse(new EndTxnResponseData()
+                                      .setErrorCode(error.code())
+                                      .setThrottleTimeMs(0));
+    }
 
     @Test
     public void testOnlyCanExecuteCloseAfterInitTransactionsTimeout() {

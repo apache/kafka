@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.producer;
 
+import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.producer.internals.DefaultPartitioner;
 import org.apache.kafka.clients.producer.internals.FutureRecordMetadata;
@@ -156,10 +157,10 @@ public class MockProducer<K, V> implements Producer<K, V> {
     @Override
     public void sendOffsetsToTransaction(Map<TopicPartition, OffsetAndMetadata> offsets,
                                          String consumerGroupId) throws ProducerFencedException {
+        Objects.requireNonNull(consumerGroupId);
         verifyProducerState();
         verifyTransactionsInitialized();
         verifyNoTransactionInFlight();
-        Objects.requireNonNull(consumerGroupId);
         if (offsets.size() == 0) {
             return;
         }
@@ -170,6 +171,13 @@ public class MockProducer<K, V> implements Producer<K, V> {
         }
         uncommittedOffsets.putAll(offsets);
         this.sentOffsets = true;
+    }
+
+    @Override
+    public void sendOffsetsToTransaction(Map<TopicPartition, OffsetAndMetadata> offsets,
+                                         ConsumerGroupMetadata groupMetadata) throws ProducerFencedException {
+        Objects.requireNonNull(groupMetadata);
+        sendOffsetsToTransaction(offsets, groupMetadata.groupId());
     }
 
     @Override

@@ -27,7 +27,7 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.{MemoryRecords, RecordBatch}
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
-import org.apache.kafka.common.requests.{JoinGroupRequest, JoinGroupResponse, OffsetCommitRequest, OffsetFetchResponse, TransactionResult}
+import org.apache.kafka.common.requests.{JoinGroupRequest, OffsetCommitRequest, OffsetFetchResponse, TransactionResult}
 import org.easymock.{Capture, EasyMock, IAnswer}
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.locks.ReentrantLock
@@ -2288,7 +2288,7 @@ class GroupCoordinatorTest {
       case _ =>
     }
 
-     groupCoordinator.handleFetchOffsets(groupIds(1), requireStable, Some(partitions)) match {
+    groupCoordinator.handleFetchOffsets(groupIds(1), requireStable, Some(partitions)) match {
       case (error, partData) =>
         errors.append(error)
         partitionData.append(partData)
@@ -2489,8 +2489,12 @@ class GroupCoordinatorTest {
     val rebalanceResult = staticMembersJoinAndRebalance(leaderInstanceId, followerInstanceId)
 
     val leaderNoMemberIdCommitOffsetResult = commitTransactionalOffsets(groupId, producerId, producerEpoch,
-      Map(tp -> offset), groupInstanceId = leaderInstanceId)
+      Map(tp -> offset), memberId = JoinGroupRequest.UNKNOWN_MEMBER_ID, groupInstanceId = leaderInstanceId)
     assertEquals(Errors.FENCED_INSTANCE_ID, leaderNoMemberIdCommitOffsetResult (tp))
+
+    val leaderInvalidMemberIdCommitOffsetResult = commitTransactionalOffsets(groupId, producerId, producerEpoch,
+      Map(tp -> offset), memberId = "invalid-member", groupInstanceId = leaderInstanceId)
+    assertEquals(Errors.FENCED_INSTANCE_ID, leaderInvalidMemberIdCommitOffsetResult (tp))
 
     val leaderCommitOffsetResult = commitTransactionalOffsets(groupId, producerId, producerEpoch,
       Map(tp -> offset), rebalanceResult.leaderId, leaderInstanceId)
@@ -2498,7 +2502,7 @@ class GroupCoordinatorTest {
   }
 
   @Test
-  def testTxnCommitOffsetWithUnknownMemberId(): Unit = {
+  def testTxnCommitOffsetWithInvalidMemberId(): Unit = {
     val tp = new TopicPartition("topic", 0)
     val offset = offsetAndMetadata(0)
     val producerId = 1000L
@@ -2510,16 +2514,25 @@ class GroupCoordinatorTest {
 
     EasyMock.reset(replicaManager)
     val invalidIdCommitOffsetResult = commitTransactionalOffsets(groupId, producerId, producerEpoch,
-      Map(tp -> offset), "invalid-member", Option.empty)
+      Map(tp -> offset), "invalid-member")
     assertEquals(Errors.UNKNOWN_MEMBER_ID, invalidIdCommitOffsetResult (tp))
+  }
 
-    val unknownMemberIdCommitOffsetResult = commitTransactionalOffsets(groupId, producerId, producerEpoch,
-      Map(tp -> offset), JoinGroupRequest.UNKNOWN_MEMBER_ID, Option.empty)
-    assertEquals(Errors.NONE, unknownMemberIdCommitOffsetResult (tp))
+  @Test
+  def testTxnCommitOffsetWithKnownMemberId(): Unit = {
+    val tp = new TopicPartition("topic", 0)
+    val offset = offsetAndMetadata(0)
+    val producerId = 1000L
+    val producerEpoch : Short = 2
 
+    val joinGroupResult = dynamicJoinGroup(groupId, JoinGroupRequest.UNKNOWN_MEMBER_ID, protocolType, protocols)
+    val joinGroupError = joinGroupResult.error
+    assertEquals(Errors.NONE, joinGroupError)
+
+    EasyMock.reset(replicaManager)
     val assignedConsumerId = joinGroupResult.memberId
     val leaderCommitOffsetResult = commitTransactionalOffsets(groupId, producerId, producerEpoch,
-      Map(tp -> offset), assignedConsumerId, Option.empty)
+      Map(tp -> offset), assignedConsumerId)
     assertEquals(Errors.NONE, leaderCommitOffsetResult (tp))
   }
 
@@ -2538,13 +2551,29 @@ class GroupCoordinatorTest {
 
     val assignedConsumerId = joinGroupResult.memberId
     val initialGenerationId = joinGroupResult.generationId
-    val leaderCommitOffsetResult = commitTransactionalOffsets(groupId, producerId, producerEpoch,
-      Map(tp -> offset), assignedConsumerId, Option.empty, initialGenerationId)
-    assertEquals(Errors.NONE, leaderCommitOffsetResult (tp))
-
     val illegalGenerationCommitOffsetResult = commitTransactionalOffsets(groupId, producerId, producerEpoch,
-      Map(tp -> offset), assignedConsumerId, Option.empty, initialGenerationId + 5)
+      Map(tp -> offset), memberId = assignedConsumerId, generationId = initialGenerationId + 5)
     assertEquals(Errors.ILLEGAL_GENERATION, illegalGenerationCommitOffsetResult (tp))
+  }
+
+  @Test
+  def testTxnCommitOffsetWithLegalGeneration(): Unit = {
+    val tp = new TopicPartition("topic", 0)
+    val offset = offsetAndMetadata(0)
+    val producerId = 1000L
+    val producerEpoch : Short = 2
+
+    val joinGroupResult = dynamicJoinGroup(groupId, JoinGroupRequest.UNKNOWN_MEMBER_ID, protocolType, protocols)
+    val joinGroupError = joinGroupResult.error
+    assertEquals(Errors.NONE, joinGroupError)
+
+    EasyMock.reset(replicaManager)
+
+    val assignedConsumerId = joinGroupResult.memberId
+    val initialGenerationId = joinGroupResult.generationId
+    val leaderCommitOffsetResult = commitTransactionalOffsets(groupId, producerId, producerEpoch,
+      Map(tp -> offset), memberId = assignedConsumerId, generationId = initialGenerationId)
+    assertEquals(Errors.NONE, leaderCommitOffsetResult (tp))
   }
 
   @Test

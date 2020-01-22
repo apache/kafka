@@ -112,7 +112,6 @@ import org.apache.kafka.common.message.SaslAuthenticateResponseData;
 import org.apache.kafka.common.message.SaslHandshakeRequestData;
 import org.apache.kafka.common.message.SaslHandshakeResponseData;
 import org.apache.kafka.common.message.StopReplicaResponseData;
-import org.apache.kafka.common.message.TxnOffsetCommitRequestData;
 import org.apache.kafka.common.message.UpdateMetadataRequestData.UpdateMetadataBroker;
 import org.apache.kafka.common.message.UpdateMetadataRequestData.UpdateMetadataEndpoint;
 import org.apache.kafka.common.message.UpdateMetadataRequestData.UpdateMetadataPartitionState;
@@ -323,9 +322,6 @@ public class RequestResponseTest {
         checkRequest(createWriteTxnMarkersRequest(), true);
         checkResponse(createWriteTxnMarkersResponse(), 0, true);
         checkErrorResponse(createWriteTxnMarkersRequest(), new UnknownServerException(), true);
-        checkRequest(createTxnOffsetCommitRequest(), true);
-        checkResponse(createTxnOffsetCommitResponse(), 0, true);
-        checkErrorResponse(createTxnOffsetCommitRequest(), new UnknownServerException(), true);
 
         checkOlderFetchVersions();
         checkResponse(createMetadataResponse(), 0, true);
@@ -383,8 +379,10 @@ public class RequestResponseTest {
         checkRequest(createWriteTxnMarkersRequest(), true);
         checkErrorResponse(createWriteTxnMarkersRequest(), new UnknownServerException(), true);
         checkResponse(createWriteTxnMarkersResponse(), 0, true);
-        checkRequest(createTxnOffsetCommitRequest(), true);
-        checkErrorResponse(createTxnOffsetCommitRequest(), new UnknownServerException(), true);
+        checkRequest(createTxnOffsetCommitRequest(0), true);
+        checkRequest(createTxnOffsetCommitRequest(3), true);
+        checkErrorResponse(createTxnOffsetCommitRequest(0), new UnknownServerException(), true);
+        checkErrorResponse(createTxnOffsetCommitRequest(3), new UnknownServerException(), true);
         checkResponse(createTxnOffsetCommitResponse(), 0, true);
         checkRequest(createListAclsRequest(), true);
         checkErrorResponse(createListAclsRequest(), new SecurityDisabledException("Security is not enabled."), true);
@@ -1663,20 +1661,29 @@ public class RequestResponseTest {
         return new WriteTxnMarkersResponse(response);
     }
 
-    private TxnOffsetCommitRequest createTxnOffsetCommitRequest() {
+    private TxnOffsetCommitRequest createTxnOffsetCommitRequest(int version) {
         final Map<TopicPartition, TxnOffsetCommitRequest.CommittedOffset> offsets = new HashMap<>();
         offsets.put(new TopicPartition("topic", 73),
                     new TxnOffsetCommitRequest.CommittedOffset(100, null, Optional.empty()));
         offsets.put(new TopicPartition("topic", 74),
                 new TxnOffsetCommitRequest.CommittedOffset(100, "blah", Optional.of(27)));
-        return new TxnOffsetCommitRequest.Builder(
-            new TxnOffsetCommitRequestData()
-                .setTransactionalId("transactionalId")
-                .setGroupId("groupId")
-                .setProducerId(21L)
-                .setProducerEpoch((short) 42)
-                .setTopics(TxnOffsetCommitRequest.getTopics(offsets))
-            ).build();
+
+        if (version < 3) {
+            return new TxnOffsetCommitRequest.Builder("transactionalId",
+                "groupId",
+                21L,
+                (short) 42,
+                offsets).build();
+        } else {
+            return new TxnOffsetCommitRequest.Builder("transactionalId",
+                "groupId",
+                21L,
+                (short) 42,
+                offsets,
+                "member",
+                2,
+                Optional.of("instance")).build();
+        }
     }
 
     private TxnOffsetCommitResponse createTxnOffsetCommitResponse() {

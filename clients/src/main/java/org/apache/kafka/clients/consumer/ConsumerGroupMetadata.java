@@ -16,6 +16,9 @@
  */
 package org.apache.kafka.clients.consumer;
 
+import org.apache.kafka.common.requests.JoinGroupRequest;
+
+import java.util.Objects;
 import java.util.Optional;
 
 /**
@@ -26,13 +29,23 @@ public class ConsumerGroupMetadata {
     final private String groupId;
     final private int generationId;
     final private String memberId;
-    final Optional<String> groupInstanceId;
+    final private Optional<String> groupInstanceId;
 
-    public ConsumerGroupMetadata(String groupId, int generationId, String memberId, Optional<String> groupInstanceId) {
-        this.groupId = groupId;
+    public ConsumerGroupMetadata(String groupId,
+                                 int generationId,
+                                 String memberId,
+                                 Optional<String> groupInstanceId) {
+        this.groupId = Objects.requireNonNull(groupId, "group.id can't be null");
         this.generationId = generationId;
-        this.memberId = memberId;
-        this.groupInstanceId = groupInstanceId;
+        this.memberId = Objects.requireNonNull(memberId, "member.id can't be null");
+        this.groupInstanceId = Objects.requireNonNull(groupInstanceId, "group.instance.id can't be null");
+    }
+
+    public ConsumerGroupMetadata(String groupId) {
+        this(groupId,
+            JoinGroupRequest.UNKNOWN_GENERATION_ID,
+            JoinGroupRequest.UNKNOWN_MEMBER_ID,
+            Optional.empty());
     }
 
     public String groupId() {
@@ -49,5 +62,14 @@ public class ConsumerGroupMetadata {
 
     public Optional<String> groupInstanceId() {
         return groupInstanceId;
+    }
+
+    @Override
+    public String toString() {
+        return String.format("GroupMetadata(groupId = %s, generationId = %d, memberId = %s, groupInstanceId = %s)",
+            groupId,
+            generationId,
+            memberId,
+            groupInstanceId.orElse(""));
     }
 }

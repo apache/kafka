@@ -16,18 +16,22 @@
  */
 package org.apache.kafka.clients.consumer;
 
+import org.apache.kafka.common.requests.JoinGroupRequest;
 import org.junit.Test;
 
 import java.util.Optional;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
 public class ConsumerGroupMetadataTest {
 
+    private String groupId = "group";
+
     @Test
     public void testAssignmentConstructor() {
-        String groupId = "group";
         String memberId = "member";
         int generationId = 2;
         String groupInstanceId = "instance";
@@ -40,5 +44,44 @@ public class ConsumerGroupMetadataTest {
         assertEquals(memberId, groupMetadata.memberId());
         assertTrue(groupMetadata.groupInstanceId().isPresent());
         assertEquals(groupInstanceId, groupMetadata.groupInstanceId().get());
+    }
+
+    @Test
+    public void testGroupIdConstructor() {
+        ConsumerGroupMetadata groupMetadata = new ConsumerGroupMetadata(groupId);
+
+        assertEquals(groupId, groupMetadata.groupId());
+        assertEquals(JoinGroupRequest.UNKNOWN_GENERATION_ID, groupMetadata.generationId());
+        assertEquals(JoinGroupRequest.UNKNOWN_MEMBER_ID, groupMetadata.memberId());
+        assertFalse(groupMetadata.groupInstanceId().isPresent());
+    }
+
+    @Test
+    public void testInvalidGroupId() {
+        String memberId = "member";
+        int generationId = 2;
+
+        assertThrows(NullPointerException.class, () -> new ConsumerGroupMetadata(
+            null, generationId, memberId, Optional.empty())
+        );
+    }
+
+    @Test
+    public void testInvalidMemberId() {
+        int generationId = 2;
+
+        assertThrows(NullPointerException.class, () -> new ConsumerGroupMetadata(
+            groupId, generationId, null, Optional.empty())
+        );
+    }
+
+    @Test
+    public void testInvalidInstanceId() {
+        String memberId = "member";
+        int generationId = 2;
+
+        assertThrows(NullPointerException.class, () -> new ConsumerGroupMetadata(
+            groupId, generationId, memberId, null)
+        );
     }
 }
