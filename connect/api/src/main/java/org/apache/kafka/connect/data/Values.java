@@ -886,7 +886,7 @@ public class Values {
                 throw new DataException("Map is missing terminating '}': " + parser.original());
             }
         } catch (DataException e) {
-            LOG.debug("Unable to parse the value as a map or an array; reverting to string", e);
+            LOG.trace("Unable to parse the value as a map or an array; reverting to string", e);
             parser.rewindTo(startPosition);
         }
 
@@ -953,8 +953,10 @@ public class Values {
                 // can't parse as a number
             }
         }
-        // At this point, the only thing this can be is a string. Embedded strings were processed above,
-        // so this is not embedded and we can use the original string...
+        if (embedded) {
+            throw new DataException("Failed to parse embedded value");
+        }
+        // At this point, the only thing this non-embedded value can be is a string.
         return new SchemaAndValue(Schema.STRING_SCHEMA, parser.original());
     }
 
