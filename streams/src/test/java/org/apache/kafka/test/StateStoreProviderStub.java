@@ -39,9 +39,9 @@ public class StateStoreProviderStub extends StreamThreadStateStoreProvider {
 
     @SuppressWarnings("unchecked")
     @Override
-    public <T> List<T> stores(final String storeName,
-                              final QueryableStoreType<T> queryableStoreType,
-                              final StoreQueryParams storeQueryParams) {
+    public <T> List<T> stores(final StoreQueryParams storeQueryParams) {
+        final String storeName = storeQueryParams.getStoreName();
+        final QueryableStoreType<T> queryableStoreType = storeQueryParams.getQueryableStoreType();
         if (throwException) {
             throw new InvalidStateStoreException("store is unavailable");
         }

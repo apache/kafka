@@ -16,64 +16,64 @@
  */
 package org.apache.kafka.streams;
 
+import org.apache.kafka.streams.state.QueryableStoreType;
+
 import java.util.Objects;
 
 /**
  * Represents all the query options that a user can provide to state what kind of stores it is expecting. The options would be whether a user would want to enable/disable stale stores* or whether it knows the list of partitions that it specifically wants to fetch. If this information is not provided the default behavior is to fetch the stores for all the partitions available on that instance* for that particular store name.
  * It contains a partition, which for a point queries can be populated from the  KeyQueryMetadata.
  */
-public class StoreQueryParams {
+public class StoreQueryParams<T> {
 
-    private final Integer partition;
-    private final boolean includeStaleStores;
+    private Integer partition;
+    private boolean includeStaleStores;
+    private final String storeName;
+    private final QueryableStoreType<T> queryableStoreType;
 
-    public static final StoreQueryParams withPartitionAndStaleStoresDisabled(final Integer partition) {
-        return new StoreQueryParams(partition, false);
+    public StoreQueryParams(final String storeName, final QueryableStoreType<T>  queryableStoreType) {
+        this.storeName = storeName;
+        this.queryableStoreType = queryableStoreType;
     }
 
-    public static final StoreQueryParams withPartitionAndStaleStoresEnabled(final Integer partition) {
-        return new StoreQueryParams(partition, true);
-    }
-
-    public static final StoreQueryParams withAllPartitionAndStaleStoresDisabled() {
-        return new StoreQueryParams(null, false);
-    }
-
-    public static final StoreQueryParams withAllPartitionAndStaleStoresEnabled() {
-        return new StoreQueryParams(null, true);
-    }
-
-    private StoreQueryParams(final Integer partition, final boolean includeStaleStores) {
+    /**
+     * Get the {@link StoreQueryParams} with stale(standby, restoring) stores added via fetching the stores.
+     *
+     * @param partition   The specific integer partition to be fetched from the stores list by using {@link StoreQueryParams}.
+     *
+     * @return String storeName
+     */
+    public StoreQueryParams<T> withPartition(final Integer partition) {
         this.partition = partition;
-        this.includeStaleStores = includeStaleStores;
-    }
-
-
-    /**
-     * Get the partition to be used to fetch list of Queryable store from QueryableStoreProvider.
-     *
-     * @return an Integer partition
-     */
-    public Integer getPartition() {
-        return partition;
+        return this;
     }
 
     /**
-     * Get the flag includeStaleStores. If true, include standbys and recovering stores along with running stores
+     * Get the {@link StoreQueryParams} with stale(standby, restoring) stores added via fetching the stores.
      *
-     * @return boolean includeStaleStores
+     * @return String storeName
      */
-    public boolean includeStaleStores() {
-        return includeStaleStores;
+    public StoreQueryParams<T> withIncludeStaleStores() {
+        this.includeStaleStores = true;
+        return this;
     }
 
     /**
-     * Get whether the store query params are fetching all partitions or a single partition.
+     * Get the store name for which key is queried by the user.
      *
-     * @return boolean. True, if all partitions are requests or false if a specific partition is requested
+     * @return String storeName
      */
-    public boolean getAllLocalPartitions() {
-        return partition == null ? true : false;
+    public String getStoreName() {
+        return storeName;
+    }
+
+    /**
+     * Get the queryable store type for which key is queried by the user.
+     *
+     * @return QueryableStoreType queryableStoreType
+     */
+    public QueryableStoreType<T> getQueryableStoreType() {
+        return queryableStoreType;
     }
 
     @Override
@@ -83,21 +83,23 @@ public class StoreQueryParams {
         }
         final StoreQueryParams storeQueryParams = (StoreQueryParams) obj;
         return Objects.equals(storeQueryParams.partition, partition)
-                && Objects.equals(storeQueryParams.includeStaleStores, includeStaleStores);
+                && Objects.equals(storeQueryParams.includeStaleStores, includeStaleStores)
+                && Objects.equals(storeQueryParams.storeName, storeName)
+                && Objects.equals(storeQueryParams.queryableStoreType, queryableStoreType);
     }
-
 
     @Override
     public String toString() {
         return "StoreQueryParams {" +
                 "partition=" + partition +
                 ", includeStaleStores=" + includeStaleStores +
+                ", storeName=" + storeName +
+                ", queryableStoreType=" + queryableStoreType +
                 '}';
     }
 
-
     @Override
     public int hashCode() {
-        return Objects.hash(partition, includeStaleStores);
+        return Objects.hash(partition, includeStaleStores, storeName, queryableStoreType);
     }
 }

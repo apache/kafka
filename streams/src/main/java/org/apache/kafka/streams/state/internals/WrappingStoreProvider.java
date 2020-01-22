@@ -29,11 +29,16 @@ import java.util.List;
 public class WrappingStoreProvider implements StateStoreProvider {
 
     private final List<StreamThreadStateStoreProvider> storeProviders;
-    private final StoreQueryParams storeQueryParams;
+    private StoreQueryParams storeQueryParams;
 
     WrappingStoreProvider(final List<StreamThreadStateStoreProvider> storeProviders,
                           final StoreQueryParams storeQueryParams) {
         this.storeProviders = storeProviders;
+        this.storeQueryParams = storeQueryParams;
+    }
+
+    //visible for testing
+    public void setStoreQueryParams(final StoreQueryParams storeQueryParams) {
         this.storeQueryParams = storeQueryParams;
     }
 
@@ -42,7 +47,7 @@ public class WrappingStoreProvider implements StateStoreProvider {
                               final QueryableStoreType<T> queryableStoreType) {
         final List<T> allStores = new ArrayList<>();
         for (final StreamThreadStateStoreProvider provider : storeProviders) {
-            final List<T> stores = provider.stores(storeName, queryableStoreType, storeQueryParams);
+            final List<T> stores = provider.stores(storeQueryParams);
             allStores.addAll(stores);
         }
         if (allStores.isEmpty()) {

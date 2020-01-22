@@ -23,8 +23,8 @@ import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.state.NoOpWindowStore;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
-import org.apache.kafka.streams.state.ReadOnlyWindowStore;
 import org.apache.kafka.streams.state.Stores;
+import org.apache.kafka.streams.state.ReadOnlyWindowStore;
 import org.apache.kafka.test.StateStoreProviderStub;
 import org.junit.Before;
 import org.junit.Test;
@@ -55,10 +55,9 @@ public class WrappingStoreProviderTest {
                 Serdes.serdeFrom(String.class))
                 .build());
         stubProviderTwo.addStore("window", new NoOpWindowStore());
-
         wrappingStoreProvider = new WrappingStoreProvider(
             Arrays.asList(stubProviderOne, stubProviderTwo),
-            StoreQueryParams.withAllPartitionAndStaleStoresDisabled()
+            new StoreQueryParams<ReadOnlyKeyValueStore<Object, Object>>("kv", QueryableStoreTypes.keyValueStore())
         );
     }
 
@@ -71,6 +70,7 @@ public class WrappingStoreProviderTest {
 
     @Test
     public void shouldFindWindowStores() {
+        wrappingStoreProvider.setStoreQueryParams(new StoreQueryParams<ReadOnlyWindowStore<Object, Object>>("window", windowStore()));
         final List<ReadOnlyWindowStore<Object, Object>>
                 windowStores =
                 wrappingStoreProvider.stores("window", windowStore());
@@ -79,6 +79,7 @@ public class WrappingStoreProviderTest {
 
     @Test(expected = InvalidStateStoreException.class)
     public void shouldThrowInvalidStoreExceptionIfNoStoreOfTypeFound() {
-        wrappingStoreProvider.stores("doesn't exist", QueryableStoreTypes.keyValueStore());
+        wrappingStoreProvider.setStoreQueryParams(new StoreQueryParams<ReadOnlyKeyValueStore<String, String>>("doesn't exist", QueryableStoreTypes.<String, String>keyValueStore()));
+        wrappingStoreProvider.stores("doesn't exist", QueryableStoreTypes.<String, String>keyValueStore());
     }
 }

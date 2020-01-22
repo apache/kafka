@@ -49,13 +49,14 @@ import org.apache.kafka.streams.kstream.Predicate;
 import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.kstream.ValueMapper;
-import org.apache.kafka.streams.state.KeyValueIterator;
-import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.QueryableStoreType;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
-import org.apache.kafka.streams.state.ReadOnlyWindowStore;
 import org.apache.kafka.streams.state.StreamsMetadata;
+import org.apache.kafka.streams.state.ReadOnlyWindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
+import org.apache.kafka.streams.state.KeyValueIterator;
+import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.MockMapper;
 import org.apache.kafka.test.NoRetryException;
@@ -304,8 +305,10 @@ public class QueryableStateIntegrationTest {
 
                     final int index = queryMetadata.getActiveHost().port();
                     final KafkaStreams streamsWithKey = pickInstanceByPort ? streamsList.get(index) : streams;
+                    final QueryableStoreType<ReadOnlyKeyValueStore<String, Long>> queryableStoreType = QueryableStoreTypes.keyValueStore();
+                    final StoreQueryParams<ReadOnlyKeyValueStore<String, Long>> storeQueryParams = new StoreQueryParams<>(storeName, queryableStoreType);
                     final ReadOnlyKeyValueStore<String, Long> store =
-                        streamsWithKey.store(storeName, QueryableStoreTypes.keyValueStore(), StoreQueryParams.withAllPartitionAndStaleStoresEnabled());
+                            streamsWithKey.store(storeQueryParams.withIncludeStaleStores(true));
                     if (store == null) {
                         nullStoreKeys.add(key);
                         continue;
@@ -363,8 +366,10 @@ public class QueryableStateIntegrationTest {
 
                     final int index = queryMetadata.getActiveHost().port();
                     final KafkaStreams streamsWithKey = pickInstanceByPort ? streamsList.get(index) : streams;
+                    final QueryableStoreType<ReadOnlyWindowStore<String, Long>> queryableWindowStoreType = QueryableStoreTypes.windowStore();
+                    final StoreQueryParams<ReadOnlyWindowStore<String, Long>> storeQueryParams = new StoreQueryParams<>(storeName, queryableWindowStoreType);
                     final ReadOnlyWindowStore<String, Long> store =
-                        streamsWithKey.store(storeName, QueryableStoreTypes.windowStore(), StoreQueryParams.withAllPartitionAndStaleStoresEnabled());
+                            streamsWithKey.store(storeQueryParams.withIncludeStaleStores(true));
                     if (store == null) {
                         nullStoreKeys.add(key);
                         continue;

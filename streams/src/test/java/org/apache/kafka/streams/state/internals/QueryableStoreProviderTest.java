@@ -54,38 +54,38 @@ public class QueryableStoreProviderTest {
 
     @Test(expected = InvalidStateStoreException.class)
     public void shouldThrowExceptionIfKVStoreDoesntExist() {
-        storeProvider.getStore("not-a-store", QueryableStoreTypes.keyValueStore(), StoreQueryParams.withAllPartitionAndStaleStoresDisabled());
+        storeProvider.getStore(new StoreQueryParams<>("not-a-store", QueryableStoreTypes.keyValueStore()));
     }
 
     @Test(expected = InvalidStateStoreException.class)
     public void shouldThrowExceptionIfWindowStoreDoesntExist() {
-        storeProvider.getStore("not-a-store", QueryableStoreTypes.windowStore(), StoreQueryParams.withAllPartitionAndStaleStoresDisabled());
+        storeProvider.getStore(new StoreQueryParams<>("not-a-store", QueryableStoreTypes.windowStore()));
     }
 
     @Test
     public void shouldReturnKVStoreWhenItExists() {
-        assertNotNull(storeProvider.getStore(keyValueStore, QueryableStoreTypes.keyValueStore(), StoreQueryParams.withAllPartitionAndStaleStoresDisabled()));
+        assertNotNull(storeProvider.getStore(new StoreQueryParams<>(keyValueStore, QueryableStoreTypes.keyValueStore())));
     }
 
     @Test
     public void shouldReturnWindowStoreWhenItExists() {
-        assertNotNull(storeProvider.getStore(windowStore, QueryableStoreTypes.windowStore(), StoreQueryParams.withAllPartitionAndStaleStoresDisabled()));
+        assertNotNull(storeProvider.getStore(new StoreQueryParams<>(windowStore, QueryableStoreTypes.windowStore())));
     }
 
     @Test(expected = InvalidStateStoreException.class)
     public void shouldThrowExceptionWhenLookingForWindowStoreWithDifferentType() {
-        storeProvider.getStore(windowStore, QueryableStoreTypes.keyValueStore(), StoreQueryParams.withAllPartitionAndStaleStoresDisabled());
+        storeProvider.getStore(new StoreQueryParams<>(windowStore, QueryableStoreTypes.keyValueStore()));
     }
 
     @Test(expected = InvalidStateStoreException.class)
     public void shouldThrowExceptionWhenLookingForKVStoreWithDifferentType() {
-        storeProvider.getStore(keyValueStore, QueryableStoreTypes.windowStore(), StoreQueryParams.withAllPartitionAndStaleStoresDisabled());
+        storeProvider.getStore(new StoreQueryParams<>(keyValueStore, QueryableStoreTypes.windowStore()));
     }
 
     @Test
     public void shouldFindGlobalStores() {
         globalStateStores.put("global", new NoOpReadOnlyStore<>());
-        assertNotNull(storeProvider.getStore("global", QueryableStoreTypes.keyValueStore(), StoreQueryParams.withAllPartitionAndStaleStoresDisabled()));
+        assertNotNull(storeProvider.getStore(new StoreQueryParams<>("global", QueryableStoreTypes.keyValueStore())));
     }
 
 

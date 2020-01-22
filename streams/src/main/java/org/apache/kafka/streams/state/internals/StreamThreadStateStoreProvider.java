@@ -46,10 +46,9 @@ public class StreamThreadStateStoreProvider {
     }
 
     @SuppressWarnings("unchecked")
-    public <T> List<T> stores(final String storeName,
-                              final QueryableStoreType<T> queryableStoreType,
-                              final StoreQueryParams storeQueryParams) {
-
+    public <T> List<T> stores(final StoreQueryParams storeQueryParams) {
+        final String storeName = storeQueryParams.getStoreName();
+        final QueryableStoreType<T> queryableStoreType = storeQueryParams.getQueryableStoreType();
         final TaskId keyTaskId = createKeyTaskId(storeName, storeQueryParams.getPartition());
         if (streamThread.state() == StreamThread.State.DEAD) {
             return Collections.emptyList();
