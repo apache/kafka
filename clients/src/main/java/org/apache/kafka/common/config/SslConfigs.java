@@ -50,10 +50,10 @@ public class SslConfigs {
     public static final String SSL_PROTOCOL_CONFIG = "ssl.protocol";
     public static final String SSL_PROTOCOL_DOC = "The SSL protocol used to generate the SSLContext. "
             + "Default setting is TLS, which is fine for most cases. "
-            + "Allowed values in recent JVMs are TLS, TLSv1.1, TLSv1.2 and TLSv1.3. SSL, SSLv2 and SSLv3 "
+            + "Allowed values in recent JVMs are TLSv1.2 and TLSv1.3. TLS, TLSv1.1, SSL, SSLv2 and SSLv3 "
             + "may be supported in older JVMs, but their usage is discouraged due to known security vulnerabilities.";
 
-    public static final String DEFAULT_SSL_PROTOCOL = "TLS";
+    public static final String DEFAULT_SSL_PROTOCOL = "TLSv1.2";
 
     public static final String SSL_PROVIDER_CONFIG = "ssl.provider";
     public static final String SSL_PROVIDER_DOC = "The name of the security provider used for SSL connections. Default value is the default security provider of the JVM.";
