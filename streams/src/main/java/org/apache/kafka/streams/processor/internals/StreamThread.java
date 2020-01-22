@@ -876,7 +876,7 @@ public class StreamThread extends Thread {
 
                 if (originalReset.equals("earliest")) {
                     addToResetList(partition, seekToBeginning, "No custom setting defined for topic '{}' using original config '{}' for offset reset", "earliest", loggedTopics);
-                } else if (originalReset.equals("latest")) {
+                } else {
                     addToResetList(partition, seekToEnd, "No custom setting defined for topic '{}' using original config '{}' for offset reset", "latest", loggedTopics);
                 }
             }
@@ -1125,6 +1125,13 @@ public class StreamThread extends Thread {
         } catch (final Throwable e) {
             log.error("Failed to close restore consumer due to the following error:", e);
         }
+        if (producer != null) {
+            try {
+                producer.close();
+            } catch (final Throwable e) {
+                log.error("Failed to close producer due to the following error:", e);
+            }
+        }
         streamsMetrics.removeAllThreadLevelSensors(getName());
 
         setState(State.DEAD);
@@ -1279,9 +1286,5 @@ public class StreamThread extends Thread {
 
     int currentNumIterations() {
         return numIterations;
-    }
-
-    public StreamThread.StateListener stateListener() {
-        return stateListener;
     }
 }
