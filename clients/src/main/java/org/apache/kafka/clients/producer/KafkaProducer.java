@@ -1271,8 +1271,6 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     private void throwIfInvalidGroupMetadata(ConsumerGroupMetadata groupMetadata) {
         if (groupMetadata == null) {
             throw new IllegalArgumentException("Consumer group metadata could not be null");
-        } else if (groupMetadata.groupId() == null) {
-            throw new IllegalArgumentException("Passed in group metadata " + groupMetadata + " has empty group.id");
         } else if (groupMetadata.generationId() > 0
             && JoinGroupRequest.UNKNOWN_MEMBER_ID.equals(groupMetadata.memberId())) {
             throw new IllegalArgumentException("Passed in group metadata " + groupMetadata + " has generationId > 0 but member.id ");

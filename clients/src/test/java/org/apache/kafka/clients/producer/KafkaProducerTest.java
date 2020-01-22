@@ -789,11 +789,6 @@ public class KafkaProducerTest {
     }
 
     @Test
-    public void testNullGroupIdInSendOffsets() {
-        verifyInvalidGroupMetadata(new ConsumerGroupMetadata(null));
-    }
-
-    @Test
     public void testInvalidGenerationIdAndMemberIdCombinedInSendOffsets() {
         verifyInvalidGroupMetadata(new ConsumerGroupMetadata("group", 2, JoinGroupRequest.UNKNOWN_MEMBER_ID, Optional.empty()));
     }

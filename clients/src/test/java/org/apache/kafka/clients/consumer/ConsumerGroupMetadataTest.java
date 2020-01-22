@@ -57,6 +57,16 @@ public class ConsumerGroupMetadataTest {
     }
 
     @Test
+    public void testInvalidGroupId() {
+        String memberId = "member";
+        int generationId = 2;
+
+        assertThrows(NullPointerException.class, () -> new ConsumerGroupMetadata(
+            null, generationId, memberId, Optional.empty())
+        );
+    }
+
+    @Test
     public void testInvalidMemberId() {
         int generationId = 2;
 
