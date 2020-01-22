@@ -168,6 +168,12 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
         return baseDir;
     }
 
+    // TODO: we should remove the register function with registerStore
+    @Override
+    public void registerStore(final StateStore store, final StateRestoreCallback stateRestoreCallback) {
+        register(store, stateRestoreCallback);
+    }
+
     public void register(final StateStore store,
                          final StateRestoreCallback stateRestoreCallback) {
 
@@ -267,12 +273,6 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
             topicPartitions.add(new TopicPartition(partition.topic(), partition.partition()));
         }
         return topicPartitions;
-    }
-
-    // TODO K9113: this is just for compilation for now, we would refactor this class in another PR
-    @Override
-    public void registerStore(final StateStore store, final StateRestoreCallback stateRestoreCallback) {
-
     }
 
     private void restoreState(final StateRestoreCallback stateRestoreCallback,
