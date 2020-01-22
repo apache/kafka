@@ -53,7 +53,8 @@ public interface Converter {
      * by default will call the {@link #fromConnectData(String, Schema, Object)} method.
      * Override this method to make use of the supplied headers.</p>
      * @param topic the topic associated with the data
-     * @param headers the headers associated with the data
+     * @param headers the headers associated with the data; any changes done to the headers
+     *        are applied to the message sent to the broker
      * @param schema the schema for the value
      * @param value the value to convert
      * @return the serialized value
