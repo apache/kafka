@@ -119,6 +119,8 @@ public class InternalTopologyBuilder {
 
     private Pattern topicPattern = null;
 
+    private List<String> topicCollection = null;
+
     private Map<Integer, Set<String>> nodeGroups = null;
 
     public static class StateStoreFactory {
@@ -215,7 +217,7 @@ public class InternalTopologyBuilder {
 
     // Map from topics to their matched regex patterns, this is to ensure one topic is passed through on source node
     // even if it can be matched by multiple regex patterns. Only used by SourceNodeFactory
-    private static final Map<String, Pattern> topicToPatterns = new HashMap<>();
+    private final Map<String, Pattern> topicToPatterns = new HashMap<>();
 
     private class SourceNodeFactory extends NodeFactory {
         private final List<String> topics;
@@ -1208,20 +1210,25 @@ public class InternalTopologyBuilder {
     }
 
     boolean usesPatternSubscription() {
-        return (!nodeToSourcePatterns.isEmpty());
+        return !nodeToSourcePatterns.isEmpty();
     }
 
     synchronized Collection<String> sourceTopicCollection() {
         log.debug("No source topics using pattern subscription found, using regular subscription for the main consumer.");
 
-        return sourceTopicNames;
+        if (topicCollection == null) {
+            topicCollection = maybeDecorateInternalSourceTopics(sourceTopicNames);
+            Collections.sort(topicCollection);
+        }
+
+        return topicCollection;
     }
 
     synchronized Pattern sourceTopicPattern() {
         log.debug("Found pattern subscribed source topics, falling back to pattern subscription for the main consumer.");
 
         if (topicPattern == null) {
-            final List<String> allSourceTopics = new ArrayList<>(sourceTopicNames);
+            final List<String> allSourceTopics = maybeDecorateInternalSourceTopics(sourceTopicNames);
             Collections.sort(allSourceTopics);
             topicPattern = buildPattern(allSourceTopics, nodeToSourcePatterns.values());
         }
@@ -1854,7 +1861,7 @@ public class InternalTopologyBuilder {
         return sb.toString();
     }
 
-    Collection<String> subscriptionUpdates() {
+    Set<String> subscriptionUpdates() {
         return Collections.unmodifiableSet(subscriptionUpdates);
     }
 
