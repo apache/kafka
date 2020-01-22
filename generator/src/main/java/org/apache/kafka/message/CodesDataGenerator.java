@@ -116,7 +116,7 @@ public class CodesDataGenerator {
     }
 
     private static String inRangeTerm(String qualifier, Map.Entry<Long, String> s, Map.Entry<Long, String> l) {
-        if (s.getValue() == l.getValue()) {
+        if (s.getValue().equals(l.getValue())) {
             return String.format("v == %s", qual(qualifier, l.getValue()));
         } else {
             return String.format("%s <= v && v <= %s", qual(qualifier, s.getValue()), qual(qualifier, l.getValue()));
