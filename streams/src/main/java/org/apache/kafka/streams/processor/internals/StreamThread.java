@@ -1023,34 +1023,13 @@ public class StreamThread extends Thread {
                 processStandbyRecords = false;
             }
 
+            ConsumerRecords<byte[], byte[]> records = null;
             try {
                 // poll(0): Since this is during the normal processing, not during restoration.
                 // We can afford to have slower restore (because we don't wait inside poll for results).
                 // Instead, we want to proceed to the next iteration to call the main consumer#poll()
                 // as soon as possible so as to not be kicked out of the group.
-                final ConsumerRecords<byte[], byte[]> records = restoreConsumer.poll(Duration.ZERO);
-
-                if (!records.isEmpty()) {
-                    for (final TopicPartition partition : records.partitions()) {
-                        final StandbyTask task = taskManager.standbyTask(partition);
-
-                        if (task == null) {
-                            throw new StreamsException(logPrefix + "Missing standby task for partition " + partition);
-                        }
-
-                        if (task.isClosed()) {
-                            log.info("Standby task {} is already closed, probably because it got unexpectedly migrated to another thread already. " +
-                                "Notifying the thread to trigger a new rebalance immediately.", task.id());
-                            throw new TaskMigratedException(task);
-                        }
-
-                        final List<ConsumerRecord<byte[], byte[]>> remaining = task.update(partition, records.records(partition));
-                        if (!remaining.isEmpty()) {
-                            restoreConsumer.pause(singleton(partition));
-                            standbyRecords.put(partition, remaining);
-                        }
-                    }
-                }
+                records = restoreConsumer.poll(Duration.ZERO);
             } catch (final InvalidOffsetException recoverableException) {
                 log.warn("Updating StandbyTasks failed. Deleting StandbyTasks stores to recreate from scratch.", recoverableException);
                 final Set<TopicPartition> partitions = recoverableException.partitions();
@@ -1067,6 +1046,27 @@ public class StreamThread extends Thread {
                     task.reinitializeStateStoresForPartitions(recoverableException.partitions());
                 }
                 restoreConsumer.seekToBeginning(partitions);
+            }
+            if (records != null && !records.isEmpty()) {
+                for (final TopicPartition partition : records.partitions()) {
+                    final StandbyTask task = taskManager.standbyTask(partition);
+
+                    if (task == null) {
+                        throw new StreamsException(logPrefix + "Missing standby task for partition " + partition);
+                    }
+
+                    if (task.isClosed()) {
+                        log.info("Standby task {} is already closed, probably because it got unexpectedly migrated to another thread already. " +
+                                "Notifying the thread to trigger a new rebalance immediately.", task.id());
+                        throw new TaskMigratedException(task);
+                    }
+
+                    final List<ConsumerRecord<byte[], byte[]>> remaining = task.update(partition, records.records(partition));
+                    if (!remaining.isEmpty()) {
+                        restoreConsumer.pause(singleton(partition));
+                        standbyRecords.put(partition, remaining);
+                    }
+                }
             }
 
             // update now if the standby restoration indeed executed
