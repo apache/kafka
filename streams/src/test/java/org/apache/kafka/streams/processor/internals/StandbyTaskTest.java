@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import junit.framework.AssertionFailedError;
 import org.apache.kafka.clients.consumer.MockConsumer;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.common.MetricName;
@@ -152,13 +151,13 @@ public class StandbyTaskTest {
         EasyMock.replay(stateManager);
 
         task = new StandbyTask(taskId,
-            Collections.singleton(partition),
-            topology,
-            consumer,
-            config,
-            streamsMetrics,
-            stateManager,
-            stateDirectory);
+                               Collections.singleton(partition),
+                               topology,
+                               consumer,
+                               config,
+                               streamsMetrics,
+                               stateManager,
+                               stateDirectory);
 
         assertEquals(Task.State.CREATED, task.state());
 
@@ -221,13 +220,13 @@ public class StandbyTaskTest {
         EasyMock.replay(stateManager);
 
         task = new StandbyTask(taskId,
-            Collections.singleton(partition),
-            topology,
-            consumer,
-            config,
-            streamsMetrics,
-            stateManager,
-            stateDirectory);
+                               Collections.singleton(partition),
+                               topology,
+                               consumer,
+                               config,
+                               streamsMetrics,
+                               stateManager,
+                               stateDirectory);
 
         assertEquals(Collections.singletonMap(partition, 50L), task.restoredOffsets());
 
@@ -237,11 +236,11 @@ public class StandbyTaskTest {
     @Test
     public void shouldDoNothingWithCreatedStateOnClose() {
         stateManager.close();
-        EasyMock.expectLastCall().andThrow(new AssertionFailedError("Close should not be called")).anyTimes();
+        EasyMock.expectLastCall().andThrow(new AssertionError("Close should not be called")).anyTimes();
         stateManager.flush();
-        EasyMock.expectLastCall().andThrow(new AssertionFailedError("Flush should not be called")).anyTimes();
+        EasyMock.expectLastCall().andThrow(new AssertionError("Flush should not be called")).anyTimes();
         stateManager.checkpoint(EasyMock.anyObject());
-        EasyMock.expectLastCall().andThrow(new AssertionFailedError("Checkpoint should not be called")).anyTimes();
+        EasyMock.expectLastCall().andThrow(new AssertionError("Checkpoint should not be called")).anyTimes();
         EasyMock.replay(stateManager);
         final MetricName metricName = setupCloseTaskMetric();
         final StandbyTask task = new StandbyTask(
@@ -270,9 +269,9 @@ public class StandbyTaskTest {
         stateManager.close();
         EasyMock.expectLastCall();
         stateManager.flush();
-        EasyMock.expectLastCall().andThrow(new AssertionFailedError("Flush should not be called")).anyTimes();
+        EasyMock.expectLastCall().andThrow(new AssertionError("Flush should not be called")).anyTimes();
         stateManager.checkpoint(EasyMock.anyObject());
-        EasyMock.expectLastCall().andThrow(new AssertionFailedError("Checkpoint should not be called")).anyTimes();
+        EasyMock.expectLastCall().andThrow(new AssertionError("Checkpoint should not be called")).anyTimes();
         EasyMock.replay(stateManager);
         final MetricName metricName = setupCloseTaskMetric();
         final StandbyTask task = new StandbyTask(
