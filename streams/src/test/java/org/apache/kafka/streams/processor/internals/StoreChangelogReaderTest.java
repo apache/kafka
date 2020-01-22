@@ -27,8 +27,8 @@ import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
-import org.apache.kafka.streams.processor.internals.ProcessorStateManager.StateStoreMetadata;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.internals.ProcessorStateManager.StateStoreMetadata;
 import org.apache.kafka.test.MockStateRestoreListener;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.easymock.EasyMock;
@@ -88,7 +88,7 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
 
     @Parameterized.Parameters
     public static Object[] data() {
-        return new Object[] { STANDBY, ACTIVE };
+        return new Object[] {STANDBY, ACTIVE};
     }
 
     @Parameterized.Parameter
@@ -182,7 +182,7 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
         changelogReader.restore();
 
         assertEquals(type == ACTIVE ? StoreChangelogReader.ChangelogState.COMPLETED : StoreChangelogReader.ChangelogState.RESTORING,
-            changelogReader.changelogMetadata(tp).state());
+                     changelogReader.changelogMetadata(tp).state());
         assertEquals(type == ACTIVE ? 10L : null, changelogReader.changelogMetadata(tp).endOffset());
         assertEquals(0L, changelogReader.changelogMetadata(tp).totalRestored());
         assertEquals(type == ACTIVE ? Collections.singleton(tp) : Collections.emptySet(), changelogReader.completedChangelogs());
@@ -214,8 +214,7 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
 
         changelogReader.register(tp, stateManager);
 
-        if (type == STANDBY)
-            changelogReader.transitToUpdateStandby();
+        if (type == STANDBY) { changelogReader.transitToUpdateStandby(); }
 
         changelogReader.restore();
 
@@ -245,7 +244,7 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
         changelogReader.restore();
 
         assertEquals(type == ACTIVE ? StoreChangelogReader.ChangelogState.COMPLETED : StoreChangelogReader.ChangelogState.RESTORING,
-            changelogReader.changelogMetadata(tp).state());
+                     changelogReader.changelogMetadata(tp).state());
         assertEquals(type == ACTIVE ? 3L : 4L, changelogReader.changelogMetadata(tp).totalRestored());
         assertEquals(type == ACTIVE ? 1 : 0, changelogReader.changelogMetadata(tp).bufferedRecords().size());
         assertEquals(0, changelogReader.changelogMetadata(tp).bufferedLimitIndex());
@@ -278,8 +277,7 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
 
         changelogReader.register(tp, stateManager);
 
-        if (type == STANDBY)
-            changelogReader.transitToUpdateStandby();
+        if (type == STANDBY) { changelogReader.transitToUpdateStandby(); }
 
         changelogReader.restore();
 
@@ -316,7 +314,7 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
         changelogReader.restore();
 
         assertEquals(type == ACTIVE ? StoreChangelogReader.ChangelogState.COMPLETED : StoreChangelogReader.ChangelogState.RESTORING,
-            changelogReader.changelogMetadata(tp).state());
+                     changelogReader.changelogMetadata(tp).state());
         assertEquals(3L, changelogReader.changelogMetadata(tp).totalRestored());
         assertEquals(type == ACTIVE ? Collections.singleton(tp) : Collections.emptySet(), changelogReader.completedChangelogs());
         assertEquals(type == ACTIVE ? Collections.singleton(tp) : Collections.emptySet(), consumer.paused());
@@ -512,7 +510,7 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
         changelogReader.restore();
 
         assertEquals(type == ACTIVE ? StoreChangelogReader.ChangelogState.REGISTERED : StoreChangelogReader.ChangelogState.RESTORING,
-            changelogReader.changelogMetadata(tp).state());
+                     changelogReader.changelogMetadata(tp).state());
         assertNull(changelogReader.changelogMetadata(tp).endOffset());
         assertEquals(type == ACTIVE ? null : 0L, changelogReader.changelogMetadata(tp).limitOffset());
         assertTrue(functionCalled.get());
