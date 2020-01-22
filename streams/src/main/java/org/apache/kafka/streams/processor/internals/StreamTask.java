@@ -183,9 +183,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         recordInfo = new PartitionGroup.RecordInfo();
         partitionGroup = new PartitionGroup(partitionQueues, recordLatenessSensor);
 
-        for (final StateStore store : topology.globalStateStores()) {
-            stateMgr.registerStore(store, null);
-        }
+        stateMgr.registerGlobalStateStores(topology.globalStateStores());
     }
 
     @Override

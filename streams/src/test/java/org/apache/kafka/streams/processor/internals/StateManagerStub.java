@@ -47,6 +47,11 @@ public class StateManagerStub implements StateManager {
     }
 
     @Override
+    public StateStore getGlobalStore(final String name) {
+        return null;
+    }
+
+    @Override
     public Map<TopicPartition, Long> changelogOffsets() {
         return null;
     }

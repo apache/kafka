@@ -52,7 +52,7 @@ public class GlobalProcessorContextImpl extends AbstractProcessorContext {
     @SuppressWarnings("unchecked")
     @Override
     public StateStore getStateStore(final String name) {
-        final StateStore store = stateManager.getStore(name);
+        final StateStore store = stateManager.getGlobalStore(name);
 
         if (store instanceof TimestampedKeyValueStore) {
             return new TimestampedKeyValueStoreReadWriteDecorator((TimestampedKeyValueStore) store);

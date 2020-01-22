@@ -83,10 +83,24 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
             throw new StreamsException("Accessing from an unknown node");
         }
 
-        final boolean isGlobalStore = task.topology.globalStateStores().stream()
-            .filter(store -> store.name().equals(name)).count() == 1;
+        final StateStore global = stateManager.getGlobalStore(name);
+        if (global != null) {
+            if (global instanceof TimestampedKeyValueStore) {
+                return new TimestampedKeyValueStoreReadOnlyDecorator((TimestampedKeyValueStore) global);
+            } else if (global instanceof KeyValueStore) {
+                return new KeyValueStoreReadOnlyDecorator((KeyValueStore) global);
+            } else if (global instanceof TimestampedWindowStore) {
+                return new TimestampedWindowStoreReadOnlyDecorator((TimestampedWindowStore) global);
+            } else if (global instanceof WindowStore) {
+                return new WindowStoreReadOnlyDecorator((WindowStore) global);
+            } else if (global instanceof SessionStore) {
+                return new SessionStoreReadOnlyDecorator((SessionStore) global);
+            }
 
-        if (!isGlobalStore && !currentNode().stateStores.contains(name)) {
+            return global;
+        }
+
+        if (!currentNode().stateStores.contains(name)) {
             throw new StreamsException("Processor " + currentNode().name() + " has no access to StateStore " + name +
                 " as the store is not connected to the processor. If you add stores manually via '.addStateStore()' " +
                 "make sure to connect the added store to the processor by providing the processor name to " +

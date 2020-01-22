@@ -142,6 +142,7 @@ public class ProcessorStateManager implements StateManager {
 
     // must be maintained in topological order
     private final FixedOrderMap<String, StateStoreMetadata> stores = new FixedOrderMap<>();
+    private final FixedOrderMap<String, StateStore> globalStores = new FixedOrderMap<>();
 
     private final File baseDir;
     private final OffsetCheckpoint checkpointFile;
@@ -174,6 +175,18 @@ public class ProcessorStateManager implements StateManager {
         this.checkpointFile = new OffsetCheckpoint(new File(baseDir, CHECKPOINT_FILE_NAME));
 
         log.debug("Created state store manager for task {}", taskId);
+    }
+
+    void registerGlobalStateStores(final List<StateStore> stateStores) {
+        log.debug("Register global stores {}", stateStores);
+        for (final StateStore stateStore : stateStores) {
+            globalStores.put(stateStore.name(), stateStore);
+        }
+    }
+
+    @Override
+    public StateStore getGlobalStore(final String name) {
+        return globalStores.get(name);
     }
 
     public void initializeStoreOffsetsFromCheckpoint() {

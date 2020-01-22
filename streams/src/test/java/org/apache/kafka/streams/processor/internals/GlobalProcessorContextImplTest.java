@@ -65,13 +65,13 @@ public class GlobalProcessorContextImplTest {
         replay(streamsConfig);
 
         final StateManager stateManager = mock(StateManager.class);
-        expect(stateManager.getStore(GLOBAL_STORE_NAME)).andReturn(mock(StateStore.class));
-        expect(stateManager.getStore(GLOBAL_KEY_VALUE_STORE_NAME)).andReturn(mock(KeyValueStore.class));
-        expect(stateManager.getStore(GLOBAL_TIMESTAMPED_KEY_VALUE_STORE_NAME)).andReturn(mock(TimestampedKeyValueStore.class));
-        expect(stateManager.getStore(GLOBAL_WINDOW_STORE_NAME)).andReturn(mock(WindowStore.class));
-        expect(stateManager.getStore(GLOBAL_TIMESTAMPED_WINDOW_STORE_NAME)).andReturn(mock(TimestampedWindowStore.class));
-        expect(stateManager.getStore(GLOBAL_SESSION_STORE_NAME)).andReturn(mock(SessionStore.class));
-        expect(stateManager.getStore(UNKNOWN_STORE)).andReturn(null);
+        expect(stateManager.getGlobalStore(GLOBAL_STORE_NAME)).andReturn(mock(StateStore.class));
+        expect(stateManager.getGlobalStore(GLOBAL_KEY_VALUE_STORE_NAME)).andReturn(mock(KeyValueStore.class));
+        expect(stateManager.getGlobalStore(GLOBAL_TIMESTAMPED_KEY_VALUE_STORE_NAME)).andReturn(mock(TimestampedKeyValueStore.class));
+        expect(stateManager.getGlobalStore(GLOBAL_WINDOW_STORE_NAME)).andReturn(mock(WindowStore.class));
+        expect(stateManager.getGlobalStore(GLOBAL_TIMESTAMPED_WINDOW_STORE_NAME)).andReturn(mock(TimestampedWindowStore.class));
+        expect(stateManager.getGlobalStore(GLOBAL_SESSION_STORE_NAME)).andReturn(mock(SessionStore.class));
+        expect(stateManager.getGlobalStore(UNKNOWN_STORE)).andReturn(null);
         replay(stateManager);
 
         globalContext = new GlobalProcessorContextImpl(
