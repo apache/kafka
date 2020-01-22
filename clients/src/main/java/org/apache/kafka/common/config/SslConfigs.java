@@ -50,7 +50,7 @@ public class SslConfigs {
     public static final String SSL_PROTOCOL_CONFIG = "ssl.protocol";
     public static final String SSL_PROTOCOL_DOC = "The SSL protocol used to generate the SSLContext. "
             + "Default setting is TLS, which is fine for most cases. "
-            + "Allowed values in recent JVMs are TLS, TLSv1.1 and TLSv1.2. SSL, SSLv2 and SSLv3 "
+            + "Allowed values in recent JVMs are TLS, TLSv1.1, TLSv1.2 and TLSv1.3. SSL, SSLv2 and SSLv3 "
             + "may be supported in older JVMs, but their usage is discouraged due to known security vulnerabilities.";
 
     public static final String DEFAULT_SSL_PROTOCOL = "TLS";
@@ -64,7 +64,7 @@ public class SslConfigs {
 
     public static final String SSL_ENABLED_PROTOCOLS_CONFIG = "ssl.enabled.protocols";
     public static final String SSL_ENABLED_PROTOCOLS_DOC = "The list of protocols enabled for SSL connections.";
-    public static final String DEFAULT_SSL_ENABLED_PROTOCOLS = "TLSv1.2,TLSv1.1,TLSv1";
+    public static final String DEFAULT_SSL_ENABLED_PROTOCOLS = "TLSv1.2";
 
     public static final String SSL_KEYSTORE_TYPE_CONFIG = "ssl.keystore.type";
     public static final String SSL_KEYSTORE_TYPE_DOC = "The file format of the key store file. "
