@@ -622,9 +622,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      * and should also not commit offsets manually (via {@link KafkaConsumer#commitSync(Map) sync} or
      * {@link KafkaConsumer#commitAsync(Map, OffsetCommitCallback) async} commits).
      *
-     * @throws IllegalStateException if no transactional.id has been configured, no transaction has been started,
-     *                               or encounters unexpected group fencing exception which should only be returned from
-     *                               new {@link KafkaProducer#sendOffsetsToTransaction(Map, ConsumerGroupMetadata) sendOffsets}.
+     * @throws IllegalStateException if no transactional.id has been configured, no transaction has been started
      * @throws ProducerFencedException fatal error indicating another producer with the same transactional.id is active
      * @throws org.apache.kafka.common.errors.UnsupportedVersionException fatal error indicating the broker
      *         does not support transactions (i.e. if its version is lower than 0.11.0.0)
@@ -1272,12 +1270,12 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
 
     private void throwIfInvalidGroupMetadata(ConsumerGroupMetadata groupMetadata) {
         if (groupMetadata == null) {
-            throw new IllegalStateException("Consumer group metadata could not be null");
+            throw new IllegalArgumentException("Consumer group metadata could not be null");
         } else if (groupMetadata.groupId() == null) {
-            throw new IllegalStateException("Passed in group metadata " + groupMetadata + " has empty group.id");
+            throw new IllegalArgumentException("Passed in group metadata " + groupMetadata + " has empty group.id");
         } else if (groupMetadata.generationId() > 0
             && JoinGroupRequest.UNKNOWN_MEMBER_ID.equals(groupMetadata.memberId())) {
-            throw new IllegalStateException("Passed in group metadata " + groupMetadata + " has generationId > 0 but member.id ");
+            throw new IllegalArgumentException("Passed in group metadata " + groupMetadata + " has generationId > 0 but member.id ");
         }
     }
 

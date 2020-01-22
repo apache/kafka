@@ -821,7 +821,7 @@ public class KafkaProducerTest {
             new StringSerializer(), metadata, client, null, time)) {
             producer.initTransactions();
             producer.beginTransaction();
-            assertThrows(IllegalStateException.class,
+            assertThrows(IllegalArgumentException.class,
                 () -> producer.sendOffsetsToTransaction(Collections.emptyMap(), groupMetadata));
         }
     }

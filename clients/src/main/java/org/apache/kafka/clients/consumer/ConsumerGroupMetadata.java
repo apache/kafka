@@ -37,12 +37,8 @@ public class ConsumerGroupMetadata {
                                  Optional<String> groupInstanceId) {
         this.groupId = groupId;
         this.generationId = generationId;
-
-        Objects.requireNonNull(memberId, "member.id can't be null");
-        this.memberId = memberId;
-
-        Objects.requireNonNull(groupInstanceId, "group.instance.id can't be null");
-        this.groupInstanceId = groupInstanceId;
+        this.memberId = Objects.requireNonNull(memberId, "member.id can't be null");
+        this.groupInstanceId = Objects.requireNonNull(groupInstanceId, "group.instance.id can't be null");
     }
 
     public ConsumerGroupMetadata(String groupId) {

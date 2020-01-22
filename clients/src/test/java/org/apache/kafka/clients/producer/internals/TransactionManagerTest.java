@@ -987,7 +987,7 @@ public class TransactionManagerTest {
         assertTrue(sendOffsetsResult.isCompleted());
         assertFalse(sendOffsetsResult.isSuccessful());
         assertTrue(sendOffsetsResult.error() instanceof FencedInstanceIdException);
-        assertFatalError(FencedInstanceIdException.class);
+        assertAbortableError(FencedInstanceIdException.class);
     }
 
     @Test
