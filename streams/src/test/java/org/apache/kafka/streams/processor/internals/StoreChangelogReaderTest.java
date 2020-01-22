@@ -214,7 +214,9 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
 
         changelogReader.register(tp, stateManager);
 
-        if (type == STANDBY) { changelogReader.transitToUpdateStandby(); }
+        if (type == STANDBY) {
+            changelogReader.transitToUpdateStandby();
+        }
 
         changelogReader.restore();
 
@@ -277,7 +279,9 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
 
         changelogReader.register(tp, stateManager);
 
-        if (type == STANDBY) { changelogReader.transitToUpdateStandby(); }
+        if (type == STANDBY) {
+            changelogReader.transitToUpdateStandby();
+        }
 
         changelogReader.restore();
 
