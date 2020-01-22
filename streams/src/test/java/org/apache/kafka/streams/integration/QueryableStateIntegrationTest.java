@@ -308,7 +308,7 @@ public class QueryableStateIntegrationTest {
                     final QueryableStoreType<ReadOnlyKeyValueStore<String, Long>> queryableStoreType = QueryableStoreTypes.keyValueStore();
                     final StoreQueryParams<ReadOnlyKeyValueStore<String, Long>> storeQueryParams = new StoreQueryParams<>(storeName, queryableStoreType);
                     final ReadOnlyKeyValueStore<String, Long> store =
-                            streamsWithKey.store(storeQueryParams.withIncludeStaleStores(true));
+                        streamsWithKey.store(storeQueryParams.withIncludeStaleStores());
                     if (store == null) {
                         nullStoreKeys.add(key);
                         continue;
@@ -369,7 +369,7 @@ public class QueryableStateIntegrationTest {
                     final QueryableStoreType<ReadOnlyWindowStore<String, Long>> queryableWindowStoreType = QueryableStoreTypes.windowStore();
                     final StoreQueryParams<ReadOnlyWindowStore<String, Long>> storeQueryParams = new StoreQueryParams<>(storeName, queryableWindowStoreType);
                     final ReadOnlyWindowStore<String, Long> store =
-                            streamsWithKey.store(storeQueryParams.withIncludeStaleStores(true));
+                        streamsWithKey.store(storeQueryParams.withIncludeStaleStores());
                     if (store == null) {
                         nullStoreKeys.add(key);
                         continue;
