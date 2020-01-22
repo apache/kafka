@@ -116,6 +116,14 @@ class ZookeeperTlsTest(ProduceConsumeValidateTest):
         if self.zk.query(path) != value:
             raise Exception("Error creating and then querying a znode using the CLI with a TLS-enabled ZooKeeper quorum")
 
+        # Make sure the ConfigCommand CLI is able to talk to a TLS-enabled ZooKeeper quorum
+        # This is necessary for the bootstrap use case despite direct ZooKeeper connectivity being deprecated
+        self.zk.describe(self.topic)
+
+        # Make sure the AclCommand CLI is able to talk to a TLS-enabled ZooKeeper quorum
+        # This is necessary for the bootstrap use case despite direct ZooKeeper connectivity being deprecated
+        self.zk.list_acls(self.topic)
+
         #
         # Test zookeeper.set.acl with just TLS mutual authentication (no SASL)
         #
