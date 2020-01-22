@@ -390,7 +390,7 @@ object MiniKdc {
       |
     """.stripMargin
     println(infoMessage)
-    Exit.addShutdownHook(miniKdc.stop, Some("minikdc-shutdown-hook"))
+    Exit.addShutdownHook("minikdc-shutdown-hook", miniKdc.stop)
     miniKdc
   }
 

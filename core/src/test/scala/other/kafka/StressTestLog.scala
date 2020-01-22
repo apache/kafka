@@ -57,7 +57,7 @@ object StressTestLog {
     val reader = new ReaderThread(log)
     reader.start()
 
-    Exit.addShutdownHook({
+    Exit.addShutdownHook("stress-test-shutdown-hook", {
         running.set(false)
         writer.join()
         reader.join()

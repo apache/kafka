@@ -515,7 +515,7 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
       offsetCommitIntervalMs = options.valueOf(offsetCommitIntervalMsOpt).intValue()
       val numStreams = options.valueOf(numStreamsOpt).intValue()
 
-      Exit.addShutdownHook(cleanShutdown(), Some("MirrorMakerShutdownHook"))
+      Exit.addShutdownHook("MirrorMakerShutdownHook", cleanShutdown())
 
       // create producer
       val producerProps = Utils.loadProps(options.valueOf(producerConfigOpt))

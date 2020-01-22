@@ -27,7 +27,7 @@ public class Exit {
     }
 
     public interface ShutdownHookAdder {
-        void addShutdownHook(Runnable runnable, String name);
+        void addShutdownHook(String name, Runnable runnable);
     }
 
     private static final Procedure DEFAULT_HALT_PROCEDURE = new Procedure() {
@@ -46,7 +46,7 @@ public class Exit {
 
     private static final ShutdownHookAdder DEFAULT_SHUTDOWN_HOOK_ADDER = new ShutdownHookAdder() {
         @Override
-        public void addShutdownHook(Runnable runnable, String name) {
+        public void addShutdownHook(String name, Runnable runnable) {
             if (name != null)
                 Runtime.getRuntime().addShutdownHook(KafkaThread.nonDaemon(name, runnable));
             else
@@ -75,11 +75,11 @@ public class Exit {
     }
 
     public static void addShutdownHook(Runnable runnable) {
-        addShutdownHook(runnable, null);
+        addShutdownHook(null, runnable);
     }
 
-    public static void addShutdownHook(Runnable runnable, String name) {
-        shutdownHookAdder.addShutdownHook(runnable, name);
+    public static void addShutdownHook(String name, Runnable runnable) {
+        shutdownHookAdder.addShutdownHook(name, runnable);
     }
 
     public static void setExitProcedure(Procedure procedure) {
