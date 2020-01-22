@@ -1117,8 +1117,6 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         final Map<TopicPartition, PartitionInfo> topicToPartitionInfo = new HashMap<>();
         final Map<HostInfo, Set<TopicPartition>> partitionsByHost;
 
-        final Map<TopicPartition, TaskId> partitionsToTaskId = new HashMap<>();
-
         switch (receivedAssignmentMetadataVersion) {
             case 1:
                 validateActiveTaskEncoding(partitions, info, logPrefix);
@@ -1127,7 +1125,6 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                     final TopicPartition partition = partitions.get(i);
                     final TaskId id = info.activeTasks().get(i);
                     activeTasks.computeIfAbsent(id, k1 -> new HashSet<>()).add(partition);
-                    partitionsToTaskId.put(partition, id);
                 }
                 partitionsByHost = Collections.emptyMap();
                 break;
@@ -1141,7 +1138,6 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                     final TopicPartition partition = partitions.get(i);
                     final TaskId id = info.activeTasks().get(i);
                     activeTasks.computeIfAbsent(id, k -> new HashSet<>()).add(partition);
-                    partitionsToTaskId.put(partition, id);
                 }
 
                 // process partitions by host
