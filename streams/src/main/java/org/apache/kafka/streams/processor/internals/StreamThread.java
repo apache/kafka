@@ -1133,7 +1133,7 @@ public class StreamThread extends Thread {
     }
 
     private void updateThreadMetadata(final Map<TaskId, Task> activeTasks,
-                                      final Map<TaskId, StandbyTask> standbyTasks) {
+                                      final Map<TaskId, Task> standbyTasks) {
         final Set<String> producerClientIds = new HashSet<>();
         final Set<TaskMetadata> activeTasksMetadata = new HashSet<>();
         for (final Map.Entry<TaskId, Task> task : activeTasks.entrySet()) {
@@ -1141,7 +1141,7 @@ public class StreamThread extends Thread {
             producerClientIds.add(getTaskProducerClientId(getName(), task.getKey()));
         }
         final Set<TaskMetadata> standbyTasksMetadata = new HashSet<>();
-        for (final Map.Entry<TaskId, StandbyTask> task : standbyTasks.entrySet()) {
+        for (final Map.Entry<TaskId, Task> task : standbyTasks.entrySet()) {
             standbyTasksMetadata.add(new TaskMetadata(task.getKey().toString(), task.getValue().partitions()));
         }
 

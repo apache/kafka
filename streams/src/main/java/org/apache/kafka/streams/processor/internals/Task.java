@@ -23,6 +23,8 @@ import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 
 import java.util.Collection;
+import java.util.Collections;
+import java.util.Map;
 import java.util.Set;
 
 public interface Task {
@@ -34,7 +36,7 @@ public interface Task {
                 return;
             } else if (oldState == RESTORING && (newState == RUNNING || newState == SUSPENDED || newState == CLOSED)) {
                 return;
-            } else if (oldState == RUNNING && (newState == SUSPENDED)) {
+            } else if (oldState == RUNNING && (newState == SUSPENDED || newState == CLOSED)) {
                 return;
             } else if (oldState == SUSPENDED && (newState == RUNNING || newState == CLOSED)) {
                 return;
@@ -52,6 +54,11 @@ public interface Task {
 
     void startRunning();
 
+    default Map<TopicPartition, Long> purgableOffsets() {
+        return Collections.emptyMap();
+    }
+
+
 //    void initializeMetadata();
 
     /**
@@ -64,6 +71,10 @@ public interface Task {
 //    boolean hasChangelogs();
 
     boolean commitNeeded();
+
+    default boolean commitRequested() {
+        return false;
+    }
 
 //    void initializeTopology();
 

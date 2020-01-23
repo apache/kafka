@@ -294,8 +294,8 @@ public class TaskManager {
         return tasks.values().stream().filter(Task::isActive).collect(Collectors.toMap(Task::id, t -> t));
     }
 
-    Map<TaskId, StandbyTask> standbyTasks() {
-        return tasks.values().stream().filter(t -> t instanceof StandbyTask).map(t -> (StandbyTask) t).collect(Collectors.toMap(Task::id, t -> t));
+    Map<TaskId, Task> standbyTasks() {
+        return tasks.values().stream().filter(t -> !t.isActive()).collect(Collectors.toMap(Task::id, t -> t));
     }
 
     void setConsumer(final Consumer<byte[], byte[]> consumer) {
@@ -391,7 +391,7 @@ public class TaskManager {
             return -1;
         } else {
             int commits = 0;
-            for (final StreamTask task : actives()) {
+            for (final Task task : activeTasks().values()) {
                 if (task.commitRequested() && task.commitNeeded()) {
                     task.commit();
                     commits++;
@@ -463,7 +463,7 @@ public class TaskManager {
             }
 
             final Map<TopicPartition, RecordsToDelete> recordsToDelete = new HashMap<>();
-            for (final StreamTask task : actives()) {
+            for (final Task task : activeTasks().values()) {
                 for (final Map.Entry<TopicPartition, Long> entry : task.purgableOffsets().entrySet()) {
                     recordsToDelete.put(entry.getKey(), RecordsToDelete.beforeOffset(entry.getValue()));
                 }

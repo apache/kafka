@@ -501,7 +501,8 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         return checkpointableOffsets;
     }
 
-    Map<TopicPartition, Long> purgableOffsets() {
+    @Override
+    public Map<TopicPartition, Long> purgableOffsets() {
         final Map<TopicPartition, Long> purgableConsumedOffsets = new HashMap<>();
         for (final Map.Entry<TopicPartition, Long> entry : consumedOffsets.entrySet()) {
             final TopicPartition tp = entry.getKey();
@@ -793,7 +794,8 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
     /**
      * Whether or not a request has been made to commit the current state
      */
-    boolean commitRequested() {
+    @Override
+    public boolean commitRequested() {
         return commitRequested;
     }
 
