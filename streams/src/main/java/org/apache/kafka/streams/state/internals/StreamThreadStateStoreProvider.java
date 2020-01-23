@@ -18,6 +18,7 @@ package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.StreamThread;
 import org.apache.kafka.streams.processor.internals.Task;
 import org.apache.kafka.streams.state.QueryableStoreType;
@@ -28,11 +29,9 @@ import org.apache.kafka.streams.state.TimestampedWindowStore;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 
-/**
- * Wrapper over StreamThread that implements StateStoreProvider
- */
-public class StreamThreadStateStoreProvider implements StateStoreProvider {
+public class StreamThreadStateStoreProvider {
 
     private final StreamThread streamThread;
 
@@ -41,33 +40,40 @@ public class StreamThreadStateStoreProvider implements StateStoreProvider {
     }
 
     @SuppressWarnings("unchecked")
-    @Override
-    public <T> List<T> stores(final String storeName, final QueryableStoreType<T> queryableStoreType) {
+    public <T> List<T> stores(final String storeName,
+                              final QueryableStoreType<T> queryableStoreType,
+                              final boolean includeStaleStores) {
         if (streamThread.state() == StreamThread.State.DEAD) {
             return Collections.emptyList();
         }
-        if (!streamThread.isRunningAndNotRebalancing()) {
-            throw new InvalidStateStoreException("Cannot get state store " + storeName + " because the stream thread is " +
-                    streamThread.state() + ", not RUNNING");
-        }
-        final List<T> stores = new ArrayList<>();
-        for (final Task streamTask : streamThread.tasks().values()) {
-            final StateStore store = streamTask.getStore(storeName);
-            if (store != null && queryableStoreType.accepts(store)) {
-                if (!store.isOpen()) {
-                    throw new InvalidStateStoreException("Cannot get state store " + storeName + " for task " + streamTask +
-                            " because the store is not open. The state store may have migrated to another instances.");
-                }
-                if (store instanceof TimestampedKeyValueStore && queryableStoreType instanceof QueryableStoreTypes.KeyValueStoreType) {
-                    stores.add((T) new ReadOnlyKeyValueStoreFacade((TimestampedKeyValueStore<Object, Object>) store));
-                } else if (store instanceof TimestampedWindowStore && queryableStoreType instanceof QueryableStoreTypes.WindowStoreType) {
-                    stores.add((T) new ReadOnlyWindowStoreFacade((TimestampedWindowStore<Object, Object>) store));
-                } else {
-                    stores.add((T) store);
+        final StreamThread.State state = streamThread.state();
+        if (includeStaleStores ? state.isAlive() : state == StreamThread.State.RUNNING) {
+            final Map<TaskId, ? extends Task> tasks = includeStaleStores ? streamThread.allTasks() : streamThread.activeTasks();
+            final List<T> stores = new ArrayList<>();
+            for (final Task streamTask : tasks.values()) {
+                final StateStore store = streamTask.getStore(storeName);
+                if (store != null && queryableStoreType.accepts(store)) {
+                    if (!store.isOpen()) {
+                        throw new InvalidStateStoreException(
+                            "Cannot get state store " + storeName + " for task " + streamTask +
+                                " because the store is not open. " +
+                                "The state store may have migrated to another instances.");
+                    }
+                    if (store instanceof TimestampedKeyValueStore && queryableStoreType instanceof QueryableStoreTypes.KeyValueStoreType) {
+                        stores.add((T) new ReadOnlyKeyValueStoreFacade<>((TimestampedKeyValueStore<Object, Object>) store));
+                    } else if (store instanceof TimestampedWindowStore && queryableStoreType instanceof QueryableStoreTypes.WindowStoreType) {
+                        stores.add((T) new ReadOnlyWindowStoreFacade<>((TimestampedWindowStore<Object, Object>) store));
+                    } else {
+                        stores.add((T) store);
+                    }
                 }
             }
+            return stores;
+        } else {
+            throw new InvalidStateStoreException("Cannot get state store " + storeName + " because the stream thread is " +
+                                                     state + ", not RUNNING" +
+                                                     (includeStaleStores ? " or REBALANCING" : ""));
         }
-        return stores;
     }
 
 }

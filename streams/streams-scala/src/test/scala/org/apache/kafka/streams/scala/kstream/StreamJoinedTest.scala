@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.streams.scala.kstream
 
 import java.time.Duration
@@ -25,7 +24,7 @@ import org.apache.kafka.streams.scala.Serdes._
 import org.apache.kafka.streams.state.Stores
 import org.junit.runner.RunWith
 import org.scalatest.{FlatSpec, Matchers}
-import org.scalatest.junit.JUnitRunner
+import org.scalatestplus.junit.JUnitRunner
 
 @RunWith(classOf[JUnitRunner])
 class StreamJoinedTest extends FlatSpec with Matchers {

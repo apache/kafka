@@ -33,7 +33,7 @@ import org.apache.kafka.common.Endpoint
 import org.apache.kafka.common.acl._
 import org.apache.kafka.common.errors.{ApiException, InvalidRequestException, UnsupportedVersionException}
 import org.apache.kafka.common.protocol.ApiKeys
-import org.apache.kafka.common.resource.PatternType
+import org.apache.kafka.common.resource.{PatternType, ResourcePatternFilter}
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.utils.{Time, SecurityUtils => JSecurityUtils}
 import org.apache.kafka.server.authorizer.AclDeleteResult.AclBindingDeleteResult
@@ -188,7 +188,9 @@ class AclAuthorizer extends Authorizer with Logging {
     val deleteExceptions = new mutable.HashMap[AclBinding, ApiException]()
     val filters = aclBindingFilters.asScala.zipWithIndex
     inWriteLock(lock) {
-      val resourcesToUpdate = aclCache.keys.map { resource =>
+      // Find all potentially matching resource patterns from the provided filters and ACL cache and apply the filters
+      val resources = aclCache.keys ++ filters.map(_._1.patternFilter).filter(_.matchesAtMostOne).flatMap(filterToResources)
+      val resourcesToUpdate = resources.map { resource =>
         val matchingFilters = filters.filter { case (filter, _) =>
           filter.patternFilter.matches(resource.toPattern)
         }
@@ -361,6 +363,17 @@ class AclAuthorizer extends Authorizer with Logging {
   private[authorizer] def startZkChangeListeners(): Unit = {
     aclChangeListeners = ZkAclChangeStore.stores
       .map(store => store.createListener(AclChangedNotificationHandler, zkClient))
+  }
+
+  private def filterToResources(filter: ResourcePatternFilter): Set[Resource] = {
+    filter.patternType match {
+      case PatternType.LITERAL | PatternType.PREFIXED =>
+        Set(Resource(ResourceType.fromJava(filter.resourceType), filter.name, filter.patternType))
+      case PatternType.ANY =>
+        Set(Resource(ResourceType.fromJava(filter.resourceType), filter.name, PatternType.LITERAL),
+          Resource(ResourceType.fromJava(filter.resourceType), filter.name, PatternType.PREFIXED))
+      case _ => throw new IllegalArgumentException(s"Cannot determine matching resources for patternType $filter")
+    }
   }
 
   def logAuditMessage(requestContext: AuthorizableRequestContext, action: Action, authorized: Boolean): Unit = {

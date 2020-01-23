@@ -659,15 +659,22 @@ public class KafkaStreamsTest {
     }
 
     @Test(expected = IllegalStateException.class)
-    public void shouldNotGetTaskWithKeyAndSerializerWhenNotRunning() {
+    public void shouldNotGetQueryMetadataWithSerializerWhenNotRunningOrRebalancing() {
         final KafkaStreams streams = new KafkaStreams(new StreamsBuilder().build(), props, supplier, time);
-        streams.metadataForKey("store", "key", Serdes.String().serializer());
+        streams.queryMetadataForKey("store", "key", Serdes.String().serializer());
+    }
+
+    @Test
+    public void shouldGetQueryMetadataWithSerializerWhenRunningOrRebalancing() {
+        final KafkaStreams streams = new KafkaStreams(new StreamsBuilder().build(), props, supplier, time);
+        streams.start();
+        assertEquals(KeyQueryMetadata.NOT_AVAILABLE, streams.queryMetadataForKey("store", "key", Serdes.String().serializer()));
     }
 
     @Test(expected = IllegalStateException.class)
-    public void shouldNotGetTaskWithKeyAndPartitionerWhenNotRunning() {
+    public void shouldNotGetQueryMetadataWithPartitionerWhenNotRunningOrRebalancing() {
         final KafkaStreams streams = new KafkaStreams(new StreamsBuilder().build(), props, supplier, time);
-        streams.metadataForKey("store", "key", (topic, key, value, numPartitions) -> 0);
+        streams.queryMetadataForKey("store", "key", (topic, key, value, numPartitions) -> 0);
     }
 
     @Test

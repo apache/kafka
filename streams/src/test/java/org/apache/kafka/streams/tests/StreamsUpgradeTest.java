@@ -225,7 +225,7 @@ public class StreamsUpgradeTest {
 
             final TaskManager taskManager = taskManger();
             taskManager.setClusterMetadata(Cluster.empty().withPartitions(topicToPartitionInfo));
-            taskManager.setPartitionsByHostState(partitionsByHost);
+            taskManager.setHostPartitionMappings(partitionsByHost, info.standbyPartitionByHost());
             taskManager.setPartitionsToTaskId(partitionsToTaskId);
             taskManager.setAssignmentMetadata(activeTasks, info.standbyTasks());
             taskManager.updateSubscriptionsFromAssignment(partitions);

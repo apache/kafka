@@ -29,9 +29,9 @@ import org.junit.Before;
 import org.junit.Test;
 
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 
+import static java.util.Collections.singletonList;
 import static org.apache.kafka.test.StreamsTestUtils.toList;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.IsEqual.equalTo;
@@ -55,8 +55,8 @@ public class CompositeReadOnlySessionStoreTest {
 
 
         sessionStore = new CompositeReadOnlySessionStore<>(
-                new WrappingStoreProvider(Arrays.<StateStoreProvider>asList(stubProviderOne, stubProviderTwo)),
-                QueryableStoreTypes.<String, Long>sessionStore(), storeName);
+            new WrappingStoreProvider(Arrays.asList(stubProviderOne, stubProviderTwo), false),
+            QueryableStoreTypes.sessionStore(), storeName);
     }
 
     @Test
@@ -90,8 +90,8 @@ public class CompositeReadOnlySessionStoreTest {
         final List<KeyValue<Windowed<String>, Long>> keyOneResults = toList(sessionStore.fetch("key-one"));
         final List<KeyValue<Windowed<String>, Long>> keyTwoResults = toList(sessionStore.fetch("key-two"));
 
-        assertEquals(Collections.singletonList(KeyValue.pair(keyOne, 0L)), keyOneResults);
-        assertEquals(Collections.singletonList(KeyValue.pair(keyTwo, 10L)), keyTwoResults);
+        assertEquals(singletonList(KeyValue.pair(keyOne, 0L)), keyOneResults);
+        assertEquals(singletonList(KeyValue.pair(keyTwo, 10L)), keyTwoResults);
     }
 
     @Test
@@ -109,9 +109,10 @@ public class CompositeReadOnlySessionStoreTest {
     public void shouldThrowInvalidStateStoreExceptionOnRebalance() {
         final CompositeReadOnlySessionStore<String, String> store =
             new CompositeReadOnlySessionStore<>(
-                new StateStoreProviderStub(true),
+                new WrappingStoreProvider(singletonList(new StateStoreProviderStub(true)), false),
                 QueryableStoreTypes.sessionStore(),
-                "whateva");
+                "whateva"
+            );
 
         store.fetch("a");
     }

@@ -44,6 +44,7 @@ import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
 import java.security.Security;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -90,6 +91,11 @@ public class SslSelectorTest extends SelectorTest {
     @Override
     public SecurityProtocol securityProtocol() {
         return SecurityProtocol.PLAINTEXT;
+    }
+
+    @Override
+    protected Map<String, Object> clientConfigs() {
+        return sslClientConfigs;
     }
 
     @Test
@@ -315,11 +321,11 @@ public class SslSelectorTest extends SelectorTest {
             while (System.currentTimeMillis() < deadline) {
                 selector.poll(10);
 
-                List<NetworkReceive> completed = selector.completedReceives();
+                Collection<NetworkReceive> completed = selector.completedReceives();
                 if (firstReceive == null) {
                     if (!completed.isEmpty()) {
                         assertEquals("expecting a single request", 1, completed.size());
-                        firstReceive = completed.get(0);
+                        firstReceive = completed.iterator().next();
                         assertTrue(selector.isMadeReadProgressLastPoll());
                         assertEquals(0, pool.availableMemory());
                     }
@@ -343,7 +349,7 @@ public class SslSelectorTest extends SelectorTest {
             firstReceive.close();
             assertEquals(900, pool.availableMemory()); //memory has been released back to pool
 
-            List<NetworkReceive> completed = Collections.emptyList();
+            Collection<NetworkReceive> completed = Collections.emptyList();
             deadline = System.currentTimeMillis() + 5000;
             while (System.currentTimeMillis() < deadline && completed.isEmpty()) {
                 selector.poll(1000);

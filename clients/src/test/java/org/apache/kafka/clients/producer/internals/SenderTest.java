@@ -40,6 +40,7 @@ import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.errors.UnsupportedForMessageFormatException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
+import org.apache.kafka.common.message.EndTxnResponseData;
 import org.apache.kafka.common.message.InitProducerIdResponseData;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.MetricConfig;
@@ -2202,7 +2203,9 @@ public class SenderTest {
             sender.initiateClose();
             txnManager.beginCommit();
             AssertEndTxnRequestMatcher endTxnMatcher = new AssertEndTxnRequestMatcher(TransactionResult.COMMIT);
-            client.prepareResponse(endTxnMatcher, new EndTxnResponse(0, Errors.NONE));
+            client.prepareResponse(endTxnMatcher, new EndTxnResponse(new EndTxnResponseData()
+                                                                         .setErrorCode(Errors.NONE.code())
+                                                                         .setThrottleTimeMs(0)));
             sender.run();
             assertTrue("Response didn't match in test", endTxnMatcher.matched);
         } finally {
@@ -2234,7 +2237,9 @@ public class SenderTest {
             sender.runOnce();
             sender.initiateClose();
             AssertEndTxnRequestMatcher endTxnMatcher = new AssertEndTxnRequestMatcher(TransactionResult.ABORT);
-            client.prepareResponse(endTxnMatcher, new EndTxnResponse(0, Errors.NONE));
+            client.prepareResponse(endTxnMatcher, new EndTxnResponse(new EndTxnResponseData()
+                                                                         .setErrorCode(Errors.NONE.code())
+                                                                         .setThrottleTimeMs(0)));
             sender.run();
             assertTrue("Response didn't match in test", endTxnMatcher.matched);
         } finally {
@@ -2337,7 +2342,7 @@ public class SenderTest {
         @Override
         public boolean matches(AbstractRequest body) {
             if (body instanceof EndTxnRequest) {
-                assertSame(requiredResult, ((EndTxnRequest) body).command());
+                assertSame(requiredResult, ((EndTxnRequest) body).result());
                 matched = true;
                 return true;
             } else {

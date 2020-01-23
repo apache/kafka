@@ -24,6 +24,7 @@ import kafka.security.authorizer.AclAuthorizer
 import kafka.utils.TestUtils
 import org.apache.kafka.common.acl._
 import org.apache.kafka.common.config.ConfigResource
+import org.apache.kafka.common.message.CreatePartitionsRequestData.CreatePartitionsTopic
 import org.apache.kafka.common.message.CreateTopicsRequestData.{CreatableTopic, CreatableTopicCollection}
 import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocolCollection
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState
@@ -291,7 +292,7 @@ class RequestQuotaTest extends BaseRequestTest {
               )
           )
         case ApiKeys.OFFSET_FETCH =>
-          new OffsetFetchRequest.Builder("test-group", List(tp).asJava)
+          new OffsetFetchRequest.Builder("test-group", false, List(tp).asJava)
 
         case ApiKeys.FIND_COORDINATOR =>
           new FindCoordinatorRequest.Builder(
@@ -391,7 +392,12 @@ class RequestQuotaTest extends BaseRequestTest {
           new AddOffsetsToTxnRequest.Builder("test-transactional-id", 1, 0, "test-txn-group")
 
         case ApiKeys.END_TXN =>
-          new EndTxnRequest.Builder("test-transactional-id", 1, 0, TransactionResult.forId(false))
+          new EndTxnRequest.Builder(new EndTxnRequestData()
+            .setTransactionalId("test-transactional-id")
+            .setProducerId(1)
+            .setProducerEpoch(0)
+            .setCommitted(false)
+          )
 
         case ApiKeys.WRITE_TXN_MARKERS =>
           new WriteTxnMarkersRequest.Builder(List.empty.asJava)
@@ -438,9 +444,11 @@ class RequestQuotaTest extends BaseRequestTest {
           new DescribeLogDirsRequest.Builder(Collections.singleton(tp))
 
         case ApiKeys.CREATE_PARTITIONS =>
-          new CreatePartitionsRequest.Builder(
-            Collections.singletonMap("topic-2", new CreatePartitionsRequest.PartitionDetails(1)), 0, false
-          )
+          val data = new CreatePartitionsRequestData()
+            .setTimeoutMs(0)
+            .setValidateOnly(false)
+            .setTopics(Collections.singletonList(new CreatePartitionsTopic().setName("topic-2").setCount(1)))
+          new CreatePartitionsRequest.Builder(data)
 
         case ApiKeys.CREATE_DELEGATION_TOKEN =>
           new CreateDelegationTokenRequest.Builder(

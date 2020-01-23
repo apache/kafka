@@ -355,6 +355,7 @@
       <allow pkg="net.sourceforge.argparse4j" />
       <!-- for tests -->
       <allow pkg="org.apache.kafka.connect.integration" />
+      <allow pkg="org.apache.kafka.connect.mirror" />
     </subpackage>
 
     <subpackage name="runtime">
