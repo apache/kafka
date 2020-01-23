@@ -558,9 +558,9 @@ class Log(@volatile var dir: File,
           val baseFile = new File(CoreUtils.replaceSuffix(file.getPath, SwapFileSuffix, ""))
           info(s"Found file ${file.getAbsolutePath} from interrupted swap operation.")
           if (isIndexFile(baseFile)) {
-            deleteIndicesIfExist(baseFile)
+            deleteIndicesIfExist(offset, SwapFileSuffix)
           } else if (isLogFile(baseFile)) {
-            deleteIndicesIfExist(baseFile)
+            deleteIndicesIfExist(offset, SwapFileSuffix)
             swapFiles += offset
           }
         }
@@ -584,35 +584,39 @@ class Log(@volatile var dir: File,
     validSwapFiles
   }
 
-  def deleteIndicesIfExist(baseFile: File, suffix: String = ""): Unit = {
-    info(s"Deleting index files with suffix $suffix for baseFile $baseFile")
-    val offset = offsetFromFile(baseFile)
-    if(!suffix.isEmpty){
+  def deleteIfExists(baseOffset: Long, fileSuffix: String = ""): Unit = {
+    info(s"Deleting files with suffix $fileSuffix for offset $baseOffset")
+    deleteIndicesIfExist(baseOffset, fileSuffix)
+    if(!fileSuffix.isEmpty){
       // Status files
-      Files.deleteIfExists(Log.offsetIndexFile(dir, offset, suffix).toPath)
-      Files.deleteIfExists(Log.timeIndexFile(dir, offset, suffix).toPath)
-      Files.deleteIfExists(Log.transactionIndexFile(dir, offset, suffix).toPath)
+      if(Log.deleteFileIfExists(Log.logFile(dir, baseOffset, fileSuffix))){
+        Log.deleteFileIfExists(Log.logFile(dir, baseOffset))
+      }
+    }else{
+      // Data files
+      Log.deleteFileIfExists(Log.logFile(dir, baseOffset))
     }
-    // Data files
-    Files.deleteIfExists(Log.offsetIndexFile(dir, offset).toPath)
-    Files.deleteIfExists(Log.timeIndexFile(dir, offset).toPath)
-    Files.deleteIfExists(Log.transactionIndexFile(dir, offset).toPath)
   }
 
-  def deleteIfExists(baseOffset: Long, fileSuffix: String = ""): Unit = {
+  def deleteIndicesIfExist(baseOffset: Long, fileSuffix: String = ""): Unit = {
     info(s"Deleting index files with suffix $fileSuffix for offset $baseOffset")
     if(!fileSuffix.isEmpty){
       // Status files
-      Log.deleteFileIfExists(Log.offsetIndexFile(dir, baseOffset, fileSuffix))
-      Log.deleteFileIfExists(Log.timeIndexFile(dir, baseOffset, fileSuffix))
-      Log.deleteFileIfExists(Log.transactionIndexFile(dir, baseOffset, fileSuffix))
-      Log.deleteFileIfExists(Log.logFile(dir, baseOffset, fileSuffix))
+      if(Log.deleteFileIfExists(Log.offsetIndexFile(dir, baseOffset, fileSuffix))){
+        Log.deleteFileIfExists(Log.offsetIndexFile(dir, baseOffset))
+      }
+      if(Log.deleteFileIfExists(Log.timeIndexFile(dir, baseOffset, fileSuffix))){
+        Log.deleteFileIfExists(Log.timeIndexFile(dir, baseOffset))
+      }
+      if(Log.deleteFileIfExists(Log.transactionIndexFile(dir, baseOffset, fileSuffix))){
+        Log.deleteFileIfExists(Log.transactionIndexFile(dir, baseOffset))
+      }
+    }else{
+      // Data files
+      Log.deleteFileIfExists(Log.offsetIndexFile(dir, baseOffset))
+      Log.deleteFileIfExists(Log.timeIndexFile(dir, baseOffset))
+      Log.deleteFileIfExists(Log.transactionIndexFile(dir, baseOffset))
     }
-    // Data files
-    Log.deleteFileIfExists(Log.offsetIndexFile(dir, baseOffset))
-    Log.deleteFileIfExists(Log.timeIndexFile(dir, baseOffset))
-    Log.deleteFileIfExists(Log.transactionIndexFile(dir, baseOffset))
-    Log.deleteFileIfExists(Log.logFile(dir, baseOffset))
   }
 
   /**
