@@ -200,7 +200,7 @@ public class TransactionalMessageCopier {
     }
 
     private static ProducerRecord<String, String> producerRecordFromConsumerRecord(String topic, ConsumerRecord<String, String> record) {
-        return new ProducerRecord<>(topic, record.key(), record.value());
+        return new ProducerRecord<>(topic, record.partition(), record.key(), record.value());
     }
 
     private static Map<TopicPartition, OffsetAndMetadata> consumerPositions(KafkaConsumer<String, String> consumer) {
@@ -271,7 +271,7 @@ public class TransactionalMessageCopier {
 
         long maxMessages = parsedArgs.getInt("maxMessages") == -1 ? Long.MAX_VALUE : parsedArgs.getInt("maxMessages");
 
-        Boolean groupMode = parsedArgs.getBoolean("groupMode");
+        boolean groupMode = parsedArgs.getBoolean("groupMode");
         String topicName = parsedArgs.getString("inputTopic");
         if (groupMode) {
             consumer.subscribe(Collections.singleton(topicName));

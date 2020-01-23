@@ -37,7 +37,7 @@ class GroupModeTransactionsTest(Test):
     """
     def __init__(self, test_context):
         """:type test_context: ducktape.tests.test.TestContext"""
-        super(TransactionsTest, self).__init__(test_context=test_context)
+        super(GroupModeTransactionsTest, self).__init__(test_context=test_context)
 
         self.input_topic = "input-topic"
         self.output_topic = "output-topic"
@@ -47,7 +47,8 @@ class GroupModeTransactionsTest(Test):
         # Test parameters
         self.num_input_partitions = 9
         self.num_output_partitions = 9
-        self.num_seed_messages = 100000
+        self.num_copiers = 3
+        self.num_seed_messages = 900000
         self.transaction_size = 750
         self.consumer_group = "grouped-transactions-test-consumer-group"
 
@@ -67,13 +68,14 @@ class GroupModeTransactionsTest(Test):
                                            topic=topic,
                                            message_validator=is_int,
                                            max_messages=num_seed_messages,
-                                           enable_idempotence=True)
+                                           enable_idempotence=True,
+                                           repeating_keys=self.num_input_partitions)
         seed_producer.start()
         wait_until(lambda: seed_producer.num_acked >= num_seed_messages,
                    timeout_sec=seed_timeout_sec,
                    err_msg="Producer failed to produce messages %d in  %ds." % \
                            (self.num_seed_messages, seed_timeout_sec))
-        return seed_producer.acked
+        return seed_producer.acked_by_partition
 
     def get_messages_from_topic(self, topic, num_messages):
         consumer = self.start_consumer(topic, group_id="verifying_consumer")
@@ -102,7 +104,8 @@ class GroupModeTransactionsTest(Test):
             input_partition=input_partition,
             output_topic=output_topic,
             max_messages=-1,
-            transaction_size=self.transaction_size
+            transaction_size=self.transaction_size,
+            group_mode=True
         )
         message_copier.start()
         wait_until(lambda: message_copier.alive(message_copier.nodes[0]),
@@ -132,14 +135,30 @@ class GroupModeTransactionsTest(Test):
             ))
         return copiers
 
+    @staticmethod
+    def valid_value_and_partition(msg):
+        """Method used to check whether the given message is a valid tab
+        separated value + partition
+
+        return value and partition as a size-two array represented tuple: [value, partition]
+        """
+        try:
+            splitted_msg = msg.split('\t')
+            tuple = [int(splitted_msg[0]), int(splitted_msg[1])]
+            return tuple
+
+        except ValueError:
+            raise Exception("Unexpected message format (expected a tab separated [value, partition] tuple). Message: %s" % (msg))
+
     def start_consumer(self, topic_to_read, group_id):
         consumer = ConsoleConsumer(context=self.test_context,
                                    num_nodes=1,
                                    kafka=self.kafka,
                                    topic=topic_to_read,
                                    group_id=group_id,
-                                   message_validator=is_int,
+                                   message_validator=self.valid_value_and_partition,
                                    from_beginning=True,
+                                   print_partition=True,
                                    isolation_level="read_committed")
         consumer.start()
         # ensure that the consumer is up.
@@ -148,6 +167,16 @@ class GroupModeTransactionsTest(Test):
                    err_msg="Consumer failed to consume any messages for %ds" % \
                            60)
         return consumer
+
+    @staticmethod
+    def split_by_partition(messages_consumed):
+        messages_by_partition = {}
+
+        for msg in messages_consumed:
+            partition = msg[1]
+            if partition not in messages_by_partition:
+                messages_by_partition[partition] = []
+            messages_by_partition[partition].append(msg[0])
 
     def drain_consumer(self, consumer, num_messages):
         # wait until we read at least the expected number of messages.
@@ -162,7 +191,7 @@ class GroupModeTransactionsTest(Test):
                    err_msg="Consumer consumed only %d out of %d messages in %ds" % \
                            (len(consumer.messages_consumed[1]), num_messages, 90))
         consumer.stop()
-        return consumer.messages_consumed[1]
+        return self.split_by_partition(consumer.messages_consumed[1])
 
     def copy_messages_transactionally(self, failure_mode, bounce_target,
                                       input_topic, output_topic,
@@ -197,7 +226,7 @@ class GroupModeTransactionsTest(Test):
                                (copier.transactional_id, 120))
         self.logger.info("finished copying messages")
 
-        return self.drain_consumer(concurrent_consumer, num_messages_to_copy)
+        return self.split_by_partition(self.drain_consumer(concurrent_consumer, num_messages_to_copy))
 
     def setup_topics(self):
         self.kafka.topics = {
@@ -218,9 +247,11 @@ class GroupModeTransactionsTest(Test):
         }
 
     @cluster(num_nodes=9)
-    @matrix(failure_mode=["hard_bounce", "clean_bounce"],
-            bounce_target=["brokers", "clients"])
-    def test_transactions(self, failure_mode, bounce_target, check_order):
+    @matrix(failure_mode=["hard_bounce"],
+            bounce_target=["brokers"])
+    # @matrix(failure_mode=["hard_bounce", "clean_bounce"],
+    #         bounce_target=["brokers", "clients"])
+    def test_transactions(self, failure_mode, bounce_target):
         security_protocol = 'PLAINTEXT'
         self.kafka.security_protocol = security_protocol
         self.kafka.interbroker_security_protocol = security_protocol
@@ -231,29 +262,47 @@ class GroupModeTransactionsTest(Test):
         self.setup_topics()
         self.kafka.start()
 
-        input_messages = self.seed_messages(self.input_topic, self.num_seed_messages)
-        concurrently_consumed_messages = self.copy_messages_transactionally(
+        input_messages_by_partition = self.seed_messages(self.input_topic, self.num_seed_messages)
+        concurrently_consumed_message_by_partition = self.copy_messages_transactionally(
             failure_mode, bounce_target, input_topic=self.input_topic,
-            output_topic=self.output_topic, num_copiers=self.num_input_partitions,
+            output_topic=self.output_topic, num_copiers=self.num_copiers,
             num_messages_to_copy=self.num_seed_messages)
-        output_messages = self.get_messages_from_topic(self.output_topic, self.num_seed_messages)
+        output_messages_by_partition = self.get_messages_from_topic(self.output_topic, self.num_seed_messages)
 
-        concurrently_consumed_message_set = set(concurrently_consumed_messages)
-        output_message_set = set(output_messages)
-        input_message_set = set(input_messages)
 
-        num_dups = abs(len(output_messages) - len(output_message_set))
-        num_dups_in_concurrent_consumer = abs(len(concurrently_consumed_messages)
+        assert len(input_messages_by_partition) == \
+               len(concurrently_consumed_message_by_partition), "The lengths of partition count doesn't match: " \
+                                                                "input partitions count %d, " \
+                                                                "concurrently consumed partitions count %d" % \
+                                                                (len(input_messages_by_partition), len(concurrently_consumed_message_by_partition))
+
+        assert len(input_messages_by_partition) == \
+               len(output_messages_by_partition), "The lengths of partition count doesn't match: " \
+                                                  "input partitions count %d, " \
+                                                  "output partitions count %d" % \
+                                                  (len(input_messages_by_partition), len(concurrently_consumed_message_by_partition))
+
+        for p in range(self.num_input_partitions):
+            if p not in input_messages_by_partition:
+                continue
+
+            output_message_set = set(output_messages_by_partition[p])
+            input_message_set = set(input_messages_by_partition[p])
+
+            concurrently_consumed_message_set = set(concurrently_consumed_message_by_partition[p])
+
+            num_dups = abs(len(output_messages) - len(output_message_set))
+            num_dups_in_concurrent_consumer = abs(len(concurrently_consumed_messages)
                                               - len(concurrently_consumed_message_set))
-        assert num_dups == 0, "Detected %d duplicates in the output stream" % num_dups
-        assert input_message_set == output_message_set, "Input and output message sets are not equal. Num input messages %d. Num output messages %d" % \
+            assert num_dups == 0, "Detected %d duplicates in the output stream" % num_dups
+            assert input_message_set == output_message_set, "Input and output message sets are not equal. Num input messages %d. Num output messages %d" % \
                                                         (len(input_message_set), len(output_message_set))
 
-        assert num_dups_in_concurrent_consumer == 0, "Detected %d dups in concurrently consumed messages" % num_dups_in_concurrent_consumer
-        assert input_message_set == concurrently_consumed_message_set, \
-            "Input and concurrently consumed output message sets are not equal. Num input messages: %d. Num concurrently_consumed_messages: %d" % \
-            (len(input_message_set), len(concurrently_consumed_message_set))
-        if check_order:
+            assert num_dups_in_concurrent_consumer == 0, "Detected %d dups in concurrently consumed messages" % num_dups_in_concurrent_consumer
+            assert input_message_set == concurrently_consumed_message_set, \
+                "Input and concurrently consumed output message sets are not equal. Num input messages: %d. Num concurrently_consumed_messages: %d" % \
+                (len(input_message_set), len(concurrently_consumed_message_set))
+
             assert input_messages == sorted(input_messages), "The seed messages themselves were not in order"
             assert output_messages == input_messages, "Output messages are not in order"
             assert concurrently_consumed_messages == output_messages, "Concurrently consumed messages are not in order"
