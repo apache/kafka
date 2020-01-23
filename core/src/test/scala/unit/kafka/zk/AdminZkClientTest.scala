@@ -275,7 +275,7 @@ class AdminZkClientTest extends ZooKeeperTestHarness with Logging with RackAware
     servers = createBrokerConfigs(3, zkConnect).map(fromProps).map(createServer(_))
 
     def checkConfig(limit: Long): Unit = {
-      retry(10000) {
+      TestUtils.retry(10000) {
         for (server <- servers) {
           assertEquals("Leader Quota Manager was not updated", limit, server.quotaManagers.leader.upperBound)
           assertEquals("Follower Quota Manager was not updated", limit, server.quotaManagers.follower.upperBound)
