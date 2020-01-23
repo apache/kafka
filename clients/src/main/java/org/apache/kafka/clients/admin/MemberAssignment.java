@@ -36,6 +36,7 @@ public class MemberAssignment {
      * @throws NullPointerException if topicPartitions is null
      */
     public MemberAssignment(Set<TopicPartition> topicPartitions) {
+        Objects.requireNonNull(topicPartitions);
         this.topicPartitions = Collections.unmodifiableSet(new HashSet<>(topicPartitions));
     }
 
