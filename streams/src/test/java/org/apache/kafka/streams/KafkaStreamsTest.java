@@ -319,9 +319,8 @@ public class KafkaStreamsTest {
                 return null;
             }).anyTimes();
 
-        EasyMock.expect(thread.allStandbyTasks()).andStubReturn(Collections.emptyList());
-        EasyMock.expect(thread.restoringTaskIds()).andStubReturn(Collections.emptySet());
-        EasyMock.expect(thread.allStreamsTasks()).andStubReturn(Collections.emptyList());
+        EasyMock.expect(thread.allStandbyTasks()).andStubReturn(Collections.emptyMap());
+        EasyMock.expect(thread.allStreamsTasks()).andStubReturn(Collections.emptyMap());
     }
 
     @Test

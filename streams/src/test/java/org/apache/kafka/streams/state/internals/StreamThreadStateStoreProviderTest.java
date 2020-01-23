@@ -343,7 +343,7 @@ public class StreamThreadStateStoreProviderTest {
 
     private void mockThread(final boolean initialized) {
         EasyMock.expect(threadMock.isRunning()).andReturn(initialized);
-        EasyMock.expect(threadMock.activeTasks()).andStubReturn(tasks);
+        EasyMock.expect(threadMock.allTasks()).andStubReturn(tasks);
         EasyMock.expect(threadMock.state()).andReturn(
             initialized ? StreamThread.State.RUNNING : StreamThread.State.PARTITIONS_ASSIGNED
         ).anyTimes();

@@ -1161,10 +1161,6 @@ public class StreamThread extends Thread {
         return taskManager.standbyTasks();
     }
 
-    public Set<TaskId> restoringTaskIds() {
-        return taskManager.restoringActiveTasks().keySet();
-    }
-
     public Map<TaskId, Task> allTasks() {
         final Map<TaskId, Task> result = new TreeMap<>();
         result.putAll(taskManager.standbyTasks());
