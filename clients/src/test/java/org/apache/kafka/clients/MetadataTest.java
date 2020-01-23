@@ -43,9 +43,16 @@ import java.net.InetSocketAddress;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+<<<<<<< HEAD
+=======
+import java.util.Set;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.stream.Collectors;
+>>>>>>> KIP-526: Improve producer's metadata fetching for new topics.
 
 import static org.apache.kafka.test.TestUtils.assertOptional;
 import static org.junit.Assert.assertEquals;
@@ -495,27 +502,27 @@ public class MetadataTest {
         Time time = new MockTime();
 
         metadata.requestUpdate();
-        Metadata.MetadataRequestAndVersion versionAndBuilder = metadata.newMetadataRequestAndVersion();
+        Metadata.MetadataRequestAndVersion versionAndBuilder = metadata.newMetadataRequestAndVersion(time.milliseconds());
         metadata.update(versionAndBuilder.requestVersion,
-                TestUtils.metadataUpdateWith(1, Collections.singletonMap("topic", 1)), time.milliseconds());
+                TestUtils.metadataUpdateWith(1, Collections.singletonMap("topic", 1)), false, time.milliseconds());
         assertFalse(metadata.updateRequested());
 
         // bump the request version for new topics added to the metadata
         metadata.requestUpdateForNewTopics();
 
         // simulating a bump while a metadata request is in flight
-        versionAndBuilder = metadata.newMetadataRequestAndVersion();
+        versionAndBuilder = metadata.newMetadataRequestAndVersion(time.milliseconds());
         metadata.requestUpdateForNewTopics();
         metadata.update(versionAndBuilder.requestVersion,
-                TestUtils.metadataUpdateWith(1, Collections.singletonMap("topic", 1)), time.milliseconds());
+                TestUtils.metadataUpdateWith(1, Collections.singletonMap("topic", 1)), false, time.milliseconds());
 
         // metadata update is still needed
         assertTrue(metadata.updateRequested());
 
         // the next update will resolve it
-        versionAndBuilder = metadata.newMetadataRequestAndVersion();
+        versionAndBuilder = metadata.newMetadataRequestAndVersion(time.milliseconds());
         metadata.update(versionAndBuilder.requestVersion,
-                TestUtils.metadataUpdateWith(1, Collections.singletonMap("topic", 1)), time.milliseconds());
+                TestUtils.metadataUpdateWith(1, Collections.singletonMap("topic", 1)), false, time.milliseconds());
         assertFalse(metadata.updateRequested());
     }
 
@@ -695,5 +702,96 @@ public class MetadataTest {
         return brokers;
     }
 
+    public void testMetadataMerge() {
+        Time time = new MockTime();
 
+        final AtomicReference<Set<String>> retainTopics = new AtomicReference<>(new HashSet<>());
+        metadata = new Metadata(refreshBackoffMs, metadataExpireMs, new LogContext(), new ClusterResourceListeners()) {
+                @Override
+                protected boolean retainTopic(String topic, boolean isInternal, long nowMs) {
+                    return retainTopics.get().contains(topic);
+                }
+            };
+
+        // Initialize a metadata instance with two topic variants "old" and "keep". Both will be retained.
+        String oldClusterId = "oldClusterId";
+        int oldNodes = 2;
+        Map<String, Errors> oldTopicErrors = new HashMap<>();
+        oldTopicErrors.put("oldInvalidTopic", Errors.INVALID_TOPIC_EXCEPTION);
+        oldTopicErrors.put("keepInvalidTopic", Errors.INVALID_TOPIC_EXCEPTION);
+        oldTopicErrors.put("oldUnauthorizedTopic", Errors.TOPIC_AUTHORIZATION_FAILED);
+        oldTopicErrors.put("keepUnauthorizedTopic", Errors.TOPIC_AUTHORIZATION_FAILED);
+        Map<String, Integer> oldTopicPartitionCounts = new HashMap<>();
+        oldTopicPartitionCounts.put("oldValidTopic", 2);
+        oldTopicPartitionCounts.put("keepValidTopic", 3);
+
+        Set<String> oldRetainTopics = new HashSet<>();
+        oldRetainTopics.add("oldInvalidTopic");
+        oldRetainTopics.add("keepInvalidTopic");
+        oldRetainTopics.add("oldUnauthorizedTopic");
+        oldRetainTopics.add("keepUnauthorizedTopic");
+        oldRetainTopics.add("oldValidTopic");
+        oldRetainTopics.add("keepValidTopic");
+
+        retainTopics.set(oldRetainTopics);
+
+        MetadataResponse metadataResponse =
+                TestUtils.metadataUpdateWith(oldClusterId, oldNodes, oldTopicErrors, oldTopicPartitionCounts, _tp -> 100);
+        metadata.update(metadataResponse, time.milliseconds());
+
+        // Update the metadata to add a new topic variant, "new", which will be retained with "keep". Note this
+        // means that all of the "old" topics should be dropped.
+        Cluster cluster = metadata.fetch();
+        assertEquals(cluster.clusterResource().clusterId(), oldClusterId);
+        assertEquals(cluster.nodes().size(), oldNodes);
+        assertEquals(cluster.invalidTopics(), new HashSet<>(Arrays.asList("oldInvalidTopic", "keepInvalidTopic")));
+        assertEquals(cluster.unauthorizedTopics(), new HashSet<>(Arrays.asList("oldUnauthorizedTopic", "keepUnauthorizedTopic")));
+        assertEquals(cluster.topics(), new HashSet<>(Arrays.asList("oldValidTopic", "keepValidTopic")));
+        assertEquals(cluster.partitionsForTopic("oldValidTopic").size(), 2);
+        assertEquals(cluster.partitionsForTopic("keepValidTopic").size(), 3);
+
+        String newClusterId = "newClusterId";
+        int newNodes = oldNodes + 1;
+        Map<String, Errors> newTopicErrors = new HashMap<>();
+        newTopicErrors.put("newInvalidTopic", Errors.INVALID_TOPIC_EXCEPTION);
+        newTopicErrors.put("newUnauthorizedTopic", Errors.TOPIC_AUTHORIZATION_FAILED);
+        Map<String, Integer> newTopicPartitionCounts = new HashMap<>();
+        newTopicPartitionCounts.put("keepValidTopic", 2);
+        newTopicPartitionCounts.put("newValidTopic", 4);
+
+        Set<String> newRetainTopics = new HashSet<>();
+        newRetainTopics.add("keepInvalidTopic");
+        newRetainTopics.add("newInvalidTopic");
+        newRetainTopics.add("keepUnauthorizedTopic");
+        newRetainTopics.add("newUnauthorizedTopic");
+        newRetainTopics.add("keepValidTopic");
+        newRetainTopics.add("newValidTopic");
+
+        retainTopics.set(newRetainTopics);
+
+        metadataResponse = TestUtils.metadataUpdateWith(newClusterId, newNodes, newTopicErrors, newTopicPartitionCounts, _tp -> 200);
+        metadata.update(metadataResponse, time.milliseconds());
+
+        cluster = metadata.fetch();
+        assertEquals(cluster.clusterResource().clusterId(), newClusterId);
+        assertEquals(cluster.nodes().size(), newNodes);
+        assertEquals(cluster.invalidTopics(), new HashSet<>(Arrays.asList("keepInvalidTopic", "newInvalidTopic")));
+        assertEquals(cluster.unauthorizedTopics(), new HashSet<>(Arrays.asList("keepUnauthorizedTopic", "newUnauthorizedTopic")));
+        assertEquals(cluster.topics(), new HashSet<>(Arrays.asList("keepValidTopic", "newValidTopic")));
+        assertEquals(cluster.partitionsForTopic("keepValidTopic").size(), 2);
+        assertEquals(cluster.partitionsForTopic("newValidTopic").size(), 4);
+
+        // Perform another metadata update, but this time all topic metadata should be cleared.
+        retainTopics.set(Collections.emptySet());
+
+        metadataResponse = TestUtils.metadataUpdateWith(newClusterId, newNodes, newTopicErrors, newTopicPartitionCounts, _tp -> 300);
+        metadata.update(metadataResponse, time.milliseconds());
+
+        cluster = metadata.fetch();
+        assertEquals(cluster.clusterResource().clusterId(), newClusterId);
+        assertEquals(cluster.nodes().size(), newNodes);
+        assertEquals(cluster.invalidTopics(), Collections.emptySet());
+        assertEquals(cluster.unauthorizedTopics(), Collections.emptySet());
+        assertEquals(cluster.topics(), Collections.emptySet());
+    }
 }

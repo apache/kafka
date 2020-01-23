@@ -125,12 +125,13 @@ public class SenderTest {
     private static final int MAX_BLOCK_TIMEOUT = 1000;
     private static final int REQUEST_TIMEOUT = 1000;
     private static final long RETRY_BACKOFF_MS = 50;
+    private static final long TOPIC_IDLE_MS = 60 * 1000;
 
     private TopicPartition tp0 = new TopicPartition("test", 0);
     private TopicPartition tp1 = new TopicPartition("test", 1);
     private MockTime time = new MockTime();
     private int batchSize = 16 * 1024;
-    private ProducerMetadata metadata = new ProducerMetadata(0, Long.MAX_VALUE,
+    private ProducerMetadata metadata = new ProducerMetadata(0, Long.MAX_VALUE, TOPIC_IDLE_MS,
             new LogContext(), new ClusterResourceListeners(), time);
     private MockClient client = new MockClient(time, metadata);
     private ApiVersions apiVersions = new ApiVersions();
@@ -508,7 +509,7 @@ public class SenderTest {
         assertTrue("Request should be completed", future.isDone());
 
         assertTrue("Topic not retained in metadata list", metadata.containsTopic(tp0.topic()));
-        time.sleep(ProducerMetadata.TOPIC_EXPIRY_MS);
+        time.sleep(TOPIC_IDLE_MS);
         client.updateMetadata(TestUtils.metadataUpdateWith(1, Collections.singletonMap("test", 2)));
         assertFalse("Unused topic has not been expired", metadata.containsTopic(tp0.topic()));
         future = appendToAccumulator(tp0);

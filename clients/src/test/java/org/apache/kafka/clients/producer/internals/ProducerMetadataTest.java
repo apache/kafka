@@ -27,8 +27,10 @@ import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Test;
 
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
@@ -41,11 +43,11 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 public class ProducerMetadataTest {
-
+    private static final long METADATA_IDLE_MS = 60 * 1000;
     private long refreshBackoffMs = 100;
     private long metadataExpireMs = 1000;
-    private ProducerMetadata metadata = new ProducerMetadata(refreshBackoffMs, metadataExpireMs, new LogContext(),
-            new ClusterResourceListeners(), Time.SYSTEM);
+    private ProducerMetadata metadata = new ProducerMetadata(refreshBackoffMs, metadataExpireMs, METADATA_IDLE_MS,
+            new LogContext(), new ClusterResourceListeners(), Time.SYSTEM);
     private AtomicReference<Exception> backgroundError = new AtomicReference<>();
 
     @After
@@ -156,30 +158,82 @@ public class ProducerMetadataTest {
     public void testTopicExpiry() {
         // Test that topic is expired if not used within the expiry interval
         long time = 0;
-        String topic1 = "topic1";
+        final String topic1 = "topic1";
         metadata.add(topic1, time);
         metadata.update(responseWithCurrentTopics(), time);
         assertTrue(metadata.containsTopic(topic1));
 
-        time += ProducerMetadata.TOPIC_EXPIRY_MS;
+        time += METADATA_IDLE_MS;
         metadata.update(responseWithCurrentTopics(), time);
         assertFalse("Unused topic not expired", metadata.containsTopic(topic1));
 
         // Test that topic is not expired if used within the expiry interval
-        metadata.add("topic2", time);
+        final String topic2 = "topic2";
+        metadata.add(topic2, time);
         metadata.update(responseWithCurrentTopics(), time);
         for (int i = 0; i < 3; i++) {
-            time += ProducerMetadata.TOPIC_EXPIRY_MS / 2;
+            time += METADATA_IDLE_MS / 2;
             metadata.update(responseWithCurrentTopics(), time);
-            assertTrue("Topic expired even though in use", metadata.containsTopic("topic2"));
-            metadata.add("topic2", time);
+            assertTrue("Topic expired even though in use", metadata.containsTopic(topic2));
+            metadata.add(topic2, time);
         }
+
+        // Add a new topic, but update its metadata after the expiry would have occurred.
+        // The topic should still be retained.
+        final String topic3 = "topic3";
+        metadata.add(topic3, time);
+        time += METADATA_IDLE_MS * 2;
+        metadata.update(responseWithCurrentTopics(), time);
+        assertTrue("Topic expired while awaiting metadata", metadata.containsTopic(topic3));
     }
 
     @Test
     public void testMetadataWaitAbortedOnFatalException() {
         metadata.fatalError(new AuthenticationException("Fatal exception from test"));
         assertThrows(AuthenticationException.class, () -> metadata.awaitUpdate(0, 1000));
+    }
+
+    @Test
+    public void testMetadataPartialUpdate() {
+        long now = 10000;
+
+        // Add a new topic and fetch its metadata in a partial update.
+        final String topic1 = "topic-one";
+        metadata.add(topic1, now);
+        assertEquals(0, metadata.timeToNextUpdate(now));
+        assertEquals(metadata.topics(), Collections.singleton(topic1));
+        assertEquals(metadata.newTopics(), Collections.singleton(topic1));
+
+        // Perform the partial update. Verify the topic is no longer considered "new".
+        now += 1000;
+        metadata.update(responseWithTopics(Collections.singleton(topic1)), true, now);
+        assertEquals(metadata.topics(), Collections.singleton(topic1));
+        assertEquals(metadata.newTopics(), Collections.emptySet());
+
+        // Add the topic again. It should not be considered "new".
+        metadata.add(topic1, now);
+        assertTrue(metadata.timeToNextUpdate(now) > 0);
+        assertEquals(metadata.topics(), Collections.singleton(topic1));
+        assertEquals(metadata.newTopics(), Collections.emptySet());
+
+        // Add two new topics. However, we'll only apply a partial update for one of them.
+        now += 1000;
+        final String topic2 = "topic-two";
+        metadata.add(topic2, now);
+
+        now += 1000;
+        final String topic3 = "topic-three";
+        metadata.add(topic3, now);
+
+        assertEquals(0, metadata.timeToNextUpdate(now));
+        assertEquals(metadata.topics(), new HashSet<>(Arrays.asList(topic1, topic2, topic3)));
+        assertEquals(metadata.newTopics(), new HashSet<>(Arrays.asList(topic2, topic3)));
+
+        // Perform the partial update for a subset of the new topics.
+        now += 1000;
+        metadata.update(responseWithTopics(Collections.singleton(topic2)), true, now);
+        assertEquals(metadata.topics(), new HashSet<>(Arrays.asList(topic1, topic2, topic3)));
+        assertEquals(metadata.newTopics(), Collections.singleton(topic3));
     }
 
     private MetadataResponse responseWithCurrentTopics() {

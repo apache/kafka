@@ -67,7 +67,7 @@ public class ConsumerMetadataTest {
         subscription.subscribe(Pattern.compile("__.*"), new NoOpConsumerRebalanceListener());
         ConsumerMetadata metadata = newConsumerMetadata(includeInternalTopics);
 
-        MetadataRequest.Builder builder = metadata.newMetadataRequestBuilder();
+        MetadataRequest.Builder builder = metadata.newMetadataRequestBuilder(false);
         assertTrue(builder.isAllTopics());
 
         List<MetadataResponse.TopicMetadata> topics = new ArrayList<>();
@@ -142,7 +142,7 @@ public class ConsumerMetadataTest {
 
         ConsumerMetadata metadata = newConsumerMetadata(false);
 
-        MetadataRequest.Builder builder = metadata.newMetadataRequestBuilder();
+        MetadataRequest.Builder builder = metadata.newMetadataRequestBuilder(false);
         assertEquals(allTopics, new HashSet<>(builder.topics()));
 
         List<MetadataResponse.TopicMetadata> topics = new ArrayList<>();

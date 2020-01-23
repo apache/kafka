@@ -51,7 +51,7 @@ public class ConsumerMetadata extends Metadata {
     }
 
     @Override
-    public synchronized MetadataRequest.Builder newMetadataRequestBuilder() {
+    public synchronized MetadataRequest.Builder newMetadataRequestBuilder(boolean isPartialUpdate) {
         if (subscription.hasPatternSubscription())
             return MetadataRequest.Builder.allTopics();
         List<String> topics = new ArrayList<>();
