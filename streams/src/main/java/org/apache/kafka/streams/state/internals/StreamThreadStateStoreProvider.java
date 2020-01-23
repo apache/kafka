@@ -18,7 +18,6 @@ package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.processor.StateStore;
-import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.StreamThread;
 import org.apache.kafka.streams.processor.internals.Task;
 import org.apache.kafka.streams.state.QueryableStoreType;
@@ -29,7 +28,6 @@ import org.apache.kafka.streams.state.TimestampedWindowStore;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import java.util.Map;
 
 public class StreamThreadStateStoreProvider {
 
@@ -48,9 +46,9 @@ public class StreamThreadStateStoreProvider {
         }
         final StreamThread.State state = streamThread.state();
         if (includeStaleStores ? state.isAlive() : state == StreamThread.State.RUNNING) {
-            final Map<TaskId, ? extends Task> tasks = includeStaleStores ? streamThread.allTasks() : streamThread.allStreamsTasks();
+            final Iterable<? extends Task> tasks = includeStaleStores ? streamThread.allTasks().values() : streamThread.activeTasks();
             final List<T> stores = new ArrayList<>();
-            for (final Task streamTask : tasks.values()) {
+            for (final Task streamTask : tasks) {
                 final StateStore store = streamTask.getStore(storeName);
                 if (store != null && queryableStoreType.accepts(store)) {
                     if (!store.isOpen()) {

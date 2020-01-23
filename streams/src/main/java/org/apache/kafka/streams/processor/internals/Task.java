@@ -72,6 +72,14 @@ public interface Task {
 
     void commit();
 
+    default boolean maybePunctuateStreamTime() {
+        return false;
+    }
+
+    default boolean maybePunctuateSystemTime() {
+        return false;
+    }
+
     void suspend();
 
     void resume();
@@ -110,8 +118,6 @@ public interface Task {
      *         indicating the current positions of the logged state stores of the task.
      */
     Map<TopicPartition, Long> changelogOffsets();
-
-    boolean hasStateStores();
 
     boolean isActive();
 

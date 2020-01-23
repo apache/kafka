@@ -136,7 +136,6 @@ public class TaskManagerTest {
         taskManager = new TaskManager(changeLogReader,
                                       UUID.randomUUID(),
                                       "",
-                                      restoreConsumer,
                                       activeTaskCreator,
                                       standbyTaskCreator,
                                       topologyBuilder,
@@ -221,7 +220,7 @@ public class TaskManagerTest {
 
         EasyMock.replay(activeTaskCreator, stateDirectory);
 
-        final Set<TaskId> tasks = taskManager.cachedTasksIds();
+        final Set<TaskId> tasks = taskManager.tasksOnLocalStorage();
 
         verify(activeTaskCreator, stateDirectory);
 
@@ -249,8 +248,8 @@ public class TaskManagerTest {
         assertThat(task00.state(), Matchers.is(Task.State.SUSPENDED));
         taskManager.handleAssignment(emptyMap(), emptyMap());
         assertThat(task00.state(), Matchers.is(Task.State.CLOSED));
-        assertThat(taskManager.activeTasks(), Matchers.anEmptyMap());
-        assertThat(taskManager.standbyTasks(), Matchers.anEmptyMap());
+        assertThat(taskManager.activeTaskMap(), Matchers.anEmptyMap());
+        assertThat(taskManager.standbyTaskMap(), Matchers.anEmptyMap());
     }
 
     @Test
@@ -265,8 +264,8 @@ public class TaskManagerTest {
         assertThat(task00.state(), Matchers.is(Task.State.RUNNING));
         taskManager.handleAssignment(emptyMap(), emptyMap());
         assertThat(task00.state(), Matchers.is(Task.State.CLOSED));
-        assertThat(taskManager.activeTasks(), Matchers.anEmptyMap());
-        assertThat(taskManager.standbyTasks(), Matchers.anEmptyMap());
+        assertThat(taskManager.activeTaskMap(), Matchers.anEmptyMap());
+        assertThat(taskManager.standbyTaskMap(), Matchers.anEmptyMap());
     }
 
     @Test
@@ -301,8 +300,8 @@ public class TaskManagerTest {
         taskManager.handleAssignment(assignment, emptyMap());
 
         assertThat(task00.state(), Matchers.is(Task.State.CREATED));
-        assertThat(taskManager.activeTasks(), Matchers.equalTo(singletonMap(taskId00, task00)));
-        assertThat(taskManager.standbyTasks(), Matchers.anEmptyMap());
+        assertThat(taskManager.activeTaskMap(), Matchers.equalTo(singletonMap(taskId00, task00)));
+        assertThat(taskManager.standbyTaskMap(), Matchers.anEmptyMap());
         verify(activeTaskCreator);
     }
 
@@ -353,14 +352,14 @@ public class TaskManagerTest {
         taskManager.handleAssignment(assignment, emptyMap());
 
         assertThat(task00.state(), Matchers.is(Task.State.CREATED));
-        assertThat(taskManager.activeTasks(), Matchers.equalTo(singletonMap(taskId00, task00)));
-        assertThat(taskManager.standbyTasks(), Matchers.anEmptyMap());
+        assertThat(taskManager.activeTaskMap(), Matchers.equalTo(singletonMap(taskId00, task00)));
+        assertThat(taskManager.standbyTaskMap(), Matchers.anEmptyMap());
 
         taskManager.shutdown(true);
 
         assertThat(task00.state(), Matchers.is(Task.State.CLOSED));
-        assertThat(taskManager.activeTasks(), Matchers.anEmptyMap());
-        assertThat(taskManager.standbyTasks(), Matchers.anEmptyMap());
+        assertThat(taskManager.activeTaskMap(), Matchers.anEmptyMap());
+        assertThat(taskManager.standbyTaskMap(), Matchers.anEmptyMap());
         // the active task creator should also get closed (so that it closes the thread producer if applicable)
         verify(activeTaskCreator);
     }
@@ -380,14 +379,14 @@ public class TaskManagerTest {
         taskManager.handleAssignment(emptyMap(), assignment);
 
         assertThat(task00.state(), Matchers.is(Task.State.CREATED));
-        assertThat(taskManager.activeTasks(), Matchers.anEmptyMap());
-        assertThat(taskManager.standbyTasks(), Matchers.equalTo(singletonMap(taskId00, task00)));
+        assertThat(taskManager.activeTaskMap(), Matchers.anEmptyMap());
+        assertThat(taskManager.standbyTaskMap(), Matchers.equalTo(singletonMap(taskId00, task00)));
 
         taskManager.shutdown(true);
 
         assertThat(task00.state(), Matchers.is(Task.State.CLOSED));
-        assertThat(taskManager.activeTasks(), Matchers.anEmptyMap());
-        assertThat(taskManager.standbyTasks(), Matchers.anEmptyMap());
+        assertThat(taskManager.activeTaskMap(), Matchers.anEmptyMap());
+        assertThat(taskManager.standbyTaskMap(), Matchers.anEmptyMap());
         // the active task creator should also get closed (so that it closes the thread producer if applicable)
         verify(activeTaskCreator);
     }
@@ -418,8 +417,8 @@ public class TaskManagerTest {
         taskManager.updateNewAndRestoringTasks();
 
         assertThat(task00.state(), Matchers.is(Task.State.RUNNING));
-        assertThat(taskManager.activeTasks(), Matchers.equalTo(singletonMap(taskId00, task00)));
-        assertThat(taskManager.standbyTasks(), Matchers.anEmptyMap());
+        assertThat(taskManager.activeTaskMap(), Matchers.equalTo(singletonMap(taskId00, task00)));
+        assertThat(taskManager.standbyTaskMap(), Matchers.anEmptyMap());
     }
 
     @Test
@@ -436,8 +435,8 @@ public class TaskManagerTest {
         taskManager.updateNewAndRestoringTasks();
 
         assertThat(task01.state(), Matchers.is(Task.State.RUNNING));
-        assertThat(taskManager.activeTasks(), Matchers.anEmptyMap());
-        assertThat(taskManager.standbyTasks(), Matchers.equalTo(singletonMap(taskId01, task01)));
+        assertThat(taskManager.activeTaskMap(), Matchers.anEmptyMap());
+        assertThat(taskManager.standbyTaskMap(), Matchers.equalTo(singletonMap(taskId01, task01)));
     }
 
     @Ignore
@@ -793,7 +792,7 @@ public class TaskManagerTest {
         private State state = State.CREATED;
         private boolean commitNeeded = false;
         private boolean commitRequested = false;
-        private Map<TopicPartition, Long> purgableOffsets;
+        private Map<TopicPartition, Long> purgeableOffsets;
 
         StateMachineTask(final TaskId id,
                          final Set<TopicPartition> partitions,
@@ -906,28 +905,22 @@ public class TaskManagerTest {
             return emptyList();
         }
 
-        @Override
-        public Map<TopicPartition, Long> changelogOffsets() {
-            return emptyMap();
-        }
-
-        @Override
-        public boolean hasStateStores() {
-            return false;
-        }
-
-        @Override
         public boolean isActive() {
             return active;
         }
 
-        public void setPurgeableOffsets(final Map<TopicPartition, Long> purgeableOffsets) {
-            this.purgableOffsets = purgeableOffsets;
+        void setPurgeableOffsets(final Map<TopicPartition, Long> purgeableOffsets) {
+            this.purgeableOffsets = purgeableOffsets;
         }
 
         @Override
         public Map<TopicPartition, Long> purgableOffsets() {
-            return purgableOffsets;
+            return purgeableOffsets;
+        }
+
+        @Override
+        public Map<TopicPartition, Long> changelogOffsets() {
+            return null;
         }
 
         @Override

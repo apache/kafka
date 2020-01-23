@@ -59,7 +59,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.TreeMap;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -221,7 +220,7 @@ public class StreamThread extends Thread {
 
             state = newState;
             if (newState == State.RUNNING) {
-                updateThreadMetadata(taskManager.activeTasks(), taskManager.standbyTasks());
+                updateThreadMetadata(taskManager.activeTaskMap(), taskManager.standbyTaskMap());
             } else {
                 updateThreadMetadata(Collections.emptyMap(), Collections.emptyMap());
             }
@@ -307,7 +306,9 @@ public class StreamThread extends Thread {
 
         abstract T createTask(final Consumer<byte[], byte[]> consumer, final TaskId id, final Set<TopicPartition> partitions);
 
-        void close() {};
+        void close() {}
+
+        ;
     }
 
     static class TaskCreator extends AbstractTaskCreator<StreamTask> {
@@ -577,7 +578,6 @@ public class StreamThread extends Thread {
             changelogReader,
             processId,
             logPrefix,
-            restoreConsumer,
             activeTaskCreator,
             standbyTaskCreator,
             builder,
@@ -671,7 +671,7 @@ public class StreamThread extends Thread {
         this.pollTime = Duration.ofMillis(config.getLong(StreamsConfig.POLL_MS_CONFIG));
         final int dummyThreadIdx = 1;
         this.maxPollTimeMs = new InternalConsumerConfig(config.getMainConsumerConfigs("dummyGroupId", "dummyClientId", dummyThreadIdx))
-                .getInt(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG);
+            .getInt(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG);
         this.commitTimeMs = config.getLong(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG);
 
         this.numIterations = 1;
@@ -723,7 +723,7 @@ public class StreamThread extends Thread {
             cleanRun = true;
         } catch (final KafkaException e) {
             log.error("Encountered the following unexpected Kafka exception during processing, " +
-                "this usually indicate Streams internal errors:", e);
+                          "this usually indicate Streams internal errors:", e);
             throw e;
         } catch (final Exception e) {
             // we have caught all Kafka related exceptions, and other runtime exceptions
@@ -754,8 +754,8 @@ public class StreamThread extends Thread {
                 }
             } catch (final TaskMigratedException ignoreAndRejoinGroup) {
                 log.warn("Detected task {} that got migrated to another thread. " +
-                        "This implies that this thread missed a rebalance and dropped out of the consumer group. " +
-                        "Will try to rejoin the consumer group.", ignoreAndRejoinGroup.migratedTaskId());
+                             "This implies that this thread missed a rebalance and dropped out of the consumer group. " +
+                             "Will try to rejoin the consumer group.", ignoreAndRejoinGroup.migratedTaskId());
 
                 enforceRebalance();
             }
@@ -823,53 +823,49 @@ public class StreamThread extends Thread {
 
         advanceNowAndComputeLatency();
 
-        // TODO: we will process some tasks even if the state is not RUNNING, i.e. some other
-        // tasks are still being restored.
-        if (taskManager.hasActiveRunningTasks()) {
-            /*
-             * Within an iteration, after N (N initialized as 1 upon start up) round of processing one-record-each on the applicable tasks, check the current time:
-             *  1. If it is time to commit, do it;
-             *  2. If it is time to punctuate, do it;
-             *  3. If elapsed time is close to consumer's max.poll.interval.ms, end the current iteration immediately.
-             *  4. If none of the the above happens, increment N.
-             *  5. If one of the above happens, half the value of N.
-             */
-            int processed = 0;
-            long timeSinceLastPoll = 0L;
+        /*
+         * Within an iteration, after N (N initialized as 1 upon start up) round of processing one-record-each on the applicable tasks, check the current time:
+         *  1. If it is time to commit, do it;
+         *  2. If it is time to punctuate, do it;
+         *  3. If elapsed time is close to consumer's max.poll.interval.ms, end the current iteration immediately.
+         *  4. If none of the the above happens, increment N.
+         *  5. If one of the above happens, half the value of N.
+         */
+        int processed = 0;
+        long timeSinceLastPoll = 0L;
 
-            do {
-                for (int i = 0; i < numIterations; i++) {
-                    processed = taskManager.process(now);
+        do {
+            for (int i = 0; i < numIterations; i++) {
+                processed = taskManager.process(now);
 
-                    if (processed > 0) {
-                        final long processLatency = advanceNowAndComputeLatency();
-                        processSensor.record(processLatency / (double) processed, now);
+                if (processed > 0) {
+                    final long processLatency = advanceNowAndComputeLatency();
+                    processSensor.record(processLatency / (double) processed, now);
 
-                        // commit any tasks that have requested a commit
-                        final int committed = taskManager.maybeCommitActiveTasksPerUserRequested();
+                    // commit any tasks that have requested a commit
+                    final int committed = taskManager.maybeCommitActiveTasksPerUserRequested();
 
-                        if (committed > 0) {
-                            final long commitLatency = advanceNowAndComputeLatency();
-                            commitSensor.record(commitLatency / (double) committed, now);
-                        }
-                    } else {
-                        // if there is no records to be processed, exit immediately
-                        break;
+                    if (committed > 0) {
+                        final long commitLatency = advanceNowAndComputeLatency();
+                        commitSensor.record(commitLatency / (double) committed, now);
                     }
-                }
-
-                timeSinceLastPoll = Math.max(now - lastPollMs, 0);
-
-                if (maybePunctuate() || maybeCommit()) {
-                    numIterations = numIterations > 1 ? numIterations / 2 : numIterations;
-                } else if (timeSinceLastPoll > maxPollTimeMs / 2) {
-                    numIterations = numIterations > 1 ? numIterations / 2 : numIterations;
+                } else {
+                    // if there is no records to be processed, exit immediately
                     break;
-                } else if (processed > 0) {
-                    numIterations++;
                 }
-            } while (processed > 0);
-        }
+            }
+
+            timeSinceLastPoll = Math.max(now - lastPollMs, 0);
+
+            if (maybePunctuate() || maybeCommit()) {
+                numIterations = numIterations > 1 ? numIterations / 2 : numIterations;
+            } else if (timeSinceLastPoll > maxPollTimeMs / 2) {
+                numIterations = numIterations > 1 ? numIterations / 2 : numIterations;
+                break;
+            } else if (processed > 0) {
+                numIterations++;
+            }
+        } while (processed > 0);
 
         maybeCommit();
     }
@@ -1000,7 +996,7 @@ public class StreamThread extends Thread {
         if (now - lastCommitMs > commitTimeMs) {
             if (log.isTraceEnabled()) {
                 log.trace("Committing all active tasks {} and standby tasks {} since {}ms has elapsed (commit interval is {}ms)",
-                    taskManager.activeTaskIds(), taskManager.standbyTaskIds(), now - lastCommitMs, commitTimeMs);
+                          taskManager.activeTaskIds(), taskManager.standbyTaskIds(), now - lastCommitMs, commitTimeMs);
             }
 
             committed = taskManager.commitAll();
@@ -1013,7 +1009,7 @@ public class StreamThread extends Thread {
 
                 if (log.isDebugEnabled()) {
                     log.debug("Committed all active tasks {} and standby tasks {} in {}ms",
-                        taskManager.activeTaskIds(), taskManager.standbyTaskIds(), intervalCommitLatency);
+                              taskManager.activeTaskIds(), taskManager.standbyTaskIds(), intervalCommitLatency);
                 }
             }
 
@@ -1022,7 +1018,7 @@ public class StreamThread extends Thread {
             } else {
                 lastCommitMs = now;
             }
-            
+
             processStandbyRecords = true;
         } else {
             committed = taskManager.maybeCommitActiveTasksPerUserRequested();
@@ -1128,16 +1124,16 @@ public class StreamThread extends Thread {
         return this;
     }
 
-    private void updateThreadMetadata(final Map<TaskId, StreamTask> activeTasks,
-                                      final Map<TaskId, StandbyTask> standbyTasks) {
+    private void updateThreadMetadata(final Map<TaskId, Task> activeTasks,
+                                      final Map<TaskId, Task> standbyTasks) {
         final Set<String> producerClientIds = new HashSet<>();
         final Set<TaskMetadata> activeTasksMetadata = new HashSet<>();
-        for (final Map.Entry<TaskId, StreamTask> task : activeTasks.entrySet()) {
+        for (final Map.Entry<TaskId, Task> task : activeTasks.entrySet()) {
             activeTasksMetadata.add(new TaskMetadata(task.getKey().toString(), task.getValue().partitions()));
             producerClientIds.add(getTaskProducerClientId(getName(), task.getKey()));
         }
         final Set<TaskMetadata> standbyTasksMetadata = new HashSet<>();
-        for (final Map.Entry<TaskId, StandbyTask> task : standbyTasks.entrySet()) {
+        for (final Map.Entry<TaskId, Task> task : standbyTasks.entrySet()) {
             standbyTasksMetadata.add(new TaskMetadata(task.getKey().toString(), task.getValue().partitions()));
         }
 
@@ -1153,19 +1149,12 @@ public class StreamThread extends Thread {
             standbyTasksMetadata);
     }
 
-    public Map<TaskId, StreamTask> allStreamsTasks() {
-        return taskManager.activeTasks();
-    }
-
-    public Map<TaskId, StandbyTask> allStandbyTasks() {
-        return taskManager.standbyTasks();
+    public Iterable<Task> activeTasks() {
+        return taskManager.activeTaskIterable();
     }
 
     public Map<TaskId, Task> allTasks() {
-        final Map<TaskId, Task> result = new TreeMap<>();
-        result.putAll(taskManager.standbyTasks());
-        result.putAll(taskManager.activeTasks());
-        return result;
+        return taskManager.tasks();
     }
 
     /**
@@ -1200,7 +1189,7 @@ public class StreamThread extends Thread {
             // When EOS is turned on, each task will have its own producer client
             // and the producer object passed in here will be null. We would then iterate through
             // all the active tasks and add their metrics to the output metrics map.
-            for (final StreamTask task: taskManager.activeTasks().values()) {
+            for (final StreamTask task : taskManager.fixmeStreamTasks().values()) {
                 final Map<MetricName, ? extends Metric> taskProducerMetrics = ((RecordCollectorImpl) task.recordCollector()).producer().metrics();
                 result.putAll(taskProducerMetrics);
             }

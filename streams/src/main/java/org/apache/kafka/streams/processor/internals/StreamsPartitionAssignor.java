@@ -227,7 +227,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         // 1. Client UUID (a unique id assigned to an instance of KafkaStreams)
         // 2. Task ids of previously running tasks
         // 3. Task ids of valid local states on the client's state directory.
-        final Set<TaskId> standbyTasks = taskManager.cachedTasksIds();
+        final Set<TaskId> standbyTasks = taskManager.tasksOnLocalStorage();
         final Set<TaskId> activeTasks = prepareForSubscription(taskManager,
             topics,
             standbyTasks,
@@ -253,7 +253,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         switch (rebalanceProtocol) {
             case EAGER:
                 // In eager, onPartitionsRevoked is called first and we must get the previously saved running task ids
-                activeTasks = taskManager.previousRunningTaskIds();
+                activeTasks = taskManager.activeTaskIds();
                 standbyTasks.removeAll(activeTasks);
                 break;
             case COOPERATIVE:
@@ -265,9 +265,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                 throw new IllegalStateException("Streams partition assignor's rebalance protocol is unknown");
         }
 
-//        REVIEW: is this necessary here?
-//        taskManager.updateSubscriptionsFromMetadata(topics);
-        taskManager.setRebalanceInProgress(true);
+        taskManager.handleRebalanceStart();
 
         return activeTasks;
     }
