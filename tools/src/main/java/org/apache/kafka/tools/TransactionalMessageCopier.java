@@ -27,6 +27,7 @@ import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.producer.KafkaProducer;
+import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.KafkaException;
@@ -123,6 +124,15 @@ public class TransactionalMessageCopier {
                 .dest("messagesPerTransaction")
                 .help("The number of messages to put in each transaction. Default is 200.");
 
+        parser.addArgument("--transaction-timeout")
+                .action(store())
+                .required(false)
+                .setDefault(60000)
+                .type(Integer.class)
+                .metavar("TRANSACTION-TIMEOUT")
+                .dest("transactionTimeout")
+                .help("The transaction timeout in milliseconds. Default is 60000(1 minute).");
+
         parser.addArgument("--transactional-id")
                 .action(store())
                 .required(true)
@@ -157,12 +167,9 @@ public class TransactionalMessageCopier {
     }
 
     private static KafkaProducer<String, String> createProducer(Namespace parsedArgs) {
-        String transactionalId = parsedArgs.getString("transactionalId");
-        String brokerList = parsedArgs.getString("brokerList");
-
         Properties props = new Properties();
-        props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList);
-        props.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, transactionalId);
+        props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, parsedArgs.getString("brokerList"));
+        props.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, parsedArgs.getString("transactionalId"));
         props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG,
                 "org.apache.kafka.common.serialization.StringSerializer");
         props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG,
@@ -172,6 +179,7 @@ public class TransactionalMessageCopier {
         // the case with multiple inflights.
         props.put(ProducerConfig.BATCH_SIZE_CONFIG, "512");
         props.put(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, "5");
+        props.put(ProducerConfig.TRANSACTION_TIMEOUT_CONFIG, parsedArgs.getInt("transactionTimeout"));
 
         return new KafkaProducer<>(props);
     }

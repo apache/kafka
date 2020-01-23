@@ -47,12 +47,13 @@ class TransactionalMessageCopier(KafkaPathResolverMixin, BackgroundThreadService
 
     def __init__(self, context, num_nodes, kafka, transactional_id, consumer_group,
                  input_topic, input_partition, output_topic, max_messages = -1,
-                 transaction_size = 1000, enable_random_aborts=True, use_group_metadata=False, group_mode=False):
+                 transaction_size = 1000, transaction_timeout = None, enable_random_aborts=True, use_group_metadata=False, group_mode=False):
         super(TransactionalMessageCopier, self).__init__(context, num_nodes)
         self.kafka = kafka
         self.transactional_id = transactional_id
         self.consumer_group = consumer_group
         self.transaction_size = transaction_size
+        self.transaction_timeout = transaction_timeout
         self.input_topic = input_topic
         self.input_partition = input_partition
         self.output_topic = output_topic
@@ -121,6 +122,9 @@ class TransactionalMessageCopier(KafkaPathResolverMixin, BackgroundThreadService
         cmd += " --output-topic %s" % self.output_topic
         cmd += " --input-partition %s" % str(self.input_partition)
         cmd += " --transaction-size %s" % str(self.transaction_size)
+
+        if self.transaction_timeout is not None:
+            cmd += " --transaction-timeout %s" % str(self.transaction_timeout)
 
         if self.enable_random_aborts:
             cmd += " --enable-random-aborts"
