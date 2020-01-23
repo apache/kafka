@@ -48,9 +48,9 @@ for %%i in ("%BASE_DIR%\core\build\dependant-libs-%SCALA_VERSION%\*.jar") do (
 )
 
 rem Classpath addition for kafka-examples
-for %%i in ("%BASE_DIR%\examples\build\libs\kafka-examples*.jar") do (
-	call :concat "%%i"
-)
+rem for %%i in ("%BASE_DIR%\examples\build\libs\kafka-examples*.jar") do (
+rem 	call :concat "%%i"
+rem )
 
 rem Classpath addition for kafka-clients
 for %%i in ("%BASE_DIR%\clients\build\libs\kafka-clients*.jar") do (
@@ -63,9 +63,9 @@ for %%i in ("%BASE_DIR%\streams\build\libs\kafka-streams*.jar") do (
 )
 
 rem Classpath addition for kafka-streams-examples
-for %%i in ("%BASE_DIR%\streams\examples\build\libs\kafka-streams-examples*.jar") do (
-	call :concat "%%i"
-)
+rem for %%i in ("%BASE_DIR%\streams\examples\build\libs\kafka-streams-examples*.jar") do (
+rem 	call :concat "%%i"
+rem )
 
 for %%i in ("%BASE_DIR%\streams\build\dependant-libs-%SCALA_VERSION%\rocksdb*.jar") do (
 	call :concat "%%i"
@@ -90,9 +90,7 @@ for %%p in (api runtime file json tools) do (
 )
 
 rem Classpath addition for release
-for %%i in ("%BASE_DIR%\libs\*") do (
-	call :concat "%%i"
-)
+call :concat "%BASE_DIR%\libs\*"
 
 rem Classpath addition for core
 for %%i in ("%BASE_DIR%\core\build\libs\kafka_%SCALA_BINARY_VERSION%*.jar") do (
@@ -176,9 +174,9 @@ IF not defined CLASSPATH (
 	EXIT /B 2
 )
 
-set COMMAND=%JAVA% %KAFKA_HEAP_OPTS% %KAFKA_JVM_PERFORMANCE_OPTS% %KAFKA_JMX_OPTS% %KAFKA_LOG4J_OPTS% -cp "%CLASSPATH%" %KAFKA_OPTS% %*
+set COMMAND=%JAVA% %KAFKA_HEAP_OPTS% %KAFKA_JVM_PERFORMANCE_OPTS% %KAFKA_JMX_OPTS% %KAFKA_LOG4J_OPTS% %JAVA_PROPS% -cp "%CLASSPATH%" %KAFKA_OPTS% %*
 rem echo.
-rem echo %COMMAND%
+echo %COMMAND%
 rem echo.
 %COMMAND%
 
