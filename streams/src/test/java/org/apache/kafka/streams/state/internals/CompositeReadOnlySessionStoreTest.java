@@ -58,7 +58,7 @@ public class CompositeReadOnlySessionStoreTest {
         final QueryableStoreType<ReadOnlySessionStore<Object, Object>> queryableStoreType = QueryableStoreTypes.sessionStore();
 
         sessionStore = new CompositeReadOnlySessionStore<>(
-            new WrappingStoreProvider(Arrays.asList(stubProviderOne, stubProviderTwo), new StoreQueryParams<ReadOnlySessionStore<Object, Object>>(storeName, queryableStoreType)),
+            new WrappingStoreProvider(Arrays.asList(stubProviderOne, stubProviderTwo), StoreQueryParams.fromNameAndType(storeName, queryableStoreType)),
             QueryableStoreTypes.sessionStore(), storeName);
     }
 
@@ -113,7 +113,7 @@ public class CompositeReadOnlySessionStoreTest {
         final QueryableStoreType<ReadOnlySessionStore<Object, Object>> queryableStoreType = QueryableStoreTypes.sessionStore();
         final CompositeReadOnlySessionStore<String, String> store =
             new CompositeReadOnlySessionStore<>(
-                new WrappingStoreProvider(singletonList(new StateStoreProviderStub(true)), new StoreQueryParams<ReadOnlySessionStore<Object, Object>>("whateva", queryableStoreType)),
+                new WrappingStoreProvider(singletonList(new StateStoreProviderStub(true)), StoreQueryParams.fromNameAndType("whateva", queryableStoreType)),
                 QueryableStoreTypes.sessionStore(),
                 "whateva"
             );

@@ -57,7 +57,7 @@ public class WrappingStoreProviderTest {
         stubProviderTwo.addStore("window", new NoOpWindowStore());
         wrappingStoreProvider = new WrappingStoreProvider(
             Arrays.asList(stubProviderOne, stubProviderTwo),
-            new StoreQueryParams<ReadOnlyKeyValueStore<Object, Object>>("kv", QueryableStoreTypes.keyValueStore())
+            StoreQueryParams.fromNameAndType("kv", QueryableStoreTypes.keyValueStore())
         );
     }
 
@@ -70,7 +70,7 @@ public class WrappingStoreProviderTest {
 
     @Test
     public void shouldFindWindowStores() {
-        wrappingStoreProvider.setStoreQueryParams(new StoreQueryParams<ReadOnlyWindowStore<Object, Object>>("window", windowStore()));
+        wrappingStoreProvider.setStoreQueryParams(StoreQueryParams.fromNameAndType("window", windowStore()));
         final List<ReadOnlyWindowStore<Object, Object>>
                 windowStores =
                 wrappingStoreProvider.stores("window", windowStore());
@@ -79,7 +79,7 @@ public class WrappingStoreProviderTest {
 
     @Test(expected = InvalidStateStoreException.class)
     public void shouldThrowInvalidStoreExceptionIfNoStoreOfTypeFound() {
-        wrappingStoreProvider.setStoreQueryParams(new StoreQueryParams<ReadOnlyKeyValueStore<String, String>>("doesn't exist", QueryableStoreTypes.<String, String>keyValueStore()));
+        wrappingStoreProvider.setStoreQueryParams(StoreQueryParams.fromNameAndType("doesn't exist", QueryableStoreTypes.<String, String>keyValueStore()));
         wrappingStoreProvider.stores("doesn't exist", QueryableStoreTypes.<String, String>keyValueStore());
     }
 }

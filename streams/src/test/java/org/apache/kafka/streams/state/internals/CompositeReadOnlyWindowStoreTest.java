@@ -21,9 +21,7 @@ import org.apache.kafka.streams.StoreQueryParams;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.TimeWindow;
-import org.apache.kafka.streams.state.QueryableStoreType;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
-import org.apache.kafka.streams.state.ReadOnlyWindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 import org.apache.kafka.test.StateStoreProviderStub;
 import org.apache.kafka.test.StreamsTestUtils;
@@ -69,9 +67,8 @@ public class CompositeReadOnlyWindowStoreTest {
         otherUnderlyingStore = new ReadOnlyWindowStoreStub<>(WINDOW_SIZE);
         stubProviderOne.addStore("other-window-store", otherUnderlyingStore);
 
-        final QueryableStoreType<ReadOnlyWindowStore<Object, Object>> queryableStoreType = QueryableStoreTypes.windowStore();
         windowStore = new CompositeReadOnlyWindowStore<>(
-            new WrappingStoreProvider(asList(stubProviderOne, stubProviderTwo), new StoreQueryParams<ReadOnlyWindowStore<Object, Object>>(storeName, queryableStoreType)),
+            new WrappingStoreProvider(asList(stubProviderOne, stubProviderTwo), StoreQueryParams.fromNameAndType(storeName, QueryableStoreTypes.windowStore())),
                 QueryableStoreTypes.windowStore(),
                 storeName
         );
@@ -141,10 +138,9 @@ public class CompositeReadOnlyWindowStoreTest {
     @Test
     public void shouldThrowInvalidStateStoreExceptionIfFetchThrows() {
         underlyingWindowStore.setOpen(false);
-        final QueryableStoreType<ReadOnlyWindowStore<Object, Object>> queryableStoreType = QueryableStoreTypes.windowStore();
         final CompositeReadOnlyWindowStore<Object, Object> store =
                 new CompositeReadOnlyWindowStore<>(
-                    new WrappingStoreProvider(singletonList(stubProviderOne), new StoreQueryParams<ReadOnlyWindowStore<Object, Object>>("window-store", QueryableStoreTypes.windowStore())),
+                    new WrappingStoreProvider(singletonList(stubProviderOne), StoreQueryParams.fromNameAndType("window-store", QueryableStoreTypes.windowStore())),
                     QueryableStoreTypes.windowStore(),
                     "window-store"
                 );

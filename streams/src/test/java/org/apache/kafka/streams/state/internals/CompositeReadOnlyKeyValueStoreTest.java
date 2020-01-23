@@ -66,7 +66,7 @@ public class CompositeReadOnlyKeyValueStoreTest {
         stubProviderOne.addStore("other-store", otherUnderlyingStore);
         final QueryableStoreType<ReadOnlyKeyValueStore<Object, Object>> queryableStoreType = QueryableStoreTypes.keyValueStore();
         theStore = new CompositeReadOnlyKeyValueStore<>(
-            new WrappingStoreProvider(asList(stubProviderOne, stubProviderTwo), new StoreQueryParams<ReadOnlyKeyValueStore<Object, Object>>(storeName, QueryableStoreTypes.keyValueStore())),
+            new WrappingStoreProvider(asList(stubProviderOne, stubProviderTwo), StoreQueryParams.fromNameAndType(storeName, QueryableStoreTypes.keyValueStore())),
             QueryableStoreTypes.keyValueStore(),
             storeName
         );
@@ -299,7 +299,7 @@ public class CompositeReadOnlyKeyValueStoreTest {
     private CompositeReadOnlyKeyValueStore<Object, Object> rebalancing() {
         final QueryableStoreType<ReadOnlyKeyValueStore<Object, Object>> queryableStoreType = QueryableStoreTypes.keyValueStore();
         return new CompositeReadOnlyKeyValueStore<>(
-            new WrappingStoreProvider(singletonList(new StateStoreProviderStub(true)), new StoreQueryParams<ReadOnlyKeyValueStore<Object, Object>>(storeName, QueryableStoreTypes.keyValueStore())),
+            new WrappingStoreProvider(singletonList(new StateStoreProviderStub(true)), StoreQueryParams.fromNameAndType(storeName, QueryableStoreTypes.keyValueStore())),
             QueryableStoreTypes.keyValueStore(),
             storeName
         );

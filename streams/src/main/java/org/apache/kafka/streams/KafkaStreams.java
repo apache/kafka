@@ -1167,7 +1167,7 @@ public class KafkaStreams implements AutoCloseable {
      *
      * Only permits queries on active replicas of the store (no standbys or restoring replicas).
      * See {@link KafkaStreams#store(StoreQueryParams)}
-     * for the option to set {@code StoreQueryParams.withAllPartitionAndStaleStoresEnabled or StoreQueryParams.withPartitionAndStaleStoresEnabled(final Integer partition)} and trade off consistency in favor of availability.
+     * for the option to set {@code StoreQueryParams.withIncludeStaleStores()} and trade off consistency in favor of availability.
      *
      * @param storeName           name of the store to find
      * @param queryableStoreType  accept only stores that are accepted by {@link QueryableStoreType#accepts(StateStore)}
@@ -1176,8 +1176,9 @@ public class KafkaStreams implements AutoCloseable {
      * @throws InvalidStateStoreException if Kafka Streams is (re-)initializing or a store with {@code storeName} and
      * {@code queryableStoreType} doesn't exist
      */
+    @Deprecated
     public <T> T store(final String storeName, final QueryableStoreType<T> queryableStoreType) {
-        return store(new StoreQueryParams<T>(storeName, queryableStoreType));
+        return store(StoreQueryParams.fromNameAndType(storeName, queryableStoreType));
     }
 
     /**
@@ -1187,10 +1188,10 @@ public class KafkaStreams implements AutoCloseable {
      * The optional parameters to the StoreQueryParams include {@code partition} and {@code includeStaleStores}.
      * The returned object can be used to query the {@link StateStore} instances.
      *
-     * @param storeQueryParams    If storeQueryParams.withPartition(int partition) is used, it allow queries on the specific partition irrespective if it is a standby
+     * @param storeQueryParams    If StoreQueryParams.fromNameAndType(storeName, queryableStoreType).withPartition(int partition) is used, it allow queries on the specific partition irrespective if it is a standby
      *                            or a restoring replicas in addition to active ones.
-     *                            If storeQueryParams.withIncludeStaleStores() is used, it allow queries on standbys and restoring replicas in addition to active ones for all the local partitions on the instance.
-     *                            If StoreQueryParams.withIncludeStaleStores().withPartition(int partition), it allow queries on the specific partition irrespective if it is a standby
+     *                            If StoreQueryParams.fromNameAndType(storeName, queryableStoreType).withIncludeStaleStores() is used, it allow queries on standbys and restoring replicas in addition to active ones for all the local partitions on the instance.
+     *                            If StoreQueryParams.fromNameAndType(storeName, queryableStoreType).withIncludeStaleStores().withPartition(int partition), it allow queries on the specific partition irrespective if it is a standby
      *                            or a restoring replicas in addition to active ones..
      *                            By default, if just storeQueryParams is used, it returns all the local partitions for the store which are in running state.
      * @param <T>                 return type

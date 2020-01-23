@@ -54,38 +54,38 @@ public class QueryableStoreProviderTest {
 
     @Test(expected = InvalidStateStoreException.class)
     public void shouldThrowExceptionIfKVStoreDoesntExist() {
-        storeProvider.getStore(new StoreQueryParams<>("not-a-store", QueryableStoreTypes.keyValueStore()));
+        storeProvider.getStore(StoreQueryParams.fromNameAndType("not-a-store", QueryableStoreTypes.keyValueStore()));
     }
 
     @Test(expected = InvalidStateStoreException.class)
     public void shouldThrowExceptionIfWindowStoreDoesntExist() {
-        storeProvider.getStore(new StoreQueryParams<>("not-a-store", QueryableStoreTypes.windowStore()));
+        storeProvider.getStore(StoreQueryParams.fromNameAndType("not-a-store", QueryableStoreTypes.windowStore()));
     }
 
     @Test
     public void shouldReturnKVStoreWhenItExists() {
-        assertNotNull(storeProvider.getStore(new StoreQueryParams<>(keyValueStore, QueryableStoreTypes.keyValueStore())));
+        assertNotNull(storeProvider.getStore(StoreQueryParams.fromNameAndType(keyValueStore, QueryableStoreTypes.keyValueStore())));
     }
 
     @Test
     public void shouldReturnWindowStoreWhenItExists() {
-        assertNotNull(storeProvider.getStore(new StoreQueryParams<>(windowStore, QueryableStoreTypes.windowStore())));
+        assertNotNull(storeProvider.getStore(StoreQueryParams.fromNameAndType(windowStore, QueryableStoreTypes.windowStore())));
     }
 
     @Test(expected = InvalidStateStoreException.class)
     public void shouldThrowExceptionWhenLookingForWindowStoreWithDifferentType() {
-        storeProvider.getStore(new StoreQueryParams<>(windowStore, QueryableStoreTypes.keyValueStore()));
+        storeProvider.getStore(StoreQueryParams.fromNameAndType(windowStore, QueryableStoreTypes.keyValueStore()));
     }
 
     @Test(expected = InvalidStateStoreException.class)
     public void shouldThrowExceptionWhenLookingForKVStoreWithDifferentType() {
-        storeProvider.getStore(new StoreQueryParams<>(keyValueStore, QueryableStoreTypes.windowStore()));
+        storeProvider.getStore(StoreQueryParams.fromNameAndType(keyValueStore, QueryableStoreTypes.windowStore()));
     }
 
     @Test
     public void shouldFindGlobalStores() {
         globalStateStores.put("global", new NoOpReadOnlyStore<>());
-        assertNotNull(storeProvider.getStore(new StoreQueryParams<>("global", QueryableStoreTypes.keyValueStore())));
+        assertNotNull(storeProvider.getStore(StoreQueryParams.fromNameAndType("global", QueryableStoreTypes.keyValueStore())));
     }
 
 

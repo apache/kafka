@@ -31,9 +31,33 @@ public class StoreQueryParams<T> {
     private final String storeName;
     private final QueryableStoreType<T> queryableStoreType;
 
-    public StoreQueryParams(final String storeName, final QueryableStoreType<T>  queryableStoreType) {
+    private StoreQueryParams(final String storeName, final QueryableStoreType<T>  queryableStoreType) {
         this.storeName = storeName;
         this.queryableStoreType = queryableStoreType;
+    }
+
+    public static <T> StoreQueryParams<T> fromNameAndType(final String storeName, final QueryableStoreType<T>  queryableStoreType) {
+        return new<T> StoreQueryParams<T>(storeName, queryableStoreType);
+    }
+
+    /**
+     * Get the partition to be used to fetch list of Queryable store from QueryableStoreProvider.
+     * If the function returns null, it would mean that no specific partition has been requested so all the local partitions
+     * for the store will be returned.
+     *
+     * @return Integer partition
+     */
+    public Integer partition() {
+        return partition;
+    }
+
+    /**
+     * Get the flag includeStaleStores. If true, include standbys and recovering stores along with running stores.
+     *
+     * @return boolean includeStaleStores
+     */
+    public boolean includeStaleStores() {
+        return includeStaleStores;
     }
 
     /**
