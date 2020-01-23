@@ -116,11 +116,11 @@ public class RocksDBMetricsIntegrationTest {
 
     @Test
     public void shouldExposeRocksDBMetricsForNonSegmentedStateStoreBeforeAndAfterFailureWithEmptyStateDir() throws Exception {
-        final Properties streamsConfiguration = getStreamsConfig();
+        final Properties streamsConfiguration = streamsConfig();
         IntegrationTestUtils.purgeLocalStreamsState(streamsConfiguration);
-        final StreamsBuilder builder = getBuilderForNonSegmentedStateStore();
+        final StreamsBuilder builder = builderForNonSegmentedStateStore();
 
-        runAndVerify(
+        cleanUpStateRunAndVerify(
             builder,
             streamsConfiguration,
             IntegerDeserializer.class,
@@ -128,7 +128,7 @@ public class RocksDBMetricsIntegrationTest {
             "rocksdb-state-id"
         );
 
-        runAndVerify(
+        cleanUpStateRunAndVerify(
             builder,
             streamsConfiguration,
             IntegerDeserializer.class,
@@ -139,11 +139,11 @@ public class RocksDBMetricsIntegrationTest {
 
     @Test
     public void shouldExposeRocksDBMetricsForSegmentedStateStoreBeforeAndAfterFailureWithEmptyStateDir() throws Exception {
-        final Properties streamsConfiguration = getStreamsConfig();
+        final Properties streamsConfiguration = streamsConfig();
         IntegrationTestUtils.purgeLocalStreamsState(streamsConfiguration);
-        final StreamsBuilder builder = getBuilderForSegmentedStateStore();
+        final StreamsBuilder builder = builderForSegmentedStateStore();
 
-        runAndVerify(
+        cleanUpStateRunAndVerify(
             builder,
             streamsConfiguration,
             LongDeserializer.class,
@@ -151,7 +151,7 @@ public class RocksDBMetricsIntegrationTest {
             "rocksdb-window-state-id"
         );
 
-        runAndVerify(
+        cleanUpStateRunAndVerify(
             builder,
             streamsConfiguration,
             LongDeserializer.class,
@@ -160,7 +160,7 @@ public class RocksDBMetricsIntegrationTest {
         );
     }
 
-    private Properties getStreamsConfig() {
+    private Properties streamsConfig() {
         final Properties streamsConfiguration = new Properties();
         streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, "test-application");
         streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
@@ -173,7 +173,7 @@ public class RocksDBMetricsIntegrationTest {
         return streamsConfiguration;
     }
 
-    private StreamsBuilder getBuilderForNonSegmentedStateStore() {
+    private StreamsBuilder builderForNonSegmentedStateStore() {
         final StreamsBuilder builder = new StreamsBuilder();
         builder.table(
             STREAM_INPUT,
@@ -182,7 +182,7 @@ public class RocksDBMetricsIntegrationTest {
         return builder;
     }
 
-    private StreamsBuilder getBuilderForSegmentedStateStore() {
+    private StreamsBuilder builderForSegmentedStateStore() {
         final StreamsBuilder builder = new StreamsBuilder();
         builder.stream(STREAM_INPUT, Consumed.with(Serdes.Integer(), Serdes.String()))
             .groupByKey()
@@ -198,11 +198,11 @@ public class RocksDBMetricsIntegrationTest {
         return builder;
     }
 
-    private void runAndVerify(final StreamsBuilder builder,
-                              final Properties streamsConfiguration,
-                              final Class outputKeyDeserializer,
-                              final Class outputValueDeserializer,
-                              final String metricsScope) throws Exception {
+    private void cleanUpStateRunAndVerify(final StreamsBuilder builder,
+                                          final Properties streamsConfiguration,
+                                          final Class outputKeyDeserializer,
+                                          final Class outputValueDeserializer,
+                                          final String metricsScope) throws Exception {
         final KafkaStreams kafkaStreams = new KafkaStreams(builder.build(), streamsConfiguration);
         kafkaStreams.cleanUp();
         produceRecords();
