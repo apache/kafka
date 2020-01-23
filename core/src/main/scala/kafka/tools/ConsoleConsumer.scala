@@ -538,7 +538,7 @@ class DefaultMessageFormatter extends MessageFormatter {
     }
 
     if (printPartition) {
-      output.write(partition)
+      output.write(s"$partition".getBytes(StandardCharsets.UTF_8))
       output.write(lineSeparator)
     }
   }

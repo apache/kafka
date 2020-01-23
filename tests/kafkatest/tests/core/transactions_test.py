@@ -102,6 +102,7 @@ class TransactionsTest(Test):
             output_topic=output_topic,
             max_messages=-1,
             transaction_size=self.transaction_size,
+            transaction_timeout=self.transaction_timeout,
             use_group_metadata=use_group_metadata
         )
         message_copier.start()
@@ -224,8 +225,8 @@ class TransactionsTest(Test):
     @matrix(failure_mode=["hard_bounce", "clean_bounce"],
             bounce_target=["brokers", "clients"],
             check_order=[True, False],
-            use_group_metadata=[True])
-    # use_group_metadata=[True, False])
+            # use_group_metadata=[True])
+            use_group_metadata=[True, False])
     def test_transactions(self, failure_mode, bounce_target, check_order, use_group_metadata):
         security_protocol = 'PLAINTEXT'
         self.kafka.security_protocol = security_protocol

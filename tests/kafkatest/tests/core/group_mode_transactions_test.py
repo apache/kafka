@@ -50,6 +50,7 @@ class GroupModeTransactionsTest(Test):
         self.num_copiers = 3
         self.num_seed_messages = 900000
         self.transaction_size = 750
+        self.transaction_timeout = 10000
         self.consumer_group = "grouped-transactions-test-consumer-group"
 
         self.zk = ZookeeperService(test_context, num_nodes=1)
@@ -93,7 +94,7 @@ class GroupModeTransactionsTest(Test):
                            hard-killed broker %s" % str(node.account))
                 self.kafka.start_node(node)
 
-    def create_and_start_message_copier(self, input_topic, input_partition, output_topic, transactional_id):
+    def create_and_start_message_copier(self, input_topic, output_topic, transactional_id):
         message_copier = TransactionalMessageCopier(
             context=self.test_context,
             num_nodes=1,
@@ -101,10 +102,11 @@ class GroupModeTransactionsTest(Test):
             transactional_id=transactional_id,
             consumer_group=self.consumer_group,
             input_topic=input_topic,
-            input_partition=input_partition,
+            input_partition=-1,
             output_topic=output_topic,
             max_messages=-1,
             transaction_size=self.transaction_size,
+            transaction_timeout=self.transaction_timeout,
             group_mode=True
         )
         message_copier.start()
@@ -130,7 +132,6 @@ class GroupModeTransactionsTest(Test):
             copiers.append(self.create_and_start_message_copier(
                 input_topic=input_topic,
                 output_topic=output_topic,
-                input_partition=i,
                 transactional_id="copier-" + str(i)
             ))
         return copiers
