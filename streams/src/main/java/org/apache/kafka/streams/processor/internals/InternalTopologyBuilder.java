@@ -1060,9 +1060,9 @@ public class InternalTopologyBuilder {
     private void setRegexMatchedTopicsToSourceNodes() {
         if (hasSubscriptionUpdates()) {
             for (final String nodeName : nodeToSourcePatterns.keySet()) {
+                final SourceNodeFactory sourceNode = (SourceNodeFactory) nodeFactories.get(nodeName);
+                final List<String> sourceTopics = sourceNode.getTopics(subscriptionUpdates);
                 //need to update nodeToSourceTopics and sourceTopicNames with topics matched from given regex
-                final List<String> sourceTopics = ((SourceNodeFactory) nodeFactories.get(nodeName))
-                                                      .getTopics(subscriptionUpdates);
                 nodeToSourceTopics.put(nodeName, sourceTopics);
                 sourceTopicNames.addAll(sourceTopics);
             }
