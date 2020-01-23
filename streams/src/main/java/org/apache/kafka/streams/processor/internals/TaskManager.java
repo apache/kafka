@@ -134,12 +134,16 @@ public class TaskManager {
             );
         }
 
-        for (final Task task : taskCreator.createTasks(consumer, activeTasksToCreate)) {
-            tasks.put(task.id(), task);
+        if (!activeTasksToCreate.isEmpty()) {
+            for (final Task task : taskCreator.createTasks(consumer, activeTasksToCreate)) {
+                tasks.put(task.id(), task);
+            }
         }
 
-        for (final Task task : standbyTaskCreator.createTasks(consumer, standbyTasksToCreate)) {
-            tasks.put(task.id(), task);
+        if (!standbyTasksToCreate.isEmpty()) {
+            for (final Task task : standbyTaskCreator.createTasks(consumer, standbyTasksToCreate)) {
+                tasks.put(task.id(), task);
+            }
         }
 
         builder.addSubscribedTopics(
@@ -282,8 +286,12 @@ public class TaskManager {
         return null;
     }
 
-    Map<TaskId, StreamTask> activeTasks() {
-        return tasks.values().stream().filter(Task::isActive).map(t -> (StreamTask) t).collect(Collectors.toMap(Task::id, t -> t));
+    Map<TaskId, StreamTask> streamTasks() {
+        return tasks.values().stream().filter(t -> t instanceof StreamTask).map(t -> (StreamTask) t).collect(Collectors.toMap(Task::id, t -> t));
+    }
+
+    Map<TaskId, Task> activeTasks() {
+        return tasks.values().stream().filter(Task::isActive).collect(Collectors.toMap(Task::id, t -> t));
     }
 
     Map<TaskId, StandbyTask> standbyTasks() {

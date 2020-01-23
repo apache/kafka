@@ -33,7 +33,6 @@ import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.processor.Cancellable;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
-import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
@@ -291,8 +290,10 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
      */
     public void resume() {
         log.debug("Resuming");
-        initializeMetadata();
-        transitionTo(State.RUNNING);
+        if (state() == State.SUSPENDED) {
+            initializeMetadata();
+            transitionTo(State.RUNNING);
+        }
     }
 
     /**

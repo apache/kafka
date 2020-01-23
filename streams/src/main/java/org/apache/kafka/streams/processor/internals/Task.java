@@ -34,7 +34,7 @@ public interface Task {
                 return;
             } else if (oldState == RESTORING && (newState == RUNNING || newState == SUSPENDED || newState == CLOSED)) {
                 return;
-            } else if (oldState == RUNNING && (newState == RESTORING || newState == SUSPENDED)) {
+            } else if (oldState == RUNNING && (newState == SUSPENDED)) {
                 return;
             } else if (oldState == SUSPENDED && (newState == RUNNING || newState == CLOSED)) {
                 return;
