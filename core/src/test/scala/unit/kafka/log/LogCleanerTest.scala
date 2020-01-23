@@ -2041,7 +2041,6 @@ class LogCleanerTest {
     assertEquals("The tombstone should be retained.", 1, log.logSegments.head.log.batches.iterator.next().lastOffset)
   }
 
-<<<<<<< HEAD
   @Test
   def testCleanTombstoneWithTimestampCompaction(): Unit = {
     val logProps = new Properties()
@@ -2194,7 +2193,8 @@ class LogCleanerTest {
     log.roll()
     cleaner.clean(LogToClean(new TopicPartition("test", 0), log, 2, log.activeSegment.baseOffset))
     assertEquals(2, log.logSegments.head.log.batches.iterator.next().lastOffset)
-=======
+  }
+
   /**
    * Verify that the clean is able to move beyond missing offsets records in dirty log
    */
@@ -2236,7 +2236,6 @@ class LogCleanerTest {
       val (nextDirtyOffset, _) = cleaner.clean(LogToClean(log.topicPartition, log, 0L, log.activeSegment.baseOffset, needCompactionNow = true))
       assertEquals("Cleaning point should pass offset gap in multiple segments", log.activeSegment.baseOffset, nextDirtyOffset)
     }
->>>>>>> upstream/trunk
   }
 
   private def writeToLog(log: Log, keysAndValues: Iterable[(Int, Int)], offsetSeq: Iterable[Long]): Iterable[Long] = {

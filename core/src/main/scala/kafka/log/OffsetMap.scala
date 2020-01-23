@@ -157,10 +157,6 @@ class SkimpyOffsetMap(val memory: Int, val hashAlgorithm: String = "MD5") extend
 
     this.compactionStrategy = CompactionStrategy.withName(strategy)
     this.headerKey = headerKey.trim()
-    if (this.compactionStrategy == CompactionStrategy.HEADER && this.headerKey.isEmpty()) {
-      // fall back to offset if header key not set
-      this.compactionStrategy == CompactionStrategy.OFFSET
-    }
 
     info(s"Compaction strategy set to '${this.compactionStrategy}'")
     this.bytesPerEntry = hashSize + longByteSize + (if (this.compactionStrategy == CompactionStrategy.OFFSET) 0 else longByteSize)
