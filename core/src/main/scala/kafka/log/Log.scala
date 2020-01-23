@@ -2566,7 +2566,7 @@ object Log {
   def timeIndexFile(dir: File, offset: Long, suffix: String = ""): File =
     new File(dir, filenamePrefixFromOffset(offset) + TimeIndexFileSuffix + suffix)
 
-  def deleteFileIfExists(file: File, suffix: String = ""): Unit =
+  def deleteFileIfExists(file: File, suffix: String = ""): Boolean =
     Files.deleteIfExists(new File(file.getPath + suffix).toPath)
 
   /**
