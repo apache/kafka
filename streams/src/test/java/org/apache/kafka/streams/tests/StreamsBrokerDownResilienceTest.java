@@ -115,7 +115,7 @@ public class StreamsBrokerDownResilienceTest {
         System.out.println("Start Kafka Streams");
         streams.start();
 
-        Exit.addShutdownHook(() -> {
+        Exit.addShutdownHook("streams-shutdown-hook", () -> {
             streams.close(Duration.ofSeconds(30));
             System.out.println("Complete shutdown of streams resilience test app now");
             System.out.flush();

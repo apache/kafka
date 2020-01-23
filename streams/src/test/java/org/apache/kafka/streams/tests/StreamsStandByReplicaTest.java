@@ -148,7 +148,7 @@ public class StreamsStandByReplicaTest {
         System.out.println("Start Kafka Streams");
         streams.start();
 
-        Exit.addShutdownHook(() -> {
+        Exit.addShutdownHook("streams-shutdown-hook", () -> {
             shutdown(streams);
             System.out.println("Shut down streams now");
         });

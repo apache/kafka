@@ -249,7 +249,7 @@ public final class Agent {
         log.info("Starting agent process.");
         final Agent agent = new Agent(platform, Scheduler.SYSTEM, restServer, resource);
         restServer.start(resource);
-        Exit.addShutdownHook(() -> {
+        Exit.addShutdownHook("agent-shutdown-hook", () -> {
             log.warn("Running agent shutdown hook.");
             try {
                 agent.beginShutdown();

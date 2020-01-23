@@ -62,7 +62,7 @@ public class ShutdownDeadlockTest {
             }
         });
 
-        Exit.addShutdownHook(() -> streams.close(Duration.ofSeconds(5)));
+        Exit.addShutdownHook("streams-shutdown-hook", () -> streams.close(Duration.ofSeconds(5)));
 
         final Properties producerProps = new Properties();
         producerProps.put(ProducerConfig.CLIENT_ID_CONFIG, "SmokeTest");

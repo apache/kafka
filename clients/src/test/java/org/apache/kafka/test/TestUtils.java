@@ -263,7 +263,7 @@ public class TestUtils {
         }
         file.deleteOnExit();
 
-        Exit.addShutdownHook(() -> {
+        Exit.addShutdownHook("delete-temp-file-shutdown-hook", () -> {
             try {
                 Utils.delete(file);
             } catch (IOException e) {

@@ -644,7 +644,7 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
 
         try {
             final VerifiableConsumer consumer = createFromArgs(parser, args);
-            Exit.addShutdownHook(() -> consumer.close());
+            Exit.addShutdownHook("verifiable-consumer-shutdown-hook", () -> consumer.close());
 
             consumer.run();
         } catch (ArgumentParserException e) {

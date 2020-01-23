@@ -111,7 +111,7 @@ public class StreamsNamedRepartitionTest {
 
         streams.start();
 
-        Exit.addShutdownHook(() -> {
+        Exit.addShutdownHook("streams-shutdown-hook", () -> {
             System.out.println("closing Kafka Streams instance");
             System.out.flush();
             streams.close(Duration.ofMillis(5000));

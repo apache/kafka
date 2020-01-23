@@ -69,7 +69,7 @@ public class EosTestDriver extends SmokeTestUtil {
 
     static void generate(final String kafka) {
 
-        Exit.addShutdownHook(() -> {
+        Exit.addShutdownHook("streams-eos-test-driver-shutdown-hook", () -> {
             System.out.println("Terminating");
             System.out.flush();
             isRunning = false;

@@ -54,7 +54,7 @@ public class EosTestClient extends SmokeTestUtil {
     private volatile boolean isRunning = true;
 
     public void start() {
-        Exit.addShutdownHook(() -> {
+        Exit.addShutdownHook("streams-shutdown-hook", () -> {
             isRunning = false;
             streams.close(Duration.ofSeconds(300));
 

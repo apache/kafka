@@ -265,7 +265,7 @@ public class TransactionalMessageCopier {
         final AtomicBoolean isShuttingDown = new AtomicBoolean(false);
         final AtomicLong remainingMessages = new AtomicLong(maxMessages);
         final AtomicLong numMessagesProcessed = new AtomicLong(0);
-        Exit.addShutdownHook(() -> {
+        Exit.addShutdownHook("transactional-message-copier-shutdown-hook", () -> {
             isShuttingDown.set(true);
             // Flush any remaining messages
             producer.close();

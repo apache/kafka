@@ -109,7 +109,7 @@ public class StreamsUpgradeToCooperativeRebalanceTest {
 
         streams.start();
 
-        Exit.addShutdownHook(() -> {
+        Exit.addShutdownHook("streams-shutdown-hook", () -> {
             streams.close();
             System.out.println(String.format("%sCOOPERATIVE-REBALANCE-TEST-CLIENT-CLOSED", upgradePhase));
             System.out.flush();

@@ -517,7 +517,7 @@ public class VerifiableProducer implements AutoCloseable {
             final long startMs = System.currentTimeMillis();
             ThroughputThrottler throttler = new ThroughputThrottler(producer.throughput, startMs);
 
-            Exit.addShutdownHook(() -> {
+            Exit.addShutdownHook("verifiable-producer-shutdown-hook", () -> {
                 // Trigger main thread to stop producing messages
                 producer.stopProducing = true;
 

@@ -77,7 +77,7 @@ public class SmokeTestClient extends SmokeTestUtil {
             e.printStackTrace();
         });
 
-        Exit.addShutdownHook(() -> close());
+        Exit.addShutdownHook("streams-shutdown-hook", () -> close());
 
         thread = new Thread(() -> streams.start());
         thread.start();

@@ -74,10 +74,6 @@ public class Exit {
         haltProcedure.execute(statusCode, message);
     }
 
-    public static void addShutdownHook(Runnable runnable) {
-        addShutdownHook(null, runnable);
-    }
-
     public static void addShutdownHook(String name, Runnable runnable) {
         shutdownHookAdder.addShutdownHook(name, runnable);
     }

@@ -71,9 +71,8 @@ public class ExitTest {
         try {
             Runnable runnable = () -> { };
             String name = "name";
-            Exit.addShutdownHook(runnable);
             Exit.addShutdownHook(name, runnable);
-            assertEquals(Arrays.asList(null, runnable, name, runnable), list);
+            assertEquals(Arrays.asList(name, runnable), list);
         } finally {
             Exit.resetShutdownHookAdder();
         }
@@ -83,8 +82,6 @@ public class ExitTest {
     public void shouldNotInvokeShutdownHookImmediately() {
         List<Object> list = new ArrayList<>();
         Runnable runnable = () -> list.add(this);
-        Exit.addShutdownHook(runnable);
-        assertEquals(0, list.size());
         Exit.addShutdownHook("message", runnable);
         assertEquals(0, list.size());
     }

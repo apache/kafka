@@ -242,7 +242,7 @@ public class VerifiableLog4jAppender {
         boolean infinite = appender.maxMessages < 0;
 
         // Trigger main thread to stop producing messages when shutting down
-        Exit.addShutdownHook(() -> appender.stopLogging = true);
+        Exit.addShutdownHook("verifiable-log4j-appender-shutdown-hook", () -> appender.stopLogging = true);
 
         long maxMessages = infinite ? Long.MAX_VALUE : appender.maxMessages;
         for (long i = 0; i < maxMessages; i++) {

@@ -49,7 +49,7 @@ public class Connect {
     public void start() {
         try {
             log.info("Kafka Connect starting");
-            Exit.addShutdownHook(shutdownHook);
+            Exit.addShutdownHook("connect-shutdown-hook", shutdownHook);
 
             herder.start();
             rest.initializeResources(herder);
