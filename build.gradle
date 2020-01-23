@@ -24,6 +24,9 @@ buildscript {
     maven {
       url "https://plugins.gradle.org/m2/"
     }
+    flatDir {
+      dirs 'repository'
+    }
   }
   apply from: file('gradle/buildscript.gradle'), to: buildscript
   apply from: "$rootDir/gradle/dependencies.gradle"
@@ -639,7 +642,8 @@ def pkgs = [
     'streams:examples',
     'streams:streams-scala',
     'streams:test-utils',
-    'tools'
+    'tools',
+    'azpubsub'
 ] + connectPkgs
 
 /** Create one task per default Scala version */
@@ -883,6 +887,8 @@ project(':core') {
     from(project(':streams:test-utils').configurations.runtime) { into("libs/") }
     from(project(':streams:examples').jar) { into("libs/") }
     from(project(':streams:examples').configurations.runtime) { into("libs/") }
+    from(project(':azpubsub').jar) { into("libs/") }
+    from(project(':azpubsub').configurations.runtime) { into("libs/") }
     duplicatesStrategy 'exclude'
   }
 
@@ -918,6 +924,8 @@ project(':core') {
     from(project(':streams:examples').jar) { into("libs/") }
     from(project(':streams:examples').configurations.runtime) { into("libs/") }
     from(project.file("$rootDir/repository")) { into "libs/" }
+    from(project(':azpubsub').jar) { into("libs/") }
+    from(project(':azpubsub').configurations.runtime) { into("libs/") }
     duplicatesStrategy 'exclude'
     
     def copyDetails = []
@@ -955,6 +963,17 @@ project(':core') {
 
   checkstyle {
     configProperties = checkstyleConfigProperties("import-control-core.xml")
+  }
+}
+
+project(':azpubsub') {
+  archivesBaseName = "kafka-azpubsub"
+
+  dependencies {
+    compile libs.scalaLibrary
+    compileOnly libs.log4j
+
+    testCompile libs.junit
   }
 }
 
