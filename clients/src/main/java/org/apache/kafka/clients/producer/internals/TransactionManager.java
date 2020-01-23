@@ -18,6 +18,8 @@ package org.apache.kafka.clients.producer.internals;
 
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.RequestCompletionHandler;
+import org.apache.kafka.clients.consumer.CommitFailedException;
+import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.utils.ProducerIdAndEpoch;
 import org.apache.kafka.common.KafkaException;
@@ -34,7 +36,6 @@ import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.EndTxnRequestData;
 import org.apache.kafka.common.message.FindCoordinatorRequestData;
 import org.apache.kafka.common.message.InitProducerIdRequestData;
-import org.apache.kafka.common.message.TxnOffsetCommitRequestData;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.DefaultRecordBatch;
 import org.apache.kafka.common.record.RecordBatch;
@@ -328,18 +329,18 @@ public class TransactionManager {
         return handler.result;
     }
 
-    public synchronized TransactionalRequestResult sendOffsetsToTransaction(Map<TopicPartition, OffsetAndMetadata> offsets,
-                                                                            String consumerGroupId) {
+    public synchronized TransactionalRequestResult sendOffsetsToTransaction(final Map<TopicPartition, OffsetAndMetadata> offsets,
+                                                                            final ConsumerGroupMetadata groupMetadata) {
         ensureTransactional();
         maybeFailWithError();
         if (currentState != State.IN_TRANSACTION)
             throw new KafkaException("Cannot send offsets to transaction either because the producer is not in an " +
                     "active transaction");
 
-        log.debug("Begin adding offsets {} for consumer group {} to transaction", offsets, consumerGroupId);
+        log.debug("Begin adding offsets {} for consumer group {} to transaction", offsets, groupMetadata);
         AddOffsetsToTxnRequest.Builder builder = new AddOffsetsToTxnRequest.Builder(transactionalId,
-            producerIdAndEpoch.producerId, producerIdAndEpoch.epoch, consumerGroupId);
-        AddOffsetsToTxnHandler handler = new AddOffsetsToTxnHandler(builder, offsets);
+            producerIdAndEpoch.producerId, producerIdAndEpoch.epoch, groupMetadata.groupId());
+        AddOffsetsToTxnHandler handler = new AddOffsetsToTxnHandler(builder, offsets, groupMetadata);
         enqueueRequest(handler);
         return handler.result;
     }
@@ -986,21 +987,23 @@ public class TransactionManager {
 
     private TxnOffsetCommitHandler txnOffsetCommitHandler(TransactionalRequestResult result,
                                                           Map<TopicPartition, OffsetAndMetadata> offsets,
-                                                          String consumerGroupId) {
+                                                          ConsumerGroupMetadata groupMetadata) {
         for (Map.Entry<TopicPartition, OffsetAndMetadata> entry : offsets.entrySet()) {
             OffsetAndMetadata offsetAndMetadata = entry.getValue();
             CommittedOffset committedOffset = new CommittedOffset(offsetAndMetadata.offset(),
                     offsetAndMetadata.metadata(), offsetAndMetadata.leaderEpoch());
             pendingTxnOffsetCommits.put(entry.getKey(), committedOffset);
         }
-        TxnOffsetCommitRequest.Builder builder = new TxnOffsetCommitRequest.Builder(
-            new TxnOffsetCommitRequestData()
-                .setTransactionalId(transactionalId)
-                .setGroupId(consumerGroupId)
-                .setProducerId(producerIdAndEpoch.producerId)
-                .setProducerEpoch(producerIdAndEpoch.epoch)
-                .setTopics(TxnOffsetCommitRequest.getTopics(pendingTxnOffsetCommits))
-        );
+
+        final TxnOffsetCommitRequest.Builder builder =
+            new TxnOffsetCommitRequest.Builder(transactionalId,
+            groupMetadata.groupId(),
+            producerIdAndEpoch.producerId,
+            producerIdAndEpoch.epoch,
+            pendingTxnOffsetCommits,
+            groupMetadata.memberId(),
+            groupMetadata.generationId(),
+            groupMetadata.groupInstanceId());
         return new TxnOffsetCommitHandler(result, builder);
     }
 
@@ -1373,12 +1376,15 @@ public class TransactionManager {
     private class AddOffsetsToTxnHandler extends TxnRequestHandler {
         private final AddOffsetsToTxnRequest.Builder builder;
         private final Map<TopicPartition, OffsetAndMetadata> offsets;
+        private final ConsumerGroupMetadata groupMetadata;
 
         private AddOffsetsToTxnHandler(AddOffsetsToTxnRequest.Builder builder,
-                                       Map<TopicPartition, OffsetAndMetadata> offsets) {
+                                       Map<TopicPartition, OffsetAndMetadata> offsets,
+                                       ConsumerGroupMetadata groupMetadata) {
             super("AddOffsetsToTxn");
             this.builder = builder;
             this.offsets = offsets;
+            this.groupMetadata = groupMetadata;
         }
 
         @Override
@@ -1400,7 +1406,7 @@ public class TransactionManager {
                 log.debug("Successfully added partition for consumer group {} to transaction", builder.consumerGroupId());
 
                 // note the result is not completed until the TxnOffsetCommit returns
-                pendingRequests.add(txnOffsetCommitHandler(result, offsets, builder.consumerGroupId()));
+                pendingRequests.add(txnOffsetCommitHandler(result, offsets, groupMetadata));
                 transactionStarted = true;
             } else if (error == Errors.COORDINATOR_NOT_AVAILABLE || error == Errors.NOT_COORDINATOR) {
                 lookupCoordinator(FindCoordinatorRequest.CoordinatorType.TRANSACTION, transactionalId);
@@ -1476,9 +1482,15 @@ public class TransactionManager {
                 } else if (error == Errors.GROUP_AUTHORIZATION_FAILED) {
                     abortableError(GroupAuthorizationException.forGroupId(builder.data.groupId()));
                     break;
-                } else if (error == Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED
-                        || error == Errors.INVALID_PRODUCER_EPOCH
-                        || error == Errors.UNSUPPORTED_FOR_MESSAGE_FORMAT) {
+                } else if (error == Errors.FENCED_INSTANCE_ID) {
+                    abortableError(error.exception());
+                    break;
+                } else if (error == Errors.UNKNOWN_MEMBER_ID
+                        || error == Errors.ILLEGAL_GENERATION) {
+                    abortableError(new CommitFailedException("Transaction offset Commit failed " +
+                        "due to consumer group metadata mismatch: " + error.exception().getMessage()));
+                    break;
+                } else if (isFatalException(error)) {
                     fatalError(error.exception());
                     break;
                 } else {
@@ -1496,5 +1508,11 @@ public class TransactionManager {
                 reenqueue();
             }
         }
+    }
+
+    private boolean isFatalException(Errors error) {
+        return error == Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED
+                   || error == Errors.INVALID_PRODUCER_EPOCH
+                   || error == Errors.UNSUPPORTED_FOR_MESSAGE_FORMAT;
     }
 }

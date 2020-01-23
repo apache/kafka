@@ -170,14 +170,11 @@ class KafkaApisTest {
       val invalidTopicPartition = new TopicPartition(topic, invalidPartitionId)
       val partitionOffsetCommitData = new TxnOffsetCommitRequest.CommittedOffset(15L, "", Optional.empty())
       val (offsetCommitRequest, request) = buildRequest(new TxnOffsetCommitRequest.Builder(
-        new TxnOffsetCommitRequestData()
-          .setTransactionalId("txnlId")
-          .setGroupId("groupId")
-          .setProducerId(15L)
-          .setProducerEpoch(0.toShort)
-          .setTopics(TxnOffsetCommitRequest.getTopics(
-            Map(invalidTopicPartition -> partitionOffsetCommitData).asJava))
-      ))
+        "txnId",
+        "groupId",
+        15L,
+        0.toShort,
+        Map(invalidTopicPartition -> partitionOffsetCommitData).asJava))
 
       val capturedResponse = expectNoThrottling()
       EasyMock.replay(replicaManager, clientRequestQuotaManager, requestChannel)
