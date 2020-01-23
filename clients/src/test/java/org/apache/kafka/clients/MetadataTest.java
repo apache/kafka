@@ -514,7 +514,7 @@ public class MetadataTest {
         versionAndBuilder = metadata.newMetadataRequestAndVersion(time.milliseconds());
         metadata.requestUpdateForNewTopics();
         metadata.update(versionAndBuilder.requestVersion,
-                TestUtils.metadataUpdateWith(1, Collections.singletonMap("topic", 1)), false, time.milliseconds());
+                TestUtils.metadataUpdateWith(1, Collections.singletonMap("topic", 1)), true, time.milliseconds());
 
         // metadata update is still needed
         assertTrue(metadata.updateRequested());
@@ -522,7 +522,48 @@ public class MetadataTest {
         // the next update will resolve it
         versionAndBuilder = metadata.newMetadataRequestAndVersion(time.milliseconds());
         metadata.update(versionAndBuilder.requestVersion,
+                TestUtils.metadataUpdateWith(1, Collections.singletonMap("topic", 1)), true, time.milliseconds());
+        assertFalse(metadata.updateRequested());
+    }
+
+    @Test
+    public void testPartialMetadataUpdate() {
+        Time time = new MockTime();
+
+        assertFalse(metadata.updateRequested());
+
+        // Request a metadata update. This must force a full metadata update request.
+        metadata.requestUpdate();
+        Metadata.MetadataRequestAndVersion versionAndBuilder = metadata.newMetadataRequestAndVersion(time.milliseconds());
+        assertFalse(versionAndBuilder.isPartialUpdate);
+        metadata.update(versionAndBuilder.requestVersion,
                 TestUtils.metadataUpdateWith(1, Collections.singletonMap("topic", 1)), false, time.milliseconds());
+        assertFalse(metadata.updateRequested());
+
+        // Request a metadata update for a new topic. This should perform a partial metadata update.
+        metadata.requestUpdateForNewTopics();
+        versionAndBuilder = metadata.newMetadataRequestAndVersion(time.milliseconds());
+        assertTrue(versionAndBuilder.isPartialUpdate);
+        metadata.update(versionAndBuilder.requestVersion,
+                TestUtils.metadataUpdateWith(1, Collections.singletonMap("topic", 1)), true, time.milliseconds());
+        assertFalse(metadata.updateRequested());
+
+        // Request both types of metadata updates. This should always perform a full update.
+        metadata.requestUpdate();
+        metadata.requestUpdateForNewTopics();
+        versionAndBuilder = metadata.newMetadataRequestAndVersion(time.milliseconds());
+        assertFalse(versionAndBuilder.isPartialUpdate);
+        metadata.update(versionAndBuilder.requestVersion,
+                TestUtils.metadataUpdateWith(1, Collections.singletonMap("topic", 1)), true, time.milliseconds());
+        assertFalse(metadata.updateRequested());
+
+        // Request only a partial metadata update, but elapse enough time such that a full refresh is needed.
+        metadata.requestUpdateForNewTopics();
+        final long refreshTimeMs = time.milliseconds() + metadata.metadataExpireMs();
+        versionAndBuilder = metadata.newMetadataRequestAndVersion(refreshTimeMs);
+        assertFalse(versionAndBuilder.isPartialUpdate);
+        metadata.update(versionAndBuilder.requestVersion,
+                TestUtils.metadataUpdateWith(1, Collections.singletonMap("topic", 1)), true, refreshTimeMs);
         assertFalse(metadata.updateRequested());
     }
 
