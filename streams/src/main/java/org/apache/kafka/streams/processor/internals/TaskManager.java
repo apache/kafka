@@ -135,21 +135,24 @@ public class TaskManager {
         }
 
         if (!activeTasksToCreate.isEmpty()) {
-            for (final Task task : taskCreator.createTasks(consumer, activeTasksToCreate)) {
-                tasks.put(task.id(), task);
-            }
+            taskCreator.createTasks(consumer, activeTasksToCreate).forEach(this::addNewTask);
         }
 
         if (!standbyTasksToCreate.isEmpty()) {
-            for (final Task task : standbyTaskCreator.createTasks(consumer, standbyTasksToCreate)) {
-                tasks.put(task.id(), task);
-            }
+            standbyTaskCreator.createTasks(consumer, standbyTasksToCreate).forEach(this::addNewTask);
         }
 
         builder.addSubscribedTopics(
             activeTasks.values().stream().flatMap(Collection::stream).collect(Collectors.toList()),
             logPrefix
         );
+    }
+
+    private void addNewTask(final Task task) {
+        final Task previous = tasks.put(task.id(), task);
+        if (previous != null) {
+            throw new IllegalStateException("Attempted to create a task that we already owned: " + task.id());
+        }
     }
 
     /**
@@ -407,9 +410,9 @@ public class TaskManager {
     int process(final long now) {
         int processed = 0;
 
-        for (final StreamTask task : actives()) {
+        for (final Task task : activeTasks().values()) {
             try {
-                if (task.isProcessable(now) && task.process()) {
+                if (task.process(now)) {
                     processed++;
                 }
             } catch (final TaskMigratedException e) {

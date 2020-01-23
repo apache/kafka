@@ -300,16 +300,16 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
      * An active task is processable if its buffer contains data for all of its input
      * source topic partitions, or if it is enforced to be processable
      */
-    boolean isProcessable(final long now) {
+    private boolean isProcessable(final long wallClockTime) {
         if (partitionGroup.allPartitionsBuffered()) {
             idleStartTime = RecordQueue.UNKNOWN;
             return true;
         } else if (partitionGroup.numBuffered() > 0) {
             if (idleStartTime == RecordQueue.UNKNOWN) {
-                idleStartTime = now;
+                idleStartTime = wallClockTime;
             }
 
-            if (now - idleStartTime >= maxTaskIdleMs) {
+            if (wallClockTime - idleStartTime >= maxTaskIdleMs) {
                 enforcedProcessingSensor.record();
                 return true;
             } else {
@@ -330,7 +330,12 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
      * @throws TaskMigratedException if the task producer got fenced (EOS only)
      */
     @SuppressWarnings("unchecked")
-    public boolean process() {
+    @Override
+    public boolean process(final long wallClockTime) {
+        if (!isProcessable(wallClockTime)) {
+            return false;
+        }
+
         // get the next record to process
         final StampedRecord record = partitionGroup.nextRecord(recordInfo);
 

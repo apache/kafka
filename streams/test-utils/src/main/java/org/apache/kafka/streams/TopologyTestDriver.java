@@ -485,7 +485,7 @@ public class TopologyTestDriver implements Closeable {
                     headers)));
 
             // Process the record ...
-            task.process();
+            task.process(mockWallClockTime.milliseconds());
             task.maybePunctuateStreamTime();
             task.commit();
             captureOutputRecords();

@@ -58,25 +58,15 @@ public interface Task {
         return Collections.emptyMap();
     }
 
-
-//    void initializeMetadata();
-
-    /**
-     * Initialize the task's stores
-     * @throws IllegalStateException If store gets registered after initialized is already finished
-     * @throws StreamsException if the store's change log does not contain the partition
-     */
-//    void initializeStateStores();
-
-//    boolean hasChangelogs();
+    default boolean process(final long wallClockTime) {
+        return false;
+    }
 
     boolean commitNeeded();
 
     default boolean commitRequested() {
         return false;
     }
-
-//    void initializeTopology();
 
     void commit();
 
