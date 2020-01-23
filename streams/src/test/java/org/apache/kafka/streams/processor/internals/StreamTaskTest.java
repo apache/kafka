@@ -257,32 +257,32 @@ public class StreamTaskTest {
             getConsumerRecord(partition2, 45)
         ));
 
-        assertTrue(task.process());
+        assertTrue(task.process(0L));
         assertEquals(5, task.numBuffered());
         assertEquals(1, source1.numReceived);
         assertEquals(0, source2.numReceived);
 
-        assertTrue(task.process());
+        assertTrue(task.process(0L));
         assertEquals(4, task.numBuffered());
         assertEquals(2, source1.numReceived);
         assertEquals(0, source2.numReceived);
 
-        assertTrue(task.process());
+        assertTrue(task.process(0L));
         assertEquals(3, task.numBuffered());
         assertEquals(2, source1.numReceived);
         assertEquals(1, source2.numReceived);
 
-        assertTrue(task.process());
+        assertTrue(task.process(0L));
         assertEquals(2, task.numBuffered());
         assertEquals(3, source1.numReceived);
         assertEquals(1, source2.numReceived);
 
-        assertTrue(task.process());
+        assertTrue(task.process(0L));
         assertEquals(1, task.numBuffered());
         assertEquals(3, source1.numReceived);
         assertEquals(2, source2.numReceived);
 
-        assertTrue(task.process());
+        assertTrue(task.process(0L));
         assertEquals(0, task.numBuffered());
         assertEquals(3, source1.numReceived);
         assertEquals(3, source2.numReceived);
@@ -445,7 +445,7 @@ public class StreamTaskTest {
             getConsumerRecord(partition2, 65)
         ));
 
-        assertTrue(task.process());
+        assertTrue(task.process(0L));
         assertEquals(1, source1.numReceived);
         assertEquals(0, source2.numReceived);
 
@@ -462,21 +462,21 @@ public class StreamTaskTest {
         assertTrue(consumer.paused().contains(partition1));
         assertTrue(consumer.paused().contains(partition2));
 
-        assertTrue(task.process());
+        assertTrue(task.process(0L));
         assertEquals(2, source1.numReceived);
         assertEquals(0, source2.numReceived);
 
         assertEquals(1, consumer.paused().size());
         assertTrue(consumer.paused().contains(partition2));
 
-        assertTrue(task.process());
+        assertTrue(task.process(0L));
         assertEquals(3, source1.numReceived);
         assertEquals(0, source2.numReceived);
 
         assertEquals(1, consumer.paused().size());
         assertTrue(consumer.paused().contains(partition2));
 
-        assertTrue(task.process());
+        assertTrue(task.process(0L));
         assertEquals(3, source1.numReceived);
         assertEquals(1, source2.numReceived);
 
@@ -507,14 +507,14 @@ public class StreamTaskTest {
         assertFalse(task.maybePunctuateStreamTime()); // punctuate at 20
 
         // st: 20
-        assertTrue(task.process());
+        assertTrue(task.process(0L));
         assertEquals(7, task.numBuffered());
         assertEquals(1, source1.numReceived);
         assertEquals(0, source2.numReceived);
         assertTrue(task.maybePunctuateStreamTime());
 
         // st: 25
-        assertTrue(task.process());
+        assertTrue(task.process(0L));
         assertEquals(6, task.numBuffered());
         assertEquals(1, source1.numReceived);
         assertEquals(1, source2.numReceived);
@@ -522,7 +522,7 @@ public class StreamTaskTest {
 
         // st: 142
         // punctuate at 142
-        assertTrue(task.process());
+        assertTrue(task.process(0L));
         assertEquals(5, task.numBuffered());
         assertEquals(2, source1.numReceived);
         assertEquals(1, source2.numReceived);
@@ -530,7 +530,7 @@ public class StreamTaskTest {
 
         // st: 145
         // only one punctuation after 100ms gap
-        assertTrue(task.process());
+        assertTrue(task.process(0L));
         assertEquals(4, task.numBuffered());
         assertEquals(2, source1.numReceived);
         assertEquals(2, source2.numReceived);
@@ -538,28 +538,28 @@ public class StreamTaskTest {
 
         // st: 155
         // punctuate at 155
-        assertTrue(task.process());
+        assertTrue(task.process(0L));
         assertEquals(3, task.numBuffered());
         assertEquals(3, source1.numReceived);
         assertEquals(2, source2.numReceived);
         assertTrue(task.maybePunctuateStreamTime());
 
         // st: 159
-        assertTrue(task.process());
+        assertTrue(task.process(0L));
         assertEquals(2, task.numBuffered());
         assertEquals(3, source1.numReceived);
         assertEquals(3, source2.numReceived);
         assertFalse(task.maybePunctuateStreamTime());
 
         // st: 160, aligned at 0
-        assertTrue(task.process());
+        assertTrue(task.process(0L));
         assertEquals(1, task.numBuffered());
         assertEquals(4, source1.numReceived);
         assertEquals(3, source2.numReceived);
         assertTrue(task.maybePunctuateStreamTime());
 
         // st: 161
-        assertTrue(task.process());
+        assertTrue(task.process(0L));
         assertEquals(0, task.numBuffered());
         assertEquals(4, source1.numReceived);
         assertEquals(4, source2.numReceived);
@@ -589,17 +589,17 @@ public class StreamTaskTest {
         assertFalse(task.maybePunctuateStreamTime());
 
         // st is now 20
-        assertTrue(task.process());
+        assertTrue(task.process(0L));
 
         assertTrue(task.maybePunctuateStreamTime());
 
         // st is now 25
-        assertTrue(task.process());
+        assertTrue(task.process(0L));
 
         assertFalse(task.maybePunctuateStreamTime());
 
         // st is now 30
-        assertTrue(task.process());
+        assertTrue(task.process(0L));
 
         processorStreamTime.mockProcessor.scheduleCancellable.cancel();
 
@@ -631,7 +631,7 @@ public class StreamTaskTest {
         assertFalse(task.commitNeeded());
 
         task.addRecords(partition1, singletonList(getConsumerRecord(partition1, 0)));
-        assertTrue(task.process());
+        assertTrue(task.process(0L));
         assertTrue(task.commitNeeded());
 
         task.commit();
@@ -689,17 +689,17 @@ public class StreamTaskTest {
         task.initializeStateStores();
         task.initializeTopology();
 
-        assertFalse(task.isProcessable(0L));
+        assertFalse(task.process(0L));
 
         final byte[] bytes = ByteBuffer.allocate(4).putInt(1).array();
 
         task.addRecords(partition1, Collections.singleton(new ConsumerRecord<>(topic1, 1, 0, bytes, bytes)));
 
-        assertFalse(task.isProcessable(0L));
+        assertFalse(task.process(0L));
 
         task.addRecords(partition2, Collections.singleton(new ConsumerRecord<>(topic2, 1, 0, bytes, bytes)));
 
-        assertTrue(task.isProcessable(0L));
+        assertTrue(task.process(0L));
     }
 
     @Test
@@ -714,39 +714,38 @@ public class StreamTaskTest {
             mkMap(mkEntry("thread-id", Thread.currentThread().getName()), mkEntry("task-id", taskId00.toString()))
         );
 
-        assertFalse(task.isProcessable(0L));
+        assertFalse(task.process(0L));
         assertEquals(0.0, metrics.metric(enforcedProcessMetric).metricValue());
 
         final byte[] bytes = ByteBuffer.allocate(4).putInt(1).array();
 
         task.addRecords(partition1, Collections.singleton(new ConsumerRecord<>(topic1, 1, 0, bytes, bytes)));
 
-        assertFalse(task.isProcessable(time.milliseconds()));
+        assertFalse(task.process(time.milliseconds()));
 
-        assertFalse(task.isProcessable(time.milliseconds() + 99L));
+        assertFalse(task.process(time.milliseconds() + 99L));
 
-        assertTrue(task.isProcessable(time.milliseconds() + 100L));
+        assertTrue(task.process(time.milliseconds() + 100L));
         assertEquals(1.0, metrics.metric(enforcedProcessMetric).metricValue());
 
         // once decided to enforce, continue doing that
-        assertTrue(task.isProcessable(time.milliseconds() + 101L));
+        assertTrue(task.process(time.milliseconds() + 101L));
         assertEquals(2.0, metrics.metric(enforcedProcessMetric).metricValue());
 
         task.addRecords(partition2, Collections.singleton(new ConsumerRecord<>(topic2, 1, 0, bytes, bytes)));
 
-        assertTrue(task.isProcessable(time.milliseconds() + 130L));
+        assertTrue(task.process(time.milliseconds() + 130L));
         assertEquals(2.0, metrics.metric(enforcedProcessMetric).metricValue());
 
         // one resumed to normal processing, the timer should be reset
-        task.process();
 
-        assertFalse(task.isProcessable(time.milliseconds() + 150L));
+        assertFalse(task.process(time.milliseconds() + 150L));
         assertEquals(2.0, metrics.metric(enforcedProcessMetric).metricValue());
 
-        assertFalse(task.isProcessable(time.milliseconds() + 249L));
+        assertFalse(task.process(time.milliseconds() + 249L));
         assertEquals(2.0, metrics.metric(enforcedProcessMetric).metricValue());
 
-        assertTrue(task.isProcessable(time.milliseconds() + 250L));
+        assertTrue(task.process(time.milliseconds() + 250L));
         assertEquals(3.0, metrics.metric(enforcedProcessMetric).metricValue());
     }
 
@@ -762,37 +761,36 @@ public class StreamTaskTest {
             mkMap(mkEntry("thread-id", Thread.currentThread().getName()), mkEntry("task-id", taskId00.toString()))
         );
 
-        assertFalse(task.isProcessable(0L));
+        assertFalse(task.process(0L));
         assertEquals(0.0, metrics.metric(enforcedProcessMetric).metricValue());
 
         final byte[] bytes = ByteBuffer.allocate(4).putInt(1).array();
 
         task.addRecords(partition1, Collections.singleton(new ConsumerRecord<>(topic1, 1, 0, bytes, bytes)));
 
-        assertFalse(task.isProcessable(time.milliseconds()));
+        assertFalse(task.process(time.milliseconds()));
 
-        assertFalse(task.isProcessable(time.milliseconds() + 99L));
+        assertFalse(task.process(time.milliseconds() + 99L));
 
-        assertTrue(task.isProcessable(time.milliseconds() + 100L));
+        assertTrue(task.process(time.milliseconds() + 100L));
         assertEquals(1.0, metrics.metric(enforcedProcessMetric).metricValue());
 
         // once the buffer is drained and no new records coming, the timer should be reset
-        task.process();
 
-        assertFalse(task.isProcessable(time.milliseconds() + 110L));
+        assertFalse(task.process(time.milliseconds() + 110L));
         assertEquals(1.0, metrics.metric(enforcedProcessMetric).metricValue());
 
         // check that after time is reset, we only falls into enforced processing after the
         // whole timeout has elapsed again
         task.addRecords(partition1, Collections.singleton(new ConsumerRecord<>(topic1, 1, 0, bytes, bytes)));
 
-        assertFalse(task.isProcessable(time.milliseconds() + 150L));
+        assertFalse(task.process(time.milliseconds() + 150L));
         assertEquals(1.0, metrics.metric(enforcedProcessMetric).metricValue());
 
-        assertFalse(task.isProcessable(time.milliseconds() + 249L));
+        assertFalse(task.process(time.milliseconds() + 249L));
         assertEquals(1.0, metrics.metric(enforcedProcessMetric).metricValue());
 
-        assertTrue(task.isProcessable(time.milliseconds() + 250L));
+        assertTrue(task.process(time.milliseconds() + 250L));
         assertEquals(2.0, metrics.metric(enforcedProcessMetric).metricValue());
     }
 
@@ -980,8 +978,6 @@ public class StreamTaskTest {
             singletonList(stateStore),
             Collections.emptyMap());
 
-        EasyMock.expect(stateManager.changelogPartitions()).andReturn(Collections.emptySet());
-        EasyMock.expectLastCall();
         stateManager.close();
         EasyMock.expectLastCall();
         EasyMock.replay(stateManager);
@@ -1040,8 +1036,8 @@ public class StreamTaskTest {
         task.addRecords(partition1, singletonList(getConsumerRecord(partition1, 5L)));
         task.addRecords(repartition, singletonList(getConsumerRecord(repartition, 10L)));
 
-        assertTrue(task.process());
-        assertTrue(task.process());
+        assertTrue(task.process(0L));
+        assertTrue(task.process(0L));
 
         task.commit();
 

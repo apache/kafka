@@ -23,6 +23,8 @@ import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 
 import java.util.Collection;
+import java.util.Collections;
+import java.util.Map;
 import java.util.Set;
 
 public interface Task {
@@ -34,7 +36,7 @@ public interface Task {
                 return;
             } else if (oldState == RESTORING && (newState == RUNNING || newState == SUSPENDED || newState == CLOSED)) {
                 return;
-            } else if (oldState == RUNNING && (newState == RESTORING || newState == SUSPENDED)) {
+            } else if (oldState == RUNNING && (newState == SUSPENDED || newState == CLOSED)) {
                 return;
             } else if (oldState == SUSPENDED && (newState == RUNNING || newState == CLOSED)) {
                 return;
@@ -52,20 +54,19 @@ public interface Task {
 
     void startRunning();
 
-//    void initializeMetadata();
+    default Map<TopicPartition, Long> purgableOffsets() {
+        return Collections.emptyMap();
+    }
 
-    /**
-     * Initialize the task's stores
-     * @throws IllegalStateException If store gets registered after initialized is already finished
-     * @throws StreamsException if the store's change log does not contain the partition
-     */
-//    void initializeStateStores();
-
-//    boolean hasChangelogs();
+    default boolean process(final long wallClockTime) {
+        return false;
+    }
 
     boolean commitNeeded();
 
-//    void initializeTopology();
+    default boolean commitRequested() {
+        return false;
+    }
 
     void commit();
 

@@ -1132,16 +1132,16 @@ public class StreamThread extends Thread {
         return this;
     }
 
-    private void updateThreadMetadata(final Map<TaskId, StreamTask> activeTasks,
-                                      final Map<TaskId, StandbyTask> standbyTasks) {
+    private void updateThreadMetadata(final Map<TaskId, Task> activeTasks,
+                                      final Map<TaskId, Task> standbyTasks) {
         final Set<String> producerClientIds = new HashSet<>();
         final Set<TaskMetadata> activeTasksMetadata = new HashSet<>();
-        for (final Map.Entry<TaskId, StreamTask> task : activeTasks.entrySet()) {
+        for (final Map.Entry<TaskId, Task> task : activeTasks.entrySet()) {
             activeTasksMetadata.add(new TaskMetadata(task.getKey().toString(), task.getValue().partitions()));
             producerClientIds.add(getTaskProducerClientId(getName(), task.getKey()));
         }
         final Set<TaskMetadata> standbyTasksMetadata = new HashSet<>();
-        for (final Map.Entry<TaskId, StandbyTask> task : standbyTasks.entrySet()) {
+        for (final Map.Entry<TaskId, Task> task : standbyTasks.entrySet()) {
             standbyTasksMetadata.add(new TaskMetadata(task.getKey().toString(), task.getValue().partitions()));
         }
 
@@ -1157,7 +1157,7 @@ public class StreamThread extends Thread {
             standbyTasksMetadata);
     }
 
-    public Map<TaskId, StreamTask> tasks() {
+    public Map<TaskId, Task> tasks() {
         return taskManager.activeTasks();
     }
 
@@ -1193,7 +1193,7 @@ public class StreamThread extends Thread {
             // When EOS is turned on, each task will have its own producer client
             // and the producer object passed in here will be null. We would then iterate through
             // all the active tasks and add their metrics to the output metrics map.
-            for (final StreamTask task: taskManager.activeTasks().values()) {
+            for (final StreamTask task: taskManager.streamTasks().values()) {
                 final Map<MetricName, ? extends Metric> taskProducerMetrics = ((RecordCollectorImpl) task.recordCollector()).producer().metrics();
                 result.putAll(taskProducerMetrics);
             }

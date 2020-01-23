@@ -290,24 +290,26 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
      */
     public void resume() {
         log.debug("Resuming");
-        initializeMetadata();
-        transitionTo(State.RUNNING);
+        if (state() == State.SUSPENDED) {
+            initializeMetadata();
+            transitionTo(State.RUNNING);
+        }
     }
 
     /**
      * An active task is processable if its buffer contains data for all of its input
      * source topic partitions, or if it is enforced to be processable
      */
-    boolean isProcessable(final long now) {
+    private boolean isProcessable(final long wallClockTime) {
         if (partitionGroup.allPartitionsBuffered()) {
             idleStartTime = RecordQueue.UNKNOWN;
             return true;
         } else if (partitionGroup.numBuffered() > 0) {
             if (idleStartTime == RecordQueue.UNKNOWN) {
-                idleStartTime = now;
+                idleStartTime = wallClockTime;
             }
 
-            if (now - idleStartTime >= maxTaskIdleMs) {
+            if (wallClockTime - idleStartTime >= maxTaskIdleMs) {
                 enforcedProcessingSensor.record();
                 return true;
             } else {
@@ -328,7 +330,12 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
      * @throws TaskMigratedException if the task producer got fenced (EOS only)
      */
     @SuppressWarnings("unchecked")
-    public boolean process() {
+    @Override
+    public boolean process(final long wallClockTime) {
+        if (!isProcessable(wallClockTime)) {
+            return false;
+        }
+
         // get the next record to process
         final StampedRecord record = partitionGroup.nextRecord(recordInfo);
 
@@ -499,7 +506,8 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         return checkpointableOffsets;
     }
 
-    Map<TopicPartition, Long> purgableOffsets() {
+    @Override
+    public Map<TopicPartition, Long> purgableOffsets() {
         final Map<TopicPartition, Long> purgableConsumedOffsets = new HashMap<>();
         for (final Map.Entry<TopicPartition, Long> entry : consumedOffsets.entrySet()) {
             final TopicPartition tp = entry.getKey();
@@ -791,7 +799,8 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
     /**
      * Whether or not a request has been made to commit the current state
      */
-    boolean commitRequested() {
+    @Override
+    public boolean commitRequested() {
         return commitRequested;
     }
 

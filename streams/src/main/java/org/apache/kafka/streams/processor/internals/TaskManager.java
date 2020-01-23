@@ -134,18 +134,25 @@ public class TaskManager {
             );
         }
 
-        for (final Task task : taskCreator.createTasks(consumer, activeTasksToCreate)) {
-            tasks.put(task.id(), task);
+        if (!activeTasksToCreate.isEmpty()) {
+            taskCreator.createTasks(consumer, activeTasksToCreate).forEach(this::addNewTask);
         }
 
-        for (final Task task : standbyTaskCreator.createTasks(consumer, standbyTasksToCreate)) {
-            tasks.put(task.id(), task);
+        if (!standbyTasksToCreate.isEmpty()) {
+            standbyTaskCreator.createTasks(consumer, standbyTasksToCreate).forEach(this::addNewTask);
         }
 
         builder.addSubscribedTopics(
             activeTasks.values().stream().flatMap(Collection::stream).collect(Collectors.toList()),
             logPrefix
         );
+    }
+
+    private void addNewTask(final Task task) {
+        final Task previous = tasks.put(task.id(), task);
+        if (previous != null) {
+            throw new IllegalStateException("Attempted to create a task that we already owned: " + task.id());
+        }
     }
 
     /**
@@ -282,12 +289,16 @@ public class TaskManager {
         return null;
     }
 
-    Map<TaskId, StreamTask> activeTasks() {
-        return tasks.values().stream().filter(Task::isActive).map(t -> (StreamTask) t).collect(Collectors.toMap(Task::id, t -> t));
+    Map<TaskId, StreamTask> streamTasks() {
+        return tasks.values().stream().filter(t -> t instanceof StreamTask).map(t -> (StreamTask) t).collect(Collectors.toMap(Task::id, t -> t));
     }
 
-    Map<TaskId, StandbyTask> standbyTasks() {
-        return tasks.values().stream().filter(t -> t instanceof StandbyTask).map(t -> (StandbyTask) t).collect(Collectors.toMap(Task::id, t -> t));
+    Map<TaskId, Task> activeTasks() {
+        return tasks.values().stream().filter(Task::isActive).collect(Collectors.toMap(Task::id, t -> t));
+    }
+
+    Map<TaskId, Task> standbyTasks() {
+        return tasks.values().stream().filter(t -> !t.isActive()).collect(Collectors.toMap(Task::id, t -> t));
     }
 
     void setConsumer(final Consumer<byte[], byte[]> consumer) {
@@ -383,7 +394,7 @@ public class TaskManager {
             return -1;
         } else {
             int commits = 0;
-            for (final StreamTask task : actives()) {
+            for (final Task task : activeTasks().values()) {
                 if (task.commitRequested() && task.commitNeeded()) {
                     task.commit();
                     commits++;
@@ -399,9 +410,9 @@ public class TaskManager {
     int process(final long now) {
         int processed = 0;
 
-        for (final StreamTask task : actives()) {
+        for (final Task task : activeTasks().values()) {
             try {
-                if (task.isProcessable(now) && task.process()) {
+                if (task.process(now)) {
                     processed++;
                 }
             } catch (final TaskMigratedException e) {
@@ -455,7 +466,7 @@ public class TaskManager {
             }
 
             final Map<TopicPartition, RecordsToDelete> recordsToDelete = new HashMap<>();
-            for (final StreamTask task : actives()) {
+            for (final Task task : activeTasks().values()) {
                 for (final Map.Entry<TopicPartition, Long> entry : task.purgableOffsets().entrySet()) {
                     recordsToDelete.put(entry.getKey(), RecordsToDelete.beforeOffset(entry.getValue()));
                 }
