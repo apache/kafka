@@ -446,6 +446,7 @@ object LogCleaner {
     val logSegment = LogSegment.open(log.dir, baseOffset, log.config, Time.SYSTEM, fileAlreadyExists = false
       , initFileSize = log.initFileSize, preallocate = log.config.preallocate)
     logSegment.changeFileStatus("", Log.CleanedFileSuffix)
+    logSegment
   }
 
 }
