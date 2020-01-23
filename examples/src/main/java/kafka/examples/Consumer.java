@@ -21,6 +21,7 @@ import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.common.IsolationLevel;
 
 import java.time.Duration;
 import java.util.Collections;
@@ -30,7 +31,7 @@ public class Consumer extends ShutdownableThread {
     private final KafkaConsumer<Integer, String> consumer;
     private final String topic;
 
-    public Consumer(String topic) {
+    public Consumer(String topic, boolean readCommitted) {
         super("KafkaConsumerExample", false);
         Properties props = new Properties();
         props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, KafkaProperties.KAFKA_SERVER_URL + ":" + KafkaProperties.KAFKA_SERVER_PORT);
@@ -40,9 +41,16 @@ public class Consumer extends ShutdownableThread {
         props.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, "30000");
         props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.IntegerDeserializer");
         props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.StringDeserializer");
+        if (readCommitted) {
+            props.put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, "read_committed");
+        }
 
         consumer = new KafkaConsumer<>(props);
         this.topic = topic;
+    }
+
+    KafkaConsumer<Integer, String> get() {
+        return consumer;
     }
 
     @Override
@@ -60,7 +68,7 @@ public class Consumer extends ShutdownableThread {
     }
 
     @Override
-    public boolean isInterruptible() {
+    public boolean isInterruptable() {
         return false;
     }
 }

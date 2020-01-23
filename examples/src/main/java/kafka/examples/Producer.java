@@ -32,15 +32,22 @@ public class Producer extends Thread {
     private final String topic;
     private final Boolean isAsync;
 
-    public Producer(String topic, Boolean isAsync) {
+    public Producer(String topic, Boolean isAsync, String transactionalId) {
         Properties props = new Properties();
         props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, KafkaProperties.KAFKA_SERVER_URL + ":" + KafkaProperties.KAFKA_SERVER_PORT);
         props.put(ProducerConfig.CLIENT_ID_CONFIG, "DemoProducer");
         props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, IntegerSerializer.class.getName());
         props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
+        if (transactionalId != null) {
+            props.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, transactionalId);
+        }
         producer = new KafkaProducer<>(props);
         this.topic = topic;
         this.isAsync = isAsync;
+    }
+
+    KafkaProducer<Integer, String> get() {
+        return producer;
     }
 
     public void run() {
