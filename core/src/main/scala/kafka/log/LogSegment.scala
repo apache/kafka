@@ -30,7 +30,7 @@ import org.apache.kafka.common.InvalidRecordException
 import org.apache.kafka.common.errors.CorruptRecordException
 import org.apache.kafka.common.record.FileRecords.{LogOffsetPosition, TimestampAndOffset}
 import org.apache.kafka.common.record._
-import org.apache.kafka.common.utils.Time
+import org.apache.kafka.common.utils.{Time, Utils}
 
 import scala.collection.JavaConverters._
 import scala.math._
@@ -491,11 +491,28 @@ class LogSegment private[log] (val log: FileRecords,
    * Change the suffix for the index and log file for this log segment
    * IOException from this method should be handled by the caller
    */
-  def changeFileSuffixes(oldSuffix: String, newSuffix: String): Unit = {
-    log.renameTo(new File(CoreUtils.replaceSuffix(log.file.getPath, oldSuffix, newSuffix)))
-    offsetIndex.renameTo(new File(CoreUtils.replaceSuffix(lazyOffsetIndex.file.getPath, oldSuffix, newSuffix)))
-    timeIndex.renameTo(new File(CoreUtils.replaceSuffix(lazyTimeIndex.file.getPath, oldSuffix, newSuffix)))
-    txnIndex.renameTo(new File(CoreUtils.replaceSuffix(txnIndex.file.getPath, oldSuffix, newSuffix)))
+  def changeFileStatus(oldSuffix: String, newSuffix: String): Unit = {
+    if(newSuffix.isEmpty) {
+      Files.deleteIfExists(new File(log.file.getPath, oldSuffix).toPath)
+      Files.deleteIfExists(new File(lazyOffsetIndex.file.getPath, oldSuffix).toPath)
+      Files.deleteIfExists(new File(lazyTimeIndex.file.getPath, oldSuffix).toPath)
+      Files.deleteIfExists(new File(txnIndex.file.getPath, oldSuffix).toPath)
+    }
+    else if(oldSuffix.isEmpty){
+      Files.createFile(new File(log.file.getPath, newSuffix).toPath)
+      Files.createFile(new File(lazyOffsetIndex.file.getPath, newSuffix).toPath)
+      Files.createFile(new File(lazyTimeIndex.file.getPath, newSuffix).toPath)
+      if(txnIndex.file.exists()){
+        Files.createFile(new File(txnIndex.file.getPath, newSuffix).toPath)
+      }
+    }else{
+      Utils.atomicMoveWithFallback(new File(log.file.getPath, oldSuffix).toPath, new File(log.file.getPath, newSuffix).toPath)
+      Utils.atomicMoveWithFallback(new File(lazyOffsetIndex.file.getPath, oldSuffix).toPath, new File(lazyOffsetIndex.file.getPath, newSuffix).toPath)
+      Utils.atomicMoveWithFallback(new File(lazyTimeIndex.file.getPath, oldSuffix).toPath, new File(lazyTimeIndex.file.getPath, newSuffix).toPath)
+      if(txnIndex.file.exists()){
+        Utils.atomicMoveWithFallback(new File(txnIndex.file.getPath, oldSuffix).toPath, new File(txnIndex.file.getPath, newSuffix).toPath)
+      }
+    }
   }
 
   /**
@@ -651,24 +668,17 @@ class LogSegment private[log] (val log: FileRecords,
 object LogSegment {
 
   def open(dir: File, baseOffset: Long, config: LogConfig, time: Time, fileAlreadyExists: Boolean = false,
-           initFileSize: Int = 0, preallocate: Boolean = false, fileSuffix: String = ""): LogSegment = {
+           initFileSize: Int = 0, preallocate: Boolean = false): LogSegment = {
     val maxIndexSize = config.maxIndexSize
     new LogSegment(
-      FileRecords.open(Log.logFile(dir, baseOffset, fileSuffix), fileAlreadyExists, initFileSize, preallocate),
-      LazyIndex.forOffset(Log.offsetIndexFile(dir, baseOffset, fileSuffix), baseOffset = baseOffset, maxIndexSize = maxIndexSize),
-      LazyIndex.forTime(Log.timeIndexFile(dir, baseOffset, fileSuffix), baseOffset = baseOffset, maxIndexSize = maxIndexSize),
-      new TransactionIndex(baseOffset, Log.transactionIndexFile(dir, baseOffset, fileSuffix)),
+      FileRecords.open(Log.logFile(dir, baseOffset), fileAlreadyExists, initFileSize, preallocate),
+      LazyIndex.forOffset(Log.offsetIndexFile(dir, baseOffset), baseOffset = baseOffset, maxIndexSize = maxIndexSize),
+      LazyIndex.forTime(Log.timeIndexFile(dir, baseOffset), baseOffset = baseOffset, maxIndexSize = maxIndexSize),
+      new TransactionIndex(baseOffset, Log.transactionIndexFile(dir, baseOffset)),
       baseOffset,
       indexIntervalBytes = config.indexInterval,
       rollJitterMs = config.randomSegmentJitter,
       time)
-  }
-
-  def deleteIfExists(dir: File, baseOffset: Long, fileSuffix: String = ""): Unit = {
-    Log.deleteFileIfExists(Log.offsetIndexFile(dir, baseOffset, fileSuffix))
-    Log.deleteFileIfExists(Log.timeIndexFile(dir, baseOffset, fileSuffix))
-    Log.deleteFileIfExists(Log.transactionIndexFile(dir, baseOffset, fileSuffix))
-    Log.deleteFileIfExists(Log.logFile(dir, baseOffset, fileSuffix))
   }
 }
 

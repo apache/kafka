@@ -531,41 +531,38 @@ class Log(@volatile var dir: File,
    * by this method.
    * @return Set of .swap files that are valid to be swapped in as segment files
    */
-  private def removeTempFilesAndCollectSwapFiles(): Set[File] = {
+  private def removeTempFilesAndCollectSwapFiles(): Set[Long] = {
 
-    def deleteIndicesIfExist(baseFile: File, suffix: String = ""): Unit = {
-      info(s"Deleting index files with suffix $suffix for baseFile $baseFile")
-      val offset = offsetFromFile(baseFile)
-      Files.deleteIfExists(Log.offsetIndexFile(dir, offset, suffix).toPath)
-      Files.deleteIfExists(Log.timeIndexFile(dir, offset, suffix).toPath)
-      Files.deleteIfExists(Log.transactionIndexFile(dir, offset, suffix).toPath)
-    }
-
-    var swapFiles = Set[File]()
-    var cleanFiles = Set[File]()
+    var swapFiles = Set[Long]()
+    var cleanFiles = Set[Long]()
     var minCleanedFileOffset = Long.MaxValue
 
     for (file <- dir.listFiles if file.isFile) {
       if (!file.canRead)
         throw new IOException(s"Could not read file $file")
-      val filename = file.getName
-      if (filename.endsWith(DeletedFileSuffix)) {
-        debug(s"Deleting stray temporary file ${file.getAbsolutePath}")
-        Files.deleteIfExists(file.toPath)
-      } else if (filename.endsWith(CleanedFileSuffix)) {
-        minCleanedFileOffset = Math.min(offsetFromFileName(filename), minCleanedFileOffset)
-        cleanFiles += file
-      } else if (filename.endsWith(SwapFileSuffix)) {
-        // we crashed in the middle of a swap operation, to recover:
-        // if a log, delete the index files, complete the swap operation later
-        // if an index just delete the index files, they will be rebuilt
-        val baseFile = new File(CoreUtils.replaceSuffix(file.getPath, SwapFileSuffix, ""))
-        info(s"Found file ${file.getAbsolutePath} from interrupted swap operation.")
-        if (isIndexFile(baseFile)) {
-          deleteIndicesIfExist(baseFile)
-        } else if (isLogFile(baseFile)) {
-          deleteIndicesIfExist(baseFile)
-          swapFiles += file
+      if(file.exists()) {
+        val filename = file.getName
+        if (filename.endsWith(DeletedFileSuffix)) {
+          debug(s"Deleting stray temporary files ${file.getAbsolutePath}")
+          val offset = offsetFromFileName(filename)
+          deleteIfExists(offset, DeletedFileSuffix)
+        } else if (filename.endsWith(CleanedFileSuffix)) {
+          val offset = offsetFromFileName(filename)
+          minCleanedFileOffset = Math.min(offset, minCleanedFileOffset)
+          cleanFiles += offset
+        } else if (filename.endsWith(SwapFileSuffix)) {
+          val offset = offsetFromFileName(filename)
+          // we crashed in the middle of a swap operation, to recover:
+          // if a log, delete the index files, complete the swap operation later
+          // if an index just delete the index files, they will be rebuilt
+          val baseFile = new File(CoreUtils.replaceSuffix(file.getPath, SwapFileSuffix, ""))
+          info(s"Found file ${file.getAbsolutePath} from interrupted swap operation.")
+          if (isIndexFile(baseFile)) {
+            deleteIndicesIfExist(baseFile)
+          } else if (isLogFile(baseFile)) {
+            deleteIndicesIfExist(baseFile)
+            swapFiles += offset
+          }
         }
       }
     }
@@ -573,21 +570,49 @@ class Log(@volatile var dir: File,
     // KAFKA-6264: Delete all .swap files whose base offset is greater than the minimum .cleaned segment offset. Such .swap
     // files could be part of an incomplete split operation that could not complete. See Log#splitOverflowedSegment
     // for more details about the split operation.
-    val (invalidSwapFiles, validSwapFiles) = swapFiles.partition(file => offsetFromFile(file) >= minCleanedFileOffset)
-    invalidSwapFiles.foreach { file =>
-      debug(s"Deleting invalid swap file ${file.getAbsoluteFile} minCleanedFileOffset: $minCleanedFileOffset")
-      val baseFile = new File(CoreUtils.replaceSuffix(file.getPath, SwapFileSuffix, ""))
-      deleteIndicesIfExist(baseFile, SwapFileSuffix)
-      Files.deleteIfExists(file.toPath)
+    val (invalidSwapFiles, validSwapFiles) = swapFiles.partition(offset => offset >= minCleanedFileOffset)
+    invalidSwapFiles.foreach { offset =>
+      debug(s"Deleting invalid swap file offset $offset minCleanedFileOffset: $minCleanedFileOffset")
+      deleteIfExists(offset, SwapFileSuffix)
     }
 
     // Now that we have deleted all .swap files that constitute an incomplete split operation, let's delete all .clean files
-    cleanFiles.foreach { file =>
-      debug(s"Deleting stray .clean file ${file.getAbsolutePath}")
-      Files.deleteIfExists(file.toPath)
+    cleanFiles.foreach { offset =>
+      debug(s"Deleting stray .clean file with offset ${offset}")
+      deleteIfExists(offset, CleanedFileSuffix)
     }
-
     validSwapFiles
+  }
+
+  def deleteIndicesIfExist(baseFile: File, suffix: String = ""): Unit = {
+    info(s"Deleting index files with suffix $suffix for baseFile $baseFile")
+    val offset = offsetFromFile(baseFile)
+    if(!suffix.isEmpty){
+      // Status files
+      Files.deleteIfExists(Log.offsetIndexFile(dir, offset, suffix).toPath)
+      Files.deleteIfExists(Log.timeIndexFile(dir, offset, suffix).toPath)
+      Files.deleteIfExists(Log.transactionIndexFile(dir, offset, suffix).toPath)
+    }
+    // Data files
+    Files.deleteIfExists(Log.offsetIndexFile(dir, offset).toPath)
+    Files.deleteIfExists(Log.timeIndexFile(dir, offset).toPath)
+    Files.deleteIfExists(Log.transactionIndexFile(dir, offset).toPath)
+  }
+
+  def deleteIfExists(baseOffset: Long, fileSuffix: String = ""): Unit = {
+    info(s"Deleting index files with suffix $fileSuffix for offset $baseOffset")
+    if(!fileSuffix.isEmpty){
+      // Status files
+      Log.deleteFileIfExists(Log.offsetIndexFile(dir, baseOffset, fileSuffix))
+      Log.deleteFileIfExists(Log.timeIndexFile(dir, baseOffset, fileSuffix))
+      Log.deleteFileIfExists(Log.transactionIndexFile(dir, baseOffset, fileSuffix))
+      Log.deleteFileIfExists(Log.logFile(dir, baseOffset, fileSuffix))
+    }
+    // Data files
+    Log.deleteFileIfExists(Log.offsetIndexFile(dir, baseOffset))
+    Log.deleteFileIfExists(Log.timeIndexFile(dir, baseOffset))
+    Log.deleteFileIfExists(Log.transactionIndexFile(dir, baseOffset))
+    Log.deleteFileIfExists(Log.logFile(dir, baseOffset))
   }
 
   /**
@@ -663,16 +688,14 @@ class Log(@volatile var dir: File,
    *                                           this situation. This is expected to be an extremely rare scenario in practice,
    *                                           and manual intervention might be required to get out of it.
    */
-  private def completeSwapOperations(swapFiles: Set[File]): Unit = {
-    for (swapFile <- swapFiles) {
-      val logFile = new File(CoreUtils.replaceSuffix(swapFile.getPath, SwapFileSuffix, ""))
-      val baseOffset = offsetFromFile(logFile)
-      val swapSegment = LogSegment.open(swapFile.getParentFile,
-        baseOffset = baseOffset,
+  private def completeSwapOperations(swapFilesOffset: Set[Long]): Unit = {
+    for (swapFileOffset <- swapFilesOffset) {
+      val swapSegment = LogSegment.open(dir,
+        swapFileOffset,
         config,
         time = time,
         fileSuffix = SwapFileSuffix)
-      info(s"Found log file ${swapFile.getPath} from interrupted swap operation, repairing.")
+      info(s"Found log file with offset $swapFileOffset from interrupted swap operation, repairing.")
       recoverSegment(swapSegment)
 
       // We create swap files for two cases:
@@ -2203,7 +2226,7 @@ class Log(@volatile var dir: File,
    * @throws IOException if the file can't be renamed and still exists
    */
   private def deleteSegmentFiles(segments: Iterable[LogSegment], asyncDelete: Boolean): Unit = {
-    segments.foreach(_.changeFileSuffixes("", Log.DeletedFileSuffix))
+    segments.foreach(_.changeFileStatus("", Log.DeletedFileSuffix))
 
     def deleteSegments(): Unit = {
       info(s"Deleting segments $segments")
@@ -2264,7 +2287,7 @@ class Log(@volatile var dir: File,
       // need to do this in two phases to be crash safe AND do the delete asynchronously
       // if we crash in the middle of this we complete the swap in loadSegments()
       if (!isRecoveredSwapFile)
-        sortedNewSegments.reverse.foreach(_.changeFileSuffixes(Log.CleanedFileSuffix, Log.SwapFileSuffix))
+        sortedNewSegments.reverse.foreach(_.changeFileStatus(Log.CleanedFileSuffix, Log.SwapFileSuffix))
       sortedNewSegments.reverse.foreach(addSegment(_))
 
       // delete the old files
@@ -2276,7 +2299,7 @@ class Log(@volatile var dir: File,
         deleteSegmentFiles(List(seg), asyncDelete = true)
       }
       // okay we are safe now, remove the swap suffix
-      sortedNewSegments.foreach(_.changeFileSuffixes(Log.SwapFileSuffix, ""))
+      sortedNewSegments.foreach(_.changeFileStatus(Log.SwapFileSuffix, ""))
     }
   }
 

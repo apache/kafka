@@ -1353,7 +1353,7 @@ class LogCleanerTest {
 
     // 1) Simulate recovery just after .cleaned file is created, before rename to .swap
     //    On recovery, clean operation is aborted. All messages should be present in the log
-    log.logSegments.head.changeFileSuffixes("", Log.CleanedFileSuffix)
+    log.logSegments.head.changeFileStatus("", Log.CleanedFileSuffix)
     for (file <- dir.listFiles if file.getName.endsWith(Log.DeletedFileSuffix)) {
       Utils.atomicMoveWithFallback(file.toPath, Paths.get(CoreUtils.replaceSuffix(file.getPath, Log.DeletedFileSuffix, "")))
     }
@@ -1369,7 +1369,7 @@ class LogCleanerTest {
 
     // 2) Simulate recovery just after swap file is created, before old segment files are
     //    renamed to .deleted. Clean operation is resumed during recovery.
-    log.logSegments.head.changeFileSuffixes("", Log.SwapFileSuffix)
+    log.logSegments.head.changeFileStatus("", Log.SwapFileSuffix)
     for (file <- dir.listFiles if file.getName.endsWith(Log.DeletedFileSuffix)) {
       Utils.atomicMoveWithFallback(file.toPath, Paths.get(CoreUtils.replaceSuffix(file.getPath, Log.DeletedFileSuffix, "")))
     }
@@ -1390,7 +1390,7 @@ class LogCleanerTest {
 
     // 3) Simulate recovery after swap file is created and old segments files are renamed
     //    to .deleted. Clean operation is resumed during recovery.
-    log.logSegments.head.changeFileSuffixes("", Log.SwapFileSuffix)
+    log.logSegments.head.changeFileStatus("", Log.SwapFileSuffix)
     log = recoverAndCheck(config, cleanedKeys)
 
     // add some more messages and clean the log again

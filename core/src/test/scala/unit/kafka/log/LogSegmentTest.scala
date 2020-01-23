@@ -262,7 +262,7 @@ class LogSegmentTest {
     val seg = createSegment(40)
     val logFile = seg.log.file
     val indexFile = seg.lazyOffsetIndex.file
-    seg.changeFileSuffixes("", ".deleted")
+    seg.changeFileStatus("", ".deleted")
     assertEquals(logFile.getAbsolutePath + ".deleted", seg.log.file.getAbsolutePath)
     assertEquals(indexFile.getAbsolutePath + ".deleted", seg.lazyOffsetIndex.file.getAbsolutePath)
     assertTrue(seg.log.file.exists)

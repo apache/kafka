@@ -2836,7 +2836,7 @@ class LogTest {
     // Simulate recovery just after .cleaned file is created, before rename to .swap. On recovery, existing split
     // operation is aborted but the recovery process itself kicks off split which should complete.
     newSegments.reverse.foreach(segment => {
-      segment.changeFileSuffixes("", Log.CleanedFileSuffix)
+      segment.changeFileStatus("", Log.CleanedFileSuffix)
       segment.truncateTo(0)
     })
     for (file <- logDir.listFiles if file.getName.endsWith(Log.DeletedFileSuffix))
@@ -2862,9 +2862,9 @@ class LogTest {
     // operation is aborted but the recovery process itself kicks off split which should complete.
     newSegments.reverse.foreach { segment =>
       if (segment != newSegments.last)
-        segment.changeFileSuffixes("", Log.CleanedFileSuffix)
+        segment.changeFileStatus("", Log.CleanedFileSuffix)
       else
-        segment.changeFileSuffixes("", Log.SwapFileSuffix)
+        segment.changeFileStatus("", Log.SwapFileSuffix)
       segment.truncateTo(0)
     }
     for (file <- logDir.listFiles if file.getName.endsWith(Log.DeletedFileSuffix))
@@ -2889,7 +2889,7 @@ class LogTest {
     // Simulate recovery right after all new segments have been renamed to .swap. On recovery, existing split operation
     // is completed and the old segment must be deleted.
     newSegments.reverse.foreach(segment => {
-        segment.changeFileSuffixes("", Log.SwapFileSuffix)
+        segment.changeFileStatus("", Log.SwapFileSuffix)
     })
     for (file <- logDir.listFiles if file.getName.endsWith(Log.DeletedFileSuffix))
       Utils.atomicMoveWithFallback(file.toPath, Paths.get(CoreUtils.replaceSuffix(file.getPath, Log.DeletedFileSuffix, "")))
@@ -2915,7 +2915,7 @@ class LogTest {
 
     // Simulate recovery right after all new segments have been renamed to .swap and old segment has been deleted. On
     // recovery, existing split operation is completed.
-    newSegments.reverse.foreach(_.changeFileSuffixes("", Log.SwapFileSuffix))
+    newSegments.reverse.foreach(_.changeFileStatus("", Log.SwapFileSuffix))
 
     for (file <- logDir.listFiles if file.getName.endsWith(Log.DeletedFileSuffix))
       Utils.delete(file)
@@ -2941,7 +2941,7 @@ class LogTest {
 
     // Simulate recovery right after one of the new segment has been renamed to .swap and the other to .log. On
     // recovery, existing split operation is completed.
-    newSegments.last.changeFileSuffixes("", Log.SwapFileSuffix)
+    newSegments.last.changeFileStatus("", Log.SwapFileSuffix)
 
     // Truncate the old segment
     segmentWithOverflow.truncateTo(0)
