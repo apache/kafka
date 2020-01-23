@@ -493,24 +493,24 @@ class LogSegment private[log] (val log: FileRecords,
    */
   def changeFileStatus(oldSuffix: String, newSuffix: String): Unit = {
     if(newSuffix.isEmpty) {
-      Files.deleteIfExists(new File(log.file.getPath, oldSuffix).toPath)
-      Files.deleteIfExists(new File(lazyOffsetIndex.file.getPath, oldSuffix).toPath)
-      Files.deleteIfExists(new File(lazyTimeIndex.file.getPath, oldSuffix).toPath)
-      Files.deleteIfExists(new File(txnIndex.file.getPath, oldSuffix).toPath)
+      Files.deleteIfExists(new File(log.file.getPath + oldSuffix).toPath)
+      Files.deleteIfExists(new File(lazyOffsetIndex.file.getPath + oldSuffix).toPath)
+      Files.deleteIfExists(new File(lazyTimeIndex.file.getPath + oldSuffix).toPath)
+      Files.deleteIfExists(new File(txnIndex.file.getPath + oldSuffix).toPath)
     }
     else if(oldSuffix.isEmpty){
-      Files.createFile(new File(log.file.getPath, newSuffix).toPath)
-      Files.createFile(new File(lazyOffsetIndex.file.getPath, newSuffix).toPath)
-      Files.createFile(new File(lazyTimeIndex.file.getPath, newSuffix).toPath)
+      Files.createFile(new File(log.file.getPath + newSuffix).toPath)
+      Files.createFile(new File(lazyOffsetIndex.file.getPath + newSuffix).toPath)
+      Files.createFile(new File(lazyTimeIndex.file.getPath + newSuffix).toPath)
       if(txnIndex.file.exists()){
-        Files.createFile(new File(txnIndex.file.getPath, newSuffix).toPath)
+        Files.createFile(new File(txnIndex.file.getPath + newSuffix).toPath)
       }
     }else{
-      Utils.atomicMoveWithFallback(new File(log.file.getPath, oldSuffix).toPath, new File(log.file.getPath, newSuffix).toPath)
-      Utils.atomicMoveWithFallback(new File(lazyOffsetIndex.file.getPath, oldSuffix).toPath, new File(lazyOffsetIndex.file.getPath, newSuffix).toPath)
-      Utils.atomicMoveWithFallback(new File(lazyTimeIndex.file.getPath, oldSuffix).toPath, new File(lazyTimeIndex.file.getPath, newSuffix).toPath)
+      Utils.atomicMoveWithFallback(new File(log.file.getPath + oldSuffix).toPath, new File(log.file.getPath + newSuffix).toPath)
+      Utils.atomicMoveWithFallback(new File(lazyOffsetIndex.file.getPath + oldSuffix).toPath, new File(lazyOffsetIndex.file.getPath + newSuffix).toPath)
+      Utils.atomicMoveWithFallback(new File(lazyTimeIndex.file.getPath + oldSuffix).toPath, new File(lazyTimeIndex.file.getPath + newSuffix).toPath)
       if(txnIndex.file.exists()){
-        Utils.atomicMoveWithFallback(new File(txnIndex.file.getPath, oldSuffix).toPath, new File(txnIndex.file.getPath, newSuffix).toPath)
+        Utils.atomicMoveWithFallback(new File(txnIndex.file.getPath + oldSuffix).toPath, new File(txnIndex.file.getPath + newSuffix).toPath)
       }
     }
   }

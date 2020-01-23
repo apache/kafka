@@ -693,8 +693,7 @@ class Log(@volatile var dir: File,
       val swapSegment = LogSegment.open(dir,
         swapFileOffset,
         config,
-        time = time,
-        fileSuffix = SwapFileSuffix)
+        time = time)
       info(s"Found log file with offset $swapFileOffset from interrupted swap operation, repairing.")
       recoverSegment(swapSegment)
 
