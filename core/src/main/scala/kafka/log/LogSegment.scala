@@ -625,9 +625,12 @@ class LogSegment private[log] (val log: FileRecords,
   def deleteIfExists(): Unit = {
     def delete(delete: () => Boolean, fileType: String, file: File, logIfMissing: Boolean): Unit = {
       try {
-        if (delete())
+        if (delete()) {
+          Files.deleteIfExists(new File(file, Log.CleanedFileSuffix).toPath)
+          Files.deleteIfExists(new File(file, Log.SwapFileSuffix).toPath)
+          Files.deleteIfExists(new File(file, Log.DeletedFileSuffix).toPath)
           info(s"Deleted $fileType ${file.getAbsolutePath}.")
-        else if (logIfMissing)
+        } else if (logIfMissing)
           info(s"Failed to delete $fileType ${file.getAbsolutePath} because it does not exist.")
       }
       catch {
