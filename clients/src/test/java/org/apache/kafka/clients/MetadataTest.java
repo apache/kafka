@@ -725,19 +725,17 @@ public class MetadataTest {
         oldTopicPartitionCounts.put("oldValidTopic", 2);
         oldTopicPartitionCounts.put("keepValidTopic", 3);
 
-        Set<String> oldRetainTopics = new HashSet<>();
-        oldRetainTopics.add("oldInvalidTopic");
-        oldRetainTopics.add("keepInvalidTopic");
-        oldRetainTopics.add("oldUnauthorizedTopic");
-        oldRetainTopics.add("keepUnauthorizedTopic");
-        oldRetainTopics.add("oldValidTopic");
-        oldRetainTopics.add("keepValidTopic");
-
-        retainTopics.set(oldRetainTopics);
+        retainTopics.set(new HashSet<>(Arrays.asList(
+            "oldInvalidTopic",
+            "keepInvalidTopic",
+            "oldUnauthorizedTopic",
+            "keepUnauthorizedTopic",
+            "oldValidTopic",
+            "keepValidTopic")));
 
         MetadataResponse metadataResponse =
                 TestUtils.metadataUpdateWith(oldClusterId, oldNodes, oldTopicErrors, oldTopicPartitionCounts, _tp -> 100);
-        metadata.update(metadataResponse, time.milliseconds());
+        metadata.update(metadataResponse, true, time.milliseconds());
 
         // Update the metadata to add a new topic variant, "new", which will be retained with "keep". Note this
         // means that all of the "old" topics should be dropped.
@@ -759,18 +757,16 @@ public class MetadataTest {
         newTopicPartitionCounts.put("keepValidTopic", 2);
         newTopicPartitionCounts.put("newValidTopic", 4);
 
-        Set<String> newRetainTopics = new HashSet<>();
-        newRetainTopics.add("keepInvalidTopic");
-        newRetainTopics.add("newInvalidTopic");
-        newRetainTopics.add("keepUnauthorizedTopic");
-        newRetainTopics.add("newUnauthorizedTopic");
-        newRetainTopics.add("keepValidTopic");
-        newRetainTopics.add("newValidTopic");
-
-        retainTopics.set(newRetainTopics);
+        retainTopics.set(new HashSet<>(Arrays.asList(
+            "keepInvalidTopic",
+            "newInvalidTopic",
+            "keepUnauthorizedTopic",
+            "newUnauthorizedTopic",
+            "keepValidTopic",
+            "newValidTopic")));
 
         metadataResponse = TestUtils.metadataUpdateWith(newClusterId, newNodes, newTopicErrors, newTopicPartitionCounts, _tp -> 200);
-        metadata.update(metadataResponse, time.milliseconds());
+        metadata.update(metadataResponse, true, time.milliseconds());
 
         cluster = metadata.fetch();
         assertEquals(cluster.clusterResource().clusterId(), newClusterId);
@@ -785,7 +781,7 @@ public class MetadataTest {
         retainTopics.set(Collections.emptySet());
 
         metadataResponse = TestUtils.metadataUpdateWith(newClusterId, newNodes, newTopicErrors, newTopicPartitionCounts, _tp -> 300);
-        metadata.update(metadataResponse, time.milliseconds());
+        metadata.update(metadataResponse, true, time.milliseconds());
 
         cluster = metadata.fetch();
         assertEquals(cluster.clusterResource().clusterId(), newClusterId);
