@@ -443,8 +443,9 @@ object LogCleaner {
 
   def createNewCleanedSegment(log: Log, baseOffset: Long): LogSegment = {
     log.deleteIfExists(baseOffset, fileSuffix = Log.CleanedFileSuffix)
-    LogSegment.open(log.dir, baseOffset, log.config, Time.SYSTEM, fileAlreadyExists = false
+    val logSegment = LogSegment.open(log.dir, baseOffset, log.config, Time.SYSTEM, fileAlreadyExists = false
       , initFileSize = log.initFileSize, preallocate = log.config.preallocate)
+    logSegment.changeFileStatus("", Log.CleanedFileSuffix)
   }
 
 }
