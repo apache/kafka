@@ -886,11 +886,21 @@ class GroupCoordinator(val brokerId: Int,
     }
   }
 
-  def handleGroupImmigration(offsetTopicPartitionId: Int): Unit = {
+  /**
+   * Load cached state from the given partition and begin handling requests for groups which map to it.
+   *
+   * @param offsetTopicPartitionId The partition we are now leading
+   */
+  def onElection(offsetTopicPartitionId: Int): Unit = {
     groupManager.scheduleLoadGroupAndOffsets(offsetTopicPartitionId, onGroupLoaded)
   }
 
-  def handleGroupEmigration(offsetTopicPartitionId: Int): Unit = {
+  /**
+   * Unload cached state for the given partition and stop handling requests for groups which map to it.
+   *
+   * @param offsetTopicPartitionId The partition we are no longer leading
+   */
+  def onResignation(offsetTopicPartitionId: Int): Unit = {
     groupManager.removeGroupsForPartition(offsetTopicPartitionId, onGroupUnloaded)
   }
 

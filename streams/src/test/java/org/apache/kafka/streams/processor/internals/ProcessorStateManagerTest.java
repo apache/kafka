@@ -614,14 +614,14 @@ public class ProcessorStateManagerTest {
         stateMgr.registerStore(persistentStore, persistentStore.stateRestoreCallback);
         final File file = new File(stateMgr.baseDir(), CHECKPOINT_FILE_NAME);
         file.createNewFile();
-        FileWriter writer = new FileWriter(file);
+        final FileWriter writer = new FileWriter(file);
         writer.write("abcdefg");
         writer.close();
 
         try {
             stateMgr.initStoresFromCheckpointedOffsets();
             fail("should have thrown processor state exception when IO exception happens");
-        } catch (ProcessorStateException e) {
+        } catch (final ProcessorStateException e) {
             // pass
         }
     }
@@ -642,7 +642,7 @@ public class ProcessorStateManagerTest {
         try {
             stateMgr.restore(storeMetadata, singletonList(consumerRecord));
             fail("should have thrown processor state exception when IO exception happens");
-        } catch (ProcessorStateException e) {
+        } catch (final ProcessorStateException e) {
             // pass
         }
     }

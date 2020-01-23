@@ -105,7 +105,7 @@ class TransactionCoordinatorTest {
       .andReturn(Right(None))
       .once()
 
-    EasyMock.expect(transactionManager.putTransactionStateIfNotExists(EasyMock.eq(transactionalId), EasyMock.capture(capturedTxn)))
+    EasyMock.expect(transactionManager.putTransactionStateIfNotExists(EasyMock.capture(capturedTxn)))
       .andAnswer(() => {
         assertTrue(capturedTxn.hasCaptured)
         Right(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, capturedTxn.getValue))
@@ -132,7 +132,7 @@ class TransactionCoordinatorTest {
       .andReturn(Right(None))
       .once()
 
-    EasyMock.expect(transactionManager.putTransactionStateIfNotExists(EasyMock.eq(transactionalId), EasyMock.capture(capturedTxn)))
+    EasyMock.expect(transactionManager.putTransactionStateIfNotExists(EasyMock.capture(capturedTxn)))
       .andAnswer(() => {
         assertTrue(capturedTxn.hasCaptured)
         Right(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, capturedTxn.getValue))
@@ -532,7 +532,7 @@ class TransactionCoordinatorTest {
     EasyMock.expect(transactionManager.validateTransactionTimeoutMs(EasyMock.anyInt()))
       .andReturn(true)
 
-    EasyMock.expect(transactionManager.putTransactionStateIfNotExists(EasyMock.eq(transactionalId), EasyMock.anyObject[TransactionMetadata]()))
+    EasyMock.expect(transactionManager.putTransactionStateIfNotExists(EasyMock.anyObject[TransactionMetadata]()))
       .andReturn(Right(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, txnMetadata)))
       .anyTimes()
 
@@ -567,7 +567,7 @@ class TransactionCoordinatorTest {
     EasyMock.expect(transactionManager.validateTransactionTimeoutMs(EasyMock.anyInt()))
       .andReturn(true)
 
-    EasyMock.expect(transactionManager.putTransactionStateIfNotExists(EasyMock.eq(transactionalId), EasyMock.anyObject[TransactionMetadata]()))
+    EasyMock.expect(transactionManager.putTransactionStateIfNotExists(EasyMock.anyObject[TransactionMetadata]()))
       .andReturn(Right(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, txnMetadata)))
       .anyTimes()
 
@@ -805,7 +805,7 @@ class TransactionCoordinatorTest {
     EasyMock.expect(transactionMarkerChannelManager.removeMarkersForTxnTopicPartition(0))
     EasyMock.replay(transactionManager, transactionMarkerChannelManager)
 
-    coordinator.handleTxnEmigration(0, coordinatorEpoch)
+    coordinator.onResignation(0, Some(coordinatorEpoch))
 
     EasyMock.verify(transactionManager, transactionMarkerChannelManager)
   }

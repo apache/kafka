@@ -664,7 +664,7 @@ public class TaskManagerTest {
         final StandbyTask task = EasyMock.createNiceMock(StandbyTask.class);
         expect(active.allTasksRunning()).andReturn(true);
         expect(standby.running()).andReturn(Collections.singletonList(task));
-        expect(task.checkpointedOffsets()).andReturn(Collections.singletonMap(t1p0, offset));
+        expect(task.restoredOffsets()).andReturn(Collections.singletonMap(t1p0, offset));
         restoreConsumer.assign(taskId0Partitions);
 
         expectLastCall();

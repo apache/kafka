@@ -130,13 +130,7 @@ public class StandbyTask extends AbstractTask {
         taskClosed = true;
     }
 
-    Map<TopicPartition, Long> checkpointedOffsets() {
+    public Map<TopicPartition, Long> restoredOffsets() {
         return Collections.unmodifiableMap(stateMgr.changelogOffsets());
-    }
-
-    public void update() {
-        // we use the changelog reader to do the actual restoration work,
-        // and here we only need to update the offset limits when necessary
-        // TODO K9113: finish this logic with ChangeLogReader
     }
 }

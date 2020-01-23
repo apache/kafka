@@ -376,6 +376,18 @@ public class TaskManager {
         consumer.pause(consumer.assignment());
     }
 
+    List<StreamTask> allStreamsTasks() {
+        return active.allTasks();
+    }
+
+    Set<TaskId> restoringTaskIds() {
+        return active.restoringTaskIds();
+    }
+
+    List<StandbyTask> allStandbyTasks() {
+        return standby.allTasks();
+    }
+
     /**
      * @throws IllegalStateException If store gets registered after initialized is already finished
      * @throws StreamsException if the store's change log does not contain the partition
@@ -414,7 +426,7 @@ public class TaskManager {
         final Collection<StandbyTask> running = standby.running();
         final Map<TopicPartition, Long> checkpointedOffsets = new HashMap<>();
         for (final StandbyTask standbyTask : running) {
-            checkpointedOffsets.putAll(standbyTask.checkpointedOffsets());
+            checkpointedOffsets.putAll(standbyTask.restoredOffsets());
         }
 
         log.debug("Assigning and seeking restoreConsumer to {}", checkpointedOffsets);

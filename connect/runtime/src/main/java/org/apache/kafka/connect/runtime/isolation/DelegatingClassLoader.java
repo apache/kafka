@@ -156,19 +156,16 @@ public class DelegatingClassLoader extends URLClassLoader {
     }
 
     public ClassLoader connectorLoader(String connectorClassOrAlias) {
-        log.debug("Getting plugin class loader for connector: '{}'", connectorClassOrAlias);
         String fullName = aliases.containsKey(connectorClassOrAlias)
                           ? aliases.get(connectorClassOrAlias)
                           : connectorClassOrAlias;
-        PluginClassLoader classLoader = pluginClassLoader(fullName);
-        if (classLoader == null) {
-            log.error(
-                    "Plugin class loader for connector: '{}' was not found. Returning: {}",
-                    connectorClassOrAlias,
-                    this
-            );
-            return this;
-        }
+        ClassLoader classLoader = pluginClassLoader(fullName);
+        if (classLoader == null) classLoader = this;
+        log.debug(
+            "Getting plugin class loader: '{}' for connector: {}",
+            classLoader,
+            connectorClassOrAlias
+        );
         return classLoader;
     }
 

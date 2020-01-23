@@ -419,6 +419,10 @@ public class StreamsMetadataState {
         return clusterMetadata != null && !clusterMetadata.topics().isEmpty();
     }
 
+    public String getStoreForChangelogTopic(final String topicName) {
+        return builder.getChangelogTopicToStore().get(topicName);
+    }
+
     private class SourceTopicsInfo {
         private final List<String> sourceTopics;
         private int maxPartitions;

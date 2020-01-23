@@ -16,9 +16,6 @@
  */
 package org.apache.kafka.connect.mirror;
 
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.acl.AccessControlEntry;
 import org.apache.kafka.common.acl.AclBinding;
@@ -28,7 +25,9 @@ import org.apache.kafka.common.resource.PatternType;
 import org.apache.kafka.common.resource.ResourcePattern;
 import org.apache.kafka.common.resource.ResourceType;
 import org.apache.kafka.clients.admin.Config;
+import org.apache.kafka.connect.connector.ConnectorContext;
 import org.apache.kafka.clients.admin.ConfigEntry;
+import org.apache.kafka.clients.admin.NewTopic;
 
 import org.junit.Test;
 
@@ -36,8 +35,21 @@ import static org.apache.kafka.connect.mirror.MirrorConnectorConfig.TASK_TOPIC_P
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.assertFalse;
+import static org.mockito.Mockito.any;
+import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.eq;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 public class MirrorSourceConnectorTest {
 
@@ -122,25 +134,25 @@ public class MirrorSourceConnectorTest {
 
     @Test
     public void testMirrorSourceConnectorTaskConfig() {
-        List<TopicPartition> knownTopicPartitions = new ArrayList<>();
+        List<TopicPartition> knownSourceTopicPartitions = new ArrayList<>();
 
         // topic `t0` has 8 partitions
-        knownTopicPartitions.add(new TopicPartition("t0", 0));
-        knownTopicPartitions.add(new TopicPartition("t0", 1));
-        knownTopicPartitions.add(new TopicPartition("t0", 2));
-        knownTopicPartitions.add(new TopicPartition("t0", 3));
-        knownTopicPartitions.add(new TopicPartition("t0", 4));
-        knownTopicPartitions.add(new TopicPartition("t0", 5));
-        knownTopicPartitions.add(new TopicPartition("t0", 6));
-        knownTopicPartitions.add(new TopicPartition("t0", 7));
+        knownSourceTopicPartitions.add(new TopicPartition("t0", 0));
+        knownSourceTopicPartitions.add(new TopicPartition("t0", 1));
+        knownSourceTopicPartitions.add(new TopicPartition("t0", 2));
+        knownSourceTopicPartitions.add(new TopicPartition("t0", 3));
+        knownSourceTopicPartitions.add(new TopicPartition("t0", 4));
+        knownSourceTopicPartitions.add(new TopicPartition("t0", 5));
+        knownSourceTopicPartitions.add(new TopicPartition("t0", 6));
+        knownSourceTopicPartitions.add(new TopicPartition("t0", 7));
 
         // topic `t1` has 2 partitions
-        knownTopicPartitions.add(new TopicPartition("t1", 0));
-        knownTopicPartitions.add(new TopicPartition("t1", 1));
+        knownSourceTopicPartitions.add(new TopicPartition("t1", 0));
+        knownSourceTopicPartitions.add(new TopicPartition("t1", 1));
 
         // topic `t2` has 2 partitions
-        knownTopicPartitions.add(new TopicPartition("t2", 0));
-        knownTopicPartitions.add(new TopicPartition("t2", 1));
+        knownSourceTopicPartitions.add(new TopicPartition("t2", 0));
+        knownSourceTopicPartitions.add(new TopicPartition("t2", 1));
 
         // MirrorConnectorConfig example for test
         Map<String, String> props = new HashMap<>();
@@ -151,7 +163,7 @@ public class MirrorSourceConnectorTest {
         MirrorConnectorConfig config = new MirrorConnectorConfig(props);
 
         // MirrorSourceConnector as minimum to run taskConfig()
-        MirrorSourceConnector connector = new MirrorSourceConnector(knownTopicPartitions, config);
+        MirrorSourceConnector connector = new MirrorSourceConnector(knownSourceTopicPartitions, config);
 
         // distribute the topic-partition to 3 tasks by round-robin
         List<Map<String, String>> output = connector.taskConfigs(3);
@@ -169,5 +181,39 @@ public class MirrorSourceConnectorTest {
 
         Map<String, String> t3 = output.get(2);
         assertEquals("t0-2,t0-5,t1-0,t2-1", t3.get(TASK_TOPIC_PARTITIONS));
+    }
+
+    @Test
+    public void testRefreshTopicPartitions() throws Exception {
+        MirrorSourceConnector connector = new MirrorSourceConnector(new SourceAndTarget("source", "target"),
+                new DefaultReplicationPolicy(), new DefaultTopicFilter(), new DefaultConfigPropertyFilter());
+        connector.initialize(mock(ConnectorContext.class));
+        connector = spy(connector);
+
+        List<TopicPartition> sourceTopicPartitions = Arrays.asList(new TopicPartition("topic", 0));
+        doReturn(sourceTopicPartitions).when(connector).findSourceTopicPartitions();
+        doReturn(Collections.emptyList()).when(connector).findTargetTopicPartitions();
+        doNothing().when(connector).createTopicPartitions(any(), any(), any());
+
+        connector.refreshTopicPartitions();
+        // if target topic is not created, refreshTopicPartitions() will call createTopicPartitions() again
+        connector.refreshTopicPartitions();
+
+        Map<String, Long> expectedPartitionCounts = new HashMap<>();
+        expectedPartitionCounts.put("source.topic", 1L);
+        List<NewTopic> expectedNewTopics = Arrays.asList(new NewTopic("source.topic", 1, (short) 0));
+
+        verify(connector, times(2)).computeAndCreateTopicPartitions();
+        verify(connector, times(2)).createTopicPartitions(
+                eq(expectedPartitionCounts),
+                eq(expectedNewTopics),
+                eq(Collections.emptyMap()));
+
+        List<TopicPartition> targetTopicPartitions = Arrays.asList(new TopicPartition("source.topic", 0));
+        doReturn(targetTopicPartitions).when(connector).findTargetTopicPartitions();
+        connector.refreshTopicPartitions();
+
+        // once target topic is created, refreshTopicPartitions() will NOT call computeAndCreateTopicPartitions() again
+        verify(connector, times(2)).computeAndCreateTopicPartitions();
     }
 }

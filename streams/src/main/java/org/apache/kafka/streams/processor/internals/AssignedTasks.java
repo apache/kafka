@@ -39,7 +39,7 @@ import java.util.concurrent.atomic.AtomicReference;
 abstract class AssignedTasks<T extends Task> {
     final Logger log;
     final String taskTypeName;
-    final Map<TaskId, T> created = new HashMap<>();
+    final Map<TaskId, T> created = new ConcurrentHashMap<>();
 
     // IQ may access this map.
     final Map<TaskId, T> running = new ConcurrentHashMap<>();

@@ -409,35 +409,15 @@ public class StoreChangelogReader implements ChangelogReader {
 
             try {
                 polledRecords = restoreConsumer.poll(pollTime);
-            } catch (FencedInstanceIdException e) {
+            } catch (final FencedInstanceIdException e) {
                 // when the consumer gets fenced, all its tasks should be migrated
                 throw new TaskMigratedException("Restore consumer get fenced by instance-id polling records.", e);
-            } catch (KafkaException e) {
+            } catch (final KafkaException e) {
                 throw new StreamsException("Restore consumer get unexpected error polling records.", e);
             }
 
             for (final TopicPartition partition : polledRecords.partitions()) {
-                final ChangelogMetadata changelogMetadata = restoringChangelogByPartition(partition);
-
-                // update the buffered records and limit index with the fetched records
-                final List<ConsumerRecord<byte[], byte[]>> records = polledRecords.records(partition);
-                final long limitOffset = Math.min(
-                    changelogMetadata.restoreEndOffset == null ? Long.MAX_VALUE : changelogMetadata.restoreEndOffset,
-                    changelogMetadata.restoreLimitOffset == null ? Long.MAX_VALUE : changelogMetadata.restoreLimitOffset
-                );
-
-                for (final ConsumerRecord<byte[], byte[]> record : records) {
-                    // filter polled records for null-keys and also possibly update buffer limit index
-                    if (record.key() == null) {
-                        log.warn("Read changelog record with null key from changelog {} at offset {}, " +
-                            "skipping it for restoration", changelogMetadata.storeMetadata.changelogPartition(), record.offset());
-                    } else {
-                        changelogMetadata.bufferedRecords.add(record);
-                        final long offset = record.offset();
-                        if (offset < limitOffset)
-                            changelogMetadata.bufferedLimitIndex = changelogMetadata.bufferedRecords.size();
-                    }
-                }
+                bufferChangelogRecords(restoringChangelogByPartition(partition), polledRecords.records(partition));
             }
 
             for (final TopicPartition partition: restoringChangelogs) {
@@ -447,6 +427,27 @@ public class StoreChangelogReader implements ChangelogReader {
                 // TODO: we always try to restore as a batch when some records are accumulated, which may result in
                 //       small batches; this can be optimized in the future, e.g. wait longer for larger batches.
                 restoreChangelog(changelogs.get(partition));
+            }
+        }
+    }
+
+    private void bufferChangelogRecords(final ChangelogMetadata changelogMetadata, final List<ConsumerRecord<byte[], byte[]>> records) {
+        // update the buffered records and limit index with the fetched records
+        final long limitOffset = Math.min(
+            changelogMetadata.restoreEndOffset == null ? Long.MAX_VALUE : changelogMetadata.restoreEndOffset,
+            changelogMetadata.restoreLimitOffset == null ? Long.MAX_VALUE : changelogMetadata.restoreLimitOffset
+        );
+
+        for (final ConsumerRecord<byte[], byte[]> record : records) {
+            // filter polled records for null-keys and also possibly update buffer limit index
+            if (record.key() == null) {
+                log.warn("Read changelog record with null key from changelog {} at offset {}, " +
+                    "skipping it for restoration", changelogMetadata.storeMetadata.changelogPartition(), record.offset());
+            } else {
+                changelogMetadata.bufferedRecords.add(record);
+                final long offset = record.offset();
+                if (offset < limitOffset)
+                    changelogMetadata.bufferedLimitIndex = changelogMetadata.bufferedRecords.size();
             }
         }
     }
@@ -486,7 +487,7 @@ public class StoreChangelogReader implements ChangelogReader {
             if (changelogMetadata.stateManager.taskType() == AbstractTask.TaskType.ACTIVE) {
                 try {
                     stateRestoreListener.onBatchRestored(partition, storeName, currentOffset, numRecords);
-                } catch (Exception e) {
+                } catch (final Exception e) {
                     throw new StreamsException("State restore listener failed on batch restored", e);
                 }
             }
@@ -502,7 +503,7 @@ public class StoreChangelogReader implements ChangelogReader {
 
             try {
                 stateRestoreListener.onRestoreEnd(partition, storeName, changelogMetadata.totalRestored);
-            } catch (Exception e) {
+            } catch (final Exception e) {
                 throw new StreamsException("State restore listener failed on restore completed", e);
             }
         }
@@ -746,7 +747,7 @@ public class StoreChangelogReader implements ChangelogReader {
 
                 try {
                     stateRestoreListener.onRestoreStart(partition, storeName, startOffset, changelogMetadata.restoreEndOffset);
-                } catch (Exception e) {
+                } catch (final Exception e) {
                     throw new StreamsException("State restore listener failed on batch restored", e);
                 }
             }
@@ -773,7 +774,7 @@ public class StoreChangelogReader implements ChangelogReader {
 
         try {
             restoreConsumer.unsubscribe();
-        } catch (KafkaException e) {
+        } catch (final KafkaException e) {
             throw new StreamsException("Restore consumer get unexpected error unsubscribing", e);
         }
     }

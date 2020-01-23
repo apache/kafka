@@ -20,8 +20,8 @@ import java.util.{Collections, Optional, Properties}
 
 import kafka.admin.ConsumerGroupCommand.{ConsumerGroupCommandOptions, ConsumerGroupService}
 import kafka.log.LogConfig
-import kafka.security.auth.{SimpleAclAuthorizer, Topic, ResourceType => AuthResourceType}
-import kafka.security.authorizer.AuthorizerUtils.WildcardHost
+import kafka.security.authorizer.AclEntry
+import kafka.security.authorizer.AclEntry.WildcardHost
 import kafka.server.{BaseRequestTest, KafkaConfig}
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.admin.{Admin, AdminClientConfig, AlterConfigOp}
@@ -117,7 +117,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, group)
 
   override def brokerPropertyOverrides(properties: Properties): Unit = {
-    properties.put(KafkaConfig.AuthorizerClassNameProp, classOf[SimpleAclAuthorizer].getName)
+    properties.put(KafkaConfig.AuthorizerClassNameProp, "kafka.security.auth.SimpleAclAuthorizer")
     properties.put(KafkaConfig.BrokerIdProp, brokerId.toString)
     properties.put(KafkaConfig.OffsetsTopicPartitionsProp, "1")
     properties.put(KafkaConfig.OffsetsTopicReplicationFactorProp, "1")
@@ -1663,11 +1663,11 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     val authorizationErrors = resources.flatMap { resourceType =>
       if (resourceType == TOPIC) {
         if (isAuthorized)
-          Set(Errors.UNKNOWN_TOPIC_OR_PARTITION, Topic.error)
+          Set(Errors.UNKNOWN_TOPIC_OR_PARTITION, AclEntry.authorizationError(ResourceType.TOPIC))
         else
-          Set(Topic.error)
+          Set(AclEntry.authorizationError(ResourceType.TOPIC))
       } else {
-        Set(AuthResourceType.fromJava(resourceType).error)
+        Set(AclEntry.authorizationError(resourceType))
       }
     }
 

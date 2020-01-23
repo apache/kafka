@@ -36,7 +36,7 @@ import kafka.coordinator.transaction.{InitProducerIdResult, TransactionCoordinat
 import kafka.log.AppendOrigin
 import kafka.message.ZStdCompressionCodec
 import kafka.network.RequestChannel
-import kafka.security.authorizer.AuthorizerUtils
+import kafka.security.authorizer.{AclEntry, AuthorizerUtils}
 import kafka.server.QuotaFactory.{QuotaManagers, UnboundedQuota}
 import kafka.utils.{CoreUtils, Logging}
 import kafka.zk.{AdminZkClient, KafkaZkClient}
@@ -178,7 +178,9 @@ class KafkaApis(val requestChannel: RequestChannel,
       case e: FatalExitError => throw e
       case e: Throwable => handleError(request, e)
     } finally {
-      request.apiLocalCompleteTimeNanos = time.nanoseconds
+      // The local completion time may be set while processing the request. Only record it if it's unset.
+      if (request.apiLocalCompleteTimeNanos < 0)
+        request.apiLocalCompleteTimeNanos = time.nanoseconds
     }
   }
 
@@ -195,16 +197,16 @@ class KafkaApis(val requestChannel: RequestChannel,
       // leadership changes
       updatedLeaders.foreach { partition =>
         if (partition.topic == GROUP_METADATA_TOPIC_NAME)
-          groupCoordinator.handleGroupImmigration(partition.partitionId)
+          groupCoordinator.onElection(partition.partitionId)
         else if (partition.topic == TRANSACTION_STATE_TOPIC_NAME)
-          txnCoordinator.handleTxnImmigration(partition.partitionId, partition.getLeaderEpoch)
+          txnCoordinator.onElection(partition.partitionId, partition.getLeaderEpoch)
       }
 
       updatedFollowers.foreach { partition =>
         if (partition.topic == GROUP_METADATA_TOPIC_NAME)
-          groupCoordinator.handleGroupEmigration(partition.partitionId)
+          groupCoordinator.onResignation(partition.partitionId)
         else if (partition.topic == TRANSACTION_STATE_TOPIC_NAME)
-          txnCoordinator.handleTxnEmigration(partition.partitionId, partition.getLeaderEpoch)
+          txnCoordinator.onResignation(partition.partitionId, Some(partition.getLeaderEpoch))
       }
     }
 
@@ -235,15 +237,16 @@ class KafkaApis(val requestChannel: RequestChannel,
       sendResponseExemptThrottle(request, new StopReplicaResponse(new StopReplicaResponseData().setErrorCode(Errors.STALE_BROKER_EPOCH.code)))
     } else {
       val (result, error) = replicaManager.stopReplicas(stopReplicaRequest)
-      // Clearing out the cache for groups that belong to an offsets topic partition for which this broker was the leader,
-      // since this broker is no longer a replica for that offsets topic partition.
-      // This is required to handle the following scenario :
-      // Consider old replicas : {[1,2,3], Leader = 1} is reassigned to new replicas : {[2,3,4], Leader = 2}, broker 1 does not receive a LeaderAndIsr
-      // request to become a follower due to which cache for groups that belong to an offsets topic partition for which broker 1 was the leader,
-      // is not cleared.
+      // Clear the coordinator caches in case we were the leader. In the case of a reassignment, we
+      // cannot rely on the LeaderAndIsr API for this since it is only sent to active replicas.
       result.foreach { case (topicPartition, error) =>
-        if (error == Errors.NONE && stopReplicaRequest.deletePartitions && topicPartition.topic == GROUP_METADATA_TOPIC_NAME) {
-          groupCoordinator.handleGroupEmigration(topicPartition.partition)
+        if (error == Errors.NONE && stopReplicaRequest.deletePartitions) {
+          if (topicPartition.topic == GROUP_METADATA_TOPIC_NAME) {
+            groupCoordinator.onResignation(topicPartition.partition)
+          } else if (topicPartition.topic == TRANSACTION_STATE_TOPIC_NAME) {
+            // The StopReplica API does not pass through the leader epoch
+            txnCoordinator.onResignation(topicPartition.partition, coordinatorEpoch = None)
+          }
         }
       }
 
@@ -1657,7 +1660,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       val hasClusterAuthorization = authorize(request, CREATE, CLUSTER, CLUSTER_NAME, logIfDenied = false)
       val topics = createTopicsRequest.data.topics.asScala.map(_.name)
       val authorizedTopics = if (hasClusterAuthorization) topics.toSet else filterAuthorized(request, CREATE, TOPIC, topics.toSeq)
-      val authorizedForDescribeConfigs = filterAuthorized(request, DESCRIBE_CONFIGS, TOPIC, topics.toSeq)
+      val authorizedForDescribeConfigs = filterAuthorized(request, DESCRIBE_CONFIGS, TOPIC, topics.toSeq, logIfDenied = false)
         .map(name => name -> results.find(name)).toMap
 
       results.asScala.foreach(topic => {
@@ -2823,7 +2826,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   private def authorizedOperations(request: RequestChannel.Request, resource: Resource): Int = {
-    val supportedOps = AuthorizerUtils.supportedOperations(resource.resourceType).toList
+    val supportedOps = AclEntry.supportedOperations(resource.resourceType).toList
     val authorizedOps = authorizer match {
       case Some(authZ) =>
         val resourcePattern = new ResourcePattern(resource.resourceType, resource.name, PatternType.LITERAL)

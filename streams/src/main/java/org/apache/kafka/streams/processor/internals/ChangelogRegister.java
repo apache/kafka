@@ -17,7 +17,6 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.streams.processor.internals.ProcessorStateManager.StateStoreMetadata;
 
 /**
  * See {@link StoreChangelogReader}.
