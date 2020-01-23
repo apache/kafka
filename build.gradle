@@ -886,6 +886,50 @@ project(':core') {
     duplicatesStrategy 'exclude'
   }
 
+  tasks.create(name: "releaseAzPubSub", dependsOn: configurations.archives.artifacts, type: Copy) {
+    into "$rootDir/distributions/kafka_${versions.baseScala}-${version}"
+    from(project.file("$rootDir/bin")) { into "bin/" }
+    from(project.file("$rootDir/config")) { into "config/" }
+    from "$rootDir/LICENSE"
+    from "$rootDir/NOTICE"
+    from(configurations.runtime) { into("libs/") exclude("zookeeper-${versions.zookeeper}.jar") }
+    from(configurations.archives.artifacts.files) { into("libs/") }
+    from(project.siteDocsTar) { into("site-docs/") }
+    from(project(':tools').jar) { into("libs/") }
+    from(project(':tools').configurations.runtime) { into("libs/") }
+    from(project(':connect:api').jar) { into("libs/") }
+    from(project(':connect:api').configurations.runtime) { into("libs/") }
+    from(project(':connect:runtime').jar) { into("libs/") }
+    from(project(':connect:runtime').configurations.runtime) { into("libs/") }
+    from(project(':connect:transforms').jar) { into("libs/") }
+    from(project(':connect:transforms').configurations.runtime) { into("libs/") }
+    from(project(':connect:json').jar) { into("libs/") }
+    from(project(':connect:json').configurations.runtime) { into("libs/") }
+    from(project(':connect:file').jar) { into("libs/") }
+    from(project(':connect:file').configurations.runtime) { into("libs/") }
+    from(project(':connect:basic-auth-extension').jar) { into("libs/") }
+    from(project(':connect:basic-auth-extension').configurations.runtime) { into("libs/") }
+    from(project(':streams').jar) { into("libs/") }
+    from(project(':streams').configurations.runtime) { into("libs/") }
+    from(project(':streams:streams-scala').jar) { into("libs/") }
+    from(project(':streams:streams-scala').configurations.runtime) { into("libs/") }
+    from(project(':streams:test-utils').jar) { into("libs/") }
+    from(project(':streams:test-utils').configurations.runtime) { into("libs/") }
+    from(project(':streams:examples').jar) { into("libs/") }
+    from(project(':streams:examples').configurations.runtime) { into("libs/") }
+    from(project.file("$rootDir/repository")) { into "libs/" }
+    duplicatesStrategy 'exclude'
+    
+    def copyDetails = []
+    eachFile { copyDetails << it }
+    doLast {
+      copyDetails.each { FileCopyDetails details ->
+        def target = new File(destinationDir, details.path)
+        if(target.exists()) { target.setLastModified(details.lastModified) }
+      }
+    }
+  }
+
   jar {
     dependsOn('copyDependantLibs')
   }
