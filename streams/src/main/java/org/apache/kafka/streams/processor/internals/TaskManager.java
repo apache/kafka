@@ -322,26 +322,28 @@ public class TaskManager {
             }
         }
 
+        boolean allRunning = true;
         if (!restoringTasks.isEmpty()) {
             changelogReader.restore();
             final Set<TopicPartition> restored = changelogReader.completedChangelogs();
             for (final Task task : restoringTasks) {
                 if (restored.containsAll(task.changelogPartitions())) {
                     task.startRunning();
+                } else {
+                    // we found a restoring task that isn't done restoring, which is evidence that
+                    // not all tasks are running
+                    allRunning = false;
                 }
             }
         }
 
-        boolean allRunning = true;
-        for (final Task task : tasks.values()) {
-            // TODO, can we make StandbyTasks partitions always empty (since they don't process any inputs)?
-            // If so, we can simplify this logic here, as the resume would be a no-op.
-            if (task.isActive() && task.state() == RUNNING) {
-                consumer.resume(task.partitions());
-            }
-
-            if (task.state() != RUNNING) {
-                allRunning = false;
+        if (allRunning) {
+            for (final Task task : tasks.values()) {
+                // TODO, can we make StandbyTasks partitions always empty (since they don't process any inputs)?
+                // If so, we can simplify this logic here, as the resume would be a no-op.
+                if (task.isActive()) {
+                    consumer.resume(task.partitions());
+                }
             }
         }
         return allRunning;
