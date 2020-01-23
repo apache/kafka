@@ -501,9 +501,12 @@ public class StreamThread extends Thread {
         Producer<byte[], byte[]> threadProducer = null;
         final boolean eosEnabled = StreamsConfig.EXACTLY_ONCE.equals(config.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG));
         if (!eosEnabled) {
-            final Map<String, Object> producerConfigs = config.getProducerConfigs(getThreadProducerClientId(threadId));
             log.info("Creating shared producer client");
+            final Map<String, Object> producerConfigs = config.getProducerConfigs(getThreadProducerClientId(threadId));
             threadProducer = clientSupplier.getProducer(producerConfigs);
+            if ("exactly_once_beta".equals(config.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG))) {
+                threadProducer.initTransactions();
+            }
         }
 
         final ThreadCache cache = new ThreadCache(logContext, cacheSizeBytes, streamsMetrics);
