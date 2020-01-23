@@ -38,7 +38,6 @@ import org.junit.{After, Before, Test}
 import org.scalatest.Assertions.{fail, intercept}
 
 import scala.collection.JavaConverters._
-import scala.util.Try
 
 class ZooKeeperClientTest extends ZooKeeperTestHarness {
   private val mockPath = "/foo"

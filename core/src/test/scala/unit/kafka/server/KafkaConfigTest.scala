@@ -601,7 +601,6 @@ class KafkaConfigTest {
         case KafkaConfig.ZkSslProtocolProp =>  //ignore string
         case KafkaConfig.ZkSslEnabledProtocolsProp =>  //ignore string
         case KafkaConfig.ZkSslCipherSuitesProp =>  //ignore string
-        case KafkaConfig.ZkSslContextSupplierClassProp =>  //ignore string
         case KafkaConfig.ZkSslEndpointIdentificationAlgorithmProp => //ignore string
         case KafkaConfig.ZkSslCrlEnableProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_boolean")
         case KafkaConfig.ZkSslOcspEnableProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_boolean")

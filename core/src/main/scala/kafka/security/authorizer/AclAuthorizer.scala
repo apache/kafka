@@ -25,7 +25,7 @@ import kafka.api.KAFKA_2_0_IV1
 import kafka.security.authorizer.AclAuthorizer.VersionedAcls
 import kafka.security.auth.{Acl, Operation, PermissionType, Resource, ResourceType}
 import kafka.security.auth.{All, Allow, Alter, AlterConfigs, Delete, Deny, Describe, DescribeConfigs, Read, Write}
-import kafka.server.{Defaults, KafkaConfig, KafkaServer}
+import kafka.server.{KafkaConfig, KafkaServer}
 import kafka.utils.CoreUtils.{inReadLock, inWriteLock}
 import kafka.utils._
 import kafka.zk._
@@ -81,23 +81,25 @@ object AclAuthorizer {
     }
   }
 
-  def zkClientConfigFromMap(configs: mutable.Map[String, _<:Any]): ZKClientConfig = {
-    val clientConfig = new ZKClientConfig()
-    def setConfigValue(unprefixedKey: String, defaultValue: Option[Any] = None): Unit = {
-      val prefixedValue = configs.get(s"$configPrefix$unprefixedKey")
-      prefixedValue.map(value => Some(value.toString)).getOrElse(defaultValue).foreach(defaultedValue =>
-        KafkaConfig.setZooKeeperClientProperty(clientConfig, unprefixedKey, defaultedValue.toString))
+  private[authorizer] def zkClientConfigFromKafkaConfigAndMap(kafkaConfig: KafkaConfig, configMap: mutable.Map[String, _<:Any]): Option[ZKClientConfig] = {
+    val zkSslClientEnable = configMap.get(AclAuthorizer.configPrefix + KafkaConfig.ZkSslClientEnableProp).
+      map(_.toString).getOrElse(kafkaConfig.zkSslClientEnable.toString).toBoolean
+    val zkClientConfig = if (!zkSslClientEnable) None else {
+      // start with the base config from the Kafka configuration
+      val zkClientConfig = KafkaServer.zkClientConfigFromKafkaConfig(kafkaConfig)
+      // add in any prefixed overlays
+      KafkaConfig.ZkSslConfigToSystemPropertyMap.foreach{ case (kafkaProp, sysProp) => {
+        val prefixedValue = configMap.get(AclAuthorizer.configPrefix + kafkaProp)
+        if (prefixedValue.isDefined)
+          zkClientConfig.get.setProperty(sysProp,
+            if (kafkaProp == KafkaConfig.ZkSslEndpointIdentificationAlgorithmProp)
+              (prefixedValue.get.toString.toUpperCase == "HTTPS").toString
+            else
+              prefixedValue.get.toString)
+      }}
+      zkClientConfig
     }
-    KafkaConfig.ZkSslConfigToSystemPropertyMap.keys.foreach(prop =>
-      prop match {
-        case KafkaConfig.ZkSslEndpointIdentificationAlgorithmProp =>
-          setConfigValue(prop, Some(Defaults.ZkSslEndpointIdentificationAlgorithm))
-        case KafkaConfig.ZkSslCrlEnableProp => setConfigValue(prop, Some(Defaults.ZkSslCrlEnable))
-        case KafkaConfig.ZkSslOcspEnableProp => setConfigValue(prop, Some(Defaults.ZkSslOcspEnable))
-        case KafkaConfig.ZkSslProtocolProp => setConfigValue(prop, Some(Defaults.ZkSslProtocol))
-        case propWithNoDefault => setConfigValue(propWithNoDefault)
-    })
-    clientConfig
+    zkClientConfig
   }
 }
 
@@ -143,17 +145,7 @@ class AclAuthorizer extends Authorizer with Logging {
     val zkSessionTimeOutMs = configs.get(AclAuthorizer.ZkSessionTimeOutProp).map(_.toString.toInt).getOrElse(kafkaConfig.zkSessionTimeoutMs)
     val zkMaxInFlightRequests = configs.get(AclAuthorizer.ZkMaxInFlightRequests).map(_.toString.toInt).getOrElse(kafkaConfig.zkMaxInFlightRequests)
 
-    val zkSslClientEnable = configs.get(AclAuthorizer.configPrefix + KafkaConfig.ZkSslClientEnableProp).
-      map(_.toString).getOrElse(kafkaConfig.zkSslClientEnable.toString).toBoolean
-    val usePrefix = zkSslClientEnable && configs.get(AclAuthorizer.configPrefix + KafkaConfig.ZkSslClientEnableProp).
-      isDefined
-    val zkClientConfig =
-      if (!zkSslClientEnable)
-        None
-      else if (!usePrefix)
-        KafkaServer.zkClientConfigFromKafkaConfig(kafkaConfig)
-      else
-        Some(AclAuthorizer.zkClientConfigFromMap(configs))
+    val zkClientConfig = AclAuthorizer.zkClientConfigFromKafkaConfigAndMap(kafkaConfig, configs)
     val time = Time.SYSTEM
     zkClient = KafkaZkClient(zkUrl, kafkaConfig.zkEnableSecureAcls, zkSessionTimeOutMs, zkConnectionTimeoutMs,
       zkMaxInFlightRequests, time, "kafka.security", "AclAuthorizer", name=Some("ACL authorizer"),
