@@ -289,16 +289,12 @@ public class TaskManager {
         return null;
     }
 
-    Map<TaskId, StreamTask> streamTasks() {
+    Map<TaskId, StandbyTask> standbyTasks() {
+        return tasks.values().stream().filter(t -> t instanceof StandbyTask).map(t -> (StandbyTask) t).collect(Collectors.toMap(Task::id, t -> t));
+    }
+
+    Map<TaskId, StreamTask> activeTasks() {
         return tasks.values().stream().filter(t -> t instanceof StreamTask).map(t -> (StreamTask) t).collect(Collectors.toMap(Task::id, t -> t));
-    }
-
-    Map<TaskId, Task> activeTasks() {
-        return tasks.values().stream().filter(Task::isActive).collect(Collectors.toMap(Task::id, t -> t));
-    }
-
-    Map<TaskId, Task> standbyTasks() {
-        return tasks.values().stream().filter(t -> !t.isActive()).collect(Collectors.toMap(Task::id, t -> t));
     }
 
     void setConsumer(final Consumer<byte[], byte[]> consumer) {

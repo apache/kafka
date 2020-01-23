@@ -525,19 +525,19 @@ class StreamsUpgradeTest(Test):
                     monitors[second_other_processor] = second_other_monitor
 
                     if len(self.old_processors) > 0:
-                        log_monitor.wait_until("Sent a version 6 subscription and got version 5 assignment back (successful version probing). Downgrade subscription metadata to commonly supported version 5 and trigger new rebalance.",
+                        log_monitor.wait_until("Sent a version 7 subscription and got version 6 assignment back (successful version probing). Downgrade subscription metadata to commonly supported version 6 and trigger new rebalance.",
                                                timeout_sec=60,
                                                err_msg="Could not detect 'successful version probing' at upgrading node " + str(node.account))
                     else:
-                        log_monitor.wait_until("Sent a version 6 subscription and got version 5 assignment back (successful version probing). Downgrade subscription metadata to commonly supported version 6 and trigger new rebalance.",
+                        log_monitor.wait_until("Sent a version 7 subscription and got version 6 assignment back (successful version probing). Downgrade subscription metadata to commonly supported version 7 and trigger new rebalance.",
                                                timeout_sec=60,
                                                err_msg="Could not detect 'successful version probing with upgraded leader' at upgrading node " + str(node.account))
-                        first_other_monitor.wait_until("Sent a version 5 subscription and group.s latest commonly supported version is 6 (successful version probing and end of rolling upgrade). Upgrading subscription metadata version to 6 for next rebalance.",
+                        first_other_monitor.wait_until("Sent a version 6 subscription and group.s latest commonly supported version is 7 (successful version probing and end of rolling upgrade). Upgrading subscription metadata version to 7 for next rebalance.",
                                                        timeout_sec=60,
-                                                       err_msg="Never saw output 'Upgrade metadata to version 6' on" + str(first_other_node.account))
-                        second_other_monitor.wait_until("Sent a version 5 subscription and group.s latest commonly supported version is 6 (successful version probing and end of rolling upgrade). Upgrading subscription metadata version to 6 for next rebalance.",
+                                                       err_msg="Never saw output 'Upgrade metadata to version 7' on" + str(first_other_node.account))
+                        second_other_monitor.wait_until("Sent a version 6 subscription and group.s latest commonly supported version is 7 (successful version probing and end of rolling upgrade). Upgrading subscription metadata version to 7 for next rebalance.",
                                                         timeout_sec=60,
-                                                        err_msg="Never saw output 'Upgrade metadata to version 6' on" + str(second_other_node.account))
+                                                        err_msg="Never saw output 'Upgrade metadata to version 7' on" + str(second_other_node.account))
 
                     log_monitor.wait_until("Version probing detected. Triggering new rebalance.",
                                            timeout_sec=60,
@@ -584,9 +584,9 @@ class StreamsUpgradeTest(Test):
 
     def verify_metadata_no_upgraded_yet(self):
         for p in self.processors:
-            found = list(p.node.account.ssh_capture("grep \"Sent a version 5 subscription and group.s latest commonly supported version is 6 (successful version probing and end of rolling upgrade). Upgrading subscription metadata version to 6 for next rebalance.\" " + p.LOG_FILE, allow_fail=True))
+            found = list(p.node.account.ssh_capture("grep \"Sent a version 6 subscription and group.s latest commonly supported version is 7 (successful version probing and end of rolling upgrade). Upgrading subscription metadata version to 7 for next rebalance.\" " + p.LOG_FILE, allow_fail=True))
             if len(found) > 0:
-                raise Exception("Kafka Streams failed with 'group member upgraded to metadata 6 too early'")
+                raise Exception("Kafka Streams failed with 'group member upgraded to metadata 7 too early'")
 
     def confirm_topics_on_all_brokers(self, expected_topic_set):
         for node in self.kafka.nodes:

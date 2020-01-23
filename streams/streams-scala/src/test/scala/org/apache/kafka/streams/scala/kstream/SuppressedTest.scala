@@ -17,6 +17,7 @@
  * limitations under the License.
  */
 package org.apache.kafka.streams.scala.kstream
+
 import java.time.Duration
 
 import org.apache.kafka.streams.kstream.internals.suppress.{

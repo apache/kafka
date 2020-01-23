@@ -28,6 +28,9 @@ import java.util.Map;
 import java.util.Set;
 
 public interface Task {
+
+    long LATEST_OFFSET = -2L;
+
     enum State {
         CREATED, RESTORING, RUNNING, SUSPENDED, CLOSED;
 
@@ -102,6 +105,12 @@ public interface Task {
      * @return any changelog partitions associated with this task
      */
     Collection<TopicPartition> changelogPartitions();
+
+    /**
+     * @return the offsets of all the changelog partitions associated with this task,
+     *         indicating the current positions of the logged state stores of the task.
+     */
+    Map<TopicPartition, Long> changelogOffsets();
 
     boolean hasStateStores();
 

@@ -78,6 +78,7 @@ import org.apache.kafka.common.errors.OffsetNotAvailableException;
 import org.apache.kafka.common.errors.OffsetOutOfRangeException;
 import org.apache.kafka.common.errors.OperationNotAttemptedException;
 import org.apache.kafka.common.errors.OutOfOrderSequenceException;
+import org.apache.kafka.common.errors.UnstableOffsetCommitException;
 import org.apache.kafka.common.errors.PolicyViolationException;
 import org.apache.kafka.common.errors.PreferredLeaderNotAvailableException;
 import org.apache.kafka.common.errors.ProducerFencedException;
@@ -317,7 +318,8 @@ public enum Errors {
             NoReassignmentInProgressException::new),
     GROUP_SUBSCRIBED_TO_TOPIC(86, "Deleting offsets of a topic is forbidden while the consumer group is actively subscribed to it.",
         GroupSubscribedToTopicException::new),
-    INVALID_RECORD(87, "This record has failed the validation on broker and hence be rejected.", InvalidRecordException::new);
+    INVALID_RECORD(87, "This record has failed the validation on broker and hence be rejected.", InvalidRecordException::new),
+    UNSTABLE_OFFSET_COMMIT(88, "There are unstable offsets that need to be cleared", UnstableOffsetCommitException::new);
 
     private static final Logger log = LoggerFactory.getLogger(Errors.class);
 

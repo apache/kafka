@@ -789,11 +789,11 @@ public class KafkaConfigBackingStoreTest {
         expectStart(existingRecords, deserialized);
 
         // Successful attempt to write new task config
-        expectReadToEnd(new LinkedHashMap<String, byte[]>());
+        expectReadToEnd(new LinkedHashMap<>());
         expectConvertWriteRead(
                 TASK_CONFIG_KEYS.get(0), KafkaConfigBackingStore.TASK_CONFIGURATION_V0, CONFIGS_SERIALIZED.get(0),
                 "properties", SAMPLE_CONFIGS.get(0));
-        expectReadToEnd(new LinkedHashMap<String, byte[]>());
+        expectReadToEnd(new LinkedHashMap<>());
         expectConvertWriteRead(
                 COMMIT_TASKS_CONFIG_KEYS.get(0), KafkaConfigBackingStore.CONNECTOR_TASKS_COMMIT_V0, CONFIGS_SERIALIZED.get(2),
                 "tasks", 1); // Updated to just 1 task
@@ -855,7 +855,7 @@ public class KafkaConfigBackingStoreTest {
         storeLog.start();
         PowerMock.expectLastCall().andAnswer(new IAnswer<Object>() {
             @Override
-            public Object answer() throws Throwable {
+            public Object answer() {
                 for (ConsumerRecord<String, byte[]> rec : preexistingRecords)
                     capturedConsumedCallback.getValue().onCompletion(null, rec);
                 return null;
@@ -917,7 +917,7 @@ public class KafkaConfigBackingStoreTest {
         EasyMock.expect(storeLog.readToEnd())
                 .andAnswer(new IAnswer<Future<Void>>() {
                     @Override
-                    public Future<Void> answer() throws Throwable {
+                    public Future<Void> answer() {
                         TestFuture<Void> future = new TestFuture<Void>();
                         for (Map.Entry<String, byte[]> entry : serializedConfigs.entrySet())
                             capturedConsumedCallback.getValue().onCompletion(null, new ConsumerRecord<>(TOPIC, 0, logOffset++, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, entry.getKey(), entry.getValue()));

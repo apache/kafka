@@ -228,7 +228,7 @@ public class StandbyTaskTest {
                                stateManager,
                                stateDirectory);
 
-        assertEquals(Collections.singletonMap(partition, 50L), task.restoredOffsets());
+        assertEquals(Collections.singletonMap(partition, 50L), task.changelogOffsets());
 
         EasyMock.verify(stateManager);
     }

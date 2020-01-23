@@ -182,8 +182,4 @@ public class StandbyTask extends AbstractTask {
 
         log.debug("Closed");
     }
-
-    Map<TopicPartition, Long> restoredOffsets() {
-        return Collections.unmodifiableMap(stateMgr.changelogOffsets());
-    }
 }

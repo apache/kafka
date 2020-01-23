@@ -49,6 +49,7 @@ import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.Materialized;
+import org.apache.kafka.streams.KeyQueryMetadata;
 import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
@@ -64,7 +65,7 @@ import org.junit.experimental.categories.Category;
 @Category(IntegrationTest.class)
 public class OptimizedKTableIntegrationTest {
     private static final int NUM_BROKERS = 1;
-
+    private static int port = 0;
     private static final String INPUT_TOPIC_NAME = "input-topic";
     private static final String TABLE_NAME = "source-table";
 
@@ -157,7 +158,9 @@ public class OptimizedKTableIntegrationTest {
             .store(TABLE_NAME, QueryableStoreTypes.keyValueStore());
 
         final boolean kafkaStreams1WasFirstActive;
-        if (store1.get(key) != null) {
+        final KeyQueryMetadata keyQueryMetadata = kafkaStreams1.queryMetadataForKey(TABLE_NAME, key, (topic, somekey, value, numPartitions) -> 0);
+
+        if ((keyQueryMetadata.getActiveHost().port() % 2) == 1) {
             kafkaStreams1WasFirstActive = true;
         } else {
             // Assert that data from the job was sent to the store
@@ -196,7 +199,7 @@ public class OptimizedKTableIntegrationTest {
         assertThat(restoreStartOffset.get(), is(anyOf(greaterThan(0L), equalTo(-1L))));
 
         // Assert that either restore was unnecessary or we restored to the last offset before we closed the kafkaStreams
-        assertThat(restoreEndOffset.get(), is(anyOf(equalTo(batch1NumMessages - 1), equalTo(-1L))));
+        assertThat(restoreEndOffset.get(), is(anyOf(equalTo(batch1NumMessages - 1L), equalTo(-1L))));
 
         // Assert that the current value in store reflects all messages being processed
         assertThat(newActiveStore.get(key), is(equalTo(totalNumMessages - 1)));
@@ -254,6 +257,7 @@ public class OptimizedKTableIntegrationTest {
         final Properties config = new Properties();
         config.put(StreamsConfig.TOPOLOGY_OPTIMIZATION, StreamsConfig.OPTIMIZE);
         config.put(StreamsConfig.APPLICATION_ID_CONFIG, applicationId);
+        config.put(StreamsConfig.APPLICATION_SERVER_CONFIG, "localhost:" + String.valueOf(++port));
         config.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers());
         config.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory(applicationId).getPath());
         config.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.Integer().getClass());

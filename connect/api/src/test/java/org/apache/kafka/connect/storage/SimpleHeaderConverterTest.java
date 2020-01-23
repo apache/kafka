@@ -164,11 +164,15 @@ public class SimpleHeaderConverterTest {
     }
 
     @Test
-    public void shouldConvertMapWithStringKeysAndMixedValuesToMapWithoutSchema() {
+    public void shouldConvertMapWithStringKeysAndMixedValuesToMap() {
         Map<String, Object> map = new LinkedHashMap<>();
         map.put("foo", "bar");
         map.put("baz", (short) 3456);
-        assertRoundTrip(null, map);
+        SchemaAndValue result = roundTrip(null, map);
+        assertEquals(Schema.Type.MAP, result.schema().type());
+        assertEquals(Schema.Type.STRING, result.schema().keySchema().type());
+        assertNull(result.schema().valueSchema());
+        assertEquals(map, result.value());
     }
 
     @Test
@@ -176,17 +180,29 @@ public class SimpleHeaderConverterTest {
         List<Object> list = new ArrayList<>();
         list.add("foo");
         list.add((short) 13344);
-        assertRoundTrip(null, list);
+        SchemaAndValue result = roundTrip(null, list);
+        assertEquals(Schema.Type.ARRAY, result.schema().type());
+        assertNull(result.schema().valueSchema());
+        assertEquals(list, result.value());
     }
 
     @Test
-    public void shouldConvertEmptyMapToMapWithoutSchema() {
-        assertRoundTrip(null, new LinkedHashMap<>());
+    public void shouldConvertEmptyMapToMap() {
+        Map<Object, Object> map = new LinkedHashMap<>();
+        SchemaAndValue result = roundTrip(null, map);
+        assertEquals(Schema.Type.MAP, result.schema().type());
+        assertNull(result.schema().keySchema());
+        assertNull(result.schema().valueSchema());
+        assertEquals(map, result.value());
     }
 
     @Test
-    public void shouldConvertEmptyListToListWithoutSchema() {
-        assertRoundTrip(null, new ArrayList<>());
+    public void shouldConvertEmptyListToList() {
+        List<Object> list = new ArrayList<>();
+        SchemaAndValue result = roundTrip(null, list);
+        assertEquals(Schema.Type.ARRAY, result.schema().type());
+        assertNull(result.schema().valueSchema());
+        assertEquals(list, result.value());
     }
 
     protected SchemaAndValue roundTrip(Schema schema, Object input) {

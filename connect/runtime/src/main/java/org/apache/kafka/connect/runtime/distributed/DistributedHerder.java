@@ -1245,8 +1245,10 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                             }, new Callback<Void>() {
                                 @Override
                                 public void onCompletion(Throwable error, Void result) {
-                                    log.error("Unexpected error during connector task reconfiguration: ", error);
-                                    log.error("Task reconfiguration for {} failed unexpectedly, this connector will not be properly reconfigured unless manually triggered.", connName);
+                                    if (error != null) {
+                                        log.error("Unexpected error during connector task reconfiguration: ", error);
+                                        log.error("Task reconfiguration for {} failed unexpectedly, this connector will not be properly reconfigured unless manually triggered.", connName);
+                                    }
                                 }
                             }
                     );
@@ -1620,7 +1622,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                 statusBackingStore.flush();
                 log.info("Finished flushing status backing store in preparation for rebalance");
             } else {
-                log.info("Wasn't unable to resume work after last rebalance, can skip stopping connectors and tasks");
+                log.info("Wasn't able to resume work after last rebalance, can skip stopping connectors and tasks");
             }
         }
     }

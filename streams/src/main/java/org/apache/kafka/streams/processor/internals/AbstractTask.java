@@ -30,7 +30,9 @@ import org.slf4j.Logger;
 
 import java.io.IOException;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Set;
 
 public abstract class AbstractTask implements Task {
@@ -234,5 +236,9 @@ public abstract class AbstractTask implements Task {
 
     public Collection<TopicPartition> changelogPartitions() {
         return stateMgr.changelogPartitions();
+    }
+
+    public Map<TopicPartition, Long> changelogOffsets() {
+        return Collections.unmodifiableMap(stateMgr.changelogOffsets());
     }
 }

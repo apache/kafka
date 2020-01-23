@@ -59,6 +59,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -145,7 +146,7 @@ public class StreamThread extends Thread {
             this.validTransitions.addAll(Arrays.asList(validTransitions));
         }
 
-        public boolean isRunning() {
+        public boolean isAlive() {
             return equals(RUNNING) || equals(STARTING) || equals(PARTITIONS_REVOKED) || equals(PARTITIONS_ASSIGNED);
         }
 
@@ -233,14 +234,9 @@ public class StreamThread extends Thread {
         return oldState;
     }
 
-    public boolean isRunningAndNotRebalancing() {
-        // we do not need to grab stateLock since it is a single read
-        return state == State.RUNNING;
-    }
-
     public boolean isRunning() {
         synchronized (stateLock) {
-            return state.isRunning();
+            return state.isAlive();
         }
     }
 
@@ -1132,16 +1128,16 @@ public class StreamThread extends Thread {
         return this;
     }
 
-    private void updateThreadMetadata(final Map<TaskId, Task> activeTasks,
-                                      final Map<TaskId, Task> standbyTasks) {
+    private void updateThreadMetadata(final Map<TaskId, StreamTask> activeTasks,
+                                      final Map<TaskId, StandbyTask> standbyTasks) {
         final Set<String> producerClientIds = new HashSet<>();
         final Set<TaskMetadata> activeTasksMetadata = new HashSet<>();
-        for (final Map.Entry<TaskId, Task> task : activeTasks.entrySet()) {
+        for (final Map.Entry<TaskId, StreamTask> task : activeTasks.entrySet()) {
             activeTasksMetadata.add(new TaskMetadata(task.getKey().toString(), task.getValue().partitions()));
             producerClientIds.add(getTaskProducerClientId(getName(), task.getKey()));
         }
         final Set<TaskMetadata> standbyTasksMetadata = new HashSet<>();
-        for (final Map.Entry<TaskId, Task> task : standbyTasks.entrySet()) {
+        for (final Map.Entry<TaskId, StandbyTask> task : standbyTasks.entrySet()) {
             standbyTasksMetadata.add(new TaskMetadata(task.getKey().toString(), task.getValue().partitions()));
         }
 
@@ -1157,8 +1153,23 @@ public class StreamThread extends Thread {
             standbyTasksMetadata);
     }
 
-    public Map<TaskId, Task> tasks() {
+    public Map<TaskId, StreamTask> allStreamsTasks() {
         return taskManager.activeTasks();
+    }
+
+    public Map<TaskId, StandbyTask> allStandbyTasks() {
+        return taskManager.standbyTasks();
+    }
+
+    public Set<TaskId> restoringTaskIds() {
+        return taskManager.restoringActiveTasks().keySet();
+    }
+
+    public Map<TaskId, Task> allTasks() {
+        final Map<TaskId, Task> result = new TreeMap<>();
+        result.putAll(taskManager.standbyTasks());
+        result.putAll(taskManager.activeTasks());
+        return result;
     }
 
     /**
@@ -1193,7 +1204,7 @@ public class StreamThread extends Thread {
             // When EOS is turned on, each task will have its own producer client
             // and the producer object passed in here will be null. We would then iterate through
             // all the active tasks and add their metrics to the output metrics map.
-            for (final StreamTask task: taskManager.streamTasks().values()) {
+            for (final StreamTask task: taskManager.activeTasks().values()) {
                 final Map<MetricName, ? extends Metric> taskProducerMetrics = ((RecordCollectorImpl) task.recordCollector()).producer().metrics();
                 result.putAll(taskProducerMetrics);
             }

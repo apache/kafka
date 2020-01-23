@@ -766,9 +766,15 @@ public class TaskManagerTest {
         expect(active.hasRestoringTasks()).andReturn(true).once();
         final StandbyTask task = EasyMock.createNiceMock(StandbyTask.class);
         expect(active.allTasksRunning()).andReturn(true);
+<<<<<<< HEAD
         expect(standby.running()).andReturn(singletonList(task));
         expect(task.checkpointedOffsets()).andReturn(Collections.singletonMap(t1p0, offset));
         restoreConsumer.assign(taskId00Partitions);
+=======
+        expect(standby.running()).andReturn(Collections.singletonList(task));
+        expect(task.restoredOffsets()).andReturn(Collections.singletonMap(t1p0, offset));
+        restoreConsumer.assign(taskId0Partitions);
+>>>>>>> 8e72390d66fc25cc06a0bb11c172a876bf6106f6
 
         expectLastCall();
         EasyMock.replay(task);
@@ -898,6 +904,11 @@ public class TaskManagerTest {
         @Override
         public Collection<TopicPartition> changelogPartitions() {
             return emptyList();
+        }
+
+        @Override
+        public Map<TopicPartition, Long> changelogOffsets() {
+            return emptyMap();
         }
 
         @Override

@@ -30,6 +30,7 @@ import kafka.cluster.Partition
 import kafka.controller.KafkaController
 import kafka.coordinator.group.{GroupCoordinator, GroupSummary, MemberSummary}
 import kafka.coordinator.transaction.TransactionCoordinator
+import kafka.log.AppendOrigin
 import kafka.network.RequestChannel
 import kafka.network.RequestChannel.SendResponse
 import kafka.server.QuotaFactory.QuotaManagers
@@ -37,6 +38,7 @@ import kafka.utils.{MockTime, TestUtils}
 import kafka.zk.KafkaZkClient
 import org.apache.kafka.common.{IsolationLevel, TopicPartition}
 import org.apache.kafka.common.errors.UnsupportedVersionException
+import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.memory.MemoryPool
 import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocol
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity
@@ -61,7 +63,7 @@ import org.junit.Assert.{assertArrayEquals, assertEquals, assertNull, assertTrue
 import org.junit.{After, Test}
 
 import scala.collection.JavaConverters._
-import scala.collection.{Map, Seq}
+import scala.collection.{Map, Seq, mutable}
 
 class KafkaApisTest {
 
@@ -168,14 +170,11 @@ class KafkaApisTest {
       val invalidTopicPartition = new TopicPartition(topic, invalidPartitionId)
       val partitionOffsetCommitData = new TxnOffsetCommitRequest.CommittedOffset(15L, "", Optional.empty())
       val (offsetCommitRequest, request) = buildRequest(new TxnOffsetCommitRequest.Builder(
-        new TxnOffsetCommitRequestData()
-          .setTransactionalId("txnlId")
-          .setGroupId("groupId")
-          .setProducerId(15L)
-          .setProducerEpoch(0.toShort)
-          .setTopics(TxnOffsetCommitRequest.getTopics(
-            Map(invalidTopicPartition -> partitionOffsetCommitData).asJava))
-      ))
+        "txnId",
+        "groupId",
+        15L,
+        0.toShort,
+        Map(invalidTopicPartition -> partitionOffsetCommitData).asJava))
 
       val capturedResponse = expectNoThrottling()
       EasyMock.replay(replicaManager, clientRequestQuotaManager, requestChannel)
@@ -297,7 +296,7 @@ class KafkaApisTest {
     EasyMock.expect(replicaManager.appendRecords(EasyMock.anyLong(),
       EasyMock.anyShort(),
       EasyMock.eq(true),
-      EasyMock.eq(false),
+      EasyMock.eq(AppendOrigin.Coordinator),
       EasyMock.anyObject(),
       EasyMock.capture(responseCallback),
       EasyMock.anyObject(),
@@ -313,6 +312,40 @@ class KafkaApisTest {
       .asInstanceOf[WriteTxnMarkersResponse]
     assertEquals(expectedErrors, markersResponse.errors(1))
     EasyMock.verify(replicaManager)
+  }
+
+  @Test
+  def shouldResignCoordinatorsIfStopReplicaReceivedWithDeleteFlag(): Unit = {
+    val controllerId = 0
+    val controllerEpoch = 5
+    val brokerEpoch = 230498320L
+
+    val groupMetadataPartition = new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0)
+    val txnStatePartition = new TopicPartition(Topic.TRANSACTION_STATE_TOPIC_NAME, 0)
+
+    val (_, request) = buildRequest(new StopReplicaRequest.Builder(
+      ApiKeys.STOP_REPLICA.latestVersion,
+      controllerId,
+      controllerEpoch,
+      brokerEpoch,
+      true,
+      Set(groupMetadataPartition, txnStatePartition).asJava))
+
+    EasyMock.expect(replicaManager.stopReplicas(anyObject())).andReturn(
+      (mutable.Map(groupMetadataPartition -> Errors.NONE, txnStatePartition -> Errors.NONE), Errors.NONE))
+    EasyMock.expect(controller.brokerEpoch).andStubReturn(brokerEpoch)
+
+    txnCoordinator.onResignation(txnStatePartition.partition, None)
+    EasyMock.expectLastCall()
+
+    groupCoordinator.onResignation(groupMetadataPartition.partition)
+    EasyMock.expectLastCall()
+
+    EasyMock.replay(controller, replicaManager, txnCoordinator, groupCoordinator)
+
+    createKafkaApis().handleStopReplicaRequest(request)
+
+    EasyMock.verify(txnCoordinator, groupCoordinator)
   }
 
   @Test
@@ -333,7 +366,7 @@ class KafkaApisTest {
     EasyMock.expect(replicaManager.appendRecords(EasyMock.anyLong(),
       EasyMock.anyShort(),
       EasyMock.eq(true),
-      EasyMock.eq(false),
+      EasyMock.eq(AppendOrigin.Coordinator),
       EasyMock.anyObject(),
       EasyMock.capture(responseCallback),
       EasyMock.anyObject(),
@@ -361,7 +394,7 @@ class KafkaApisTest {
     EasyMock.expect(replicaManager.appendRecords(EasyMock.anyLong(),
       EasyMock.anyShort(),
       EasyMock.eq(true),
-      EasyMock.eq(false),
+      EasyMock.eq(AppendOrigin.Coordinator),
       EasyMock.anyObject(),
       EasyMock.anyObject(),
       EasyMock.anyObject(),

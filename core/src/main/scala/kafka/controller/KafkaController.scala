@@ -1450,7 +1450,10 @@ class KafkaController(val config: KafkaConfig,
   }
 
   private def processPartitionModifications(topic: String): Unit = {
-    def restorePartitionReplicaAssignment(topic: String, newPartitionReplicaAssignment: Map[TopicPartition, Seq[Int]]): Unit = {
+    def restorePartitionReplicaAssignment(
+      topic: String,
+      newPartitionReplicaAssignment: Map[TopicPartition, ReplicaAssignment]
+    ): Unit = {
       info("Restoring the partition replica assignment for topic %s".format(topic))
 
       val existingPartitions = zkClient.getChildren(TopicPartitionsZNode.path(topic))
@@ -1466,11 +1469,12 @@ class KafkaController(val config: KafkaConfig,
     }
 
     if (!isActive) return
-    val partitionReplicaAssignment = zkClient.getReplicaAssignmentForTopics(immutable.Set(topic))
+    val partitionReplicaAssignment = zkClient.getFullReplicaAssignmentForTopics(immutable.Set(topic))
     val partitionsToBeAdded = partitionReplicaAssignment.filter { case (topicPartition, _) =>
       controllerContext.partitionReplicaAssignment(topicPartition).isEmpty
     }
-    if (topicDeletionManager.isTopicQueuedUpForDeletion(topic))
+
+    if (topicDeletionManager.isTopicQueuedUpForDeletion(topic)) {
       if (partitionsToBeAdded.nonEmpty) {
         warn("Skipping adding partitions %s for topic %s since it is currently being deleted"
           .format(partitionsToBeAdded.map(_._1.partition).mkString(","), topic))
@@ -1480,14 +1484,12 @@ class KafkaController(val config: KafkaConfig,
         // This can happen if existing partition replica assignment are restored to prevent increasing partition count during topic deletion
         info("Ignoring partition change during topic deletion as no new partitions are added")
       }
-    else {
-      if (partitionsToBeAdded.nonEmpty) {
-        info(s"New partitions to be added $partitionsToBeAdded")
-        partitionsToBeAdded.foreach { case (topicPartition, assignedReplicas) =>
-          controllerContext.updatePartitionReplicaAssignment(topicPartition, assignedReplicas)
-        }
-        onNewPartitionCreation(partitionsToBeAdded.keySet)
+    } else if (partitionsToBeAdded.nonEmpty) {
+      info(s"New partitions to be added $partitionsToBeAdded")
+      partitionsToBeAdded.foreach { case (topicPartition, assignedReplicas) =>
+        controllerContext.updatePartitionFullReplicaAssignment(topicPartition, assignedReplicas)
       }
+      onNewPartitionCreation(partitionsToBeAdded.keySet)
     }
   }
 
@@ -1567,13 +1569,15 @@ class KafkaController(val config: KafkaConfig,
       val partitionsToReassign = mutable.Map.empty[TopicPartition, ReplicaAssignment]
 
       reassignments.foreach { case (tp, targetReplicas) =>
-        if (replicasAreValid(tp, targetReplicas)) {
-          maybeBuildReassignment(tp, targetReplicas) match {
-            case Some(context) => partitionsToReassign.put(tp, context)
-            case None => reassignmentResults.put(tp, new ApiError(Errors.NO_REASSIGNMENT_IN_PROGRESS))
-          }
-        } else {
-          reassignmentResults.put(tp, new ApiError(Errors.INVALID_REPLICA_ASSIGNMENT))
+        val maybeApiError = targetReplicas.flatMap(validateReplicas(tp, _))
+        maybeApiError match {
+          case None =>
+            maybeBuildReassignment(tp, targetReplicas) match {
+              case Some(context) => partitionsToReassign.put(tp, context)
+              case None => reassignmentResults.put(tp, new ApiError(Errors.NO_REASSIGNMENT_IN_PROGRESS))
+            }
+          case Some(err) =>
+            reassignmentResults.put(tp, err)
         }
       }
 
@@ -1586,22 +1590,27 @@ class KafkaController(val config: KafkaConfig,
     }
   }
 
-  private def replicasAreValid(topicPartition: TopicPartition, replicasOpt: Option[Seq[Int]]): Boolean = {
-    replicasOpt match {
-      case Some(replicas) =>
-        val replicaSet = replicas.toSet
-        if (replicas.isEmpty || replicas.size != replicaSet.size)
-          false
-        else if (replicas.exists(_ < 0))
-          false
-        else {
-          // Ensure that any new replicas are among the live brokers
-          val currentAssignment = controllerContext.partitionFullReplicaAssignment(topicPartition)
-          val newAssignment = currentAssignment.reassignTo(replicas)
-          newAssignment.addingReplicas.toSet.subsetOf(controllerContext.liveBrokerIds)
-        }
-
-      case None => true
+  private def validateReplicas(topicPartition: TopicPartition, replicas: Seq[Int]): Option[ApiError] = {
+    val replicaSet = replicas.toSet
+    if (replicas.isEmpty)
+      Some(new ApiError(Errors.INVALID_REPLICA_ASSIGNMENT,
+          s"Empty replica list specified in partition reassignment."))
+    else if (replicas.size != replicaSet.size) {
+      Some(new ApiError(Errors.INVALID_REPLICA_ASSIGNMENT,
+          s"Duplicate replica ids in partition reassignment replica list: $replicas"))
+    } else if (replicas.exists(_ < 0))
+      Some(new ApiError(Errors.INVALID_REPLICA_ASSIGNMENT,
+          s"Invalid broker id in replica list: $replicas"))
+    else {
+      // Ensure that any new replicas are among the live brokers
+      val currentAssignment = controllerContext.partitionFullReplicaAssignment(topicPartition)
+      val newAssignment = currentAssignment.reassignTo(replicas)
+      val areNewReplicasAlive = newAssignment.addingReplicas.toSet.subsetOf(controllerContext.liveBrokerIds)
+      if (!areNewReplicasAlive)
+        Some(new ApiError(Errors.INVALID_REPLICA_ASSIGNMENT,
+          s"Replica assignment has brokers that are not alive. Replica list: " +
+            s"${newAssignment.addingReplicas}, live broker list: ${controllerContext.liveBrokerIds}"))
+      else None
     }
   }
 

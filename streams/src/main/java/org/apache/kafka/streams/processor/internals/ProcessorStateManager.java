@@ -457,5 +457,4 @@ public class ProcessorStateManager implements StateManager {
 
         return found.isEmpty() ? null : found.get(0);
     }
-
 }

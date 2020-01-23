@@ -46,6 +46,7 @@ import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.nio.ByteBuffer;
 import java.util.Base64;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
@@ -199,10 +200,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
     public void transitionTo(final State newState) {
         State.validateTransition(state, newState);
         state = newState;
-    }
-
-    public boolean isEosEnabled() {
-        return eosEnabled;
     }
 
     @Override
@@ -804,12 +801,11 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         return commitRequested;
     }
 
-    // visible for testing
+    // ---- visible for testing only below --- //
     long partitionTime(final TopicPartition partition) {
         return partitionGroup.partitionTimestamp(partition);
     }
 
-    // visible for testing
     String encodeTimestamp(final long partitionTime) {
         final ByteBuffer buffer = ByteBuffer.allocate(9);
         buffer.put(LATEST_MAGIC_BYTE);
@@ -817,7 +813,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         return Base64.getEncoder().encodeToString(buffer.array());
     }
 
-    // visible for testing
     long decodeTimestamp(final String encryptedString) {
         if (encryptedString.length() == 0) {
             return RecordQueue.UNKNOWN;
@@ -834,7 +829,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         }
     }
 
-    // ---- visible for testing only below --- //
     RecordCollector recordCollector() {
         return recordCollector;
     }

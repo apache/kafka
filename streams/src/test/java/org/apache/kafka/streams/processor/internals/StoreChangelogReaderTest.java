@@ -221,7 +221,6 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
         changelogReader.restore();
 
         assertEquals(StoreChangelogReader.ChangelogState.RESTORING, changelogReader.changelogMetadata(tp).state());
-        assertEquals(type == ACTIVE ? 10L : null, changelogReader.changelogMetadata(tp).endOffset());
         assertEquals(0L, changelogReader.changelogMetadata(tp).totalRestored());
         assertTrue(changelogReader.completedChangelogs().isEmpty());
         assertNull(changelogReader.changelogMetadata(tp).limitOffset());
@@ -229,10 +228,15 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
         assertEquals(Collections.emptySet(), consumer.paused());
 
         if (type == ACTIVE) {
+            assertEquals(10L, (long) changelogReader.changelogMetadata(tp).endOffset());
+
             assertEquals(tp, callback.restoreTopicPartition);
             assertEquals(storeName, callback.storeNameCalledStates.get(RESTORE_START));
             assertNull(callback.storeNameCalledStates.get(RESTORE_END));
             assertNull(callback.storeNameCalledStates.get(RESTORE_BATCH));
+        } else {
+            assertNull(changelogReader.changelogMetadata(tp).endOffset());
+
         }
 
         consumer.addRecord(new ConsumerRecord<>(topicName, 0, 6L, "key".getBytes(), "value".getBytes()));
@@ -245,20 +249,23 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
 
         changelogReader.restore();
 
-        assertEquals(type == ACTIVE ? StoreChangelogReader.ChangelogState.COMPLETED : StoreChangelogReader.ChangelogState.RESTORING,
-                     changelogReader.changelogMetadata(tp).state());
-        assertEquals(type == ACTIVE ? 3L : 4L, changelogReader.changelogMetadata(tp).totalRestored());
-        assertEquals(type == ACTIVE ? 1 : 0, changelogReader.changelogMetadata(tp).bufferedRecords().size());
-        assertEquals(0, changelogReader.changelogMetadata(tp).bufferedLimitIndex());
-        assertEquals(type == ACTIVE ? Collections.singleton(tp) : Collections.emptySet(), changelogReader.completedChangelogs());
-        assertEquals(type == ACTIVE ? Collections.singleton(tp) : Collections.emptySet(), consumer.paused());
         assertEquals(12L, consumer.position(tp));
 
         if (type == ACTIVE) {
-            assertEquals(tp, callback.restoreTopicPartition);
-            assertEquals(storeName, callback.storeNameCalledStates.get(RESTORE_START));
+            assertEquals(StoreChangelogReader.ChangelogState.COMPLETED, changelogReader.changelogMetadata(tp).state());
+            assertEquals(3L, changelogReader.changelogMetadata(tp).totalRestored());
+            assertEquals(1, changelogReader.changelogMetadata(tp).bufferedRecords().size());
+            assertEquals(Collections.singleton(tp), changelogReader.completedChangelogs());
+            assertEquals(Collections.singleton(tp), consumer.paused());
+
             assertEquals(storeName, callback.storeNameCalledStates.get(RESTORE_BATCH));
             assertEquals(storeName, callback.storeNameCalledStates.get(RESTORE_END));
+        } else {
+            assertEquals(StoreChangelogReader.ChangelogState.RESTORING, changelogReader.changelogMetadata(tp).state());
+            assertEquals(4L, changelogReader.changelogMetadata(tp).totalRestored());
+            assertEquals(0, changelogReader.changelogMetadata(tp).bufferedRecords().size());
+            assertEquals(Collections.emptySet(), changelogReader.completedChangelogs());
+            assertEquals(Collections.emptySet(), consumer.paused());
         }
     }
 
@@ -286,17 +293,20 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
         changelogReader.restore();
 
         assertEquals(StoreChangelogReader.ChangelogState.RESTORING, changelogReader.changelogMetadata(tp).state());
-        assertEquals(type == ACTIVE ? 11L : null, changelogReader.changelogMetadata(tp).endOffset());
         assertEquals(0L, changelogReader.changelogMetadata(tp).totalRestored());
         assertNull(changelogReader.changelogMetadata(tp).limitOffset());
         assertEquals(5L, consumer.position(tp));
         assertEquals(Collections.emptySet(), consumer.paused());
 
         if (type == ACTIVE) {
+            assertEquals(11L, (long) changelogReader.changelogMetadata(tp).endOffset());
+
             assertEquals(tp, callback.restoreTopicPartition);
             assertEquals(storeName, callback.storeNameCalledStates.get(RESTORE_START));
             assertNull(callback.storeNameCalledStates.get(RESTORE_END));
             assertNull(callback.storeNameCalledStates.get(RESTORE_BATCH));
+        } else {
+            assertNull(changelogReader.changelogMetadata(tp).endOffset());
         }
 
         consumer.addRecord(new ConsumerRecord<>(topicName, 0, 6L, "key".getBytes(), "value".getBytes()));
@@ -317,12 +327,22 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
 
         changelogReader.restore();
 
-        assertEquals(type == ACTIVE ? StoreChangelogReader.ChangelogState.COMPLETED : StoreChangelogReader.ChangelogState.RESTORING,
-                     changelogReader.changelogMetadata(tp).state());
-        assertEquals(3L, changelogReader.changelogMetadata(tp).totalRestored());
-        assertEquals(type == ACTIVE ? Collections.singleton(tp) : Collections.emptySet(), changelogReader.completedChangelogs());
-        assertEquals(type == ACTIVE ? Collections.singleton(tp) : Collections.emptySet(), consumer.paused());
         assertEquals(11L, consumer.position(tp));
+        assertEquals(3L, changelogReader.changelogMetadata(tp).totalRestored());
+
+        if (type == ACTIVE) {
+            assertEquals(StoreChangelogReader.ChangelogState.COMPLETED, changelogReader.changelogMetadata(tp).state());
+            assertEquals(3L, changelogReader.changelogMetadata(tp).totalRestored());
+            assertEquals(Collections.singleton(tp), changelogReader.completedChangelogs());
+            assertEquals(Collections.singleton(tp), consumer.paused());
+
+            assertEquals(storeName, callback.storeNameCalledStates.get(RESTORE_BATCH));
+            assertEquals(storeName, callback.storeNameCalledStates.get(RESTORE_END));
+        } else {
+            assertEquals(StoreChangelogReader.ChangelogState.RESTORING, changelogReader.changelogMetadata(tp).state());
+            assertEquals(Collections.emptySet(), changelogReader.completedChangelogs());
+            assertEquals(Collections.emptySet(), consumer.paused());
+        }
     }
 
     @Test

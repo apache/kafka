@@ -39,8 +39,9 @@ public final class TransactionalRequestResult {
         this.operation = operation;
     }
 
-    public void setError(RuntimeException error) {
+    public void fail(RuntimeException error) {
         this.error = error;
+        this.latch.countDown();
     }
 
     public void done() {

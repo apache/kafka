@@ -242,6 +242,7 @@ object TopicCommand extends Logging {
         newTopic.configs(configsMap)
         val createResult = adminClient.createTopics(Collections.singleton(newTopic))
         createResult.all().get()
+        println(s"Created topic ${topic.name}.")
       } else {
         throw new IllegalArgumentException(s"Topic ${topic.name} already exists")
       }
