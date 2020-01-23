@@ -20,6 +20,7 @@ import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.DeleteRecordsResult;
 import org.apache.kafka.clients.admin.RecordsToDelete;
 import org.apache.kafka.clients.consumer.Consumer;
+import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.LogContext;
@@ -53,6 +54,7 @@ public class TaskManager {
     private final AssignedStandbyTasks standby;
     private final ChangelogReader changelogReader;
     private final String logPrefix;
+    private final Producer<byte[], byte[]> threadProducer;
     private final Consumer<byte[], byte[]> restoreConsumer;
     private final StreamThread.AbstractTaskCreator<StreamTask> taskCreator;
     private final StreamThread.AbstractTaskCreator<StandbyTask> standbyTaskCreator;
@@ -80,6 +82,7 @@ public class TaskManager {
     TaskManager(final ChangelogReader changelogReader,
                 final UUID processId,
                 final String logPrefix,
+                final Producer<byte[], byte[]> threadProducer,
                 final Consumer<byte[], byte[]> restoreConsumer,
                 final StreamsMetadataState streamsMetadataState,
                 final StreamThread.AbstractTaskCreator<StreamTask> taskCreator,
@@ -91,12 +94,12 @@ public class TaskManager {
         this.processId = processId;
         this.logPrefix = logPrefix;
         this.streamsMetadataState = streamsMetadataState;
+        this.threadProducer = threadProducer;
         this.restoreConsumer = restoreConsumer;
         this.taskCreator = taskCreator;
         this.standbyTaskCreator = standbyTaskCreator;
         this.active = active;
         this.standby = standby;
-
         final LogContext logContext = new LogContext(logPrefix);
 
         this.log = logContext.logger(getClass());
@@ -287,6 +290,14 @@ public class TaskManager {
 
     void shutdown(final boolean clean) {
         final AtomicReference<RuntimeException> firstException = new AtomicReference<>(null);
+
+        if (threadProducer != null) {
+            active.commit();
+            threadProducer.commitTransaction();
+            for (final StreamTask tasks : active.runningTaskMap().values()) {
+                tasks.writeCheckpoint();
+            }
+        }
 
         try {
             active.shutdown(clean);

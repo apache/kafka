@@ -16,10 +16,6 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import java.util.Collection;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.Time;
@@ -27,6 +23,12 @@ import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.StreamThread.State;
 import org.apache.kafka.streams.processor.internals.assignment.AssignorError;
 import org.slf4j.Logger;
+
+import java.util.Collection;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 public class StreamsRebalanceListener implements ConsumerRebalanceListener {
 
@@ -114,6 +116,15 @@ public class StreamsRebalanceListener implements ConsumerRebalanceListener {
             try {
                 // suspend only the active tasks, reassigned standby tasks will be closed in onPartitionsAssigned
                 suspendedTasks = taskManager.suspendActiveTasksAndState(revokedPartitions);
+                if (streamThread.eosBetaEnabled && !streamThread.eosUpgradeModeEnabled) {
+                    streamThread.producer.commitTransaction();
+                    streamThread.transactionInFlight = false;
+                    for (final Map.Entry<TaskId, StreamTask> tasks : taskManager.activeTasks().entrySet()) {
+                        if (suspendedTasks.contains(tasks.getKey())) {
+                            tasks.getValue().writeCheckpoint();
+                        }
+                    }
+                }
             } catch (final Throwable t) {
                 log.error(
                     "Error caught during partition revocation, " +
@@ -142,6 +153,19 @@ public class StreamsRebalanceListener implements ConsumerRebalanceListener {
 
         Set<TaskId> lostTasks = new HashSet<>();
         final long start = time.milliseconds();
+        if (streamThread.eosBetaEnabled && !streamThread.eosUpgradeModeEnabled) {
+            try {
+                streamThread.producer.abortTransaction();
+                streamThread.transactionInFlight = false;
+            } catch (final Throwable t) {
+                log.error(
+                    "Error caught during partitions lost, " +
+                        "will abort the current process and re-throw at the end of rebalance: ",
+                    t
+                );
+                streamThread.setRebalanceException(t);
+            }
+        }
         try {
             // close all active tasks as lost but don't try to commit offsets as we no longer own them
             lostTasks = taskManager.closeLostTasks();

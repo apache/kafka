@@ -127,6 +127,7 @@ public class TaskManagerTest {
         taskManager = new TaskManager(changeLogReader,
                                       UUID.randomUUID(),
                                       "",
+                                      null,
                                       restoreConsumer,
                                       streamsMetadataState,
                                       activeTaskCreator,

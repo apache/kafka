@@ -203,7 +203,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
 
         // initialize transactions if eos is turned on, which will block if the previous transaction has not
         // completed yet; do not start the first transaction until the topology has been initialized later
-        if (eosEnabled && !eosBetaEnabled) {
+        if (eosAlphaEnabled || eosUpgradeModeEnabled) {
             initializeTransactions();
         }
     }
@@ -288,7 +288,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
     public void initializeTopology() {
         initTopology();
 
-        if (eosEnabled && !eosBetaEnabled) {
+        if (eosAlphaEnabled || eosUpgradeModeEnabled) {
             try {
                 this.producer.beginTransaction();
             } catch (final ProducerFencedException | UnknownProducerIdException e) {
@@ -315,7 +315,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
     public void resume() {
         log.debug("Resuming");
         if (eosEnabled) {
-            if (!eosBetaEnabled) {
+            if (eosAlphaEnabled || eosUpgradeModeEnabled) {
                 if (producer != null) {
                     throw new IllegalStateException("Task producer should be null.");
                 }
@@ -510,8 +510,13 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
 
         try {
             if (eosEnabled) {
-                producer.sendOffsetsToTransaction(consumedOffsetsAndMetadata, applicationId);
-                if (!eosBetaEnabled) {
+                if (eosAlphaEnabled) {
+                    producer.sendOffsetsToTransaction(consumedOffsetsAndMetadata, applicationId);
+                } else {
+                    producer.sendOffsetsToTransaction(consumedOffsetsAndMetadata, consumer.groupMetadata());
+                }
+
+                if (eosAlphaEnabled || eosUpgradeModeEnabled) {
                     producer.commitTransaction();
                     transactionInFlight = false;
                     if (startNewTransaction) {
@@ -628,7 +633,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
             try {
                 commit(false, partitionTimes);
             } finally {
-                if (eosEnabled && !eosBetaEnabled) {
+                if (eosAlphaEnabled || eosUpgradeModeEnabled) {
                     stateMgr.checkpoint(activeTaskCheckpointableOffsets());
 
                     try {
@@ -647,10 +652,14 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
             // In the case of unclean close we still need to make sure all the stores are flushed before closing any
             super.flushState();
 
-            if (eosEnabled && !eosBetaEnabled) {
+            if (eosAlphaEnabled || eosUpgradeModeEnabled) {
                 maybeAbortTransactionAndCloseRecordCollector(isZombie);
             }
         }
+    }
+
+    public void writeCheckpoint() {
+        stateMgr.checkpoint(activeTaskCheckpointableOffsets());
     }
 
     private void maybeAbortTransactionAndCloseRecordCollector(final boolean isZombie) {

@@ -363,7 +363,7 @@ public class StreamThread extends Thread {
         }
 
         private Producer<byte[], byte[]> createProducer(final TaskId id) {
-            // eos
+            // eos-alpha
             if (threadProducer == null) {
                 final Map<String, Object> producerConfigs = config.getProducerConfigs(getTaskProducerClientId(threadId, id));
                 log.info("Creating producer client for task {}", id);
@@ -445,7 +445,6 @@ public class StreamThread extends Thread {
     private final long commitTimeMs;
     private final int maxPollTimeMs;
     private final String originalReset;
-    private final boolean eosBetaEnabled;
     private final TaskManager taskManager;
     private final AtomicInteger assignmentErrorCode;
 
@@ -465,6 +464,10 @@ public class StreamThread extends Thread {
     private volatile ThreadMetadata threadMetadata;
     private StreamThread.StateListener stateListener;
     private Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> standbyRecords;
+
+    final boolean eosBetaEnabled;
+    final boolean eosUpgradeModeEnabled;
+    boolean transactionInFlight = false;
 
     // package-private for testing
     final ConsumerRebalanceListener rebalanceListener;
@@ -499,12 +502,15 @@ public class StreamThread extends Thread {
         final StoreChangelogReader changelogReader = new StoreChangelogReader(restoreConsumer, pollTime, userStateRestoreListener, logContext);
 
         Producer<byte[], byte[]> threadProducer = null;
-        final boolean eosEnabled = StreamsConfig.EXACTLY_ONCE.equals(config.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG));
-        if (!eosEnabled) {
+        final boolean eosBetaEnabled = eosBetaEnabled(config);
+        final boolean eosEnabled = eosEnabled(config);
+        final boolean eosUpgradeModeEnabled = eosUpgradeModeEnabled(config);
+
+        if (!eosEnabled || eosBetaEnabled && !eosUpgradeModeEnabled) {
             log.info("Creating shared producer client");
             final Map<String, Object> producerConfigs = config.getProducerConfigs(getThreadProducerClientId(threadId));
             threadProducer = clientSupplier.getProducer(producerConfigs);
-            if ("exactly_once_beta".equals(config.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG))) {
+            if (eosBetaEnabled && !eosUpgradeModeEnabled) {
                 threadProducer.initTransactions();
             }
         }
@@ -536,6 +542,7 @@ public class StreamThread extends Thread {
             changelogReader,
             processId,
             logPrefix,
+            eosBetaEnabled && !eosUpgradeModeEnabled ? threadProducer : null,
             restoreConsumer,
             streamsMetadataState,
             activeTaskCreator,
@@ -628,9 +635,38 @@ public class StreamThread extends Thread {
             new InternalConsumerConfig(config.getMainConsumerConfigs("dummyGroupId", "dummyClientId", dummyThreadIdx))
                 .getInt(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG);
         this.commitTimeMs = config.getLong(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG);
-        this.eosBetaEnabled = "exactly_once_beta".equals(config.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG));
+        this.eosBetaEnabled = eosBetaEnabled(config);
+        this.eosUpgradeModeEnabled = eosUpgradeModeEnabled(config);
 
         this.numIterations = 1;
+    }
+
+    static boolean eosAlphaEnabled(final StreamsConfig config) {
+        return StreamsConfig.EXACTLY_ONCE.equals(config.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG));
+    }
+
+    public static boolean eosBetaEnabled(final StreamsConfig config) {
+        return "exactly_once_beta".equals(config.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG));
+    }
+
+    public static boolean eosEnabled(final StreamsConfig config) {
+        return eosAlphaEnabled(config) || eosBetaEnabled(config);
+    }
+
+    public static boolean eosUpgradeModeEnabled(final StreamsConfig config) {
+        final boolean eosBetaEnabled = "exactly_once_beta".equals(config.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG));
+
+        final Set<String> eosAlphaVersions = new HashSet<>();
+        eosAlphaVersions.add(StreamsConfig.UPGRADE_FROM_24);
+        eosAlphaVersions.add(StreamsConfig.UPGRADE_FROM_23);
+        eosAlphaVersions.add(StreamsConfig.UPGRADE_FROM_22);
+        eosAlphaVersions.add(StreamsConfig.UPGRADE_FROM_21);
+        eosAlphaVersions.add(StreamsConfig.UPGRADE_FROM_20);
+        eosAlphaVersions.add(StreamsConfig.UPGRADE_FROM_11);
+        eosAlphaVersions.add(StreamsConfig.UPGRADE_FROM_10);
+        eosAlphaVersions.add(StreamsConfig.UPGRADE_FROM_0110);
+
+        return eosBetaEnabled && eosAlphaVersions.contains(config.getString(StreamsConfig.UPGRADE_FROM_CONFIG));
     }
 
     private static final class InternalConsumerConfig extends ConsumerConfig {
@@ -786,6 +822,13 @@ public class StreamThread extends Thread {
         // TODO: we will process some tasks even if the state is not RUNNING, i.e. some other
         // tasks are still being restored.
         if (taskManager.hasActiveRunningTasks()) {
+            // because we don't want to start a transaction if all tasks are in restoring phase,
+            // we need to track transaction state manually via `transactionInFlight`
+            if (eosBetaEnabled && !eosUpgradeModeEnabled && !transactionInFlight) {
+                producer.beginTransaction();
+                transactionInFlight = true;
+            }
+
             /*
              * Within an iteration, after N (N initialized as 1 upon start up) round of processing one-record-each on the applicable tasks, check the current time:
              *  1. If it is time to commit, do it;
@@ -809,7 +852,7 @@ public class StreamThread extends Thread {
                         final int committed = taskManager.maybeCommitActiveTasksPerUserRequested();
 
                         if (committed > 0) {
-                            if (eosBetaEnabled) {
+                            if (eosBetaEnabled && !eosUpgradeModeEnabled) {
                                 taskManager.commitAllActive();
                                 producer.commitTransaction();
                                 producer.beginTransaction();
@@ -974,7 +1017,7 @@ public class StreamThread extends Thread {
 
             committed = taskManager.commitAllActive();
             if (committed > 0) {
-                if (eosBetaEnabled) {
+                if (eosBetaEnabled && !eosUpgradeModeEnabled) {
                     producer.commitTransaction();
                     producer.beginTransaction();
                 }
@@ -1004,7 +1047,7 @@ public class StreamThread extends Thread {
         } else {
             committed = taskManager.maybeCommitActiveTasksPerUserRequested();
             if (committed > 0) {
-                if (eosBetaEnabled) {
+                if (eosBetaEnabled && !eosUpgradeModeEnabled) {
                     taskManager.commitAllActive();
                     producer.commitTransaction();
                     producer.beginTransaction();

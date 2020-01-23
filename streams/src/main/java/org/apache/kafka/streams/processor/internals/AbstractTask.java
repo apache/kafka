@@ -44,7 +44,9 @@ public abstract class AbstractTask implements Task {
     final Consumer<byte[], byte[]> consumer;
     final String logPrefix;
     final boolean eosEnabled;
+    final boolean eosAlphaEnabled;
     final boolean eosBetaEnabled;
+    final boolean eosUpgradeModeEnabled;
     final Logger log;
     final LogContext logContext;
     final StateDirectory stateDirectory;
@@ -71,8 +73,10 @@ public abstract class AbstractTask implements Task {
         this.partitions = new HashSet<>(partitions);
         this.topology = topology;
         this.consumer = consumer;
-        this.eosBetaEnabled = "exactly_once_beta".equals(config.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG));
-        this.eosEnabled = eosBetaEnabled || StreamsConfig.EXACTLY_ONCE.equals(config.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG));
+        this.eosAlphaEnabled = StreamThread.eosAlphaEnabled(config);
+        this.eosBetaEnabled = StreamThread.eosBetaEnabled(config);
+        this.eosEnabled = StreamThread.eosEnabled(config);
+        this.eosUpgradeModeEnabled = StreamThread.eosUpgradeModeEnabled(config);
         this.stateDirectory = stateDirectory;
 
         final String threadIdPrefix = String.format("stream-thread [%s] ", Thread.currentThread().getName());

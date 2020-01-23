@@ -956,6 +956,7 @@ public class StreamThreadTest {
             new MockChangelogReader(),
             PROCESS_ID,
             "log-prefix",
+            null,
             mockStreamThreadConsumer,
             streamsMetadataState,
             null,
