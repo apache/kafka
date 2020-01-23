@@ -211,7 +211,6 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     protected JoinGroupRequestData.JoinGroupRequestProtocolCollection metadata() {
         log.debug("Joining group with current subscription: {}", subscriptions.subscription());
         this.joinedSubscription = subscriptions.subscription();
-        subscriptions.resetGroupSubscription();
         JoinGroupRequestData.JoinGroupRequestProtocolCollection protocolSet = new JoinGroupRequestData.JoinGroupRequestProtocolCollection();
 
         List<String> topics = new ArrayList<>(joinedSubscription);
@@ -690,6 +689,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         }
 
         isLeader = false;
+        subscriptions.resetGroupSubscription();
 
         if (exception != null) {
             throw new KafkaException("User rebalance callback throws an error", exception);
