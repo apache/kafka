@@ -817,7 +817,7 @@ public class StreamThread extends Thread {
         // only try to initialize the assigned tasks
         // if the state is still in PARTITION_ASSIGNED after the poll call
         if (state == State.PARTITIONS_ASSIGNED) {
-            if (taskManager.updateNewAndRestoringTasks()) {
+            if (taskManager.initializeNewTasksAndCheckForCompletedRestoration()) {
                 setState(State.RUNNING);
             }
         }
