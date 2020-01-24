@@ -81,10 +81,10 @@ object ZkSecurityMigrator extends Logging {
       KafkaConfig.getZooKeeperClientProperty(zkClientConfig, KafkaConfig.ZkClientCnxnSocketProp).isDefined &&
       KafkaConfig.getZooKeeperClientProperty(zkClientConfig, KafkaConfig.ZkSslKeyStoreLocationProp).isDefined
     if (jaasFile == null && !tlsClientAuthEnabled) {
-      val errorMsg = "No JAAS configuration file and has been specified and no TLS client certificate has been specified. Please make sure that you have set " +
+      val errorMsg = "No JAAS configuration file has been specified and no TLS client certificate has been specified. Please make sure that you have set " +
         "the system property %s or provide a ZooKeeper client TLS configuration via --%s <filename> identifying at least %s, %s, and %s".format(JaasUtils.JAVA_LOGIN_CONFIG_PARAM,
           tlsConfigFileOption, KafkaConfig.ZkSslClientEnableProp, KafkaConfig.ZkClientCnxnSocketProp, KafkaConfig.ZkSslKeyStoreLocationProp)
-      System.out.println("ERROR: %s".format(errorMsg))
+      System.err.println("ERROR: %s".format(errorMsg))
       throw new IllegalArgumentException("Incorrect configuration")
     }
 

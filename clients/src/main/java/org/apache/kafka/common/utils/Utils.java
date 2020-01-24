@@ -553,6 +553,7 @@ public final class Utils {
     /**
      * Read a properties file from the given path
      * @param filename The path of the file to read
+     * @return the loaded properties
      */
     public static Properties loadProps(String filename) throws IOException {
         return loadProps(filename, null);
@@ -562,6 +563,7 @@ public final class Utils {
      * Read a properties file from the given path
      * @param filename The path of the file to read
      * @param onlyIncludeKeys When non-null, only return values associated with these keys and ignore all others
+     * @return the loaded properties
      */
     public static Properties loadProps(String filename, List<String> onlyIncludeKeys) throws IOException {
         Properties props = new Properties();
