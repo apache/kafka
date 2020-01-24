@@ -207,7 +207,7 @@ public class TaskManagerTest {
         EasyMock.replay(activeTaskCreator, standbyTaskCreator, topologyBuilder, changeLogReader);
 
         taskManager.handleAssignment(taskId00Assignment, emptyMap());
-        taskManager.updateNewAndRestoringTasks();
+        taskManager.initializeNewTasksAndCheckForCompletedRestoration();
         assertThat(task00.state(), Matchers.is(Task.State.RUNNING));
         taskManager.handleRevocation(taskId00Partitions);
         assertThat(task00.state(), Matchers.is(Task.State.SUSPENDED));
@@ -225,7 +225,7 @@ public class TaskManagerTest {
         expect(standbyTaskCreator.createTasks(anyObject(), eq(taskId00Assignment))).andReturn(singletonList(task00)).anyTimes();
         EasyMock.replay(activeTaskCreator, standbyTaskCreator, changeLogReader);
         taskManager.handleAssignment(emptyMap(), taskId00Assignment);
-        taskManager.updateNewAndRestoringTasks();
+        taskManager.initializeNewTasksAndCheckForCompletedRestoration();
         assertThat(task00.state(), Matchers.is(Task.State.RUNNING));
         taskManager.handleAssignment(emptyMap(), emptyMap());
         assertThat(task00.state(), Matchers.is(Task.State.CLOSED));
@@ -242,11 +242,11 @@ public class TaskManagerTest {
 
         EasyMock.replay(activeTaskCreator, changeLogReader);
         taskManager.handleAssignment(taskId00Assignment, emptyMap());
-        taskManager.updateNewAndRestoringTasks();
+        taskManager.initializeNewTasksAndCheckForCompletedRestoration();
         assertThat(task00.state(), Matchers.is(Task.State.RUNNING));
 
         taskManager.handleAssignment(taskId00Assignment, emptyMap());
-        taskManager.updateNewAndRestoringTasks();
+        taskManager.initializeNewTasksAndCheckForCompletedRestoration();
         assertThat(task00.state(), Matchers.is(Task.State.RUNNING));
 
         verify(activeTaskCreator);
@@ -279,7 +279,7 @@ public class TaskManagerTest {
 
         EasyMock.replay(activeTaskCreator, changeLogReader);
         taskManager.handleAssignment(taskId00Assignment, emptyMap());
-        taskManager.updateNewAndRestoringTasks();
+        taskManager.initializeNewTasksAndCheckForCompletedRestoration();
         assertThat(task00.state(), Matchers.is(Task.State.RUNNING));
 
         taskManager.handleRevocation(taskId00Partitions);
@@ -379,7 +379,7 @@ public class TaskManagerTest {
         EasyMock.replay(activeTaskCreator, changeLogReader);
 
         taskManager.handleAssignment(taskId00Assignment, emptyMap());
-        taskManager.updateNewAndRestoringTasks();
+        taskManager.initializeNewTasksAndCheckForCompletedRestoration();
 
         assertThat(task00.state(), Matchers.is(Task.State.RUNNING));
         assertThat(taskManager.activeTaskMap(), Matchers.equalTo(singletonMap(taskId00, task00)));
@@ -397,7 +397,7 @@ public class TaskManagerTest {
         EasyMock.replay(standbyTaskCreator, changeLogReader);
 
         taskManager.handleAssignment(emptyMap(), taskId01Assignment);
-        taskManager.updateNewAndRestoringTasks();
+        taskManager.initializeNewTasksAndCheckForCompletedRestoration();
 
         assertThat(task01.state(), Matchers.is(Task.State.RUNNING));
         assertThat(taskManager.activeTaskMap(), Matchers.anEmptyMap());
@@ -482,7 +482,7 @@ public class TaskManagerTest {
         EasyMock.replay(activeTaskCreator, standbyTaskCreator, changeLogReader);
 
         taskManager.handleAssignment(taskId00Assignment, taskId01Assignment);
-        taskManager.updateNewAndRestoringTasks();
+        taskManager.initializeNewTasksAndCheckForCompletedRestoration();
 
         assertThat(task00.state(), Matchers.is(Task.State.RUNNING));
         assertThat(task01.state(), Matchers.is(Task.State.RUNNING));
@@ -581,7 +581,7 @@ public class TaskManagerTest {
         EasyMock.replay(activeTaskCreator, changeLogReader, adminClient);
 
         taskManager.handleAssignment(taskId00Assignment, emptyMap());
-        taskManager.updateNewAndRestoringTasks();
+        taskManager.initializeNewTasksAndCheckForCompletedRestoration();
 
         assertThat(task00.state(), Matchers.is(Task.State.RUNNING));
 
@@ -613,7 +613,7 @@ public class TaskManagerTest {
 
 
         taskManager.handleAssignment(assignment, emptyMap());
-        taskManager.updateNewAndRestoringTasks();
+        taskManager.initializeNewTasksAndCheckForCompletedRestoration();
 
         assertThat(task00.state(), Matchers.is(Task.State.RUNNING));
         assertThat(task01.state(), Matchers.is(Task.State.RUNNING));
@@ -646,7 +646,7 @@ public class TaskManagerTest {
         EasyMock.replay(activeTaskCreator, changeLogReader, adminClient);
 
         taskManager.handleAssignment(taskId00Assignment, emptyMap());
-        taskManager.updateNewAndRestoringTasks();
+        taskManager.initializeNewTasksAndCheckForCompletedRestoration();
 
         assertThat(task00.state(), Matchers.is(Task.State.RUNNING));
 

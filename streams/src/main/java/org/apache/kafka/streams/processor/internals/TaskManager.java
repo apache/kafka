@@ -120,7 +120,7 @@ public class TaskManager {
             } else if (standbyTasks.containsKey(task.id()) && !task.isActive()) {
                 task.resume();
                 standbyTasksToCreate.remove(task.id());
-            } else /* we previously task, and we don't have it anymore, or it has changed active/standby state */ {
+            } else /* we previously owned this task, and we don't have it anymore, or it has changed active/standby state */ {
                 try {
                     task.closeClean();
                     changelogReader.remove(task.changelogPartitions());
@@ -173,7 +173,7 @@ public class TaskManager {
      * @throws IllegalStateException If store gets registered after initialized is already finished
      * @throws StreamsException if the store's change log does not contain the partition
      */
-    boolean updateNewAndRestoringTasks() {
+    boolean initializeNewTasksAndCheckForCompletedRestoration() {
         final List<Task> restoringTasks = new LinkedList<>();
         for (final Task task : tasks.values()) {
             task.initializeIfNeeded();
@@ -211,8 +211,6 @@ public class TaskManager {
     }
 
     /**
-     * Similar to shutdownTasksAndState, however does not close the task managers, in the hope that
-     * soon the tasks will be assigned again.
      * @throws TaskMigratedException if the task producer got fenced (EOS only)
      */
     void handleRevocation(final Collection<TopicPartition> revokedPartitions) {
