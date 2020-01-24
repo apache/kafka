@@ -222,9 +222,9 @@ class TransactionsTest(Test):
         }
 
     @cluster(num_nodes=9)
-    @matrix(failure_mode=["hard_bounce", "clean_bounce"],
-            bounce_target=["brokers", "clients"],
-            check_order=[True, False],
+    @matrix(failure_mode=["hard_bounce"], # "clean_bounce"
+            bounce_target=["clients"], # "brokers"
+            check_order=[False],
             # use_group_metadata=[True])
             use_group_metadata=[True, False])
     def test_transactions(self, failure_mode, bounce_target, check_order, use_group_metadata):
