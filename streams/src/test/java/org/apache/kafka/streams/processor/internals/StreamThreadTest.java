@@ -123,17 +123,18 @@ public class StreamThreadTest {
     private final static String CLIENT_ID = APPLICATION_ID + "-" + PROCESS_ID;
 
     private final int threadIdx = 1;
-    private final MockTime mockTime = new MockTime();
     private final Metrics metrics = new Metrics();
-    private final MockClientSupplier clientSupplier = new MockClientSupplier();
-    private final InternalStreamsBuilder internalStreamsBuilder = new InternalStreamsBuilder(new InternalTopologyBuilder());
-    private final StreamsConfig config = new StreamsConfig(configProps(false));
+    private final MockTime mockTime = new MockTime();
     private final String stateDir = TestUtils.tempDirectory().getPath();
-    private final StateDirectory stateDirectory = new StateDirectory(config, mockTime, true);
+    private final MockClientSupplier clientSupplier = new MockClientSupplier();
+    private final StreamsConfig config = new StreamsConfig(configProps(false));
     private final ConsumedInternal<Object, Object> consumed = new ConsumedInternal<>();
+    private final ChangelogReader changelogReader = new MockChangelogReader();
+    private final StateDirectory stateDirectory = new StateDirectory(config, mockTime, true);
+    private final InternalStreamsBuilder internalStreamsBuilder = new InternalStreamsBuilder(new InternalTopologyBuilder());
 
-    private InternalTopologyBuilder internalTopologyBuilder;
     private StreamsMetadataState streamsMetadataState;
+    private InternalTopologyBuilder internalTopologyBuilder;
 
     @Before
     public void setUp() {
@@ -585,7 +586,7 @@ public class StreamThreadTest {
             null,
             consumer,
             consumer,
-            null,
+            changelogReader,
             null,
             taskManager,
             streamsMetrics,
@@ -594,6 +595,7 @@ public class StreamThreadTest {
             new LogContext(""),
             new AtomicInteger()
         );
+
         thread.setNow(mockTime.milliseconds());
         thread.maybeCommit();
         mockTime.sleep(commitInterval + 1);
@@ -1615,7 +1617,6 @@ public class StreamThreadTest {
         shouldLogAndRecordSkippedMetricForDeserializationException(StreamsConfig.METRICS_0100_TO_24);
     }
 
-    @Test
     private void shouldLogAndRecordSkippedMetricForDeserializationException(final String builtInMetricsVersion) {
         final LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
 

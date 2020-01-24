@@ -515,7 +515,7 @@ public class StreamThread extends Thread {
     private StreamThread.StateListener stateListener;
     private Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> standbyRecords;
 
-    private final StoreChangelogReader changelogReader;
+    private final ChangelogReader changelogReader;
 
     // package-private for testing
     final ConsumerRebalanceListener rebalanceListener;
@@ -624,7 +624,7 @@ public class StreamThread extends Thread {
                         final Admin adminClient,
                         final Consumer<byte[], byte[]> restoreConsumer,
                         final Consumer<byte[], byte[]> consumer,
-                        final StoreChangelogReader changelogReader,
+                        final ChangelogReader changelogReader,
                         final String originalReset,
                         final TaskManager taskManager,
                         final StreamsMetricsImpl streamsMetrics,
