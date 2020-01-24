@@ -304,7 +304,8 @@ public class TransactionalMessageCopier {
         } else {
             TopicPartition inputPartition = new TopicPartition(topicName, parsedArgs.getInt("inputPartition"));
             consumer.assign(singleton(inputPartition));
-            remainingMessages.set(Math.min(messagesRemaining(consumer, inputPartition), messageCap));
+            messageCap = Math.min(messagesRemaining(consumer, inputPartition), messageCap);
+            remainingMessages.set(messageCap);
         }
 
         final boolean enableRandomAborts = parsedArgs.getBoolean("enableRandomAborts");
@@ -355,7 +356,7 @@ public class TransactionalMessageCopier {
                     } else {
                         producer.commitTransaction();
                         final long finalMessagesInCurrentTransaction = messagesInCurrentTransaction;
-                        remainingMessages.getAndUpdate(r -> r - numMessagesProcessed.addAndGet(finalMessagesInCurrentTransaction));
+                        remainingMessages.set(messageCap - numMessagesProcessed.addAndGet(finalMessagesInCurrentTransaction));
                     }
                 } catch (ProducerFencedException | OutOfOrderSequenceException e) {
                     // We cannot recover from these errors, so just rethrow them and let the process fail
