@@ -23,7 +23,6 @@ import org.apache.kafka.streams.processor.TaskId;
 
 import java.util.Collection;
 import java.util.Collections;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -96,7 +95,7 @@ public interface Task {
         return Collections.emptyMap();
     }
 
-    void addRecords(TopicPartition partition, Iterable<ConsumerRecord<byte[],byte[]>> records);
+    void addRecords(TopicPartition partition, Iterable<ConsumerRecord<byte[], byte[]>> records);
 
     default boolean process(final long wallClockTime) {
         return false;
