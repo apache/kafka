@@ -85,6 +85,7 @@ public class StandbyTask extends AbstractTask implements Task {
             // no topology needs initialized, we can transit to RUNNING
             // right after registered the stores
             transitionTo(State.RESTORING);
+            transitionTo(State.RUNNING);
 
             log.debug("Initialized");
         }
@@ -98,11 +99,7 @@ public class StandbyTask extends AbstractTask implements Task {
 
     @Override
     public void startRunning() {
-        if (state() == State.RESTORING) {
-            // do nothing
-        } else {
-            throw new IllegalStateException("Illegal state " + state() + " while start running standby task " + id);
-        }
+        throw new IllegalStateException("StandbyTask " + id + " should already be in running state.");
     }
 
     @Override
