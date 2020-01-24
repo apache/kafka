@@ -202,11 +202,7 @@ public class TaskManager {
         // is delete this conditional and run the loop always.
         if (allRunning) {
             for (final Task task : tasks.values()) {
-                // TODO, can we make StandbyTasks partitions always empty (since they don't process any inputs)?
-                // If so, we can simplify this logic here, as the resume would be a no-op.
-                if (task.isActive()) {
-                    consumer.resume(task.inputPartitions());
-                }
+                consumer.resume(task.inputPartitions());
             }
         }
         return allRunning;
