@@ -48,7 +48,7 @@ class GroupModeTransactionsTest(Test):
         self.num_input_partitions = 9
         self.num_output_partitions = 9
         self.num_copiers = 3
-        self.num_seed_messages = 900000
+        self.num_seed_messages = 100000
         self.transaction_size = 750
         self.transaction_timeout = 10000
         self.consumer_group = "grouped-transactions-test-consumer-group"
