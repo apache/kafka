@@ -63,6 +63,8 @@ public class TaskManager {
     private boolean rebalanceInProgress = false;  // if we are in the middle of a rebalance, it is not safe to commit
 
     private final Map<TaskId, Task> tasks = new TreeMap<>();
+    // materializing this relationship because the lookup is on the hot path
+    private final Map<TopicPartition, Task> partitionToTask = new HashMap<>();
 
     private Consumer<byte[], byte[]> consumer;
     private final InternalTopologyBuilder builder;
@@ -130,6 +132,7 @@ public class TaskManager {
                 task.resume();
                 standbyTasksToCreate.remove(task.id());
             } else /* we previously owned this task, and we don't have it anymore, or it has changed active/standby state */ {
+                final Set<TopicPartition> inputPartitions = task.inputPartitions();
                 try {
                     task.closeClean();
                     changelogReader.remove(task.changelogPartitions());
@@ -142,6 +145,9 @@ public class TaskManager {
                     // We've already recorded the exception (which is the point of clean).
                     // Now, we should go ahead and complete the close because a half-closed task is no good to anyone.
                     task.closeDirty();
+                }
+                for (final TopicPartition inputPartition : inputPartitions) {
+                    partitionToTask.remove(inputPartition);
                 }
                 iterator.remove();
             }
@@ -183,6 +189,10 @@ public class TaskManager {
         final Task previous = tasks.put(task.id(), task);
         if (previous != null) {
             throw new IllegalStateException("Attempted to create a task that we already owned: " + task.id());
+        }
+
+        for (final TopicPartition topicPartition : task.inputPartitions()) {
+            partitionToTask.put(topicPartition, task);
         }
     }
 
@@ -237,7 +247,11 @@ public class TaskManager {
 
         for (final TaskId taskId : revokedTasks) {
             final Task task = tasks.get(taskId);
-            task.suspend();
+            try {
+                task.suspend();
+            } catch (final RuntimeException e) {
+                throw new StreamsException("Unexpected exception while suspending task " + taskId, e);
+            }
         }
     }
 
@@ -252,11 +266,16 @@ public class TaskManager {
         final Iterator<Task> iterator = tasks.values().iterator();
         while (iterator.hasNext()) {
             final Task task = iterator.next();
+            final Set<TopicPartition> inputPartitions = task.inputPartitions();
             // Even though we've apparently dropped out of the group, we can continue safely to maintain our
             // standby tasks while we rejoin.
             if (task.isActive()) {
                 task.closeDirty();
                 changelogReader.remove(task.changelogPartitions());
+            }
+
+            for (final TopicPartition inputPartition : inputPartitions) {
+                partitionToTask.remove(inputPartition);
             }
             iterator.remove();
         }
@@ -298,6 +317,7 @@ public class TaskManager {
         final Iterator<Task> iterator = tasks.values().iterator();
         while (iterator.hasNext()) {
             final Task task = iterator.next();
+            final Set<TopicPartition> inputPartitions = task.inputPartitions();
             if (clean) {
                 try {
                     task.closeClean();
@@ -312,6 +332,10 @@ public class TaskManager {
                 task.closeDirty();
             }
             changelogReader.remove(task.changelogPartitions());
+
+            for (final TopicPartition inputPartition : inputPartitions) {
+                partitionToTask.remove(inputPartition);
+            }
 
             iterator.remove();
         }
@@ -336,13 +360,8 @@ public class TaskManager {
             .collect(Collectors.toSet());
     }
 
-    StreamTask streamTask(final TopicPartition partition) {
-        for (final Task task : activeTaskIterable()) {
-            if (task.inputPartitions().contains(partition)) {
-                return (StreamTask) task;
-            }
-        }
-        return null;
+    Task taskForInputPartition(final TopicPartition partition) {
+        return partitionToTask.get(partition);
     }
 
     StandbyTask standbyTask(final TopicPartition partition) {
