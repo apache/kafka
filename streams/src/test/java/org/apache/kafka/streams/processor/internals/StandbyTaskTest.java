@@ -142,7 +142,7 @@ public class StandbyTaskTest {
     }
 
     @Test
-    public void shouldTransitToRestoringAfterInitialization() {
+    public void shouldTransitToRunningAfterInitialization() {
         stateManager.registerStore(store1, store1.stateRestoreCallback);
         EasyMock.expectLastCall();
         stateManager.registerStore(store2, store2.stateRestoreCallback);
@@ -161,12 +161,12 @@ public class StandbyTaskTest {
 
         task.initializeIfNeeded();
 
-        assertEquals(Task.State.RESTORING, task.state());
+        assertEquals(Task.State.RUNNING, task.state());
 
         // initialize should be idempotent
         task.initializeIfNeeded();
 
-        assertEquals(Task.State.RESTORING, task.state());
+        assertEquals(Task.State.RUNNING, task.state());
 
         EasyMock.verify(stateManager);
     }
@@ -358,7 +358,7 @@ public class StandbyTaskTest {
 
         assertThrows(RuntimeException.class, task::closeClean);
 
-        assertEquals(Task.State.RESTORING, task.state());
+        assertEquals(Task.State.RUNNING, task.state());
 
         final double expectedCloseTaskMetric = 0.0;
         verifyCloseTaskMetric(expectedCloseTaskMetric, streamsMetrics, metricName);
@@ -384,7 +384,7 @@ public class StandbyTaskTest {
 
         assertThrows(RuntimeException.class, task::closeClean);
 
-        assertEquals(Task.State.RESTORING, task.state());
+        assertEquals(Task.State.RUNNING, task.state());
 
         final double expectedCloseTaskMetric = 0.0;
         verifyCloseTaskMetric(expectedCloseTaskMetric, streamsMetrics, metricName);
@@ -410,7 +410,7 @@ public class StandbyTaskTest {
 
         assertThrows(RuntimeException.class, task::closeClean);
 
-        assertEquals(Task.State.RESTORING, task.state());
+        assertEquals(Task.State.RUNNING, task.state());
 
         final double expectedCloseTaskMetric = 0.0;
         verifyCloseTaskMetric(expectedCloseTaskMetric, streamsMetrics, metricName);
