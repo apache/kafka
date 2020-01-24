@@ -1357,7 +1357,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
         private MetadataSnapshot(SubscriptionState subscription, Cluster cluster, int version) {
             Map<String, Integer> partitionsPerTopic = new HashMap<>();
-            for (String topic : subscription.groupSubscription()) {
+            for (String topic : subscription.metadataTopics()) {
                 Integer numPartitions = cluster.partitionCountForTopic(topic);
                 if (numPartitions != null)
                     partitionsPerTopic.put(topic, numPartitions);
