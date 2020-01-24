@@ -508,7 +508,6 @@ public class StreamThread extends Thread {
     private long lastCommitMs;
     private int numIterations;
     private Throwable rebalanceException = null;
-    private boolean processStandbyRecords = false;
     private volatile State state = State.CREATED;
     private volatile ThreadMetadata threadMetadata;
     private StreamThread.StateListener stateListener;
@@ -1015,7 +1014,9 @@ public class StreamThread extends Thread {
                 lastCommitMs = now;
             }
 
-            processStandbyRecords = true;
+            // TODO: this is a naive heuristic that when we are committing, the other threads maybe committing
+            //       too so we can try update the limit offset; this heuristic can be further improved
+            changelogReader.updateLimitOffsets();
         } else {
             committed = taskManager.maybeCommitActiveTasksPerUserRequested();
             if (committed > 0) {

@@ -127,6 +127,7 @@ public class TaskManager {
             } else /* we previously task, and we don't have it anymore, or it has changed active/standby state */ {
                 try {
                     task.closeClean();
+                    changelogReader.remove(task.changelogPartitions());
                 } catch (final RuntimeException e) {
                     log.error(
                         "Failed to close {} cleanly. Attempting to close remaining tasks before re-throwing.",
@@ -159,6 +160,8 @@ public class TaskManager {
             activeTasks.values().stream().flatMap(Collection::stream).collect(Collectors.toList()),
             logPrefix
         );
+
+        changelogReader.transitToRestoreActive();
 
         rebalanceInProgress = false;
     }
@@ -204,7 +207,10 @@ public class TaskManager {
             for (final Task task : tasks.values()) {
                 consumer.resume(task.inputPartitions());
             }
+
+            changelogReader.transitToUpdateStandby();
         }
+
         return allRunning;
     }
 
@@ -246,6 +252,7 @@ public class TaskManager {
             // standby tasks while we rejoin.
             if (task.isActive()) {
                 task.closeDirty();
+                changelogReader.remove(task.changelogPartitions());
             }
             iterator.remove();
         }
@@ -300,6 +307,8 @@ public class TaskManager {
             } else {
                 task.closeDirty();
             }
+            changelogReader.remove(task.changelogPartitions());
+
             iterator.remove();
         }
 

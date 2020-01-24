@@ -263,7 +263,7 @@ public class StoreChangelogReader implements ChangelogReader {
     //
     // NOTE: even if the newly created tasks do not need any restoring, we still first transit to this state and then
     // immediately transit back -- there's no overhead of transiting back and forth but simplifies the logic a lot.
-    // TODO K9113: this function should be called by stream thread
+    @Override
     public void transitToRestoreActive() {
         log.debug("Transiting to restore active tasks: {}", changelogs);
 
@@ -280,7 +280,7 @@ public class StoreChangelogReader implements ChangelogReader {
     // upon completing them but only pause the corresponding partitions; the changelog metadata / partitions would only
     // be cleared when the corresponding task is being removed from the thread. In other words, the restore consumer
     // should contain all changelogs that are RESTORING or COMPLETED
-    // TODO K9113: this function should be called by stream thread
+    @Override
     public void transitToUpdateStandby() {
         if (state != ChangelogReaderState.ACTIVE_RESTORING) {
             throw new IllegalStateException("The changelog reader is not restoring active tasks while trying to " +
@@ -366,18 +366,6 @@ public class StoreChangelogReader implements ChangelogReader {
     private boolean allChangelogsCompleted() {
         return changelogs.values().stream()
             .allMatch(metadata -> metadata.changelogState == ChangelogState.COMPLETED);
-    }
-
-    // for stream thread to decide to transit to normal processing
-    // TODO K9113: called by the task manager to decide when to transit to standby updating.
-    boolean allActiveChangelogsCompleted() {
-        for (final ChangelogMetadata metadata : changelogs.values()) {
-            if (metadata.stateManager.taskType() == Task.TaskType.ACTIVE) {
-                if (metadata.changelogState != ChangelogState.COMPLETED)
-                    return false;
-            }
-        }
-        return true;
     }
 
     @Override
@@ -540,7 +528,6 @@ public class StoreChangelogReader implements ChangelogReader {
         }
     }
 
-    // TODO K9113: standby task that have source changelogs should call this function periodically
     public void updateLimitOffsets() {
         if (state != ChangelogReaderState.STANDBY_UPDATING) {
             throw new IllegalStateException("We should not try to update standby tasks limit offsets if there are still" +
@@ -755,8 +742,7 @@ public class StoreChangelogReader implements ChangelogReader {
     }
 
     @Override
-    // TODO K9113: when a task is removed from the thread, this should be called
-    public void remove(final List<TopicPartition> revokedChangelogs) {
+    public void remove(final Collection<TopicPartition> revokedChangelogs) {
         for (final TopicPartition partition : revokedChangelogs) {
             final ChangelogMetadata changelogMetadata = changelogs.remove(partition);
             changelogMetadata.clear();

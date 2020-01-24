@@ -66,7 +66,7 @@ import static org.junit.Assert.assertTrue;
 @RunWith(EasyMockRunner.class)
 public class TaskManagerTest {
 
-    private static final String topic1 = "topic1";
+    private final String topic1 = "topic1";
 
     private final TaskId taskId00 = new TaskId(0, 0);
     private final TopicPartition t1p0 = new TopicPartition(topic1, 0);

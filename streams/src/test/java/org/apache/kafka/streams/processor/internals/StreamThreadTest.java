@@ -94,7 +94,6 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Stream;
-import java.util.stream.StreamSupport;
 
 import static java.util.Collections.singletonList;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
@@ -929,8 +928,8 @@ public class StreamThreadTest {
         thread.rebalanceListener.onPartitionsAssigned(Collections.emptyList());
     }
 
-    public List<Task> asList(Iterable<Task> tasks) {
-        List<Task> result = new LinkedList<>();
+    public List<Task> asList(final Iterable<Task> tasks) {
+        final List<Task> result = new LinkedList<>();
         for (final Task task : tasks) {
             result.add(task);
         }

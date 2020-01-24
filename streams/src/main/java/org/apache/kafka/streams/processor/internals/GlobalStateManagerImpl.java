@@ -168,15 +168,8 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
         return baseDir;
     }
 
-    // TODO: we should remove the register function with registerStore
     @Override
     public void registerStore(final StateStore store, final StateRestoreCallback stateRestoreCallback) {
-        register(store, stateRestoreCallback);
-    }
-
-    public void register(final StateStore store,
-                         final StateRestoreCallback stateRestoreCallback) {
-
         if (globalStores.containsKey(store.name())) {
             throw new IllegalArgumentException(String.format("Global Store %s has already been registered", store.name()));
         }

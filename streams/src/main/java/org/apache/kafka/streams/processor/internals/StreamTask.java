@@ -56,6 +56,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import static java.lang.String.format;
@@ -105,10 +106,8 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     private final Sensor enforcedProcessingSensor;
     private final InternalProcessorContext processorContext;
 
-    private boolean taskInitialized;
-    private boolean commitNeeded;
-
     private long idleStartTime;
+    private boolean commitNeeded = false;
     private boolean commitRequested = false;
 
     public StreamTask(final TaskId id,
@@ -882,7 +881,14 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     }
 
     public Map<TopicPartition, Long> changelogOffsets() {
-        return Collections.unmodifiableMap(stateMgr.changelogOffsets());
+        if (state() == State.RUNNING) {
+            // if we are in running state, just return the latest offset sentinel indicating
+            // we should be at the end of the changelog
+            return changelogPartitions().stream()
+                .collect(Collectors.toMap(Function.identity(), tp -> Task.LATEST_OFFSET));
+        } else {
+            return Collections.unmodifiableMap(stateMgr.changelogOffsets());
+        }
     }
 
     // visible for testing

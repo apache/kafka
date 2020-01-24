@@ -154,7 +154,9 @@ public class StandbyTask extends AbstractTask implements Task {
                 break;
 
             case RUNNING:
-                if (clean) { commit(); }
+                if (clean) {
+                    commit();
+                }
 
                 try {
                     TaskUtils.closeStateManager(log, logPrefix, stateMgr, stateDirectory, id);
