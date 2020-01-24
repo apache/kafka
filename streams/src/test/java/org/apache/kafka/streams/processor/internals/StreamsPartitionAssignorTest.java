@@ -48,7 +48,6 @@ import org.apache.kafka.test.MockProcessorSupplier;
 import org.easymock.Capture;
 import org.easymock.EasyMock;
 import org.junit.Before;
-import org.junit.Ignore;
 import org.junit.Test;
 
 import java.nio.ByteBuffer;
@@ -989,11 +988,14 @@ public class StreamsPartitionAssignorTest {
         assertEquals(standbyPartitionsByHost, info20.standbyPartitionByHost());
     }
 
-    @Ignore
     @Test
     public void testOnAssignment() {
-        streamsMetadataState = EasyMock.createNiceMock(StreamsMetadataState.class);
-        createMockTaskManager();
+        final InternalTopologyBuilder internalTopologyBuilder =
+            TopologyWrapper.getInternalTopologyBuilder(new StreamsBuilder().build());
+        internalTopologyBuilder.setApplicationId(APPLICATION_ID);
+
+        taskManager = EasyMock.createStrictMock(TaskManager.class);
+
         final Map<HostInfo, Set<TopicPartition>> hostState = Collections.singletonMap(
             new HostInfo("localhost", 9090),
             mkSet(t3p0, t3p3));
@@ -1004,14 +1006,14 @@ public class StreamsPartitionAssignorTest {
         final Map<TaskId, Set<TopicPartition>> standbyTasks = new HashMap<>();
         standbyTasks.put(task0_1, mkSet(t3p1));
         standbyTasks.put(task0_2, mkSet(t3p2));
-        //FIXME
-//        taskManager.setAssignmentMetadata(activeTasks, standbyTasks);
+        
+        taskManager.handleAssignment(activeTasks, standbyTasks);
         EasyMock.expectLastCall();
         EasyMock.replay(taskManager);
 
-        streamsMetadataState = EasyMock.createNiceMock(StreamsMetadataState.class);
+        streamsMetadataState = EasyMock.createStrictMock(StreamsMetadataState.class);
         final Capture<Cluster> capturedCluster = EasyMock.newCapture();
-        streamsMetadataState.onChange(EasyMock.eq(hostState), EasyMock.eq(EasyMock.anyObject()), EasyMock.capture(capturedCluster));
+        streamsMetadataState.onChange(EasyMock.eq(hostState), EasyMock.anyObject(), EasyMock.capture(capturedCluster));
         EasyMock.expectLastCall();
         EasyMock.replay(streamsMetadataState);
 
