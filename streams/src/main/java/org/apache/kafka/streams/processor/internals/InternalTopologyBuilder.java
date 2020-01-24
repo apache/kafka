@@ -61,10 +61,8 @@ public class InternalTopologyBuilder {
     // node factories in a topological order
     private final Map<String, NodeFactory> nodeFactories = new LinkedHashMap<>();
 
-    // state factories
     private final Map<String, StateStoreFactory> stateFactories = new HashMap<>();
 
-    // built global state stores
     private final Map<String, StoreBuilder> globalStateBuilders = new LinkedHashMap<>();
 
     // built global state stores
@@ -87,10 +85,6 @@ public class InternalTopologyBuilder {
 
     // map from sink processor names to sink topic (without application-id prefix for internal topics)
     private final Map<String, String> nodeToSinkTopic = new HashMap<>();
-
-    // map from topics to their matched regex patterns, this is to ensure one topic is passed through on source node
-    // even if it can be matched by multiple regex patterns
-    private final Map<String, Pattern> topicToPatterns = new HashMap<>();
 
     // map from state store names to all the topics subscribed from source processors that
     // are connected to these state stores
@@ -119,11 +113,14 @@ public class InternalTopologyBuilder {
 
     private final QuickUnion<String> nodeGrouper = new QuickUnion<>();
 
-    private SubscriptionUpdates subscriptionUpdates = new SubscriptionUpdates();
+    // Used to capture subscribed topics via Patterns discovered during the partition assignment process.
+    private final Set<String> subscriptionUpdates = new HashSet<>();
 
     private String applicationId = null;
 
     private Pattern topicPattern = null;
+
+    private List<String> topicCollection = null;
 
     private Map<Integer, Set<String>> nodeGroups = null;
 
@@ -218,6 +215,10 @@ public class InternalTopologyBuilder {
             return new Processor(name, new HashSet<>(stateStoreNames));
         }
     }
+
+    // Map from topics to their matched regex patterns, this is to ensure one topic is passed through on source node
+    // even if it can be matched by multiple regex patterns. Only used by SourceNodeFactory
+    private final Map<String, Pattern> topicToPatterns = new HashMap<>();
 
     private class SourceNodeFactory extends NodeFactory {
         private final List<String> topics;
@@ -916,7 +917,7 @@ public class InternalTopologyBuilder {
                                  final SourceNode node) {
 
         final List<String> topics = (sourceNodeFactory.pattern != null) ?
-                                    sourceNodeFactory.getTopics(subscriptionUpdates.getUpdates()) :
+                                    sourceNodeFactory.getTopics(subscriptionUpdates()) :
                                     sourceNodeFactory.topics;
 
         for (final String topic : topics) {
@@ -1058,24 +1059,23 @@ public class InternalTopologyBuilder {
     }
 
     private void setRegexMatchedTopicsToSourceNodes() {
-        if (subscriptionUpdates.hasUpdates()) {
-            for (final Map.Entry<String, Pattern> stringPatternEntry : nodeToSourcePatterns.entrySet()) {
-                final SourceNodeFactory sourceNode =
-                    (SourceNodeFactory) nodeFactories.get(stringPatternEntry.getKey());
-                //need to update nodeToSourceTopics with topics matched from given regex
-                nodeToSourceTopics.put(
-                    stringPatternEntry.getKey(),
-                    sourceNode.getTopics(subscriptionUpdates.getUpdates()));
-                log.debug("nodeToSourceTopics {}", nodeToSourceTopics);
+        if (hasSubscriptionUpdates()) {
+            for (final String nodeName : nodeToSourcePatterns.keySet()) {
+                final SourceNodeFactory sourceNode = (SourceNodeFactory) nodeFactories.get(nodeName);
+                final List<String> sourceTopics = sourceNode.getTopics(subscriptionUpdates);
+                //need to update nodeToSourceTopics and sourceTopicNames with topics matched from given regex
+                nodeToSourceTopics.put(nodeName, sourceTopics);
+                sourceTopicNames.addAll(sourceTopics);
             }
+            log.debug("Updated nodeToSourceTopics: {}", nodeToSourceTopics);
         }
     }
 
     private void setRegexMatchedTopicToStateStore() {
-        if (subscriptionUpdates.hasUpdates()) {
+        if (hasSubscriptionUpdates()) {
             for (final Map.Entry<String, Set<Pattern>> storePattern : stateStoreNameToSourceRegex.entrySet()) {
                 final Set<String> updatedTopicsForStateStore = new HashSet<>();
-                for (final String subscriptionUpdateTopic : subscriptionUpdates.getUpdates()) {
+                for (final String subscriptionUpdateTopic : subscriptionUpdates()) {
                     for (final Pattern pattern : storePattern.getValue()) {
                         if (pattern.matcher(subscriptionUpdateTopic).matches()) {
                             updatedTopicsForStateStore.add(subscriptionUpdateTopic);
@@ -1118,11 +1118,11 @@ public class InternalTopologyBuilder {
                                        final Set<Pattern> resetPatterns) {
         final List<String> topics = maybeDecorateInternalSourceTopics(resetTopics);
 
-        return buildPatternForOffsetResetTopics(topics, resetPatterns);
+        return buildPattern(topics, resetPatterns);
     }
 
-    private static Pattern buildPatternForOffsetResetTopics(final Collection<String> sourceTopics,
-                                                            final Collection<Pattern> sourcePatterns) {
+    private static Pattern buildPattern(final Collection<String> sourceTopics,
+                                        final Collection<Pattern> sourcePatterns) {
         final StringBuilder builder = new StringBuilder();
 
         for (final String topic : sourceTopics) {
@@ -1210,35 +1210,31 @@ public class InternalTopologyBuilder {
         return applicationId + "-" + topic;
     }
 
-    SubscriptionUpdates subscriptionUpdates() {
-        return subscriptionUpdates;
+    boolean usesPatternSubscription() {
+        return !nodeToSourcePatterns.isEmpty();
+    }
+
+    synchronized Collection<String> sourceTopicCollection() {
+        log.debug("No source topics using pattern subscription found, using regular subscription for the main consumer.");
+
+        if (topicCollection == null) {
+            topicCollection = maybeDecorateInternalSourceTopics(sourceTopicNames);
+            Collections.sort(topicCollection);
+        }
+
+        return topicCollection;
     }
 
     synchronized Pattern sourceTopicPattern() {
-        if (topicPattern == null) {
-            final List<String> allSourceTopics = new ArrayList<>();
-            if (!nodeToSourceTopics.isEmpty()) {
-                for (final List<String> topics : nodeToSourceTopics.values()) {
-                    allSourceTopics.addAll(maybeDecorateInternalSourceTopics(topics));
-                }
-                allSourceTopics.removeAll(globalTopics);
-            }
-            Collections.sort(allSourceTopics);
+        log.debug("Found pattern subscribed source topics, falling back to pattern subscription for the main consumer.");
 
-            topicPattern = buildPatternForOffsetResetTopics(allSourceTopics, nodeToSourcePatterns.values());
+        if (topicPattern == null) {
+            final List<String> allSourceTopics = maybeDecorateInternalSourceTopics(sourceTopicNames);
+            Collections.sort(allSourceTopics);
+            topicPattern = buildPattern(allSourceTopics, nodeToSourcePatterns.values());
         }
 
         return topicPattern;
-    }
-
-    // package-private for testing only
-    synchronized void updateSubscriptions(final SubscriptionUpdates subscriptionUpdates,
-                                          final String logPrefix) {
-        log.debug("{}updating builder with {} topic(s) with possible matching regex subscription(s)",
-                logPrefix, subscriptionUpdates);
-        this.subscriptionUpdates = subscriptionUpdates;
-        setRegexMatchedTopicsToSourceNodes();
-        setRegexMatchedTopicToStateStore();
     }
 
     private boolean isGlobalSource(final String nodeName) {
@@ -1866,31 +1862,24 @@ public class InternalTopologyBuilder {
         return sb.toString();
     }
 
-    /**
-     * Used to capture subscribed topic via Patterns discovered during the
-     * partition assignment process.
-     */
-    public static class SubscriptionUpdates {
+    Set<String> subscriptionUpdates() {
+        return Collections.unmodifiableSet(subscriptionUpdates);
+    }
 
-        private final Set<String> updatedTopicSubscriptions = new HashSet<>();
+    private boolean hasSubscriptionUpdates() {
+        return !subscriptionUpdates.isEmpty();
+    }
 
-        private void updateTopics(final Collection<String> topicNames) {
-            updatedTopicSubscriptions.clear();
-            updatedTopicSubscriptions.addAll(topicNames);
-        }
+    synchronized void updateSubscribedTopics(final Set<String> topics,
+                                             final String logPrefix) {
+        log.debug("{}found {} topics possibly matching subscription", logPrefix, topics);
+        subscriptionUpdates.clear();
+        subscriptionUpdates.addAll(topics);
 
-        public Collection<String> getUpdates() {
-            return Collections.unmodifiableSet(updatedTopicSubscriptions);
-        }
-
-        boolean hasUpdates() {
-            return !updatedTopicSubscriptions.isEmpty();
-        }
-
-        @Override
-        public String toString() {
-            return String.format("SubscriptionUpdates{updatedTopicSubscriptions=%s}", updatedTopicSubscriptions);
-        }
+        log.debug("{}updating builder with {} topic(s) with possible matching regex subscription(s)",
+            logPrefix, subscriptionUpdates);
+        setRegexMatchedTopicsToSourceNodes();
+        setRegexMatchedTopicToStateStore();
     }
 
     void addSubscribedTopicsFromAssignment(final List<TopicPartition> partitions, final String logPrefix) {
@@ -1900,19 +1889,21 @@ public class InternalTopologyBuilder {
                 assignedTopics.add(topicPartition.topic());
             }
 
-            final Collection<String> existingTopics = subscriptionUpdates().getUpdates();
+            final Collection<String> existingTopics = subscriptionUpdates();
             if (!existingTopics.containsAll(assignedTopics)) {
                 assignedTopics.addAll(existingTopics);
 
-                final SubscriptionUpdates newSubscriptionUpdates = new SubscriptionUpdates();
-                log.debug("{}found {} topics possibly matching regex", logPrefix, assignedTopics);
-                // update the topic groups with the returned subscription set for regex pattern subscriptions
-                newSubscriptionUpdates.updateTopics(assignedTopics);
-                updateSubscriptions(newSubscriptionUpdates, logPrefix);
+                log.debug("{}found {} topics possibly matching subscription", logPrefix, assignedTopics);
+                subscriptionUpdates.clear();
+                subscriptionUpdates.addAll(assignedTopics);
+
+                log.debug("{}updating builder with {} topic(s) with possible matching regex subscription(s)",
+                    logPrefix, subscriptionUpdates);
+                setRegexMatchedTopicsToSourceNodes();
+                setRegexMatchedTopicToStateStore();
             }
         }
     }
-
 
     // following functions are for test only
 

@@ -24,6 +24,7 @@ import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
@@ -42,6 +43,7 @@ import org.junit.runner.RunWith;
 import java.io.File;
 import java.io.IOException;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.Deque;
 import java.util.HashMap;
 import java.util.LinkedList;
@@ -63,6 +65,7 @@ import static org.easymock.EasyMock.anyObject;
 import static org.easymock.EasyMock.anyString;
 import static org.easymock.EasyMock.eq;
 import static org.easymock.EasyMock.expect;
+import static org.easymock.EasyMock.expectLastCall;
 import static org.easymock.EasyMock.verify;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.is;
@@ -88,8 +91,7 @@ public class TaskManagerTest {
     private final TopicPartition t1p2 = new TopicPartition(topic1, 2);
     private final Set<TopicPartition> taskId02Partitions = mkSet(t1p2);
 
-    @Mock(type = MockType.STRICT)
-    private InternalTopologyBuilder.SubscriptionUpdates subscriptionUpdates;
+
     @Mock(type = MockType.STRICT)
     private InternalTopologyBuilder topologyBuilder;
     @Mock(type = MockType.NICE)
@@ -106,6 +108,8 @@ public class TaskManagerTest {
     private Admin adminClient;
 
     private TaskManager taskManager;
+
+    private Set<String> subscriptionUpdates = Collections.emptySet();
 
     @Rule
     public final TemporaryFolder testFolder = new TemporaryFolder();
@@ -131,21 +135,14 @@ public class TaskManagerTest {
         expect(standbyTaskCreator.createTasks(anyObject(), anyObject())).andReturn(emptyList()).anyTimes();
 
         topologyBuilder.addSubscribedTopicsFromAssignment(anyObject(), anyString());
-        EasyMock.expectLastCall();
+        expectLastCall();
 
-        EasyMock.expectLastCall().once();
+        expectLastCall().once();
 
         EasyMock.replay(activeTaskCreator,
                         standbyTaskCreator,
                         topologyBuilder,
                         subscriptionUpdates);
-
-        taskManager.handleAssignment(assignment, emptyMap());
-
-        verify(activeTaskCreator,
-               standbyTaskCreator,
-               topologyBuilder,
-               subscriptionUpdates);
     }
 
     @Test
@@ -157,19 +154,12 @@ public class TaskManagerTest {
         expect(standbyTaskCreator.createTasks(anyObject(), anyObject())).andReturn(emptyList()).anyTimes();
 
         topologyBuilder.addSubscribedTopicsFromAssignment(anyObject(), anyString());
-        EasyMock.expectLastCall();
+        expectLastCall();
 
         EasyMock.replay(activeTaskCreator,
                         standbyTaskCreator,
                         topologyBuilder,
                         subscriptionUpdates);
-
-        taskManager.handleAssignment(assignment, emptyMap());
-
-        verify(activeTaskCreator,
-               standbyTaskCreator,
-               topologyBuilder,
-               subscriptionUpdates);
     }
 
     @Test
@@ -206,7 +196,7 @@ public class TaskManagerTest {
         expect(standbyTaskCreator.createTasks(anyObject(), anyObject())).andReturn(emptyList()).anyTimes();
 
         topologyBuilder.addSubscribedTopicsFromAssignment(anyObject(), anyString());
-        EasyMock.expectLastCall().anyTimes();
+        expectLastCall().anyTimes();
 
         EasyMock.replay(activeTaskCreator, standbyTaskCreator, topologyBuilder, changeLogReader);
 
@@ -321,7 +311,7 @@ public class TaskManagerTest {
         expect(changeLogReader.completedChangelogs()).andReturn(emptySet());
         expect(activeTaskCreator.createTasks(anyObject(), eq(assignment))).andReturn(singletonList(task00)).anyTimes();
         activeTaskCreator.close();
-        EasyMock.expectLastCall();
+        expectLastCall();
         expect(standbyTaskCreator.createTasks(anyObject(), eq(emptyMap()))).andReturn(emptyList()).anyTimes();
         EasyMock.replay(activeTaskCreator, standbyTaskCreator, changeLogReader);
 
@@ -347,7 +337,7 @@ public class TaskManagerTest {
 
         expect(activeTaskCreator.createTasks(anyObject(), eq(emptyMap()))).andReturn(emptyList()).anyTimes();
         activeTaskCreator.close();
-        EasyMock.expectLastCall();
+        expectLastCall();
         expect(standbyTaskCreator.createTasks(anyObject(), eq(assignment))).andReturn(singletonList(task00)).anyTimes();
         EasyMock.replay(activeTaskCreator, standbyTaskCreator, changeLogReader);
 
@@ -768,24 +758,16 @@ public class TaskManagerTest {
         expect(active.hasRestoringTasks()).andReturn(true).once();
         final StandbyTask task = EasyMock.createNiceMock(StandbyTask.class);
         expect(active.allTasksRunning()).andReturn(true);
-<<<<<<< HEAD
         expect(standby.running()).andReturn(singletonList(task));
         expect(task.checkpointedOffsets()).andReturn(Collections.singletonMap(t1p0, offset));
         restoreConsumer.assign(taskId00Partitions);
-=======
-        expect(standby.running()).andReturn(Collections.singletonList(task));
-        expect(task.restoredOffsets()).andReturn(Collections.singletonMap(t1p0, offset));
-        restoreConsumer.assign(taskId0Partitions);
->>>>>>> 8e72390d66fc25cc06a0bb11c172a876bf6106f6
-
         expectLastCall();
         EasyMock.replay(task);
     }*/
 
     private void mockTopologyBuilder() {
         expect(activeTaskCreator.builder()).andReturn(topologyBuilder).anyTimes();
-        expect(topologyBuilder.sourceTopicPattern()).andReturn(Pattern.compile("abc"));
-        expect(topologyBuilder.subscriptionUpdates()).andReturn(subscriptionUpdates);
+        expect(topologyBuilder.sourceTopicPattern()).andReturn(Pattern.compile("abc")).anyTimes();
     }
 
     private static class StateMachineTask extends AbstractTask implements Task {

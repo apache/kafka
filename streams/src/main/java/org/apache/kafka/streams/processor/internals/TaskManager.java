@@ -105,14 +105,16 @@ public class TaskManager {
         rebalanceInProgress = true;
     }
 
-    public void handleRebalanceComplete() {
+    void handleRebalanceComplete() {
         // we should pause consumer only within the listener since
         // before then the assignment has not been updated yet.
         consumer.pause(consumer.assignment());
+
+        rebalanceInProgress = false;
     }
 
-    public void handleAssignment(final Map<TaskId, Set<TopicPartition>> activeTasks,
-                                 final Map<TaskId, Set<TopicPartition>> standbyTasks) {
+    void handleAssignment(final Map<TaskId, Set<TopicPartition>> activeTasks,
+                          final Map<TaskId, Set<TopicPartition>> standbyTasks) {
         log.info("Handle new assignment with:\n\tNew active tasks: {}\n\tNew standby tasks: {}" +
                 "\n\tExisting active tasks: {}\n\tExisting standby tasks: {}",
             activeTasks.keySet(), standbyTasks.keySet(), activeTaskIds(), standbyTaskIds());
@@ -181,8 +183,6 @@ public class TaskManager {
         }
 
         changelogReader.transitToRestoreActive();
-
-        rebalanceInProgress = false;
     }
 
     private void addNewTask(final Task task) {
@@ -348,7 +348,7 @@ public class TaskManager {
         }
     }
 
-    public Set<TaskId> activeTaskIds() {
+    Set<TaskId> activeTaskIds() {
         return activeTaskStream()
             .map(Task::id)
             .collect(Collectors.toSet());
@@ -424,7 +424,6 @@ public class TaskManager {
             return commits;
         }
     }
-
 
     /**
      * @throws TaskMigratedException if committing offsets failed (non-EOS)
