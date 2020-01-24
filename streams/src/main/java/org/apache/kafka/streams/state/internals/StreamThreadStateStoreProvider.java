@@ -49,7 +49,7 @@ public class StreamThreadStateStoreProvider {
     public <T> List<T> stores(final StoreQueryParams storeQueryParams) {
         final String storeName = storeQueryParams.getStoreName();
         final QueryableStoreType<T> queryableStoreType = storeQueryParams.getQueryableStoreType();
-        final TaskId keyTaskId = (storeQueryParams.partition() == null) ? null : createKeyTaskId(storeName, storeQueryParams.partition());
+        final TaskId keyTaskId = createKeyTaskId(storeName, storeQueryParams.partition());
         if (streamThread.state() == StreamThread.State.DEAD) {
             return Collections.emptyList();
         }
@@ -87,6 +87,9 @@ public class StreamThreadStateStoreProvider {
     }
 
     private TaskId createKeyTaskId(final String storeName, final Integer partition) {
+        if (partition == null) {
+            return null;
+        }
         final List<String> sourceTopics = internalTopologyBuilder.stateStoreNameToSourceTopics().get(storeName);
         final Set<String> sourceTopicsSet = sourceTopics.stream().collect(Collectors.toSet());
         final Map<Integer, InternalTopologyBuilder.TopicsInfo> topicGroups = internalTopologyBuilder.topicGroups();
