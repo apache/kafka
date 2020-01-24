@@ -814,61 +814,72 @@ public class StreamThread extends Thread {
             addRecordsToTasks(records);
         }
 
+        // we can always let changelog reader to try restoring in order to initialize the changelogs;
+        // if there's no active restoring or standby updating it would not try to fetch any data
+        changelogReader.restore();
+
         // only try to initialize the assigned tasks
         // if the state is still in PARTITION_ASSIGNED after the poll call
         if (state == State.PARTITIONS_ASSIGNED) {
-            if (taskManager.initializeNewTasksAndCheckForCompletedRestoration()) {
+            if (taskManager.checkForCompletedRestoration()) {
+                changelogReader.transitToUpdateStandby();
+
                 setState(State.RUNNING);
+            } else {
+                // transit to restore active is idempotent so we can call it multiple times
+                changelogReader.transitToRestoreActive();
             }
         }
 
         advanceNowAndComputeLatency();
 
-        /*
-         * Within an iteration, after N (N initialized as 1 upon start up) round of processing one-record-each on the applicable tasks, check the current time:
-         *  1. If it is time to commit, do it;
-         *  2. If it is time to punctuate, do it;
-         *  3. If elapsed time is close to consumer's max.poll.interval.ms, end the current iteration immediately.
-         *  4. If none of the the above happens, increment N.
-         *  5. If one of the above happens, half the value of N.
-         */
-        int processed = 0;
-        long timeSinceLastPoll = 0L;
+        if (state == State.RUNNING) {
+            /*
+             * Within an iteration, after N (N initialized as 1 upon start up) round of processing one-record-each on the applicable tasks, check the current time:
+             *  1. If it is time to commit, do it;
+             *  2. If it is time to punctuate, do it;
+             *  3. If elapsed time is close to consumer's max.poll.interval.ms, end the current iteration immediately.
+             *  4. If none of the the above happens, increment N.
+             *  5. If one of the above happens, half the value of N.
+             */
+            int processed = 0;
+            long timeSinceLastPoll = 0L;
 
-        do {
-            for (int i = 0; i < numIterations; i++) {
-                processed = taskManager.process(now);
+            do {
+                for (int i = 0; i < numIterations; i++) {
+                    processed = taskManager.process(now);
 
-                if (processed > 0) {
-                    final long processLatency = advanceNowAndComputeLatency();
-                    processSensor.record(processLatency / (double) processed, now);
+                    if (processed > 0) {
+                        final long processLatency = advanceNowAndComputeLatency();
+                        processSensor.record(processLatency / (double) processed, now);
 
-                    // commit any tasks that have requested a commit
-                    final int committed = taskManager.maybeCommitActiveTasksPerUserRequested();
+                        // commit any tasks that have requested a commit
+                        final int committed = taskManager.maybeCommitActiveTasksPerUserRequested();
 
-                    if (committed > 0) {
-                        final long commitLatency = advanceNowAndComputeLatency();
-                        commitSensor.record(commitLatency / (double) committed, now);
+                        if (committed > 0) {
+                            final long commitLatency = advanceNowAndComputeLatency();
+                            commitSensor.record(commitLatency / (double) committed, now);
+                        }
+                    } else {
+                        // if there is no records to be processed, exit immediately
+                        break;
                     }
-                } else {
-                    // if there is no records to be processed, exit immediately
-                    break;
                 }
-            }
 
-            timeSinceLastPoll = Math.max(now - lastPollMs, 0);
+                timeSinceLastPoll = Math.max(now - lastPollMs, 0);
 
-            if (maybePunctuate() || maybeCommit()) {
-                numIterations = numIterations > 1 ? numIterations / 2 : numIterations;
-            } else if (timeSinceLastPoll > maxPollTimeMs / 2) {
-                numIterations = numIterations > 1 ? numIterations / 2 : numIterations;
-                break;
-            } else if (processed > 0) {
-                numIterations++;
-            }
-        } while (processed > 0);
+                if (maybePunctuate() || maybeCommit()) {
+                    numIterations = numIterations > 1 ? numIterations / 2 : numIterations;
+                } else if (timeSinceLastPoll > maxPollTimeMs / 2) {
+                    numIterations = numIterations > 1 ? numIterations / 2 : numIterations;
+                    break;
+                } else if (processed > 0) {
+                    numIterations++;
+                }
+            } while (processed > 0);
 
-        maybeCommit();
+            maybeCommit();
+        }
     }
 
     /**

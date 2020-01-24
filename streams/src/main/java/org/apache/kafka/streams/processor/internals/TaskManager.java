@@ -105,8 +105,11 @@ public class TaskManager {
 
     public void handleAssignment(final Map<TaskId, Set<TopicPartition>> activeTasks,
                                  final Map<TaskId, Set<TopicPartition>> standbyTasks) {
-        final Map<TaskId, Set<TopicPartition>> activeTasksToCreate = new TreeMap<>(activeTasks);
+        log.info("Handle new assignment with:\n\tNew active tasks: {}\n\tNew standby tasks: {}" +
+                "\n\tExisting active tasks: {}\n\tExisting standby tasks: {}",
+            activeTasks.keySet(), standbyTasks.keySet(), activeTaskIds(), standbyTaskIds());
 
+        final Map<TaskId, Set<TopicPartition>> activeTasksToCreate = new TreeMap<>(activeTasks);
         final Map<TaskId, Set<TopicPartition>> standbyTasksToCreate = new TreeMap<>(standbyTasks);
 
         // first rectify all existing tasks
@@ -160,6 +163,11 @@ public class TaskManager {
             logPrefix
         );
 
+        // initialize the created tasks
+        for (final Task task : tasks.values()) {
+            task.initializeIfNeeded();
+        }
+
         changelogReader.transitToRestoreActive();
 
         rebalanceInProgress = false;
@@ -176,10 +184,9 @@ public class TaskManager {
      * @throws IllegalStateException If store gets registered after initialized is already finished
      * @throws StreamsException if the store's change log does not contain the partition
      */
-    boolean initializeNewTasksAndCheckForCompletedRestoration() {
+    boolean checkForCompletedRestoration() {
         final List<Task> restoringTasks = new LinkedList<>();
         for (final Task task : tasks.values()) {
-            task.initializeIfNeeded();
             if (task.state() == RESTORING) {
                 restoringTasks.add(task);
             }
@@ -187,7 +194,6 @@ public class TaskManager {
 
         boolean allRunning = true;
         if (!restoringTasks.isEmpty()) {
-            changelogReader.restore();
             final Set<TopicPartition> restored = changelogReader.completedChangelogs();
             for (final Task task : restoringTasks) {
                 if (restored.containsAll(task.changelogPartitions())) {
@@ -198,16 +204,6 @@ public class TaskManager {
                     allRunning = false;
                 }
             }
-        }
-
-        // Note: if we wanted to process ready tasks while others are still restoring, all we have to do
-        // is delete this conditional and run the loop always.
-        if (allRunning) {
-            for (final Task task : tasks.values()) {
-                consumer.resume(task.inputPartitions());
-            }
-
-            changelogReader.transitToUpdateStandby();
         }
 
         return allRunning;

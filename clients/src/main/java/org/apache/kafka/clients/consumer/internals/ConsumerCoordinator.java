@@ -366,14 +366,14 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             revokedPartitions.removeAll(assignedPartitions);
 
             log.info("Updating assignment with\n" +
-                    "now assigned partitions: {}\n" +
-                    "compare with previously owned partitions: {}\n" +
-                    "newly added partitions: {}\n" +
-                    "revoked partitions: {}\n",
-                Utils.join(assignedPartitions, ", "),
-                Utils.join(ownedPartitions, ", "),
-                Utils.join(addedPartitions, ", "),
-                Utils.join(revokedPartitions, ", ")
+                    "\tAssigned partitions:                       {}\n" +
+                    "\tCurrent owned partitions:                  {}\n" +
+                    "\tAdded partitions (assigned - owned):       {}\n" +
+                    "\tRevoked partitions (owned - assigned):     {}\n",
+                assignedPartitions,
+                ownedPartitions,
+                addedPartitions,
+                revokedPartitions
             );
 
             if (!revokedPartitions.isEmpty()) {

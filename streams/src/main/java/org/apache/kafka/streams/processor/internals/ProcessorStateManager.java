@@ -285,7 +285,11 @@ public class ProcessorStateManager implements StateManager {
         final Map<TopicPartition, Long> changelogOffsets = new HashMap<>();
         for (final StateStoreMetadata storeMetadata : stores.values()) {
             if (storeMetadata.changelogPartition != null) {
-                changelogOffsets.put(storeMetadata.changelogPartition, storeMetadata.offset);
+                // for changelog whose offset is unknown, use 0L indicating earliest offset
+                // otherwise return the current offset + 1 as the next offset to fetch
+                changelogOffsets.put(
+                    storeMetadata.changelogPartition,
+                    storeMetadata.offset == null ? 0L : storeMetadata.offset + 1L);
             }
         }
         return changelogOffsets;

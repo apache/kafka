@@ -387,7 +387,7 @@ public class StoreChangelogReader implements ChangelogReader {
         }
 
         if (allChangelogsCompleted()) {
-            log.info("Finished restoring all changelogs {}", changelogs.keySet());
+            log.debug("Finished restoring all changelogs {}", changelogs.keySet());
             return;
         }
 
