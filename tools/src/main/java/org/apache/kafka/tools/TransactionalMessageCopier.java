@@ -22,6 +22,7 @@ import net.sourceforge.argparse4j.ArgumentParsers;
 import net.sourceforge.argparse4j.inf.ArgumentParser;
 import net.sourceforge.argparse4j.inf.Namespace;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
@@ -281,12 +282,29 @@ public class TransactionalMessageCopier {
 
         boolean groupMode = parsedArgs.getBoolean("groupMode");
         String topicName = parsedArgs.getString("inputTopic");
+        final AtomicLong remainingMessages = new AtomicLong(messageCap);
+        final AtomicLong numMessagesProcessed = new AtomicLong(0);
         if (groupMode) {
-            consumer.subscribe(Collections.singleton(topicName));
+            consumer.subscribe(Collections.singleton(topicName), new ConsumerRebalanceListener() {
+                @Override
+                public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
+
+                }
+
+                @Override
+                public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
+                    long messageSum = 0;
+                    for (TopicPartition partition : partitions) {
+                        messageSum += messagesRemaining(consumer, partition);
+                    }
+                    remainingMessages.set(messageSum);
+                    numMessagesProcessed.set(0);
+                }
+            });
         } else {
             TopicPartition inputPartition = new TopicPartition(topicName, parsedArgs.getInt("inputPartition"));
             consumer.assign(singleton(inputPartition));
-            messageCap = Math.min(messagesRemaining(consumer, inputPartition), messageCap);
+            remainingMessages.set(Math.min(messagesRemaining(consumer, inputPartition), messageCap));
         }
 
         final boolean enableRandomAborts = parsedArgs.getBoolean("enableRandomAborts");
@@ -294,8 +312,7 @@ public class TransactionalMessageCopier {
         producer.initTransactions();
 
         final AtomicBoolean isShuttingDown = new AtomicBoolean(false);
-        final AtomicLong remainingMessages = new AtomicLong(messageCap);
-        final AtomicLong numMessagesProcessed = new AtomicLong(0);
+
         Exit.addShutdownHook("transactional-message-copier-shutdown-hook", () -> {
             isShuttingDown.set(true);
             // Flush any remaining messages
@@ -309,6 +326,7 @@ public class TransactionalMessageCopier {
         final boolean useGroupMetadata = parsedArgs.getBoolean("useGroupMetadata");
         try {
             Random random = new Random();
+
             while (0 < remainingMessages.get()) {
                 System.out.println(statusAsJson(numMessagesProcessed.get(), remainingMessages.get(), transactionalId));
                 if (isShuttingDown.get())
@@ -326,17 +344,6 @@ public class TransactionalMessageCopier {
                         }
                     }
 
-                    // The max message has not been initialized, which means we have to init.
-                    if (groupMode && messageCap == Long.MAX_VALUE) {
-                        messageCap = 0;
-
-                        for (TopicPartition partition : consumer.assignment()) {
-                            messageCap += messagesRemaining(consumer, partition);
-                        }
-                        // We could not neglect the messages already inside current transaction.
-                        messageCap += messagesInCurrentTransaction;
-                    }
-
                     if (useGroupMetadata) {
                         producer.sendOffsetsToTransaction(consumerPositions(consumer), consumer.groupMetadata());
                     } else {
@@ -347,7 +354,8 @@ public class TransactionalMessageCopier {
                         throw new KafkaException("Aborting transaction");
                     } else {
                         producer.commitTransaction();
-                        remainingMessages.set(messageCap - numMessagesProcessed.addAndGet(messagesInCurrentTransaction));
+                        final long finalMessagesInCurrentTransaction = messagesInCurrentTransaction;
+                        remainingMessages.getAndUpdate(r -> r - numMessagesProcessed.addAndGet(finalMessagesInCurrentTransaction));
                     }
                 } catch (ProducerFencedException | OutOfOrderSequenceException e) {
                     // We cannot recover from these errors, so just rethrow them and let the process fail
