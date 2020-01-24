@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor;
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.GroupSubscription;
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.RebalanceProtocol;
@@ -174,6 +175,7 @@ public class StreamsPartitionAssignorTest {
         configurationMap.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, USER_END_POINT);
         configurationMap.put(StreamsConfig.InternalConfig.TASK_MANAGER_FOR_PARTITION_ASSIGNOR, taskManager);
         configurationMap.put(StreamsConfig.InternalConfig.STREAMS_METADATA_STATE_FOR_PARTITION_ASSIGNOR, streamsMetadataState);
+        configurationMap.put(StreamsConfig.InternalConfig.STREAMS_ADMIN_CLIENT, EasyMock.createNiceMock(Admin.class));
         configurationMap.put(StreamsConfig.InternalConfig.ASSIGNMENT_ERROR_CODE, new AtomicInteger());
         return configurationMap;
     }
@@ -203,7 +205,6 @@ public class StreamsPartitionAssignorTest {
                                        final UUID processId,
                                        final InternalTopologyBuilder builder) {
         taskManager = EasyMock.createNiceMock(TaskManager.class);
-        EasyMock.expect(taskManager.adminClient()).andReturn(null).anyTimes();
         EasyMock.expect(taskManager.builder()).andReturn(builder).anyTimes();
         EasyMock.expect(taskManager.activeTaskIds()).andReturn(prevTasks).anyTimes();
         EasyMock.expect(taskManager.tasksOnLocalStorage()).andReturn(cachedTasks).anyTimes();

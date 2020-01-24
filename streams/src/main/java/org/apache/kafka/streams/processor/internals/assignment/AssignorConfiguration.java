@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.processor.internals.assignment;
 
 import org.apache.kafka.clients.CommonClientConfigs;
+import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.RebalanceProtocol;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.ConfigException;
@@ -127,7 +128,25 @@ public final class AssignorConfiguration {
             streamsMetadataState = (StreamsMetadataState) o;
         }
 
-        internalTopicManager = new InternalTopicManager(taskManager.adminClient(), streamsConfig);
+        {
+            final Object o = configs.get(StreamsConfig.InternalConfig.STREAMS_ADMIN_CLIENT);
+            if (o == null) {
+                final KafkaException fatalException = new KafkaException("Admin is not specified");
+                log.error(fatalException.getMessage(), fatalException);
+                throw fatalException;
+            }
+
+            if (!(o instanceof Admin)) {
+                final KafkaException fatalException = new KafkaException(
+                    String.format("%s is not an instance of %s", o.getClass().getName(), Admin.class.getName())
+                );
+                log.error(fatalException.getMessage(), fatalException);
+                throw fatalException;
+            }
+
+            internalTopicManager = new InternalTopicManager((Admin) o, streamsConfig);
+        }
+
 
         copartitionedTopicsEnforcer = new CopartitionedTopicsEnforcer(logPrefix);
     }

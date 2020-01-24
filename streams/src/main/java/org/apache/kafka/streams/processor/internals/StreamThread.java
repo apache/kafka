@@ -64,6 +64,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 public class StreamThread extends Thread {
 
+    private final Admin adminClient;
+
     /**
      * Stream thread states are the possible states that a stream thread can be in.
      * A thread must only be in one state at a time
@@ -584,6 +586,7 @@ public class StreamThread extends Thread {
         final Map<String, Object> consumerConfigs = config.getMainConsumerConfigs(applicationId, getConsumerClientId(threadId), threadIdx);
         consumerConfigs.put(StreamsConfig.InternalConfig.TASK_MANAGER_FOR_PARTITION_ASSIGNOR, taskManager);
         consumerConfigs.put(StreamsConfig.InternalConfig.STREAMS_METADATA_STATE_FOR_PARTITION_ASSIGNOR, streamsMetadataState);
+        consumerConfigs.put(StreamsConfig.InternalConfig.STREAMS_ADMIN_CLIENT, adminClient);
         final AtomicInteger assignmentErrorCode = new AtomicInteger();
         consumerConfigs.put(StreamsConfig.InternalConfig.ASSIGNMENT_ERROR_CODE, assignmentErrorCode);
         String originalReset = null;
@@ -600,6 +603,7 @@ public class StreamThread extends Thread {
             time,
             config,
             activeTaskCreator.threadProducer,
+            adminClient,
             restoreConsumer,
             consumer,
             changelogReader,
@@ -617,6 +621,7 @@ public class StreamThread extends Thread {
     public StreamThread(final Time time,
                         final StreamsConfig config,
                         final Producer<byte[], byte[]> producer,
+                        final Admin adminClient,
                         final Consumer<byte[], byte[]> restoreConsumer,
                         final Consumer<byte[], byte[]> consumer,
                         final StoreChangelogReader changelogReader,
@@ -628,6 +633,7 @@ public class StreamThread extends Thread {
                         final LogContext logContext,
                         final AtomicInteger assignmentErrorCode) {
         super(threadId);
+        this.adminClient = adminClient;
 
         this.stateLock = new Object();
         this.standbyRecords = new HashMap<>();
@@ -1204,7 +1210,7 @@ public class StreamThread extends Thread {
     }
 
     public Map<MetricName, Metric> adminClientMetrics() {
-        final Map<MetricName, ? extends Metric> adminClientMetrics = taskManager.adminClient().metrics();
+        final Map<MetricName, ? extends Metric> adminClientMetrics = adminClient.metrics();
         return new LinkedHashMap<>(adminClientMetrics);
     }
 

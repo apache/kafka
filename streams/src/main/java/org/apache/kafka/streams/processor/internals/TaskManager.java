@@ -99,11 +99,7 @@ public class TaskManager {
         return builder;
     }
 
-    public Admin adminClient() {
-        return adminClient;
-    }
-
-    public void handleRebalanceStart() {
+    void handleRebalanceStart() {
         rebalanceInProgress = true;
     }
 

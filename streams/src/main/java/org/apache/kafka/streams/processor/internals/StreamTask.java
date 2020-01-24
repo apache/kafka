@@ -270,6 +270,8 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         if (state() == State.SUSPENDED) {
             initializeMetadata();
             transitionTo(State.RUNNING);
+        } else {
+            throw new IllegalStateException("Expected only to resume from SUSPENDED state, but was " + state());
         }
     }
 

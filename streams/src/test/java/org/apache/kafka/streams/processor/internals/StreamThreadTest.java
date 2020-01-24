@@ -413,6 +413,7 @@ public class StreamThreadTest {
             mockTime,
             config,
             null,
+            null,
             consumer,
             consumer,
             null,
@@ -544,6 +545,7 @@ public class StreamThreadTest {
             mockTime,
             config,
             null,
+            null,
             consumer,
             consumer,
             null,
@@ -579,6 +581,7 @@ public class StreamThreadTest {
         final StreamThread thread = new StreamThread(
             mockTime,
             config,
+            null,
             null,
             consumer,
             consumer,
@@ -742,6 +745,7 @@ public class StreamThreadTest {
             mockTime,
             config,
             null,
+            null,
             consumer,
             consumer,
             null,
@@ -776,6 +780,7 @@ public class StreamThreadTest {
         final StreamThread thread = new StreamThread(
             mockTime,
             config,
+            null,
             null,
             consumer,
             consumer,
@@ -852,6 +857,7 @@ public class StreamThreadTest {
             mockTime,
             config,
             null,
+            null,
             mockStreamThreadConsumer,
             mockStreamThreadConsumer,
             null,
@@ -887,6 +893,7 @@ public class StreamThreadTest {
         final StreamThread thread = new StreamThread(
             mockTime,
             config,
+            null,
             null,
             consumer,
             consumer,
@@ -1839,6 +1846,7 @@ public class StreamThreadTest {
             mockTime,
             config,
             producer,
+            null,
             consumer,
             consumer,
             null,
@@ -1879,7 +1887,7 @@ public class StreamThreadTest {
             mockTime,
             config,
             producer,
-            consumer,
+            adminClient, consumer,
             consumer,
             null,
             null,
@@ -1898,7 +1906,6 @@ public class StreamThreadTest {
             null,
             new MockTime());
 
-        EasyMock.expect(taskManager.adminClient()).andReturn(adminClient);
         EasyMock.expectLastCall();
         EasyMock.replay(taskManager, consumer);
 
