@@ -61,7 +61,7 @@ public class TaskMigratedException extends StreamsException {
     }
 
     public TaskMigratedException(final String message, final Throwable throwable) {
-        this(null, message + " It means all tasks belonging to this thread has been migrated", throwable);
+        this(null, message + " It means all tasks belonging to this thread have been migrated", throwable);
     }
 
     public TaskId migratedTaskId() {

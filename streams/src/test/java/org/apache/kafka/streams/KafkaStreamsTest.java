@@ -81,6 +81,7 @@ import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
+import static java.util.Collections.emptyList;
 import static java.util.Collections.singletonList;
 import static org.easymock.EasyMock.anyInt;
 import static org.easymock.EasyMock.anyLong;
@@ -319,9 +320,8 @@ public class KafkaStreamsTest {
                 return null;
             }).anyTimes();
 
-        EasyMock.expect(thread.allStandbyTasks()).andStubReturn(Collections.emptyList());
-        EasyMock.expect(thread.restoringTaskIds()).andStubReturn(Collections.emptySet());
-        EasyMock.expect(thread.allStreamsTasks()).andStubReturn(Collections.emptyList());
+        EasyMock.expect(thread.activeTasks()).andStubReturn(emptyList());
+        EasyMock.expect(thread.allTasks()).andStubReturn(Collections.emptyMap());
     }
 
     @Test

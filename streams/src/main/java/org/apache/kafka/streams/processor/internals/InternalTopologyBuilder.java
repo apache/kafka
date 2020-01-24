@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.StreamsConfig;
@@ -1892,13 +1893,24 @@ public class InternalTopologyBuilder {
         }
     }
 
-    void updateSubscribedTopics(final Set<String> topics,
-                                final String logPrefix) {
-        final SubscriptionUpdates subscriptionUpdates = new SubscriptionUpdates();
-        log.debug("{}found {} topics possibly matching regex", logPrefix, topics);
-        // update the topic groups with the returned subscription set for regex pattern subscriptions
-        subscriptionUpdates.updateTopics(topics);
-        updateSubscriptions(subscriptionUpdates, logPrefix);
+    void addSubscribedTopicsFromAssignment(final List<TopicPartition> partitions, final String logPrefix) {
+        if (sourceTopicPattern() != null) {
+            final Set<String> assignedTopics = new HashSet<>();
+            for (final TopicPartition topicPartition : partitions) {
+                assignedTopics.add(topicPartition.topic());
+            }
+
+            final Collection<String> existingTopics = subscriptionUpdates().getUpdates();
+            if (!existingTopics.containsAll(assignedTopics)) {
+                assignedTopics.addAll(existingTopics);
+
+                final SubscriptionUpdates newSubscriptionUpdates = new SubscriptionUpdates();
+                log.debug("{}found {} topics possibly matching regex", logPrefix, assignedTopics);
+                // update the topic groups with the returned subscription set for regex pattern subscriptions
+                newSubscriptionUpdates.updateTopics(assignedTopics);
+                updateSubscriptions(newSubscriptionUpdates, logPrefix);
+            }
+        }
     }
 
 

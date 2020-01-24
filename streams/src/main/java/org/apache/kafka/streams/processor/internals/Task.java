@@ -16,55 +16,139 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.streams.errors.StreamsException;
-import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 
 import java.util.Collection;
+import java.util.Collections;
+import java.util.Map;
 import java.util.Set;
 
 public interface Task {
 
-    void initializeMetadata();
+    long LATEST_OFFSET = -2L;
 
-    /**
-     * Initialize the task and return {@code true} if the task is ready to run, i.e, it has no state stores
-     * @return true if this task has no state stores that may need restoring.
-     * @throws IllegalStateException If store gets registered after initialized is already finished
-     * @throws StreamsException if the store's change log does not contain the partition
-     */
-    boolean initializeStateStores();
+    enum State {
+        CREATED {
+            @Override
+            public boolean hasBeenRunning() {
+                return false;
+            }
+        },
+        RESTORING {
+            @Override
+            public boolean hasBeenRunning() {
+                return false;
+            }
+        },
+        RUNNING {
+            @Override
+            public boolean hasBeenRunning() {
+                return true;
+            }
+        },
+        SUSPENDED {
+            @Override
+            public boolean hasBeenRunning() {
+                return true;
+            }
+        },
+        CLOSED {
+            @Override
+            public boolean hasBeenRunning() {
+                return true;
+            }
+        },
+        CLOSING {
+            @Override
+            public boolean hasBeenRunning() {
+                return true;
+            }
+        };
+
+        public abstract boolean hasBeenRunning();
+    }
+
+    enum TaskType {
+        ACTIVE("ACTIVE"),
+
+        STANDBY("STANDBY"),
+
+        GLOBAL("GLOBAL");
+
+        public final String name;
+
+        TaskType(final String name) {
+            this.name = name;
+        }
+    }
+
+    State state();
+
+    void initializeIfNeeded();
+
+    void completeInitializationAfterRestore();
+
+    default Map<TopicPartition, Long> purgableOffsets() {
+        return Collections.emptyMap();
+    }
+
+    void addRecords(TopicPartition partition, Iterable<ConsumerRecord<byte[], byte[]>> records);
+
+    default boolean process(final long wallClockTime) {
+        return false;
+    }
 
     boolean commitNeeded();
 
-    void initializeTopology();
+    default boolean commitRequested() {
+        return false;
+    }
 
     void commit();
 
+    default boolean maybePunctuateStreamTime() {
+        return false;
+    }
+
+    default boolean maybePunctuateSystemTime() {
+        return false;
+    }
+
+    void suspend();
+
     void resume();
 
-    void close(final boolean clean);
+    /**
+     * Close a task that we still own. Commit all progress and close the task gracefully.
+     * Throws an exception if this couldn't be done.
+     */
+    void closeClean();
+
+    /**
+     * Close a task that we may not own. Discard any uncommitted progress and close the task.
+     * Never throws an exception, but just makes all attempts to release resources while closing.
+     */
+    void closeDirty();
 
     StateStore getStore(final String name);
 
-    String applicationId();
-
-    ProcessorTopology topology();
-
-    ProcessorContext context();
-
     TaskId id();
 
-    Set<TopicPartition> partitions();
+    Set<TopicPartition> inputPartitions();
 
     /**
      * @return any changelog partitions associated with this task
      */
     Collection<TopicPartition> changelogPartitions();
 
-    boolean hasStateStores();
+    /**
+     * @return the offsets of all the changelog partitions associated with this task,
+     *         indicating the current positions of the logged state stores of the task.
+     */
+    Map<TopicPartition, Long> changelogOffsets();
 
-    String toString(final String indent);
+    boolean isActive();
 }

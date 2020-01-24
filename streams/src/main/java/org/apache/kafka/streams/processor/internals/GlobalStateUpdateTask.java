@@ -114,7 +114,7 @@ public class GlobalStateUpdateTask implements GlobalStateMaintainer {
     }
 
     public void close() throws IOException {
-        stateMgr.close(true);
+        stateMgr.close();
     }
 
     private void initTopology() {

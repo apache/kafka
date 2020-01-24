@@ -43,10 +43,10 @@ import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.internals.KeyValueStoreFacade;
 import org.apache.kafka.streams.internals.QuietStreamsConfig;
 import org.apache.kafka.streams.internals.WindowStoreFacade;
-import org.apache.kafka.streams.processor.internals.AbstractTask;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.processor.internals.RecordCollector;
 import org.apache.kafka.streams.processor.internals.RecordCollectorImpl;
+import org.apache.kafka.streams.processor.internals.Task;
 import org.apache.kafka.streams.processor.internals.metrics.TaskMetrics;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.PunctuationType;
@@ -386,7 +386,7 @@ public class TopologyTestDriver implements Closeable {
             final ProcessorStateManager stateManager = new ProcessorStateManager(
                 TASK_ID,
                 new HashSet<>(partitionsByTopic.values()),
-                AbstractTask.TaskType.ACTIVE,
+                Task.TaskType.ACTIVE,
                 stateDirectory,
                 processorTopology.storeToChangelogTopic(),
                 new StoreChangelogReader(
@@ -414,8 +414,8 @@ public class TopologyTestDriver implements Closeable {
                 mockWallClockTime,
                 stateManager,
                 recordCollector);
-            task.initializeStateStores();
-            task.initializeTopology();
+            task.initializeIfNeeded();
+            task.completeInitializationAfterRestore();
             ((InternalProcessorContext) task.context()).setRecordContext(new ProcessorRecordContext(
                 0L,
                 -1L,
@@ -485,7 +485,7 @@ public class TopologyTestDriver implements Closeable {
                     headers)));
 
             // Process the record ...
-            task.process();
+            task.process(mockWallClockTime.milliseconds());
             task.maybePunctuateStreamTime();
             task.commit();
             captureOutputRecords();
@@ -999,7 +999,7 @@ public class TopologyTestDriver implements Closeable {
      */
     public void close() {
         if (task != null) {
-            task.close(true);
+            task.closeClean();
         }
         if (globalStateTask != null) {
             try {

@@ -107,17 +107,17 @@ public class ProcessorContextImplTest {
 
         final ProcessorStateManager stateManager = mock(ProcessorStateManager.class);
 
-        expect(stateManager.getStore("GlobalKeyValueStore")).andReturn(keyValueStoreMock());
-        expect(stateManager.getStore("GlobalTimestampedKeyValueStore")).andReturn(timestampedKeyValueStoreMock());
-        expect(stateManager.getStore("GlobalWindowStore")).andReturn(windowStoreMock());
-        expect(stateManager.getStore("GlobalTimestampedWindowStore")).andReturn(timestampedWindowStoreMock());
-        expect(stateManager.getStore("GlobalSessionStore")).andReturn(sessionStoreMock());
+        expect(stateManager.getGlobalStore("GlobalKeyValueStore")).andReturn(keyValueStoreMock());
+        expect(stateManager.getGlobalStore("GlobalTimestampedKeyValueStore")).andReturn(timestampedKeyValueStoreMock());
+        expect(stateManager.getGlobalStore("GlobalWindowStore")).andReturn(windowStoreMock());
+        expect(stateManager.getGlobalStore("GlobalTimestampedWindowStore")).andReturn(timestampedWindowStoreMock());
+        expect(stateManager.getGlobalStore("GlobalSessionStore")).andReturn(sessionStoreMock());
+        expect(stateManager.getGlobalStore(anyString())).andReturn(null);
         expect(stateManager.getStore("LocalKeyValueStore")).andReturn(keyValueStoreMock());
         expect(stateManager.getStore("LocalTimestampedKeyValueStore")).andReturn(timestampedKeyValueStoreMock());
         expect(stateManager.getStore("LocalWindowStore")).andReturn(windowStoreMock());
         expect(stateManager.getStore("LocalTimestampedWindowStore")).andReturn(timestampedWindowStoreMock());
         expect(stateManager.getStore("LocalSessionStore")).andReturn(sessionStoreMock());
-        expect(stateManager.getStore(anyString())).andReturn(null);
 
         replay(stateManager);
 

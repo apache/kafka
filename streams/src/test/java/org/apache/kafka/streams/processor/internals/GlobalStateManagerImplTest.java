@@ -407,7 +407,7 @@ public class GlobalStateManagerImplTest {
         initializeConsumer(1, 0, t2);
         stateManager.registerStore(store2, stateRestoreCallback);
 
-        stateManager.close(true);
+        stateManager.close();
         assertFalse(store1.isOpen());
         assertFalse(store2.isOpen());
     }
@@ -423,7 +423,7 @@ public class GlobalStateManagerImplTest {
             }
         }, stateRestoreCallback);
 
-        stateManager.close(true);
+        stateManager.close();
     }
 
     @Test
@@ -440,7 +440,7 @@ public class GlobalStateManagerImplTest {
     @Test
     public void shouldUnlockGlobalStateDirectoryOnClose() throws IOException {
         stateManager.initialize();
-        stateManager.close(true);
+        stateManager.close();
         final StateDirectory stateDir = new StateDirectory(streamsConfig, new MockTime(), true);
         try {
             // should be able to get the lock now as it should've been released in close
@@ -463,9 +463,9 @@ public class GlobalStateManagerImplTest {
                 super.close();
             }
         }, stateRestoreCallback);
-        stateManager.close(true);
+        stateManager.close();
 
-        stateManager.close(true);
+        stateManager.close();
     }
 
     @Test
@@ -485,7 +485,7 @@ public class GlobalStateManagerImplTest {
         stateManager.registerStore(store2, stateRestoreCallback);
 
         try {
-            stateManager.close(true);
+            stateManager.close();
         } catch (final ProcessorStateException e) {
             // expected
         }
@@ -565,7 +565,7 @@ public class GlobalStateManagerImplTest {
         initializeConsumer(10, 0, t1);
         stateManager.registerStore(store1, stateRestoreCallback);
         stateManager.checkpoint(Collections.emptyMap());
-        stateManager.close(true);
+        stateManager.close();
 
         final Map<TopicPartition, Long> checkpointMap = stateManager.changelogOffsets();
         assertThat(checkpointMap, equalTo(Collections.singletonMap(t1, 10L)));
@@ -577,7 +577,7 @@ public class GlobalStateManagerImplTest {
         stateManager.initialize();
         initializeConsumer(10, 0, t3);
         stateManager.registerStore(store3, stateRestoreCallback);
-        stateManager.close(true);
+        stateManager.close();
 
         assertThat(readOffsetsCheckpoint(), equalTo(Collections.emptyMap()));
     }

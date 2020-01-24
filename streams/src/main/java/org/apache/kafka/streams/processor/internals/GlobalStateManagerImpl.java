@@ -168,9 +168,8 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
         return baseDir;
     }
 
-    public void register(final StateStore store,
-                         final StateRestoreCallback stateRestoreCallback) {
-
+    @Override
+    public void registerStore(final StateStore store, final StateRestoreCallback stateRestoreCallback) {
         if (globalStores.containsKey(store.name())) {
             throw new IllegalArgumentException(String.format("Global Store %s has already been registered", store.name()));
         }
@@ -269,12 +268,6 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
         return topicPartitions;
     }
 
-    // TODO K9113: this is just for compilation for now, we would refactor this class in another PR
-    @Override
-    public void registerStore(final StateStore store, final StateRestoreCallback stateRestoreCallback) {
-
-    }
-
     private void restoreState(final StateRestoreCallback stateRestoreCallback,
                               final List<TopicPartition> topicPartitions,
                               final Map<TopicPartition, Long> highWatermarks,
@@ -348,7 +341,7 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
 
 
     @Override
-    public void close(final boolean clean) throws IOException {
+    public void close() throws IOException {
         try {
             if (globalStores.isEmpty()) {
                 return;

@@ -28,7 +28,6 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.TopologyWrapper;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.processor.TaskId;
-import org.apache.kafka.streams.processor.internals.AbstractTask;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.processor.internals.ProcessorTopology;
@@ -38,6 +37,7 @@ import org.apache.kafka.streams.processor.internals.StateDirectory;
 import org.apache.kafka.streams.processor.internals.StoreChangelogReader;
 import org.apache.kafka.streams.processor.internals.StreamTask;
 import org.apache.kafka.streams.processor.internals.StreamThread;
+import org.apache.kafka.streams.processor.internals.Task;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 import org.apache.kafka.streams.state.ReadOnlyWindowStore;
@@ -78,7 +78,7 @@ public class StreamThreadStateStoreProviderTest {
     private File stateDir;
     private final String topicName = "topic";
     private StreamThread threadMock;
-    private Map<TaskId, StreamTask> tasks;
+    private Map<TaskId, Task> tasks;
 
     @Before
     public void before() {
@@ -140,7 +140,7 @@ public class StreamThreadStateStoreProviderTest {
             clientSupplier,
             processorTopology,
             new TaskId(0, 0));
-        taskOne.initializeStateStores();
+        taskOne.initializeIfNeeded();
         tasks.put(new TaskId(0, 0), taskOne);
 
         final StreamTask taskTwo = createStreamsTask(
@@ -148,7 +148,7 @@ public class StreamThreadStateStoreProviderTest {
             clientSupplier,
             processorTopology,
             new TaskId(0, 1));
-        taskTwo.initializeStateStores();
+        taskTwo.initializeIfNeeded();
         tasks.put(new TaskId(0, 1), taskTwo);
 
         threadMock = EasyMock.createNiceMock(StreamThread.class);
@@ -310,7 +310,7 @@ public class StreamThreadStateStoreProviderTest {
         final ProcessorStateManager stateManager = new ProcessorStateManager(
             taskId,
             partitions,
-            AbstractTask.TaskType.ACTIVE,
+            Task.TaskType.ACTIVE,
             stateDirectory,
             topology.storeToChangelogTopic(),
             new StoreChangelogReader(
@@ -342,7 +342,8 @@ public class StreamThreadStateStoreProviderTest {
 
     private void mockThread(final boolean initialized) {
         EasyMock.expect(threadMock.isRunning()).andReturn(initialized);
-        EasyMock.expect(threadMock.activeTasks()).andStubReturn(tasks);
+        EasyMock.expect(threadMock.allTasks()).andStubReturn(tasks);
+        EasyMock.expect(threadMock.activeTasks()).andStubReturn(tasks.values().stream()::iterator);
         EasyMock.expect(threadMock.state()).andReturn(
             initialized ? StreamThread.State.RUNNING : StreamThread.State.PARTITIONS_ASSIGNED
         ).anyTimes();

@@ -23,7 +23,7 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
-import org.apache.kafka.streams.processor.internals.AbstractTask.TaskType;
+import org.apache.kafka.streams.processor.internals.Task.TaskType;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
@@ -142,6 +142,7 @@ public class ProcessorStateManager implements StateManager {
 
     // must be maintained in topological order
     private final FixedOrderMap<String, StateStoreMetadata> stores = new FixedOrderMap<>();
+    private final FixedOrderMap<String, StateStore> globalStores = new FixedOrderMap<>();
 
     private final File baseDir;
     private final OffsetCheckpoint checkpointFile;
@@ -176,7 +177,19 @@ public class ProcessorStateManager implements StateManager {
         log.debug("Created state store manager for task {}", taskId);
     }
 
-    public void initStoresFromCheckpointedOffsets() {
+    void registerGlobalStateStores(final List<StateStore> stateStores) {
+        log.debug("Register global stores {}", stateStores);
+        for (final StateStore stateStore : stateStores) {
+            globalStores.put(stateStore.name(), stateStore);
+        }
+    }
+
+    @Override
+    public StateStore getGlobalStore(final String name) {
+        return globalStores.get(name);
+    }
+
+    public void initializeStoreOffsetsFromCheckpoint() {
         try {
             final Map<TopicPartition, Long> loadedCheckpoints = checkpointFile.read();
 
@@ -272,7 +285,11 @@ public class ProcessorStateManager implements StateManager {
         final Map<TopicPartition, Long> changelogOffsets = new HashMap<>();
         for (final StateStoreMetadata storeMetadata : stores.values()) {
             if (storeMetadata.changelogPartition != null) {
-                changelogOffsets.put(storeMetadata.changelogPartition, storeMetadata.offset);
+                // for changelog whose offset is unknown, use 0L indicating earliest offset
+                // otherwise return the current offset + 1 as the next offset to fetch
+                changelogOffsets.put(
+                    storeMetadata.changelogPartition,
+                    storeMetadata.offset == null ? 0L : storeMetadata.offset + 1L);
             }
         }
         return changelogOffsets;
@@ -368,7 +385,7 @@ public class ProcessorStateManager implements StateManager {
      * @throws ProcessorStateException if any error happens when closing the state stores
      */
     @Override
-    public void close(final boolean clean) throws ProcessorStateException {
+    public void close() throws ProcessorStateException {
         RuntimeException firstException = null;
         // attempting to close the stores, just in case they
         // are not closed by a ProcessorNode yet

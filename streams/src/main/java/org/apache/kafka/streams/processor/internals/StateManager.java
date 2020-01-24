@@ -44,5 +44,8 @@ interface StateManager {
 
     Map<TopicPartition, Long> changelogOffsets();
 
-    void close(final boolean clean) throws IOException;
+    void close() throws IOException;
+
+    // TODO: we can remove this when consolidating global state manager into processor state manager
+    StateStore getGlobalStore(final String name);
 }

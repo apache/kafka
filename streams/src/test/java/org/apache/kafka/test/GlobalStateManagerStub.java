@@ -59,7 +59,7 @@ public class GlobalStateManagerStub implements GlobalStateManager {
     public void flush() {}
 
     @Override
-    public void close(final boolean clean) {
+    public void close() {
         closed = true;
     }
 
@@ -70,6 +70,11 @@ public class GlobalStateManagerStub implements GlobalStateManager {
 
     @Override
     public StateStore getStore(final String name) {
+        return null;
+    }
+
+    @Override
+    public StateStore getGlobalStore(final String name) {
         return null;
     }
 

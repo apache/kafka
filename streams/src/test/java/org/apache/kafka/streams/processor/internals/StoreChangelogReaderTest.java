@@ -27,8 +27,8 @@ import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
-import org.apache.kafka.streams.processor.internals.ProcessorStateManager.StateStoreMetadata;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.internals.ProcessorStateManager.StateStoreMetadata;
 import org.apache.kafka.test.MockStateRestoreListener;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.easymock.EasyMock;
@@ -52,8 +52,8 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.common.utils.Utils.mkSet;
-import static org.apache.kafka.streams.processor.internals.AbstractTask.TaskType.ACTIVE;
-import static org.apache.kafka.streams.processor.internals.AbstractTask.TaskType.STANDBY;
+import static org.apache.kafka.streams.processor.internals.Task.TaskType.ACTIVE;
+import static org.apache.kafka.streams.processor.internals.Task.TaskType.STANDBY;
 import static org.apache.kafka.streams.processor.internals.StoreChangelogReader.ChangelogReaderState.ACTIVE_RESTORING;
 import static org.apache.kafka.streams.processor.internals.StoreChangelogReader.ChangelogReaderState.STANDBY_UPDATING;
 import static org.apache.kafka.test.MockStateRestoreListener.RESTORE_BATCH;
@@ -92,7 +92,7 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
     }
 
     @Parameterized.Parameter
-    public AbstractTask.TaskType type;
+    public Task.TaskType type;
 
     private final String storeName = "store";
     private final String topicName = "topic";
@@ -182,7 +182,7 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
         changelogReader.restore();
 
         assertEquals(type == ACTIVE ? StoreChangelogReader.ChangelogState.COMPLETED : StoreChangelogReader.ChangelogState.RESTORING,
-            changelogReader.changelogMetadata(tp).state());
+                     changelogReader.changelogMetadata(tp).state());
         assertEquals(type == ACTIVE ? 10L : null, changelogReader.changelogMetadata(tp).endOffset());
         assertEquals(0L, changelogReader.changelogMetadata(tp).totalRestored());
         assertEquals(type == ACTIVE ? Collections.singleton(tp) : Collections.emptySet(), changelogReader.completedChangelogs());
@@ -214,8 +214,9 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
 
         changelogReader.register(tp, stateManager);
 
-        if (type == STANDBY)
+        if (type == STANDBY) {
             changelogReader.transitToUpdateStandby();
+        }
 
         changelogReader.restore();
 
@@ -285,8 +286,9 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
 
         changelogReader.register(tp, stateManager);
 
-        if (type == STANDBY)
+        if (type == STANDBY) {
             changelogReader.transitToUpdateStandby();
+        }
 
         changelogReader.restore();
 
@@ -532,7 +534,7 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
         changelogReader.restore();
 
         assertEquals(type == ACTIVE ? StoreChangelogReader.ChangelogState.REGISTERED : StoreChangelogReader.ChangelogState.RESTORING,
-            changelogReader.changelogMetadata(tp).state());
+                     changelogReader.changelogMetadata(tp).state());
         assertNull(changelogReader.changelogMetadata(tp).endOffset());
         assertEquals(type == ACTIVE ? null : 0L, changelogReader.changelogMetadata(tp).limitOffset());
         assertTrue(functionCalled.get());

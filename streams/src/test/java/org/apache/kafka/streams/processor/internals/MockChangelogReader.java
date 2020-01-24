@@ -18,9 +18,9 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.common.TopicPartition;
 
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -43,6 +43,16 @@ public class MockChangelogReader implements ChangelogReader {
     }
 
     @Override
+    public void transitToRestoreActive() {
+        // do nothing
+    }
+
+    @Override
+    public void transitToUpdateStandby() {
+        // do nothing
+    }
+
+    @Override
     public void updateLimitOffsets() {
         // do nothing
     }
@@ -59,7 +69,7 @@ public class MockChangelogReader implements ChangelogReader {
     }
 
     @Override
-    public void remove(final List<TopicPartition> partitions) {
+    public void remove(final Collection<TopicPartition> partitions) {
         restoringPartitions.removeAll(partitions);
 
         for (final TopicPartition partition : partitions) {
