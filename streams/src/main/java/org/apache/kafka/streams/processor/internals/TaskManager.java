@@ -155,7 +155,7 @@ public class TaskManager {
             standbyTaskCreator.createTasks(consumer, standbyTasksToCreate).forEach(this::addNewTask);
         }
 
-        builder.addSubscribedTopics(
+        builder.addSubscribedTopicsFromAssignment(
             activeTasks.values().stream().flatMap(Collection::stream).collect(Collectors.toList()),
             logPrefix
         );
@@ -518,6 +518,6 @@ public class TaskManager {
 
     // FIXME: inappropriately used from StreamsUpgradeTest
     public void fixmeUpdateSubscriptionsFromAssignment(final List<TopicPartition> partitions) {
-        builder.addSubscribedTopics(partitions, logPrefix);
+        builder.addSubscribedTopicsFromAssignment(partitions, logPrefix);
     }
 }

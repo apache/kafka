@@ -40,10 +40,7 @@ import org.junit.runner.RunWith;
 
 import java.io.File;
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.Collection;
-import java.util.HashSet;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -129,7 +126,7 @@ public class TaskManagerTest {
         expect(activeTaskCreator.createTasks(anyObject(), eq(assignment))).andReturn(emptyList()).anyTimes();
         expect(standbyTaskCreator.createTasks(anyObject(), anyObject())).andReturn(emptyList()).anyTimes();
 
-        topologyBuilder.addSubscribedTopics(anyObject(), anyString());
+        topologyBuilder.addSubscribedTopicsFromAssignment(anyObject(), anyString());
         EasyMock.expectLastCall();
 
         EasyMock.expectLastCall().once();
@@ -155,7 +152,7 @@ public class TaskManagerTest {
         expect(activeTaskCreator.createTasks(anyObject(), eq(assignment))).andReturn(emptyList()).anyTimes();
         expect(standbyTaskCreator.createTasks(anyObject(), anyObject())).andReturn(emptyList()).anyTimes();
 
-        topologyBuilder.addSubscribedTopics(anyObject(), anyString());
+        topologyBuilder.addSubscribedTopicsFromAssignment(anyObject(), anyString());
         EasyMock.expectLastCall();
 
         EasyMock.replay(activeTaskCreator,
@@ -204,7 +201,7 @@ public class TaskManagerTest {
         expect(activeTaskCreator.createTasks(anyObject(), eq(emptyMap()))).andReturn(emptyList()).anyTimes();
         expect(standbyTaskCreator.createTasks(anyObject(), anyObject())).andReturn(emptyList()).anyTimes();
 
-        topologyBuilder.addSubscribedTopics(anyObject(), anyString());
+        topologyBuilder.addSubscribedTopicsFromAssignment(anyObject(), anyString());
         EasyMock.expectLastCall().anyTimes();
 
         EasyMock.replay(activeTaskCreator, standbyTaskCreator, topologyBuilder, changeLogReader);

@@ -1893,7 +1893,7 @@ public class InternalTopologyBuilder {
         }
     }
 
-    void addSubscribedTopics(final List<TopicPartition> partitions, final String logPrefix) {
+    void addSubscribedTopicsFromAssignment(final List<TopicPartition> partitions, final String logPrefix) {
         if (sourceTopicPattern() != null) {
             final Set<String> assignedTopics = new HashSet<>();
             for (final TopicPartition topicPartition : partitions) {
@@ -1903,18 +1903,14 @@ public class InternalTopologyBuilder {
             final Collection<String> existingTopics = subscriptionUpdates().getUpdates();
             if (!existingTopics.containsAll(assignedTopics)) {
                 assignedTopics.addAll(existingTopics);
-                updateSubscribedTopics(assignedTopics, logPrefix);
+
+                final SubscriptionUpdates newSubscriptionUpdates = new SubscriptionUpdates();
+                log.debug("{}found {} topics possibly matching regex", logPrefix, assignedTopics);
+                // update the topic groups with the returned subscription set for regex pattern subscriptions
+                newSubscriptionUpdates.updateTopics(assignedTopics);
+                updateSubscriptions(newSubscriptionUpdates, logPrefix);
             }
         }
-    }
-
-    void updateSubscribedTopics(final Set<String> topics,
-                                final String logPrefix) {
-        final SubscriptionUpdates subscriptionUpdates = new SubscriptionUpdates();
-        log.debug("{}found {} topics possibly matching regex", logPrefix, topics);
-        // update the topic groups with the returned subscription set for regex pattern subscriptions
-        subscriptionUpdates.updateTopics(topics);
-        updateSubscriptions(subscriptionUpdates, logPrefix);
     }
 
 

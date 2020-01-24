@@ -307,8 +307,6 @@ public class StreamThread extends Thread {
         abstract T createTask(final Consumer<byte[], byte[]> consumer, final TaskId id, final Set<TopicPartition> partitions);
 
         void close() {}
-
-        ;
     }
 
     static class TaskCreator extends AbstractTaskCreator<StreamTask> {
