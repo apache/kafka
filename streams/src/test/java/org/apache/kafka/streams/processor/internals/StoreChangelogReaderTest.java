@@ -52,8 +52,8 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.common.utils.Utils.mkSet;
-import static org.apache.kafka.streams.processor.internals.AbstractTask.TaskType.ACTIVE;
-import static org.apache.kafka.streams.processor.internals.AbstractTask.TaskType.STANDBY;
+import static org.apache.kafka.streams.processor.internals.Task.TaskType.ACTIVE;
+import static org.apache.kafka.streams.processor.internals.Task.TaskType.STANDBY;
 import static org.apache.kafka.streams.processor.internals.StoreChangelogReader.ChangelogReaderState.ACTIVE_RESTORING;
 import static org.apache.kafka.streams.processor.internals.StoreChangelogReader.ChangelogReaderState.STANDBY_UPDATING;
 import static org.apache.kafka.test.MockStateRestoreListener.RESTORE_BATCH;
@@ -92,7 +92,7 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
     }
 
     @Parameterized.Parameter
-    public AbstractTask.TaskType type;
+    public Task.TaskType type;
 
     private final String storeName = "store";
     private final String topicName = "topic";

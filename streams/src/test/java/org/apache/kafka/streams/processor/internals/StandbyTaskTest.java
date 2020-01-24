@@ -151,9 +151,7 @@ public class StandbyTaskTest {
         EasyMock.replay(stateManager);
 
         task = new StandbyTask(taskId,
-                               Collections.singleton(partition),
                                topology,
-                               consumer,
                                config,
                                streamsMetrics,
                                stateManager,
@@ -177,9 +175,7 @@ public class StandbyTaskTest {
     public void shouldThrowIfCommittingOnIllegalState() {
         task = new StandbyTask(
             taskId,
-            Utils.mkSet(partition),
             topology,
-            consumer,
             config,
             streamsMetrics,
             stateManager,
@@ -199,9 +195,7 @@ public class StandbyTaskTest {
         final TaskId taskId = new TaskId(0, 0);
         task = new StandbyTask(
             taskId,
-            Utils.mkSet(partition),
             topology,
-            consumer,
             config,
             streamsMetrics,
             stateManager,
@@ -220,9 +214,7 @@ public class StandbyTaskTest {
         EasyMock.replay(stateManager);
 
         task = new StandbyTask(taskId,
-                               Collections.singleton(partition),
                                topology,
-                               consumer,
                                config,
                                streamsMetrics,
                                stateManager,
@@ -245,9 +237,7 @@ public class StandbyTaskTest {
         final MetricName metricName = setupCloseTaskMetric();
         final StandbyTask task = new StandbyTask(
             taskId,
-            Utils.mkSet(partition),
             topology,
-            consumer,
             config,
             streamsMetrics,
             stateManager,
@@ -276,9 +266,7 @@ public class StandbyTaskTest {
         final MetricName metricName = setupCloseTaskMetric();
         final StandbyTask task = new StandbyTask(
             taskId,
-            Utils.mkSet(partition),
             topology,
-            consumer,
             config,
             streamsMetrics,
             stateManager,
@@ -304,9 +292,7 @@ public class StandbyTaskTest {
         final MetricName metricName = setupCloseTaskMetric();
         final StandbyTask task = new StandbyTask(
             taskId,
-            Utils.mkSet(partition),
             topology,
-            consumer,
             config,
             streamsMetrics,
             stateManager,
@@ -336,9 +322,7 @@ public class StandbyTaskTest {
         final MetricName metricName = setupCloseTaskMetric();
         final StandbyTask task = new StandbyTask(
             taskId,
-            Utils.mkSet(partition),
             topology,
-            consumer,
             config,
             streamsMetrics,
             stateManager,
@@ -364,9 +348,7 @@ public class StandbyTaskTest {
         final MetricName metricName = setupCloseTaskMetric();
         final StandbyTask task = new StandbyTask(
             taskId,
-            Utils.mkSet(partition),
             topology,
-            consumer,
             config,
             streamsMetrics,
             stateManager,
@@ -392,9 +374,7 @@ public class StandbyTaskTest {
         final MetricName metricName = setupCloseTaskMetric();
         final StandbyTask task = new StandbyTask(
             taskId,
-            Utils.mkSet(partition),
             topology,
-            consumer,
             config,
             streamsMetrics,
             stateManager,
@@ -420,9 +400,7 @@ public class StandbyTaskTest {
         final MetricName metricName = setupCloseTaskMetric();
         final StandbyTask task = new StandbyTask(
             taskId,
-            Utils.mkSet(partition),
             topology,
-            consumer,
             config,
             streamsMetrics,
             stateManager,
@@ -444,9 +422,7 @@ public class StandbyTaskTest {
     public void shouldThrowIfClosingOnIllegalState() {
         task = new StandbyTask(
             taskId,
-            Utils.mkSet(partition),
             topology,
-            consumer,
             config,
             streamsMetrics,
             stateManager,

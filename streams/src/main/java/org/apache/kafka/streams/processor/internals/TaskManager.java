@@ -31,7 +31,6 @@ import org.slf4j.Logger;
 
 import java.io.File;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -206,7 +205,7 @@ public class TaskManager {
                 // TODO, can we make StandbyTasks partitions always empty (since they don't process any inputs)?
                 // If so, we can simplify this logic here, as the resume would be a no-op.
                 if (task.isActive()) {
-                    consumer.resume(task.partitions());
+                    consumer.resume(task.inputPartitions());
                 }
             }
         }
@@ -223,7 +222,7 @@ public class TaskManager {
 
         for (final Task task : tasks.values()) {
             for (final TopicPartition partition : revokedPartitions) {
-                if (task.partitions().contains(partition)) {
+                if (task.inputPartitions().contains(partition)) {
                     revokedTasks.add(task.id());
                     break;
                 }
@@ -330,7 +329,7 @@ public class TaskManager {
 
     StreamTask streamTask(final TopicPartition partition) {
         for (final Task task : activeTaskIterable()) {
-            if (task.partitions().contains(partition)) {
+            if (task.inputPartitions().contains(partition)) {
                 return (StreamTask) task;
             }
         }
@@ -339,7 +338,7 @@ public class TaskManager {
 
     StandbyTask standbyTask(final TopicPartition partition) {
         for (final Task task : (Iterable<Task>) standbyTaskStream()::iterator) {
-            if (task.partitions().contains(partition)) {
+            if (task.inputPartitions().contains(partition)) {
                 return (StandbyTask) task;
             }
         }

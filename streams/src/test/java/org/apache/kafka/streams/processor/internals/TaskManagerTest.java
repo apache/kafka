@@ -24,7 +24,6 @@ import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.easymock.EasyMock;
@@ -70,7 +69,7 @@ import static org.junit.Assert.assertTrue;
 @RunWith(EasyMockRunner.class)
 public class TaskManagerTest {
 
-    private final String topic1 = "topic1";
+    private static final String topic1 = "topic1";
 
     private final TaskId taskId00 = new TaskId(0, 0);
     private final TopicPartition t1p0 = new TopicPartition(topic1, 0);
@@ -85,7 +84,6 @@ public class TaskManagerTest {
     private final TaskId taskId02 = new TaskId(0, 2);
     private final TopicPartition t1p2 = new TopicPartition(topic1, 2);
     private final Set<TopicPartition> taskId02Partitions = mkSet(t1p2);
-    private final Map<TaskId, Set<TopicPartition>> taskId02Assignment = singletonMap(taskId02, taskId02Partitions);
 
     @Mock(type = MockType.STRICT)
     private InternalTopologyBuilder.SubscriptionUpdates subscriptionUpdates;
@@ -96,8 +94,6 @@ public class TaskManagerTest {
     @Mock(type = MockType.NICE)
     private ChangelogReader changeLogReader;
     @Mock(type = MockType.NICE)
-    private StreamsMetadataState streamsMetadataState;
-    @Mock(type = MockType.NICE)
     private Consumer<byte[], byte[]> restoreConsumer;
     @Mock(type = MockType.NICE)
     private Consumer<byte[], byte[]> consumer;
@@ -107,26 +103,8 @@ public class TaskManagerTest {
     private StreamThread.AbstractTaskCreator<Task> standbyTaskCreator;
     @Mock(type = MockType.NICE)
     private Admin adminClient;
-    @Mock(type = MockType.NICE)
-    private StreamTask streamTask;
-    @Mock(type = MockType.NICE)
-    private StandbyTask standbyTask;
 
     private TaskManager taskManager;
-
-    private final String topic2 = "topic2";
-    private final TopicPartition t1p3 = new TopicPartition(topic1, 3);
-    private final TopicPartition t2p1 = new TopicPartition(topic2, 1);
-    private final TopicPartition t2p2 = new TopicPartition(topic2, 2);
-    private final TopicPartition t2p3 = new TopicPartition(topic2, 3);
-
-    private final TaskId task02 = new TaskId(0, 2);
-    private final TaskId task03 = new TaskId(0, 3);
-    private final TaskId task11 = new TaskId(1, 1);
-
-    private final Set<TaskId> revokedTasks = new HashSet<>();
-    private final List<TopicPartition> revokedPartitions = new ArrayList<>();
-    private final List<TopicPartition> revokedChangelogs = emptyList();
 
     @Rule
     public final TemporaryFolder testFolder = new TemporaryFolder();
@@ -141,21 +119,11 @@ public class TaskManagerTest {
                                       topologyBuilder,
                                       adminClient);
         taskManager.setConsumer(consumer);
-        revokedChangelogs.clear();
-    }
-
-    private void replay() {
-        EasyMock.replay(changeLogReader,
-                        restoreConsumer,
-                        consumer,
-                        activeTaskCreator,
-                        standbyTaskCreator,
-                        adminClient);
     }
 
     @Test
     public void shouldUpdateSubscriptionFromAssignmentOfNewTopic2() {
-        final Map<TaskId, Set<TopicPartition>> assignment = mkMap(mkEntry(taskId01, mkSet(t1p1, t2p1)));
+        final Map<TaskId, Set<TopicPartition>> assignment = mkMap(mkEntry(taskId01, mkSet(t1p1, new TopicPartition("topic2", 1))));
 
         expect(activeTaskCreator.builder()).andReturn(topologyBuilder).anyTimes();
         expect(activeTaskCreator.createTasks(anyObject(), eq(assignment))).andReturn(emptyList()).anyTimes();
@@ -224,7 +192,7 @@ public class TaskManagerTest {
 
         verify(activeTaskCreator, stateDirectory);
 
-        assertThat(tasks, equalTo(Utils.mkSet(taskId01, task02, task11)));
+        assertThat(tasks, equalTo(Utils.mkSet(taskId01, taskId02, new TaskId(1, 1))));
     }
 
     @Test
@@ -785,11 +753,10 @@ public class TaskManagerTest {
         expect(topologyBuilder.subscriptionUpdates()).andReturn(subscriptionUpdates);
     }
 
-    private static class StateMachineTask implements Task {
+    private static class StateMachineTask extends AbstractTask implements Task {
         private final TaskId id;
         private final Set<TopicPartition> partitions;
         private final boolean active;
-        private State state = State.CREATED;
         private boolean commitNeeded = false;
         private boolean commitRequested = false;
         private Map<TopicPartition, Long> purgeableOffsets;
@@ -800,17 +767,6 @@ public class TaskManagerTest {
             this.id = id;
             this.partitions = partitions;
             this.active = active;
-        }
-
-        @Override
-        public State state() {
-            return state;
-        }
-
-        @Override
-        public void transitionTo(final State newState) {
-            State.validateTransition(state, newState);
-            state = newState;
         }
 
         @Override
@@ -876,27 +832,12 @@ public class TaskManagerTest {
         }
 
         @Override
-        public String applicationId() {
-            return null;
-        }
-
-        @Override
-        public ProcessorTopology topology() {
-            return null;
-        }
-
-        @Override
-        public ProcessorContext context() {
-            return null;
-        }
-
-        @Override
         public TaskId id() {
             return id;
         }
 
         @Override
-        public Set<TopicPartition> partitions() {
+        public Set<TopicPartition> inputPartitions() {
             return partitions;
         }
 
@@ -920,11 +861,6 @@ public class TaskManagerTest {
 
         @Override
         public Map<TopicPartition, Long> changelogOffsets() {
-            return null;
-        }
-
-        @Override
-        public String toString(final String indent) {
             return null;
         }
     }

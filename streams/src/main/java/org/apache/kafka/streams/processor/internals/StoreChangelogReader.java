@@ -310,7 +310,7 @@ public class StoreChangelogReader implements ChangelogReader {
         final ChangelogMetadata changelogMetadata = new ChangelogMetadata(storeMetadata, stateManager);
 
         // initializing limit offset to 0L for standby changelog to effectively disable any restoration until it is updated
-        if (stateManager.taskType() == AbstractTask.TaskType.STANDBY && stateManager.changelogAsSource(partition)) {
+        if (stateManager.taskType() == Task.TaskType.STANDBY && stateManager.changelogAsSource(partition)) {
             changelogMetadata.restoreLimitOffset = 0L;
         }
 
@@ -350,7 +350,7 @@ public class StoreChangelogReader implements ChangelogReader {
     private Set<TopicPartition> activeRestoringChangelogs() {
         return changelogs.values().stream()
             .filter(metadata -> metadata.changelogState == ChangelogState.RESTORING &&
-                metadata.stateManager.taskType() == AbstractTask.TaskType.ACTIVE)
+                metadata.stateManager.taskType() == Task.TaskType.ACTIVE)
             .map(metadata -> metadata.storeMetadata.changelogPartition())
             .collect(Collectors.toSet());
     }
@@ -358,7 +358,7 @@ public class StoreChangelogReader implements ChangelogReader {
     private Set<TopicPartition> standbyRestoringChangelogs() {
         return changelogs.values().stream()
             .filter(metadata -> metadata.changelogState == ChangelogState.RESTORING &&
-                metadata.stateManager.taskType() == AbstractTask.TaskType.STANDBY)
+                metadata.stateManager.taskType() == Task.TaskType.STANDBY)
             .map(metadata -> metadata.storeMetadata.changelogPartition())
             .collect(Collectors.toSet());
     }
@@ -372,7 +372,7 @@ public class StoreChangelogReader implements ChangelogReader {
     // TODO K9113: called by the task manager to decide when to transit to standby updating.
     boolean allActiveChangelogsCompleted() {
         for (final ChangelogMetadata metadata : changelogs.values()) {
-            if (metadata.stateManager.taskType() == AbstractTask.TaskType.ACTIVE) {
+            if (metadata.stateManager.taskType() == Task.TaskType.ACTIVE) {
                 if (metadata.changelogState != ChangelogState.COMPLETED)
                     return false;
             }
@@ -484,7 +484,7 @@ public class StoreChangelogReader implements ChangelogReader {
             changelogMetadata.totalRestored += numRecords;
 
             // do not trigger restore listener if we are processing standby tasks
-            if (changelogMetadata.stateManager.taskType() == AbstractTask.TaskType.ACTIVE) {
+            if (changelogMetadata.stateManager.taskType() == Task.TaskType.ACTIVE) {
                 try {
                     stateRestoreListener.onBatchRestored(partition, storeName, currentOffset, numRecords);
                 } catch (final Exception e) {
@@ -494,7 +494,7 @@ public class StoreChangelogReader implements ChangelogReader {
         }
 
         // we should check even if there's nothing restored, but do not check completed if we are processing standby tasks
-        if (changelogMetadata.stateManager.taskType() == AbstractTask.TaskType.ACTIVE && hasRestoredToEnd(changelogMetadata)) {
+        if (changelogMetadata.stateManager.taskType() == Task.TaskType.ACTIVE && hasRestoredToEnd(changelogMetadata)) {
             log.info("Finished restoring changelog {} to store {} with a total number of {} records",
                 partition, storeName, changelogMetadata.totalRestored);
 
@@ -548,7 +548,7 @@ public class StoreChangelogReader implements ChangelogReader {
         }
 
         final Set<TopicPartition> changelogsWithLimitOffsets = changelogs.entrySet().stream()
-            .filter(entry -> entry.getValue().stateManager.taskType() == AbstractTask.TaskType.STANDBY &&
+            .filter(entry -> entry.getValue().stateManager.taskType() == Task.TaskType.STANDBY &&
                 entry.getValue().stateManager.changelogAsSource(entry.getKey()))
             .map(Map.Entry::getKey).collect(Collectors.toSet());
 
@@ -558,7 +558,7 @@ public class StoreChangelogReader implements ChangelogReader {
     private void updateLimitOffsetsForStandbyChangelogs(final Map<TopicPartition, Long> committedOffsets) {
         for (final ChangelogMetadata metadata : changelogs.values()) {
             final TopicPartition partition = metadata.storeMetadata.changelogPartition();
-            if (metadata.stateManager.taskType() == AbstractTask.TaskType.STANDBY &&
+            if (metadata.stateManager.taskType() == Task.TaskType.STANDBY &&
                 metadata.stateManager.changelogAsSource(partition) &&
                 committedOffsets.containsKey(partition)) {
 
@@ -595,7 +595,7 @@ public class StoreChangelogReader implements ChangelogReader {
             final TopicPartition partition = metadata.storeMetadata.changelogPartition();
 
             // TODO K9113: when TaskType.GLOBAL is added we need to modify this
-            if (metadata.stateManager.taskType() == AbstractTask.TaskType.ACTIVE)
+            if (metadata.stateManager.taskType() == Task.TaskType.ACTIVE)
                 newPartitionsToFindEndOffset.add(partition);
 
             if (metadata.stateManager.changelogAsSource(partition))
@@ -731,7 +731,7 @@ public class StoreChangelogReader implements ChangelogReader {
 
         // do not trigger restore listener if we are processing standby tasks
         for (final ChangelogMetadata changelogMetadata : newPartitionsToRestore) {
-            if (changelogMetadata.stateManager.taskType() == AbstractTask.TaskType.ACTIVE) {
+            if (changelogMetadata.stateManager.taskType() == Task.TaskType.ACTIVE) {
                 final TopicPartition partition = changelogMetadata.storeMetadata.changelogPartition();
                 final String storeName = changelogMetadata.storeMetadata.store().name();
 

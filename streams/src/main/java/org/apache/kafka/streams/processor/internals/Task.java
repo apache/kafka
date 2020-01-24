@@ -48,9 +48,21 @@ public interface Task {
         }
     }
 
-    State state();
+    enum TaskType {
+        ACTIVE("ACTIVE"),
 
-    void transitionTo(State newState);
+        STANDBY("STANDBY"),
+
+        GLOBAL("GLOBAL");
+
+        public final String name;
+
+        TaskType(final String name) {
+            this.name = name;
+        }
+    }
+
+    State state();
 
     void initializeIfNeeded();
 
@@ -98,15 +110,9 @@ public interface Task {
 
     StateStore getStore(final String name);
 
-    String applicationId();
-
-    ProcessorTopology topology();
-
-    ProcessorContext context();
-
     TaskId id();
 
-    Set<TopicPartition> partitions();
+    Set<TopicPartition> inputPartitions();
 
     /**
      * @return any changelog partitions associated with this task
@@ -120,6 +126,4 @@ public interface Task {
     Map<TopicPartition, Long> changelogOffsets();
 
     boolean isActive();
-
-    String toString(final String indent);
 }

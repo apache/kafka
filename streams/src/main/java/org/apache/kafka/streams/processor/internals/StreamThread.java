@@ -370,7 +370,7 @@ public class StreamThread extends Thread {
             final ProcessorStateManager stateManager = new ProcessorStateManager(
                 taskId,
                 partitions,
-                AbstractTask.TaskType.ACTIVE,
+                Task.TaskType.ACTIVE,
                 stateDirectory,
                 topology.storeToChangelogTopic(),
                 storeChangelogReader,
@@ -464,7 +464,7 @@ public class StreamThread extends Thread {
                 final ProcessorStateManager stateManager = new ProcessorStateManager(
                     taskId,
                     partitions,
-                    AbstractTask.TaskType.STANDBY,
+                    Task.TaskType.STANDBY,
                     stateDirectory,
                     topology.storeToChangelogTopic(),
                     storeChangelogReader,
@@ -472,9 +472,7 @@ public class StreamThread extends Thread {
 
                 return new StandbyTask(
                     taskId,
-                    partitions,
                     topology,
-                    consumer,
                     config,
                     streamsMetrics,
                     stateManager,
@@ -1129,12 +1127,12 @@ public class StreamThread extends Thread {
         final Set<String> producerClientIds = new HashSet<>();
         final Set<TaskMetadata> activeTasksMetadata = new HashSet<>();
         for (final Map.Entry<TaskId, Task> task : activeTasks.entrySet()) {
-            activeTasksMetadata.add(new TaskMetadata(task.getKey().toString(), task.getValue().partitions()));
+            activeTasksMetadata.add(new TaskMetadata(task.getKey().toString(), task.getValue().inputPartitions()));
             producerClientIds.add(getTaskProducerClientId(getName(), task.getKey()));
         }
         final Set<TaskMetadata> standbyTasksMetadata = new HashSet<>();
         for (final Map.Entry<TaskId, Task> task : standbyTasks.entrySet()) {
-            standbyTasksMetadata.add(new TaskMetadata(task.getKey().toString(), task.getValue().partitions()));
+            standbyTasksMetadata.add(new TaskMetadata(task.getKey().toString(), task.getValue().inputPartitions()));
         }
 
         final String adminClientId = threadMetadata.adminClientId();

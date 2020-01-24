@@ -220,7 +220,7 @@ public class StreamTaskTest {
         final StreamTask task = createStatefulTask(createConfig(false), false);
 
         try {
-            task.registerStateStores();
+            task.initializeStateStores();
             fail("Should have thrown LockException");
         } catch (final LockException e) {
             // ok
@@ -235,7 +235,7 @@ public class StreamTaskTest {
 
         final StreamTask task = createStatelessTask(createConfig(false), StreamsConfig.METRICS_LATEST);
 
-        task.registerStateStores();
+        task.initializeStateStores();
 
         // should fail if lock is called
         EasyMock.verify(stateDirectory);
@@ -367,7 +367,7 @@ public class StreamTaskTest {
             "kafka.streams:type=stream-task-metrics,%s=%s,task-id=%s",
             threadIdTag,
             threadId,
-            task.id.toString()
+            task.id()
         )));
         if (StreamsConfig.METRICS_0100_TO_24.equals(builtInMetricsVersion)) {
             assertTrue(reporter.containsMbean(String.format(
@@ -654,7 +654,7 @@ public class StreamTaskTest {
     @Test
     public void shouldEncodeAndDecodeMetadata() {
         task = createStatelessTask(createConfig(false), StreamsConfig.METRICS_LATEST);
-        assertEquals(DEFAULT_TIMESTAMP, task.decodeTimestamp(task.encodeTimestamp(DEFAULT_TIMESTAMP)));
+        assertEquals(DEFAULT_TIMESTAMP, task.decodeTimestamp(StreamTask.encodeTimestamp(DEFAULT_TIMESTAMP)));
     }
 
     @Test
@@ -866,7 +866,7 @@ public class StreamTaskTest {
         } catch (final StreamsException e) {
             final String message = e.getMessage();
             assertTrue("message=" + message + " should contain processor", message.contains("processor '" + processorStreamTime.name() + "'"));
-            assertThat(task.processorContext.currentNode(), nullValue());
+            assertThat(task.processorContext().currentNode(), nullValue());
         }
     }
 
@@ -884,7 +884,7 @@ public class StreamTaskTest {
         } catch (final StreamsException e) {
             final String message = e.getMessage();
             assertTrue("message=" + message + " should contain processor", message.contains("processor '" + processorSystemTime.name() + "'"));
-            assertThat(task.processorContext.currentNode(), nullValue());
+            assertThat(task.processorContext().currentNode(), nullValue());
         }
     }
 
@@ -928,7 +928,7 @@ public class StreamTaskTest {
         task = createStatelessTask(createConfig(false), StreamsConfig.METRICS_LATEST);
         task.initializeStateStores();
         task.initializeTopology();
-        task.processorContext.setCurrentNode(processorStreamTime);
+        task.processorContext().setCurrentNode(processorStreamTime);
         try {
             task.punctuate(processorStreamTime, 10, PunctuationType.STREAM_TIME, punctuator);
             fail("Should throw illegal state exception as current node is not null");
@@ -954,7 +954,7 @@ public class StreamTaskTest {
         task.initializeStateStores();
         task.initializeTopology();
         task.punctuate(processorStreamTime, 5, PunctuationType.STREAM_TIME, punctuator);
-        assertThat(((ProcessorContextImpl) task.context()).currentNode(), nullValue());
+        assertThat(((InternalProcessorContext) task.context()).currentNode(), nullValue());
     }
 
     @Test(expected = IllegalStateException.class)
@@ -966,7 +966,7 @@ public class StreamTaskTest {
     @Test
     public void shouldNotThrowExceptionOnScheduleIfCurrentNodeIsNotNull() {
         task = createStatelessTask(createConfig(false), StreamsConfig.METRICS_LATEST);
-        task.processorContext.setCurrentNode(processorStreamTime);
+        task.processorContext().setCurrentNode(processorStreamTime);
         task.schedule(1, PunctuationType.STREAM_TIME, timestamp -> { });
     }
 
