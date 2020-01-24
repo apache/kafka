@@ -690,7 +690,7 @@ public class StreamThread extends Thread {
      * @throws StreamsException      if the store's change log does not contain the partition
      */
     private void runLoop() {
-        consumer.subscribe(builder.sourceTopicPattern(), rebalanceListener);
+        subscribeConsumer();
 
         while (isRunning()) {
             try {
@@ -713,7 +713,15 @@ public class StreamThread extends Thread {
 
     private void enforceRebalance() {
         consumer.unsubscribe();
-        consumer.subscribe(builder.sourceTopicPattern(), rebalanceListener);
+        subscribeConsumer();
+    }
+
+    private void subscribeConsumer() {
+        if (builder.usesPatternSubscription()) {
+            consumer.subscribe(builder.sourceTopicPattern(), rebalanceListener);
+        } else {
+            consumer.subscribe(builder.sourceTopicCollection(), rebalanceListener);
+        }
     }
 
     /**

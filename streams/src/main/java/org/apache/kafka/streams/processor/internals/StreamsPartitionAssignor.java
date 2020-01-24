@@ -241,9 +241,9 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
     }
 
     protected static Set<TaskId> prepareForSubscription(final TaskManager taskManager,
-        final Set<String> topics,
-        final Set<TaskId> standbyTasks,
-        final RebalanceProtocol rebalanceProtocol) {
+                                                        final Set<String> topics,
+                                                        final Set<TaskId> standbyTasks,
+                                                        final RebalanceProtocol rebalanceProtocol) {
         // Any tasks that are not yet running are counted as standby tasks for assignment purposes,
         // along with any old tasks for which we still found state on disk
         final Set<TaskId> activeTasks;
