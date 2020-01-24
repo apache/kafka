@@ -513,28 +513,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
 
     /**
      * <pre>
-     * - close topology
-     * - {@link #commit()}
-     *   - flush state and producer
-     *   - if (!eos) write checkpoint
-     *   - commit offsets
-     * </pre>
-     *
-     * @throws TaskMigratedException if committing offsets failed (non-EOS)
-     *                               or if the task producer got fenced (EOS)
-     */
-    public void suspend() {
-        log.debug("Suspending");
-        if (state() == State.SUSPENDED) {
-            return;
-        } else {
-            suspend(true);
-            transitionTo(State.SUSPENDED);
-        }
-    }
-
-    /**
-     * <pre>
      * the following order must be followed:
      *  1. first close topology to make sure all cached records in the topology are processed
      *  2. then flush the state, send any left changelog records
@@ -546,37 +524,37 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
      * @throws TaskMigratedException if committing offsets failed (non-EOS)
      *                               or if the task producer got fenced (EOS)
      */
-    private void suspend(final boolean clean) {
-        try {
-            // If the suspension is from unclean shutdown, then only need to close topology and flush state to make sure that when later
-            // closing the states, there's no records triggering any processing anymore; also swallow all caught exceptions
-            closeTopology(clean);
+    public void suspend() {
+        log.debug("Suspending");
+        if (state() == State.SUSPENDED) {
+            return;
+        } else {
+            try {
+                // If the suspension is from unclean shutdown, then only need to close topology and flush state to make sure that when later
+                // closing the states, there's no records triggering any processing anymore; also swallow all caught exceptions
+                closeTopology(true);
 
-            if (clean) {
                 commitState();
                 // whenever we have successfully committed state during suspension, it is safe to checkpoint
                 // the state as well no matter if EOS is enabled or not
                 stateMgr.checkpoint(checkpointableOffsets());
-            } else {
-                stateMgr.flush();
-            }
-        } catch (final RuntimeException error) {
-            if (clean) {
+            } catch (final RuntimeException error) {
                 throw error;
             }
-        }
 
-        // we should also clear any buffered records of a task when suspending it
-        partitionGroup.clear();
+            // we should also clear any buffered records of a task when suspending it
+            partitionGroup.clear();
+            transitionTo(State.SUSPENDED);
+        }
     }
+
 
     private void closeTopology(final boolean clean) {
         log.trace("Closing processor topology");
-
-        // close the processors
-        // make sure close() is called for each node even when there is a RuntimeException
-        RuntimeException exception = null;
         if (state().hasBeenRunning()) {
+            // close the processors
+            // make sure close() is called for each node even when there is a RuntimeException
+            RuntimeException exception = null;
             for (final ProcessorNode node : topology.processors()) {
                 processorContext.setCurrentNode(node);
                 try {
@@ -587,10 +565,10 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                     processorContext.setCurrentNode(null);
                 }
             }
-        }
 
-        if (exception != null && clean) {
-            throw exception;
+            if (exception != null && clean) {
+                throw exception;
+            }
         }
     }
 
