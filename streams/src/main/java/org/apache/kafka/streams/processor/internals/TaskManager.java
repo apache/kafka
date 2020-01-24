@@ -130,6 +130,9 @@ public class TaskManager {
                         task
                     );
                     taskCloseExceptions.put(task.id(), e);
+                    // We've already recorded the exception (which is the point of clean).
+                    // Now, we should go ahead and complete the close because a half-closed task is no good to anyone.
+                    task.closeDirty();
                 }
                 iterator.remove();
             }

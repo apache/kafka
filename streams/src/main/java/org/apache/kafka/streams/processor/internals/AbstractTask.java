@@ -32,7 +32,7 @@ public abstract class AbstractTask implements Task {
         } else if (oldState == RESTORING && (newState == RUNNING || newState == SUSPENDED || newState == CLOSING)) {
         } else if (oldState == RUNNING && (newState == SUSPENDED || newState == CLOSING)) {
         } else if (oldState == SUSPENDED && (newState == RUNNING || newState == CLOSING)) {
-        } else if (oldState == CLOSING && newState== CLOSED) {
+        } else if (oldState == CLOSING && (newState== CLOSING || newState== CLOSED)) {
         } else {
             throw new IllegalStateException("Invalid transition from " + oldState + " to " + newState);
         }
