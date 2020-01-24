@@ -82,7 +82,7 @@ public interface Task {
 
     void initializeIfNeeded();
 
-    void startRunning();
+    void completeInitializationAfterRestore();
 
     default Map<TopicPartition, Long> purgableOffsets() {
         return Collections.emptyMap();

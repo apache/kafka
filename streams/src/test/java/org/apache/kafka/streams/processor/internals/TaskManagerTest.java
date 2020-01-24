@@ -777,7 +777,7 @@ public class TaskManagerTest {
         }
 
         @Override
-        public void startRunning() {
+        public void completeInitializationAfterRestore() {
             transitionTo(State.RUNNING);
         }
 

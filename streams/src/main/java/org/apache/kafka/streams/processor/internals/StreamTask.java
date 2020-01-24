@@ -174,7 +174,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         for (final TopicPartition partition : partitions) {
             final SourceNode source = topology.source(partition.topic());
             final TimestampExtractor timestampExtractor = source.getTimestampExtractor();
-            final TimestampExtractor sourceTimestampExtractor = timestampExtractor != null ? source.getTimestampExtractor() : defaultTimestampExtractor;
+            final TimestampExtractor sourceTimestampExtractor = timestampExtractor != null ? timestampExtractor : defaultTimestampExtractor;
             final RecordQueue queue = new RecordQueue(
                 partition,
                 source,
@@ -208,11 +208,15 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     }
 
     @Override
-    public void startRunning() {
-        initTopology();
-        processorContext.initialize();
-        idleStartTime = RecordQueue.UNKNOWN;
-        transitionTo(State.RUNNING);
+    public void completeInitializationAfterRestore() {
+        if (state() == State.RESTORING) {
+            initTopology();
+            processorContext.initialize();
+            idleStartTime = RecordQueue.UNKNOWN;
+            transitionTo(State.RUNNING);
+        } else {
+            throw new IllegalStateException("This method is only for transitioning from restoring to running. But was in state " + state());
+        }
     }
 
     public void initializeMetadata() {

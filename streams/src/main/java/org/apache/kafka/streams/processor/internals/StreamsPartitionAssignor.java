@@ -1126,7 +1126,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         }
 
         // version 1 field
-        final Map<TaskId, Set<TopicPartition>> activeTasks = new HashMap<>();
+        final Map<TaskId, Set<TopicPartition>> activeTasks;
         // version 2 fields
         final Map<TopicPartition, PartitionInfo> topicToPartitionInfo = new HashMap<>();
         final Map<HostInfo, Set<TopicPartition>> partitionsByHost;
@@ -1136,11 +1136,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             case 1:
                 validateActiveTaskEncoding(partitions, info, logPrefix);
 
-                for (int i = 0; i < partitions.size(); i++) {
-                    final TopicPartition partition = partitions.get(i);
-                    final TaskId id = info.activeTasks().get(i);
-                    activeTasks.computeIfAbsent(id, k1 -> new HashSet<>()).add(partition);
-                }
+                activeTasks = getActiveTasks(partitions, info);
                 partitionsByHost = Collections.emptyMap();
                 standbyPartitionsByHost = Collections.emptyMap();
                 break;
@@ -1150,11 +1146,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             case 5:
                 validateActiveTaskEncoding(partitions, info, logPrefix);
 
-                for (int i = 0; i < partitions.size(); i++) {
-                    final TopicPartition partition = partitions.get(i);
-                    final TaskId id = info.activeTasks().get(i);
-                    activeTasks.computeIfAbsent(id, k -> new HashSet<>()).add(partition);
-                }
+                activeTasks = getActiveTasks(partitions, info);
 
                 // process partitions by host
                 for (final Set<TopicPartition> value : info.partitionsByHost().values()) {
@@ -1177,11 +1169,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             case 6:
                 validateActiveTaskEncoding(partitions, info, logPrefix);
 
-                for (int i = 0; i < partitions.size(); i++) {
-                    final TopicPartition partition = partitions.get(i);
-                    final TaskId id = info.activeTasks().get(i);
-                    activeTasks.computeIfAbsent(id, k -> new HashSet<>()).add(partition);
-                }
+                activeTasks = getActiveTasks(partitions, info);
 
                 // process partitions by host
                 for (final Set<TopicPartition> value : info.partitionsByHost().values()) {
@@ -1211,6 +1199,18 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         final Cluster fakeCluster = Cluster.empty().withPartitions(topicToPartitionInfo);
         streamsMetadataState.onChange(partitionsByHost, standbyPartitionsByHost, fakeCluster);
         taskManager.handleAssignment(activeTasks, info.standbyTasks());
+    }
+
+    private Map<TaskId, Set<TopicPartition>> getActiveTasks(final List<TopicPartition> partitions, final AssignmentInfo info) {
+        final Map<TaskId, Set<TopicPartition>> activeTasks;
+        final Map<TaskId, Set<TopicPartition>> result =  new HashMap<>();
+        for (int i = 0; i < partitions.size(); i++) {
+            final TopicPartition partition = partitions.get(i);
+            final TaskId id = info.activeTasks().get(i);
+            result.computeIfAbsent(id, k1 -> new HashSet<>()).add(partition);
+        }
+        activeTasks = result;
+        return activeTasks;
     }
 
     private static void validateActiveTaskEncoding(final List<TopicPartition> partitions, final AssignmentInfo info, final String logPrefix) {

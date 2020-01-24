@@ -98,7 +98,7 @@ public class StandbyTask extends AbstractTask implements Task {
     }
 
     @Override
-    public void startRunning() {
+    public void completeInitializationAfterRestore() {
         throw new IllegalStateException("StandbyTask " + id + " should already be in running state.");
     }
 
