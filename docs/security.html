@@ -56,16 +56,16 @@
         <h5><a id="security_confighostname" href="#security_confighostname">Configuring Host Name Verification</a></h5>
         From Kafka version 2.0.0 onwards, host name verification of servers is enabled by default for client connections
         as well as inter-broker connections to prevent man-in-the-middle attacks. Server host name verification may be disabled
-        by setting <tt>ssl.endpoint.identification.algorithm</tt> to an empty string. For example,
+        by setting <code>ssl.endpoint.identification.algorithm</code> to an empty string. For example,
         <pre class="brush: text;">	ssl.endpoint.identification.algorithm=</pre>
-        For dynamically configured broker listeners, hostname verification may be disabled using <tt>kafka-configs.sh</tt>.
+        For dynamically configured broker listeners, hostname verification may be disabled using <code>kafka-configs.sh</code>.
         For example,
         <pre class="brush: text;">
         bin/kafka-configs.sh --bootstrap-server localhost:9093 --entity-type brokers --entity-name 0 --alter --add-config "listener.name.internal.ssl.endpoint.identification.algorithm="
         </pre>
 
-        For older versions of Kafka, <tt>ssl.endpoint.identification.algorithm</tt> is not defined by default, so host name
-        verification is not performed. The property should be set to <tt>HTTPS</tt> to enable host name verification.
+        For older versions of Kafka, <code>ssl.endpoint.identification.algorithm</code> is not defined by default, so host name
+        verification is not performed. The property should be set to <code>HTTPS</code> to enable host name verification.
 
         <pre class="brush: text;">	ssl.endpoint.identification.algorithm=HTTPS </pre>
 
@@ -80,7 +80,7 @@
             <li>Subject Alternative Name (SAN)
         </ol>
         <br>
-        Both fields are valid, RFC-2818 recommends the use of SAN however. SAN is also more flexible, allowing for multiple DNS entries to be declared. Another advantage is that the CN can be set to a more meaningful value for authorization purposes. To add a SAN field  append the following argument <tt> -ext SAN=DNS:{FQDN} </tt> to the keytool command:
+        Both fields are valid, RFC-2818 recommends the use of SAN however. SAN is also more flexible, allowing for multiple DNS entries to be declared. Another advantage is that the CN can be set to a more meaningful value for authorization purposes. To add a SAN field  append the following argument <code> -ext SAN=DNS:{FQDN} </code> to the keytool command:
         <pre class="brush: bash;">
         keytool -keystore server.keystore.jks -alias localhost -validity {validity} -genkey -keyalg RSA -ext SAN=DNS:{FQDN}
         </pre>
@@ -267,9 +267,9 @@
             <tt>zookeeper.sasl.client.username</tt> to the appropriate name
             (<i>e.g.</i>, <tt>-Dzookeeper.sasl.client.username=zk</tt>).</p>
 
-            <p>Brokers may also configure JAAS using the broker configuration property <tt>sasl.jaas.config</tt>.
+            <p>Brokers may also configure JAAS using the broker configuration property <code>sasl.jaas.config</code>.
             The property name must be prefixed with the listener prefix including the SASL mechanism,
-            i.e. <tt>listener.name.{listenerName}.{saslMechanism}.sasl.jaas.config</tt>. Only one
+            i.e. <code>listener.name.{listenerName}.{saslMechanism}.sasl.jaas.config</code>. Only one
             login module may be specified in the config value. If multiple mechanisms are configured on a
             listener, configs must be provided for each mechanism using the listener and mechanism prefix.
             For example,
@@ -285,9 +285,9 @@
 
             If JAAS configuration is defined at different levels, the order of precedence used is:
             <ul>
-              <li>Broker configuration property <tt>listener.name.{listenerName}.{saslMechanism}.sasl.jaas.config</tt></li>
-              <li><tt>{listenerName}.KafkaServer</tt> section of static JAAS configuration</tt></li>
-              <li><tt>KafkaServer</tt> section of static JAAS configuration</tt></li>
+              <li>Broker configuration property <code>listener.name.{listenerName}.{saslMechanism}.sasl.jaas.config</code></li>
+              <li><code>{listenerName}.KafkaServer</code> section of static JAAS configuration</code></li>
+              <li><code>KafkaServer</code> section of static JAAS configuration</code></li>
             </ul>
             Note that ZooKeeper JAAS config may only be configured using static JAAS configuration.
 
@@ -312,7 +312,7 @@
                 creating a physical configuration file. This mode also enables different producers
                 and consumers within the same JVM to use different credentials by specifying
                 different properties for each client. If both static JAAS configuration system property
-                <tt>java.security.auth.login.config</tt> and client property <tt>sasl.jaas.config</tt>
+                <code>java.security.auth.login.config</code> and client property <code>sasl.jaas.config</code>
                 are specified, the client property will be used.</p>
 
                 <p>See <a href="#security_sasl_kerberos_clientconfig">GSSAPI (Kerberos)</a>,
@@ -456,7 +456,7 @@
                     own principal (usually with the same name as the user running the client), so obtain or create
                     these principals as needed. Then configure the JAAS configuration property for each client.
                     Different clients within a JVM may run as different users by specifying different principals.
-                    The property <tt>sasl.jaas.config</tt> in producer.properties or consumer.properties describes
+                    The property <code>sasl.jaas.config</code> in producer.properties or consumer.properties describes
                     how clients like producer and consumer can connect to the Kafka Broker. The following is an example
                     configuration for a client using a keytab (recommended for long-running processes):
                 <pre>
@@ -491,7 +491,7 @@
     <li><h4><a id="security_sasl_plain" href="#security_sasl_plain">Authentication using SASL/PLAIN</a></h4>
         <p>SASL/PLAIN is a simple username/password authentication mechanism that is typically used with TLS for encryption to implement secure authentication.
         Kafka supports a default implementation for SASL/PLAIN which can be extended for production use as described <a href="#security_sasl_plain_production">here</a>.</p>
-        The username is used as the authenticated <tt>Principal</tt> for configuration of ACLs etc.
+        The username is used as the authenticated <code>Principal</code> for configuration of ACLs etc.
         <ol>
         <li><h5><a id="security_sasl_plain_brokerconfig" href="#security_sasl_plain_brokerconfig">Configuring Kafka Brokers</a></h5>
             <ol>
@@ -532,7 +532,7 @@
                 <p>The options <tt>username</tt> and <tt>password</tt> are used by clients to configure
                 the user for client connections. In this example, clients connect to the broker as user <i>alice</i>.
                 Different clients within a JVM may connect as different users by specifying different user names
-                and passwords in <tt>sasl.jaas.config</tt>.</p>
+                and passwords in <code>sasl.jaas.config</code>.</p>
 
                 <p>JAAS configuration for clients may alternatively be specified as a JVM parameter similar to brokers
                 as described <a href="#security_client_staticjaas">here</a>. Clients use the login section named
@@ -549,10 +549,10 @@
             <li>The default implementation of SASL/PLAIN in Kafka specifies usernames and passwords in the JAAS configuration file as shown
                 <a href="#security_sasl_plain_brokerconfig">here</a>. From Kafka version 2.0 onwards, you can avoid storing clear passwords on disk
                 by configuring your own callback handlers that obtain username and password from an external source using the configuration options
-                <tt>sasl.server.callback.handler.class</tt> and <tt>sasl.client.callback.handler.class</tt>.</li>
+                <code>sasl.server.callback.handler.class</code> and <code>sasl.client.callback.handler.class</code>.</li>
             <li>In production systems, external authentication servers may implement password authentication. From Kafka version 2.0 onwards,
                 you can plug in your own callback handlers that use external authentication servers for password verification by configuring
-                <tt>sasl.server.callback.handler.class</tt>.</li>
+                <code>sasl.server.callback.handler.class</code>.</li>
             </ul>
         </li>
         </ol>
@@ -564,7 +564,7 @@
         like PLAIN and DIGEST-MD5. The mechanism is defined in <a href="https://tools.ietf.org/html/rfc5802">RFC 5802</a>.
         Kafka supports <a href="https://tools.ietf.org/html/rfc7677">SCRAM-SHA-256</a> and SCRAM-SHA-512 which
         can be used with TLS to perform secure authentication. The username is used as the authenticated
-        <tt>Principal</tt> for configuration of ACLs etc. The default SCRAM implementation in Kafka
+        <code>Principal</code> for configuration of ACLs etc. The default SCRAM implementation in Kafka
         stores SCRAM credentials in Zookeeper and is suitable for use in Kafka installations where Zookeeper
         is on a private network. Refer to <a href="#security_sasl_scram_security">Security Considerations</a>
         for more details.</p>
@@ -632,7 +632,7 @@
                 <p>The options <tt>username</tt> and <tt>password</tt> are used by clients to configure
                 the user for client connections. In this example, clients connect to the broker as user <i>alice</i>.
                 Different clients within a JVM may connect as different users by specifying different user names
-                and passwords in <tt>sasl.jaas.config</tt>.</p>
+                and passwords in <code>sasl.jaas.config</code>.</p>
 
                 <p>JAAS configuration for clients may alternatively be specified as a JVM parameter similar to brokers
                 as described <a href="#security_client_staticjaas">here</a>. Clients use the login section named
@@ -653,7 +653,7 @@
             <li>SCRAM should be used only with TLS-encryption to prevent interception of SCRAM exchanges. This
             protects against dictionary or brute force attacks and against impersonation if Zookeeper is compromised.</li>
             <li>From Kafka version 2.0 onwards, the default SASL/SCRAM credential store may be overridden using custom callback handlers
-            by configuring <tt>sasl.server.callback.handler.class</tt> in installations where Zookeeper is not secure.</li>
+            by configuring <code>sasl.server.callback.handler.class</code> in installations where Zookeeper is not secure.</li>
             <li>For more details on security considerations, refer to
             <a href="https://tools.ietf.org/html/rfc5802#section-9">RFC 5802</a>.
             </ul>
@@ -706,7 +706,7 @@
                 the subject (<tt>sub</tt>) claim, which determines the user for client connections.
                 In this example, clients connect to the broker as user <i>alice</i>.
                 Different clients within a JVM may connect as different users by specifying different subject (<tt>sub</tt>)
-                claims in <tt>sasl.jaas.config</tt>.</p>
+                claims in <code>sasl.jaas.config</code>.</p>
 
                 <p>JAAS configuration for clients may alternatively be specified as a JVM parameter similar to brokers
                 as described <a href="#security_client_staticjaas">here</a>. Clients use the login section named
@@ -983,7 +983,7 @@
                 <p>The options <tt>username</tt> and <tt>password</tt> are used by clients to configure the token id and
                     token HMAC. And the option <tt>tokenauth</tt> is used to indicate the server about token authentication.
                     In this example, clients connect to the broker using token id: <i>tokenID123</i>. Different clients within a
-                    JVM may connect using different tokens by specifying different token details in <tt>sasl.jaas.config</tt>.</p>
+                    JVM may connect using different tokens by specifying different token details in <code>sasl.jaas.config</code>.</p>
 
                 <p>JAAS configuration for clients may alternatively be specified as a JVM parameter similar to brokers
                 as described <a href="#security_client_staticjaas">here</a>. Clients use the login section named
@@ -1023,10 +1023,10 @@
 
     <h5><a id="security_authz_ssl" href="#security_authz_ssl">Customizing SSL User Name</a></h5>
 
-    By default, the SSL user name will be of the form "CN=writeuser,OU=Unknown,O=Unknown,L=Unknown,ST=Unknown,C=Unknown". One can change that by setting <tt>ssl.principal.mapping.rules</tt> to a customized rule in server.properties.
+    By default, the SSL user name will be of the form "CN=writeuser,OU=Unknown,O=Unknown,L=Unknown,ST=Unknown,C=Unknown". One can change that by setting <code>ssl.principal.mapping.rules</code> to a customized rule in server.properties.
     This config allows a list of rules for mapping X.500 distinguished name to short name. The rules are evaluated in order and the first rule that matches a distinguished name is used to map it to a short name. Any later rules in the list are ignored.
 
-    <br>The format of <tt>ssl.principal.mapping.rules</tt> is a list where each rule starts with "RULE:" and contains an expression as the following formats. Default rule will return
+    <br>The format of <code>ssl.principal.mapping.rules</code> is a list where each rule starts with "RULE:" and contains an expression as the following formats. Default rule will return
     string representation of the X.500 certificate distinguished name. If the distinguished name matches the pattern, then the replacement command will be run over the name.
     This also supports lowercase/uppercase options, to force the translated result to be all lower/uppercase case. This is done by adding a "/L" or "/U' to the end of the rule.
 
@@ -1035,7 +1035,7 @@
         RULE:pattern/replacement/[LU]
     </pre>
 
-    Example <tt>ssl.principal.mapping.rules</tt> values are:
+    Example <code>ssl.principal.mapping.rules</code> values are:
     <pre>
         RULE:^CN=(.*?),OU=ServiceUsers.*$/$1/,
         RULE:^CN=(.*?),OU=(.*?),O=(.*?),L=(.*?),ST=(.*?),C=(.*?)$/$1@$2/L,
@@ -1051,8 +1051,8 @@
 
     <h5><a id="security_authz_sasl" href="#security_authz_sasl">Customizing SASL User Name</a></h5>
 
-    By default, the SASL user name will be the primary part of the Kerberos principal. One can change that by setting <tt>sasl.kerberos.principal.to.local.rules</tt> to a customized rule in server.properties.
-    The format of <tt>sasl.kerberos.principal.to.local.rules</tt> is a list where each rule works in the same way as the auth_to_local in <a href="http://web.mit.edu/Kerberos/krb5-latest/doc/admin/conf_files/krb5_conf.html">Kerberos configuration file (krb5.conf)</a>. This also support additional lowercase/uppercase rule, to force the translated result to be all lowercase/uppercase. This is done by adding a "/L" or "/U" to the end of the rule. check below formats for syntax.
+    By default, the SASL user name will be the primary part of the Kerberos principal. One can change that by setting <code>sasl.kerberos.principal.to.local.rules</code> to a customized rule in server.properties.
+    The format of <code>sasl.kerberos.principal.to.local.rules</code> is a list where each rule works in the same way as the auth_to_local in <a href="http://web.mit.edu/Kerberos/krb5-latest/doc/admin/conf_files/krb5_conf.html">Kerberos configuration file (krb5.conf)</a>. This also support additional lowercase/uppercase rule, to force the translated result to be all lowercase/uppercase. This is done by adding a "/L" or "/U" to the end of the rule. check below formats for syntax.
     Each rules starts with RULE: and contains an expression as the following formats. See the kerberos documentation for more details.
     <pre>
         RULE:[n:string](regexp)s/pattern/replacement/
