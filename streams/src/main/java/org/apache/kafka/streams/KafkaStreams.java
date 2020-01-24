@@ -1185,7 +1185,7 @@ public class KafkaStreams implements AutoCloseable {
      * Get a facade wrapping the local {@link StateStore} instances with the provided {@link StoreQueryParams}.
      * StoreQueryParams need required parameters to be set, which are {@code storeName} and if
      * type is accepted by the provided {@link QueryableStoreType#accepts(StateStore) queryableStoreType}.
-     * The optional parameters to the StoreQueryParams include {@code partition} and {@code includeStaleStores}.
+     * The optional parameters to the StoreQueryParams include {@code partition} and {@code staleStoresEnabled}.
      * The returned object can be used to query the {@link StateStore} instances.
      *
      * @param storeQueryParams    If StoreQueryParams.fromNameAndType(storeName, queryableStoreType).withPartition(int partition) is used, it allow queries on the specific partition irrespective if it is a standby

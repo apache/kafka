@@ -27,7 +27,7 @@ import java.util.Objects;
 public class StoreQueryParams<T> {
 
     private Integer partition;
-    private boolean includeStaleStores;
+    private boolean staleStores;
     private final String storeName;
     private final QueryableStoreType<T> queryableStoreType;
 
@@ -36,7 +36,7 @@ public class StoreQueryParams<T> {
         this.queryableStoreType = queryableStoreType;
     }
 
-    public static <T> StoreQueryParams<T> fromNameAndType(final String storeName, final QueryableStoreType<T>  queryableStoreType) {
+    public static final <T> StoreQueryParams<T> fromNameAndType(final String storeName, final QueryableStoreType<T>  queryableStoreType) {
         return new<T> StoreQueryParams<T>(storeName, queryableStoreType);
     }
 
@@ -52,12 +52,12 @@ public class StoreQueryParams<T> {
     }
 
     /**
-     * Get the flag includeStaleStores. If true, include standbys and recovering stores along with running stores.
+     * Get the flag staleStores. If true, include standbys and recovering stores along with running stores.
      *
-     * @return boolean includeStaleStores
+     * @return boolean staleStores
      */
-    public boolean includeStaleStores() {
-        return includeStaleStores;
+    public boolean staleStoresEnabled() {
+        return staleStores;
     }
 
     /**
@@ -77,8 +77,8 @@ public class StoreQueryParams<T> {
      *
      * @return String storeName
      */
-    public StoreQueryParams<T> withIncludeStaleStores() {
-        this.includeStaleStores = true;
+    public StoreQueryParams<T> enableStaleStores() {
+        this.staleStores = true;
         return this;
     }
 
@@ -107,7 +107,7 @@ public class StoreQueryParams<T> {
         }
         final StoreQueryParams storeQueryParams = (StoreQueryParams) obj;
         return Objects.equals(storeQueryParams.partition, partition)
-                && Objects.equals(storeQueryParams.includeStaleStores, includeStaleStores)
+                && Objects.equals(storeQueryParams.staleStores, staleStores)
                 && Objects.equals(storeQueryParams.storeName, storeName)
                 && Objects.equals(storeQueryParams.queryableStoreType, queryableStoreType);
     }
@@ -116,7 +116,7 @@ public class StoreQueryParams<T> {
     public String toString() {
         return "StoreQueryParams {" +
                 "partition=" + partition +
-                ", includeStaleStores=" + includeStaleStores +
+                ", staleStores=" + staleStores +
                 ", storeName=" + storeName +
                 ", queryableStoreType=" + queryableStoreType +
                 '}';
@@ -124,6 +124,6 @@ public class StoreQueryParams<T> {
 
     @Override
     public int hashCode() {
-        return Objects.hash(partition, includeStaleStores, storeName, queryableStoreType);
+        return Objects.hash(partition, staleStores, storeName, queryableStoreType);
     }
 }

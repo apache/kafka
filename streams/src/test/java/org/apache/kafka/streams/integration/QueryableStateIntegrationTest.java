@@ -307,7 +307,7 @@ public class QueryableStateIntegrationTest {
                     final KafkaStreams streamsWithKey = pickInstanceByPort ? streamsList.get(index) : streams;
                     final QueryableStoreType<ReadOnlyKeyValueStore<String, Long>> queryableStoreType = QueryableStoreTypes.keyValueStore();
                     final ReadOnlyKeyValueStore<String, Long> store =
-                        streamsWithKey.store(StoreQueryParams.fromNameAndType(storeName, queryableStoreType).withIncludeStaleStores());
+                        streamsWithKey.store(StoreQueryParams.fromNameAndType(storeName, queryableStoreType).enableStaleStores());
                     if (store == null) {
                         nullStoreKeys.add(key);
                         continue;
@@ -367,7 +367,7 @@ public class QueryableStateIntegrationTest {
                     final KafkaStreams streamsWithKey = pickInstanceByPort ? streamsList.get(index) : streams;
                     final QueryableStoreType<ReadOnlyWindowStore<String, Long>> queryableWindowStoreType = QueryableStoreTypes.windowStore();
                     final ReadOnlyWindowStore<String, Long> store =
-                        streamsWithKey.store(StoreQueryParams.fromNameAndType(storeName, queryableWindowStoreType).withIncludeStaleStores());
+                        streamsWithKey.store(StoreQueryParams.fromNameAndType(storeName, queryableWindowStoreType).enableStaleStores());
                     if (store == null) {
                         nullStoreKeys.add(key);
                         continue;

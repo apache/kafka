@@ -49,13 +49,13 @@ public class StreamThreadStateStoreProvider {
     public <T> List<T> stores(final StoreQueryParams storeQueryParams) {
         final String storeName = storeQueryParams.getStoreName();
         final QueryableStoreType<T> queryableStoreType = storeQueryParams.getQueryableStoreType();
-        final TaskId keyTaskId = createKeyTaskId(storeName, storeQueryParams.partition());
+        final TaskId keyTaskId = (storeQueryParams.partition() == null) ? null : createKeyTaskId(storeName, storeQueryParams.partition());
         if (streamThread.state() == StreamThread.State.DEAD) {
             return Collections.emptyList();
         }
         final StreamThread.State state = streamThread.state();
-        if (storeQueryParams.includeStaleStores() ? state.isAlive() : state == StreamThread.State.RUNNING) {
-            final Map<TaskId, ? extends Task> tasks = storeQueryParams.includeStaleStores() ? streamThread.allTasks() : streamThread.activeTasks();
+        if (storeQueryParams.staleStoresEnabled() ? state.isAlive() : state == StreamThread.State.RUNNING) {
+            final Map<TaskId, ? extends Task> tasks = storeQueryParams.staleStoresEnabled() ? streamThread.allTasks() : streamThread.activeTasks();
             final List<T> stores = new ArrayList<>();
             for (final Task streamTask : tasks.values()) {
                 if (keyTaskId != null && !keyTaskId.equals(streamTask.id())) {
@@ -82,14 +82,11 @@ public class StreamThreadStateStoreProvider {
         } else {
             throw new InvalidStateStoreException("Cannot get state store " + storeName + " because the stream thread is " +
                                                      state + ", not RUNNING" +
-                                                     (storeQueryParams.includeStaleStores() ? " or REBALANCING" : ""));
+                                                     (storeQueryParams.staleStoresEnabled() ? " or REBALANCING" : ""));
         }
     }
 
     private TaskId createKeyTaskId(final String storeName, final Integer partition) {
-        if (partition == null) {
-            return null;
-        }
         final List<String> sourceTopics = internalTopologyBuilder.stateStoreNameToSourceTopics().get(storeName);
         final Set<String> sourceTopicsSet = sourceTopics.stream().collect(Collectors.toSet());
         final Map<Integer, InternalTopologyBuilder.TopicsInfo> topicGroups = internalTopologyBuilder.topicGroups();

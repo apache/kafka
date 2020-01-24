@@ -42,8 +42,8 @@ public class QueryableStoreProvider {
      * Get a composite object wrapping the instances of the {@link StateStore} with the provided
      * storeName and {@link QueryableStoreType}
      *
-     * @param storeQueryParams       if stateStoresEnabled is used i.e. includeStaleStores is true, include standbys and recovering stores;
-     *                                        if stateStoresDisabled i.e. includeStaleStores is false, only include running actives;
+     * @param storeQueryParams       if stateStoresEnabled is used i.e. staleStoresEnabled is true, include standbys and recovering stores;
+     *                                        if stateStoresDisabled i.e. staleStoresEnabled is false, only include running actives;
      *                                        if partition is null then it fetches all local partitions on the instance;
      *                                        if partition is set then it fetches a specific partition.
      * @param <T>                The expected type of the returned store
