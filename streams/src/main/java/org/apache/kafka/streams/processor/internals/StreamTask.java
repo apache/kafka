@@ -612,7 +612,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             // fatal for the "closeClean()" call, and the caller can try again with closeDirty() to complete the shutdown.
             if (clean) {
                 commitState();
-                // whenever we have successfully committed state during suspension, it is safe to checkpoint
+                // whenever we have successfully committed state, it is safe to checkpoint
                 // the state as well no matter if EOS is enabled or not
                 stateMgr.checkpoint(checkpointableOffsets());
             } else {
