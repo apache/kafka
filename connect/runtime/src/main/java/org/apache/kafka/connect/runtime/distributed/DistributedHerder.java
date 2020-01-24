@@ -699,7 +699,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                     public Void call() throws Exception {
                         log.trace("Handling connector config request {}", connName);
                         if (!isLeader()) {
-                            callback.onCompletion(new NotLeaderException("Only the leader can set connector configs.", leaderUrl()), null);
+                            callback.onCompletion(new NotLeaderException("Only the leader can delete connector configs.", leaderUrl()), null);
                             return null;
                         }
 
