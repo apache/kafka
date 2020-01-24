@@ -415,7 +415,7 @@ public class TopologyTestDriver implements Closeable {
                 stateManager,
                 recordCollector);
             task.initializeStateStores();
-            task.initializeTopology();
+            task.startRunning();
             ((InternalProcessorContext) task.context()).setRecordContext(new ProcessorRecordContext(
                 0L,
                 -1L,

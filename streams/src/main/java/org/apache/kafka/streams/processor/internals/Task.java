@@ -17,7 +17,6 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 
@@ -31,8 +30,38 @@ public interface Task {
     long LATEST_OFFSET = -2L;
 
     enum State {
-        CREATED, RESTORING, RUNNING, SUSPENDED, CLOSED;
+        CREATED {
+            @Override
+            public boolean hasBeenRunning() {
+                return false;
+            }
+        },
+        RESTORING {
+            @Override
+            public boolean hasBeenRunning() {
+                return false;
+            }
+        },
+        RUNNING {
+            @Override
+            public boolean hasBeenRunning() {
+                return true;
+            }
+        },
+        SUSPENDED {
+            @Override
+            public boolean hasBeenRunning() {
+                return true;
+            }
+        },
+        CLOSED {
+            @Override
+            public boolean hasBeenRunning() {
+                return true;
+            }
+        };
 
+        public abstract boolean hasBeenRunning();
     }
 
     enum TaskType {

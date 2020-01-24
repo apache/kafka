@@ -120,7 +120,7 @@ public class StandbyTask extends AbstractTask implements Task {
      */
     @Override
     public void commit() {
-        if (state() == State.RESTORING) {
+        if (state() == State.RUNNING) {
             stateMgr.flush();
 
             // since there's no written offsets we can checkpoint with empty map,
@@ -153,7 +153,7 @@ public class StandbyTask extends AbstractTask implements Task {
                 // the task is created and not initialized, do nothing
                 break;
 
-            case RESTORING:
+            case RUNNING:
                 if (clean) { commit(); }
 
                 try {

@@ -72,14 +72,12 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     static final byte LATEST_MAGIC_BYTE = 1;
 
     private final TaskId id;
-    private final String applicationId;
     private final ProcessorTopology topology;
     private final ProcessorStateManager stateMgr;
     private final Set<TopicPartition> partitions;
     private final Consumer<byte[], byte[]> consumer;
     private final String logPrefix;
     private final Logger log;
-    private final LogContext logContext;
     private final StateDirectory stateDirectory;
 
     private final Time time;
@@ -125,7 +123,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                       final ProcessorStateManager stateMgr,
                       final RecordCollector recordCollector) {
         this.id = id;
-        applicationId = config.getString(StreamsConfig.APPLICATION_ID_CONFIG);
         this.partitions = new HashSet<>(partitions);
         this.topology = topology;
         this.consumer = consumer;
@@ -135,7 +132,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
 
         final String threadIdPrefix = format("stream-thread [%s] ", Thread.currentThread().getName());
         logPrefix = threadIdPrefix + format("%s [%s] ", "task", id);
-        logContext = new LogContext(logPrefix);
+        final LogContext logContext = new LogContext(logPrefix);
         log = logContext.logger(getClass());
 
         this.time = time;
@@ -212,7 +209,9 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
 
     @Override
     public void startRunning() {
-        initializeTopology();
+        initTopology();
+        processorContext.initialize();
+        idleStartTime = RecordQueue.UNKNOWN;
         transitionTo(State.RUNNING);
     }
 
@@ -256,23 +255,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
 
     public void initializeStateStores() {
         TaskUtils.registerStateStores(topology, stateDirectory, id, logPrefix, log, processorContext, stateMgr);
-    }
-
-    /**
-     * <pre>
-     * - (re-)initialize the topology of the task
-     * </pre>
-     *
-     * @throws TaskMigratedException if the task producer got fenced (EOS only)
-     */
-    public void initializeTopology() {
-        initTopology();
-
-        processorContext.initialize();
-
-        taskInitialized = true;
-
-        idleStartTime = RecordQueue.UNKNOWN;
     }
 
     /**
@@ -585,7 +567,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         // close the processors
         // make sure close() is called for each node even when there is a RuntimeException
         RuntimeException exception = null;
-        if (taskInitialized) {
+        if (state().hasBeenRunning()) {
             for (final ProcessorNode node : topology.processors()) {
                 processorContext.setCurrentNode(node);
                 try {

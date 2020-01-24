@@ -486,8 +486,8 @@ public class StreamTaskTest {
     @Test
     public void shouldPunctuateOnceStreamTimeAfterGap() {
         task = createStatelessTask(createConfig(false), StreamsConfig.METRICS_LATEST);
-        task.initializeStateStores();
-        task.initializeTopology();
+        task.initializeIfNeeded();
+        task.startRunning();
 
         task.addRecords(partition1, asList(
             getConsumerRecord(partition1, 20),
@@ -571,8 +571,8 @@ public class StreamTaskTest {
     @Test
     public void shouldRespectPunctuateCancellationStreamTime() {
         task = createStatelessTask(createConfig(false), StreamsConfig.METRICS_LATEST);
-        task.initializeStateStores();
-        task.initializeTopology();
+        task.initializeIfNeeded();
+        task.startRunning();
 
         task.addRecords(partition1, asList(
             getConsumerRecord(partition1, 20),
@@ -611,8 +611,8 @@ public class StreamTaskTest {
     @Test
     public void shouldRespectPunctuateCancellationSystemTime() {
         task = createStatelessTask(createConfig(false), StreamsConfig.METRICS_LATEST);
-        task.initializeStateStores();
-        task.initializeTopology();
+        task.initializeIfNeeded();
+        task.startRunning();
         final long now = time.milliseconds();
         time.sleep(10);
         assertTrue(task.maybePunctuateSystemTime());
@@ -625,8 +625,8 @@ public class StreamTaskTest {
     @Test
     public void shouldRespectCommitNeeded() {
         task = createStatelessTask(createConfig(false), StreamsConfig.METRICS_LATEST);
-        task.initializeStateStores();
-        task.initializeTopology();
+        task.initializeIfNeeded();
+        task.startRunning();
 
         assertFalse(task.commitNeeded());
 
@@ -676,8 +676,8 @@ public class StreamTaskTest {
     @Test
     public void shouldRespectCommitRequested() {
         task = createStatelessTask(createConfig(false), StreamsConfig.METRICS_LATEST);
-        task.initializeStateStores();
-        task.initializeTopology();
+        task.initializeIfNeeded();
+        task.startRunning();
 
         task.requestCommit();
         assertTrue(task.commitRequested());
@@ -686,8 +686,8 @@ public class StreamTaskTest {
     @Test
     public void shouldBeProcessableIfAllPartitionsBuffered() {
         task = createStatelessTask(createConfig(false), StreamsConfig.METRICS_LATEST);
-        task.initializeStateStores();
-        task.initializeTopology();
+        task.initializeIfNeeded();
+        task.startRunning();
 
         assertFalse(task.process(0L));
 
@@ -705,8 +705,8 @@ public class StreamTaskTest {
     @Test
     public void shouldBeProcessableIfWaitedForTooLong() {
         task = createStatelessTask(createConfig(false), StreamsConfig.METRICS_LATEST);
-        task.initializeStateStores();
-        task.initializeTopology();
+        task.initializeIfNeeded();
+        task.startRunning();
 
         final MetricName enforcedProcessMetric = metrics.metricName(
             "enforced-processing-total",
@@ -752,8 +752,8 @@ public class StreamTaskTest {
     @Test
     public void shouldNotBeProcessableIfNoDataAvailble() {
         task = createStatelessTask(createConfig(false), StreamsConfig.METRICS_LATEST);
-        task.initializeStateStores();
-        task.initializeTopology();
+        task.initializeIfNeeded();
+        task.startRunning();
 
         final MetricName enforcedProcessMetric = metrics.metricName(
             "enforced-processing-total",
@@ -798,8 +798,8 @@ public class StreamTaskTest {
     @Test
     public void shouldPunctuateSystemTimeWhenIntervalElapsed() {
         task = createStatelessTask(createConfig(false), StreamsConfig.METRICS_LATEST);
-        task.initializeStateStores();
-        task.initializeTopology();
+        task.initializeIfNeeded();
+        task.startRunning();
         final long now = time.milliseconds();
         time.sleep(10);
         assertTrue(task.maybePunctuateSystemTime());
@@ -818,8 +818,8 @@ public class StreamTaskTest {
     @Test
     public void shouldNotPunctuateSystemTimeWhenIntervalNotElapsed() {
         task = createStatelessTask(createConfig(false), StreamsConfig.METRICS_LATEST);
-        task.initializeStateStores();
-        task.initializeTopology();
+        task.initializeIfNeeded();
+        task.startRunning();
         assertFalse(task.maybePunctuateSystemTime());
         time.sleep(9);
         assertFalse(task.maybePunctuateSystemTime());
@@ -829,8 +829,8 @@ public class StreamTaskTest {
     @Test
     public void shouldPunctuateOnceSystemTimeAfterGap() {
         task = createStatelessTask(createConfig(false), StreamsConfig.METRICS_LATEST);
-        task.initializeStateStores();
-        task.initializeTopology();
+        task.initializeIfNeeded();
+        task.startRunning();
         final long now = time.milliseconds();
         time.sleep(100);
         assertTrue(task.maybePunctuateSystemTime());
@@ -855,8 +855,8 @@ public class StreamTaskTest {
     @Test
     public void shouldWrapKafkaExceptionsWithStreamsExceptionAndAddContextWhenPunctuatingStreamTime() {
         task = createStatelessTask(createConfig(false), StreamsConfig.METRICS_LATEST);
-        task.initializeStateStores();
-        task.initializeTopology();
+        task.initializeIfNeeded();
+        task.startRunning();
 
         try {
             task.punctuate(processorStreamTime, 1, PunctuationType.STREAM_TIME, timestamp -> {
@@ -873,8 +873,8 @@ public class StreamTaskTest {
     @Test
     public void shouldWrapKafkaExceptionsWithStreamsExceptionAndAddContextWhenPunctuatingWallClockTimeTime() {
         task = createStatelessTask(createConfig(false), StreamsConfig.METRICS_LATEST);
-        task.initializeStateStores();
-        task.initializeTopology();
+        task.initializeIfNeeded();
+        task.startRunning();
 
         try {
             task.punctuate(processorSystemTime, 1, PunctuationType.WALL_CLOCK_TIME, timestamp -> {
@@ -900,8 +900,8 @@ public class StreamTaskTest {
         EasyMock.replay(stateManager, recordCollector);
 
 
-        task.initializeStateStores();
-        task.initializeTopology();
+        task.initializeIfNeeded();
+        task.startRunning();
         task.commit();
 
         EasyMock.verify(recordCollector);
@@ -912,8 +912,8 @@ public class StreamTaskTest {
         task = createStatefulTask(createConfig(true), true);
         EasyMock.replay(stateManager, recordCollector);
 
-        task.initializeStateStores();
-        task.initializeTopology();
+        task.initializeIfNeeded();
+        task.startRunning();
         task.commit();
         final File checkpointFile = new File(
             stateDirectory.directoryForTask(taskId00),
@@ -926,8 +926,8 @@ public class StreamTaskTest {
     @Test
     public void shouldThrowIllegalStateExceptionIfCurrentNodeIsNotNullWhenPunctuateCalled() {
         task = createStatelessTask(createConfig(false), StreamsConfig.METRICS_LATEST);
-        task.initializeStateStores();
-        task.initializeTopology();
+        task.initializeIfNeeded();
+        task.startRunning();
         task.processorContext().setCurrentNode(processorStreamTime);
         try {
             task.punctuate(processorStreamTime, 10, PunctuationType.STREAM_TIME, punctuator);
@@ -940,8 +940,8 @@ public class StreamTaskTest {
     @Test
     public void shouldCallPunctuateOnPassedInProcessorNode() {
         task = createStatelessTask(createConfig(false), StreamsConfig.METRICS_LATEST);
-        task.initializeStateStores();
-        task.initializeTopology();
+        task.initializeIfNeeded();
+        task.startRunning();
         task.punctuate(processorStreamTime, 5, PunctuationType.STREAM_TIME, punctuator);
         assertThat(punctuatedAt, equalTo(5L));
         task.punctuate(processorStreamTime, 10, PunctuationType.STREAM_TIME, punctuator);
@@ -951,8 +951,8 @@ public class StreamTaskTest {
     @Test
     public void shouldSetProcessorNodeOnContextBackToNullAfterSuccessfulPunctuate() {
         task = createStatelessTask(createConfig(false), StreamsConfig.METRICS_LATEST);
-        task.initializeStateStores();
-        task.initializeTopology();
+        task.initializeIfNeeded();
+        task.startRunning();
         task.punctuate(processorStreamTime, 5, PunctuationType.STREAM_TIME, punctuator);
         assertThat(((InternalProcessorContext) task.context()).currentNode(), nullValue());
     }
@@ -995,8 +995,8 @@ public class StreamTaskTest {
             stateManager,
             recordCollector);
 
-        task.initializeStateStores();
-        task.initializeTopology();
+        task.initializeIfNeeded();
+        task.startRunning();
 
         task.closeDirty();
 
@@ -1030,8 +1030,8 @@ public class StreamTaskTest {
             time,
             stateManager,
             recordCollector);
-        task.initializeStateStores();
-        task.initializeTopology();
+        task.initializeIfNeeded();
+        task.startRunning();
 
         task.addRecords(partition1, singletonList(getConsumerRecord(partition1, 5L)));
         task.addRecords(repartition, singletonList(getConsumerRecord(repartition, 10L)));
