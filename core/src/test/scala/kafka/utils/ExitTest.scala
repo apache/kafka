@@ -17,8 +17,11 @@
 
 package kafka.utils
 
+import java.io.IOException
+
 import org.junit.Assert.assertEquals
 import org.junit.Test
+import org.scalatest.Assertions.intercept
 
 class ExitTest {
   @Test
@@ -27,28 +30,19 @@ class ExitTest {
     def haltProcedure(exitStatus: Int, message: Option[String]) : Nothing = {
       array(0) = exitStatus
       array(1) = message
-      throw new Exception()
+      throw new IOException()
     }
     Exit.setHaltProcedure(haltProcedure)
     val statusCode = 0
     val message = Some("message")
     try {
-      try {
-        Exit.halt(statusCode)
-      } catch {
-        case e: Exception => {
-          assertEquals(statusCode, array(0))
-          assertEquals(None, array(1))
-        }
-      }
-      try {
-        Exit.halt(statusCode, message)
-      } catch {
-        case e: Exception => {
-          assertEquals(statusCode, array(0))
-          assertEquals(message, array(1))
-        }
-      }
+      intercept[IOException] {Exit.halt(statusCode)}
+      assertEquals(statusCode, array(0))
+      assertEquals(None, array(1))
+
+      intercept[IOException] {Exit.halt(statusCode, message)}
+      assertEquals(statusCode, array(0))
+      assertEquals(message, array(1))
     } finally {
       Exit.resetHaltProcedure()
     }
@@ -60,28 +54,19 @@ class ExitTest {
     def exitProcedure(exitStatus: Int, message: Option[String]) : Nothing = {
       array(0) = exitStatus
       array(1) = message
-      throw new Exception()
+      throw new IOException()
     }
     Exit.setExitProcedure(exitProcedure)
     val statusCode = 0
     val message = Some("message")
     try {
-      try {
-        Exit.exit(statusCode)
-      } catch {
-        case e: Exception => {
-          assertEquals(statusCode, array(0))
-          assertEquals(None, array(1))
-        }
-      }
-      try {
-        Exit.exit(statusCode, message)
-      } catch {
-        case e: Exception => {
-          assertEquals(statusCode, array(0))
-          assertEquals(message, array(1))
-        }
-      }
+      intercept[IOException] {Exit.exit(statusCode)}
+      assertEquals(statusCode, array(0))
+      assertEquals(None, array(1))
+
+      intercept[IOException] {Exit.exit(statusCode, message)}
+      assertEquals(statusCode, array(0))
+      assertEquals(message, array(1))
     } finally {
       Exit.resetExitProcedure()
     }

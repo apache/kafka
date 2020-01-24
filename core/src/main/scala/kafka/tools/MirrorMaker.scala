@@ -532,7 +532,7 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
       producer = new MirrorMakerProducer(sync, producerProps)
 
       // Create consumers
-      val customRebalanceListener = {
+      val customRebalanceListener: Option[ConsumerRebalanceListener] = {
         val customRebalanceListenerClass = options.valueOf(consumerRebalanceListenerOpt)
         if (customRebalanceListenerClass != null) {
           val rebalanceListenerArgs = options.valueOf(rebalanceListenerArgsOpt)
@@ -540,7 +540,9 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
             Some(CoreUtils.createObject[ConsumerRebalanceListener](customRebalanceListenerClass, rebalanceListenerArgs))
           else
             Some(CoreUtils.createObject[ConsumerRebalanceListener](customRebalanceListenerClass))
-        } else None
+        } else {
+          None
+        }
       }
       val mirrorMakerConsumers = createConsumers(
         numStreams,
@@ -556,10 +558,14 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
       val customMessageHandlerClass = options.valueOf(messageHandlerOpt)
       val messageHandlerArgs = options.valueOf(messageHandlerArgsOpt)
       messageHandler = {
-        if (customMessageHandlerClass != null) if (messageHandlerArgs != null)
-          CoreUtils.createObject[MirrorMakerMessageHandler](customMessageHandlerClass, messageHandlerArgs)
-        else
-          CoreUtils.createObject[MirrorMakerMessageHandler](customMessageHandlerClass) else defaultMirrorMakerMessageHandler
+        if (customMessageHandlerClass != null) {
+          if (messageHandlerArgs != null)
+            CoreUtils.createObject[MirrorMakerMessageHandler](customMessageHandlerClass, messageHandlerArgs)
+          else
+            CoreUtils.createObject[MirrorMakerMessageHandler](customMessageHandlerClass)
+        } else {
+          defaultMirrorMakerMessageHandler
+        }
       }
     }
   }

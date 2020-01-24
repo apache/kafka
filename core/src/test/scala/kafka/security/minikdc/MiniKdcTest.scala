@@ -23,7 +23,7 @@ import kafka.utils.TestUtils
 import org.junit.Test
 import org.junit.Assert._
 
-class MinikdcTest {
+class MiniKdcTest {
   @Test
   def shouldNotStopImmediatelyWhenStarted(): Unit = {
     val config = new Properties()
