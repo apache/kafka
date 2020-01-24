@@ -414,7 +414,7 @@ public class TopologyTestDriver implements Closeable {
                 mockWallClockTime,
                 stateManager,
                 recordCollector);
-            task.initializeStateStores();
+            task.initializeIfNeeded();
             task.completeInitializationAfterRestore();
             ((InternalProcessorContext) task.context()).setRecordContext(new ProcessorRecordContext(
                 0L,

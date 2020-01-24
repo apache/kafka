@@ -214,11 +214,12 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             idleStartTime = RecordQueue.UNKNOWN;
             transitionTo(State.RUNNING);
         } else {
-            throw new IllegalStateException("This method is only for transitioning from restoring to running. But was in state " + state());
+            throw new IllegalStateException("Illegal state " + state() + " for task " + id + " while completing initialization");
         }
     }
 
-    public void initializeMetadata() {
+    // package private for testing
+    void initializeMetadata() {
         try {
             final Map<TopicPartition, OffsetAndMetadata> offsetsAndMetadata = consumer.committed(partitions).entrySet().stream()
                                                                                       .filter(e -> e.getValue() != null)
@@ -255,8 +256,8 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         }
     }
 
-
-    public void initializeStateStores() {
+    // package private for testing
+    void initializeStateStores() {
         TaskUtils.registerStateStores(topology, stateDirectory, id, logPrefix, log, processorContext, stateMgr);
     }
 
