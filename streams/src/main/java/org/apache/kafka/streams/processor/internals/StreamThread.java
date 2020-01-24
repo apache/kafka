@@ -1022,7 +1022,7 @@ public class StreamThread extends Thread {
 
             // TODO: this is a naive heuristic that when we are committing, the other threads maybe committing
             //       too so we can try update the limit offset; this heuristic can be further improved
-            changelogReader.updateLimitOffsets();
+            // changelogReader.updateLimitOffsets();
         } else {
             committed = taskManager.maybeCommitActiveTasksPerUserRequested();
             if (committed > 0) {
