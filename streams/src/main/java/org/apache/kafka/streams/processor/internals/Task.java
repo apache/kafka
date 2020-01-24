@@ -59,6 +59,12 @@ public interface Task {
             public boolean hasBeenRunning() {
                 return true;
             }
+        },
+        CLOSING {
+            @Override
+            public boolean hasBeenRunning() {
+                return true;
+            }
         };
 
         public abstract boolean hasBeenRunning();

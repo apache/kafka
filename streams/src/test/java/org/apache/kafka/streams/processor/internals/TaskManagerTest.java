@@ -815,11 +815,13 @@ public class TaskManagerTest {
 
         @Override
         public void closeClean() {
+            transitionTo(State.CLOSING);
             transitionTo(State.CLOSED);
         }
 
         @Override
         public void closeDirty() {
+            transitionTo(State.CLOSING);
             transitionTo(State.CLOSED);
         }
 

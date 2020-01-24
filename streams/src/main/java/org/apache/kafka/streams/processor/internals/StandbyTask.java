@@ -150,13 +150,17 @@ public class StandbyTask extends AbstractTask implements Task {
     private void close(final boolean clean) {
         switch (state()) {
             case CREATED:
+                transitionTo(State.CLOSING);
                 // the task is created and not initialized, do nothing
                 break;
 
             case RUNNING:
+                // No resources are destroyed here, so we can do this before transit to CLOSING
                 if (clean) {
                     commit();
                 }
+
+                transitionTo(State.CLOSING);
 
                 try {
                     TaskUtils.closeStateManager(log, logPrefix, stateMgr, stateDirectory, id);

@@ -358,7 +358,7 @@ public class StandbyTaskTest {
 
         assertThrows(RuntimeException.class, task::closeClean);
 
-        assertEquals(Task.State.RUNNING, task.state());
+        assertEquals(Task.State.CLOSING, task.state());
 
         final double expectedCloseTaskMetric = 0.0;
         verifyCloseTaskMetric(expectedCloseTaskMetric, streamsMetrics, metricName);

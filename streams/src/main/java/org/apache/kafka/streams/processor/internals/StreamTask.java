@@ -525,8 +525,12 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
      */
     public void suspend() {
         log.debug("Suspending");
-        suspend(true);
-        transitionTo(State.SUSPENDED);
+        if (state() == State.SUSPENDED) {
+            return;
+        } else {
+            suspend(true);
+            transitionTo(State.SUSPENDED);
+        }
     }
 
     /**
@@ -546,7 +550,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         try {
             // If the suspension is from unclean shutdown, then only need to close topology and flush state to make sure that when later
             // closing the states, there's no records triggering any processing anymore; also swallow all caught exceptions
-            closeTopology();
+            closeTopology(clean);
 
             if (clean) {
                 commitState();
@@ -566,7 +570,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         partitionGroup.clear();
     }
 
-    private void closeTopology() {
+    private void closeTopology(final boolean clean) {
         log.trace("Closing processor topology");
 
         // close the processors
@@ -585,7 +589,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             }
         }
 
-        if (exception != null) {
+        if (exception != null && clean) {
             throw exception;
         }
     }
@@ -617,13 +621,32 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
      */
     private void close(final boolean clean) {
         log.debug("Closing");
+        // Once we start closing, we have to complete it.
+        transitionTo(State.CLOSING);
 
         try {
-            // If it is an unclean close, then the suspend would never
-            // throw since it would swallow all exception; otherwise if suspension
-            // throws we do not need to proceed to further steps and should just notify
-            // the caller thread. Therefore it is always safe to proceed without try-catch
-            suspend(clean);
+
+            closeTopology(clean);
+
+            // If from unclean shutdown, then only need to close topology and flush state to make sure that when later
+            // closing the states, there's no records triggering any processing anymore; also swallow all caught exceptions
+            // However, for a _clean_ shutdown, we try to commit and checkpoint. If there are any exceptions, they become
+            // fatal for the "closeClean()" call, and the caller can try again with closeDirty() to complete the shutdown.
+            if (clean) {
+                commitState();
+                // whenever we have successfully committed state during suspension, it is safe to checkpoint
+                // the state as well no matter if EOS is enabled or not
+                stateMgr.checkpoint(checkpointableOffsets());
+            } else {
+                try {
+                    stateMgr.flush();
+                } catch (final RuntimeException error) {
+                    log.debug("Ignoring flush error in unclean close.", error);
+                }
+            }
+
+            // we should also clear any buffered records of a task when suspending it
+            partitionGroup.clear();
 
             TaskUtils.closeStateManager(log, logPrefix, stateMgr, stateDirectory, id);
         } finally {
@@ -631,11 +654,10 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             closeTaskSensor.record();
             streamsMetrics.removeAllTaskLevelSensors(threadId, id.toString());
 
-            transitionTo(State.CLOSED);
-
             // this is last because it might throw
             closeRecordCollector(clean);
         }
+        transitionTo(State.CLOSED);
     }
 
     private void closeRecordCollector(final boolean clean) {
@@ -887,7 +909,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             // if we are in running state, just return the latest offset sentinel indicating
             // we should be at the end of the changelog
             return changelogPartitions().stream()
-                .collect(Collectors.toMap(Function.identity(), tp -> Task.LATEST_OFFSET));
+                                        .collect(Collectors.toMap(Function.identity(), tp -> Task.LATEST_OFFSET));
         } else {
             return Collections.unmodifiableMap(stateMgr.changelogOffsets());
         }
