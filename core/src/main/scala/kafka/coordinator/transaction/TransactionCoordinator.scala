@@ -520,6 +520,7 @@ class TransactionCoordinator(brokerId: Int,
       }
     }
 
+    info(s"Doing a round of txn timeout")
     txnManager.timedOutTransactions().foreach { txnIdAndPidEpoch =>
       txnManager.getTransactionState(txnIdAndPidEpoch.transactionalId).right.foreach {
         case None =>
