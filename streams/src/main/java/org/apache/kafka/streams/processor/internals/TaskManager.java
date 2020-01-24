@@ -103,6 +103,12 @@ public class TaskManager {
         rebalanceInProgress = true;
     }
 
+    public void handleRebalanceComplete() {
+        // we should pause consumer only within the listener since
+        // before then the assignment has not been updated yet.
+        consumer.pause(consumer.assignment());
+    }
+
     public void handleAssignment(final Map<TaskId, Set<TopicPartition>> activeTasks,
                                  final Map<TaskId, Set<TopicPartition>> standbyTasks) {
         log.info("Handle new assignment with:\n\tNew active tasks: {}\n\tNew standby tasks: {}" +
@@ -204,6 +210,11 @@ public class TaskManager {
                     allRunning = false;
                 }
             }
+        }
+
+        if (allRunning) {
+            // we can call resume multiple times since it is idempotent.
+            consumer.resume(consumer.assignment());
         }
 
         return allRunning;
