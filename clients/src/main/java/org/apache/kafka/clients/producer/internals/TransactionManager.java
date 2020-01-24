@@ -1329,6 +1329,7 @@ public class TransactionManager {
                         transactionCoordinator = node;
                 }
                 result.done();
+                log.info("Discovered {} coordinator {}", coordinatorType.toString().toLowerCase(), node);
             } else if (error == Errors.COORDINATOR_NOT_AVAILABLE) {
                 reenqueue();
             } else if (error == Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED) {

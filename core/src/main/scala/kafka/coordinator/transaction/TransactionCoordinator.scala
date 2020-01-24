@@ -108,6 +108,7 @@ class TransactionCoordinator(brokerId: Int,
                            expectedProducerIdAndEpoch: Option[ProducerIdAndEpoch],
                            responseCallback: InitProducerIdCallback): Unit = {
 
+    info(s"Received txn.id initialization request from $transactionalId with expected producer.id and epoch: $expectedProducerIdAndEpoch")
     if (transactionalId == null) {
       // if the transactional id is null, then always blindly accept the request
       // and return a new producerId from the producerId manager
