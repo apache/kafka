@@ -240,7 +240,11 @@ public class TaskManager {
 
         for (final TaskId taskId : revokedTasks) {
             final Task task = tasks.get(taskId);
-            task.suspend();
+            try {
+                task.suspend();
+            } catch (final RuntimeException e) {
+                throw new StreamsException("Unexpected exception while suspending task " + taskId, e);
+            }
         }
     }
 
