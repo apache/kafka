@@ -645,6 +645,7 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
    */
   def completePendingTxnOffsetCommit(producerId: Long, isCommit: Boolean): Unit = {
     val pendingOffsetsOpt = pendingTransactionalOffsetCommits.remove(producerId)
+    info(s"txn offset commit was removed for producer $producerId. The current pending txn offsets are $pendingTransactionalOffsetCommits")
     if (isCommit) {
       pendingOffsetsOpt.foreach { pendingOffsets =>
         pendingOffsets.foreach { case (topicPartition, commitRecordMetadataAndOffset) =>

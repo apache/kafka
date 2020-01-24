@@ -277,7 +277,7 @@ public class TransactionalMessageCopier {
         final KafkaProducer<String, String> producer = createProducer(parsedArgs);
         final KafkaConsumer<String, String> consumer = createConsumer(parsedArgs);
 
-        long maxMessages = parsedArgs.getInt("maxMessages") == -1 ? Long.MAX_VALUE : parsedArgs.getInt("maxMessages");
+        long messageCap = parsedArgs.getInt("maxMessages") == -1 ? Long.MAX_VALUE : parsedArgs.getInt("maxMessages");
 
         boolean groupMode = parsedArgs.getBoolean("groupMode");
         String topicName = parsedArgs.getString("inputTopic");
@@ -286,7 +286,7 @@ public class TransactionalMessageCopier {
         } else {
             TopicPartition inputPartition = new TopicPartition(topicName, parsedArgs.getInt("inputPartition"));
             consumer.assign(singleton(inputPartition));
-            maxMessages = Math.min(messagesRemaining(consumer, inputPartition), maxMessages);
+            messageCap = Math.min(messagesRemaining(consumer, inputPartition), messageCap);
         }
 
         final boolean enableRandomAborts = parsedArgs.getBoolean("enableRandomAborts");
@@ -294,7 +294,7 @@ public class TransactionalMessageCopier {
         producer.initTransactions();
 
         final AtomicBoolean isShuttingDown = new AtomicBoolean(false);
-        final AtomicLong remainingMessages = new AtomicLong(maxMessages);
+        final AtomicLong remainingMessages = new AtomicLong(messageCap);
         final AtomicLong numMessagesProcessed = new AtomicLong(0);
         Exit.addShutdownHook("transactional-message-copier-shutdown-hook", () -> {
             isShuttingDown.set(true);
@@ -326,6 +326,17 @@ public class TransactionalMessageCopier {
                         }
                     }
 
+                    // The max message has not been initialized, which means we have to init.
+                    if (groupMode && messageCap == Long.MAX_VALUE) {
+                        messageCap = 0;
+
+                        for (TopicPartition partition : consumer.assignment()) {
+                            messageCap += messagesRemaining(consumer, partition);
+                        }
+                        // We could not neglect the messages already inside current transaction.
+                        messageCap += messagesInCurrentTransaction;
+                    }
+
                     if (useGroupMetadata) {
                         producer.sendOffsetsToTransaction(consumerPositions(consumer), consumer.groupMetadata());
                     } else {
@@ -336,7 +347,7 @@ public class TransactionalMessageCopier {
                         throw new KafkaException("Aborting transaction");
                     } else {
                         producer.commitTransaction();
-                        remainingMessages.set(maxMessages - numMessagesProcessed.addAndGet(messagesInCurrentTransaction));
+                        remainingMessages.set(messageCap - numMessagesProcessed.addAndGet(messagesInCurrentTransaction));
                     }
                 } catch (ProducerFencedException | OutOfOrderSequenceException e) {
                     // We cannot recover from these errors, so just rethrow them and let the process fail
