@@ -656,7 +656,14 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
      * @param partition the partition
      * @param records   the records
      */
+    @Override
     public void addRecords(final TopicPartition partition, final Iterable<ConsumerRecord<byte[], byte[]>> records) {
+        if (state() == State.CLOSED || state() == State.CLOSING) {
+            log.info("Stream task {} is already closed, probably because it got unexpectedly migrated to another thread already. " +
+                         "Notifying the thread to trigger a new rebalance immediately.", id());
+            throw new TaskMigratedException(id());
+        }
+
         final int newQueueSize = partitionGroup.addRawRecords(partition, records);
 
         if (log.isTraceEnabled()) {

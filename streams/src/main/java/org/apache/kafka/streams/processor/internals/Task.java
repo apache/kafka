@@ -16,12 +16,14 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 
 import java.util.Collection;
 import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -93,6 +95,8 @@ public interface Task {
     default Map<TopicPartition, Long> purgableOffsets() {
         return Collections.emptyMap();
     }
+
+    void addRecords(TopicPartition partition, Iterable<ConsumerRecord<byte[],byte[]>> records);
 
     default boolean process(final long wallClockTime) {
         return false;

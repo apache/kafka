@@ -951,7 +951,7 @@ public class StreamThread extends Thread {
     private void addRecordsToTasks(final ConsumerRecords<byte[], byte[]> records) {
 
         for (final TopicPartition partition : records.partitions()) {
-            final StreamTask task = taskManager.streamTask(partition);
+            final Task task = taskManager.taskForInputPartition(partition);
 
             if (task == null) {
                 log.error(
@@ -960,10 +960,6 @@ public class StreamThread extends Thread {
                     taskManager.toString(">")
                 );
                 throw new NullPointerException("Task was unexpectedly missing for partition " + partition);
-            } else if (task.isClosed()) {
-                log.info("Stream task {} is already closed, probably because it got unexpectedly migrated to another thread already. " +
-                             "Notifying the thread to trigger a new rebalance immediately.", task.id());
-                throw new TaskMigratedException(task.id());
             }
 
             task.addRecords(partition, records.records(partition));

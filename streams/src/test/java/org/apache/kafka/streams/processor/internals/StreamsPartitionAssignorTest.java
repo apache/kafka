@@ -1006,7 +1006,7 @@ public class StreamsPartitionAssignorTest {
         final Map<TaskId, Set<TopicPartition>> standbyTasks = new HashMap<>();
         standbyTasks.put(task0_1, mkSet(t3p1));
         standbyTasks.put(task0_2, mkSet(t3p2));
-        
+
         taskManager.handleAssignment(activeTasks, standbyTasks);
         EasyMock.expectLastCall();
         EasyMock.replay(taskManager);
