@@ -609,7 +609,7 @@ class DynamicLogConfig(logManager: LogManager, server: KafkaServer) extends Brok
       props ++= newBrokerDefaults.asScala
       props ++= log.config.originals.asScala.filterKeys(log.config.overriddenConfigs.contains)
 
-      val logConfig = LogConfig(props.asJava)
+      val logConfig = LogConfig(props.asJava, log.config.overriddenConfigs)
       log.updateConfig(newBrokerDefaults.asScala.keySet, logConfig)
     }
     if (logManager.currentDefaultConfig.uncleanLeaderElectionEnable && !origUncleanLeaderElectionEnable) {
