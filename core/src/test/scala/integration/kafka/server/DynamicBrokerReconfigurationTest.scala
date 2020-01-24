@@ -512,7 +512,7 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
     TestUtils.createTopic(zkClient, topic2, 1, replicationFactor = numServers, servers, topicProps)
     var log = servers.head.logManager.getLog(new TopicPartition(topic2, 0)).getOrElse(throw new IllegalStateException("Log not found"))
     assertTrue(log.config.overriddenConfigs.contains(KafkaConfig.MinInSyncReplicasProp))
-    assertEquals(log.config.originals().get(KafkaConfig.MinInSyncReplicasProp).toString, "2")
+    assertEquals("2", log.config.originals().get(KafkaConfig.MinInSyncReplicasProp).toString)
 
     val props = new Properties
     props.put(KafkaConfig.MinInSyncReplicasProp, "3")
@@ -521,13 +521,13 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
     // Verify that all broker defaults have been updated again
     servers.foreach { server =>
       props.asScala.foreach { case (k, v) =>
-        assertEquals(s"Not reconfigured $k", server.config.originals.get(k).toString, v)
+        assertEquals(s"Not reconfigured $k", v, server.config.originals.get(k).toString)
       }
     }
 
     log = servers.head.logManager.getLog(new TopicPartition(topic2, 0)).getOrElse(throw new IllegalStateException("Log not found"))
     assertTrue(log.config.overriddenConfigs.contains(KafkaConfig.MinInSyncReplicasProp))
-    assertEquals(log.config.originals().get(KafkaConfig.MinInSyncReplicasProp).toString, "2") // Verify topic-level config survives
+    assertEquals("2", log.config.originals().get(KafkaConfig.MinInSyncReplicasProp).toString) // Verify topic-level config survives
 
     // Make a second broker-default change
     props.clear()
@@ -535,7 +535,7 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
     reconfigureServers(props, perBrokerConfig = false, (KafkaConfig.LogRetentionTimeMillisProp, "604800000"))
     log = servers.head.logManager.getLog(new TopicPartition(topic2, 0)).getOrElse(throw new IllegalStateException("Log not found"))
     assertTrue(log.config.overriddenConfigs.contains(KafkaConfig.MinInSyncReplicasProp))
-    assertEquals(log.config.originals().get(KafkaConfig.MinInSyncReplicasProp).toString, "2") // Verify topic-level config still survives
+    assertEquals("2", log.config.originals().get(KafkaConfig.MinInSyncReplicasProp).toString) // Verify topic-level config still survives
   }
 
   @Test
