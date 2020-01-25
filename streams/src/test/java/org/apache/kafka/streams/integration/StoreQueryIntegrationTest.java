@@ -348,30 +348,4 @@ public class StoreQueryIntegrationTest {
         config.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100);
         return config;
     }
-
-    private StateRestoreListener createTrackingRestoreListener(final AtomicLong restoreStartOffset,
-                                                               final AtomicLong restoreEndOffset) {
-        return new StateRestoreListener() {
-            @Override
-            public void onRestoreStart(final TopicPartition topicPartition,
-                                       final String storeName,
-                                       final long startingOffset,
-                                       final long endingOffset) {
-                restoreStartOffset.set(startingOffset);
-                restoreEndOffset.set(endingOffset);
-            }
-
-            @Override
-            public void onBatchRestored(final TopicPartition topicPartition, final String storeName,
-                                        final long batchEndOffset, final long numRestored) {
-
-            }
-
-            @Override
-            public void onRestoreEnd(final TopicPartition topicPartition, final String storeName,
-                                     final long totalRestored) {
-
-            }
-        };
-    }
 }
