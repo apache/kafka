@@ -21,6 +21,7 @@ import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.errors.DataException;
 import org.apache.kafka.connect.sink.SinkRecord;
+import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Test;
 
@@ -29,7 +30,7 @@ import java.util.HashMap;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertThrows;
+import static org.junit.Assert.fail;
 
 public class ValueToKeyTest {
     private final ValueToKey<SinkRecord> xform = new ValueToKey<>();
@@ -103,7 +104,11 @@ public class ValueToKeyTest {
 
         final SinkRecord record = new SinkRecord("", 0, null, null, valueSchema, value, 0);
 
-        DataException actual = assertThrows(DataException.class, () -> xform.apply(record));
-        assertEquals("Field does not exist: not_exist", actual.getMessage());
+        try {
+            xform.apply(record);
+            fail("Expected exception was not thrown");
+        } catch (DataException e) {
+            assertEquals("Field does not exist: not_exist", e.getMessage());
+        }
     }
 }
