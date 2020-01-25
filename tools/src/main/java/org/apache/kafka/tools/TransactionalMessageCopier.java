@@ -278,17 +278,17 @@ public class TransactionalMessageCopier {
         final KafkaProducer<String, String> producer = createProducer(parsedArgs);
         final KafkaConsumer<String, String> consumer = createConsumer(parsedArgs);
 
-        long messageCap = parsedArgs.getInt("maxMessages") == -1 ? Long.MAX_VALUE : parsedArgs.getInt("maxMessages");
+        final AtomicLong messageCap = new AtomicLong(
+            parsedArgs.getInt("maxMessages") == -1 ? Long.MAX_VALUE : parsedArgs.getInt("maxMessages"));
 
         boolean groupMode = parsedArgs.getBoolean("groupMode");
         String topicName = parsedArgs.getString("inputTopic");
-        final AtomicLong remainingMessages = new AtomicLong(messageCap);
+        final AtomicLong remainingMessages = new AtomicLong(messageCap.get());
         final AtomicLong numMessagesProcessed = new AtomicLong(0);
         if (groupMode) {
             consumer.subscribe(Collections.singleton(topicName), new ConsumerRebalanceListener() {
                 @Override
                 public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
-
                 }
 
                 @Override
@@ -297,15 +297,15 @@ public class TransactionalMessageCopier {
                     for (TopicPartition partition : partitions) {
                         messageSum += messagesRemaining(consumer, partition);
                     }
-                    remainingMessages.set(messageSum);
+                    messageCap.set(messageSum);
                     numMessagesProcessed.set(0);
                 }
             });
         } else {
             TopicPartition inputPartition = new TopicPartition(topicName, parsedArgs.getInt("inputPartition"));
             consumer.assign(singleton(inputPartition));
-            messageCap = Math.min(messagesRemaining(consumer, inputPartition), messageCap);
-            remainingMessages.set(messageCap);
+            messageCap.set(Math.min(messagesRemaining(consumer, inputPartition), messageCap.get()));
+            remainingMessages.set(messageCap.get());
         }
 
         final boolean enableRandomAborts = parsedArgs.getBoolean("enableRandomAborts");
@@ -355,8 +355,7 @@ public class TransactionalMessageCopier {
                         throw new KafkaException("Aborting transaction");
                     } else {
                         producer.commitTransaction();
-                        final long finalMessagesInCurrentTransaction = messagesInCurrentTransaction;
-                        remainingMessages.set(messageCap - numMessagesProcessed.addAndGet(finalMessagesInCurrentTransaction));
+                        remainingMessages.set(messageCap.get() - numMessagesProcessed.addAndGet(messagesInCurrentTransaction));
                     }
                 } catch (ProducerFencedException | OutOfOrderSequenceException e) {
                     // We cannot recover from these errors, so just rethrow them and let the process fail
