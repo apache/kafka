@@ -28,7 +28,6 @@ import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.producer.KafkaProducer;
-import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.KafkaException;
@@ -36,10 +35,15 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.OutOfOrderSequenceException;
 import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.utils.Exit;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
+import java.text.DateFormat;
+import java.text.SimpleDateFormat;
 import java.time.Duration;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
@@ -56,6 +60,9 @@ import static net.sourceforge.argparse4j.impl.Arguments.storeTrue;
  * topic transactionally, committing the offsets and messages together.
  */
 public class TransactionalMessageCopier {
+
+    private static final Logger log = LoggerFactory.getLogger(TransactionalMessageCopier.class);
+    private static final DateFormat sdf = new SimpleDateFormat("yyyy/MM/dd HH:mm:ss");
 
     /** Get the command-line argument parser. */
     private static ArgumentParser argParser() {
@@ -256,6 +263,7 @@ public class TransactionalMessageCopier {
         statusData.put("progress", transactionalId);
         statusData.put("consumed", consumed);
         statusData.put("remaining", remaining);
+        statusData.put("time", sdf.format(new Date()));
         return toJsonString(statusData);
     }
 
@@ -264,6 +272,7 @@ public class TransactionalMessageCopier {
         shutdownData.put("remaining", remaining);
         shutdownData.put("consumed", consumed);
         shutdownData.put("shutdown_complete", transactionalId);
+        shutdownData.put("time", sdf.format(new Date()));
         return toJsonString(shutdownData);
     }
 
@@ -299,6 +308,7 @@ public class TransactionalMessageCopier {
                     }
                     messageCap.set(messageSum);
                     numMessagesProcessed.set(0);
+                    log.info("set messageCap to {}", messageSum);
                 }
             });
         } else {

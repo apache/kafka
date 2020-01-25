@@ -48,7 +48,7 @@ class GroupModeTransactionsTest(Test):
         self.num_input_partitions = 9
         self.num_output_partitions = 9
         self.num_copiers = 3
-        self.num_seed_messages = 100000
+        self.num_seed_messages = 50000
         self.transaction_size = 750
         self.transaction_timeout = 10000
         self.consumer_group = "grouped-transactions-test-consumer-group"
@@ -220,11 +220,12 @@ class GroupModeTransactionsTest(Test):
         elif bounce_target == "clients":
             self.bounce_copiers(copiers, clean_shutdown)
 
+        copier_timeout_sec = 120
         for copier in copiers:
             wait_until(lambda: copier.is_done,
-                       timeout_sec=120,
+                       timeout_sec=copier_timeout_sec,
                        err_msg="%s - Failed to copy all messages in  %ds." % \
-                               (copier.transactional_id, 120))
+                               (copier.transactional_id, copier_timeout_sec))
         self.logger.info("finished copying messages")
 
         return self.split_by_partition(self.drain_consumer(concurrent_consumer, num_messages_to_copy))
