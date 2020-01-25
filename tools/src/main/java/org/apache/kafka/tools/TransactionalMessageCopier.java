@@ -62,7 +62,7 @@ import static net.sourceforge.argparse4j.impl.Arguments.storeTrue;
 public class TransactionalMessageCopier {
 
     private static final Logger log = LoggerFactory.getLogger(TransactionalMessageCopier.class);
-    private static final DateFormat sdf = new SimpleDateFormat("yyyy/MM/dd HH:mm:ss");
+    private static final DateFormat sdf = new SimpleDateFormat("yyyy/MM/dd HH:mm:ss:SSS");
 
     /** Get the command-line argument parser. */
     private static ArgumentParser argParser() {
@@ -241,6 +241,7 @@ public class TransactionalMessageCopier {
     private static long messagesRemaining(KafkaConsumer<String, String> consumer, TopicPartition partition) {
         long currentPosition = consumer.position(partition);
         Map<TopicPartition, Long> endOffsets = consumer.endOffsets(singleton(partition));
+        log.info("Partition {} current position: {}, endOffsets: {}", partition, currentPosition, endOffsets);
         if (endOffsets.containsKey(partition)) {
             return endOffsets.get(partition) - currentPosition;
         }
@@ -308,6 +309,7 @@ public class TransactionalMessageCopier {
                     }
                     messageCap.set(messageSum);
                     numMessagesProcessed.set(0);
+
                     log.info("set messageCap to {}", messageSum);
                 }
             });
@@ -349,6 +351,10 @@ public class TransactionalMessageCopier {
                     producer.beginTransaction();
                     while (messagesInCurrentTransaction < numMessagesForNextTransaction) {
                         ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(200));
+                        if (messageCap.get() <= 0) {
+                            // We could see no more message needed for processing after poll
+                            break;
+                        }
                         for (ConsumerRecord<String, String> record : records) {
                             producer.send(producerRecordFromConsumerRecord(outputTopic, record));
                             messagesInCurrentTransaction++;

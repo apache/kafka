@@ -178,6 +178,7 @@ class GroupModeTransactionsTest(Test):
             if partition not in messages_by_partition:
                 messages_by_partition[partition] = []
             messages_by_partition[partition].append(msg[0])
+        return messages_by_partition
 
     def drain_consumer(self, consumer, num_messages):
         # wait until we read at least the expected number of messages.
@@ -228,7 +229,7 @@ class GroupModeTransactionsTest(Test):
                                (copier.transactional_id, copier_timeout_sec))
         self.logger.info("finished copying messages")
 
-        return self.split_by_partition(self.drain_consumer(concurrent_consumer, num_messages_to_copy))
+        return self.drain_consumer(concurrent_consumer, num_messages_to_copy)
 
     def setup_topics(self):
         self.kafka.topics = {
@@ -248,11 +249,11 @@ class GroupModeTransactionsTest(Test):
             }
         }
 
-    @cluster(num_nodes=9)
-    @matrix(failure_mode=["hard_bounce"],
-            bounce_target=["brokers"])
-    # @matrix(failure_mode=["hard_bounce", "clean_bounce"],
-    #         bounce_target=["brokers", "clients"])
+    @cluster(num_nodes=10)
+    # @matrix(failure_mode=["hard_bounce"],
+    #         bounce_target=["brokers"])
+    @matrix(failure_mode=["hard_bounce", "clean_bounce"],
+            bounce_target=["brokers", "clients"])
     def test_transactions(self, failure_mode, bounce_target):
         security_protocol = 'PLAINTEXT'
         self.kafka.security_protocol = security_protocol
@@ -271,7 +272,9 @@ class GroupModeTransactionsTest(Test):
             num_messages_to_copy=self.num_seed_messages)
         output_messages_by_partition = self.get_messages_from_topic(self.output_topic, self.num_seed_messages)
 
-
+        print ("number of input messages partition is " + str(len(input_messages_by_partition)))
+        print ("number of output messages partition is " + str(len(output_messages_by_partition)))
+        print ("number of concurrently consumed messages partition is " + str(len(concurrently_consumed_message_by_partition)))
         assert len(input_messages_by_partition) == \
                len(concurrently_consumed_message_by_partition), "The lengths of partition count doesn't match: " \
                                                                 "input partitions count %d, " \
