@@ -28,7 +28,7 @@ import com.typesafe.scalalogging.LazyLogging
 import joptsimple._
 import kafka.common.MessageFormatter
 import kafka.utils.Implicits._
-import kafka.utils._
+import kafka.utils.{Exit, _}
 import org.apache.kafka.clients.consumer.{Consumer, ConsumerConfig, ConsumerRecord, KafkaConsumer}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.{AuthenticationException, TimeoutException, WakeupException}
@@ -85,8 +85,7 @@ object ConsoleConsumer extends Logging {
   }
 
   def addShutdownHook(consumer: ConsumerWrapper, conf: ConsumerConfig): Unit = {
-    Runtime.getRuntime.addShutdownHook(new Thread() {
-      override def run(): Unit = {
+    Exit.addShutdownHook("consumer-shutdown-hook", {
         consumer.wakeup()
 
         shutdownLatch.await()
@@ -94,7 +93,6 @@ object ConsoleConsumer extends Logging {
         if (conf.enableSystestEventsLogging) {
           System.out.println("shutdown_complete")
         }
-      }
     })
   }
 
@@ -264,7 +262,7 @@ object ConsoleConsumer extends Logging {
       "Log lifecycle events of the consumer in addition to logging consumed " +
         "messages. (This is specific for system tests.)")
     val isolationLevelOpt = parser.accepts("isolation-level",
-      "Set to read_committed in order to filter out transactional messages which are not committed. Set to read_uncommitted" +
+      "Set to read_committed in order to filter out transactional messages which are not committed. Set to read_uncommitted " +
         "to read all messages.")
       .withRequiredArg()
       .ofType(classOf[String])

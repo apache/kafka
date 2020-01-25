@@ -21,6 +21,7 @@ import org.apache.kafka.clients.ClientDnsLookup;
 import org.apache.kafka.clients.ClientUtils;
 import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.NetworkClient;
+import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
@@ -62,6 +63,7 @@ import org.apache.kafka.common.network.Selector;
 import org.apache.kafka.common.record.AbstractRecords;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.RecordBatch;
+import org.apache.kafka.common.requests.JoinGroupRequest;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.common.utils.KafkaThread;
@@ -81,7 +83,6 @@ import java.util.Properties;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 
@@ -230,7 +231,6 @@ import java.util.concurrent.atomic.AtomicReference;
 public class KafkaProducer<K, V> implements Producer<K, V> {
 
     private final Logger log;
-    private static final AtomicInteger PRODUCER_CLIENT_ID_SEQUENCE = new AtomicInteger(1);
     private static final String JMX_PREFIX = "kafka.producer";
     public static final String NETWORK_THREAD_PREFIX = "kafka-producer-network-thread";
     public static final String PRODUCER_METRIC_GROUP_NAME = "producer-metrics";
@@ -333,7 +333,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             String transactionalId = userProvidedConfigs.containsKey(ProducerConfig.TRANSACTIONAL_ID_CONFIG) ?
                     (String) userProvidedConfigs.get(ProducerConfig.TRANSACTIONAL_ID_CONFIG) : null;
 
-            this.clientId = buildClientId(config.getString(ProducerConfig.CLIENT_ID_CONFIG), transactionalId);
+            this.clientId = config.getString(ProducerConfig.CLIENT_ID_CONFIG);
 
             LogContext logContext;
             if (transactionalId == null)
@@ -404,6 +404,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                     apiVersions,
                     transactionManager,
                     new BufferPool(this.totalMemorySize, config.getInt(ProducerConfig.BATCH_SIZE_CONFIG), metrics, time, PRODUCER_METRIC_GROUP_NAME));
+
             List<InetSocketAddress> addresses = ClientUtils.parseAndValidateAddresses(
                     config.getList(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG),
                     config.getString(ProducerConfig.CLIENT_DNS_LOOKUP_CONFIG));
@@ -433,21 +434,11 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         }
     }
 
-    private static String buildClientId(String configuredClientId, String transactionalId) {
-        if (!configuredClientId.isEmpty())
-            return configuredClientId;
-
-        if (transactionalId != null)
-            return "producer-" + transactionalId;
-
-        return "producer-" + PRODUCER_CLIENT_ID_SEQUENCE.getAndIncrement();
-    }
-
     // visible for testing
     Sender newSender(LogContext logContext, KafkaClient kafkaClient, ProducerMetadata metadata) {
-        int maxInflightRequests = configureInflightRequests(producerConfig, transactionManager != null);
+        int maxInflightRequests = configureInflightRequests(producerConfig);
         int requestTimeoutMs = producerConfig.getInt(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG);
-        ChannelBuilder channelBuilder = ClientUtils.createChannelBuilder(producerConfig, time);
+        ChannelBuilder channelBuilder = ClientUtils.createChannelBuilder(producerConfig, time, logContext);
         ProducerMetrics metricsRegistry = new ProducerMetrics(this.metrics);
         Sensor throttleTimeSensor = Sender.throttleTimeSensor(metricsRegistry.senderMetrics);
         KafkaClient client = kafkaClient != null ? kafkaClient : new NetworkClient(
@@ -467,8 +458,8 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                 apiVersions,
                 throttleTimeSensor,
                 logContext);
-        int retries = configureRetries(producerConfig, transactionManager != null, log);
-        short acks = configureAcks(producerConfig, transactionManager != null, log);
+        int retries = configureRetries(producerConfig, log);
+        short acks = configureAcks(producerConfig, log);
         return new Sender(logContext,
                 client,
                 metadata,
@@ -516,23 +507,13 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
 
         TransactionManager transactionManager = null;
 
-        boolean userConfiguredIdempotence = false;
-        if (config.originals().containsKey(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG))
-            userConfiguredIdempotence = true;
+        boolean userConfiguredIdempotence = config.originals().containsKey(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG);
+        boolean userConfiguredTransactions = config.originals().containsKey(ProducerConfig.TRANSACTIONAL_ID_CONFIG);
+        if (userConfiguredTransactions && !userConfiguredIdempotence)
+            log.info("Overriding the default {} to true since {} is specified.", ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG,
+                    ProducerConfig.TRANSACTIONAL_ID_CONFIG);
 
-        boolean userConfiguredTransactions = false;
-        if (config.originals().containsKey(ProducerConfig.TRANSACTIONAL_ID_CONFIG))
-            userConfiguredTransactions = true;
-
-        boolean idempotenceEnabled = config.getBoolean(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG);
-
-        if (!idempotenceEnabled && userConfiguredIdempotence && userConfiguredTransactions)
-            throw new ConfigException("Cannot set a " + ProducerConfig.TRANSACTIONAL_ID_CONFIG + " without also enabling idempotence.");
-
-        if (userConfiguredTransactions)
-            idempotenceEnabled = true;
-
-        if (idempotenceEnabled) {
+        if (config.idempotenceEnabled()) {
             String transactionalId = config.getString(ProducerConfig.TRANSACTIONAL_ID_CONFIG);
             int transactionTimeoutMs = config.getInt(ProducerConfig.TRANSACTION_TIMEOUT_CONFIG);
             long retryBackoffMs = config.getLong(ProducerConfig.RETRY_BACKOFF_MS_CONFIG);
@@ -542,61 +523,38 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             else
                 log.info("Instantiated an idempotent producer.");
         }
-
         return transactionManager;
     }
 
-    private static int configureRetries(ProducerConfig config, boolean idempotenceEnabled, Logger log) {
-        boolean userConfiguredRetries = false;
-        if (config.originals().containsKey(ProducerConfig.RETRIES_CONFIG)) {
-            userConfiguredRetries = true;
-        }
-        if (idempotenceEnabled && !userConfiguredRetries) {
-            // We recommend setting infinite retries when the idempotent producer is enabled, so it makes sense to make
-            // this the default.
+    private static int configureRetries(ProducerConfig config, Logger log) {
+        boolean userConfiguredRetries = config.originals().containsKey(ProducerConfig.RETRIES_CONFIG);
+        if (config.idempotenceEnabled() && !userConfiguredRetries) {
             log.info("Overriding the default retries config to the recommended value of {} since the idempotent " +
                     "producer is enabled.", Integer.MAX_VALUE);
-            return Integer.MAX_VALUE;
-        }
-        if (idempotenceEnabled && config.getInt(ProducerConfig.RETRIES_CONFIG) == 0) {
-            throw new ConfigException("Must set " + ProducerConfig.RETRIES_CONFIG + " to non-zero when using the idempotent producer.");
         }
         return config.getInt(ProducerConfig.RETRIES_CONFIG);
     }
 
-    private static int configureInflightRequests(ProducerConfig config, boolean idempotenceEnabled) {
-        if (idempotenceEnabled && 5 < config.getInt(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION)) {
+    private static int configureInflightRequests(ProducerConfig config) {
+        if (config.idempotenceEnabled() && 5 < config.getInt(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION)) {
             throw new ConfigException("Must set " + ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION + " to at most 5" +
                     " to use the idempotent producer.");
         }
         return config.getInt(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION);
     }
 
-    private static short configureAcks(ProducerConfig config, boolean idempotenceEnabled, Logger log) {
-        boolean userConfiguredAcks = false;
-        short acks = (short) parseAcks(config.getString(ProducerConfig.ACKS_CONFIG));
-        if (config.originals().containsKey(ProducerConfig.ACKS_CONFIG)) {
-            userConfiguredAcks = true;
-        }
+    private static short configureAcks(ProducerConfig config, Logger log) {
+        boolean userConfiguredAcks = config.originals().containsKey(ProducerConfig.ACKS_CONFIG);
+        short acks = Short.valueOf(config.getString(ProducerConfig.ACKS_CONFIG));
 
-        if (idempotenceEnabled && !userConfiguredAcks) {
-            log.info("Overriding the default {} to all since idempotence is enabled.", ProducerConfig.ACKS_CONFIG);
-            return -1;
-        }
-
-        if (idempotenceEnabled && acks != -1) {
-            throw new ConfigException("Must set " + ProducerConfig.ACKS_CONFIG + " to all in order to use the idempotent " +
-                    "producer. Otherwise we cannot guarantee idempotence.");
+        if (config.idempotenceEnabled()) {
+            if (!userConfiguredAcks)
+                log.info("Overriding the default {} to all since idempotence is enabled.", ProducerConfig.ACKS_CONFIG);
+            else if (acks != -1)
+                throw new ConfigException("Must set " + ProducerConfig.ACKS_CONFIG + " to all in order to use the idempotent " +
+                        "producer. Otherwise we cannot guarantee idempotence.");
         }
         return acks;
-    }
-
-    private static int parseAcks(String acksString) {
-        try {
-            return acksString.trim().equalsIgnoreCase("all") ? -1 : Integer.parseInt(acksString.trim());
-        } catch (NumberFormatException e) {
-            throw new ConfigException("Invalid configuration value for 'acks': " + acksString);
-        }
     }
 
     /**
@@ -664,22 +622,59 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      * and should also not commit offsets manually (via {@link KafkaConsumer#commitSync(Map) sync} or
      * {@link KafkaConsumer#commitAsync(Map, OffsetCommitCallback) async} commits).
      *
-     * @throws IllegalStateException if no transactional.id has been configured or no transaction has been started
+     * @throws IllegalStateException if no transactional.id has been configured, no transaction has been started
      * @throws ProducerFencedException fatal error indicating another producer with the same transactional.id is active
      * @throws org.apache.kafka.common.errors.UnsupportedVersionException fatal error indicating the broker
      *         does not support transactions (i.e. if its version is lower than 0.11.0.0)
-     * @throws org.apache.kafka.common.errors.UnsupportedForMessageFormatException  fatal error indicating the message
+     * @throws org.apache.kafka.common.errors.UnsupportedForMessageFormatException fatal error indicating the message
      *         format used for the offsets topic on the broker does not support transactions
      * @throws org.apache.kafka.common.errors.AuthorizationException fatal error indicating that the configured
-     *         transactional.id is not authorized. See the exception for more details
+     *         transactional.id is not authorized, or the consumer group id is not authorized.
      * @throws KafkaException if the producer has encountered a previous fatal or abortable error, or for any
      *         other unexpected error
      */
     public void sendOffsetsToTransaction(Map<TopicPartition, OffsetAndMetadata> offsets,
                                          String consumerGroupId) throws ProducerFencedException {
+        sendOffsetsToTransaction(offsets, new ConsumerGroupMetadata(consumerGroupId));
+    }
+
+    /**
+     * Sends a list of specified offsets to the consumer group coordinator, and also marks
+     * those offsets as part of the current transaction. These offsets will be considered
+     * committed only if the transaction is committed successfully. The committed offset should
+     * be the next message your application will consume, i.e. lastProcessedMessageOffset + 1.
+     * <p>
+     * This method should be used when you need to batch consumed and produced messages
+     * together, typically in a consume-transform-produce pattern. Thus, the specified
+     * {@code groupMetadata} should be extracted from the used {@link KafkaConsumer consumer} via
+     * {@link KafkaConsumer#groupMetadata()} to leverage consumer group metadata for proper fencing.
+     * Note, that the consumer should have {@code enable.auto.commit=false} and should
+     * also not commit offsets manually (via {@link KafkaConsumer#commitSync(Map) sync} or
+     * {@link KafkaConsumer#commitAsync(Map, OffsetCommitCallback) async} commits).
+     *
+     * @throws IllegalStateException if no transactional.id has been configured or no transaction has been started.
+     * @throws ProducerFencedException fatal error indicating another producer with the same transactional.id is active
+     * @throws org.apache.kafka.common.errors.UnsupportedVersionException fatal error indicating the broker
+     *         does not support transactions (i.e. if its version is lower than 0.11.0.0) or
+     *         the broker doesn't support latest version of transactional API with consumer group metadata (i.e. if its version is
+     *         lower than 2.5.0).
+     * @throws org.apache.kafka.common.errors.UnsupportedForMessageFormatException fatal error indicating the message
+     *         format used for the offsets topic on the broker does not support transactions
+     * @throws org.apache.kafka.common.errors.AuthorizationException fatal error indicating that the configured
+     *         transactional.id is not authorized, or the consumer group id is not authorized.
+     * @throws org.apache.kafka.clients.consumer.CommitFailedException if the commit failed and cannot be retried
+     *         (e.g. if the consumer has been kicked out of the group). Users should handle this by aborting the transaction.
+     * @throws org.apache.kafka.common.errors.FencedInstanceIdException if this producer instance gets fenced by broker due to a
+     *                                                                  mis-configured consumer instance id within group metadata.
+     * @throws KafkaException if the producer has encountered a previous fatal or abortable error, or for any
+     *         other unexpected error
+     */
+    public void sendOffsetsToTransaction(Map<TopicPartition, OffsetAndMetadata> offsets,
+                                         ConsumerGroupMetadata groupMetadata) throws ProducerFencedException {
+        throwIfInvalidGroupMetadata(groupMetadata);
         throwIfNoTransactionManager();
         throwIfProducerClosed();
-        TransactionalRequestResult result = transactionManager.sendOffsetsToTransaction(offsets, consumerGroupId);
+        TransactionalRequestResult result = transactionManager.sendOffsetsToTransaction(offsets, groupMetadata);
         sender.wakeup();
         result.await();
     }
@@ -1271,6 +1266,15 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                 partition :
                 partitioner.partition(
                         record.topic(), record.key(), serializedKey, record.value(), serializedValue, cluster);
+    }
+
+    private void throwIfInvalidGroupMetadata(ConsumerGroupMetadata groupMetadata) {
+        if (groupMetadata == null) {
+            throw new IllegalArgumentException("Consumer group metadata could not be null");
+        } else if (groupMetadata.generationId() > 0
+            && JoinGroupRequest.UNKNOWN_MEMBER_ID.equals(groupMetadata.memberId())) {
+            throw new IllegalArgumentException("Passed in group metadata " + groupMetadata + " has generationId > 0 but member.id ");
+        }
     }
 
     private void throwIfNoTransactionManager() {

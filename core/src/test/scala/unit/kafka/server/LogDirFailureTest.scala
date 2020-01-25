@@ -164,7 +164,7 @@ class LogDirFailureTest extends IntegrationTestHarness {
     }
   }
 
-  def testProduceAfterLogDirFailureOnLeader(failureType: LogDirFailureType) {
+  def testProduceAfterLogDirFailureOnLeader(failureType: LogDirFailureType): Unit = {
     val consumer = createConsumer()
     subscribeAndWaitForAssignment(topic, consumer)
 

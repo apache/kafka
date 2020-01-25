@@ -26,7 +26,7 @@ import org.apache.kafka.clients.{ClientResponse, NetworkClient}
 import org.apache.kafka.common.requests.{RequestHeader, TransactionResult, WriteTxnMarkersRequest, WriteTxnMarkersResponse}
 import org.apache.kafka.common.utils.MockTime
 import org.apache.kafka.common.{Node, TopicPartition}
-import org.easymock.{Capture, EasyMock, IAnswer}
+import org.easymock.{Capture, EasyMock}
 import org.junit.Assert._
 import org.junit.Test
 import com.yammer.metrics.Metrics
@@ -290,11 +290,9 @@ class TransactionMarkerChannelManagerTest {
       EasyMock.eq(txnTransitionMetadata2),
       EasyMock.capture(capturedErrorsCallback),
       EasyMock.anyObject()))
-      .andAnswer(new IAnswer[Unit] {
-        override def answer(): Unit = {
-          txnMetadata2.completeTransitionTo(txnTransitionMetadata2)
-          capturedErrorsCallback.getValue.apply(Errors.NONE)
-        }
+      .andAnswer(() => {
+        txnMetadata2.completeTransitionTo(txnTransitionMetadata2)
+        capturedErrorsCallback.getValue.apply(Errors.NONE)
       }).once()
     EasyMock.replay(txnStateManager, metadataCache)
 
@@ -339,11 +337,9 @@ class TransactionMarkerChannelManagerTest {
       EasyMock.eq(txnTransitionMetadata2),
       EasyMock.capture(capturedErrorsCallback),
       EasyMock.anyObject()))
-      .andAnswer(new IAnswer[Unit] {
-        override def answer(): Unit = {
-          txnMetadata2.pendingState = None
-          capturedErrorsCallback.getValue.apply(Errors.NOT_COORDINATOR)
-        }
+      .andAnswer(() => {
+        txnMetadata2.pendingState = None
+        capturedErrorsCallback.getValue.apply(Errors.NOT_COORDINATOR)
       }).once()
     EasyMock.replay(txnStateManager, metadataCache)
 
@@ -388,17 +384,11 @@ class TransactionMarkerChannelManagerTest {
       EasyMock.eq(txnTransitionMetadata2),
       EasyMock.capture(capturedErrorsCallback),
       EasyMock.anyObject()))
-      .andAnswer(new IAnswer[Unit] {
-        override def answer(): Unit = {
-          capturedErrorsCallback.getValue.apply(Errors.COORDINATOR_NOT_AVAILABLE)
-        }
-      })
-      .andAnswer(new IAnswer[Unit] {
-      override def answer(): Unit = {
+      .andAnswer(() => capturedErrorsCallback.getValue.apply(Errors.COORDINATOR_NOT_AVAILABLE))
+      .andAnswer(() => {
         txnMetadata2.completeTransitionTo(txnTransitionMetadata2)
         capturedErrorsCallback.getValue.apply(Errors.NONE)
-      }
-    })
+      })
 
     EasyMock.replay(txnStateManager, metadataCache)
 

@@ -27,7 +27,7 @@ import kafka.utils._
 import kafka.utils.json.JsonValue
 import kafka.zk.{AdminZkClient, KafkaZkClient}
 import org.apache.kafka.clients.admin.DescribeReplicaLogDirsResult.ReplicaLogDirInfo
-import org.apache.kafka.clients.admin.{Admin, AdminClientConfig, AlterReplicaLogDirsOptions, AdminClient => JAdminClient}
+import org.apache.kafka.clients.admin.{Admin, AdminClientConfig, AlterReplicaLogDirsOptions}
 import org.apache.kafka.common.errors.ReplicaNotAvailableException
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.utils.{Time, Utils}
@@ -78,7 +78,7 @@ object ReassignPartitionsCommand extends Logging {
         new Properties()
       props.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, opts.options.valueOf(opts.bootstrapServerOpt))
       props.putIfAbsent(AdminClientConfig.CLIENT_ID_CONFIG, "reassign-partitions-tool")
-      Some(JAdminClient.create(props))
+      Some(Admin.create(props))
     } else {
       None
     }

@@ -42,7 +42,6 @@ import org.mockito.Mockito._
 import org.scalatest.Assertions.assertThrows
 import org.mockito.ArgumentMatchers
 import org.mockito.invocation.InvocationOnMock
-import org.mockito.stubbing.Answer
 import unit.kafka.cluster.AbstractPartitionTest
 
 import scala.collection.JavaConverters._
@@ -439,8 +438,8 @@ class PartitionTest extends AbstractPartitionTest {
 
     // after makeLeader(() call, partition should know about all the replicas
     // append records with initial leader epoch
-    partition.appendRecordsToLeader(batch1, isFromClient = true)
-    partition.appendRecordsToLeader(batch2, isFromClient = true)
+    partition.appendRecordsToLeader(batch1, origin = AppendOrigin.Client, requiredAcks = 0)
+    partition.appendRecordsToLeader(batch2, origin = AppendOrigin.Client, requiredAcks = 0)
     assertEquals("Expected leader's HW not move", partition.localLogOrException.logStartOffset,
       partition.localLogOrException.highWatermark)
 
@@ -696,7 +695,7 @@ class PartitionTest extends AbstractPartitionTest {
       new SimpleRecord("k2".getBytes, "v2".getBytes),
       new SimpleRecord("k3".getBytes, "v3".getBytes)),
       baseOffset = 0L)
-    partition.appendRecordsToLeader(records, isFromClient = true)
+    partition.appendRecordsToLeader(records, origin = AppendOrigin.Client, requiredAcks = 0)
 
     def fetchLatestOffset(isolationLevel: Option[IsolationLevel]): TimestampAndOffset = {
       val res = partition.fetchOffsetForTimestamp(ListOffsetRequest.LATEST_TIMESTAMP,
@@ -815,8 +814,9 @@ class PartitionTest extends AbstractPartitionTest {
 
     // after makeLeader(() call, partition should know about all the replicas
     // append records with initial leader epoch
-    val lastOffsetOfFirstBatch = partition.appendRecordsToLeader(batch1, isFromClient = true).lastOffset
-    partition.appendRecordsToLeader(batch2, isFromClient = true)
+    val lastOffsetOfFirstBatch = partition.appendRecordsToLeader(batch1, origin = AppendOrigin.Client,
+      requiredAcks = 0).lastOffset
+    partition.appendRecordsToLeader(batch2, origin = AppendOrigin.Client, requiredAcks = 0)
     assertEquals("Expected leader's HW not move", partition.localLogOrException.logStartOffset,
       partition.log.get.highWatermark)
 
@@ -859,7 +859,7 @@ class PartitionTest extends AbstractPartitionTest {
     val currentLeaderEpochStartOffset = partition.localLogOrException.logEndOffset
 
     // append records with the latest leader epoch
-    partition.appendRecordsToLeader(batch3, isFromClient = true)
+    partition.appendRecordsToLeader(batch3, origin = AppendOrigin.Client, requiredAcks = 0)
 
     // fetch from follower not in ISR from log start offset should not add this follower to ISR
     updateFollowerFetchState(follower1, LogOffsetMetadata(0))
@@ -908,13 +908,11 @@ class PartitionTest extends AbstractPartitionTest {
         logManager)
 
       when(delayedOperations.checkAndCompleteFetch())
-        .thenAnswer(new Answer[Unit] {
-          override def answer(invocation: InvocationOnMock): Unit = {
-            // Acquire leaderIsrUpdate read lock of a different partition when completing delayed fetch
-            val anotherPartition = (tp.partition + 1) % topicPartitions.size
-            val partition = partitions(anotherPartition)
-            partition.fetchOffsetSnapshot(Optional.of(leaderEpoch), fetchOnlyFromLeader = true)
-          }
+        .thenAnswer((invocation: InvocationOnMock) => {
+          // Acquire leaderIsrUpdate read lock of a different partition when completing delayed fetch
+          val anotherPartition = (tp.partition + 1) % topicPartitions.size
+          val partition = partitions(anotherPartition)
+          partition.fetchOffsetSnapshot(Optional.of(leaderEpoch), fetchOnlyFromLeader = true)
         })
 
       partition.setLog(log, isFutureLog = false)
@@ -946,16 +944,20 @@ class PartitionTest extends AbstractPartitionTest {
     val executor = Executors.newFixedThreadPool(topicPartitions.size + 1)
     try {
       // Invoke some operation that acquires leaderIsrUpdate write lock on one thread
-      executor.submit(CoreUtils.runnable {
+      executor.submit((() => {
         while (!done.get) {
           partitions.foreach(_.maybeShrinkIsr())
         }
-      })
+      }): Runnable)
       // Append records to partitions, one partition-per-thread
       val futures = partitions.map { partition =>
-        executor.submit(CoreUtils.runnable {
-          (1 to 10000).foreach { _ => partition.appendRecordsToLeader(createRecords(baseOffset = 0), isFromClient = true) }
-        })
+        executor.submit((() => {
+          (1 to 10000).foreach { _ =>
+            partition.appendRecordsToLeader(createRecords(baseOffset = 0),
+              origin = AppendOrigin.Client,
+              requiredAcks = 0)
+          }
+        }): Runnable)
       }
       futures.foreach(_.get(15, TimeUnit.SECONDS))
       done.set(true)
@@ -1589,11 +1591,9 @@ class PartitionTest extends AbstractPartitionTest {
   @Test
   def testLogConfigDirtyAsTopicUpdated(): Unit = {
     val spyLogManager = spy(logManager)
-    doAnswer(new Answer[Unit] {
-      def answer(invocation: InvocationOnMock): Unit = {
-        logManager.initializingLog(topicPartition)
-        logManager.topicConfigUpdated(topicPartition.topic())
-      }
+    doAnswer((invocation: InvocationOnMock) => {
+      logManager.initializingLog(topicPartition)
+      logManager.topicConfigUpdated(topicPartition.topic())
     }).when(spyLogManager).initializingLog(ArgumentMatchers.eq(topicPartition))
 
     val partition = new Partition(topicPartition,
@@ -1626,11 +1626,9 @@ class PartitionTest extends AbstractPartitionTest {
   @Test
   def testLogConfigDirtyAsBrokerUpdated(): Unit = {
     val spyLogManager = spy(logManager)
-    doAnswer(new Answer[Unit] {
-      def answer(invocation: InvocationOnMock): Unit = {
-        logManager.initializingLog(topicPartition)
-        logManager.brokerConfigUpdated()
-      }
+    doAnswer((invocation: InvocationOnMock) => {
+      logManager.initializingLog(topicPartition)
+      logManager.brokerConfigUpdated()
     }).when(spyLogManager).initializingLog(ArgumentMatchers.eq(topicPartition))
 
     val partition = new Partition(topicPartition,

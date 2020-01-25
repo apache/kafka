@@ -233,8 +233,8 @@ public class SubscriptionInfoTest {
     }
 
     @Test
-    public void generatedVersion3To5ShouldDecodeLegacyFormat() {
-        for (int version = 3; version <= 5; version++) {
+    public void generatedVersion3To6ShouldDecodeLegacyFormat() {
+        for (int version = 3; version <= 6; version++) {
             final LegacySubscriptionInfoSerde info = new LegacySubscriptionInfoSerde(
                 version,
                 LATEST_SUPPORTED_VERSION,

@@ -19,26 +19,28 @@ package org.apache.kafka.test;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.QueryableStoreType;
-import org.apache.kafka.streams.state.internals.StateStoreProvider;
+import org.apache.kafka.streams.state.internals.StreamThreadStateStoreProvider;
 
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-public class StateStoreProviderStub implements StateStoreProvider {
+public class StateStoreProviderStub extends StreamThreadStateStoreProvider {
 
     private final Map<String, StateStore> stores = new HashMap<>();
     private final boolean throwException;
 
     public StateStoreProviderStub(final boolean throwException) {
-
+        super(null);
         this.throwException = throwException;
     }
 
     @SuppressWarnings("unchecked")
     @Override
-    public <T> List<T> stores(final String storeName, final QueryableStoreType<T> queryableStoreType) {
+    public <T> List<T> stores(final String storeName,
+                              final QueryableStoreType<T> queryableStoreType,
+                              final boolean includeStaleStores) {
         if (throwException) {
             throw new InvalidStateStoreException("store is unavailable");
         }

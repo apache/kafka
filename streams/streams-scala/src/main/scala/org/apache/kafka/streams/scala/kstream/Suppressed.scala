@@ -34,10 +34,10 @@ import org.apache.kafka.streams.kstream.internals.suppress.{
 /**
  * Duplicates the static factory methods inside the Java interface [[org.apache.kafka.streams.kstream.Suppressed]].
  *
- * This is required for compatibility w/ Scala 2.11 + Java 1.8 because the Scala 2.11 compiler doesn't support the use
- * of static methods inside Java interfaces.
+ * This was required for compatibility w/ Scala 2.11 + Java 1.8 because the Scala 2.11 compiler doesn't support the use
+ * of static methods inside Java interfaces. We have since dropped Scala 2.11 support.
  */
-// TODO: Deprecate this class if support for Scala 2.11 + Java 1.8 is dropped.
+@deprecated(message = "Use org.apache.kafka.streams.kstream.Suppressed", since = "2.5")
 object Suppressed {
 
   /**

@@ -709,7 +709,7 @@ class ControllerChannelManagerTest {
         val replica = brokers((i + leaderIndex) % brokers.size)
         replica
       }
-      context.updatePartitionReplicaAssignment(partition, replicas)
+      context.updatePartitionFullReplicaAssignment(partition, ReplicaAssignment(replicas))
       leaderIndex += 1
     }
     context

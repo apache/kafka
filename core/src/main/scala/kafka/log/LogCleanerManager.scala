@@ -21,7 +21,6 @@ import java.io.File
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.locks.ReentrantLock
 
-import com.yammer.metrics.core.Gauge
 import kafka.common.{KafkaException, LogCleaningAbortedException}
 import kafka.metrics.KafkaMetricsGroup
 import kafka.server.LogDirFailureChannel
@@ -89,48 +88,41 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
 
   /* gauges for tracking the number of partitions marked as uncleanable for each log directory */
   for (dir <- logDirs) {
-    newGauge(
-      "uncleanable-partitions-count",
-      new Gauge[Int] { def value = inLock(lock) { uncleanablePartitions.get(dir.getAbsolutePath).map(_.size).getOrElse(0) } },
+    newGauge("uncleanable-partitions-count",
+      () => inLock(lock) { uncleanablePartitions.get(dir.getAbsolutePath).map(_.size).getOrElse(0) },
       Map("logDirectory" -> dir.getAbsolutePath)
     )
   }
 
   /* gauges for tracking the number of uncleanable bytes from uncleanable partitions for each log directory */
-    for (dir <- logDirs) {
-      newGauge(
-        "uncleanable-bytes",
-        new Gauge[Long] {
-          def value = {
-            inLock(lock) {
-              uncleanablePartitions.get(dir.getAbsolutePath) match {
-                case Some(partitions) => {
-                  val lastClean = allCleanerCheckpoints
-                  val now = Time.SYSTEM.milliseconds
-                  partitions.map { tp =>
-                    val log = logs.get(tp)
-                    val lastCleanOffset = lastClean.get(tp)
-                    val (firstDirtyOffset, firstUncleanableDirtyOffset) = cleanableOffsets(log, lastCleanOffset, now)
-                    val (_, uncleanableBytes) = calculateCleanableBytes(log, firstDirtyOffset, firstUncleanableDirtyOffset)
-                    uncleanableBytes
-                  }.sum
-                }
-                case _ => 0
-              }
-            }
-          }
-        },
-        Map("logDirectory" -> dir.getAbsolutePath)
-      )
-    }
+  for (dir <- logDirs) {
+    newGauge("uncleanable-bytes",
+      () => inLock(lock) {
+        uncleanablePartitions.get(dir.getAbsolutePath) match {
+          case Some(partitions) =>
+            val lastClean = allCleanerCheckpoints
+            val now = Time.SYSTEM.milliseconds
+            partitions.iterator.map { tp =>
+              val log = logs.get(tp)
+              val lastCleanOffset = lastClean.get(tp)
+              val (firstDirtyOffset, firstUncleanableDirtyOffset) = cleanableOffsets(log, lastCleanOffset, now)
+              val (_, uncleanableBytes) = calculateCleanableBytes(log, firstDirtyOffset, firstUncleanableDirtyOffset)
+              uncleanableBytes
+            }.sum
+          case None => 0
+        }
+      },
+      Map("logDirectory" -> dir.getAbsolutePath)
+    )
+  }
 
   /* a gauge for tracking the cleanable ratio of the dirtiest log */
   @volatile private var dirtiestLogCleanableRatio = 0.0
-  newGauge("max-dirty-percent", new Gauge[Int] { def value = (100 * dirtiestLogCleanableRatio).toInt })
+  newGauge("max-dirty-percent", () => (100 * dirtiestLogCleanableRatio).toInt)
 
   /* a gauge for tracking the time since the last log cleaner run, in milli seconds */
-  @volatile private var timeOfLastRun : Long = Time.SYSTEM.milliseconds
-  newGauge("time-since-last-run-ms", new Gauge[Long] { def value = Time.SYSTEM.milliseconds - timeOfLastRun })
+  @volatile private var timeOfLastRun: Long = Time.SYSTEM.milliseconds
+  newGauge("time-since-last-run-ms", () => Time.SYSTEM.milliseconds - timeOfLastRun)
 
   /**
    * @return the position processed for all logs.

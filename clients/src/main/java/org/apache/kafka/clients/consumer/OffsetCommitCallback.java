@@ -18,6 +18,7 @@ package org.apache.kafka.clients.consumer;
 
 import org.apache.kafka.common.TopicPartition;
 
+import java.time.Duration;
 import java.util.Collection;
 import java.util.Map;
 
@@ -37,6 +38,9 @@ public interface OffsetCommitCallback {
      * @throws org.apache.kafka.clients.consumer.CommitFailedException if the commit failed and cannot be retried.
      *             This can only occur if you are using automatic group management with {@link KafkaConsumer#subscribe(Collection)},
      *             or if there is an active group with the same groupId which is using group management.
+     * @throws org.apache.kafka.common.errors.RebalanceInProgressException if the commit failed because
+     *            it is in the middle of a rebalance. In such cases
+     *            commit could be retried after the rebalance is completed with the {@link KafkaConsumer#poll(Duration)} call.
      * @throws org.apache.kafka.common.errors.WakeupException if {@link KafkaConsumer#wakeup()} is called before or while this
      *             function is called
      * @throws org.apache.kafka.common.errors.InterruptException if the calling thread is interrupted before or while

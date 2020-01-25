@@ -31,8 +31,6 @@ import org.junit.Assert._
 import org.junit.{After, Before, Test}
 import org.mockito.ArgumentMatchers.any
 import org.mockito.Mockito.{doAnswer, spy}
-import org.mockito.invocation.InvocationOnMock
-import org.mockito.stubbing.Answer
 
 import scala.collection.mutable
 import scala.util.{Failure, Try}
@@ -115,18 +113,16 @@ class LogManagerTest {
     logManager.shutdown()
     logManager = spy(createLogManager(dirs))
     val brokenDirs = mutable.Set[File]()
-    doAnswer(new Answer[Try[File]] {
-      override def answer(invocation: InvocationOnMock): Try[File] = {
-        // The first half of directories tried will fail, the rest goes through.
-        val logDir = invocation.getArgument[File](0)
-        if (brokenDirs.contains(logDir) || brokenDirs.size < dirs.length / 2) {
-          brokenDirs.add(logDir)
-          Failure(new Throwable("broken dir"))
-        } else {
-          invocation.callRealMethod().asInstanceOf[Try[File]]
-        }
+    doAnswer { invocation =>
+      // The first half of directories tried will fail, the rest goes through.
+      val logDir = invocation.getArgument[File](0)
+      if (brokenDirs.contains(logDir) || brokenDirs.size < dirs.length / 2) {
+        brokenDirs.add(logDir)
+        Failure(new Throwable("broken dir"))
+      } else {
+        invocation.callRealMethod().asInstanceOf[Try[File]]
       }
-    }).when(logManager).createLogDirectory(any(), any())
+    }.when(logManager).createLogDirectory(any(), any())
     logManager.startup()
 
     // Request creating a new log.
