@@ -226,7 +226,7 @@ class GroupModeTransactionsTest(Test):
         for copier in copiers:
             wait_until(lambda: copier.is_done,
                        timeout_sec=copier_timeout_sec,
-                       err_msg="%s - Failed to copy all messages in  %ds." % \
+                       err_msg="%s - Failed to copy all messages in %ds." % \
                                (copier.transactional_id, copier_timeout_sec))
         self.logger.info("finished copying messages")
 

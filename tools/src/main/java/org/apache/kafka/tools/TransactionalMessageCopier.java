@@ -259,20 +259,22 @@ public class TransactionalMessageCopier {
         return json;
     }
 
-    private static String statusAsJson(long consumed, long remaining, String transactionalId) {
+    private static String statusAsJson(long totalProcessed, long consumed, long remaining, String transactionalId) {
         Map<String, Object> statusData = new HashMap<>();
-        statusData.put("progress", transactionalId);
+        statusData.put("txn.id", transactionalId);
+        statusData.put("totalProcessed", totalProcessed);
         statusData.put("consumed", consumed);
         statusData.put("remaining", remaining);
         statusData.put("time", FORMAT.format(new Date()));
         return toJsonString(statusData);
     }
 
-    private static String shutDownString(long consumed, long remaining, String transactionalId) {
+    private static String shutDownString(long totalProcessed, long consumed, long remaining, String transactionalId) {
         Map<String, Object> shutdownData = new HashMap<>();
-        shutdownData.put("remaining", remaining);
-        shutdownData.put("consumed", consumed);
         shutdownData.put("shutdown_complete", transactionalId);
+        shutdownData.put("totalProcessed", totalProcessed);
+        shutdownData.put("consumed", consumed);
+        shutdownData.put("remaining", remaining);
         shutdownData.put("time", FORMAT.format(new Date()));
         return toJsonString(shutdownData);
     }
@@ -294,7 +296,8 @@ public class TransactionalMessageCopier {
         boolean groupMode = parsedArgs.getBoolean("groupMode");
         String topicName = parsedArgs.getString("inputTopic");
         final AtomicLong remainingMessages = new AtomicLong(messageCap.get());
-        final AtomicLong numMessagesProcessed = new AtomicLong(0);
+        final AtomicLong numMessagesProcessedSinceLastRebalance = new AtomicLong(0);
+        final AtomicLong totalMessageProcessed = new AtomicLong(0);
         if (groupMode) {
             consumer.subscribe(Collections.singleton(topicName), new ConsumerRebalanceListener() {
                 @Override
@@ -308,7 +311,7 @@ public class TransactionalMessageCopier {
                         messageSum += messagesRemaining(consumer, partition);
                     }
                     messageCap.set(messageSum);
-                    numMessagesProcessed.set(0);
+                    numMessagesProcessedSinceLastRebalance.set(0);
 
                     log.info("set messageCap to {}", messageSum);
                 }
@@ -333,14 +336,16 @@ public class TransactionalMessageCopier {
             synchronized (consumer) {
                 consumer.close();
             }
-            System.out.println(shutDownString(numMessagesProcessed.get(), remainingMessages.get(), transactionalId));
+            System.out.println(shutDownString(totalMessageProcessed.get(),
+                numMessagesProcessedSinceLastRebalance.get(), remainingMessages.get(), transactionalId));
         });
 
         final boolean useGroupMetadata = parsedArgs.getBoolean("useGroupMetadata");
         try {
             Random random = new Random();
             while (remainingMessages.get() > 0) {
-                System.out.println(statusAsJson(numMessagesProcessed.get(), remainingMessages.get(), transactionalId));
+                System.out.println(statusAsJson(totalMessageProcessed.get(),
+                    numMessagesProcessedSinceLastRebalance.get(), remainingMessages.get(), transactionalId));
                 if (isShuttingDown.get())
                     break;
                 int messagesInCurrentTransaction = 0;
@@ -370,7 +375,8 @@ public class TransactionalMessageCopier {
                         throw new KafkaException("Aborting transaction");
                     } else {
                         producer.commitTransaction();
-                        remainingMessages.set(messageCap.get() - numMessagesProcessed.addAndGet(messagesInCurrentTransaction));
+                        remainingMessages.set(messageCap.get() - numMessagesProcessedSinceLastRebalance.addAndGet(messagesInCurrentTransaction));
+                        totalMessageProcessed.getAndAdd(messagesInCurrentTransaction);
                     }
                 } catch (ProducerFencedException | OutOfOrderSequenceException e) {
                     // We cannot recover from these errors, so just rethrow them and let the process fail
