@@ -517,7 +517,7 @@ public class TaskManager {
                 assignedTopics.add(topicPartition.topic());
             }
 
-            final Collection<String> existingTopics = builder().subscriptionUpdates().getUpdates();
+            final Collection<String> existingTopics = builder().subscriptionUpdates();
             if (!existingTopics.containsAll(assignedTopics)) {
                 assignedTopics.addAll(existingTopics);
                 builder().updateSubscribedTopics(assignedTopics, logPrefix);
@@ -527,7 +527,7 @@ public class TaskManager {
 
     public void updateSubscriptionsFromMetadata(final Set<String> topics) {
         if (builder().sourceTopicPattern() != null) {
-            final Collection<String> existingTopics = builder().subscriptionUpdates().getUpdates();
+            final Collection<String> existingTopics = builder().subscriptionUpdates();
             if (!existingTopics.equals(topics)) {
                 builder().updateSubscribedTopics(topics, logPrefix);
             }

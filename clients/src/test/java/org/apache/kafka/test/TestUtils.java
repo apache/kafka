@@ -29,6 +29,7 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.requests.RequestHeader;
+import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -262,14 +263,11 @@ public class TestUtils {
         }
         file.deleteOnExit();
 
-        Runtime.getRuntime().addShutdownHook(new Thread() {
-            @Override
-            public void run() {
-                try {
-                    Utils.delete(file);
-                } catch (IOException e) {
-                    log.error("Error deleting {}", file.getAbsolutePath(), e);
-                }
+        Exit.addShutdownHook("delete-temp-file-shutdown-hook", () -> {
+            try {
+                Utils.delete(file);
+            } catch (IOException e) {
+                log.error("Error deleting {}", file.getAbsolutePath(), e);
             }
         });
 

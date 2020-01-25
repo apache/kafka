@@ -16,6 +16,7 @@
   */
 package kafka.utils
 
+import org.apache.kafka.common.utils.Exit.ShutdownHookAdder
 import org.apache.kafka.common.utils.{Exit => JExit}
 
 /**
@@ -34,11 +35,24 @@ object Exit {
     throw new AssertionError("halt should not return, but it did.")
   }
 
+  def addShutdownHook(name: String, shutdownHook: => Unit): Unit = {
+    JExit.addShutdownHook(name, new Runnable {
+      def run(): Unit = shutdownHook
+    })
+  }
+
   def setExitProcedure(exitProcedure: (Int, Option[String]) => Nothing): Unit =
     JExit.setExitProcedure(functionToProcedure(exitProcedure))
 
   def setHaltProcedure(haltProcedure: (Int, Option[String]) => Nothing): Unit =
     JExit.setHaltProcedure(functionToProcedure(haltProcedure))
+
+  def setShutdownHookAdder(shutdownHookAdder: (String, => Unit) => Unit): Unit = {
+    JExit.setShutdownHookAdder(new ShutdownHookAdder {
+      def addShutdownHook(name: String, runnable: Runnable): Unit =
+        shutdownHookAdder(name, runnable.run)
+    })
+  }
 
   def resetExitProcedure(): Unit =
     JExit.resetExitProcedure()
@@ -46,8 +60,10 @@ object Exit {
   def resetHaltProcedure(): Unit =
     JExit.resetHaltProcedure()
 
+  def resetShutdownHookAdder(): Unit =
+    JExit.resetShutdownHookAdder()
+
   private def functionToProcedure(procedure: (Int, Option[String]) => Nothing) = new JExit.Procedure {
     def execute(statusCode: Int, message: String): Unit = procedure(statusCode, Option(message))
   }
-
 }

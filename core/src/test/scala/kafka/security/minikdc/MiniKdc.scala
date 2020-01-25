@@ -370,7 +370,7 @@ object MiniKdc {
     }
   }
 
-  private def start(workDir: File, config: Properties, keytabFile: File, principals: Seq[String]): Unit = {
+  private[minikdc] def start(workDir: File, config: Properties, keytabFile: File, principals: Seq[String]): MiniKdc = {
     val miniKdc = new MiniKdc(config, workDir)
     miniKdc.start()
     miniKdc.createPrincipal(keytabFile, principals: _*)
@@ -390,9 +390,8 @@ object MiniKdc {
       |
     """.stripMargin
     println(infoMessage)
-    Runtime.getRuntime.addShutdownHook(CoreUtils.newThread("minikdc-shutdown-hook", daemon = false) {
-      miniKdc.stop()
-    })
+    Exit.addShutdownHook("minikdc-shutdown-hook", miniKdc.stop)
+    miniKdc
   }
 
   val OrgName = "org.name"

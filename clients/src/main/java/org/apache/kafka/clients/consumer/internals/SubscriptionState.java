@@ -183,12 +183,6 @@ public class SubscriptionState {
             return false;
 
         subscription = topicsToSubscribe;
-        if (subscriptionType != SubscriptionType.USER_ASSIGNED) {
-            groupSubscription = new HashSet<>(groupSubscription);
-            groupSubscription.addAll(topicsToSubscribe);
-        } else {
-            groupSubscription = new HashSet<>(topicsToSubscribe);
-        }
         return true;
     }
 
@@ -208,7 +202,7 @@ public class SubscriptionState {
      * Reset the group's subscription to only contain topics subscribed by this consumer.
      */
     synchronized void resetGroupSubscription() {
-        groupSubscription = subscription;
+        groupSubscription = Collections.emptySet();
     }
 
     /**
@@ -335,9 +329,9 @@ public class SubscriptionState {
     }
 
     /**
-     * Get the subscription for the group. For the leader, this will include the union of the
-     * subscriptions of all group members. For followers, it is just that member's subscription.
-     * This is used when querying topic metadata to detect the metadata changes which would
+     * Get the subcription topics for which metadata is required . For the leader, this will include
+     * the union of the subscriptions of all group members. For followers, it is just that member's
+     * subscription. This is used when querying topic metadata to detect the metadata changes which would
      * require rebalancing. The leader fetches metadata for all topics in the group so that it
      * can do the partition assignment (which requires at least partition counts for all topics
      * to be assigned).
@@ -345,12 +339,12 @@ public class SubscriptionState {
      * @return The union of all subscribed topics in the group if this member is the leader
      *   of the current generation; otherwise it returns the same set as {@link #subscription()}
      */
-    synchronized Set<String> groupSubscription() {
-        return this.groupSubscription;
+    synchronized Set<String> metadataTopics() {
+        return groupSubscription.isEmpty() ? subscription : groupSubscription;
     }
 
-    synchronized boolean isGroupSubscribed(String topic) {
-        return groupSubscription.contains(topic);
+    synchronized boolean needsMetadata(String topic) {
+        return subscription.contains(topic) || groupSubscription.contains(topic);
     }
 
     private TopicPartitionState assignedState(TopicPartition tp) {

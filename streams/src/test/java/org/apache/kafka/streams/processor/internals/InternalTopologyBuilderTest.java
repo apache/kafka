@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import java.util.Arrays;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
@@ -34,7 +35,6 @@ import org.apache.kafka.test.MockTimestampExtractor;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.junit.Test;
 
-import java.lang.reflect.Field;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -231,7 +231,19 @@ public class InternalTopologyBuilderTest {
     }
 
     @Test
-    public void testSourceTopics() {
+    public void testOnlyTopicNameSourceTopics() {
+        builder.setApplicationId("X");
+        builder.addSource(null, "source-1", null, null, null, "topic-1");
+        builder.addSource(null, "source-2", null, null, null, "topic-2");
+        builder.addSource(null, "source-3", null, null, null, "topic-3");
+        builder.addInternalTopic("topic-3");
+
+        assertFalse(builder.usesPatternSubscription());
+        assertEquals(Arrays.asList("X-topic-3", "topic-1", "topic-2"), builder.sourceTopicCollection());
+    }
+
+    @Test
+    public void testPatternSourceTopics() {
         builder.setApplicationId("X");
         builder.addSource(null, "source-1", null, null, null, "topic-1");
         builder.addSource(null, "source-2", null, null, null, "topic-2");
@@ -667,22 +679,18 @@ public class InternalTopologyBuilderTest {
 
     @SuppressWarnings("unchecked")
     @Test
-    public void shouldSetCorrectSourceNodesWithRegexUpdatedTopics() throws Exception {
+    public void shouldSetCorrectSourceNodesWithRegexUpdatedTopics() {
         builder.addSource(null, "source-1", null, null, null, "topic-foo");
         builder.addSource(null, "source-2", null, null, null, Pattern.compile("topic-[A-C]"));
         builder.addSource(null, "source-3", null, null, null, Pattern.compile("topic-\\d"));
 
-        final InternalTopologyBuilder.SubscriptionUpdates subscriptionUpdates = new InternalTopologyBuilder.SubscriptionUpdates();
-        final Field updatedTopicsField  = subscriptionUpdates.getClass().getDeclaredField("updatedTopicSubscriptions");
-        updatedTopicsField.setAccessible(true);
-
-        final Set<String> updatedTopics = (Set<String>) updatedTopicsField.get(subscriptionUpdates);
+        final Set<String> updatedTopics = new HashSet<>();
 
         updatedTopics.add("topic-B");
         updatedTopics.add("topic-3");
         updatedTopics.add("topic-A");
 
-        builder.updateSubscriptions(subscriptionUpdates, null);
+        builder.updateSubscribedTopics(updatedTopics, null);
         builder.setApplicationId("test-id");
 
         final Map<Integer, InternalTopologyBuilder.TopicsInfo> topicGroups = builder.topicGroups();
@@ -690,7 +698,6 @@ public class InternalTopologyBuilderTest {
         assertTrue(topicGroups.get(1).sourceTopics.contains("topic-A"));
         assertTrue(topicGroups.get(1).sourceTopics.contains("topic-B"));
         assertTrue(topicGroups.get(2).sourceTopics.contains("topic-3"));
-
     }
 
     @Test
@@ -754,22 +761,18 @@ public class InternalTopologyBuilderTest {
 
     @SuppressWarnings("unchecked")
     @Test
-    public void shouldConnectRegexMatchedTopicsToStateStore() throws Exception {
+    public void shouldConnectRegexMatchedTopicsToStateStore() {
         builder.addSource(null, "ingest", null, null, null, Pattern.compile("topic-\\d+"));
         builder.addProcessor("my-processor", new MockProcessorSupplier(), "ingest");
         builder.addStateStore(storeBuilder, "my-processor");
 
-        final InternalTopologyBuilder.SubscriptionUpdates subscriptionUpdates = new InternalTopologyBuilder.SubscriptionUpdates();
-        final Field updatedTopicsField  = subscriptionUpdates.getClass().getDeclaredField("updatedTopicSubscriptions");
-        updatedTopicsField.setAccessible(true);
-
-        final Set<String> updatedTopics = (Set<String>) updatedTopicsField.get(subscriptionUpdates);
+        final Set<String> updatedTopics = new HashSet<>();
 
         updatedTopics.add("topic-2");
         updatedTopics.add("topic-3");
         updatedTopics.add("topic-A");
 
-        builder.updateSubscriptions(subscriptionUpdates, "test-thread");
+        builder.updateSubscribedTopics(updatedTopics, "test-thread");
         builder.setApplicationId("test-app");
 
         final Map<String, List<String>> stateStoreAndTopics = builder.stateStoreNameToSourceTopics();
