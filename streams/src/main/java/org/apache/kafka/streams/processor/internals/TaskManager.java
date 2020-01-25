@@ -213,7 +213,7 @@ public class TaskManager {
             final Set<TopicPartition> restored = changelogReader.completedChangelogs();
             for (final Task task : restoringTasks) {
                 if (restored.containsAll(task.changelogPartitions())) {
-                    task.completeInitializationAfterRestore();
+                    task.completeRestoration();
                 } else {
                     // we found a restoring task that isn't done restoring, which is evidence that
                     // not all tasks are running

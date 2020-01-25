@@ -83,10 +83,13 @@ public class StandbyTask extends AbstractTask implements Task {
     public void initializeIfNeeded() {
         if (state() == State.CREATED) {
             initializeStateStores();
+
             // no topology needs initialized, we can transit to RUNNING
             // right after registered the stores
             transitionTo(State.RESTORING);
             transitionTo(State.RUNNING);
+
+            processorContext.initialize();
 
             log.debug("Initialized");
         }
@@ -94,23 +97,21 @@ public class StandbyTask extends AbstractTask implements Task {
 
     private void initializeStateStores() {
         TaskUtils.registerStateStores(topology, stateDirectory, id, logPrefix, log, processorContext, stateMgr);
-
-        processorContext.initialize();
     }
 
     @Override
-    public void completeInitializationAfterRestore() {
-        throw new IllegalStateException("StandbyTask " + id + " should already be in running state.");
+    public void completeRestoration() {
+        throw new IllegalStateException("Standby task " + id + " should never be completing restoration");
     }
 
     @Override
     public void suspend() {
-        log.debug("No-op suspend.");
+        log.trace("No-op suspend.");
     }
 
     @Override
     public void resume() {
-        log.debug("No-op resume");
+        log.trace("No-op resume");
     }
 
     /**

@@ -85,37 +85,21 @@ public interface Task {
         }
     }
 
+    TaskId id();
+
     State state();
+
+    boolean isActive();
 
     void initializeIfNeeded();
 
-    void completeInitializationAfterRestore();
-
-    default Map<TopicPartition, Long> purgableOffsets() {
-        return Collections.emptyMap();
-    }
+    void completeRestoration();
 
     void addRecords(TopicPartition partition, Iterable<ConsumerRecord<byte[], byte[]>> records);
 
-    default boolean process(final long wallClockTime) {
-        return false;
-    }
-
     boolean commitNeeded();
 
-    default boolean commitRequested() {
-        return false;
-    }
-
     void commit();
-
-    default boolean maybePunctuateStreamTime() {
-        return false;
-    }
-
-    default boolean maybePunctuateSystemTime() {
-        return false;
-    }
 
     void suspend();
 
@@ -135,8 +119,6 @@ public interface Task {
 
     StateStore getStore(final String name);
 
-    TaskId id();
-
     Set<TopicPartition> inputPartitions();
 
     /**
@@ -150,5 +132,25 @@ public interface Task {
      */
     Map<TopicPartition, Long> changelogOffsets();
 
-    boolean isActive();
+    default Map<TopicPartition, Long> purgableOffsets() {
+        return Collections.emptyMap();
+    }
+
+    default boolean process(final long wallClockTime) {
+        return false;
+    }
+
+    default boolean commitRequested() {
+        return false;
+    }
+
+    default boolean maybePunctuateStreamTime() {
+        return false;
+    }
+
+    default boolean maybePunctuateSystemTime() {
+        return false;
+    }
+
+
 }

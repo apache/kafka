@@ -24,7 +24,6 @@ import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
-import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
@@ -795,7 +794,7 @@ public class TaskManagerTest {
         }
 
         @Override
-        public void completeInitializationAfterRestore() {
+        public void completeRestoration() {
             transitionTo(State.RUNNING);
         }
 
