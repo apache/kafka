@@ -125,15 +125,12 @@ class TransactionStateManager(brokerId: Int,
       transactionMetadataCache.flatMap { case (_, entry) =>
         entry.metadataPerTransactionalId.filter { case (_, txnMetadata) =>
           if (txnMetadata.pendingTransitionInProgress) {
-            info(s"Found txn with pending state $txnMetadata and a pending state ${txnMetadata.pendingState}")
             false
           } else {
             txnMetadata.state match {
               case Ongoing =>
-                info(s"Checking of $txnMetadata expiration result is ${txnMetadata.txnStartTimestamp + txnMetadata.txnTimeoutMs < now}")
                 txnMetadata.txnStartTimestamp + txnMetadata.txnTimeoutMs < now
               case _ =>
-                info(s"Found non-ongoing txn $txnMetadata")
                 false
             }
           }

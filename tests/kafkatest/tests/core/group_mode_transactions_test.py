@@ -29,7 +29,8 @@ from ducktape.utils.util import wait_until
 class GroupModeTransactionsTest(Test):
     """This test essentially does the same effort as TransactionsTest by transactionally copying data from a source topic to
     a destination topic and killing the copy process as well as the broker randomly through the process.
-    The major difference is that we choose to work as a collaborated group instead of individual
+    The major difference is that we choose to work as a collaborated group with same topic subscription
+    instead of individual consumers.
 
     In the end we verify that the final output
     topic contains exactly one committed copy of each message in the input
@@ -48,7 +49,7 @@ class GroupModeTransactionsTest(Test):
         self.num_input_partitions = 9
         self.num_output_partitions = 9
         self.num_copiers = 3
-        self.num_seed_messages = 50000
+        self.num_seed_messages = 100000
         self.transaction_size = 750
         self.transaction_timeout = 10000
         self.consumer_group = "grouped-transactions-test-consumer-group"
@@ -250,8 +251,6 @@ class GroupModeTransactionsTest(Test):
         }
 
     @cluster(num_nodes=10)
-    # @matrix(failure_mode=["hard_bounce"],
-    #         bounce_target=["brokers"])
     @matrix(failure_mode=["hard_bounce", "clean_bounce"],
             bounce_target=["brokers", "clients"])
     def test_transactions(self, failure_mode, bounce_target):
@@ -272,9 +271,6 @@ class GroupModeTransactionsTest(Test):
             num_messages_to_copy=self.num_seed_messages)
         output_messages_by_partition = self.get_messages_from_topic(self.output_topic, self.num_seed_messages)
 
-        print ("number of input messages partition is " + str(len(input_messages_by_partition)))
-        print ("number of output messages partition is " + str(len(output_messages_by_partition)))
-        print ("number of concurrently consumed messages partition is " + str(len(concurrently_consumed_message_by_partition)))
         assert len(input_messages_by_partition) == \
                len(concurrently_consumed_message_by_partition), "The lengths of partition count doesn't match: " \
                                                                 "input partitions count %d, " \
@@ -290,6 +286,9 @@ class GroupModeTransactionsTest(Test):
         for p in range(self.num_input_partitions):
             if p not in input_messages_by_partition:
                 continue
+
+            assert p in output_messages_by_partition, "Partition %d not in output messages"
+            assert p in concurrently_consumed_message_by_partition, "Partition %d not in concurrently consumed messages"
 
             output_message_set = set(output_messages_by_partition[p])
             input_message_set = set(input_messages_by_partition[p])

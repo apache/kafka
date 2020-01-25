@@ -589,7 +589,6 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         TransactionalRequestResult result = transactionManager.initializeTransactions();
         sender.wakeup();
         result.await(maxBlockTimeMs, TimeUnit.MILLISECONDS);
-        log.info("Init transaction call succeed");
     }
 
     /**

@@ -62,7 +62,7 @@ import static net.sourceforge.argparse4j.impl.Arguments.storeTrue;
 public class TransactionalMessageCopier {
 
     private static final Logger log = LoggerFactory.getLogger(TransactionalMessageCopier.class);
-    private static final DateFormat sdf = new SimpleDateFormat("yyyy/MM/dd HH:mm:ss:SSS");
+    private static final DateFormat FORMAT = new SimpleDateFormat("yyyy/MM/dd HH:mm:ss:SSS");
 
     /** Get the command-line argument parser. */
     private static ArgumentParser argParser() {
@@ -264,7 +264,7 @@ public class TransactionalMessageCopier {
         statusData.put("progress", transactionalId);
         statusData.put("consumed", consumed);
         statusData.put("remaining", remaining);
-        statusData.put("time", sdf.format(new Date()));
+        statusData.put("time", FORMAT.format(new Date()));
         return toJsonString(statusData);
     }
 
@@ -273,7 +273,7 @@ public class TransactionalMessageCopier {
         shutdownData.put("remaining", remaining);
         shutdownData.put("consumed", consumed);
         shutdownData.put("shutdown_complete", transactionalId);
-        shutdownData.put("time", sdf.format(new Date()));
+        shutdownData.put("time", FORMAT.format(new Date()));
         return toJsonString(shutdownData);
     }
 
@@ -339,8 +339,7 @@ public class TransactionalMessageCopier {
         final boolean useGroupMetadata = parsedArgs.getBoolean("useGroupMetadata");
         try {
             Random random = new Random();
-
-            while (0 < remainingMessages.get()) {
+            while (remainingMessages.get() > 0) {
                 System.out.println(statusAsJson(numMessagesProcessed.get(), remainingMessages.get(), transactionalId));
                 if (isShuttingDown.get())
                     break;

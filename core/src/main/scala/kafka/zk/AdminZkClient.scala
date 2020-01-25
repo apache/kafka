@@ -52,7 +52,6 @@ class AdminZkClient(zkClient: KafkaZkClient) extends Logging {
                   replicationFactor: Int,
                   topicConfig: Properties = new Properties,
                   rackAwareMode: RackAwareMode = RackAwareMode.Enforced): Unit = {
-
     val brokerMetadatas = getBrokerMetadatas(rackAwareMode)
     val replicaAssignment = AdminUtils.assignReplicasToBrokers(brokerMetadatas, partitions, replicationFactor)
     createTopicWithAssignment(topic, topicConfig, replicaAssignment)

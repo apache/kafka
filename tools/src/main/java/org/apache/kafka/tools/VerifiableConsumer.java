@@ -162,7 +162,6 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
                 for (ConsumerRecord<String, String> record : partitionRecords) {
                     printJson(new RecordData(record));
                 }
-
             }
 
             consumedMessages += partitionRecords.size();

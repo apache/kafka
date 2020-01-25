@@ -645,7 +645,6 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
    */
   def completePendingTxnOffsetCommit(producerId: Long, isCommit: Boolean): Unit = {
     val pendingOffsetsOpt = pendingTransactionalOffsetCommits.remove(producerId)
-    info(s"txn offset commit was removed for producer $producerId. The current pending txn offsets are $pendingTransactionalOffsetCommits")
     if (isCommit) {
       pendingOffsetsOpt.foreach { pendingOffsets =>
         pendingOffsets.foreach { case (topicPartition, commitRecordMetadataAndOffset) =>
@@ -675,18 +674,9 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
     pendingTransactionalOffsetCommits.contains(producerId)
 
   def hasPendingOffsetCommitsForTopicPartition(topicPartition: TopicPartition): Boolean = {
-    if (pendingOffsetCommits.contains(topicPartition)) {
-      info(s"Found pending offset commit for $topicPartition")
-    }
     pendingOffsetCommits.contains(topicPartition) ||
-      pendingTransactionalOffsetCommits.exists( entry => {
-        var hasPartition = entry._2.contains(topicPartition)
-        if (hasPartition) {
-          info(s"Trying to fetch offset for $topicPartition, but found producer ${entry._1} has a pending offset")
-        }
-        hasPartition
-      }
-//        _._2.contains(topicPartition)
+      pendingTransactionalOffsetCommits.exists(
+        _._2.contains(topicPartition)
       )
   }
 

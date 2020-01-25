@@ -223,7 +223,6 @@ ducker_build() {
     SECONDS=0
 
     must_pushd "${ducker_dir}"
-    # --no-cache
     must_do -v -o docker build --memory="${docker_build_memory_limit}" \
         --build-arg "ducker_creator=${user_name}" --build-arg "jdk_version=${jdk_version}" -t "${image_name}" \
         -f "${ducker_dir}/Dockerfile" ${docker_args} -- .
