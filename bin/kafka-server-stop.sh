@@ -14,7 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 SIGNAL=${SIGNAL:-TERM}
-PIDS=$(ps ax | grep -i 'kafka\.Kafka' | grep java | grep -v grep | awk '{print $1}')
+PIDS=$(ps -fwwC java | grep -F kafka.Kafka | awk '{print $1}')
 
 if [ -z "$PIDS" ]; then
   echo "No kafka server to stop"
