@@ -216,7 +216,7 @@
               files="SmokeTestDriver.java"/>
 
     <suppress checks="CyclomaticComplexity"
-              files="KStreamKStreamJoinTest.java"/>
+              files="KStreamKStreamJoinTest.java|KTableKTableForeignKeyJoinIntegrationTest.java"/>
     <suppress checks="CyclomaticComplexity"
               files="RelationalSmokeTest.java|SmokeTestDriver.java"/>
 
