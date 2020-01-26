@@ -223,6 +223,11 @@
     can be used to change the URI which will be used by the follower nodes to connect with the leader. When using both HTTP and HTTPS listeners, the <code>rest.advertised.listener</code> option can be also used to define which listener
         will be used for the cross-cluster communication. When using HTTPS for communication between nodes, the same <code>ssl.*</code> or <code>listeners.https</code> options will be used to configure the HTTPS client.</p>
 
+    <h3><a id="connect_insecure_by_default" href="#connect_insecure_by_default"> &#9888; WARNING: Insecure By Default</a></h3>
+    <p> Kafka Connect does not come with TLS client authenticatsion enabled by default. This allows unauthenticated clients to create/modify/delete connectors. This can be used in default configurations to read arbitrary data from the filesystem.</p>
+    <p>For any production deployment, it is strongly urged that TLS client authentication be enabled, or Connect endpoints should be bound to loopback interfaces.</p>
+    <p>For more information, refer to <a href="#insecure_by_default">Kafka Security</a></p>
+
     <p>The following are the currently supported REST API endpoints:</p>
 
     <ul>

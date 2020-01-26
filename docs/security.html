@@ -34,6 +34,18 @@
 
     It's worth noting that security is optional - non-secured clusters are supported, as well as a mix of authenticated, unauthenticated, encrypted and non-encrypted clients.
 
+    <h3><a id="insecure_by_default" href="#insecure_by_default"> &#9888; WARNING: Insecure By Default</a></h3>
+    <p> While security it optional, Kafka does not come with any security enabled by default. This means that Kafka instances can be read/written/configured by unauthenticated clients.</p>
+    <p>This can result in serious security implications, such as:</p>
+    <ul>
+        <li>Ability to read arbitrary data from topics</li>
+        <li>Ability to write arbitrary data from topics</li>
+        <li>Ability to reconfigure instances, possibly resulting in denial of service or remote code execution</li>
+        <li>Ability to create arbitrary Connect configurations, resulting in arbitrary file disclosure</li>
+    </ul>
+    <p>For any production deployment, it is strongly urged that RBAC be enabled at a minimum to avoid cluster compromise. There is no alternative mitigation other than restricting access via network firewall rules.</p>
+
+
     The guides below explain how to configure and use the security features in both clients and brokers.
 
     <h3><a id="security_ssl" href="#security_ssl">7.2 Encryption and Authentication using SSL</a></h3>
@@ -1867,6 +1879,9 @@
 
     The metadata stored in ZooKeeper for the Kafka cluster is world-readable, but can only be modified by the brokers. The rationale behind this decision is that the data stored in ZooKeeper is not sensitive, but inappropriate manipulation of that data can cause cluster disruption. We also recommend limiting the access to ZooKeeper via network segmentation (only brokers and some admin tools need access to ZooKeeper).
 
+   <h3><a id="zookeeper_insecure_by_default" href="#zookeeper_insecure_by_default"> &#9888; WARNING: Insecure By Default</a></h3>
+    <p> ZooKeeper does not have any security mechanisms enabled by default and will bind to all interfaces. Prior to any network deployment, this should be restricted.
+    
     <h4><a id="zk_authz_migration" href="#zk_authz_migration">7.6.2 Migrating clusters</a></h4>
     If you are running a version of Kafka that does not support security or simply with security disabled, and you want to make the cluster secure, then you need to execute the following steps to enable ZooKeeper authentication with minimal disruption to your operations:
     <ol>
