@@ -166,11 +166,7 @@ public class MemoryRecords extends AbstractRecords {
             // we do this to avoid calling CleanedTransactionMetadata#onControlBatchRead
             // more than once since each call is relatively expensive
             long deleteHorizonMs = filter.retrieveDeleteHorizon(batch);
-            final BatchRetention batchRetention;
-            if (!batch.deleteHorizonSet())
-                batchRetention = filter.checkBatchRetention(batch, deleteHorizonMs);
-            else
-                batchRetention = filter.checkBatchRetention(batch);
+            final BatchRetention batchRetention = filter.checkBatchRetention(batch);
 
             filterResult.bytesRead += batch.sizeInBytes();
 
@@ -189,8 +185,7 @@ public class MemoryRecords extends AbstractRecords {
             List<Record> retainedRecords = new ArrayList<>();
 
             final BatchIterationResult iterationResult = iterateOverBatch(batch, decompressionBufferSupplier, filterResult, filter,
-                                                                          batchMagic, writeOriginalBatch, maxOffset, retainedRecords,
-                                                                          deleteHorizonMs);
+                                                                          batchMagic, writeOriginalBatch, maxOffset, retainedRecords);
             containsTombstonesOrMarker = iterationResult.containsTombstonesOrMarker();
             writeOriginalBatch = iterationResult.shouldWriteOriginalBatch();
             maxOffset = iterationResult.maxOffset();
@@ -199,7 +194,9 @@ public class MemoryRecords extends AbstractRecords {
                 // we check if the delete horizon should be set to a new value
                 // in which case, we need to reset the base timestamp and overwrite the timestamp deltas
                 // if the batch does not contain tombstones, then we don't need to overwrite batch
-                if (writeOriginalBatch && (deleteHorizonMs == RecordBatch.NO_TIMESTAMP || deleteHorizonMs == batch.deleteHorizonMs() || !containsTombstonesOrMarker)) {
+                boolean canControlBatchBeRemoved = batch.isControlBatch() && deleteHorizonMs > RecordBatch.NO_TIMESTAMP;
+                if (writeOriginalBatch && (deleteHorizonMs == RecordBatch.NO_TIMESTAMP || deleteHorizonMs == batch.deleteHorizonMs()
+                     || (!containsTombstonesOrMarker && !canControlBatchBeRemoved))) {
                     batch.writeTo(bufferOutputStream);
                     filterResult.updateRetainedBatchMetadata(batch, retainedRecords.size(), false);
                 } else {
@@ -247,15 +244,14 @@ public class MemoryRecords extends AbstractRecords {
                                                          byte batchMagic,
                                                          boolean writeOriginalBatch,
                                                          long maxOffset,
-                                                         List<Record> retainedRecords,
-                                                         long newBatchDeleteHorizonMs) {
+                                                         List<Record> retainedRecords) {
         boolean containsTombstonesOrMarker = false;
         try (final CloseableIterator<Record> iterator = batch.streamingIterator(decompressionBufferSupplier)) {
             while (iterator.hasNext()) {
                 Record record = iterator.next();
                 filterResult.messagesRead += 1;
 
-                if (filter.shouldRetainRecord(batch, record, newBatchDeleteHorizonMs)) {
+                if (filter.shouldRetainRecord(batch, record)) {
                     // Check for log corruption due to KAFKA-4298. If we find it, make sure that we overwrite
                     // the corrupted batch with correct data.
                     if (!record.hasMagic(batchMagic))
@@ -376,10 +372,6 @@ public class MemoryRecords extends AbstractRecords {
          */
         protected abstract BatchRetention checkBatchRetention(RecordBatch batch);
 
-        protected BatchRetention checkBatchRetention(RecordBatch batch, long newBatchDeleteHorizonMs) {
-            return checkBatchRetention(batch);
-        }
-
         /**
          * Check whether a record should be retained in the log. Note that {@link #checkBatchRetention(RecordBatch)}
          * is used prior to checking individual record retention. Only records from batches which were not
@@ -387,22 +379,11 @@ public class MemoryRecords extends AbstractRecords {
          */
         protected abstract boolean shouldRetainRecord(RecordBatch recordBatch, Record record);
 
-        protected boolean shouldRetainRecord(RecordBatch recordBatch, Record record, long newDeleteHorizonMs) {
-            return shouldRetainRecord(recordBatch, record);
-        }
-
         /**
          * Retrieves the delete horizon ms for a specific batch
          */
         protected long retrieveDeleteHorizon(RecordBatch recordBatch) {
             return -1L;
-        }
-
-        /**
-         * Checks if the control batch (if it is one) can be removed (making sure that it is empty)
-         */
-        protected boolean isControlBatchEmpty(RecordBatch recordBatch) {
-            return true;
         }
     }
 
