@@ -210,6 +210,8 @@ public class ProcessorStateManagerTest {
 
             assertThat(batchingRestoreCallback.getRestoredRecords().size(), is(1));
             assertTrue(batchingRestoreCallback.getRestoredRecords().contains(expectedKeyValue));
+
+            assertEquals(Collections.singletonMap(persistentStorePartition, 101L), stateMgr.changelogOffsets());
         } finally {
             stateMgr.close();
         }
@@ -236,7 +238,7 @@ public class ProcessorStateManagerTest {
     }
 
     @Test
-    public void shouldnRestoreTimestampedStoreWithConverter() {
+    public void shouldRestoreTimestampedStoreWithConverter() {
         final ProcessorStateManager stateMgr = getStateManager(Task.TaskType.ACTIVE);
         final MockKeyValueStore store = getConverterStore();
 
@@ -325,9 +327,9 @@ public class ProcessorStateManagerTest {
                 nonPersistentStorePartition),
                 stateMgr.changelogPartitions());
             assertEquals(mkMap(
-                mkEntry(persistentStorePartition, checkpointOffset),
-                mkEntry(persistentStoreTwoPartition, null),
-                mkEntry(nonPersistentStorePartition, checkpointOffset)),
+                mkEntry(persistentStorePartition, checkpointOffset + 1L),
+                mkEntry(persistentStoreTwoPartition, 0L),
+                mkEntry(nonPersistentStorePartition, checkpointOffset + 1L)),
                 stateMgr.changelogOffsets()
             );
 

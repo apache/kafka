@@ -79,6 +79,9 @@ public class StandbyTask extends AbstractTask implements Task {
         return false;
     }
 
+    /**
+     * @throws StreamsException fatal error, should close the thread
+     */
     @Override
     public void initializeIfNeeded() {
         if (state() == State.CREATED) {
@@ -106,32 +109,41 @@ public class StandbyTask extends AbstractTask implements Task {
 
     @Override
     public void suspend() {
-        log.trace("No-op suspend.");
+        log.trace("No-op suspend with state {}", state());
     }
 
     @Override
     public void resume() {
-        log.trace("No-op resume");
+        log.trace("No-op resume with state {}", state());
     }
 
     /**
-     * <pre>
-     * - flush store
-     * - checkpoint store
-     * </pre>
+     * 1. flush store
+     * 2. write checkpoint file
+     *
+     * @throws TaskMigratedException all the task has been migrated
+     * @throws StreamsException fatal error, should close the thread
      */
     @Override
     public void commit() {
-        if (state() == State.RUNNING) {
-            stateMgr.flush();
+        switch (state()) {
+            case RUNNING:
+                stateMgr.flush();
 
-            // since there's no written offsets we can checkpoint with empty map,
-            // and the state current offset would be used to checkpoint
-            stateMgr.checkpoint(Collections.emptyMap());
+                // since there's no written offsets we can checkpoint with empty map,
+                // and the state current offset would be used to checkpoint
+                stateMgr.checkpoint(Collections.emptyMap());
 
-            log.debug("Committed");
-        } else {
-            throw new IllegalStateException("Illegal state " + state() + " while committing standby task " + id);
+                log.debug("Committed");
+                break;
+
+            case CLOSING:
+                // do nothing and also not throw
+                break;
+
+            default:
+                throw new IllegalStateException("Illegal state " + state() + " while committing standby task " + id);
+
         }
     }
 
@@ -146,33 +158,28 @@ public class StandbyTask extends AbstractTask implements Task {
     }
 
     /**
-     * 1. when unclean close, we do not need to commit;
-     * 2. when unclean close, we do not throw any exception;
+     * 1. commit if we are running and clean close;
+     * 2. close the state manager.
+     *
+     * @throws TaskMigratedException all the task has been migrated
+     * @throws StreamsException fatal error, should close the thread
      */
     private void close(final boolean clean) {
         switch (state()) {
             case CREATED:
-                transitionTo(State.CLOSING);
                 // the task is created and not initialized, do nothing
+                transitionTo(State.CLOSING);
                 break;
 
             case RUNNING:
-                // No resources are destroyed here, so we can do this before transit to CLOSING
-                if (clean) {
+                if (clean)
                     commit();
-                }
 
                 transitionTo(State.CLOSING);
 
-                try {
-                    TaskUtils.closeStateManager(log, logPrefix, stateMgr, stateDirectory, id);
-                } catch (final RuntimeException error) {
-                    if (clean) {
-                        throw error;
-                    } else {
-                        log.warn("Closing standby task " + id + " uncleanly throws an exception " + error);
-                    }
-                }
+            case CLOSING:
+                // all operations falling into CLOSING are idempotent
+                TaskUtils.closeStateManager(id, log, logPrefix, clean, stateMgr, stateDirectory);
                 break;
 
             default:

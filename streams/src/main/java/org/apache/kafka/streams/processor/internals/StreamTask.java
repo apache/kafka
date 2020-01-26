@@ -197,6 +197,9 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         return true;
     }
 
+    /**
+     * @throws StreamsException fatal error, should close the thread
+     */
     @Override
     public void initializeIfNeeded() {
         if (state() == State.CREATED) {
@@ -211,12 +214,12 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     @Override
     public void completeRestoration() {
         if (state() == State.RESTORING) {
-            initTopology();
+            initializeTopology();
             processorContext.initialize();
             idleStartTime = RecordQueue.UNKNOWN;
             transitionTo(State.RUNNING);
 
-            log.debug("Restored and ready to be running");
+            log.debug("Restored and ready to run");
         } else {
             throw new IllegalStateException("Illegal state " + state() + " while completing restoration for active task " + id);
         }
@@ -238,28 +241,31 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     @Override
     public void suspend() {
         switch (state()) {
+            case SUSPENDED:
+            case CLOSING:
+                // do nothing
+                log.trace("Skip suspending since state is {}", state());
+                break;
 
-        }
-        log.debug("Suspending");
-        if (state() == State.SUSPENDED) {
-            return;
-        } else {
-            try {
-                // If the suspension is from unclean shutdown, then only need to close topology and flush state to make sure that when later
-                // closing the states, there's no records triggering any processing anymore; also swallow all caught exceptions
+            case RUNNING:
                 closeTopology(true);
 
+            case RESTORING:
                 commitState();
                 // whenever we have successfully committed state during suspension, it is safe to checkpoint
                 // the state as well no matter if EOS is enabled or not
                 stateMgr.checkpoint(checkpointableOffsets());
-            } catch (final RuntimeException error) {
-                throw error;
-            }
 
-            // we should also clear any buffered records of a task when suspending it
-            partitionGroup.clear();
-            transitionTo(State.SUSPENDED);
+                // we should also clear any buffered records of a task when suspending it
+                partitionGroup.clear();
+
+                transitionTo(State.SUSPENDED);
+                log.debug("Suspended running");
+
+                break;
+
+            default:
+                throw new IllegalStateException("Illegal state " + state() + " while suspending active task " + id);
         }
     }
 
@@ -271,16 +277,17 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     @Override
     public void resume() {
         switch (state()) {
+            case CLOSING:
             case RUNNING:
             case RESTORING:
-                // no need to do anything, just let them continue running / restoring
+                // no need to do anything, just let them continue running / restoring / closing
+                log.trace("Skip resuming since state is {}", state());
                 break;
 
             case SUSPENDED:
                 initializeMetadata();
-                transitionTo(State.RUNNING);
-
-                log.debug("Resumed to running state");
+                transitionTo(State.RESTORING);
+                log.debug("Resumed to restoring state");
 
                 break;
 
@@ -295,13 +302,26 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
      */
     @Override
     public void commit() {
-        log.debug("Committing");
+        switch (state()) {
+            case RUNNING:
+            case RESTORING:
+                commitState();
 
-        commitState();
+                // this is an optimization for non-EOS only
+                if (eosDisabled) {
+                    stateMgr.checkpoint(checkpointableOffsets());
+                }
 
-        // this is an optimization for non-EOS only
-        if (eosDisabled) {
-            stateMgr.checkpoint(checkpointableOffsets());
+                log.debug("Committed");
+
+                break;
+
+            case CLOSING:
+                // do nothing
+                break;
+
+            default:
+                throw new IllegalStateException("Illegal state " + state() + " while committing standby task " + id);
         }
     }
 
@@ -340,6 +360,14 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         commitSensor.record(time.nanoseconds() - startNs);
     }
 
+    private Map<TopicPartition, Long> extractPartitionTimes() {
+        final Map<TopicPartition, Long> partitionTimes = new HashMap<>();
+        for (final TopicPartition partition : partitionGroup.partitions()) {
+            partitionTimes.put(partition, partitionGroup.partitionTimestamp(partition));
+        }
+        return partitionTimes;
+    }
+
     @Override
     public void closeClean() {
         close(true);
@@ -366,43 +394,58 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
      *                               or if the task producer got fenced (EOS)
      */
     private void close(final boolean clean) {
-        log.debug("Closing");
-        // Once we start closing, we have to complete it.
-        transitionTo(State.CLOSING);
+        switch(state()) {
+            case CREATED:
+                transitionTo(State.CLOSING);
+                // the task is created and not initialized, do nothing
+                break;
 
-        try {
-            closeTopology(clean);
+            case RUNNING:
+                closeTopology(clean);
+                // intentionally fall through
 
-            // If from unclean shutdown, then only need to close topology and flush state to make sure that when later
-            // closing the states, there's no records triggering any processing anymore; also swallow all caught exceptions
-            // However, for a _clean_ shutdown, we try to commit and checkpoint. If there are any exceptions, they become
-            // fatal for the "closeClean()" call, and the caller can try again with closeDirty() to complete the shutdown.
-            if (clean) {
-                commitState();
-                // whenever we have successfully committed state, it is safe to checkpoint
-                // the state as well no matter if EOS is enabled or not
-                stateMgr.checkpoint(checkpointableOffsets());
-            } else {
-                try {
-                    stateMgr.flush();
-                } catch (final RuntimeException error) {
-                    log.debug("Ignoring flush error in unclean close.", error);
+            case SUSPENDED:
+            case RESTORING:
+                if (clean) {
+                    commitState();
+                    // whenever we have successfully committed state, it is safe to checkpoint
+                    // the state as well no matter if EOS is enabled or not
+                    stateMgr.checkpoint(checkpointableOffsets());
+                } else {
+                    // If from unclean close, then only need to flush state to make sure that when later
+                    // closing the states, there's no records triggering any processing anymore; also swallow all caught exceptions
+                    // However, for a _clean_ shutdown, we try to commit and checkpoint. If there are any exceptions, they become
+                    // fatal for the "closeClean()" call, and the caller can try again with closeDirty() to complete the shutdown.
+                    try {
+                        stateMgr.flush();
+                    } catch (final RuntimeException error) {
+                        log.debug("Ignoring flush error in unclean close.", error);
+                    }
                 }
-            }
 
-            // we should also clear any buffered records of a task when suspending it
-            partitionGroup.clear();
+                transitionTo(State.CLOSING);
+                // intentionally fall through
 
-            TaskUtils.closeStateManager(log, logPrefix, stateMgr, stateDirectory, id);
-        } finally {
-            partitionGroup.close();
-            closeTaskSensor.record();
-            streamsMetrics.removeAllTaskLevelSensors(threadId, id.toString());
+            case CLOSING:
+                // all operations falling into CLOSING are idempotent
+                TaskUtils.closeStateManager(id, log, logPrefix, clean, stateMgr, stateDirectory);
 
-            // this is last because it might throw
-            closeRecordCollector(clean);
+                // this is last because it might throw
+                closeRecordCollector(clean);
+
+                break;
+
+            default:
+                throw new IllegalStateException("Illegal state " + state() + " while closing standby task " + id);
         }
+
+        partitionGroup.close();
+        closeTaskSensor.record();
+        streamsMetrics.removeAllTaskLevelSensors(threadId, id.toString());
+
         transitionTo(State.CLOSED);
+
+        log.debug("Closed");
     }
 
     /**
@@ -544,16 +587,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         processorContext.setCurrentNode(currNode);
     }
 
-    private Map<TopicPartition, Long> extractPartitionTimes() {
-        final Map<TopicPartition, Long> partitionTimes = new HashMap<>();
-        for (final TopicPartition partition : partitionGroup.partitions()) {
-            partitionTimes.put(partition, partitionGroup.partitionTimestamp(partition));
-        }
-        return partitionTimes;
-    }
-
-
-
     /**
      * Return all the checkpointable offsets(written + consumed) to the state manager.
      * Currently only changelog topic offsets need to be checkpointed.
@@ -622,7 +655,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         return purgableConsumedOffsets;
     }
 
-    private void initTopology() {
+    private void initializeTopology() {
         // initialize the task by initializing all its processor nodes in the topology
         log.trace("Initializing processor nodes of the topology");
         for (final ProcessorNode node : topology.processors()) {

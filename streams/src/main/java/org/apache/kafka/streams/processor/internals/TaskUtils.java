@@ -71,11 +71,12 @@ public final class TaskUtils {
     /**
      * @throws ProcessorStateException if there is an error while closing the state manager
      */
-    static void closeStateManager(final Logger log,
+    static void closeStateManager(final TaskId id,
+                                  final Logger log,
                                   final String logPrefix,
+                                  final boolean closeClean,
                                   final ProcessorStateManager stateMgr,
-                                  final StateDirectory stateDirectory,
-                                  final TaskId id) {
+                                  final StateDirectory stateDirectory) {
         ProcessorStateException exception = null;
         log.trace("Closing state manager");
         try {
@@ -91,8 +92,12 @@ public final class TaskUtils {
                 }
             }
         }
+
         if (exception != null) {
-            throw exception;
+            if (closeClean)
+                throw exception;
+            else
+                log.warn("Closing standby task " + id + " uncleanly throws an exception " + exception);
         }
     }
 }

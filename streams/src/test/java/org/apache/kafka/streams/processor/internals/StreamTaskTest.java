@@ -84,6 +84,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -91,15 +92,17 @@ import static org.junit.Assert.fail;
 @RunWith(EasyMockRunner.class)
 public class StreamTaskTest {
 
+    private static final String APPLICATION_ID = "stream-task-test";
     private static final File BASE_DIR = TestUtils.tempDirectory();
+    private static final long DEFAULT_TIMESTAMP = 1000;
 
-    private final Serializer<Integer> intSerializer = Serdes.Integer().serializer();
-    private final Deserializer<Integer> intDeserializer = Serdes.Integer().deserializer();
     private final String topic1 = "topic1";
     private final String topic2 = "topic2";
     private final TopicPartition partition1 = new TopicPartition(topic1, 1);
     private final TopicPartition partition2 = new TopicPartition(topic2, 1);
     private final Set<TopicPartition> partitions = mkSet(partition1, partition2);
+    private final Serializer<Integer> intSerializer = Serdes.Integer().serializer();
+    private final Deserializer<Integer> intDeserializer = Serdes.Integer().deserializer();
 
     private final MockSourceNode<Integer, Integer> source1 = new MockSourceNode<>(new String[] {topic1}, intDeserializer, intDeserializer);
     private final MockSourceNode<Integer, Integer> source2 = new MockSourceNode<>(new String[] {topic2}, intDeserializer, intDeserializer);
@@ -126,14 +129,12 @@ public class StreamTaskTest {
     private final byte[] recordKey = intSerializer.serialize(null, 1);
     private final Metrics metrics = new Metrics(new MetricConfig().recordLevel(Sensor.RecordingLevel.DEBUG));
     private final StreamsMetricsImpl streamsMetrics = new MockStreamsMetrics(metrics);
-    private final TaskId taskId00 = new TaskId(0, 0);
+    private final TaskId taskId = new TaskId(0, 0);
     private final MockTime time = new MockTime();
+
     private StateDirectory stateDirectory;
     private StreamTask task;
     private long punctuatedAt;
-
-    private static final String APPLICATION_ID = "stream-task-test";
-    private static final long DEFAULT_TIMESTAMP = 1000;
 
     @Mock(type = MockType.NICE)
     private ProcessorStateManager stateManager;
@@ -197,34 +198,22 @@ public class StreamTaskTest {
 
     @After
     public void cleanup() throws IOException {
-        try {
-            if (task != null) {
-                try {
-                    task.closeClean();
-                } catch (final Exception e) {
-                    // swallow
-                }
-            }
-        } finally {
-            Utils.delete(BASE_DIR);
+        if (task != null && !task.isClosed()) {
+            task.closeDirty();
+            task = null;
         }
+        Utils.delete(BASE_DIR);
     }
 
     @Test
-    public void shouldThrowLockExceptionIfFailedToLockStateDirectoryWhenTopologyHasStores() throws IOException {
+    public void shouldThrowLockExceptionIfFailedToLockStateDirectory() throws IOException {
         stateDirectory = EasyMock.createNiceMock(StateDirectory.class);
-        EasyMock.expect(stateDirectory.lock(taskId00)).andReturn(false);
+        EasyMock.expect(stateDirectory.lock(taskId)).andReturn(false);
         EasyMock.replay(stateDirectory);
 
-        final StreamTask task = createStatefulTask(createConfig(false, "100"), false);
+        task = createStatefulTask(createConfig(false, "100"), false);
 
-        try {
-            task.initializeStateStores();
-            fail("Should have thrown LockException");
-        } catch (final LockException e) {
-            // ok
-        }
-
+        assertThrows(LockException.class, task::initializeIfNeeded);
     }
 
     @Test
@@ -232,16 +221,16 @@ public class StreamTaskTest {
         stateDirectory = EasyMock.createNiceMock(StateDirectory.class);
         EasyMock.replay(stateDirectory);
 
-        final StreamTask task = createStatelessTask(createConfig(false, "100"), StreamsConfig.METRICS_LATEST);
+        task = createStatelessTask(createConfig(false, "100"), StreamsConfig.METRICS_LATEST);
 
-        task.initializeStateStores();
+        task.initializeIfNeeded();
 
         // should fail if lock is called
         EasyMock.verify(stateDirectory);
     }
 
     @Test
-    public void testProcessOrder() {
+    public void shouldProcessInOrder() {
         task = createStatelessTask(createConfig(false, "0"), StreamsConfig.METRICS_LATEST);
 
         task.addRecords(partition1, asList(
@@ -711,7 +700,7 @@ public class StreamTaskTest {
         final MetricName enforcedProcessMetric = metrics.metricName(
             "enforced-processing-total",
             "stream-task-metrics",
-            mkMap(mkEntry("thread-id", Thread.currentThread().getName()), mkEntry("task-id", taskId00.toString()))
+            mkMap(mkEntry("thread-id", Thread.currentThread().getName()), mkEntry("task-id", taskId.toString()))
         );
 
         assertFalse(task.process(time.milliseconds() + 0L));
@@ -764,7 +753,7 @@ public class StreamTaskTest {
         final MetricName enforcedProcessMetric = metrics.metricName(
             "enforced-processing-total",
             "stream-task-metrics",
-            mkMap(mkEntry("thread-id", Thread.currentThread().getName()), mkEntry("task-id", taskId00.toString()))
+            mkMap(mkEntry("thread-id", Thread.currentThread().getName()), mkEntry("task-id", taskId.toString()))
         );
 
         assertFalse(task.process(0L));
@@ -922,7 +911,7 @@ public class StreamTaskTest {
         task.completeRestoration();
         task.commit();
         final File checkpointFile = new File(
-            stateDirectory.directoryForTask(taskId00),
+            stateDirectory.directoryForTask(taskId),
             StateManagerUtil.CHECKPOINT_FILE_NAME
         );
 
@@ -989,7 +978,7 @@ public class StreamTaskTest {
         EasyMock.replay(stateManager);
 
         task = new StreamTask(
-            taskId00,
+            taskId,
             partitions,
             topology,
             consumer,
@@ -1025,7 +1014,7 @@ public class StreamTaskTest {
         EasyMock.replay(stateManager, recordCollector);
 
         task = new StreamTask(
-            taskId00,
+            taskId,
             mkSet(partition1, repartition),
             topology,
             consumer,
@@ -1103,7 +1092,7 @@ public class StreamTaskTest {
         EasyMock.expect(stateManager.changelogPartitions()).andReturn(Collections.singleton(partition1));
 
         return new StreamTask(
-            taskId00,
+            taskId,
             mkSet(partition1),
             topology,
             consumer,
@@ -1129,7 +1118,7 @@ public class StreamTaskTest {
             logged ? Collections.singleton(new TopicPartition(storeName + "-changelog", 1)) : Collections.emptySet());
 
         return new StreamTask(
-            taskId00,
+            taskId,
             partitions,
             topology,
             consumer,
@@ -1159,7 +1148,7 @@ public class StreamTaskTest {
         EasyMock.replay(stateManager, recordCollector);
 
         return new StreamTask(
-            taskId00,
+            taskId,
             partitions,
             topology,
             consumer,

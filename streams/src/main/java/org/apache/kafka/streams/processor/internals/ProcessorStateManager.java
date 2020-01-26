@@ -435,8 +435,7 @@ public class ProcessorStateManager implements StateManager {
             // store is logged, persistent, and has a valid current offset
             if (storeMetadata.changelogPartition != null &&
                 storeMetadata.stateStore.persistent() &&
-                storeMetadata.offset != null
-            ) {
+                storeMetadata.offset != null) {
                 checkpointingOffsets.put(storeMetadata.changelogPartition, storeMetadata.offset);
             }
         }

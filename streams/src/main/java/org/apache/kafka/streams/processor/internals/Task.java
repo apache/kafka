@@ -21,8 +21,10 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 
@@ -31,42 +33,52 @@ public interface Task {
     long LATEST_OFFSET = -2L;
 
     enum State {
-        CREATED {
+        CREATED(1, 4) {         // 0
             @Override
             public boolean hasBeenRunning() {
                 return false;
             }
         },
-        RESTORING {
+        RESTORING(2, 3, 4) {    // 1
             @Override
             public boolean hasBeenRunning() {
                 return false;
             }
         },
-        RUNNING {
+        RUNNING(3, 4) {         // 2
             @Override
             public boolean hasBeenRunning() {
                 return true;
             }
         },
-        SUSPENDED {
+        SUSPENDED(1, 4) {       // 3
             @Override
             public boolean hasBeenRunning() {
                 return true;
             }
         },
-        CLOSED {
+        CLOSING(4, 5) {         // 4, we allow CLOSING to transit to itself to make close idempotent
             @Override
             public boolean hasBeenRunning() {
-                return true;
+                return false;
             }
         },
-        CLOSING {
+        CLOSED {                               // 5
             @Override
             public boolean hasBeenRunning() {
                 return true;
             }
         };
+
+        private final Set<Integer> validTransitions = new HashSet<>();
+
+        State(final Integer... validTransitions) {
+            this.validTransitions.addAll(Arrays.asList(validTransitions));
+        }
+
+        public boolean isValidTransition(final State newState) {
+            return validTransitions.contains(newState.ordinal());
+        }
 
         public abstract boolean hasBeenRunning();
     }
