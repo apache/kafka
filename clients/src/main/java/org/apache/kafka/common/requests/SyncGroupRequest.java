@@ -81,7 +81,7 @@ public class SyncGroupRequest extends AbstractRequest {
         return groupAssignments;
     }
 
-    public boolean areProtocolTypeAndNamePresent() {
+    public boolean areMandatoryProtocolTypeAndNameMissing() {
         return version() >= 5 && (data.protocolType() == null || data.protocolName() == null);
     }
 
