@@ -25,6 +25,8 @@ import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.streams.errors.DeserializationExceptionHandler;
+import org.apache.kafka.streams.errors.LogAndFailExceptionHandler;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.slf4j.Logger;
@@ -40,6 +42,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import static org.apache.kafka.streams.processor.internals.metrics.TaskMetrics.droppedRecordsSensorOrSkippedRecordsSensor;
+
 public class StoreChangelogReader implements ChangelogReader {
 
     private final Logger log;
@@ -52,15 +56,26 @@ public class StoreChangelogReader implements ChangelogReader {
     private final Set<TopicPartition> needsInitializing = new HashSet<>();
     private final Set<TopicPartition> completedRestorers = new HashSet<>();
     private final Duration pollTime;
+    private final DeserializationExceptionHandler deserializationExceptionHandler;
+    private final Map<String, RecordDeserializer> deserializers = new HashMap<>();
 
     public StoreChangelogReader(final Consumer<byte[], byte[]> restoreConsumer,
                                 final Duration pollTime,
                                 final StateRestoreListener userStateRestoreListener,
                                 final LogContext logContext) {
+        this(restoreConsumer, pollTime, userStateRestoreListener, logContext, new LogAndFailExceptionHandler());
+    }
+
+    public StoreChangelogReader(final Consumer<byte[], byte[]> restoreConsumer,
+                                final Duration pollTime,
+                                final StateRestoreListener userStateRestoreListener,
+                                final LogContext logContext,
+                                final DeserializationExceptionHandler deserializationExceptionHandler) {
         this.restoreConsumer = restoreConsumer;
         this.pollTime = pollTime;
         this.log = logContext.logger(getClass());
         this.userStateRestoreListener = userStateRestoreListener;
+        this.deserializationExceptionHandler = deserializationExceptionHandler;
     }
 
     @Override
@@ -90,8 +105,31 @@ public class StoreChangelogReader implements ChangelogReader {
             final ConsumerRecords<byte[], byte[]> records = restoreConsumer.poll(pollTime);
 
             for (final TopicPartition partition : needsRestoring) {
+                final StreamTask restoringTask = active.restoringTaskFor(partition);
                 final StateRestorer restorer = stateRestorers.get(partition);
-                final long pos = processNext(records.records(partition), restorer, restoreToOffsets.get(partition));
+
+                if (!deserializers.containsKey(partition.topic()) && deserializationCheckNeeded(
+                    restoringTask.applicationId(), partition.topic(), restorer.storeName())) {
+                    final SourceNode source = restoringTask.topology().source(partition.topic());
+                    if (source != null) {
+                        deserializers.put(
+                            partition.topic(),
+                            new RecordDeserializer(
+                                source,
+                                this.deserializationExceptionHandler,
+                                restoringTask.logContext,
+                                droppedRecordsSensorOrSkippedRecordsSensor(
+                                    Thread.currentThread().getName(),
+                                    restoringTask.processorContext.taskId().toString(),
+                                    restoringTask.processorContext.metrics()
+                                )
+                            )
+                        );
+                    }
+                }
+
+                final long pos = processNext(records.records(partition), restorer, restoreToOffsets.get(partition),
+                    restoringTask.processorContext);
                 restorer.setRestoredOffset(pos);
                 if (restorer.hasCompleted(pos, restoreToOffsets.get(partition))) {
                     restorer.restoreDone();
@@ -121,6 +159,12 @@ public class StoreChangelogReader implements ChangelogReader {
         checkForCompletedRestoration();
 
         return completedRestorers;
+    }
+
+    private boolean deserializationCheckNeeded(final String applicationId,
+                                               final String sourceTopic, final String storeName) {
+
+        return !ProcessorStateManager.storeChangelogTopic(applicationId, storeName).equals(sourceTopic);
     }
 
     private void initialize(final RestoringTasks active) {
@@ -319,13 +363,15 @@ public class StoreChangelogReader implements ChangelogReader {
 
     private long processNext(final List<ConsumerRecord<byte[], byte[]>> records,
                              final StateRestorer restorer,
-                             final Long endOffset) {
+                             final Long endOffset,
+                             final InternalProcessorContext processorContext) {
         final List<ConsumerRecord<byte[], byte[]>> restoreRecords = new ArrayList<>();
         long nextPosition = -1;
         final int numberRecords = records.size();
         int numberRestored = 0;
         long lastRestoredOffset = -1;
         for (final ConsumerRecord<byte[], byte[]> record : records) {
+            final RecordDeserializer recordDeserializer = deserializers.get(record.topic());
             final long offset = record.offset();
             if (restorer.hasCompleted(offset, endOffset)) {
                 nextPosition = record.offset();
@@ -334,6 +380,9 @@ public class StoreChangelogReader implements ChangelogReader {
             lastRestoredOffset = offset;
             numberRestored++;
             if (record.key() != null) {
+                if (recordDeserializer != null && recordDeserializer.deserialize(processorContext, record) == null) {
+                    continue;
+                }
                 restoreRecords.add(record);
             }
         }
