@@ -389,7 +389,7 @@ public class TaskManager {
     }
 
     Iterable<Task> activeTaskIterable() {
-        return activeTaskStream()::iterator;
+        return activeTaskStream().collect(Collectors.toList());
     }
 
     private Stream<Task> activeTaskStream() {
