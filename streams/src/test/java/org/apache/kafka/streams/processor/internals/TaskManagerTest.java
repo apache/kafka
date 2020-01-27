@@ -227,13 +227,6 @@ public class TaskManagerTest {
         verify(activeTaskCreator);
     }
 
-    private static void expectRestoreToBeCompleted(final Consumer<byte[], byte[]> consumer, final ChangelogReader changeLogReader) {
-        expect(consumer.assignment()).andReturn(emptySet());
-        consumer.resume(emptySet());
-        expectLastCall();
-        expect(changeLogReader.completedChangelogs()).andReturn(emptySet());
-    }
-
     @Test
     public void shouldAddNewActiveTasks() {
         final Map<TaskId, Set<TopicPartition>> assignment = singletonMap(taskId00, taskId00Partitions);
@@ -703,6 +696,14 @@ public class TaskManagerTest {
         // this could be a bit mysterious; we're verifying _no_ interactions on the consumer,
         // since the taskManager should _not_ resume the assignment while we're still in RESTORING
         verify(consumer);
+    }
+
+    private static void expectRestoreToBeCompleted(final Consumer<byte[], byte[]> consumer,
+                                                   final ChangelogReader changeLogReader) {
+        expect(consumer.assignment()).andReturn(emptySet());
+        consumer.resume(emptySet());
+        expectLastCall();
+        expect(changeLogReader.completedChangelogs()).andReturn(emptySet());
     }
 
     private static class StateMachineTask extends AbstractTask implements Task {
