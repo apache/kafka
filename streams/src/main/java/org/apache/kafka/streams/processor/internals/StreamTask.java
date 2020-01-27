@@ -517,8 +517,8 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             if (recordInfo.queue().size() == maxBufferedSize) {
                 consumer.resume(singleton(partition));
             }
-        } catch (final RecoverableClientException e) {
-            throw new TaskMigratedException(id, e);
+        } catch (final StreamsException e) {
+            throw e;
         } catch (final KafkaException e) {
             final String stackTrace = getStacktraceString(e);
             throw new StreamsException(format("Exception caught in process. taskId=%s, " +
@@ -567,8 +567,8 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
 
         try {
             maybeMeasureLatency(() -> node.punctuate(timestamp, punctuator), time, punctuateLatencySensor);
-        } catch (final RecoverableClientException e) {
-            throw new TaskMigratedException(id, e);
+        } catch (final StreamsException e) {
+            throw e;
         } catch (final KafkaException e) {
             throw new StreamsException(format("%sException caught while punctuating processor '%s'", logPrefix, node.name()), e);
         } finally {
@@ -606,8 +606,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                 .filter(e -> e.getValue() != null)
                 .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
             initializeTaskTime(offsetsAndMetadata);
-        } catch (final AuthorizationException e) {
-            throw new ProcessorStateException(format("task [%s] AuthorizationException when initializing offsets for %s", id, partitions), e);
         } catch (final WakeupException e) {
             throw e;
         } catch (final KafkaException e) {
@@ -945,7 +943,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         }
     }
 
-    /* visible for testing below */
+    // below are visible for testing only
     RecordCollector recordCollector() {
         return recordCollector;
     }
@@ -954,10 +952,11 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         return processorContext;
     }
 
-    /**
-     * @return The number of records left in the buffer of this task's partition group
-     */
     int numBuffered() {
         return partitionGroup.numBuffered();
+    }
+
+    long streamTime() {
+        return partitionGroup.streamTime();
     }
 }
