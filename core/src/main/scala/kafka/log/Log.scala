@@ -529,7 +529,7 @@ class Log(@volatile var dir: File,
    * in place of existing segment(s). For log splitting, we know that any .swap file whose base offset is higher than
    * the smallest offset .clean file could be part of an incomplete split operation. Such .swap files are also deleted
    * by this method.
-   * @return Set of .swap files that are valid to be swapped in as segment files
+   * @return Set of .swap file offsets that are valid to be swapped in as segment files
    */
   private def removeTempFilesAndCollectSwapFiles(): Set[Long] = {
 
