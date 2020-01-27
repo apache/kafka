@@ -24,6 +24,7 @@ import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.NetworkClientUtils;
 import org.apache.kafka.clients.RequestCompletionHandler;
 import org.apache.kafka.common.Cluster;
+import org.apache.kafka.common.InvalidRecordException;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.Node;
@@ -60,6 +61,8 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 import static org.apache.kafka.common.record.RecordBatch.NO_TIMESTAMP;
 
@@ -619,6 +622,18 @@ public class Sender implements Runnable {
                 //
                 // The only thing we can do is to return success to the user and not return a valid offset and timestamp.
                 completeBatch(batch, response);
+
+            // only execute the batch dropping and retrial logic if all records
+            } else if (!response.recordErrors.isEmpty() && response.recordErrors.size() < batch.recordCount) {
+                if (!response.errorMessage.isEmpty())
+                    log.error(response.errorMessage);
+                else
+                    log.error(response.error.message());
+
+                // remove this batch from in flight batches and deallocate it
+                Set<Integer> batchIndices = response.recordErrors.stream().map(r -> r.batchIndex).collect(Collectors.toSet());
+                failPartialBatch(batch, response, batchIndices, new InvalidRecordException("Batch is dropped"), true);
+                this.accumulator.dropRecordsAndReenqueueNewBatch(batch, batchIndices, now);
             } else {
                 final RuntimeException exception;
                 if (error == Errors.TOPIC_AUTHORIZATION_FAILED)
@@ -688,6 +703,32 @@ public class Sender implements Runnable {
 
         if (batch.done(baseOffset, logAppendTime, exception)) {
             maybeRemoveAndDeallocateBatch(batch);
+        }
+    }
+
+    private void failPartialBatch(ProducerBatch batch,
+                                  ProduceResponse.PartitionResponse response,
+                                  Set<Integer> batchIndices,
+                                  RuntimeException exception,
+                                  boolean adjustSequenceNumbers) {
+        failPartialBatch(batch, response.baseOffset, batchIndices, response.logAppendTime, exception, adjustSequenceNumbers);
+    }
+
+    private void failPartialBatch(ProducerBatch batch,
+                                  long baseOffset,
+                                  Set<Integer> batchIndices,
+                                  long logAppendTime,
+                                  RuntimeException exception,
+                                  boolean adjustSequenceNumber) {
+        if (transactionManager != null) {
+            transactionManager.handleFailedBatch(batch, exception, adjustSequenceNumber);
+        }
+
+        this.sensors.recordErrors(batch.topicPartition.topic(), batch.recordCount);
+
+        if (batch.partiallyDone(baseOffset, batchIndices, logAppendTime, exception)) {
+            maybeRemoveFromInflightBatches(batch);
+            this.accumulator.deallocate(batch);
         }
     }
 

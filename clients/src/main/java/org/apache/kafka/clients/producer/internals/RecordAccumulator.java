@@ -355,6 +355,22 @@ public final class RecordAccumulator {
         }
     }
 
+    public void dropRecordsAndReenqueueNewBatch(ProducerBatch batch, Set<Integer> errorRecords, long now) {
+        ProducerBatch batchToKeep = batch.dropRecords(errorRecords);
+
+        incomplete.add(batchToKeep);
+
+        batchToKeep.reenqueued(now);
+        Deque<ProducerBatch> partitionDeque = getOrCreateDeque(batch.topicPartition);
+        synchronized (partitionDeque) {
+            if (transactionManager != null && transactionManager.hasProducerIdAndEpoch(batchToKeep.producerId(), batchToKeep.producerEpoch())) {
+                transactionManager.addInFlightBatch(batchToKeep);
+                insertInSequenceOrder(partitionDeque, batchToKeep);
+            } else
+                partitionDeque.addLast(batchToKeep);
+        }
+    }
+
     /**
      * Split the big batch that has been rejected and reenqueue the split batches in to the accumulator.
      * @return the number of split batches.

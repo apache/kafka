@@ -26,6 +26,7 @@ import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.common.utils.ProducerIdAndEpoch;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.Cluster;
+import org.apache.kafka.common.InvalidRecordException;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.MetricNameTemplate;
@@ -80,6 +81,7 @@ import org.junit.Test;
 import org.mockito.InOrder;
 
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Deque;
 import java.util.HashMap;
@@ -1381,6 +1383,249 @@ public class SenderTest {
     }
 
     @Test
+    public void testCorrectHandlingOfInvalidRecordExceptionWithEmptyOffsetList() throws Exception {
+        Future<RecordMetadata> future = accumulator.append(tp0, 0L, "key".getBytes(), "value".getBytes(),
+                null, null, MAX_BLOCK_TIMEOUT, false).future;
+
+        String errorMessage = "Custom error message";
+        // empty list since a non-empty list will cause the Sender not to complete the request
+        List<ProduceResponse.RecordError> recordErrors = Collections.emptyList();
+
+        sender.runOnce(); // connect
+        sender.runOnce(); // send produce request
+        assertEquals("We should have a single produce request in flight.", 1, client.inFlightRequestCount());
+        assertEquals(1, sender.inFlightBatches(tp0).size());
+        assertTrue(client.hasInFlightRequests());
+        client.respond(new MockClient.RequestMatcher() {
+            @Override
+            public boolean matches(AbstractRequest body) {
+                return true;
+            }
+        }, produceResponse(tp0, ProduceResponse.INVALID_OFFSET, Errors.INVALID_RECORD, 0, recordErrors, errorMessage));
+
+        sender.runOnce();
+        assertEquals("All requests completed.", 0, client.inFlightRequestCount());
+        assertEquals(0, sender.inFlightBatches(tp0).size());
+        assertFalse(client.hasInFlightRequests());
+        assertTrue("Request should be completed", future.isDone());
+        try {
+            future.get();
+            fail("The request is supposed to fail here");
+        } catch (Exception e) {
+            assertTrue(e.getCause() instanceof InvalidRecordException);
+        }
+    }
+
+    @Test
+    public void testCorrectHandlingOfInvalidRecordExceptionWithNonemptyOffsetList() throws Exception {
+        List<Future<RecordMetadata>> futures = new ArrayList<>();
+        for (int i = 0; i < 4; ++i)
+            futures.add(accumulator.append(tp0, 0L, "key".getBytes(), "value".getBytes(),
+                    null, null, MAX_BLOCK_TIMEOUT, false).future);
+
+        List<ProduceResponse.RecordError> recordErrors = new ArrayList<>();
+        // drop the first record
+        recordErrors.add(new ProduceResponse.RecordError(0));
+        recordErrors.add(new ProduceResponse.RecordError(2));
+        String errorMessage = "Custom error message";
+
+        sender.runOnce();   // send request
+        assertEquals(1, client.inFlightRequestCount());
+        assertEquals(1, sender.inFlightBatches(tp0).size());
+        assertEquals(4, sender.inFlightBatches(tp0).get(0).recordCount);
+        client.respond(new MockClient.RequestMatcher() {
+            @Override
+            public boolean matches(AbstractRequest body) {
+                return true;
+            }
+        }, produceResponse(tp0, ProduceResponse.INVALID_OFFSET, Errors.INVALID_RECORD, 0, recordErrors, errorMessage));
+
+        sender.runOnce();   // receive request
+        assertEquals(0, client.inFlightRequestCount());
+        assertEquals(0, sender.inFlightBatches(tp0).size());
+        assertTrue("Request 1 should be completed and throw an exception", futures.get(0).isDone());
+        assertFalse("Request 2 is still pending", futures.get(1).isDone());
+        assertTrue("Request 3 should be completed and throw an exception", futures.get(2).isDone());
+        assertFalse("Request 4 is still pending", futures.get(3).isDone());
+
+        try {
+            futures.get(0).get();
+            fail("Request 1 is supposed to fail");
+        } catch (Exception e) {
+            assertTrue(e.getCause() instanceof InvalidRecordException);
+        }
+        try {
+            futures.get(2).get();
+            fail("Request 3 is supposed to fail");
+        } catch (Exception e) {
+            assertTrue(e.getCause() instanceof InvalidRecordException);
+        }
+
+        sender.runOnce();   // resend request which includes the new batch
+        assertEquals(1, sender.inFlightBatches(tp0).size());
+        assertEquals(2, sender.inFlightBatches(tp0).get(0).recordCount);
+        assertTrue(sender.inFlightBatches(tp0).get(0).inRetry());
+
+        client.respond(produceResponse(tp0, 0L, Errors.NONE, 0));
+        sender.runOnce();   // receive re-tried request
+
+        // there are no "holes" in the offset
+        assertTrue("Request 2 should be completed", futures.get(1).isDone());
+        assertEquals(0, futures.get(1).get().offset());
+        assertTrue("Request 4 should be completed", futures.get(3).isDone());
+        assertEquals(1, futures.get(3).get().offset());
+    }
+
+    @Test
+    public void testRecordsInErrorRecordsHaveTheirCallbacksCalled() throws Exception {
+        final AtomicInteger invalidRecordCallbackCount = new AtomicInteger(0);
+        List<Future<RecordMetadata>> futures = new ArrayList<>();
+        for (int i = 0; i < 4; ++i)
+            futures.add(accumulator.append(tp0, 0L, "key".getBytes(), "value".getBytes(),
+                    null, new Callback() {
+                        @Override
+                        public void onCompletion(RecordMetadata metadata, Exception exception) {
+                            if (exception != null) {
+                                invalidRecordCallbackCount.incrementAndGet();
+                                assertTrue(exception instanceof InvalidRecordException);
+                            }
+                        }
+                    }, MAX_BLOCK_TIMEOUT, false).future);
+
+        List<ProduceResponse.RecordError> recordErrors = new ArrayList<>();
+        // drop the first record
+        recordErrors.add(new ProduceResponse.RecordError(0));
+        recordErrors.add(new ProduceResponse.RecordError(2));
+        String errorMessage = "Custom error message";
+        sender.runOnce();   // send request
+        assertEquals(1, client.inFlightRequestCount());
+        assertEquals(1, sender.inFlightBatches(tp0).size());
+        assertEquals(4, sender.inFlightBatches(tp0).get(0).recordCount);
+        client.respond(new MockClient.RequestMatcher() {
+            @Override
+            public boolean matches(AbstractRequest body) {
+                return true;
+            }
+        }, produceResponse(tp0, ProduceResponse.INVALID_OFFSET, Errors.INVALID_RECORD, 0, recordErrors, errorMessage));
+
+        sender.runOnce();   // receive request
+        assertEquals(0, client.inFlightRequestCount());
+        assertEquals(0, sender.inFlightBatches(tp0).size());
+        assertTrue("Request 1 should be completed and throw an exception", futures.get(0).isDone());
+        assertFalse("Request 2 is still pending", futures.get(1).isDone());
+        assertTrue("Request 3 should be completed and throw an exception", futures.get(2).isDone());
+        assertFalse("Request 4 is still pending", futures.get(3).isDone());
+
+        try {
+            futures.get(0).get();
+            fail("Request 1 is supposed to fail");
+        } catch (Exception e) {
+            assertTrue(e.getCause() instanceof InvalidRecordException);
+        }
+        try {
+            futures.get(2).get();
+            fail("Request 3 is supposed to fail");
+        } catch (Exception e) {
+            assertTrue(e.getCause() instanceof InvalidRecordException);
+        }
+
+        sender.runOnce();   // resend request which includes the new batch
+        assertEquals(1, sender.inFlightBatches(tp0).size());
+        assertEquals(2, sender.inFlightBatches(tp0).get(0).recordCount);
+        assertTrue(sender.inFlightBatches(tp0).get(0).inRetry());
+
+        client.respond(produceResponse(tp0, 0L, Errors.NONE, 0));
+        sender.runOnce();   // receive re-tried request
+
+        // there are no "holes" in the offset
+        assertTrue("Request 2 should be completed", futures.get(1).isDone());
+        assertEquals(0, futures.get(1).get().offset());
+        assertTrue("Request 4 should be completed", futures.get(3).isDone());
+        assertEquals(1, futures.get(3).get().offset());
+
+        // Callbacks with InvalidRecordException are called exactly twice
+        assertEquals(invalidRecordCallbackCount.get(), 2);
+    }
+
+    @Test
+    public void testCorrectHandlingOfInvalidRecordExceptionWithNonemptyOffsetListForIdempotentProducer() throws Exception {
+        final long producerId = 343434L;
+        TransactionManager transactionManager = new TransactionManager();
+        setupWithTransactionState(transactionManager);
+        prepareAndReceiveInitProducerId(producerId, Errors.NONE);
+        assertTrue(transactionManager.hasProducerId());
+
+        assertEquals(0, transactionManager.sequenceNumber(tp0).longValue());
+
+        List<Future<RecordMetadata>> futures = new ArrayList<>();
+        for (int i = 0; i < 4; ++i)
+            futures.add(accumulator.append(tp0, 0L, "key".getBytes(), "value".getBytes(),
+                    null, null, MAX_BLOCK_TIMEOUT, false).future);
+
+        List<ProduceResponse.RecordError> recordErrors = new ArrayList<>();
+        // drop the first record
+        recordErrors.add(new ProduceResponse.RecordError(0));
+        recordErrors.add(new ProduceResponse.RecordError(2));
+        String errorMessage = "Custom error message";
+
+        sender.runOnce();       // send request
+        String nodeId = client.requests().peek().destination();
+        Node node = new Node(Integer.valueOf(nodeId), "localhost", 0);
+        assertEquals(1, client.inFlightRequestCount());
+        assertEquals(1, sender.inFlightBatches(tp0).size());
+        assertEquals(4, sender.inFlightBatches(tp0).get(0).recordCount);
+        assertEquals(4, transactionManager.sequenceNumber(tp0).longValue());    // there are 4 records
+        assertEquals(OptionalInt.empty(), transactionManager.lastAckedSequence(tp0));
+        for (Future<RecordMetadata> future : futures)
+            assertFalse(future.isDone());
+        assertTrue(client.isReady(node, time.milliseconds()));
+
+        sendIdempotentProducerResponse(0, tp0, Errors.INVALID_RECORD, 0L, recordErrors, errorMessage);
+
+        sender.runOnce();       // receive request
+        assertEquals(0, client.inFlightRequestCount());
+        assertEquals(OptionalInt.empty(), transactionManager.lastAckedSequence(tp0));   // haven't been ack-ed yet because the batch was rejected
+        assertEquals(0, client.inFlightRequestCount());
+        assertEquals(0, sender.inFlightBatches(tp0).size());
+        assertTrue("Request 1 should be completed and throw an exception", futures.get(0).isDone());
+        assertFalse("Request 2 is still pending", futures.get(1).isDone());
+        assertTrue("Request 3 should be completed and throw an exception", futures.get(2).isDone());
+        assertFalse("Request 4 is still pending", futures.get(3).isDone());
+
+        try {
+            futures.get(0).get();
+            fail("Request 1 is supposed to fail");
+        } catch (Exception e) {
+            assertTrue(e.getCause() instanceof InvalidRecordException);
+        }
+        try {
+            futures.get(2).get();
+            fail("Request 3 is supposed to fail");
+        } catch (Exception e) {
+            assertTrue(e.getCause() instanceof InvalidRecordException);
+        }
+
+        sender.runOnce();   // resend request which includes the new batch
+        assertEquals(1, sender.inFlightBatches(tp0).size());
+        assertEquals(2, sender.inFlightBatches(tp0).get(0).recordCount);
+        assertTrue(sender.inFlightBatches(tp0).get(0).inRetry());
+        assertEquals(OptionalInt.empty(), transactionManager.lastAckedSequence(tp0));
+
+        sendIdempotentProducerResponse(0, tp0, Errors.NONE, 0L);
+
+        sender.runOnce();   // receive re-tried request
+        assertFalse(client.hasInFlightRequests());
+        assertEquals(0, sender.inFlightBatches(tp0).size());
+        // there are no "holes" in the offset
+        assertTrue("Request 2 should be completed", futures.get(1).isDone());
+        assertEquals(0, futures.get(1).get().offset());
+        assertTrue("Request 4 should be completed", futures.get(3).isDone());
+        assertEquals(1, futures.get(3).get().offset());
+        assertEquals(OptionalInt.of(1), transactionManager.lastAckedSequence(tp0));
+    }
+
+
+    @Test
     public void testUnknownProducerHandlingWhenRetentionLimitReached() throws Exception {
         final long producerId = 343434L;
         TransactionManager transactionManager = new TransactionManager();
@@ -1629,6 +1874,10 @@ public class SenderTest {
         sendIdempotentProducerResponse(expectedSequence, tp, responseError, responseOffset, -1L);
     }
 
+    void sendIdempotentProducerResponse(int expectedSequence, TopicPartition tp, Errors responseError, long responseOffset, List<ProduceResponse.RecordError> recordErrors, String errorMessage) {
+        sendIdempotentProducerResponse(expectedSequence, tp, responseError, responseOffset, -1, recordErrors, errorMessage);
+    }
+
     void sendIdempotentProducerResponse(final int expectedSequence, TopicPartition tp, Errors responseError, long responseOffset, long logStartOffset) {
         client.respond(new MockClient.RequestMatcher() {
             @Override
@@ -1644,6 +1893,23 @@ public class SenderTest {
                 return true;
             }
         }, produceResponse(tp, responseOffset, responseError, 0, logStartOffset));
+    }
+
+    void sendIdempotentProducerResponse(final int expectedSequence, TopicPartition tp, Errors responseError, long responseOffset, long logStartOffset, List<ProduceResponse.RecordError> recordErrors, String errorMessage) {
+        client.respond(new MockClient.RequestMatcher() {
+            @Override
+            public boolean matches(AbstractRequest body) {
+                ProduceRequest produceRequest = (ProduceRequest) body;
+                assertTrue(produceRequest.hasIdempotentRecords());
+
+                MemoryRecords records = produceRequest.partitionRecordsOrFail().get(tp0);
+                Iterator<MutableRecordBatch> batchIterator = records.batches().iterator();
+                RecordBatch firstBatch = batchIterator.next();
+                assertFalse(batchIterator.hasNext());
+                assertEquals(expectedSequence, firstBatch.baseSequence());
+                return true;
+            }
+        }, produceResponse(tp, responseOffset, responseError, 0, logStartOffset, recordErrors, errorMessage));
     }
 
     @Test
@@ -2445,6 +2711,16 @@ public class SenderTest {
         ProduceResponse.PartitionResponse resp = new ProduceResponse.PartitionResponse(error, offset, RecordBatch.NO_TIMESTAMP, logStartOffset);
         Map<TopicPartition, ProduceResponse.PartitionResponse> partResp = Collections.singletonMap(tp, resp);
         return new ProduceResponse(partResp, throttleTimeMs);
+    }
+
+    private ProduceResponse produceResponse(TopicPartition tp, long offset, Errors error, int throttleTimeMs, long logStartOffset, List<ProduceResponse.RecordError> recordErrors, String errorMessage) {
+        ProduceResponse.PartitionResponse resp = new ProduceResponse.PartitionResponse(error, offset, RecordBatch.NO_TIMESTAMP, logStartOffset, recordErrors, errorMessage);
+        Map<TopicPartition, ProduceResponse.PartitionResponse> partResp = Collections.singletonMap(tp, resp);
+        return new ProduceResponse(partResp, throttleTimeMs);
+    }
+
+    private ProduceResponse produceResponse(TopicPartition tp, long offset, Errors error, int throttleTimeMs, List<ProduceResponse.RecordError> recordErrors, String errorMessage) {
+        return produceResponse(tp, offset, error, throttleTimeMs, -1L, recordErrors, errorMessage);
     }
 
     private ProduceResponse produceResponse(Map<TopicPartition, OffsetAndError> responses) {

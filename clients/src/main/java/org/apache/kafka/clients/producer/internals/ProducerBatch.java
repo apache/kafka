@@ -42,6 +42,7 @@ import java.util.ArrayList;
 import java.util.Deque;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -118,6 +119,21 @@ public final class ProducerBatch {
             thunks.add(new Thunk(callback, future));
             this.recordCount++;
             return future;
+        }
+    }
+
+    /**
+     * Append the record to the current record set with an existing future
+     * Used for {@link #dropRecords(Set)} when dropping failed records from a batch
+     */
+    private void tryAppendForDropping(long timestamp, ByteBuffer key, ByteBuffer value, Header[] headers, Thunk thunk) {
+        if (recordsBuilder.hasRoomFor(timestamp, key, value, headers)) {
+            this.recordsBuilder.append(timestamp, key, value, headers);
+            this.maxRecordSize = Math.max(this.maxRecordSize, AbstractRecords.estimateSizeInBytesUpperBound(magic(),
+                    recordsBuilder.compressionType(), key, value, headers));
+            thunk.future.setProduceFuture(this.produceFuture, this.recordCount);
+            thunks.add(thunk);
+            this.recordCount++;
         }
     }
 
@@ -215,6 +231,46 @@ public final class ProducerBatch {
         return false;
     }
 
+    /**
+     * Same as {@link #done(long, long, RuntimeException)} but excludes records not specified in batchIndices from
+     * having their callbacks invoked
+     * @param baseOffset The base offset of the messages assigned by the server
+     * @param batchIndices The set of offsets in this batch to complete
+     * @param logAppendTime The log append time or -1 if CreateTime is being used
+     * @param exception The exception that occurred (or null if the request was successful)
+     * @return true if the batch was completed successfully and false if the batch was previously aborted
+     */
+    public boolean partiallyDone(long baseOffset, Set<Integer> batchIndices, long logAppendTime, RuntimeException exception) {
+        final FinalState tryFinalState = (exception == null) ? FinalState.SUCCEEDED : FinalState.FAILED;
+
+        if (tryFinalState == FinalState.SUCCEEDED) {
+            log.trace("Successfully produced messages to {} with base offset {}.", topicPartition, baseOffset);
+        } else {
+            log.trace("Failed to produce messages to {} with base offset {}.", topicPartition, baseOffset, exception);
+        }
+
+        if (this.finalState.compareAndSet(null, tryFinalState)) {
+            completeFutureAndFireCallbacks(baseOffset, batchIndices, logAppendTime, exception);
+            return true;
+        }
+
+        if (this.finalState.get() != FinalState.SUCCEEDED) {
+            if (tryFinalState == FinalState.SUCCEEDED) {
+                // Log if a previously unsuccessful batch succeeded later on.
+                log.debug("ProduceResponse returned {} for {} after batch with base offset {} had already been {}.",
+                        tryFinalState, topicPartition, baseOffset, this.finalState.get());
+            } else {
+                // FAILED --> FAILED and ABORTED --> FAILED transitions are ignored.
+                log.debug("Ignored state transition {} -> {} for {} batch with base offset {}",
+                        this.finalState.get(), tryFinalState, topicPartition, baseOffset);
+            }
+        } else {
+            // A SUCCESSFUL batch must not attempt another state change.
+            throw new IllegalStateException("A " + this.finalState.get() + " batch must not attempt another state change to " + tryFinalState);
+        }
+        return false;
+    }
+
     private void completeFutureAndFireCallbacks(long baseOffset, long logAppendTime, RuntimeException exception) {
         // Set the future before invoking the callbacks as we rely on its state for the `onCompletion` call
         produceFuture.set(baseOffset, logAppendTime, exception);
@@ -236,6 +292,67 @@ public final class ProducerBatch {
         }
 
         produceFuture.done();
+    }
+
+    private void completeFutureAndFireCallbacks(long baseOffset, Set<Integer> batchIndices, long logAppendTime, RuntimeException exception) {
+        // Set the future before invoking the callbacks as we rely on its state for the `onCompletion` call
+        produceFuture.set(baseOffset, logAppendTime, exception);
+
+        // execute callbacks
+        for (int i = 0; i < thunks.size(); i++) {
+            if (!batchIndices.contains(i)) {
+                try {
+                    Thunk thunk = thunks.get(i);
+                    if (exception == null) {
+                        RecordMetadata metadata = thunk.future.value();
+                        if (thunk.callback != null)
+                            thunk.callback.onCompletion(metadata, null);
+                    } else {
+                        if (thunk.callback != null)
+                            thunk.callback.onCompletion(null, exception);
+                    }
+                } catch (Exception e) {
+                    log.error("Error executing user-provided callback on message for topic-partition '{}'", topicPartition, e);
+                }
+            }
+        }
+
+        produceFuture.done();
+    }
+
+    public ProducerBatch dropRecords(Set<Integer> errorRecords) {
+        MemoryRecords memoryRecords = recordsBuilder.build();
+
+        Iterator<MutableRecordBatch> recordBatchIterator = memoryRecords.batches().iterator();
+        if (!recordBatchIterator.hasNext())
+            throw new IllegalStateException("Cannot drop records from an empty producer batch.");
+
+        RecordBatch recordBatch = recordBatchIterator.next();
+
+        if (recordBatchIterator.hasNext())
+            throw new IllegalArgumentException("A producer batch should only have one record batch.");
+
+        Iterator<Thunk> thunkIterator = thunks.iterator();
+
+        ProducerBatch batchToKeep = null;
+
+        for (Record record : recordBatch) {
+            assert thunkIterator.hasNext();
+            Thunk thunk = thunkIterator.next();
+
+            if (!errorRecords.contains((int) record.offset())) {
+                if (batchToKeep == null)
+                    batchToKeep = createBatchOffAccumulatorForRecord(record, recordBatch.sizeInBytes());
+                batchToKeep.tryAppendForDropping(record.timestamp(), record.key(), record.value(), record.headers(), thunk);
+            }
+        }
+
+        if (batchToKeep != null && hasSequence()) {
+            ProducerIdAndEpoch producerIdAndEpoch = new ProducerIdAndEpoch(producerId(), producerEpoch());
+            batchToKeep.setProducerState(producerIdAndEpoch, baseSequence(), isTransactional());
+        }
+
+        return batchToKeep;
     }
 
     public Deque<ProducerBatch> split(int splitBatchSize) {
