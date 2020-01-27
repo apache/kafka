@@ -133,8 +133,7 @@ public class TaskManagerTest {
         topologyBuilder.addSubscribedTopicsFromAssignment(eq(asList(t1p1, newTopicPartition)), anyString());
         expectLastCall();
 
-        replay(activeTaskCreator,
-                        topologyBuilder);
+        replay(activeTaskCreator, topologyBuilder);
 
         taskManager.handleAssignment(assignment, emptyMap());
 
