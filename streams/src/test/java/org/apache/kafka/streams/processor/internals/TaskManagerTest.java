@@ -34,7 +34,6 @@ import org.easymock.Mock;
 import org.easymock.MockType;
 import org.hamcrest.Matchers;
 import org.junit.Before;
-import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
@@ -272,7 +271,7 @@ public class TaskManagerTest {
         final Task task00 = new StateMachineTask(taskId00, taskId00Partitions, true) {
             @Override
             public void suspend() {
-                throw new RuntimeException("asdf");
+                throw new RuntimeException("KABOOM!");
             }
         };
 
@@ -285,7 +284,6 @@ public class TaskManagerTest {
         assertThat(task00.state(), is(Task.State.RUNNING));
 
         assertThrows(StreamsException.class, () -> taskManager.handleRevocation(taskId00Partitions));
-        // TODO K9113: is it safe for the task to still be RUNNING, or should we trap it in SUSPENDING or something?
         assertThat(task00.state(), is(Task.State.RUNNING));
     }
 

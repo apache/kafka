@@ -201,7 +201,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     @Override
     public void initializeIfNeeded() {
         if (state() == State.CREATED) {
-            initializeMetadata();
             TaskUtils.registerStateStores(id, log, logPrefix, topology, stateMgr, stateDirectory, processorContext);
 
             transitionTo(State.RESTORING);
@@ -213,6 +212,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     @Override
     public void completeRestoration() {
         if (state() == State.RESTORING) {
+            initializeMetadata();
             initializeTopology();
             processorContext.initialize();
             idleStartTime = RecordQueue.UNKNOWN;
@@ -239,17 +239,15 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
      */
     @Override
     public void suspend() {
-        switch (state()) {
-            case SUSPENDED:
-            case CLOSING:
-                // do nothing
-                log.trace("Skip suspending since state is {}", state());
-                break;
-
-            case RUNNING:
+        if (state() == State.CLOSING || state() == State.SUSPENDED) {
+            // do nothing
+            log.trace("Skip suspending since state is {}", state());
+        } else {
+            if (state() == State.RUNNING) {
                 closeTopology(true);
+            }
 
-            case RESTORING:
+            if (state() == State.RUNNING || state() == State.RESTORING) {
                 commitState();
                 // whenever we have successfully committed state during suspension, it is safe to checkpoint
                 // the state as well no matter if EOS is enabled or not
@@ -260,11 +258,9 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
 
                 transitionTo(State.SUSPENDED);
                 log.debug("Suspended running");
-
-                break;
-
-            default:
+            } else {
                 throw new IllegalStateException("Illegal state " + state() + " while suspending active task " + id);
+            }
         }
     }
 
@@ -393,25 +389,22 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
      *                               or if the task producer got fenced (EOS)
      */
     private void close(final boolean clean) {
-        switch(state()) {
-            case CREATED:
-                transitionTo(State.CLOSING);
-                // the task is created and not initialized, do nothing
-                break;
-
-            case RUNNING:
+        if (state() == State.CREATED) {
+            // the task is created and not initialized, do nothing
+            transitionTo(State.CLOSING);
+        } else {
+            if (state() == State.RUNNING) {
                 closeTopology(clean);
-                // intentionally fall through
+            }
 
-            case SUSPENDED:
-            case RESTORING:
+            if (state() == State.RUNNING || state() == State.RESTORING) {
                 if (clean) {
                     commitState();
                     // whenever we have successfully committed state, it is safe to checkpoint
                     // the state as well no matter if EOS is enabled or not
                     stateMgr.checkpoint(checkpointableOffsets());
                 } else {
-                    // If from unclean close, then only need to flush state to make sure that when later
+                    // if from unclean close, then only need to flush state to make sure that when later
                     // closing the states, there's no records triggering any processing anymore; also swallow all caught exceptions
                     // However, for a _clean_ shutdown, we try to commit and checkpoint. If there are any exceptions, they become
                     // fatal for the "closeClean()" call, and the caller can try again with closeDirty() to complete the shutdown.
@@ -423,19 +416,20 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                 }
 
                 transitionTo(State.CLOSING);
-                // intentionally fall through
+            } else if (state() == State.SUSPENDED) {
+                // do not need to commit / checkpoint, since when suspending we've already committed the state
+                transitionTo(State.CLOSING);
+            }
 
-            case CLOSING:
-                // all operations falling into CLOSING are idempotent
+            if (state() == State.CLOSING) {
+                // first close state manager (which is idempotent) then close the record collector (which could throw),
+                // if the latter throws and we re-close dirty which would close the state manager again.
                 TaskUtils.closeStateManager(id, log, logPrefix, clean, stateMgr, stateDirectory);
 
-                // this is last because it might throw
                 closeRecordCollector(clean);
-
-                break;
-
-            default:
-                throw new IllegalStateException("Illegal state " + state() + " while closing standby task " + id);
+            } else {
+                throw new IllegalStateException("Illegal state " + state() + " while closing active task " + id);
+            }
         }
 
         partitionGroup.close();

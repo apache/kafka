@@ -244,6 +244,7 @@ public class StreamTaskTest {
         assertEquals(RecordQueue.UNKNOWN, task.streamTime());
 
         task.initializeIfNeeded();
+        task.completeRestoration();
 
         assertEquals(10L, task.streamTime());
     }
@@ -957,6 +958,8 @@ public class StreamTaskTest {
         stateDirectory = EasyMock.createNiceMock(StateDirectory.class);
         EasyMock.expect(stateDirectory.lock(taskId)).andReturn(true);
         EasyMock.expect(recordCollector.offsets()).andReturn(Collections.singletonMap(changelogPartition, 10L));
+        recordCollector.commit(EasyMock.eq(Collections.emptyMap()));
+        EasyMock.expectLastCall();
         stateManager.checkpoint(EasyMock.eq(Collections.singletonMap(changelogPartition, 10L)));
         EasyMock.expectLastCall();
         EasyMock.replay(recordCollector, stateDirectory, stateManager);
@@ -967,8 +970,13 @@ public class StreamTaskTest {
 
         task.suspend();
 
+        assertEquals(Task.State.SUSPENDED, task.state());
+
         EasyMock.verify(stateManager);
     }
+
+    @Test
+    public void should
 
     @Test
     public void shouldCheckpointOffsetsOnCommit() {
@@ -1127,7 +1135,9 @@ public class StreamTaskTest {
         task = createOptimizedStatefulTask(createConfig(false, "100"), consumer);
         EasyMock.replay(stateManager);
 
-        assertThrows(ProcessorStateException.class, task::initializeIfNeeded);
+        task.initializeIfNeeded();
+
+        assertThrows(ProcessorStateException.class, task::completeRestoration);
     }
 
     private Consumer<byte[], byte[]> mockConsumerWithCommittedException(final RuntimeException toThrow) {

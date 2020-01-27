@@ -546,7 +546,7 @@ public class TaskManager {
         return stringBuilder.toString();
     }
 
-    // TODO K9113: this is used from StreamThread only for a hack to collect metrics from the record collectors inside of StreamTasks
+    // FIXME: this is used from StreamThread only for a hack to collect metrics from the record collectors inside of StreamTasks
     // Instead, we should register and record the metrics properly inside of the record collector.
     Map<TaskId, StreamTask> fixmeStreamTasks() {
         return tasks.values().stream().filter(t -> t instanceof StreamTask).map(t -> (StreamTask) t).collect(Collectors.toMap(Task::id, t -> t));

@@ -135,6 +135,8 @@ public class StandbyTask extends AbstractTask implements Task {
 
             case CLOSING:
                 // do nothing and also not throw
+                log.trace("Skip committing since task is closing");
+
                 break;
 
             default:
@@ -161,25 +163,22 @@ public class StandbyTask extends AbstractTask implements Task {
      * @throws StreamsException fatal error, should close the thread
      */
     private void close(final boolean clean) {
-        switch (state()) {
-            case CREATED:
-                // the task is created and not initialized, do nothing
-                transitionTo(State.CLOSING);
-                break;
-
-            case RUNNING:
+        if (state() == State.CREATED) {
+            // the task is created and not initialized, do nothing
+            transitionTo(State.CLOSING);
+        } else {
+            if (state() == State.RUNNING) {
                 if (clean)
                     commit();
 
                 transitionTo(State.CLOSING);
+            }
 
-            case CLOSING:
-                // all operations falling into CLOSING are idempotent
+            if (state() == State.CLOSING) {
                 TaskUtils.closeStateManager(id, log, logPrefix, clean, stateMgr, stateDirectory);
-                break;
-
-            default:
+            } else {
                 throw new IllegalStateException("Illegal state " + state() + " while closing standby task " + id);
+            }
         }
 
         closeTaskSensor.record();
