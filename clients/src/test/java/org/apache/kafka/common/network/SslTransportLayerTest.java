@@ -58,6 +58,8 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 
+import static org.apache.kafka.common.config.SslConfigs.DEFAULT_SSL_PROTOCOL;
+import static org.apache.kafka.common.config.SslConfigs.SSL_PROTOCOL_CONFIG;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
@@ -96,7 +98,7 @@ public class SslTransportLayerTest {
         this.tlsProtocol = tlsProtocol;
 
         sslConfigOverrides = new HashMap<>();
-        sslConfigOverrides.put(SslConfigs.SSL_PROTOCOL_CONFIG, tlsProtocol);
+        sslConfigOverrides.put(SSL_PROTOCOL_CONFIG, tlsProtocol);
         sslConfigOverrides.put(SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG, Collections.singletonList(tlsProtocol));
     }
 
@@ -549,6 +551,71 @@ public class SslTransportLayerTest {
 
         NetworkTestUtils.waitForChannelClose(selector, node, ChannelState.State.AUTHENTICATION_FAILED);
         server.verifyAuthenticationMetrics(0, 1);
+    }
+
+    /**
+     * Tests that connections cannot be made with default TLS version.
+     */
+    @Test
+    public void testTLSDefaults() throws Exception {
+        final LogContext logContext = new LogContext();
+
+        sslServerConfigs = serverCertStores.getTrustingConfig(clientCertStores);
+        sslClientConfigs = clientCertStores.getTrustingConfig(serverCertStores);
+
+        assertEquals(DEFAULT_SSL_PROTOCOL, sslServerConfigs.get(SSL_PROTOCOL_CONFIG));
+        assertEquals(DEFAULT_SSL_PROTOCOL, sslClientConfigs.get(SSL_PROTOCOL_CONFIG));
+
+        channelBuilder = new SslChannelBuilder(Mode.CLIENT, null, false, logContext);
+        channelBuilder.configure(sslServerConfigs);
+        selector = new Selector(5000, new Metrics(), time, "MetricGroup", channelBuilder, logContext);
+
+        server = createEchoServer(SecurityProtocol.SSL);
+        createSelector(sslClientConfigs);
+
+        final String node = "0";
+
+        InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
+        selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
+
+        NetworkTestUtils.waitForChannelClose(selector, node, ChannelState.State.READY);
+        server.verifyAuthenticationMetrics(1, 0);
+    }
+
+    /**
+     * Tests that connections cannot be made with TLSv1.1 versions
+     */
+    @Test
+    public void testTLS1Version() throws Exception {
+        checkSuccessConnection("TLSv1");
+    }
+
+    /**
+     * Tests that connections cannot be made with TLSv1.1 versions
+     */
+    @Test
+    public void testTLS11Version() throws Exception {
+        checkSuccessConnection("TLSv1.1");
+    }
+
+    /**
+     * Checks connections success with the specific {@code tlsVersion}.
+     * @param tlsVersion
+     * @throws Exception
+     */
+    private void checkSuccessConnection(String tlsVersion) throws Exception {
+        String node = "0";
+
+        sslServerConfigs.put(SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG, Arrays.asList(tlsVersion));
+        server = createEchoServer(SecurityProtocol.SSL);
+
+        sslClientConfigs.put(SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG, Arrays.asList(tlsVersion));
+        createSelector(sslClientConfigs);
+        InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
+        selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
+
+        NetworkTestUtils.waitForChannelClose(selector, node, ChannelState.State.READY);
+        server.verifyAuthenticationMetrics(1, 0);
     }
 
     /**
