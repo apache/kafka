@@ -63,6 +63,7 @@ import static org.easymock.EasyMock.anyString;
 import static org.easymock.EasyMock.eq;
 import static org.easymock.EasyMock.expect;
 import static org.easymock.EasyMock.expectLastCall;
+import static org.easymock.EasyMock.replay;
 import static org.easymock.EasyMock.verify;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.is;
@@ -134,7 +135,7 @@ public class TaskManagerTest {
         topologyBuilder.addSubscribedTopicsFromAssignment(eq(asList(t1p1, newTopicPartition)), anyString());
         expectLastCall();
 
-        EasyMock.replay(activeTaskCreator,
+        replay(activeTaskCreator,
                         topologyBuilder);
 
         taskManager.handleAssignment(assignment, emptyMap());
@@ -157,7 +158,7 @@ public class TaskManagerTest {
         expect(activeTaskCreator.stateDirectory()).andReturn(stateDirectory).once();
         expect(stateDirectory.listTaskDirectories()).andReturn(taskFolders).once();
 
-        EasyMock.replay(activeTaskCreator, stateDirectory);
+        replay(activeTaskCreator, stateDirectory);
 
         final Set<TaskId> tasks = taskManager.tasksOnLocalStorage();
 
@@ -178,7 +179,7 @@ public class TaskManagerTest {
         topologyBuilder.addSubscribedTopicsFromAssignment(anyObject(), anyString());
         expectLastCall().anyTimes();
 
-        EasyMock.replay(activeTaskCreator, standbyTaskCreator, topologyBuilder, consumer, changeLogReader);
+        replay(activeTaskCreator, standbyTaskCreator, topologyBuilder, consumer, changeLogReader);
 
         taskManager.handleAssignment(taskId00Assignment, emptyMap());
 
@@ -198,7 +199,7 @@ public class TaskManagerTest {
 
         expectRestoreToBeCompleted(consumer, changeLogReader);
         expect(standbyTaskCreator.createTasks(anyObject(), eq(taskId00Assignment))).andReturn(singletonList(task00)).anyTimes();
-        EasyMock.replay(activeTaskCreator, standbyTaskCreator, consumer, changeLogReader);
+        replay(activeTaskCreator, standbyTaskCreator, consumer, changeLogReader);
         taskManager.handleAssignment(emptyMap(), taskId00Assignment);
         taskManager.checkForCompletedRestoration();
         assertThat(task00.state(), is(Task.State.RUNNING));
@@ -216,7 +217,8 @@ public class TaskManagerTest {
         // expect these calls twice (because we're going to checkForCompletedRestoration twice)
         expectRestoreToBeCompleted(consumer, changeLogReader);
         expect(activeTaskCreator.createTasks(anyObject(), eq(taskId00Assignment))).andReturn(singletonList(task00));
-        EasyMock.replay(activeTaskCreator, consumer, changeLogReader);
+        replay(activeTaskCreator, consumer, changeLogReader);
+
         taskManager.handleAssignment(taskId00Assignment, emptyMap());
         taskManager.checkForCompletedRestoration();
         assertThat(task00.state(), is(Task.State.RUNNING));
@@ -240,10 +242,11 @@ public class TaskManagerTest {
         final Map<TaskId, Set<TopicPartition>> assignment = singletonMap(taskId00, taskId00Partitions);
         final Task task00 = new StateMachineTask(taskId00, taskId00Partitions, true);
 
-        expect(changeLogReader.completedChangelogs()).andReturn(emptySet());
+        changeLogReader.transitToRestoreActive();
+        expectLastCall();
         expect(activeTaskCreator.createTasks(anyObject(), eq(assignment))).andReturn(singletonList(task00)).anyTimes();
         expect(standbyTaskCreator.createTasks(anyObject(), eq(emptyMap()))).andReturn(emptyList()).anyTimes();
-        EasyMock.replay(activeTaskCreator, standbyTaskCreator, changeLogReader);
+        replay(activeTaskCreator, standbyTaskCreator, changeLogReader);
 
         taskManager.handleAssignment(assignment, emptyMap());
 
@@ -260,7 +263,7 @@ public class TaskManagerTest {
         expectRestoreToBeCompleted(consumer, changeLogReader);
         expect(activeTaskCreator.createTasks(anyObject(), eq(taskId00Assignment))).andReturn(singletonList(task00));
 
-        EasyMock.replay(activeTaskCreator, consumer, changeLogReader);
+        replay(activeTaskCreator, consumer, changeLogReader);
         taskManager.handleAssignment(taskId00Assignment, emptyMap());
         taskManager.checkForCompletedRestoration();
         assertThat(task00.state(), is(Task.State.RUNNING));
@@ -281,7 +284,7 @@ public class TaskManagerTest {
         expectRestoreToBeCompleted(consumer, changeLogReader);
         expect(activeTaskCreator.createTasks(anyObject(), eq(taskId00Assignment))).andReturn(singletonList(task00));
 
-        EasyMock.replay(activeTaskCreator, consumer, changeLogReader);
+        replay(activeTaskCreator, consumer, changeLogReader);
         taskManager.handleAssignment(taskId00Assignment, emptyMap());
         taskManager.checkForCompletedRestoration();
         assertThat(task00.state(), is(Task.State.RUNNING));
@@ -293,15 +296,25 @@ public class TaskManagerTest {
 
     @Test
     public void shouldCloseActiveTasksOnShutdown() {
+        final TopicPartition changelog = new TopicPartition("changelog", 0);
         final Map<TaskId, Set<TopicPartition>> assignment = singletonMap(taskId00, taskId00Partitions);
-        final Task task00 = new StateMachineTask(taskId00, taskId00Partitions, true);
+        final Task task00 = new StateMachineTask(taskId00, taskId00Partitions, true) {
+            @Override
+            public Collection<TopicPartition> changelogPartitions() {
+                return singletonList(changelog);
+            }
+        };
 
-        expect(changeLogReader.completedChangelogs()).andReturn(emptySet());
+        EasyMock.resetToStrict(changeLogReader);
+        changeLogReader.transitToRestoreActive();
+        // make sure we also remove the changelog partitions from the changelog reader
+        changeLogReader.remove(eq(singletonList(changelog)));
+        expectLastCall();
         expect(activeTaskCreator.createTasks(anyObject(), eq(assignment))).andReturn(singletonList(task00)).anyTimes();
         activeTaskCreator.close();
         expectLastCall();
         expect(standbyTaskCreator.createTasks(anyObject(), eq(emptyMap()))).andReturn(emptyList()).anyTimes();
-        EasyMock.replay(activeTaskCreator, standbyTaskCreator, changeLogReader);
+        replay(activeTaskCreator, standbyTaskCreator, changeLogReader);
 
         taskManager.handleAssignment(assignment, emptyMap());
 
@@ -315,7 +328,7 @@ public class TaskManagerTest {
         assertThat(taskManager.activeTaskMap(), Matchers.anEmptyMap());
         assertThat(taskManager.standbyTaskMap(), Matchers.anEmptyMap());
         // the active task creator should also get closed (so that it closes the thread producer if applicable)
-        verify(activeTaskCreator);
+        verify(activeTaskCreator, changeLogReader);
     }
 
     @Test
@@ -327,7 +340,7 @@ public class TaskManagerTest {
         activeTaskCreator.close();
         expectLastCall();
         expect(standbyTaskCreator.createTasks(anyObject(), eq(assignment))).andReturn(singletonList(task00)).anyTimes();
-        EasyMock.replay(activeTaskCreator, standbyTaskCreator, changeLogReader);
+        replay(activeTaskCreator, standbyTaskCreator, changeLogReader);
 
         taskManager.handleAssignment(emptyMap(), assignment);
 
@@ -344,18 +357,6 @@ public class TaskManagerTest {
         verify(activeTaskCreator);
     }
 
-    @Ignore
-    @Test
-    public void shouldUnassignChangelogPartitionsOnShutdown() {
-        throw new RuntimeException();
-//        restoreConsumer.unsubscribe();
-//        expectLastCall();
-//        replay();
-//
-//        taskManager.shutdown(true);
-//        verify(restoreConsumer);
-    }
-
     @Test
     public void shouldInitializeNewActiveTasks() {
         final StateMachineTask task00 = new StateMachineTask(taskId00, taskId00Partitions, true);
@@ -363,7 +364,7 @@ public class TaskManagerTest {
         expectRestoreToBeCompleted(consumer, changeLogReader);
         expect(activeTaskCreator.createTasks(anyObject(), eq(taskId00Assignment)))
             .andReturn(singletonList(task00)).anyTimes();
-        EasyMock.replay(activeTaskCreator, consumer, changeLogReader);
+        replay(activeTaskCreator, consumer, changeLogReader);
 
         taskManager.handleAssignment(taskId00Assignment, emptyMap());
         taskManager.checkForCompletedRestoration();
@@ -381,7 +382,7 @@ public class TaskManagerTest {
         expect(standbyTaskCreator.createTasks(anyObject(), eq(taskId01Assignment)))
             .andReturn(singletonList(task01)).anyTimes();
 
-        EasyMock.replay(standbyTaskCreator, consumer, changeLogReader);
+        replay(standbyTaskCreator, consumer, changeLogReader);
 
         taskManager.handleAssignment(emptyMap(), taskId01Assignment);
         taskManager.checkForCompletedRestoration();
@@ -466,7 +467,7 @@ public class TaskManagerTest {
         expect(standbyTaskCreator.createTasks(anyObject(), eq(taskId01Assignment)))
             .andReturn(singletonList(task01)).anyTimes();
 
-        EasyMock.replay(activeTaskCreator, standbyTaskCreator, consumer, changeLogReader);
+        replay(activeTaskCreator, standbyTaskCreator, consumer, changeLogReader);
 
         taskManager.handleAssignment(taskId00Assignment, taskId01Assignment);
         taskManager.checkForCompletedRestoration();
@@ -565,7 +566,7 @@ public class TaskManagerTest {
         futureDeletedRecords.completeExceptionally(new Exception("KABOOM!"));
         expect(adminClient.deleteRecords(anyObject())).andReturn(deleteRecordsResult).times(2);
 
-        EasyMock.replay(activeTaskCreator, adminClient, consumer, changeLogReader);
+        replay(activeTaskCreator, adminClient, consumer, changeLogReader);
 
         taskManager.handleAssignment(taskId00Assignment, emptyMap());
         taskManager.checkForCompletedRestoration();
@@ -596,7 +597,7 @@ public class TaskManagerTest {
         expect(activeTaskCreator.createTasks(anyObject(), eq(assignment)))
             .andReturn(asList(task00, task01, task02)).anyTimes();
 
-        EasyMock.replay(activeTaskCreator, standbyTaskCreator, consumer, changeLogReader);
+        replay(activeTaskCreator, standbyTaskCreator, consumer, changeLogReader);
 
 
         taskManager.handleAssignment(assignment, emptyMap());
@@ -624,7 +625,7 @@ public class TaskManagerTest {
         expect(activeTaskCreator.createTasks(anyObject(), eq(taskId00Assignment)))
             .andReturn(singletonList(task00)).anyTimes();
 
-        EasyMock.replay(activeTaskCreator, consumer, changeLogReader);
+        replay(activeTaskCreator, consumer, changeLogReader);
 
         taskManager.handleAssignment(taskId00Assignment, emptyMap());
         taskManager.checkForCompletedRestoration();
@@ -658,7 +659,7 @@ public class TaskManagerTest {
         expect(activeTaskCreator.createTasks(anyObject(), eq(taskId00Assignment)))
             .andReturn(singletonList(task00)).anyTimes();
 
-        EasyMock.replay(activeTaskCreator, consumer, changeLogReader);
+        replay(activeTaskCreator, consumer, changeLogReader);
 
         taskManager.handleAssignment(taskId00Assignment, emptyMap());
         taskManager.checkForCompletedRestoration();
@@ -697,7 +698,7 @@ public class TaskManagerTest {
         expect(activeTaskCreator.createTasks(anyObject(), eq(taskId00Assignment)))
             .andReturn(singletonList(task00)).anyTimes();
 
-        EasyMock.replay(activeTaskCreator, changeLogReader, consumer);
+        replay(activeTaskCreator, changeLogReader, consumer);
 
         taskManager.handleAssignment(taskId00Assignment, emptyMap());
         assertThat(taskManager.checkForCompletedRestoration(), is(false));
