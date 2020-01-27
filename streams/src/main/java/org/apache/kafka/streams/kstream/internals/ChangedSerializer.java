@@ -21,12 +21,15 @@ import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.errors.StreamsException;
 
 import java.nio.ByteBuffer;
+import java.util.Map;
 
 public class ChangedSerializer<T> implements Serializer<Change<T>> {
 
     private static final int NEWFLAG_SIZE = 1;
 
     private Serializer<T> inner;
+    private boolean isKey;
+    private Map<String, ?> configs;
 
     public ChangedSerializer(final Serializer<T> inner) {
         this.inner = inner;
@@ -38,6 +41,22 @@ public class ChangedSerializer<T> implements Serializer<Change<T>> {
 
     public void setInner(final Serializer<T> inner) {
         this.inner = inner;
+        if (inner == null) {
+            configs = null;
+        } else if (configs != null) {
+            inner.configure(configs, isKey);
+        }
+    }
+
+    @Override
+    public void configure(final Map<String, ?> configs,
+                          final boolean isKey) {
+        if (inner != null) {
+            inner.configure(configs, isKey);
+        } else {
+            this.configs = configs;
+            this.isKey = isKey;
+        }
     }
 
     /**
