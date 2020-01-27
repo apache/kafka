@@ -58,8 +58,6 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 
-import static org.apache.kafka.common.config.SslConfigs.DEFAULT_SSL_PROTOCOL;
-import static org.apache.kafka.common.config.SslConfigs.SSL_PROTOCOL_CONFIG;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
@@ -98,7 +96,7 @@ public class SslTransportLayerTest {
         this.tlsProtocol = tlsProtocol;
 
         sslConfigOverrides = new HashMap<>();
-        sslConfigOverrides.put(SSL_PROTOCOL_CONFIG, tlsProtocol);
+        sslConfigOverrides.put(SslConfigs.SSL_PROTOCOL_CONFIG, tlsProtocol);
         sslConfigOverrides.put(SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG, Collections.singletonList(tlsProtocol));
     }
 
@@ -563,8 +561,8 @@ public class SslTransportLayerTest {
         sslServerConfigs = serverCertStores.getTrustingConfig(clientCertStores);
         sslClientConfigs = clientCertStores.getTrustingConfig(serverCertStores);
 
-        assertEquals(DEFAULT_SSL_PROTOCOL, sslServerConfigs.get(SSL_PROTOCOL_CONFIG));
-        assertEquals(DEFAULT_SSL_PROTOCOL, sslClientConfigs.get(SSL_PROTOCOL_CONFIG));
+        assertEquals(SslConfigs.DEFAULT_SSL_PROTOCOL, sslServerConfigs.get(SslConfigs.SSL_PROTOCOL_CONFIG));
+        assertEquals(SslConfigs.DEFAULT_SSL_PROTOCOL, sslClientConfigs.get(SslConfigs.SSL_PROTOCOL_CONFIG));
 
         channelBuilder = new SslChannelBuilder(Mode.CLIENT, null, false, logContext);
         channelBuilder.configure(sslServerConfigs);
