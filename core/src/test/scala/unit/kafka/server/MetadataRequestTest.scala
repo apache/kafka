@@ -282,6 +282,7 @@ class MetadataRequestTest extends BaseRequestTest {
       !response.brokers.asScala.exists(_.id == downNode.dataPlaneRequestProcessor.brokerId)
     }, "Replica was not found down", 5000)
 
+
     // Validate version 0 still filters unavailable replicas and contains error
     val v0MetadataResponse = sendMetadataRequest(new MetadataRequest(requestData(List(replicaDownTopic), true), 0.toShort))
     val v0BrokerIds = v0MetadataResponse.brokers().asScala.map(_.id).toSeq
@@ -292,8 +293,8 @@ class MetadataRequestTest extends BaseRequestTest {
     assertTrue("PartitionMetadata should have an error", v0PartitionMetadata.error == Errors.REPLICA_NOT_AVAILABLE)
     assertTrue(s"Response should have ${replicaCount - 1} replicas", v0PartitionMetadata.replicaIds.size == replicaCount - 1)
 
-    // Validate latest version returns unavailable replicas with no error
-    val v1MetadataResponse = sendMetadataRequest(new MetadataRequest.Builder(List(replicaDownTopic).asJava, true).build())
+    // Validate version 1 returns unavailable replicas with no error
+    val v1MetadataResponse = sendMetadataRequest(new MetadataRequest.Builder(List(replicaDownTopic).asJava, true).build(1))
     val v1BrokerIds = v1MetadataResponse.brokers().asScala.map(_.id).toSeq
     assertTrue("Response should have no errors", v1MetadataResponse.errors.isEmpty)
     assertFalse(s"The downed broker should not be in the brokers list", v1BrokerIds.contains(downNode))

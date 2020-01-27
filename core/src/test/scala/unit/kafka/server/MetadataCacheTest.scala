@@ -134,12 +134,6 @@ class MetadataCacheTest {
           assertEquals(Optional.of(partitionState.leaderEpoch), partitionMetadata.leaderEpoch)
           assertEquals(partitionState.isr, partitionMetadata.inSyncReplicaIds)
           assertEquals(partitionState.replicas, partitionMetadata.replicaIds)
-
-            // TODO: Figure out what to do with these checks which no longer make sense
-//          val endpoint = endpoints(partitionMetadata.leaderId).find(_.listener == listenerName.value).get
-//          val leader = partitionMetadata.leader
-//          assertEquals(endpoint.host, leader.host)
-//          assertEquals(endpoint.port, leader.port)
         }
       }
 

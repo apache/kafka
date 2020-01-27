@@ -1292,9 +1292,10 @@ class KafkaApis(val requestChannel: RequestChannel,
             .find(_.partition == partition)
             .flatMap(metadata => metadataCache.getAliveBroker(metadata.leaderId))
             .flatMap(_.getNode(request.context.listenerName))
+            .filterNot(_.isEmpty)
 
           coordinatorEndpoint match {
-            case Some(endpoint) if !endpoint.isEmpty =>
+            case Some(endpoint) =>
               createFindCoordinatorResponse(Errors.NONE, endpoint)
             case _ =>
               createFindCoordinatorResponse(Errors.COORDINATOR_NOT_AVAILABLE, Node.noNode)

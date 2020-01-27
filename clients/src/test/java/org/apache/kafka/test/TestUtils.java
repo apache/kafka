@@ -159,10 +159,10 @@ public class TestUtils {
             for (int i = 0; i < numPartitions; i++) {
                 TopicPartition tp = new TopicPartition(topic, i);
                 Node leader = nodes.get(i % nodes.size());
-                List<Integer> replicas = Collections.singletonList(leader.id());
+                List<Integer> replicaIds = Collections.singletonList(leader.id());
                 partitionMetadata.add(partitionSupplier.supply(
                         Errors.NONE, tp, leader.id(), Optional.ofNullable(epochSupplier.apply(tp)),
-                        replicas, replicas, replicas));
+                        replicaIds, replicaIds, replicaIds));
             }
 
             topicMetadata.add(new MetadataResponse.TopicMetadata(Errors.NONE, topic,
