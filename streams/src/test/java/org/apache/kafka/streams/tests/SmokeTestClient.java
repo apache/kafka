@@ -20,6 +20,7 @@ import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
@@ -76,7 +77,7 @@ public class SmokeTestClient extends SmokeTestUtil {
             e.printStackTrace();
         });
 
-        Runtime.getRuntime().addShutdownHook(new Thread(this::close));
+        Exit.addShutdownHook("streams-shutdown-hook", () -> close());
 
         thread = new Thread(() -> streams.start());
         thread.start();

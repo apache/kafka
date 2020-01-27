@@ -26,7 +26,7 @@ import kafka.integration.KafkaServerTestHarness
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
 import kafka.utils.TestUtils.consumeRecords
-import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer, OffsetAndMetadata}
+import org.apache.kafka.clients.consumer.{ConsumerConfig, ConsumerGroupMetadata, KafkaConsumer, OffsetAndMetadata}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.apache.kafka.common.errors.{ProducerFencedException, TimeoutException}
@@ -227,7 +227,20 @@ class TransactionsTest extends KafkaServerTestHarness {
   }
 
   @Test
-  def testSendOffsets() = {
+  def testSendOffsetsWithGroupId() = {
+    sendOffset((producer, groupId, consumer) =>
+      producer.sendOffsetsToTransaction(TestUtils.consumerPositions(consumer).asJava, groupId))
+  }
+
+  @Test
+  def testSendOffsetsWithGroupMetadata() = {
+    sendOffset((producer, _, consumer) =>
+      producer.sendOffsetsToTransaction(TestUtils.consumerPositions(consumer).asJava, consumer.groupMetadata()))
+  }
+
+  private def sendOffset(commit: (KafkaProducer[Array[Byte], Array[Byte]],
+    String, KafkaConsumer[Array[Byte], Array[Byte]]) => Unit) = {
+
     // The basic plan for the test is as follows:
     //  1. Seed topic1 with 1000 unique, numbered, messages.
     //  2. Run a consume/process/produce loop to transactionally copy messages from topic1 to topic2 and commit
@@ -242,7 +255,7 @@ class TransactionsTest extends KafkaServerTestHarness {
 
     TestUtils.seedTopicWithNumberedRecords(topic1, numSeedMessages, servers)
 
-    val producer = transactionalProducers(0)
+    val producer = transactionalProducers.head
 
     val consumer = createReadCommittedConsumer(consumerGroupId, maxPollRecords = numSeedMessages / 4)
     consumer.subscribe(List(topic1).asJava)
@@ -263,7 +276,7 @@ class TransactionsTest extends KafkaServerTestHarness {
           producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic2, key, value, willBeCommitted = shouldCommit))
         }
 
-        producer.sendOffsetsToTransaction(TestUtils.consumerPositions(consumer).asJava, consumerGroupId)
+        commit(producer, consumerGroupId, consumer)
         if (shouldCommit) {
           producer.commitTransaction()
           recordsProcessed += records.size
@@ -274,7 +287,7 @@ class TransactionsTest extends KafkaServerTestHarness {
           debug(s"aborted transaction Last committed record: ${new String(records.last.value(), "UTF-8")}. Num " +
             s"records written to $topic2: $recordsProcessed")
           TestUtils.resetToCommittedPositions(consumer)
-       }
+        }
       }
     } finally {
       consumer.close()

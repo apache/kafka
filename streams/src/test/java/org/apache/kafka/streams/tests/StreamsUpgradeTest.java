@@ -27,6 +27,7 @@ import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.utils.ByteBufferInputStream;
+import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KafkaClientSupplier;
 import org.apache.kafka.streams.KafkaStreams;
@@ -81,13 +82,13 @@ public class StreamsUpgradeTest {
         final KafkaStreams streams = buildStreams(streamsProperties);
         streams.start();
 
-        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+        Exit.addShutdownHook("streams-shutdown-hook", () -> {
             System.out.println("closing Kafka Streams instance");
             System.out.flush();
             streams.close();
             System.out.println("UPGRADE-TEST-CLIENT-CLOSED");
             System.out.flush();
-        }));
+        });
     }
 
     public static KafkaStreams buildStreams(final Properties streamsProperties) {
