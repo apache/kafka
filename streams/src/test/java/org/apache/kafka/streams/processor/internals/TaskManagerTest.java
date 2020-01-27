@@ -48,7 +48,6 @@ import java.util.LinkedList;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
-import java.util.regex.Pattern;
 
 import static java.util.Arrays.asList;
 import static java.util.Collections.emptyList;
@@ -96,7 +95,7 @@ public class TaskManagerTest {
     private StateDirectory stateDirectory;
     @Mock(type = MockType.NICE)
     private ChangelogReader changeLogReader;
-    @Mock(type = MockType.NICE)
+    @Mock(type = MockType.STRICT)
     private Consumer<byte[], byte[]> consumer;
     @Mock(type = MockType.STRICT)
     private StreamThread.AbstractTaskCreator<Task> activeTaskCreator;
@@ -124,42 +123,23 @@ public class TaskManagerTest {
         taskManager.setConsumer(consumer);
     }
 
-    @Ignore
     @Test
-    public void shouldUpdateSubscriptionFromAssignmentOfNewTopic2() {
-        final Map<TaskId, Set<TopicPartition>> assignment = mkMap(mkEntry(taskId01, mkSet(t1p1, new TopicPartition("topic2", 1))));
+    public void shouldIdempotentlyUpdateSubscriptionFromActiveAssignment() {
+        final TopicPartition newTopicPartition = new TopicPartition("topic2", 1);
+        final Map<TaskId, Set<TopicPartition>> assignment = mkMap(mkEntry(taskId01, mkSet(t1p1, newTopicPartition)));
 
         expect(activeTaskCreator.builder()).andReturn(topologyBuilder).anyTimes();
         expect(activeTaskCreator.createTasks(anyObject(), eq(assignment))).andReturn(emptyList()).anyTimes();
-        expect(standbyTaskCreator.createTasks(anyObject(), anyObject())).andReturn(emptyList()).anyTimes();
 
-        topologyBuilder.addSubscribedTopicsFromAssignment(anyObject(), anyString());
-        expectLastCall();
-
-        expectLastCall().once();
-
-        EasyMock.replay(activeTaskCreator,
-                        standbyTaskCreator,
-                        topologyBuilder,
-                        subscriptionUpdates);
-    }
-
-    @Ignore
-    @Test
-    public void shouldNotUpdateSubscriptionFromAssignmentOfExistingTopic1() {
-        final Map<TaskId, Set<TopicPartition>> assignment = mkMap(mkEntry(taskId01, mkSet(t1p1)));
-
-        expect(activeTaskCreator.builder()).andReturn(topologyBuilder).anyTimes();
-        expect(activeTaskCreator.createTasks(anyObject(), eq(assignment))).andReturn(emptyList()).anyTimes();
-        expect(standbyTaskCreator.createTasks(anyObject(), anyObject())).andReturn(emptyList()).anyTimes();
-
-        topologyBuilder.addSubscribedTopicsFromAssignment(anyObject(), anyString());
+        topologyBuilder.addSubscribedTopicsFromAssignment(eq(asList(t1p1, newTopicPartition)), anyString());
         expectLastCall();
 
         EasyMock.replay(activeTaskCreator,
-                        standbyTaskCreator,
-                        topologyBuilder,
-                        subscriptionUpdates);
+                        topologyBuilder);
+
+        taskManager.handleAssignment(assignment, emptyMap());
+
+        verify(activeTaskCreator, topologyBuilder);
     }
 
     @Test
@@ -232,6 +212,8 @@ public class TaskManagerTest {
     public void shouldAddNonResumedSuspendedTasks() {
         final Task task00 = new StateMachineTask(taskId00, taskId00Partitions, true);
 
+        expectRestoreToBeCompleted(consumer, changeLogReader);
+        // expect these calls twice (because we're going to checkForCompletedRestoration twice)
         expectRestoreToBeCompleted(consumer, changeLogReader);
         expect(activeTaskCreator.createTasks(anyObject(), eq(taskId00Assignment))).andReturn(singletonList(task00));
         EasyMock.replay(activeTaskCreator, consumer, changeLogReader);
@@ -715,64 +697,14 @@ public class TaskManagerTest {
         expect(activeTaskCreator.createTasks(anyObject(), eq(taskId00Assignment)))
             .andReturn(singletonList(task00)).anyTimes();
 
-        EasyMock.replay(activeTaskCreator, changeLogReader);
+        EasyMock.replay(activeTaskCreator, changeLogReader, consumer);
 
         taskManager.handleAssignment(taskId00Assignment, emptyMap());
         assertThat(taskManager.checkForCompletedRestoration(), is(false));
         assertThat(task00.state(), is(Task.State.RESTORING));
-    }
-
-    @Ignore
-    @Test
-    public void shouldNotResumeConsumptionUntilAllStoresRestored() {
-        throw new RuntimeException();
-//        expect(active.allTasksRunning()).andReturn(false);
-//
-//        final Consumer<byte[], byte[]> consumer = EasyMock.createStrictMock(Consumer.class);
-//        taskManager.setConsumer(consumer);
-//        EasyMock.replay(active, consumer, changeLogReader);
-//
-//        // shouldn't invoke `resume` method in consumer
-//        taskManager.updateNewAndRestoringTasks();
-//        verify(consumer);
-    }
-
-    @Ignore
-    @Test
-    public void shouldUpdateTasksFromPartitionAssignment() {
-        throw new RuntimeException();
-//        final Map<TaskId, Set<TopicPartition>> activeTasks = new HashMap<>();
-//        final Map<TaskId, Set<TopicPartition>> standbyTasks = new HashMap<>();
-//
-//        taskManager.setAssignmentMetadata(activeTasks, standbyTasks);
-//        assertTrue(taskManager.assignedActiveTasks().isEmpty());
-//
-//        // assign two active tasks with two partitions each
-//        activeTasks.put(task01, new HashSet<>(asList(t1p1, t2p1)));
-//        activeTasks.put(task02, new HashSet<>(asList(t1p2, t2p2)));
-//
-//        // assign one standby task with two partitions
-//        standbyTasks.put(task03, new HashSet<>(asList(t1p3, t2p3)));
-//        taskManager.setAssignmentMetadata(activeTasks, standbyTasks);
-//
-//        assertThat(taskManager.assignedActiveTasks(), equalTo(activeTasks));
-//        assertThat(taskManager.assignedStandbyTasks(), equalTo(standbyTasks));
-    }
-
-/*        private void mockAssignStandbyPartitions(final long offset) {
-        expect(active.hasRestoringTasks()).andReturn(true).once();
-        final StandbyTask task = EasyMock.createNiceMock(StandbyTask.class);
-        expect(active.allTasksRunning()).andReturn(true);
-        expect(standby.running()).andReturn(singletonList(task));
-        expect(task.checkpointedOffsets()).andReturn(Collections.singletonMap(t1p0, offset));
-        restoreConsumer.assign(taskId00Partitions);
-        expectLastCall();
-        EasyMock.replay(task);
-    }*/
-
-    private void mockTopologyBuilder() {
-        expect(activeTaskCreator.builder()).andReturn(topologyBuilder).anyTimes();
-        expect(topologyBuilder.sourceTopicPattern()).andReturn(Pattern.compile("abc")).anyTimes();
+        // this could be a bit mysterious; we're verifying _no_ interactions on the consumer,
+        // since the taskManager should _not_ resume the assignment while we're still in RESTORING
+        verify(consumer);
     }
 
     private static class StateMachineTask extends AbstractTask implements Task {
