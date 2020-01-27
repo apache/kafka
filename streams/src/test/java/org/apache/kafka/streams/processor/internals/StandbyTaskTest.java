@@ -233,32 +233,13 @@ public class StandbyTaskTest {
     }
 
     @Test
-    public void shouldNotCommitOnCloseDirty() {
+    public void shouldNotCommitAndThrowOnCloseDirty() {
         stateManager.close();
-        EasyMock.expectLastCall();
+        EasyMock.expectLastCall().andThrow(new ProcessorStateException("KABOOM!")).anyTimes();
         stateManager.flush();
         EasyMock.expectLastCall().andThrow(new AssertionError("Flush should not be called")).anyTimes();
         stateManager.checkpoint(EasyMock.anyObject());
         EasyMock.expectLastCall().andThrow(new AssertionError("Checkpoint should not be called")).anyTimes();
-        EasyMock.replay(stateManager);
-        final MetricName metricName = setupCloseTaskMetric();
-
-        task = createStandbyTask();
-        task.initializeIfNeeded();
-        task.closeDirty();
-
-        assertEquals(Task.State.CLOSED, task.state());
-
-        final double expectedCloseTaskMetric = 1.0;
-        verifyCloseTaskMetric(expectedCloseTaskMetric, streamsMetrics, metricName);
-
-        EasyMock.verify(stateManager);
-    }
-
-    @Test
-    public void shouldNotThrowOnCloseDirty() {
-        stateManager.close();
-        EasyMock.expectLastCall().andThrow(new ProcessorStateException("KABOOM!")).anyTimes();
         EasyMock.replay(stateManager);
         final MetricName metricName = setupCloseTaskMetric();
 
@@ -341,7 +322,7 @@ public class StandbyTaskTest {
     @Test
     public void shouldThrowOnCloseCleanCheckpointError() {
         stateManager.checkpoint(EasyMock.anyObject());
-        EasyMock.expectLastCall().andThrow(new RuntimeException("Checkpoint should not be called")).anyTimes();
+        EasyMock.expectLastCall().andThrow(new RuntimeException("KABOOM!")).anyTimes();
         EasyMock.replay(stateManager);
         final MetricName metricName = setupCloseTaskMetric();
 

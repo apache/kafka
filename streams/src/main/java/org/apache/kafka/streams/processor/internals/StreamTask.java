@@ -280,7 +280,9 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                 break;
 
             case SUSPENDED:
-                initializeMetadata();
+                // just re-initilaize the topology is sufficient
+                initializeTopology();
+
                 transitionTo(State.RESTORING);
                 log.debug("Resumed to restoring state");
 
@@ -562,7 +564,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             maybeMeasureLatency(() -> node.punctuate(timestamp, punctuator), time, punctuateLatencySensor);
         } catch (final StreamsException e) {
             throw e;
-        } catch (final KafkaException e) {
+        } catch (final RuntimeException e) {
             throw new StreamsException(format("%sException caught while punctuating processor '%s'", logPrefix, node.name()), e);
         } finally {
             processorContext.setCurrentNode(null);
