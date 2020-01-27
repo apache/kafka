@@ -25,7 +25,7 @@ import org.slf4j.Logger;
 
 import java.io.IOException;
 
-public final class TaskUtils {
+final class TaskUtils {
     private TaskUtils() {}
 
     /**
@@ -33,13 +33,13 @@ public final class TaskUtils {
      *
      * @throws StreamsException If the store's change log does not contain the partition
      */
-    static void registerStateStores(final ProcessorTopology topology,
-                                    final StateDirectory stateDirectory,
-                                    final TaskId id,
-                                    final String logPrefix,
+    static void registerStateStores(final TaskId id,
                                     final Logger log,
-                                    final InternalProcessorContext processorContext,
-                                    final ProcessorStateManager stateMgr) {
+                                    final String logPrefix,
+                                    final ProcessorTopology topology,
+                                    final ProcessorStateManager stateMgr,
+                                    final StateDirectory stateDirectory,
+                                    final InternalProcessorContext processorContext) {
         if (topology.stateStores().isEmpty()) {
             return;
         }

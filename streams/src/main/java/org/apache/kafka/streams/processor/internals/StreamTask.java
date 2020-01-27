@@ -21,8 +21,6 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.errors.AuthorizationException;
-import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
@@ -204,7 +202,8 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     public void initializeIfNeeded() {
         if (state() == State.CREATED) {
             initializeMetadata();
-            initializeStateStores();
+            TaskUtils.registerStateStores(id, log, logPrefix, topology, stateMgr, stateDirectory, processorContext);
+
             transitionTo(State.RESTORING);
 
             log.debug("Initialized");
@@ -519,7 +518,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             }
         } catch (final StreamsException e) {
             throw e;
-        } catch (final KafkaException e) {
+        } catch (final RuntimeException e) {
             final String stackTrace = getStacktraceString(e);
             throw new StreamsException(format("Exception caught in process. taskId=%s, " +
                                                   "processor=%s, topic=%s, partition=%d, offset=%d, stacktrace=%s",
@@ -537,7 +536,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         return true;
     }
 
-    private String getStacktraceString(final KafkaException e) {
+    private String getStacktraceString(final RuntimeException e) {
         String stacktrace = null;
         try (final StringWriter stringWriter = new StringWriter();
              final PrintWriter printWriter = new PrintWriter(stringWriter)) {
@@ -599,15 +598,12 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         return checkpointableOffsets;
     }
 
-    // package private for testing
-    void initializeMetadata() {
+    private void initializeMetadata() {
         try {
             final Map<TopicPartition, OffsetAndMetadata> offsetsAndMetadata = consumer.committed(partitions).entrySet().stream()
                 .filter(e -> e.getValue() != null)
                 .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
             initializeTaskTime(offsetsAndMetadata);
-        } catch (final WakeupException e) {
-            throw e;
         } catch (final KafkaException e) {
             throw new ProcessorStateException(format("task [%s] Failed to initialize offsets for %s", id, partitions), e);
         }
@@ -633,11 +629,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         for (final TopicPartition partition : nonCommitted) {
             log.debug("No committed offset for partition {}, therefore no timestamp can be found for this partition", partition);
         }
-    }
-
-    // package private for testing
-    void initializeStateStores() {
-        TaskUtils.registerStateStores(topology, stateDirectory, id, logPrefix, log, processorContext, stateMgr);
     }
 
     @Override

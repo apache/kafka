@@ -85,7 +85,7 @@ public class StandbyTask extends AbstractTask implements Task {
     @Override
     public void initializeIfNeeded() {
         if (state() == State.CREATED) {
-            initializeStateStores();
+            TaskUtils.registerStateStores(id, log, logPrefix, topology, stateMgr, stateDirectory, processorContext);
 
             // no topology needs initialized, we can transit to RUNNING
             // right after registered the stores
@@ -96,10 +96,6 @@ public class StandbyTask extends AbstractTask implements Task {
 
             log.debug("Initialized");
         }
-    }
-
-    private void initializeStateStores() {
-        TaskUtils.registerStateStores(topology, stateDirectory, id, logPrefix, log, processorContext, stateMgr);
     }
 
     @Override
