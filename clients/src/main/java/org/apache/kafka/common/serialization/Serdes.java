@@ -132,7 +132,7 @@ public class Serdes {
             super(new ListSerializer<>(), new ListDeserializer<>());
         }
 
-        public <L extends List> ListSerde(Class<L> listClass, Serde<Inner> serde) {
+        public <L extends List<Inner>> ListSerde(Class<L> listClass, Serde<Inner> serde) {
             super(new ListSerializer<>(serde.serializer()), new ListDeserializer<>(listClass, serde.deserializer()));
         }
     }
@@ -281,8 +281,9 @@ public class Serdes {
     /*
      * A serde for {@code List} type
      */
-    public static <L extends List, Inner> Serde<List<Inner>>
+    public static <L extends List<Inner>, Inner> Serde<List<Inner>>
         ListSerde(Class<L> listClass, Serde<Inner> innerSerde) {
+
         return new ListSerde<>(listClass, innerSerde);
     }
 

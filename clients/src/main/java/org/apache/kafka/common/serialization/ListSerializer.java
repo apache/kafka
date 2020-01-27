@@ -17,6 +17,7 @@
 package org.apache.kafka.common.serialization;
 
 import org.apache.kafka.clients.CommonClientConfigs;
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.utils.Utils;
 
@@ -32,7 +33,7 @@ public class ListSerializer<Inner> implements Serializer<List<Inner>> {
     private Serializer<Inner> inner;
     private boolean isFixedLength;
 
-    static private List<Class<? extends Serializer>> fixedLengthSerializers = Arrays.asList(
+    static private List<Class<? extends Serializer<?>>> fixedLengthSerializers = Arrays.asList(
         ShortSerializer.class,
         IntegerSerializer.class,
         FloatSerializer.class,
@@ -44,26 +45,29 @@ public class ListSerializer<Inner> implements Serializer<List<Inner>> {
 
     public ListSerializer(Serializer<Inner> serializer) {
         this.inner = serializer;
-        this.isFixedLength = fixedLengthSerializers.contains(serializer.getClass());
+        this.isFixedLength = serializer != null && fixedLengthSerializers.contains(serializer.getClass());
     }
 
-    @SuppressWarnings(value = "unchecked")
+    @SuppressWarnings("unchecked")
     @Override
     public void configure(Map<String, ?> configs, boolean isKey) {
         if (inner == null) {
-            final String innerSerdePropertyName = isKey ? CommonClientConfigs.DEFAULT_LIST_KEY_SERDE_INNER_CLASS : CommonClientConfigs.DEFAULT_LIST_VALUE_SERDE_INNER_CLASS;
-            final Object innerSerde = configs.get(innerSerdePropertyName);
+            final String innerSerializerPropertyName = isKey ? CommonClientConfigs.DEFAULT_LIST_KEY_SERDE_INNER_CLASS : CommonClientConfigs.DEFAULT_LIST_VALUE_SERDE_INNER_CLASS;
+            final Object innerSerializerClassOrName = configs.get(innerSerializerPropertyName);
+            if (innerSerializerClassOrName == null) {
+                throw new ConfigException("Not able to determine the serializer class because it was neither passed via the constructor nor set in the config");
+            }
             try {
-                if (innerSerde instanceof String) {
-                    inner = Utils.newInstance((String) innerSerde, Serde.class).serializer();
-                } else if (innerSerde instanceof Class) {
-                    inner = ((Serde<Inner>) Utils.newInstance((Class) innerSerde)).serializer();
+                if (innerSerializerClassOrName instanceof String) {
+                    inner = Utils.newInstance((String) innerSerializerClassOrName, Serializer.class);
+                } else if (innerSerializerClassOrName instanceof Class) {
+                    inner = Utils.newInstance((Class<Serializer<Inner>>) innerSerializerClassOrName);
                 } else {
-                    throw new ClassNotFoundException();
+                    throw new KafkaException("Could not create a serializer class instance using \"" + innerSerializerPropertyName + "\" property.");
                 }
                 inner.configure(configs, isKey);
             } catch (final ClassNotFoundException e) {
-                throw new ConfigException(innerSerdePropertyName, innerSerde, "Serde class " + innerSerde + " could not be found.");
+                throw new ConfigException(innerSerializerPropertyName, innerSerializerClassOrName, "Serializer class " + innerSerializerClassOrName + " could not be found.");
             }
         }
     }
@@ -86,13 +90,15 @@ public class ListSerializer<Inner> implements Serializer<List<Inner>> {
             }
             return baos.toByteArray();
         } catch (IOException e) {
-            throw new RuntimeException("Failed to serialize List", e);
+            throw new KafkaException("Failed to serialize List", e);
         }
     }
 
     @Override
     public void close() {
-        inner.close();
+        if (inner != null) {
+            inner.close();
+        }
     }
 
 }

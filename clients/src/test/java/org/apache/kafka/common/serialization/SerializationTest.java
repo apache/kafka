@@ -118,6 +118,7 @@ public class SerializationTest {
         }
     }
 
+    @SuppressWarnings("unchecked")
     @Test
     public void listSerdeShouldReturnEmptyCollection() {
         List<Integer> testData = Arrays.asList();
@@ -126,6 +127,7 @@ public class SerializationTest {
                 listSerde.deserializer().deserialize(topic, listSerde.serializer().serialize(topic, testData)));
     }
 
+    @SuppressWarnings("unchecked")
     @Test
     public void listSerdeShouldReturnNull() {
         List<Integer> testData = null;
@@ -134,6 +136,7 @@ public class SerializationTest {
                 listSerde.deserializer().deserialize(topic, listSerde.serializer().serialize(topic, testData)));
     }
 
+    @SuppressWarnings("unchecked")
     @Test
     public void listSerdeShouldRoundtripShortPrimitiveInput() {
         List<Short> testData = Arrays.asList((short) 1, (short) 2, (short) 3);
@@ -143,6 +146,7 @@ public class SerializationTest {
                 listSerde.deserializer().deserialize(topic, listSerde.serializer().serialize(topic, testData)));
     }
 
+    @SuppressWarnings("unchecked")
     @Test
     public void listSerdeSerializerShouldReturnByteArrayOfFixedSizeForShortPrimitiveInput() {
         List<Short> testData = Arrays.asList((short) 1, (short) 2, (short) 3);
@@ -151,6 +155,7 @@ public class SerializationTest {
                 listSerde.serializer().serialize(topic, testData).length);
     }
 
+    @SuppressWarnings("unchecked")
     @Test
     public void listSerdeShouldRoundtripIntPrimitiveInput() {
         List<Integer> testData = Arrays.asList(1, 2, 3);
@@ -160,6 +165,7 @@ public class SerializationTest {
                 listSerde.deserializer().deserialize(topic, listSerde.serializer().serialize(topic, testData)));
     }
 
+    @SuppressWarnings("unchecked")
     @Test
     public void listSerdeSerializerShouldReturnByteArrayOfFixedSizeForIntPrimitiveInput() {
         List<Integer> testData = Arrays.asList(1, 2, 3);
@@ -168,6 +174,7 @@ public class SerializationTest {
                 listSerde.serializer().serialize(topic, testData).length);
     }
 
+    @SuppressWarnings("unchecked")
     @Test
     public void listSerdeShouldRoundtripFloatPrimitiveInput() {
         List<Float> testData = Arrays.asList((float) 1, (float) 2, (float) 3);
@@ -177,6 +184,7 @@ public class SerializationTest {
                 listSerde.deserializer().deserialize(topic, listSerde.serializer().serialize(topic, testData)));
     }
 
+    @SuppressWarnings("unchecked")
     @Test
     public void listSerdeSerializerShouldReturnByteArrayOfFixedSizeForFloatPrimitiveInput() {
         List<Float> testData = Arrays.asList((float) 1, (float) 2, (float) 3);
@@ -185,6 +193,7 @@ public class SerializationTest {
                 listSerde.serializer().serialize(topic, testData).length);
     }
 
+    @SuppressWarnings("unchecked")
     @Test
     public void listSerdeShouldRoundtripLongPrimitiveInput() {
         List<Long> testData = Arrays.asList((long) 1, (long) 2, (long) 3);
@@ -194,6 +203,7 @@ public class SerializationTest {
                 listSerde.deserializer().deserialize(topic, listSerde.serializer().serialize(topic, testData)));
     }
 
+    @SuppressWarnings("unchecked")
     @Test
     public void listSerdeSerializerShouldReturnByteArrayOfFixedSizeForLongPrimitiveInput() {
         List<Long> testData = Arrays.asList((long) 1, (long) 2, (long) 3);
@@ -202,6 +212,7 @@ public class SerializationTest {
                 listSerde.serializer().serialize(topic, testData).length);
     }
 
+    @SuppressWarnings("unchecked")
     @Test
     public void listSerdeShouldRoundtripDoublePrimitiveInput() {
         List<Double> testData = Arrays.asList((double) 1, (double) 2, (double) 3);
@@ -211,6 +222,7 @@ public class SerializationTest {
                 listSerde.deserializer().deserialize(topic, listSerde.serializer().serialize(topic, testData)));
     }
 
+    @SuppressWarnings("unchecked")
     @Test
     public void listSerdeSerializerShouldReturnByteArrayOfFixedSizeForDoublePrimitiveInput() {
         List<Double> testData = Arrays.asList((double) 1, (double) 2, (double) 3);
@@ -219,6 +231,7 @@ public class SerializationTest {
                 listSerde.serializer().serialize(topic, testData).length);
     }
 
+    @SuppressWarnings("unchecked")
     @Test
     public void listSerdeShouldRoundtripUUIDInput() {
         List<UUID> testData = Arrays.asList(UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID());
@@ -228,6 +241,7 @@ public class SerializationTest {
                 listSerde.deserializer().deserialize(topic, listSerde.serializer().serialize(topic, testData)));
     }
 
+    @SuppressWarnings("unchecked")
     @Test
     public void listSerdeSerializerShouldReturnByteArrayOfFixedSizeForUUIDInput() {
         List<UUID> testData = Arrays.asList(UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID());
@@ -236,8 +250,9 @@ public class SerializationTest {
                 listSerde.serializer().serialize(topic, testData).length);
     }
 
+    @SuppressWarnings("unchecked")
     @Test
-    public void listSerdeShouldRountripNonPrimitiveInput() {
+    public void listSerdeShouldRoundtripNonPrimitiveInput() {
         List<String> testData = Arrays.asList("A", "B", "C");
         Serde<List<String>> listSerde = Serdes.ListSerde(ArrayList.class, Serdes.String());
         assertEquals("Should get the original collection after serialization and deserialization on an empty list", testData,
@@ -245,6 +260,7 @@ public class SerializationTest {
     }
 
 
+    @SuppressWarnings("unchecked")
     @Test
     public void listSerdeShouldReturnLinkedList() {
         List<Integer> testData = new LinkedList<>();
@@ -253,6 +269,7 @@ public class SerializationTest {
                 listSerde.deserializer().deserialize(topic, listSerde.serializer().serialize(topic, testData)) instanceof LinkedList);
     }
 
+    @SuppressWarnings("unchecked")
     @Test
     public void listSerdeShouldReturnStack() {
         List<Integer> testData = new Stack<>();

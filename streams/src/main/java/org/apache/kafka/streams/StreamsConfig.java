@@ -418,15 +418,6 @@ public class StreamsConfig extends AbstractConfig {
             + "Note when windowed serde class is used, one needs to set the inner serde class that implements the <code>org.apache.kafka.common.serialization.Serde</code> interface via '"
             + DEFAULT_WINDOWED_KEY_SERDE_INNER_CLASS + "' or '" + DEFAULT_WINDOWED_VALUE_SERDE_INNER_CLASS + "' as well";
 
-
-    public static final String DEFAULT_LIST_KEY_SERDE_INNER_CLASS = CommonClientConfigs.DEFAULT_LIST_KEY_SERDE_INNER_CLASS;
-
-    public static final String DEFAULT_LIST_VALUE_SERDE_INNER_CLASS = CommonClientConfigs.DEFAULT_LIST_VALUE_SERDE_INNER_CLASS;
-
-    public static final String DEFAULT_LIST_KEY_SERDE_TYPE_CLASS = CommonClientConfigs.DEFAULT_LIST_KEY_SERDE_TYPE_CLASS;
-
-    public static final String DEFAULT_LIST_VALUE_SERDE_TYPE_CLASS = CommonClientConfigs.DEFAULT_LIST_VALUE_SERDE_TYPE_CLASS;
-
     /** {@code default.timestamp.extractor} */
     @SuppressWarnings("WeakerAccess")
     public static final String DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG = "default.timestamp.extractor";

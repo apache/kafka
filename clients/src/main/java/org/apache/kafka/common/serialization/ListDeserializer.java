@@ -17,6 +17,8 @@
 package org.apache.kafka.common.serialization;
 
 import org.apache.kafka.clients.CommonClientConfigs;
+import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.utils.Utils;
 
@@ -24,6 +26,7 @@ import java.io.ByteArrayInputStream;
 import java.io.DataInputStream;
 import java.io.IOException;
 import java.lang.reflect.Constructor;
+import java.lang.reflect.InvocationTargetException;
 import java.util.List;
 import java.util.Map;
 
@@ -36,7 +39,7 @@ public class ListDeserializer<Inner> implements Deserializer<List<Inner>> {
     private Class<?> listClass;
     private Integer primitiveSize;
 
-    static private Map<Class<? extends Deserializer>, Integer> fixedLengthDeserializers = mkMap(
+    static private Map<Class<? extends Deserializer<?>>, Integer> fixedLengthDeserializers = mkMap(
         mkEntry(ShortDeserializer.class, 2),
         mkEntry(IntegerDeserializer.class, 4),
         mkEntry(FloatDeserializer.class, 4),
@@ -47,26 +50,33 @@ public class ListDeserializer<Inner> implements Deserializer<List<Inner>> {
 
     public ListDeserializer() {}
 
-    public <L extends List> ListDeserializer(Class<L> listClass, Deserializer<Inner> innerDeserializer) {
+    public <L extends List<Inner>> ListDeserializer(Class<L> listClass, Deserializer<Inner> innerDeserializer) {
         this.listClass = listClass;
         this.inner = innerDeserializer;
-        this.primitiveSize = fixedLengthDeserializers.get(innerDeserializer.getClass());
+        if (innerDeserializer != null) {
+            this.primitiveSize = fixedLengthDeserializers.get(innerDeserializer.getClass());
+        }
     }
 
-    @SuppressWarnings(value = "unchecked")
+    @SuppressWarnings("unchecked")
     @Override
     public void configure(Map<String, ?> configs, boolean isKey) {
-        if (inner == null) {
+        if (listClass == null) {
             String listTypePropertyName = isKey ? CommonClientConfigs.DEFAULT_LIST_KEY_SERDE_TYPE_CLASS : CommonClientConfigs.DEFAULT_LIST_VALUE_SERDE_TYPE_CLASS;
-            String innerSerdePropertyName = isKey ? CommonClientConfigs.DEFAULT_LIST_KEY_SERDE_INNER_CLASS : CommonClientConfigs.DEFAULT_LIST_VALUE_SERDE_INNER_CLASS;
             listClass = (Class<List<Inner>>) configs.get(listTypePropertyName);
-            Class<Serde> innerSerde = (Class<Serde>) configs.get(innerSerdePropertyName);
-            inner = Utils.newInstance(innerSerde).deserializer();
+            if (listClass == null) {
+                throw new ConfigException("Not able to determine the list class because it was neither passed via the constructor nor set in the config");
+            }
+        }
+        if (inner == null) {
+            String innerDeserializerPropertyName = isKey ? CommonClientConfigs.DEFAULT_LIST_KEY_SERDE_INNER_CLASS : CommonClientConfigs.DEFAULT_LIST_VALUE_SERDE_INNER_CLASS;
+            Class<Deserializer<Inner>> innerDeserializerClass = (Class<Deserializer<Inner>>) configs.get(innerDeserializerPropertyName);
+            inner = Utils.newInstance(innerDeserializerClass);
             inner.configure(configs, isKey);
         }
     }
 
-    @SuppressWarnings(value = "unchecked")
+    @SuppressWarnings("unchecked")
     private List<Inner> getListInstance(int listSize) {
         try {
             Constructor<List<Inner>> listConstructor;
@@ -77,8 +87,9 @@ public class ListDeserializer<Inner> implements Deserializer<List<Inner>> {
                 listConstructor = (Constructor<List<Inner>>) listClass.getConstructor();
                 return listConstructor.newInstance();
             }
-        } catch (Exception e) {
-            throw new RuntimeException("Could not construct a list instance of \"" + listClass.getCanonicalName() + "\"", e);
+        } catch (InstantiationException | IllegalAccessException | NoSuchMethodException |
+                IllegalArgumentException | InvocationTargetException e) {
+            throw new KafkaException("Could not construct a list instance of \"" + listClass.getCanonicalName() + "\"", e);
         }
     }
 
@@ -99,13 +110,15 @@ public class ListDeserializer<Inner> implements Deserializer<List<Inner>> {
             }
             return deserializedList;
         } catch (IOException e) {
-            throw new RuntimeException("Unable to deserialize into a List", e);
+            throw new KafkaException("Unable to deserialize into a List", e);
         }
     }
 
     @Override
     public void close() {
-        inner.close();
+        if (inner != null) {
+            inner.close();
+        }
     }
 
 }
