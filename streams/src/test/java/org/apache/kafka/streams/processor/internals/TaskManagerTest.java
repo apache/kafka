@@ -107,8 +107,6 @@ public class TaskManagerTest {
 
     private TaskManager taskManager;
 
-    private Set<String> subscriptionUpdates = emptySet();
-
     @Rule
     public final TemporaryFolder testFolder = new TemporaryFolder();
 
