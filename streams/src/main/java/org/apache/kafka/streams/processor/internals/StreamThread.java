@@ -793,7 +793,6 @@ public class StreamThread extends Thread {
              */
             int processed = 0;
             long timeSinceLastPoll = 0L;
-
             do {
                 for (int i = 0; i < numIterations; i++) {
                     processed = taskManager.process(now);
@@ -801,14 +800,7 @@ public class StreamThread extends Thread {
                     if (processed > 0) {
                         final long processLatency = advanceNowAndComputeLatency();
                         processSensor.record(processLatency / (double) processed, now);
-
-                        // commit any tasks that have requested a commit
-                        final int committed = taskManager.maybeCommitActiveTasksPerUserRequested();
-
-                        if (committed > 0) {
-                            final long commitLatency = advanceNowAndComputeLatency();
-                            commitSensor.record(commitLatency / (double) committed, now);
-                        }
+                        maybeCommit();
                     } else {
                         // if there is no records to be processed, exit immediately
                         break;
@@ -817,7 +809,7 @@ public class StreamThread extends Thread {
 
                 timeSinceLastPoll = Math.max(now - lastPollMs, 0);
 
-                if (maybePunctuate() || maybeCommit()) {
+                if (maybePunctuate()) {
                     numIterations = numIterations > 1 ? numIterations / 2 : numIterations;
                 } else if (timeSinceLastPoll > maxPollTimeMs / 2) {
                     numIterations = numIterations > 1 ? numIterations / 2 : numIterations;
