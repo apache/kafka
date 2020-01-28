@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import org.apache.kafka.clients.consumer.MockConsumer;
-import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
@@ -30,6 +28,8 @@ import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.errors.LockException;
+import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.test.MockKeyValueStore;
@@ -58,6 +58,7 @@ import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertThrows;
+
 
 @RunWith(EasyMockRunner.class)
 public class StandbyTaskTest {
@@ -98,7 +99,6 @@ public class StandbyTaskTest {
         )));
     }
 
-    private final MockConsumer<byte[], byte[]> consumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST);
     private final MockRestoreConsumer<Integer, Integer> restoreStateConsumer = new MockRestoreConsumer<>(
         new IntegerSerializer(),
         new IntegerSerializer()
@@ -135,10 +135,21 @@ public class StandbyTaskTest {
     @After
     public void cleanup() throws IOException {
         if (task != null && !task.isClosed()) {
-            task.closeClean();
+            task.closeDirty();
             task = null;
         }
         Utils.delete(baseDir);
+    }
+
+    @Test
+    public void shouldThrowLockExceptionIfFailedToLockStateDirectory() throws IOException {
+        stateDirectory = EasyMock.createNiceMock(StateDirectory.class);
+        EasyMock.expect(stateDirectory.lock(taskId)).andReturn(false);
+        EasyMock.replay(stateDirectory);
+
+        task = createStandbyTask();
+
+        assertThrows(LockException.class, task::initializeIfNeeded);
     }
 
     @Test
@@ -150,12 +161,7 @@ public class StandbyTaskTest {
 
         EasyMock.replay(stateManager);
 
-        task = new StandbyTask(taskId,
-                               topology,
-                               config,
-                               streamsMetrics,
-                               stateManager,
-                               stateDirectory);
+        task = createStandbyTask();
 
         assertEquals(Task.State.CREATED, task.state());
 
@@ -173,14 +179,7 @@ public class StandbyTaskTest {
 
     @Test
     public void shouldThrowIfCommittingOnIllegalState() {
-        task = new StandbyTask(
-            taskId,
-            topology,
-            config,
-            streamsMetrics,
-            stateManager,
-            stateDirectory
-        );
+        task = createStandbyTask();
 
         assertThrows(IllegalStateException.class, task::commit);
     }
@@ -192,17 +191,8 @@ public class StandbyTaskTest {
         stateManager.checkpoint(EasyMock.eq(Collections.emptyMap()));
         EasyMock.replay(stateManager);
 
-        final TaskId taskId = new TaskId(0, 0);
-        task = new StandbyTask(
-            taskId,
-            topology,
-            config,
-            streamsMetrics,
-            stateManager,
-            stateDirectory
-        );
+        task = createStandbyTask();
         task.initializeIfNeeded();
-
         task.commit();
 
         EasyMock.verify(stateManager);
@@ -213,12 +203,7 @@ public class StandbyTaskTest {
         EasyMock.expect(stateManager.changelogOffsets()).andReturn(Collections.singletonMap(partition, 50L));
         EasyMock.replay(stateManager);
 
-        task = new StandbyTask(taskId,
-                               topology,
-                               config,
-                               streamsMetrics,
-                               stateManager,
-                               stateDirectory);
+        task = createStandbyTask();
 
         assertEquals(Collections.singletonMap(partition, 50L), task.changelogOffsets());
 
@@ -235,15 +220,8 @@ public class StandbyTaskTest {
         EasyMock.expectLastCall().andThrow(new AssertionError("Checkpoint should not be called")).anyTimes();
         EasyMock.replay(stateManager);
         final MetricName metricName = setupCloseTaskMetric();
-        final StandbyTask task = new StandbyTask(
-            taskId,
-            topology,
-            config,
-            streamsMetrics,
-            stateManager,
-            stateDirectory
-        );
 
+        task = createStandbyTask();
         task.closeClean();
 
         assertEquals(Task.State.CLOSED, task.state());
@@ -255,51 +233,18 @@ public class StandbyTaskTest {
     }
 
     @Test
-    public void shouldNotCommitOnCloseDirty() {
+    public void shouldNotCommitAndThrowOnCloseDirty() {
         stateManager.close();
-        EasyMock.expectLastCall();
+        EasyMock.expectLastCall().andThrow(new ProcessorStateException("KABOOM!")).anyTimes();
         stateManager.flush();
         EasyMock.expectLastCall().andThrow(new AssertionError("Flush should not be called")).anyTimes();
         stateManager.checkpoint(EasyMock.anyObject());
         EasyMock.expectLastCall().andThrow(new AssertionError("Checkpoint should not be called")).anyTimes();
         EasyMock.replay(stateManager);
         final MetricName metricName = setupCloseTaskMetric();
-        final StandbyTask task = new StandbyTask(
-            taskId,
-            topology,
-            config,
-            streamsMetrics,
-            stateManager,
-            stateDirectory
-        );
+
+        task = createStandbyTask();
         task.initializeIfNeeded();
-
-        task.closeDirty();
-
-        assertEquals(Task.State.CLOSED, task.state());
-
-        final double expectedCloseTaskMetric = 1.0;
-        verifyCloseTaskMetric(expectedCloseTaskMetric, streamsMetrics, metricName);
-
-        EasyMock.verify(stateManager);
-    }
-
-    @Test
-    public void shouldNotThrowOnCloseDirty() {
-        stateManager.close();
-        EasyMock.expectLastCall().andThrow(new RuntimeException("KABOOM!")).anyTimes();
-        EasyMock.replay(stateManager);
-        final MetricName metricName = setupCloseTaskMetric();
-        final StandbyTask task = new StandbyTask(
-            taskId,
-            topology,
-            config,
-            streamsMetrics,
-            stateManager,
-            stateDirectory
-        );
-        task.initializeIfNeeded();
-
         task.closeDirty();
 
         assertEquals(Task.State.CLOSED, task.state());
@@ -320,16 +265,9 @@ public class StandbyTaskTest {
         EasyMock.expectLastCall();
         EasyMock.replay(stateManager);
         final MetricName metricName = setupCloseTaskMetric();
-        final StandbyTask task = new StandbyTask(
-            taskId,
-            topology,
-            config,
-            streamsMetrics,
-            stateManager,
-            stateDirectory
-        );
-        task.initializeIfNeeded();
 
+        task = createStandbyTask();
+        task.initializeIfNeeded();
         task.closeClean();
 
         assertEquals(Task.State.CLOSED, task.state());
@@ -346,14 +284,8 @@ public class StandbyTaskTest {
         EasyMock.expectLastCall().andThrow(new RuntimeException("KABOOM!")).anyTimes();
         EasyMock.replay(stateManager);
         final MetricName metricName = setupCloseTaskMetric();
-        final StandbyTask task = new StandbyTask(
-            taskId,
-            topology,
-            config,
-            streamsMetrics,
-            stateManager,
-            stateDirectory
-        );
+
+        task = createStandbyTask();
         task.initializeIfNeeded();
 
         assertThrows(RuntimeException.class, task::closeClean);
@@ -364,6 +296,7 @@ public class StandbyTaskTest {
         verifyCloseTaskMetric(expectedCloseTaskMetric, streamsMetrics, metricName);
 
         EasyMock.verify(stateManager);
+        EasyMock.reset(stateManager);
     }
 
     @Test
@@ -372,40 +305,28 @@ public class StandbyTaskTest {
         EasyMock.expectLastCall().andThrow(new RuntimeException("KABOOM!")).anyTimes();
         EasyMock.replay(stateManager);
         final MetricName metricName = setupCloseTaskMetric();
-        final StandbyTask task = new StandbyTask(
-            taskId,
-            topology,
-            config,
-            streamsMetrics,
-            stateManager,
-            stateDirectory
-        );
+
+        task = createStandbyTask();
         task.initializeIfNeeded();
 
         assertThrows(RuntimeException.class, task::closeClean);
-
         assertEquals(Task.State.RUNNING, task.state());
 
         final double expectedCloseTaskMetric = 0.0;
         verifyCloseTaskMetric(expectedCloseTaskMetric, streamsMetrics, metricName);
 
         EasyMock.verify(stateManager);
+        EasyMock.reset(stateManager);
     }
 
     @Test
     public void shouldThrowOnCloseCleanCheckpointError() {
         stateManager.checkpoint(EasyMock.anyObject());
-        EasyMock.expectLastCall().andThrow(new RuntimeException("Checkpoint should not be called")).anyTimes();
+        EasyMock.expectLastCall().andThrow(new RuntimeException("KABOOM!")).anyTimes();
         EasyMock.replay(stateManager);
         final MetricName metricName = setupCloseTaskMetric();
-        final StandbyTask task = new StandbyTask(
-            taskId,
-            topology,
-            config,
-            streamsMetrics,
-            stateManager,
-            stateDirectory
-        );
+
+        task = createStandbyTask();
         task.initializeIfNeeded();
 
         assertThrows(RuntimeException.class, task::closeClean);
@@ -416,24 +337,22 @@ public class StandbyTaskTest {
         verifyCloseTaskMetric(expectedCloseTaskMetric, streamsMetrics, metricName);
 
         EasyMock.verify(stateManager);
+        EasyMock.reset(stateManager);
     }
 
     @Test
     public void shouldThrowIfClosingOnIllegalState() {
-        task = new StandbyTask(
-            taskId,
-            topology,
-            config,
-            streamsMetrics,
-            stateManager,
-            stateDirectory
-        );
+        task = createStandbyTask();
 
         task.closeClean();
 
         // close call are not idempotent since we are already in closed
         assertThrows(IllegalStateException.class, task::closeClean);
         assertThrows(IllegalStateException.class, task::closeDirty);
+    }
+
+    private StandbyTask createStandbyTask() {
+        return new StandbyTask(taskId, topology, config, streamsMetrics, stateManager, stateDirectory);
     }
 
     private MetricName setupCloseTaskMetric() {

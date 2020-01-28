@@ -213,7 +213,7 @@ public class TaskManager {
             final Set<TopicPartition> restored = changelogReader.completedChangelogs();
             for (final Task task : restoringTasks) {
                 if (restored.containsAll(task.changelogPartitions())) {
-                    task.completeInitializationAfterRestore();
+                    task.completeRestoration();
                 } else {
                     // we found a restoring task that isn't done restoring, which is evidence that
                     // not all tasks are running
@@ -235,14 +235,19 @@ public class TaskManager {
      */
     void handleRevocation(final Collection<TopicPartition> revokedPartitions) {
         final Set<TaskId> revokedTasks = new HashSet<>();
+        final Set<TopicPartition> remainingPartitions = new HashSet<>(revokedPartitions);
 
         for (final Task task : tasks.values()) {
-            for (final TopicPartition partition : revokedPartitions) {
-                if (task.inputPartitions().contains(partition)) {
-                    revokedTasks.add(task.id());
-                    break;
-                }
+            if (remainingPartitions.containsAll(task.inputPartitions())) {
+                revokedTasks.add(task.id());
+                remainingPartitions.removeAll(task.inputPartitions());
+                break;
             }
+        }
+
+        if (!remainingPartitions.isEmpty()) {
+            throw new IllegalStateException("Some revoked partitions that do not belong " +
+                "to any tasks remain: " + remainingPartitions);
         }
 
         for (final TaskId taskId : revokedTasks) {
@@ -377,12 +382,6 @@ public class TaskManager {
         // not bothering with an unmodifiable map, since the tasks themselves are mutable, but
         // if any outside code modifies the map or the tasks, it would be a severe transgression.
         return tasks;
-    }
-
-    // TODO K9113: this is used from StreamThread only for a hack to collect metrics from the record collectors inside of StreamTasks
-    // Instead, we should register and record the metrics properly inside of the record collector.
-    Map<TaskId, StreamTask> fixmeStreamTasks() {
-        return tasks.values().stream().filter(t -> t instanceof StreamTask).map(t -> (StreamTask) t).collect(Collectors.toMap(Task::id, t -> t));
     }
 
     Map<TaskId, Task> activeTaskMap() {
@@ -545,6 +544,12 @@ public class TaskManager {
                          .append('(').append(task.isActive() ? "active" : "standby").append(')');
         }
         return stringBuilder.toString();
+    }
+
+    // FIXME: this is used from StreamThread only for a hack to collect metrics from the record collectors inside of StreamTasks
+    // Instead, we should register and record the metrics properly inside of the record collector.
+    Map<TaskId, StreamTask> fixmeStreamTasks() {
+        return tasks.values().stream().filter(t -> t instanceof StreamTask).map(t -> (StreamTask) t).collect(Collectors.toMap(Task::id, t -> t));
     }
 
     // FIXME: inappropriately used from StreamsUpgradeTest

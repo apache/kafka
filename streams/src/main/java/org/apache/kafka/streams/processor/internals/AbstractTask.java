@@ -16,12 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import static org.apache.kafka.streams.processor.internals.Task.State.CLOSED;
-import static org.apache.kafka.streams.processor.internals.Task.State.CLOSING;
 import static org.apache.kafka.streams.processor.internals.Task.State.CREATED;
-import static org.apache.kafka.streams.processor.internals.Task.State.RESTORING;
-import static org.apache.kafka.streams.processor.internals.Task.State.RUNNING;
-import static org.apache.kafka.streams.processor.internals.Task.State.SUSPENDED;
 
 public abstract class AbstractTask implements Task {
     private Task.State state = CREATED;
@@ -33,14 +28,11 @@ public abstract class AbstractTask implements Task {
 
     final void transitionTo(final Task.State newState) {
         final State oldState = state();
-        if (oldState == CREATED && (newState == RESTORING || newState == CLOSING)) {
-        } else if (oldState == RESTORING && (newState == RUNNING || newState == SUSPENDED || newState == CLOSING)) {
-        } else if (oldState == RUNNING && (newState == SUSPENDED || newState == CLOSING)) {
-        } else if (oldState == SUSPENDED && (newState == RUNNING || newState == CLOSING)) {
-        } else if (oldState == CLOSING && (newState == CLOSING || newState == CLOSED)) {
+
+        if (oldState.isValidTransition(newState)) {
+            state = newState;
         } else {
             throw new IllegalStateException("Invalid transition from " + oldState + " to " + newState);
         }
-        state = newState;
     }
 }
