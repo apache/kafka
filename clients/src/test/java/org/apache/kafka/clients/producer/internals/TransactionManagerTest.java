@@ -1709,13 +1709,11 @@ public class TransactionManagerTest {
         assertFalse(responseFuture.isDone());
         prepareAddPartitionsToTxnResponse(Errors.NONE, tp0, epoch, pid);
         prepareProduceResponse(Errors.OUT_OF_ORDER_SEQUENCE_NUMBER, pid, epoch);
-        prepareEndTxnResponse(Errors.NONE, TransactionResult.ABORT, pid, epoch);
 
+        // Because this is a failure that triggers an epoch bump, the abort will trigger an InitProducerId call
         runUntil(transactionManager::hasAbortableError);
         TransactionalRequestResult abortResult = transactionManager.beginAbort();
-        sender.runOnce();  // try to abort
         prepareInitPidResponse(Errors.NONE, false, pid, (short) (epoch + 1));
-        sender.runOnce();
         runUntil(abortResult::isCompleted);
         assertTrue(abortResult.isSuccessful());
         assertTrue(transactionManager.isReady());  // make sure we are ready for a transaction now.
@@ -1753,6 +1751,35 @@ public class TransactionManagerTest {
         runUntil(abortResult::isCompleted);
         assertTrue(abortResult.isSuccessful());
         assertTrue(transactionManager.isReady());  // make sure we are ready for a transaction now.
+    }
+
+    @Test
+    public void testInitProducerIdRetriesDuringAbort() throws InterruptedException {
+        final long pid = 13131L;
+        final short epoch = 1;
+
+        doInitTransactions(pid, epoch);
+
+        transactionManager.beginTransaction();
+        transactionManager.failIfNotReadyForSend();
+        transactionManager.maybeAddPartitionToTransaction(tp0);
+
+        Future<RecordMetadata> responseFuture = appendToAccumulator(tp0);
+
+        assertFalse(responseFuture.isDone());
+        prepareAddPartitionsToTxnResponse(Errors.NONE, tp0, epoch, pid);
+        prepareProduceResponse(Errors.OUT_OF_ORDER_SEQUENCE_NUMBER, pid, epoch);
+
+        // Because this is a failure that triggers an epoch bump, the abort will trigger an InitProducerId call
+        runUntil(transactionManager::hasAbortableError);
+        TransactionalRequestResult abortResult = transactionManager.beginAbort();
+        prepareInitPidResponse(Errors.CONCURRENT_TRANSACTIONS, false, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH);
+        prepareInitPidResponse(Errors.CONCURRENT_TRANSACTIONS, false, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH);
+        prepareInitPidResponse(Errors.NONE, false, pid, (short) (epoch + 1));
+        runUntil(abortResult::isCompleted);
+        assertTrue(abortResult.isSuccessful());
+        assertTrue(transactionManager.isReady());  // make sure we are ready for a transaction now.
+        assertEquals((short) (epoch + 1), transactionManager.producerIdAndEpoch().epoch);
     }
 
     @Test
@@ -2773,8 +2800,6 @@ public class TransactionManagerTest {
 
         assertTrue(transactionManager.hasAbortableError());
         TransactionalRequestResult abortResult = transactionManager.beginAbort();
-        prepareEndTxnResponse(Errors.NONE, TransactionResult.ABORT, pid, initialEpoch);
-        sender.runOnce();  // handle the abort
 
         prepareInitPidResponse(Errors.NONE, false, pid, bumpedEpoch);
         sender.runOnce();  // Receive InitProducerId response
@@ -2829,8 +2854,6 @@ public class TransactionManagerTest {
 
         assertTrue(transactionManager.hasAbortableError());
         TransactionalRequestResult abortResult = transactionManager.beginAbort();
-        prepareEndTxnResponse(Errors.NONE, TransactionResult.ABORT, pid, initialEpoch);
-        sender.runOnce();  // handle the abort
 
         prepareInitPidResponse(Errors.NONE, false, pid, bumpedEpoch);
         sender.runOnce();  // Receive InitProducerId response
@@ -2898,9 +2921,7 @@ public class TransactionManagerTest {
         time.sleep(110);  // Sleep to make sure the node blackout period has passed
 
         prepareFindCoordinatorResponse(Errors.NONE, false, CoordinatorType.TRANSACTION, transactionalId);
-        prepareEndTxnResponse(Errors.NONE, TransactionResult.ABORT, pid, initialEpoch);
         sender.runOnce();  // Receive FindCoordinator request
-        sender.runOnce();  // Receive abort request
 
         prepareInitPidResponse(Errors.NONE, false, pid, bumpedEpoch);
         sender.runOnce();  // Receive InitProducerId response
@@ -2936,8 +2957,6 @@ public class TransactionManagerTest {
 
         assertTrue(transactionManager.hasAbortableError());
         TransactionalRequestResult abortResult = transactionManager.beginAbort();
-        prepareEndTxnResponse(Errors.NONE, TransactionResult.ABORT, producerId, initialEpoch);
-        sender.runOnce();  // handle the abort
 
         prepareInitPidResponse(Errors.NONE, false, producerId, bumpedEpoch);
         sender.runOnce();  // Receive InitProducerId response
@@ -2977,8 +2996,6 @@ public class TransactionManagerTest {
 
         assertTrue(transactionManager.hasAbortableError());
         TransactionalRequestResult abortResult = transactionManager.beginAbort();
-        prepareEndTxnResponse(Errors.NONE, TransactionResult.ABORT, producerId, initialEpoch);
-        sender.runOnce();  // handle the abort
 
         prepareInitPidResponse(Errors.NONE, false, producerId, bumpedEpoch);
         sender.runOnce();  // Receive InitProducerId response
@@ -3027,8 +3044,6 @@ public class TransactionManagerTest {
 
         assertTrue(transactionManager.hasAbortableError());
         TransactionalRequestResult abortResult = transactionManager.beginAbort();
-        prepareEndTxnResponse(Errors.NONE, TransactionResult.ABORT, producerId, initialEpoch);
-        sender.runOnce();  // handle the abort
 
         prepareInitPidResponse(Errors.NONE, false, producerId, bumpedEpoch);
         sender.runOnce();  // Receive InitProducerId response

@@ -291,12 +291,12 @@ public class TransactionManager {
     }
 
     synchronized TransactionalRequestResult initializeTransactions(ProducerIdAndEpoch currentProducerIdAndEpoch) {
+        boolean isEpochBump = currentProducerIdAndEpoch != ProducerIdAndEpoch.NONE;
         return handleCachedTransactionRequestResult(() -> {
-            boolean isEpochBump = currentProducerIdAndEpoch != ProducerIdAndEpoch.NONE;
-            // If this is an epoch bump, we will transition the state as part of handling the EndTxnRequest
-            if (!isEpochBump) {
+            // If this is an epoch bump, we stay in the ABORTING_TRANSACTION state until the re-initialization completes
+            // if (!isEpochBump) {
                 transitionTo(State.INITIALIZING);
-            }
+            // }
             setProducerIdAndEpoch(currentProducerIdAndEpoch);
             InitProducerIdRequestData requestData = new InitProducerIdRequestData()
                     .setTransactionalId(transactionalId)
@@ -339,19 +339,22 @@ public class TransactionManager {
     private TransactionalRequestResult beginCompletingTransaction(TransactionResult transactionResult) {
         if (!newPartitionsInTransaction.isEmpty())
             enqueueRequest(addPartitionsToTransactionHandler());
-        EndTxnRequest.Builder builder = new EndTxnRequest.Builder(
-            new EndTxnRequestData()
-                .setTransactionalId(transactionalId)
-                .setProducerId(producerIdAndEpoch.producerId)
-                .setProducerEpoch(producerIdAndEpoch.epoch)
-                .setCommitted(transactionResult.id));
-        EndTxnHandler handler = new EndTxnHandler(builder);
-        enqueueRequest(handler);
-        if (!shouldBumpEpoch()) {
+
+        // If we are bumping the epoch, call InitProducerId instead of EndTxn. This will automatically abort the
+        // transaction on the broker side and return a CONCURRENT_TRANSACTIONS, which will be retried until successful
+        if (shouldBumpEpoch()) {
+            return initializeTransactions(this.producerIdAndEpoch);
+        } else {
+            EndTxnRequest.Builder builder = new EndTxnRequest.Builder(
+                    new EndTxnRequestData()
+                            .setTransactionalId(transactionalId)
+                            .setProducerId(producerIdAndEpoch.producerId)
+                            .setProducerEpoch(producerIdAndEpoch.epoch)
+                            .setCommitted(transactionResult.id));
+            EndTxnHandler handler = new EndTxnHandler(builder);
+            enqueueRequest(handler);
             return handler.result;
         }
-
-        return initializeTransactions(this.producerIdAndEpoch);
     }
 
     public synchronized TransactionalRequestResult sendOffsetsToTransaction(final Map<TopicPartition, OffsetAndMetadata> offsets,
@@ -1043,16 +1046,7 @@ public class TransactionManager {
         enqueueRequest(new FindCoordinatorHandler(builder));
     }
 
-    private void completeTransaction() {
-        // Don't transition to READY if we are waiting for an InitProducerId request to complete
-        transitionTo(epochBumpRequired ? State.INITIALIZING : State.READY);
-        lastError = null;
-        epochBumpRequired = false;
-        transactionStarted = false;
-        newPartitionsInTransaction.clear();
-        pendingPartitionsInTransaction.clear();
-        partitionsInTransaction.clear();
-    }
+
 
     private TxnRequestHandler addPartitionsToTransactionHandler() {
         pendingPartitionsInTransaction.addAll(newPartitionsInTransaction);
@@ -1103,6 +1097,16 @@ public class TransactionManager {
     private boolean canBumpEpoch() {
         return !isTransactional() ||
                 apiVersions.get(transactionCoordinator.idString()).apiVersion(ApiKeys.INIT_PRODUCER_ID).maxVersion >= 3;
+    }
+
+    private void completeTransaction() {
+        transitionTo(State.READY);
+        lastError = null;
+        epochBumpRequired = false;
+        transactionStarted = false;
+        newPartitionsInTransaction.clear();
+        pendingPartitionsInTransaction.clear();
+        partitionsInTransaction.clear();
     }
 
     abstract class TxnRequestHandler implements RequestCompletionHandler {
@@ -1247,9 +1251,11 @@ public class TransactionManager {
                 setProducerIdAndEpoch(producerIdAndEpoch);
                 if (this.isEpochBump) {
                     resetSequenceNumbers();
+                    completeTransaction();
+                } else {
+                    transitionTo(State.READY);
+                    lastError = null;
                 }
-                transitionTo(State.READY);
-                lastError = null;
                 result.done();
             } else if (error == Errors.NOT_COORDINATOR || error == Errors.COORDINATOR_NOT_AVAILABLE) {
                 lookupCoordinator(FindCoordinatorRequest.CoordinatorType.TRANSACTION, transactionalId);
