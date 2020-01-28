@@ -552,37 +552,29 @@ public class SslTransportLayerTest {
     }
 
     /**
-     * Tests that connection sucess with the default TLS version.
+     * Tests that connection success with the default TLS version.
      */
     @Test
     public void testTLSDefaults() throws Exception {
-        final LogContext logContext = new LogContext();
-
         sslServerConfigs = serverCertStores.getTrustingConfig(clientCertStores);
         sslClientConfigs = clientCertStores.getTrustingConfig(serverCertStores);
 
         assertEquals(SslConfigs.DEFAULT_SSL_PROTOCOL, sslServerConfigs.get(SslConfigs.SSL_PROTOCOL_CONFIG));
         assertEquals(SslConfigs.DEFAULT_SSL_PROTOCOL, sslClientConfigs.get(SslConfigs.SSL_PROTOCOL_CONFIG));
 
-        channelBuilder = new SslChannelBuilder(Mode.CLIENT, null, false, logContext);
-        channelBuilder.configure(sslServerConfigs);
-        selector = new Selector(5000, new Metrics(), time, "MetricGroup", channelBuilder, logContext);
-
         server = createEchoServer(SecurityProtocol.SSL);
         createSelector(sslClientConfigs);
 
-        final String node = "0";
-
         InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
-        selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
+        selector.connect("0", addr, BUFFER_SIZE, BUFFER_SIZE);
 
-        NetworkTestUtils.checkClientConnection(selector, node, 10, 100);
+        NetworkTestUtils.checkClientConnection(selector, "0", 10, 100);
         server.verifyAuthenticationMetrics(1, 0);
 
-        checkAuthentiationFailed(node, "TLSv1.1");
+        checkAuthentiationFailed("1", "TLSv1.1");
         server.verifyAuthenticationMetrics(1, 1);
 
-        checkAuthentiationFailed(node, "TLSv1");
+        checkAuthentiationFailed("2", "TLSv1");
         server.verifyAuthenticationMetrics(1, 2);
     }
 
@@ -601,11 +593,10 @@ public class SslTransportLayerTest {
      */
     @Test
     public void testUnsupportedTLSVersion() throws Exception {
-        String node = "0";
         sslServerConfigs.put(SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG, Arrays.asList("TLSv1.2"));
         server = createEchoServer(SecurityProtocol.SSL);
 
-        checkAuthentiationFailed(node, "TLSv1.1");
+        checkAuthentiationFailed("0", "TLSv1.1");
         server.verifyAuthenticationMetrics(0, 1);
     }
 
