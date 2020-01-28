@@ -118,9 +118,11 @@ public class TaskManager {
     /**
      * @throws TaskMigratedException if the task producer got fenced (EOS only)
      * @throws StreamsException fatal error while creating / initializing the task
+     *
+     * public for upgrade testing only
      */
-    void handleAssignment(final Map<TaskId, Set<TopicPartition>> activeTasks,
-                          final Map<TaskId, Set<TopicPartition>> standbyTasks) {
+    public void handleAssignment(final Map<TaskId, Set<TopicPartition>> activeTasks,
+                                 final Map<TaskId, Set<TopicPartition>> standbyTasks) {
         log.info("Handle new assignment with:\n\tNew active tasks: {}\n\tNew standby tasks: {}" +
                 "\n\tExisting active tasks: {}\n\tExisting standby tasks: {}",
             activeTasks.keySet(), standbyTasks.keySet(), activeTaskIds(), standbyTaskIds());
@@ -548,14 +550,9 @@ public class TaskManager {
         return null;
     }
 
-    // FIXME: this is used from StreamThread only for a hack to collect metrics from the record collectors inside of StreamTasks
+    // TODO: this is used from StreamThread only for a hack to collect metrics from the record collectors inside of StreamTasks
     // Instead, we should register and record the metrics properly inside of the record collector.
     Map<TaskId, StreamTask> fixmeStreamTasks() {
         return tasks.values().stream().filter(t -> t instanceof StreamTask).map(t -> (StreamTask) t).collect(Collectors.toMap(Task::id, t -> t));
-    }
-
-    // FIXME: inappropriately used from StreamsUpgradeTest
-    public void fixmeUpdateSubscriptionsFromAssignment(final List<TopicPartition> partitions) {
-        builder.addSubscribedTopicsFromAssignment(partitions, logPrefix);
     }
 }

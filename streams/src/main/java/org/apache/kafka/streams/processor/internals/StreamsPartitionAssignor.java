@@ -1128,7 +1128,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         // version 1 field
         final Map<TaskId, Set<TopicPartition>> activeTasks;
         // version 2 fields
-        final Map<TopicPartition, PartitionInfo> topicToPartitionInfo = new HashMap<>();
+        final Map<TopicPartition, PartitionInfo> topicToPartitionInfo;
         final Map<HostInfo, Set<TopicPartition>> partitionsByHost;
         final Map<HostInfo, Set<TopicPartition>> standbyPartitionsByHost;
 
@@ -1139,6 +1139,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                 activeTasks = getActiveTasks(partitions, info);
                 partitionsByHost = Collections.emptyMap();
                 standbyPartitionsByHost = Collections.emptyMap();
+                topicToPartitionInfo = Collections.emptyMap();
                 break;
             case 2:
             case 3:
@@ -1147,47 +1148,17 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                 validateActiveTaskEncoding(partitions, info, logPrefix);
 
                 activeTasks = getActiveTasks(partitions, info);
-
-                // process partitions by host
-                for (final Set<TopicPartition> value : info.partitionsByHost().values()) {
-                    for (final TopicPartition topicPartition : value) {
-                        topicToPartitionInfo.put(
-                            topicPartition,
-                            new PartitionInfo(
-                                topicPartition.topic(),
-                                topicPartition.partition(),
-                                null,
-                                new Node[0],
-                                new Node[0]
-                            )
-                        );
-                    }
-                }
                 partitionsByHost = info.partitionsByHost();
                 standbyPartitionsByHost = Collections.emptyMap();
+                topicToPartitionInfo = getTopicPartitionInfo(partitionsByHost);
                 break;
             case 6:
                 validateActiveTaskEncoding(partitions, info, logPrefix);
 
                 activeTasks = getActiveTasks(partitions, info);
-
-                // process partitions by host
-                for (final Set<TopicPartition> value : info.partitionsByHost().values()) {
-                    for (final TopicPartition topicPartition : value) {
-                        topicToPartitionInfo.put(
-                            topicPartition,
-                            new PartitionInfo(
-                                topicPartition.topic(),
-                                topicPartition.partition(),
-                                null,
-                                new Node[0],
-                                new Node[0]
-                            )
-                        );
-                    }
-                }
                 partitionsByHost = info.partitionsByHost();
                 standbyPartitionsByHost = info.standbyPartitionByHost();
+                topicToPartitionInfo = getTopicPartitionInfo(partitionsByHost);
                 break;
             default:
                 throw new IllegalStateException(
@@ -1201,33 +1172,19 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         taskManager.handleAssignment(activeTasks, info.standbyTasks());
     }
 
-    private static void processVersionOneAssignment(final String logPrefix,
-                                                    final AssignmentInfo info,
-                                                    final List<TopicPartition> partitions,
-                                                    final Map<TaskId, Set<TopicPartition>> activeTasks,
-                                                    final Map<TopicPartition, TaskId> partitionsToTaskId) {
-        // the number of assigned partitions should be the same as number of active tasks, which
-        // could be duplicated if one task has more than one assigned partitions
-        validateActiveTaskEncoding(partitions, info, logPrefix);
-
+    // protected for upgrade test
+    protected static Map<TaskId, Set<TopicPartition>> getActiveTasks(final List<TopicPartition> partitions, final AssignmentInfo info) {
+        final Map<TaskId, Set<TopicPartition>> activeTasks = new HashMap<>();
         for (int i = 0; i < partitions.size(); i++) {
             final TopicPartition partition = partitions.get(i);
             final TaskId id = info.activeTasks().get(i);
-            activeTasks.computeIfAbsent(id, k -> new HashSet<>()).add(partition);
-            partitionsToTaskId.put(partition, id);
+            activeTasks.computeIfAbsent(id, k1 -> new HashSet<>()).add(partition);
         }
+        return activeTasks;
     }
 
-    public static void processVersionTwoAssignment(final String logPrefix,
-                                                   final AssignmentInfo info,
-                                                   final List<TopicPartition> partitions,
-                                                   final Map<TaskId, Set<TopicPartition>> activeTasks,
-                                                   final Map<TopicPartition, PartitionInfo> topicToPartitionInfo,
-                                                   final Map<TopicPartition, TaskId> partitionsToTaskId) {
-        processVersionOneAssignment(logPrefix, info, partitions, activeTasks, partitionsToTaskId);
-
-        // process partitions by host
-        final Map<HostInfo, Set<TopicPartition>> partitionsByHost = info.partitionsByHost();
+    private static Map<TopicPartition, PartitionInfo> getTopicPartitionInfo(final Map<HostInfo, Set<TopicPartition>> partitionsByHost) {
+        final Map<TopicPartition, PartitionInfo> topicToPartitionInfo = new HashMap<>();
         for (final Set<TopicPartition> value : partitionsByHost.values()) {
             for (final TopicPartition topicPartition : value) {
                 topicToPartitionInfo.put(
@@ -1242,18 +1199,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                 );
             }
         }
-    }
-
-    private Map<TaskId, Set<TopicPartition>> getActiveTasks(final List<TopicPartition> partitions, final AssignmentInfo info) {
-        final Map<TaskId, Set<TopicPartition>> activeTasks;
-        final Map<TaskId, Set<TopicPartition>> result =  new HashMap<>();
-        for (int i = 0; i < partitions.size(); i++) {
-            final TopicPartition partition = partitions.get(i);
-            final TaskId id = info.activeTasks().get(i);
-            result.computeIfAbsent(id, k1 -> new HashSet<>()).add(partition);
-        }
-        activeTasks = result;
-        return activeTasks;
+        return topicToPartitionInfo;
     }
 
     private static void validateActiveTaskEncoding(final List<TopicPartition> partitions, final AssignmentInfo info, final String logPrefix) {
