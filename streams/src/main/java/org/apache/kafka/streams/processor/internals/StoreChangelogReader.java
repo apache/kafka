@@ -643,7 +643,7 @@ public class StoreChangelogReader implements ChangelogReader {
 
         // the current assignment should not contain any of the new partitions
         if (assignment.removeAll(partitions)) {
-            throw new IllegalStateException("The current assignment " + assignment + " " +
+            throw new IllegalStateException("The current assignment " + restoreConsumer.assignment() + " " +
                 "already contains some of the new partitions " + partitions);
         }
         assignment.addAll(partitions);

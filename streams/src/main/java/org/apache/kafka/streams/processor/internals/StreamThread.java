@@ -20,7 +20,6 @@ import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
-import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.InvalidOffsetException;
 import org.apache.kafka.clients.producer.Producer;
@@ -53,7 +52,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -472,6 +470,7 @@ public class StreamThread extends Thread {
 
                 return new StandbyTask(
                     taskId,
+                    partitions,
                     topology,
                     config,
                     streamsMetrics,
@@ -513,7 +512,6 @@ public class StreamThread extends Thread {
     private volatile State state = State.CREATED;
     private volatile ThreadMetadata threadMetadata;
     private StreamThread.StateListener stateListener;
-    private Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> standbyRecords;
 
     private final ChangelogReader changelogReader;
 
@@ -633,11 +631,9 @@ public class StreamThread extends Thread {
                         final LogContext logContext,
                         final AtomicInteger assignmentErrorCode) {
         super(threadId);
-        this.adminClient = adminClient;
-
         this.stateLock = new Object();
-        this.standbyRecords = new HashMap<>();
 
+        this.adminClient = adminClient;
         this.streamsMetrics = streamsMetrics;
         this.commitSensor = ThreadMetrics.commitSensor(threadId, streamsMetrics);
         this.pollSensor = ThreadMetrics.pollSensor(threadId, streamsMetrics);
@@ -1111,12 +1107,6 @@ public class StreamThread extends Thread {
         log.info("Shutdown complete");
     }
 
-    void clearStandbyRecords(final List<TopicPartition> partitions) {
-        for (final TopicPartition tp : partitions) {
-            standbyRecords.remove(tp);
-        }
-    }
-
     /**
      * Return information about the current {@link StreamThread}.
      *
@@ -1167,7 +1157,7 @@ public class StreamThread extends Thread {
             standbyTasksMetadata);
     }
 
-    public Iterable<Task> activeTasks() {
+    public List<Task> activeTasks() {
         return taskManager.activeTaskIterable();
     }
 
@@ -1238,15 +1228,11 @@ public class StreamThread extends Thread {
         return taskManager;
     }
 
-    Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> standbyRecords() {
-        return standbyRecords;
-    }
-
     int currentNumIterations() {
         return numIterations;
     }
 
-    public StreamThread.StateListener stateListener() {
-        return stateListener;
+    Throwable rebalanceException() {
+        return rebalanceException;
     }
 }

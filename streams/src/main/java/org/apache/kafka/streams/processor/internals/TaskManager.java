@@ -113,6 +113,10 @@ public class TaskManager {
         rebalanceInProgress = false;
     }
 
+    /**
+     * @throws TaskMigratedException if the task producer got fenced (EOS only)
+     * @throws StreamsException fatal error while creating / initializing the task
+     */
     void handleAssignment(final Map<TaskId, Set<TopicPartition>> activeTasks,
                           final Map<TaskId, Set<TopicPartition>> standbyTasks) {
         log.info("Handle new assignment with:\n\tNew active tasks: {}\n\tNew standby tasks: {}" +
@@ -241,7 +245,6 @@ public class TaskManager {
             if (remainingPartitions.containsAll(task.inputPartitions())) {
                 revokedTasks.add(task.id());
                 remainingPartitions.removeAll(task.inputPartitions());
-                break;
             }
         }
 
@@ -252,11 +255,7 @@ public class TaskManager {
 
         for (final TaskId taskId : revokedTasks) {
             final Task task = tasks.get(taskId);
-            try {
-                task.suspend();
-            } catch (final RuntimeException e) {
-                throw new StreamsException("Unexpected exception while suspending task " + taskId, e);
-            }
+            task.suspend();
         }
     }
 
@@ -265,7 +264,7 @@ public class TaskManager {
      * NOTE this method assumes that when it is called, EVERY task/partition has been lost and must
      * be closed as a zombie.
      */
-    void handleTaskLoss() {
+    void handleLostAll() {
         log.debug("Closing lost active tasks as zombies.");
 
         final Iterator<Task> iterator = tasks.values().iterator();
@@ -369,15 +368,6 @@ public class TaskManager {
         return partitionToTask.get(partition);
     }
 
-    StandbyTask standbyTask(final TopicPartition partition) {
-        for (final Task task : (Iterable<Task>) standbyTaskStream()::iterator) {
-            if (task.inputPartitions().contains(partition)) {
-                return (StandbyTask) task;
-            }
-        }
-        return null;
-    }
-
     Map<TaskId, Task> tasks() {
         // not bothering with an unmodifiable map, since the tasks themselves are mutable, but
         // if any outside code modifies the map or the tasks, it would be a severe transgression.
@@ -388,7 +378,7 @@ public class TaskManager {
         return activeTaskStream().collect(Collectors.toMap(Task::id, t -> t));
     }
 
-    Iterable<Task> activeTaskIterable() {
+    List<Task> activeTaskIterable() {
         return activeTaskStream().collect(Collectors.toList());
     }
 
@@ -544,6 +534,16 @@ public class TaskManager {
                          .append('(').append(task.isActive() ? "active" : "standby").append(')');
         }
         return stringBuilder.toString();
+    }
+
+    // below are for testing only
+    StandbyTask standbyTask(final TopicPartition partition) {
+        for (final Task task : (Iterable<Task>) standbyTaskStream()::iterator) {
+            if (task.inputPartitions().contains(partition)) {
+                return (StandbyTask) task;
+            }
+        }
+        return null;
     }
 
     // FIXME: this is used from StreamThread only for a hack to collect metrics from the record collectors inside of StreamTasks

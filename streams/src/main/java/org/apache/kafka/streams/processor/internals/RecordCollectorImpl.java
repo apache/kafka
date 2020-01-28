@@ -333,7 +333,9 @@ public class RecordCollectorImpl implements RecordCollector {
     @Override
     public void flush() {
         log.debug("Flushing record collector");
+
         producer.flush();
+
         checkForException();
     }
 

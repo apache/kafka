@@ -64,6 +64,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.instanceOf;
@@ -343,7 +344,7 @@ public class StreamThreadStateStoreProviderTest {
     private void mockThread(final boolean initialized) {
         EasyMock.expect(threadMock.isRunning()).andReturn(initialized);
         EasyMock.expect(threadMock.allTasks()).andStubReturn(tasks);
-        EasyMock.expect(threadMock.activeTasks()).andStubReturn(tasks.values().stream()::iterator);
+        EasyMock.expect(threadMock.activeTasks()).andStubReturn(tasks.values().stream().collect(Collectors.toList()));
         EasyMock.expect(threadMock.state()).andReturn(
             initialized ? StreamThread.State.RUNNING : StreamThread.State.PARTITIONS_ASSIGNED
         ).anyTimes();

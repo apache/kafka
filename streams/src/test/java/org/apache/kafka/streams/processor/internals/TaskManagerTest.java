@@ -267,7 +267,7 @@ public class TaskManagerTest {
     }
 
     @Test
-    public void shouldThrowStreamsExceptionAtEndIfExceptionDuringSuspend() {
+    public void shouldPassUpIfExceptionDuringSuspend() {
         final Task task00 = new StateMachineTask(taskId00, taskId00Partitions, true) {
             @Override
             public void suspend() {
@@ -283,7 +283,7 @@ public class TaskManagerTest {
         assertThat(taskManager.checkForCompletedRestoration(), is(true));
         assertThat(task00.state(), is(Task.State.RUNNING));
 
-        assertThrows(StreamsException.class, () -> taskManager.handleRevocation(taskId00Partitions));
+        assertThrows(RuntimeException.class, () -> taskManager.handleRevocation(taskId00Partitions));
         assertThat(task00.state(), is(Task.State.RUNNING));
     }
 
