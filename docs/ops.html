@@ -298,6 +298,12 @@
   <p>
   For instance, the following example will move all partitions for topics foo1,foo2 to the new set of brokers 5,6. At the end of this move, all partitions for topics foo1 and foo2 will <i>only</i> exist on brokers 5,6.
   <p>
+  The "log_dirs" is optional. When it is specified, its length must equal the length of the replicas list. The value in this list can be either "any" or the absolute path of the log directory on the broker.
+  <p>
+  If absolute log directory path is specified, it is currently required that the replica has not already been created on that broker.
+  <p>
+  The replica will then be created in the specified log directory on the broker later.
+  <p>
   Since the tool accepts the input list of topics as a json file, you first need to identify the topics you want to move and create the json file as follows:
   <pre class="brush: bash;">
   > cat topics-to-move.json
@@ -312,23 +318,23 @@
   Current partition replica assignment
 
   {"version":1,
-  "partitions":[{"topic":"foo1","partition":2,"replicas":[1,2]},
-                {"topic":"foo1","partition":0,"replicas":[3,4]},
-                {"topic":"foo2","partition":2,"replicas":[1,2]},
-                {"topic":"foo2","partition":0,"replicas":[3,4]},
-                {"topic":"foo1","partition":1,"replicas":[2,3]},
-                {"topic":"foo2","partition":1,"replicas":[2,3]}]
+  "partitions":[{"topic":"foo1","partition":2,"replicas":[1,2], "log_dirs": ["any", "any"]},
+                {"topic":"foo1","partition":0,"replicas":[3,4], "log_dirs": ["any", "any"]},
+                {"topic":"foo2","partition":2,"replicas":[1,2], "log_dirs": ["any", "any"]},
+                {"topic":"foo2","partition":0,"replicas":[3,4], "log_dirs": ["any", "any"]},
+                {"topic":"foo1","partition":1,"replicas":[2,3], "log_dirs": ["any", "any"]},
+                {"topic":"foo2","partition":1,"replicas":[2,3], "log_dirs": ["any", "any"]}]
   }
 
   Proposed partition reassignment configuration
 
   {"version":1,
-  "partitions":[{"topic":"foo1","partition":2,"replicas":[5,6]},
-                {"topic":"foo1","partition":0,"replicas":[5,6]},
-                {"topic":"foo2","partition":2,"replicas":[5,6]},
-                {"topic":"foo2","partition":0,"replicas":[5,6]},
-                {"topic":"foo1","partition":1,"replicas":[5,6]},
-                {"topic":"foo2","partition":1,"replicas":[5,6]}]
+  "partitions":[{"topic":"foo1","partition":2,"replicas":[5,6], "log_dirs": ["any", "any"]},
+                {"topic":"foo1","partition":0,"replicas":[5,6], "log_dirs": ["any", "any"]},
+                {"topic":"foo2","partition":2,"replicas":[5,6], "log_dirs": ["any", "any"]},
+                {"topic":"foo2","partition":0,"replicas":[5,6], "log_dirs": ["any", "any"]},
+                {"topic":"foo1","partition":1,"replicas":[5,6], "log_dirs": ["any", "any"]},
+                {"topic":"foo2","partition":1,"replicas":[5,6], "log_dirs": ["any", "any"]}]
   }
   </pre>
   <p>
@@ -338,23 +344,23 @@
   Current partition replica assignment
 
   {"version":1,
-  "partitions":[{"topic":"foo1","partition":2,"replicas":[1,2]},
-                {"topic":"foo1","partition":0,"replicas":[3,4]},
-                {"topic":"foo2","partition":2,"replicas":[1,2]},
-                {"topic":"foo2","partition":0,"replicas":[3,4]},
-                {"topic":"foo1","partition":1,"replicas":[2,3]},
-                {"topic":"foo2","partition":1,"replicas":[2,3]}]
+  "partitions":[{"topic":"foo1","partition":2,"replicas":[1,2], "log_dirs": ["any", "any"]},
+                {"topic":"foo1","partition":0,"replicas":[3,4], "log_dirs": ["any", "any"]},
+                {"topic":"foo2","partition":2,"replicas":[1,2], "log_dirs": ["any", "any"]},
+                {"topic":"foo2","partition":0,"replicas":[3,4], "log_dirs": ["any", "any"]},
+                {"topic":"foo1","partition":1,"replicas":[2,3], "log_dirs": ["any", "any"]},
+                {"topic":"foo2","partition":1,"replicas":[2,3], "log_dirs": ["any", "any"]}]
   }
 
   Save this to use as the --reassignment-json-file option during rollback
   Successfully started reassignment of partitions
   {"version":1,
-  "partitions":[{"topic":"foo1","partition":2,"replicas":[5,6]},
-                {"topic":"foo1","partition":0,"replicas":[5,6]},
-                {"topic":"foo2","partition":2,"replicas":[5,6]},
-                {"topic":"foo2","partition":0,"replicas":[5,6]},
-                {"topic":"foo1","partition":1,"replicas":[5,6]},
-                {"topic":"foo2","partition":1,"replicas":[5,6]}]
+  "partitions":[{"topic":"foo1","partition":2,"replicas":[5,6], "log_dirs": ["any", "any"]},
+                {"topic":"foo1","partition":0,"replicas":[5,6], "log_dirs": ["any", "any"]},
+                {"topic":"foo2","partition":2,"replicas":[5,6], "log_dirs": ["any", "any"]},
+                {"topic":"foo2","partition":0,"replicas":[5,6], "log_dirs": ["any", "any"]},
+                {"topic":"foo1","partition":1,"replicas":[5,6], "log_dirs": ["any", "any"]},
+                {"topic":"foo2","partition":1,"replicas":[5,6], "log_dirs": ["any", "any"]}]
   }
   </pre>
   <p>
