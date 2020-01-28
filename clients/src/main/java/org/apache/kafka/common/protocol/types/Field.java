@@ -91,6 +91,16 @@ public class Field {
         }
     }
 
+    public static class Double extends Field {
+        public Double(String name, String docString) {
+            super(name, Type.DOUBLE, docString, false, null);
+        }
+
+        public Double(String name, String docString, double defaultValue) {
+            super(name, Type.DOUBLE, docString, true, defaultValue);
+        }
+    }
+
     public static class Str extends Field {
         public Str(String name, String docString) {
             super(name, Type.STRING, docString, false, null);
