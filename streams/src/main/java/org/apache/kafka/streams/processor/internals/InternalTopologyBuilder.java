@@ -1226,13 +1226,14 @@ public class InternalTopologyBuilder {
     }
 
     synchronized Pattern sourceTopicPattern() {
-        log.debug("Found pattern subscribed source topics, falling back to pattern subscription for the main consumer.");
-
         if (topicPattern == null) {
             final List<String> allSourceTopics = maybeDecorateInternalSourceTopics(sourceTopicNames);
             Collections.sort(allSourceTopics);
             topicPattern = buildPattern(allSourceTopics, nodeToSourcePatterns.values());
         }
+
+        log.debug("Found pattern subscribed source topics, falling back to pattern " +
+            "subscription for the main consumer: {}", topicPattern);
 
         return topicPattern;
     }
