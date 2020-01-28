@@ -305,27 +305,29 @@ class TopicPartitionRemoteIndex(val topicPartition: TopicPartition, logDir: File
   def lookupEntryForTimestamp(targetTimestamp: Long, startingOffset: Long): Option[RemoteLogIndexEntry] = {
     CoreUtils.inLock(lock) {
       val floorOffset = remoteSegmentIndexes.floorKey(startingOffset)
-      remoteSegmentIndexes.tailMap(floorOffset).values().forEach(seg => {
-        // Find the earliest remote index segment that contains the required messages
-        if (seg.maxTimestampSoFar >= targetTimestamp && seg.lastOffset.get >= startingOffset) {
-          // Get the earliest index entry that its timestamp is less than or equal to the target timestamp
-          val timestampOffset = seg.timeIndex.lookup(targetTimestamp)
-          val offset = math.max(timestampOffset.offset, startingOffset)
-          val offsetPosition = seg.offsetIndex.lookup(offset)
+      remoteSegmentIndexes.tailMap(floorOffset).values().forEach(new Consumer[RemoteSegmentIndex] {
+        override def accept(seg: RemoteSegmentIndex): Unit = {
+          // Find the earliest remote index segment that contains the required messages
+          if (seg.maxTimestampSoFar >= targetTimestamp && seg.lastOffset.get >= startingOffset) {
+            // Get the earliest index entry that its timestamp is less than or equal to the target timestamp
+            val timestampOffset = seg.timeIndex.lookup(targetTimestamp)
+            val offset = math.max(timestampOffset.offset, startingOffset)
+            val offsetPosition = seg.offsetIndex.lookup(offset)
 
-          var pos = offsetPosition.position
+            var pos = offsetPosition.position
 
-          while (true) {
-            val entry = seg.remoteLogIndex.lookupEntry(pos)
-            if (entry.isEmpty)
-              return None
+            while (true) {
+              val entry = seg.remoteLogIndex.lookupEntry(pos)
+              if (entry.isEmpty)
+                return None
 
-            if (entry.get.lastTimeStamp >= targetTimestamp && entry.get.lastOffset >= startingOffset)
-              return entry
-            else
-              pos += entry.get.totalLength
+              if (entry.get.lastTimeStamp >= targetTimestamp && entry.get.lastOffset >= startingOffset)
+                return entry
+              else
+                pos += entry.get.totalLength
+            }
+            None
           }
-          None
         }
       })
     }
