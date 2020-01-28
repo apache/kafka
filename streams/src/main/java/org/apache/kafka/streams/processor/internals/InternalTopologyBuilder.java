@@ -1863,7 +1863,7 @@ public class InternalTopologyBuilder {
         return sb.toString();
     }
 
-    Set<String> subscriptionUpdates() {
+    private Set<String> subscriptionUpdates() {
         return Collections.unmodifiableSet(subscriptionUpdates);
     }
 
@@ -1897,12 +1897,10 @@ public class InternalTopologyBuilder {
     }
 
     private void updateSubscribedTopics(final Set<String> topics, final String logPrefix) {
-        log.debug("{}found {} topics possibly matching subscription", logPrefix, topics);
+        log.debug("{}found {} topics possibly matching subscription", logPrefix, topics.size());
         subscriptionUpdates.clear();
         subscriptionUpdates.addAll(topics);
 
-        log.debug("{}updating builder with {} topic(s) with possible matching regex subscription(s)",
-            logPrefix, subscriptionUpdates);
         setRegexMatchedTopicsToSourceNodes();
         setRegexMatchedTopicToStateStore();
     }
