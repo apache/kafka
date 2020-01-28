@@ -634,7 +634,7 @@ class LogSegment private[log] (val log: FileRecords,
           info(s"Failed to delete $fileType ${file.getAbsolutePath} because it does not exist.")
       }
       catch {
-        case e: IOException => throw new IOException(s"Delete of $fileType ${file.getAbsolutePath} failed.", e)
+        case e: IOException => throw new DeleteFailedException(s"Delete of $fileType ${file.getAbsolutePath} failed.", e)
       }
     }
 

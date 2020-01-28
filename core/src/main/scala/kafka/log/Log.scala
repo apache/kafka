@@ -2234,7 +2234,14 @@ class Log(@volatile var dir: File,
     def deleteSegments(): Unit = {
       info(s"Deleting segments $segments")
       maybeHandleIOException(s"Error while deleting segments for $topicPartition in dir ${dir.getParent}") {
-        segments.foreach(_.deleteIfExists())
+        segments.foreach( segment =>
+          try {
+            segment.deleteIfExists()
+          }
+          catch {
+            case e: DeleteFailedException => error(s"Segment Delete failed.", e)
+           }
+        )
       }
     }
 
