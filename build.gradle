@@ -965,12 +965,15 @@ project(':core') {
 }
 
 project(':azpubsub') {
+  apply plugin: 'scala'
+
   archivesBaseName = "kafka-azpubsub"
 
   dependencies {
+    compile project(':core')
     compile libs.scalaLibrary
     compileOnly libs.log4j
-
+    
     testCompile libs.junit
   }
 }
