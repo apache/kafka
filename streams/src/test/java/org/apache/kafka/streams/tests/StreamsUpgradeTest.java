@@ -225,14 +225,12 @@ public class StreamsUpgradeTest {
             partitionsByHost = info.partitionsByHost();
 
             final TaskManager taskManager = taskManger();
-// TODO K9113: fix this test
-//            taskManager.setClusterMetadata(Cluster.empty().withPartitions(topicToPartitionInfo));
-//            taskManager.setPartitionsByHostState(partitionsByHost);
-//            taskManager.setPartitionsToTaskId(partitionsToTaskId);
-//            taskManager.setAssignmentMetadata(activeTasks, info.standbyTasks());
+            taskManager.setClusterMetadata(Cluster.empty().withPartitions(topicToPartitionInfo));
+            taskManager.setPartitionsByHostState(partitionsByHost);
+            taskManager.setPartitionsToTaskId(partitionsToTaskId);
+            taskManager.setAssignmentMetadata(activeTasks, info.standbyTasks());
             taskManager.fixmeUpdateSubscriptionsFromAssignment(partitions);
-            // TODO K9113: fix this test
-            //  taskManager.handleRebalanceStart(false);
+            taskManager.handleRebalanceStart(false);
             usedSubscriptionMetadataVersionPeek.set(usedSubscriptionMetadataVersion);
         }
 

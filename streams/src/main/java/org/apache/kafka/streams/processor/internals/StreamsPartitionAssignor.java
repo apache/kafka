@@ -1201,33 +1201,6 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         taskManager.handleAssignment(activeTasks, info.standbyTasks());
     }
 
-    private Map<TaskId, Set<TopicPartition>> getActiveTasks(final List<TopicPartition> partitions, final AssignmentInfo info) {
-        final Map<TaskId, Set<TopicPartition>> activeTasks;
-        final Map<TaskId, Set<TopicPartition>> result =  new HashMap<>();
-        for (int i = 0; i < partitions.size(); i++) {
-            final TopicPartition partition = partitions.get(i);
-            final TaskId id = info.activeTasks().get(i);
-            result.computeIfAbsent(id, k1 -> new HashSet<>()).add(partition);
-        }
-        activeTasks = result;
-        return activeTasks;
-    }
-
-    private static void validateActiveTaskEncoding(final List<TopicPartition> partitions, final AssignmentInfo info, final String logPrefix) {
-        // the number of assigned partitions should be the same as number of active tasks, which
-        // could be duplicated if one task has more than one assigned partitions
-        if (partitions.size() != info.activeTasks().size()) {
-            throw new TaskAssignmentException(
-                String.format(
-                    "%sNumber of assigned partitions %d is not equal to "
-                        + "the number of active taskIds %d, assignmentInfo=%s",
-                    logPrefix, partitions.size(),
-                    info.activeTasks().size(), info.toString()
-                )
-            );
-        }
-    }
-
     private static void processVersionOneAssignment(final String logPrefix,
                                                     final AssignmentInfo info,
                                                     final List<TopicPartition> partitions,
@@ -1268,6 +1241,33 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                     )
                 );
             }
+        }
+    }
+
+    private Map<TaskId, Set<TopicPartition>> getActiveTasks(final List<TopicPartition> partitions, final AssignmentInfo info) {
+        final Map<TaskId, Set<TopicPartition>> activeTasks;
+        final Map<TaskId, Set<TopicPartition>> result =  new HashMap<>();
+        for (int i = 0; i < partitions.size(); i++) {
+            final TopicPartition partition = partitions.get(i);
+            final TaskId id = info.activeTasks().get(i);
+            result.computeIfAbsent(id, k1 -> new HashSet<>()).add(partition);
+        }
+        activeTasks = result;
+        return activeTasks;
+    }
+
+    private static void validateActiveTaskEncoding(final List<TopicPartition> partitions, final AssignmentInfo info, final String logPrefix) {
+        // the number of assigned partitions should be the same as number of active tasks, which
+        // could be duplicated if one task has more than one assigned partitions
+        if (partitions.size() != info.activeTasks().size()) {
+            throw new TaskAssignmentException(
+                String.format(
+                    "%sNumber of assigned partitions %d is not equal to "
+                        + "the number of active taskIds %d, assignmentInfo=%s",
+                    logPrefix, partitions.size(),
+                    info.activeTasks().size(), info.toString()
+                )
+            );
         }
     }
 
