@@ -230,7 +230,7 @@ public class Metadata implements Closeable {
     }
 
     public synchronized void bootstrap(List<InetSocketAddress> addresses) {
-        requestUpdate();
+        this.needFullUpdate = true;
         this.updateVersion += 1;
         this.cache = MetadataCache.bootstrap(addresses);
     }
