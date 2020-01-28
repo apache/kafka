@@ -1168,22 +1168,26 @@ class GroupCoordinatorTest {
   }
 
   @Test
-  def testProtocolTypeInJoinAndSyncRequest(): Unit = {
-    // JoinGroup(leader): The Protocol Type is None when there is an error
+  def testJoinGroupReturnsAnNoneProtocolTypeWhenAnErrorOccurs(): Unit = {
+    // JoinGroup(leader)
     EasyMock.reset(replicaManager)
-    var leaderResponseFuture = sendJoinGroup(groupId, "fake-id", protocolType,
+    val leaderResponseFuture = sendJoinGroup(groupId, "fake-id", protocolType,
       protocolSuperset, leaderInstanceId, DefaultSessionTimeout)
 
-    var leaderJoinGroupResult = await(leaderResponseFuture, 1)
+    // The Protocol Type is None when there is an error
+    val leaderJoinGroupResult = await(leaderResponseFuture, 1)
     assertEquals(Errors.UNKNOWN_MEMBER_ID, leaderJoinGroupResult.error)
     assertEquals(None, leaderJoinGroupResult.protocolType)
+  }
 
-    // JoinGroup(leader): The Protocol Type is Defined when there is not error
+  @Test
+  def testJoinGroupReturnsTheProtocolType(): Unit = {
+    // JoinGroup(leader)
     EasyMock.reset(replicaManager)
-    leaderResponseFuture = sendJoinGroup(groupId, JoinGroupRequest.UNKNOWN_MEMBER_ID, protocolType,
+    val leaderResponseFuture = sendJoinGroup(groupId, JoinGroupRequest.UNKNOWN_MEMBER_ID, protocolType,
       protocolSuperset, leaderInstanceId, DefaultSessionTimeout)
 
-    // JoinGroup(follower): The Protocol Type is Defined when there is not error
+    // JoinGroup(follower)
     EasyMock.reset(replicaManager)
     val followerResponseFuture = sendJoinGroup(groupId, JoinGroupRequest.UNKNOWN_MEMBER_ID, protocolType,
       protocolSuperset, followerInstanceId, DefaultSessionTimeout)
@@ -1191,81 +1195,80 @@ class GroupCoordinatorTest {
     timer.advanceClock(GroupInitialRebalanceDelay + 1)
     timer.advanceClock(DefaultRebalanceTimeout + 1)
 
-    leaderJoinGroupResult = await(leaderResponseFuture, 1)
+    // The Protocol Type is Defined when there is not error
+    val leaderJoinGroupResult = await(leaderResponseFuture, 1)
     assertEquals(Errors.NONE, leaderJoinGroupResult.error)
     assertEquals(protocolType, leaderJoinGroupResult.protocolType.orNull)
 
+    // The Protocol Type is Defined when there is not error
     val followerJoinGroupResult = await(followerResponseFuture, 1)
     assertEquals(Errors.NONE, followerJoinGroupResult.error)
     assertEquals(protocolType, followerJoinGroupResult.protocolType.orNull)
+  }
 
-    val protocolName = leaderJoinGroupResult.protocolName
+  @Test
+  def testSyncGroupReturnsAnErrorWhenProtocolTypeIsInconsistent(): Unit = {
+    testSyncGroupProtocolTypeAndNameWith(Some("whatever"), None, Errors.INCONSISTENT_GROUP_PROTOCOL,
+      None, None)
+  }
 
-    // SyncGroup(leader): Providing a wrong Protocol Type yields an error
+  @Test
+  def testSyncGroupReturnsAnErrorWhenProtocolNameIsInconsistent(): Unit = {
+    testSyncGroupProtocolTypeAndNameWith(None, Some("whatever"), Errors.INCONSISTENT_GROUP_PROTOCOL,
+      None, None)
+  }
+
+  @Test
+  def testSyncGroupSucceedWhenProtocolTypeAndNameAreNotProvided(): Unit = {
+    testSyncGroupProtocolTypeAndNameWith(None, None, Errors.NONE,
+      Some(protocolType), Some(protocolName))
+  }
+
+  @Test
+  def testSyncGroupSucceedWhenProtocolTypeAndNameAreConsistent(): Unit = {
+    testSyncGroupProtocolTypeAndNameWith(Some(protocolType), Some(protocolName),
+      Errors.NONE, Some(protocolType), Some(protocolName))
+  }
+
+  private def testSyncGroupProtocolTypeAndNameWith(protocolType: Option[String],
+                                                   protocolName: Option[String],
+                                                   expectedError: Errors,
+                                                   expectedProtocolType: Option[String],
+                                                   expectedProtocolName: Option[String]): Unit = {
+    // JoinGroup(leader) with the Protocol Type of the group
     EasyMock.reset(replicaManager)
+    val leaderResponseFuture = sendJoinGroup(groupId, JoinGroupRequest.UNKNOWN_MEMBER_ID, this.protocolType,
+      protocolSuperset, leaderInstanceId, DefaultSessionTimeout)
+
+    // JoinGroup(follower) with the Protocol Type of the group
+    EasyMock.reset(replicaManager)
+    val followerResponseFuture = sendJoinGroup(groupId, JoinGroupRequest.UNKNOWN_MEMBER_ID, this.protocolType,
+      protocolSuperset, followerInstanceId, DefaultSessionTimeout)
+
+    timer.advanceClock(GroupInitialRebalanceDelay + 1)
+    timer.advanceClock(DefaultRebalanceTimeout + 1)
+
+    val leaderJoinGroupResult = await(leaderResponseFuture, 1)
     val leaderId = leaderJoinGroupResult.memberId
-    var leaderSyncGroupResult = syncGroupLeader(groupId, leaderJoinGroupResult.generationId, leaderId,
-      Map(leaderId -> Array[Byte]()), Some("whatever"), None)
-    assertEquals(Errors.INCONSISTENT_GROUP_PROTOCOL, leaderSyncGroupResult.error)
-    assertEquals(None, leaderSyncGroupResult.protocolType)
-    assertEquals(None, leaderSyncGroupResult.protocolName)
-
-    // SyncGroup(leader): Providing a wrong Protocol Name yields an error
-    EasyMock.reset(replicaManager)
-    leaderSyncGroupResult = syncGroupLeader(groupId, leaderJoinGroupResult.generationId, leaderId,
-      Map(leaderId -> Array[Byte]()), None, Some("whatever"))
-    assertEquals(Errors.INCONSISTENT_GROUP_PROTOCOL, leaderSyncGroupResult.error)
-    assertEquals(None, leaderSyncGroupResult.protocolType)
-    assertEquals(None, leaderSyncGroupResult.protocolName)
-
-    // SyncGroup(leader): Providing no Protocol Type/Name succeed
-    EasyMock.reset(replicaManager)
-    leaderSyncGroupResult = syncGroupLeader(groupId, leaderJoinGroupResult.generationId, leaderId,
-      Map(leaderId -> Array[Byte]()), None, None)
-    assertEquals(Errors.NONE, leaderSyncGroupResult.error)
-    assertEquals(protocolType, leaderSyncGroupResult.protocolType.orNull)
-    assertEquals(protocolName, leaderSyncGroupResult.protocolName.orNull)
-
-    // SyncGroup(leader): Providing a correct Protocol Type/Name succeed
-    EasyMock.reset(replicaManager)
-    leaderSyncGroupResult = syncGroupLeader(groupId, leaderJoinGroupResult.generationId, leaderId,
-      Map(leaderId -> Array[Byte]()), Some(protocolType), Some(protocolName))
-    assertEquals(Errors.NONE, leaderSyncGroupResult.error)
-    assertEquals(protocolType, leaderSyncGroupResult.protocolType.orNull)
-    assertEquals(protocolName, leaderSyncGroupResult.protocolName.orNull)
-
-    // SyncGroup(follower): Providing a wrong Protocol Type yields an error
-    EasyMock.reset(replicaManager)
+    val generationId = leaderJoinGroupResult.generationId
+    val followerJoinGroupResult = await(followerResponseFuture, 1)
     val followerId = followerJoinGroupResult.memberId
-    var followerSyncGroupResult = syncGroupFollower(groupId, leaderJoinGroupResult.generationId,
-      followerId, Some("whatever"), None)
-    assertEquals(Errors.INCONSISTENT_GROUP_PROTOCOL, followerSyncGroupResult.error)
-    assertEquals(None, followerSyncGroupResult.protocolType)
-    assertEquals(None, followerSyncGroupResult.protocolName)
 
-    // SyncGroup(follower): Providing a wrong Protocol Name yields an error
+    // SyncGroup with the provided Protocol Type and Name
     EasyMock.reset(replicaManager)
-    followerSyncGroupResult = syncGroupFollower(groupId, leaderJoinGroupResult.generationId,
-      followerId, None, Some("whatever"))
-    assertEquals(Errors.INCONSISTENT_GROUP_PROTOCOL, followerSyncGroupResult.error)
-    assertEquals(None, followerSyncGroupResult.protocolType)
-    assertEquals(None, followerSyncGroupResult.protocolName)
+    val leaderSyncGroupResult = syncGroupLeader(groupId, generationId, leaderId,
+      Map(leaderId -> Array.empty), protocolType, protocolName)
+    assertEquals(expectedError, leaderSyncGroupResult.error)
+    assertEquals(expectedProtocolType, leaderSyncGroupResult.protocolType)
+    assertEquals(expectedProtocolName, leaderSyncGroupResult.protocolName)
 
-    // SyncGroup(follower): Providing no Protocol Type/Name succeed
+    // SyncGroup with the provided Protocol Type and Name
     EasyMock.reset(replicaManager)
-    followerSyncGroupResult = syncGroupFollower(groupId, leaderJoinGroupResult.generationId,
-      followerId, None, None)
-    assertEquals(Errors.NONE, followerSyncGroupResult.error)
-    assertEquals(protocolType, followerSyncGroupResult.protocolType.orNull)
-    assertEquals(protocolName, followerSyncGroupResult.protocolName.orNull)
-
-    // SyncGroup(follower): Providing a correct Protocol Type succeed
-    EasyMock.reset(replicaManager)
-    followerSyncGroupResult = syncGroupFollower(groupId, leaderJoinGroupResult.generationId,
-      followerId, Some(protocolType), Some(protocolName))
-    assertEquals(Errors.NONE, followerSyncGroupResult.error)
-    assertEquals(protocolType, followerSyncGroupResult.protocolType.orNull)
-    assertEquals(protocolName, followerSyncGroupResult.protocolName.orNull)
+    val followerSyncGroupResult = syncGroupFollower(groupId, generationId, followerId,
+      protocolType, protocolName)
+    assertEquals(expectedError, followerSyncGroupResult.error)
+    assertEquals(expectedProtocolType, followerSyncGroupResult.protocolType)
+    assertEquals(expectedProtocolName, followerSyncGroupResult.protocolName)
   }
 
   private class RebalanceResult(val generation: Int,

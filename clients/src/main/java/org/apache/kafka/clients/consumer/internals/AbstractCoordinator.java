@@ -436,7 +436,7 @@ public abstract class AbstractCoordinator implements Closeable {
                     // Duplicate the buffer in case `onJoinComplete` does not complete and needs to be retried.
                     ByteBuffer memberAssignment = future.value().duplicate();
 
-                    onJoinComplete(generationSnapshot.generationId, generationSnapshot.memberId, generationSnapshot.protocol, memberAssignment);
+                    onJoinComplete(generationSnapshot.generationId, generationSnapshot.memberId, generationSnapshot.protocolName, memberAssignment);
 
                     // Generally speaking we should always resetJoinGroupFuture once the future is done, but here
                     // we can only reset the join group future after the completion callback returns. This ensures
@@ -659,7 +659,7 @@ public abstract class AbstractCoordinator implements Closeable {
                                 .setGroupId(rebalanceConfig.groupId)
                                 .setMemberId(generation.memberId)
                                 .setProtocolType(protocolType())
-                                .setProtocolName(generation.protocol)
+                                .setProtocolName(generation.protocolName)
                                 .setGroupInstanceId(this.rebalanceConfig.groupInstanceId.orElse(null))
                                 .setGenerationId(generation.generationId)
                                 .setAssignments(Collections.emptyList())
@@ -688,7 +688,7 @@ public abstract class AbstractCoordinator implements Closeable {
                                     .setGroupId(rebalanceConfig.groupId)
                                     .setMemberId(generation.memberId)
                                     .setProtocolType(protocolType())
-                                    .setProtocolName(generation.protocol)
+                                    .setProtocolName(generation.protocolName)
                                     .setGroupInstanceId(this.rebalanceConfig.groupInstanceId.orElse(null))
                                     .setGenerationId(generation.generationId)
                                     .setAssignments(groupAssignmentList)
@@ -905,7 +905,7 @@ public abstract class AbstractCoordinator implements Closeable {
     }
 
     private boolean isProtocolNameInconsistent(String protocolName) {
-        return protocolName != null && !protocolName.equals(generation().protocol);
+        return protocolName != null && !protocolName.equals(generation().protocolName);
     }
 
     /**
@@ -1341,12 +1341,12 @@ public abstract class AbstractCoordinator implements Closeable {
 
         public final int generationId;
         public final String memberId;
-        public final String protocol;
+        public final String protocolName;
 
-        public Generation(int generationId, String memberId, String protocol) {
+        public Generation(int generationId, String memberId, String protocolName) {
             this.generationId = generationId;
             this.memberId = memberId;
-            this.protocol = protocol;
+            this.protocolName = protocolName;
         }
 
         /**
@@ -1364,12 +1364,12 @@ public abstract class AbstractCoordinator implements Closeable {
             final Generation that = (Generation) o;
             return generationId == that.generationId &&
                     Objects.equals(memberId, that.memberId) &&
-                    Objects.equals(protocol, that.protocol);
+                    Objects.equals(protocolName, that.protocolName);
         }
 
         @Override
         public int hashCode() {
-            return Objects.hash(generationId, memberId, protocol);
+            return Objects.hash(generationId, memberId, protocolName);
         }
 
         @Override
@@ -1377,7 +1377,7 @@ public abstract class AbstractCoordinator implements Closeable {
             return "Generation{" +
                     "generationId=" + generationId +
                     ", memberId='" + memberId + '\'' +
-                    ", protocol='" + protocol + '\'' +
+                    ", protocol='" + protocolName + '\'' +
                     '}';
         }
     }

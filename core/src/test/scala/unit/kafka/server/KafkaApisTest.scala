@@ -92,6 +92,7 @@ class KafkaApisTest {
   private val brokerTopicStats = new BrokerTopicStats
   private val clusterId = "clusterId"
   private val time = new MockTime
+  private val clientId = ""
 
   @After
   def tearDown(): Unit = {
@@ -679,18 +680,23 @@ class KafkaApisTest {
       ("second", "second".getBytes())
     )
 
+    val groupId = "group"
+    val memberId = "member1"
+    val protocolType = "consumer"
+    val rebalanceTimeoutMs = 10
+    val sessionTimeoutMs = 5
     val capturedProtocols = EasyMock.newCapture[List[(String, Array[Byte])]]()
 
     EasyMock.expect(groupCoordinator.handleJoinGroup(
-      anyString,
-      anyString,
-      anyObject(classOf[Option[String]]),
-      anyBoolean,
-      anyString,
-      anyString,
-      anyInt,
-      anyInt,
-      anyString,
+      EasyMock.eq(groupId),
+      EasyMock.eq(memberId),
+      EasyMock.eq(None),
+      EasyMock.eq(true),
+      EasyMock.eq(clientId),
+      EasyMock.eq(InetAddress.getLocalHost.toString),
+      EasyMock.eq(rebalanceTimeoutMs),
+      EasyMock.eq(sessionTimeoutMs),
+      EasyMock.eq(protocolType),
       EasyMock.capture(capturedProtocols),
       anyObject()
     ))
@@ -701,9 +707,11 @@ class KafkaApisTest {
       buildRequest(
         new JoinGroupRequest.Builder(
           new JoinGroupRequestData()
-            .setGroupId("test")
-            .setMemberId("test")
-            .setProtocolType("consumer")
+            .setGroupId(groupId)
+            .setMemberId(memberId)
+            .setProtocolType(protocolType)
+            .setRebalanceTimeoutMs(rebalanceTimeoutMs)
+            .setSessionTimeoutMs(sessionTimeoutMs)
             .setProtocols(new JoinGroupRequestData.JoinGroupRequestProtocolCollection(
               protocols.map { case (name, protocol) => new JoinGroupRequestProtocol()
                 .setName(name).setMetadata(protocol)
@@ -736,24 +744,22 @@ class KafkaApisTest {
     val groupId = "group"
     val memberId = "member1"
     val protocolType = "consumer"
-    val protocols = List(
-      new JoinGroupRequestProtocol().setName("first").setMetadata("first".getBytes()),
-      new JoinGroupRequestProtocol().setName("second").setMetadata("second".getBytes())
-    )
+    val rebalanceTimeoutMs = 10
+    val sessionTimeoutMs = 5
 
     val capturedCallback = EasyMock.newCapture[JoinGroupCallback]()
 
     EasyMock.expect(groupCoordinator.handleJoinGroup(
-      anyString,
-      anyString,
-      anyObject(classOf[Option[String]]),
-      anyBoolean,
-      anyString,
-      anyString,
-      anyInt,
-      anyInt,
-      anyString,
-      anyObject(),
+      EasyMock.eq(groupId),
+      EasyMock.eq(memberId),
+      EasyMock.eq(None),
+      EasyMock.eq(if (version >= 4) true else false),
+      EasyMock.eq(clientId),
+      EasyMock.eq(InetAddress.getLocalHost.toString),
+      EasyMock.eq(if (version >= 1) rebalanceTimeoutMs else sessionTimeoutMs),
+      EasyMock.eq(sessionTimeoutMs),
+      EasyMock.eq(protocolType),
+      EasyMock.eq(List.empty),
       EasyMock.capture(capturedCallback)
     ))
 
@@ -762,7 +768,8 @@ class KafkaApisTest {
         .setGroupId(groupId)
         .setMemberId(memberId)
         .setProtocolType(protocolType)
-        .setProtocols(new JoinGroupRequestData.JoinGroupRequestProtocolCollection(protocols.iterator.asJava))
+        .setRebalanceTimeoutMs(rebalanceTimeoutMs)
+        .setSessionTimeoutMs(sessionTimeoutMs)
     ).build(version)
 
     val requestChannelRequest = buildRequest(joinGroupRequest)
@@ -814,21 +821,20 @@ class KafkaApisTest {
     val capturedResponse = expectNoThrottling()
 
     val groupId = "group"
+    val memberId = "member1"
     val protocolType = "consumer"
     val protocolName = "range"
 
-    val capturedProtocolType = EasyMock.newCapture[Option[String]]()
-    val capturedProtocolName = EasyMock.newCapture[Option[String]]()
     val capturedCallback = EasyMock.newCapture[SyncGroupCallback]()
 
     EasyMock.expect(groupCoordinator.handleSyncGroup(
-      anyString,
-      anyInt,
-      anyString,
-      EasyMock.capture(capturedProtocolType),
-      EasyMock.capture(capturedProtocolName),
-      anyObject(classOf[Option[String]]),
-      anyObject(),
+      EasyMock.eq(groupId),
+      EasyMock.eq(0),
+      EasyMock.eq(memberId),
+      EasyMock.eq(if (version >= 5) Some(protocolType) else None),
+      EasyMock.eq(if (version >= 5) Some(protocolName) else None),
+      EasyMock.eq(None),
+      EasyMock.eq(Map.empty),
       EasyMock.capture(capturedCallback)
     ))
 
@@ -836,6 +842,7 @@ class KafkaApisTest {
       new SyncGroupRequestData()
         .setGroupId(groupId)
         .setGenerationId(0)
+        .setMemberId(memberId)
         .setProtocolType(protocolType)
         .setProtocolName(protocolName)
     ).build(version)
@@ -847,14 +854,6 @@ class KafkaApisTest {
     createKafkaApis().handleSyncGroupRequest(requestChannelRequest)
 
     EasyMock.verify(groupCoordinator)
-
-    if (version >= 5) {
-      assertEquals(Some(protocolType), capturedProtocolType.getValue)
-      assertEquals(Some(protocolName), capturedProtocolName.getValue)
-    } else {
-      assertEquals(None, capturedProtocolType.getValue)
-      assertEquals(None, capturedProtocolName.getValue)
-    }
 
     capturedCallback.getValue.apply(SyncGroupResult(
       protocolType = Some(protocolType),
@@ -891,6 +890,7 @@ class KafkaApisTest {
     val capturedResponse = expectNoThrottling()
 
     val groupId = "group"
+    val memberId = "member1"
     val protocolType = "consumer"
     val protocolName = "range"
 
@@ -898,13 +898,13 @@ class KafkaApisTest {
 
     if (version < 5) {
       EasyMock.expect(groupCoordinator.handleSyncGroup(
-        anyString,
-        anyInt,
-        anyString,
-        anyObject(classOf[Option[String]]),
-        anyObject(classOf[Option[String]]),
-        anyObject(classOf[Option[String]]),
-        anyObject(),
+        EasyMock.eq(groupId),
+        EasyMock.eq(0),
+        EasyMock.eq(memberId),
+        EasyMock.eq(None),
+        EasyMock.eq(None),
+        EasyMock.eq(None),
+        EasyMock.eq(Map.empty),
         EasyMock.capture(capturedCallback)
       ))
     }
@@ -913,6 +913,7 @@ class KafkaApisTest {
       new SyncGroupRequestData()
         .setGroupId(groupId)
         .setGenerationId(0)
+        .setMemberId(memberId)
     ).build(version)
 
     val requestChannelRequest = buildRequest(syncGroupRequest)
@@ -1299,7 +1300,7 @@ class KafkaApisTest {
   private def buildRequest[T <: AbstractRequest](request: AbstractRequest,
                                                  listenerName: ListenerName = ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT)): RequestChannel.Request = {
 
-    val buffer = request.serialize(new RequestHeader(request.api, request.version, "", 0))
+    val buffer = request.serialize(new RequestHeader(request.api, request.version, clientId, 0))
 
     // read the header from the buffer first so that the body can be read next from the Request constructor
     val header = RequestHeader.parse(buffer)
