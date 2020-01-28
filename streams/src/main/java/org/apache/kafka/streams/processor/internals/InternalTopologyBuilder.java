@@ -1226,13 +1226,14 @@ public class InternalTopologyBuilder {
     }
 
     synchronized Pattern sourceTopicPattern() {
-        log.debug("Found pattern subscribed source topics, falling back to pattern subscription for the main consumer.");
-
         if (topicPattern == null) {
             final List<String> allSourceTopics = maybeDecorateInternalSourceTopics(sourceTopicNames);
             Collections.sort(allSourceTopics);
             topicPattern = buildPattern(allSourceTopics, nodeToSourcePatterns.values());
         }
+
+        log.debug("Found pattern subscribed source topics, falling back to pattern " +
+            "subscription for the main consumer: {}", topicPattern);
 
         return topicPattern;
     }
@@ -1870,8 +1871,32 @@ public class InternalTopologyBuilder {
         return !subscriptionUpdates.isEmpty();
     }
 
-    synchronized void updateSubscribedTopics(final Set<String> topics,
-                                             final String logPrefix) {
+    synchronized void addSubscribedTopicsFromAssignment(final List<TopicPartition> partitions, final String logPrefix) {
+        if (sourceTopicPattern() != null) {
+            final Set<String> assignedTopics = new HashSet<>();
+            for (final TopicPartition topicPartition : partitions) {
+                assignedTopics.add(topicPartition.topic());
+            }
+
+            final Collection<String> existingTopics = subscriptionUpdates();
+            if (!existingTopics.containsAll(assignedTopics)) {
+                assignedTopics.addAll(existingTopics);
+                updateSubscribedTopics(assignedTopics, logPrefix);
+            }
+        }
+    }
+
+    synchronized void addSubscribedTopicsFromMetadata(final Set<String> topics, final String logPrefix) {
+        if (sourceTopicPattern() != null) {
+            final Collection<String> existingTopics = subscriptionUpdates();
+            if (!existingTopics.equals(topics)) {
+                topics.addAll(existingTopics);
+                updateSubscribedTopics(topics, logPrefix);
+            }
+        }
+    }
+
+    private void updateSubscribedTopics(final Set<String> topics, final String logPrefix) {
         log.debug("{}found {} topics possibly matching subscription", logPrefix, topics);
         subscriptionUpdates.clear();
         subscriptionUpdates.addAll(topics);
@@ -1882,31 +1907,7 @@ public class InternalTopologyBuilder {
         setRegexMatchedTopicToStateStore();
     }
 
-    void addSubscribedTopicsFromAssignment(final List<TopicPartition> partitions, final String logPrefix) {
-        if (sourceTopicPattern() != null) {
-            final Set<String> assignedTopics = new HashSet<>();
-            for (final TopicPartition topicPartition : partitions) {
-                assignedTopics.add(topicPartition.topic());
-            }
-
-            final Collection<String> existingTopics = subscriptionUpdates();
-            if (!existingTopics.containsAll(assignedTopics)) {
-                assignedTopics.addAll(existingTopics);
-
-                log.debug("{}found {} topics possibly matching subscription", logPrefix, assignedTopics);
-                subscriptionUpdates.clear();
-                subscriptionUpdates.addAll(assignedTopics);
-
-                log.debug("{}updating builder with {} topic(s) with possible matching regex subscription(s)",
-                    logPrefix, subscriptionUpdates);
-                setRegexMatchedTopicsToSourceNodes();
-                setRegexMatchedTopicToStateStore();
-            }
-        }
-    }
-
     // following functions are for test only
-
     public synchronized Set<String> sourceTopicNames() {
         return sourceTopicNames;
     }

@@ -25,9 +25,9 @@ import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
-import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
+
 import org.easymock.EasyMock;
 import org.easymock.EasyMockRunner;
 import org.easymock.Mock;
@@ -267,7 +267,7 @@ public class TaskManagerTest {
     }
 
     @Test
-    public void shouldThrowStreamsExceptionAtEndIfExceptionDuringSuspend() {
+    public void shouldPassUpIfExceptionDuringSuspend() {
         final Task task00 = new StateMachineTask(taskId00, taskId00Partitions, true) {
             @Override
             public void suspend() {
@@ -283,7 +283,7 @@ public class TaskManagerTest {
         assertThat(taskManager.checkForCompletedRestoration(), is(true));
         assertThat(task00.state(), is(Task.State.RUNNING));
 
-        assertThrows(StreamsException.class, () -> taskManager.handleRevocation(taskId00Partitions));
+        assertThrows(RuntimeException.class, () -> taskManager.handleRevocation(taskId00Partitions));
         assertThat(task00.state(), is(Task.State.RUNNING));
     }
 

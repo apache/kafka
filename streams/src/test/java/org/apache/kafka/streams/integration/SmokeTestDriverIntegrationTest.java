@@ -16,15 +16,22 @@
  */
 package org.apache.kafka.streams.integration;
 
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
+import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
+import org.apache.kafka.streams.tests.SmokeTestClient;
 import org.apache.kafka.streams.tests.SmokeTestDriver;
 import org.apache.kafka.test.IntegrationTest;
+
+import org.junit.Assert;
 import org.junit.ClassRule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.Map;
+import java.util.Properties;
 import java.util.Set;
 
 import static org.apache.kafka.streams.tests.SmokeTestDriver.generate;
@@ -71,71 +78,69 @@ public class SmokeTestDriverIntegrationTest {
 
     }
 
-    // FIXME
-
     @Test
     public void shouldWorkWithRebalance() throws InterruptedException {
-//        int numClientsCreated = 0;
-//        final ArrayList<SmokeTestClient> clients = new ArrayList<>();
-//
-//        IntegrationTestUtils.cleanStateBeforeTest(CLUSTER, SmokeTestDriver.topics());
-//
-//        final String bootstrapServers = CLUSTER.bootstrapServers();
-//        final Driver driver = new Driver(bootstrapServers, 10, 1000);
-//        driver.start();
-//        System.out.println("started driver");
-//
-//
-//        final Properties props = new Properties();
-//        props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
-//
-//        // cycle out Streams instances as long as the test is running.
-//        while (driver.isAlive()) {
-//            // take a nap
-//            Thread.sleep(1000);
-//
-//            // add a new client
-//            final SmokeTestClient smokeTestClient = new SmokeTestClient("streams-" + numClientsCreated++);
-//            clients.add(smokeTestClient);
-//            smokeTestClient.start(props);
-//
-//            while (!clients.get(clients.size() - 1).started()) {
-//                Thread.sleep(100);
-//            }
-//
-//            // let the oldest client die of "natural causes"
-//            if (clients.size() >= 3) {
-//                final SmokeTestClient client = clients.remove(0);
-//
-//                client.closeAsync();
-//                while (!client.closed()) {
-//                    Thread.sleep(100);
-//                }
-//            }
-//        }
-//
-//        try {
-//            // wait for verification to finish
-//            driver.join();
-//        } finally {
-//            // whether or not the assertions failed, tell all the streams instances to stop
-//            for (final SmokeTestClient client : clients) {
-//                client.closeAsync();
-//            }
-//
-//            // then, wait for them to stop
-//            for (final SmokeTestClient client : clients) {
-//                while (!client.closed()) {
-//                    Thread.sleep(100);
-//                }
-//            }
-//        }
-//
-//        // check to make sure that it actually succeeded
-//        if (driver.exception() != null) {
-//            driver.exception().printStackTrace();
-//            throw new AssertionError(driver.exception());
-//        }
-//        Assert.assertTrue(driver.result().result(), driver.result().passed());
+        int numClientsCreated = 0;
+        final ArrayList<SmokeTestClient> clients = new ArrayList<>();
+
+        IntegrationTestUtils.cleanStateBeforeTest(CLUSTER, SmokeTestDriver.topics());
+
+        final String bootstrapServers = CLUSTER.bootstrapServers();
+        final Driver driver = new Driver(bootstrapServers, 10, 1000);
+        driver.start();
+        System.out.println("started driver");
+
+
+        final Properties props = new Properties();
+        props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
+
+        // cycle out Streams instances as long as the test is running.
+        while (driver.isAlive()) {
+            // take a nap
+            Thread.sleep(1000);
+
+            // add a new client
+            final SmokeTestClient smokeTestClient = new SmokeTestClient("streams-" + numClientsCreated++);
+            clients.add(smokeTestClient);
+            smokeTestClient.start(props);
+
+            while (!clients.get(clients.size() - 1).started()) {
+                Thread.sleep(100);
+            }
+
+            // let the oldest client die of "natural causes"
+            if (clients.size() >= 3) {
+                final SmokeTestClient client = clients.remove(0);
+
+                client.closeAsync();
+                while (!client.closed()) {
+                    Thread.sleep(100);
+                }
+            }
+        }
+
+        try {
+            // wait for verification to finish
+            driver.join();
+        } finally {
+            // whether or not the assertions failed, tell all the streams instances to stop
+            for (final SmokeTestClient client : clients) {
+                client.closeAsync();
+            }
+
+            // then, wait for them to stop
+            for (final SmokeTestClient client : clients) {
+                while (!client.closed()) {
+                    Thread.sleep(100);
+                }
+            }
+        }
+
+        // check to make sure that it actually succeeded
+        if (driver.exception() != null) {
+            driver.exception().printStackTrace();
+            throw new AssertionError(driver.exception());
+        }
+        Assert.assertTrue(driver.result().result(), driver.result().passed());
     }
 }

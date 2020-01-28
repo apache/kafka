@@ -38,32 +38,36 @@ import java.util.Set;
  */
 public class StandbyTask extends AbstractTask implements Task {
     private final TaskId id;
-    private final ProcessorTopology topology;
-    private final ProcessorStateManager stateMgr;
-    private final String logPrefix;
     private final Logger log;
+    private final String logPrefix;
+    private final ProcessorTopology topology;
+    private final Set<TopicPartition> partitions;
+    private final ProcessorStateManager stateMgr;
     private final StateDirectory stateDirectory;
     private final Sensor closeTaskSensor;
     private final InternalProcessorContext processorContext;
 
     /**
      * @param id             the ID of this task
+     * @param partitions     input topic partitions, used for thread metadata only
      * @param topology       the instance of {@link ProcessorTopology}
      * @param config         the {@link StreamsConfig} specified by the user
      * @param metrics        the {@link StreamsMetrics} created by the thread
+     * @param stateMgr       the {@link ProcessorStateManager} for this task
      * @param stateDirectory the {@link StateDirectory} created by the thread
      */
     StandbyTask(final TaskId id,
+                final Set<TopicPartition> partitions,
                 final ProcessorTopology topology,
                 final StreamsConfig config,
                 final StreamsMetricsImpl metrics,
                 final ProcessorStateManager stateMgr,
                 final StateDirectory stateDirectory) {
         this.id = id;
-        this.topology = topology;
-        this.stateDirectory = stateDirectory;
-
         this.stateMgr = stateMgr;
+        this.topology = topology;
+        this.partitions = partitions;
+        this.stateDirectory = stateDirectory;
 
         final String threadIdPrefix = String.format("stream-thread [%s] ", Thread.currentThread().getName());
         logPrefix = threadIdPrefix + String.format("%s [%s] ", "standby-task", id);
@@ -194,7 +198,7 @@ public class StandbyTask extends AbstractTask implements Task {
 
     @Override
     public Set<TopicPartition> inputPartitions() {
-        return Collections.emptySet();
+        return partitions;
     }
 
     @Override

@@ -352,7 +352,7 @@ public class StandbyTaskTest {
     }
 
     private StandbyTask createStandbyTask() {
-        return new StandbyTask(taskId, topology, config, streamsMetrics, stateManager, stateDirectory);
+        return new StandbyTask(taskId, Collections.singleton(partition), topology, config, streamsMetrics, stateManager, stateDirectory);
     }
 
     private MetricName setupCloseTaskMetric() {

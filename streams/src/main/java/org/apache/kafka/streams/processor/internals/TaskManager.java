@@ -101,7 +101,9 @@ public class TaskManager {
         return builder;
     }
 
-    void handleRebalanceStart() {
+    void handleRebalanceStart(final Set<String> subscribedTopics) {
+        builder.addSubscribedTopicsFromMetadata(subscribedTopics, logPrefix);
+
         rebalanceInProgress = true;
     }
 
@@ -113,8 +115,14 @@ public class TaskManager {
         rebalanceInProgress = false;
     }
 
-    void handleAssignment(final Map<TaskId, Set<TopicPartition>> activeTasks,
-                          final Map<TaskId, Set<TopicPartition>> standbyTasks) {
+    /**
+     * @throws TaskMigratedException if the task producer got fenced (EOS only)
+     * @throws StreamsException fatal error while creating / initializing the task
+     *
+     * public for upgrade testing only
+     */
+    public void handleAssignment(final Map<TaskId, Set<TopicPartition>> activeTasks,
+                                 final Map<TaskId, Set<TopicPartition>> standbyTasks) {
         log.info("Handle new assignment with:\n\tNew active tasks: {}\n\tNew standby tasks: {}" +
                 "\n\tExisting active tasks: {}\n\tExisting standby tasks: {}",
             activeTasks.keySet(), standbyTasks.keySet(), activeTaskIds(), standbyTaskIds());
@@ -241,7 +249,6 @@ public class TaskManager {
             if (remainingPartitions.containsAll(task.inputPartitions())) {
                 revokedTasks.add(task.id());
                 remainingPartitions.removeAll(task.inputPartitions());
-                break;
             }
         }
 
@@ -252,11 +259,7 @@ public class TaskManager {
 
         for (final TaskId taskId : revokedTasks) {
             final Task task = tasks.get(taskId);
-            try {
-                task.suspend();
-            } catch (final RuntimeException e) {
-                throw new StreamsException("Unexpected exception while suspending task " + taskId, e);
-            }
+            task.suspend();
         }
     }
 
@@ -265,7 +268,7 @@ public class TaskManager {
      * NOTE this method assumes that when it is called, EVERY task/partition has been lost and must
      * be closed as a zombie.
      */
-    void handleTaskLoss() {
+    void handleLostAll() {
         log.debug("Closing lost active tasks as zombies.");
 
         final Iterator<Task> iterator = tasks.values().iterator();
@@ -369,15 +372,6 @@ public class TaskManager {
         return partitionToTask.get(partition);
     }
 
-    StandbyTask standbyTask(final TopicPartition partition) {
-        for (final Task task : (Iterable<Task>) standbyTaskStream()::iterator) {
-            if (task.inputPartitions().contains(partition)) {
-                return (StandbyTask) task;
-            }
-        }
-        return null;
-    }
-
     Map<TaskId, Task> tasks() {
         // not bothering with an unmodifiable map, since the tasks themselves are mutable, but
         // if any outside code modifies the map or the tasks, it would be a severe transgression.
@@ -388,8 +382,8 @@ public class TaskManager {
         return activeTaskStream().collect(Collectors.toMap(Task::id, t -> t));
     }
 
-    Iterable<Task> activeTaskIterable() {
-        return activeTaskStream()::iterator;
+    List<Task> activeTaskIterable() {
+        return activeTaskStream().collect(Collectors.toList());
     }
 
     private Stream<Task> activeTaskStream() {
@@ -546,14 +540,19 @@ public class TaskManager {
         return stringBuilder.toString();
     }
 
-    // FIXME: this is used from StreamThread only for a hack to collect metrics from the record collectors inside of StreamTasks
+    // below are for testing only
+    StandbyTask standbyTask(final TopicPartition partition) {
+        for (final Task task : (Iterable<Task>) standbyTaskStream()::iterator) {
+            if (task.inputPartitions().contains(partition)) {
+                return (StandbyTask) task;
+            }
+        }
+        return null;
+    }
+
+    // TODO: this is used from StreamThread only for a hack to collect metrics from the record collectors inside of StreamTasks
     // Instead, we should register and record the metrics properly inside of the record collector.
     Map<TaskId, StreamTask> fixmeStreamTasks() {
         return tasks.values().stream().filter(t -> t instanceof StreamTask).map(t -> (StreamTask) t).collect(Collectors.toMap(Task::id, t -> t));
-    }
-
-    // FIXME: inappropriately used from StreamsUpgradeTest
-    public void fixmeUpdateSubscriptionsFromAssignment(final List<TopicPartition> partitions) {
-        builder.addSubscribedTopicsFromAssignment(partitions, logPrefix);
     }
 }

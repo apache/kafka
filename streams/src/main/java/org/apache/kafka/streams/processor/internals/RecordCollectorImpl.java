@@ -73,6 +73,9 @@ public class RecordCollectorImpl implements RecordCollector {
     private Producer<byte[], byte[]> producer;
     private volatile KafkaException sendException;
 
+    /**
+     * @throws StreamsException fatal error that should cause the thread to die (from producer.initTxn)
+     */
     public RecordCollectorImpl(final TaskId taskId,
                                final StreamsConfig config,
                                final LogContext logContext,
@@ -93,16 +96,6 @@ public class RecordCollectorImpl implements RecordCollector {
 
         producer = producerSupplier.get(taskId);
 
-        // TODO K9113: this should be moved to task when it transits to running from created / restoring
-        // then even if there's a long time between the initialization and the first txn that is also fine.
-        initialize();
-    }
-
-    /**
-     * @throws StreamsException fatal error that should cause the thread to die
-     */
-    @Override
-    public void initialize() {
         maybeInitTxns();
     }
 
@@ -333,7 +326,9 @@ public class RecordCollectorImpl implements RecordCollector {
     @Override
     public void flush() {
         log.debug("Flushing record collector");
+
         producer.flush();
+
         checkForException();
     }
 

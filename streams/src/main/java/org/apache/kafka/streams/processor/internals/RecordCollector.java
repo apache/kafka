@@ -27,11 +27,6 @@ import java.util.Map;
 
 public interface RecordCollector extends AutoCloseable {
 
-    /**
-     * Initialize the record collector
-     */
-    void initialize();
-
     <K, V> void send(final String topic,
                      final K key,
                      final V value,

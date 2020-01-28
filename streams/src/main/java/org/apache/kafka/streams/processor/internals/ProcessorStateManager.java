@@ -189,7 +189,8 @@ public class ProcessorStateManager implements StateManager {
         return globalStores.get(name);
     }
 
-    public void initializeStoreOffsetsFromCheckpoint() {
+    // package-private for test only
+    void initializeStoreOffsetsFromCheckpoint() {
         try {
             final Map<TopicPartition, Long> loadedCheckpoints = checkpointFile.read();
 

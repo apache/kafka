@@ -17,11 +17,11 @@
 
 package org.apache.kafka.streams.integration;
 
-import kafka.utils.MockTime;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
@@ -38,17 +38,21 @@ import org.apache.kafka.streams.state.internals.KeyValueStoreBuilder;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.TestUtils;
+
 import org.junit.After;
 import org.junit.Before;
 import org.junit.ClassRule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Properties;
 import java.util.concurrent.atomic.AtomicInteger;
+
+import static org.junit.Assert.assertEquals;
 
 
 /**
@@ -65,14 +69,14 @@ public class GlobalThreadShutDownOrderTest {
 
     private static final int NUM_BROKERS = 1;
     private static final Properties BROKER_CONFIG;
-    private final AtomicInteger closeCounter = new AtomicInteger(0);
-    private final int expectedCloseCount = 1;
 
     static {
         BROKER_CONFIG = new Properties();
         BROKER_CONFIG.put("transaction.state.log.replication.factor", (short) 1);
         BROKER_CONFIG.put("transaction.state.log.min.isr", 1);
     }
+
+    private final AtomicInteger closeCounter = new AtomicInteger(0);
 
     @ClassRule
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS, BROKER_CONFIG);
@@ -121,32 +125,31 @@ public class GlobalThreadShutDownOrderTest {
     }
 
     @After
-    public void whenShuttingDown() throws Exception {
+    public void after() throws Exception {
         if (kafkaStreams != null) {
             kafkaStreams.close();
         }
         IntegrationTestUtils.purgeLocalStreamsState(streamsConfiguration);
     }
 
-    // FIXME
     @Test
     public void shouldFinishGlobalStoreOperationOnShutDown() throws Exception {
-//        kafkaStreams = new KafkaStreams(builder.build(), streamsConfiguration);
-//        populateTopics(globalStoreTopic);
-//        populateTopics(streamTopic);
-//
-//        kafkaStreams.start();
-//
-//        TestUtils.waitForCondition(
-//            () -> firstRecordProcessed,
-//            30000,
-//            "Has not processed record within 30 seconds");
-//
-//        kafkaStreams.close(Duration.ofSeconds(30));
-//
-//        final List<Long> expectedRetrievedValues = Arrays.asList(1L, 2L, 3L, 4L);
-//        assertEquals(expectedRetrievedValues, retrievedValuesList);
-//        assertEquals(expectedCloseCount, closeCounter.get());
+        kafkaStreams = new KafkaStreams(builder.build(), streamsConfiguration);
+        populateTopics(globalStoreTopic);
+        populateTopics(streamTopic);
+
+        kafkaStreams.start();
+
+        TestUtils.waitForCondition(
+            () -> firstRecordProcessed,
+            30000,
+            "Has not processed record within 30 seconds");
+
+        kafkaStreams.close(Duration.ofSeconds(30));
+
+        final List<Long> expectedRetrievedValues = Arrays.asList(1L, 2L, 3L, 4L);
+        assertEquals(expectedRetrievedValues, retrievedValuesList);
+        assertEquals(1, closeCounter.get());
     }
 
 
