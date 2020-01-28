@@ -62,31 +62,19 @@ public class Metadata implements Closeable {
     private final Logger log;
     private final long refreshBackoffMs;
     private final long metadataExpireMs;
-    private int updateVersion;          // bumped on every metadata response
+    private int updateVersion;  // bumped on every metadata response
+    private int requestVersion; // bumped on every new topic addition
     private long lastRefreshMs;
     private long lastSuccessfulRefreshMs;
     private KafkaException fatalException;
     private Set<String> invalidTopics;
     private Set<String> unauthorizedTopics;
     private MetadataCache cache = MetadataCache.empty();
-    private boolean needUpdate;
+    private boolean needFullUpdate;
+    private boolean needPartialUpdate;
     private final ClusterResourceListeners clusterResourceListeners;
     private boolean isClosed;
     private final Map<TopicPartition, Integer> lastSeenLeaderEpochs;
-
-    // The following are used for tracking whether a metadata update is needed.  `requestVersion` is a monotonically
-    // increasing counter that is incremented every time an update is requested. If a full metadata update is requested,
-    // then `fullRequestVersion` is set to the current `requestVersion`, otherwise a partial metadata update should be
-    // done where `partialRequestVersion` will be set to the current `requestVersion`. `lastRequestVersion` is the request
-    // version for the last successful update.
-    //
-    // It can be deduced whether a full update or partial update should be performed by inspecting the respective request
-    // versions, and comparing them to the last request version. If the `fullRequestVersion` is greater, than a full update
-    // has been requested, otherwise if `partialRequestVersion` is greater, than only a partial update is necessary.
-    private int requestVersion;
-    private int fullRequestVersion;
-    private int partialRequestVersion;
-    private int lastRequestVersion;
 
     /**
      * Create a new Metadata instance
@@ -104,19 +92,17 @@ public class Metadata implements Closeable {
         this.log = logContext.logger(Metadata.class);
         this.refreshBackoffMs = refreshBackoffMs;
         this.metadataExpireMs = metadataExpireMs;
-        this.updateVersion = 0;
         this.lastRefreshMs = 0L;
         this.lastSuccessfulRefreshMs = 0L;
-        this.needUpdate = false;
+        this.requestVersion = 0;
+        this.updateVersion = 0;
+        this.needFullUpdate = false;
+        this.needPartialUpdate = false;
         this.clusterResourceListeners = clusterResourceListeners;
         this.isClosed = false;
         this.lastSeenLeaderEpochs = new HashMap<>();
         this.invalidTopics = Collections.emptySet();
         this.unauthorizedTopics = Collections.emptySet();
-        this.requestVersion = 0;
-        this.fullRequestVersion = 0;
-        this.partialRequestVersion = 0;
-        this.lastRequestVersion = 0;
     }
 
     /**
@@ -145,7 +131,7 @@ public class Metadata implements Closeable {
      * @return remaining time in ms till updating the cluster info
      */
     public synchronized long timeToNextUpdate(long nowMs) {
-        long timeToExpire = needUpdate ? 0 : Math.max(this.lastSuccessfulRefreshMs + this.metadataExpireMs - nowMs, 0);
+        long timeToExpire = updateRequested() ? 0 : Math.max(this.lastSuccessfulRefreshMs + this.metadataExpireMs - nowMs, 0);
         return Math.max(timeToExpire, timeToAllowUpdate(nowMs));
     }
 
@@ -157,18 +143,15 @@ public class Metadata implements Closeable {
      * Request an update of the current cluster metadata info, return the current updateVersion before the update
      */
     public synchronized int requestUpdate() {
-        this.needUpdate = true;
-        this.requestVersion++;
-        this.fullRequestVersion = this.requestVersion;
+        this.needFullUpdate = true;
         return this.updateVersion;
     }
 
     public synchronized void requestUpdateForNewTopics() {
         // Override the timestamp of last refresh to let immediate update.
         this.lastRefreshMs = 0;
-        this.needUpdate = true;
+        this.needPartialUpdate = true;
         this.requestVersion++;
-        this.partialRequestVersion = this.requestVersion;
     }
 
     /**
@@ -217,7 +200,7 @@ public class Metadata implements Closeable {
      * @return true if an update was requested, false otherwise
      */
     public synchronized boolean updateRequested() {
-        return this.needUpdate;
+        return this.needFullUpdate || this.needPartialUpdate;
     }
 
     /**
@@ -277,13 +260,13 @@ public class Metadata implements Closeable {
         if (isClosed())
             throw new IllegalStateException("Update requested after metadata close");
 
-        this.needUpdate = requestVersion < this.requestVersion;
-        this.lastRequestVersion = requestVersion;
+        this.needPartialUpdate = requestVersion < this.requestVersion;
         this.lastRefreshMs = nowMs;
+        this.updateVersion += 1;
         if (!isPartialUpdate) {
+            this.needFullUpdate = false;
             this.lastSuccessfulRefreshMs = nowMs;
         }
-        this.updateVersion += 1;
 
         String previousClusterId = cache.clusterResource().clusterId();
 
@@ -517,28 +500,40 @@ public class Metadata implements Closeable {
         return this.isClosed;
     }
 
-    private synchronized boolean shouldPerformPartialUpdate(long nowMs) {
-        // If the full request version is higher than the last recorded version, then a full update
-        // request has been made.
-        if (this.fullRequestVersion > this.lastRequestVersion)
-            return false;
-
-        // If the last successful refresh time is near or exceeded the metadata refresh time, then
-        // perform a full update.
-        if (this.lastSuccessfulRefreshMs + this.metadataExpireMs <= nowMs)
-            return false;
-
-        return true;
-    }
-
     public synchronized MetadataRequestAndVersion newMetadataRequestAndVersion(long nowMs) {
-        boolean isPartialUpdate = shouldPerformPartialUpdate(nowMs);
-        MetadataRequest.Builder request = newMetadataRequestBuilder(isPartialUpdate);
+        MetadataRequest.Builder request = null;
+        boolean isPartialUpdate = false;
+
+        // Perform a partial update only if a full update hasn't been requested, and the last successful
+        // hasn't exceeded the metadata refresh time.
+        if (!this.needFullUpdate && this.lastSuccessfulRefreshMs + this.metadataExpireMs > nowMs) {
+            request = newMetadataRequestBuilderForNewTopics();
+            isPartialUpdate = true;
+        }
+        if (request == null) {
+            request = newMetadataRequestBuilder();
+            isPartialUpdate = false;
+        }
         return new MetadataRequestAndVersion(request, requestVersion, isPartialUpdate);
     }
 
-    protected MetadataRequest.Builder newMetadataRequestBuilder(boolean isPartialUpdate) {
+    /**
+     * Constructs and returns a metadata request builder for fetching cluster data and all active topics.
+     *
+     * @return the constructed non-null metadata builder
+     */
+    protected MetadataRequest.Builder newMetadataRequestBuilder() {
         return MetadataRequest.Builder.allTopics();
+    }
+
+    /**
+     * Constructs and returns a metadata request builder for fetching cluster data and any uncached topics,
+     * otherwise null if the functionality is not supported.
+     *
+     * @return the constructed metadata builder, or null if not supported
+     */
+    protected MetadataRequest.Builder newMetadataRequestBuilderForNewTopics() {
+        return null;
     }
 
     protected boolean retainTopic(String topic, boolean isInternal, long nowMs) {

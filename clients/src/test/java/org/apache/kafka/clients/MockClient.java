@@ -642,7 +642,7 @@ public class MockClient implements KafkaClient {
 
         @Override
         public void update(Time time, MetadataUpdate update) {
-            MetadataRequest.Builder builder = metadata.newMetadataRequestBuilder(false);
+            MetadataRequest.Builder builder = metadata.newMetadataRequestBuilder();
             maybeCheckExpectedTopics(update, builder);
             metadata.update(update.updateResponse, time.milliseconds());
             this.lastUpdate = update;

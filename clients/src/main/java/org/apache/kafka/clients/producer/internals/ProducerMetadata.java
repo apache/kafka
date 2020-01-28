@@ -55,8 +55,13 @@ public class ProducerMetadata extends Metadata {
     }
 
     @Override
-    public synchronized MetadataRequest.Builder newMetadataRequestBuilder(boolean isPartialUpdate) {
-        return new MetadataRequest.Builder(new ArrayList<>(isPartialUpdate ? newTopics : topics.keySet()), true);
+    public synchronized MetadataRequest.Builder newMetadataRequestBuilder() {
+        return new MetadataRequest.Builder(new ArrayList<>(topics.keySet()), true);
+    }
+
+    @Override
+    public synchronized MetadataRequest.Builder newMetadataRequestBuilderForNewTopics() {
+        return new MetadataRequest.Builder(new ArrayList<>(newTopics), true);
     }
 
     public synchronized void add(String topic, long nowMs) {
@@ -117,8 +122,8 @@ public class ProducerMetadata extends Metadata {
     public synchronized void update(int requestVersion, MetadataResponse response, boolean isPartialUpdate, long nowMs) {
         super.update(requestVersion, response, isPartialUpdate, nowMs);
 
-        // Remove any new topics in the response from the new topic set. Note that if an error was encountered for a
-        // new topic, then any work to resolve the error will include the topic in a full metadata update.
+        // Remove all topics in the response that are in the new topic set. Note that if an error was encountered for a
+        // new topic's metadata, then any work to resolve the error will include the topic in a full metadata update.
         if (!newTopics.isEmpty()) {
             for (MetadataResponse.TopicMetadata metadata : response.topicMetadata()) {
                 newTopics.remove(metadata.topic());
