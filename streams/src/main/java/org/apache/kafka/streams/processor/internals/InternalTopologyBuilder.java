@@ -1871,12 +1871,10 @@ public class InternalTopologyBuilder {
 
     synchronized void updateSubscribedTopics(final Set<String> topics,
                                              final String logPrefix) {
-        log.debug("{}found {} topics possibly matching subscription", logPrefix, topics);
+        log.debug("{}found {} topics possibly matching subscription", logPrefix, topics.size());
         subscriptionUpdates.clear();
         subscriptionUpdates.addAll(topics);
 
-        log.debug("{}updating builder with {} topic(s) with possible matching regex subscription(s)",
-            logPrefix, subscriptionUpdates);
         setRegexMatchedTopicsToSourceNodes();
         setRegexMatchedTopicToStateStore();
     }
