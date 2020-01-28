@@ -71,6 +71,10 @@ import org.apache.kafka.common.message.AlterPartitionReassignmentsRequestData.Re
 import org.apache.kafka.common.message.CreateDelegationTokenRequestData;
 import org.apache.kafka.common.message.CreateDelegationTokenRequestData.CreatableRenewers;
 import org.apache.kafka.common.message.CreateDelegationTokenResponseData;
+import org.apache.kafka.common.message.CreatePartitionsRequestData;
+import org.apache.kafka.common.message.CreatePartitionsRequestData.CreatePartitionsAssignment;
+import org.apache.kafka.common.message.CreatePartitionsRequestData.CreatePartitionsTopic;
+import org.apache.kafka.common.message.CreatePartitionsResponseData.CreatePartitionsTopicResult;
 import org.apache.kafka.common.message.CreateTopicsRequestData;
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopicCollection;
 import org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicConfigs;
@@ -127,7 +131,6 @@ import org.apache.kafka.common.requests.CreateAclsResponse.AclCreationResponse;
 import org.apache.kafka.common.requests.CreateDelegationTokenRequest;
 import org.apache.kafka.common.requests.CreateDelegationTokenResponse;
 import org.apache.kafka.common.requests.CreatePartitionsRequest;
-import org.apache.kafka.common.requests.CreatePartitionsRequest.PartitionDetails;
 import org.apache.kafka.common.requests.CreatePartitionsResponse;
 import org.apache.kafka.common.requests.CreateTopicsRequest;
 import org.apache.kafka.common.requests.CreateTopicsResponse;
@@ -438,7 +441,7 @@ public class KafkaAdminClient extends AdminClient {
             reporters.add(new JmxReporter(JMX_PREFIX));
             metrics = new Metrics(metricConfig, reporters, time);
             String metricGrpPrefix = "admin-client";
-            channelBuilder = ClientUtils.createChannelBuilder(config, time);
+            channelBuilder = ClientUtils.createChannelBuilder(config, time, logContext);
             selector = new Selector(config.getLong(AdminClientConfig.CONNECTIONS_MAX_IDLE_MS_CONFIG),
                     metrics, time, metricGrpPrefix, channelBuilder, logContext);
             networkClient = new NetworkClient(
@@ -552,11 +555,12 @@ public class KafkaAdminClient extends AdminClient {
             log.debug("Waiting for the I/O thread to exit. Hard shutdown in {} ms.", deltaMs);
         }
         try {
-            // Wait for the thread to be joined.
-            thread.join();
-
-            AppInfoParser.unregisterAppInfo(JMX_PREFIX, clientId, metrics);
-
+            // close() can be called by AdminClient thread when it invokes callback. That will
+            // cause deadlock, so check for that condition.
+            if (Thread.currentThread() != thread) {
+                // Wait for the thread to be joined.
+                thread.join(waitTimeMs);
+            }
             log.debug("Kafka admin client closed.");
         } catch (InterruptedException e) {
             log.debug("Interrupted while joining I/O thread", e);
@@ -1163,8 +1167,33 @@ public class KafkaAdminClient extends AdminClient {
 
         @Override
         public void run() {
-            long now = time.milliseconds();
             log.trace("Thread starting");
+            try {
+                processRequests();
+            } finally {
+                AppInfoParser.unregisterAppInfo(JMX_PREFIX, clientId, metrics);
+
+                int numTimedOut = 0;
+                TimeoutProcessor timeoutProcessor = new TimeoutProcessor(Long.MAX_VALUE);
+                synchronized (this) {
+                    numTimedOut += timeoutProcessor.handleTimeouts(newCalls, "The AdminClient thread has exited.");
+                    newCalls = null;
+                }
+                numTimedOut += timeoutProcessor.handleTimeouts(pendingCalls, "The AdminClient thread has exited.");
+                numTimedOut += timeoutCallsToSend(timeoutProcessor);
+                numTimedOut += timeoutProcessor.handleTimeouts(correlationIdToCalls.values(),
+                        "The AdminClient thread has exited.");
+                if (numTimedOut > 0) {
+                    log.debug("Timed out {} remaining operation(s).", numTimedOut);
+                }
+                closeQuietly(client, "KafkaClient");
+                closeQuietly(metrics, "Metrics");
+                log.debug("Exiting AdminClientRunnable thread.");
+            }
+        }
+
+        private void processRequests() {
+            long now = time.milliseconds();
             while (true) {
                 // Copy newCalls into pendingCalls.
                 drainNewCalls();
@@ -1219,22 +1248,6 @@ public class KafkaAdminClient extends AdminClient {
                 now = time.milliseconds();
                 handleResponses(now, responses);
             }
-            int numTimedOut = 0;
-            TimeoutProcessor timeoutProcessor = new TimeoutProcessor(Long.MAX_VALUE);
-            synchronized (this) {
-                numTimedOut += timeoutProcessor.handleTimeouts(newCalls, "The AdminClient thread has exited.");
-                newCalls = null;
-            }
-            numTimedOut += timeoutProcessor.handleTimeouts(pendingCalls, "The AdminClient thread has exited.");
-            numTimedOut += timeoutCallsToSend(timeoutProcessor);
-            numTimedOut += timeoutProcessor.handleTimeouts(correlationIdToCalls.values(),
-                    "The AdminClient thread has exited.");
-            if (numTimedOut > 0) {
-                log.debug("Timed out {} remaining operation(s).", numTimedOut);
-            }
-            closeQuietly(client, "KafkaClient");
-            closeQuietly(metrics, "Metrics");
-            log.debug("Exiting AdminClientRunnable thread.");
         }
 
         /**
@@ -2313,8 +2326,21 @@ public class KafkaAdminClient extends AdminClient {
         for (String topic : newPartitions.keySet()) {
             futures.put(topic, new KafkaFutureImpl<>());
         }
-        final Map<String, PartitionDetails> requestMap = newPartitions.entrySet().stream()
-                .collect(Collectors.toMap(Map.Entry::getKey, e -> partitionDetails(e.getValue())));
+
+        final List<CreatePartitionsTopic> topics = newPartitions.entrySet().stream()
+                .map(partitionsEntry -> {
+                    NewPartitions newPartition = partitionsEntry.getValue();
+                    List<List<Integer>> newAssignments = newPartition.assignments();
+                    List<CreatePartitionsAssignment> assignments = newAssignments == null ? null :
+                            newAssignments.stream()
+                            .map(brokerIds -> new CreatePartitionsAssignment().setBrokerIds(brokerIds))
+                            .collect(Collectors.toList());
+                    return new CreatePartitionsTopic()
+                            .setName(partitionsEntry.getKey())
+                            .setCount(newPartition.totalCount())
+                            .setAssignments(assignments);
+                })
+                .collect(Collectors.toList());
 
         final long now = time.milliseconds();
         runnable.call(new Call("createPartitions", calcDeadlineMs(now, options.timeoutMs()),
@@ -2322,26 +2348,33 @@ public class KafkaAdminClient extends AdminClient {
 
             @Override
             public CreatePartitionsRequest.Builder createRequest(int timeoutMs) {
-                return new CreatePartitionsRequest.Builder(requestMap, timeoutMs, options.validateOnly());
+                CreatePartitionsRequestData requestData = new CreatePartitionsRequestData()
+                        .setTopics(topics)
+                        .setValidateOnly(options.validateOnly())
+                        .setTimeoutMs(timeoutMs);
+
+                return new CreatePartitionsRequest.Builder(requestData);
             }
 
             @Override
             public void handleResponse(AbstractResponse abstractResponse) {
                 CreatePartitionsResponse response = (CreatePartitionsResponse) abstractResponse;
                 // Check for controller change
-                for (ApiError error : response.errors().values()) {
-                    if (error.error() == Errors.NOT_CONTROLLER) {
+                for (CreatePartitionsTopicResult topicResult: response.data().results()) {
+                    Errors error = Errors.forCode(topicResult.errorCode());
+                    if (error == Errors.NOT_CONTROLLER) {
                         metadataManager.clearController();
                         metadataManager.requestUpdate();
                         throw error.exception();
                     }
                 }
-                for (Map.Entry<String, ApiError> result : response.errors().entrySet()) {
-                    KafkaFutureImpl<Void> future = futures.get(result.getKey());
-                    if (result.getValue().isSuccess()) {
+                for (CreatePartitionsTopicResult topicResult: response.data().results()) {
+                    Errors error = Errors.forCode(topicResult.errorCode());
+                    KafkaFutureImpl<Void> future = futures.get(topicResult.name());
+                    if (error == Errors.NONE) {
                         future.complete(null);
                     } else {
-                        future.completeExceptionally(result.getValue().exception());
+                        future.completeExceptionally(error.exception(topicResult.errorMessage()));
                     }
                 }
             }
@@ -2851,10 +2884,6 @@ public class KafkaAdminClient extends AdminClient {
         return false;
     }
 
-    private PartitionDetails partitionDetails(NewPartitions newPartitions) {
-        return new PartitionDetails(newPartitions.totalCount(), newPartitions.assignments());
-    }
-
     private final static class ListConsumerGroupsResults {
         private final List<Throwable> errors;
         private final HashMap<String, ConsumerGroupListing> listings;
@@ -2999,7 +3028,9 @@ public class KafkaAdminClient extends AdminClient {
                 new ConstantNodeIdProvider(context.node().get().id())) {
             @Override
             OffsetFetchRequest.Builder createRequest(int timeoutMs) {
-                return new OffsetFetchRequest.Builder(context.groupId(), context.options().topicPartitions());
+                // Set the flag to false as for admin client request,
+                // we don't need to wait for any pending offset state to clear.
+                return new OffsetFetchRequest.Builder(context.groupId(), false, context.options().topicPartitions());
             }
 
             @Override

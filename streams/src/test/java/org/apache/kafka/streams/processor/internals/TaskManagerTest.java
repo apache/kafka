@@ -70,8 +70,7 @@ public class TaskManagerTest {
     private final Map<TaskId, Set<TopicPartition>> taskId0Assignment = Collections.singletonMap(taskId0, taskId0Partitions);
     private final Map<TopicPartition, TaskId> taskId0PartitionToTaskId = Collections.singletonMap(t1p0, taskId0);
 
-    @Mock(type = MockType.STRICT)
-    private InternalTopologyBuilder.SubscriptionUpdates subscriptionUpdates;
+
     @Mock(type = MockType.STRICT)
     private InternalTopologyBuilder topologyBuilder;
     @Mock(type = MockType.STRICT)
@@ -118,6 +117,7 @@ public class TaskManagerTest {
     private final Set<TaskId> revokedTasks = new HashSet<>();
     private final List<TopicPartition> revokedPartitions = new ArrayList<>();
     private final List<TopicPartition> revokedChangelogs = Collections.emptyList();
+    private Set<String> subscriptionUpdates = Collections.emptySet();
 
     @Rule
     public final TemporaryFolder testFolder = new TemporaryFolder();
@@ -152,69 +152,61 @@ public class TaskManagerTest {
     @Test
     public void shouldUpdateSubscriptionFromAssignment() {
         mockTopologyBuilder();
-        expect(subscriptionUpdates.getUpdates()).andReturn(Utils.mkSet(topic1));
+        expect(topologyBuilder.subscriptionUpdates()).andReturn(Utils.mkSet(topic1));
         topologyBuilder.updateSubscribedTopics(EasyMock.eq(Utils.mkSet(topic1, topic2)), EasyMock.anyString());
         expectLastCall().once();
 
         EasyMock.replay(activeTaskCreator,
-                        topologyBuilder,
-                        subscriptionUpdates);
+                        topologyBuilder);
 
         taskManager.updateSubscriptionsFromAssignment(asList(t1p1, t2p1));
 
         EasyMock.verify(activeTaskCreator,
-                        topologyBuilder,
-                        subscriptionUpdates);
+                        topologyBuilder);
     }
 
     @Test
     public void shouldNotUpdateSubscriptionFromAssignment() {
         mockTopologyBuilder();
-        expect(subscriptionUpdates.getUpdates()).andReturn(Utils.mkSet(topic1, topic2));
+        expect(topologyBuilder.subscriptionUpdates()).andReturn(Utils.mkSet(topic1, topic2));
 
         EasyMock.replay(activeTaskCreator,
-                        topologyBuilder,
-                        subscriptionUpdates);
+                        topologyBuilder);
 
         taskManager.updateSubscriptionsFromAssignment(asList(t1p1));
 
         EasyMock.verify(activeTaskCreator,
-                        topologyBuilder,
-                        subscriptionUpdates);
+                        topologyBuilder);
     }
 
     @Test
     public void shouldUpdateSubscriptionFromMetadata() {
         mockTopologyBuilder();
-        expect(subscriptionUpdates.getUpdates()).andReturn(Utils.mkSet(topic1));
+        expect(topologyBuilder.subscriptionUpdates()).andReturn(Utils.mkSet(topic1));
         topologyBuilder.updateSubscribedTopics(EasyMock.eq(Utils.mkSet(topic1, topic2)), EasyMock.anyString());
         expectLastCall().once();
 
         EasyMock.replay(activeTaskCreator,
-                topologyBuilder,
-                subscriptionUpdates);
+                        topologyBuilder);
 
         taskManager.updateSubscriptionsFromMetadata(Utils.mkSet(topic1, topic2));
 
         EasyMock.verify(activeTaskCreator,
-                topologyBuilder,
-                subscriptionUpdates);
+                        topologyBuilder);
     }
 
     @Test
     public void shouldNotUpdateSubscriptionFromMetadata() {
         mockTopologyBuilder();
-        expect(subscriptionUpdates.getUpdates()).andReturn(Utils.mkSet(topic1));
+        expect(topologyBuilder.subscriptionUpdates()).andReturn(Utils.mkSet(topic1));
 
         EasyMock.replay(activeTaskCreator,
-                topologyBuilder,
-                subscriptionUpdates);
+                        topologyBuilder);
 
         taskManager.updateSubscriptionsFromMetadata(Utils.mkSet(topic1));
 
         EasyMock.verify(activeTaskCreator,
-                topologyBuilder,
-                subscriptionUpdates);
+                        topologyBuilder);
     }
 
     @Test
@@ -677,7 +669,7 @@ public class TaskManagerTest {
     }
 
     private void mockSingleActiveTask() {
-        expect(activeTaskCreator.createTasks(EasyMock.<Consumer<byte[], byte[]>>anyObject(),
+        expect(activeTaskCreator.createTasks(EasyMock.anyObject(),
                                                   EasyMock.eq(taskId0Assignment)))
                 .andReturn(Collections.singletonList(streamTask));
 
@@ -685,7 +677,6 @@ public class TaskManagerTest {
 
     private void mockTopologyBuilder() {
         expect(activeTaskCreator.builder()).andReturn(topologyBuilder).anyTimes();
-        expect(topologyBuilder.sourceTopicPattern()).andReturn(Pattern.compile("abc"));
-        expect(topologyBuilder.subscriptionUpdates()).andReturn(subscriptionUpdates);
+        expect(topologyBuilder.sourceTopicPattern()).andReturn(Pattern.compile("abc")).anyTimes();
     }
 }

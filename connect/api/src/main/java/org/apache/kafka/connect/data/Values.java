@@ -723,14 +723,30 @@ public class Values {
         return new SimpleDateFormat(ISO_8601_TIMESTAMP_FORMAT_PATTERN);
     }
 
+    protected static boolean canParseSingleTokenLiteral(Parser parser, boolean embedded, String tokenLiteral) {
+        int startPosition = parser.mark();
+        // If the next token is what we expect, then either...
+        if (parser.canConsume(tokenLiteral)) {
+            //   ...we're reading an embedded value, in which case the next token will be handled appropriately
+            //      by the caller if it's something like an end delimiter for a map or array, or a comma to
+            //      separate multiple embedded values...
+            //   ...or it's being parsed as part of a top-level string, in which case, any other tokens should
+            //      cause use to stop parsing this single-token literal as such and instead just treat it like
+            //      a string. For example, the top-level string "true}" will be tokenized as the tokens "true" and
+            //      "}", but should ultimately be parsed as just the string "true}" instead of the boolean true.
+            if (embedded || !parser.hasNext()) {
+                return true;
+            }
+        }
+        parser.rewindTo(startPosition);
+        return false;
+    }
+
     protected static SchemaAndValue parse(Parser parser, boolean embedded) throws NoSuchElementException {
         if (!parser.hasNext()) {
             return null;
         }
         if (embedded) {
-            if (parser.canConsume(NULL_VALUE)) {
-                return null;
-            }
             if (parser.canConsume(QUOTE_DELIMITER)) {
                 StringBuilder sb = new StringBuilder();
                 while (parser.hasNext()) {
@@ -742,34 +758,51 @@ public class Values {
                 return new SchemaAndValue(Schema.STRING_SCHEMA, sb.toString());
             }
         }
-        if (parser.canConsume(TRUE_LITERAL)) {
+
+        if (canParseSingleTokenLiteral(parser, embedded, NULL_VALUE)) {
+            return null;
+        }
+        if (canParseSingleTokenLiteral(parser, embedded, TRUE_LITERAL)) {
             return TRUE_SCHEMA_AND_VALUE;
         }
-        if (parser.canConsume(FALSE_LITERAL)) {
+        if (canParseSingleTokenLiteral(parser, embedded, FALSE_LITERAL)) {
             return FALSE_SCHEMA_AND_VALUE;
         }
+
         int startPosition = parser.mark();
+
         try {
             if (parser.canConsume(ARRAY_BEGIN_DELIMITER)) {
                 List<Object> result = new ArrayList<>();
                 Schema elementSchema = null;
                 while (parser.hasNext()) {
                     if (parser.canConsume(ARRAY_END_DELIMITER)) {
-                        Schema listSchema = null;
+                        Schema listSchema;
                         if (elementSchema != null) {
                             listSchema = SchemaBuilder.array(elementSchema).schema();
+                            result = alignListEntriesWithSchema(listSchema, result);
+                        } else {
+                            // Every value is null
+                            listSchema = SchemaBuilder.arrayOfNull().build();
                         }
-                        result = alignListEntriesWithSchema(listSchema, result);
                         return new SchemaAndValue(listSchema, result);
                     }
+
                     if (parser.canConsume(COMMA_DELIMITER)) {
                         throw new DataException("Unable to parse an empty array element: " + parser.original());
                     }
                     SchemaAndValue element = parse(parser, true);
                     elementSchema = commonSchemaFor(elementSchema, element);
-                    result.add(element.value());
-                    parser.canConsume(COMMA_DELIMITER);
+                    result.add(element != null ? element.value() : null);
+
+                    int currentPosition = parser.mark();
+                    if (parser.canConsume(ARRAY_END_DELIMITER)) {
+                        parser.rewindTo(currentPosition);
+                    } else if (!parser.canConsume(COMMA_DELIMITER)) {
+                        throw new DataException("Array elements missing '" + COMMA_DELIMITER + "' delimiter");
+                    }
                 }
+
                 // Missing either a comma or an end delimiter
                 if (COMMA_DELIMITER.equals(parser.previous())) {
                     throw new DataException("Array is missing element after ',': " + parser.original());
@@ -783,26 +816,34 @@ public class Values {
                 Schema valueSchema = null;
                 while (parser.hasNext()) {
                     if (parser.canConsume(MAP_END_DELIMITER)) {
-                        Schema mapSchema = null;
+                        Schema mapSchema;
                         if (keySchema != null && valueSchema != null) {
-                            mapSchema = SchemaBuilder.map(keySchema, valueSchema).schema();
+                            mapSchema = SchemaBuilder.map(keySchema, valueSchema).build();
+                            result = alignMapKeysAndValuesWithSchema(mapSchema, result);
+                        } else if (keySchema != null) {
+                            mapSchema = SchemaBuilder.mapWithNullValues(keySchema);
+                            result = alignMapKeysWithSchema(mapSchema, result);
+                        } else {
+                            mapSchema = SchemaBuilder.mapOfNull().build();
                         }
-                        result = alignMapKeysAndValuesWithSchema(mapSchema, result);
                         return new SchemaAndValue(mapSchema, result);
                     }
+
                     if (parser.canConsume(COMMA_DELIMITER)) {
-                        throw new DataException("Unable to parse a map entry has no key or value: " + parser.original());
+                        throw new DataException("Unable to parse a map entry with no key or value: " + parser.original());
                     }
                     SchemaAndValue key = parse(parser, true);
                     if (key == null || key.value() == null) {
                         throw new DataException("Map entry may not have a null key: " + parser.original());
                     }
+
                     if (!parser.canConsume(ENTRY_DELIMITER)) {
                         throw new DataException("Map entry is missing '=': " + parser.original());
                     }
                     SchemaAndValue value = parse(parser, true);
                     Object entryValue = value != null ? value.value() : null;
                     result.put(key.value(), entryValue);
+
                     parser.canConsume(COMMA_DELIMITER);
                     keySchema = commonSchemaFor(keySchema, key);
                     valueSchema = commonSchemaFor(valueSchema, value);
@@ -811,14 +852,19 @@ public class Values {
                 if (COMMA_DELIMITER.equals(parser.previous())) {
                     throw new DataException("Map is missing element after ',': " + parser.original());
                 }
-                throw new DataException("Map is missing terminating ']': " + parser.original());
+                throw new DataException("Map is missing terminating '}': " + parser.original());
             }
         } catch (DataException e) {
-            LOG.debug("Unable to parse the value as a map; reverting to string", e);
+            LOG.debug("Unable to parse the value as a map or an array; reverting to string", e);
             parser.rewindTo(startPosition);
         }
-        String token = parser.next().trim();
-        assert !token.isEmpty(); // original can be empty string but is handled right away; no way for token to be empty here
+
+        String token = parser.next();
+        if (token.trim().isEmpty()) {
+            return new SchemaAndValue(Schema.STRING_SCHEMA, token);
+        }
+        token = token.trim();
+
         char firstChar = token.charAt(0);
         boolean firstCharIsDigit = Character.isDigit(firstChar);
         if (firstCharIsDigit || firstChar == '+' || firstChar == '-') {
@@ -877,6 +923,9 @@ public class Values {
                     // not a valid date
                 }
             }
+        }
+        if (embedded) {
+            throw new DataException("Failed to parse embedded value");
         }
         // At this point, the only thing this can be is a string. Embedded strings were processed above,
         // so this is not embedded and we can use the original string...
@@ -953,9 +1002,6 @@ public class Values {
     }
 
     protected static List<Object> alignListEntriesWithSchema(Schema schema, List<Object> input) {
-        if (schema == null) {
-            return input;
-        }
         Schema valueSchema = schema.valueSchema();
         List<Object> result = new ArrayList<>();
         for (Object value : input) {
@@ -966,9 +1012,6 @@ public class Values {
     }
 
     protected static Map<Object, Object> alignMapKeysAndValuesWithSchema(Schema mapSchema, Map<Object, Object> input) {
-        if (mapSchema == null) {
-            return input;
-        }
         Schema keySchema = mapSchema.keySchema();
         Schema valueSchema = mapSchema.valueSchema();
         Map<Object, Object> result = new LinkedHashMap<>();
@@ -976,6 +1019,16 @@ public class Values {
             Object newKey = convertTo(keySchema, null, entry.getKey());
             Object newValue = convertTo(valueSchema, null, entry.getValue());
             result.put(newKey, newValue);
+        }
+        return result;
+    }
+
+    protected static Map<Object, Object> alignMapKeysWithSchema(Schema mapSchema, Map<Object, Object> input) {
+        Schema keySchema = mapSchema.keySchema();
+        Map<Object, Object> result = new LinkedHashMap<>();
+        for (Map.Entry<?, ?> entry : input.entrySet()) {
+            Object newKey = convertTo(keySchema, null, entry.getKey());
+            result.put(newKey, entry.getValue());
         }
         return result;
     }
@@ -1123,12 +1176,13 @@ public class Values {
                 nextToken = consumeNextToken();
             }
             if (ignoreLeadingAndTrailingWhitespace) {
-                nextToken = nextToken.trim();
-                while (nextToken.isEmpty() && canConsumeNextToken()) {
-                    nextToken = consumeNextToken().trim();
+                while (nextToken.trim().isEmpty() && canConsumeNextToken()) {
+                    nextToken = consumeNextToken();
                 }
             }
-            return nextToken.equals(expected);
+            return ignoreLeadingAndTrailingWhitespace
+                ? nextToken.trim().equals(expected)
+                : nextToken.equals(expected);
         }
     }
 }

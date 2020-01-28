@@ -37,4 +37,23 @@ public class ProducerIdAndEpoch {
     public String toString() {
         return "(producerId=" + producerId + ", epoch=" + epoch + ")";
     }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+
+        ProducerIdAndEpoch that = (ProducerIdAndEpoch) o;
+
+        if (producerId != that.producerId) return false;
+        return epoch == that.epoch;
+    }
+
+    @Override
+    public int hashCode() {
+        int result = (int) (producerId ^ (producerId >>> 32));
+        result = 31 * result + (int) epoch;
+        return result;
+    }
+
 }

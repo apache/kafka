@@ -148,6 +148,8 @@ public class KafkaConsumerTest {
     private final int autoCommitIntervalMs = 500;
 
     private final String groupId = "mock-group";
+    private final String memberId = "memberId";
+    private final String leaderId = "leaderId";
     private final Optional<String> groupInstanceId = Optional.of("mock-instance");
 
     private final String partitionRevoked = "Hit partition revoke ";
@@ -1533,7 +1535,7 @@ public class KafkaConsumerTest {
         Node coordinator = new Node(Integer.MAX_VALUE - node.id(), node.host(), node.port());
 
 
-        client.prepareResponseFrom(joinGroupFollowerResponse(assignor, 1, "memberId", "leaderId", Errors.NONE), coordinator);
+        client.prepareResponseFrom(joinGroupFollowerResponse(assignor, 1, memberId, leaderId, Errors.NONE), coordinator);
         client.prepareResponseFrom(syncGroupResponse(singletonList(tp0), Errors.NONE), coordinator);
 
         client.prepareResponseFrom(fetchResponse(tp0, 0, 1), node);
@@ -1543,20 +1545,13 @@ public class KafkaConsumerTest {
         consumer.poll(Duration.ZERO);
 
         // heartbeat fails due to rebalance in progress
-        client.prepareResponseFrom(new MockClient.RequestMatcher() {
-            @Override
-            public boolean matches(AbstractRequest body) {
-                return true;
-            }
-        }, new HeartbeatResponse(
-                new HeartbeatResponseData().setErrorCode(Errors.REBALANCE_IN_PROGRESS.code())),
-                coordinator);
+        client.prepareResponseFrom(body -> true, new HeartbeatResponse(
+            new HeartbeatResponseData().setErrorCode(Errors.REBALANCE_IN_PROGRESS.code())), coordinator);
 
         // join group
         final ByteBuffer byteBuffer = ConsumerProtocol.serializeSubscription(new ConsumerPartitionAssignor.Subscription(singletonList(topic)));
 
         // This member becomes the leader
-        String memberId = "memberId";
         final JoinGroupResponse leaderResponse = new JoinGroupResponse(
                 new JoinGroupResponseData()
                         .setErrorCode(Errors.NONE.code())
@@ -1579,15 +1574,11 @@ public class KafkaConsumerTest {
         client.prepareResponseFrom(FindCoordinatorResponse.prepareResponse(Errors.NONE, node), node);
 
         // rejoin group
-        client.prepareResponseFrom(joinGroupFollowerResponse(assignor, 1, "memberId", "leaderId", Errors.NONE), coordinator);
+        client.prepareResponseFrom(joinGroupFollowerResponse(assignor, 1, memberId, leaderId, Errors.NONE), coordinator);
         client.prepareResponseFrom(syncGroupResponse(singletonList(tp0), Errors.NONE), coordinator);
 
-        client.prepareResponseFrom(new MockClient.RequestMatcher() {
-            @Override
-            public boolean matches(final AbstractRequest body) {
-                return body instanceof FetchRequest && ((FetchRequest) body).fetchData().containsKey(tp0);
-            }
-        }, fetchResponse(tp0, 1, 1), node);
+        client.prepareResponseFrom(body -> body instanceof FetchRequest 
+            && ((FetchRequest) body).fetchData().containsKey(tp0), fetchResponse(tp0, 1, 1), node);
         time.sleep(heartbeatIntervalMs);
         Thread.sleep(heartbeatIntervalMs);
         consumer.updateAssignmentMetadataIfNeeded(time.timer(Long.MAX_VALUE));
@@ -1754,7 +1745,7 @@ public class KafkaConsumerTest {
         Node coordinator = new Node(Integer.MAX_VALUE - node.id(), node.host(), node.port());
 
         client.prepareResponseFrom(FindCoordinatorResponse.prepareResponse(Errors.NONE, node), node);
-        client.prepareResponseFrom(joinGroupFollowerResponse(assignor, 1, "memberId", "leaderId", Errors.NONE), coordinator);
+        client.prepareResponseFrom(joinGroupFollowerResponse(assignor, 1, memberId, leaderId, Errors.NONE), coordinator);
         client.prepareResponseFrom(syncGroupResponse(singletonList(tp0), Errors.NONE), coordinator);
 
         // assign throws
@@ -1780,6 +1771,154 @@ public class KafkaConsumerTest {
 
         // the assignment is still updated regardless of the exception
         assertTrue(subscription.assignedPartitions().isEmpty());
+    }
+
+    @Test
+    public void testReturnRecordsDuringRebalance() {
+        Time time = new MockTime(1L);
+        SubscriptionState subscription = new SubscriptionState(new LogContext(), OffsetResetStrategy.EARLIEST);
+        ConsumerMetadata metadata = createMetadata(subscription);
+        MockClient client = new MockClient(time, metadata);
+        ConsumerPartitionAssignor assignor = new CooperativeStickyAssignor();
+        KafkaConsumer<String, String> consumer = newConsumer(time, client, subscription, metadata, assignor, true, groupInstanceId);
+
+        initMetadata(client, Utils.mkMap(Utils.mkEntry(topic, 1), Utils.mkEntry(topic2, 1), Utils.mkEntry(topic3, 1)));
+
+        consumer.subscribe(Arrays.asList(topic, topic2), getConsumerRebalanceListener(consumer));
+        Node node = metadata.fetch().nodes().get(0);
+        Node coordinator = prepareRebalance(client, node, assignor, Arrays.asList(tp0, t2p0), null);
+
+        // a first rebalance to get the assignment, we need two poll calls since we need two round trips to finish join / sync-group
+        consumer.poll(Duration.ZERO);
+        consumer.poll(Duration.ZERO);
+
+        assertEquals(Utils.mkSet(topic, topic2), consumer.subscription());
+        assertEquals(Utils.mkSet(tp0, t2p0), consumer.assignment());
+
+        // prepare a response of the outstanding fetch so that we have data available on the next poll
+        Map<TopicPartition, FetchInfo> fetches1 = new HashMap<>();
+        fetches1.put(tp0, new FetchInfo(0, 1));
+        fetches1.put(t2p0, new FetchInfo(0, 10));
+        client.respondFrom(fetchResponse(fetches1), node);
+
+        ConsumerRecords<String, String> records = consumer.poll(Duration.ZERO);
+
+        // verify that the fetch occurred as expected
+        assertEquals(11, records.count());
+        assertEquals(1L, consumer.position(tp0));
+        assertEquals(10L, consumer.position(t2p0));
+
+        // prepare the next response of the prefetch
+        fetches1.clear();
+        fetches1.put(tp0, new FetchInfo(1, 1));
+        fetches1.put(t2p0, new FetchInfo(10, 20));
+        client.respondFrom(fetchResponse(fetches1), node);
+
+        // subscription change
+        consumer.subscribe(Arrays.asList(topic, topic3), getConsumerRebalanceListener(consumer));
+
+        // verify that subscription has changed but assignment is still unchanged
+        assertEquals(Utils.mkSet(topic, topic3), consumer.subscription());
+        assertEquals(Utils.mkSet(tp0, t2p0), consumer.assignment());
+
+        // mock the offset commit response for to be revoked partitions
+        Map<TopicPartition, Long> partitionOffsets1 = new HashMap<>();
+        partitionOffsets1.put(t2p0, 10L);
+        AtomicBoolean commitReceived = prepareOffsetCommitResponse(client, coordinator, partitionOffsets1);
+
+        // poll once which would not complete the rebalance
+        records = consumer.poll(Duration.ZERO);
+
+        // clear out the prefetch so it doesn't interfere with the rest of the test
+        fetches1.clear();
+        fetches1.put(tp0, new FetchInfo(2, 1));
+        client.respondFrom(fetchResponse(fetches1), node);
+
+        // verify that the fetch still occurred as expected
+        assertEquals(Utils.mkSet(topic, topic3), consumer.subscription());
+        assertEquals(Collections.singleton(tp0), consumer.assignment());
+        assertEquals(1, records.count());
+        assertEquals(2L, consumer.position(tp0));
+
+        // verify that the offset commits occurred as expected
+        assertTrue(commitReceived.get());
+
+        // mock rebalance responses
+        client.respondFrom(joinGroupFollowerResponse(assignor, 2, "memberId", "leaderId", Errors.NONE), coordinator);
+        client.prepareResponseFrom(syncGroupResponse(Arrays.asList(tp0, t3p0), Errors.NONE), coordinator);
+
+        // we need to poll 1) for getting the join response, and then send the sync request;
+        //                 2) for getting the sync response
+        records = consumer.poll(Duration.ZERO);
+
+        // should not finish the response yet
+        assertEquals(Utils.mkSet(topic, topic3), consumer.subscription());
+        assertEquals(Collections.singleton(tp0), consumer.assignment());
+        assertEquals(1, records.count());
+        assertEquals(3L, consumer.position(tp0));
+
+        fetches1.clear();
+        fetches1.put(tp0, new FetchInfo(3, 1));
+        client.respondFrom(fetchResponse(fetches1), node);
+
+        records = consumer.poll(Duration.ZERO);
+
+        // should have t3 but not sent yet the t3 records
+        assertEquals(Utils.mkSet(topic, topic3), consumer.subscription());
+        assertEquals(Utils.mkSet(tp0, t3p0), consumer.assignment());
+        assertEquals(1, records.count());
+        assertEquals(4L, consumer.position(tp0));
+        assertEquals(0L, consumer.position(t3p0));
+
+        fetches1.clear();
+        fetches1.put(tp0, new FetchInfo(4, 1));
+        fetches1.put(t3p0, new FetchInfo(0, 100));
+        client.respondFrom(fetchResponse(fetches1), node);
+
+        records = consumer.poll(Duration.ZERO);
+
+        // should have t3 but not sent yet the t3 records
+        assertEquals(101, records.count());
+        assertEquals(5L, consumer.position(tp0));
+        assertEquals(100L, consumer.position(t3p0));
+
+        client.requests().clear();
+        consumer.unsubscribe();
+        consumer.close();
+    }
+
+    @Test
+    public void testGetGroupMetadata() {
+        final Time time = new MockTime();
+        final SubscriptionState subscription = new SubscriptionState(new LogContext(), OffsetResetStrategy.EARLIEST);
+        final ConsumerMetadata metadata = createMetadata(subscription);
+        final MockClient client = new MockClient(time, metadata);
+
+        initMetadata(client, Collections.singletonMap(topic, 1));
+        final Node node = metadata.fetch().nodes().get(0);
+
+        final ConsumerPartitionAssignor assignor = new RoundRobinAssignor();
+
+        final KafkaConsumer<String, String> consumer = newConsumer(time, client, subscription, metadata, assignor, true, groupInstanceId);
+
+        final ConsumerGroupMetadata groupMetadataOnStart = consumer.groupMetadata();
+        assertEquals(groupId, groupMetadataOnStart.groupId());
+        assertEquals(JoinGroupRequest.UNKNOWN_MEMBER_ID, groupMetadataOnStart.memberId());
+        assertEquals(JoinGroupRequest.UNKNOWN_GENERATION_ID, groupMetadataOnStart.generationId());
+        assertEquals(groupInstanceId, groupMetadataOnStart.groupInstanceId());
+
+        consumer.subscribe(singleton(topic), getConsumerRebalanceListener(consumer));
+        prepareRebalance(client, node, assignor, singletonList(tp0), null);
+
+        // initial fetch
+        client.prepareResponseFrom(fetchResponse(tp0, 0, 0), node);
+        consumer.updateAssignmentMetadataIfNeeded(time.timer(Long.MAX_VALUE));
+
+        final ConsumerGroupMetadata groupMetadataAfterPoll = consumer.groupMetadata();
+        assertEquals(groupId, groupMetadataAfterPoll.groupId());
+        assertEquals(memberId, groupMetadataAfterPoll.memberId());
+        assertEquals(1, groupMetadataAfterPoll.generationId());
+        assertEquals(groupInstanceId, groupMetadataAfterPoll.groupInstanceId());
     }
 
     private KafkaConsumer<String, String> consumerWithPendingAuthenticationError() {
@@ -1856,7 +1995,7 @@ public class KafkaConsumerTest {
                 ConsumerPartitionAssignor.Subscription subscription = ConsumerProtocol.deserializeSubscription(protocolMetadata);
                 return subscribedTopics.equals(new HashSet<>(subscription.topics()));
             }
-        }, joinGroupFollowerResponse(assignor, 1, "memberId", "leaderId", Errors.NONE), coordinator);
+        }, joinGroupFollowerResponse(assignor, 1, memberId, leaderId, Errors.NONE), coordinator);
 
         // sync group
         client.prepareResponseFrom(syncGroupResponse(partitions, Errors.NONE), coordinator);
@@ -1872,7 +2011,7 @@ public class KafkaConsumerTest {
         }
 
         // join group
-        client.prepareResponseFrom(joinGroupFollowerResponse(assignor, 1, "memberId", "leaderId", Errors.NONE), coordinator);
+        client.prepareResponseFrom(joinGroupFollowerResponse(assignor, 1, memberId, leaderId, Errors.NONE), coordinator);
 
         // sync group
         client.prepareResponseFrom(syncGroupResponse(partitions, Errors.NONE), coordinator);
@@ -1882,12 +2021,9 @@ public class KafkaConsumerTest {
 
     private AtomicBoolean prepareHeartbeatResponse(MockClient client, Node coordinator, Errors error) {
         final AtomicBoolean heartbeatReceived = new AtomicBoolean(false);
-        client.prepareResponseFrom(new MockClient.RequestMatcher() {
-            @Override
-            public boolean matches(AbstractRequest body) {
-                heartbeatReceived.set(true);
-                return true;
-            }
+        client.prepareResponseFrom(body -> {
+            heartbeatReceived.set(true);
+            return true;
         }, new HeartbeatResponse(new HeartbeatResponseData().setErrorCode(error.code())), coordinator);
         return heartbeatReceived;
     }

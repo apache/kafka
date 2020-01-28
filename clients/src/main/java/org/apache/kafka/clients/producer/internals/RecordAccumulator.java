@@ -802,6 +802,7 @@ public final class RecordAccumulator {
      */
     public void close() {
         this.closed = true;
+        this.free.close();
     }
 
     /*

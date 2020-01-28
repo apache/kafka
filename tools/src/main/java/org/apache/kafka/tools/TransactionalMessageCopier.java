@@ -33,6 +33,7 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.OutOfOrderSequenceException;
 import org.apache.kafka.common.errors.ProducerFencedException;
+import org.apache.kafka.common.utils.Exit;
 
 import java.io.IOException;
 import java.time.Duration;
@@ -264,7 +265,7 @@ public class TransactionalMessageCopier {
         final AtomicBoolean isShuttingDown = new AtomicBoolean(false);
         final AtomicLong remainingMessages = new AtomicLong(maxMessages);
         final AtomicLong numMessagesProcessed = new AtomicLong(0);
-        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+        Exit.addShutdownHook("transactional-message-copier-shutdown-hook", () -> {
             isShuttingDown.set(true);
             // Flush any remaining messages
             producer.close();
@@ -272,7 +273,7 @@ public class TransactionalMessageCopier {
                 consumer.close();
             }
             System.out.println(shutDownString(numMessagesProcessed.get(), remainingMessages.get(), transactionalId));
-        }));
+        });
 
         try {
             Random random = new Random();

@@ -20,13 +20,14 @@ import java.util
 import java.util.Properties
 import java.util.concurrent.ExecutionException
 
-import kafka.security.auth.{Cluster, Topic}
+import kafka.security.authorizer.AclEntry
 import kafka.server.KafkaConfig
 import kafka.utils.Logging
 import kafka.utils.TestUtils._
-import org.apache.kafka.clients.admin.{Admin, AdminClient, AdminClientConfig, CreateTopicsOptions, CreateTopicsResult, DescribeClusterOptions, DescribeTopicsOptions, NewTopic, TopicDescription}
+import org.apache.kafka.clients.admin.{Admin, AdminClientConfig, CreateTopicsOptions, CreateTopicsResult, DescribeClusterOptions, DescribeTopicsOptions, NewTopic, TopicDescription}
 import org.apache.kafka.common.acl.AclOperation
 import org.apache.kafka.common.errors.{TopicExistsException, UnknownTopicOrPartitionException}
+import org.apache.kafka.common.resource.ResourceType
 import org.apache.kafka.common.utils.Utils
 import org.junit.Assert._
 import org.junit.rules.Timeout
@@ -67,7 +68,7 @@ abstract class BaseAdminIntegrationTest extends IntegrationTestHarness with Logg
 
   @Test
   def testCreateDeleteTopics(): Unit = {
-    client = AdminClient.create(createConfig())
+    client = Admin.create(createConfig())
     val topics = Seq("mytopic", "mytopic2", "mytopic3")
     val newTopics = Seq(
       new NewTopic("mytopic", Map((0: Integer) -> Seq[Integer](1, 2).asJava, (1: Integer) -> Seq[Integer](2, 0).asJava).asJava),
@@ -154,7 +155,7 @@ abstract class BaseAdminIntegrationTest extends IntegrationTestHarness with Logg
 
   @Test
   def testAuthorizedOperations(): Unit = {
-    client = AdminClient.create(createConfig())
+    client = Admin.create(createConfig())
 
     // without includeAuthorizedOperations flag
     var result = client.describeCluster
@@ -176,13 +177,12 @@ abstract class BaseAdminIntegrationTest extends IntegrationTestHarness with Logg
 
     //with includeAuthorizedOperations flag
     topicResult = getTopicMetadata(client, topic, new DescribeTopicsOptions().includeAuthorizedOperations(true))
-    expectedOperations = Topic.supportedOperations
-      .map(operation => operation.toJava).asJava
+    expectedOperations = AclEntry.supportedOperations(ResourceType.TOPIC).asJava
     assertEquals(expectedOperations, topicResult.authorizedOperations)
   }
 
   def configuredClusterPermissions(): Set[AclOperation] = {
-    Cluster.supportedOperations.map(operation => operation.toJava)
+    AclEntry.supportedOperations(ResourceType.CLUSTER)
   }
 
   override def modifyConfigs(configs: Seq[Properties]): Unit = {

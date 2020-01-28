@@ -560,7 +560,7 @@ public class EosIntegrationTest {
         gcInjected = new AtomicBoolean(false);
         final StreamsBuilder builder = new StreamsBuilder();
 
-        String[] storeNames = null;
+        String[] storeNames = new String[0];
         if (withState) {
             storeNames = new String[] {storeName};
             final StoreBuilder<KeyValueStore<Long, Long>> storeBuilder = Stores

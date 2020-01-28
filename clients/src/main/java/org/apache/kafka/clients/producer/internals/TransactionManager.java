@@ -19,6 +19,8 @@ package org.apache.kafka.clients.producer.internals;
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.RequestCompletionHandler;
+import org.apache.kafka.clients.consumer.CommitFailedException;
+import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.errors.UnknownProducerIdException;
 import org.apache.kafka.common.utils.ProducerIdAndEpoch;
@@ -33,9 +35,9 @@ import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.errors.TransactionalIdAuthorizationException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
+import org.apache.kafka.common.message.EndTxnRequestData;
 import org.apache.kafka.common.message.FindCoordinatorRequestData;
 import org.apache.kafka.common.message.InitProducerIdRequestData;
-import org.apache.kafka.common.message.TxnOffsetCommitRequestData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.DefaultRecordBatch;
@@ -76,9 +78,6 @@ import java.util.SortedSet;
 import java.util.TreeSet;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
-
-import static org.apache.kafka.common.record.RecordBatch.NO_PRODUCER_EPOCH;
-import static org.apache.kafka.common.record.RecordBatch.NO_PRODUCER_ID;
 
 /**
  * A class which maintains state for transactions. Also keeps the state necessary to ensure idempotent production.
@@ -219,6 +218,8 @@ public class TransactionManager {
 
         private boolean isTransitionValid(State source, State target) {
             switch (target) {
+                case UNINITIALIZED:
+                    return source == READY;
                 case INITIALIZING:
                     return source == UNINITIALIZED || source == ABORTING_TRANSACTION;
                 case READY:
@@ -264,7 +265,7 @@ public class TransactionManager {
                               int transactionTimeoutMs,
                               long retryBackoffMs,
                               ApiVersions apiVersions) {
-        this.producerIdAndEpoch = new ProducerIdAndEpoch(NO_PRODUCER_ID, NO_PRODUCER_EPOCH);
+        this.producerIdAndEpoch = ProducerIdAndEpoch.NONE;
         this.transactionalId = transactionalId;
         this.log = logContext.logger(TransactionManager.class);
         this.transactionTimeoutMs = transactionTimeoutMs;
@@ -338,9 +339,13 @@ public class TransactionManager {
     private TransactionalRequestResult beginCompletingTransaction(TransactionResult transactionResult) {
         if (!newPartitionsInTransaction.isEmpty())
             enqueueRequest(addPartitionsToTransactionHandler());
-        EndTxnRequest.Builder endTxnRequestBuilder = new EndTxnRequest.Builder(transactionalId, producerIdAndEpoch.producerId,
-                producerIdAndEpoch.epoch, transactionResult);
-        EndTxnHandler handler = new EndTxnHandler(endTxnRequestBuilder);
+        EndTxnRequest.Builder builder = new EndTxnRequest.Builder(
+            new EndTxnRequestData()
+                .setTransactionalId(transactionalId)
+                .setProducerId(producerIdAndEpoch.producerId)
+                .setProducerEpoch(producerIdAndEpoch.epoch)
+                .setCommitted(transactionResult.id));
+        EndTxnHandler handler = new EndTxnHandler(builder);
         enqueueRequest(handler);
         if (!shouldBumpEpoch()) {
             return handler.result;
@@ -349,18 +354,18 @@ public class TransactionManager {
         return initializeTransactions(this.producerIdAndEpoch);
     }
 
-    public synchronized TransactionalRequestResult sendOffsetsToTransaction(Map<TopicPartition, OffsetAndMetadata> offsets,
-                                                                            String consumerGroupId) {
+    public synchronized TransactionalRequestResult sendOffsetsToTransaction(final Map<TopicPartition, OffsetAndMetadata> offsets,
+                                                                            final ConsumerGroupMetadata groupMetadata) {
         ensureTransactional();
         maybeFailWithError();
         if (currentState != State.IN_TRANSACTION)
             throw new KafkaException("Cannot send offsets to transaction either because the producer is not in an " +
                     "active transaction");
 
-        log.debug("Begin adding offsets {} for consumer group {} to transaction", offsets, consumerGroupId);
+        log.debug("Begin adding offsets {} for consumer group {} to transaction", offsets, groupMetadata);
         AddOffsetsToTxnRequest.Builder builder = new AddOffsetsToTxnRequest.Builder(transactionalId,
-            producerIdAndEpoch.producerId, producerIdAndEpoch.epoch, consumerGroupId);
-        AddOffsetsToTxnHandler handler = new AddOffsetsToTxnHandler(builder, offsets);
+                producerIdAndEpoch.producerId, producerIdAndEpoch.epoch, groupMetadata.groupId());
+        AddOffsetsToTxnHandler handler = new AddOffsetsToTxnHandler(builder, offsets, groupMetadata);
         enqueueRequest(handler);
         return handler.result;
     }
@@ -439,6 +444,10 @@ public class TransactionManager {
 
     synchronized void transitionToFatalError(RuntimeException exception) {
         transitionTo(State.FATAL_ERROR, exception);
+
+        if (pendingResult != null) {
+            pendingResult.fail(exception);
+        }
     }
 
     // visible for testing
@@ -473,7 +482,7 @@ public class TransactionManager {
     /**
      * Set the producer id and epoch atomically.
      */
-    void setProducerIdAndEpoch(ProducerIdAndEpoch producerIdAndEpoch) {
+    private void setProducerIdAndEpoch(ProducerIdAndEpoch producerIdAndEpoch) {
         log.info("ProducerId set to {} with epoch {}", producerIdAndEpoch.producerId, producerIdAndEpoch.epoch);
         this.producerIdAndEpoch = producerIdAndEpoch;
     }
@@ -495,12 +504,13 @@ public class TransactionManager {
      * would not have any way of knowing this happened. So for the transactional producer, it's best to return the
      * produce error to the user and let them abort the transaction and close the producer explicitly.
      */
-    synchronized void resetProducerId() {
+    synchronized void resetIdempotentProducerId() {
         if (isTransactional())
             throw new IllegalStateException("Cannot reset producer state for a transactional producer. " +
                     "You must either abort the ongoing transaction or reinitialize the transactional producer instead");
         setProducerIdAndEpoch(ProducerIdAndEpoch.NONE);
         resetSequenceNumbers();
+        transitionTo(State.UNINITIALIZED);
     }
 
     private synchronized void resetSequenceNumbers() {
@@ -519,13 +529,26 @@ public class TransactionManager {
                     "transaction is aborted");
         } else {
             if (this.producerIdAndEpoch.epoch == Short.MAX_VALUE) {
-                resetProducerId();
+                resetIdempotentProducerId();
             } else {
                 this.producerIdAndEpoch =
                         new ProducerIdAndEpoch(this.producerIdAndEpoch.producerId, (short) (this.producerIdAndEpoch.epoch + 1));
             }
 
             topicPartitionBookkeeper.topicPartitionBookkeeping.keySet().forEach(topicPartition -> startSequencesAtBeginning(topicPartition));
+        }
+    }
+
+    synchronized void resetIdempotentProducerIdIfNeeded() {
+        if (!isTransactional()) {
+            if (currentState != State.INITIALIZING && !hasProducerId()) {
+                transitionTo(State.INITIALIZING);
+                InitProducerIdRequestData requestData = new InitProducerIdRequestData()
+                        .setTransactionalId(null)
+                        .setTransactionTimeoutMs(Integer.MAX_VALUE);
+                InitProducerIdHandler handler = new InitProducerIdHandler(new InitProducerIdRequest.Builder(requestData), false);
+                enqueueRequest(handler);
+            }
         }
     }
 
@@ -661,7 +684,7 @@ public class TransactionManager {
             // Reset the producerId since we have hit an irrecoverable exception and cannot make any guarantees
             // about the previously committed message. Note that this will discard the producer id and sequence
             // numbers for all existing partitions.
-            resetProducerId();
+            resetIdempotentProducerId();
         } else if (exception instanceof UnknownProducerIdException) {
             resetSequenceNumbers();
         } else {
@@ -764,15 +787,15 @@ public class TransactionManager {
                         } else {
                             transitionToFatalError(exception);
                         }
-                        this.partitionsWithUnresolvedSequences.clear();
                     } else {
                         // For the idempotent producer, reset producer state
                         log.info("No inflight batches remaining for {}, last ack'd sequence for partition is {}, next sequence is {}. " +
                                         "Going to bump epoch and reset sequence numbers.", topicPartition,
                                 lastAckedSequence(topicPartition).orElse(NO_LAST_ACKED_SEQUENCE_NUMBER), sequenceNumber(topicPartition));
                         bumpEpoch();
-                        this.partitionsWithUnresolvedSequences.clear();
                     }
+
+                    this.partitionsWithUnresolvedSequences.clear();
                 }
             }
         }
@@ -793,7 +816,7 @@ public class TransactionManager {
         return false;
     }
 
-    synchronized TxnRequestHandler nextRequestHandler(boolean hasIncompleteBatches) {
+    synchronized TxnRequestHandler nextRequest(boolean hasIncompleteBatches) {
         if (!newPartitionsInTransaction.isEmpty())
             enqueueRequest(addPartitionsToTransactionHandler());
 
@@ -843,8 +866,7 @@ public class TransactionManager {
         pendingRequests.forEach(handler ->
                 handler.fatalError(shutdownException));
         if (pendingResult != null) {
-            pendingResult.setError(shutdownException);
-            pendingResult.done();
+            pendingResult.fail(shutdownException);
         }
     }
 
@@ -871,7 +893,7 @@ public class TransactionManager {
         inFlightRequestCorrelationId = NO_INFLIGHT_REQUEST_CORRELATION_ID;
     }
 
-    boolean hasInFlightTransactionalRequest() {
+    boolean hasInFlightRequest() {
         return inFlightRequestCorrelationId != NO_INFLIGHT_REQUEST_CORRELATION_ID;
     }
 
@@ -1042,21 +1064,23 @@ public class TransactionManager {
 
     private TxnOffsetCommitHandler txnOffsetCommitHandler(TransactionalRequestResult result,
                                                           Map<TopicPartition, OffsetAndMetadata> offsets,
-                                                          String consumerGroupId) {
+                                                          ConsumerGroupMetadata groupMetadata) {
         for (Map.Entry<TopicPartition, OffsetAndMetadata> entry : offsets.entrySet()) {
             OffsetAndMetadata offsetAndMetadata = entry.getValue();
             CommittedOffset committedOffset = new CommittedOffset(offsetAndMetadata.offset(),
                     offsetAndMetadata.metadata(), offsetAndMetadata.leaderEpoch());
             pendingTxnOffsetCommits.put(entry.getKey(), committedOffset);
         }
-        TxnOffsetCommitRequest.Builder builder = new TxnOffsetCommitRequest.Builder(
-            new TxnOffsetCommitRequestData()
-                .setTransactionalId(transactionalId)
-                .setGroupId(consumerGroupId)
-                .setProducerId(producerIdAndEpoch.producerId)
-                .setProducerEpoch(producerIdAndEpoch.epoch)
-                .setTopics(TxnOffsetCommitRequest.getTopics(pendingTxnOffsetCommits))
-        );
+
+        final TxnOffsetCommitRequest.Builder builder =
+            new TxnOffsetCommitRequest.Builder(transactionalId,
+            groupMetadata.groupId(),
+            producerIdAndEpoch.producerId,
+            producerIdAndEpoch.epoch,
+            pendingTxnOffsetCommits,
+            groupMetadata.memberId(),
+            groupMetadata.generationId(),
+            groupMetadata.groupInstanceId());
         return new TxnOffsetCommitHandler(result, builder);
     }
 
@@ -1094,15 +1118,13 @@ public class TransactionManager {
         }
 
         void fatalError(RuntimeException e) {
-            result.setError(e);
+            result.fail(e);
             transitionToFatalError(e);
-            result.done();
         }
 
         void abortableError(RuntimeException e) {
-            result.setError(e);
+            result.fail(e);
             transitionToAbortableError(e);
-            result.done();
         }
 
         void recoverableError(RuntimeException e) {
@@ -1115,8 +1137,7 @@ public class TransactionManager {
         }
 
         void fail(RuntimeException e) {
-            result.setError(e);
-            result.done();
+            result.fail(e);
         }
 
         void reenqueue() {
@@ -1207,6 +1228,15 @@ public class TransactionManager {
         }
 
         @Override
+        FindCoordinatorRequest.CoordinatorType coordinatorType() {
+            if (isTransactional()) {
+                return FindCoordinatorRequest.CoordinatorType.TRANSACTION;
+            } else {
+                return null;
+            }
+        }
+
+        @Override
         public void handleResponse(AbstractResponse response) {
             InitProducerIdResponse initProducerIdResponse = (InitProducerIdResponse) response;
             Errors error = initProducerIdResponse.error();
@@ -1226,7 +1256,8 @@ public class TransactionManager {
                 reenqueue();
             } else if (error == Errors.COORDINATOR_LOAD_IN_PROGRESS || error == Errors.CONCURRENT_TRANSACTIONS) {
                 reenqueue();
-            } else if (error == Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED) {
+            } else if (error == Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED ||
+                    error == Errors.CLUSTER_AUTHORIZATION_FAILED) {
                 fatalError(error.exception());
             } else {
                 fatalError(new KafkaException("Unexpected error in InitProducerIdResponse; " + error.message()));
@@ -1402,7 +1433,7 @@ public class TransactionManager {
         private final EndTxnRequest.Builder builder;
 
         private EndTxnHandler(EndTxnRequest.Builder builder) {
-            super("EndTxn(" + builder.result() + ")");
+            super("EndTxn(" + builder.data.committed() + ")");
             this.builder = builder;
         }
 
@@ -1451,12 +1482,15 @@ public class TransactionManager {
     private class AddOffsetsToTxnHandler extends TxnRequestHandler {
         private final AddOffsetsToTxnRequest.Builder builder;
         private final Map<TopicPartition, OffsetAndMetadata> offsets;
+        private final ConsumerGroupMetadata groupMetadata;
 
         private AddOffsetsToTxnHandler(AddOffsetsToTxnRequest.Builder builder,
-                                       Map<TopicPartition, OffsetAndMetadata> offsets) {
+                                       Map<TopicPartition, OffsetAndMetadata> offsets,
+                                       ConsumerGroupMetadata groupMetadata) {
             super("AddOffsetsToTxn");
             this.builder = builder;
             this.offsets = offsets;
+            this.groupMetadata = groupMetadata;
         }
 
         @Override
@@ -1478,7 +1512,7 @@ public class TransactionManager {
                 log.debug("Successfully added partition for consumer group {} to transaction", builder.consumerGroupId());
 
                 // note the result is not completed until the TxnOffsetCommit returns
-                pendingRequests.add(txnOffsetCommitHandler(result, offsets, builder.consumerGroupId()));
+                pendingRequests.add(txnOffsetCommitHandler(result, offsets, groupMetadata));
                 transactionStarted = true;
             } else if (error == Errors.COORDINATOR_NOT_AVAILABLE || error == Errors.NOT_COORDINATOR) {
                 lookupCoordinator(FindCoordinatorRequest.CoordinatorType.TRANSACTION, transactionalId);
@@ -1556,9 +1590,15 @@ public class TransactionManager {
                 } else if (error == Errors.GROUP_AUTHORIZATION_FAILED) {
                     abortableError(GroupAuthorizationException.forGroupId(builder.data.groupId()));
                     break;
-                } else if (error == Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED
-                        || error == Errors.INVALID_PRODUCER_EPOCH
-                        || error == Errors.UNSUPPORTED_FOR_MESSAGE_FORMAT) {
+                } else if (error == Errors.FENCED_INSTANCE_ID) {
+                    abortableError(error.exception());
+                    break;
+                } else if (error == Errors.UNKNOWN_MEMBER_ID
+                        || error == Errors.ILLEGAL_GENERATION) {
+                    abortableError(new CommitFailedException("Transaction offset Commit failed " +
+                        "due to consumer group metadata mismatch: " + error.exception().getMessage()));
+                    break;
+                } else if (isFatalException(error)) {
                     fatalError(error.exception());
                     break;
                 } else if (error == Errors.UNKNOWN_PRODUCER_ID || error == Errors.INVALID_PRODUCER_ID_MAPPING) {
@@ -1578,5 +1618,11 @@ public class TransactionManager {
                 reenqueue();
             }
         }
+    }
+
+    private boolean isFatalException(Errors error) {
+        return error == Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED
+                   || error == Errors.INVALID_PRODUCER_EPOCH
+                   || error == Errors.UNSUPPORTED_FOR_MESSAGE_FORMAT;
     }
 }

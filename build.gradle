@@ -36,7 +36,7 @@ buildscript {
     classpath "com.github.jengelman.gradle.plugins:shadow:$versions.shadowPlugin"
     classpath "org.owasp:dependency-check-gradle:$versions.owaspDepCheckPlugin"
     classpath "com.diffplug.spotless:spotless-plugin-gradle:$versions.spotlessPlugin"
-    classpath "gradle.plugin.com.github.spotbugs:spotbugs-gradle-plugin:$versions.spotbugsPlugin"
+    classpath "com.github.spotbugs:spotbugs-gradle-plugin:$versions.spotbugsPlugin"
   }
 }
 
@@ -54,7 +54,7 @@ allprojects {
   repositories {
     mavenCentral()
   }
-  
+
   apply plugin: 'idea'
   apply plugin: 'org.owasp.dependencycheck'
   apply plugin: 'com.github.ben-manes.versions'
@@ -411,6 +411,7 @@ subprojects {
       "-language:postfixOps",
       "-language:implicitConversions",
       "-language:existentials",
+      "-Xlint:constant",
       "-Xlint:delayedinit-select",
       "-Xlint:doc-detached",
       "-Xlint:missing-interpolator",
@@ -421,35 +422,29 @@ subprojects {
       "-Xlint:poly-implicit-overload",
       "-Xlint:private-shadow",
       "-Xlint:stars-align",
-      "-Xlint:type-parameter-shadow"
+      "-Xlint:type-parameter-shadow",
+      "-Xlint:unused"
     ]
 
-    if (versions.baseScala != '2.11') {
-      scalaCompileOptions.additionalParameters += [
-        "-Xlint:constant",
-        "-Xlint:unused"
-      ]
+    // Inline more aggressively when compiling the `core` jar since it's not meant to be used as a library.
+    // More specifically, inline classes from the Scala library so that we can inline methods like `Option.exists`
+    // and avoid lambda allocations. This is only safe if the Scala library version is the same at compile time
+    // and runtime. We cannot guarantee this for libraries like kafka streams, so only inline classes from the
+    // Kafka project in that case.
+    List<String> inlineFrom
+    if (project.name.equals('core'))
+      inlineFrom = ["-opt-inline-from:scala.**", "-opt-inline-from:kafka.**", "-opt-inline-from:org.apache.kafka.**"]
+    else
+      inlineFrom = ["-opt-inline-from:org.apache.kafka.**"]
 
-      // Inline more aggressively when compiling the `core` jar since it's not meant to be used as a library.
-      // More specifically, inline classes from the Scala library so that we can inline methods like `Option.exists`
-      // and avoid lambda allocations. This is only safe if the Scala library version is the same at compile time
-      // and runtime. We cannot guarantee this for libraries like kafka streams, so only inline classes from the
-      // Kafka project in that case.
-      List<String> inlineFrom
-      if (project.name.equals('core'))
-        inlineFrom = ["-opt-inline-from:scala.**", "-opt-inline-from:kafka.**", "-opt-inline-from:org.apache.kafka.**"]
-      else
-        inlineFrom = ["-opt-inline-from:org.apache.kafka.**"]
-
-      // Somewhat confusingly, `-opt:l:inline` enables all optimizations. `inlineFrom` configures what can be inlined.
-      // See https://www.lightbend.com/blog/scala-inliner-optimizer for more information about the optimizer.
-      scalaCompileOptions.additionalParameters += ["-opt:l:inline"]
-      scalaCompileOptions.additionalParameters += inlineFrom
-    }
+    // Somewhat confusingly, `-opt:l:inline` enables all optimizations. `inlineFrom` configures what can be inlined.
+    // See https://www.lightbend.com/blog/scala-inliner-optimizer for more information about the optimizer.
+    scalaCompileOptions.additionalParameters += ["-opt:l:inline"]
+    scalaCompileOptions.additionalParameters += inlineFrom
     
-  // these options are valid for Scala versions < 2.13 only
-  // Scala 2.13 removes them, see https://github.com/scala/scala/pull/6502 and https://github.com/scala/scala/pull/5969
-    if (versions.baseScala in ['2.11','2.12']) {
+    // these options are valid for Scala versions < 2.13 only
+    // Scala 2.13 removes them, see https://github.com/scala/scala/pull/6502 and https://github.com/scala/scala/pull/5969
+    if (versions.baseScala == '2.12') {
       scalaCompileOptions.additionalParameters += [
         "-Xlint:by-name-right-associative",
         "-Xlint:unsound-match"
@@ -564,8 +559,8 @@ def fineTuneEclipseClasspathFile(eclipse, project) {
       if (project.name.equals('core')) {
         cp.entries.findAll { it.kind == "src" && it.path.equals("src/test/scala") }*.excludes = ["integration/", "other/", "unit/"]
       }
-      /* 
-       * Set all eclipse build output to go to 'build_eclipse' directory. This is to ensure that gradle and eclipse use different 
+      /*
+       * Set all eclipse build output to go to 'build_eclipse' directory. This is to ensure that gradle and eclipse use different
        * build output directories, and also avoid using the eclpise default of 'bin' which clashes with some of our script directories.
        * https://discuss.gradle.org/t/eclipse-generated-files-should-be-put-in-the-same-place-as-the-gradle-generated-files/6986/2
        */
@@ -592,10 +587,10 @@ task jacocoRootReport(type: org.gradle.testing.jacoco.tasks.JacocoReport) {
   description = 'Generates an aggregate report from all subprojects'
   dependsOn(javaProjects.test)
 
-  additionalSourceDirs = files(javaProjects.sourceSets.main.allSource.srcDirs)
-  sourceDirectories = files(javaProjects.sourceSets.main.allSource.srcDirs)
-  classDirectories =  files(javaProjects.sourceSets.main.output)
-  executionData = files(javaProjects.jacocoTestReport.executionData)
+  additionalSourceDirs.from = javaProjects.sourceSets.main.allSource.srcDirs
+  sourceDirectories.from = javaProjects.sourceSets.main.allSource.srcDirs
+  classDirectories.from = javaProjects.sourceSets.main.output
+  executionData.from = javaProjects.jacocoTestReport.executionData
 
   reports {
     html.enabled = true
@@ -754,19 +749,14 @@ project(':core') {
     testCompile libs.scalatest
     testCompile libs.slf4jlog4j
     testCompile libs.jfreechart
-
-    scoverage libs.scoveragePlugin
-    scoverage libs.scoverageRuntime
   }
-  
+
   scoverage {
+    scoverageVersion = "$versions.scoverage"
     reportDir = file("${rootProject.buildDir}/scoverage")
     highlighting = false
-  }
-  checkScoverage {
     minimumRate = 0.0
   }
-  checkScoverage.shouldRunAfter('test')
 
   configurations {
     // manually excludes some unnecessary dependencies
@@ -1882,6 +1872,7 @@ project(':connect:mirror') {
     compile libs.slf4jApi
 
     testCompile libs.junit
+    testCompile libs.mockitoCore
     testCompile project(':clients').sourceSets.test.output
     testCompile project(':connect:runtime').sourceSets.test.output
     testCompile project(':core')

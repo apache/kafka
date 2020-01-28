@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.streams.kstream;
 
 import org.apache.kafka.common.utils.Bytes;
@@ -266,15 +265,6 @@ public interface CogroupedKStream<K, VOut> {
                               final Materialized<K, VOut, KeyValueStore<Bytes, byte[]>> materialized);
 
     /**
-     * Create a new {@link SessionWindowedCogroupedKStream} instance that can be used to perform session
-     * windowed aggregations.
-     *
-     * @param sessionWindows the specification of the aggregation {@link SessionWindows}
-     * @return an instance of {@link SessionWindowedCogroupedKStream}
-     */
-    SessionWindowedCogroupedKStream<K, VOut> windowedBy(final SessionWindows sessionWindows);
-
-    /**
      * Create a new {@link TimeWindowedCogroupedKStream} instance that can be used to perform windowed
      * aggregations.
      *
@@ -283,4 +273,14 @@ public interface CogroupedKStream<K, VOut> {
      * @return an instance of {@link TimeWindowedCogroupedKStream}
      */
     <W extends Window> TimeWindowedCogroupedKStream<K, VOut> windowedBy(final Windows<W> windows);
+
+    /**
+     * Create a new {@link SessionWindowedCogroupedKStream} instance that can be used to perform session
+     * windowed aggregations.
+     *
+     * @param windows the specification of the aggregation {@link SessionWindows}
+     * @return an instance of {@link SessionWindowedCogroupedKStream}
+     */
+    SessionWindowedCogroupedKStream<K, VOut> windowedBy(final SessionWindows windows);
+
 }

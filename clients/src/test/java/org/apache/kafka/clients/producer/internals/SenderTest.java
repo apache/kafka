@@ -40,6 +40,7 @@ import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.errors.UnsupportedForMessageFormatException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
+import org.apache.kafka.common.message.EndTxnResponseData;
 import org.apache.kafka.common.message.InitProducerIdResponseData;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.MetricConfig;
@@ -1161,8 +1162,9 @@ public class SenderTest {
     public void testResetOfProducerStateShouldAllowQueuedBatchesToDrain() throws Exception {
         final long producerId = 343434L;
         TransactionManager transactionManager = new TransactionManager();
-        transactionManager.setProducerIdAndEpoch(new ProducerIdAndEpoch(producerId, (short) 0));
         setupWithTransactionState(transactionManager);
+        prepareAndReceiveInitProducerId(producerId, Errors.NONE);
+        assertTrue(transactionManager.hasProducerId());
 
         int maxRetries = 10;
         Metrics m = new Metrics();
@@ -1181,10 +1183,12 @@ public class SenderTest {
         responses.put(tp1, new OffsetAndError(-1, Errors.NOT_LEADER_FOR_PARTITION));
         responses.put(tp0, new OffsetAndError(-1, Errors.OUT_OF_ORDER_SEQUENCE_NUMBER));
         client.respond(produceResponse(responses));
+
         sender.runOnce();
         assertTrue(failedResponse.isDone());
         assertFalse("Expected transaction state to be reset upon receiving an OutOfOrderSequenceException", transactionManager.hasProducerId());
         prepareAndReceiveInitProducerId(producerId + 1, Errors.NONE); // also send request to tp1
+        sender.runOnce();
         assertEquals(producerId + 1, transactionManager.producerIdAndEpoch().producerId);
 
         assertFalse(successfulResponse.isDone());
@@ -1202,8 +1206,9 @@ public class SenderTest {
     public void testCloseWithProducerIdReset() throws Exception {
         final long producerId = 343434L;
         TransactionManager transactionManager = new TransactionManager();
-        transactionManager.setProducerIdAndEpoch(new ProducerIdAndEpoch(producerId, (short) 0));
         setupWithTransactionState(transactionManager);
+        prepareAndReceiveInitProducerId(producerId, Errors.NONE);
+        assertTrue(transactionManager.hasProducerId());
 
         Metrics m = new Metrics();
         SenderMetricsRegistry senderMetrics = new SenderMetricsRegistry(m);
@@ -1239,8 +1244,9 @@ public class SenderTest {
     @Test
     public void testForceCloseWithProducerIdReset() throws Exception {
         TransactionManager transactionManager = new TransactionManager();
-        transactionManager.setProducerIdAndEpoch(new ProducerIdAndEpoch(1L, (short) 0));
         setupWithTransactionState(transactionManager);
+        prepareAndReceiveInitProducerId(1L, Errors.NONE);
+        assertTrue(transactionManager.hasProducerId());
 
         Metrics m = new Metrics();
         SenderMetricsRegistry senderMetrics = new SenderMetricsRegistry(m);
@@ -1272,8 +1278,9 @@ public class SenderTest {
     public void testBatchesDrainedWithOldProducerIdShouldFailWithOutOfOrderSequenceOnSubsequentRetry() throws Exception {
         final long producerId = 343434L;
         TransactionManager transactionManager = new TransactionManager();
-        transactionManager.setProducerIdAndEpoch(new ProducerIdAndEpoch(producerId, (short) 0));
         setupWithTransactionState(transactionManager);
+        prepareAndReceiveInitProducerId(producerId, Errors.NONE);
+        assertTrue(transactionManager.hasProducerId());
 
         int maxRetries = 10;
         Metrics m = new Metrics();
@@ -1698,8 +1705,9 @@ public class SenderTest {
     public void testSequenceNumberIncrement() throws InterruptedException {
         final long producerId = 343434L;
         TransactionManager transactionManager = new TransactionManager();
-        transactionManager.setProducerIdAndEpoch(new ProducerIdAndEpoch(producerId, (short) 0));
         setupWithTransactionState(transactionManager);
+        prepareAndReceiveInitProducerId(producerId, Errors.NONE);
+        assertTrue(transactionManager.hasProducerId());
 
         int maxRetries = 10;
         Metrics m = new Metrics();
@@ -1741,8 +1749,9 @@ public class SenderTest {
     public void testAbortRetryWhenProducerIdChanges() throws InterruptedException {
         final long producerId = 343434L;
         TransactionManager transactionManager = new TransactionManager();
-        transactionManager.setProducerIdAndEpoch(new ProducerIdAndEpoch(producerId, (short) 0));
         setupWithTransactionState(transactionManager);
+        prepareAndReceiveInitProducerId(producerId, Errors.NONE);
+        assertTrue(transactionManager.hasProducerId());
 
         int maxRetries = 10;
         Metrics m = new Metrics();
@@ -1761,8 +1770,8 @@ public class SenderTest {
         assertEquals(0, client.inFlightRequestCount());
         assertFalse("Client ready status should be false", client.isReady(node, time.milliseconds()));
 
-        transactionManager.resetProducerId();
-        transactionManager.setProducerIdAndEpoch(new ProducerIdAndEpoch(producerId + 1, (short) 0));
+        transactionManager.resetIdempotentProducerId();
+        prepareAndReceiveInitProducerId(producerId + 1, Errors.NONE);
         sender.runOnce(); // receive error
         sender.runOnce(); // reconnect
         sender.runOnce(); // nothing to do, since the pid has changed. We should check the metrics for errors.
@@ -1779,8 +1788,9 @@ public class SenderTest {
     public void testBumpEpochWhenOutOfOrderSequenceReceived() throws InterruptedException {
         final long producerId = 343434L;
         TransactionManager transactionManager = new TransactionManager();
-        transactionManager.setProducerIdAndEpoch(new ProducerIdAndEpoch(producerId, (short) 0));
         setupWithTransactionState(transactionManager);
+        prepareAndReceiveInitProducerId(producerId, Errors.NONE);
+        assertTrue(transactionManager.hasProducerId());
 
         int maxRetries = 10;
         Metrics m = new Metrics();
@@ -1809,7 +1819,9 @@ public class SenderTest {
         TopicPartition tp = new TopicPartition("testSplitBatchAndSend", 1);
         TransactionManager txnManager = new TransactionManager();
         ProducerIdAndEpoch producerIdAndEpoch = new ProducerIdAndEpoch(123456L, (short) 0);
-        txnManager.setProducerIdAndEpoch(producerIdAndEpoch);
+        setupWithTransactionState(txnManager);
+        prepareAndReceiveInitProducerId(123456L, Errors.NONE);
+        assertTrue(txnManager.hasProducerId());
         testSplitBatchAndSend(txnManager, producerIdAndEpoch, tp);
     }
 
@@ -2144,7 +2156,9 @@ public class SenderTest {
             sender.initiateClose();
             txnManager.beginCommit();
             AssertEndTxnRequestMatcher endTxnMatcher = new AssertEndTxnRequestMatcher(TransactionResult.COMMIT);
-            client.prepareResponse(endTxnMatcher, new EndTxnResponse(0, Errors.NONE));
+            client.prepareResponse(endTxnMatcher, new EndTxnResponse(new EndTxnResponseData()
+                                                                         .setErrorCode(Errors.NONE.code())
+                                                                         .setThrottleTimeMs(0)));
             sender.run();
             assertTrue("Response didn't match in test", endTxnMatcher.matched);
         } finally {
@@ -2176,7 +2190,9 @@ public class SenderTest {
             sender.runOnce();
             sender.initiateClose();
             AssertEndTxnRequestMatcher endTxnMatcher = new AssertEndTxnRequestMatcher(TransactionResult.ABORT);
-            client.prepareResponse(endTxnMatcher, new EndTxnResponse(0, Errors.NONE));
+            client.prepareResponse(endTxnMatcher, new EndTxnResponse(new EndTxnResponseData()
+                                                                         .setErrorCode(Errors.NONE.code())
+                                                                         .setThrottleTimeMs(0)));
             sender.run();
             assertTrue("Response didn't match in test", endTxnMatcher.matched);
         } finally {
@@ -2279,7 +2295,7 @@ public class SenderTest {
         @Override
         public boolean matches(AbstractRequest body) {
             if (body instanceof EndTxnRequest) {
-                assertSame(requiredResult, ((EndTxnRequest) body).command());
+                assertSame(requiredResult, ((EndTxnRequest) body).result());
                 matched = true;
                 return true;
             } else {
