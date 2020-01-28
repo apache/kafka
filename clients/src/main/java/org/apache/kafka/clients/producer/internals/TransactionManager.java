@@ -179,6 +179,9 @@ public class TransactionManager {
     // successfully (indicating that the expired batch actually made it to the broker). If we don't get any successful
     // responses for the partition once the inflight request count falls to zero, we reset the producer id and
     // consequently clear this data structure as well.
+    // The value of the map is the sequence number of the batch following the expired one, computed by adding its
+    // record count to its sequence number. This is used to tell if a subsequent batch is the one immediately following
+    // the expired one.
     private final Map<TopicPartition, Integer> partitionsWithUnresolvedSequences;
 
     private final PriorityQueue<TxnRequestHandler> pendingRequests;
@@ -280,10 +283,6 @@ public class TransactionManager {
         this.retryBackoffMs = retryBackoffMs;
         this.topicPartitionBookkeeper = new TopicPartitionBookkeeper();
         this.apiVersions = apiVersions;
-    }
-
-    TransactionManager() {
-        this(new LogContext(), null, 0, 100L, new ApiVersions());
     }
 
     public synchronized TransactionalRequestResult initializeTransactions() {
@@ -528,7 +527,7 @@ public class TransactionManager {
 
     synchronized void bumpEpoch() {
         if (isTransactional()) {
-            log.warn("Skipping epoch bump for transactional producer. The epoch will be bumped after the ongoing" +
+            log.warn("Skipping epoch bump for transactional producer. The epoch will be bumped after the ongoing " +
                     "transaction is aborted");
         } else {
             if (this.producerIdAndEpoch.epoch == Short.MAX_VALUE) {
@@ -761,9 +760,9 @@ public class TransactionManager {
         return partitionsWithUnresolvedSequences.containsKey(topicPartition);
     }
 
-    synchronized void markSequenceUnresolved(TopicPartition topicPartition, int nextSequence) {
-        log.debug("Marking partition {} unresolved", topicPartition);
-        partitionsWithUnresolvedSequences.put(topicPartition, nextSequence);
+    synchronized void markSequenceUnresolved(ProducerBatch batch) {
+        log.debug("Marking partition {} unresolved", batch.topicPartition);
+        partitionsWithUnresolvedSequences.put(batch.topicPartition, batch.baseSequence() + batch.recordCount);
     }
 
     // Checks if there are any partitions with unresolved partitions which may now be resolved. Returns true if

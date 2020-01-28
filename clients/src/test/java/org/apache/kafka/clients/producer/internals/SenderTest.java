@@ -528,7 +528,7 @@ public class SenderTest {
     @Test
     public void testInitProducerIdRequest() throws Exception {
         final long producerId = 343434L;
-        TransactionManager transactionManager = new TransactionManager();
+        TransactionManager transactionManager = createTransactionManager();
         setupWithTransactionState(transactionManager);
         prepareAndReceiveInitProducerId(producerId, Errors.NONE);
         assertTrue(transactionManager.hasProducerId());
@@ -539,7 +539,7 @@ public class SenderTest {
     @Test
     public void testClusterAuthorizationExceptionInInitProducerIdRequest() throws Exception {
         final long producerId = 343434L;
-        TransactionManager transactionManager = new TransactionManager();
+        TransactionManager transactionManager = createTransactionManager();
         setupWithTransactionState(transactionManager);
         prepareAndReceiveInitProducerId(producerId, Errors.CLUSTER_AUTHORIZATION_FAILED);
         assertFalse(transactionManager.hasProducerId());
@@ -584,7 +584,7 @@ public class SenderTest {
     @Test
     public void testIdempotenceWithMultipleInflights() throws Exception {
         final long producerId = 343434L;
-        TransactionManager transactionManager = new TransactionManager();
+        TransactionManager transactionManager = createTransactionManager();
         setupWithTransactionState(transactionManager);
         prepareAndReceiveInitProducerId(producerId, Errors.NONE);
         assertTrue(transactionManager.hasProducerId());
@@ -634,7 +634,7 @@ public class SenderTest {
     public void testIdempotenceWithMultipleInflightsRetriedInOrder() throws Exception {
         // Send multiple in flight requests, retry them all one at a time, in the correct order.
         final long producerId = 343434L;
-        TransactionManager transactionManager = new TransactionManager();
+        TransactionManager transactionManager = createTransactionManager();
         setupWithTransactionState(transactionManager);
         prepareAndReceiveInitProducerId(producerId, Errors.NONE);
         assertTrue(transactionManager.hasProducerId());
@@ -734,7 +734,7 @@ public class SenderTest {
     @Test
     public void testIdempotenceWithMultipleInflightsWhereFirstFailsFatallyAndSequenceOfFutureBatchesIsAdjusted() throws Exception {
         final long producerId = 343434L;
-        TransactionManager transactionManager = new TransactionManager();
+        TransactionManager transactionManager = createTransactionManager();
         setupWithTransactionState(transactionManager);
         prepareAndReceiveInitProducerId(producerId, Errors.NONE);
         assertTrue(transactionManager.hasProducerId());
@@ -793,7 +793,7 @@ public class SenderTest {
     @Test
     public void testMustNotRetryOutOfOrderSequenceForNextBatch() throws Exception {
         final long producerId = 343434L;
-        TransactionManager transactionManager = new TransactionManager();
+        TransactionManager transactionManager = createTransactionManager();
         setupWithTransactionState(transactionManager);
         prepareAndReceiveInitProducerId(producerId, Errors.NONE);
         assertTrue(transactionManager.hasProducerId());
@@ -836,7 +836,7 @@ public class SenderTest {
     @Test
     public void testCorrectHandlingOfOutOfOrderResponses() throws Exception {
         final long producerId = 343434L;
-        TransactionManager transactionManager = new TransactionManager();
+        TransactionManager transactionManager = createTransactionManager();
         setupWithTransactionState(transactionManager);
         prepareAndReceiveInitProducerId(producerId, Errors.NONE);
         assertTrue(transactionManager.hasProducerId());
@@ -917,7 +917,7 @@ public class SenderTest {
     @Test
     public void testCorrectHandlingOfOutOfOrderResponsesWhenSecondSucceeds() throws Exception {
         final long producerId = 343434L;
-        TransactionManager transactionManager = new TransactionManager();
+        TransactionManager transactionManager = createTransactionManager();
         setupWithTransactionState(transactionManager);
         prepareAndReceiveInitProducerId(producerId, Errors.NONE);
         assertTrue(transactionManager.hasProducerId());
@@ -985,7 +985,7 @@ public class SenderTest {
     @Test
     public void testExpiryOfUnsentBatchesShouldNotCauseUnresolvedSequences() throws Exception {
         final long producerId = 343434L;
-        TransactionManager transactionManager = new TransactionManager();
+        TransactionManager transactionManager = createTransactionManager();
         setupWithTransactionState(transactionManager);
         prepareAndReceiveInitProducerId(producerId, Errors.NONE);
         assertTrue(transactionManager.hasProducerId());
@@ -1008,7 +1008,7 @@ public class SenderTest {
     @Test
     public void testExpiryOfFirstBatchShouldNotCauseUnresolvedSequencesIfFutureBatchesSucceed() throws Exception {
         final long producerId = 343434L;
-        TransactionManager transactionManager = new TransactionManager();
+        TransactionManager transactionManager = createTransactionManager();
         setupWithTransactionState(transactionManager, false, null);
         prepareAndReceiveInitProducerId(producerId, Errors.NONE);
         assertTrue(transactionManager.hasProducerId());
@@ -1075,7 +1075,7 @@ public class SenderTest {
     @Test
     public void testExpiryOfFirstBatchShouldCauseEpochBumpIfFutureBatchesFail() throws Exception {
         final long producerId = 343434L;
-        TransactionManager transactionManager = new TransactionManager();
+        TransactionManager transactionManager = createTransactionManager();
         setupWithTransactionState(transactionManager);
         prepareAndReceiveInitProducerId(producerId, Errors.NONE);
         assertTrue(transactionManager.hasProducerId());
@@ -1123,7 +1123,7 @@ public class SenderTest {
     @Test
     public void testExpiryOfAllSentBatchesShouldCauseUnresolvedSequences() throws Exception {
         final long producerId = 343434L;
-        TransactionManager transactionManager = new TransactionManager();
+        TransactionManager transactionManager = createTransactionManager();
         setupWithTransactionState(transactionManager);
         prepareAndReceiveInitProducerId(producerId, Errors.NONE);
         assertTrue(transactionManager.hasProducerId());
@@ -1161,7 +1161,7 @@ public class SenderTest {
     @Test
     public void testResetOfProducerStateShouldAllowQueuedBatchesToDrain() throws Exception {
         final long producerId = 343434L;
-        TransactionManager transactionManager = new TransactionManager();
+        TransactionManager transactionManager = createTransactionManager();
         setupWithTransactionState(transactionManager);
         prepareAndReceiveInitProducerId(producerId, Errors.NONE);
         assertTrue(transactionManager.hasProducerId());
@@ -1205,7 +1205,7 @@ public class SenderTest {
     @Test
     public void testCloseWithProducerIdReset() throws Exception {
         final long producerId = 343434L;
-        TransactionManager transactionManager = new TransactionManager();
+        TransactionManager transactionManager = createTransactionManager();
         setupWithTransactionState(transactionManager);
         prepareAndReceiveInitProducerId(producerId, Errors.NONE);
         assertTrue(transactionManager.hasProducerId());
@@ -1243,7 +1243,7 @@ public class SenderTest {
 
     @Test
     public void testForceCloseWithProducerIdReset() throws Exception {
-        TransactionManager transactionManager = new TransactionManager();
+        TransactionManager transactionManager = createTransactionManager();
         setupWithTransactionState(transactionManager);
         prepareAndReceiveInitProducerId(1L, Errors.NONE);
         assertTrue(transactionManager.hasProducerId());
@@ -1277,7 +1277,7 @@ public class SenderTest {
     @Test
     public void testBatchesDrainedWithOldProducerIdShouldFailWithOutOfOrderSequenceOnSubsequentRetry() throws Exception {
         final long producerId = 343434L;
-        TransactionManager transactionManager = new TransactionManager();
+        TransactionManager transactionManager = createTransactionManager();
         setupWithTransactionState(transactionManager);
         prepareAndReceiveInitProducerId(producerId, Errors.NONE);
         assertTrue(transactionManager.hasProducerId());
@@ -1326,7 +1326,7 @@ public class SenderTest {
     @Test
     public void testCorrectHandlingOfDuplicateSequenceError() throws Exception {
         final long producerId = 343434L;
-        TransactionManager transactionManager = new TransactionManager();
+        TransactionManager transactionManager = createTransactionManager();
         setupWithTransactionState(transactionManager);
         prepareAndReceiveInitProducerId(producerId, Errors.NONE);
         assertTrue(transactionManager.hasProducerId());
@@ -1379,7 +1379,7 @@ public class SenderTest {
     @Test
     public void testBumpEpochOnUnknownProducerIdError() throws Exception {
         final long producerId = 343434L;
-        TransactionManager transactionManager = new TransactionManager();
+        TransactionManager transactionManager = createTransactionManager();
         setupWithTransactionState(transactionManager);
         prepareAndReceiveInitProducerId(producerId, Errors.NONE);
         assertTrue(transactionManager.hasProducerId());
@@ -1438,7 +1438,7 @@ public class SenderTest {
     @Test
     public void testUnknownProducerErrorShouldBeRetriedForFutureBatchesWhenFirstFails() throws Exception {
         final long producerId = 343434L;
-        TransactionManager transactionManager = new TransactionManager();
+        TransactionManager transactionManager = createTransactionManager();
         setupWithTransactionState(transactionManager);
         prepareAndReceiveInitProducerId(producerId, Errors.NONE);
         assertTrue(transactionManager.hasProducerId());
@@ -1527,7 +1527,7 @@ public class SenderTest {
     @Test
     public void testShouldRaiseOutOfOrderSequenceExceptionToUserIfLogWasNotTruncated() throws Exception {
         final long producerId = 343434L;
-        TransactionManager transactionManager = new TransactionManager();
+        TransactionManager transactionManager = createTransactionManager();
         setupWithTransactionState(transactionManager);
         prepareAndReceiveInitProducerId(producerId, Errors.NONE);
         assertTrue(transactionManager.hasProducerId());
@@ -1589,7 +1589,7 @@ public class SenderTest {
     @Test
     public void testClusterAuthorizationExceptionInProduceRequest() throws Exception {
         final long producerId = 343434L;
-        TransactionManager transactionManager = new TransactionManager();
+        TransactionManager transactionManager = createTransactionManager();
         setupWithTransactionState(transactionManager);
 
         prepareAndReceiveInitProducerId(producerId, Errors.NONE);
@@ -1615,7 +1615,7 @@ public class SenderTest {
     @Test
     public void testCancelInFlightRequestAfterFatalError() throws Exception {
         final long producerId = 343434L;
-        TransactionManager transactionManager = new TransactionManager();
+        TransactionManager transactionManager = createTransactionManager();
         setupWithTransactionState(transactionManager);
 
         prepareAndReceiveInitProducerId(producerId, Errors.NONE);
@@ -1655,7 +1655,7 @@ public class SenderTest {
     @Test
     public void testUnsupportedForMessageFormatInProduceRequest() throws Exception {
         final long producerId = 343434L;
-        TransactionManager transactionManager = new TransactionManager();
+        TransactionManager transactionManager = createTransactionManager();
         setupWithTransactionState(transactionManager);
 
         prepareAndReceiveInitProducerId(producerId, Errors.NONE);
@@ -1679,7 +1679,7 @@ public class SenderTest {
     @Test
     public void testUnsupportedVersionInProduceRequest() throws Exception {
         final long producerId = 343434L;
-        TransactionManager transactionManager = new TransactionManager();
+        TransactionManager transactionManager = createTransactionManager();
         setupWithTransactionState(transactionManager);
 
         prepareAndReceiveInitProducerId(producerId, Errors.NONE);
@@ -1704,7 +1704,7 @@ public class SenderTest {
     @Test
     public void testSequenceNumberIncrement() throws InterruptedException {
         final long producerId = 343434L;
-        TransactionManager transactionManager = new TransactionManager();
+        TransactionManager transactionManager = createTransactionManager();
         setupWithTransactionState(transactionManager);
         prepareAndReceiveInitProducerId(producerId, Errors.NONE);
         assertTrue(transactionManager.hasProducerId());
@@ -1748,7 +1748,7 @@ public class SenderTest {
     @Test
     public void testAbortRetryWhenProducerIdChanges() throws InterruptedException {
         final long producerId = 343434L;
-        TransactionManager transactionManager = new TransactionManager();
+        TransactionManager transactionManager = createTransactionManager();
         setupWithTransactionState(transactionManager);
         prepareAndReceiveInitProducerId(producerId, Errors.NONE);
         assertTrue(transactionManager.hasProducerId());
@@ -1787,7 +1787,7 @@ public class SenderTest {
     @Test
     public void testBumpEpochWhenOutOfOrderSequenceReceived() throws InterruptedException {
         final long producerId = 343434L;
-        TransactionManager transactionManager = new TransactionManager();
+        TransactionManager transactionManager = createTransactionManager();
         setupWithTransactionState(transactionManager);
         prepareAndReceiveInitProducerId(producerId, Errors.NONE);
         assertTrue(transactionManager.hasProducerId());
@@ -1817,7 +1817,7 @@ public class SenderTest {
     @Test
     public void testIdempotentSplitBatchAndSend() throws Exception {
         TopicPartition tp = new TopicPartition("testSplitBatchAndSend", 1);
-        TransactionManager txnManager = new TransactionManager();
+        TransactionManager txnManager = createTransactionManager();
         ProducerIdAndEpoch producerIdAndEpoch = new ProducerIdAndEpoch(123456L, (short) 0);
         setupWithTransactionState(txnManager);
         prepareAndReceiveInitProducerId(123456L, Errors.NONE);
@@ -2401,6 +2401,10 @@ public class SenderTest {
         return produceResponse(tp, offset, error, throttleTimeMs, -1L);
     }
 
+    private TransactionManager createTransactionManager() {
+        return new TransactionManager(new LogContext(), null, 0, 100L, new ApiVersions());
+    }
+    
     private void setupWithTransactionState(TransactionManager transactionManager) {
         setupWithTransactionState(transactionManager, false, null);
     }

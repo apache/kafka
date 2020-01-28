@@ -389,7 +389,7 @@ public class Sender implements Runnable {
             failBatch(expiredBatch, -1, NO_TIMESTAMP, new TimeoutException(errorMessage), false);
             if (transactionManager != null && expiredBatch.inRetry()) {
                 // This ensures that no new batches are drained until the current in flight batches are fully resolved.
-                transactionManager.markSequenceUnresolved(expiredBatch.topicPartition, expiredBatch.baseSequence() + expiredBatch.recordCount);
+                transactionManager.markSequenceUnresolved(expiredBatch);
             }
         }
         sensors.updateProduceRequestMetrics(batches);

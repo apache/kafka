@@ -391,7 +391,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             int deliveryTimeoutMs = configureDeliveryTimeout(config, log);
 
             this.apiVersions = new ApiVersions();
-            this.transactionManager = configureTransactionState(config, logContext, log, apiVersions);
+            this.transactionManager = configureTransactionState(config, logContext);
             this.accumulator = new RecordAccumulator(logContext,
                     config.getInt(ProducerConfig.BATCH_SIZE_CONFIG),
                     this.compressionType,
@@ -503,10 +503,8 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         return deliveryTimeoutMs;
     }
 
-    private static TransactionManager configureTransactionState(ProducerConfig config,
-                                                                LogContext logContext,
-                                                                Logger log,
-                                                                ApiVersions apiVersions) {
+    private TransactionManager configureTransactionState(ProducerConfig config,
+                                                         LogContext logContext) {
 
         TransactionManager transactionManager = null;
 

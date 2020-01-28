@@ -2562,7 +2562,7 @@ public class TransactionManagerTest {
         assertEquals(OptionalInt.of(0), transactionManager.lastAckedSequence(tp0));
 
         // Marking sequence numbers unresolved without inflight requests is basically a no-op.
-        transactionManager.markSequenceUnresolved(tp0, 1);
+        transactionManager.markSequenceUnresolved(b1);
         transactionManager.checkUnresolvedSequences();
         assertEquals(producerIdAndEpoch, transactionManager.producerIdAndEpoch());
         assertFalse(transactionManager.hasUnresolvedSequences());
@@ -2570,7 +2570,7 @@ public class TransactionManagerTest {
         // We have a new batch which fails with a timeout
         ProducerBatch b2 = writeIdempotentBatchWithValue(transactionManager, tp0, "2");
         assertEquals(Integer.valueOf(2), transactionManager.sequenceNumber(tp0));
-        transactionManager.markSequenceUnresolved(tp0, 2);
+        transactionManager.markSequenceUnresolved(b2);
         transactionManager.handleFailedBatch(b2, new TimeoutException(), false);
         assertTrue(transactionManager.hasUnresolvedSequences());
 
@@ -2596,7 +2596,7 @@ public class TransactionManagerTest {
         assertEquals(3, transactionManager.sequenceNumber(tp0).intValue());
 
         // The first batch fails with a timeout
-        transactionManager.markSequenceUnresolved(tp0, 3);
+        transactionManager.markSequenceUnresolved(b1);
         transactionManager.handleFailedBatch(b1, new TimeoutException(), false);
         assertTrue(transactionManager.hasUnresolvedSequences());
 
@@ -2636,7 +2636,7 @@ public class TransactionManagerTest {
         assertEquals(Integer.valueOf(3), transactionManager.sequenceNumber(tp0));
 
         // The first batch fails with a timeout
-        transactionManager.markSequenceUnresolved(tp0, 3);
+        transactionManager.markSequenceUnresolved(b1);
         transactionManager.handleFailedBatch(b1, new TimeoutException(), false);
         assertTrue(transactionManager.hasUnresolvedSequences());
 
