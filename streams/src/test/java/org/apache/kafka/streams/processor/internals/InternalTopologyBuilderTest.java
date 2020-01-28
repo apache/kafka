@@ -690,7 +690,7 @@ public class InternalTopologyBuilderTest {
         updatedTopics.add("topic-3");
         updatedTopics.add("topic-A");
 
-        builder.updateSubscribedTopics(updatedTopics, null);
+        builder.addSubscribedTopicsFromMetadata(updatedTopics, null);
         builder.setApplicationId("test-id");
 
         final Map<Integer, InternalTopologyBuilder.TopicsInfo> topicGroups = builder.topicGroups();
@@ -772,7 +772,7 @@ public class InternalTopologyBuilderTest {
         updatedTopics.add("topic-3");
         updatedTopics.add("topic-A");
 
-        builder.updateSubscribedTopics(updatedTopics, "test-thread");
+        builder.addSubscribedTopicsFromMetadata(updatedTopics, "test-thread");
         builder.setApplicationId("test-app");
 
         final Map<String, List<String>> stateStoreAndTopics = builder.stateStoreNameToSourceTopics();

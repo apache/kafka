@@ -265,7 +265,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                 throw new IllegalStateException("Streams partition assignor's rebalance protocol is unknown");
         }
 
-        taskManager.handleRebalanceStart();
+        taskManager.handleRebalanceStart(topics);
 
         return activeTasks;
     }

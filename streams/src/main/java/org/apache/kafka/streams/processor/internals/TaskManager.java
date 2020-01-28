@@ -101,7 +101,9 @@ public class TaskManager {
         return builder;
     }
 
-    void handleRebalanceStart() {
+    void handleRebalanceStart(final Set<String> subscribedTopics) {
+        builder.addSubscribedTopicsFromMetadata(subscribedTopics, logPrefix);
+
         rebalanceInProgress = true;
     }
 
