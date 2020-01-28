@@ -576,8 +576,24 @@ public class SslTransportLayerTest {
         InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
         selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
 
-        NetworkTestUtils.waitForChannelClose(selector, node, ChannelState.State.READY);
+        NetworkTestUtils.checkClientConnection(selector, node, 10, 100);
         server.verifyAuthenticationMetrics(1, 0);
+
+        checkAuthentiationFailed(node, "TLSv1.1");
+        server.verifyAuthenticationMetrics(1, 1);
+
+        checkAuthentiationFailed(node, "TLSv1");
+        server.verifyAuthenticationMetrics(1, 2);
+    }
+
+    /** Checks connection failed using the specified {@code tlsVersion}. */
+    private void checkAuthentiationFailed(String node, String tlsVersion) throws IOException {
+        sslClientConfigs.put(SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG, Arrays.asList(tlsVersion));
+        createSelector(sslClientConfigs);
+        InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
+        selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
+
+        NetworkTestUtils.waitForChannelClose(selector, node, ChannelState.State.AUTHENTICATION_FAILED);
     }
 
     /**
@@ -589,12 +605,7 @@ public class SslTransportLayerTest {
         sslServerConfigs.put(SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG, Arrays.asList("TLSv1.2"));
         server = createEchoServer(SecurityProtocol.SSL);
 
-        sslClientConfigs.put(SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG, Arrays.asList("TLSv1.1"));
-        createSelector(sslClientConfigs);
-        InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
-        selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
-
-        NetworkTestUtils.waitForChannelClose(selector, node, ChannelState.State.AUTHENTICATION_FAILED);
+        checkAuthentiationFailed(node, "TLSv1.1");
         server.verifyAuthenticationMetrics(0, 1);
     }
 
