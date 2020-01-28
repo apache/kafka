@@ -34,7 +34,7 @@ class ChangeLoggingSessionBytesStore
     extends WrappedStateStore<SessionStore<Bytes, byte[]>, byte[], byte[]>
     implements SessionStore<Bytes, byte[]> {
 
-    private StoreChangeLogger<Bytes, byte[]> changeLogger;
+    StoreChangeLogger<Bytes, byte[]> changeLogger;
 
     ChangeLoggingSessionBytesStore(final SessionStore<Bytes, byte[]> bytesStore) {
         super(bytesStore);
@@ -66,13 +66,13 @@ class ChangeLoggingSessionBytesStore
     @Override
     public void remove(final Windowed<Bytes> sessionKey) {
         wrapped().remove(sessionKey);
-        changeLogger.logChange(SessionKeySchema.toBinary(sessionKey), null);
+        log(SessionKeySchema.toBinary(sessionKey), null);
     }
 
     @Override
     public void put(final Windowed<Bytes> sessionKey, final byte[] aggregate) {
         wrapped().put(sessionKey, aggregate);
-        changeLogger.logChange(SessionKeySchema.toBinary(sessionKey), aggregate);
+        log(SessionKeySchema.toBinary(sessionKey), aggregate);
 
     }
 
@@ -89,5 +89,10 @@ class ChangeLoggingSessionBytesStore
     @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> fetch(final Bytes from, final Bytes to) {
         return wrapped().fetch(from, to);
+    }
+
+    void log(final Bytes key,
+             final byte[] value) {
+        changeLogger.logChange(key, value);
     }
 }

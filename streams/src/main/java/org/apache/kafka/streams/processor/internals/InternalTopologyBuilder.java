@@ -28,6 +28,7 @@ import org.apache.kafka.streams.processor.TimestampExtractor;
 import org.apache.kafka.streams.processor.TopicNameExtractor;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.internals.SessionStoreBuilder;
+import org.apache.kafka.streams.state.internals.TimestampedSessionStoreBuilder;
 import org.apache.kafka.streams.state.internals.TimestampedWindowStoreBuilder;
 import org.apache.kafka.streams.state.internals.WindowStoreBuilder;
 import org.slf4j.Logger;
@@ -142,6 +143,8 @@ public class InternalTopologyBuilder {
                 return ((TimestampedWindowStoreBuilder) builder).retentionPeriod();
             } else if (builder instanceof SessionStoreBuilder) {
                 return ((SessionStoreBuilder) builder).retentionPeriod();
+            } else if (builder instanceof TimestampedSessionStoreBuilder) {
+                return ((TimestampedSessionStoreBuilder) builder).retentionPeriod();
             } else {
                 throw new IllegalStateException("retentionPeriod is not supported when not a window store");
             }
@@ -162,7 +165,8 @@ public class InternalTopologyBuilder {
         private boolean isWindowStore() {
             return builder instanceof WindowStoreBuilder
                 || builder instanceof TimestampedWindowStoreBuilder
-                || builder instanceof SessionStoreBuilder;
+                || builder instanceof SessionStoreBuilder
+                || builder instanceof TimestampedSessionStoreBuilder;
         }
 
         // Apparently Java strips the generics from this method because we're using the raw type for builder,

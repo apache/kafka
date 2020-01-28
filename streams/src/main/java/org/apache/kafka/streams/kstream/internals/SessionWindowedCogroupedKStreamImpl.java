@@ -37,6 +37,7 @@ import org.apache.kafka.streams.state.SessionBytesStoreSupplier;
 import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
+import org.apache.kafka.streams.state.TimestampedSessionStore;
 
 public class SessionWindowedCogroupedKStreamImpl<K, V> extends
     AbstractStream<K, V> implements SessionWindowedCogroupedKStream<K, V> {
@@ -108,7 +109,7 @@ public class SessionWindowedCogroupedKStreamImpl<K, V> extends
 
 
     @SuppressWarnings("deprecation") // continuing to support SessionWindows#maintainMs in fallback mode
-    private  StoreBuilder<SessionStore<K, V>> materialize(final MaterializedInternal<K, V, SessionStore<Bytes, byte[]>> materialized) {
+    private  StoreBuilder<TimestampedSessionStore<K, V>> materialize(final MaterializedInternal<K, V, SessionStore<Bytes, byte[]>> materialized) {
         SessionBytesStoreSupplier supplier = (SessionBytesStoreSupplier) materialized.storeSupplier();
         if (supplier == null) {
             // NOTE: in the future, when we remove sessionWindows#maintainMs(), we should set the default retention
@@ -124,12 +125,12 @@ public class SessionWindowedCogroupedKStreamImpl<K, V> extends
                                                        + " grace=[" + sessionWindows.gracePeriodMs() + "],"
                                                        + " retention=[" + retentionPeriod + "]");
             }
-            supplier = Stores.persistentSessionStore(
+            supplier = Stores.persistentTimestampedSessionStore(
                 materialized.storeName(),
                 Duration.ofMillis(retentionPeriod)
             );
         }
-        final StoreBuilder<SessionStore<K, V>> builder = Stores.sessionStoreBuilder(
+        final StoreBuilder<TimestampedSessionStore<K, V>> builder = Stores.timestampedSessionStoreBuilder(
             supplier,
             materialized.keySerde(),
             materialized.valueSerde()

@@ -163,14 +163,31 @@ public class SessionWindowedKStreamImplTest {
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             processData(driver);
-            final SessionStore<String, Long> store = driver.getSessionStore("count-store");
-            final List<KeyValue<Windowed<String>, Long>> data = StreamsTestUtils.toList(store.fetch("1", "2"));
-            assertThat(
-                data,
-                equalTo(Arrays.asList(
-                    KeyValue.pair(new Windowed<>("1", new SessionWindow(10, 15)), 2L),
-                    KeyValue.pair(new Windowed<>("1", new SessionWindow(600, 600)), 1L),
-                    KeyValue.pair(new Windowed<>("2", new SessionWindow(599, 600)), 2L))));
+            {
+                final SessionStore<String, Long> store = driver.getSessionStore("count-store");
+                final List<KeyValue<Windowed<String>, Long>> data = StreamsTestUtils.toList(store.fetch("1", "2"));
+
+                assertThat(
+                    data,
+                    equalTo(Arrays.asList(
+                        KeyValue.pair(new Windowed<>("1", new SessionWindow(10, 15)), 2L),
+                        KeyValue.pair(new Windowed<>("1", new SessionWindow(600, 600)), 1L),
+                        KeyValue.pair(new Windowed<>("2", new SessionWindow(599, 600)), 2L))));
+
+            }
+            {
+                final SessionStore<String, ValueAndTimestamp<Long>> store =
+                    driver.getTimestampedSessionStore("count-store");
+                final List<KeyValue<Windowed<String>, ValueAndTimestamp<Long>>> data =
+                    StreamsTestUtils.toList(store.fetch("1", "2"));
+
+                assertThat(
+                    data,
+                    equalTo(Arrays.asList(
+                        KeyValue.pair(new Windowed<>("1", new SessionWindow(10, 15)), ValueAndTimestamp.make(2L, 15L)),
+                        KeyValue.pair(new Windowed<>("1", new SessionWindow(600, 600)), ValueAndTimestamp.make(1L, 600L)),
+                        KeyValue.pair(new Windowed<>("2", new SessionWindow(599, 600)), ValueAndTimestamp.make(2L, 599L)))));
+            }
         }
     }
 
@@ -180,15 +197,30 @@ public class SessionWindowedKStreamImplTest {
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             processData(driver);
-            final SessionStore<String, String> sessionStore = driver.getSessionStore("reduced");
-            final List<KeyValue<Windowed<String>, String>> data = StreamsTestUtils.toList(sessionStore.fetch("1", "2"));
+            {
+                final SessionStore<String, String> sessionStore = driver.getSessionStore("reduced");
+                final List<KeyValue<Windowed<String>, String>> data = StreamsTestUtils.toList(sessionStore.fetch("1", "2"));
 
-            assertThat(
-                data,
-                equalTo(Arrays.asList(
-                    KeyValue.pair(new Windowed<>("1", new SessionWindow(10, 15)), "1+2"),
-                    KeyValue.pair(new Windowed<>("1", new SessionWindow(600, 600)), "3"),
-                    KeyValue.pair(new Windowed<>("2", new SessionWindow(599, 600)), "1+2"))));
+                assertThat(
+                    data,
+                    equalTo(Arrays.asList(
+                        KeyValue.pair(new Windowed<>("1", new SessionWindow(10, 15)), "1+2"),
+                        KeyValue.pair(new Windowed<>("1", new SessionWindow(600, 600)), "3"),
+                        KeyValue.pair(new Windowed<>("2", new SessionWindow(599, 600)), "1+2"))));
+            }
+            {
+                final SessionStore<String, ValueAndTimestamp<Long>> store =
+                    driver.getTimestampedSessionStore("reduced");
+                final List<KeyValue<Windowed<String>, ValueAndTimestamp<Long>>> data =
+                    StreamsTestUtils.toList(store.fetch("1", "2"));
+
+                assertThat(
+                    data,
+                    equalTo(Arrays.asList(
+                        KeyValue.pair(new Windowed<>("1", new SessionWindow(10, 15)), ValueAndTimestamp.make("1+2", 15L)),
+                        KeyValue.pair(new Windowed<>("1", new SessionWindow(600, 600)), ValueAndTimestamp.make("3", 600L)),
+                        KeyValue.pair(new Windowed<>("2", new SessionWindow(599, 600)), ValueAndTimestamp.make("1+2", 599L)))));
+            }
         }
     }
 
@@ -202,14 +234,29 @@ public class SessionWindowedKStreamImplTest {
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             processData(driver);
-            final SessionStore<String, String> sessionStore = driver.getSessionStore("aggregated");
-            final List<KeyValue<Windowed<String>, String>> data = StreamsTestUtils.toList(sessionStore.fetch("1", "2"));
-            assertThat(
-                data,
-                equalTo(Arrays.asList(
-                    KeyValue.pair(new Windowed<>("1", new SessionWindow(10, 15)), "0+0+1+2"),
-                    KeyValue.pair(new Windowed<>("1", new SessionWindow(600, 600)), "0+3"),
-                    KeyValue.pair(new Windowed<>("2", new SessionWindow(599, 600)), "0+0+1+2"))));
+            {
+                final SessionStore<String, String> sessionStore = driver.getSessionStore("aggregated");
+                final List<KeyValue<Windowed<String>, String>> data = StreamsTestUtils.toList(sessionStore.fetch("1", "2"));
+                assertThat(
+                    data,
+                    equalTo(Arrays.asList(
+                        KeyValue.pair(new Windowed<>("1", new SessionWindow(10, 15)), "0+0+1+2"),
+                        KeyValue.pair(new Windowed<>("1", new SessionWindow(600, 600)), "0+3"),
+                        KeyValue.pair(new Windowed<>("2", new SessionWindow(599, 600)), "0+0+1+2"))));
+            }
+            {
+                final SessionStore<String, ValueAndTimestamp<Long>> store =
+                    driver.getTimestampedSessionStore("aggregated");
+                final List<KeyValue<Windowed<String>, ValueAndTimestamp<Long>>> data =
+                    StreamsTestUtils.toList(store.fetch("1", "2"));
+
+                assertThat(
+                    data,
+                    equalTo(Arrays.asList(
+                        KeyValue.pair(new Windowed<>("1", new SessionWindow(10, 15)), ValueAndTimestamp.make("0+0+1+2", 15L)),
+                        KeyValue.pair(new Windowed<>("1", new SessionWindow(600, 600)), ValueAndTimestamp.make("0+3", 600L)),
+                        KeyValue.pair(new Windowed<>("2", new SessionWindow(599, 600)), ValueAndTimestamp.make("0+0+1+2", 599L)))));
+            }
         }
     }
 

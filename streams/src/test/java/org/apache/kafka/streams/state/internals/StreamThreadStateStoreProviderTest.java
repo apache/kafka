@@ -38,9 +38,11 @@ import org.apache.kafka.streams.processor.internals.StreamTask;
 import org.apache.kafka.streams.processor.internals.StreamThread;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
+import org.apache.kafka.streams.state.ReadOnlySessionStore;
 import org.apache.kafka.streams.state.ReadOnlyWindowStore;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
+import org.apache.kafka.streams.state.TimestampedSessionStore;
 import org.apache.kafka.streams.state.TimestampedWindowStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.test.MockClientSupplier;
@@ -111,6 +113,22 @@ public class StreamThreadStateStoreProviderTest {
                     Duration.ofMillis(10L),
                     Duration.ofMillis(2L),
                     false),
+                Serdes.String(),
+                Serdes.String()),
+            "the-processor");
+        topology.addStateStore(
+            Stores.sessionStoreBuilder(
+                Stores.inMemorySessionStore(
+                    "session-store",
+                    Duration.ofMillis(10L)),
+                Serdes.String(),
+                Serdes.String()),
+            "the-processor");
+        topology.addStateStore(
+            Stores.timestampedSessionStoreBuilder(
+                Stores.inMemorySessionStore(
+                    "timestamped-session-store",
+                    Duration.ofMillis(10L)),
                 Serdes.String(),
                 Serdes.String()),
             "the-processor");
@@ -228,6 +246,30 @@ public class StreamThreadStateStoreProviderTest {
     }
 
     @Test
+    public void shouldFindSessionStores() {
+        mockThread(true);
+        final List<ReadOnlySessionStore<String, String>> sessionStores =
+            provider.stores("session-store", QueryableStoreTypes.sessionStore(), false);
+        assertEquals(2, sessionStores.size());
+        for (final ReadOnlySessionStore<String, String> store: sessionStores) {
+            assertThat(store, instanceOf(ReadOnlySessionStore.class));
+            assertThat(store, not(instanceOf(TimestampedSessionStore.class)));
+        }
+    }
+
+    @Test
+    public void shouldFindTimestampedSessionStores() {
+        mockThread(true);
+        final List<ReadOnlySessionStore<String, ValueAndTimestamp<String>>> sessionStores =
+            provider.stores("timestamped-session-store", QueryableStoreTypes.timestampedSessionStore(), false);
+        assertEquals(2, sessionStores.size());
+        for (final ReadOnlySessionStore<String, ValueAndTimestamp<String>> store: sessionStores) {
+            assertThat(store, instanceOf(ReadOnlySessionStore.class));
+            assertThat(store, instanceOf(TimestampedSessionStore.class));
+        }
+    }
+
+    @Test
     public void shouldNotFindWindowStoresAsTimestampedStore() {
         mockThread(true);
         final List<ReadOnlyWindowStore<String, ValueAndTimestamp<String>>> windowStores =
@@ -244,6 +286,26 @@ public class StreamThreadStateStoreProviderTest {
         for (final ReadOnlyWindowStore<String, ValueAndTimestamp<String>> store: windowStores) {
             assertThat(store, instanceOf(ReadOnlyWindowStore.class));
             assertThat(store, not(instanceOf(TimestampedWindowStore.class)));
+        }
+    }
+
+    @Test
+    public void shouldNotFindSessionStoresAsTimestampedStore() {
+        mockThread(true);
+        final List<ReadOnlySessionStore<String, ValueAndTimestamp<String>>> sessionStores =
+            provider.stores("session-store", QueryableStoreTypes.timestampedSessionStore(), false);
+        assertEquals(0, sessionStores.size());
+    }
+
+    @Test
+    public void shouldFindTimestampedSessionStoresAsWindowStore() {
+        mockThread(true);
+        final List<ReadOnlySessionStore<String, ValueAndTimestamp<String>>> sessionStores =
+            provider.stores("timestamped-session-store", QueryableStoreTypes.sessionStore(), false);
+        assertEquals(2, sessionStores.size());
+        for (final ReadOnlySessionStore<String, ValueAndTimestamp<String>> store: sessionStores) {
+            assertThat(store, instanceOf(ReadOnlySessionStore.class));
+            assertThat(store, not(instanceOf(TimestampedSessionStore.class)));
         }
     }
 
@@ -273,6 +335,20 @@ public class StreamThreadStateStoreProviderTest {
         mockThread(true);
         taskOne.getStore("timestamped-window-store").close();
         provider.stores(StoreQueryParams.fromNameAndType("timestamped-window-store", QueryableStoreTypes.timestampedWindowStore()));
+    }
+
+    @Test(expected = InvalidStateStoreException.class)
+    public void shouldThrowInvalidStoreExceptionIfSessionStoreClosed() {
+        mockThread(true);
+        taskOne.getStore("session-store").close();
+        provider.stores("session-store", QueryableStoreTypes.sessionStore(), false);
+    }
+
+    @Test(expected = InvalidStateStoreException.class)
+    public void shouldThrowInvalidStoreExceptionIfTsSessionStoreClosed() {
+        mockThread(true);
+        taskOne.getStore("timestamped-session-store").close();
+        provider.stores("timestamped-session-store", QueryableStoreTypes.timestampedSessionStore(), false);
     }
 
     @Test

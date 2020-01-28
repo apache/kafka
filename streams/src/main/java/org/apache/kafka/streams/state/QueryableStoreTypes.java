@@ -91,6 +91,17 @@ public final class QueryableStoreTypes {
         return new SessionStoreType<>();
     }
 
+    /**
+     * A {@link QueryableStoreType} that accepts {@link ReadOnlySessionStore ReadOnlySessionStore<K, ValueAndTimestamp<V>>}.
+     *
+     * @param <K> key type of the store
+     * @param <V> value type of the store
+     * @return {@link QueryableStoreTypes.TimestampedSessionStoreType}
+     */
+    public static <K, V> QueryableStoreType<ReadOnlySessionStore<K, ValueAndTimestamp<V>>> timestampedSessionStore() {
+        return new TimestampedSessionStoreType<>();
+    }
+
     private static abstract class QueryableStoreTypeMatcher<T> implements QueryableStoreType<T> {
 
         private final Set<Class> matchTo;
@@ -183,4 +194,19 @@ public final class QueryableStoreTypes {
         }
     }
 
+    private static class TimestampedSessionStoreType<K, V>
+        extends QueryableStoreTypeMatcher<ReadOnlySessionStore<K, ValueAndTimestamp<V>>> {
+
+        TimestampedSessionStoreType() {
+            super(new HashSet<>(Arrays.asList(
+                TimestampedSessionStore.class,
+                ReadOnlySessionStore.class)));
+        }
+
+        @Override
+        public ReadOnlySessionStore<K, ValueAndTimestamp<V>> create(final StateStoreProvider storeProvider,
+                                                                    final String storeName) {
+            return new CompositeReadOnlySessionStore<>(storeProvider, this, storeName);
+        }
+    }
 }

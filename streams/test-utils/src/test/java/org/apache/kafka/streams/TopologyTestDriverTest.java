@@ -894,6 +894,7 @@ public class TopologyTestDriverTest {
         final String windowStoreName = "windowStore";
         final String timestampedWindowStoreName = "windowTimestampStore";
         final String sessionStoreName = "sessionStore";
+        final String timestampedSessionStoreName = "sessionTimestampStore";
         final String globalKeyValueStoreName = "globalKeyValueStore";
         final String globalTimestampedKeyValueStoreName = "globalKeyValueTimestampStore";
 
@@ -906,6 +907,7 @@ public class TopologyTestDriverTest {
             windowStoreName,
             timestampedWindowStoreName,
             sessionStoreName,
+            timestampedSessionStoreName,
             globalKeyValueStoreName,
             globalTimestampedKeyValueStoreName);
 
@@ -918,30 +920,42 @@ public class TopologyTestDriverTest {
         assertNull(testDriver.getWindowStore(keyValueStoreName));
         assertNull(testDriver.getTimestampedWindowStore(keyValueStoreName));
         assertNull(testDriver.getSessionStore(keyValueStoreName));
+        assertNull(testDriver.getTimestampedSessionStore(keyValueStoreName));
 
         assertNotNull(testDriver.getKeyValueStore(timestampedKeyValueStoreName));
         assertNotNull(testDriver.getTimestampedKeyValueStore(timestampedKeyValueStoreName));
         assertNull(testDriver.getWindowStore(timestampedKeyValueStoreName));
         assertNull(testDriver.getTimestampedWindowStore(timestampedKeyValueStoreName));
         assertNull(testDriver.getSessionStore(timestampedKeyValueStoreName));
+        assertNull(testDriver.getTimestampedSessionStore(timestampedKeyValueStoreName));
 
         assertNull(testDriver.getKeyValueStore(windowStoreName));
         assertNull(testDriver.getTimestampedKeyValueStore(windowStoreName));
         assertNotNull(testDriver.getWindowStore(windowStoreName));
         assertNull(testDriver.getTimestampedWindowStore(windowStoreName));
         assertNull(testDriver.getSessionStore(windowStoreName));
+        assertNull(testDriver.getTimestampedSessionStore(windowStoreName));
 
         assertNull(testDriver.getKeyValueStore(timestampedWindowStoreName));
         assertNull(testDriver.getTimestampedKeyValueStore(timestampedWindowStoreName));
         assertNotNull(testDriver.getWindowStore(timestampedWindowStoreName));
         assertNotNull(testDriver.getTimestampedWindowStore(timestampedWindowStoreName));
         assertNull(testDriver.getSessionStore(timestampedWindowStoreName));
+        assertNull(testDriver.getTimestampedSessionStore(timestampedWindowStoreName));
 
         assertNull(testDriver.getKeyValueStore(sessionStoreName));
         assertNull(testDriver.getTimestampedKeyValueStore(sessionStoreName));
         assertNull(testDriver.getWindowStore(sessionStoreName));
         assertNull(testDriver.getTimestampedWindowStore(sessionStoreName));
         assertNotNull(testDriver.getSessionStore(sessionStoreName));
+        assertNull(testDriver.getTimestampedSessionStore(sessionStoreName));
+
+        assertNull(testDriver.getKeyValueStore(timestampedSessionStoreName));
+        assertNull(testDriver.getTimestampedKeyValueStore(timestampedSessionStoreName));
+        assertNull(testDriver.getWindowStore(timestampedSessionStoreName));
+        assertNull(testDriver.getTimestampedWindowStore(timestampedSessionStoreName));
+        assertNotNull(testDriver.getSessionStore(timestampedSessionStoreName));
+        assertNotNull(testDriver.getTimestampedSessionStore(timestampedSessionStoreName));
 
         // verify global stores
         assertNotNull(testDriver.getKeyValueStore(globalKeyValueStoreName));
@@ -949,12 +963,14 @@ public class TopologyTestDriverTest {
         assertNull(testDriver.getWindowStore(globalKeyValueStoreName));
         assertNull(testDriver.getTimestampedWindowStore(globalKeyValueStoreName));
         assertNull(testDriver.getSessionStore(globalKeyValueStoreName));
+        assertNull(testDriver.getTimestampedSessionStore(globalKeyValueStoreName));
 
         assertNotNull(testDriver.getKeyValueStore(globalTimestampedKeyValueStoreName));
         assertNotNull(testDriver.getTimestampedKeyValueStore(globalTimestampedKeyValueStoreName));
         assertNull(testDriver.getWindowStore(globalTimestampedKeyValueStoreName));
         assertNull(testDriver.getTimestampedWindowStore(globalTimestampedKeyValueStoreName));
         assertNull(testDriver.getSessionStore(globalTimestampedKeyValueStoreName));
+        assertNull(testDriver.getTimestampedSessionStore(globalTimestampedKeyValueStoreName));
     }
 
     @Test
@@ -973,6 +989,7 @@ public class TopologyTestDriverTest {
         final String windowStoreName = "windowStore";
         final String timestampedWindowStoreName = "windowTimestampStore";
         final String sessionStoreName = "sessionStore";
+        final String timestampedSessionStoreName = "sessionTimestampStore";
         final String globalKeyValueStoreName = "globalKeyValueStore";
         final String globalTimestampedKeyValueStoreName = "globalKeyValueTimestampStore";
 
@@ -985,6 +1002,7 @@ public class TopologyTestDriverTest {
             windowStoreName,
             timestampedWindowStoreName,
             sessionStoreName,
+            timestampedSessionStoreName,
             globalKeyValueStoreName,
             globalTimestampedKeyValueStoreName);
 
@@ -1039,6 +1057,15 @@ public class TopologyTestDriverTest {
         {
             final IllegalArgumentException e = assertThrows(
                 IllegalArgumentException.class,
+                () -> testDriver.getStateStore(timestampedSessionStoreName));
+            assertThat(
+                e.getMessage(),
+                equalTo("Store " + timestampedSessionStoreName
+                    + " is a timestamped session store and should be accessed via `getTimestampedSessionStore()`"));
+        }
+        {
+            final IllegalArgumentException e = assertThrows(
+                IllegalArgumentException.class,
                 () -> testDriver.getStateStore(globalKeyValueStoreName));
             assertThat(
                 e.getMessage(),
@@ -1063,6 +1090,7 @@ public class TopologyTestDriverTest {
                                      final String windowStoreName,
                                      final String timestampedWindowStoreName,
                                      final String sessionStoreName,
+                                     final String timestampedSessionStoreName,
                                      final String globalKeyValueStoreName,
                                      final String globalTimestampedKeyValueStoreName) {
         // add state stores
@@ -1112,6 +1140,15 @@ public class TopologyTestDriverTest {
                     Stores.inMemorySessionStore(sessionStoreName, Duration.ofMillis(1000L)),
                     Serdes.ByteArray(),
                     Serdes.ByteArray()),
+            "processor");
+        topology.addStateStore(
+            Stores.timestampedSessionStoreBuilder(
+                persistent ?
+                    Stores.persistentTimestampedSessionStore(timestampedSessionStoreName, Duration.ofMillis(1000L)) :
+                    Stores.inMemorySessionStore(timestampedSessionStoreName, Duration.ofMillis(1000L)),
+                Serdes.ByteArray(),
+                Serdes.ByteArray()
+            ),
             "processor");
         // add global stores
         topology.addGlobalStore(

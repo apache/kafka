@@ -39,11 +39,12 @@ public class MeteredSessionStore<K, V>
     extends WrappedStateStore<SessionStore<Bytes, byte[]>, Windowed<K>, V>
     implements SessionStore<K, V> {
 
+    final Serde<K> keySerde;
+    final Serde<V> valueSerde;
+    StateSerdes<K, V> serdes;
+
     private final String metricsScope;
-    private final Serde<K> keySerde;
-    private final Serde<V> valueSerde;
     private final Time time;
-    private StateSerdes<K, V> serdes;
     private StreamsMetricsImpl streamsMetrics;
     private Sensor putSensor;
     private Sensor fetchSensor;
@@ -75,6 +76,8 @@ public class MeteredSessionStore<K, V>
             keySerde == null ? (Serde<K>) context.keySerde() : keySerde,
             valueSerde == null ? (Serde<V>) context.valueSerde() : valueSerde);
         taskId = context.taskId().toString();
+        initStoreSerde(context);
+
         streamsMetrics = (StreamsMetricsImpl) context.metrics();
 
         putSensor = StateStoreMetrics.putSensor(threadId, taskId, metricsScope, name(), streamsMetrics);
@@ -86,6 +89,14 @@ public class MeteredSessionStore<K, V>
 
         // register and possibly restore the state from the logs
         maybeMeasureLatency(() -> super.init(context, root), time, restoreSensor);
+    }
+
+    @SuppressWarnings("unchecked")
+    void initStoreSerde(final ProcessorContext context) {
+        serdes = new StateSerdes<>(
+            ProcessorStateManager.storeChangelogTopic(context.applicationId(), name()),
+            keySerde == null ? (Serde<K>) context.keySerde() : keySerde,
+            valueSerde == null ? (Serde<V>) context.valueSerde() : valueSerde);
     }
 
     @SuppressWarnings("unchecked")

@@ -278,4 +278,34 @@ public class StoresTest {
         ).build();
         assertThat(store, not(nullValue()));
     }
+
+    @Test
+    public void shouldBuildTimestampedSessionStore() {
+        final TimestampedSessionStore<String, String> store = Stores.timestampedSessionStoreBuilder(
+            Stores.persistentTimestampedSessionStore("store", ofMillis(3L)),
+            Serdes.String(),
+            Serdes.String()
+        ).build();
+        assertThat(store, not(nullValue()));
+    }
+
+    @Test
+    public void shouldBuildTimestampedSessionStoreThatWrapsSessionStore() {
+        final TimestampedSessionStore<String, String> store = Stores.timestampedSessionStoreBuilder(
+            Stores.persistentSessionStore("store", ofMillis(3L)),
+            Serdes.String(),
+            Serdes.String()
+        ).build();
+        assertThat(store, not(nullValue()));
+    }
+
+    @Test
+    public void shouldBuildTimestampedSessionStoreThatWrapsInMemorySessionStore() {
+        final TimestampedSessionStore<String, String> store = Stores.timestampedSessionStoreBuilder(
+            Stores.inMemorySessionStore("store", ofMillis(3L)),
+            Serdes.String(),
+            Serdes.String()
+        ).build();
+        assertThat(store, not(nullValue()));
+    }
 }

@@ -33,6 +33,7 @@ import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
+import org.apache.kafka.streams.state.TimestampedSessionStore;
 import org.apache.kafka.streams.state.TimestampedWindowStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.WindowStore;
@@ -93,6 +94,8 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
                 return new TimestampedWindowStoreReadOnlyDecorator((TimestampedWindowStore) global);
             } else if (global instanceof WindowStore) {
                 return new WindowStoreReadOnlyDecorator((WindowStore) global);
+            } else if (global instanceof TimestampedSessionStore) {
+                return new TimestampedSessionStoreReadWriteDecorator((TimestampedSessionStore) global);
             } else if (global instanceof SessionStore) {
                 return new SessionStoreReadOnlyDecorator((SessionStore) global);
             }
@@ -119,6 +122,8 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
             return new TimestampedWindowStoreReadWriteDecorator((TimestampedWindowStore) store);
         } else if (store instanceof WindowStore) {
             return new WindowStoreReadWriteDecorator((WindowStore) store);
+        } else if (store instanceof TimestampedSessionStore) {
+            return new TimestampedSessionStoreReadWriteDecorator((TimestampedSessionStore) store);
         } else if (store instanceof SessionStore) {
             return new SessionStoreReadWriteDecorator((SessionStore) store);
         }
@@ -630,6 +635,15 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
         public KeyValueIterator<Windowed<K>, AGG> fetch(final K from,
                                                         final K to) {
             return wrapped().fetch(from, to);
+        }
+    }
+
+    static class TimestampedSessionStoreReadWriteDecorator<K, AGG>
+        extends SessionStoreReadWriteDecorator<K, ValueAndTimestamp<AGG>>
+        implements TimestampedSessionStore<K, AGG> {
+
+        TimestampedSessionStoreReadWriteDecorator(final TimestampedSessionStore<K, AGG> inner) {
+            super(inner);
         }
     }
 }

@@ -51,7 +51,7 @@ public class RocksDBSessionStoreTest extends SessionBytesStoreTest {
 
     @Override
     String getMetricsScope() {
-        return new RocksDbSessionBytesStoreSupplier(null, 0).metricsScope();
+        return new RocksDbSessionBytesStoreSupplier(null, 0, false).metricsScope();
     }
 
     @Override

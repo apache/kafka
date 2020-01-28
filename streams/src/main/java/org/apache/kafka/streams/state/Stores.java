@@ -30,6 +30,7 @@ import org.apache.kafka.streams.state.internals.RocksDbSessionBytesStoreSupplier
 import org.apache.kafka.streams.state.internals.RocksDbWindowBytesStoreSupplier;
 import org.apache.kafka.streams.state.internals.SessionStoreBuilder;
 import org.apache.kafka.streams.state.internals.TimestampedKeyValueStoreBuilder;
+import org.apache.kafka.streams.state.internals.TimestampedSessionStoreBuilder;
 import org.apache.kafka.streams.state.internals.TimestampedWindowStoreBuilder;
 import org.apache.kafka.streams.state.internals.WindowStoreBuilder;
 
@@ -355,26 +356,6 @@ public final class Stores {
      * Create a persistent {@link SessionBytesStoreSupplier}.
      *
      * @param name              name of the store (cannot be {@code null})
-     * @param retentionPeriodMs length of time to retain data in the store (cannot be negative)
-     *                          (note that the retention period must be at least as long enough to
-     *                          contain the inactivity gap of the session and the entire grace period.)
-     * @return an instance of a {@link  SessionBytesStoreSupplier}
-     * @deprecated since 2.1 Use {@link Stores#persistentSessionStore(String, Duration)} instead
-     */
-    @Deprecated // continuing to support Windows#maintainMs/segmentInterval in fallback mode
-    public static SessionBytesStoreSupplier persistentSessionStore(final String name,
-                                                                   final long retentionPeriodMs) {
-        Objects.requireNonNull(name, "name cannot be null");
-        if (retentionPeriodMs < 0) {
-            throw new IllegalArgumentException("retentionPeriod cannot be negative");
-        }
-        return new RocksDbSessionBytesStoreSupplier(name, retentionPeriodMs);
-    }
-
-    /**
-     * Create a persistent {@link SessionBytesStoreSupplier}.
-     *
-     * @param name              name of the store (cannot be {@code null})
      * @param retentionPeriod   length of time to retain data in the store (cannot be negative)
      *                          (note that the retention period must be at least as long enough to
      *                          contain the inactivity gap of the session and the entire grace period.)
@@ -384,7 +365,47 @@ public final class Stores {
     public static SessionBytesStoreSupplier persistentSessionStore(final String name,
                                                                    final Duration retentionPeriod) {
         final String msgPrefix = prepareMillisCheckFailMsgPrefix(retentionPeriod, "retentionPeriod");
-        return persistentSessionStore(name, ApiUtils.validateMillisecondDuration(retentionPeriod, msgPrefix));
+        return persistentSessionStore(name, ApiUtils.validateMillisecondDuration(retentionPeriod, msgPrefix), false);
+    }
+
+    /**
+     * Create a persistent {@link SessionBytesStoreSupplier}.
+     * <p>
+     * This store supplier can be passed into a
+     * {@link #timestampedSessionStoreBuilder(SessionBytesStoreSupplier, Serde, Serde)}.
+     * If you want to create a {@link SessionStore} you should use
+     * {@link #persistentSessionStore(String, Duration, boolean)} to create a store supplier instead.
+     *
+     * @param name                  name of the store (cannot be {@code null})
+     * @param retentionPeriod       length of time to retain data in the store (cannot be negative)
+     *                              (note that the retention period must be at least long enough to contain the
+     *                              windowed data's entire life cycle, from window-start through window-end,
+     *                              and for the entire grace period)
+     * @return an instance of {@link SessionBytesStoreSupplier}
+     * @throws IllegalArgumentException if {@code retentionPeriod} or {@code windowSize} can't be represented as {@code long milliseconds}
+     */
+    public static SessionBytesStoreSupplier persistentTimestampedSessionStore(final String name,
+                                                                              final Duration retentionPeriod) throws IllegalArgumentException {
+        return persistentSessionStore(name, retentionPeriod, true);
+    }
+
+    @Deprecated // continuing to support Windows#maintainMs/segmentInterval in fallback mode
+    private static SessionBytesStoreSupplier persistentSessionStore(final String name,
+                                                                    final long retentionPeriodMs,
+                                                                    final boolean timestampedStore) {
+        Objects.requireNonNull(name, "name cannot be null");
+        if (retentionPeriodMs < 0) {
+            throw new IllegalArgumentException("retentionPeriod cannot be negative");
+        }
+        return new RocksDbSessionBytesStoreSupplier(name, retentionPeriodMs, timestampedStore);
+    }
+
+    @SuppressWarnings("deprecation") // removing #persistentSessionStore(String name, long retentionPeriodMs) will fix this
+    private static SessionBytesStoreSupplier persistentSessionStore(final String name,
+                                                                    final Duration retentionPeriod,
+                                                                    final boolean timestampedStore) {
+        final String msgPrefix = prepareMillisCheckFailMsgPrefix(retentionPeriod, "retentionPeriod");
+        return persistentSessionStore(name, ApiUtils.validateMillisecondDuration(retentionPeriod, msgPrefix), timestampedStore);
     }
 
     /**
@@ -509,5 +530,27 @@ public final class Stores {
                                                                               final Serde<V> valueSerde) {
         Objects.requireNonNull(supplier, "supplier cannot be null");
         return new SessionStoreBuilder<>(supplier, keySerde, valueSerde, Time.SYSTEM);
+    }
+
+    /**
+     * Creates a {@link StoreBuilder} that can be used to build a {@link TimestampedSessionStore}.
+     * <p>
+     * The provided supplier should <strong>not</strong> be a supplier for
+     * {@link SessionStore SessionStore}. For this case, passed in timestamps will be dropped and not stored in the
+     * windows-store. On read, no valid timestamp but a dummy timestamp will be returned.
+     *
+     * @param supplier      a {@link SessionBytesStoreSupplier} (cannot be {@code null})
+     * @param keySerde      the key serde to use
+     * @param valueSerde    the value serde to use; if the serialized bytes is {@code null} for put operations,
+     *                      it is treated as delete
+     * @param <K>           key type
+     * @param <V>           value type
+     * @return an instance of {@link StoreBuilder} that can build a {@link TimestampedSessionStore}
+     */
+    public static <K, V> StoreBuilder<TimestampedSessionStore<K, V>> timestampedSessionStoreBuilder(final SessionBytesStoreSupplier supplier,
+                                                                                                    final Serde<K> keySerde,
+                                                                                                    final Serde<V> valueSerde) {
+        Objects.requireNonNull(supplier, "supplier cannot be null");
+        return new TimestampedSessionStoreBuilder<>(supplier, keySerde, valueSerde, Time.SYSTEM);
     }
 }
