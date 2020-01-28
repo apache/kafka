@@ -37,6 +37,7 @@ import org.apache.kafka.common.record.Records;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.Closeable;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
@@ -55,19 +56,11 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import static kafka.log.remote.RemoteLogManager.REMOTE_STORAGE_MANAGER_CONFIG_PREFIX;
 import static scala.collection.JavaConverters.seqAsJavaListConverter;
 
 public class HDFSRemoteStorageManager implements RemoteStorageManager {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(HDFSRemoteStorageManager.class);
-
-    // TODO: Use the utilities in AbstractConfig. Should we support dynamic config?
-    public static final String HDFS_URI_PROP = REMOTE_STORAGE_MANAGER_CONFIG_PREFIX() + "hdfs.fs.uri";
-    public static final String HDFS_BASE_DIR_PROP = REMOTE_STORAGE_MANAGER_CONFIG_PREFIX() + "hdfs.base.dir";
-    public static final String HDFS_REMOTE_INDEX_INTERVAL_BYTES = REMOTE_STORAGE_MANAGER_CONFIG_PREFIX() + "hdfs.remote.index.interval.bytes";
-    public static final String HDFS_REMOTE_INDEX_INTERVAL_BYTES_DEFAULT = "262144";
-
     private static final String REMOTE_LOG_DIR_FORMAT = "%020d-%020d";
     private static final Pattern REMOTE_SEGMENT_DIR_NAME_PATTERN = Pattern.compile("(\\d{20})-(\\d{20})");
     private static final String LOG_FILE_NAME = "log";
@@ -84,6 +77,8 @@ public class HDFSRemoteStorageManager implements RemoteStorageManager {
     private String baseDir = null;
     private Configuration hadoopConf = null;
     private ThreadLocal<FileSystem> fs = new ThreadLocal<>();
+    private int cacheLineSize;
+    private LRUCache readCache;
 
     @Override
     public long earliestLogOffset(TopicPartition tp) throws IOException {
@@ -157,7 +152,6 @@ public class HDFSRemoteStorageManager implements RemoteStorageManager {
 
     @Override
     public List<RemoteLogSegmentInfo> listRemoteSegments(TopicPartition topicPartition, long minOffset) throws IOException {
-
         FileSystem fs = getFS();
         Path path = new Path(getTPRemoteDir(topicPartition));
         if (!fs.exists(path)) {
@@ -218,13 +212,15 @@ public class HDFSRemoteStorageManager implements RemoteStorageManager {
     @Override
     public boolean deleteLogSegment(RemoteLogSegmentInfo remoteLogSegmentInfo) throws IOException {
         FileSystem fs = getFS();
-        return fs.delete((Path) remoteLogSegmentInfo.props().get(FILE_PATH), true);
+        Path path = (Path) remoteLogSegmentInfo.props().get(FILE_PATH);
+        return fs.delete(path, true);
     }
 
     @Override
     public boolean deleteTopicPartition(TopicPartition tp) throws IOException {
         FileSystem fs = getFS();
         Path path = new Path(getTPRemoteDir(tp));
+
         return fs.delete(path, true);
     }
 
@@ -257,6 +253,65 @@ public class HDFSRemoteStorageManager implements RemoteStorageManager {
         return minStartOffset == Long.MAX_VALUE ? -1L : minStartOffset;
     }
 
+    private class CachedInputStream implements Closeable {
+        private Path logFile;
+        private long fileLen;
+        private FSDataInputStream inputStream;
+
+        CachedInputStream(Path logFile) throws IOException {
+            this.logFile = logFile;
+            FileSystem fs = getFS();
+            fileLen = fs.getFileStatus(logFile).getLen();
+        }
+
+        public ByteBuffer read(long position, int bytes) throws IOException {
+            if ((position % cacheLineSize + bytes) <= cacheLineSize) {
+                // The requested data is inside one cache line.
+                // We don't need to copy the data.
+                byte[] data = getCachedData(position);
+                return ByteBuffer.wrap(data, (int) position % cacheLineSize, bytes);
+            } else {
+                byte[] res = new byte[bytes];
+                int pos = 0;
+                while (pos < bytes) {
+                    byte[] data = getCachedData(position + pos);
+                    int len = (int) Math.min(res.length - pos, data.length - (position + pos) % cacheLineSize);
+                    System.arraycopy(data, (int) (position + pos) % cacheLineSize,
+                        res, pos,
+                        len);
+                    pos += len;
+                }
+                return ByteBuffer.wrap(res);
+            }
+        }
+
+        private byte[] getCachedData(long position) throws IOException {
+            long pos = (position / cacheLineSize) * cacheLineSize;
+
+            byte[] data = readCache.get(logFile.toString(), pos);
+            if (data != null)
+                return data;
+
+            if (inputStream == null) {
+                FileSystem fs = getFS();
+                inputStream = fs.open(logFile);
+            }
+            long dataLength = Math.min(cacheLineSize, fileLen - pos);
+            data = new byte[(int) dataLength];
+            inputStream.readFully(pos, data);
+            readCache.put(logFile.toString(), pos, data);
+            return data;
+        }
+
+        @Override
+        public void close() throws IOException {
+            if (inputStream != null) {
+                inputStream.close();
+                inputStream = null;
+            }
+        }
+    }
+
     /**
      * Read remote log from startOffset.
      **/
@@ -277,8 +332,7 @@ public class HDFSRemoteStorageManager implements RemoteStorageManager {
 
         Path logFile = getPath(path, LOG_FILE_NAME);
         FileSystem fs = getFS();
-
-        try (FSDataInputStream is = fs.open(logFile)) {
+        try (CachedInputStream is = new CachedInputStream(logFile)) {
             // Find out the 1st batch that is not less than startOffset
             Records records = read(is, pos, remoteLogIndexEntry.dataLength());
 
@@ -305,10 +359,8 @@ public class HDFSRemoteStorageManager implements RemoteStorageManager {
         }
     }
 
-    private Records read(FSDataInputStream is, int pos, int maxBytes) throws IOException {
-        byte[] buf = new byte[maxBytes];
-        is.readFully(pos, buf);
-        return MemoryRecords.readableRecords(ByteBuffer.wrap(buf));
+    private Records read(CachedInputStream is, int pos, int bytes) throws IOException {
+        return MemoryRecords.readableRecords(is.read(pos, bytes));
     }
 
     @Override
@@ -329,9 +381,7 @@ public class HDFSRemoteStorageManager implements RemoteStorageManager {
         int pos = Integer.parseInt(m.group(2));
 
         Path logFile = getPath(path, LOG_FILE_NAME);
-        FileSystem fs = getFS();
-
-        try (FSDataInputStream is = fs.open(logFile)) {
+        try (CachedInputStream is = new CachedInputStream(logFile)) {
             Records records = read(is, pos, remoteLogIndexEntry.dataLength());
             for (RecordBatch batch : records.batches()) {
                 if (batch.maxTimestamp() >= targetTimestamp && batch.lastOffset() >= startingOffset) {
@@ -370,16 +420,18 @@ public class HDFSRemoteStorageManager implements RemoteStorageManager {
      */
     @Override
     public void configure(Map<String, ?> configs) {
-        fsURI = URI.create(configs.get(HDFS_URI_PROP).toString());
-        baseDir = configs.get(HDFS_BASE_DIR_PROP).toString();
+        HDFSRemoteStorageManagerConfig conf = new HDFSRemoteStorageManagerConfig(configs, true);
 
-        String intervalBytesStr = null;
-        if (configs.containsKey(HDFS_REMOTE_INDEX_INTERVAL_BYTES))
-            intervalBytesStr = configs.get(HDFS_REMOTE_INDEX_INTERVAL_BYTES).toString();
-
-        if (intervalBytesStr == null || intervalBytesStr.isEmpty())
-            intervalBytesStr = HDFS_REMOTE_INDEX_INTERVAL_BYTES_DEFAULT;
-        indexIntervalBytes = Integer.parseInt(intervalBytesStr);
+        fsURI = URI.create(conf.getString(HDFSRemoteStorageManagerConfig.HDFS_URI_PROP));
+        baseDir = conf.getString(HDFSRemoteStorageManagerConfig.HDFS_BASE_DIR_PROP);
+        indexIntervalBytes = conf.getInt(HDFSRemoteStorageManagerConfig.HDFS_REMOTE_INDEX_INTERVAL_BYTES_PROP);
+        cacheLineSize = conf.getInt(HDFSRemoteStorageManagerConfig.HDFS_REMOTE_READ_MB_PROP) * 1048576;
+        long cacheSize = conf.getInt(HDFSRemoteStorageManagerConfig.HDFS_REMOTE_READ_CACHE_MB_PROP) * 1048576L;
+        if (cacheSize < cacheLineSize) {
+            throw new IllegalArgumentException(HDFSRemoteStorageManagerConfig.HDFS_REMOTE_READ_MB_PROP +
+                " is larger than " + HDFSRemoteStorageManagerConfig.HDFS_REMOTE_READ_CACHE_MB_PROP);
+        }
+        readCache = new LRUCache(cacheSize);
 
         hadoopConf = new Configuration(); // Load configuration from hadoop configuration files in class path
     }

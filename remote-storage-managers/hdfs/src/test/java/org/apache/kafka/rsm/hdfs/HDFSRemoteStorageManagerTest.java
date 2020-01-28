@@ -91,8 +91,8 @@ public class HDFSRemoteStorageManagerTest {
         segments.add(seg2);
 
         config = new HashMap<>();
-        config.put(HDFSRemoteStorageManager.HDFS_URI_PROP, hdfsURI);
-        config.put(HDFSRemoteStorageManager.HDFS_BASE_DIR_PROP, baseDir);
+        config.put(HDFSRemoteStorageManagerConfig.HDFS_URI_PROP, hdfsURI);
+        config.put(HDFSRemoteStorageManagerConfig.HDFS_BASE_DIR_PROP, baseDir);
     }
 
     private void appendRecords(LogSegment seg, long offset, int numRecords) {
@@ -395,7 +395,7 @@ public class HDFSRemoteStorageManagerTest {
 
         // 1 byte
         HDFSRemoteStorageManager rsm2 = new HDFSRemoteStorageManager();
-        config.put(HDFSRemoteStorageManager.HDFS_REMOTE_INDEX_INTERVAL_BYTES, "1");
+        config.put(HDFSRemoteStorageManagerConfig.HDFS_REMOTE_INDEX_INTERVAL_BYTES_PROP, "1");
         rsm1.configure(config);
         TopicPartition tp2 = new TopicPartition("test", 20);
         indexEntries = rsm1.copyLogSegment(tp2, seg, leaderEpoch);
@@ -403,7 +403,7 @@ public class HDFSRemoteStorageManagerTest {
 
         // 1,000,000 bytes
         HDFSRemoteStorageManager rsm3 = new HDFSRemoteStorageManager();
-        config.put(HDFSRemoteStorageManager.HDFS_REMOTE_INDEX_INTERVAL_BYTES, "1000000");
+        config.put(HDFSRemoteStorageManagerConfig.HDFS_REMOTE_INDEX_INTERVAL_BYTES_PROP, "1000000");
         rsm1.configure(config);
         TopicPartition tp3 = new TopicPartition("test", 30);
         indexEntries = rsm1.copyLogSegment(tp3, seg, leaderEpoch);
@@ -411,7 +411,7 @@ public class HDFSRemoteStorageManagerTest {
 
         // 500,001 bytes
         HDFSRemoteStorageManager rsm4 = new HDFSRemoteStorageManager();
-        config.put(HDFSRemoteStorageManager.HDFS_REMOTE_INDEX_INTERVAL_BYTES, "500001");
+        config.put(HDFSRemoteStorageManagerConfig.HDFS_REMOTE_INDEX_INTERVAL_BYTES_PROP, "500001");
         rsm1.configure(config);
         TopicPartition tp4 = new TopicPartition("test", 40);
         indexEntries = rsm1.copyLogSegment(tp4, seg, leaderEpoch);
@@ -518,7 +518,7 @@ public class HDFSRemoteStorageManagerTest {
     @Test
     public void testFindOffsetByTimestamp() throws Exception {
         HDFSRemoteStorageManager rsm = new HDFSRemoteStorageManager();
-        config.put(HDFSRemoteStorageManager.HDFS_REMOTE_INDEX_INTERVAL_BYTES, "1"); // one index entry for each record batch
+        config.put(HDFSRemoteStorageManagerConfig.HDFS_REMOTE_INDEX_INTERVAL_BYTES_PROP, "1"); // one index entry for each record batch
         rsm.configure(config);
 
         TopicPartition tp = new TopicPartition("test", 5);
