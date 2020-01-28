@@ -570,6 +570,7 @@ public class SslTransportLayerTest {
 
         NetworkTestUtils.checkClientConnection(selector, "0", 10, 100);
         server.verifyAuthenticationMetrics(1, 0);
+        selector.close();
 
         checkAuthentiationFailed("1", "TLSv1.1");
         server.verifyAuthenticationMetrics(1, 1);
@@ -586,6 +587,8 @@ public class SslTransportLayerTest {
         selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
 
         NetworkTestUtils.waitForChannelClose(selector, node, ChannelState.State.AUTHENTICATION_FAILED);
+
+        selector.close();
     }
 
     /**
