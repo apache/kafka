@@ -65,6 +65,8 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
+import static org.apache.kafka.connect.runtime.WorkerConfig.TOPIC_TRACKING_ALLOW_RESET_CONFIG;
+
 @Path("/connectors")
 @Produces(MediaType.APPLICATION_JSON)
 @Consumes(MediaType.APPLICATION_JSON)
@@ -183,6 +185,11 @@ public class ConnectorsResource {
     @PUT
     @Path("/{connector}/topics/reset")
     public Response resetConnectorActiveTopics(final @PathParam("connector") String connector, final @Context HttpHeaders headers) throws Throwable {
+        if (!config.getBoolean(TOPIC_TRACKING_ALLOW_RESET_CONFIG)) {
+            return Response.status(Response.Status.FORBIDDEN)
+                    .entity("Topic tracking reset is disabled.")
+                    .build();
+        }
         herder.resetConnectorActiveTopics(connector);
         return Response.accepted().build();
     }
