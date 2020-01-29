@@ -1911,7 +1911,7 @@ public final class MessageDataGenerator {
             }
         } else if (field.type() instanceof FieldType.Float64FieldType) {
             if (field.defaultString().isEmpty()) {
-                return "0D";
+                return "0.0";
             } else {
                 try {
                     Double.parseDouble(field.defaultString());

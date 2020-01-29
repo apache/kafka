@@ -223,12 +223,12 @@ public class ByteUtilsTest {
 
     @Test
     public void testDouble() throws IOException {
-        assertDoubleSerde(0.0D, 0x0L);
-        assertDoubleSerde(-0.0D, 0x8000000000000000L);
-        assertDoubleSerde(1.0D, 0x3FF0000000000000L);
-        assertDoubleSerde(-1.0D, 0xBFF0000000000000L);
-        assertDoubleSerde(123e45D, 0x49B58B82C0E0BB00L);
-        assertDoubleSerde(-123e45D, 0xC9B58B82C0E0BB00L);
+        assertDoubleSerde(0.0, 0x0L);
+        assertDoubleSerde(-0.0, 0x8000000000000000L);
+        assertDoubleSerde(1.0, 0x3FF0000000000000L);
+        assertDoubleSerde(-1.0, 0xBFF0000000000000L);
+        assertDoubleSerde(123e45, 0x49B58B82C0E0BB00L);
+        assertDoubleSerde(-123e45, 0xC9B58B82C0E0BB00L);
         assertDoubleSerde(Double.MIN_VALUE, 0x1L);
         assertDoubleSerde(-Double.MIN_VALUE, 0x8000000000000001L);
         assertDoubleSerde(Double.MAX_VALUE, 0x7FEFFFFFFFFFFFFFL);

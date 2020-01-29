@@ -89,10 +89,11 @@ public class ProtocolSerializationTest {
         check(Type.INT16, (short) -11111, "INT16");
         check(Type.INT32, -11111111, "INT32");
         check(Type.INT64, -11111111111L, "INT64");
-        check(Type.FLOAT64, -0.5D, "FLOAT64");
-        check(Type.FLOAT64, 1e300D, "FLOAT64");
-        check(Type.FLOAT64, 0.0D, "FLOAT64");
-        check(Type.FLOAT64, -0.0D, "FLOAT64");
+        check(Type.FLOAT64, 2.5, "FLOAT64");
+        check(Type.FLOAT64, -0.5, "FLOAT64");
+        check(Type.FLOAT64, 1e300, "FLOAT64");
+        check(Type.FLOAT64, 0.0, "FLOAT64");
+        check(Type.FLOAT64, -0.0, "FLOAT64");
         check(Type.FLOAT64, Double.MAX_VALUE, "FLOAT64");
         check(Type.FLOAT64, Double.MIN_VALUE, "FLOAT64");
         check(Type.FLOAT64, Double.NaN, "FLOAT64");
