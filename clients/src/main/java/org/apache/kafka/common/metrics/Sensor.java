@@ -135,7 +135,7 @@ public final class Sensor {
         return this.name;
     }
 
-    List<Sensor> parents() {
+    public List<Sensor> parents() {
         return unmodifiableList(asList(parents));
     }
 

@@ -66,14 +66,14 @@ public class SourceNode<K, V> extends ProcessorNode<K, V> {
     @SuppressWarnings("unchecked")
     @Override
     public void init(final InternalProcessorContext context) {
-        super.init(context);
-        this.context = context;
         processAtSourceSensor = ProcessorNodeMetrics.processorAtSourceSensorOrForwardSensor(
             Thread.currentThread().getName(),
             context.taskId().toString(),
             context.currentNode().name(),
             context.metrics()
         );
+        super.init(context);
+        this.context = context;
 
         // if deserializers are null, get the default ones from the context
         if (this.keyDeserializer == null) {
