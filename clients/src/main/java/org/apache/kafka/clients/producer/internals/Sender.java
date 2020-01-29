@@ -297,14 +297,6 @@ public class Sender implements Runnable {
             try {
                 transactionManager.maybeResolveSequences();
 
-                if (transactionManager.isTransactional()
-                        && transactionManager.hasUnresolvedSequences()
-                        && !transactionManager.hasFatalError()) {
-                    transactionManager.transitionToFatalError(
-                            new KafkaException("The client hasn't received acknowledgment for " +
-                                    "some previously sent messages and can no longer retry them. It isn't safe to continue."));
-                }
-
                 // do not continue sending if the transaction manager is in a failed state
                 if (transactionManager.hasFatalError()) {
                     RuntimeException lastError = transactionManager.lastError();
