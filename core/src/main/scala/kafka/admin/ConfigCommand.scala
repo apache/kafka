@@ -353,13 +353,13 @@ object ConfigCommand extends Config {
         ).asJavaCollection
         adminClient.incrementalAlterConfigs(Map(configResource -> alterLogLevelEntries).asJava, alterOptions).all().get(60, TimeUnit.SECONDS)
 
-      case _ => throw new IllegalArgumentException(s"Unsupported entity type: ${entityType}")
+      case _ => throw new IllegalArgumentException(s"Unsupported entity type: $entityType")
     }
 
     if (entityName.nonEmpty)
-      println(s"Completed updating config for ${entityType.dropRight(1)} ${entityName}.")
+      println(s"Completed updating config for ${entityType.dropRight(1)} $entityName.")
     else
-      println(s"Completed updating default config for ${entityType} in the cluster.")
+      println(s"Completed updating default config for $entityType in the cluster.")
   }
 
   private def describeConfig(adminClient: Admin, opts: ConfigCommandOptions): Unit = {
@@ -379,9 +379,10 @@ object ConfigCommand extends Config {
     entities.foreach { entity =>
       entity match {
         case "" =>
-          println(s"Default config for ${entityType} in the cluster are:")
+          println(s"Default configs for $entityType in the cluster are:")
         case _ =>
-          println(s"Configs for ${entityType.dropRight(1)} ${entity} are:")
+          val configSourceStr = if (describeAll) "All" else "Dynamic"
+          println(s"$configSourceStr configs for ${entityType.dropRight(1)} $entity are:")
       }
       getConfig(adminClient, entityType, entity, includeSynonyms = true, describeAll).foreach { entry =>
         val synonyms = entry.synonyms.asScala.map(synonym => s"${synonym.source}:${synonym.name}=${synonym.value}").mkString(", ")
@@ -393,10 +394,10 @@ object ConfigCommand extends Config {
   private def getConfig(adminClient: Admin, entityType: String, entityName: String, includeSynonyms: Boolean, describeAll: Boolean) = {
     def validateBrokerId(): Unit = try entityName.toInt catch {
       case _: NumberFormatException =>
-        throw new IllegalArgumentException(s"The entity name for ${entityType} must be a valid integer broker id, found: ${entityName}")
+        throw new IllegalArgumentException(s"The entity name for $entityType must be a valid integer broker id, found: $entityName")
     }
 
-    val (configResourceType, configSourceFilter) = entityType match {
+    val (configResourceType, dynamicConfigSource) = entityType match {
       case ConfigType.Topic =>
         if (!entityName.isEmpty)
           Topic.validate(entityName)
@@ -406,14 +407,18 @@ object ConfigCommand extends Config {
           (ConfigResource.Type.BROKER, Some(ConfigEntry.ConfigSource.DYNAMIC_DEFAULT_BROKER_CONFIG))
         case _ =>
           validateBrokerId()
-          val configSource = if (describeAll) None else Some(ConfigEntry.ConfigSource.DYNAMIC_BROKER_CONFIG)
-          (ConfigResource.Type.BROKER, configSource)
+          (ConfigResource.Type.BROKER, Some(ConfigEntry.ConfigSource.DYNAMIC_BROKER_CONFIG))
       }
       case BrokerLoggerConfigType =>
         if (!entityName.isEmpty)
           validateBrokerId()
         (ConfigResource.Type.BROKER_LOGGER, None)
     }
+
+    val configSourceFilter = if (describeAll)
+      None
+    else
+      dynamicConfigSource
 
     val configResource = new ConfigResource(configResourceType, entityName)
     val configs = adminClient.describeConfigs(Collections.singleton(configResource)).all.get(30, TimeUnit.SECONDS)
@@ -658,13 +663,8 @@ object ConfigCommand extends Config {
       else if (options.has(bootstrapServerOpt) && options.has(zkConnectOpt))
         throw new IllegalArgumentException("Only one of --bootstrap-server or --zookeeper must be specified")
 
-      if (options.has(allOpt)) {
-        if (options.has(zkConnectOpt))
-          throw new IllegalArgumentException(s"--bootstrap-server must be specified for --all")
-        else if (!hasEntityName)
-          throw new IllegalArgumentException(s"--entity-name must be specified for --all")
-        else if (!entityTypeVals.contains(ConfigType.Broker))
-          throw new IllegalArgumentException(s"--all only applies to --entity-type=${ConfigType.Broker}")
+      if (options.has(allOpt) && options.has(zkConnectOpt)) {
+        throw new IllegalArgumentException(s"--bootstrap-server must be specified for --all")
       }
 
       if (hasEntityName && (entityTypeVals.contains(ConfigType.Broker) || entityTypeVals.contains(BrokerLoggerConfigType))) {
