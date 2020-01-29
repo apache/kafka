@@ -120,9 +120,17 @@ public class VerifiableProducer implements AutoCloseable {
                 .metavar("TOPIC")
                 .help("Produce messages to this topic.");
 
+        parser.addArgument("--bootstrap-server")
+                .action(store())
+                .required(false)
+                .type(String.class)
+                .metavar("HOST1:PORT1[,HOST2:PORT2[...]]")
+                .dest("bootstrapServer")
+                .help("REQUIRED: The server(s) to connect to. Comma-separated list of Kafka brokers in the form HOST1:PORT1,HOST2:PORT2,...");
+
         parser.addArgument("--broker-list")
                 .action(store())
-                .required(true)
+                .required(false)
                 .type(String.class)
                 .metavar("HOST1:PORT1[,HOST2:PORT2[...]]")
                 .dest("brokerList")
@@ -222,7 +230,16 @@ public class VerifiableProducer implements AutoCloseable {
             createTime = null;
 
         Properties producerProps = new Properties();
-        producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, res.getString("brokerList"));
+
+        if(res.get("bootstrapServer") != null ) {
+            producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, res.getString("bootstrapServer"));
+        } else if(res.getString("brokerList") != null) {
+            producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, res.getString("brokerList"));
+        } else {
+            parser.printHelp();
+            Exit.exit(0);
+        }
+
         producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG,
                 "org.apache.kafka.common.serialization.StringSerializer");
         producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG,

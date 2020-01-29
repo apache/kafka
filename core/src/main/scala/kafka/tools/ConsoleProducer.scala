@@ -90,7 +90,11 @@ object ConsoleProducer {
 
     props ++= config.extraProducerProps
 
-    props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, config.brokerList)
+    if(config.bootstrapServer != null)
+      props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, config.bootstrapServer)
+    else
+      props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, config.brokerList)
+
     props.put(ProducerConfig.COMPRESSION_TYPE_CONFIG, config.compressionCodec)
     props.put(ProducerConfig.CLIENT_ID_CONFIG, "console-producer")
     props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer")
@@ -125,9 +129,13 @@ object ConsoleProducer {
       .withRequiredArg
       .describedAs("topic")
       .ofType(classOf[String])
-    val brokerListOpt = parser.accepts("broker-list", "REQUIRED: The broker list string in the form HOST1:PORT1,HOST2:PORT2.")
+    val brokerListOpt = parser.accepts("broker-list", "The broker list string in the form HOST1:PORT1,HOST2:PORT2.")
       .withRequiredArg
       .describedAs("broker-list")
+      .ofType(classOf[String])
+    val bootstrapServerOpt = parser.accepts("bootstrap-server", "REQUIRED: The server(s) to connect to.")
+      .withRequiredArg
+      .describedAs("server to connect to")
       .ofType(classOf[String])
     val syncOpt = parser.accepts("sync", "If set message send requests to the brokers are synchronously, one at a time as they arrive.")
     val compressionCodecOpt = parser.accepts("compression-codec", "The compression codec: either 'none', 'gzip', 'snappy', 'lz4', or 'zstd'." +
@@ -220,11 +228,18 @@ object ConsoleProducer {
     options = tryParse(parser, args)
 
     CommandLineUtils.printHelpAndExitIfNeeded(this, "This tool helps to read data from standard input and publish it to Kafka.")
-    CommandLineUtils.checkRequiredArgs(parser, options, topicOpt, brokerListOpt)
+    if (!options.has(bootstrapServerOpt) && !options.has(brokerListOpt))
+      CommandLineUtils.checkRequiredArgs(parser, options, topicOpt, bootstrapServerOpt)
 
     val topic = options.valueOf(topicOpt)
     val brokerList = options.valueOf(brokerListOpt)
-    ToolsUtils.validatePortOrDie(parser,brokerList)
+    val bootstrapServer = options.valueOf(bootstrapServerOpt)
+    if (options.has(brokerListOpt))
+      ToolsUtils.validatePortOrDie(parser, brokerList)
+
+    if(options.has(bootstrapServerOpt))
+      ToolsUtils.validatePortOrDie(parser, bootstrapServer)
+
     val sync = options.has(syncOpt)
     val compressionCodecOptionValue = options.valueOf(compressionCodecOpt)
     val compressionCodec = if (options.has(compressionCodecOpt))

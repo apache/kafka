@@ -503,10 +503,17 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
                 .newArgumentParser("verifiable-consumer")
                 .defaultHelp(true)
                 .description("This tool consumes messages from a specific topic and emits consumer events (e.g. group rebalances, received messages, and offsets committed) as JSON objects to STDOUT.");
+        parser.addArgument("--bootstrap-server")
+                .action(store())
+                .required(false)
+                .type(String.class)
+                .metavar("HOST1:PORT1[,HOST2:PORT2[...]]")
+                .dest("bootstrapServer")
+                .help("REQUIRED: The server(s) to connect to. Comma-separated list of Kafka brokers in the form HOST1:PORT1,HOST2:PORT2,...");
 
         parser.addArgument("--broker-list")
                 .action(store())
-                .required(true)
+                .required(false)
                 .type(String.class)
                 .metavar("HOST1:PORT1[,HOST2:PORT2[...]]")
                 .dest("brokerList")
@@ -616,7 +623,16 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
         if (groupInstanceId != null) {
             consumerProps.put(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG, groupInstanceId);
         }
-        consumerProps.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, res.getString("brokerList"));
+
+        if(res.get("bootstrapServer") != null ) {
+            consumerProps.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, res.getString("bootstrapServer"));
+        } else if(res.getString("brokerList") != null) {
+            consumerProps.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, res.getString("brokerList"));
+        } else {
+            parser.printHelp();
+            Exit.exit(0);
+        }
+
         consumerProps.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, useAutoCommit);
         consumerProps.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, res.getString("resetPolicy"));
         consumerProps.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, Integer.toString(res.getInt("sessionTimeout")));
@@ -641,7 +657,6 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
             parser.printHelp();
             Exit.exit(0);
         }
-
         try {
             final VerifiableConsumer consumer = createFromArgs(parser, args);
             Runtime.getRuntime().addShutdownHook(new Thread(() -> consumer.close()));
