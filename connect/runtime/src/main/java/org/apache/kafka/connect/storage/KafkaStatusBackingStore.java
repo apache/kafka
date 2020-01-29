@@ -446,6 +446,7 @@ public class KafkaStatusBackingStore implements StatusBackingStore {
                 log.error("Invalid topic status value {} for field {}", innerValue, TOPIC_STATE_KEY);
                 return null;
             }
+            @SuppressWarnings("unchecked")
             Map<String, Object> topicStatusMetadata = (Map<String, Object>) innerValue;
             return new TopicStatus((String) topicStatusMetadata.get(TOPIC_NAME_KEY),
                     (String) topicStatusMetadata.get(TOPIC_CONNECTOR_KEY),
