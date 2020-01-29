@@ -303,7 +303,6 @@ public class TransactionManager {
         boolean isEpochBump = this.producerIdAndEpoch != ProducerIdAndEpoch.NONE;
         return handleCachedTransactionRequestResult(() -> {
             transitionTo(State.INITIALIZING);
-            // setProducerIdAndEpoch(currentProducerIdAndEpoch);
             InitProducerIdRequestData requestData = new InitProducerIdRequestData()
                     .setTransactionalId(transactionalId)
                     .setTransactionTimeoutMs(transactionTimeoutMs)
@@ -522,6 +521,11 @@ public class TransactionManager {
         transitionTo(State.UNINITIALIZED);
     }
 
+    private synchronized void resetSequenceForPartition(TopicPartition topicPartition) {
+        topicPartitionBookkeeper.topicPartitionBookkeeping.remove(topicPartition);
+        this.partitionsWithUnresolvedSequences.remove(topicPartition);
+    }
+
     private synchronized void resetSequenceNumbers() {
         topicPartitionBookkeeper.reset();
         this.partitionsWithUnresolvedSequences.clear();
@@ -693,7 +697,7 @@ public class TransactionManager {
             // numbers for all existing partitions.
             resetIdempotentProducerId();
         } else if (exception instanceof UnknownProducerIdException) {
-            resetSequenceNumbers();
+            resetSequenceForPartition(batch.topicPartition);
         } else {
             removeInFlightBatch(batch);
             if (adjustSequenceNumbers) {
@@ -737,19 +741,6 @@ public class TransactionManager {
             log.info("Resetting sequence number of batch with current sequence {} for partition {} to {}", inFlightBatch.baseSequence(), batch.topicPartition, newSequence);
             inFlightBatch.resetProducerState(new ProducerIdAndEpoch(inFlightBatch.producerId(), inFlightBatch.producerEpoch()), newSequence, inFlightBatch.isTransactional());
         });
-    }
-
-    private void startSequencesAtBeginning(TopicPartition topicPartition) {
-        final PrimitiveRef.IntRef sequence = PrimitiveRef.ofInt(0);
-        topicPartitionBookkeeper.getPartition(topicPartition).resetSequenceNumbers(inFlightBatch -> {
-            log.info("Resetting sequence number of batch with current sequence {} for partition {} to {}",
-                    inFlightBatch.baseSequence(), inFlightBatch.topicPartition, sequence.value);
-            inFlightBatch.resetProducerState(new ProducerIdAndEpoch(this.producerIdAndEpoch.producerId,
-                    this.producerIdAndEpoch.epoch), sequence.value, inFlightBatch.isTransactional());
-            sequence.value += inFlightBatch.recordCount;
-        });
-        topicPartitionBookkeeper.getPartition(topicPartition).nextSequence = sequence.value;
-        topicPartitionBookkeeper.getPartition(topicPartition).lastAckedSequence = NO_LAST_ACKED_SEQUENCE_NUMBER;
     }
 
     private boolean hasInflightBatches(TopicPartition topicPartition) {

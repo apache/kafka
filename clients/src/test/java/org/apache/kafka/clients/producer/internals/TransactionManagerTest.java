@@ -2726,7 +2726,17 @@ public class TransactionManagerTest {
         transactionManager.maybeAddPartitionToTransaction(tp0);
 
         prepareAddPartitionsToTxnResponse(Errors.NONE, tp0, epoch, pid);
-        sender.runOnce();  // Send AddPartitionsRequest
+        sender.runOnce();  // Send AddPartitionsRequest for tp0
+
+        transactionManager.maybeAddPartitionToTransaction(tp1);
+        prepareAddPartitionsToTxnResponse(Errors.NONE, tp1, epoch, pid);
+        sender.runOnce();  // Send AddPartitionsRequest for tp0
+
+        Future<RecordMetadata> successPartitionResponseFuture = appendToAccumulator(tp1);
+        sender.runOnce(); // Send Produce Request
+        sendProduceResponse(Errors.NONE, pid, epoch, tp1);
+        sender.runOnce(); // Send Produce Response
+        assertTrue(successPartitionResponseFuture.isDone());
 
         Future<RecordMetadata> responseFuture0 = appendToAccumulator(tp0);
         sender.runOnce(); // Send Produce Request
@@ -2763,6 +2773,7 @@ public class TransactionManagerTest {
         sender.runOnce();  // Send AddPartitionsRequest
 
         assertEquals(0, transactionManager.sequenceNumber(tp0).intValue());
+        assertEquals(1, transactionManager.sequenceNumber(tp1).intValue());
     }
 
     @Test
@@ -3175,7 +3186,11 @@ public class TransactionManagerTest {
     }
 
     private void sendProduceResponse(Errors error, final long producerId, final short producerEpoch) {
-        client.respond(produceRequestMatcher(producerId, producerEpoch), produceResponse(tp0, 0, error, 0));
+        sendProduceResponse(error, producerId, producerEpoch, tp0);
+    }
+
+    private void sendProduceResponse(Errors error, final long producerId, final short producerEpoch, TopicPartition tp) {
+        client.respond(produceRequestMatcher(producerId, producerEpoch, tp), produceResponse(tp, 0, error, 0));
     }
 
     private void prepareProduceResponse(Errors error, final long producerId, final short producerEpoch) {
@@ -3183,9 +3198,13 @@ public class TransactionManagerTest {
     }
 
     private MockClient.RequestMatcher produceRequestMatcher(final long pid, final short epoch) {
+        return produceRequestMatcher(pid, epoch, tp0);
+    }
+
+    private MockClient.RequestMatcher produceRequestMatcher(final long pid, final short epoch, TopicPartition tp) {
         return body -> {
             ProduceRequest produceRequest = (ProduceRequest) body;
-            MemoryRecords records = produceRequest.partitionRecordsOrFail().get(tp0);
+            MemoryRecords records = produceRequest.partitionRecordsOrFail().get(tp);
             assertNotNull(records);
             Iterator<MutableRecordBatch> batchIterator = records.batches().iterator();
             assertTrue(batchIterator.hasNext());
