@@ -108,9 +108,7 @@ public class MemoryStatusBackingStore implements StatusBackingStore {
     @Override
     public TopicStatus getTopic(String connector, String topic) {
         ConcurrentMap<String, TopicStatus> activeTopics = topics.get(connector);
-        return activeTopics != null
-               ? activeTopics.get(topic)
-               : null;
+        return activeTopics != null ? activeTopics.get(topic) : null;
     }
 
     @Override
