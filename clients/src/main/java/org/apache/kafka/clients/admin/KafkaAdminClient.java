@@ -2245,10 +2245,9 @@ public class KafkaAdminClient extends AdminClient {
 
         Map<Integer, Set<TopicPartition>> partitionsByBroker = new HashMap<>();
 
-        for (TopicPartitionReplica replica: replicas) {
-            if (!partitionsByBroker.containsKey(replica.brokerId()))
-                partitionsByBroker.put(replica.brokerId(), new HashSet<>());
-            partitionsByBroker.get(replica.brokerId()).add(new TopicPartition(replica.topic(), replica.partition()));
+        for (TopicPartitionReplica replica : replicas) {
+            partitionsByBroker.computeIfAbsent(replica.brokerId(), key -> new HashSet<>())
+                .add(new TopicPartition(replica.topic(), replica.partition()));
         }
 
         final long now = time.milliseconds();
@@ -2437,9 +2436,8 @@ public class KafkaAdminClient extends AdminClient {
                     } else {
                         Node node = cluster.leaderFor(entry.getKey());
                         if (node != null) {
-                            if (!leaders.containsKey(node))
-                                leaders.put(node, new HashMap<>());
-                            leaders.get(node).put(entry.getKey(), entry.getValue().beforeOffset());
+                            leaders.computeIfAbsent(node, key -> new HashMap<>()).put(entry.getKey(),
+                                entry.getValue().beforeOffset());
                         } else {
                             future.completeExceptionally(Errors.LEADER_NOT_AVAILABLE.exception());
                         }
