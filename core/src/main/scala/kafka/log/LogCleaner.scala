@@ -580,9 +580,11 @@ private[log] class Cleaner(val id: Int,
           s"${if(retainDeletesAndTxnMarkers) "retaining" else "discarding"} deletes.")
 
         try {
-          val containsTombstones: Boolean = cleanInto(log.topicPartition, currentSegment.log, cleaned, map, retainDeletesAndTxnMarkers, log.config.deleteRetentionMs,
+          val latestDeleteHorizon: Long = cleanInto(log.topicPartition, currentSegment.log, cleaned, map, retainDeletesAndTxnMarkers, log.config.deleteRetentionMs,
                     log.config.maxMessageSize, transactionMetadata, lastOffsetOfActiveProducers, stats, currentTime = currentTime)
-          log.containsTombstones = containsTombstones
+          if (log.latestDeleteHorizon < latestDeleteHorizon) {
+            log.latestDeleteHorizon = latestDeleteHorizon
+          }
         } catch {
           case e: LogSegmentOffsetOverflowException =>
             // Split the current segment. It's also safest to abort the current cleaning process, so that we retry from
@@ -639,8 +641,8 @@ private[log] class Cleaner(val id: Int,
                              transactionMetadata: CleanedTransactionMetadata,
                              lastRecordsOfActiveProducers: Map[Long, LastRecord],
                              stats: CleanerStats,
-                             currentTime: Long = RecordBatch.NO_TIMESTAMP): Boolean = {
-    var containsTombstones: Boolean = false
+                             currentTime: Long = RecordBatch.NO_TIMESTAMP): Long = {
+    var latestDeleteHorizon: Long = RecordBatch.NO_TIMESTAMP
 
     val logCleanerFilter: RecordFilter = new RecordFilter {
       var discardBatchRecords: Boolean = _
@@ -690,23 +692,30 @@ private[log] class Cleaner(val id: Int,
           isRecordRetained = false
         else
           isRecordRetained = Cleaner.this.shouldRetainRecord(map, retainDeletesAndTxnMarkers, batch, record, stats, currentTime = currentTime)
-        if (isRecordRetained && !record.hasValue())
-          containsTombstones = true
         isRecordRetained
       }
 
       override def retrieveDeleteHorizon(batch: RecordBatch) : Long = {
         isBatchDiscardable = shouldDiscardBatch(batch, transactionMetadata)
 
-        if (batch.deleteHorizonSet())
+        if (batch.deleteHorizonSet()) {
+          if (batch.deleteHorizonMs() > latestDeleteHorizon) {
+            latestDeleteHorizon = batch.deleteHorizonMs()
+          }
           return batch.deleteHorizonMs() // means that we keep the old timestamp stored
+        }
 
         // check that the control batch has been emptied of records
         // if not, then we do not set a delete horizon until that is true
         if (batch.isControlBatch() && !isBatchDiscardable) {
           return -1L
         }
-        return time.milliseconds() + tombstoneRetentionMs;
+
+        val newDeleteHorizon: Long = time.milliseconds() + tombstoneRetentionMs
+        if (newDeleteHorizon > latestDeleteHorizon) {
+          latestDeleteHorizon = newDeleteHorizon
+        }
+        newDeleteHorizon
       }
     }
 
@@ -746,7 +755,7 @@ private[log] class Cleaner(val id: Int,
         growBuffersOrFail(sourceRecords, position, maxLogMessageSize, records)
     }
     restoreBuffers()
-    containsTombstones
+    latestDeleteHorizon
   }
 
 

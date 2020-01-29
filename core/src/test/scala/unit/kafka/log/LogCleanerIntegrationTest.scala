@@ -186,7 +186,7 @@ class LogCleanerIntegrationTest extends AbstractLogCleanerIntegrationTest with K
     val topicPartitions = Array(new TopicPartition("log-partition", 0))
     val props = new Properties()
     props.put(LogConfig.DeleteRetentionMsProp, "1000")
-    cleaner = makeCleaner(partitions = topicPartitions, propertyOverrides = props)
+    cleaner = makeCleaner(partitions = topicPartitions, propertyOverrides = props, backOffMs = 100L)
 
     val log = cleaner.logs.get(topicPartitions(0))
 
@@ -206,7 +206,9 @@ class LogCleanerIntegrationTest extends AbstractLogCleanerIntegrationTest with K
     }
     assertTrue(containsTombstones)
 
-    Thread.sleep(400)
+    // We sleep a little bit, so that log cleaner has already gone through 
+    // some iterations, ensures that delete horizons has been updated correctly
+    Thread.sleep(300L)
     time.sleep(tombstoneRetentionMs + 1)
 
     val latestOffset: Long = log.latestEpoch match {
@@ -227,10 +229,10 @@ class LogCleanerIntegrationTest extends AbstractLogCleanerIntegrationTest with K
     cleaner.awaitCleaned(new TopicPartition("log-partition", 0), 
                          latestOffset + 1, maxWaitMs = tombstoneRetentionMs)
 
+    assertEquals(log.latestDeleteHorizon, T0 + tombstoneRetentionMs)
     for (segment <- log.logSegments; record <- segment.log.records.asScala) {
       fail ("The log should not contain record " + record + ", tombstone has expired its lifetime.")
     }
-    assertFalse(log.containsTombstones)
   }
 
   private def readFromLog(log: Log): Iterable[(Int, Int)] = {

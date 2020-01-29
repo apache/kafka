@@ -222,7 +222,7 @@ class Log(@volatile var dir: File,
           val topicPartition: TopicPartition,
           val producerStateManager: ProducerStateManager,
           logDirFailureChannel: LogDirFailureChannel,
-          @volatile var containsTombstones: Boolean = false) extends Logging with KafkaMetricsGroup {
+          @volatile var latestDeleteHorizon: Long = RecordBatch.NO_TIMESTAMP) extends Logging with KafkaMetricsGroup {
 
   import kafka.log.Log._
 

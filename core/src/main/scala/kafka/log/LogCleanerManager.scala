@@ -207,8 +207,11 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
       if(cleanableLogs.isEmpty) {
         // in this case, we are probably in a low throughput situation
         // therefore, we should take advantage of this fact and remove tombstones if we can
+        // under the condition that the log's latest delete horizon is less than the current time
+        // tracked
         val logsContainingTombstones = logs.filter {
-          case (_, log) => log.containsTombstones
+          case (_, log) => log.latestDeleteHorizon != -1L &&
+                           log.latestDeleteHorizon <= time.milliseconds()
         }.filterNot {
           case (topicPartition, log) =>
             // skip any logs already in-progress and uncleanable partitions
