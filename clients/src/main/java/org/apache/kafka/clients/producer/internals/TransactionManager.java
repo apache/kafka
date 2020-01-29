@@ -1264,8 +1264,7 @@ public class TransactionManager {
                     // For idempotent producers, we need to rewrite in-flight batches with the new ID and epoch
                     topicPartitionBookkeeper.startAllSequencesFromBeginning(producerIdAndEpoch);
                     transitionTo(State.READY);
-                }
-                else if (this.isEpochBump) {
+                } else if (this.isEpochBump) {
                     // If this is a transactional epoch bump, reset the sequence numbers and clear the previous transaction state
                     resetSequenceNumbers();
                     completeTransaction();
