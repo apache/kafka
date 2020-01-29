@@ -25,6 +25,7 @@ import java.util.concurrent.locks.ReentrantLock
 import kafka.log.CleanableIndex
 import kafka.utils.CoreUtils.inLock
 import kafka.utils.Logging
+import org.apache.kafka.common.log.remote.storage.RemoteLogIndexEntry
 import org.apache.kafka.common.utils.Utils
 
 /**
@@ -116,7 +117,8 @@ class RemoteLogIndex(_file: File, val startOffset: Long) extends CleanableIndex(
 
   def lookupEntry(position: Long): Option[RemoteLogIndexEntry] = {
     inLock(lock) {
-      RemoteLogIndexEntry.parseEntry(channel(), position)
+      val value = RemoteLogIndexEntry.parseEntry(channel(), position)
+      if (value.isPresent) Some(value.get()) else None
     }
   }
 

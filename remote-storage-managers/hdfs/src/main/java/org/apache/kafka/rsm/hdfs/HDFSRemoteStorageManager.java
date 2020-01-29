@@ -17,8 +17,6 @@
 package org.apache.kafka.rsm.hdfs;
 
 import kafka.log.LogSegment;
-import kafka.log.remote.RemoteLogIndexEntry;
-import kafka.log.remote.RemoteLogSegmentInfo;
 import kafka.log.remote.RemoteStorageManager;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataInputStream;
@@ -28,6 +26,8 @@ import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.log.remote.storage.RemoteLogIndexEntry;
+import org.apache.kafka.common.log.remote.storage.RemoteLogSegmentInfo;
 import org.apache.kafka.common.record.FileLogInputStream;
 import org.apache.kafka.common.record.FileRecords;
 import org.apache.kafka.common.record.MemoryRecords;
@@ -56,8 +56,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import static scala.collection.JavaConverters.seqAsJavaListConverter;
-
 public class HDFSRemoteStorageManager implements RemoteStorageManager {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(HDFSRemoteStorageManager.class);
@@ -84,7 +82,7 @@ public class HDFSRemoteStorageManager implements RemoteStorageManager {
     public long earliestLogOffset(TopicPartition tp) throws IOException {
         List<RemoteLogSegmentInfo> remoteLogSegmentInfos = listRemoteSegments(tp);
         //todo better to avoid it seeking from remote storage when it can be cached here especially incase of leader.
-        return (remoteLogSegmentInfos.isEmpty()) ? -1L : remoteLogSegmentInfos.get(0).baseOffset();
+        return (remoteLogSegmentInfos.isEmpty()) ? -1L : remoteLogSegmentInfos.get(0).baseOffset;
     }
 
     @Override
@@ -182,7 +180,7 @@ public class HDFSRemoteStorageManager implements RemoteStorageManager {
             }
         }
 
-        segments.sort(Comparator.comparingLong(RemoteLogSegmentInfo::baseOffset));
+        segments.sort(Comparator.comparingLong(value -> value.baseOffset));
         return segments;
     }
 
@@ -192,13 +190,13 @@ public class HDFSRemoteStorageManager implements RemoteStorageManager {
 
         File tmpFile = null;
         try {
-            Path hdfsPath = (Path) remoteLogSegment.props().get(FILE_PATH);
+            Path hdfsPath = (Path) remoteLogSegment.props.get(FILE_PATH);
             tmpFile = File.createTempFile("kafka-hdfs-rsm-" + hdfsPath.getName(), null);
             tmpFile.deleteOnExit();
 
             Path remoteIndexPath = getPath(hdfsPath.toString(), REMOTE_INDEX_FILE_NAME);
             try (InputStream is = fs.open(remoteIndexPath)) {
-                return seqAsJavaListConverter(RemoteLogIndexEntry.readAll(is)).asJava();
+                return RemoteLogIndexEntry.readAll(is);
             }
         } finally {
             if (tmpFile != null && tmpFile.exists()) {
@@ -212,7 +210,7 @@ public class HDFSRemoteStorageManager implements RemoteStorageManager {
     @Override
     public boolean deleteLogSegment(RemoteLogSegmentInfo remoteLogSegmentInfo) throws IOException {
         FileSystem fs = getFS();
-        Path path = (Path) remoteLogSegmentInfo.props().get(FILE_PATH);
+        Path path = (Path) remoteLogSegmentInfo.props.get(FILE_PATH);
         return fs.delete(path, true);
     }
 
@@ -317,10 +315,10 @@ public class HDFSRemoteStorageManager implements RemoteStorageManager {
      **/
     @Override
     public Records read(RemoteLogIndexEntry remoteLogIndexEntry, int maxBytes, long startOffset, boolean minOneMessage) throws IOException {
-        if (startOffset > remoteLogIndexEntry.lastOffset())
+        if (startOffset > remoteLogIndexEntry.lastOffset)
             throw new IllegalArgumentException("startOffset > remoteLogIndexEntry.lastOffset()");
 
-        String rdi = new String(remoteLogIndexEntry.rdi(), StandardCharsets.UTF_8);
+        String rdi = new String(remoteLogIndexEntry.rdi, StandardCharsets.UTF_8);
         Matcher m = RDI_PATTERN.matcher(rdi);
 
         if (!m.matches()) {
@@ -334,7 +332,7 @@ public class HDFSRemoteStorageManager implements RemoteStorageManager {
         FileSystem fs = getFS();
         try (CachedInputStream is = new CachedInputStream(logFile)) {
             // Find out the 1st batch that is not less than startOffset
-            Records records = read(is, pos, remoteLogIndexEntry.dataLength());
+            Records records = read(is, pos, remoteLogIndexEntry.dataLength);
 
             int batchPos = pos;
             RecordBatch firstBatch = null;
@@ -370,7 +368,7 @@ public class HDFSRemoteStorageManager implements RemoteStorageManager {
         if (targetTimestamp < 0)
             throw new IllegalArgumentException("targetTimestamp cannot be negative");
 
-        String rdi = new String(remoteLogIndexEntry.rdi(), StandardCharsets.UTF_8);
+        String rdi = new String(remoteLogIndexEntry.rdi, StandardCharsets.UTF_8);
         Matcher m = RDI_PATTERN.matcher(rdi);
 
         if (!m.matches()) {
@@ -382,7 +380,7 @@ public class HDFSRemoteStorageManager implements RemoteStorageManager {
 
         Path logFile = getPath(path, LOG_FILE_NAME);
         try (CachedInputStream is = new CachedInputStream(logFile)) {
-            Records records = read(is, pos, remoteLogIndexEntry.dataLength());
+            Records records = read(is, pos, remoteLogIndexEntry.dataLength);
             for (RecordBatch batch : records.batches()) {
                 if (batch.maxTimestamp() >= targetTimestamp && batch.lastOffset() >= startingOffset) {
                     for (Record record : batch) {
@@ -486,7 +484,7 @@ public class HDFSRemoteStorageManager implements RemoteStorageManager {
                                                         FileLogInputStream.FileChannelRecordBatch firstBatch,
                                                         FileLogInputStream.FileChannelRecordBatch lastBatch) {
         String rdi = remoteLogFileUri + ":" + firstBatch.position();
-        return RemoteLogIndexEntry.apply(firstBatch.baseOffset(), lastBatch.lastOffset(), firstBatch.firstTimestamp(),
+        return new RemoteLogIndexEntry((short) 0, 0, firstBatch.baseOffset(), lastBatch.lastOffset(), firstBatch.firstTimestamp(),
                 lastBatch.maxTimestamp(), lastBatch.position() + lastBatch.sizeInBytes() - firstBatch.position(),
                 rdi.getBytes(StandardCharsets.UTF_8));
     }

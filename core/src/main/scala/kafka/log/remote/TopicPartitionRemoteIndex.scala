@@ -23,18 +23,22 @@ import java.util.concurrent.locks.ReentrantLock
 import java.util.concurrent.{ConcurrentNavigableMap, ConcurrentSkipListMap}
 import java.util.function.{Consumer, Predicate}
 
-import kafka.log.remote.TopicPartitionRemoteIndex.{REMOTE_OFFSET_INDEX_SUFFIX, REMOTE_TIME_INDEX_SUFFIX, REMOTE_LOG_INDEX_CHECKPOINT_SUFFIX}
+import kafka.log.remote.TopicPartitionRemoteIndex.{REMOTE_LOG_INDEX_CHECKPOINT_SUFFIX, REMOTE_OFFSET_INDEX_SUFFIX, REMOTE_TIME_INDEX_SUFFIX}
 import kafka.log.{CleanableIndex, Log, OffsetIndex, TimeIndex}
 import kafka.utils.{CoreUtils, Logging, nonthreadsafe}
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.log.remote.storage.RemoteLogIndexEntry
 import org.apache.kafka.common.utils.Utils
 
 import scala.collection.JavaConverters._
 
-private class RemoteSegmentIndex(val offsetIndex: OffsetIndex, val timeIndex: TimeIndex, val remoteLogIndex: RemoteLogIndex) {
+private class RemoteSegmentIndex(val offsetIndex: OffsetIndex, val timeIndex: TimeIndex,
+                                 val remoteLogIndex: RemoteLogIndex) {
   /* The maximum timestamp we see so far */
   @volatile private var _maxTimestampSoFar: Option[Long] = None
+
   def maxTimestampSoFar_=(timestamp: Long): Unit = _maxTimestampSoFar = Some(timestamp)
+
   def maxTimestampSoFar: Long = {
     if (_maxTimestampSoFar.isEmpty)
       _maxTimestampSoFar = Some(timeIndex.lastEntry.timestamp)
@@ -79,7 +83,7 @@ private class RemoteSegmentIndex(val offsetIndex: OffsetIndex, val timeIndex: Ti
  *  - time index
  *   - maintains a mapping between timestamp and message offset for the remote messages.
  *
- *   These index files are also locally stored in respective log-dir of the topic partition.
+ * These index files are also locally stored in respective log-dir of the topic partition.
  *
  * @param topicPartition
  * @param logDir
@@ -109,7 +113,7 @@ class TopicPartitionRemoteIndex(val topicPartition: TopicPartition, logDir: File
   private def addIndex(offset: Long, remoteIndex: RemoteSegmentIndex): Unit = {
     CoreUtils.inLock(lock) {
       remoteSegmentIndexes.put(offset, remoteIndex)
-      if(_startOffset.isEmpty) _startOffset = Some(offset)
+      if (_startOffset.isEmpty) _startOffset = Some(offset)
       _lastBatchStartOffset = Some(offset)
       _lastOffset = remoteIndex.lastOffset
     }
@@ -117,8 +121,9 @@ class TopicPartitionRemoteIndex(val topicPartition: TopicPartition, logDir: File
 
   def cleanupIndexesUntil(offset: Long): Iterable[CleanableIndex] = {
 
-    def removeIndexes(toOffset:Long, indexes: ConcurrentNavigableMap[Long, RemoteSegmentIndex]): Iterable[CleanableIndex] = {
-      if(offset < 0) {
+    def removeIndexes(toOffset: Long,
+                      indexes: ConcurrentNavigableMap[Long, RemoteSegmentIndex]): Iterable[CleanableIndex] = {
+      if (offset < 0) {
         val result = indexes.values().asScala.toList.flatMap(x => x.asList())
         indexes.clear()
         result
@@ -173,8 +178,9 @@ class TopicPartitionRemoteIndex(val topicPartition: TopicPartition, logDir: File
           baseOffset
         }
 
-      logger.info(s"resultantStartOffset computed is '$resultantStartOffset' with firstEntryOffset: '$firstEntryOffset', " +
-        s"lastEntryOffset : '$lastEntryOffset', lastBatchStartOffset: $lastBatchStartOffset startOffset: $startOffset")
+      logger.info(
+        s"resultantStartOffset computed is '$resultantStartOffset' with firstEntryOffset: '$firstEntryOffset', " +
+          s"lastEntryOffset : '$lastEntryOffset', lastBatchStartOffset: $lastBatchStartOffset startOffset: $startOffset")
 
       if (resultantStartOffset >= 0) {
         val resultantStartOffsetStr = Log.filenamePrefixFromOffset(resultantStartOffset)
@@ -245,7 +251,7 @@ class TopicPartitionRemoteIndex(val topicPartition: TopicPartition, logDir: File
    */
   def removeUnflushedIndexFiles(): Unit = {
     val checkpointFiles = listCheckpointFiles()
-    val checkpoint = if(checkpointFiles.isEmpty) 0L else checkpointFiles.map(Log.offsetFromFile(_)).max
+    val checkpoint = if (checkpointFiles.isEmpty) 0L else checkpointFiles.map(Log.offsetFromFile(_)).max
 
     logger.info(s"The maximum remote index checkpoint of $topicPartition is $checkpoint")
 
@@ -254,7 +260,8 @@ class TopicPartitionRemoteIndex(val topicPartition: TopicPartition, logDir: File
     logDir.listFiles(new FilenameFilter {
       override def accept(dir: File, name: String): Boolean = {
         try {
-          if (name.endsWith(RemoteLogIndex.SUFFIX) || name.endsWith(REMOTE_OFFSET_INDEX_SUFFIX) || name.endsWith(REMOTE_TIME_INDEX_SUFFIX)) {
+          if (name.endsWith(RemoteLogIndex.SUFFIX) || name.endsWith(REMOTE_OFFSET_INDEX_SUFFIX) || name.endsWith(
+            REMOTE_TIME_INDEX_SUFFIX)) {
             if (Log.offsetFromFileName(name) >= checkpoint)
               return true
           }
@@ -267,7 +274,7 @@ class TopicPartitionRemoteIndex(val topicPartition: TopicPartition, logDir: File
       try {
         if (f.exists && f.isFile) {
           logger.info("Deleting unflushed remote index file " + f.getAbsolutePath)
-          if(!f.delete)
+          if (!f.delete)
             logger.warn("Failed to delete unflushed remote index file: " + f.getAbsolutePath);
         }
       } catch {
@@ -359,13 +366,13 @@ object TopicPartitionRemoteIndex {
     Files.list(logDir.toPath).filter(new Predicate[Path] {
       // `endsWith` should be checked on `filePath.toString` instead of `filePath` as that would check
       // Path#endsWith which has respective Path semantics instead of simple string comparision.
-      override def test(filePath: Path): Boolean = filePath !=null && filePath.toString.endsWith(RemoteLogIndex.SUFFIX)
+      override def test(filePath: Path): Boolean = filePath != null && filePath.toString.endsWith(RemoteLogIndex.SUFFIX)
     }).sorted(new Comparator[Path] {
       override def compare(path1: Path, path2: Path): Int = {
         val fileName1 = path1.getFileName
         val fileName2 = path2.getFileName
-        
-        if(fileName1 != null && fileName2!= null) fileName1.compareTo(fileName2)
+
+        if (fileName1 != null && fileName2 != null) fileName1.compareTo(fileName2)
         else throw new IllegalArgumentException("path is null")
       }
     }).forEach(new Consumer[Path] {

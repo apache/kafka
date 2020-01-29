@@ -23,6 +23,7 @@ import java.util.function.{Consumer, Function}
 
 import kafka.log.Log
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.log.remote.storage.RemoteLogIndexEntry
 import org.apache.kafka.common.utils.Utils
 
 object RLMIndexer {
@@ -41,7 +42,8 @@ class RLMIndexer(rsm: RemoteStorageManager, logFetcher: TopicPartition => Option
     maybeLoadIndex(tp).flatMap(_.lookupEntryForOffset(offset))
   }
 
-  def lookupEntryForTimestamp(tp: TopicPartition, timestamp: Long, startingOffset: Long): Option[RemoteLogIndexEntry] = {
+  def lookupEntryForTimestamp(tp: TopicPartition, timestamp: Long,
+                              startingOffset: Long): Option[RemoteLogIndexEntry] = {
     maybeLoadIndex(tp).flatMap(_.lookupEntryForTimestamp(timestamp, startingOffset))
   }
 
@@ -66,7 +68,8 @@ class RLMIndexer(rsm: RemoteStorageManager, logFetcher: TopicPartition => Option
     }))
   }
 
-  def maybeBuildIndexes(tp: TopicPartition, entries: Seq[RemoteLogIndexEntry], parentDir: File, baseOffsetStr: String): Boolean = {
+  def maybeBuildIndexes(tp: TopicPartition, entries: Seq[RemoteLogIndexEntry], parentDir: File,
+                        baseOffsetStr: String): Boolean = {
     if (entries.nonEmpty) {
       val indexEntry = remoteIndexes.computeIfAbsent(tp, new Function[TopicPartition, TopicPartitionRemoteIndex] {
         override def apply(x: TopicPartition): TopicPartitionRemoteIndex = TopicPartitionRemoteIndex.open(x, parentDir)

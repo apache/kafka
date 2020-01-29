@@ -24,6 +24,8 @@ import org.scalatest.junit.JUnitSuite
 
 import scala.collection.mutable.ArrayBuffer
 import scala.util.Random
+import org.apache.kafka.common.log.remote.storage.RemoteLogIndexEntry
+
 
 class RemoteLogIndexTest extends JUnitSuite {
   var index: RemoteLogIndex = _
@@ -85,7 +87,7 @@ object RemoteLogIndexTest {
       val lastOffset = firstOffset + offsetStep - 1
       val lastTimestamp = lastOffset * 1000L
       val dataLength = Math.abs(new Random().nextInt())
-      val entry: RemoteLogIndexEntry = RemoteLogIndexEntry(firstOffset, lastOffset, firstTimestamp, lastTimestamp,
+      val entry: RemoteLogIndexEntry = new RemoteLogIndexEntry(0, 0, firstOffset, lastOffset, firstTimestamp, lastTimestamp,
         dataLength, rdiBytes)
       firstOffset += offsetStep
       firstTimestamp = firstOffset * 1000L

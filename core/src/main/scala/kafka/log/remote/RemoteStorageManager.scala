@@ -21,6 +21,7 @@ import java.io.IOException
 
 import kafka.log.LogSegment
 import org.apache.kafka.common.annotation.InterfaceStability
+import org.apache.kafka.common.log.remote.storage.{RemoteLogIndexEntry, RemoteLogSegmentInfo}
 import org.apache.kafka.common.record.FileRecords.TimestampAndOffset
 import org.apache.kafka.common.record.Records
 import org.apache.kafka.common.{Configurable, TopicPartition}
@@ -56,7 +57,8 @@ trait RemoteStorageManager extends Configurable with AutoCloseable {
    * @return
    */
   @throws(classOf[IOException])
-  def copyLogSegment(topicPartition: TopicPartition, logSegment: LogSegment, leaderEpoch: Int): util.List[RemoteLogIndexEntry]
+  def copyLogSegment(topicPartition: TopicPartition, logSegment: LogSegment,
+                     leaderEpoch: Int): util.List[RemoteLogIndexEntry]
 
   /**
    * List the remote log segment files of the given topicPartition.

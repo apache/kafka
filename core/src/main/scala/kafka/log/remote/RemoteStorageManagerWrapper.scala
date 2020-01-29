@@ -21,13 +21,15 @@ import java.util
 
 import kafka.log.LogSegment
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.log.remote.storage.{RemoteLogIndexEntry, RemoteLogSegmentInfo}
 import org.apache.kafka.common.record.FileRecords.TimestampAndOffset
 import org.apache.kafka.common.record.Records
 
 /**
  * A wrapper class of RemoteStorageManager that sets the context class loader when calling RSM methods
  */
-class RemoteStorageManagerWrapper(val rsm: RemoteStorageManager, val rsmClassLoader: ClassLoader) extends RemoteStorageManager {
+class RemoteStorageManagerWrapper(val rsm: RemoteStorageManager,
+                                  val rsmClassLoader: ClassLoader) extends RemoteStorageManager {
 
   def withClassLoader[T](fun: => T): T = {
     val originalClassLoader = Thread.currentThread.getContextClassLoader
@@ -41,61 +43,87 @@ class RemoteStorageManagerWrapper(val rsm: RemoteStorageManager, val rsmClassLoa
 
   @throws(classOf[IOException])
   override def earliestLogOffset(tp: TopicPartition): Long = {
-    withClassLoader { rsm.earliestLogOffset(tp) }
+    withClassLoader {
+      rsm.earliestLogOffset(tp)
+    }
   }
 
   @throws(classOf[IOException])
-  override def copyLogSegment(topicPartition: TopicPartition, logSegment: LogSegment, leaderEpoch: Int): util.List[RemoteLogIndexEntry] = {
-    withClassLoader { rsm.copyLogSegment(topicPartition, logSegment, leaderEpoch) }
+  override def copyLogSegment(topicPartition: TopicPartition, logSegment: LogSegment,
+                              leaderEpoch: Int): util.List[RemoteLogIndexEntry] = {
+    withClassLoader {
+      rsm.copyLogSegment(topicPartition, logSegment, leaderEpoch)
+    }
   }
 
   @throws(classOf[IOException])
   override def listRemoteSegments(topicPartition: TopicPartition): util.List[RemoteLogSegmentInfo] = {
-    withClassLoader { rsm.listRemoteSegments(topicPartition) }
+    withClassLoader {
+      rsm.listRemoteSegments(topicPartition)
+    }
   }
 
   @throws(classOf[IOException])
   override def listRemoteSegments(topicPartition: TopicPartition, minOffset: Long): util.List[RemoteLogSegmentInfo] = {
-    withClassLoader { rsm.listRemoteSegments(topicPartition, minOffset) }
+    withClassLoader {
+      rsm.listRemoteSegments(topicPartition, minOffset)
+    }
   }
 
   @throws(classOf[IOException])
   override def getRemoteLogIndexEntries(remoteLogSegment: RemoteLogSegmentInfo): util.List[RemoteLogIndexEntry] = {
-    withClassLoader { rsm.getRemoteLogIndexEntries(remoteLogSegment) }
+    withClassLoader {
+      rsm.getRemoteLogIndexEntries(remoteLogSegment)
+    }
   }
 
   @throws(classOf[IOException])
   override def deleteLogSegment(remoteLogSegmentInfo: RemoteLogSegmentInfo): Boolean = {
-    withClassLoader { rsm.deleteLogSegment(remoteLogSegmentInfo) }
+    withClassLoader {
+      rsm.deleteLogSegment(remoteLogSegmentInfo)
+    }
   }
 
   @throws(classOf[IOException])
   override def deleteTopicPartition(topicPartition: TopicPartition): Boolean = {
-    withClassLoader { rsm.deleteTopicPartition(topicPartition) }
+    withClassLoader {
+      rsm.deleteTopicPartition(topicPartition)
+    }
   }
 
   @throws(classOf[IOException])
   override def cleanupLogUntil(topicPartition: TopicPartition, cleanUpTillMs: Long): Long = {
-    withClassLoader { rsm.cleanupLogUntil(topicPartition, cleanUpTillMs) }
+    withClassLoader {
+      rsm.cleanupLogUntil(topicPartition, cleanUpTillMs)
+    }
   }
 
   @throws(classOf[IOException])
-  override def read(remoteLogIndexEntry: RemoteLogIndexEntry, maxBytes: Int, startOffset: Long, minOneMessage: Boolean): Records = {
-    withClassLoader { rsm.read(remoteLogIndexEntry, maxBytes, startOffset, minOneMessage) }
+  override def read(remoteLogIndexEntry: RemoteLogIndexEntry, maxBytes: Int, startOffset: Long,
+                    minOneMessage: Boolean): Records = {
+    withClassLoader {
+      rsm.read(remoteLogIndexEntry, maxBytes, startOffset, minOneMessage)
+    }
   }
 
   @throws(classOf[IOException])
   override def findOffsetByTimestamp(remoteLogIndexEntry: RemoteLogIndexEntry,
                                      targetTimestamp: Long,
                                      startingOffset: Long): TimestampAndOffset = {
-    withClassLoader { rsm.findOffsetByTimestamp(remoteLogIndexEntry, targetTimestamp, startingOffset) }
+    withClassLoader {
+      rsm.findOffsetByTimestamp(remoteLogIndexEntry, targetTimestamp, startingOffset)
+    }
   }
 
   override def close(): Unit = {
-    withClassLoader { rsm.close() }
+    withClassLoader {
+      rsm.close()
+    }
   }
 
   override def configure(configs: util.Map[String, _]): Unit = {
-    withClassLoader { rsm.configure(configs) }
+    withClassLoader {
+      rsm.configure(configs)
+    }
   }
 }

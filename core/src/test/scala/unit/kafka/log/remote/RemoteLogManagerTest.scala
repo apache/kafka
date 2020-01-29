@@ -38,6 +38,7 @@ import org.apache.kafka.common.utils.Utils
 import org.easymock.EasyMock
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
+import org.apache.kafka.common.log.remote.storage.{RemoteLogIndexEntry, RemoteLogSegmentInfo}
 
 class RemoteLogManagerTest {
 

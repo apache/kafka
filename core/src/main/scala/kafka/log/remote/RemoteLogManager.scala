@@ -29,6 +29,7 @@ import kafka.server.{Defaults, FetchDataInfo, KafkaConfig, LogOffsetMetadata, Re
 import kafka.utils.Logging
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.OffsetOutOfRangeException
+import org.apache.kafka.common.log.remote.storage.RemoteLogSegmentInfo
 import org.apache.kafka.common.record.FileRecords.TimestampAndOffset
 import org.apache.kafka.common.requests.FetchRequest.PartitionData
 import org.apache.kafka.common.utils.{ChildFirstClassLoader, KafkaThread, Time, Utils}
@@ -63,13 +64,13 @@ class RLMScheduledThreadPool(poolSize: Int) extends Logging {
 
   def scheduleWithFixedDelay(runnable: Runnable, initialDelay: Long, delay: Long,
                              timeUnit: TimeUnit): ScheduledFuture[_] = {
-    info(s"Scheduling runnable $runnable with initial dalay: $initialDelay , fixed delay: $delay" )
+    info(s"Scheduling runnable $runnable with initial dalay: $initialDelay , fixed delay: $delay")
     scheduledThreadPool.scheduleWithFixedDelay(runnable, initialDelay, delay, timeUnit)
   }
 
   def scheduleOnceWithDelay(runnable: Runnable, delay: Long,
                             timeUnit: TimeUnit): ScheduledFuture[_] = {
-    info(s"Scheduling runnable $runnable once with delay: $delay" )
+    info(s"Scheduling runnable $runnable once with delay: $delay")
     scheduledThreadPool.schedule(runnable, delay, timeUnit)
   }
 
@@ -132,23 +133,24 @@ class RemoteLogManager(fetchLog: TopicPartition => Option[Log],
   private val remoteStorageManager: RemoteStorageManager = createRemoteStorageManager()
   private val rlmIndexer: RLMIndexer = new RLMIndexer(remoteStorageManager, fetchLog)
 
-  private[remote] def rlmScheduledThreadPoolSize:Int = rlmScheduledThreadPool.poolSize()
-  private[remote] def leaderOrFollowerTasksSize:Int = leaderOrFollowerTasks.size()
+  private[remote] def rlmScheduledThreadPoolSize: Int = rlmScheduledThreadPool.poolSize()
+
+  private[remote] def leaderOrFollowerTasksSize: Int = leaderOrFollowerTasks.size()
 
   private def doHandleLeaderOrFollowerPartitions(topicPartition: TopicPartition,
                                                  convertToLeaderOrFollower: RLMTask => Unit): Unit = {
-      val rlmTaskWithFuture = leaderOrFollowerTasks.computeIfAbsent(topicPartition,
-        new Function[TopicPartition, RLMTaskWithFuture] {
-          override def apply(tp: TopicPartition): RLMTaskWithFuture = {
-            val task = new RLMTask(tp)
-            //set this upfront when it is getting initialized instead of doing it after scheduling.
-            convertToLeaderOrFollower(task)
-            info(s"Created a new task: $task and getting scheduled")
-            val future = rlmScheduledThreadPool.scheduleWithFixedDelay(task, 0, delayInMs, TimeUnit.MILLISECONDS)
-            RLMTaskWithFuture(task, future)
-          }
-        })
-      convertToLeaderOrFollower(rlmTaskWithFuture.rlmTask)
+    val rlmTaskWithFuture = leaderOrFollowerTasks.computeIfAbsent(topicPartition,
+      new Function[TopicPartition, RLMTaskWithFuture] {
+        override def apply(tp: TopicPartition): RLMTaskWithFuture = {
+          val task = new RLMTask(tp)
+          //set this upfront when it is getting initialized instead of doing it after scheduling.
+          convertToLeaderOrFollower(task)
+          info(s"Created a new task: $task and getting scheduled")
+          val future = rlmScheduledThreadPool.scheduleWithFixedDelay(task, 0, delayInMs, TimeUnit.MILLISECONDS)
+          RLMTaskWithFuture(task, future)
+        }
+      })
+    convertToLeaderOrFollower(rlmTaskWithFuture.rlmTask)
   }
 
   /**
@@ -181,7 +183,7 @@ class RemoteLogManager(fetchLog: TopicPartition => Option[Log],
    * @param topicPartitions Set of topic partitions.
    * @param delete          flag to indicate whether the given topic partitions to be deleted or not.
    */
-  def stopPartitions(topicPartitions: Set[TopicPartition], delete:Boolean): Unit = {
+  def stopPartitions(topicPartitions: Set[TopicPartition], delete: Boolean): Unit = {
     topicPartitions.foreach { tp =>
       // unassign topic partitions from RLM leader/follower
       val rlmTaskWithFuture = leaderOrFollowerTasks.remove(tp)
@@ -203,15 +205,16 @@ class RemoteLogManager(fetchLog: TopicPartition => Option[Log],
   class RLMTask(tp: TopicPartition) extends CancellableRunnable with Logging {
     this.logIdent = s"[RLMTask partition:$tp ] "
     @volatile private var leaderEpoch: Int = -1
+
     private def isLeader(): Boolean = leaderEpoch >= 0
 
     // The highest offset that is already in the local remote index files
     // When looking for new remote segments, we will only look for the remote segments that contains larger offsets
     private var readOffset: Long = rlmIndexer.getOrLoadIndexOffset(tp).getOrElse(-1)
 
-    fetchLog(tp).foreach {log => log.updateRemoteIndexHighestOffset(readOffset)}
+    fetchLog(tp).foreach { log => log.updateRemoteIndexHighestOffset(readOffset) }
 
-    def convertToLeader(leaderEpochVal:Int): Unit = {
+    def convertToLeader(leaderEpochVal: Int): Unit = {
       if (leaderEpochVal < 0) throw new KafkaException(s"leaderEpoch value for topic partition $tp can not be negative")
       leaderEpoch = leaderEpochVal
     }
@@ -230,7 +233,7 @@ class RemoteLogManager(fetchLog: TopicPartition => Option[Log],
 
           // LSO indicates the offset below are ready to be consumed(high-watermark or committed)
           val lso = log.lastStableOffset
-          if(lso < 0) {
+          if (lso < 0) {
             warn(s"lastStableOffset for partition $tp is $lso, which should not be negative.")
           } else if (lso > 0 && readOffset < lso) {
             // copy segments only till the min of high-watermark or stable-offset
@@ -239,7 +242,7 @@ class RemoteLogManager(fetchLog: TopicPartition => Option[Log],
             debug(s"Checking for segments to copy, readOffset: $readOffset and fetchOffset: $fetchOffset")
             val activeSegBaseOffset = log.activeSegment.baseOffset
             val sortedSegments = log.logSegments(readOffset + 1, fetchOffset).toSeq.sortBy(_.baseOffset)
-            val index:Int = sortedSegments.map(x => x.baseOffset).search(activeSegBaseOffset) match {
+            val index: Int = sortedSegments.map(x => x.baseOffset).search(activeSegBaseOffset) match {
               case Found(x) => x
               case InsertionPoint(y) => y - 1
             }
@@ -276,7 +279,7 @@ class RemoteLogManager(fetchLog: TopicPartition => Option[Log],
         }
         }
       } catch {
-        case ex:Exception => error(s"Error occurred while copying log segments of partition: $tp", ex)
+        case ex: Exception => error(s"Error occurred while copying log segments of partition: $tp", ex)
       }
     }
 
@@ -310,13 +313,15 @@ class RemoteLogManager(fetchLog: TopicPartition => Option[Log],
 
       def handleLogStartOffsetUpdate(topicPartition: TopicPartition, remoteLogStartOffset: Long): Unit = {
         updateRemoteLogStartOffset(topicPartition, remoteLogStartOffset)
-        debug(s"Cleaning remote log indexes of partition $topicPartition till remoteLogStartOffset:$remoteLogStartOffset")
+        debug(
+          s"Cleaning remote log indexes of partition $topicPartition till remoteLogStartOffset:$remoteLogStartOffset")
 
         // remove all indexes earlier to lso and rename them with a suffix of [Log.DeletedFileSuffix].
         rlmIndexer.maybeLoadIndex(topicPartition).foreach(index => {
           val cleanedUpIndexes = index.cleanupIndexesUntil(remoteLogStartOffset)
           if (!cleanedUpIndexes.isEmpty) {
-            info(s"Deleting remote log indexes of partition $topicPartition till remoteLogStartOffset:$remoteLogStartOffset")
+            info(
+              s"Deleting remote log indexes of partition $topicPartition till remoteLogStartOffset:$remoteLogStartOffset")
 
             // deleting files in the current thread for now. These can be scheduled in a separate thread pool as it is more of
             // a cleanup activity. If the broker shutsdown in the middle of this activity, restart will delete all these files
@@ -336,7 +341,7 @@ class RemoteLogManager(fetchLog: TopicPartition => Option[Log],
 
         handleLogStartOffsetUpdate(tp, remoteLogStartOffset)
       } catch {
-        case ex:Exception => error(s"Error while cleaningup log segments for partition: $tp", ex)
+        case ex: Exception => error(s"Error while cleaningup log segments for partition: $tp", ex)
       }
     }
 
@@ -386,12 +391,12 @@ class RemoteLogManager(fetchLog: TopicPartition => Option[Log],
    * - If all the messages in the remote storage have smaller offsets, return None
    * - If all the messages in the remote storage have smaller timestamps, return None
    * - If all the messages in the remote storage have larger timestamps, or no message in the remote storage has a timestamp
-   *   the returned offset will be max(the earliest offset in the remote storage, startingOffset) and the timestamp will
-   *   be Message.NoTimestamp.
+   * the returned offset will be max(the earliest offset in the remote storage, startingOffset) and the timestamp will
+   * be Message.NoTimestamp.
    * - Otherwise, return an option of TimestampOffset. The offset is the offset of the first message whose timestamp
-   *   is greater than or equals to the target timestamp and whose offset is greater than or equals to the startingOffset.
+   * is greater than or equals to the target timestamp and whose offset is greater than or equals to the startingOffset.
    *
-   * @param timestamp The timestamp to search for.
+   * @param timestamp      The timestamp to search for.
    * @param startingOffset The starting offset to search.
    * @return the timestamp and offset of the first message that meets the requirements. None will be returned if there is no such message.
    */
@@ -453,7 +458,7 @@ class RemoteLogManager(fetchLog: TopicPartition => Option[Log],
       try {
         future.cancel(true)
       } catch {
-        case ex:Exception => error(s"Error occurred while canceling the task: $rlmTask", ex)
+        case ex: Exception => error(s"Error occurred while canceling the task: $rlmTask", ex)
       }
     }
   }
@@ -461,12 +466,12 @@ class RemoteLogManager(fetchLog: TopicPartition => Option[Log],
 }
 
 case class RemoteLogManagerConfig(remoteLogStorageEnable: Boolean, remoteLogStorageManagerClass: String,
-                                  remoteLogStorageManagerClassPath: String,
-                                  remoteLogRetentionBytes: Long, remoteLogRetentionMillis: Long,
-                                  remoteLogReaderThreads: Int,
-                                  remoteLogReaderMaxPendingTasks: Int,
-                                  remoteStorageConfig: Map[String, Any], remoteLogManagerThreadPoolSize: Int,
-                                  remoteLogManagerTaskIntervalMs: Long)
+                                  remoteLogStorageManagerClassPath: String, remoteLogRetentionBytes: Long,
+                                  remoteLogRetentionMillis: Long, remoteLogReaderThreads: Int,
+                                  remoteLogReaderMaxPendingTasks: Int, remoteStorageConfig: Map[String, Any],
+                                  remoteLogManagerThreadPoolSize: Int, remoteLogManagerTaskIntervalMs: Long,
+                                  remoteLogMetadataManagerClass: String = "",
+                                  remoteLogMetadataManagerClassPath: String = "")
 
 object RemoteLogManager {
   def REMOTE_STORAGE_MANAGER_CONFIG_PREFIX = "remote.log.storage."
@@ -474,7 +479,8 @@ object RemoteLogManager {
   def DefaultConfig = RemoteLogManagerConfig(remoteLogStorageEnable = Defaults.RemoteLogStorageEnable, null, null,
     Defaults.RemoteLogRetentionBytes, TimeUnit.MINUTES.toMillis(Defaults.RemoteLogRetentionMinutes),
     Defaults.RemoteLogReaderThreads, Defaults.RemoteLogReaderMaxPendingTasks, Map.empty,
-    Defaults.RemoteLogManagerThreadPoolSize, Defaults.RemoteLogManagerTaskIntervalMs)
+    Defaults.RemoteLogManagerThreadPoolSize, Defaults.RemoteLogManagerTaskIntervalMs, Defaults.RemoteLogMetadataManager,
+    Defaults.RemoteLogMetadataManagerClassPath)
 
   def createRemoteLogManagerConfig(config: KafkaConfig): RemoteLogManagerConfig = {
     var rsmProps = Map[String, Any]()
@@ -491,6 +497,7 @@ object RemoteLogManager {
       config.remoteLogStorageManagerClassPath,
       config.remoteLogRetentionBytes, config.remoteLogRetentionMillis,
       config.remoteLogReaderThreads, config.remoteLogReaderMaxPendingTasks, rsmProps.toMap,
-      config.remoteLogManagerThreadPoolSize, config.remoteLogManagerTaskIntervalMs)
+      config.remoteLogManagerThreadPoolSize, config.remoteLogManagerTaskIntervalMs, config.remoteLogMetadataManager,
+      config.remoteLogMetadataManagerClassPath)
   }
 }
