@@ -89,7 +89,7 @@ public class StreamsUpgradeTest {
         });
     }
 
-    private static KafkaStreams buildStreams(final Properties streamsProperties) {
+    public static KafkaStreams buildStreams(final Properties streamsProperties) {
         final StreamsBuilder builder = new StreamsBuilder();
         final KStream<Void, Void> dataStream = builder.stream("data");
         dataStream.process(SmokeTestUtil.printProcessorSupplier("data"));

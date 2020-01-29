@@ -36,6 +36,7 @@ import org.easymock.EasyMockRule;
 import org.easymock.EasyMockSupport;
 import org.easymock.Mock;
 import org.easymock.MockType;
+import org.junit.After;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
@@ -140,6 +141,11 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
         EasyMock.expect(storeMetadata.changelogPartition()).andReturn(tp).anyTimes();
         EasyMock.expect(storeMetadata.store()).andReturn(store).anyTimes();
         EasyMock.expect(store.name()).andReturn(storeName).anyTimes();
+    }
+
+    @After
+    public void tearDown() {
+        EasyMock.reset(stateManager, activeStateManager, standbyStateManager, storeMetadata, storeMetadataOne, storeMetadataTwo, store);
     }
 
     @Test
