@@ -29,6 +29,7 @@ import org.apache.kafka.connect.runtime.distributed.RebalanceNeededException;
 import org.apache.kafka.connect.runtime.distributed.RequestTargetException;
 import org.apache.kafka.connect.runtime.rest.InternalRequestSignature;
 import org.apache.kafka.connect.runtime.rest.RestClient;
+import org.apache.kafka.connect.runtime.rest.entities.ActiveTopicsInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
 import org.apache.kafka.connect.runtime.rest.entities.CreateConnectorRequest;
@@ -171,6 +172,19 @@ public class ConnectorsResource {
     @Path("/{connector}/status")
     public ConnectorStateInfo getConnectorStatus(final @PathParam("connector") String connector) throws Throwable {
         return herder.connectorStatus(connector);
+    }
+
+    @GET
+    @Path("/{connector}/topics")
+    public Map<String, ActiveTopicsInfo> getConnectorActiveTopics(final @PathParam("connector") String connector) throws Throwable {
+        return herder.connectorActiveTopics(connector);
+    }
+
+    @PUT
+    @Path("/{connector}/topics/reset")
+    public Response resetConnectorActiveTopics(final @PathParam("connector") String connector, final @Context HttpHeaders headers) throws Throwable {
+        herder.resetConnectorActiveTopics(connector);
+        return Response.accepted().build();
     }
 
     @PUT
