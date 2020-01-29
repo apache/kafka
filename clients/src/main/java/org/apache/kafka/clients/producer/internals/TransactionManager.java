@@ -131,6 +131,21 @@ public class TransactionManager {
             else
                 return OptionalInt.empty();
         }
+
+        void startAllSequencesFromBeginning(ProducerIdAndEpoch newProducerIdAndEpoch) {
+            topicPartitionBookkeeping.keySet().forEach(topicPartition ->
+                    startSequencesAtBeginning(topicPartition, newProducerIdAndEpoch));
+        }
+
+        private void startSequencesAtBeginning(TopicPartition topicPartition, ProducerIdAndEpoch newProducerIdAndEpoch) {
+            final PrimitiveRef.IntRef sequence = PrimitiveRef.ofInt(0);
+            getPartition(topicPartition).resetSequenceNumbers(inFlightBatch -> {
+                inFlightBatch.resetProducerState(newProducerIdAndEpoch, sequence.value, inFlightBatch.isTransactional());
+                sequence.value += inFlightBatch.recordCount;
+            });
+            getPartition(topicPartition).nextSequence = sequence.value;
+            getPartition(topicPartition).lastAckedSequence = NO_LAST_ACKED_SEQUENCE_NUMBER;
+        }
     }
 
     private static class TopicPartitionEntry {
@@ -284,20 +299,15 @@ public class TransactionManager {
     }
 
     public synchronized TransactionalRequestResult initializeTransactions() {
-        return initializeTransactions(ProducerIdAndEpoch.NONE);
-    }
-
-    synchronized TransactionalRequestResult initializeTransactions(ProducerIdAndEpoch currentProducerIdAndEpoch) {
-        boolean isEpochBump = currentProducerIdAndEpoch != ProducerIdAndEpoch.NONE;
+        boolean isEpochBump = this.producerIdAndEpoch != ProducerIdAndEpoch.NONE;
         return handleCachedTransactionRequestResult(() -> {
-            // If this is an epoch bump, we stay in the ABORTING_TRANSACTION state until the re-initialization completes
             transitionTo(State.INITIALIZING);
-            setProducerIdAndEpoch(currentProducerIdAndEpoch);
+            // setProducerIdAndEpoch(currentProducerIdAndEpoch);
             InitProducerIdRequestData requestData = new InitProducerIdRequestData()
                     .setTransactionalId(transactionalId)
                     .setTransactionTimeoutMs(transactionTimeoutMs)
-                    .setProducerId(currentProducerIdAndEpoch.producerId)
-                    .setProducerEpoch(currentProducerIdAndEpoch.epoch);
+                    .setProducerId(this.producerIdAndEpoch.producerId)
+                    .setProducerEpoch(this.producerIdAndEpoch.epoch);
             InitProducerIdHandler handler = new InitProducerIdHandler(new InitProducerIdRequest.Builder(requestData),
                     isEpochBump);
             enqueueRequest(handler);
@@ -338,7 +348,7 @@ public class TransactionManager {
         // If we are bumping the epoch, call InitProducerId instead of EndTxn. This will automatically abort the
         // transaction on the broker side and return a CONCURRENT_TRANSACTIONS, which will be retried until successful
         if (shouldBumpEpoch()) {
-            return initializeTransactions(this.producerIdAndEpoch);
+            return initializeTransactions();
         } else {
             EndTxnRequest.Builder builder = new EndTxnRequest.Builder(
                     new EndTxnRequestData()
@@ -472,9 +482,9 @@ public class TransactionManager {
         return producerIdAndEpoch.producerId == producerId;
     }
 
-    boolean hasProducerIdAndEpoch(long producerId, short producerEpoch) {
+    boolean hasProducerIdAndEpoch(ProducerBatch batch) {
         ProducerIdAndEpoch idAndEpoch = this.producerIdAndEpoch;
-        return idAndEpoch.producerId == producerId && idAndEpoch.epoch == producerEpoch;
+        return idAndEpoch.producerId == batch.producerId() && idAndEpoch.epoch == batch.producerEpoch();
     }
 
     /**
@@ -529,11 +539,9 @@ public class TransactionManager {
             if (this.producerIdAndEpoch.epoch == Short.MAX_VALUE) {
                 resetIdempotentProducerId();
             } else {
-                this.producerIdAndEpoch =
-                        new ProducerIdAndEpoch(this.producerIdAndEpoch.producerId, (short) (this.producerIdAndEpoch.epoch + 1));
+                setProducerIdAndEpoch(new ProducerIdAndEpoch(this.producerIdAndEpoch.producerId, (short) (this.producerIdAndEpoch.epoch + 1)));
+                topicPartitionBookkeeper.startAllSequencesFromBeginning(this.producerIdAndEpoch);
             }
-
-            topicPartitionBookkeeper.topicPartitionBookkeeping.keySet().forEach(topicPartition -> startSequencesAtBeginning(topicPartition));
         }
     }
 
@@ -634,7 +642,7 @@ public class TransactionManager {
     }
 
     public synchronized void handleCompletedBatch(ProducerBatch batch, ProduceResponse.PartitionResponse response) {
-        if (!hasProducerIdAndEpoch(batch.producerId(), batch.producerEpoch())) {
+        if (!hasProducerIdAndEpoch(batch)) {
             log.debug("Ignoring completed batch {} with producer id {}, epoch {}, and sequence number {} " +
                             "since the producerId has been reset internally", batch, batch.producerId(),
                     batch.producerEpoch(), batch.baseSequence());
@@ -668,7 +676,7 @@ public class TransactionManager {
     synchronized void handleFailedBatch(ProducerBatch batch, RuntimeException exception, boolean adjustSequenceNumbers) {
         maybeTransitionToErrorState(exception);
 
-        if (!hasProducerIdAndEpoch(batch.producerId(), batch.producerEpoch())) {
+        if (!hasProducerIdAndEpoch(batch)) {
             log.debug("Ignoring failed batch {} with producer id {}, epoch {}, and sequence number {} " +
                             "since the producerId has been reset internally", batch, batch.producerId(),
                     batch.producerEpoch(), batch.baseSequence(), exception);
@@ -735,11 +743,11 @@ public class TransactionManager {
         topicPartitionBookkeeper.getPartition(topicPartition).resetSequenceNumbers(inFlightBatch -> {
             log.info("Resetting sequence number of batch with current sequence {} for partition {} to {}",
                     inFlightBatch.baseSequence(), inFlightBatch.topicPartition, sequence.value);
-            inFlightBatch.resetProducerState(new ProducerIdAndEpoch(inFlightBatch.producerId(),
+            inFlightBatch.resetProducerState(new ProducerIdAndEpoch(this.producerIdAndEpoch.producerId,
                     this.producerIdAndEpoch.epoch), sequence.value, inFlightBatch.isTransactional());
             sequence.value += inFlightBatch.recordCount;
         });
-        setNextSequence(topicPartition, sequence.value);
+        topicPartitionBookkeeper.getPartition(topicPartition).nextSequence = sequence.value;
         topicPartitionBookkeeper.getPartition(topicPartition).lastAckedSequence = NO_LAST_ACKED_SEQUENCE_NUMBER;
     }
 
@@ -757,13 +765,14 @@ public class TransactionManager {
     }
 
     synchronized void markSequenceUnresolved(ProducerBatch batch) {
-        log.debug("Marking partition {} unresolved", batch.topicPartition);
-        partitionsWithUnresolvedSequences.put(batch.topicPartition, batch.baseSequence() + batch.recordCount);
+        int nextSequence = batch.baseSequence() + batch.recordCount;
+        log.debug("Marking partition {} unresolved with next sequence number {}", batch.topicPartition, nextSequence);
+        partitionsWithUnresolvedSequences.put(batch.topicPartition, nextSequence);
     }
 
-    // Checks if there are any partitions with unresolved partitions which may now be resolved. Returns true if
-    // the producer id needs a reset, false otherwise.
-    public void checkUnresolvedSequences() {
+    // Attempts to resolve unresolved sequences. If all in-flight requests are complete and some partitions are still
+    // unresolved, either bump the epoch if possible, or transition to a fatal error
+    public void maybeResolveSequences() {
         for (Iterator<TopicPartition> iter = partitionsWithUnresolvedSequences.keySet().iterator(); iter.hasNext(); ) {
             TopicPartition topicPartition = iter.next();
             if (!hasInflightBatches(topicPartition)) {
@@ -777,12 +786,15 @@ public class TransactionManager {
                     // We would enter this branch if all in flight batches were ultimately expired in the producer.
                     if (isTransactional()) {
                         // For the transactional producer, we bump the epoch if possible, otherwise we transition to a fatal error
-                        KafkaException exception = new KafkaException("The client hasn't received acknowledgment for " +
-                                "some previously sent messages and can no longer retry them. It isn't safe to continue.");
+                        String unackedMessagesErr = "The client hasn't received acknowledgment for some previously " +
+                                "sent messages and can no longer retry them.";
                         if (canBumpEpoch()) {
                             epochBumpRequired = true;
+                            KafkaException exception = new KafkaException(unackedMessagesErr + "It is safe to abort " +
+                                    "the transaction and continue.");
                             transitionToAbortableError(exception);
                         } else {
+                            KafkaException exception = new KafkaException(unackedMessagesErr + "It isn't safe to continue.");
                             transitionToFatalError(exception);
                         }
                     } else {
@@ -926,7 +938,7 @@ public class TransactionManager {
     }
 
     synchronized boolean canRetry(ProduceResponse.PartitionResponse response, ProducerBatch batch) {
-        if (!hasProducerIdAndEpoch(batch.producerId(), batch.producerEpoch()))
+        if (!hasProducerIdAndEpoch(batch))
             return false;
 
         Errors error = response.error;
@@ -934,7 +946,7 @@ public class TransactionManager {
         // For an UNKNOWN_PRODUCER_ID, the idempotent producer will locally bump the epoch and reset the sequence
         // numbers of in-flight batches from sequence 0, then retry the failed batch, which should now succeed.
         // For the transactional producer, allow the batch to fail. When processing the failed batch, we will
-        // abort the transaction and attempt to bump the epoch.
+        // transition to an abortable error and set a flag indicating that we need to bump the epoch
         if (error == Errors.UNKNOWN_PRODUCER_ID && !isTransactional()) {
             bumpEpoch();
             return true;
@@ -1244,7 +1256,13 @@ public class TransactionManager {
                 ProducerIdAndEpoch producerIdAndEpoch = new ProducerIdAndEpoch(initProducerIdResponse.data.producerId(),
                         initProducerIdResponse.data.producerEpoch());
                 setProducerIdAndEpoch(producerIdAndEpoch);
-                if (this.isEpochBump) {
+                if (!isTransactional()) {
+                    // For idempotent producers, we need to rewrite in-flight batches with the new ID and epoch
+                    topicPartitionBookkeeper.startAllSequencesFromBeginning(producerIdAndEpoch);
+                    transitionTo(State.READY);
+                }
+                else if (this.isEpochBump) {
+                    // If this is a transactional epoch bump, reset the sequence numbers and clear the previous transaction state
                     resetSequenceNumbers();
                     completeTransaction();
                 } else {

@@ -2563,7 +2563,7 @@ public class TransactionManagerTest {
 
         // Marking sequence numbers unresolved without inflight requests is basically a no-op.
         transactionManager.markSequenceUnresolved(b1);
-        transactionManager.checkUnresolvedSequences();
+        transactionManager.maybeResolveSequences();
         assertEquals(producerIdAndEpoch, transactionManager.producerIdAndEpoch());
         assertFalse(transactionManager.hasUnresolvedSequences());
 
@@ -2576,7 +2576,7 @@ public class TransactionManagerTest {
 
         // We only had one inflight batch, so we should be able to clear the unresolved status
         // and bump the epoch
-        transactionManager.checkUnresolvedSequences();
+        transactionManager.maybeResolveSequences();
         assertFalse(transactionManager.hasUnresolvedSequences());
         assertEquals(6, transactionManager.producerIdAndEpoch().epoch);
     }
@@ -2615,7 +2615,7 @@ public class TransactionManagerTest {
         // requiring a producerId reset.
         transactionManager.handleCompletedBatch(b3, new ProduceResponse.PartitionResponse(
                 Errors.NONE, 500L, time.milliseconds(), 0L));
-        transactionManager.checkUnresolvedSequences();
+        transactionManager.maybeResolveSequences();
         assertEquals(producerIdAndEpoch, transactionManager.producerIdAndEpoch());
         assertFalse(transactionManager.hasUnresolvedSequences());
         assertEquals(3, transactionManager.sequenceNumber(tp0).intValue());
@@ -2649,7 +2649,7 @@ public class TransactionManagerTest {
 
         // When the last inflight batch fails, we have to reset the producerId
         transactionManager.handleFailedBatch(b3, new TimeoutException(), false);
-        transactionManager.checkUnresolvedSequences();
+        transactionManager.maybeResolveSequences();
         assertEquals(6, transactionManager.producerIdAndEpoch().epoch);
         assertFalse(transactionManager.hasUnresolvedSequences());
         assertEquals(0, transactionManager.sequenceNumber(tp0).intValue());

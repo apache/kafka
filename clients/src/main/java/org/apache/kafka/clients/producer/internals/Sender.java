@@ -295,7 +295,7 @@ public class Sender implements Runnable {
     void runOnce() {
         if (transactionManager != null) {
             try {
-                transactionManager.checkUnresolvedSequences();
+                transactionManager.maybeResolveSequences();
 
                 if (transactionManager.isTransactional()
                         && transactionManager.hasUnresolvedSequences()
@@ -603,9 +603,7 @@ public class Sender implements Runnable {
                     error);
                 if (transactionManager == null) {
                     reenqueueBatch(batch, now);
-                } else if (transactionManager.hasProducerIdAndEpoch(batch.producerId(), batch.producerEpoch()) ||
-                        (transactionManager.hasProducerIdAndEpoch(batch.producerId(), (short) (batch.producerEpoch() + 1)) &&
-                                batch.baseSequence() == 0)) {
+                } else if (transactionManager.hasProducerIdAndEpoch(batch)) {
                     // If idempotence is enabled only retry the request if the current producer id is the same as
                     // the producer id of the batch.
                     log.debug("Retrying batch to topic-partition {}. ProducerId: {}; Sequence number : {}",
