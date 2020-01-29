@@ -72,6 +72,14 @@ public class ProducerMetadata extends Metadata {
         }
     }
 
+    public synchronized int requestUpdateForTopic(String topic) {
+        if (newTopics.contains(topic)) {
+            return requestUpdateForNewTopics();
+        } else {
+            return requestUpdate();
+        }
+    }
+
     // Visible for testing
     synchronized Set<String> topics() {
         return topics.keySet();

@@ -362,19 +362,19 @@ public class KafkaProducerTest {
         producer.send(record);
 
         // One request update for each empty cluster returned
-        verify(metadata, times(4)).requestUpdate();
+        verify(metadata, times(4)).requestUpdateForTopic(topic);
         verify(metadata, times(4)).awaitUpdate(anyInt(), anyLong());
         verify(metadata, times(5)).fetch();
 
         // Should not request update for subsequent `send`
         producer.send(record, null);
-        verify(metadata, times(4)).requestUpdate();
+        verify(metadata, times(4)).requestUpdateForTopic(topic);
         verify(metadata, times(4)).awaitUpdate(anyInt(), anyLong());
         verify(metadata, times(6)).fetch();
 
         // Should not request update for subsequent `partitionsFor`
         producer.partitionsFor(topic);
-        verify(metadata, times(4)).requestUpdate();
+        verify(metadata, times(4)).requestUpdateForTopic(topic);
         verify(metadata, times(4)).awaitUpdate(anyInt(), anyLong());
         verify(metadata, times(7)).fetch();
 
@@ -414,7 +414,7 @@ public class KafkaProducerTest {
         // Four request updates where the topic isn't present, at which point the timeout expires and a
         // TimeoutException is thrown
         Future future = producer.send(record);
-        verify(metadata, times(4)).requestUpdate();
+        verify(metadata, times(4)).requestUpdateForTopic(topic);
         verify(metadata, times(4)).awaitUpdate(anyInt(), anyLong());
         verify(metadata, times(5)).fetch();
         try {
@@ -450,7 +450,7 @@ public class KafkaProducerTest {
         };
         // One request update if metadata is available but outdated for the given record
         producer.send(record);
-        verify(metadata, times(2)).requestUpdate();
+        verify(metadata, times(2)).requestUpdateForTopic(topic);
         verify(metadata, times(2)).awaitUpdate(anyInt(), anyLong());
         verify(metadata, times(3)).fetch();
 
@@ -490,7 +490,7 @@ public class KafkaProducerTest {
         // Four request updates where the requested partition is out of range, at which point the timeout expires
         // and a TimeoutException is thrown
         Future future = producer.send(record);
-        verify(metadata, times(4)).requestUpdate();
+        verify(metadata, times(4)).requestUpdateForTopic(topic);
         verify(metadata, times(4)).awaitUpdate(anyInt(), anyLong());
         verify(metadata, times(5)).fetch();
         try {
