@@ -81,8 +81,15 @@ public class SyncGroupRequest extends AbstractRequest {
         return groupAssignments;
     }
 
-    public boolean areMandatoryProtocolTypeAndNameMissing() {
-        return version() >= 5 && (data.protocolType() == null || data.protocolName() == null);
+    /**
+     * ProtocolType and ProtocolName are mandatory since version 5. This methods verifies that
+     * they are defined for version % or higher, or returns true otherwise for older versions.
+     */
+    public boolean areMandatoryProtocolTypeAndNamePresent() {
+        if (version() >= 5)
+            return data.protocolType() != null && data.protocolName() != null;
+        else
+            return true;
     }
 
     public static SyncGroupRequest parse(ByteBuffer buffer, short version) {

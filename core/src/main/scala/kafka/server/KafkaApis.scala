@@ -1483,7 +1483,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       // until we are sure that all brokers support it. If static group being loaded by an older coordinator, it will discard
       // the group.instance.id field, so static members could accidentally become "dynamic", which leads to wrong states.
       sendResponseCallback(SyncGroupResult(Errors.UNSUPPORTED_VERSION))
-    } else if (syncGroupRequest.areMandatoryProtocolTypeAndNameMissing()) {
+    } else if (!syncGroupRequest.areMandatoryProtocolTypeAndNamePresent()) {
       // Starting from version 5, ProtocolType and ProtocolName fields are mandatory.
       sendResponseCallback(SyncGroupResult(Errors.INCONSISTENT_GROUP_PROTOCOL))
     } else if (!authorize(request, READ, GROUP, syncGroupRequest.data.groupId)) {

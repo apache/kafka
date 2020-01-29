@@ -880,7 +880,7 @@ class KafkaApisTest {
   @Test
   def testSyncGroupProtocolTypeAndNameAreMandatorySinceV5(): Unit = {
     for (version <- ApiKeys.SYNC_GROUP.oldestVersion to ApiKeys.SYNC_GROUP.latestVersion) {
-      testSyncGroupProtocolTypeAndName(version.asInstanceOf[Short])
+      testSyncGroupProtocolTypeAndNameAreMandatorySinceV5(version.asInstanceOf[Short])
     }
   }
 
@@ -936,10 +936,10 @@ class KafkaApisTest {
     val response = readResponse(ApiKeys.SYNC_GROUP, syncGroupRequest, capturedResponse)
       .asInstanceOf[SyncGroupResponse]
 
-    if (version >= 5) {
-      assertEquals(Errors.INCONSISTENT_GROUP_PROTOCOL, response.error)
-    } else {
+    if (version < 5) {
       assertEquals(Errors.NONE, response.error)
+    } else {
+      assertEquals(Errors.INCONSISTENT_GROUP_PROTOCOL, response.error)
     }
 
     EasyMock.verify(clientRequestQuotaManager, requestChannel)
