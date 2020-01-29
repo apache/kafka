@@ -247,14 +247,12 @@ public class TransactionManager {
 
     // We use the priority to determine the order in which requests need to be sent out. For instance, if we have
     // a pending FindCoordinator request, that must always go first. Next, If we need a producer id, that must go second.
-    // The endTxn request must always go last, unless we are bumping the epoch (a special case of InitProducerId)as
-    // part of ending the transaction.
+    // The endTxn request must always go last.
     private enum Priority {
         FIND_COORDINATOR(0),
         INIT_PRODUCER_ID(1),
         ADD_PARTITIONS_OR_OFFSETS(2),
-        END_TXN(3),
-        EPOCH_BUMP(4);
+        END_TXN(3);
 
         final int priority;
 
@@ -293,9 +291,7 @@ public class TransactionManager {
         boolean isEpochBump = currentProducerIdAndEpoch != ProducerIdAndEpoch.NONE;
         return handleCachedTransactionRequestResult(() -> {
             // If this is an epoch bump, we stay in the ABORTING_TRANSACTION state until the re-initialization completes
-            // if (!isEpochBump) {
-                transitionTo(State.INITIALIZING);
-            // }
+            transitionTo(State.INITIALIZING);
             setProducerIdAndEpoch(currentProducerIdAndEpoch);
             InitProducerIdRequestData requestData = new InitProducerIdRequestData()
                     .setTransactionalId(transactionalId)
@@ -1227,7 +1223,7 @@ public class TransactionManager {
 
         @Override
         Priority priority() {
-            return this.isEpochBump ? Priority.EPOCH_BUMP : Priority.INIT_PRODUCER_ID;
+            return Priority.INIT_PRODUCER_ID;
         }
 
         @Override
