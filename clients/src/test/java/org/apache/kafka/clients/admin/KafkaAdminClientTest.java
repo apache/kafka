@@ -705,17 +705,17 @@ public class KafkaAdminClientTest {
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
 
             // Test a call where we get back ACL1 and ACL2.
-            env.kafkaClient().prepareResponse(new DescribeAclsResponse(0, ApiError.NONE,
+            env.kafkaClient().prepareResponse(DescribeAclsResponse.prepareResponse(0, ApiError.NONE,
                     asList(ACL1, ACL2)));
             assertCollectionIs(env.adminClient().describeAcls(FILTER1).values().get(), ACL1, ACL2);
 
             // Test a call where we get back no results.
-            env.kafkaClient().prepareResponse(new DescribeAclsResponse(0, ApiError.NONE,
+            env.kafkaClient().prepareResponse(DescribeAclsResponse.prepareResponse(0, ApiError.NONE,
                 Collections.<AclBinding>emptySet()));
             assertTrue(env.adminClient().describeAcls(FILTER2).values().get().isEmpty());
 
             // Test a call where we get back an error.
-            env.kafkaClient().prepareResponse(new DescribeAclsResponse(0,
+            env.kafkaClient().prepareResponse(DescribeAclsResponse.prepareResponse(0,
                 new ApiError(Errors.SECURITY_DISABLED, "Security is disabled"), Collections.<AclBinding>emptySet()));
             TestUtils.assertFutureError(env.adminClient().describeAcls(FILTER2).values(), SecurityDisabledException.class);
 

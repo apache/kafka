@@ -65,6 +65,9 @@ import org.apache.kafka.common.message.DeleteGroupsResponseData.DeletableGroupRe
 import org.apache.kafka.common.message.DeleteTopicsRequestData;
 import org.apache.kafka.common.message.DeleteTopicsResponseData;
 import org.apache.kafka.common.message.DeleteTopicsResponseData.DeletableTopicResult;
+import org.apache.kafka.common.message.DescribeAclsResponseData;
+import org.apache.kafka.common.message.DescribeAclsResponseData.AclDescription;
+import org.apache.kafka.common.message.DescribeAclsResponseData.DescribeAclsResource;
 import org.apache.kafka.common.message.DescribeGroupsRequestData;
 import org.apache.kafka.common.message.DescribeGroupsResponseData;
 import org.apache.kafka.common.message.DescribeGroupsResponseData.DescribedGroup;
@@ -384,8 +387,8 @@ public class RequestResponseTest {
         checkErrorResponse(createTxnOffsetCommitRequest(0), new UnknownServerException(), true);
         checkErrorResponse(createTxnOffsetCommitRequest(3), new UnknownServerException(), true);
         checkResponse(createTxnOffsetCommitResponse(), 0, true);
-        checkRequest(createListAclsRequest(), true);
-        checkErrorResponse(createListAclsRequest(), new SecurityDisabledException("Security is not enabled."), true);
+        checkRequest(createDescribeAclsRequest(), true);
+        checkErrorResponse(createDescribeAclsRequest(), new SecurityDisabledException("Security is not enabled."), true);
         checkResponse(createDescribeAclsResponse(), ApiKeys.DESCRIBE_ACLS.latestVersion(), true);
         checkRequest(createCreateAclsRequest(), true);
         checkErrorResponse(createCreateAclsRequest(), new SecurityDisabledException("Security is not enabled."), true);
@@ -1692,16 +1695,27 @@ public class RequestResponseTest {
         return new TxnOffsetCommitResponse(0, errorPerPartitions);
     }
 
-    private DescribeAclsRequest createListAclsRequest() {
+    private DescribeAclsRequest createDescribeAclsRequest() {
         return new DescribeAclsRequest.Builder(new AclBindingFilter(
                 new ResourcePatternFilter(ResourceType.TOPIC, "mytopic", PatternType.LITERAL),
                 new AccessControlEntryFilter(null, null, AclOperation.ANY, AclPermissionType.ANY))).build();
     }
 
     private DescribeAclsResponse createDescribeAclsResponse() {
-        return new DescribeAclsResponse(0, ApiError.NONE, Collections.singleton(new AclBinding(
-            new ResourcePattern(ResourceType.TOPIC, "mytopic", PatternType.LITERAL),
-            new AccessControlEntry("User:ANONYMOUS", "*", AclOperation.WRITE, AclPermissionType.ALLOW))));
+        DescribeAclsResponseData data = new DescribeAclsResponseData()
+                .setErrorCode(Errors.NONE.code())
+                .setErrorMessage(Errors.NONE.message())
+                .setThrottleTimeMs(0)
+                .setResources(Collections.singletonList(new DescribeAclsResource()
+                        .setType(ResourceType.TOPIC.code())
+                        .setName("mytopic")
+                        .setPatternType(PatternType.LITERAL.code())
+                        .setAcls(Collections.singletonList(new AclDescription()
+                                .setHost("*")
+                                .setOperation(AclOperation.WRITE.code())
+                                .setPermissionType(AclPermissionType.ALLOW.code())
+                                .setPrincipal("User:ANONYMOUS")))));
+        return new DescribeAclsResponse(data);
     }
 
     private CreateAclsRequest createCreateAclsRequest() {

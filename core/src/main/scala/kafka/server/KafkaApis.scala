@@ -2214,14 +2214,14 @@ class KafkaApis(val requestChannel: RequestChannel,
     authorizer match {
       case None =>
         sendResponseMaybeThrottle(request, requestThrottleMs =>
-          new DescribeAclsResponse(requestThrottleMs,
+          DescribeAclsResponse.prepareResponse(requestThrottleMs,
             new ApiError(Errors.SECURITY_DISABLED, "No Authorizer is configured on the broker"), util.Collections.emptySet()))
       case Some(auth) =>
         val filter = describeAclsRequest.filter
         val returnedAcls = new util.HashSet[AclBinding]()
-        auth.acls(filter).asScala.foreach(returnedAcls.add)
+        auth.acls(filter).forEach(returnedAcls.add)
         sendResponseMaybeThrottle(request, requestThrottleMs =>
-          new DescribeAclsResponse(requestThrottleMs, ApiError.NONE, returnedAcls))
+          DescribeAclsResponse.prepareResponse(requestThrottleMs, ApiError.NONE, returnedAcls))
     }
   }
 
