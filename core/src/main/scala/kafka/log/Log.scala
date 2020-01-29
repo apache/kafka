@@ -1629,7 +1629,7 @@ class Log(@volatile var dir: File,
         // NEXT_LOCAL_TIMESTAMP is only used by follower brokers, to find out the offset that they
         // should start fetching from. Since the followers do not need the epoch, we can return
         // an empty epoch here to keep things simple.
-        return Some(new TimestampAndOffset(RecordBatch.NO_TIMESTAMP, highestOffsetWithRemoteIndex, Optional.empty[Integer]()))
+        return Some(new TimestampAndOffset(RecordBatch.NO_TIMESTAMP, highestOffsetWithRemoteIndex + 1, Optional.empty[Integer]()))
       } else if (targetTimestamp == ListOffsetRequest.LATEST_TIMESTAMP) {
         val latestEpochOpt = leaderEpochCache.flatMap(_.latestEpoch).map(_.asInstanceOf[Integer])
         val epochOptional = Optional.ofNullable(latestEpochOpt.orNull)
