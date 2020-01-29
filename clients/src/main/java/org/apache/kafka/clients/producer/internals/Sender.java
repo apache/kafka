@@ -601,19 +601,12 @@ public class Sender implements Runnable {
                     batch.topicPartition,
                     this.retries - batch.attempts() - 1,
                     error);
-                if (transactionManager == null) {
-                    reenqueueBatch(batch, now);
-                } else if (transactionManager.hasProducerIdAndEpoch(batch)) {
-                    // If idempotence is enabled only retry the request if the current producer id is the same as
-                    // the producer id of the batch.
-                    log.debug("Retrying batch to topic-partition {}. ProducerId: {}; Sequence number : {}",
-                            batch.topicPartition, batch.producerId(), batch.baseSequence());
-                    reenqueueBatch(batch, now);
-                } else {
-                    failBatch(batch, response, new OutOfOrderSequenceException("Attempted to retry sending a " +
-                            "batch but the producer id changed from " + batch.producerId() + " to " +
-                            transactionManager.producerIdAndEpoch().producerId + " in the mean time. This batch will be dropped."), false);
-                }
+                reenqueueBatch(batch, now);
+            } else if (transactionManager != null && !transactionManager.hasProducerIdAndEpoch(batch)) {
+                // If we can't retry because the producer ID has changed, fail with an out of sequence error rather than the underlying failure
+                failBatch(batch, response, new OutOfOrderSequenceException("Attempted to retry sending a " +
+                        "batch but the producer id changed from " + batch.producerId() + " to " +
+                        transactionManager.producerIdAndEpoch().producerId + " in the mean time. This batch will be dropped."), false);
             } else if (error == Errors.DUPLICATE_SEQUENCE_NUMBER) {
                 // If we have received a duplicate sequence error, it means that the sequence number has advanced beyond
                 // the sequence of the current batch, and we haven't retained batch metadata on the broker to return
@@ -702,7 +695,7 @@ public class Sender implements Runnable {
         return !batch.hasReachedDeliveryTimeout(accumulator.getDeliveryTimeoutMs(), now) &&
             batch.attempts() < this.retries &&
             !batch.isDone() &&
-            ((response.error.exception() instanceof RetriableException) ||
+            ((transactionManager == null && response.error.exception() instanceof RetriableException) ||
                 (transactionManager != null && transactionManager.canRetry(response, batch)));
     }
 

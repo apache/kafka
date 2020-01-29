@@ -22,6 +22,7 @@ import org.apache.kafka.clients.RequestCompletionHandler;
 import org.apache.kafka.clients.consumer.CommitFailedException;
 import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.UnknownProducerIdException;
 import org.apache.kafka.common.utils.ProducerIdAndEpoch;
 import org.apache.kafka.common.KafkaException;
@@ -938,6 +939,8 @@ public class TransactionManager {
     }
 
     synchronized boolean canRetry(ProduceResponse.PartitionResponse response, ProducerBatch batch) {
+        // Block retries if the producer ID and epoch don't match. This must be checked first, because if the epoch
+        // overflows, the producer ID will be set to -1 until the next sender loop run
         if (!hasProducerIdAndEpoch(batch))
             return false;
 
@@ -964,7 +967,8 @@ public class TransactionManager {
             }
         }
 
-        return false;
+        // If neither of the above cases are true, retry if the exception is retriable
+        return error.exception() instanceof RetriableException;
     }
 
     // visible for testing
