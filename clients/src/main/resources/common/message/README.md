@@ -203,7 +203,7 @@ currently not possible to specify a custom default for bytes or array fields.
 Custom defaults are useful when an older message version lacked some
 information.  For example, if an older request lacked a timeout field, you may
 want to specify that the server should assume that the timeout for such a
-request is 5000 ms (or some other arbitrary value.)
+request is 5000 ms (or some other arbitrary value).
 
 Ignorable Fields
 ----------------
