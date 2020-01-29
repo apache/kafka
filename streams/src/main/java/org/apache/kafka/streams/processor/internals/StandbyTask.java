@@ -98,7 +98,7 @@ public class StandbyTask extends AbstractTask implements Task {
 
             processorContext.initialize();
 
-            log.debug("Initialized");
+            log.info("Initialized");
         }
     }
 
@@ -134,7 +134,7 @@ public class StandbyTask extends AbstractTask implements Task {
                 // and the state current offset would be used to checkpoint
                 stateMgr.checkpoint(Collections.emptyMap());
 
-                log.debug("Committed");
+                log.info("Committed");
                 break;
 
             case CLOSING:
@@ -152,11 +152,15 @@ public class StandbyTask extends AbstractTask implements Task {
     @Override
     public void closeClean() {
         close(true);
+
+        log.info("Closed clean");
     }
 
     @Override
     public void closeDirty() {
         close(false);
+
+        log.info("Closed dirty");
     }
 
     /**
@@ -187,8 +191,6 @@ public class StandbyTask extends AbstractTask implements Task {
 
         closeTaskSensor.record();
         transitionTo(State.CLOSED);
-
-        log.debug("Closed");
     }
 
     @Override

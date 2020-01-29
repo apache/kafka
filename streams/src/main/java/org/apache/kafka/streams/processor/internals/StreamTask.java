@@ -205,7 +205,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
 
             transitionTo(State.RESTORING);
 
-            log.debug("Initialized");
+            log.info("Initialized");
         }
     }
 
@@ -218,7 +218,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             idleStartTime = RecordQueue.UNKNOWN;
             transitionTo(State.RUNNING);
 
-            log.debug("Restored and ready to run");
+            log.info("Restored and ready to run");
         } else {
             throw new IllegalStateException("Illegal state " + state() + " while completing restoration for active task " + id);
         }
@@ -257,7 +257,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                 partitionGroup.clear();
 
                 transitionTo(State.SUSPENDED);
-                log.debug("Suspended running");
+                log.info("Suspended running");
             } else {
                 throw new IllegalStateException("Illegal state " + state() + " while suspending active task " + id);
             }
@@ -284,7 +284,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                 initializeTopology();
 
                 transitionTo(State.RESTORING);
-                log.debug("Resumed to restoring state");
+                log.info("Resumed to restoring state");
 
                 break;
 
@@ -309,7 +309,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                     stateMgr.checkpoint(checkpointableOffsets());
                 }
 
-                log.debug("Committed");
+                log.info("Committed");
 
                 break;
 
@@ -368,11 +368,15 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     @Override
     public void closeClean() {
         close(true);
+
+        log.info("Closed clean");
     }
 
     @Override
     public void closeDirty() {
         close(false);
+
+        log.info("Closed dirty");
     }
 
     /**
@@ -439,8 +443,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         streamsMetrics.removeAllTaskLevelSensors(threadId, id.toString());
 
         transitionTo(State.CLOSED);
-
-        log.debug("Closed");
     }
 
     /**

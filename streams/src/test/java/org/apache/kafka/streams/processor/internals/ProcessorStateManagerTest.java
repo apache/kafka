@@ -33,6 +33,7 @@ import org.apache.kafka.streams.state.TimestampedBytesStore;
 import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
 import org.apache.kafka.test.MockBatchingStateRestoreListener;
 import org.apache.kafka.test.MockKeyValueStore;
+import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
 import org.easymock.EasyMock;
 import org.easymock.EasyMockRunner;
@@ -100,6 +101,7 @@ public class ProcessorStateManagerTest {
     private final ConsumerRecord<byte[], byte[]> consumerRecord = new ConsumerRecord<>(persistentStoreTopicName, 1, 100L, keyBytes, valueBytes);
     private final MockChangelogReader changelogReader = new MockChangelogReader();
     private final LogContext logContext = new LogContext("process-state-manager-test ");
+    private final StreamsConfig config = new StreamsConfig(StreamsTestUtils.getStreamsConfig());
 
     private File baseDir;
     private File checkpointFile;
@@ -157,6 +159,7 @@ public class ProcessorStateManagerTest {
     public void shouldReportChangelogAsSource() {
         final ProcessorStateManager stateMgr = new ProcessorStateManager(
             taskId,
+            config,
             mkSet(persistentStorePartition, nonPersistentStorePartition),
             Task.TaskType.STANDBY,
             stateDirectory,
@@ -177,6 +180,7 @@ public class ProcessorStateManagerTest {
     public void shouldFindSingleStoreForChangelog() {
         final ProcessorStateManager stateMgr = new ProcessorStateManager(
             taskId,
+            config,
             Collections.emptySet(),
             Task.TaskType.STANDBY,
             stateDirectory,
@@ -286,6 +290,7 @@ public class ProcessorStateManagerTest {
     public void shouldNotRegisterNonLoggedStore() {
         final ProcessorStateManager stateMgr = new ProcessorStateManager(
             taskId,
+            config,
             emptySet(),
             Task.TaskType.STANDBY,
             stateDirectory,
@@ -475,6 +480,7 @@ public class ProcessorStateManagerTest {
     public void shouldNotWriteCheckpointForStoresWithoutChangelogTopic() throws IOException {
         final ProcessorStateManager stateMgr = new ProcessorStateManager(
             taskId,
+            config,
             emptySet(),
             Task.TaskType.STANDBY,
             stateDirectory,
@@ -708,6 +714,7 @@ public class ProcessorStateManagerTest {
     private ProcessorStateManager getStateManager(final Task.TaskType taskType) {
         return new ProcessorStateManager(
             taskId,
+            config,
             emptySet(),
             taskType,
             stateDirectory,

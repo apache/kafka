@@ -385,6 +385,7 @@ public class TopologyTestDriver implements Closeable {
             final LogContext logContext = new LogContext("topology-test-driver ");
             final ProcessorStateManager stateManager = new ProcessorStateManager(
                 TASK_ID,
+                streamsConfig,
                 new HashSet<>(partitionsByTopic.values()),
                 Task.TaskType.ACTIVE,
                 stateDirectory,

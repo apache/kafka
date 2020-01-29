@@ -20,6 +20,7 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.FixedOrderMap;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
@@ -136,6 +137,7 @@ public class ProcessorStateManager implements StateManager {
     private final TaskId taskId;
     private final String logPrefix;
     private final TaskType taskType;
+    private final boolean eosEnabled;
     private final ChangelogRegister changelogReader;
     private final Map<String, String> storeToChangelogTopic;
     private final Collection<TopicPartition> sourcePartitions;
@@ -156,6 +158,7 @@ public class ProcessorStateManager implements StateManager {
      * @throws ProcessorStateException if the task directory does not exist and could not be created
      */
     public ProcessorStateManager(final TaskId taskId,
+                                 final StreamsConfig config,
                                  final Collection<TopicPartition> sources,
                                  final TaskType taskType,
                                  final StateDirectory stateDirectory,
@@ -173,6 +176,7 @@ public class ProcessorStateManager implements StateManager {
 
         this.baseDir = stateDirectory.directoryForTask(taskId);
         this.checkpointFile = new OffsetCheckpoint(new File(baseDir, CHECKPOINT_FILE_NAME));
+        this.eosEnabled = StreamsConfig.EXACTLY_ONCE.equals(config.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG));
 
         log.debug("Created state store manager for task {}", taskId);
     }
@@ -205,6 +209,8 @@ public class ProcessorStateManager implements StateManager {
 
                         log.debug("State store {} initialized from checkpoint with offset {} at changelog {}",
                             store.stateStore.name(), store.offset, store.changelogPartition);
+                    } else if (eosEnabled) {
+                        store.
                     } else {
                         log.info("State store {} did not find checkpoint offset, hence would " +
                                 "default to the starting offset at changelog {}",
