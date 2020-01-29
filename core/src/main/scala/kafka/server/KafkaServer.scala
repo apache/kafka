@@ -92,8 +92,8 @@ object KafkaServer {
       .timeWindow(kafkaConfig.metricSampleWindowMs, TimeUnit.MILLISECONDS)
   }
 
-  def zkClientConfigFromKafkaConfig(config: KafkaConfig) =
-    if (!config.zkSslClientEnable)
+  def zkClientConfigFromKafkaConfig(config: KafkaConfig, forceZkSslClientEnable: Boolean = false) =
+    if (!config.zkSslClientEnable && !forceZkSslClientEnable)
       None
     else {
       val clientConfig = new ZKClientConfig()

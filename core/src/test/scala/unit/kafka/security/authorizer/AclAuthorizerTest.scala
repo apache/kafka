@@ -870,7 +870,7 @@ class AclAuthorizerTest extends ZooKeeperTestHarness {
     val prefixedValue = "prefixedValue"
     val prefix = "authorizer."
     val configs = Map("zookeeper.connect" -> "somewhere", // required, otherwise we would omit it
-      KafkaConfig.ZkSslClientEnableProp -> "true",
+      KafkaConfig.ZkSslClientEnableProp -> "false",
       KafkaConfig.ZkClientCnxnSocketProp -> kafkaValue,
       KafkaConfig.ZkSslKeyStoreLocationProp -> kafkaValue,
       KafkaConfig.ZkSslKeyStorePasswordProp -> kafkaValue,
@@ -884,6 +884,7 @@ class AclAuthorizerTest extends ZooKeeperTestHarness {
       KafkaConfig.ZkSslEndpointIdentificationAlgorithmProp -> "HTTPS",
       KafkaConfig.ZkSslCrlEnableProp -> "false",
       KafkaConfig.ZkSslOcspEnableProp -> "false",
+      prefix + KafkaConfig.ZkSslClientEnableProp -> "true",
       prefix + KafkaConfig.ZkClientCnxnSocketProp -> prefixedValue,
       prefix + KafkaConfig.ZkSslKeyStoreLocationProp -> prefixedValue,
       prefix + KafkaConfig.ZkSslKeyStorePasswordProp -> prefixedValue,
