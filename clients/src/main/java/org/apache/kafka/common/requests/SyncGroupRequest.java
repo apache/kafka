@@ -83,7 +83,7 @@ public class SyncGroupRequest extends AbstractRequest {
 
     /**
      * ProtocolType and ProtocolName are mandatory since version 5. This methods verifies that
-     * they are defined for version % or higher, or returns true otherwise for older versions.
+     * they are defined for version 5 or higher, or returns true otherwise for older versions.
      */
     public boolean areMandatoryProtocolTypeAndNamePresent() {
         if (version() >= 5)
