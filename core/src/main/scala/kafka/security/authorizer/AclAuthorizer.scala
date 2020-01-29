@@ -86,7 +86,9 @@ object AclAuthorizer {
   private[authorizer] def zkClientConfigFromKafkaConfigAndMap(kafkaConfig: KafkaConfig, configMap: mutable.Map[String, _<:Any]): Option[ZKClientConfig] = {
     val zkSslClientEnable = configMap.get(AclAuthorizer.configPrefix + KafkaConfig.ZkSslClientEnableProp).
       map(_.toString).getOrElse(kafkaConfig.zkSslClientEnable.toString).toBoolean
-    val zkClientConfig = if (!zkSslClientEnable) None else {
+    if (!zkSslClientEnable)
+      None
+    else {
       // start with the base config from the Kafka configuration
       val zkClientConfig = KafkaServer.zkClientConfigFromKafkaConfig(kafkaConfig)
       // add in any prefixed overlays
@@ -101,7 +103,6 @@ object AclAuthorizer {
       }}
       zkClientConfig
     }
-    zkClientConfig
   }
 }
 
