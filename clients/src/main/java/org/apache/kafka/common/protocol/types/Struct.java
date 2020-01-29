@@ -97,7 +97,7 @@ public class Struct {
         return getShort(field.name);
     }
 
-    public Double get(Field.Double field) {
+    public Double get(Field.Float64 field) {
         return getDouble(field.name);
     }
 
@@ -151,7 +151,7 @@ public class Struct {
         return alternative;
     }
 
-    public Double getOrElse(Field.Double field, double alternative) {
+    public Double getOrElse(Field.Float64 field, double alternative) {
         if (hasField(field.name))
             return getDouble(field.name);
         return alternative;
@@ -387,7 +387,7 @@ public class Struct {
         return set(def.name, value);
     }
 
-    public Struct set(Field.Double def, double value) {
+    public Struct set(Field.Float64 def, double value) {
         return set(def.name, value);
     }
 

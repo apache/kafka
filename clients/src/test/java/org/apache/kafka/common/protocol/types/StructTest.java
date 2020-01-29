@@ -29,7 +29,7 @@ public class StructTest {
         new Field.Int32("int32", ""),
         new Field.Int64("int64", ""),
         new Field.Bool("boolean", ""),
-        new Field.Double("double", ""),
+        new Field.Float64("float64", ""),
         new Field.Str("string", ""));
 
     private static final Schema ARRAY_SCHEMA = new Schema(new Field.Array("array", new ArrayOf(Type.INT8), ""));
@@ -47,7 +47,7 @@ public class StructTest {
                 .set("int32", 12)
                 .set("int64", (long) 12)
                 .set("boolean", true)
-                .set("double", 0.5)
+                .set("float64", 0.5)
                 .set("string", "foobar");
         Struct struct2 = new Struct(FLAT_STRUCT_SCHEMA)
                 .set("int8", (byte) 12)
@@ -55,7 +55,7 @@ public class StructTest {
                 .set("int32", 12)
                 .set("int64", (long) 12)
                 .set("boolean", true)
-                .set("double", 0.5)
+                .set("float64", 0.5)
                 .set("string", "foobar");
         Struct struct3 = new Struct(FLAT_STRUCT_SCHEMA)
                 .set("int8", (byte) 12)
@@ -63,7 +63,7 @@ public class StructTest {
                 .set("int32", 12)
                 .set("int64", (long) 12)
                 .set("boolean", true)
-                .set("double", 0.5)
+                .set("float64", 0.5)
                 .set("string", "mismatching string");
 
         assertEquals(struct1, struct2);

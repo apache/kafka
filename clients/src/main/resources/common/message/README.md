@@ -79,7 +79,7 @@ There are several primitive field types available.
 
 * "int64": a 64-bit integer.
 
-* "double": is a double-precision floating point number (IEEE 754).
+* "float64": is a double-precision floating point number (IEEE 754).
 
 * "string": a UTF-8 string.
 
@@ -95,7 +95,7 @@ Guide](https://kafka.apache.org/protocol.html).
 
 Nullable Fields
 ---------------
-Booleans, ints, and doubles can never be null.  However, fields that are strings,
+Booleans, ints, and floats can never be null.  However, fields that are strings,
 bytes, or arrays may optionally be "nullable."  When a field is "nullable," that
 simply means that we are prepared to serialize and deserialize null entries for
 that field.
@@ -174,7 +174,7 @@ been set:
 
 * Integer fields default to 0.
 
-* Doubles default to 0.
+* Floats default to 0.
 
 * Booleans default to false.
 
@@ -190,7 +190,7 @@ versions of the field are nullable.
 
 Custom Default Values
 ---------------------
-You may set a custom default for fields that are integers, booleans, doubles, or
+You may set a custom default for fields that are integers, booleans, floats, or
 strings.  Just add a "default" entry in the JSON object.  The custom default
 overrides the normal default for the type.  So for example, you could make a
 boolean field default to true rather than false, and so forth.

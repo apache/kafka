@@ -367,7 +367,7 @@ public abstract class Type {
         }
     };
 
-    public static final DocumentedType DOUBLE = new DocumentedType() {
+    public static final DocumentedType FLOAT64 = new DocumentedType() {
         @Override
         public void write(ByteBuffer buffer, Object o) {
             ByteUtils.writeDouble((Double) o, buffer);
@@ -385,7 +385,7 @@ public abstract class Type {
 
         @Override
         public String typeName() {
-            return "DOUBLE";
+            return "FLOAT64";
         }
 
         @Override
@@ -992,7 +992,7 @@ public abstract class Type {
     private static String toHtml() {
         DocumentedType[] types = {
             BOOLEAN, INT8, INT16, INT32, INT64,
-            UNSIGNED_INT32, VARINT, VARLONG, UUID, DOUBLE,
+            UNSIGNED_INT32, VARINT, VARLONG, UUID, FLOAT64,
             STRING, COMPACT_STRING, NULLABLE_STRING, COMPACT_NULLABLE_STRING,
             BYTES, COMPACT_BYTES, NULLABLE_BYTES, COMPACT_NULLABLE_BYTES,
             RECORDS, new ArrayOf(STRING), new CompactArrayOf(COMPACT_STRING)};

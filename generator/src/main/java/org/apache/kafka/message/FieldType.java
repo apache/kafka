@@ -112,9 +112,9 @@ public interface FieldType {
         }
     }
 
-    final class DoubleFieldType implements FieldType {
-        static final DoubleFieldType INSTANCE = new DoubleFieldType();
-        private static final String NAME = "double";
+    final class Float64FieldType implements FieldType {
+        static final Float64FieldType INSTANCE = new Float64FieldType();
+        private static final String NAME = "float64";
 
         @Override
         public Optional<Integer> fixedLength() {
@@ -256,8 +256,8 @@ public interface FieldType {
                 return Int64FieldType.INSTANCE;
             case UUIDFieldType.NAME:
                 return UUIDFieldType.INSTANCE;
-            case DoubleFieldType.NAME:
-                return DoubleFieldType.INSTANCE;
+            case Float64FieldType.NAME:
+                return Float64FieldType.INSTANCE;
             case StringFieldType.NAME:
                 return StringFieldType.INSTANCE;
             case BytesFieldType.NAME:

@@ -260,7 +260,7 @@ public final class ByteUtils {
      * @return The double value read
      */
     public static double readDouble(DataInput in) throws IOException {
-        return Double.longBitsToDouble(in.readLong());
+        return in.readDouble();
     }
 
     /**
@@ -270,7 +270,7 @@ public final class ByteUtils {
      * @return The long value read
      */
     public static double readDouble(ByteBuffer buffer) {
-        return Double.longBitsToDouble(buffer.getLong());
+        return buffer.getDouble();
     }
 
     /**
@@ -373,7 +373,7 @@ public final class ByteUtils {
      * @param out The output to write to
      */
     public static void writeDouble(double value, DataOutput out) throws IOException {
-        out.writeLong(Double.doubleToRawLongBits(value));
+        out.writeDouble(value);
     }
 
     /**
@@ -383,7 +383,7 @@ public final class ByteUtils {
      * @param buffer The buffer to write to
      */
     public static void writeDouble(double value, ByteBuffer buffer) {
-        buffer.putLong(Double.doubleToRawLongBits(value));
+        buffer.putDouble(value);
     }
 
     /**

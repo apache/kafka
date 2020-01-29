@@ -91,13 +91,13 @@ public class Field {
         }
     }
 
-    public static class Double extends Field {
-        public Double(String name, String docString) {
-            super(name, Type.DOUBLE, docString, false, null);
+    public static class Float64 extends Field {
+        public Float64(String name, String docString) {
+            super(name, Type.FLOAT64, docString, false, null);
         }
 
-        public Double(String name, String docString, double defaultValue) {
-            super(name, Type.DOUBLE, docString, true, defaultValue);
+        public Float64(String name, String docString, double defaultValue) {
+            super(name, Type.FLOAT64, docString, true, defaultValue);
         }
     }
 
