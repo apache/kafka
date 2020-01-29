@@ -367,7 +367,6 @@ public class StreamThread extends Thread {
 
             final ProcessorStateManager stateManager = new ProcessorStateManager(
                 taskId,
-                config,
                 partitions,
                 Task.TaskType.ACTIVE,
                 stateDirectory,
@@ -462,7 +461,6 @@ public class StreamThread extends Thread {
             if (!topology.stateStores().isEmpty() && !topology.storeToChangelogTopic().isEmpty()) {
                 final ProcessorStateManager stateManager = new ProcessorStateManager(
                     taskId,
-                    config,
                     partitions,
                     Task.TaskType.STANDBY,
                     stateDirectory,

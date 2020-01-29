@@ -89,7 +89,7 @@ public class StandbyTask extends AbstractTask implements Task {
     @Override
     public void initializeIfNeeded() {
         if (state() == State.CREATED) {
-            TaskUtils.registerStateStores(id, log, logPrefix, topology, stateMgr, stateDirectory, processorContext);
+            StateManagerUtil.registerStateStores(log, logPrefix, topology, stateMgr, stateDirectory, processorContext);
 
             // no topology needs initialized, we can transit to RUNNING
             // right after registered the stores
@@ -183,7 +183,9 @@ public class StandbyTask extends AbstractTask implements Task {
             }
 
             if (state() == State.CLOSING) {
-                TaskUtils.closeStateManager(id, log, logPrefix, clean, stateMgr, stateDirectory);
+                StateManagerUtil.closeStateManager(log, logPrefix, clean, stateMgr, stateDirectory);
+
+                // TODO: if EOS is enabled, we should wipe out the state stores like we did for StreamTask too
             } else {
                 throw new IllegalStateException("Illegal state " + state() + " while closing standby task " + id);
             }

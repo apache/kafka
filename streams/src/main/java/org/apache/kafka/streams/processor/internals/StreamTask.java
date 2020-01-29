@@ -201,7 +201,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     @Override
     public void initializeIfNeeded() {
         if (state() == State.CREATED) {
-            TaskUtils.registerStateStores(id, log, logPrefix, topology, stateMgr, stateDirectory, processorContext);
+            StateManagerUtil.registerStateStores(log, logPrefix, topology, stateMgr, stateDirectory, processorContext);
 
             transitionTo(State.RESTORING);
 
@@ -409,7 +409,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                     // whenever we have successfully committed state, it is safe to checkpoint
                     // the state as well no matter if EOS is enabled or not
                     stateMgr.checkpoint(checkpointableOffsets());
-                } else {
+                } else if (eosDisabled) {
                     // if from unclean close, then only need to flush state to make sure that when later
                     // closing the states, there's no records triggering any processing anymore; also swallow all caught exceptions
                     // However, for a _clean_ shutdown, we try to commit and checkpoint. If there are any exceptions, they become
@@ -430,7 +430,12 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             if (state() == State.CLOSING) {
                 // first close state manager (which is idempotent) then close the record collector (which could throw),
                 // if the latter throws and we re-close dirty which would close the state manager again.
-                TaskUtils.closeStateManager(id, log, logPrefix, clean, stateMgr, stateDirectory);
+                StateManagerUtil.closeStateManager(log, logPrefix, clean, stateMgr, stateDirectory);
+
+                // if EOS is enabled, we wipe out the whole state store since they are invalid to use anymore
+                if (!eosDisabled) {
+                    StateManagerUtil.wipeStateStores(log, stateMgr);
+                }
 
                 closeRecordCollector(clean);
             } else {
