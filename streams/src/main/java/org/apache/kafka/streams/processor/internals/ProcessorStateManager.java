@@ -206,6 +206,8 @@ public class ProcessorStateManager implements StateManager {
                         log.debug("State store {} initialized from checkpoint with offset {} at changelog {}",
                             store.stateStore.name(), store.offset, store.changelogPartition);
                     } else {
+                        // TODO K9113: for EOS when there's no checkpointed offset, we should treat it as TaskCorrupted
+
                         log.info("State store {} did not find checkpoint offset, hence would " +
                                 "default to the starting offset at changelog {}",
                             store.stateStore.name(), store.changelogPartition);
