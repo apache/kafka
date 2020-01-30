@@ -264,12 +264,12 @@ public class KafkaAdminClient extends AdminClient {
     /**
      * The default timeout to use for an operation.
      */
-    private int defaultApiTimeoutMs;
+    private final int defaultApiTimeoutMs;
 
     /**
      * The timeout to use for a single request.
      */
-    private int requestTimeoutMs;
+    private final int requestTimeoutMs;
 
     /**
      * The name of this AdminClient instance.
@@ -508,7 +508,8 @@ public class KafkaAdminClient extends AdminClient {
                              LogContext logContext) {
         this.clientId = clientId;
         this.log = logContext.logger(KafkaAdminClient.class);
-        configureDefaultApiTimeoutMsAndRequestTimeoutMs(config);
+        this.requestTimeoutMs = config.getInt(AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG);
+        this.defaultApiTimeoutMs = configureDefaultApiTimeoutMs(config);
         this.time = time;
         this.metadataManager = metadataManager;
         this.metrics = metrics;
@@ -533,21 +534,22 @@ public class KafkaAdminClient extends AdminClient {
      *
      * @param config The configuration
      */
-    private void configureDefaultApiTimeoutMsAndRequestTimeoutMs(AdminClientConfig config) {
-        this.requestTimeoutMs = config.getInt(AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG);
-        this.defaultApiTimeoutMs = config.getInt(AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG);
+    private int configureDefaultApiTimeoutMs(AdminClientConfig config) {
+        int requestTimeoutMs = config.getInt(AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG);
+        int defaultApiTimeoutMs = config.getInt(AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG);
 
-        if (this.defaultApiTimeoutMs < this.requestTimeoutMs) {
+        if (defaultApiTimeoutMs < requestTimeoutMs) {
             if (config.originals().containsKey(AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG)) {
                 throw new ConfigException("The specified value of " + AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG +
                         " must be no smaller than the value of " + AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG + ".");
             } else {
                 log.warn("Overriding the default value for {} ({}) with the explicitly configured request timeout {}",
                         AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG, this.defaultApiTimeoutMs,
-                        this.requestTimeoutMs);
-                this.defaultApiTimeoutMs = this.requestTimeoutMs;
+                        requestTimeoutMs);
+                return requestTimeoutMs;
             }
         }
+        return defaultApiTimeoutMs;
     }
 
     @Override
