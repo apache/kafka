@@ -6,6 +6,7 @@ import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.source.SourceRecord;
 import org.junit.Test;
 
+import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -34,6 +35,28 @@ public class ToStructByRegexTransformTest {
         assertThat(((Map<String,?>)result.value()).get("path"), is("documentation/#connect"));
 
     }
+
+    @Test
+    public void schemalessStructTimemillisTest() {
+        System.out.println(System.currentTimeMillis());
+        Map<String, String> configMap = new HashMap<>();
+        configMap.put("regex", "^(.{3,4})_(.*)_(pc|mw|ios|and)([0-9]{3})_([0-9]{13})");
+        configMap.put("mapping", "env,serviceId,device,sequence,datetime:TIMEMILLIS");
+        configMap.put("struct.field", "code");
+
+        Map<String, String> testData = new HashMap<>();
+        testData.put("code", "dev_kafka_pc001_1580372261372");
+
+        testForm.configure(configMap);
+        SourceRecord result = testForm.apply(new SourceRecord(null, null, "", 0, null, testData));
+
+        assertThat(((Map<String, ?>)result.value()).get("env"), is("dev"));
+        assertThat(((Map<String, ?>)result.value()).get("serviceId"), is("kafka"));
+        assertThat(((Map<String, ?>)result.value()).get("device"), is("pc"));
+        assertThat(((Map<String, ?>)result.value()).get("sequence"), is("001"));
+        assertThat(((Map<String, ?>)result.value()).get("datetime"), is(new Date(1580372261372L)));
+    }
+
 
     @Test
     public void schemalessPlainTextTest(){
