@@ -1121,6 +1121,50 @@ public class SenderTest {
     }
 
     @Test
+    public void testUnresolvedSequencesAreNotFatal() throws Exception {
+        ProducerIdAndEpoch producerIdAndEpoch = new ProducerIdAndEpoch(123456L, (short) 0);
+        apiVersions.update("0", NodeApiVersions.create(ApiKeys.INIT_PRODUCER_ID.id, (short) 0, (short) 3));
+        TransactionManager txnManager = new TransactionManager(logContext, "testUnresolvedSeq", 60000, 100, apiVersions);
+
+        setupWithTransactionState(txnManager);
+        doInitTransactions(txnManager, producerIdAndEpoch);
+
+        txnManager.beginTransaction();
+        txnManager.failIfNotReadyForSend();
+        txnManager.maybeAddPartitionToTransaction(tp0);
+        client.prepareResponse(new AddPartitionsToTxnResponse(0, Collections.singletonMap(tp0, Errors.NONE)));
+        sender.runOnce();
+
+        // Send first ProduceRequest
+        Future<RecordMetadata> request1 = appendToAccumulator(tp0);
+        sender.runOnce();  // send request
+
+        time.sleep(1000L);
+        Future<RecordMetadata> request2 = appendToAccumulator(tp0);
+        sender.runOnce();  // send request
+
+        assertEquals(2, client.inFlightRequestCount());
+
+        sendIdempotentProducerResponse(0, tp0, Errors.NOT_LEADER_FOR_PARTITION, -1);
+        sender.runOnce();  // receive first response
+
+        Node node = metadata.fetch().nodes().get(0);
+        time.sleep(1000L);
+        client.disconnect(node.idString());
+        client.blackout(node, 10);
+
+        sender.runOnce(); // now expire the first batch.
+        assertFutureFailure(request1, TimeoutException.class);
+        assertTrue(txnManager.hasUnresolvedSequence(tp0));
+        // let's enqueue another batch, which should not be dequeued until the unresolved state is clear.
+        Future<RecordMetadata> request3 = appendToAccumulator(tp0);
+
+        // Loop once and confirm that the transaction manager does not enter a fatal error state
+        sender.runOnce();
+        assertTrue(txnManager.hasAbortableError());
+    }
+
+    @Test
     public void testExpiryOfAllSentBatchesShouldCauseUnresolvedSequences() throws Exception {
         final long producerId = 343434L;
         TransactionManager transactionManager = createTransactionManager();
