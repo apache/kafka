@@ -50,8 +50,8 @@ public class QueryableStoreProvider {
      * @return A composite object that wraps the store instances.
      */
     public <T> T getStore(final StoreQueryParams<T> storeQueryParams) {
-        final String storeName = storeQueryParams.getStoreName();
-        final QueryableStoreType<T> queryableStoreType = storeQueryParams.getQueryableStoreType();
+        final String storeName = storeQueryParams.storeName();
+        final QueryableStoreType<T> queryableStoreType = storeQueryParams.queryableStoreType();
         final List<T> globalStore = globalStoreProvider.stores(storeName, queryableStoreType);
         if (!globalStore.isEmpty()) {
             return queryableStoreType.create(globalStoreProvider, storeName);

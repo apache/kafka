@@ -1160,21 +1160,9 @@ public class KafkaStreams implements AutoCloseable {
         return streamsMetadataState.getKeyQueryMetadataForKey(storeName, key, partitioner);
     }
 
+
     /**
-     * Get a facade wrapping the local {@link StateStore} instances with the provided {@code storeName} if the Store's
-     * type is accepted by the provided {@link QueryableStoreType#accepts(StateStore) queryableStoreType}.
-     * The returned object can be used to query the {@link StateStore} instances.
-     *
-     * Only permits queries on active replicas of the store (no standbys or restoring replicas).
-     * See {@link KafkaStreams#store(StoreQueryParams)}
-     * for the option to set {@code StoreQueryParams.withIncludeStaleStores()} and trade off consistency in favor of availability.
-     *
-     * @param storeName           name of the store to find
-     * @param queryableStoreType  accept only stores that are accepted by {@link QueryableStoreType#accepts(StateStore)}
-     * @param <T>                 return type
-     * @return A facade wrapping the local {@link StateStore} instances
-     * @throws InvalidStateStoreException if Kafka Streams is (re-)initializing or a store with {@code storeName} and
-     * {@code queryableStoreType} doesn't exist
+     * @deprecated since 2.5 release; use {@link #store(StoreQueryParams)}  instead
      */
     @Deprecated
     public <T> T store(final String storeName, final QueryableStoreType<T> queryableStoreType) {
@@ -1185,16 +1173,9 @@ public class KafkaStreams implements AutoCloseable {
      * Get a facade wrapping the local {@link StateStore} instances with the provided {@link StoreQueryParams}.
      * StoreQueryParams need required parameters to be set, which are {@code storeName} and if
      * type is accepted by the provided {@link QueryableStoreType#accepts(StateStore) queryableStoreType}.
-     * The optional parameters to the StoreQueryParams include {@code partition} and {@code staleStoresEnabled}.
      * The returned object can be used to query the {@link StateStore} instances.
      *
-     * @param storeQueryParams    If StoreQueryParams.fromNameAndType(storeName, queryableStoreType).withPartition(int partition) is used, it allow queries on the specific partition irrespective if it is a standby
-     *                            or a restoring replicas in addition to active ones.
-     *                            If StoreQueryParams.fromNameAndType(storeName, queryableStoreType).withIncludeStaleStores() is used, it allow queries on standbys and restoring replicas in addition to active ones for all the local partitions on the instance.
-     *                            If StoreQueryParams.fromNameAndType(storeName, queryableStoreType).withIncludeStaleStores().withPartition(int partition), it allow queries on the specific partition irrespective if it is a standby
-     *                            or a restoring replicas in addition to active ones..
-     *                            By default, if just storeQueryParams is used, it returns all the local partitions for the store which are in running state.
-     * @param <T>                 return type
+     * @param storeQueryParams   to set the optional parameters to fetch type of stores user wants to fetch when a key is queried
      * @return A facade wrapping the local {@link StateStore} instances
      * @throws InvalidStateStoreException if Kafka Streams is (re-)initializing or a store with {@code storeName} and
      * {@code queryableStoreType} doesn't exist

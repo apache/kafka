@@ -40,15 +40,16 @@ public class StreamThreadStateStoreProvider {
     private final StreamThread streamThread;
     private final InternalTopologyBuilder internalTopologyBuilder;
 
-    public StreamThreadStateStoreProvider(final StreamThread streamThread, final InternalTopologyBuilder internalTopologyBuilder) {
+    public StreamThreadStateStoreProvider(final StreamThread streamThread,
+                                          final InternalTopologyBuilder internalTopologyBuilder) {
         this.streamThread = streamThread;
         this.internalTopologyBuilder = internalTopologyBuilder;
     }
 
     @SuppressWarnings("unchecked")
     public <T> List<T> stores(final StoreQueryParams storeQueryParams) {
-        final String storeName = storeQueryParams.getStoreName();
-        final QueryableStoreType<T> queryableStoreType = storeQueryParams.getQueryableStoreType();
+        final String storeName = storeQueryParams.storeName();
+        final QueryableStoreType<T> queryableStoreType = storeQueryParams.queryableStoreType();
         final TaskId keyTaskId = createKeyTaskId(storeName, storeQueryParams.partition());
         if (streamThread.state() == StreamThread.State.DEAD) {
             return Collections.emptyList();
