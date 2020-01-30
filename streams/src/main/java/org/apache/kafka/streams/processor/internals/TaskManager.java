@@ -123,8 +123,11 @@ public class TaskManager {
      */
     public void handleAssignment(final Map<TaskId, Set<TopicPartition>> activeTasks,
                                  final Map<TaskId, Set<TopicPartition>> standbyTasks) {
-        log.info("Handle new assignment with:\n\tNew active tasks: {}\n\tNew standby tasks: {}" +
-                "\n\tExisting active tasks: {}\n\tExisting standby tasks: {}",
+        log.info("Handle new assignment with:\n" +
+                "\tNew active tasks: {}\n" +
+                "\tNew standby tasks: {}\n" +
+                "\tExisting active tasks: {}\n" +
+                "\tExisting standby tasks: {}",
             activeTasks.keySet(), standbyTasks.keySet(), activeTaskIds(), standbyTaskIds());
 
         final Map<TaskId, Set<TopicPartition>> activeTasksToCreate = new TreeMap<>(activeTasks);
@@ -147,10 +150,7 @@ public class TaskManager {
                     task.closeClean();
                     changelogReader.remove(task.changelogPartitions());
                 } catch (final RuntimeException e) {
-                    log.error(
-                        "Failed to close {} cleanly. Attempting to close remaining tasks before re-throwing.",
-                        task
-                    );
+                    log.error("Failed to close task {} cleanly. Attempting to close remaining tasks before re-throwing.", task.id());
                     taskCloseExceptions.put(task.id(), e);
                     // We've already recorded the exception (which is the point of clean).
                     // Now, we should go ahead and complete the close because a half-closed task is no good to anyone.

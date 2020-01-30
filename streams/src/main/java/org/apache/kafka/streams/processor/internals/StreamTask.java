@@ -608,7 +608,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                 .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
             initializeTaskTime(offsetsAndMetadata);
         } catch (final KafkaException e) {
-            throw new ProcessorStateException(format("task [%s] Failed to initialize offsets for %s", id, partitions), e);
+            throw new StreamsException(format("task [%s] Failed to initialize offsets for %s", id, partitions), e);
         }
     }
 
@@ -665,12 +665,12 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         if (state().hasBeenRunning()) {
             // close the processors
             // make sure close() is called for each node even when there is a RuntimeException
-            RuntimeException exception = null;
+            StreamsException exception = null;
             for (final ProcessorNode node : topology.processors()) {
                 processorContext.setCurrentNode(node);
                 try {
                     node.close();
-                } catch (final RuntimeException e) {
+                } catch (final StreamsException e) {
                     exception = e;
                 } finally {
                     processorContext.setCurrentNode(null);

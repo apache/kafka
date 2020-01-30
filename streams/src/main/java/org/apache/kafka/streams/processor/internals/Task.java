@@ -18,6 +18,8 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 
@@ -134,23 +136,43 @@ public interface Task {
 
     boolean isActive();
 
+    /**
+     * @throws StreamsException fatal error, should close the thread
+     */
     void initializeIfNeeded();
 
+    /**
+     * @throws StreamsException fatal error, should close the thread
+     */
     void completeRestoration();
 
     void addRecords(TopicPartition partition, Iterable<ConsumerRecord<byte[], byte[]>> records);
 
     boolean commitNeeded();
 
+    /**
+     * @throws TaskMigratedException all the task has been migrated
+     * @throws StreamsException fatal error, should close the thread
+     */
     void commit();
 
+    /**
+     * @throws TaskMigratedException all the task has been migrated
+     * @throws StreamsException fatal error, should close the thread
+     */
     void suspend();
 
+    /**
+     * @throws StreamsException fatal error, should close the thread
+     */
     void resume();
 
     /**
      * Close a task that we still own. Commit all progress and close the task gracefully.
      * Throws an exception if this couldn't be done.
+     *
+     * @throws TaskMigratedException all the task has been migrated
+     * @throws StreamsException fatal error, should close the thread
      */
     void closeClean();
 

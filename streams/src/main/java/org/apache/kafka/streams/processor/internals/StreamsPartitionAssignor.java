@@ -172,14 +172,6 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
     private CopartitionedTopicsEnforcer copartitionedTopicsEnforcer;
     private RebalanceProtocol rebalanceProtocol;
 
-    protected String userEndPoint() {
-        return userEndPoint;
-    }
-
-    protected TaskManager taskManger() {
-        return taskManager;
-    }
-
     /**
      * We need to have the PartitionAssignor and its StreamThread to be mutually accessible since the former needs
      * later's cached metadata while sending subscriptions, and the latter needs former's returned assignment when
@@ -969,9 +961,9 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
      * @return set of consumer(s) that previously owned the partitions in this task
      *         empty set signals that it is a new task, or its previous owner is no longer in the group
      */
-    Set<String> previousConsumersOfTaskPartitions(final Set<TopicPartition> taskPartitions,
-                                                  final Map<TopicPartition, String> clientOwnedPartitions,
-                                                  final Set<TopicPartition> allOwnedPartitions) {
+    private Set<String> previousConsumersOfTaskPartitions(final Set<TopicPartition> taskPartitions,
+                                                          final Map<TopicPartition, String> clientOwnedPartitions,
+                                                          final Set<TopicPartition> allOwnedPartitions) {
         // this "foreignConsumer" indicates a partition was owned by someone from another client -- we don't really care who
         final String foreignConsumer = "";
         final Set<String> previousConsumers = new HashSet<>();
@@ -1169,6 +1161,9 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
 
         final Cluster fakeCluster = Cluster.empty().withPartitions(topicToPartitionInfo);
         streamsMetadataState.onChange(partitionsByHost, standbyPartitionsByHost, fakeCluster);
+
+        // we do not capture any exceptions but just let the exception thrown from consumer.poll directly
+        // since when stream thread captures it, either we close all tasks as dirty or we close thread
         taskManager.handleAssignment(activeTasks, info.standbyTasks());
     }
 
@@ -1285,4 +1280,11 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         this.internalTopicManager = internalTopicManager;
     }
 
+    protected String userEndPoint() {
+        return userEndPoint;
+    }
+
+    protected TaskManager taskManger() {
+        return taskManager;
+    }
 }
