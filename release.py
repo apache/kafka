@@ -122,7 +122,7 @@ def cmd(action, cmd_arg, *args, **kwargs):
             kwargs['num_retries'] = num_retries - 1
             kwargs['allow_failure'] = allow_failure
             print("Retrying... %d remaining retries" % (num_retries - 1))
-            time.sleep(4. / (num_retries + 1)) # e.g., if retries=4, sleep for 1s, 1.3s, 2s, then 4s
+            time.sleep(4. / (num_retries + 1)) # e.g., if retries=3, sleep for 1s, 1.3s, 2s
             return cmd(action, cmd_arg, *args, **kwargs)
 
         if allow_failure:
