@@ -18,6 +18,7 @@ package org.apache.kafka.streams.kstream;
 
 import org.apache.kafka.clients.producer.internals.DefaultPartitioner;
 import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
@@ -27,6 +28,7 @@ import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.TopicNameExtractor;
+import org.apache.kafka.streams.state.KeyValueStore;
 
 /**
  * {@code KStream} is an abstraction of a <i>record stream</i> of {@link KeyValue} pairs, i.e., each record is an
@@ -873,6 +875,73 @@ public interface KStream<K, V> {
      */
     void to(final TopicNameExtractor<K, V> topicExtractor,
             final Produced<K, V> produced);
+
+    /**
+     * Convert this stream to a {@link KTable}.
+     * <p>
+     * an internal repartitioning topic may need to be created in Kafka if a key changed
+     * This topic will be named "${applicationId}-&lt;name&gt;-repartition", where "applicationId" is user-specified in
+     * {@link StreamsConfig} via parameter {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG},
+     * "&lt;name&gt;" is an internally generated name, and "-repartition" is a fixed suffix.
+     * <p>
+     * Note that this is a logical operation and only changes the "interpretation" of the stream, i.e., each record of
+     * it was a "fact/event" and is re-interpreted as update now (cf. {@link KStream} vs {@code KTable}).
+     *
+     * @return a {@link KTable} that contains the same records as this {@code KStream}
+     */
+    KTable<K, V> toTable();
+
+    /**
+     * Convert this stream to a {@link KTable}.
+     * <p>
+     * an internal repartitioning topic may need to be created in Kafka if a key changed
+     * This topic will be named "${applicationId}-&lt;name&gt;-repartition", where "applicationId" is user-specified in
+     * {@link StreamsConfig} via parameter {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG},
+     * "&lt;name&gt;" is an internally generated name, and "-repartition" is a fixed suffix.
+     * <p>
+     * Note that this is a logical operation and only changes the "interpretation" of the stream, i.e., each record of
+     * it was a "fact/event" and is re-interpreted as update now (cf. {@link KStream} vs {@code KTable}).
+     *
+     * @param named  a {@link Named} config used to name the processor in the topology
+     * @return a {@link KTable} that contains the same records as this {@code KStream}
+     */
+    KTable<K, V> toTable(final Named named);
+
+    /**
+     * Convert this stream to a {@link KTable}.
+     * <p>
+     * an internal repartitioning topic may need to be created in Kafka if a key changed
+     * This topic will be named "${applicationId}-&lt;name&gt;-repartition", where "applicationId" is user-specified in
+     * {@link StreamsConfig} via parameter {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG},
+     * "&lt;name&gt;" is an internally generated name, and "-repartition" is a fixed suffix.
+     * <p>
+     * Note that this is a logical operation and only changes the "interpretation" of the stream, i.e., each record of
+     * it was a "fact/event" and is re-interpreted as update now (cf. {@link KStream} vs {@code KTable}).
+     *
+     * @param materialized an instance of {@link Materialized} used to describe how the state store of the
+     *                            resulting table should be materialized.
+     * @return a {@link KTable} that contains the same records as this {@code KStream}
+     */
+    KTable<K, V> toTable(final Materialized<K, V, KeyValueStore<Bytes, byte[]>> materialized);
+
+    /**
+     * Convert this stream to a {@link KTable}.
+     * <p>
+     * an internal repartitioning topic may need to be created in Kafka if a key changed
+     * This topic will be named "${applicationId}-&lt;name&gt;-repartition", where "applicationId" is user-specified in
+     * {@link StreamsConfig} via parameter {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG},
+     * "&lt;name&gt;" is an internally generated name, and "-repartition" is a fixed suffix.
+     * <p>
+     * Note that this is a logical operation and only changes the "interpretation" of the stream, i.e., each record of
+     * it was a "fact/event" and is re-interpreted as update now (cf. {@link KStream} vs {@code KTable}).
+     *
+     * @param named  a {@link Named} config used to name the processor in the topology
+     * @param materialized an instance of {@link Materialized} used to describe how the state store of the
+     *                            resulting table should be materialized.
+     * @return a {@link KTable} that contains the same records as this {@code KStream}
+     */
+    KTable<K, V> toTable(final Named named,
+                         final Materialized<K, V, KeyValueStore<Bytes, byte[]>> materialized);
 
     /**
      * Group the records of this {@code KStream} on a new key that is selected using the provided {@link KeyValueMapper}
