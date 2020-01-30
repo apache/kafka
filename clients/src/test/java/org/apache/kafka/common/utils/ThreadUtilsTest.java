@@ -16,17 +16,16 @@
  */
 package org.apache.kafka.common.utils;
 
-import org.junit.Assert;
 import org.junit.Test;
 
 import java.util.concurrent.ThreadFactory;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
+
 public class ThreadUtilsTest {
 
-    private static final Runnable EMPTY_RUNNABLE = new Runnable() {
-        @Override
-        public void run() {
-        }
+    private static final Runnable EMPTY_RUNNABLE = () -> {
     };
     private static final String THREAD_NAME = "ThreadName";
     private static final String THREAD_NAME_WITH_NUMBER = THREAD_NAME + "%d";
@@ -34,22 +33,21 @@ public class ThreadUtilsTest {
 
     @Test
     public void testThreadNameWithoutNumberNoDemon() {
-        Assert.assertEquals(ThreadUtils.createThreadFactory(THREAD_NAME, false).
-                newThread(EMPTY_RUNNABLE).getName(), THREAD_NAME);
+        assertEquals(THREAD_NAME, ThreadUtils.createThreadFactory(THREAD_NAME, false).
+                newThread(EMPTY_RUNNABLE).getName());
     }
 
     @Test
     public void testThreadNameWithoutNumberDemon() {
         Thread daemonThread = ThreadUtils.createThreadFactory(THREAD_NAME, true).newThread(EMPTY_RUNNABLE);
         try {
-            Assert.assertEquals(daemonThread.getName(), THREAD_NAME);
-            Assert.assertTrue(daemonThread.isDaemon());
+            assertEquals(THREAD_NAME, daemonThread.getName());
+            assertTrue(daemonThread.isDaemon());
         } finally {
             try {
                 daemonThread.join();
             } catch (InterruptedException e) {
                 // can be ignored
-                e.printStackTrace();
             }
         }
     }
@@ -57,8 +55,8 @@ public class ThreadUtilsTest {
     @Test
     public void testThreadNameWithNumberNoDemon() {
         ThreadFactory localThreadFactory = ThreadUtils.createThreadFactory(THREAD_NAME_WITH_NUMBER, false);
-        Assert.assertEquals(localThreadFactory.newThread(EMPTY_RUNNABLE).getName(), THREAD_NAME + "1");
-        Assert.assertEquals(localThreadFactory.newThread(EMPTY_RUNNABLE).getName(), THREAD_NAME + "2");
+        assertEquals(THREAD_NAME + "1", localThreadFactory.newThread(EMPTY_RUNNABLE).getName());
+        assertEquals(THREAD_NAME + "2", localThreadFactory.newThread(EMPTY_RUNNABLE).getName());
     }
 
     @Test
@@ -68,25 +66,23 @@ public class ThreadUtilsTest {
         Thread daemonThread2 = localThreadFactory.newThread(EMPTY_RUNNABLE);
 
         try {
-            Assert.assertEquals(daemonThread1.getName(), THREAD_NAME + "1");
-            Assert.assertTrue(daemonThread1.isDaemon());
+            assertEquals(THREAD_NAME + "1", daemonThread1.getName());
+            assertTrue(daemonThread1.isDaemon());
         } finally {
             try {
                 daemonThread1.join();
             } catch (InterruptedException e) {
                 // can be ignored
-                e.printStackTrace();
             }
         }
         try {
-            Assert.assertEquals(daemonThread2.getName(), THREAD_NAME + "2");
-            Assert.assertTrue(daemonThread2.isDaemon());
+            assertEquals(THREAD_NAME + "2", daemonThread2.getName());
+            assertTrue(daemonThread2.isDaemon());
         } finally {
             try {
                 daemonThread2.join();
             } catch (InterruptedException e) {
                 // can be ignored
-                e.printStackTrace();
             }
         }
     }

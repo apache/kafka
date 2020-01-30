@@ -59,7 +59,6 @@ import org.easymock.Capture;
 import org.easymock.EasyMock;
 import org.easymock.IAnswer;
 import org.junit.After;
-import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -164,10 +163,7 @@ public class DistributedHerderTest {
 
     private static final String WORKER_ID = "localhost:8083";
     private static final String KAFKA_CLUSTER_ID = "I4ZmrWqfT2e-upky_4fdPA";
-    private static final Runnable EMPTY_RUNNABLE = new Runnable() {
-        @Override
-        public void run() {
-        }
+    private static final Runnable EMPTY_RUNNABLE = () -> {
     };
 
     @Mock private ConfigBackingStore configBackingStore;
@@ -1775,13 +1771,13 @@ public class DistributedHerderTest {
 
     @Test
     public void testThreadNames() {
-        Assert.assertTrue(Whitebox.<ThreadPoolExecutor>getInternalState(herder, "herderExecutor").
+        assertTrue(Whitebox.<ThreadPoolExecutor>getInternalState(herder, "herderExecutor").
                 getThreadFactory().newThread(EMPTY_RUNNABLE).getName().startsWith(DistributedHerder.class.getSimpleName()));
 
-        Assert.assertTrue(Whitebox.<ThreadPoolExecutor>getInternalState(herder, "forwardRequestExecutor").
+        assertTrue(Whitebox.<ThreadPoolExecutor>getInternalState(herder, "forwardRequestExecutor").
                 getThreadFactory().newThread(EMPTY_RUNNABLE).getName().startsWith("ForwardRequestExecutor"));
 
-        Assert.assertTrue(Whitebox.<ThreadPoolExecutor>getInternalState(herder, "startAndStopExecutor").
+        assertTrue(Whitebox.<ThreadPoolExecutor>getInternalState(herder, "startAndStopExecutor").
                 getThreadFactory().newThread(EMPTY_RUNNABLE).getName().startsWith("StartAndStopExecutor"));
     }
 
