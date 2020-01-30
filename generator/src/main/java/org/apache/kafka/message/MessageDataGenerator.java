@@ -345,6 +345,8 @@ public final class MessageDataGenerator {
         } else if (field.type() instanceof FieldType.UUIDFieldType) {
             headerGenerator.addImport(MessageGenerator.UUID_CLASS);
             return "UUID";
+        } else if (field.type() instanceof FieldType.Float64FieldType) {
+            return "double";
         } else if (field.type().isString()) {
             return "String";
         } else if (field.type().isBytes()) {
@@ -573,6 +575,8 @@ public final class MessageDataGenerator {
             return "_readable.readLong()";
         } else if (type instanceof FieldType.UUIDFieldType) {
             return "_readable.readUUID()";
+        } else if (type instanceof FieldType.Float64FieldType) {
+            return "_readable.readDouble()";
         } else if (type.isStruct()) {
             return String.format("new %s(_readable, _version)", type.toString());
         } else {
@@ -821,6 +825,8 @@ public final class MessageDataGenerator {
         } else if (type instanceof FieldType.UUIDFieldType) {
             headerGenerator.addImport(MessageGenerator.UUID_CLASS);
             return "UUID";
+        } else if (type instanceof FieldType.Float64FieldType) {
+            return "Double";
         } else if (type.isString()) {
             return "String";
         } else if (type.isStruct()) {
@@ -843,6 +849,8 @@ public final class MessageDataGenerator {
             return String.format("struct.getLong(\"%s\")", name);
         } else if (type instanceof FieldType.UUIDFieldType) {
             return String.format("struct.getUUID(\"%s\")", name);
+        } else if (type instanceof FieldType.Float64FieldType) {
+            return String.format("struct.getDouble(\"%s\")", name);
         } else if (type.isString()) {
             return String.format("struct.getString(\"%s\")", name);
         } else if (type.isBytes()) {
@@ -1052,6 +1060,8 @@ public final class MessageDataGenerator {
             return String.format("_writable.writeLong(%s)", name);
         } else if (type instanceof FieldType.UUIDFieldType) {
             return String.format("_writable.writeUUID(%s)", name);
+        } else if (type instanceof FieldType.Float64FieldType) {
+            return String.format("_writable.writeDouble(%s)", name);
         } else if (type instanceof FieldType.StructType) {
             return String.format("%s.write(_writable, _cache, _version)", name);
         } else {
@@ -1278,6 +1288,7 @@ public final class MessageDataGenerator {
                 (field.type() instanceof FieldType.Int32FieldType) ||
                 (field.type() instanceof FieldType.Int64FieldType) ||
                 (field.type() instanceof FieldType.UUIDFieldType) ||
+                (field.type() instanceof FieldType.Float64FieldType) ||
                 (field.type() instanceof FieldType.StringFieldType)) {
             buffer.printf("struct.set(\"%s\", this.%s);%n",
                 field.snakeCaseName(), field.camelCaseName());
@@ -1317,6 +1328,7 @@ public final class MessageDataGenerator {
             (field.type() instanceof FieldType.Int32FieldType) ||
             (field.type() instanceof FieldType.Int64FieldType) ||
             (field.type() instanceof FieldType.UUIDFieldType) ||
+            (field.type() instanceof FieldType.Float64FieldType) ||
             (field.type() instanceof FieldType.StringFieldType)) {
             buffer.printf("_taggedFields.put(%d, %s);%n",
                 field.tag().get(), field.camelCaseName());
@@ -1726,6 +1738,9 @@ public final class MessageDataGenerator {
         } else if (field.type() instanceof FieldType.UUIDFieldType) {
             buffer.printf("hashCode = 31 * hashCode + %s.hashCode();%n",
                 field.camelCaseName());
+        } else if (field.type() instanceof FieldType.Float64FieldType) {
+            buffer.printf("hashCode = 31 * hashCode + Double.hashCode(%s);%n",
+                field.camelCaseName(), field.camelCaseName());
         } else if (field.type().isBytes()) {
             if (field.zeroCopy()) {
                 headerGenerator.addImport(MessageGenerator.OBJECTS_CLASS);
@@ -1770,7 +1785,8 @@ public final class MessageDataGenerator {
         } else if ((field.type() instanceof FieldType.Int8FieldType) ||
                 (field.type() instanceof FieldType.Int16FieldType) ||
                 (field.type() instanceof FieldType.Int32FieldType) ||
-                (field.type() instanceof FieldType.Int64FieldType)) {
+                (field.type() instanceof FieldType.Int64FieldType) ||
+                (field.type() instanceof FieldType.Float64FieldType)) {
             buffer.printf("+ \"%s%s=\" + %s%n",
                 prefix, field.camelCaseName(), field.camelCaseName());
         } else if (field.type().isString()) {
@@ -1892,6 +1908,18 @@ public final class MessageDataGenerator {
                 }
                 headerGenerator.addImport(MessageGenerator.UUID_CLASS);
                 return "UUID.fromString(\"" + field.defaultString() + "\")";
+            }
+        } else if (field.type() instanceof FieldType.Float64FieldType) {
+            if (field.defaultString().isEmpty()) {
+                return "0.0";
+            } else {
+                try {
+                    Double.parseDouble(field.defaultString());
+                } catch (NumberFormatException e) {
+                    throw new RuntimeException("Invalid default for float64 field " +
+                        field.name() + ": " + field.defaultString(), e);
+                }
+                return "Double.parseDouble(\"" + field.defaultString() + "\")";
             }
         } else if (field.type() instanceof FieldType.StringFieldType) {
             if (field.defaultString().equals("null")) {
