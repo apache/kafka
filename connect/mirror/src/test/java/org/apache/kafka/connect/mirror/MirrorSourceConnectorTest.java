@@ -32,6 +32,7 @@ import org.apache.kafka.clients.admin.NewTopic;
 import org.junit.Test;
 
 import static org.apache.kafka.connect.mirror.MirrorConnectorConfig.TASK_TOPIC_PARTITIONS;
+import static org.apache.kafka.connect.mirror.TestUtils.makeProps;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.assertFalse;
@@ -155,12 +156,7 @@ public class MirrorSourceConnectorTest {
         knownSourceTopicPartitions.add(new TopicPartition("t2", 1));
 
         // MirrorConnectorConfig example for test
-        Map<String, String> props = new HashMap<>();
-        props.put("name", "ConnectorName");
-        props.put("connector.class", "ConnectorClass");
-        props.put("source.cluster.alias", "source1");
-        props.put("target.cluster.alias", "target2");
-        MirrorConnectorConfig config = new MirrorConnectorConfig(props);
+        MirrorConnectorConfig config = new MirrorConnectorConfig(makeProps());
 
         // MirrorSourceConnector as minimum to run taskConfig()
         MirrorSourceConnector connector = new MirrorSourceConnector(knownSourceTopicPartitions, config);
