@@ -42,7 +42,7 @@ public class StoreQueryParams<T> {
 
     public static <T> StoreQueryParams<T> fromNameAndType(final String storeName,
                                                           final QueryableStoreType<T>  queryableStoreType) {
-        return new<T> StoreQueryParams<T>(storeName, queryableStoreType);
+        return new StoreQueryParams<T>(storeName, queryableStoreType);
     }
 
     /**
