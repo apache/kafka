@@ -18,6 +18,7 @@
 package kafka.api
 
 import java.lang.{Long => JLong}
+import java.nio.charset.StandardCharsets
 import java.time.Duration
 import java.util.{Optional, Properties}
 import java.util.concurrent.TimeUnit
@@ -271,8 +272,8 @@ class TransactionsTest extends KafkaServerTestHarness {
         shouldCommit = !shouldCommit
 
         records.foreach { record =>
-          val key = new String(record.key(), "UTF-8")
-          val value = new String(record.value(), "UTF-8")
+          val key = new String(record.key(), StandardCharsets.UTF_8)
+          val value = new String(record.value(), StandardCharsets.UTF_8)
           producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic2, key, value, willBeCommitted = shouldCommit))
         }
 
@@ -280,11 +281,11 @@ class TransactionsTest extends KafkaServerTestHarness {
         if (shouldCommit) {
           producer.commitTransaction()
           recordsProcessed += records.size
-          debug(s"committed transaction.. Last committed record: ${new String(records.last.value(), "UTF-8")}. Num " +
+          debug(s"committed transaction.. Last committed record: ${new String(records.last.value(), StandardCharsets.UTF_8)}. Num " +
             s"records written to $topic2: $recordsProcessed")
         } else {
           producer.abortTransaction()
-          debug(s"aborted transaction Last committed record: ${new String(records.last.value(), "UTF-8")}. Num " +
+          debug(s"aborted transaction Last committed record: ${new String(records.last.value(), StandardCharsets.UTF_8)}. Num " +
             s"records written to $topic2: $recordsProcessed")
           TestUtils.resetToCommittedPositions(consumer)
         }

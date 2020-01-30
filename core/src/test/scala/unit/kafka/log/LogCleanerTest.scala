@@ -19,6 +19,7 @@ package kafka.log
 
 import java.io.{File, RandomAccessFile}
 import java.nio._
+import java.nio.charset.StandardCharsets
 import java.nio.file.Paths
 import java.util.Properties
 import java.util.concurrent.{CountDownLatch, TimeUnit}
@@ -1730,7 +1731,7 @@ class FakeOffsetMap(val slots: Int) extends OffsetMap {
   var lastOffset = -1L
 
   private def keyFor(key: ByteBuffer) =
-    new String(Utils.readBytes(key.duplicate), "UTF-8")
+    new String(Utils.readBytes(key.duplicate), StandardCharsets.UTF_8)
 
   override def put(key: ByteBuffer, offset: Long): Unit = {
     lastOffset = offset
