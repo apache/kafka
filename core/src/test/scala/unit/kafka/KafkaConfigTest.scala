@@ -114,6 +114,7 @@ class KafkaTest {
   private val booleanPropValueToSet = true
   private val stringPropValueToSet = "foo"
   private val passwordPropValueToSet = "ThePa$$word!"
+  private val listPropValueToSet = List("A", "B")
 
   @Test
   def testZkSslClientEnable(): Unit = {
@@ -165,14 +166,14 @@ class KafkaTest {
 
   @Test
   def testZkSslEnabledProtocols(): Unit = {
-    testZkListConfig(KafkaConfig.ZkSslEnabledProtocolsProp, "zookeeper.ssl.enabled.protocols",
-      "zookeeper.ssl.enabledProtocols", config => config.ZkSslEnabledProtocols)
+    testZkConfig(KafkaConfig.ZkSslEnabledProtocolsProp, "zookeeper.ssl.enabled.protocols",
+      "zookeeper.ssl.enabledProtocols", listPropValueToSet.mkString(","), config => config.ZkSslEnabledProtocols, listPropValueToSet.asJava)
   }
 
   @Test
   def testZkSslCipherSuites(): Unit = {
-    testZkListConfig(KafkaConfig.ZkSslCipherSuitesProp, "zookeeper.ssl.cipher.suites",
-      "zookeeper.ssl.ciphersuites", config => config.ZkSslCipherSuites)
+    testZkConfig(KafkaConfig.ZkSslCipherSuitesProp, "zookeeper.ssl.cipher.suites",
+      "zookeeper.ssl.ciphersuites", listPropValueToSet.mkString(","), config => config.ZkSslCipherSuites, listPropValueToSet.asJava)
   }
 
   @Test
@@ -278,33 +279,6 @@ class KafkaTest {
     val config = KafkaConfig.fromProps(Kafka.getPropsFromArgs(Array(propertiesFile, "--override", s"$kafkaPropName=${propValueToSet}")))
     assertEquals(expectedPropertyValue, config.values.get(kafkaPropName)) // appears in the values
     assertEquals(Some(expectedPropertyValue), getPropValueFrom(config)) // appears in the property
-  }
-
-  private def testZkListConfig(kafkaPropName: String, expectedKafkaPropName: String, sysPropName: String,
-                               getPropValueFrom: (KafkaConfig) => Option[util.List[String]]): Unit = {
-    assertEquals(expectedKafkaPropName, kafkaPropName)
-    val propertiesFile = prepareDefaultConfig()
-    // first make sure there is no default
-    val emptyConfig = KafkaConfig.fromProps(Kafka.getPropsFromArgs(Array(propertiesFile)))
-    assertNull(emptyConfig.originals.get(kafkaPropName)) // doesn't appear in the originals
-    assertNull(emptyConfig.values.get(kafkaPropName)) // doesn't appear in the values
-    assertEquals(None, getPropValueFrom(emptyConfig)) // has no default value
-    // next set system property alone
-    val expectedPropValue = List("A", "B")
-    try {
-      System.setProperty(sysPropName, s"${expectedPropValue.mkString(",")}")
-      // need to create a new Kafka config for the system property to be recognized
-      val config = KafkaConfig.fromProps(Kafka.getPropsFromArgs(Array(propertiesFile)))
-      assertNull(config.originals.get(kafkaPropName)) // doesn't appear in the originals
-      assertNull(config.values.get(kafkaPropName)) // doesn't appear in the values
-      assertEquals(Some(expectedPropValue.asJava), getPropValueFrom(config)) // but system property does impact the ultimate value of the property
-    } finally {
-      System.clearProperty(sysPropName)
-    }
-    // finally set Kafka config alone
-    val config = KafkaConfig.fromProps(Kafka.getPropsFromArgs(Array(propertiesFile, "--override", s"$kafkaPropName=${expectedPropValue.mkString(",")}")))
-    assertEquals(expectedPropValue.asJava, config.values.get(kafkaPropName)) // appears in the values
-    assertEquals(Some(expectedPropValue.asJava), getPropValueFrom(config))
   }
 
   def prepareDefaultConfig(): String = {
