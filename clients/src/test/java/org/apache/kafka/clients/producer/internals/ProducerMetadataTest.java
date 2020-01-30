@@ -61,7 +61,7 @@ public class ProducerMetadataTest {
         String topic = "my-topic";
         metadata.add(topic, time);
 
-        metadata.update(responseWithTopics(Collections.emptySet()), time);
+        metadata.updateWithCurrentRequestVersion(responseWithTopics(Collections.emptySet()), false, time);
         assertTrue("No update needed.", metadata.timeToNextUpdate(time) > 0);
         metadata.requestUpdate();
         assertTrue("Still no updated needed due to backoff", metadata.timeToNextUpdate(time) > 0);
@@ -75,7 +75,7 @@ public class ProducerMetadataTest {
         // This simulates the metadata update sequence in KafkaProducer
         while (t1.isAlive() || t2.isAlive()) {
             if (metadata.timeToNextUpdate(time) == 0) {
-                metadata.update(responseWithCurrentTopics(), time);
+                metadata.updateWithCurrentRequestVersion(responseWithCurrentTopics(), false, time);
                 time += refreshBackoffMs;
             }
             Thread.sleep(1);
@@ -90,7 +90,7 @@ public class ProducerMetadataTest {
     @Test
     public void testMetadataAwaitAfterClose() throws InterruptedException {
         long time = 0;
-        metadata.update(responseWithCurrentTopics(), time);
+        metadata.updateWithCurrentRequestVersion(responseWithCurrentTopics(), false, time);
         assertTrue("No update needed.", metadata.timeToNextUpdate(time) > 0);
         metadata.requestUpdate();
         assertTrue("Still no updated needed due to backoff", metadata.timeToNextUpdate(time) > 0);
@@ -115,7 +115,7 @@ public class ProducerMetadataTest {
     @Test
     public void testMetadataUpdateWaitTime() throws Exception {
         long time = 0;
-        metadata.update(responseWithCurrentTopics(), time);
+        metadata.updateWithCurrentRequestVersion(responseWithCurrentTopics(), false, time);
         assertTrue("No update needed.", metadata.timeToNextUpdate(time) > 0);
         // first try with a max wait time of 0 and ensure that this returns back without waiting forever
         try {
@@ -139,13 +139,13 @@ public class ProducerMetadataTest {
         long now = 10000;
 
         // New topic added to fetch set and update requested. It should allow immediate update.
-        metadata.update(responseWithCurrentTopics(), now);
+        metadata.updateWithCurrentRequestVersion(responseWithCurrentTopics(), false, now);
         metadata.add("new-topic", now);
         assertEquals(0, metadata.timeToNextUpdate(now));
 
         // Even though add is called, immediate update isn't necessary if the new topic set isn't
         // containing a new topic,
-        metadata.update(responseWithCurrentTopics(), now);
+        metadata.updateWithCurrentRequestVersion(responseWithCurrentTopics(), false, now);
         metadata.add("new-topic", now);
         assertEquals(metadataExpireMs, metadata.timeToNextUpdate(now));
 
@@ -160,20 +160,20 @@ public class ProducerMetadataTest {
         long time = 0;
         final String topic1 = "topic1";
         metadata.add(topic1, time);
-        metadata.update(responseWithCurrentTopics(), time);
+        metadata.updateWithCurrentRequestVersion(responseWithCurrentTopics(), false, time);
         assertTrue(metadata.containsTopic(topic1));
 
         time += METADATA_IDLE_MS;
-        metadata.update(responseWithCurrentTopics(), time);
+        metadata.updateWithCurrentRequestVersion(responseWithCurrentTopics(), false, time);
         assertFalse("Unused topic not expired", metadata.containsTopic(topic1));
 
         // Test that topic is not expired if used within the expiry interval
         final String topic2 = "topic2";
         metadata.add(topic2, time);
-        metadata.update(responseWithCurrentTopics(), time);
+        metadata.updateWithCurrentRequestVersion(responseWithCurrentTopics(), false, time);
         for (int i = 0; i < 3; i++) {
             time += METADATA_IDLE_MS / 2;
-            metadata.update(responseWithCurrentTopics(), time);
+            metadata.updateWithCurrentRequestVersion(responseWithCurrentTopics(), false, time);
             assertTrue("Topic expired even though in use", metadata.containsTopic(topic2));
             metadata.add(topic2, time);
         }
@@ -183,7 +183,7 @@ public class ProducerMetadataTest {
         final String topic3 = "topic3";
         metadata.add(topic3, time);
         time += METADATA_IDLE_MS * 2;
-        metadata.update(responseWithCurrentTopics(), time);
+        metadata.updateWithCurrentRequestVersion(responseWithCurrentTopics(), false, time);
         assertTrue("Topic expired while awaiting metadata", metadata.containsTopic(topic3));
     }
 
@@ -207,7 +207,7 @@ public class ProducerMetadataTest {
 
         // Perform the partial update. Verify the topic is no longer considered "new".
         now += 1000;
-        metadata.update(responseWithTopics(Collections.singleton(topic1)), true, now);
+        metadata.updateWithCurrentRequestVersion(responseWithTopics(Collections.singleton(topic1)), true, now);
         assertFalse(metadata.updateRequested());
         assertEquals(metadata.topics(), Collections.singleton(topic1));
         assertEquals(metadata.newTopics(), Collections.emptySet());
@@ -236,7 +236,7 @@ public class ProducerMetadataTest {
         // Perform the partial update for a subset of the new topics.
         now += 1000;
         assertTrue(metadata.updateRequested());
-        metadata.update(responseWithTopics(Collections.singleton(topic2)), true, now);
+        metadata.updateWithCurrentRequestVersion(responseWithTopics(Collections.singleton(topic2)), true, now);
         assertEquals(metadata.topics(), new HashSet<>(Arrays.asList(topic1, topic2, topic3)));
         assertEquals(metadata.newTopics(), Collections.singleton(topic3));
     }
@@ -260,7 +260,7 @@ public class ProducerMetadataTest {
 
         // Perform the partial update. Verify no additional (full) updates are requested.
         now += 1000;
-        metadata.update(responseWithTopics(Collections.singleton(topic1)), true, now);
+        metadata.updateWithCurrentRequestVersion(responseWithTopics(Collections.singleton(topic1)), true, now);
         assertFalse(metadata.updateRequested());
 
         // Request an update for topic1 again. Such a request may occur when the leader
@@ -270,12 +270,12 @@ public class ProducerMetadataTest {
 
         // Perform a partial update for the topic. This should not clear the full update.
         now += 1000;
-        metadata.update(responseWithTopics(Collections.singleton(topic1)), true, now);
+        metadata.updateWithCurrentRequestVersion(responseWithTopics(Collections.singleton(topic1)), true, now);
         assertTrue(metadata.updateRequested());
 
         // Perform the full update. This should clear the update request.
         now += 1000;
-        metadata.update(responseWithTopics(new HashSet<>(Arrays.asList(topic1, topic2))), false, now);
+        metadata.updateWithCurrentRequestVersion(responseWithTopics(new HashSet<>(Arrays.asList(topic1, topic2))), false, now);
         assertFalse(metadata.updateRequested());
     }
 

@@ -239,10 +239,7 @@ public class Metadata implements Closeable {
     /**
      * Update metadata assuming the current request version. This is mainly for convenience in testing.
      */
-    public synchronized void update(MetadataResponse response, long nowMs) {
-        this.update(this.requestVersion, response, false, nowMs);
-    }
-    public synchronized void update(MetadataResponse response, boolean isPartialUpdate, long nowMs) {
+    public synchronized void updateWithCurrentRequestVersion(MetadataResponse response, boolean isPartialUpdate, long nowMs) {
         this.update(this.requestVersion, response, isPartialUpdate, nowMs);
     }
 

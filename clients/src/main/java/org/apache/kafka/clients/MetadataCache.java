@@ -168,8 +168,7 @@ public class MetadataCache {
         // For all topic metadata that's to be retained, we must update the partition info's nodes since it's possible that
         // a node has been modified or removed. Update the node object for known nodes, otherwise clear all nodes that were
         // removed and let the metadata resolution process request an update, if necessary.
-        ArrayList<PartitionInfoAndEpoch> newPartitions = new ArrayList<>(addPartitions.size());
-        newPartitions.addAll(addPartitions);
+        ArrayList<PartitionInfoAndEpoch> newPartitions = new ArrayList<>(addPartitions);
         for (Map.Entry<TopicPartition, MetadataCache.PartitionInfoAndEpoch> entry : metadataByPartition.entrySet()) {
             if (!shouldRetainTopic.test(entry.getKey().topic())) {
                 continue;
