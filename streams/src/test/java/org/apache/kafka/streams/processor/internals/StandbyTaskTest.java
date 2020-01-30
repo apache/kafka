@@ -115,6 +115,8 @@ public class StandbyTaskTest {
 
     @Before
     public void setup() throws Exception {
+        EasyMock.expect(stateManager.taskId()).andReturn(taskId).anyTimes();
+
         restoreStateConsumer.reset();
         restoreStateConsumer.updatePartitions(storeChangelogTopicName1, asList(
             new PartitionInfo(storeChangelogTopicName1, 0, Node.noNode(), new Node[0], new Node[0]),
@@ -297,6 +299,7 @@ public class StandbyTaskTest {
 
         EasyMock.verify(stateManager);
         EasyMock.reset(stateManager);
+        EasyMock.replay(stateManager);
     }
 
     @Test
@@ -317,6 +320,7 @@ public class StandbyTaskTest {
 
         EasyMock.verify(stateManager);
         EasyMock.reset(stateManager);
+        EasyMock.replay(stateManager);
     }
 
     @Test
@@ -338,6 +342,7 @@ public class StandbyTaskTest {
 
         EasyMock.verify(stateManager);
         EasyMock.reset(stateManager);
+        EasyMock.replay(stateManager);
     }
 
     @Test

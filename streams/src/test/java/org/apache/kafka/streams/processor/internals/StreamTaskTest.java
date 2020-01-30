@@ -193,6 +193,8 @@ public class StreamTaskTest {
 
     @Before
     public void setup() {
+        EasyMock.expect(stateManager.taskId()).andReturn(taskId).anyTimes();
+
         consumer.assign(asList(partition1, partition2));
         stateDirectory = new StateDirectory(createConfig(false, "100"), new MockTime(), true);
     }
@@ -939,6 +941,8 @@ public class StreamTaskTest {
 
     @Test
     public void shouldWrapKafkaExceptionWithStreamsExceptionWhenProcess() {
+        EasyMock.replay(stateManager);
+
         task = createFaultyStatefulTask(createConfig(false, "100"));
 
         task.initializeIfNeeded();
@@ -1168,7 +1172,7 @@ public class StreamTaskTest {
     }
 
     @Test
-    public void shouldThrowProcessorStateExceptionWhenFetchCommittedFailed() {
+    public void shouldThrowStreamsExceptionWhenFetchCommittedFailed() {
         EasyMock.expect(stateManager.changelogPartitions()).andReturn(Collections.singleton(partition1));
         EasyMock.replay(stateManager);
 
@@ -1183,7 +1187,7 @@ public class StreamTaskTest {
 
         task.initializeIfNeeded();
 
-        assertThrows(ProcessorStateException.class, task::completeRestoration);
+        assertThrows(StreamsException.class, task::completeRestoration);
     }
 
     @Test
@@ -1319,6 +1323,7 @@ public class StreamTaskTest {
 
         EasyMock.verify(stateManager);
         EasyMock.reset(stateManager);
+        EasyMock.replay(stateManager);
     }
 
     @Test
@@ -1349,6 +1354,7 @@ public class StreamTaskTest {
 
         EasyMock.verify(stateManager);
         EasyMock.reset(stateManager);
+        EasyMock.replay(stateManager);
     }
 
     @Test
@@ -1379,6 +1385,7 @@ public class StreamTaskTest {
 
         EasyMock.verify(stateManager);
         EasyMock.reset(stateManager);
+        EasyMock.replay(stateManager);
     }
 
     @Test

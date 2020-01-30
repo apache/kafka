@@ -665,12 +665,12 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         if (state().hasBeenRunning()) {
             // close the processors
             // make sure close() is called for each node even when there is a RuntimeException
-            StreamsException exception = null;
+            RuntimeException exception = null;
             for (final ProcessorNode node : topology.processors()) {
                 processorContext.setCurrentNode(node);
                 try {
                     node.close();
-                } catch (final StreamsException e) {
+                } catch (final RuntimeException e) {
                     exception = e;
                 } finally {
                     processorContext.setCurrentNode(null);
