@@ -291,15 +291,16 @@ object ConsumerGroupCommand extends Logging {
     }
 
     private def printStates(states: Map[String, GroupState]): Unit = {
-      for ((groupId, state) <- states) {
-        if (shouldPrintMemberState(groupId, Some(state.state), Some(1))) {
-          val coordinator = s"${state.coordinator.host}:${state.coordinator.port} (${state.coordinator.idString})"
-          val coordinatorColLen = Math.max(25, coordinator.length)
-          print(s"\n%${-coordinatorColLen}s %-25s %-20s %-15s %s".format("GROUP", "COORDINATOR (ID)", "ASSIGNMENT-STRATEGY", "STATE", "#MEMBERS"))
-          print(s"\n%${-coordinatorColLen}s %-25s %-20s %-15s %s".format(state.group, coordinator, state.assignmentStrategy, state.state, state.numMembers))
-          println()
-        }
-      }
+      val stateValues = states.filter({ case (groupId, state) => shouldPrintMemberState(groupId, Some(state.state), Some(1)) })
+        .values
+        .map(state => (state.group, s"${state.coordinator.host}:${state.coordinator.port} (${state.coordinator.idString})",
+          state.assignmentStrategy, state.state, state.numMembers)).toList
+
+      val maxCoordinatorColLen =  if (stateValues.nonEmpty) Math.max(25, stateValues.map(_._1.length).max) else 25
+      print(s"\n%${-maxCoordinatorColLen}s %-25s %-20s %-15s %s".format("GROUP", "COORDINATOR (ID)", "ASSIGNMENT-STRATEGY", "STATE", "#MEMBERS"))
+
+      stateValues.foreach({case (group,coordinator,  assignmentStrategy,state, numMembers ) =>
+        print(s"\n%${-maxCoordinatorColLen}s %-25s %-20s %-15s %s".format(group, coordinator, assignmentStrategy, state, numMembers))})
     }
 
     def describeGroups(): Unit = {
