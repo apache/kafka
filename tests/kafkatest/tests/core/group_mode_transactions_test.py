@@ -108,6 +108,7 @@ class GroupModeTransactionsTest(Test):
             max_messages=-1,
             transaction_size=self.transaction_size,
             transaction_timeout=self.transaction_timeout,
+            use_group_metadata=True,
             group_mode=True
         )
         message_copier.start()
@@ -116,13 +117,13 @@ class GroupModeTransactionsTest(Test):
                    err_msg="Message copier failed to start after 10 s")
         return message_copier
 
-    def bounce_copiers(self, copiers, clean_shutdown):
+    def bounce_copiers(self, copiers, clean_shutdown, timeout_sec=60):
         for _ in range(3):
             for copier in copiers:
                 wait_until(lambda: copier.progress_percent() >= 20.0,
-                           timeout_sec=30,
-                           err_msg="%s : Message copier didn't make enough progress in 30s. Current progress: %s" \
-                                   % (copier.transactional_id, str(copier.progress_percent())))
+                           timeout_sec=timeout_sec,
+                           err_msg="%s : Message copier didn't make enough progress in %ds. Current progress: %s" \
+                                   % (copier.transactional_id, timeout_sec, str(copier.progress_percent())))
                 self.logger.info("%s - progress: %s" % (copier.transactional_id,
                                                         str(copier.progress_percent())))
                 copier.restart(clean_shutdown)

@@ -130,8 +130,7 @@ class TransactionStateManager(brokerId: Int,
             txnMetadata.state match {
               case Ongoing =>
                 txnMetadata.txnStartTimestamp + txnMetadata.txnTimeoutMs < now
-              case _ =>
-                false
+              case _ => false
             }
           }
         }.map { case (txnId, txnMetadata) =>

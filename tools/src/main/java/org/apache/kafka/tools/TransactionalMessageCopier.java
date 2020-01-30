@@ -259,13 +259,14 @@ public class TransactionalMessageCopier {
         return json;
     }
 
-    private static String statusAsJson(long totalProcessed, long consumed, long remaining, String transactionalId) {
+    private static String statusAsJson(long totalProcessed, long consumed, long remaining, String transactionalId, String stage) {
         Map<String, Object> statusData = new HashMap<>();
-        statusData.put("txn.id", transactionalId);
+        statusData.put("progress", transactionalId);
         statusData.put("totalProcessed", totalProcessed);
         statusData.put("consumed", consumed);
         statusData.put("remaining", remaining);
         statusData.put("time", FORMAT.format(new Date()));
+        statusData.put("stage", stage);
         return toJsonString(statusData);
     }
 
@@ -306,14 +307,12 @@ public class TransactionalMessageCopier {
 
                 @Override
                 public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
-                    long messageSum = 0;
-                    for (TopicPartition partition : partitions) {
-                        messageSum += messagesRemaining(consumer, partition);
-                    }
-                    messageCap.set(messageSum);
+                    messageCap.set(partitions.stream()
+                        .mapToLong(partition -> messagesRemaining(consumer, partition)).sum());
                     numMessagesProcessedSinceLastRebalance.set(0);
-
-                    log.info("set messageCap to {}", messageSum);
+                    // We use message cap for remaining here as the remainingMessages are not set yet.
+                    System.out.println(statusAsJson(totalMessageProcessed.get(),
+                        numMessagesProcessedSinceLastRebalance.get(), messageCap.get(), transactionalId, "RebalanceComplete"));
                 }
             });
         } else {
@@ -345,7 +344,7 @@ public class TransactionalMessageCopier {
             Random random = new Random();
             while (remainingMessages.get() > 0) {
                 System.out.println(statusAsJson(totalMessageProcessed.get(),
-                    numMessagesProcessedSinceLastRebalance.get(), remainingMessages.get(), transactionalId));
+                    numMessagesProcessedSinceLastRebalance.get(), remainingMessages.get(), transactionalId, "ProcessLoop"));
                 if (isShuttingDown.get())
                     break;
                 int messagesInCurrentTransaction = 0;
