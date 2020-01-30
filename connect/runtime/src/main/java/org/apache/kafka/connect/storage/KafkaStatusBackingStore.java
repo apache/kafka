@@ -55,6 +55,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
@@ -370,21 +371,21 @@ public class KafkaStatusBackingStore implements StatusBackingStore {
 
     @Override
     public TopicStatus getTopic(String connector, String topic) {
-        ConcurrentMap<String, TopicStatus> activeTopics = topics.get(connector);
-        return activeTopics != null ? activeTopics.get(topic) : null;
+        ConcurrentMap<String, TopicStatus> activeTopics = topics.get(Objects.requireNonNull(connector));
+        return activeTopics != null ? activeTopics.get(Objects.requireNonNull(topic)) : null;
     }
 
     @Override
     public Collection<TopicStatus> getAllTopics(String connector) {
-        ConcurrentMap<String, TopicStatus> activeTopics = topics.get(connector);
+        ConcurrentMap<String, TopicStatus> activeTopics = topics.get(Objects.requireNonNull(connector));
         return activeTopics != null
-               ? Collections.unmodifiableCollection(activeTopics.values())
+               ? Collections.unmodifiableCollection(Objects.requireNonNull(activeTopics.values()))
                : Collections.emptySet();
     }
 
     @Override
     public void deleteTopic(String connector, String topic) {
-        sendTopicStatus(connector, topic, null);
+        sendTopicStatus(Objects.requireNonNull(connector), Objects.requireNonNull(topic), null);
     }
 
     @Override

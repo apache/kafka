@@ -148,18 +148,22 @@ public interface Herder {
 
     /**
      * Lookup the set of topics currently used by a connector.
+     *
      * @param connName name of the connector
+     * @return the set of active topics
      */
-    Map<String, ActiveTopicsInfo> connectorActiveTopics(String connName);
+    ActiveTopicsInfo connectorActiveTopics(String connName);
 
     /**
-     * Lookup the set of topics currently used by a connector.
+     * Request to asynchronously reset the active topics for the named connector.
+     *
      * @param connName name of the connector
      */
     void resetConnectorActiveTopics(String connName);
 
     /**
      * Return a reference to the status backing store used by this herder.
+     *
      * @return the status backing store used by this herder
      */
     StatusBackingStore statusBackingStore();

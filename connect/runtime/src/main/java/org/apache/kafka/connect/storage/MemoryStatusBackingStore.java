@@ -28,6 +28,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
@@ -107,13 +108,13 @@ public class MemoryStatusBackingStore implements StatusBackingStore {
 
     @Override
     public TopicStatus getTopic(String connector, String topic) {
-        ConcurrentMap<String, TopicStatus> activeTopics = topics.get(connector);
-        return activeTopics != null ? activeTopics.get(topic) : null;
+        ConcurrentMap<String, TopicStatus> activeTopics = topics.get(Objects.requireNonNull(connector));
+        return activeTopics != null ? activeTopics.get(Objects.requireNonNull(topic)) : null;
     }
 
     @Override
     public Collection<TopicStatus> getAllTopics(String connector) {
-        ConcurrentMap<String, TopicStatus> activeTopics = topics.get(connector);
+        ConcurrentMap<String, TopicStatus> activeTopics = topics.get(Objects.requireNonNull(connector));
         return activeTopics != null
                ? Collections.unmodifiableCollection(activeTopics.values())
                : Collections.emptySet();
@@ -121,9 +122,9 @@ public class MemoryStatusBackingStore implements StatusBackingStore {
 
     @Override
     public void deleteTopic(String connector, String topic) {
-        ConcurrentMap<String, TopicStatus> activeTopics = topics.get(connector);
+        ConcurrentMap<String, TopicStatus> activeTopics = topics.get(Objects.requireNonNull(connector));
         if (activeTopics != null) {
-            activeTopics.remove(topic);
+            activeTopics.remove(Objects.requireNonNull(topic));
         }
     }
 

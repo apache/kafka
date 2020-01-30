@@ -96,23 +96,23 @@ public interface StatusBackingStore {
 
     /**
      * Get the status of a connector's topic if the connector is actively using this topic
-     * @param connector the connector name
-     * @param topic the topic name
+     * @param connector the connector name; never null
+     * @param topic the topic name; never null
      * @return the state or null if there is none
      */
     TopicStatus getTopic(String connector, String topic);
 
     /**
      * Get the states of all topics that a connector is using.
-     * @param connector the connector name
-     * @return a collection of topic states
+     * @param connector the connector name; never null
+     * @return a collection of topic states or an empty collection if there is none
      */
     Collection<TopicStatus> getAllTopics(String connector);
 
     /**
      * Delete this topic from the connector's set of active topics
-     * @param connector the connector name
-     * @param topic the topic name
+     * @param connector the connector name; never null
+     * @param topic the topic name; never null
      */
     void deleteTopic(String connector, String topic);
 

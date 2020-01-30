@@ -263,11 +263,11 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
     }
 
     @Override
-    public Map<String, ActiveTopicsInfo> connectorActiveTopics(String connName) {
+    public ActiveTopicsInfo connectorActiveTopics(String connName) {
         Collection<String> topics = statusBackingStore.getAllTopics(connName).stream()
                 .map(TopicStatus::topic)
                 .collect(Collectors.toList());
-        return Collections.singletonMap(connName, new ActiveTopicsInfo(connName, topics));
+        return new ActiveTopicsInfo(connName, topics);
     }
 
     @Override

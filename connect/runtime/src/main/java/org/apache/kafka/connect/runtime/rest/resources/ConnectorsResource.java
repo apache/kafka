@@ -58,6 +58,7 @@ import javax.ws.rs.core.UriBuilder;
 import javax.ws.rs.core.UriInfo;
 
 import java.net.URI;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -179,7 +180,8 @@ public class ConnectorsResource {
     @GET
     @Path("/{connector}/topics")
     public Map<String, ActiveTopicsInfo> getConnectorActiveTopics(final @PathParam("connector") String connector) throws Throwable {
-        return herder.connectorActiveTopics(connector);
+        ActiveTopicsInfo info = herder.connectorActiveTopics(connector);
+        return Collections.singletonMap(info.connector(), info);
     }
 
     @PUT

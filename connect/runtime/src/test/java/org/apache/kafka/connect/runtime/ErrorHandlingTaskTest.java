@@ -377,7 +377,7 @@ public class ErrorHandlingTaskTest {
                     new ConnectorTaskId(connectorCapture.getValue(), 0),
                     Time.SYSTEM.milliseconds()));
         } else {
-            expect.andStubAnswer(() -> new TopicStatus(
+            expect.andAnswer(() -> new TopicStatus(
                     topicCapture.getValue(),
                     new ConnectorTaskId(connectorCapture.getValue(), 0),
                     Time.SYSTEM.milliseconds()));
