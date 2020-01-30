@@ -254,6 +254,26 @@ public final class ByteUtils {
     }
 
     /**
+     * Read a double-precision 64-bit format IEEE 754 value.
+     *
+     * @param in The input to read from
+     * @return The double value read
+     */
+    public static double readDouble(DataInput in) throws IOException {
+        return in.readDouble();
+    }
+
+    /**
+     * Read a double-precision 64-bit format IEEE 754 value.
+     *
+     * @param buffer The buffer to read from
+     * @return The long value read
+     */
+    public static double readDouble(ByteBuffer buffer) {
+        return buffer.getDouble();
+    }
+
+    /**
      * Write the given integer following the variable-length unsigned encoding from
      * <a href="http://code.google.com/apis/protocolbuffers/docs/encoding.html"> Google Protocol Buffers</a>
      * into the buffer.
@@ -344,6 +364,26 @@ public final class ByteUtils {
             v >>>= 7;
         }
         buffer.put((byte) v);
+    }
+
+    /**
+     * Write the given double following the double-precision 64-bit format IEEE 754 value into the output.
+     *
+     * @param value The value to write
+     * @param out The output to write to
+     */
+    public static void writeDouble(double value, DataOutput out) throws IOException {
+        out.writeDouble(value);
+    }
+
+    /**
+     * Write the given double following the double-precision 64-bit format IEEE 754 value into the buffer.
+     *
+     * @param value The value to write
+     * @param buffer The buffer to write to
+     */
+    public static void writeDouble(double value, ByteBuffer buffer) {
+        buffer.putDouble(value);
     }
 
     /**
