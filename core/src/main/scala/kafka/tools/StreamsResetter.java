@@ -27,6 +27,8 @@ import org.apache.kafka.clients.admin.DeleteTopicsResult;
 import org.apache.kafka.clients.admin.DescribeConsumerGroupsOptions;
 import org.apache.kafka.clients.admin.DescribeConsumerGroupsResult;
 import org.apache.kafka.clients.admin.MemberDescription;
+import org.apache.kafka.clients.admin.RemoveMembersFromConsumerGroupOptions;
+import org.apache.kafka.clients.admin.RemoveMembersFromConsumerGroupResult;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
@@ -34,6 +36,7 @@ import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.annotation.InterfaceStability;
+import org.apache.kafka.common.message.LeaveGroupRequestData;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Utils;
@@ -106,6 +109,7 @@ public class StreamsResetter {
     private static OptionSpec versionOption;
     private static OptionSpecBuilder executeOption;
     private static OptionSpec<String> commandConfigOption;
+    private static OptionSpec<Boolean> forceDeleteMemberOption;
 
     private static String usage = "This tool helps to quickly reset an application in order to reprocess "
             + "its data from scratch.\n"
@@ -149,7 +153,7 @@ public class StreamsResetter {
             properties.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, options.valueOf(bootstrapServerOption));
 
             adminClient = Admin.create(properties);
-            validateNoActiveConsumers(groupId, adminClient);
+            maybeDeleteActiveConsumers(groupId, adminClient);
 
             allTopics.clear();
             allTopics.addAll(adminClient.listTopics().names().get(60, TimeUnit.SECONDS));
@@ -176,20 +180,37 @@ public class StreamsResetter {
         return exitCode;
     }
 
-    private void validateNoActiveConsumers(final String groupId,
-                                           final Admin adminClient)
+    private void maybeDeleteActiveConsumers(final String groupId,
+                                                               final Admin adminClient)
         throws ExecutionException, InterruptedException {
-
         final DescribeConsumerGroupsResult describeResult = adminClient.describeConsumerGroups(
             Collections.singleton(groupId),
             new DescribeConsumerGroupsOptions().timeoutMs(10 * 1000));
-        final List<MemberDescription> members =
-            new ArrayList<>(describeResult.describedGroups().get(groupId).get().members());
-        if (!members.isEmpty()) {
-            throw new IllegalStateException("Consumer group '" + groupId + "' is still active "
-                    + "and has following members: " + members + ". "
-                    + "Make sure to stop all running application instances before running the reset tool.");
+        List<MemberDescription> activeMembers =  new ArrayList<>(describeResult.describedGroups().get(groupId).get().members());
+        if (!activeMembers.isEmpty()) {
+            if (options.valueOf(forceDeleteMemberOption)) {
+                forceDeleteMembers(groupId, adminClient, activeMembers);
+            } else {
+                throw new IllegalStateException("Consumer group '" + groupId + "' is still active "
+                        + "and has following members: " + activeMembers + ". "
+                        + "Make sure to stop all running application instances before running the reset tool." +
+                        "Try set '--force-delete-member true' in the cmdline to force delete active members.");
+            }
         }
+    }
+
+    private RemoveMembersFromConsumerGroupResult forceDeleteMembers(final String groupId, final Admin adminClient, final List<MemberDescription> members) {
+        List<LeaveGroupRequestData.MemberIdentity> membersToDelete = new ArrayList<>();
+        for (MemberDescription member: members) {
+            LeaveGroupRequestData.MemberIdentity memberToDelete = new LeaveGroupRequestData.MemberIdentity();
+            if (member.groupInstanceId().isPresent()) {
+                memberToDelete.setGroupInstanceId(member.groupInstanceId().get());
+            } else {
+                memberToDelete.setMemberId(member.consumerId());
+            }
+            membersToDelete.add(memberToDelete);
+        }
+        return adminClient.removeMembersFromConsumerGroup(groupId, new RemoveMembersFromConsumerGroupOptions(membersToDelete));
     }
 
     private void parseArguments(final String[] args) {
@@ -236,6 +257,7 @@ public class StreamsResetter {
             .withRequiredArg()
             .ofType(String.class)
             .describedAs("file name");
+        forceDeleteMemberOption = optionParser.accepts("force-delete-member", "Force delete member when long session time out has been configured").withRequiredArg().ofType(Boolean.class).defaultsTo(false);
         executeOption = optionParser.accepts("execute", "Execute the command.");
         dryRunOption = optionParser.accepts("dry-run", "Display the actions that would be performed without executing the reset commands.");
         helpOption = optionParser.accepts("help", "Print usage information.").forHelp();

@@ -38,9 +38,9 @@ import static org.junit.Assert.assertThrows;
 
 public class RemoveMembersFromConsumerGroupResultTest {
 
-    private final MemberToRemove instanceOne = new MemberToRemove("instance-1");
-    private final MemberToRemove instanceTwo = new MemberToRemove("instance-2");
-    private Set<MemberToRemove> membersToRemove;
+    private final MemberIdentity instanceOne = new MemberIdentity().setGroupInstanceId("instance-1");
+    private final MemberIdentity instanceTwo = new MemberIdentity().setGroupInstanceId("instance-2");
+    private Set<MemberIdentity> membersToRemove;
     private Map<MemberIdentity, Errors> errorsMap;
 
     private KafkaFutureImpl<Map<MemberIdentity, Errors>> memberFutures;
@@ -53,8 +53,8 @@ public class RemoveMembersFromConsumerGroupResultTest {
         membersToRemove.add(instanceTwo);
 
         errorsMap = new HashMap<>();
-        errorsMap.put(instanceOne.toMemberIdentity(), Errors.NONE);
-        errorsMap.put(instanceTwo.toMemberIdentity(), Errors.FENCED_INSTANCE_ID);
+        errorsMap.put(instanceOne, Errors.NONE);
+        errorsMap.put(instanceTwo, Errors.FENCED_INSTANCE_ID);
     }
 
     @Test
@@ -72,7 +72,7 @@ public class RemoveMembersFromConsumerGroupResultTest {
 
     @Test
     public void testMemberMissingErrorInRequestConstructor() throws InterruptedException, ExecutionException {
-        errorsMap.remove(instanceTwo.toMemberIdentity());
+        errorsMap.remove(instanceTwo);
         memberFutures.complete(errorsMap);
         assertFalse(memberFutures.isCompletedExceptionally());
         RemoveMembersFromConsumerGroupResult missingMemberResult =
@@ -87,15 +87,14 @@ public class RemoveMembersFromConsumerGroupResultTest {
     public void testMemberLevelErrorInResponseConstructor() throws InterruptedException, ExecutionException {
         RemoveMembersFromConsumerGroupResult memberLevelErrorResult = createAndVerifyMemberLevelError();
         assertThrows(IllegalArgumentException.class, () -> memberLevelErrorResult.memberResult(
-            new MemberToRemove("invalid-instance-id"))
-        );
+            new MemberIdentity().setGroupInstanceId("invalid-instance-id")));
     }
 
     @Test
     public void testNoErrorConstructor() throws ExecutionException, InterruptedException {
         Map<MemberIdentity, Errors> errorsMap = new HashMap<>();
-        errorsMap.put(instanceOne.toMemberIdentity(), Errors.NONE);
-        errorsMap.put(instanceTwo.toMemberIdentity(), Errors.NONE);
+        errorsMap.put(instanceOne, Errors.NONE);
+        errorsMap.put(instanceTwo, Errors.NONE);
         RemoveMembersFromConsumerGroupResult noErrorResult =
             new RemoveMembersFromConsumerGroupResult(memberFutures, membersToRemove);
         memberFutures.complete(errorsMap);

@@ -32,10 +32,10 @@ import java.util.Set;
 public class RemoveMembersFromConsumerGroupResult {
 
     private final KafkaFuture<Map<MemberIdentity, Errors>> future;
-    private final Set<MemberToRemove> memberInfos;
+    private final Set<MemberIdentity> memberInfos;
 
     RemoveMembersFromConsumerGroupResult(KafkaFuture<Map<MemberIdentity, Errors>> future,
-                                         Set<MemberToRemove> memberInfos) {
+                                         Set<MemberIdentity> memberInfos) {
         this.future = future;
         this.memberInfos = memberInfos;
     }
@@ -51,8 +51,8 @@ public class RemoveMembersFromConsumerGroupResult {
             if (throwable != null) {
                 result.completeExceptionally(throwable);
             } else {
-                for (MemberToRemove memberToRemove : memberInfos) {
-                    if (maybeCompleteExceptionally(memberErrors, memberToRemove.toMemberIdentity(), result)) {
+                for (MemberIdentity member : memberInfos) {
+                    if (maybeCompleteExceptionally(memberErrors, member, result)) {
                         return;
                     }
                 }
@@ -65,7 +65,7 @@ public class RemoveMembersFromConsumerGroupResult {
     /**
      * Returns the selected member future.
      */
-    public KafkaFuture<Void> memberResult(MemberToRemove member) {
+    public KafkaFuture<Void> memberResult(MemberIdentity member) {
         if (!memberInfos.contains(member)) {
             throw new IllegalArgumentException("Member " + member + " was not included in the original request");
         }
@@ -74,7 +74,7 @@ public class RemoveMembersFromConsumerGroupResult {
         this.future.whenComplete((memberErrors, throwable) -> {
             if (throwable != null) {
                 result.completeExceptionally(throwable);
-            } else if (!maybeCompleteExceptionally(memberErrors, member.toMemberIdentity(), result)) {
+            } else if (!maybeCompleteExceptionally(memberErrors, member, result)) {
                 result.complete(null);
             }
         });

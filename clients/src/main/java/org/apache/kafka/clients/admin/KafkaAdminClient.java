@@ -3492,8 +3492,7 @@ public class KafkaAdminClient extends AdminClient {
             @Override
             LeaveGroupRequest.Builder createRequest(int timeoutMs) {
                 return new LeaveGroupRequest.Builder(context.groupId(),
-                                                     context.options().members().stream().map(
-                                                         MemberToRemove::toMemberIdentity).collect(Collectors.toList()));
+                                                     context.options().members().stream().collect(Collectors.toList()));
             }
 
             @Override

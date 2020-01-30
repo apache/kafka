@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.admin;
 
+import org.apache.kafka.common.message.LeaveGroupRequestData;
 import org.junit.Test;
 
 import java.util.Collections;
@@ -27,9 +28,9 @@ public class RemoveMembersFromConsumerGroupOptionsTest {
     @Test
     public void testConstructor() {
         RemoveMembersFromConsumerGroupOptions options = new RemoveMembersFromConsumerGroupOptions(
-            Collections.singleton(new MemberToRemove("instance-1")));
+            Collections.singleton(new LeaveGroupRequestData.MemberIdentity().setGroupInstanceId("instance-1")));
 
         assertEquals(Collections.singleton(
-            new MemberToRemove("instance-1")), options.members());
+            new LeaveGroupRequestData.MemberIdentity().setGroupInstanceId("instance-1")), options.members());
     }
 }
