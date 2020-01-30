@@ -583,10 +583,10 @@ public class MetadataTest {
         assertTrue(overlappingVersionAndBuilder.isPartialUpdate);
         assertTrue(metadata.updateRequested());
         metadata.update(versionAndBuilder.requestVersion,
-                TestUtils.metadataUpdateWith(1, Collections.singletonMap("topic-1", 1)), true, refreshTimeMs);
+                TestUtils.metadataUpdateWith(1, Collections.singletonMap("topic-1", 1)), true, time.milliseconds());
         assertTrue(metadata.updateRequested());
         metadata.update(overlappingVersionAndBuilder.requestVersion,
-                TestUtils.metadataUpdateWith(1, Collections.singletonMap("topic-2", 1)), true, refreshTimeMs);
+                TestUtils.metadataUpdateWith(1, Collections.singletonMap("topic-2", 1)), true, time.milliseconds());
         assertFalse(metadata.updateRequested());
     }
 

@@ -73,6 +73,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Exchanger;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -382,6 +383,45 @@ public class KafkaProducerTest {
     }
 
     @Test
+    public void testMetadataExpiry() throws InterruptedException {
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
+        ProducerMetadata metadata = mock(ProducerMetadata.class);
+
+        Cluster emptyCluster = new Cluster(
+            "dummy",
+            Collections.singletonList(host1),
+            Collections.emptySet(),
+            Collections.emptySet(),
+            Collections.emptySet());
+        when(metadata.fetch()).thenReturn(onePartitionCluster, emptyCluster, onePartitionCluster);
+
+        KafkaProducer<String, String> producer = new KafkaProducer<String, String>(configs, new StringSerializer(),
+                new StringSerializer(), metadata, new MockClient(Time.SYSTEM, metadata), null, Time.SYSTEM) {
+            @Override
+            Sender newSender(LogContext logContext, KafkaClient kafkaClient, ProducerMetadata metadata) {
+                // give Sender its own Metadata instance so that we can isolate Metadata calls from KafkaProducer
+                return super.newSender(logContext, kafkaClient, newMetadata(0, 100_000, 100_000));
+            }
+        };
+        ProducerRecord<String, String> record = new ProducerRecord<>(topic, "value");
+        producer.send(record);
+
+        // Verify the topic's metadata isn't requested since it's already present.
+        verify(metadata, times(0)).requestUpdateForTopic(topic);
+        verify(metadata, times(0)).awaitUpdate(anyInt(), anyLong());
+        verify(metadata, times(1)).fetch();
+
+        // The metadata has been expired. Verify the producer requests the topic's metadata.
+        producer.send(record, null);
+        verify(metadata, times(1)).requestUpdateForTopic(topic);
+        verify(metadata, times(1)).awaitUpdate(anyInt(), anyLong());
+        verify(metadata, times(3)).fetch();
+
+        producer.close(Duration.ofMillis(0));
+    }
+
+    @Test
     public void testMetadataTimeoutWithMissingTopic() throws Exception {
         Map<String, Object> configs = new HashMap<>();
         configs.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
@@ -532,6 +572,43 @@ public class KafkaProducerTest {
             t.start();
             assertThrows(TimeoutException.class, () -> producer.partitionsFor(topic));
             running.set(false);
+            t.join();
+        }
+    }
+
+    @Test
+    public void testTopicExpiryInMetadata() throws InterruptedException {
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
+        configs.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, "600000");
+        long refreshBackoffMs = 500L;
+        long metadataExpireMs = 60000L;
+        long metadataIdleMs = 60000L;
+        final Time time = new MockTime();
+        final ProducerMetadata metadata = new ProducerMetadata(refreshBackoffMs, metadataExpireMs, metadataIdleMs,
+                new LogContext(), new ClusterResourceListeners(), time);
+        final String topic = "topic";
+        try (KafkaProducer<String, String> producer = new KafkaProducer<>(configs, new StringSerializer(),
+                new StringSerializer(), metadata, new MockClient(time, metadata), null, time)) {
+
+            Exchanger<Void> exchanger = new Exchanger<>();
+
+            Thread t = new Thread(() -> {
+                try {
+                    MetadataResponse updateResponse = TestUtils.metadataUpdateWith(1, singletonMap(topic, 1));
+                    metadata.update(updateResponse, time.milliseconds());
+                    exchanger.exchange(null);
+                    time.sleep(60 * 1000L);
+                    exchanger.exchange(null);
+                } catch (InterruptedException e) {
+                    throw new RuntimeException(e);
+                }
+            });
+            t.start();
+            exchanger.exchange(null);
+            assertTrue(producer.partitionsFor(topic) != null);
+            exchanger.exchange(null);
+            assertThrows(TimeoutException.class, () -> producer.partitionsFor(topic));
             t.join();
         }
     }
