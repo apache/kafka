@@ -523,7 +523,7 @@ public class Worker {
             // Note we pass the configState as it performs dynamic transformations under the covers
             return new WorkerSourceTask(id, (SourceTask) task, statusListener, initialState, keyConverter, valueConverter,
                     headerConverter, transformationChain, producer, offsetReader, offsetWriter, config, configState, metrics, loader,
-                    time, retryWithToleranceOperator);
+                    time, retryWithToleranceOperator, herder.statusBackingStore());
         } else if (task instanceof SinkTask) {
             TransformationChain<SinkRecord> transformationChain = new TransformationChain<>(connConfig.<SinkRecord>transformations(), retryWithToleranceOperator);
             log.info("Initializing: {}", transformationChain);
@@ -535,7 +535,7 @@ public class Worker {
 
             return new WorkerSinkTask(id, (SinkTask) task, statusListener, initialState, config, configState, metrics, keyConverter,
                                       valueConverter, headerConverter, transformationChain, consumer, loader, time,
-                                      retryWithToleranceOperator);
+                                      retryWithToleranceOperator, herder.statusBackingStore());
         } else {
             log.error("Tasks must be a subclass of either SourceTask or SinkTask", task);
             throw new ConnectException("Tasks must be a subclass of either SourceTask or SinkTask");
