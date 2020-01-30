@@ -170,7 +170,7 @@ case class GroupSummary(state: String,
 /**
   * We cache offset commits along with their commit record offset. This enables us to ensure that the latest offset
   * commit is always materialized when we have a mix of transactional and regular offset commits. Without preserving
-  * information of the commit record offset, compaction of the offsets topic it self may result in the wrong offset commit
+  * information of the commit record offset, compaction of the offsets topic itself may result in the wrong offset commit
   * being materialized.
   */
 case class CommitRecordMetadataAndOffset(appendedBatchOffset: Option[Long], offsetAndMetadata: OffsetAndMetadata) {
@@ -677,10 +677,17 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
     }
   }
 
-  def activeProducers = pendingTransactionalOffsetCommits.keySet
+  def activeProducers: collection.Set[Long] = pendingTransactionalOffsetCommits.keySet
 
-  def hasPendingOffsetCommitsFromProducer(producerId: Long) =
+  def hasPendingOffsetCommitsFromProducer(producerId: Long): Boolean =
     pendingTransactionalOffsetCommits.contains(producerId)
+
+  def hasPendingOffsetCommitsForTopicPartition(topicPartition: TopicPartition): Boolean = {
+    pendingOffsetCommits.contains(topicPartition) ||
+      pendingTransactionalOffsetCommits.exists(
+        _._2.contains(topicPartition)
+      )
+  }
 
   def removeAllOffsets(): immutable.Map[TopicPartition, OffsetAndMetadata] = removeOffsets(offsets.keySet.toSeq)
 

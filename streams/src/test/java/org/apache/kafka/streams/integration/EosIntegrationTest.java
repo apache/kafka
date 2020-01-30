@@ -26,6 +26,7 @@ import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.StoreQueryParams;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
@@ -560,7 +561,7 @@ public class EosIntegrationTest {
         gcInjected = new AtomicBoolean(false);
         final StreamsBuilder builder = new StreamsBuilder();
 
-        String[] storeNames = null;
+        String[] storeNames = new String[0];
         if (withState) {
             storeNames = new String[] {storeName};
             final StoreBuilder<KeyValueStore<Long, Long>> storeBuilder = Stores
@@ -750,7 +751,7 @@ public class EosIntegrationTest {
         final long maxWaitingTime = System.currentTimeMillis() + 300000L;
         while (System.currentTimeMillis() < maxWaitingTime) {
             try {
-                store = streams.store(storeName, QueryableStoreTypes.keyValueStore());
+                store = streams.store(StoreQueryParams.fromNameAndType(storeName, QueryableStoreTypes.keyValueStore()));
                 break;
             } catch (final InvalidStateStoreException okJustRetry) {
                 try {

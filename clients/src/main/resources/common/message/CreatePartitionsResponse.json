@@ -18,8 +18,9 @@
   "type": "response",
   "name": "CreatePartitionsResponse",
   // Starting in version 1, on quota violation, brokers send out responses before throttling.
-  "validVersions": "0-1",
-  "flexibleVersions": "none",
+  // Version 2 adds flexible version support
+  "validVersions": "0-2",
+  "flexibleVersions": "2+",
   "fields": [
     { "name": "ThrottleTimeMs", "type": "int32", "versions": "0+",
       "about": "The duration in milliseconds for which the request was throttled due to a quota violation, or zero if the request did not violate any quota." },
@@ -30,7 +31,7 @@
       { "name": "ErrorCode", "type": "int16", "versions": "0+",
         "about": "The result error, or zero if there was no error."},
       { "name": "ErrorMessage", "type": "string", "versions": "0+", "nullableVersions": "0+",
-        "about": "The result message, or null if there was no error."}
+        "default": "null", "about": "The result message, or null if there was no error."}
     ]}
   ]
 }

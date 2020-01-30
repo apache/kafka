@@ -18,7 +18,7 @@ import java.util.concurrent._
 import java.util.{Collection, Collections, Properties}
 
 import kafka.server.KafkaConfig
-import kafka.utils.{CoreUtils, Logging, ShutdownableThread, TestUtils}
+import kafka.utils.{Logging, ShutdownableThread, TestUtils}
 import org.apache.kafka.clients.consumer._
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.TopicPartition
@@ -382,7 +382,7 @@ class ConsumerBounceTest extends AbstractConsumerTest with Logging {
   private def checkCloseDuringRebalance(groupId: String, topic: String, executor: ExecutorService, brokersAvailableDuringClose: Boolean): Unit = {
 
     def subscribeAndPoll(consumer: KafkaConsumer[Array[Byte], Array[Byte]], revokeSemaphore: Option[Semaphore] = None): Future[Any] = {
-      executor.submit(CoreUtils.runnable {
+      executor.submit(() => {
         consumer.subscribe(Collections.singletonList(topic))
         revokeSemaphore.foreach(s => s.release())
         // requires to used deprecated `poll(long)` to trigger metadata update
@@ -452,7 +452,7 @@ class ConsumerBounceTest extends AbstractConsumerTest with Logging {
 
   private def submitCloseAndValidate(consumer: KafkaConsumer[Array[Byte], Array[Byte]],
       closeTimeoutMs: Long, minCloseTimeMs: Option[Long], maxCloseTimeMs: Option[Long]): Future[Any] = {
-    executor.submit(CoreUtils.runnable {
+    executor.submit(() => {
       val closeGraceTimeMs = 2000
       val startMs = System.currentTimeMillis()
       info("Closing consumer with timeout " + closeTimeoutMs + " ms.")

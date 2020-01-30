@@ -559,7 +559,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         cmd += "&& sleep 1 && rm -f %s" % json_file
 
         # send command
-        self.logger.info("Verifying parition reassignment...")
+        self.logger.info("Verifying partition reassignment...")
         self.logger.debug(cmd)
         output = ""
         for line in node.account.ssh_capture(cmd):
@@ -674,15 +674,15 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         """
         self.logger.debug("Querying zookeeper to find assigned replicas for topic %s and partition %d" % (topic, partition))
         zk_path = "/brokers/topics/%s" % (topic)
-        assignemnt = self.zk.query(zk_path, chroot=self.zk_chroot)
+        assignment = self.zk.query(zk_path, chroot=self.zk_chroot)
 
-        if assignemnt is None:
+        if assignment is None:
             raise Exception("Error finding partition state for topic %s and partition %d." % (topic, partition))
 
-        assignemnt = json.loads(assignemnt)
-        self.logger.info(assignemnt)
+        assignment = json.loads(assignment)
+        self.logger.info(assignment)
 
-        replicas = assignemnt["partitions"][str(partition)]
+        replicas = assignment["partitions"][str(partition)]
 
         self.logger.info("Assigned replicas for topic %s and partition %d is now: %s" % (topic, partition, replicas))
         return [self.get_node(replica) for replica in replicas]
@@ -715,6 +715,17 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         except:
             self.logger.debug("Data in /cluster/id znode could not be parsed. Data = %s" % cluster)
             raise
+
+    def check_protocol_errors(self, node):
+	""" Checks for common protocol exceptions due to invalid inter broker protocol handling.
+        While such errors can and should be checked in other ways, checking the logs is a worthwhile failsafe.
+        """
+        for node in self.nodes:
+            exit_code = node.account.ssh("grep -e 'java.lang.IllegalArgumentException: Invalid version' -e SchemaException %s/*"
+                    % KafkaService.OPERATIONAL_LOG_DEBUG_DIR, allow_fail=True)
+            if exit_code != 1:
+                return False
+        return True
 
     def list_consumer_groups(self, node=None, command_config=None):
         """ Get list of consumer groups.

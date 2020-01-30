@@ -16,10 +16,11 @@
  */
 package kafka.common
 
-import kafka.security.auth.{Group, Resource}
 import kafka.utils.TestUtils
 import kafka.zk.{LiteralAclChangeStore, LiteralAclStore, ZkAclChangeStore, ZooKeeperTestHarness}
 import org.apache.kafka.common.resource.PatternType.LITERAL
+import org.apache.kafka.common.resource.ResourcePattern
+import org.apache.kafka.common.resource.ResourceType.GROUP
 import org.junit.{After, Before, Test}
 
 import scala.collection.mutable.ArrayBuffer
@@ -48,8 +49,8 @@ class ZkNodeChangeNotificationListenerTest extends ZooKeeperTestHarness {
 
   @Test
   def testProcessNotification(): Unit = {
-    val notificationMessage1 = Resource(Group, "messageA", LITERAL)
-    val notificationMessage2 = Resource(Group, "messageB", LITERAL)
+    val notificationMessage1 = new ResourcePattern(GROUP, "messageA", LITERAL)
+    val notificationMessage2 = new ResourcePattern(GROUP, "messageB", LITERAL)
 
     notificationListener = new ZkNodeChangeNotificationListener(zkClient, LiteralAclChangeStore.aclChangePath,
       ZkAclChangeStore.SequenceNumberPrefix, notificationHandler, changeExpirationMs)
@@ -71,7 +72,7 @@ class ZkNodeChangeNotificationListenerTest extends ZooKeeperTestHarness {
     TestUtils.waitUntilTrue(() => notificationHandler.received().size == 2 && notificationHandler.received().last == notificationMessage2,
       "Failed to send/process notification message in the timeout period.")
 
-    (3 to 10).foreach(i => zkClient.createAclChangeNotification(Resource(Group, "message" + i, LITERAL)))
+    (3 to 10).foreach(i => zkClient.createAclChangeNotification(new ResourcePattern(GROUP, "message" + i, LITERAL)))
 
     TestUtils.waitUntilTrue(() => notificationHandler.received().size == 10,
       s"Expected 10 invocations of processNotifications, but there were ${notificationHandler.received()}")
@@ -84,16 +85,16 @@ class ZkNodeChangeNotificationListenerTest extends ZooKeeperTestHarness {
       ZkAclChangeStore.SequenceNumberPrefix, notificationHandler, changeExpirationMs)
     notificationListener.init()
 
-    zkClient.createAclChangeNotification(Resource(Group, "messageA", LITERAL))
-    zkClient.createAclChangeNotification(Resource(Group, "messageB", LITERAL))
-    zkClient.createAclChangeNotification(Resource(Group, "messageC", LITERAL))
+    zkClient.createAclChangeNotification(new ResourcePattern(GROUP, "messageA", LITERAL))
+    zkClient.createAclChangeNotification(new ResourcePattern(GROUP, "messageB", LITERAL))
+    zkClient.createAclChangeNotification(new ResourcePattern(GROUP, "messageC", LITERAL))
 
     TestUtils.waitUntilTrue(() => notificationHandler.received().size == 3,
       s"Expected 2 invocations of processNotifications, but there were ${notificationHandler.received()}")
   }
 
   private class TestNotificationHandler extends NotificationHandler {
-    private val messages = ArrayBuffer.empty[Resource]
+    private val messages = ArrayBuffer.empty[ResourcePattern]
     @volatile private var throwSize = Option.empty[Int]
 
     override def processNotification(notificationMessage: Array[Byte]): Unit = {
@@ -103,7 +104,7 @@ class ZkNodeChangeNotificationListenerTest extends ZooKeeperTestHarness {
         throw new RuntimeException("Oh no, my processing failed!")
     }
 
-    def received(): Seq[Resource] = messages
+    def received(): Seq[ResourcePattern] = messages
 
     def setThrowSize(index: Int): Unit = throwSize = Option(index)
   }

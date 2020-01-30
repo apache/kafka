@@ -192,9 +192,11 @@ class ZkReplicaStateMachine(config: KafkaConfig,
 
           currentState match {
             case NewReplica =>
-              val assignment = controllerContext.partitionReplicaAssignment(partition)
-              if (!assignment.contains(replicaId)) {
-                controllerContext.updatePartitionReplicaAssignment(partition, assignment :+ replicaId)
+              val assignment = controllerContext.partitionFullReplicaAssignment(partition)
+              if (!assignment.replicas.contains(replicaId)) {
+                error(s"Adding replica ($replicaId) that is not part of the assignment $assignment")
+                val newAssignment = assignment.copy(replicas = assignment.replicas :+ replicaId)
+                controllerContext.updatePartitionFullReplicaAssignment(partition, newAssignment)
               }
             case _ =>
               controllerContext.partitionLeadershipInfo.get(partition) match {
@@ -259,8 +261,11 @@ class ZkReplicaStateMachine(config: KafkaConfig,
       case NonExistentReplica =>
         validReplicas.foreach { replica =>
           val currentState = controllerContext.replicaState(replica)
-          val currentAssignedReplicas = controllerContext.partitionReplicaAssignment(replica.topicPartition)
-          controllerContext.updatePartitionReplicaAssignment(replica.topicPartition, currentAssignedReplicas.filterNot(_ == replica.replica))
+          val newAssignedReplicas = controllerContext
+            .partitionFullReplicaAssignment(replica.topicPartition)
+            .removeReplica(replica.replica)
+
+          controllerContext.updatePartitionFullReplicaAssignment(replica.topicPartition, newAssignedReplicas)
           logSuccessfulTransition(replicaId, replica.topicPartition, currentState, NonExistentReplica)
           controllerContext.removeReplicaState(replica)
         }

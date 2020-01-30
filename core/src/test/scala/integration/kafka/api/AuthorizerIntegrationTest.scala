@@ -20,11 +20,11 @@ import java.util.{Collections, Optional, Properties}
 
 import kafka.admin.ConsumerGroupCommand.{ConsumerGroupCommandOptions, ConsumerGroupService}
 import kafka.log.LogConfig
-import kafka.security.auth.{SimpleAclAuthorizer, Topic, ResourceType => AuthResourceType}
-import kafka.security.authorizer.AuthorizerUtils.WildcardHost
+import kafka.security.authorizer.AclEntry
+import kafka.security.authorizer.AclEntry.WildcardHost
 import kafka.server.{BaseRequestTest, KafkaConfig}
 import kafka.utils.TestUtils
-import org.apache.kafka.clients.admin.{Admin, AdminClient, AdminClientConfig, AlterConfigOp}
+import org.apache.kafka.clients.admin.{Admin, AdminClientConfig, AlterConfigOp}
 import org.apache.kafka.clients.consumer._
 import org.apache.kafka.clients.consumer.internals.NoOpConsumerRebalanceListener
 import org.apache.kafka.clients.producer._
@@ -34,13 +34,14 @@ import org.apache.kafka.common.acl.{AccessControlEntry, AccessControlEntryFilter
 import org.apache.kafka.common.config.{ConfigResource, LogLevelConfig}
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.Topic.GROUP_METADATA_TOPIC_NAME
+import org.apache.kafka.common.message.CreatePartitionsRequestData.CreatePartitionsTopic
 import org.apache.kafka.common.message.CreateTopicsRequestData.{CreatableTopic, CreatableTopicCollection}
 import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData.{AlterConfigsResource, AlterableConfig, AlterableConfigCollection}
 import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocolCollection
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity
 import org.apache.kafka.common.message.UpdateMetadataRequestData.{UpdateMetadataBroker, UpdateMetadataEndpoint, UpdateMetadataPartitionState}
-import org.apache.kafka.common.message.{AlterPartitionReassignmentsRequestData, ControlledShutdownRequestData, CreateTopicsRequestData, DeleteGroupsRequestData, DeleteTopicsRequestData, DescribeGroupsRequestData, FindCoordinatorRequestData, HeartbeatRequestData, IncrementalAlterConfigsRequestData, JoinGroupRequestData, ListPartitionReassignmentsRequestData, OffsetCommitRequestData, SyncGroupRequestData}
+import org.apache.kafka.common.message.{AlterPartitionReassignmentsRequestData, ControlledShutdownRequestData, CreatePartitionsRequestData, CreateTopicsRequestData, DeleteGroupsRequestData, DeleteTopicsRequestData, DescribeGroupsRequestData, FindCoordinatorRequestData, HeartbeatRequestData, IncrementalAlterConfigsRequestData, JoinGroupRequestData, ListPartitionReassignmentsRequestData, OffsetCommitRequestData, SyncGroupRequestData}
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record.{CompressionType, MemoryRecords, RecordBatch, Records, SimpleRecord}
@@ -116,7 +117,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, group)
 
   override def brokerPropertyOverrides(properties: Properties): Unit = {
-    properties.put(KafkaConfig.AuthorizerClassNameProp, classOf[SimpleAclAuthorizer].getName)
+    properties.put(KafkaConfig.AuthorizerClassNameProp, "kafka.security.auth.SimpleAclAuthorizer")
     properties.put(KafkaConfig.BrokerIdProp, brokerId.toString)
     properties.put(KafkaConfig.OffsetsTopicPartitionsProp, "1")
     properties.put(KafkaConfig.OffsetsTopicReplicationFactorProp, "1")
@@ -169,7 +170,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     ApiKeys.ALTER_REPLICA_LOG_DIRS -> ((resp: AlterReplicaLogDirsResponse) => resp.responses.get(tp)),
     ApiKeys.DESCRIBE_LOG_DIRS -> ((resp: DescribeLogDirsResponse) =>
       if (resp.logDirInfos.size() > 0) resp.logDirInfos.asScala.head._2.error else Errors.CLUSTER_AUTHORIZATION_FAILED),
-    ApiKeys.CREATE_PARTITIONS -> ((resp: CreatePartitionsResponse) => resp.errors.asScala.find(_._1 == topic).get._2.error),
+    ApiKeys.CREATE_PARTITIONS -> ((resp: CreatePartitionsResponse) => Errors.forCode(resp.data.results.asScala.head.errorCode())),
     ApiKeys.ELECT_LEADERS -> ((resp: ElectLeadersResponse) => Errors.forCode(resp.data().errorCode())),
     ApiKeys.INCREMENTAL_ALTER_CONFIGS -> ((resp: IncrementalAlterConfigsResponse) => {
       val topicResourceError = IncrementalAlterConfigsResponse.fromResponseData(resp.data()).get(new ConfigResource(ConfigResource.Type.TOPIC, tp.topic))
@@ -288,7 +289,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   }
 
   private def createOffsetFetchRequest = {
-    new requests.OffsetFetchRequest.Builder(group, List(tp).asJava).build()
+    new requests.OffsetFetchRequest.Builder(group, false, List(tp).asJava).build()
   }
 
   private def createFindCoordinatorRequest = {
@@ -375,9 +376,15 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   }
 
   private def createPartitionsRequest = {
-    new CreatePartitionsRequest.Builder(
-      Map(topic -> new CreatePartitionsRequest.PartitionDetails(10)).asJava, 10000, true
-    ).build()
+    val partitionTopic = new CreatePartitionsTopic()
+      .setName(topic)
+      .setCount(10)
+      .setAssignments(null)
+    val data = new CreatePartitionsRequestData()
+      .setTimeoutMs(10000)
+      .setValidateOnly(true)
+      .setTopics(Collections.singletonList(partitionTopic))
+    new CreatePartitionsRequest.Builder(data).build(0.toShort)
   }
 
   private def heartbeatRequest = new HeartbeatRequest.Builder(
@@ -1052,10 +1059,10 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     addAndVerifyAcls(createAcls, createTopicResource)
 
     // retry as topic being created can have MetadataResponse with Errors.LEADER_NOT_AVAILABLE
-    TestUtils.retry(JTestUtils.DEFAULT_MAX_WAIT_MS)(() => {
+    TestUtils.retry(JTestUtils.DEFAULT_MAX_WAIT_MS) {
       val metadataResponse = connectAndReceive[MetadataResponse](metadataRequest)
       assertEquals(Set(topic, createTopic).asJava, metadataResponse.topicsByError(Errors.NONE))
-    })
+    }
   }
 
   @Test(expected = classOf[AuthorizationException])
@@ -1141,7 +1148,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     // note there's only one broker, so no need to lookup the group coordinator
 
     // without describe permission on the topic, we shouldn't be able to fetch offsets
-    val offsetFetchRequest = requests.OffsetFetchRequest.Builder.allTopicPartitions(group).build()
+    val offsetFetchRequest = new requests.OffsetFetchRequest.Builder(group, false, null).build()
     var offsetFetchResponse = connectAndReceive[OffsetFetchResponse](offsetFetchRequest)
     assertEquals(Errors.NONE, offsetFetchResponse.error)
     assertTrue(offsetFetchResponse.responseData.isEmpty)
@@ -1389,14 +1396,14 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   @Test
   def testUnauthorizedCreatePartitions(): Unit = {
     val createPartitionsResponse = connectAndReceive[CreatePartitionsResponse](createPartitionsRequest)
-    assertEquals(Errors.TOPIC_AUTHORIZATION_FAILED, createPartitionsResponse.errors.asScala.head._2.error)
+    assertEquals(Errors.TOPIC_AUTHORIZATION_FAILED.code(), createPartitionsResponse.data.results.asScala.head.errorCode())
   }
 
   @Test
   def testCreatePartitionsWithWildCardAuth(): Unit = {
     addAndVerifyAcls(Set(new AccessControlEntry(userPrincipalStr, WildcardHost, ALTER, ALLOW)), new ResourcePattern(TOPIC, "*", LITERAL))
     val createPartitionsResponse = connectAndReceive[CreatePartitionsResponse](createPartitionsRequest)
-    assertEquals(Errors.NONE, createPartitionsResponse.errors.asScala.head._2.error)
+    assertEquals(Errors.NONE.code(), createPartitionsResponse.data.results.asScala.head.errorCode())
   }
 
   @Test(expected = classOf[TransactionalIdAuthorizationException])
@@ -1656,11 +1663,11 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     val authorizationErrors = resources.flatMap { resourceType =>
       if (resourceType == TOPIC) {
         if (isAuthorized)
-          Set(Errors.UNKNOWN_TOPIC_OR_PARTITION, Topic.error)
+          Set(Errors.UNKNOWN_TOPIC_OR_PARTITION, AclEntry.authorizationError(ResourceType.TOPIC))
         else
-          Set(Topic.error)
+          Set(AclEntry.authorizationError(ResourceType.TOPIC))
       } else {
-        Set(AuthResourceType.fromJava(resourceType).error)
+        Set(AclEntry.authorizationError(resourceType))
       }
     }
 
@@ -1734,7 +1741,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   private def createAdminClient(): Admin = {
     val props = new Properties()
     props.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
-    val adminClient = AdminClient.create(props)
+    val adminClient = Admin.create(props)
     adminClients += adminClient
     adminClient
   }

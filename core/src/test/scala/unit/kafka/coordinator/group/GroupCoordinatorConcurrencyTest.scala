@@ -240,8 +240,9 @@ class GroupCoordinatorConcurrencyTest extends AbstractCoordinatorConcurrencyTest
           offsetsPartitions.map(_.partition).toSet, isCommit = random.nextBoolean)
         responseCallback(errors)
       }
-      groupCoordinator.handleTxnCommitOffsets(member.group.groupId,
-          producerId, producerEpoch, offsets, callbackWithTxnCompletion)
+      groupCoordinator.handleTxnCommitOffsets(member.group.groupId, producerId, producerEpoch,
+        JoinGroupRequest.UNKNOWN_MEMBER_ID, Option.empty, JoinGroupRequest.UNKNOWN_GENERATION_ID,
+        offsets, callbackWithTxnCompletion)
     }
   }
 

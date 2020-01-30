@@ -26,6 +26,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Map.Entry;
 
 /**
@@ -156,5 +157,22 @@ public class NewTopic {
                 append(", configs=").append(configs).
                 append(")");
         return bld.toString();
+    }
+
+    @Override
+    public boolean equals(final Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        final NewTopic that = (NewTopic) o;
+        return Objects.equals(name, that.name) &&
+            Objects.equals(numPartitions, that.numPartitions) &&
+            Objects.equals(replicationFactor, that.replicationFactor) &&
+            Objects.equals(replicasAssignments, that.replicasAssignments) &&
+            Objects.equals(configs, that.configs);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(name, numPartitions, replicationFactor, replicasAssignments, configs);
     }
 }

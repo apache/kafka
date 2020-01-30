@@ -445,6 +445,39 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
     new ConfigCommandOptions(optsList.toArray).checkArgs()
   }
 
+  @Test
+  def testDescribeAllBrokerConfig(): Unit = {
+    val optsList = List("--bootstrap-server", "localhost:9092",
+      "--entity-type", ConfigType.Broker,
+      "--entity-name", "1",
+      "--describe",
+      "--all")
+
+    new ConfigCommandOptions(optsList.toArray).checkArgs()
+  }
+
+  @Test
+  def testDescribeAllTopicConfig(): Unit = {
+    val optsList = List("--bootstrap-server", "localhost:9092",
+      "--entity-type", ConfigType.Topic,
+      "--entity-name", "foo",
+      "--describe",
+      "--all")
+
+    new ConfigCommandOptions(optsList.toArray).checkArgs()
+  }
+
+  @Test(expected = classOf[IllegalArgumentException])
+  def testDescribeAllBrokerConfigBootstrapServerRequired(): Unit = {
+    val optsList = List("--zookeeper", zkConnect,
+      "--entity-type", ConfigType.Broker,
+      "--entity-name", "1",
+      "--describe",
+      "--all")
+
+    new ConfigCommandOptions(optsList.toArray).checkArgs()
+  }
+
   @Test(expected = classOf[IllegalArgumentException])
   def testEntityDefaultOptionWithDescribeBrokerLoggerIsNotAllowed(): Unit = {
     val optsList = List("--bootstrap-server", "localhost:9092",
@@ -524,10 +557,6 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
       }
     }
     EasyMock.replay(alterResult, describeResult)
-    val alterResourceName = if (resourceName.nonEmpty)
-      resourceName
-    else
-      ConfigEntityName.Default
     ConfigCommand.alterConfig(mockAdminClient, alterOpts)
     assertEquals(Map("message.max.bytes" -> "10", "num.io.threads" -> "5"), brokerConfigs.toMap)
     EasyMock.reset(alterResult, describeResult)

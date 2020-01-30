@@ -55,7 +55,7 @@ public class ConsumerMetadata extends Metadata {
         if (subscription.hasPatternSubscription())
             return MetadataRequest.Builder.allTopics();
         List<String> topics = new ArrayList<>();
-        topics.addAll(subscription.groupSubscription());
+        topics.addAll(subscription.metadataTopics());
         topics.addAll(transientTopics);
         return new MetadataRequest.Builder(topics, allowAutoTopicCreation);
     }
@@ -72,7 +72,7 @@ public class ConsumerMetadata extends Metadata {
 
     @Override
     protected synchronized boolean retainTopic(String topic, boolean isInternal, long nowMs) {
-        if (transientTopics.contains(topic) || subscription.isGroupSubscribed(topic))
+        if (transientTopics.contains(topic) || subscription.needsMetadata(topic))
             return true;
 
         if (isInternal && !includeInternalTopics)

@@ -69,11 +69,11 @@ public class EosTestDriver extends SmokeTestUtil {
 
     static void generate(final String kafka) {
 
-        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+        Exit.addShutdownHook("streams-eos-test-driver-shutdown-hook", () -> {
             System.out.println("Terminating");
             System.out.flush();
             isRunning = false;
-        }));
+        });
 
         final Properties producerProps = new Properties();
         producerProps.put(ProducerConfig.CLIENT_ID_CONFIG, "EosTest");

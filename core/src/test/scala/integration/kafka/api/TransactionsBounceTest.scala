@@ -22,6 +22,8 @@ import java.util.Properties
 import kafka.integration.KafkaServerTestHarness
 import kafka.server.KafkaConfig
 import kafka.utils.{ShutdownableThread, TestUtils}
+import org.apache.kafka.clients.consumer.KafkaConsumer
+import org.apache.kafka.clients.producer.KafkaProducer
 import org.apache.kafka.clients.producer.internals.ErrorLoggingCallback
 import org.apache.kafka.common.TopicPartition
 import org.junit.Assert._
@@ -71,7 +73,19 @@ class TransactionsBounceTest extends KafkaServerTestHarness {
   }
 
   @Test
-  def testBrokerFailure(): Unit = {
+  def testWithGroupId(): Unit = {
+    testBrokerFailure((producer, groupId, consumer) =>
+      producer.sendOffsetsToTransaction(TestUtils.consumerPositions(consumer).asJava, groupId))
+  }
+
+  @Test
+  def testWithGroupMetadata(): Unit = {
+    testBrokerFailure((producer, _, consumer) =>
+      producer.sendOffsetsToTransaction(TestUtils.consumerPositions(consumer).asJava, consumer.groupMetadata()))
+  }
+
+  private def testBrokerFailure(commit: (KafkaProducer[Array[Byte], Array[Byte]],
+    String, KafkaConsumer[Array[Byte], Array[Byte]]) => Unit): Unit = {
     // basic idea is to seed a topic with 10000 records, and copy it transactionally while bouncing brokers
     // constantly through the period.
     val consumerGroup = "myGroup"
@@ -103,7 +117,7 @@ class TransactionsBounceTest extends KafkaServerTestHarness {
             !shouldAbort), new ErrorLoggingCallback(outputTopic, record.key, record.value, true))
         }
         trace(s"Sent ${records.size} messages. Committing offsets.")
-        producer.sendOffsetsToTransaction(TestUtils.consumerPositions(consumer).asJava, consumerGroup)
+        commit(producer, consumerGroup, consumer)
 
         if (shouldAbort) {
           trace(s"Committed offsets. Aborting transaction of ${records.size} messages.")

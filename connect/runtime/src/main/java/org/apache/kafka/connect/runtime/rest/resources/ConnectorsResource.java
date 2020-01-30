@@ -29,6 +29,7 @@ import org.apache.kafka.connect.runtime.distributed.RebalanceNeededException;
 import org.apache.kafka.connect.runtime.distributed.RequestTargetException;
 import org.apache.kafka.connect.runtime.rest.InternalRequestSignature;
 import org.apache.kafka.connect.runtime.rest.RestClient;
+import org.apache.kafka.connect.runtime.rest.entities.ActiveTopicsInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
 import org.apache.kafka.connect.runtime.rest.entities.CreateConnectorRequest;
@@ -57,12 +58,16 @@ import javax.ws.rs.core.UriBuilder;
 import javax.ws.rs.core.UriInfo;
 
 import java.net.URI;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+
+import static org.apache.kafka.connect.runtime.WorkerConfig.TOPIC_TRACKING_ALLOW_RESET_CONFIG;
+import static org.apache.kafka.connect.runtime.WorkerConfig.TOPIC_TRACKING_ENABLE_CONFIG;
 
 @Path("/connectors")
 @Produces(MediaType.APPLICATION_JSON)
@@ -171,6 +176,35 @@ public class ConnectorsResource {
     @Path("/{connector}/status")
     public ConnectorStateInfo getConnectorStatus(final @PathParam("connector") String connector) throws Throwable {
         return herder.connectorStatus(connector);
+    }
+
+    @GET
+    @Path("/{connector}/topics")
+    public Response getConnectorActiveTopics(final @PathParam("connector") String connector) throws Throwable {
+        if (!config.getBoolean(TOPIC_TRACKING_ENABLE_CONFIG)) {
+            return Response.status(Response.Status.FORBIDDEN)
+                    .entity("Topic tracking is disabled.")
+                    .build();
+        }
+        ActiveTopicsInfo info = herder.connectorActiveTopics(connector);
+        return Response.ok(Collections.singletonMap(info.connector(), info)).build();
+    }
+
+    @PUT
+    @Path("/{connector}/topics/reset")
+    public Response resetConnectorActiveTopics(final @PathParam("connector") String connector, final @Context HttpHeaders headers) throws Throwable {
+        if (!config.getBoolean(TOPIC_TRACKING_ENABLE_CONFIG)) {
+            return Response.status(Response.Status.FORBIDDEN)
+                    .entity("Topic tracking is disabled.")
+                    .build();
+        }
+        if (!config.getBoolean(TOPIC_TRACKING_ALLOW_RESET_CONFIG)) {
+            return Response.status(Response.Status.FORBIDDEN)
+                    .entity("Topic tracking reset is disabled.")
+                    .build();
+        }
+        herder.resetConnectorActiveTopics(connector);
+        return Response.accepted().build();
     }
 
     @PUT
