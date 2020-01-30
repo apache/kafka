@@ -573,6 +573,21 @@ public class MetadataTest {
         metadata.update(versionAndBuilder.requestVersion,
                 TestUtils.metadataUpdateWith(1, Collections.singletonMap("topic", 1)), true, refreshTimeMs);
         assertFalse(metadata.updateRequested());
+
+        // Request two partial metadata updates that are overlapping.
+        metadata.requestUpdateForNewTopics();
+        versionAndBuilder = metadata.newMetadataRequestAndVersion(time.milliseconds());
+        assertTrue(versionAndBuilder.isPartialUpdate);
+        metadata.requestUpdateForNewTopics();
+        Metadata.MetadataRequestAndVersion overlappingVersionAndBuilder = metadata.newMetadataRequestAndVersion(time.milliseconds());
+        assertTrue(overlappingVersionAndBuilder.isPartialUpdate);
+        assertTrue(metadata.updateRequested());
+        metadata.update(versionAndBuilder.requestVersion,
+                TestUtils.metadataUpdateWith(1, Collections.singletonMap("topic-1", 1)), true, refreshTimeMs);
+        assertTrue(metadata.updateRequested());
+        metadata.update(overlappingVersionAndBuilder.requestVersion,
+                TestUtils.metadataUpdateWith(1, Collections.singletonMap("topic-2", 1)), true, refreshTimeMs);
+        assertFalse(metadata.updateRequested());
     }
 
     @Test

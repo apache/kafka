@@ -200,6 +200,7 @@ public class ProducerMetadataTest {
         // Add a new topic and fetch its metadata in a partial update.
         final String topic1 = "topic-one";
         metadata.add(topic1, now);
+        assertTrue(metadata.updateRequested());
         assertEquals(0, metadata.timeToNextUpdate(now));
         assertEquals(metadata.topics(), Collections.singleton(topic1));
         assertEquals(metadata.newTopics(), Collections.singleton(topic1));
@@ -207,11 +208,13 @@ public class ProducerMetadataTest {
         // Perform the partial update. Verify the topic is no longer considered "new".
         now += 1000;
         metadata.update(responseWithTopics(Collections.singleton(topic1)), true, now);
+        assertFalse(metadata.updateRequested());
         assertEquals(metadata.topics(), Collections.singleton(topic1));
         assertEquals(metadata.newTopics(), Collections.emptySet());
 
         // Add the topic again. It should not be considered "new".
         metadata.add(topic1, now);
+        assertFalse(metadata.updateRequested());
         assertTrue(metadata.timeToNextUpdate(now) > 0);
         assertEquals(metadata.topics(), Collections.singleton(topic1));
         assertEquals(metadata.newTopics(), Collections.emptySet());
@@ -225,15 +228,55 @@ public class ProducerMetadataTest {
         final String topic3 = "topic-three";
         metadata.add(topic3, now);
 
+        assertTrue(metadata.updateRequested());
         assertEquals(0, metadata.timeToNextUpdate(now));
         assertEquals(metadata.topics(), new HashSet<>(Arrays.asList(topic1, topic2, topic3)));
         assertEquals(metadata.newTopics(), new HashSet<>(Arrays.asList(topic2, topic3)));
 
         // Perform the partial update for a subset of the new topics.
         now += 1000;
+        assertTrue(metadata.updateRequested());
         metadata.update(responseWithTopics(Collections.singleton(topic2)), true, now);
         assertEquals(metadata.topics(), new HashSet<>(Arrays.asList(topic1, topic2, topic3)));
         assertEquals(metadata.newTopics(), Collections.singleton(topic3));
+    }
+
+    @Test
+    public void testRequestUpdateForTopic() {
+        long now = 10000;
+
+        final String topic1 = "topic-1";
+        final String topic2 = "topic-2";
+
+        // Add the topics to the metadata.
+        metadata.add(topic1, now);
+        metadata.add(topic2, now);
+        assertTrue(metadata.updateRequested());
+
+        // Request an update for topic1. Since the topic is considered new, it should not trigger
+        // the metadata to require a full update.
+        metadata.requestUpdateForTopic(topic1);
+        assertTrue(metadata.updateRequested());
+
+        // Perform the partial update. Verify no additional (full) updates are requested.
+        now += 1000;
+        metadata.update(responseWithTopics(Collections.singleton(topic1)), true, now);
+        assertFalse(metadata.updateRequested());
+
+        // Request an update for topic1 again. Such a request may occur when the leader
+        // changes, which may affect many topics, and should therefore request a full update.
+        metadata.requestUpdateForTopic(topic1);
+        assertTrue(metadata.updateRequested());
+
+        // Perform a partial update for the topic. This should not clear the full update.
+        now += 1000;
+        metadata.update(responseWithTopics(Collections.singleton(topic1)), true, now);
+        assertTrue(metadata.updateRequested());
+
+        // Perform the full update. This should clear the update request.
+        now += 1000;
+        metadata.update(responseWithTopics(new HashSet<>(Arrays.asList(topic1, topic2))), false, now);
+        assertFalse(metadata.updateRequested());
     }
 
     private MetadataResponse responseWithCurrentTopics() {
