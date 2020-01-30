@@ -124,7 +124,8 @@ public class KafkaStatusBackingStore implements StatusBackingStore {
     private final Converter converter;
     private final Table<String, Integer, CacheEntry<TaskStatus>> tasks;
     private final Map<String, CacheEntry<ConnectorStatus>> connectors;
-    private final ConcurrentMap<String, ConcurrentMap<String, TopicStatus>> topics;
+    //visible for testing
+    protected final ConcurrentMap<String, ConcurrentMap<String, TopicStatus>> topics;
 
     private String statusTopic;
     private KafkaBasedLog<String, byte[]> kafkaLog;
