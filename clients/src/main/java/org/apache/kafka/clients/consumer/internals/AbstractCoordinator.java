@@ -574,26 +574,29 @@ public abstract class AbstractCoordinator implements Closeable {
         @Override
         public void handle(JoinGroupResponse joinResponse, RequestFuture<ByteBuffer> future) {
             Errors error = joinResponse.error();
-            if (isProtocolTypeInconsistent(joinResponse.data().protocolType())) {
-                log.debug("JoinGroup failed: Received inconsistent ProtocolType ({})",
-                    joinResponse.data().protocolType());
-                future.raise(Errors.INCONSISTENT_GROUP_PROTOCOL);
-            } else if (error == Errors.NONE) {
-                log.debug("Received successful JoinGroup response: {}", joinResponse);
-                sensors.joinSensor.record(response.requestLatencyMs());
+            if (error == Errors.NONE) {
+                if (isProtocolTypeInconsistent(joinResponse.data().protocolType())) {
+                    log.debug("JoinGroup failed due to inconsistent Protocol Type, received {} but expected {}",
+                        joinResponse.data().protocolType(), protocolType());
+                    future.raise(Errors.INCONSISTENT_GROUP_PROTOCOL);
+                } else {
+                    log.debug("Received successful JoinGroup response: {}", joinResponse);
+                    sensors.joinSensor.record(response.requestLatencyMs());
 
-                synchronized (AbstractCoordinator.this) {
-                    if (state != MemberState.REBALANCING) {
-                        // if the consumer was woken up before a rebalance completes, we may have already left
-                        // the group. In this case, we do not want to continue with the sync group.
-                        future.raise(new UnjoinedGroupException());
-                    } else {
-                        AbstractCoordinator.this.generation = new Generation(joinResponse.data().generationId(),
-                                joinResponse.data().memberId(), joinResponse.data().protocolName());
-                        if (joinResponse.isLeader()) {
-                            onJoinLeader(joinResponse).chain(future);
+                    synchronized (AbstractCoordinator.this) {
+                        if (state != MemberState.REBALANCING) {
+                            // if the consumer was woken up before a rebalance completes, we may have already left
+                            // the group. In this case, we do not want to continue with the sync group.
+                            future.raise(new UnjoinedGroupException());
                         } else {
-                            onJoinFollower().chain(future);
+                            AbstractCoordinator.this.generation = new Generation(
+                                joinResponse.data().generationId(),
+                                joinResponse.data().memberId(), joinResponse.data().protocolName());
+                            if (joinResponse.isLeader()) {
+                                onJoinLeader(joinResponse).chain(future);
+                            } else {
+                                onJoinFollower().chain(future);
+                            }
                         }
                     }
                 }
@@ -712,14 +715,19 @@ public abstract class AbstractCoordinator implements Closeable {
         public void handle(SyncGroupResponse syncResponse,
                            RequestFuture<ByteBuffer> future) {
             Errors error = syncResponse.error();
-            if (isProtocolTypeInconsistent(syncResponse.data.protocolType())
-                || isProtocolNameInconsistent(syncResponse.data.protocolName())) {
-                log.debug("SyngGroup failed: Received inconsistent ProtocolType ({}) and/or ProtocolName ({})",
-                    syncResponse.data.protocolType(), syncResponse.data.protocolName());
-                future.raise(Errors.INCONSISTENT_GROUP_PROTOCOL);
-            } else if (error == Errors.NONE) {
-                sensors.syncSensor.record(response.requestLatencyMs());
-                future.complete(ByteBuffer.wrap(syncResponse.data.assignment()));
+            if (error == Errors.NONE) {
+                if (isProtocolTypeInconsistent(syncResponse.data.protocolType())) {
+                    log.debug("SyncGroup failed due to inconsistent Protocol Type, received {} but expected {}",
+                        syncResponse.data.protocolType(), protocolType());
+                    future.raise(Errors.INCONSISTENT_GROUP_PROTOCOL);
+                } else if (isProtocolNameInconsistent(syncResponse.data.protocolName())) {
+                    log.debug("SyncGroup failed due to inconsistent Protocol Name, received {} but expected {}",
+                        syncResponse.data.protocolName(), generation().protocolName);
+                    future.raise(Errors.INCONSISTENT_GROUP_PROTOCOL);
+                } else {
+                    sensors.syncSensor.record(response.requestLatencyMs());
+                    future.complete(ByteBuffer.wrap(syncResponse.data.assignment()));
+                }
             } else {
                 requestRejoin();
 

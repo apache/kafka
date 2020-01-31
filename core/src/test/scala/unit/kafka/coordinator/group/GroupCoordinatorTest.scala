@@ -1168,7 +1168,7 @@ class GroupCoordinatorTest {
   }
 
   @Test
-  def testJoinGroupReturnsAnNoneProtocolTypeWhenAnErrorOccurs(): Unit = {
+  def testJoinGroupProtocolTypeIsNotProvidedWhenAnErrorOccurs(): Unit = {
     // JoinGroup(leader)
     EasyMock.reset(replicaManager)
     val leaderResponseFuture = sendJoinGroup(groupId, "fake-id", protocolType,

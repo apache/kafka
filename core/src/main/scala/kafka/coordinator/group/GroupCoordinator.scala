@@ -929,8 +929,10 @@ class GroupCoordinator(val brokerId: Int,
   }
 
   private def propagateAssignment(group: GroupMetadata, error: Errors): Unit = {
-    val protocolType = if (error == Errors.NONE) group.protocolType else None
-    val protocolName = if (error == Errors.NONE) group.protocolName else None
+    val (protocolType, protocolName) = if (error == Errors.NONE)
+      (group.protocolType, group.protocolName)
+    else
+      (None, None)
     for (member <- group.allMemberMetadata) {
       if (group.maybeInvokeSyncCallback(member, SyncGroupResult(protocolType, protocolName, member.assignment, error))) {
         // reset the session timeout for members after propagating the member's assignment.
