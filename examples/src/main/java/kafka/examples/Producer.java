@@ -51,7 +51,7 @@ public class Producer extends Thread {
     }
 
     public void run() {
-        int messageNo = 1;
+        int messageNo = 0;
         while (true) {
             String messageStr = "Message_" + messageNo;
             long startTime = System.currentTimeMillis();
@@ -69,7 +69,7 @@ public class Producer extends Thread {
                     e.printStackTrace();
                 }
             }
-            ++messageNo;
+            messageNo += 2;
         }
     }
 }
