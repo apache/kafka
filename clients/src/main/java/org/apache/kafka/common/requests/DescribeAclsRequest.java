@@ -85,7 +85,7 @@ public class DescribeAclsRequest extends AbstractRequest {
                 || data.resourceType() == ResourceType.UNKNOWN.code()
                 || data.permissionType() == AclPermissionType.UNKNOWN.code()
                 || data.operation() == AclOperation.UNKNOWN.code()) {
-            throw new IllegalArgumentException("DescribeAclsRequest contain UNKNOWN elements: " + data);
+            throw new IllegalArgumentException("DescribeAclsRequest contains UNKNOWN elements: " + data);
         }
     }
 

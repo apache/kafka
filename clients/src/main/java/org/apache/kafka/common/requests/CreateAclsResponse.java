@@ -22,9 +22,9 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 public class CreateAclsResponse extends AbstractResponse {
     private final CreateAclsResponseData data;
@@ -53,10 +53,7 @@ public class CreateAclsResponse extends AbstractResponse {
 
     @Override
     public Map<Errors, Integer> errorCounts() {
-        Map<Errors, Integer> errorCounts = new HashMap<>();
-        for (CreateAclsResponseData.CreatableAclResult result : results())
-            updateErrorCounts(errorCounts, Errors.forCode(result.errorCode()));
-        return errorCounts;
+        return errorCounts(results().stream().map(r -> Errors.forCode(r.errorCode())).collect(Collectors.toList()));
     }
 
     public static CreateAclsResponse parse(ByteBuffer buffer, short version) {
