@@ -47,7 +47,6 @@ public class DeleteAclsRequest extends AbstractRequest {
 
         @Override
         public DeleteAclsRequest build(short version) {
-            validate(version);
             return new DeleteAclsRequest(version, data);
         }
 
@@ -56,31 +55,6 @@ public class DeleteAclsRequest extends AbstractRequest {
             return data.toString();
         }
 
-        private void validate(short version) {
-            if (version == 0) {
-                for (DeleteAclsRequestData.DeleteAclsFilter filter : data.filters()) {
-                    PatternType patternType = PatternType.fromCode(filter.patternTypeFilter());
-
-                    // If ANY is specified, we override it to the default of LITERAL
-                    if (patternType == PatternType.ANY)
-                        filter.setPatternTypeFilter(PatternType.LITERAL.code());
-                    else if (patternType != PatternType.LITERAL)
-                        throw new UnsupportedVersionException("Version 0 does not support pattern type " +
-                                patternType + " (only LITERAL and ANY are supported)");
-                }
-            }
-
-            final boolean unknown = data.filters().stream().anyMatch(filter ->
-                    filter.patternTypeFilter() == PatternType.UNKNOWN.code()
-                            || filter.resourceTypeFilter() == ResourceType.UNKNOWN.code()
-                            || filter.operation() == AclOperation.UNKNOWN.code()
-                            || filter.permissionType() == AclPermissionType.UNKNOWN.code()
-            );
-
-            if (unknown) {
-                throw new IllegalArgumentException("Filters contain UNKNOWN elements");
-            }
-        }
     }
 
     private final DeleteAclsRequestData data;
@@ -88,6 +62,35 @@ public class DeleteAclsRequest extends AbstractRequest {
     private DeleteAclsRequest(short version, DeleteAclsRequestData data) {
         super(ApiKeys.DELETE_ACLS, version);
         this.data = data;
+        normalizeAndValidate();
+    }
+
+    private void normalizeAndValidate() {
+        if (version() == 0) {
+            for (DeleteAclsRequestData.DeleteAclsFilter filter : data.filters()) {
+                PatternType patternType = PatternType.fromCode(filter.patternTypeFilter());
+
+                // On older brokers, no pattern types existed except LITERAL (effectively). So even though ANY is not
+                // directly supported on those brokers, we can get the same effect as ANY by setting the pattern type
+                // to LITERAL. Note that the wildcard `*` is considered `LITERAL` for compatibility reasons.
+                if (patternType == PatternType.ANY)
+                    filter.setPatternTypeFilter(PatternType.LITERAL.code());
+                else if (patternType != PatternType.LITERAL)
+                    throw new UnsupportedVersionException("Version 0 does not support pattern type " +
+                            patternType + " (only LITERAL and ANY are supported)");
+            }
+        }
+
+        final boolean unknown = data.filters().stream().anyMatch(filter ->
+                filter.patternTypeFilter() == PatternType.UNKNOWN.code()
+                        || filter.resourceTypeFilter() == ResourceType.UNKNOWN.code()
+                        || filter.operation() == AclOperation.UNKNOWN.code()
+                        || filter.permissionType() == AclPermissionType.UNKNOWN.code()
+        );
+
+        if (unknown) {
+            throw new IllegalArgumentException("Filters contain UNKNOWN elements, filters: " + data.filters());
+        }
     }
 
     public DeleteAclsRequest(Struct struct, short version) {
