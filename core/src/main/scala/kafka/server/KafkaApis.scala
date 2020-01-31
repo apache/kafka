@@ -1390,12 +1390,18 @@ class KafkaApis(val requestChannel: RequestChannel,
     // the callback for sending a join-group response
     def sendResponseCallback(joinResult: JoinGroupResult): Unit = {
       def createResponse(requestThrottleMs: Int): AbstractResponse = {
+        val protocolName = if (request.context.apiVersion() >= 7)
+          joinResult.protocolName.orNull
+        else
+          joinResult.protocolName.getOrElse(GroupCoordinator.NoProtocol)
+
         val responseBody = new JoinGroupResponse(
           new JoinGroupResponseData()
             .setThrottleTimeMs(requestThrottleMs)
             .setErrorCode(joinResult.error.code)
             .setGenerationId(joinResult.generationId)
-            .setProtocolName(joinResult.subProtocol)
+            .setProtocolType(joinResult.protocolType.orNull)
+            .setProtocolName(protocolName)
             .setLeader(joinResult.leaderId)
             .setMemberId(joinResult.memberId)
             .setMembers(joinResult.members.asJava)
@@ -1412,28 +1418,10 @@ class KafkaApis(val requestChannel: RequestChannel,
       // Only enable static membership when IBP >= 2.3, because it is not safe for the broker to use the static member logic
       // until we are sure that all brokers support it. If static group being loaded by an older coordinator, it will discard
       // the group.instance.id field, so static members could accidentally become "dynamic", which leads to wrong states.
-      sendResponseCallback(JoinGroupResult(
-        List.empty,
-        JoinGroupRequest.UNKNOWN_MEMBER_ID,
-        JoinGroupRequest.UNKNOWN_GENERATION_ID,
-        JoinGroupRequest.UNKNOWN_PROTOCOL,
-        JoinGroupRequest.UNKNOWN_MEMBER_ID,
-        Errors.UNSUPPORTED_VERSION
-      ))
+      sendResponseCallback(JoinGroupResult(JoinGroupRequest.UNKNOWN_MEMBER_ID, Errors.UNSUPPORTED_VERSION))
     } else if (!authorize(request, READ, GROUP, joinGroupRequest.data.groupId)) {
-      sendResponseMaybeThrottle(request, requestThrottleMs =>
-        new JoinGroupResponse(
-          new JoinGroupResponseData()
-            .setThrottleTimeMs(requestThrottleMs)
-            .setErrorCode(Errors.GROUP_AUTHORIZATION_FAILED.code)
-            .setGenerationId(JoinGroupRequest.UNKNOWN_GENERATION_ID)
-            .setProtocolName(JoinGroupRequest.UNKNOWN_PROTOCOL)
-            .setLeader(JoinGroupRequest.UNKNOWN_MEMBER_ID)
-            .setMemberId(JoinGroupRequest.UNKNOWN_MEMBER_ID)
-            .setMembers(util.Collections.emptyList())
-        )
-      )
-    }  else {
+      sendResponseCallback(JoinGroupResult(JoinGroupRequest.UNKNOWN_MEMBER_ID, Errors.GROUP_AUTHORIZATION_FAILED))
+    } else {
       val groupInstanceId = Option(joinGroupRequest.data.groupInstanceId)
 
       // Only return MEMBER_ID_REQUIRED error if joinGroupRequest version is >= 4
@@ -1443,6 +1431,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       // let the coordinator handle join-group
       val protocols = joinGroupRequest.data.protocols.valuesList.asScala.map(protocol =>
         (protocol.name, protocol.metadata)).toList
+
       groupCoordinator.handleJoinGroup(
         joinGroupRequest.data.groupId,
         joinGroupRequest.data.memberId,
@@ -1466,6 +1455,8 @@ class KafkaApis(val requestChannel: RequestChannel,
         new SyncGroupResponse(
           new SyncGroupResponseData()
             .setErrorCode(syncGroupResult.error.code)
+            .setProtocolType(syncGroupResult.protocolType.orNull)
+            .setProtocolName(syncGroupResult.protocolName.orNull)
             .setAssignment(syncGroupResult.memberAssignment)
             .setThrottleTimeMs(requestThrottleMs)
         ))
@@ -1475,9 +1466,12 @@ class KafkaApis(val requestChannel: RequestChannel,
       // Only enable static membership when IBP >= 2.3, because it is not safe for the broker to use the static member logic
       // until we are sure that all brokers support it. If static group being loaded by an older coordinator, it will discard
       // the group.instance.id field, so static members could accidentally become "dynamic", which leads to wrong states.
-      sendResponseCallback(SyncGroupResult(Array[Byte](), Errors.UNSUPPORTED_VERSION))
+      sendResponseCallback(SyncGroupResult(Errors.UNSUPPORTED_VERSION))
+    } else if (!syncGroupRequest.areMandatoryProtocolTypeAndNamePresent()) {
+      // Starting from version 5, ProtocolType and ProtocolName fields are mandatory.
+      sendResponseCallback(SyncGroupResult(Errors.INCONSISTENT_GROUP_PROTOCOL))
     } else if (!authorize(request, READ, GROUP, syncGroupRequest.data.groupId)) {
-      sendResponseCallback(SyncGroupResult(Array[Byte](), Errors.GROUP_AUTHORIZATION_FAILED))
+      sendResponseCallback(SyncGroupResult(Errors.GROUP_AUTHORIZATION_FAILED))
     } else {
       val assignmentMap = immutable.Map.newBuilder[String, Array[Byte]]
       syncGroupRequest.data.assignments.asScala.foreach { assignment =>
@@ -1488,6 +1482,8 @@ class KafkaApis(val requestChannel: RequestChannel,
         syncGroupRequest.data.groupId,
         syncGroupRequest.data.generationId,
         syncGroupRequest.data.memberId,
+        Option(syncGroupRequest.data.protocolType),
+        Option(syncGroupRequest.data.protocolName),
         Option(syncGroupRequest.data.groupInstanceId),
         assignmentMap.result,
         sendResponseCallback

@@ -89,6 +89,7 @@ import org.apache.kafka.common.message.InitProducerIdRequestData;
 import org.apache.kafka.common.message.InitProducerIdResponseData;
 import org.apache.kafka.common.message.JoinGroupRequestData;
 import org.apache.kafka.common.message.JoinGroupResponseData;
+import org.apache.kafka.common.message.JoinGroupResponseData.JoinGroupResponseMember;
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState;
 import org.apache.kafka.common.message.LeaderAndIsrResponseData;
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity;
@@ -115,6 +116,9 @@ import org.apache.kafka.common.message.SaslAuthenticateResponseData;
 import org.apache.kafka.common.message.SaslHandshakeRequestData;
 import org.apache.kafka.common.message.SaslHandshakeResponseData;
 import org.apache.kafka.common.message.StopReplicaResponseData;
+import org.apache.kafka.common.message.SyncGroupRequestData;
+import org.apache.kafka.common.message.SyncGroupRequestData.SyncGroupRequestAssignment;
+import org.apache.kafka.common.message.SyncGroupResponseData;
 import org.apache.kafka.common.message.UpdateMetadataRequestData.UpdateMetadataBroker;
 import org.apache.kafka.common.message.UpdateMetadataRequestData.UpdateMetadataEndpoint;
 import org.apache.kafka.common.message.UpdateMetadataRequestData.UpdateMetadataPartitionState;
@@ -202,10 +206,19 @@ public class RequestResponseTest {
         checkRequest(createHeartBeatRequest(), true);
         checkErrorResponse(createHeartBeatRequest(), new UnknownServerException(), true);
         checkResponse(createHeartBeatResponse(), 0, true);
-        checkRequest(createJoinGroupRequest(1), true);
-        checkErrorResponse(createJoinGroupRequest(0), new UnknownServerException(), true);
-        checkErrorResponse(createJoinGroupRequest(1), new UnknownServerException(), true);
-        checkResponse(createJoinGroupResponse(), 0, true);
+
+        for (int v = ApiKeys.JOIN_GROUP.oldestVersion(); v <= ApiKeys.JOIN_GROUP.latestVersion(); v++) {
+            checkRequest(createJoinGroupRequest(v), true);
+            checkErrorResponse(createJoinGroupRequest(v), new UnknownServerException(), true);
+            checkResponse(createJoinGroupResponse(v), v, true);
+        }
+
+        for (int v = ApiKeys.SYNC_GROUP.oldestVersion(); v <= ApiKeys.SYNC_GROUP.latestVersion(); v++) {
+            checkRequest(createSyncGroupRequest(v), true);
+            checkErrorResponse(createSyncGroupRequest(v), new UnknownServerException(), true);
+            checkResponse(createSyncGroupResponse(v), v, true);
+        }
+
         checkRequest(createLeaveGroupRequest(), true);
         checkErrorResponse(createLeaveGroupRequest(), new UnknownServerException(), true);
         checkResponse(createLeaveGroupResponse(), 0, true);
@@ -1003,56 +1016,104 @@ public class RequestResponseTest {
     }
 
     private JoinGroupRequest createJoinGroupRequest(int version) {
-        JoinGroupRequestData.JoinGroupRequestProtocolCollection protocols = new JoinGroupRequestData.JoinGroupRequestProtocolCollection(
+        JoinGroupRequestData.JoinGroupRequestProtocolCollection protocols =
+            new JoinGroupRequestData.JoinGroupRequestProtocolCollection(
                 Collections.singleton(
                 new JoinGroupRequestData.JoinGroupRequestProtocol()
                         .setName("consumer-range")
                         .setMetadata(new byte[0])).iterator()
         );
-        if (version <= 4) {
-            return new JoinGroupRequest.Builder(
-                    new JoinGroupRequestData()
-                            .setGroupId("group1")
-                            .setSessionTimeoutMs(30000)
-                            .setMemberId("consumer1")
-                            .setGroupInstanceId(null)
-                            .setProtocolType("consumer")
-                            .setProtocols(protocols)
-                            .setRebalanceTimeoutMs(60000)) // v1 and above contains rebalance timeout
-                    .build((short) version);
-        } else {
-            return new JoinGroupRequest.Builder(
-                    new JoinGroupRequestData()
-                            .setGroupId("group1")
-                            .setSessionTimeoutMs(30000)
-                            .setMemberId("consumer1")
-                            .setGroupInstanceId("groupInstanceId") // v5 and above could set group instance id
-                            .setProtocolType("consumer")
-                            .setProtocols(protocols)
-                            .setRebalanceTimeoutMs(60000)) // v1 and above contains rebalance timeout
-                    .build((short) version);
-        }
+
+        JoinGroupRequestData data = new JoinGroupRequestData()
+            .setGroupId("group1")
+            .setSessionTimeoutMs(30000)
+            .setMemberId("consumer1")
+            .setProtocolType("consumer")
+            .setProtocols(protocols);
+
+        // v1 and above contains rebalance timeout
+        if (version >= 1)
+            data.setRebalanceTimeoutMs(60000);
+
+        // v5 and above could set group instance id
+        if (version >= 5)
+            data.setGroupInstanceId("groupInstanceId");
+
+        return new JoinGroupRequest.Builder(data).build((short) version);
     }
 
-    private JoinGroupResponse createJoinGroupResponse() {
-        List<JoinGroupResponseData.JoinGroupResponseMember> members = Arrays.asList(
-                new JoinGroupResponseData.JoinGroupResponseMember()
-                        .setMemberId("consumer1")
-                        .setMetadata(new byte[0]),
-                new JoinGroupResponseData.JoinGroupResponseMember()
-                        .setMemberId("consumer2")
-                        .setMetadata(new byte[0])
+    private JoinGroupResponse createJoinGroupResponse(int version) {
+        List<JoinGroupResponseData.JoinGroupResponseMember> members = new ArrayList<>();
+
+        for (int i = 0; i < 2; i++) {
+            JoinGroupResponseMember member = new JoinGroupResponseData.JoinGroupResponseMember()
+                .setMemberId("consumer" + i)
+                .setMetadata(new byte[0]);
+
+            if (version >= 5)
+                member.setGroupInstanceId("instance" + i);
+
+            members.add(member);
+        }
+
+        JoinGroupResponseData data = new JoinGroupResponseData()
+            .setErrorCode(Errors.NONE.code())
+            .setGenerationId(1)
+            .setProtocolType("consumer") // Added in v7 but ignorable
+            .setProtocolName("range")
+            .setLeader("leader")
+            .setMemberId("consumer1")
+            .setMembers(members);
+
+        // v1 and above could set throttle time
+        if (version >= 1)
+            data.setThrottleTimeMs(1000);
+
+        return new JoinGroupResponse(data);
+    }
+
+    private SyncGroupRequest createSyncGroupRequest(int version) {
+        List<SyncGroupRequestAssignment> assignments = Collections.singletonList(
+            new SyncGroupRequestAssignment()
+                .setMemberId("member")
+                .setAssignment(new byte[0])
         );
 
-        return new JoinGroupResponse(
-                new JoinGroupResponseData()
-                        .setErrorCode(Errors.NONE.code())
-                        .setGenerationId(1)
-                        .setProtocolName("range")
-                        .setLeader("leader")
-                        .setMemberId("consumer1")
-                        .setMembers(members)
-        );
+        SyncGroupRequestData data = new SyncGroupRequestData()
+            .setGroupId("group1")
+            .setGenerationId(1)
+            .setMemberId("member")
+            .setProtocolType("consumer") // Added in v5 but ignorable
+            .setProtocolName("range")    // Added in v5 but ignorable
+            .setAssignments(assignments);
+
+        JoinGroupRequestData.JoinGroupRequestProtocolCollection protocols =
+            new JoinGroupRequestData.JoinGroupRequestProtocolCollection(
+                Collections.singleton(
+                    new JoinGroupRequestData.JoinGroupRequestProtocol()
+                        .setName("consumer-range")
+                        .setMetadata(new byte[0])).iterator()
+            );
+
+        // v3 and above could set group instance id
+        if (version >= 3)
+            data.setGroupInstanceId("groupInstanceId");
+
+        return new SyncGroupRequest.Builder(data).build((short) version);
+    }
+
+    private SyncGroupResponse createSyncGroupResponse(int version) {
+        SyncGroupResponseData data = new SyncGroupResponseData()
+            .setErrorCode(Errors.NONE.code())
+            .setProtocolType("consumer") // Added in v5 but ignorable
+            .setProtocolName("range")    // Added in v5 but ignorable
+            .setAssignment(new byte[0]);
+
+        // v1 and above could set throttle time
+        if (version >= 1)
+            data.setThrottleTimeMs(1000);
+
+        return new SyncGroupResponse(data);
     }
 
     private ListGroupsRequest createListGroupsRequest() {
