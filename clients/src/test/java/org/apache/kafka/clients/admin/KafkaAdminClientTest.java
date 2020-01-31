@@ -38,6 +38,7 @@ import org.apache.kafka.common.acl.AclBinding;
 import org.apache.kafka.common.acl.AclBindingFilter;
 import org.apache.kafka.common.acl.AclOperation;
 import org.apache.kafka.common.acl.AclPermissionType;
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.ClusterAuthorizationException;
@@ -108,11 +109,11 @@ import org.apache.kafka.common.requests.LeaveGroupResponse;
 import org.apache.kafka.common.requests.ListGroupsResponse;
 import org.apache.kafka.common.requests.ListOffsetResponse;
 import org.apache.kafka.common.requests.ListOffsetResponse.PartitionData;
-import org.apache.kafka.common.requests.MetadataResponse.PartitionMetadata;
-import org.apache.kafka.common.requests.MetadataResponse.TopicMetadata;
 import org.apache.kafka.common.requests.ListPartitionReassignmentsResponse;
 import org.apache.kafka.common.requests.MetadataRequest;
 import org.apache.kafka.common.requests.MetadataResponse;
+import org.apache.kafka.common.requests.MetadataResponse.PartitionMetadata;
+import org.apache.kafka.common.requests.MetadataResponse.TopicMetadata;
 import org.apache.kafka.common.requests.OffsetCommitResponse;
 import org.apache.kafka.common.requests.OffsetDeleteResponse;
 import org.apache.kafka.common.requests.OffsetFetchResponse;
@@ -123,9 +124,7 @@ import org.apache.kafka.common.resource.ResourceType;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
-import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.Timeout;
@@ -144,6 +143,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.OptionalInt;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
@@ -177,6 +177,14 @@ public class KafkaAdminClientTest {
 
     @Rule
     final public Timeout globalTimeout = Timeout.millis(120000);
+
+    @Test
+    public void testDefaultApiTimeoutAndRequestTimeoutConflicts() {
+        final AdminClientConfig config = newConfMap(AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG, "500");
+        KafkaException exception = assertThrows(KafkaException.class,
+            () -> KafkaAdminClient.createInternal(config, null));
+        assertTrue(exception.getCause() instanceof ConfigException);
+    }
 
     @Test
     public void testGetOrCreateListValue() {
@@ -591,7 +599,7 @@ public class KafkaAdminClientTest {
 
         try (final AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(Time.SYSTEM, bootstrapCluster,
                 newStrMap(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999",
-                        AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG, "10000000",
+                        AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG, "10000000",
                         AdminClientConfig.RETRIES_CONFIG, "0"))) {
 
             // The first request fails with a disconnect
@@ -845,54 +853,6 @@ public class KafkaAdminClientTest {
                         new ElectLeadersOptions().timeoutMs(100));
                 TestUtils.assertFutureError(results.partitions(), TimeoutException.class);
             }
-        }
-    }
-
-    /**
-     * Test handling timeouts.
-     */
-    @Ignore // The test is flaky. Should be renabled when this JIRA is fixed: https://issues.apache.org/jira/browse/KAFKA-5792
-    @Test
-    public void testHandleTimeout() throws Exception {
-        MockTime time = new MockTime();
-        try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(time,
-                mockCluster(1, 0),
-                AdminClientConfig.RECONNECT_BACKOFF_MAX_MS_CONFIG, "1",
-                AdminClientConfig.RECONNECT_BACKOFF_MS_CONFIG, "1")) {
-            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
-            assertEquals(time, env.time());
-            assertEquals(env.time(), ((KafkaAdminClient) env.adminClient()).time());
-
-            // Make a request with an extremely short timeout.
-            // Then wait for it to fail by not supplying any response.
-            log.info("Starting AdminClient#listTopics...");
-            final ListTopicsResult result = env.adminClient().listTopics(new ListTopicsOptions().timeoutMs(1000));
-            TestUtils.waitForCondition(new TestCondition() {
-                @Override
-                public boolean conditionMet() {
-                    return env.kafkaClient().hasInFlightRequests();
-                }
-            }, "Timed out waiting for inFlightRequests");
-            time.sleep(5000);
-            TestUtils.waitForCondition(new TestCondition() {
-                @Override
-                public boolean conditionMet() {
-                    return result.listings().isDone();
-                }
-            }, "Timed out waiting for listTopics to complete");
-            TestUtils.assertFutureError(result.listings(), TimeoutException.class);
-            log.info("Verified the error result of AdminClient#listTopics");
-
-            // The next request should succeed.
-            time.sleep(5000);
-            env.kafkaClient().prepareResponse(new DescribeConfigsResponse(0,
-                Collections.singletonMap(new ConfigResource(ConfigResource.Type.TOPIC, "foo"),
-                    new DescribeConfigsResponse.Config(ApiError.NONE,
-                        Collections.emptySet()))));
-            DescribeConfigsResult result2 = env.adminClient().describeConfigs(Collections.singleton(
-                new ConfigResource(ConfigResource.Type.TOPIC, "foo")));
-            time.sleep(5000);
-            result2.values().get(new ConfigResource(ConfigResource.Type.TOPIC, "foo")).get();
         }
     }
 
@@ -2552,6 +2512,146 @@ public class KafkaAdminClientTest {
         assertNull(KafkaAdminClient.getSubLevelError(errorsMap, memberIdentities.get(0), "For unit test"));
         assertEquals(FencedInstanceIdException.class, KafkaAdminClient.getSubLevelError(
             errorsMap, memberIdentities.get(1), "For unit test").getClass());
+    }
+
+    @Test
+    public void testSuccessfulRetryAfterRequestTimeout() throws Exception {
+        HashMap<Integer, Node> nodes = new HashMap<>();
+        MockTime time = new MockTime();
+        Node node0 = new Node(0, "localhost", 8121);
+        nodes.put(0, node0);
+        Cluster cluster = new Cluster("mockClusterId", nodes.values(),
+                Arrays.asList(new PartitionInfo("foo", 0, node0, new Node[]{node0}, new Node[]{node0})),
+                Collections.emptySet(), Collections.emptySet(),
+                Collections.emptySet(), nodes.get(0));
+
+        final int requestTimeoutMs = 1000;
+        final int retryBackoffMs = 100;
+        final int apiTimeoutMs = 3000;
+
+        try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(time, cluster,
+                AdminClientConfig.RETRY_BACKOFF_MS_CONFIG, String.valueOf(retryBackoffMs),
+                AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG, String.valueOf(requestTimeoutMs))) {
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+
+            final ListTopicsResult result = env.adminClient()
+                    .listTopics(new ListTopicsOptions().timeoutMs(apiTimeoutMs));
+
+            // Wait until the first attempt has been sent, then advance the time
+            TestUtils.waitForCondition(() -> env.kafkaClient().hasInFlightRequests(),
+                    "Timed out waiting for Metadata request to be sent");
+            time.sleep(requestTimeoutMs + 1);
+
+            // Wait for the request to be timed out before backing off
+            TestUtils.waitForCondition(() -> !env.kafkaClient().hasInFlightRequests(),
+                    "Timed out waiting for inFlightRequests to be timed out");
+            time.sleep(retryBackoffMs);
+
+            // Since api timeout bound is not hit, AdminClient should retry
+            TestUtils.waitForCondition(() -> env.kafkaClient().hasInFlightRequests(),
+                    "Failed to retry Metadata request");
+            env.kafkaClient().respond(prepareMetadataResponse(cluster, Errors.NONE));
+
+            assertEquals(1, result.listings().get().size());
+            assertEquals("foo", result.listings().get().iterator().next().name());
+        }
+    }
+
+    @Test
+    public void testDefaultApiTimeout() throws Exception {
+        testApiTimeout(1500, 3000, OptionalInt.empty());
+    }
+
+    @Test
+    public void testDefaultApiTimeoutOverride() throws Exception {
+        testApiTimeout(1500, 10000, OptionalInt.of(3000));
+    }
+
+    private void testApiTimeout(int requestTimeoutMs,
+                                int defaultApiTimeoutMs,
+                                OptionalInt overrideApiTimeoutMs) throws Exception {
+        HashMap<Integer, Node> nodes = new HashMap<>();
+        MockTime time = new MockTime();
+        Node node0 = new Node(0, "localhost", 8121);
+        nodes.put(0, node0);
+        Cluster cluster = new Cluster("mockClusterId", nodes.values(),
+                Arrays.asList(new PartitionInfo("foo", 0, node0, new Node[]{node0}, new Node[]{node0})),
+                Collections.emptySet(), Collections.emptySet(),
+                Collections.emptySet(), nodes.get(0));
+
+        final int retryBackoffMs = 100;
+        final int effectiveTimeoutMs = overrideApiTimeoutMs.orElse(defaultApiTimeoutMs);
+        assertEquals("This test expects the effective timeout to be twice the request timeout",
+                2 * requestTimeoutMs, effectiveTimeoutMs);
+
+        try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(time, cluster,
+                AdminClientConfig.RETRY_BACKOFF_MS_CONFIG, String.valueOf(retryBackoffMs),
+                AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG, String.valueOf(requestTimeoutMs),
+                AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG, String.valueOf(defaultApiTimeoutMs))) {
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+
+            ListTopicsOptions options = new ListTopicsOptions();
+            overrideApiTimeoutMs.ifPresent(options::timeoutMs);
+
+            final ListTopicsResult result = env.adminClient().listTopics(options);
+
+            // Wait until the first attempt has been sent, then advance the time
+            TestUtils.waitForCondition(() -> env.kafkaClient().hasInFlightRequests(),
+                    "Timed out waiting for Metadata request to be sent");
+            time.sleep(requestTimeoutMs + 1);
+
+            // Wait for the request to be timed out before backing off
+            TestUtils.waitForCondition(() -> !env.kafkaClient().hasInFlightRequests(),
+                    "Timed out waiting for inFlightRequests to be timed out");
+            time.sleep(retryBackoffMs);
+
+            // Since api timeout bound is not hit, AdminClient should retry
+            TestUtils.waitForCondition(() -> env.kafkaClient().hasInFlightRequests(),
+                    "Timed out waiting for Metadata request to be sent");
+            time.sleep(requestTimeoutMs + 1);
+
+            TestUtils.assertFutureThrows(result.future, TimeoutException.class);
+        }
+    }
+
+    @Test
+    public void testRequestTimeoutExceedingDefaultApiTimeout() throws Exception {
+        HashMap<Integer, Node> nodes = new HashMap<>();
+        MockTime time = new MockTime();
+        Node node0 = new Node(0, "localhost", 8121);
+        nodes.put(0, node0);
+        Cluster cluster = new Cluster("mockClusterId", nodes.values(),
+                Arrays.asList(new PartitionInfo("foo", 0, node0, new Node[]{node0}, new Node[]{node0})),
+                Collections.emptySet(), Collections.emptySet(),
+                Collections.emptySet(), nodes.get(0));
+
+        // This test assumes the default api timeout value of 60000. When the request timeout
+        // is set to something larger, we should adjust the api timeout accordingly for compatibility.
+
+        final int retryBackoffMs = 100;
+        final int requestTimeoutMs = 120000;
+
+        try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(time, cluster,
+                AdminClientConfig.RETRY_BACKOFF_MS_CONFIG, String.valueOf(retryBackoffMs),
+                AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG, String.valueOf(requestTimeoutMs))) {
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+
+            ListTopicsOptions options = new ListTopicsOptions();
+
+            final ListTopicsResult result = env.adminClient().listTopics(options);
+
+            // Wait until the first attempt has been sent, then advance the time by the default api timeout
+            TestUtils.waitForCondition(() -> env.kafkaClient().hasInFlightRequests(),
+                    "Timed out waiting for Metadata request to be sent");
+            time.sleep(60001);
+
+            // The in-flight request should not be cancelled
+            assertTrue(env.kafkaClient().hasInFlightRequests());
+
+            // Now sleep the remaining time for the request timeout to expire
+            time.sleep(60000);
+            TestUtils.assertFutureThrows(result.future, TimeoutException.class);
+        }
     }
 
     private static MemberDescription convertToMemberDescriptions(DescribedGroupMember member,
