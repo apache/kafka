@@ -46,7 +46,7 @@ public abstract class AbstractStream<K, V> {
     protected final String name;
     protected final Serde<K> keySerde;
     protected final Serde<V> valSerde;
-    protected final Set<String> sourceNodes;
+    protected final Set<String> subTopologySourceNodes;
     protected final StreamsGraphNode streamsGraphNode;
     protected final InternalStreamsBuilder builder;
 
@@ -57,17 +57,17 @@ public abstract class AbstractStream<K, V> {
         this.builder = stream.builder;
         this.keySerde = stream.keySerde;
         this.valSerde = stream.valSerde;
-        this.sourceNodes = stream.sourceNodes;
+        this.subTopologySourceNodes = stream.subTopologySourceNodes;
         this.streamsGraphNode = stream.streamsGraphNode;
     }
 
     AbstractStream(final String name,
                    final Serde<K> keySerde,
                    final Serde<V> valSerde,
-                   final Set<String> sourceNodes,
+                   final Set<String> subTopologySourceNodes,
                    final StreamsGraphNode streamsGraphNode,
                    final InternalStreamsBuilder builder) {
-        if (sourceNodes == null || sourceNodes.isEmpty()) {
+        if (subTopologySourceNodes == null || subTopologySourceNodes.isEmpty()) {
             throw new IllegalArgumentException("parameter <sourceNodes> must not be null or empty");
         }
 
@@ -75,7 +75,7 @@ public abstract class AbstractStream<K, V> {
         this.builder = builder;
         this.keySerde = keySerde;
         this.valSerde = valSerde;
-        this.sourceNodes = sourceNodes;
+        this.subTopologySourceNodes = subTopologySourceNodes;
         this.streamsGraphNode = streamsGraphNode;
     }
 
@@ -86,9 +86,9 @@ public abstract class AbstractStream<K, V> {
     }
 
     Set<String> ensureCopartitionWith(final Collection<? extends AbstractStream<K, ?>> otherStreams) {
-        final Set<String> allSourceNodes = new HashSet<>(sourceNodes);
+        final Set<String> allSourceNodes = new HashSet<>(subTopologySourceNodes);
         for (final AbstractStream<K, ?> other: otherStreams) {
-            allSourceNodes.addAll(other.sourceNodes);
+            allSourceNodes.addAll(other.subTopologySourceNodes);
         }
         builder.internalTopologyBuilder.copartitionSources(allSourceNodes);
 
