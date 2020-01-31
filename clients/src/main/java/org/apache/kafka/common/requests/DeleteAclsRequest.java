@@ -24,7 +24,9 @@ import org.apache.kafka.common.acl.AclOperation;
 import org.apache.kafka.common.acl.AclPermissionType;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.DeleteAclsRequestData;
+import org.apache.kafka.common.message.DeleteAclsRequestData.DeleteAclsFilter;
 import org.apache.kafka.common.message.DeleteAclsResponseData;
+import org.apache.kafka.common.message.DeleteAclsResponseData.DeleteAclsFilterResult;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.resource.PatternType;
@@ -32,7 +34,6 @@ import org.apache.kafka.common.resource.ResourcePatternFilter;
 import org.apache.kafka.common.resource.ResourceType;
 
 import java.nio.ByteBuffer;
-import java.util.ArrayList;
 import java.util.List;
 
 import static org.apache.kafka.common.protocol.ApiKeys.DELETE_ACLS;
@@ -110,11 +111,11 @@ public class DeleteAclsRequest extends AbstractRequest {
 
     @Override
     public AbstractResponse getErrorResponse(int throttleTimeMs, Throwable throwable) {
-        List<DeleteAclsResponseData.DeleteAclsFilterResult> filterResults = new ArrayList<>();
         ApiError apiError = ApiError.fromThrowable(throwable);
-        Collections.nCopies(data.filters().size(), new DeleteAclsResponseData.DeleteAclsFilterResult()
-            .setErrorCode(apiError.error().code())
-            .setErrorMessage(apiError.message()));
+        List<DeleteAclsFilterResult> filterResults = Collections.nCopies(data.filters().size(),
+            new DeleteAclsResponseData.DeleteAclsFilterResult()
+                .setErrorCode(apiError.error().code())
+                .setErrorMessage(apiError.message()));
         return new DeleteAclsResponse(new DeleteAclsResponseData()
             .setThrottleTimeMs(throttleTimeMs)
             .setFilterResults(filterResults));
@@ -124,8 +125,8 @@ public class DeleteAclsRequest extends AbstractRequest {
         return new DeleteAclsRequest(DELETE_ACLS.parseRequest(version, buffer), version);
     }
 
-    public static DeleteAclsRequestData.DeleteAclsFilter deleteAclsFilter(AclBindingFilter filter) {
-        return new DeleteAclsRequestData.DeleteAclsFilter()
+    public static DeleteAclsFilter deleteAclsFilter(AclBindingFilter filter) {
+        return new DeleteAclsFilter()
             .setResourceNameFilter(filter.patternFilter().name())
             .setResourceTypeFilter(filter.patternFilter().resourceType().code())
             .setPatternTypeFilter(filter.patternFilter().patternType().code())
@@ -135,7 +136,7 @@ public class DeleteAclsRequest extends AbstractRequest {
             .setPrincipalFilter(filter.entryFilter().principal());
     }
 
-    private static AclBindingFilter aclBindingFilter(DeleteAclsRequestData.DeleteAclsFilter filter) {
+    private static AclBindingFilter aclBindingFilter(DeleteAclsFilter filter) {
         ResourcePatternFilter patternFilter = new ResourcePatternFilter(
             ResourceType.fromCode(filter.resourceTypeFilter()),
             filter.resourceNameFilter(),
