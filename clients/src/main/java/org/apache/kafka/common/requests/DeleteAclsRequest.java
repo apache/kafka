@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.requests;
 
+import java.util.Collections;
 import java.util.stream.Collectors;
 import org.apache.kafka.common.acl.AccessControlEntryFilter;
 import org.apache.kafka.common.acl.AclBindingFilter;
@@ -110,12 +111,10 @@ public class DeleteAclsRequest extends AbstractRequest {
     @Override
     public AbstractResponse getErrorResponse(int throttleTimeMs, Throwable throwable) {
         List<DeleteAclsResponseData.DeleteAclsFilterResult> filterResults = new ArrayList<>();
-        data.filters().forEach(__ -> {
-            ApiError apiError = ApiError.fromThrowable(throwable);
-            filterResults.add(new DeleteAclsResponseData.DeleteAclsFilterResult()
-                .setErrorCode(apiError.error().code())
-                .setErrorMessage(apiError.message()));
-        });
+        ApiError apiError = ApiError.fromThrowable(throwable);
+        Collections.nCopies(data.filters().size(), new DeleteAclsResponseData.DeleteAclsFilterResult()
+            .setErrorCode(apiError.error().code())
+            .setErrorMessage(apiError.message()));
         return new DeleteAclsResponse(new DeleteAclsResponseData()
             .setThrottleTimeMs(throttleTimeMs)
             .setFilterResults(filterResults));
