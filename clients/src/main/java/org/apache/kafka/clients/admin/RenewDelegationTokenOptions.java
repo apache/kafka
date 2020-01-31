@@ -21,10 +21,7 @@ import org.apache.kafka.common.annotation.InterfaceStability;
 
 /**
  * Options for {@link Admin#renewDelegationToken(byte[], RenewDelegationTokenOptions)}.
- *
- * The API of this class is evolving, see {@link Admin} for details.
  */
-@InterfaceStability.Evolving
 public class RenewDelegationTokenOptions extends AbstractOptions<RenewDelegationTokenOptions> {
     private long renewTimePeriodMs = -1;
 

@@ -21,9 +21,6 @@ import org.apache.kafka.common.annotation.InterfaceStability;
 
 /**
  * Options for {@link AdminClient#listPartitionReassignments(ListPartitionReassignmentsOptions)}
- *
- * The API of this class is evolving. See {@link AdminClient} for details.
  */
-@InterfaceStability.Evolving
 public class ListPartitionReassignmentsOptions extends AbstractOptions<ListPartitionReassignmentsOptions> {
 }

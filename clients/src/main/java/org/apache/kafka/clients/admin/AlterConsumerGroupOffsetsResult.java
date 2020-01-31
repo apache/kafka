@@ -30,10 +30,7 @@ import org.apache.kafka.common.protocol.Errors;
 
 /**
  * The result of the {@link AdminClient#alterConsumerGroupOffsets(String, Map)} call.
- *
- * The API of this class is evolving, see {@link AdminClient} for details.
  */
-@InterfaceStability.Evolving
 public class AlterConsumerGroupOffsetsResult {
 
     private final KafkaFuture<Map<TopicPartition, Errors>> future;

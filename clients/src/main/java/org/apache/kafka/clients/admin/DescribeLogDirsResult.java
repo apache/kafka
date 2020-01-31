@@ -28,10 +28,7 @@ import org.apache.kafka.common.requests.DescribeLogDirsResponse.LogDirInfo;
 
 /**
  * The result of the {@link Admin#describeLogDirs(Collection)} call.
- *
- * The API of this class is evolving, see {@link Admin} for details.
  */
-@InterfaceStability.Evolving
 public class DescribeLogDirsResult {
     private final Map<Integer, KafkaFuture<Map<String, LogDirInfo>>> futures;
 

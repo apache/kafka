@@ -24,10 +24,7 @@ import org.apache.kafka.common.security.auth.KafkaPrincipal;
 
 /**
  * Options for {@link Admin#describeDelegationToken(DescribeDelegationTokenOptions)}.
- *
- * The API of this class is evolving, see {@link Admin} for details.
  */
-@InterfaceStability.Evolving
 public class DescribeDelegationTokenOptions extends AbstractOptions<DescribeDelegationTokenOptions> {
     private List<KafkaPrincipal> owners;
 

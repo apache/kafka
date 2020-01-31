@@ -21,10 +21,7 @@ import org.apache.kafka.common.annotation.InterfaceStability;
 
 /**
  * Options for {@link AdminClient#listOffsets(Map)}.
- *
- * The API of this class is evolving, see {@link AdminClient} for details.
  */
-@InterfaceStability.Evolving
 public class ListOffsetsOptions extends AbstractOptions<ListOffsetsOptions> {
 
     private final IsolationLevel isolationLevel;

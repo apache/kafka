@@ -23,7 +23,6 @@ import java.util.Map;
 /**
  * Options for {@link Admin#alterReplicaLogDirs(Map, AlterReplicaLogDirsOptions)}.
  */
-@InterfaceStability.Evolving
 public class AlterReplicaLogDirsOptions extends AbstractOptions<AlterReplicaLogDirsOptions> {
 
 }

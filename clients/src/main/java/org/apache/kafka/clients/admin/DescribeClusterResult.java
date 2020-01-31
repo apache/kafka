@@ -27,10 +27,7 @@ import java.util.Set;
 
 /**
  * The result of the {@link KafkaAdminClient#describeCluster()} call.
- *
- * The API of this class is evolving, see {@link Admin} for details.
  */
-@InterfaceStability.Evolving
 public class DescribeClusterResult {
     private final KafkaFuture<Collection<Node>> nodes;
     private final KafkaFuture<Node> controller;

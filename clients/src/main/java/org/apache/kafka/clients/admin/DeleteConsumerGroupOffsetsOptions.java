@@ -21,10 +21,7 @@ import org.apache.kafka.common.annotation.InterfaceStability;
 
 /**
  * Options for the {@link Admin#deleteConsumerGroupOffsets(String, Set)} call.
- *
- * The API of this class is evolving, see {@link Admin} for details.
  */
-@InterfaceStability.Evolving
 public class DeleteConsumerGroupOffsetsOptions extends AbstractOptions<DeleteConsumerGroupOffsetsOptions> {
 
 }

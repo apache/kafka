@@ -24,10 +24,7 @@ import java.util.List;
 
 /**
  * Options for {@link Admin#listConsumerGroupOffsets(String)}.
- * <p>
- * The API of this class is evolving, see {@link Admin} for details.
  */
-@InterfaceStability.Evolving
 public class ListConsumerGroupOffsetsOptions extends AbstractOptions<ListConsumerGroupOffsetsOptions> {
 
     private List<TopicPartition> topicPartitions = null;

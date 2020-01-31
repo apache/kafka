@@ -31,11 +31,8 @@ import org.apache.kafka.common.internals.KafkaFutureImpl;
 /**
  * The result of {@link Admin#electPreferredLeaders(Collection, ElectPreferredLeadersOptions)}
  *
- * The API of this class is evolving, see {@link Admin} for details.
- *
  * @deprecated Since 2.4.0. Use {@link Admin#electLeaders(ElectionType, Set, ElectLeadersOptions)}.
  */
-@InterfaceStability.Evolving
 @Deprecated
 public class ElectPreferredLeadersResult {
     private final ElectLeadersResult electionResult;

@@ -24,10 +24,7 @@ import java.util.Collection;
 
 /**
  * Options for {@link Admin#describeLogDirs(Collection)}
- *
- * The API of this class is evolving, see {@link Admin} for details.
  */
-@InterfaceStability.Evolving
 public class DescribeLogDirsOptions extends AbstractOptions<DescribeLogDirsOptions> {
 
 }

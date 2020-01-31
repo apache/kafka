@@ -26,10 +26,7 @@ import java.util.Set;
 
 /**
  * The result of the {@link Admin#listTopics()} call.
- *
- * The API of this class is evolving, see {@link Admin} for details.
  */
-@InterfaceStability.Evolving
 public class ListTopicsResult {
     final KafkaFuture<Map<String, TopicListing>> future;
 

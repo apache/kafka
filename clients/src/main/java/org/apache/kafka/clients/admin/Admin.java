@@ -48,7 +48,6 @@ import org.apache.kafka.common.requests.LeaveGroupResponse;
  * manner, but we reserve the right to make breaking changes in minor releases, if necessary. We will update the
  * {@code InterfaceStability} annotation and this notice once the API is considered stable.
  */
-@InterfaceStability.Evolving
 public interface Admin extends AutoCloseable {
 
     /**

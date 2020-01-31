@@ -26,10 +26,7 @@ import java.util.Map;
 
 /**
  * The result of the {@link Admin#listConsumerGroupOffsets(String)} call.
- * <p>
- * The API of this class is evolving, see {@link Admin} for details.
  */
-@InterfaceStability.Evolving
 public class ListConsumerGroupOffsetsResult {
 
     final KafkaFuture<Map<TopicPartition, OffsetAndMetadata>> future;
