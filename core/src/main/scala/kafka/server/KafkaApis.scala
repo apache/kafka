@@ -1390,6 +1390,10 @@ class KafkaApis(val requestChannel: RequestChannel,
     // the callback for sending a join-group response
     def sendResponseCallback(joinResult: JoinGroupResult): Unit = {
       def createResponse(requestThrottleMs: Int): AbstractResponse = {
+        val protocolName = if (request.context.apiVersion() >= 7)
+          joinResult.protocolName.orNull
+        else
+          joinResult.protocolName.getOrElse(GroupCoordinator.NoProtocol)
 
         val responseBody = new JoinGroupResponse(
           new JoinGroupResponseData()
@@ -1397,7 +1401,7 @@ class KafkaApis(val requestChannel: RequestChannel,
             .setErrorCode(joinResult.error.code)
             .setGenerationId(joinResult.generationId)
             .setProtocolType(joinResult.protocolType.orNull)
-            .setProtocolName(joinResult.protocolName)
+            .setProtocolName(protocolName)
             .setLeader(joinResult.leaderId)
             .setMemberId(joinResult.memberId)
             .setMembers(joinResult.members.asJava)
@@ -1414,29 +1418,9 @@ class KafkaApis(val requestChannel: RequestChannel,
       // Only enable static membership when IBP >= 2.3, because it is not safe for the broker to use the static member logic
       // until we are sure that all brokers support it. If static group being loaded by an older coordinator, it will discard
       // the group.instance.id field, so static members could accidentally become "dynamic", which leads to wrong states.
-      sendResponseCallback(JoinGroupResult(
-        List.empty,
-        JoinGroupRequest.UNKNOWN_MEMBER_ID,
-        JoinGroupRequest.UNKNOWN_GENERATION_ID,
-        None,
-        JoinGroupRequest.UNKNOWN_PROTOCOL,
-        JoinGroupRequest.UNKNOWN_MEMBER_ID,
-        Errors.UNSUPPORTED_VERSION
-      ))
+      sendResponseCallback(JoinGroupResult(JoinGroupRequest.UNKNOWN_MEMBER_ID, Errors.UNSUPPORTED_VERSION))
     } else if (!authorize(request, READ, GROUP, joinGroupRequest.data.groupId)) {
-      sendResponseMaybeThrottle(request, requestThrottleMs =>
-        new JoinGroupResponse(
-          new JoinGroupResponseData()
-            .setThrottleTimeMs(requestThrottleMs)
-            .setErrorCode(Errors.GROUP_AUTHORIZATION_FAILED.code)
-            .setGenerationId(JoinGroupRequest.UNKNOWN_GENERATION_ID)
-            .setProtocolType(JoinGroupRequest.UNKNOWN_PROTOCOL_TYPE)
-            .setProtocolName(JoinGroupRequest.UNKNOWN_PROTOCOL)
-            .setLeader(JoinGroupRequest.UNKNOWN_MEMBER_ID)
-            .setMemberId(JoinGroupRequest.UNKNOWN_MEMBER_ID)
-            .setMembers(util.Collections.emptyList())
-        )
-      )
+      sendResponseCallback(JoinGroupResult(JoinGroupRequest.UNKNOWN_MEMBER_ID, Errors.GROUP_AUTHORIZATION_FAILED))
     } else {
       val groupInstanceId = Option(joinGroupRequest.data.groupInstanceId)
 

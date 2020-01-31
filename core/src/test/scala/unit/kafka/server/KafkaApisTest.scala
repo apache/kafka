@@ -730,13 +730,13 @@ class KafkaApisTest {
   }
 
   @Test
-  def testJoinGroupProtocolType(): Unit = {
+  def testJoinGroupWhenAnErrorOccurs(): Unit = {
     for (version <- ApiKeys.JOIN_GROUP.oldestVersion to ApiKeys.JOIN_GROUP.latestVersion) {
-      testJoinGroupProtocolType(version.asInstanceOf[Short])
+      testJoinGroupWhenAnErrorOccurs(version.asInstanceOf[Short])
     }
   }
 
-  def testJoinGroupProtocolType(version: Short): Unit = {
+  def testJoinGroupWhenAnErrorOccurs(version: Short): Unit = {
     EasyMock.reset(groupCoordinator, clientRequestQuotaManager, requestChannel)
 
     val capturedResponse = expectNoThrottling()
@@ -780,12 +780,85 @@ class KafkaApisTest {
 
     EasyMock.verify(groupCoordinator)
 
+    capturedCallback.getValue.apply(JoinGroupResult(memberId, Errors.INCONSISTENT_GROUP_PROTOCOL))
+
+    val response = readResponse(ApiKeys.JOIN_GROUP, joinGroupRequest, capturedResponse)
+      .asInstanceOf[JoinGroupResponse]
+
+    assertEquals(Errors.INCONSISTENT_GROUP_PROTOCOL, response.error)
+    assertEquals(0, response.data.members.size)
+    assertEquals(memberId, response.data.memberId)
+    assertEquals(GroupCoordinator.NoGeneration, response.data.generationId)
+    assertEquals(GroupCoordinator.NoLeader, response.data.leader)
+    assertNull(response.data.protocolType)
+
+    if (version >= 7) {
+      assertNull(response.data.protocolName)
+    } else {
+      assertEquals(GroupCoordinator.NoProtocol, response.data.protocolName)
+    }
+
+    EasyMock.verify(clientRequestQuotaManager, requestChannel)
+  }
+
+  @Test
+  def testJoinGroupProtocolType(): Unit = {
+    for (version <- ApiKeys.JOIN_GROUP.oldestVersion to ApiKeys.JOIN_GROUP.latestVersion) {
+      testJoinGroupProtocolType(version.asInstanceOf[Short])
+    }
+  }
+
+  def testJoinGroupProtocolType(version: Short): Unit = {
+    EasyMock.reset(groupCoordinator, clientRequestQuotaManager, requestChannel)
+
+    val capturedResponse = expectNoThrottling()
+
+    val groupId = "group"
+    val memberId = "member1"
+    val protocolType = "consumer"
+    val protocolName = "range"
+    val rebalanceTimeoutMs = 10
+    val sessionTimeoutMs = 5
+
+    val capturedCallback = EasyMock.newCapture[JoinGroupCallback]()
+
+    EasyMock.expect(groupCoordinator.handleJoinGroup(
+      EasyMock.eq(groupId),
+      EasyMock.eq(memberId),
+      EasyMock.eq(None),
+      EasyMock.eq(if (version >= 4) true else false),
+      EasyMock.eq(clientId),
+      EasyMock.eq(InetAddress.getLocalHost.toString),
+      EasyMock.eq(if (version >= 1) rebalanceTimeoutMs else sessionTimeoutMs),
+      EasyMock.eq(sessionTimeoutMs),
+      EasyMock.eq(protocolType),
+      EasyMock.eq(List.empty),
+      EasyMock.capture(capturedCallback)
+    ))
+
+    val joinGroupRequest = new JoinGroupRequest.Builder(
+      new JoinGroupRequestData()
+        .setGroupId(groupId)
+        .setMemberId(memberId)
+        .setProtocolType(protocolType)
+        .setRebalanceTimeoutMs(rebalanceTimeoutMs)
+        .setSessionTimeoutMs(sessionTimeoutMs)
+    ).build(version)
+
+    val requestChannelRequest = buildRequest(joinGroupRequest)
+
+    EasyMock.replay(groupCoordinator, clientRequestQuotaManager, requestChannel)
+
+    createKafkaApis().handleJoinGroupRequest(requestChannelRequest)
+
+    EasyMock.verify(groupCoordinator)
+
     capturedCallback.getValue.apply(JoinGroupResult(
       members = List.empty,
       memberId = memberId,
       generationId = 0,
       protocolType = Some(protocolType),
-      protocolName = "",
+      protocolName = Some(protocolName),
       leaderId = memberId,
       error = Errors.NONE
     ))
@@ -798,6 +871,7 @@ class KafkaApisTest {
     assertEquals(memberId, response.data.memberId)
     assertEquals(0, response.data.generationId)
     assertEquals(memberId, response.data.leader)
+    assertEquals(protocolName, response.data.protocolName)
 
     if (version >= 7) {
       assertEquals(protocolType, response.data.protocolType)

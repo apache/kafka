@@ -43,7 +43,7 @@
     { "name": "ProtocolType", "type": "string", "versions": "7+",
       "nullableVersions": "7+", "default": "null", "ignorable": true,
       "about": "The group protocol name." },
-    { "name": "ProtocolName", "type": "string", "versions": "0+",
+    { "name": "ProtocolName", "type": "string", "versions": "0+", "nullableVersions": "7+",
       "about": "The group protocol selected by the coordinator." },
     { "name": "Leader", "type": "string", "versions": "0+",
       "about": "The leader of the group." },

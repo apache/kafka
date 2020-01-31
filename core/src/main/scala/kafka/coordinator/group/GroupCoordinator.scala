@@ -223,7 +223,7 @@ class GroupCoordinator(val brokerId: Int,
                 memberId = newMemberId,
                 generationId = group.generationId,
                 protocolType = group.protocolType,
-                protocolName = group.protocolName.orNull,
+                protocolName = group.protocolName,
                 // We want to avoid current leader performing trivial assignment while the group
                 // is in stable/awaiting sync stage, because the new assignment in leader's next sync call
                 // won't be broadcast by a stable/awaiting sync group. This could be guaranteed by
@@ -314,7 +314,7 @@ class GroupCoordinator(val brokerId: Int,
                   memberId = memberId,
                   generationId = group.generationId,
                   protocolType = group.protocolType,
-                  protocolName = group.protocolName.orNull,
+                  protocolName = group.protocolName,
                   leaderId = group.leaderOrNull,
                   error = Errors.NONE))
               } else {
@@ -337,7 +337,7 @@ class GroupCoordinator(val brokerId: Int,
                   memberId = memberId,
                   generationId = group.generationId,
                   protocolType = group.protocolType,
-                  protocolName = group.protocolName.orNull,
+                  protocolName = group.protocolName,
                   leaderId = group.leaderOrNull,
                   error = Errors.NONE))
               }
@@ -1140,7 +1140,7 @@ class GroupCoordinator(val brokerId: Int,
               memberId = member.memberId,
               generationId = group.generationId,
               protocolType = group.protocolType,
-              protocolName = group.protocolName.orNull,
+              protocolName = group.protocolName,
               leaderId = group.leaderOrNull,
               error = Errors.NONE)
 
@@ -1293,7 +1293,7 @@ case class JoinGroupResult(members: List[JoinGroupResponseMember],
                            memberId: String,
                            generationId: Int,
                            protocolType: Option[String],
-                           protocolName: String,
+                           protocolName: Option[String],
                            leaderId: String,
                            error: Errors)
 
@@ -1304,7 +1304,7 @@ object JoinGroupResult {
       memberId = memberId,
       generationId = GroupCoordinator.NoGeneration,
       protocolType = None,
-      protocolName = GroupCoordinator.NoProtocol,
+      protocolName = None,
       leaderId = GroupCoordinator.NoLeader,
       error = error)
   }
