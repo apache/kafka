@@ -47,7 +47,7 @@ public class CreateAclsResponse extends AbstractResponse {
         return data.throttleTimeMs();
     }
 
-    public List<CreateAclsResponseData.CreatableAclResult> results() {
+    public List<CreateAclsResponseData.AclCreationResult> results() {
         return data.results();
     }
 

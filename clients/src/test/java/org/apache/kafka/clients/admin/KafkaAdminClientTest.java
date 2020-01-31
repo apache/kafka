@@ -732,8 +732,8 @@ public class KafkaAdminClientTest {
 
             // Test a call where we successfully create two ACLs.
             env.kafkaClient().prepareResponse(new CreateAclsResponse(new CreateAclsResponseData().setResults(asList(
-                new CreateAclsResponseData.CreatableAclResult(),
-                new CreateAclsResponseData.CreatableAclResult()))));
+                new CreateAclsResponseData.AclCreationResult(),
+                new CreateAclsResponseData.AclCreationResult()))));
             CreateAclsResult results = env.adminClient().createAcls(asList(ACL1, ACL2));
             assertCollectionIs(results.values().keySet(), ACL1, ACL2);
             for (KafkaFuture<Void> future : results.values().values())
@@ -742,10 +742,10 @@ public class KafkaAdminClientTest {
 
             // Test a call where we fail to create one ACL.
             env.kafkaClient().prepareResponse(new CreateAclsResponse(new CreateAclsResponseData().setResults(asList(
-                new CreateAclsResponseData.CreatableAclResult()
+                new CreateAclsResponseData.AclCreationResult()
                     .setErrorCode(Errors.SECURITY_DISABLED.code())
                     .setErrorMessage("Security is disabled"),
-                new CreateAclsResponseData.CreatableAclResult()))));
+                new CreateAclsResponseData.AclCreationResult()))));
             results = env.adminClient().createAcls(asList(ACL1, ACL2));
             assertCollectionIs(results.values().keySet(), ACL1, ACL2);
             TestUtils.assertFutureError(results.values().get(ACL1), SecurityDisabledException.class);

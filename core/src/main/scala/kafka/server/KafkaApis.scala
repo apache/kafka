@@ -54,7 +54,7 @@ import org.apache.kafka.common.message.{AlterPartitionReassignmentsResponseData,
 import org.apache.kafka.common.message.CreateTopicsResponseData.{CreatableTopicResult, CreatableTopicResultCollection}
 import org.apache.kafka.common.message.DeleteGroupsResponseData.{DeletableGroupResult, DeletableGroupResultCollection}
 import org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData.{ReassignablePartitionResponse, ReassignableTopicResponse}
-import org.apache.kafka.common.message.CreateAclsResponseData.CreatableAclResult
+import org.apache.kafka.common.message.CreateAclsResponseData.AclCreationResult
 import org.apache.kafka.common.message.DeleteTopicsResponseData.{DeletableTopicResult, DeletableTopicResultCollection}
 import org.apache.kafka.common.message.ElectLeadersResponseData.PartitionResult
 import org.apache.kafka.common.message.ElectLeadersResponseData.ReplicaElectionResult
@@ -2261,7 +2261,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         def sendResponseCallback(): Unit = {
           val aclCreationResults = allBindings.map { acl =>
             val result = errorResults.getOrElse(acl, createResults(validBindings.indexOf(acl)).get)
-            val creationResult = new CreatableAclResult()
+            val creationResult = new AclCreationResult()
             result.exception.asScala.foreach { throwable =>
               val apiError = ApiError.fromThrowable(throwable)
               creationResult

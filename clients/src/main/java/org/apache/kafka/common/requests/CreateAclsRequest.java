@@ -22,7 +22,9 @@ import org.apache.kafka.common.acl.AclBinding;
 import org.apache.kafka.common.acl.AclOperation;
 import org.apache.kafka.common.acl.AclPermissionType;
 import org.apache.kafka.common.message.CreateAclsRequestData;
+import org.apache.kafka.common.message.CreateAclsRequestData.AclCreation;
 import org.apache.kafka.common.message.CreateAclsResponseData;
+import org.apache.kafka.common.message.CreateAclsResponseData.AclCreationResult;
 import org.apache.kafka.common.resource.ResourcePattern;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.protocol.ApiKeys;
@@ -67,7 +69,7 @@ public class CreateAclsRequest extends AbstractRequest {
         this(version, new CreateAclsRequestData(struct, version));
     }
 
-    public List<CreateAclsRequestData.CreatableAcl> aclCreations() {
+    public List<AclCreation> aclCreations() {
         return data.creations();
     }
 
@@ -78,8 +80,8 @@ public class CreateAclsRequest extends AbstractRequest {
 
     @Override
     public AbstractResponse getErrorResponse(int throttleTimeMs, Throwable throwable) {
-        CreateAclsResponseData.CreatableAclResult result = CreateAclsRequest.aclResult(throwable);
-        List<CreateAclsResponseData.CreatableAclResult> results = Collections.nCopies(data.creations().size(), result);
+        CreateAclsResponseData.AclCreationResult result = CreateAclsRequest.aclResult(throwable);
+        List<CreateAclsResponseData.AclCreationResult> results = Collections.nCopies(data.creations().size(), result);
         return new CreateAclsResponse(new CreateAclsResponseData()
             .setThrottleTimeMs(throttleTimeMs)
             .setResults(results));
@@ -106,7 +108,7 @@ public class CreateAclsRequest extends AbstractRequest {
             throw new IllegalArgumentException("CreatableAcls contain unknown elements: " + data.creations());
     }
 
-    public static AclBinding aclBinding(CreateAclsRequestData.CreatableAcl acl) {
+    public static AclBinding aclBinding(AclCreation acl) {
         ResourcePattern pattern = new ResourcePattern(
             ResourceType.fromCode(acl.resourceType()),
             acl.resourceName(),
@@ -119,8 +121,8 @@ public class CreateAclsRequest extends AbstractRequest {
         return new AclBinding(pattern, entry);
     }
 
-    public static CreateAclsRequestData.CreatableAcl creatableAcl(AclBinding binding) {
-        return new CreateAclsRequestData.CreatableAcl()
+    public static AclCreation aclCreation(AclBinding binding) {
+        return new AclCreation()
             .setHost(binding.entry().host())
             .setOperation(binding.entry().operation().code())
             .setPermissionType(binding.entry().permissionType().code())
@@ -130,9 +132,9 @@ public class CreateAclsRequest extends AbstractRequest {
             .setResourcePatternType(binding.pattern().patternType().code());
     }
 
-    private static CreateAclsResponseData.CreatableAclResult aclResult(Throwable throwable) {
+    private static AclCreationResult aclResult(Throwable throwable) {
         ApiError apiError = ApiError.fromThrowable(throwable);
-        return new CreateAclsResponseData.CreatableAclResult()
+        return new AclCreationResult()
             .setErrorCode(apiError.error().code())
             .setErrorMessage(apiError.message());
     }

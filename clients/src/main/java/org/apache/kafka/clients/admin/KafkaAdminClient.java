@@ -69,8 +69,8 @@ import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.message.AlterPartitionReassignmentsRequestData;
 import org.apache.kafka.common.message.AlterPartitionReassignmentsRequestData.ReassignableTopic;
 import org.apache.kafka.common.message.CreateAclsRequestData;
-import org.apache.kafka.common.message.CreateAclsRequestData.CreatableAcl;
-import org.apache.kafka.common.message.CreateAclsResponseData.CreatableAclResult;
+import org.apache.kafka.common.message.CreateAclsRequestData.AclCreation;
+import org.apache.kafka.common.message.CreateAclsResponseData.AclCreationResult;
 import org.apache.kafka.common.message.CreateDelegationTokenRequestData;
 import org.apache.kafka.common.message.CreateDelegationTokenRequestData.CreatableRenewers;
 import org.apache.kafka.common.message.CreateDelegationTokenResponseData;
@@ -1738,14 +1738,14 @@ public class KafkaAdminClient extends AdminClient {
     public CreateAclsResult createAcls(Collection<AclBinding> acls, CreateAclsOptions options) {
         final long now = time.milliseconds();
         final Map<AclBinding, KafkaFutureImpl<Void>> futures = new HashMap<>();
-        final LinkedHashMap<AclBinding,CreatableAcl> aclCreations = new LinkedHashMap<>();
+        final LinkedHashMap<AclBinding, AclCreation> aclCreations = new LinkedHashMap<>();
         for (AclBinding acl : acls) {
             if (futures.get(acl) == null) {
                 KafkaFutureImpl<Void> future = new KafkaFutureImpl<>();
                 futures.put(acl, future);
                 String indefinite = acl.toFilter().findIndefiniteField();
                 if (indefinite == null) {
-                    aclCreations.put(acl, CreateAclsRequest.creatableAcl(acl));
+                    aclCreations.put(acl, CreateAclsRequest.aclCreation(acl));
                 } else {
                     future.completeExceptionally(new InvalidRequestException("Invalid ACL creation: " +
                         indefinite));
@@ -1764,16 +1764,16 @@ public class KafkaAdminClient extends AdminClient {
             @Override
             void handleResponse(AbstractResponse abstractResponse) {
                 CreateAclsResponse response = (CreateAclsResponse) abstractResponse;
-                List<CreatableAclResult> responses = response.results();
-                Iterator<CreatableAclResult> iter = responses.iterator();
-                for (Map.Entry<AclBinding, CreatableAcl> entry : aclCreations.entrySet()) {
+                List<AclCreationResult> responses = response.results();
+                Iterator<AclCreationResult> iter = responses.iterator();
+                for (Map.Entry<AclBinding, AclCreation> entry : aclCreations.entrySet()) {
                     AclBinding aclBinding = entry.getKey();
                     KafkaFutureImpl<Void> future = futures.get(aclBinding);
                     if (!iter.hasNext()) {
                         future.completeExceptionally(new UnknownServerException(
                             "The broker reported no creation result for the given ACL: " + aclBinding));
                     } else {
-                        CreatableAclResult creation = iter.next();
+                        AclCreationResult creation = iter.next();
                         Errors error = Errors.forCode(creation.errorCode());
                         ApiError apiError = new ApiError(error, creation.errorMessage());
                         if (apiError.isFailure())

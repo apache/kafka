@@ -467,7 +467,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
 
   private def createAclsRequest: CreateAclsRequest = new CreateAclsRequest.Builder(
     new CreateAclsRequestData().setCreations(Collections.singletonList(
-      new CreateAclsRequestData.CreatableAcl()
+      new CreateAclsRequestData.AclCreation()
         .setResourceType(ResourceType.TOPIC.code)
         .setResourceName("mytopic")
         .setResourcePatternType(PatternType.LITERAL.code)

@@ -414,7 +414,7 @@ class RequestQuotaTest extends BaseRequestTest {
 
         case ApiKeys.CREATE_ACLS =>
           new CreateAclsRequest.Builder(new CreateAclsRequestData().setCreations(Collections.singletonList(
-            new CreateAclsRequestData.CreatableAcl()
+            new CreateAclsRequestData.AclCreation()
               .setResourceType(AdminResourceType.TOPIC.code)
               .setResourceName("mytopic")
               .setResourcePatternType(PatternType.LITERAL.code)

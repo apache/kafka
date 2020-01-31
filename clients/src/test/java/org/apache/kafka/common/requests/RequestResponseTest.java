@@ -1719,11 +1719,11 @@ public class RequestResponseTest {
     }
 
     private CreateAclsRequest createCreateAclsRequest() {
-        List<CreateAclsRequestData.CreatableAcl> creations = new ArrayList<>();
-        creations.add(CreateAclsRequest.creatableAcl(new AclBinding(
+        List<CreateAclsRequestData.AclCreation> creations = new ArrayList<>();
+        creations.add(CreateAclsRequest.aclCreation(new AclBinding(
             new ResourcePattern(ResourceType.TOPIC, "mytopic", PatternType.LITERAL),
             new AccessControlEntry("User:ANONYMOUS", "127.0.0.1", AclOperation.READ, AclPermissionType.ALLOW))));
-        creations.add(CreateAclsRequest.creatableAcl(new AclBinding(
+        creations.add(CreateAclsRequest.aclCreation(new AclBinding(
             new ResourcePattern(ResourceType.GROUP, "mygroup", PatternType.LITERAL),
             new AccessControlEntry("User:ANONYMOUS", "*", AclOperation.WRITE, AclPermissionType.DENY))));
         CreateAclsRequestData data = new CreateAclsRequestData().setCreations(creations);
@@ -1732,8 +1732,8 @@ public class RequestResponseTest {
 
     private CreateAclsResponse createCreateAclsResponse() {
         return new CreateAclsResponse(new CreateAclsResponseData().setResults(asList(
-            new CreateAclsResponseData.CreatableAclResult(),
-            new CreateAclsResponseData.CreatableAclResult()
+            new CreateAclsResponseData.AclCreationResult(),
+            new CreateAclsResponseData.AclCreationResult()
                 .setErrorCode(Errors.INVALID_REQUEST.code())
                 .setErrorMessage("Foo bar"))));
     }
