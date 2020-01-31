@@ -98,6 +98,9 @@ ext {
 
   userMaxForks = project.hasProperty('maxParallelForks') ? maxParallelForks.toInteger() : null
 
+  userFlakyRetries = project.hasProperty('flakyRetries') ? flakyRetries.toInteger() : 1
+  userMaxTestFailures = project.hasProperty('maxTestFailures') ? maxTestFailures.toInteger() : 5
+
   skipSigning = project.hasProperty('skipSigning') && skipSigning.toBoolean()
   shouldSign = !skipSigning && !version.endsWith("SNAPSHOT") && project.gradle.startParameter.taskNames.any { it.contains("upload") }
 
@@ -293,8 +296,8 @@ subprojects {
     logTestStdout.rehydrate(delegate, owner, this)()
 
     retry {
-      maxRetries = 3
-      maxFailures = 50
+      maxRetries = userFlakyRetries
+      maxFailures = userMaxTestFailures
     }
   }
 
