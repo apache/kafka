@@ -206,7 +206,7 @@ object ConsumerPerformance extends LazyLogging {
       .withRequiredArg
       .describedAs("server to connect to")
       .ofType(classOf[String])
-    val bootstrapServersOpt = parser.accepts("broker-list", "REQUIRED: The server(s) to connect to.")
+    val brokerListOpt = parser.accepts("broker-list", "REQUIRED: The server(s) to connect to.")
       .withRequiredArg()
       .describedAs("host")
       .ofType(classOf[String])
@@ -258,8 +258,14 @@ object ConsumerPerformance extends LazyLogging {
 
     CommandLineUtils.printHelpAndExitIfNeeded(this, "This tool helps in performance test for the full zookeeper consumer")
 
-    if (!options.has(bootstrapServerOpt) && !options.has(bootstrapServersOpt))
-      CommandLineUtils.checkRequiredArgs(parser, options, topicOpt, bootstrapServerOpt)
+    if (!options.has(bootstrapServerOpt) && !options.has(brokerListOpt))
+      CommandLineUtils.checkRequiredArgs(parser, options, topicOpt, numMessagesOpt, bootstrapServerOpt)
+
+    if (options.has(brokerListOpt))
+      CommandLineUtils.checkRequiredArgs(parser, options, topicOpt, numMessagesOpt, brokerListOpt)
+
+    if (options.has(bootstrapServerOpt))
+      CommandLineUtils.checkRequiredArgs(parser, options, topicOpt, numMessagesOpt, bootstrapServerOpt)
 
     val printMetrics = options.has(printMetricsOpt)
 
@@ -269,10 +275,11 @@ object ConsumerPerformance extends LazyLogging {
       new Properties
 
     import org.apache.kafka.clients.consumer.ConsumerConfig
-    if(options.valueOf(bootstrapServerOpt) != null)
+    if(options.has(bootstrapServerOpt))
       props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, options.valueOf(bootstrapServerOpt))
     else
-      props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, options.valueOf(bootstrapServersOpt))
+      props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, options.valueOf(brokerListOpt))
+
     props.put(ConsumerConfig.GROUP_ID_CONFIG, options.valueOf(groupIdOpt))
     props.put(ConsumerConfig.RECEIVE_BUFFER_CONFIG, options.valueOf(socketBufferSizeOpt).toString)
     props.put(ConsumerConfig.MAX_PARTITION_FETCH_BYTES_CONFIG, options.valueOf(fetchSizeOpt).toString)

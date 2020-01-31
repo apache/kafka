@@ -54,7 +54,7 @@ class ConsumerPerformanceTest {
     val config = new ConsumerPerformance.ConsumerPerfConfig(args)
 
     //Then
-    assertEquals("localhost:9092", config.options.valueOf(config.bootstrapServersOpt))
+    assertEquals("localhost:9092", config.options.valueOf(config.brokerListOpt))
     assertEquals("test", config.topic)
     assertEquals(10, config.numMessages)
   }
