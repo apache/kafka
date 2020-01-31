@@ -23,6 +23,7 @@ import org.apache.kafka.common.acl.AclOperation;
 import org.apache.kafka.common.acl.AclPermissionType;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.DeleteAclsRequestData;
+import org.apache.kafka.common.message.DeleteAclsResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.resource.PatternType;
@@ -31,7 +32,6 @@ import org.apache.kafka.common.resource.ResourceType;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 
 import static org.apache.kafka.common.protocol.ApiKeys.DELETE_ACLS;
@@ -109,12 +109,16 @@ public class DeleteAclsRequest extends AbstractRequest {
 
     @Override
     public AbstractResponse getErrorResponse(int throttleTimeMs, Throwable throwable) {
-        List<DeleteAclsResponse.AclFilterResponse> responses = new ArrayList<>();
-        for (int i = 0; i < data.filters().size(); i++) {
-            responses.add(new DeleteAclsResponse.AclFilterResponse(
-                ApiError.fromThrowable(throwable), Collections.emptySet()));
-        }
-        return new DeleteAclsResponse(throttleTimeMs, responses);
+        List<DeleteAclsResponseData.DeleteAclsFilterResult> filterResults = new ArrayList<>();
+        data.filters().forEach(__ -> {
+            ApiError apiError = ApiError.fromThrowable(throwable);
+            filterResults.add(new DeleteAclsResponseData.DeleteAclsFilterResult()
+                .setErrorCode(apiError.error().code())
+                .setErrorMessage(apiError.message()));
+        });
+        return new DeleteAclsResponse(new DeleteAclsResponseData()
+            .setThrottleTimeMs(throttleTimeMs)
+            .setFilterResults(filterResults));
     }
 
     public static DeleteAclsRequest parse(ByteBuffer buffer, short version) {

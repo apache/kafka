@@ -50,7 +50,7 @@ import org.apache.kafka.common.internals.FatalExitError
 import org.apache.kafka.common.internals.Topic.{GROUP_METADATA_TOPIC_NAME, TRANSACTION_STATE_TOPIC_NAME, isInternal}
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopic
 import org.apache.kafka.common.message.CreatePartitionsResponseData.CreatePartitionsTopicResult
-import org.apache.kafka.common.message.{AlterPartitionReassignmentsResponseData, CreateAclsResponseData, CreatePartitionsResponseData, CreateTopicsResponseData, DeleteGroupsResponseData, DeleteTopicsResponseData, DescribeAclsResponseData, DescribeGroupsResponseData, EndTxnResponseData, ExpireDelegationTokenResponseData, FindCoordinatorResponseData, HeartbeatResponseData, InitProducerIdResponseData, JoinGroupResponseData, LeaveGroupResponseData, ListGroupsResponseData, ListPartitionReassignmentsResponseData, OffsetCommitRequestData, OffsetCommitResponseData, OffsetDeleteResponseData, RenewDelegationTokenResponseData, SaslAuthenticateResponseData, SaslHandshakeResponseData, StopReplicaResponseData, SyncGroupResponseData, UpdateMetadataResponseData}
+import org.apache.kafka.common.message.{AlterPartitionReassignmentsResponseData, CreateAclsResponseData, CreatePartitionsResponseData, CreateTopicsResponseData, DeleteAclsResponseData, DeleteGroupsResponseData, DeleteTopicsResponseData, DescribeAclsResponseData, DescribeGroupsResponseData, EndTxnResponseData, ExpireDelegationTokenResponseData, FindCoordinatorResponseData, HeartbeatResponseData, InitProducerIdResponseData, JoinGroupResponseData, LeaveGroupResponseData, ListGroupsResponseData, ListPartitionReassignmentsResponseData, OffsetCommitRequestData, OffsetCommitResponseData, OffsetDeleteResponseData, RenewDelegationTokenResponseData, SaslAuthenticateResponseData, SaslHandshakeResponseData, StopReplicaResponseData, SyncGroupResponseData, UpdateMetadataResponseData}
 import org.apache.kafka.common.message.CreateTopicsResponseData.{CreatableTopicResult, CreatableTopicResultCollection}
 import org.apache.kafka.common.message.DeleteGroupsResponseData.{DeletableGroupResult, DeletableGroupResultCollection}
 import org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData.{ReassignablePartitionResponse, ReassignableTopicResponse}
@@ -65,7 +65,6 @@ import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.replica.ClientMetadata
 import org.apache.kafka.common.replica.ClientMetadata.DefaultClientMetadata
-import org.apache.kafka.common.requests.DeleteAclsResponse.{AclDeletionResult, AclFilterResponse}
 import org.apache.kafka.common.requests.DescribeLogDirsResponse.LogDirInfo
 import org.apache.kafka.common.requests.FindCoordinatorRequest.CoordinatorType
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
@@ -2294,19 +2293,12 @@ class KafkaApis(val requestChannel: RequestChannel,
         val deleteResults = auth.deleteAcls(request.context, deleteAclsRequest.filters)
           .asScala.map(_.toCompletableFuture).toList
 
-        def toErrorCode(exception: Optional[ApiException]): ApiError = {
-          exception.asScala.map(ApiError.fromThrowable).getOrElse(ApiError.NONE)
-        }
-
         def sendResponseCallback(): Unit = {
-          val filterResponses = deleteResults.map(_.get).map { result =>
-            val deletions = result.aclBindingDeleteResults().asScala.toList.map { deletionResult =>
-              new AclDeletionResult(toErrorCode(deletionResult.exception), deletionResult.aclBinding)
-            }.asJava
-            new AclFilterResponse(toErrorCode(result.exception), deletions)
-          }.asJava
+          val filterResults = deleteResults.map(_.get).map(DeleteAclsResponse.filterResult).asJava
           sendResponseMaybeThrottle(request, requestThrottleMs =>
-            new DeleteAclsResponse(requestThrottleMs, filterResponses))
+            new DeleteAclsResponse(new DeleteAclsResponseData()
+              .setThrottleTimeMs(requestThrottleMs)
+              .setFilterResults(filterResults)))
         }
         alterAclsPurgatory.tryCompleteElseWatch(config.connectionsMaxIdleMs, deleteResults, sendResponseCallback)
     }

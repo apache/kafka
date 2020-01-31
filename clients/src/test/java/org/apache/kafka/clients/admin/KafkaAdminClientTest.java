@@ -63,6 +63,7 @@ import org.apache.kafka.common.message.CreatePartitionsResponseData.CreatePartit
 import org.apache.kafka.common.message.CreateAclsResponseData;
 import org.apache.kafka.common.message.CreateTopicsResponseData;
 import org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicResult;
+import org.apache.kafka.common.message.DeleteAclsResponseData;
 import org.apache.kafka.common.message.DeleteGroupsResponseData;
 import org.apache.kafka.common.message.DeleteGroupsResponseData.DeletableGroupResult;
 import org.apache.kafka.common.message.DeleteGroupsResponseData.DeletableGroupResultCollection;
@@ -93,8 +94,6 @@ import org.apache.kafka.common.requests.CreatePartitionsResponse;
 import org.apache.kafka.common.requests.CreateTopicsRequest;
 import org.apache.kafka.common.requests.CreateTopicsResponse;
 import org.apache.kafka.common.requests.DeleteAclsResponse;
-import org.apache.kafka.common.requests.DeleteAclsResponse.AclDeletionResult;
-import org.apache.kafka.common.requests.DeleteAclsResponse.AclFilterResponse;
 import org.apache.kafka.common.requests.DeleteGroupsResponse;
 import org.apache.kafka.common.requests.DeleteRecordsResponse;
 import org.apache.kafka.common.requests.DeleteTopicsRequest;
@@ -761,10 +760,16 @@ public class KafkaAdminClientTest {
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
 
             // Test a call where one filter has an error.
-            env.kafkaClient().prepareResponse(new DeleteAclsResponse(0, asList(
-                    new AclFilterResponse(asList(new AclDeletionResult(ACL1), new AclDeletionResult(ACL2))),
-                    new AclFilterResponse(new ApiError(Errors.SECURITY_DISABLED, "No security"),
-                            Collections.<AclDeletionResult>emptySet()))));
+            env.kafkaClient().prepareResponse(new DeleteAclsResponse(new DeleteAclsResponseData()
+                .setThrottleTimeMs(0)
+                .setFilterResults(asList(
+                    new DeleteAclsResponseData.DeleteAclsFilterResult()
+                        .setMatchingAcls(asList(
+                            DeleteAclsResponse.matchingAcl(ACL1, ApiError.NONE),
+                            DeleteAclsResponse.matchingAcl(ACL2, ApiError.NONE))),
+                    new DeleteAclsResponseData.DeleteAclsFilterResult()
+                        .setErrorCode(Errors.SECURITY_DISABLED.code())
+                        .setErrorMessage("No security")))));
             DeleteAclsResult results = env.adminClient().deleteAcls(asList(FILTER1, FILTER2));
             Map<AclBindingFilter, KafkaFuture<FilterResults>> filterResults = results.values();
             FilterResults filter1Results = filterResults.get(FILTER1).get();
@@ -776,18 +781,28 @@ public class KafkaAdminClientTest {
             TestUtils.assertFutureError(results.all(), SecurityDisabledException.class);
 
             // Test a call where one deletion result has an error.
-            env.kafkaClient().prepareResponse(new DeleteAclsResponse(0, asList(
-                    new AclFilterResponse(asList(new AclDeletionResult(ACL1),
-                            new AclDeletionResult(new ApiError(Errors.SECURITY_DISABLED, "No security"), ACL2))),
-                    new AclFilterResponse(Collections.<AclDeletionResult>emptySet()))));
+            env.kafkaClient().prepareResponse(new DeleteAclsResponse(new DeleteAclsResponseData()
+                .setThrottleTimeMs(0)
+                .setFilterResults(asList(
+                    new DeleteAclsResponseData.DeleteAclsFilterResult()
+                        .setMatchingAcls(asList(
+                            DeleteAclsResponse.matchingAcl(ACL1, ApiError.NONE),
+                            new DeleteAclsResponseData.DeleteAclsMatchingAcl()
+                                .setErrorCode(Errors.SECURITY_DISABLED.code())
+                                .setErrorMessage("No security"))),
+                    new DeleteAclsResponseData.DeleteAclsFilterResult()))));
             results = env.adminClient().deleteAcls(asList(FILTER1, FILTER2));
             assertTrue(results.values().get(FILTER2).get().values().isEmpty());
             TestUtils.assertFutureError(results.all(), SecurityDisabledException.class);
 
             // Test a call where there are no errors.
-            env.kafkaClient().prepareResponse(new DeleteAclsResponse(0, asList(
-                    new AclFilterResponse(asList(new AclDeletionResult(ACL1))),
-                    new AclFilterResponse(asList(new AclDeletionResult(ACL2))))));
+            env.kafkaClient().prepareResponse(new DeleteAclsResponse(new DeleteAclsResponseData()
+                .setThrottleTimeMs(0)
+                .setFilterResults(asList(
+                    new DeleteAclsResponseData.DeleteAclsFilterResult()
+                        .setMatchingAcls(asList(DeleteAclsResponse.matchingAcl(ACL1, ApiError.NONE))),
+                    new DeleteAclsResponseData.DeleteAclsFilterResult()
+                        .setMatchingAcls(asList(DeleteAclsResponse.matchingAcl(ACL2, ApiError.NONE)))))));
             results = env.adminClient().deleteAcls(asList(FILTER1, FILTER2));
             Collection<AclBinding> deleted = results.all().get();
             assertCollectionIs(deleted, ACL1, ACL2);

@@ -48,12 +48,12 @@ import org.apache.kafka.common.message.CreateAclsResponseData;
 import org.apache.kafka.common.message.CreateDelegationTokenRequestData;
 import org.apache.kafka.common.message.CreateDelegationTokenRequestData.CreatableRenewers;
 import org.apache.kafka.common.message.CreateDelegationTokenResponseData;
-import org.apache.kafka.common.message.CreateTopicsRequestData;
 import org.apache.kafka.common.message.CreatePartitionsRequestData;
-import org.apache.kafka.common.message.CreatePartitionsRequestData.CreatePartitionsTopic;
 import org.apache.kafka.common.message.CreatePartitionsRequestData.CreatePartitionsAssignment;
+import org.apache.kafka.common.message.CreatePartitionsRequestData.CreatePartitionsTopic;
 import org.apache.kafka.common.message.CreatePartitionsResponseData;
 import org.apache.kafka.common.message.CreatePartitionsResponseData.CreatePartitionsTopicResult;
+import org.apache.kafka.common.message.CreateTopicsRequestData;
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableReplicaAssignment;
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopic;
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreateableTopicConfig;
@@ -61,6 +61,7 @@ import org.apache.kafka.common.message.CreateTopicsResponseData;
 import org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicConfigs;
 import org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicResult;
 import org.apache.kafka.common.message.DeleteAclsRequestData;
+import org.apache.kafka.common.message.DeleteAclsResponseData;
 import org.apache.kafka.common.message.DeleteGroupsRequestData;
 import org.apache.kafka.common.message.DeleteGroupsResponseData;
 import org.apache.kafka.common.message.DeleteGroupsResponseData.DeletableGroupResult;
@@ -133,8 +134,6 @@ import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.SimpleRecord;
 import org.apache.kafka.common.requests.CreateTopicsRequest.Builder;
-import org.apache.kafka.common.requests.DeleteAclsResponse.AclDeletionResult;
-import org.apache.kafka.common.requests.DeleteAclsResponse.AclFilterResponse;
 import org.apache.kafka.common.requests.FindCoordinatorRequest.CoordinatorType;
 import org.apache.kafka.common.resource.PatternType;
 import org.apache.kafka.common.resource.ResourcePattern;
@@ -1762,17 +1761,30 @@ public class RequestResponseTest {
     }
 
     private DeleteAclsResponse createDeleteAclsResponse() {
-        List<AclFilterResponse> responses = new ArrayList<>();
-        responses.add(new AclFilterResponse(Utils.mkSet(
-                new AclDeletionResult(new AclBinding(
-                        new ResourcePattern(ResourceType.TOPIC, "mytopic3", PatternType.LITERAL),
-                        new AccessControlEntry("User:ANONYMOUS", "*", AclOperation.DESCRIBE, AclPermissionType.ALLOW))),
-                new AclDeletionResult(new AclBinding(
-                        new ResourcePattern(ResourceType.TOPIC, "mytopic4", PatternType.LITERAL),
-                        new AccessControlEntry("User:ANONYMOUS", "*", AclOperation.DESCRIBE, AclPermissionType.DENY))))));
-        responses.add(new AclFilterResponse(new ApiError(Errors.SECURITY_DISABLED, "No security"),
-            Collections.<AclDeletionResult>emptySet()));
-        return new DeleteAclsResponse(0, responses);
+        List<DeleteAclsResponseData.DeleteAclsFilterResult> filterResults = new ArrayList<>();
+        filterResults.add(new DeleteAclsResponseData.DeleteAclsFilterResult().setMatchingAcls(asList(
+                new DeleteAclsResponseData.DeleteAclsMatchingAcl()
+                    .setResourceType(ResourceType.TOPIC.code())
+                    .setResourceName("mytopic3")
+                    .setPatternType(PatternType.LITERAL.code())
+                    .setPrincipal("User:ANONYMOUS")
+                    .setHost("*")
+                    .setOperation(AclOperation.DESCRIBE.code())
+                    .setPermissionType(AclPermissionType.ALLOW.code()),
+                new DeleteAclsResponseData.DeleteAclsMatchingAcl()
+                    .setResourceType(ResourceType.TOPIC.code())
+                    .setResourceName("mytopic4")
+                    .setPatternType(PatternType.LITERAL.code())
+                    .setPrincipal("User:ANONYMOUS")
+                    .setHost("*")
+                    .setOperation(AclOperation.DESCRIBE.code())
+                    .setPermissionType(AclPermissionType.DENY.code()))));
+        filterResults.add(new DeleteAclsResponseData.DeleteAclsFilterResult()
+            .setErrorCode(Errors.SECURITY_DISABLED.code())
+            .setErrorMessage("No security"));
+        return new DeleteAclsResponse(new DeleteAclsResponseData()
+            .setThrottleTimeMs(0)
+            .setFilterResults(filterResults));
     }
 
     private DescribeConfigsRequest createDescribeConfigsRequest(int version) {

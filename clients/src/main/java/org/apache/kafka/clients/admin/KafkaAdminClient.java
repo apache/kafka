@@ -82,6 +82,9 @@ import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopicCol
 import org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicConfigs;
 import org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicResult;
 import org.apache.kafka.common.message.DeleteAclsRequestData;
+import org.apache.kafka.common.message.DeleteAclsResponseData;
+import org.apache.kafka.common.message.DeleteAclsResponseData.DeleteAclsFilterResult;
+import org.apache.kafka.common.message.DeleteAclsResponseData.DeleteAclsMatchingAcl;
 import org.apache.kafka.common.message.DeleteGroupsRequestData;
 import org.apache.kafka.common.message.DeleteTopicsRequestData;
 import org.apache.kafka.common.message.DeleteTopicsResponseData.DeletableTopicResult;
@@ -137,8 +140,6 @@ import org.apache.kafka.common.requests.CreateTopicsRequest;
 import org.apache.kafka.common.requests.CreateTopicsResponse;
 import org.apache.kafka.common.requests.DeleteAclsRequest;
 import org.apache.kafka.common.requests.DeleteAclsResponse;
-import org.apache.kafka.common.requests.DeleteAclsResponse.AclDeletionResult;
-import org.apache.kafka.common.requests.DeleteAclsResponse.AclFilterResponse;
 import org.apache.kafka.common.requests.DeleteGroupsRequest;
 import org.apache.kafka.common.requests.DeleteGroupsResponse;
 import org.apache.kafka.common.requests.DeleteRecordsRequest;
@@ -1731,6 +1732,7 @@ public class KafkaAdminClient extends AdminClient {
         return new DescribeAclsResult(future);
     }
 
+    //FIXME...
     @Override
     public CreateAclsResult createAcls(Collection<AclBinding> acls, CreateAclsOptions options) {
         final long now = time.milliseconds();
@@ -1815,8 +1817,8 @@ public class KafkaAdminClient extends AdminClient {
             @Override
             void handleResponse(AbstractResponse abstractResponse) {
                 DeleteAclsResponse response = (DeleteAclsResponse) abstractResponse;
-                List<AclFilterResponse> responses = response.responses();
-                Iterator<AclFilterResponse> iter = responses.iterator();
+                List<DeleteAclsResponseData.DeleteAclsFilterResult> results = response.filterResults();
+                Iterator<DeleteAclsResponseData.DeleteAclsFilterResult> iter = results.iterator();
                 //FIXME What about duplicates?
                 for (AclBindingFilter filter : filters) {
                     KafkaFutureImpl<FilterResults> future = futures.get(filter);
@@ -1824,13 +1826,17 @@ public class KafkaAdminClient extends AdminClient {
                         future.completeExceptionally(new UnknownServerException(
                             "The broker reported no deletion result for the given filter."));
                     } else {
-                        AclFilterResponse deletion = iter.next();
-                        if (deletion.error().isFailure()) {
-                            future.completeExceptionally(deletion.error().exception());
+                        DeleteAclsFilterResult filterResult = iter.next();
+                        ApiError error = new ApiError(Errors.forCode(filterResult.errorCode()), filterResult.errorMessage());
+                        if (error.isFailure()) {
+                            future.completeExceptionally(error.exception());
                         } else {
                             List<FilterResult> filterResults = new ArrayList<>();
-                            for (AclDeletionResult deletionResult : deletion.deletions()) {
-                                filterResults.add(new FilterResult(deletionResult.acl(), deletionResult.error().exception()));
+                            for (DeleteAclsMatchingAcl matchingAcl : filterResult.matchingAcls()) {
+                                ApiError aclError = new ApiError(Errors.forCode(matchingAcl.errorCode()),
+                                    matchingAcl.errorMessage());
+                                AclBinding aclBinding = DeleteAclsResponse.aclBinding(matchingAcl);
+                                filterResults.add(new FilterResult(aclBinding, aclError.exception()));
                             }
                             future.complete(new FilterResults(filterResults));
                         }
