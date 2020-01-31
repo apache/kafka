@@ -83,6 +83,7 @@ import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopicCol
 import org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicConfigs;
 import org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicResult;
 import org.apache.kafka.common.message.DeleteAclsRequestData;
+import org.apache.kafka.common.message.DeleteAclsRequestData.DeleteAclsFilter;
 import org.apache.kafka.common.message.DeleteAclsResponseData;
 import org.apache.kafka.common.message.DeleteAclsResponseData.DeleteAclsFilterResult;
 import org.apache.kafka.common.message.DeleteAclsResponseData.DeleteAclsMatchingAcl;
@@ -207,7 +208,6 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
-import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -1738,21 +1738,23 @@ public class KafkaAdminClient extends AdminClient {
     public CreateAclsResult createAcls(Collection<AclBinding> acls, CreateAclsOptions options) {
         final long now = time.milliseconds();
         final Map<AclBinding, KafkaFutureImpl<Void>> futures = new HashMap<>();
-        final LinkedHashMap<AclBinding, AclCreation> aclCreations = new LinkedHashMap<>();
+        final List<AclCreation> aclCreations = new ArrayList<>();
+        final List<AclBinding> aclBindingsSent = new ArrayList<>();
         for (AclBinding acl : acls) {
             if (futures.get(acl) == null) {
                 KafkaFutureImpl<Void> future = new KafkaFutureImpl<>();
                 futures.put(acl, future);
                 String indefinite = acl.toFilter().findIndefiniteField();
                 if (indefinite == null) {
-                    aclCreations.put(acl, CreateAclsRequest.aclCreation(acl));
+                    aclCreations.add(CreateAclsRequest.aclCreation(acl));
+                    aclBindingsSent.add(acl);
                 } else {
                     future.completeExceptionally(new InvalidRequestException("Invalid ACL creation: " +
                         indefinite));
                 }
             }
         }
-        final CreateAclsRequestData data = new CreateAclsRequestData().setCreations(new ArrayList<>(aclCreations.values()));
+        final CreateAclsRequestData data = new CreateAclsRequestData().setCreations(aclCreations);
         runnable.call(new Call("createAcls", calcDeadlineMs(now, options.timeoutMs()),
             new LeastLoadedNodeProvider()) {
 
@@ -1766,8 +1768,7 @@ public class KafkaAdminClient extends AdminClient {
                 CreateAclsResponse response = (CreateAclsResponse) abstractResponse;
                 List<AclCreationResult> responses = response.results();
                 Iterator<AclCreationResult> iter = responses.iterator();
-                for (Map.Entry<AclBinding, AclCreation> entry : aclCreations.entrySet()) {
-                    AclBinding aclBinding = entry.getKey();
+                for (AclBinding aclBinding : aclBindingsSent) {
                     KafkaFutureImpl<Void> future = futures.get(aclBinding);
                     if (!iter.hasNext()) {
                         future.completeExceptionally(new UnknownServerException(
@@ -1796,14 +1797,16 @@ public class KafkaAdminClient extends AdminClient {
     public DeleteAclsResult deleteAcls(Collection<AclBindingFilter> filters, DeleteAclsOptions options) {
         final long now = time.milliseconds();
         final Map<AclBindingFilter, KafkaFutureImpl<FilterResults>> futures = new HashMap<>();
-        final List<DeleteAclsRequestData.DeleteAclsFilter> filterList = new ArrayList<>();
+        final List<AclBindingFilter> aclBindingFiltersSent = new ArrayList<>();
+        final List<DeleteAclsFilter> deleteAclsFilters = new ArrayList<>();
         for (AclBindingFilter filter : filters) {
             if (futures.get(filter) == null) {
-                filterList.add(DeleteAclsRequest.deleteAclsFilter(filter));
+                aclBindingFiltersSent.add(filter);
+                deleteAclsFilters.add(DeleteAclsRequest.deleteAclsFilter(filter));
                 futures.put(filter, new KafkaFutureImpl<>());
             }
         }
-        final DeleteAclsRequestData data = new DeleteAclsRequestData().setFilters(filterList);
+        final DeleteAclsRequestData data = new DeleteAclsRequestData().setFilters(deleteAclsFilters);
         runnable.call(new Call("deleteAcls", calcDeadlineMs(now, options.timeoutMs()),
             new LeastLoadedNodeProvider()) {
 
@@ -1817,9 +1820,8 @@ public class KafkaAdminClient extends AdminClient {
                 DeleteAclsResponse response = (DeleteAclsResponse) abstractResponse;
                 List<DeleteAclsResponseData.DeleteAclsFilterResult> results = response.filterResults();
                 Iterator<DeleteAclsResponseData.DeleteAclsFilterResult> iter = results.iterator();
-                //FIXME What about duplicates?
-                for (AclBindingFilter filter : filters) {
-                    KafkaFutureImpl<FilterResults> future = futures.get(filter);
+                for (AclBindingFilter bindingFilter : aclBindingFiltersSent) {
+                    KafkaFutureImpl<FilterResults> future = futures.get(bindingFilter);
                     if (!iter.hasNext()) {
                         future.completeExceptionally(new UnknownServerException(
                             "The broker reported no deletion result for the given filter."));
