@@ -20,6 +20,7 @@ import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.metrics.SensorAccessor;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
@@ -119,8 +120,9 @@ public class SourceNodeTest {
             final String sensorNamePrefix = "internal." + threadId + ".task." + context.taskId().toString();
             final Sensor processSensor =
                 metrics.getSensor(sensorNamePrefix + ".node." + context.currentNode().name() + ".s.process");
+            final SensorAccessor sensorAccessor = new SensorAccessor(processSensor);
             assertThat(
-                processSensor.parents().stream().map(Sensor::name).collect(Collectors.toList()),
+                sensorAccessor.parents().stream().map(Sensor::name).collect(Collectors.toList()),
                 contains(sensorNamePrefix + ".s.process")
             );
         }
