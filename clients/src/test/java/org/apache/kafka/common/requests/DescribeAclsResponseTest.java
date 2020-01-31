@@ -99,7 +99,8 @@ public class DescribeAclsResponseTest {
         final DescribeAclsResponse result = new DescribeAclsResponse(struct, V0);
         assertResponseEquals(original, result);
 
-        final DescribeAclsResponse result2 = DescribeAclsResponse.prepareResponse(10, ApiError.NONE, DescribeAclsResponse.aclBindings(resources));
+        final DescribeAclsResponse result2 = buildResponse(10, Errors.NONE, DescribeAclsResponse.aclsResources(
+            DescribeAclsResponse.aclBindings(resources)));
         assertResponseEquals(original, result2);
     }
 
@@ -112,7 +113,8 @@ public class DescribeAclsResponseTest {
         final DescribeAclsResponse result = new DescribeAclsResponse(struct, V1);
         assertResponseEquals(original, result);
 
-        final DescribeAclsResponse result2 = DescribeAclsResponse.prepareResponse(100, ApiError.NONE, DescribeAclsResponse.aclBindings(resources));
+        final DescribeAclsResponse result2 = buildResponse(100, Errors.NONE, DescribeAclsResponse.aclsResources(
+            DescribeAclsResponse.aclBindings(resources)));
         assertResponseEquals(original, result2);
     }
 
