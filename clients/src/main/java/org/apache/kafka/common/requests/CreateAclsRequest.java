@@ -97,11 +97,13 @@ public class CreateAclsRequest extends AbstractRequest {
                 throw new UnsupportedVersionException("Version 0 only supports literal resource pattern types");
         }
 
-        final boolean unknown = data.creations().stream()
-            .map(CreateAclsRequest::aclBinding)
-            .anyMatch(AclBinding::isUnknown);
+        final boolean unknown = data.creations().stream().anyMatch(creation ->
+            creation.resourcePatternType() == PatternType.UNKNOWN.code()
+                || creation.resourceType() == ResourceType.UNKNOWN.code()
+                || creation.permissionType() == AclPermissionType.UNKNOWN.code()
+                || creation.operation() == AclOperation.UNKNOWN.code());
         if (unknown)
-            throw new IllegalArgumentException("You can not create ACL bindings with unknown elements");
+            throw new IllegalArgumentException("CreatableAcls contain unknown elements: " + data.creations());
     }
 
     public static AclBinding aclBinding(CreateAclsRequestData.CreatableAcl acl) {
