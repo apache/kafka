@@ -29,6 +29,7 @@ import org.apache.kafka.common.resource.ResourceType;
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertThrows;
 
 public class DescribeAclsRequestTest {
     private static final short V0 = 0;
@@ -46,14 +47,14 @@ public class DescribeAclsRequestTest {
     private static final AclBindingFilter UNKNOWN_FILTER = new AclBindingFilter(new ResourcePatternFilter(ResourceType.UNKNOWN, "foo", PatternType.LITERAL),
         new AccessControlEntryFilter("User:ANONYMOUS", "127.0.0.1", AclOperation.READ, AclPermissionType.DENY));
 
-    @Test(expected = UnsupportedVersionException.class)
+    @Test
     public void shouldThrowOnV0IfPrefixed() {
-        new DescribeAclsRequest.Builder(PREFIXED_FILTER).build(V0);
+        assertThrows(UnsupportedVersionException.class, () -> new DescribeAclsRequest.Builder(PREFIXED_FILTER).build(V0));
     }
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test
     public void shouldThrowIfUnknown() {
-        new DescribeAclsRequest.Builder(UNKNOWN_FILTER).build(V0);
+        assertThrows(IllegalArgumentException.class, () -> new DescribeAclsRequest.Builder(UNKNOWN_FILTER).build(V0));
     }
 
     @Test
