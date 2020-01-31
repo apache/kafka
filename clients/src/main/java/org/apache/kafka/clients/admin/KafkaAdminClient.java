@@ -69,7 +69,8 @@ import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.message.AlterPartitionReassignmentsRequestData;
 import org.apache.kafka.common.message.AlterPartitionReassignmentsRequestData.ReassignableTopic;
 import org.apache.kafka.common.message.CreateAclsRequestData;
-import org.apache.kafka.common.message.CreateAclsResponseData;
+import org.apache.kafka.common.message.CreateAclsRequestData.CreatableAcl;
+import org.apache.kafka.common.message.CreateAclsResponseData.CreatableAclResult;
 import org.apache.kafka.common.message.CreateDelegationTokenRequestData;
 import org.apache.kafka.common.message.CreateDelegationTokenRequestData.CreatableRenewers;
 import org.apache.kafka.common.message.CreateDelegationTokenResponseData;
@@ -206,6 +207,7 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -1732,26 +1734,25 @@ public class KafkaAdminClient extends AdminClient {
         return new DescribeAclsResult(future);
     }
 
-    //FIXME...
     @Override
     public CreateAclsResult createAcls(Collection<AclBinding> acls, CreateAclsOptions options) {
         final long now = time.milliseconds();
         final Map<AclBinding, KafkaFutureImpl<Void>> futures = new HashMap<>();
-        final List<CreateAclsRequestData.CreatableAcl> aclCreations = new ArrayList<>();
+        final LinkedHashMap<AclBinding,CreatableAcl> aclCreations = new LinkedHashMap<>();
         for (AclBinding acl : acls) {
             if (futures.get(acl) == null) {
                 KafkaFutureImpl<Void> future = new KafkaFutureImpl<>();
                 futures.put(acl, future);
                 String indefinite = acl.toFilter().findIndefiniteField();
                 if (indefinite == null) {
-                    aclCreations.add(CreateAclsRequest.creatableAcl(acl));
+                    aclCreations.put(acl, CreateAclsRequest.creatableAcl(acl));
                 } else {
                     future.completeExceptionally(new InvalidRequestException("Invalid ACL creation: " +
                         indefinite));
                 }
             }
         }
-        final CreateAclsRequestData data = new CreateAclsRequestData().setCreations(aclCreations);
+        final CreateAclsRequestData data = new CreateAclsRequestData().setCreations(new ArrayList<>(aclCreations.values()));
         runnable.call(new Call("createAcls", calcDeadlineMs(now, options.timeoutMs()),
             new LeastLoadedNodeProvider()) {
 
@@ -1763,25 +1764,22 @@ public class KafkaAdminClient extends AdminClient {
             @Override
             void handleResponse(AbstractResponse abstractResponse) {
                 CreateAclsResponse response = (CreateAclsResponse) abstractResponse;
-                List<CreateAclsResponseData.CreatableAclResult> responses = response.results();
-                Iterator<CreateAclsResponseData.CreatableAclResult> iter = responses.iterator();
-                for (AclBinding binding : acls) {
-                    KafkaFutureImpl<Void> future = futures.get(binding);
-                    //FIXME What about duplicates?
-                    if (future.isCompletedExceptionally())
-                        continue;
+                List<CreatableAclResult> responses = response.results();
+                Iterator<CreatableAclResult> iter = responses.iterator();
+                for (Map.Entry<AclBinding, CreatableAcl> entry : aclCreations.entrySet()) {
+                    AclBinding aclBinding = entry.getKey();
+                    KafkaFutureImpl<Void> future = futures.get(aclBinding);
                     if (!iter.hasNext()) {
                         future.completeExceptionally(new UnknownServerException(
-                            "The broker reported no creation result for the given ACL."));
+                            "The broker reported no creation result for the given ACL: " + aclBinding));
                     } else {
-                        CreateAclsResponseData.CreatableAclResult creation = iter.next();
+                        CreatableAclResult creation = iter.next();
                         Errors error = Errors.forCode(creation.errorCode());
                         ApiError apiError = new ApiError(error, creation.errorMessage());
-                        if (apiError.isFailure()) {
+                        if (apiError.isFailure())
                             future.completeExceptionally(apiError.exception());
-                        } else {
+                        else
                             future.complete(null);
-                        }
                     }
                 }
             }
