@@ -26,12 +26,19 @@ import org.apache.kafka.common.IsolationLevel;
 import java.time.Duration;
 import java.util.Collections;
 import java.util.Properties;
+import java.util.concurrent.CountDownLatch;
 
 public class Consumer extends ShutdownableThread {
     private final KafkaConsumer<Integer, String> consumer;
     private final String topic;
+    private final int numMessageToConsume;
+    private int messageRemaining;
+    private final CountDownLatch latch;
 
-    public Consumer(String topic, boolean readCommitted) {
+    public Consumer(final String topic,
+                    final boolean readCommitted,
+                    final int numMessageToConsume,
+                    final CountDownLatch latch) {
         super("KafkaConsumerExample", false);
         Properties props = new Properties();
         props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, KafkaProperties.KAFKA_SERVER_URL + ":" + KafkaProperties.KAFKA_SERVER_PORT);
@@ -47,6 +54,9 @@ public class Consumer extends ShutdownableThread {
 
         consumer = new KafkaConsumer<>(props);
         this.topic = topic;
+        this.numMessageToConsume = numMessageToConsume;
+        this.messageRemaining = numMessageToConsume;
+        this.latch = latch;
     }
 
     KafkaConsumer<Integer, String> get() {
@@ -60,6 +70,11 @@ public class Consumer extends ShutdownableThread {
         for (ConsumerRecord<Integer, String> record : records) {
             System.out.println("Received message: (" + record.key() + ", " + record.value() + ") at offset " + record.offset());
         }
+        messageRemaining -= records.count();
+        if (messageRemaining <= 0) {
+            System.out.println("Read committed consumer finished reading " + numMessageToConsume + " messages");
+        }
+        latch.countDown();
     }
 
     @Override

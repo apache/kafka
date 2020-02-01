@@ -36,6 +36,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicLong;
 
 import static java.util.Collections.singleton;
@@ -61,12 +62,15 @@ public class ExactlyOnceMessageProcessor extends Thread {
     private final KafkaProducer<Integer, String> producer;
     private final KafkaConsumer<Integer, String> consumer;
 
+    private final CountDownLatch latch;
+
     public ExactlyOnceMessageProcessor(final String mode,
                                        final String inputTopic,
                                        final String outputTopic,
                                        final int numPartitions,
                                        final int numInstances,
-                                       final int instanceIdx) {
+                                       final int instanceIdx,
+                                       final CountDownLatch latch) {
         this.mode = mode;
         this.inputTopic = inputTopic;
         this.outputTopic = outputTopic;
@@ -74,8 +78,9 @@ public class ExactlyOnceMessageProcessor extends Thread {
         this.numInstances = numInstances;
         this.instanceIdx = instanceIdx;
         this.transactionalId = "Processor-" + instanceIdx;
-        producer = new Producer(outputTopic, true, transactionalId, -1).get();
-        consumer = new Consumer(inputTopic, READ_COMMITTED).get();
+        producer = new Producer(outputTopic, true, transactionalId, -1, null).get();
+        consumer = new Consumer(inputTopic, READ_COMMITTED, -1, null).get();
+        this.latch = latch;
     }
 
     @Override
@@ -146,6 +151,7 @@ public class ExactlyOnceMessageProcessor extends Thread {
         }
 
         printWithPrefix("Finished processing " + messageProcessed + " records");
+        latch.countDown();
     }
 
     private void printWithPrefix(String message) {
