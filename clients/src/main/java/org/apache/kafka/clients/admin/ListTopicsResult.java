@@ -48,23 +48,13 @@ public class ListTopicsResult {
      * Return a future which yields a collection of TopicListing objects.
      */
     public KafkaFuture<Collection<TopicListing>> listings() {
-        return future.thenApply(new KafkaFuture.BaseFunction<Map<String, TopicListing>, Collection<TopicListing>>() {
-            @Override
-            public Collection<TopicListing> apply(Map<String, TopicListing> namesToDescriptions) {
-                return namesToDescriptions.values();
-            }
-        });
+        return future.thenApply(namesToDescriptions -> namesToDescriptions.values());
     }
 
     /**
      * Return a future which yields a collection of topic names.
      */
     public KafkaFuture<Set<String>> names() {
-        return future.thenApply(new KafkaFuture.BaseFunction<Map<String, TopicListing>, Set<String>>() {
-            @Override
-            public Set<String> apply(Map<String, TopicListing> namesToListings) {
-                return namesToListings.keySet();
-            }
-        });
+        return future.thenApply(namesToListings -> namesToListings.keySet());
     }
 }

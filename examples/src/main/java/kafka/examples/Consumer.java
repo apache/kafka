@@ -36,13 +36,14 @@ public class Consumer extends ShutdownableThread {
     private final CountDownLatch latch;
 
     public Consumer(final String topic,
+                    final String groupId,
                     final boolean readCommitted,
                     final int numMessageToConsume,
                     final CountDownLatch latch) {
         super("KafkaConsumerExample", false);
         Properties props = new Properties();
         props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, KafkaProperties.KAFKA_SERVER_URL + ":" + KafkaProperties.KAFKA_SERVER_PORT);
-        props.put(ConsumerConfig.GROUP_ID_CONFIG, "DemoConsumer");
+        props.put(ConsumerConfig.GROUP_ID_CONFIG, groupId);
         props.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "true");
         props.put(ConsumerConfig.AUTO_COMMIT_INTERVAL_MS_CONFIG, "1000");
         props.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, "30000");
@@ -51,6 +52,7 @@ public class Consumer extends ShutdownableThread {
         if (readCommitted) {
             props.put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, "read_committed");
         }
+        props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
 
         consumer = new KafkaConsumer<>(props);
         this.topic = topic;
@@ -68,13 +70,13 @@ public class Consumer extends ShutdownableThread {
         consumer.subscribe(Collections.singletonList(this.topic));
         ConsumerRecords<Integer, String> records = consumer.poll(Duration.ofSeconds(1));
         for (ConsumerRecord<Integer, String> record : records) {
-            System.out.println("Received message: (" + record.key() + ", " + record.value() + ") at offset " + record.offset());
+            System.out.println("Verify-consumer received message : from partition " + record.partition() + ", (" + record.key() + ", " + record.value() + ") at offset " + record.offset());
         }
         messageRemaining -= records.count();
         if (messageRemaining <= 0) {
-            System.out.println("Read committed consumer finished reading " + numMessageToConsume + " messages");
+            System.out.println("Verify-consumer finished reading " + numMessageToConsume + " messages");
+            latch.countDown();
         }
-        latch.countDown();
     }
 
     @Override

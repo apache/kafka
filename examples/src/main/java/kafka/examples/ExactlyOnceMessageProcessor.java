@@ -28,6 +28,7 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.FencedInstanceIdException;
 import org.apache.kafka.common.errors.ProducerFencedException;
+import org.apache.kafka.common.internals.Topic;
 
 import java.time.Duration;
 import java.util.ArrayList;
@@ -38,8 +39,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicLong;
-
-import static java.util.Collections.singleton;
 
 /**
  * A demo class for how to write a customized EOS app. It takes a consume-process-produce loop
@@ -78,8 +77,8 @@ public class ExactlyOnceMessageProcessor extends Thread {
         this.numInstances = numInstances;
         this.instanceIdx = instanceIdx;
         this.transactionalId = "Processor-" + instanceIdx;
-        producer = new Producer(outputTopic, true, transactionalId, -1, null).get();
-        consumer = new Consumer(inputTopic, READ_COMMITTED, -1, null).get();
+        producer = new Producer(outputTopic, true, transactionalId, true, -1, null).get();
+        consumer = new Consumer(inputTopic, "Eos-consumer", READ_COMMITTED, -1, null).get();
         this.latch = latch;
     }
 
@@ -159,16 +158,22 @@ public class ExactlyOnceMessageProcessor extends Thread {
     }
 
     private ProducerRecord<Integer, String> transform(ConsumerRecord<Integer, String> record) {
-        // Customized business logic here
-        return new ProducerRecord<>(outputTopic, record.key() / 2, record.value());
+        printWithPrefix("Transformed record (" + record.key() + "," + record.value() + ")");
+        return new ProducerRecord<>(outputTopic, record.key() / 2, "Transformed_" + record.value());
     }
 
-    private static long messagesRemaining(KafkaConsumer<Integer, String> consumer) {
+    private long messagesRemaining(KafkaConsumer<Integer, String> consumer) {
+        // If we couldn't detect any end offset, that means we are still not able to fetch offsets.
+        final Map<TopicPartition, Long> fullEndOffsets = consumer.endOffsets(new ArrayList<>(consumer.assignment()));
+        if (fullEndOffsets.isEmpty()) {
+            return Long.MAX_VALUE;
+        }
+
         return consumer.assignment().stream().mapToLong(partition -> {
             long currentPosition = consumer.position(partition);
-            Map<TopicPartition, Long> endOffsets = consumer.endOffsets(singleton(partition));
-            if (endOffsets.containsKey(partition)) {
-                return endOffsets.get(partition) - currentPosition;
+            printWithPrefix("Processing partition " + partition + " with full offsets " + fullEndOffsets);
+            if (fullEndOffsets.containsKey(partition)) {
+                return fullEndOffsets.get(partition) - currentPosition;
             }
             return 0;
         }).sum();

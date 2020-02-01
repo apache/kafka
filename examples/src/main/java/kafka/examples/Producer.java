@@ -35,7 +35,12 @@ public class Producer extends Thread {
     private int numRecords;
     private final CountDownLatch latch;
 
-    public Producer(String topic, Boolean isAsync, String transactionalId, int numRecords, CountDownLatch latch) {
+    public Producer(final String topic,
+                    final Boolean isAsync,
+                    final String transactionalId,
+                    final boolean enableIdempotency,
+                    final int numRecords,
+                    final CountDownLatch latch) {
         Properties props = new Properties();
         props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, KafkaProperties.KAFKA_SERVER_URL + ":" + KafkaProperties.KAFKA_SERVER_PORT);
         props.put(ProducerConfig.CLIENT_ID_CONFIG, "DemoProducer");
@@ -44,6 +49,8 @@ public class Producer extends Thread {
         if (transactionalId != null) {
             props.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, transactionalId);
         }
+        props.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, enableIdempotency);
+
         producer = new KafkaProducer<>(props);
         this.topic = topic;
         this.isAsync = isAsync;
@@ -58,7 +65,8 @@ public class Producer extends Thread {
     @Override
     public void run() {
         int messageNo = 0;
-        while (numRecords > 0) {
+        int recordsSent = 0;
+        while (recordsSent < numRecords) {
             String messageStr = "Message_" + messageNo;
             long startTime = System.currentTimeMillis();
             if (isAsync) { // Send asynchronously
@@ -76,8 +84,9 @@ public class Producer extends Thread {
                 }
             }
             messageNo += 2;
-            numRecords -= 1;
+            recordsSent += 1;
         }
+        System.out.println("Producer sent " + numRecords + " records successfully");
         latch.countDown();
     }
 }

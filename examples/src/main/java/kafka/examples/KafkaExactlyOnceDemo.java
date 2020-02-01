@@ -17,16 +17,29 @@
 package kafka.examples;
 
 import org.apache.kafka.clients.admin.Admin;
-import org.apache.kafka.clients.admin.CreateTopicsResult;
+import org.apache.kafka.clients.admin.DescribeTopicsResult;
+import org.apache.kafka.clients.admin.ListTopicsResult;
 import org.apache.kafka.clients.admin.NewTopic;
+import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.common.KafkaFuture;
+import org.apache.kafka.common.errors.TopicExistsException;
+import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 
 import java.util.Arrays;
+import java.util.List;
 import java.util.Properties;
+import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 
+/**
+ * This exactly once demo driver is following below steps:
+ * 1. Set up a producer to pre populate a set of records into input topic
+ * 2.
+ */
 public class KafkaExactlyOnceDemo {
 
     private static final String INPUT_TOPIC = "input-topic";
@@ -43,19 +56,21 @@ public class KafkaExactlyOnceDemo {
         int numInstances = Integer.valueOf(args[2]);
         int numRecords = Integer.valueOf(args[3]);
 
-        createTopics(numPartitions);
+        recreateTopics(numPartitions);
 
         CountDownLatch prePopulateLatch = new CountDownLatch(1);
 
-        // Pre-populate records
-        Producer producerThread = new Producer(INPUT_TOPIC, true, null, numRecords, prePopulateLatch);
+        // Pre-populate records.
+        final boolean isAsync = false;
+        final boolean enableIdempotency = true;
+        Producer producerThread = new Producer(INPUT_TOPIC, isAsync, null, enableIdempotency, numRecords, prePopulateLatch);
         producerThread.start();
 
         prePopulateLatch.await(5, TimeUnit.MINUTES);
 
         CountDownLatch transactionalCopyLatch = new CountDownLatch(numInstances);
 
-        // Transactionally copy over all messages
+        // Transactionally copy over all messages.
         for (int instanceIdx = 0; instanceIdx < numInstances; instanceIdx++) {
             ExactlyOnceMessageProcessor messageProcessor = new ExactlyOnceMessageProcessor(mode,
                 INPUT_TOPIC, OUTPUT_TOPIC, numPartitions,
@@ -67,7 +82,7 @@ public class KafkaExactlyOnceDemo {
 
         CountDownLatch consumeLatch = new CountDownLatch(1);
 
-        Consumer consumerThread = new Consumer(KafkaProperties.TOPIC, true, numRecords, consumeLatch);
+        Consumer consumerThread = new Consumer(OUTPUT_TOPIC, "Verify-consumer", true, numRecords, consumeLatch);
         consumerThread.start();
 
         consumeLatch.await(5, TimeUnit.MINUTES);
@@ -75,16 +90,78 @@ public class KafkaExactlyOnceDemo {
         System.out.println("All finished!");
     }
 
-    private static void createTopics(final int numPartitions) throws ExecutionException, InterruptedException {
-        Properties properties = new Properties();
-        properties.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
+    private static void recreateTopics(final int numPartitions) throws ExecutionException, InterruptedException {
+        Properties props = new Properties();
+        props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, KafkaProperties.KAFKA_SERVER_URL + ":" + KafkaProperties.KAFKA_SERVER_PORT);
 
-        Admin adminClient = Admin.create(properties);
-        short replicationFactor = 1;
-        CreateTopicsResult result = adminClient.createTopics(Arrays.asList(
-            new NewTopic(INPUT_TOPIC, numPartitions, replicationFactor),
-            new NewTopic(OUTPUT_TOPIC, numPartitions, replicationFactor)));
+        Admin adminClient = Admin.create(props);
 
-        result.all().get();
+        List<String> topicsToDelete = Arrays.asList(INPUT_TOPIC, OUTPUT_TOPIC);
+
+        try {
+            adminClient.deleteTopics(topicsToDelete).all().get();
+        } catch (ExecutionException e) {
+            if (!(e.getCause() instanceof UnknownTopicOrPartitionException)) {
+                throw e;
+            }
+            System.out.println("Encountered exception during topic deletion: " + e.getCause());
+        }
+        System.out.println("Deleted old topics: " + topicsToDelete);
+
+        // Check topic existence in a retry loop
+        while (true) {
+            System.out.println("Making sure the topics are deleted successfully: " + topicsToDelete);
+            boolean noTopicsInfo = true;
+
+            Set<String> listedTopics = adminClient.listTopics().names().get();
+            System.out.println("Current list of topics: " + listedTopics);
+
+            for (String topic : topicsToDelete) {
+               System.out.println("Checking topic " + topic);
+               if (listedTopics.contains(topic)) {
+                   noTopicsInfo = false;
+                   break;
+               }
+            }
+
+            if (noTopicsInfo) {
+                break;
+            }
+            Thread.sleep(1000);
+        }
+
+        // Create topics in a retry loop
+        while (true) {
+            final short replicationFactor = 1;
+            final List<NewTopic> newTopics = Arrays.asList(
+                new NewTopic(INPUT_TOPIC, numPartitions, replicationFactor),
+                new NewTopic(OUTPUT_TOPIC, numPartitions, replicationFactor));
+            try {
+                adminClient.createTopics(newTopics).all().get();
+                System.out.println("Created new topics: " + newTopics);
+                break;
+            } catch (ExecutionException e) {
+                if (!(e.getCause() instanceof TopicExistsException)) {
+                    throw e;
+                }
+                System.out.println("Metadata of the old topics are not cleared yet...");
+                Thread.sleep(1000);
+            }
+        }
     }
 }
+
+//            DescribeTopicsResult describeTopicsResult = adminClient.describeTopics(topicsToDelete);
+//            for (KafkaFuture<TopicDescription> future : describeTopicsResult.values().values()) {
+//                try {
+//                    TopicDescription description = future.get();
+//                    System.out.println("Found topic description: " + description);
+//                    noTopicsInfo = false;
+//                    break;
+//                } catch (ExecutionException e) {
+//                    if (!(e.getCause() instanceof UnknownTopicOrPartitionException)) {
+//                        throw e;
+//                    }
+//                }
+//            }
+
