@@ -28,7 +28,6 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.FencedInstanceIdException;
 import org.apache.kafka.common.errors.ProducerFencedException;
-import org.apache.kafka.common.internals.Topic;
 
 import java.time.Duration;
 import java.util.ArrayList;
@@ -41,10 +40,8 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
- * A demo class for how to write a customized EOS app. It takes a consume-process-produce loop
- * The things to pay attention to beyond a general consumer + producer app are:
- * 1. Define a unique transactional.id for your app
- * 2. Turn on read_committed isolation level
+ * A demo class for how to write a customized EOS app. It takes a consume-process-produce loop. Important
+ * configurations and steps are commented.
  */
 public class ExactlyOnceMessageProcessor extends Thread {
 
@@ -77,23 +74,25 @@ public class ExactlyOnceMessageProcessor extends Thread {
         this.numInstances = numInstances;
         this.instanceIdx = instanceIdx;
         this.transactionalId = "Processor-" + instanceIdx;
+        // A unique transactional.id must be provided in order to properly use EOS.
         producer = new Producer(outputTopic, true, transactionalId, true, -1, null).get();
+        // Consumer must be in read_committed mode, which means it won't be able to read uncommitted data.
         consumer = new Consumer(inputTopic, "Eos-consumer", READ_COMMITTED, -1, null).get();
         this.latch = latch;
     }
 
     @Override
     public void run() {
-        // Init transactions call should always happen first in order to clear zombie transactions.
+        // Init transactions call should always happen first in order to clear zombie transactions from previous generation.
         producer.initTransactions();
 
         final AtomicLong messageRemaining = new AtomicLong(Long.MAX_VALUE);
 
         // Under group mode, topic based subscription is sufficient as Consumers are safe to work transactionally after 2.5.
         // Under standalone mode, user needs to manually assign the topic partitions and make sure the assignment is unique
-        // across the consumer group.
+        // across the consumer group instances.
         if (this.mode.equals("groupMode")) {
-            consumer.subscribe(Collections.singleton(KafkaProperties.TOPIC), new ConsumerRebalanceListener() {
+            consumer.subscribe(Collections.singleton(inputTopic), new ConsumerRebalanceListener() {
                 @Override
                 public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
                     printWithPrefix("Revoked partition assignment to kick-off rebalancing: " + partitions);
@@ -106,6 +105,7 @@ public class ExactlyOnceMessageProcessor extends Thread {
                 }
             });
         } else {
+            // Do a range assignment of topic partitions.
             List<TopicPartition> topicPartitions = new ArrayList<>();
             int rangeSize = numPartitions / numInstances;
             int startPartition = rangeSize * instanceIdx;
@@ -140,6 +140,7 @@ public class ExactlyOnceMessageProcessor extends Thread {
                     producer.commitTransaction();
                     messageProcessed += records.count();
                 } catch (CommitFailedException e) {
+                    // In case of a retriable exception, suggest aborting the ongoing transaction first for correctness.
                     producer.abortTransaction();
                 } catch (ProducerFencedException | FencedInstanceIdException e) {
                     throw new KafkaException("Encountered fatal error during processing: " + e.getMessage());
