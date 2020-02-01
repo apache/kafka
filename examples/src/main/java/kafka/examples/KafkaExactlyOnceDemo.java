@@ -1,115 +1,58 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package kafka.examples;
 
-import org.apache.kafka.clients.consumer.CommitFailedException;
-import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
-import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.apache.kafka.clients.consumer.ConsumerRecords;
-import org.apache.kafka.clients.consumer.KafkaConsumer;
-import org.apache.kafka.clients.consumer.OffsetAndMetadata;
-import org.apache.kafka.clients.producer.KafkaProducer;
-import org.apache.kafka.clients.producer.ProducerRecord;
-import org.apache.kafka.common.KafkaException;
-import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.errors.FencedInstanceIdException;
-import org.apache.kafka.common.errors.ProducerFencedException;
+import java.util.ArrayList;
+import java.util.List;
 
-import java.time.Duration;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.UUID;
-
-import static java.util.Collections.singleton;
-
-/**
- * A demo class for how to write a customized EOS app. It takes a consume-process-produce loop
- * The things to pay attention to beyond a general consumer + producer app are:
- * 1. Define a unique transactional.id for your app
- * 2. Turn on read_committed isolation level
- */
 public class KafkaExactlyOnceDemo {
 
+    private static final String INPUT_TOPIC = "input-topic";
     private static final String OUTPUT_TOPIC = "output-topic";
-    private static final String TRANSACTIONAL_ID = "transactional-id-" + UUID.randomUUID();
-    private static final boolean READ_COMMITTED = true;
 
-    public static void main(String[] args) {
-        if (args.length < 1) {
-            throw new IllegalArgumentException("Should accept at least one parameter");
-        } else if (args[0].equals("standaloneMode") && args.length != 2) {
-            throw new IllegalArgumentException("Should have specified partition in standalone mode");
+    public static void main(String[] args) throws InterruptedException {
+        if (args.length != 4) {
+            throw new IllegalArgumentException("Should accept 4 parameters: [mode], " +
+                "[number of partitions], [number of instances], [number of records]");
         }
 
-        KafkaProducer<Integer, String> producer = new Producer(KafkaProperties.TOPIC, true, TRANSACTIONAL_ID).get();
-        // Init transactions call should always happen first in order to clear zombie transactions.
-        producer.initTransactions();
+        String mode = args[0];
+        int numPartitions = Integer.valueOf(args[1]);
+        int numInstances = Integer.valueOf(args[2]);
+        int numRecords = Integer.valueOf(args[3]);
 
-        KafkaConsumer<Integer, String> consumer = new Consumer(KafkaProperties.TOPIC, READ_COMMITTED).get();
-        // Under group mode, topic based subscription is sufficient as Consumers are safe to work transactionally after 2.5.
-        // Under standalone mode, user needs to manually assign the topic partitions and make sure the assignment is unique
-        // across the consumer group.
-        if (args[0].equals("groupMode")) {
-            consumer.subscribe(Collections.singleton(KafkaProperties.TOPIC), new ConsumerRebalanceListener() {
-                @Override
-                public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
+        // Pre-populate records
+        Producer producerThread = new Producer(INPUT_TOPIC, true, null, numRecords);
+        producerThread.start();
 
-                }
-
-                @Override
-                public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
-                    System.out.println("Get partition assignment " + partitions);
-                }
-            });
-        } else {
-            consumer.assign(Collections.singletonList(new TopicPartition(KafkaProperties.TOPIC,
-                Integer.valueOf(args[1]))));
-        }
-        long messageRemaining = messagesRemaining(consumer);
-
-        while (messageRemaining > 0) {
-            ConsumerRecords<Integer, String> records = consumer.poll(Duration.ofMillis(200));
-            if (records.count() > 0) {
-                try {
-                    // Begin a new transaction session.
-                    producer.beginTransaction();
-                    for (ConsumerRecord<Integer, String> record : records) {
-                        ProducerRecord<Integer, String> customizedRecord = transform(record);
-                        // Send records to the downstream.
-                        producer.send(customizedRecord);
-                    }
-                    Map<TopicPartition, OffsetAndMetadata> positions = new HashMap<>();
-                    for (TopicPartition topicPartition : consumer.assignment()) {
-                        positions.put(topicPartition, new OffsetAndMetadata(consumer.position(topicPartition), null));
-                    }
-                    // Checkpoint the progress by sending offsets to group coordinator broker.
-                    producer.sendOffsetsToTransaction(positions, consumer.groupMetadata());
-                    // Finish the transaction.
-                    producer.commitTransaction();
-                } catch (CommitFailedException e) {
-                    producer.abortTransaction();
-                } catch (ProducerFencedException | FencedInstanceIdException e) {
-                    throw new KafkaException("Encountered fatal error during processing: " + e.getMessage());
-                }
+        synchronized (producerThread.getClass()) {
+            while (producerThread.isAlive()) {
+                producerThread.getClass().wait();
             }
-            messageRemaining = messagesRemaining(consumer);
-            System.out.println("Message remaining: " + messageRemaining);
         }
+
+        List<ExactlyOnceMessageProcessor> eosProcessors = new ArrayList<>(numInstances);
+        for (int instanceIdx = 0; instanceIdx < numInstances; instanceIdx++) {
+            ExactlyOnceMessageProcessor messageProcessor = new ExactlyOnceMessageProcessor(mode,
+                INPUT_TOPIC, OUTPUT_TOPIC, numPartitions, numInstances, instanceIdx);
+            eosProcessors.add(messageProcessor);
+            messageProcessor.start();
+        }
+
     }
 
-    private static ProducerRecord<Integer, String> transform(ConsumerRecord<Integer, String> record) {
-        // Customized business logic here
-        return new ProducerRecord<>(OUTPUT_TOPIC, record.key() / 2, record.value());
-    }
-
-    private static long messagesRemaining(KafkaConsumer<Integer, String> consumer) {
-        return consumer.assignment().stream().mapToLong(partition -> {
-            long currentPosition = consumer.position(partition);
-            Map<TopicPartition, Long> endOffsets = consumer.endOffsets(singleton(partition));
-            if (endOffsets.containsKey(partition)) {
-                return endOffsets.get(partition) - currentPosition;
-            }
-            return 0;
-        }).sum();
-    }
 }

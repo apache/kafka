@@ -31,8 +31,9 @@ public class Producer extends Thread {
     private final KafkaProducer<Integer, String> producer;
     private final String topic;
     private final Boolean isAsync;
+    private int numRecords;
 
-    public Producer(String topic, Boolean isAsync, String transactionalId) {
+    public Producer(String topic, Boolean isAsync, String transactionalId, int numRecords) {
         Properties props = new Properties();
         props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, KafkaProperties.KAFKA_SERVER_URL + ":" + KafkaProperties.KAFKA_SERVER_PORT);
         props.put(ProducerConfig.CLIENT_ID_CONFIG, "DemoProducer");
@@ -44,32 +45,38 @@ public class Producer extends Thread {
         producer = new KafkaProducer<>(props);
         this.topic = topic;
         this.isAsync = isAsync;
+        this.numRecords = numRecords;
     }
 
     KafkaProducer<Integer, String> get() {
         return producer;
     }
 
+    @Override
     public void run() {
-        int messageNo = 0;
-        while (true) {
-            String messageStr = "Message_" + messageNo;
-            long startTime = System.currentTimeMillis();
-            if (isAsync) { // Send asynchronously
-                producer.send(new ProducerRecord<>(topic,
-                    messageNo,
-                    messageStr), new DemoCallBack(startTime, messageNo, messageStr));
-            } else { // Send synchronously
-                try {
+        synchronized (this) {
+            int messageNo = 0;
+            while (numRecords > 0) {
+                String messageStr = "Message_" + messageNo;
+                long startTime = System.currentTimeMillis();
+                if (isAsync) { // Send asynchronously
                     producer.send(new ProducerRecord<>(topic,
                         messageNo,
-                        messageStr)).get();
-                    System.out.println("Sent message: (" + messageNo + ", " + messageStr + ")");
-                } catch (InterruptedException | ExecutionException e) {
-                    e.printStackTrace();
+                        messageStr), new DemoCallBack(startTime, messageNo, messageStr));
+                } else { // Send synchronously
+                    try {
+                        producer.send(new ProducerRecord<>(topic,
+                            messageNo,
+                            messageStr)).get();
+                        System.out.println("Sent message: (" + messageNo + ", " + messageStr + ")");
+                    } catch (InterruptedException | ExecutionException e) {
+                        e.printStackTrace();
+                    }
                 }
+                messageNo += 2;
+                numRecords -= 1;
             }
-            messageNo += 2;
+            this.notifyAll();
         }
     }
 }
