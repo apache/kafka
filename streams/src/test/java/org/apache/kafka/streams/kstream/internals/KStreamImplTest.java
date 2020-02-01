@@ -2397,13 +2397,13 @@ public class KStreamImplTest {
             equalTo("Topologies:\n" +
                 "   Sub-topology: 0\n" +
                 "    Source: KSTREAM-SOURCE-0000000000 (topics: [input])\n" +
-                "      --> KSTREAM-TOTABLE-0000000002\n" +
-                "    Processor: KSTREAM-TOTABLE-0000000002 (stores: [])\n" +
+                "      --> KSTREAM-TOTABLE-0000000001\n" +
+                "    Processor: KSTREAM-TOTABLE-0000000001 (stores: [])\n" +
                 "      --> KTABLE-TOSTREAM-0000000003\n" +
                 "      <-- KSTREAM-SOURCE-0000000000\n" +
                 "    Processor: KTABLE-TOSTREAM-0000000003 (stores: [])\n" +
                 "      --> KSTREAM-SINK-0000000004\n" +
-                "      <-- KSTREAM-TOTABLE-0000000002\n" +
+                "      <-- KSTREAM-TOTABLE-0000000001\n" +
                 "    Sink: KSTREAM-SINK-0000000004 (topic: output)\n" +
                 "      <-- KTABLE-TOSTREAM-0000000003\n\n")
         );
@@ -2570,11 +2570,11 @@ public class KStreamImplTest {
                 "    Source: KTABLE-SOURCE-0000000016 (topics: [KTABLE-FK-JOIN-SUBSCRIPTION-RESPONSE-0000000014-topic])\n" +
                 "      --> KTABLE-FK-JOIN-SUBSCRIPTION-RESPONSE-RESOLVER-PROCESSOR-0000000017\n" +
                 "    Source: KSTREAM-SOURCE-0000000000 (topics: [input1])\n" +
-                "      --> KSTREAM-TOTABLE-0000000002\n" +
-                "    Processor: KTABLE-FK-JOIN-SUBSCRIPTION-RESPONSE-RESOLVER-PROCESSOR-0000000017 (stores: [KSTREAM-TOTABLE-STATE-STORE-0000000001])\n" +
+                "      --> KSTREAM-TOTABLE-0000000001\n" +
+                "    Processor: KTABLE-FK-JOIN-SUBSCRIPTION-RESPONSE-RESOLVER-PROCESSOR-0000000017 (stores: [KSTREAM-TOTABLE-STATE-STORE-0000000002])\n" +
                 "      --> KTABLE-FK-JOIN-OUTPUT-0000000018\n" +
                 "      <-- KTABLE-SOURCE-0000000016\n" +
-                "    Processor: KSTREAM-TOTABLE-0000000002 (stores: [KSTREAM-TOTABLE-STATE-STORE-0000000001])\n" +
+                "    Processor: KSTREAM-TOTABLE-0000000001 (stores: [KSTREAM-TOTABLE-STATE-STORE-0000000002])\n" +
                 "      --> KTABLE-FK-JOIN-SUBSCRIPTION-REGISTRATION-0000000007\n" +
                 "      <-- KSTREAM-SOURCE-0000000000\n" +
                 "    Processor: KTABLE-FK-JOIN-OUTPUT-0000000018 (stores: [])\n" +
@@ -2582,7 +2582,7 @@ public class KStreamImplTest {
                 "      <-- KTABLE-FK-JOIN-SUBSCRIPTION-RESPONSE-RESOLVER-PROCESSOR-0000000017\n" +
                 "    Processor: KTABLE-FK-JOIN-SUBSCRIPTION-REGISTRATION-0000000007 (stores: [])\n" +
                 "      --> KTABLE-SINK-0000000008\n" +
-                "      <-- KSTREAM-TOTABLE-0000000002\n" +
+                "      <-- KSTREAM-TOTABLE-0000000001\n" +
                 "    Processor: KTABLE-TOSTREAM-0000000020 (stores: [])\n" +
                 "      --> KSTREAM-SINK-0000000021\n" +
                 "      <-- KTABLE-FK-JOIN-OUTPUT-0000000018\n" +
@@ -2593,21 +2593,21 @@ public class KStreamImplTest {
                 "\n" +
                 "  Sub-topology: 1\n" +
                 "    Source: KSTREAM-SOURCE-0000000003 (topics: [input2])\n" +
-                "      --> KSTREAM-TOTABLE-0000000005\n" +
+                "      --> KSTREAM-TOTABLE-0000000004\n" +
                 "    Source: KTABLE-SOURCE-0000000009 (topics: [KTABLE-FK-JOIN-SUBSCRIPTION-REGISTRATION-0000000006-topic])\n" +
                 "      --> KTABLE-FK-JOIN-SUBSCRIPTION-PROCESSOR-0000000011\n" +
-                "    Processor: KSTREAM-TOTABLE-0000000005 (stores: [KSTREAM-TOTABLE-STATE-STORE-0000000004])\n" +
+                "    Processor: KSTREAM-TOTABLE-0000000004 (stores: [KSTREAM-TOTABLE-STATE-STORE-0000000005])\n" +
                 "      --> KTABLE-FK-JOIN-SUBSCRIPTION-PROCESSOR-0000000013\n" +
                 "      <-- KSTREAM-SOURCE-0000000003\n" +
                 "    Processor: KTABLE-FK-JOIN-SUBSCRIPTION-PROCESSOR-0000000011 (stores: [KTABLE-FK-JOIN-SUBSCRIPTION-STATE-STORE-0000000010])\n" +
                 "      --> KTABLE-FK-JOIN-SUBSCRIPTION-PROCESSOR-0000000012\n" +
                 "      <-- KTABLE-SOURCE-0000000009\n" +
-                "    Processor: KTABLE-FK-JOIN-SUBSCRIPTION-PROCESSOR-0000000012 (stores: [KSTREAM-TOTABLE-STATE-STORE-0000000004])\n" +
+                "    Processor: KTABLE-FK-JOIN-SUBSCRIPTION-PROCESSOR-0000000012 (stores: [KSTREAM-TOTABLE-STATE-STORE-0000000005])\n" +
                 "      --> KTABLE-SINK-0000000015\n" +
                 "      <-- KTABLE-FK-JOIN-SUBSCRIPTION-PROCESSOR-0000000011\n" +
                 "    Processor: KTABLE-FK-JOIN-SUBSCRIPTION-PROCESSOR-0000000013 (stores: [KTABLE-FK-JOIN-SUBSCRIPTION-STATE-STORE-0000000010])\n" +
                 "      --> KTABLE-SINK-0000000015\n" +
-                "      <-- KSTREAM-TOTABLE-0000000005\n" +
+                "      <-- KSTREAM-TOTABLE-0000000004\n" +
                 "    Sink: KTABLE-SINK-0000000015 (topic: KTABLE-FK-JOIN-SUBSCRIPTION-RESPONSE-0000000014-topic)\n" +
                 "      <-- KTABLE-FK-JOIN-SUBSCRIPTION-PROCESSOR-0000000012, KTABLE-FK-JOIN-SUBSCRIPTION-PROCESSOR-0000000013\n\n")
         );
@@ -2676,21 +2676,21 @@ public class KStreamImplTest {
             equalTo("Topologies:\n" +
                 "   Sub-topology: 0\n" +
                 "    Source: KSTREAM-SOURCE-0000000000 (topics: [left])\n" +
-                "      --> KSTREAM-TOTABLE-0000000002\n" +
+                "      --> KSTREAM-TOTABLE-0000000001\n" +
                 "    Source: KSTREAM-SOURCE-0000000003 (topics: [right])\n" +
-                "      --> KSTREAM-TOTABLE-0000000005\n" +
-                "    Processor: KSTREAM-TOTABLE-0000000002 (stores: [KSTREAM-TOTABLE-STATE-STORE-0000000001])\n" +
+                "      --> KSTREAM-TOTABLE-0000000004\n" +
+                "    Processor: KSTREAM-TOTABLE-0000000001 (stores: [KSTREAM-TOTABLE-STATE-STORE-0000000002])\n" +
                 "      --> KTABLE-JOINTHIS-0000000007\n" +
                 "      <-- KSTREAM-SOURCE-0000000000\n" +
-                "    Processor: KSTREAM-TOTABLE-0000000005 (stores: [KSTREAM-TOTABLE-STATE-STORE-0000000004])\n" +
+                "    Processor: KSTREAM-TOTABLE-0000000004 (stores: [KSTREAM-TOTABLE-STATE-STORE-0000000005])\n" +
                 "      --> KTABLE-JOINOTHER-0000000008\n" +
                 "      <-- KSTREAM-SOURCE-0000000003\n" +
-                "    Processor: KTABLE-JOINOTHER-0000000008 (stores: [KSTREAM-TOTABLE-STATE-STORE-0000000001])\n" +
+                "    Processor: KTABLE-JOINOTHER-0000000008 (stores: [KSTREAM-TOTABLE-STATE-STORE-0000000002])\n" +
                 "      --> KTABLE-MERGE-0000000006\n" +
-                "      <-- KSTREAM-TOTABLE-0000000005\n" +
-                "    Processor: KTABLE-JOINTHIS-0000000007 (stores: [KSTREAM-TOTABLE-STATE-STORE-0000000004])\n" +
+                "      <-- KSTREAM-TOTABLE-0000000004\n" +
+                "    Processor: KTABLE-JOINTHIS-0000000007 (stores: [KSTREAM-TOTABLE-STATE-STORE-0000000005])\n" +
                 "      --> KTABLE-MERGE-0000000006\n" +
-                "      <-- KSTREAM-TOTABLE-0000000002\n" +
+                "      <-- KSTREAM-TOTABLE-0000000001\n" +
                 "    Processor: KTABLE-MERGE-0000000006 (stores: [])\n" +
                 "      --> KTABLE-TOSTREAM-0000000009\n" +
                 "      <-- KTABLE-JOINTHIS-0000000007, KTABLE-JOINOTHER-0000000008\n" +
@@ -2765,14 +2765,14 @@ public class KStreamImplTest {
                 "   Sub-topology: 0\n" +
                 "    Source: KSTREAM-SOURCE-0000000000 (topics: [streamTopic])\n" +
                 "      --> KSTREAM-JOIN-0000000004\n" +
-                "    Processor: KSTREAM-JOIN-0000000004 (stores: [KSTREAM-TOTABLE-STATE-STORE-0000000002])\n" +
+                "    Processor: KSTREAM-JOIN-0000000004 (stores: [KSTREAM-TOTABLE-STATE-STORE-0000000003])\n" +
                 "      --> KSTREAM-SINK-0000000005\n" +
                 "      <-- KSTREAM-SOURCE-0000000000\n" +
                 "    Source: KSTREAM-SOURCE-0000000001 (topics: [tableTopic])\n" +
-                "      --> KSTREAM-TOTABLE-0000000003\n" +
+                "      --> KSTREAM-TOTABLE-0000000002\n" +
                 "    Sink: KSTREAM-SINK-0000000005 (topic: output)\n" +
                 "      <-- KSTREAM-JOIN-0000000004\n" +
-                "    Processor: KSTREAM-TOTABLE-0000000003 (stores: [KSTREAM-TOTABLE-STATE-STORE-0000000002])\n" +
+                "    Processor: KSTREAM-TOTABLE-0000000002 (stores: [KSTREAM-TOTABLE-STATE-STORE-0000000003])\n" +
                 "      --> none\n" +
                 "      <-- KSTREAM-SOURCE-0000000001\n\n"));
 
@@ -2842,13 +2842,13 @@ public class KStreamImplTest {
             equalTo("Topologies:\n" +
                 "   Sub-topology: 0\n" +
                 "    Source: KSTREAM-SOURCE-0000000000 (topics: [input])\n" +
-                "      --> KSTREAM-TOTABLE-0000000002\n" +
-                "    Processor: KSTREAM-TOTABLE-0000000002 (stores: [KSTREAM-TOTABLE-STATE-STORE-0000000001])\n" +
+                "      --> KSTREAM-TOTABLE-0000000001\n" +
+                "    Processor: KSTREAM-TOTABLE-0000000001 (stores: [KSTREAM-TOTABLE-STATE-STORE-0000000002])\n" +
                 "      --> KTABLE-SELECT-0000000003\n" +
                 "      <-- KSTREAM-SOURCE-0000000000\n" +
                 "    Processor: KTABLE-SELECT-0000000003 (stores: [])\n" +
                 "      --> KSTREAM-SINK-0000000005\n" +
-                "      <-- KSTREAM-TOTABLE-0000000002\n" +
+                "      <-- KSTREAM-TOTABLE-0000000001\n" +
                 "    Sink: KSTREAM-SINK-0000000005 (topic: KTABLE-AGGREGATE-STATE-STORE-0000000004-repartition)\n" +
                 "      <-- KTABLE-SELECT-0000000003\n" +
                 "\n" +
