@@ -256,7 +256,7 @@ object TestPurgatoryPerformance {
 
   private class CompletionQueue {
     private[this] val delayQueue = new DelayQueue[Scheduled]()
-    private[this] val thread = new ShutdownableThread(name = "completion thread", isInterruptable = false) {
+    private[this] val thread = new ShutdownableThread(name = "completion thread", isInterruptible = false) {
       override def doWork(): Unit = {
         val scheduled = delayQueue.poll(100, TimeUnit.MILLISECONDS)
         if (scheduled != null) {

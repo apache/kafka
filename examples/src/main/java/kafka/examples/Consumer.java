@@ -84,7 +84,7 @@ public class Consumer extends ShutdownableThread {
     }
 
     @Override
-    public boolean isInterruptable() {
+    public boolean isInterruptible() {
         return false;
     }
 }

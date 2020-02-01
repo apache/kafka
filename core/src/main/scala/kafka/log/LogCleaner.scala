@@ -269,7 +269,7 @@ class LogCleaner(initialConfig: CleanerConfig,
    * choosing the dirtiest log, cleaning it, and then swapping in the cleaned segments.
    */
   private[log] class CleanerThread(threadId: Int)
-    extends ShutdownableThread(name = s"kafka-log-cleaner-thread-$threadId", isInterruptable = false) {
+    extends ShutdownableThread(name = s"kafka-log-cleaner-thread-$threadId", isInterruptible = false) {
 
     protected override def loggerName = classOf[LogCleaner].getName
 
