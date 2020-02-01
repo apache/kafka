@@ -31,12 +31,39 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 
 /**
- * This exactly once demo driver is following below steps:
- * 1. Set up a producer to pre-populate a set of records into input topic
- * 2. Set up transactional instances which does a consume-process-produce loop, tailing data from
- *    input topic (See {@link ExactlyOnceMessageProcessor})
- * 3. Set up a read committed consumer to verify we have all data copied from output topic, while
- *    the message ordering on partition level is maintained.
+ * This exactly once demo driver takes 4 arguments:
+ *   - mode: whether to run as standalone app, or a group
+ *   - partition: number of partitions for input/output topic
+ *   - instances: number of instances
+ *   - records: number of records
+ * An example argument list would be `groupMode 6 3 50000`
+ *
+ * The driver could be decomposed as following stages:
+ *
+ * 1. Cleanup any topic whose name conflicts with input and output topic, so that we have a clean-start.
+ *
+ * 2. Set up a producer in a separate thread to pre-populate a set of records with even number keys into
+ *    the input topic. The driver will block for the record generation to finish, so the producer
+ *    must be in synchronous sending mode.
+ *
+ * 3. Set up transactional instances in separate threads which does a consume-process-produce loop,
+ *    tailing data from input topic (See {@link ExactlyOnceMessageProcessor}). Each EOS instance will
+ *    drain all the records from either given partitions or auto assigned partitions by actively
+ *    comparing log end offset with committed offset. Each record will be processed exactly once
+ *    as dividing the key by 2, and extend the value message. The driver will block for all the record
+ *    processing to finish. The transformed record shall be written to the output topic, with
+ *    transactional guarantee.
+ *
+ * 4. Set up a read committed consumer in a separate thread to verify we have all records within
+ *    the output topic, while the message ordering on partition level is maintained.
+ *    The driver will block for the consumption of all committed records.
+ *
+ * From this demo, you could see that all the records from pre-population are processed exactly once,
+ * in either standalone mode or group mode, with strong partition level ordering guarantee.
+ *
+ * Note: please start the kafka broker and zookeeper in local first. The broker version must be >= 2.5
+ * in order to run group mode, otherwise the app could throw
+ * {@link org.apache.kafka.common.errors.UnsupportedVersionException}.
  */
 public class KafkaExactlyOnceDemo {
 
@@ -54,11 +81,12 @@ public class KafkaExactlyOnceDemo {
         int numInstances = Integer.valueOf(args[2]);
         int numRecords = Integer.valueOf(args[3]);
 
+        /* Stage 1: topic cleanup and recreation */
         recreateTopics(numPartitions);
 
         CountDownLatch prePopulateLatch = new CountDownLatch(1);
 
-        // Pre-populate records.
+        /* Stage 2: pre-populate records */
         final boolean isAsync = false;
         final boolean enableIdempotency = true;
         Producer producerThread = new Producer(INPUT_TOPIC, isAsync, null, enableIdempotency, numRecords, prePopulateLatch);
@@ -68,7 +96,7 @@ public class KafkaExactlyOnceDemo {
 
         CountDownLatch transactionalCopyLatch = new CountDownLatch(numInstances);
 
-        // Transactionally copy over all messages.
+        /* Stage 3: transactionally process all messages */
         for (int instanceIdx = 0; instanceIdx < numInstances; instanceIdx++) {
             ExactlyOnceMessageProcessor messageProcessor = new ExactlyOnceMessageProcessor(mode,
                 INPUT_TOPIC, OUTPUT_TOPIC, numPartitions,
@@ -80,6 +108,7 @@ public class KafkaExactlyOnceDemo {
 
         CountDownLatch consumeLatch = new CountDownLatch(1);
 
+        /* Stage 4: consume all processed messages to verify exactly once */
         Consumer consumerThread = new Consumer(OUTPUT_TOPIC, "Verify-consumer", true, numRecords, consumeLatch);
         consumerThread.start();
 
@@ -88,9 +117,11 @@ public class KafkaExactlyOnceDemo {
         System.out.println("All finished!");
     }
 
-    private static void recreateTopics(final int numPartitions) throws ExecutionException, InterruptedException {
+    private static void recreateTopics(final int numPartitions)
+        throws ExecutionException, InterruptedException {
         Properties props = new Properties();
-        props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, KafkaProperties.KAFKA_SERVER_URL + ":" + KafkaProperties.KAFKA_SERVER_PORT);
+        props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG,
+            KafkaProperties.KAFKA_SERVER_URL + ":" + KafkaProperties.KAFKA_SERVER_PORT);
 
         Admin adminClient = Admin.create(props);
 
@@ -141,7 +172,8 @@ public class KafkaExactlyOnceDemo {
         }
     }
 
-    private static void deleteTopic(Admin adminClient, List<String> topicsToDelete) throws InterruptedException, ExecutionException {
+    private static void deleteTopic(final Admin adminClient, final List<String> topicsToDelete)
+        throws InterruptedException, ExecutionException {
         try {
             adminClient.deleteTopics(topicsToDelete).all().get();
         } catch (ExecutionException e) {

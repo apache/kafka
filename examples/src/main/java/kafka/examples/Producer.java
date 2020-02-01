@@ -64,26 +64,26 @@ public class Producer extends Thread {
 
     @Override
     public void run() {
-        int messageNo = 0;
+        int messageKey = 0;
         int recordsSent = 0;
         while (recordsSent < numRecords) {
-            String messageStr = "Message_" + messageNo;
+            String messageStr = "Message_" + messageKey;
             long startTime = System.currentTimeMillis();
             if (isAsync) { // Send asynchronously
                 producer.send(new ProducerRecord<>(topic,
-                    messageNo,
-                    messageStr), new DemoCallBack(startTime, messageNo, messageStr));
+                    messageKey,
+                    messageStr), new DemoCallBack(startTime, messageKey, messageStr));
             } else { // Send synchronously
                 try {
                     producer.send(new ProducerRecord<>(topic,
-                        messageNo,
+                        messageKey,
                         messageStr)).get();
-                    System.out.println("Sent message: (" + messageNo + ", " + messageStr + ")");
+                    System.out.println("Sent message: (" + messageKey + ", " + messageStr + ")");
                 } catch (InterruptedException | ExecutionException e) {
                     e.printStackTrace();
                 }
             }
-            messageNo += 2;
+            messageKey += 2;
             recordsSent += 1;
         }
         System.out.println("Producer sent " + numRecords + " records successfully");

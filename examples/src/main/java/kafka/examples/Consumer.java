@@ -30,6 +30,7 @@ import java.util.concurrent.CountDownLatch;
 public class Consumer extends ShutdownableThread {
     private final KafkaConsumer<Integer, String> consumer;
     private final String topic;
+    private final String groupId;
     private final int numMessageToConsume;
     private int messageRemaining;
     private final CountDownLatch latch;
@@ -40,6 +41,7 @@ public class Consumer extends ShutdownableThread {
                     final int numMessageToConsume,
                     final CountDownLatch latch) {
         super("KafkaConsumerExample", false);
+        this.groupId = groupId;
         Properties props = new Properties();
         props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, KafkaProperties.KAFKA_SERVER_URL + ":" + KafkaProperties.KAFKA_SERVER_PORT);
         props.put(ConsumerConfig.GROUP_ID_CONFIG, groupId);
@@ -69,11 +71,11 @@ public class Consumer extends ShutdownableThread {
         consumer.subscribe(Collections.singletonList(this.topic));
         ConsumerRecords<Integer, String> records = consumer.poll(Duration.ofSeconds(1));
         for (ConsumerRecord<Integer, String> record : records) {
-            System.out.println("Verify-consumer received message : from partition " + record.partition() + ", (" + record.key() + ", " + record.value() + ") at offset " + record.offset());
+            System.out.println(groupId + " received message : from partition " + record.partition() + ", (" + record.key() + ", " + record.value() + ") at offset " + record.offset());
         }
         messageRemaining -= records.count();
         if (messageRemaining <= 0) {
-            System.out.println("Verify-consumer finished reading " + numMessageToConsume + " messages");
+            System.out.println(groupId + " finished reading " + numMessageToConsume + " messages");
             latch.countDown();
         }
     }

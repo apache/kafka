@@ -29,5 +29,7 @@ public class KafkaConsumerProducerDemo {
         Consumer consumerThread = new Consumer(KafkaProperties.TOPIC, "DemoConsumer", false, 10000, latch);
         consumerThread.start();
         latch.await(5, TimeUnit.MINUTES);
+        consumerThread.shutdown();
+        System.out.println("All finished!");
     }
 }

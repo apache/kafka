@@ -40,8 +40,8 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
- * A demo class for how to write a customized EOS app. It takes a consume-process-produce loop. Important
- * configurations and steps are commented.
+ * A demo class for how to write a customized EOS app. It takes a consume-process-produce loop.
+ * Important configurations and APIs are commented.
  */
 public class ExactlyOnceMessageProcessor extends Thread {
 
@@ -50,6 +50,7 @@ public class ExactlyOnceMessageProcessor extends Thread {
     private final String mode;
     private final String inputTopic;
     private final String outputTopic;
+    private final String consumerGroupId;
     private final int numPartitions;
     private final int numInstances;
     private final int instanceIdx;
@@ -70,6 +71,7 @@ public class ExactlyOnceMessageProcessor extends Thread {
         this.mode = mode;
         this.inputTopic = inputTopic;
         this.outputTopic = outputTopic;
+        this.consumerGroupId = "Eos-consumer";
         this.numPartitions = numPartitions;
         this.numInstances = numInstances;
         this.instanceIdx = instanceIdx;
@@ -77,7 +79,7 @@ public class ExactlyOnceMessageProcessor extends Thread {
         // A unique transactional.id must be provided in order to properly use EOS.
         producer = new Producer(outputTopic, true, transactionalId, true, -1, null).get();
         // Consumer must be in read_committed mode, which means it won't be able to read uncommitted data.
-        consumer = new Consumer(inputTopic, "Eos-consumer", READ_COMMITTED, -1, null).get();
+        consumer = new Consumer(inputTopic, consumerGroupId, READ_COMMITTED, -1, null).get();
         this.latch = latch;
     }
 
@@ -88,19 +90,19 @@ public class ExactlyOnceMessageProcessor extends Thread {
 
         final AtomicLong messageRemaining = new AtomicLong(Long.MAX_VALUE);
 
-        // Under group mode, topic based subscription is sufficient as Consumers are safe to work transactionally after 2.5.
+        // Under group mode, topic based subscription is sufficient as EOS apps are safe to cooperate transactionally after 2.5.
         // Under standalone mode, user needs to manually assign the topic partitions and make sure the assignment is unique
         // across the consumer group instances.
         if (this.mode.equals("groupMode")) {
             consumer.subscribe(Collections.singleton(inputTopic), new ConsumerRebalanceListener() {
                 @Override
                 public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
-                    printWithPrefix("Revoked partition assignment to kick-off rebalancing: " + partitions);
+                    printWithTxnId("Revoked partition assignment to kick-off rebalancing: " + partitions);
                 }
 
                 @Override
                 public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
-                    printWithPrefix("Received partition assignment after rebalancing: " + partitions);
+                    printWithTxnId("Received partition assignment after rebalancing: " + partitions);
                     messageRemaining.set(messagesRemaining(consumer));
                 }
             });
@@ -115,7 +117,7 @@ public class ExactlyOnceMessageProcessor extends Thread {
             }
 
             consumer.assign(topicPartitions);
-            printWithPrefix("Manually assign partitions: " + topicPartitions);
+            printWithTxnId("Manually assign partitions: " + topicPartitions);
         }
 
         int messageProcessed = 0;
@@ -126,8 +128,8 @@ public class ExactlyOnceMessageProcessor extends Thread {
                     // Begin a new transaction session.
                     producer.beginTransaction();
                     for (ConsumerRecord<Integer, String> record : records) {
+                        // Process the record and send to downstream.
                         ProducerRecord<Integer, String> customizedRecord = transform(record);
-                        // Send records to the downstream.
                         producer.send(customizedRecord);
                     }
                     Map<TopicPartition, OffsetAndMetadata> positions = new HashMap<>();
@@ -135,8 +137,14 @@ public class ExactlyOnceMessageProcessor extends Thread {
                         positions.put(topicPartition, new OffsetAndMetadata(consumer.position(topicPartition), null));
                     }
                     // Checkpoint the progress by sending offsets to group coordinator broker.
-                    producer.sendOffsetsToTransaction(positions, consumer.groupMetadata());
-                    // Finish the transaction.
+                    // Under group mode, we must apply consumer group metadata for proper fencing.
+                    if (this.mode.equals("groupMode")) {
+                        producer.sendOffsetsToTransaction(positions, consumer.groupMetadata());
+                    } else {
+                        producer.sendOffsetsToTransaction(positions, consumerGroupId);
+                    }
+
+                    // Finish the transaction. All sent records should be visible for consumption now.
                     producer.commitTransaction();
                     messageProcessed += records.count();
                 } catch (CommitFailedException e) {
@@ -147,32 +155,32 @@ public class ExactlyOnceMessageProcessor extends Thread {
                 }
             }
             messageRemaining.set(messagesRemaining(consumer));
-            printWithPrefix("Message remaining: " + messageRemaining);
+            printWithTxnId("Message remaining: " + messageRemaining);
         }
 
-        printWithPrefix("Finished processing " + messageProcessed + " records");
+        printWithTxnId("Finished processing " + messageProcessed + " records");
         latch.countDown();
     }
 
-    private void printWithPrefix(String message) {
+    private void printWithTxnId(final String message) {
         System.out.println(transactionalId + ": " + message);
     }
 
-    private ProducerRecord<Integer, String> transform(ConsumerRecord<Integer, String> record) {
-        printWithPrefix("Transformed record (" + record.key() + "," + record.value() + ")");
+    private ProducerRecord<Integer, String> transform(final ConsumerRecord<Integer, String> record) {
+        printWithTxnId("Transformed record (" + record.key() + "," + record.value() + ")");
         return new ProducerRecord<>(outputTopic, record.key() / 2, "Transformed_" + record.value());
     }
 
-    private long messagesRemaining(KafkaConsumer<Integer, String> consumer) {
-        // If we couldn't detect any end offset, that means we are still not able to fetch offsets.
+    private long messagesRemaining(final KafkaConsumer<Integer, String> consumer) {
         final Map<TopicPartition, Long> fullEndOffsets = consumer.endOffsets(new ArrayList<>(consumer.assignment()));
+        // If we couldn't detect any end offset, that means we are still not able to fetch offsets.
         if (fullEndOffsets.isEmpty()) {
             return Long.MAX_VALUE;
         }
 
         return consumer.assignment().stream().mapToLong(partition -> {
             long currentPosition = consumer.position(partition);
-            printWithPrefix("Processing partition " + partition + " with full offsets " + fullEndOffsets);
+            printWithTxnId("Processing partition " + partition + " with full offsets " + fullEndOffsets);
             if (fullEndOffsets.containsKey(partition)) {
                 return fullEndOffsets.get(partition) - currentPosition;
             }
