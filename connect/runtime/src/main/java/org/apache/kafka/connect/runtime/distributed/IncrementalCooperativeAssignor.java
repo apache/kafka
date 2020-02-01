@@ -91,7 +91,23 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
                     member.memberId(),
                     IncrementalCooperativeConnectProtocol.deserializeMetadata(ByteBuffer.wrap(member.metadata())));
         }
-        log.debug("Member configs: {}", memberConfigs);
+
+        Set<String> seenUrls = new HashSet<>();
+        boolean duplicateUrlsFound = false;
+        for (ExtendedWorkerState state : memberConfigs.values()) {
+            if (seenUrls.contains(state.url())) {
+                duplicateUrlsFound = true;
+                break;
+            } else {
+                seenUrls.add(state.url());
+            }
+        }
+        if (duplicateUrlsFound) {
+            log.warn("Member configs: {}", memberConfigs);
+            log.warn("Duplicate member URLs found. This can break REST API forwarding to leader.");
+        } else {
+            log.debug("Member configs: {}", memberConfigs);
+        }
 
         // The new config offset is the maximum seen by any member. We always perform assignment using this offset,
         // even if some members have fallen behind. The config offset used to generate the assignment is included in

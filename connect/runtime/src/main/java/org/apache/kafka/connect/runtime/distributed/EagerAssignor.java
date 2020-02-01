@@ -26,8 +26,10 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import static org.apache.kafka.common.message.JoinGroupResponseData.JoinGroupResponseMember;
 import static org.apache.kafka.connect.runtime.distributed.ConnectProtocol.Assignment;
@@ -57,6 +59,23 @@ public class EagerAssignor implements ConnectAssignor {
         Map<String, ExtendedWorkerState> memberConfigs = new HashMap<>();
         for (JoinGroupResponseMember member : allMemberMetadata)
             memberConfigs.put(member.memberId(), IncrementalCooperativeConnectProtocol.deserializeMetadata(ByteBuffer.wrap(member.metadata())));
+
+        Set<String> seenUrls = new HashSet<>();
+        boolean duplicateUrlsFound = false;
+        for (ExtendedWorkerState state : memberConfigs.values()) {
+            if (seenUrls.contains(state.url())) {
+                duplicateUrlsFound = true;
+                break;
+            } else {
+                seenUrls.add(state.url());
+            }
+        }
+        if (duplicateUrlsFound) {
+            log.warn("Member configs: {}", memberConfigs);
+            log.warn("Duplicate member URLs found. This can break REST API forwarding to leader.");
+        } else {
+            log.debug("Member configs: {}", memberConfigs);
+        }
 
         long maxOffset = findMaxMemberConfigOffset(memberConfigs, coordinator);
         Long leaderOffset = ensureLeaderConfig(maxOffset, coordinator);
