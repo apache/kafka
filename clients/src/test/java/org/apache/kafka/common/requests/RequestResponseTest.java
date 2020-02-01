@@ -170,6 +170,7 @@ import java.util.Set;
 
 import static java.util.Arrays.asList;
 import static org.apache.kafka.common.protocol.ApiKeys.FETCH;
+import static org.apache.kafka.common.protocol.ApiKeys.PRODUCE;
 import static org.apache.kafka.common.requests.FetchMetadata.INVALID_SESSION_ID;
 import static org.apache.kafka.test.TestUtils.toBuffer;
 import static org.junit.Assert.assertEquals;
@@ -651,6 +652,33 @@ public class RequestResponseTest {
         assertEquals("Response data does not match", responseData, v0Response.responses());
         assertEquals("Response data does not match", responseData, v1Response.responses());
         assertEquals("Response data does not match", responseData, v2Response.responses());
+    }
+
+    @Test
+    public void produceResponseRecordErrorsTest() {
+        Map<TopicPartition, ProduceResponse.PartitionResponse> responseData = new HashMap<>();
+        TopicPartition tp = new TopicPartition("test", 0);
+        ProduceResponse.PartitionResponse partResponse = new ProduceResponse.PartitionResponse(Errors.NONE,
+                10000, RecordBatch.NO_TIMESTAMP, 100,
+                Collections.singletonList(new ProduceResponse.RecordError(3, "Record error")),
+                "Produce failed");
+        responseData.put(tp, partResponse);
+
+        for (short ver = 0; ver <= PRODUCE.latestVersion(); ver++) {
+            ProduceResponse response = new ProduceResponse(responseData);
+            Struct struct = response.toStruct(ver);
+            assertEquals("Should use schema version " + ver, ApiKeys.PRODUCE.responseSchema(ver), struct.schema());
+            ProduceResponse.PartitionResponse deserialized = new ProduceResponse(struct).responses().get(tp);
+            if (ver >= 8) {
+                assertEquals(1, deserialized.recordErrors.size());
+                assertEquals(3, deserialized.recordErrors.get(0).batchIndex);
+                assertEquals("Record error", deserialized.recordErrors.get(0).message);
+                assertEquals("Produce failed", deserialized.errorMessage);
+            } else {
+                assertEquals(0, deserialized.recordErrors.size());
+                assertEquals(null, deserialized.errorMessage);
+            }
+        }
     }
 
     @Test
