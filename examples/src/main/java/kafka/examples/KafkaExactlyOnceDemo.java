@@ -17,12 +17,8 @@
 package kafka.examples;
 
 import org.apache.kafka.clients.admin.Admin;
-import org.apache.kafka.clients.admin.DescribeTopicsResult;
-import org.apache.kafka.clients.admin.ListTopicsResult;
 import org.apache.kafka.clients.admin.NewTopic;
-import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
-import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.errors.TopicExistsException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 
@@ -32,13 +28,15 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 
 /**
  * This exactly once demo driver is following below steps:
- * 1. Set up a producer to pre populate a set of records into input topic
- * 2.
+ * 1. Set up a producer to pre-populate a set of records into input topic
+ * 2. Set up transactional instances which does a consume-process-produce loop, tailing data from
+ *    input topic (See {@link ExactlyOnceMessageProcessor})
+ * 3. Set up a read committed consumer to verify we have all data copied from output topic, while
+ *    the message ordering on partition level is maintained.
  */
 public class KafkaExactlyOnceDemo {
 
@@ -98,33 +96,23 @@ public class KafkaExactlyOnceDemo {
 
         List<String> topicsToDelete = Arrays.asList(INPUT_TOPIC, OUTPUT_TOPIC);
 
-        try {
-            adminClient.deleteTopics(topicsToDelete).all().get();
-        } catch (ExecutionException e) {
-            if (!(e.getCause() instanceof UnknownTopicOrPartitionException)) {
-                throw e;
-            }
-            System.out.println("Encountered exception during topic deletion: " + e.getCause());
-        }
-        System.out.println("Deleted old topics: " + topicsToDelete);
+        deleteTopic(adminClient, topicsToDelete);
 
         // Check topic existence in a retry loop
         while (true) {
             System.out.println("Making sure the topics are deleted successfully: " + topicsToDelete);
-            boolean noTopicsInfo = true;
 
             Set<String> listedTopics = adminClient.listTopics().names().get();
             System.out.println("Current list of topics: " + listedTopics);
 
-            for (String topic : topicsToDelete) {
-               System.out.println("Checking topic " + topic);
-               if (listedTopics.contains(topic)) {
-                   noTopicsInfo = false;
-                   break;
-               }
+            boolean hasTopicInfo = false;
+            for (String listedTopic : listedTopics) {
+                if (topicsToDelete.contains(listedTopic)) {
+                    hasTopicInfo = true;
+                    break;
+                }
             }
-
-            if (noTopicsInfo) {
+            if (!hasTopicInfo) {
                 break;
             }
             Thread.sleep(1000);
@@ -145,23 +133,23 @@ public class KafkaExactlyOnceDemo {
                     throw e;
                 }
                 System.out.println("Metadata of the old topics are not cleared yet...");
+
+                deleteTopic(adminClient, topicsToDelete);
+
                 Thread.sleep(1000);
             }
         }
     }
+
+    private static void deleteTopic(Admin adminClient, List<String> topicsToDelete) throws InterruptedException, ExecutionException {
+        try {
+            adminClient.deleteTopics(topicsToDelete).all().get();
+        } catch (ExecutionException e) {
+            if (!(e.getCause() instanceof UnknownTopicOrPartitionException)) {
+                throw e;
+            }
+            System.out.println("Encountered exception during topic deletion: " + e.getCause());
+        }
+        System.out.println("Deleted old topics: " + topicsToDelete);
+    }
 }
-
-//            DescribeTopicsResult describeTopicsResult = adminClient.describeTopics(topicsToDelete);
-//            for (KafkaFuture<TopicDescription> future : describeTopicsResult.values().values()) {
-//                try {
-//                    TopicDescription description = future.get();
-//                    System.out.println("Found topic description: " + description);
-//                    noTopicsInfo = false;
-//                    break;
-//                } catch (ExecutionException e) {
-//                    if (!(e.getCause() instanceof UnknownTopicOrPartitionException)) {
-//                        throw e;
-//                    }
-//                }
-//            }
-
