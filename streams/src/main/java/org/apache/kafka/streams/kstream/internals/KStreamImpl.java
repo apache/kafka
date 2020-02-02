@@ -562,14 +562,12 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
 
     @Override
     public KStream<K, V> repartition(final Repartitioned<K, V> repartitioned) {
-        Objects.requireNonNull(repartitioned, "repartitioned parameter can't be null");
-
         return doRepartition(repartitioned, null);
     }
 
     @Override
     public <KR> KStream<KR, V> repartition(final KeyValueMapper<? super K, ? super V, ? extends KR> selector) {
-        Objects.requireNonNull(selector, "selector parameter can't be null");
+        Objects.requireNonNull(selector, "selector can't be null");
 
         return doRepartition(Repartitioned.as(null), selector);
     }
@@ -577,21 +575,19 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
     @Override
     public <KR> KStream<KR, V> repartition(final KeyValueMapper<? super K, ? super V, ? extends KR> selector,
                                            final Repartitioned<KR, V> repartitioned) {
-        Objects.requireNonNull(selector, "selector parameter can't be null");
-        Objects.requireNonNull(repartitioned, "repartitioned parameter can't be null");
+        Objects.requireNonNull(selector, "selector can't be null");
 
         return doRepartition(repartitioned, selector);
     }
 
-    @SuppressWarnings("unchecked")
     private <KR> KStream<KR, V> doRepartition(final Repartitioned<KR, V> repartitioned,
                                               final KeyValueMapper<? super K, ? super V, ? extends KR> selector) {
+        Objects.requireNonNull(repartitioned, "repartitioned can't be null");
+
         final RepartitionedInternal<KR, V> repartitionedInternal = new RepartitionedInternal<>(repartitioned);
 
         final String name = repartitionedInternal.name() != null ? repartitionedInternal.name() : builder
             .newProcessorName(REPARTITION_NAME);
-
-        final Serde<KR> keySerde = repartitionedInternal.keySerde() == null ? (Serde<KR>) this.keySerde : repartitionedInternal.keySerde();
 
         final Serde<V> valueSerde = repartitionedInternal.valueSerde() == null ? valSerde : repartitionedInternal.valueSerde();
 
@@ -602,7 +598,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
 
         final String repartitionSourceName = createRepartitionedSource(
             builder,
-            keySerde,
+            repartitionedInternal.keySerde(),
             valueSerde,
             name,
             repartitionedInternal.streamPartitioner(),
@@ -630,10 +626,9 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
 
         return new KStreamImpl<>(
             repartitionSourceName,
-            keySerde,
+            repartitionedInternal.keySerde(),
             valueSerde,
             Collections.unmodifiableSet(sourceNodes),
-            // explicitly set repartition required as false
             false,
             unoptimizableRepartitionNode,
             builder
