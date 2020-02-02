@@ -19,7 +19,6 @@ package org.apache.kafka.streams.processor.internals.assignment;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.errors.TopologyException;
-import org.apache.kafka.streams.processor.internals.ImmutableRepartitionTopicConfig;
 import org.apache.kafka.streams.processor.internals.InternalTopicConfig;
 import org.slf4j.Logger;
 
@@ -129,7 +128,7 @@ public class CopartitionedTopicsEnforcer {
     }
 
     private boolean isMutableRepartitionTopicConfig(final InternalTopicConfig internalTopicConfig) {
-        return !(internalTopicConfig instanceof ImmutableRepartitionTopicConfig);
+        return !internalTopicConfig.hasEnforcedNumberOfPartitions();
     }
 
     private int getSamePartitions(final Map<String, Integer> nonRepartitionTopicsInCopartitionGroup) {

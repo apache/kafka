@@ -16,10 +16,10 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import java.util.HashMap;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.internals.Topic;
 
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -31,6 +31,7 @@ import java.util.Optional;
 public abstract class InternalTopicConfig {
     final String name;
     final Map<String, String> topicConfigs;
+    final boolean enforceNumberOfPartitions;
 
     private Optional<Integer> numberOfPartitions = Optional.empty();
 
@@ -45,6 +46,22 @@ public abstract class InternalTopicConfig {
 
         this.name = name;
         this.topicConfigs = topicConfigs;
+        this.enforceNumberOfPartitions = false;
+    }
+
+    InternalTopicConfig(final String name,
+                        final Map<String, String> topicConfigs,
+                        final int numberOfPartitions,
+                        final boolean enforceNumberOfPartitions) {
+        Objects.requireNonNull(name, "name can't be null");
+        Topic.validate(name);
+
+        validateNumberOfPartitions(numberOfPartitions);
+
+        this.name = name;
+        this.topicConfigs = topicConfigs;
+        this.numberOfPartitions = Optional.of(numberOfPartitions);
+        this.enforceNumberOfPartitions = enforceNumberOfPartitions;
     }
 
     /**
@@ -54,7 +71,11 @@ public abstract class InternalTopicConfig {
      * @param additionalRetentionMs - added to retention to allow for clock drift etc
      * @return Properties to be used when creating the topic
      */
-    abstract public Map<String, String> getProperties(final Map<String, String> defaultProperties, final long additionalRetentionMs);
+    public abstract Map<String, String> getProperties(final Map<String, String> defaultProperties, final long additionalRetentionMs);
+
+    public boolean hasEnforcedNumberOfPartitions() {
+        return enforceNumberOfPartitions;
+    }
 
     public String name() {
         return name;
@@ -65,11 +86,16 @@ public abstract class InternalTopicConfig {
     }
 
     public void setNumberOfPartitions(final int numberOfPartitions) {
+        if (hasEnforcedNumberOfPartitions() && this.numberOfPartitions.isPresent()) {
+            throw new UnsupportedOperationException("number of partitions is enforced and can't be altered");
+        }
+
         validateNumberOfPartitions(numberOfPartitions);
+
         this.numberOfPartitions = Optional.of(numberOfPartitions);
     }
 
-    protected void validateNumberOfPartitions(final int numberOfPartitions) {
+    private static void validateNumberOfPartitions(final int numberOfPartitions) {
         if (numberOfPartitions < 1) {
             throw new IllegalArgumentException("Number of partitions must be at least 1.");
         }
@@ -80,6 +106,7 @@ public abstract class InternalTopicConfig {
         return "InternalTopicConfig(" +
                 "name=" + name +
                 ", topicConfigs=" + topicConfigs +
+                ", enforceNumberOfPartitions=" + enforceNumberOfPartitions +
                 ")";
     }
 }

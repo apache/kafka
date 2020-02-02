@@ -888,10 +888,11 @@ public class InternalTopologyBuilderTest {
 
         assertEquals(
             repartitionSourceTopics.get("Z-topic-1z"),
-            new ImmutableRepartitionTopicConfig(
+            new RepartitionTopicConfig(
                 "Z-topic-1z",
+                Collections.emptyMap(),
                 numberOfPartitions,
-                Collections.emptyMap()
+                true
             )
         );
     }

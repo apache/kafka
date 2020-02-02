@@ -1238,8 +1238,9 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                                   logPrefix, topic.name())
                 );
             }
-
-            topic.setNumberOfPartitions(numPartitions.get());
+            if (!topic.hasEnforcedNumberOfPartitions()) {
+                topic.setNumberOfPartitions(numPartitions.get());
+            }
             topicsToMakeReady.put(topic.name(), topic);
         }
 

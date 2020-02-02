@@ -1068,10 +1068,10 @@ public class InternalTopologyBuilder {
     private RepartitionTopicConfig buildRepartitionTopicConfig(final String internalTopic,
                                                                final Optional<Integer> numberOfPartitions) {
         return numberOfPartitions
-            .map(partitions -> (RepartitionTopicConfig) new ImmutableRepartitionTopicConfig(internalTopic,
-                                                                                            partitions,
-                                                                                            Collections.emptyMap()))
-
+            .map(partitions -> new RepartitionTopicConfig(internalTopic,
+                                                          Collections.emptyMap(),
+                                                          partitions,
+                                                          true))
             .orElse(new RepartitionTopicConfig(internalTopic, Collections.emptyMap()));
     }
 
