@@ -165,7 +165,6 @@ public class KStreamRepartitionIntegrationTest {
 
     @Test
     public void shouldThrowAnExceptionWhenNumberOfPartitionsOfRepartitionOperationDoNotMatchSourceTopicWhenJoining() throws InterruptedException {
-        final String topicBMapperName = "topic-b-mapper";
         final String topicB = "topic-b-" + TEST_NUM.get();
         final int topicBNumberOfPartitions = 6;
         final String inputTopicRepartitionName = "join-repartition-test";
@@ -173,6 +172,53 @@ public class KStreamRepartitionIntegrationTest {
         final int inputTopicRepartitionedNumOfPartitions = 2;
 
         CLUSTER.createTopic(topicB, topicBNumberOfPartitions, 1);
+
+        final StreamsBuilder builder = new StreamsBuilder();
+
+        final Repartitioned<Integer, String> inputTopicRepartitioned = Repartitioned
+            .<Integer, String>as(inputTopicRepartitionName)
+            .withNumberOfPartitions(inputTopicRepartitionedNumOfPartitions);
+
+        final KStream<Integer, String> topicBStream = builder
+            .stream(topicB, Consumed.with(Serdes.Integer(), Serdes.String()));
+
+        builder.stream(inputTopic, Consumed.with(Serdes.Integer(), Serdes.String()))
+               .repartition(inputTopicRepartitioned)
+               .join(topicBStream, (value1, value2) -> value2, JoinWindows.of(Duration.ofSeconds(10)))
+               .to(outputTopic);
+
+        builder.build(streamsConfiguration);
+
+        startStreams(builder, REBALANCING, ERROR, (t, e) -> expectedThrowable.set(e));
+
+        final String expectedMsg = String.format("Number of partitions [%s] of repartition topic [%s] " +
+                                                 "doesn't match number of partitions [%s] of the source topic.",
+                                                 inputTopicRepartitionedNumOfPartitions,
+                                                 toRepartitionTopicName(inputTopicRepartitionName),
+                                                 topicBNumberOfPartitions);
+        assertNotNull(expectedThrowable.get());
+        assertTrue(expectedThrowable.get().getMessage().contains(expectedMsg));
+    }
+
+    @Test
+    public void shouldDeductNumberOfPartitionsFromRepartitionOperation() throws InterruptedException, ExecutionException {
+        final String topicBMapperName = "topic-b-mapper";
+        final String topicB = "topic-b-" + TEST_NUM.get();
+        final int topicBNumberOfPartitions = 6;
+        final String inputTopicRepartitionName = "join-repartition-test";
+        final int inputTopicRepartitionedNumOfPartitions = 3;
+
+        final long timestamp = System.currentTimeMillis();
+
+        CLUSTER.createTopic(topicB, topicBNumberOfPartitions, 1);
+
+        final List<KeyValue<Integer, String>> expectedRecords = Arrays.asList(
+            new KeyValue<>(1, "A"),
+            new KeyValue<>(2, "B")
+        );
+
+        sendEvents(timestamp, expectedRecords);
+        sendEvents(topicB, timestamp, expectedRecords);
 
         final StreamsBuilder builder = new StreamsBuilder();
 
@@ -191,15 +237,19 @@ public class KStreamRepartitionIntegrationTest {
 
         builder.build(streamsConfiguration);
 
-        startStreams(builder, REBALANCING, ERROR, (t, e) -> expectedThrowable.set(e));
+        startStreams(builder);
 
-        final String expectedMsg = String.format("Number of partitions [%s] of repartition topic [%s] " +
-                                                 "doesn't match number of partitions [%s] of the source topic.",
-                                                 inputTopicRepartitionedNumOfPartitions,
-                                                 toRepartitionTopicName(inputTopicRepartitionName),
-                                                 topicBNumberOfPartitions);
-        assertNotNull(expectedThrowable.get());
-        assertTrue(expectedThrowable.get().getMessage().contains(expectedMsg));
+        assertEquals(inputTopicRepartitionedNumOfPartitions,
+                     getNumberOfPartitionsForTopic(toRepartitionTopicName(inputTopicRepartitionName)));
+
+        assertEquals(inputTopicRepartitionedNumOfPartitions,
+                     getNumberOfPartitionsForTopic(toRepartitionTopicName(topicBMapperName)));
+
+        validateReceivedMessages(
+            new IntegerDeserializer(),
+            new StringDeserializer(),
+            expectedRecords
+        );
     }
 
     @Test

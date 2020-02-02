@@ -68,15 +68,17 @@ public class CopartitionedTopicsEnforcer {
         final Collection<InternalTopicConfig> internalTopicConfigs = repartitionTopicConfigs.values();
 
         if (copartitionGroup.equals(repartitionTopicConfigs.keySet())) {
-            if (internalTopicConfigs.stream().anyMatch(this::isMutableRepartitionTopicConfig)) {
-                // If all topics for this co-partition group is repartition topics,
+            // if there is at least one repartiton topic with enforced number of partitions
+            // 1) validate that they all have same number of partitions
+            // 2) set all other non-enforced repartition topic
+            if (internalTopicConfigs.stream().anyMatch(InternalTopicConfig::hasEnforcedNumberOfPartitions)) {
+
+                numPartitionsToUseForRepartitionTopics = validateAndGetNumOfPartitions(repartitionTopicConfigs,
+                                                                                       internalTopicConfigs);
+            } else {
+                // If all topics for this co-partition group are repartition topics,
                 // then set the number of partitions to be the maximum of the number of partitions.
                 numPartitionsToUseForRepartitionTopics = getMaxPartitions(repartitionTopicConfigs);
-            } else {
-                // if all repartition topics are immutable repartition topics,
-                // we must ensure that they all have same number of partitions.
-                numPartitionsToUseForRepartitionTopics = validateAndGetNumOfPartitionsOfImmutableTopics(repartitionTopicConfigs,
-                                                                                                        internalTopicConfigs);
             }
         } else {
             // Otherwise, use the number of partitions from external topics (which must all be the same)
@@ -85,32 +87,43 @@ public class CopartitionedTopicsEnforcer {
 
         // coerce all the repartition topics to use the decided number of partitions.
         for (final InternalTopicConfig config : internalTopicConfigs) {
-            if (isMutableRepartitionTopicConfig(config)) {
-                config.setNumberOfPartitions(numPartitionsToUseForRepartitionTopics);
-            } else {
-                final int numberOfPartitionsOfInternalTopic = config.numberOfPartitions().get();
+            maybeSetNumberOfPartitionsForInternalTopic(numPartitionsToUseForRepartitionTopics, config);
 
-                if (numberOfPartitionsOfInternalTopic != numPartitionsToUseForRepartitionTopics) {
-                    final String msg = String.format("%sNumber of partitions [%s] of repartition topic [%s] " +
-                                                     "doesn't match number of partitions [%s] of the source topic.",
-                                                     logPrefix,
-                                                     numberOfPartitionsOfInternalTopic,
-                                                     config.name(),
-                                                     numPartitionsToUseForRepartitionTopics);
-                    throw new TopologyException(msg);
-                }
+            final int numberOfPartitionsOfInternalTopic = config.numberOfPartitions().get();
+
+            if (numberOfPartitionsOfInternalTopic != numPartitionsToUseForRepartitionTopics) {
+                final String msg = String.format("%sNumber of partitions [%s] of repartition topic [%s] " +
+                                                 "doesn't match number of partitions [%s] of the source topic.",
+                                                 logPrefix,
+                                                 numberOfPartitionsOfInternalTopic,
+                                                 config.name(),
+                                                 numPartitionsToUseForRepartitionTopics);
+                throw new TopologyException(msg);
             }
         }
     }
 
-    private int validateAndGetNumOfPartitionsOfImmutableTopics(final Map<Object, InternalTopicConfig> repartitionTopicConfigs,
-                                                               final Collection<InternalTopicConfig> internalTopicConfigs) {
-        final int numberOfPartitionsOfInternalTopic = internalTopicConfigs.iterator()
-                                                                          .next()
-                                                                          .numberOfPartitions()
-                                                                          .get();
+    private static void maybeSetNumberOfPartitionsForInternalTopic(final int numPartitionsToUseForRepartitionTopics,
+                                                                   final InternalTopicConfig config) {
+        if (!config.hasEnforcedNumberOfPartitions()) {
+            config.setNumberOfPartitions(numPartitionsToUseForRepartitionTopics);
+        }
+    }
 
-        for (final InternalTopicConfig internalTopicConfig : internalTopicConfigs) {
+    private int validateAndGetNumOfPartitions(final Map<Object, InternalTopicConfig> repartitionTopicConfigs,
+                                              final Collection<InternalTopicConfig> internalTopicConfigs) {
+        final Collection<InternalTopicConfig> internalTopicConfigsWithEnforcedNumberOfPartitions = internalTopicConfigs
+            .stream()
+            .filter(InternalTopicConfig::hasEnforcedNumberOfPartitions)
+            .collect(Collectors.toList());
+
+        final int numberOfPartitionsOfInternalTopic = internalTopicConfigsWithEnforcedNumberOfPartitions
+            .iterator()
+            .next()
+            .numberOfPartitions()
+            .get();
+
+        for (final InternalTopicConfig internalTopicConfig : internalTopicConfigsWithEnforcedNumberOfPartitions) {
             if (internalTopicConfig.numberOfPartitions().get() != numberOfPartitionsOfInternalTopic) {
                 final Map<Object, Integer> repartitionTopics = repartitionTopicConfigs
                     .entrySet()
@@ -125,10 +138,6 @@ public class CopartitionedTopicsEnforcer {
         }
 
         return numberOfPartitionsOfInternalTopic;
-    }
-
-    private boolean isMutableRepartitionTopicConfig(final InternalTopicConfig internalTopicConfig) {
-        return !internalTopicConfig.hasEnforcedNumberOfPartitions();
     }
 
     private int getSamePartitions(final Map<String, Integer> nonRepartitionTopicsInCopartitionGroup) {

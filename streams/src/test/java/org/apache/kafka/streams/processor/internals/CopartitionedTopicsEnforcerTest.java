@@ -110,7 +110,7 @@ public class CopartitionedTopicsEnforcerTest {
     }
 
     @Test
-    public void shouldThrowAnExceptionIfImmutableRepartitionTopicsDoNotHaveSameNumberOfPartitions() {
+    public void shouldThrowAnExceptionIfRepartitionTopicConfigsWithEnforcedNumOfPartitionsHaveDifferentNumOfPartitiones() {
         final InternalTopicConfig topic1 = createRepartitionTopicConfigWithEnforcedNumberOfPartitions("repartitioned-1", 10);
         final InternalTopicConfig topic2 = createRepartitionTopicConfigWithEnforcedNumberOfPartitions("repartitioned-2", 5);
 
@@ -133,7 +133,7 @@ public class CopartitionedTopicsEnforcerTest {
     }
 
     @Test
-    public void shouldNotThrowAnExceptionWhenNumberOfPartitionsOfImmutableTopicConfigsAreTheSame() {
+    public void shouldNotThrowAnExceptionWhenRepartitionTopicConfigsWithEnforcedNumOfPartitionsAreValid() {
         final InternalTopicConfig topic1 = createRepartitionTopicConfigWithEnforcedNumberOfPartitions("repartitioned-1", 10);
         final InternalTopicConfig topic2 = createRepartitionTopicConfigWithEnforcedNumberOfPartitions("repartitioned-2", 10);
 
@@ -147,7 +147,7 @@ public class CopartitionedTopicsEnforcerTest {
     }
 
     @Test
-    public void shouldThrowAnExceptionWhenNumberOfPartitionsOfNonRepartitionTopicAndImmutableRepartitionTopicDoNotMatch() {
+    public void shouldThrowAnExceptionWhenNumberOfPartitionsOfNonRepartitionTopicAndRepartitionTopicWithEnforcedNumOfPartitionsDoNotMatch() {
         final InternalTopicConfig topic1 = createRepartitionTopicConfigWithEnforcedNumberOfPartitions("repartitioned-1", 10);
 
         final TopologyException ex = assertThrows(
@@ -164,7 +164,7 @@ public class CopartitionedTopicsEnforcerTest {
     }
 
     @Test
-    public void shouldNotThrowAnExceptionWhenNumberOfPartitionsOfNonRepartitionTopicAndImmutableRepartitionTopicMatch() {
+    public void shouldNotThrowAnExceptionWhenNumberOfPartitionsOfNonRepartitionTopicAndRepartitionTopicWithEnforcedNumOfPartitionsMatch() {
         final InternalTopicConfig topic1 = createRepartitionTopicConfigWithEnforcedNumberOfPartitions("repartitioned-1", 2);
 
         validator.enforce(Utils.mkSet(topic1.name(), "second"),
@@ -172,6 +172,22 @@ public class CopartitionedTopicsEnforcerTest {
                           cluster.withPartitions(partitions));
 
         assertThat(topic1.numberOfPartitions(), equalTo(Optional.of(2)));
+    }
+
+    @Test
+    public void shouldDeductNumberOfPartitionsFromRepartitionTopicWithEnforcedNumberOfPartitions() {
+        final InternalTopicConfig topic1 = createRepartitionTopicConfigWithEnforcedNumberOfPartitions("repartitioned-1", 2);
+        final InternalTopicConfig topic2 = createTopicConfig("repartitioned-2", 5);
+        final InternalTopicConfig topic3 = createRepartitionTopicConfigWithEnforcedNumberOfPartitions("repartitioned-3", 2);
+
+        validator.enforce(Utils.mkSet(topic1.name(), topic2.name()),
+                          Utils.mkMap(Utils.mkEntry(topic1.name(), topic1),
+                                      Utils.mkEntry(topic2.name(), topic2),
+                                      Utils.mkEntry(topic3.name(), topic3)),
+                          cluster.withPartitions(partitions));
+
+        assertEquals(topic1.numberOfPartitions(), topic2.numberOfPartitions());
+        assertEquals(topic2.numberOfPartitions(), topic3.numberOfPartitions());
     }
 
     private InternalTopicConfig createTopicConfig(final String repartitionTopic,
