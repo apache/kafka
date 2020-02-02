@@ -17,7 +17,9 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.ForeachAction;
 import org.apache.kafka.streams.kstream.GlobalKTable;
 import org.apache.kafka.streams.kstream.Grouped;
@@ -27,6 +29,7 @@ import org.apache.kafka.streams.kstream.KGroupedStream;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
+import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Named;
 import org.apache.kafka.streams.kstream.Predicate;
 import org.apache.kafka.streams.kstream.Printed;
@@ -45,11 +48,13 @@ import org.apache.kafka.streams.kstream.internals.graph.ProcessorParameters;
 import org.apache.kafka.streams.kstream.internals.graph.StatefulProcessorNode;
 import org.apache.kafka.streams.kstream.internals.graph.StreamSinkNode;
 import org.apache.kafka.streams.kstream.internals.graph.StreamTableJoinNode;
+import org.apache.kafka.streams.kstream.internals.graph.StreamToTableNode;
 import org.apache.kafka.streams.kstream.internals.graph.StreamsGraphNode;
 import org.apache.kafka.streams.processor.FailOnInvalidTimestamp;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.TopicNameExtractor;
 import org.apache.kafka.streams.processor.internals.StaticTopicNameExtractor;
+import org.apache.kafka.streams.state.KeyValueStore;
 
 import java.lang.reflect.Array;
 import java.util.Arrays;
@@ -57,6 +62,8 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.Objects;
 import java.util.Set;
+
+import static org.apache.kafka.streams.kstream.internals.graph.OptimizableRepartitionNode.optimizableRepartitionNodeBuilder;
 
 public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K, V> {
 
@@ -109,6 +116,8 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
     private static final String TRANSFORMVALUES_NAME = "KSTREAM-TRANSFORMVALUES-";
 
     private static final String FOREACH_NAME = "KSTREAM-FOREACH-";
+
+    private static final String TO_KTABLE_NAME = "KSTREAM-TOTABLE-";
 
     private final boolean repartitionRequired;
 
@@ -598,6 +607,100 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
         );
 
         builder.addGraphNode(streamsGraphNode, sinkNode);
+    }
+
+    @Override
+    public KTable<K, V> toTable() {
+        return toTable(NamedInternal.empty());
+    }
+
+    @Override
+    public KTable<K, V> toTable(final Named named) {
+        final ConsumedInternal<K, V> consumedInternal = new ConsumedInternal<>(Consumed.with(keySerde, valSerde));
+
+        final MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>> materializedInternal =
+            new MaterializedInternal<>(
+                Materialized.with(consumedInternal.keySerde(), consumedInternal.valueSerde()),
+                builder,
+                TO_KTABLE_NAME);
+
+        return doToTable(named, materializedInternal);
+    }
+
+    @Override
+    public KTable<K, V> toTable(final Materialized<K, V, KeyValueStore<Bytes, byte[]>> materialized) {
+        return toTable(NamedInternal.empty(), materialized);
+    }
+
+    @Override
+    public KTable<K, V> toTable(final Named named,
+                                final Materialized<K, V, KeyValueStore<Bytes, byte[]>> materialized) {
+        Objects.requireNonNull(materialized, "materialized can't be null");
+
+        final MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>> materializedInternal =
+            new MaterializedInternal<>(materialized);
+        return doToTable(
+            named,
+            materializedInternal);
+    }
+
+    private KTable<K, V> doToTable(final Named named,
+                                   final MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>> materializedInternal) {
+        Objects.requireNonNull(named, "named can't be null");
+
+        final Serde<K> keySerdeOverride = materializedInternal.keySerde() == null
+            ? keySerde
+            : materializedInternal.keySerde();
+        final Serde<V> valueSerdeOverride = materializedInternal.valueSerde() == null
+            ? valSerde
+            : materializedInternal.valueSerde();
+
+        final NamedInternal namedInternal = new NamedInternal(named);
+        final String name = namedInternal.orElseGenerateWithPrefix(builder, TO_KTABLE_NAME);
+        final Set<String> subTopologySourceNodes;
+        final StreamsGraphNode tableParentNode;
+
+        if (repartitionRequired) {
+            final OptimizableRepartitionNodeBuilder<K, V> repartitionNodeBuilder = optimizableRepartitionNodeBuilder();
+            final String sourceName = createRepartitionedSource(
+                builder,
+                keySerdeOverride,
+                valueSerdeOverride,
+                name,
+                repartitionNodeBuilder
+            );
+
+            tableParentNode = repartitionNodeBuilder.build();
+            builder.addGraphNode(streamsGraphNode, tableParentNode);
+            subTopologySourceNodes = Collections.singleton(sourceName);
+        } else {
+            tableParentNode = streamsGraphNode;
+            subTopologySourceNodes = sourceNodes;
+        }
+
+        final KTableSource<K, V> tableSource = new KTableSource<>(
+            materializedInternal.storeName(),
+            materializedInternal.queryableStoreName()
+        );
+        final ProcessorParameters<K, V> processorParameters = new ProcessorParameters<>(tableSource, name);
+        final StreamsGraphNode tableNode = new StreamToTableNode<>(
+            name,
+            processorParameters,
+            materializedInternal
+        );
+
+        builder.addGraphNode(tableParentNode, tableNode);
+
+        return new KTableImpl<K, V, V>(
+            name,
+            keySerdeOverride,
+            valueSerdeOverride,
+            subTopologySourceNodes,
+            materializedInternal.queryableStoreName(),
+            tableSource,
+            tableNode,
+            builder
+        );
     }
 
     @Override

@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.StoreQueryParams;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.TimeWindow;
@@ -66,9 +67,8 @@ public class CompositeReadOnlyWindowStoreTest {
         otherUnderlyingStore = new ReadOnlyWindowStoreStub<>(WINDOW_SIZE);
         stubProviderOne.addStore("other-window-store", otherUnderlyingStore);
 
-
         windowStore = new CompositeReadOnlyWindowStore<>(
-            new WrappingStoreProvider(asList(stubProviderOne, stubProviderTwo), false),
+            new WrappingStoreProvider(asList(stubProviderOne, stubProviderTwo), StoreQueryParams.fromNameAndType(storeName, QueryableStoreTypes.windowStore())),
                 QueryableStoreTypes.windowStore(),
                 storeName
         );
@@ -140,7 +140,7 @@ public class CompositeReadOnlyWindowStoreTest {
         underlyingWindowStore.setOpen(false);
         final CompositeReadOnlyWindowStore<Object, Object> store =
                 new CompositeReadOnlyWindowStore<>(
-                    new WrappingStoreProvider(singletonList(stubProviderOne), false),
+                    new WrappingStoreProvider(singletonList(stubProviderOne), StoreQueryParams.fromNameAndType("window-store", QueryableStoreTypes.windowStore())),
                     QueryableStoreTypes.windowStore(),
                     "window-store"
                 );

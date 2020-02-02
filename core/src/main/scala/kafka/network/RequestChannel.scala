@@ -49,7 +49,7 @@ object RequestChannel extends Logging {
   case object ShutdownRequest extends BaseRequest
 
   case class Session(principal: KafkaPrincipal, clientAddress: InetAddress) {
-    val sanitizedUser = Sanitizer.sanitize(principal.getName)
+    val sanitizedUser: String = Sanitizer.sanitize(principal.getName)
   }
 
   class Metrics {
@@ -110,7 +110,7 @@ object RequestChannel extends Logging {
 
     trace(s"Processor $processor received request: ${requestDesc(true)}")
 
-    def requestThreadTimeNanos = {
+    def requestThreadTimeNanos: Long = {
       if (apiLocalCompleteTimeNanos == -1L) apiLocalCompleteTimeNanos = Time.SYSTEM.nanoseconds
       math.max(apiLocalCompleteTimeNanos - requestDequeueTimeNanos, 0L)
     }

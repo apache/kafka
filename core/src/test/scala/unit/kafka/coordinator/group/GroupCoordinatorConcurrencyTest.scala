@@ -42,8 +42,9 @@ import scala.concurrent.{Await, Future, Promise, TimeoutException}
 class GroupCoordinatorConcurrencyTest extends AbstractCoordinatorConcurrencyTest[GroupMember] {
 
   private val protocolType = "consumer"
+  private val protocolName = "range"
   private val metadata = Array[Byte]()
-  private val protocols = List(("range", metadata))
+  private val protocols = List((protocolName, metadata))
 
   private val nGroups = nThreads * 10
   private val nMembersPerGroup = nThreads * 5
@@ -154,7 +155,6 @@ class GroupCoordinatorConcurrencyTest extends AbstractCoordinatorConcurrencyTest
     }
   }
 
-
   class JoinGroupOperation extends GroupOperation[JoinGroupCallbackParams, JoinGroupCallback] {
     override def responseCallback(responsePromise: Promise[JoinGroupCallbackParams]): JoinGroupCallback = {
       val callback: JoinGroupCallback = responsePromise.success(_)
@@ -182,10 +182,10 @@ class GroupCoordinatorConcurrencyTest extends AbstractCoordinatorConcurrencyTest
     override def runWithCallback(member: GroupMember, responseCallback: SyncGroupCallback): Unit = {
       if (member.leader) {
         groupCoordinator.handleSyncGroup(member.groupId, member.generationId, member.memberId,
-          member.groupInstanceId, member.group.assignment, responseCallback)
+          Some(protocolType), Some(protocolName), member.groupInstanceId, member.group.assignment, responseCallback)
       } else {
         groupCoordinator.handleSyncGroup(member.groupId, member.generationId, member.memberId,
-          member.groupInstanceId, Map.empty[String, Array[Byte]], responseCallback)
+          Some(protocolType), Some(protocolName), member.groupInstanceId, Map.empty[String, Array[Byte]], responseCallback)
       }
     }
     override def awaitAndVerify(member: GroupMember): Unit = {
@@ -208,6 +208,7 @@ class GroupCoordinatorConcurrencyTest extends AbstractCoordinatorConcurrencyTest
        assertEquals(Errors.NONE, error)
     }
   }
+
   class CommitOffsetsOperation extends GroupOperation[CommitOffsetCallbackParams, CommitOffsetCallback] {
     override def responseCallback(responsePromise: Promise[CommitOffsetCallbackParams]): CommitOffsetCallback = {
       val callback: CommitOffsetCallback = offsets => responsePromise.success(offsets)
@@ -313,7 +314,7 @@ object GroupCoordinatorConcurrencyTest {
     val members = (0 until nMembers).map { i =>
       new GroupMember(this, groupPartitionId, i == 0)
     }
-    def assignment = members.map { m => (m.memberId, Array[Byte]()) }.toMap
+    def assignment: Map[String, Array[Byte]] = members.map { m => (m.memberId, Array[Byte]()) }.toMap
   }
 
   class GroupMember(val group: Group, val groupPartitionId: Int, val leader: Boolean) extends CoordinatorMember {

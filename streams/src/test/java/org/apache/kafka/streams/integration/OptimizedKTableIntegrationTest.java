@@ -45,11 +45,12 @@ import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.KeyQueryMetadata;
+import org.apache.kafka.streams.StoreQueryParams;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.Materialized;
-import org.apache.kafka.streams.KeyQueryMetadata;
 import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
@@ -152,10 +153,10 @@ public class OptimizedKTableIntegrationTest {
         assertThat(semaphore.tryAcquire(batch1NumMessages, 60, TimeUnit.SECONDS), is(equalTo(true)));
 
         final ReadOnlyKeyValueStore<Integer, Integer> store1 = kafkaStreams1
-            .store(TABLE_NAME, QueryableStoreTypes.keyValueStore());
+            .store(StoreQueryParams.fromNameAndType(TABLE_NAME, QueryableStoreTypes.keyValueStore()));
 
         final ReadOnlyKeyValueStore<Integer, Integer> store2 = kafkaStreams2
-            .store(TABLE_NAME, QueryableStoreTypes.keyValueStore());
+            .store(StoreQueryParams.fromNameAndType(TABLE_NAME, QueryableStoreTypes.keyValueStore()));
 
         final boolean kafkaStreams1WasFirstActive;
         final KeyQueryMetadata keyQueryMetadata = kafkaStreams1.queryMetadataForKey(TABLE_NAME, key, (topic, somekey, value, numPartitions) -> 0);
