@@ -986,7 +986,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   @Test
   def testCallInFlightTimeouts(): Unit = {
     val config = createConfig()
-    config.put(AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG, "100000000")
+    config.put(AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG, "100000000")
     val factory = new KafkaAdminClientTest.FailureInjectingTimeoutProcessorFactory()
     client = KafkaAdminClientTest.createInternal(new AdminClientConfig(config), factory)
     val future = client.createTopics(Seq("mytopic", "mytopic2").map(new NewTopic(_, 1, 1.toShort)).asJava,

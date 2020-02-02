@@ -18,10 +18,12 @@ package org.apache.kafka.connect.runtime;
 
 import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.runtime.rest.InternalRequestSignature;
+import org.apache.kafka.connect.runtime.rest.entities.ActiveTopicsInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigInfos;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
 import org.apache.kafka.connect.runtime.rest.entities.TaskInfo;
+import org.apache.kafka.connect.storage.StatusBackingStore;
 import org.apache.kafka.connect.util.Callback;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 
@@ -145,6 +147,28 @@ public interface Herder {
     ConnectorStateInfo connectorStatus(String connName);
 
     /**
+     * Lookup the set of topics currently used by a connector.
+     *
+     * @param connName name of the connector
+     * @return the set of active topics
+     */
+    ActiveTopicsInfo connectorActiveTopics(String connName);
+
+    /**
+     * Request to asynchronously reset the active topics for the named connector.
+     *
+     * @param connName name of the connector
+     */
+    void resetConnectorActiveTopics(String connName);
+
+    /**
+     * Return a reference to the status backing store used by this herder.
+     *
+     * @return the status backing store used by this herder
+     */
+    StatusBackingStore statusBackingStore();
+
+    /**
      * Lookup the status of the a task.
      * @param id id of the task
      */
@@ -199,7 +223,6 @@ public interface Herder {
      * @return a reference to the plugin factory.
      */
     Plugins plugins();
-
 
     /**
      * Get the cluster ID of the Kafka cluster backing this Connect cluster.

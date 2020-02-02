@@ -321,7 +321,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                   Serializer<V> valueSerializer,
                   ProducerMetadata metadata,
                   KafkaClient kafkaClient,
-                  ProducerInterceptors interceptors,
+                  ProducerInterceptors<K, V> interceptors,
                   Time time) {
         ProducerConfig config = new ProducerConfig(ProducerConfig.addSerializerToConfig(configs, keySerializer,
                 valueSerializer));
@@ -486,7 +486,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         int requestTimeoutMs = config.getInt(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG);
         int lingerAndRequestTimeoutMs = (int) Math.min((long) lingerMs + requestTimeoutMs, Integer.MAX_VALUE);
 
-        if (deliveryTimeoutMs < Integer.MAX_VALUE && deliveryTimeoutMs < lingerAndRequestTimeoutMs) {
+        if (deliveryTimeoutMs < lingerAndRequestTimeoutMs) {
             if (config.originals().containsKey(ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG)) {
                 // throw an exception if the user explicitly set an inconsistent value
                 throw new ConfigException(ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG
@@ -545,7 +545,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
 
     private static short configureAcks(ProducerConfig config, Logger log) {
         boolean userConfiguredAcks = config.originals().containsKey(ProducerConfig.ACKS_CONFIG);
-        short acks = Short.valueOf(config.getString(ProducerConfig.ACKS_CONFIG));
+        short acks = Short.parseShort(config.getString(ProducerConfig.ACKS_CONFIG));
 
         if (config.idempotenceEnabled()) {
             if (!userConfiguredAcks)
@@ -1051,12 +1051,11 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      * Validate that the record size isn't too large
      */
     private void ensureValidRecordSize(int size) {
-        if (size > this.maxRequestSize)
+        if (size > maxRequestSize)
             throw new RecordTooLargeException("The message is " + size +
-                    " bytes when serialized which is larger than the maximum request size you have configured with the " +
-                    ProducerConfig.MAX_REQUEST_SIZE_CONFIG +
-                    " configuration.");
-        if (size > this.totalMemorySize)
+                    " bytes when serialized which is larger than " + maxRequestSize + ", which is the value of the " +
+                    ProducerConfig.MAX_REQUEST_SIZE_CONFIG + " configuration.");
+        if (size > totalMemorySize)
             throw new RecordTooLargeException("The message is " + size +
                     " bytes when serialized which is larger than the total memory buffer you have configured with the " +
                     ProducerConfig.BUFFER_MEMORY_CONFIG +
@@ -1348,7 +1347,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         }
 
         public void onCompletion(RecordMetadata metadata, Exception exception) {
-            metadata = metadata != null ? metadata : new RecordMetadata(tp, -1, -1, RecordBatch.NO_TIMESTAMP, Long.valueOf(-1L), -1, -1);
+            metadata = metadata != null ? metadata : new RecordMetadata(tp, -1, -1, RecordBatch.NO_TIMESTAMP, -1L, -1, -1);
             this.interceptors.onAcknowledgement(metadata, exception);
             if (this.userCallback != null)
                 this.userCallback.onCompletion(metadata, exception);

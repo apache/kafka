@@ -1246,7 +1246,7 @@ object GroupMetadataManager {
 
     value.set(PROTOCOL_TYPE_KEY, groupMetadata.protocolType.getOrElse(""))
     value.set(GENERATION_KEY, groupMetadata.generationId)
-    value.set(PROTOCOL_KEY, groupMetadata.protocolOrNull)
+    value.set(PROTOCOL_KEY, groupMetadata.protocolName.orNull)
     value.set(LEADER_KEY, groupMetadata.leaderOrNull)
 
     if (version >= 2)
@@ -1266,7 +1266,7 @@ object GroupMetadataManager {
         memberStruct.set(GROUP_INSTANCE_ID_KEY, memberMetadata.groupInstanceId.orNull)
 
       // The group is non-empty, so the current protocol must be defined
-      val protocol = groupMetadata.protocolOrNull
+      val protocol = groupMetadata.protocolName.orNull
       if (protocol == null)
         throw new IllegalStateException("Attempted to write non-empty group metadata with no defined protocol")
 
@@ -1532,7 +1532,7 @@ object GroupMetadataManager {
 
       Json.encodeAsString(Map(
         "protocolType" -> protocolType,
-        "protocol" -> group.protocolOrNull,
+        "protocol" -> group.protocolName.orNull,
         "generationId" -> group.generationId,
         "assignment" -> assignment
       ).asJava)

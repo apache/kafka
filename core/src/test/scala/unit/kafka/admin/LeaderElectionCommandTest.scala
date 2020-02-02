@@ -309,7 +309,8 @@ object LeaderElectionCommandTest {
   def createConfig(servers: Seq[KafkaServer]): Map[String, Object] = {
     Map(
       AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG -> bootstrapServers(servers),
-      AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG -> "20000"
+      AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG -> "20000",
+      AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG -> "10000"
     )
   }
 

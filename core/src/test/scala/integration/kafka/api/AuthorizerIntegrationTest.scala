@@ -81,6 +81,8 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   val logDir = "logDir"
   val deleteRecordsPartition = new TopicPartition(deleteTopic, part)
   val group = "my-group"
+  val protocolType = "consumer"
+  val protocolName = "consumer-range"
   val clusterResource = new ResourcePattern(CLUSTER, Resource.CLUSTER_NAME, LITERAL)
   val topicResource = new ResourcePattern(TOPIC, topic, LITERAL)
   val groupResource = new ResourcePattern(GROUP, group, LITERAL)
@@ -324,7 +326,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   private def createJoinGroupRequest = {
     val protocolSet = new JoinGroupRequestProtocolCollection(
       Collections.singletonList(new JoinGroupRequestData.JoinGroupRequestProtocol()
-        .setName("consumer-range")
+        .setName(protocolName)
         .setMetadata("test".getBytes())
     ).iterator())
 
@@ -334,7 +336,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
         .setSessionTimeoutMs(10000)
         .setMemberId(JoinGroupRequest.UNKNOWN_MEMBER_ID)
         .setGroupInstanceId(null)
-        .setProtocolType("consumer")
+        .setProtocolType(protocolType)
         .setProtocols(protocolSet)
         .setRebalanceTimeoutMs(60000)
     ).build()
@@ -346,6 +348,8 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
         .setGroupId(group)
         .setGenerationId(1)
         .setMemberId(JoinGroupRequest.UNKNOWN_MEMBER_ID)
+        .setProtocolType(protocolType)
+        .setProtocolName(protocolName)
         .setAssignments(Collections.emptyList())
     ).build()
   }

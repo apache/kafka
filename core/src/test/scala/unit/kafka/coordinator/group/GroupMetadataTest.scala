@@ -325,25 +325,25 @@ class GroupMetadataTest {
     group.add(member, _ => ())
 
     assertEquals(0, group.generationId)
-    assertNull(group.protocolOrNull)
+    assertNull(group.protocolName.orNull)
 
     group.initNextGeneration()
 
     assertEquals(1, group.generationId)
-    assertEquals("roundrobin", group.protocolOrNull)
+    assertEquals("roundrobin", group.protocolName.orNull)
   }
 
   @Test
   def testInitNextGenerationEmptyGroup(): Unit = {
     assertEquals(Empty, group.currentState)
     assertEquals(0, group.generationId)
-    assertNull(group.protocolOrNull)
+    assertNull(group.protocolName.orNull)
 
     group.transitionTo(PreparingRebalance)
     group.initNextGeneration()
 
     assertEquals(1, group.generationId)
-    assertNull(group.protocolOrNull)
+    assertNull(group.protocolName.orNull)
   }
 
   @Test
@@ -568,7 +568,7 @@ class GroupMetadataTest {
     })
 
     assertTrue(group.hasAllMembersJoined)
-    group.maybeInvokeJoinCallback(member, GroupCoordinator.joinError(member.memberId, Errors.NONE))
+    group.maybeInvokeJoinCallback(member, JoinGroupResult(member.memberId, Errors.NONE))
     assertTrue(invoked)
     assertFalse(member.isAwaitingJoin)
   }
@@ -578,7 +578,7 @@ class GroupMetadataTest {
     group.add(member)
 
     assertFalse(member.isAwaitingJoin)
-    group.maybeInvokeJoinCallback(member, GroupCoordinator.joinError(member.memberId, Errors.NONE))
+    group.maybeInvokeJoinCallback(member, JoinGroupResult(member.memberId, Errors.NONE))
     assertFalse(member.isAwaitingJoin)
   }
 
@@ -587,7 +587,7 @@ class GroupMetadataTest {
     group.add(member)
     member.awaitingSyncCallback = _ => {}
 
-    val invoked = group.maybeInvokeSyncCallback(member, SyncGroupResult(Array.empty, Errors.NONE))
+    val invoked = group.maybeInvokeSyncCallback(member, SyncGroupResult(Errors.NONE))
     assertTrue(invoked)
     assertFalse(member.isAwaitingSync)
   }
@@ -596,7 +596,7 @@ class GroupMetadataTest {
   def testNotInvokeSyncCallback(): Unit = {
     group.add(member)
 
-    val invoked = group.maybeInvokeSyncCallback(member, SyncGroupResult(Array.empty, Errors.NONE))
+    val invoked = group.maybeInvokeSyncCallback(member, SyncGroupResult(Errors.NONE))
     assertFalse(invoked)
     assertFalse(member.isAwaitingSync)
   }

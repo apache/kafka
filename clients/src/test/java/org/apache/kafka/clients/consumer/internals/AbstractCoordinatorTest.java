@@ -22,6 +22,7 @@ import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.FencedInstanceIdException;
+import org.apache.kafka.common.errors.InconsistentGroupProtocolException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
@@ -85,6 +86,8 @@ public class AbstractCoordinatorTest {
     private static final int REQUEST_TIMEOUT_MS = 40000;
     private static final String GROUP_ID = "dummy-group";
     private static final String METRIC_GROUP_PREFIX = "consumer";
+    private static final String PROTOCOL_TYPE = "dummy";
+    private static final String PROTOCOL_NAME = "dummy-subprotocol";
 
     private Node node;
     private Metrics metrics;
@@ -358,6 +361,63 @@ public class AbstractCoordinatorTest {
         assertEquals(Errors.FENCED_INSTANCE_ID.message(), future.exception().getMessage());
         // Make sure the exception is fatal.
         assertFalse(future.isRetriable());
+    }
+
+    @Test
+    public void testJoinGroupProtocolTypeAndName() {
+        String wrongProtocolType = "wrong-type";
+        String wrongProtocolName = "wrong-name";
+
+        // No Protocol Type in both JoinGroup and SyncGroup responses
+        assertTrue(joinGroupWithProtocolTypeAndName(null, null, null));
+
+        // Protocol Type in both JoinGroup and SyncGroup responses
+        assertTrue(joinGroupWithProtocolTypeAndName(PROTOCOL_TYPE, PROTOCOL_TYPE, PROTOCOL_NAME));
+
+        // Wrong protocol type in the JoinGroupResponse
+        assertThrows(InconsistentGroupProtocolException.class,
+            () -> joinGroupWithProtocolTypeAndName("wrong", null, null));
+
+        // Correct protocol type in the JoinGroupResponse
+        // Wrong protocol type in the SyncGroupResponse
+        // Correct protocol name in the SyncGroupResponse
+        assertThrows(InconsistentGroupProtocolException.class,
+            () -> joinGroupWithProtocolTypeAndName(PROTOCOL_TYPE, wrongProtocolType, PROTOCOL_NAME));
+
+        // Correct protocol type in the JoinGroupResponse
+        // Correct protocol type in the SyncGroupResponse
+        // Wrong protocol name in the SyncGroupResponse
+        assertThrows(InconsistentGroupProtocolException.class,
+            () -> joinGroupWithProtocolTypeAndName(PROTOCOL_TYPE, PROTOCOL_TYPE, wrongProtocolName));
+    }
+
+    private boolean joinGroupWithProtocolTypeAndName(String joinGroupResponseProtocolType,
+                                                     String syncGroupResponseProtocolType,
+                                                     String syncGroupResponseProtocolName) {
+        setupCoordinator();
+        mockClient.reset();
+        mockClient.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
+        coordinator.ensureCoordinatorReady(mockTime.timer(0));
+
+        mockClient.prepareResponse(body -> {
+            if (!(body instanceof JoinGroupRequest)) {
+                return false;
+            }
+            JoinGroupRequest joinGroupRequest = (JoinGroupRequest) body;
+            return joinGroupRequest.data().protocolType().equals(PROTOCOL_TYPE);
+        }, joinGroupFollowerResponse(defaultGeneration, memberId,
+            "memberid", Errors.NONE, joinGroupResponseProtocolType));
+
+        mockClient.prepareResponse(body -> {
+            if (!(body instanceof SyncGroupRequest)) {
+                return false;
+            }
+            SyncGroupRequest syncGroupRequest = (SyncGroupRequest) body;
+            return syncGroupRequest.data.protocolType().equals(PROTOCOL_TYPE)
+                && syncGroupRequest.data.protocolName().equals(PROTOCOL_NAME);
+        }, syncGroupResponse(Errors.NONE, syncGroupResponseProtocolType, syncGroupResponseProtocolName));
+
+        return coordinator.joinGroupIfNeeded(mockTime.timer(5000L));
     }
 
     @Test
@@ -946,12 +1006,24 @@ public class AbstractCoordinatorTest {
         return new HeartbeatResponse(new HeartbeatResponseData().setErrorCode(error.code()));
     }
 
-    private JoinGroupResponse joinGroupFollowerResponse(int generationId, String memberId, String leaderId, Errors error) {
+    private JoinGroupResponse joinGroupFollowerResponse(int generationId,
+                                                        String memberId,
+                                                        String leaderId,
+                                                        Errors error) {
+        return joinGroupFollowerResponse(generationId, memberId, leaderId, error, null);
+    }
+
+    private JoinGroupResponse joinGroupFollowerResponse(int generationId,
+                                                        String memberId,
+                                                        String leaderId,
+                                                        Errors error,
+                                                        String protocolType) {
         return new JoinGroupResponse(
                 new JoinGroupResponseData()
                         .setErrorCode(error.code())
                         .setGenerationId(generationId)
-                        .setProtocolName("dummy-subprotocol")
+                        .setProtocolType(protocolType)
+                        .setProtocolName(PROTOCOL_NAME)
                         .setMemberId(memberId)
                         .setLeader(leaderId)
                         .setMembers(Collections.emptyList())
@@ -964,9 +1036,17 @@ public class AbstractCoordinatorTest {
     }
 
     private SyncGroupResponse syncGroupResponse(Errors error) {
+        return syncGroupResponse(error, null, null);
+    }
+
+    private SyncGroupResponse syncGroupResponse(Errors error,
+                                                String protocolType,
+                                                String protocolName) {
         return new SyncGroupResponse(
                 new SyncGroupResponseData()
                         .setErrorCode(error.code())
+                        .setProtocolType(protocolType)
+                        .setProtocolName(protocolName)
                         .setAssignment(new byte[0])
         );
     }
@@ -992,14 +1072,14 @@ public class AbstractCoordinatorTest {
 
         @Override
         protected String protocolType() {
-            return "dummy";
+            return PROTOCOL_TYPE;
         }
 
         @Override
         protected JoinGroupRequestData.JoinGroupRequestProtocolCollection metadata() {
             return new JoinGroupRequestData.JoinGroupRequestProtocolCollection(
                     Collections.singleton(new JoinGroupRequestData.JoinGroupRequestProtocol()
-                            .setName("dummy-subprotocol")
+                            .setName(PROTOCOL_NAME)
                             .setMetadata(EMPTY_DATA.array())).iterator()
             );
         }

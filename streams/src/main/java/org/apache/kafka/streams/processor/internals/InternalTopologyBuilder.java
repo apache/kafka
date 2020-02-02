@@ -1495,7 +1495,7 @@ public class InternalTopologyBuilder {
         @Override
         public String toString() {
             final String topicsString = topics == null ? topicPattern.toString() : topics.toString();
-            
+
             return "Source: " + name + " (topics: " + topicsString + ")\n      --> " + nodeNames(successors);
         }
 
@@ -1697,7 +1697,7 @@ public class InternalTopologyBuilder {
 
     public static class TopicsInfo {
         final Set<String> sinkTopics;
-        final Set<String> sourceTopics;
+        public final Set<String> sourceTopics;
         public final Map<String, InternalTopicConfig> stateChangelogTopics;
         public final Map<String, InternalTopicConfig> repartitionSourceTopics;
 
@@ -1871,12 +1871,10 @@ public class InternalTopologyBuilder {
 
     synchronized void updateSubscribedTopics(final Set<String> topics,
                                              final String logPrefix) {
-        log.debug("{}found {} topics possibly matching subscription", logPrefix, topics);
+        log.debug("{}found {} topics possibly matching subscription", logPrefix, topics.size());
         subscriptionUpdates.clear();
         subscriptionUpdates.addAll(topics);
 
-        log.debug("{}updating builder with {} topic(s) with possible matching regex subscription(s)",
-            logPrefix, subscriptionUpdates);
         setRegexMatchedTopicsToSourceNodes();
         setRegexMatchedTopicToStateStore();
     }

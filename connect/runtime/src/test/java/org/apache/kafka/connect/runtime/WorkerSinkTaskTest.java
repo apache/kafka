@@ -33,6 +33,7 @@ import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
 import org.apache.kafka.connect.errors.RetriableException;
@@ -47,12 +48,14 @@ import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTask;
 import org.apache.kafka.connect.storage.Converter;
 import org.apache.kafka.connect.storage.HeaderConverter;
+import org.apache.kafka.connect.storage.StatusBackingStore;
 import org.apache.kafka.connect.storage.StringConverter;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.easymock.Capture;
 import org.easymock.CaptureType;
 import org.easymock.EasyMock;
 import org.easymock.IAnswer;
+import org.easymock.IExpectationSetters;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -142,6 +145,8 @@ public class WorkerSinkTaskTest {
     @Mock
     private TaskStatus.Listener statusListener;
     @Mock
+    private StatusBackingStore statusBackingStore;
+    @Mock
     private KafkaConsumer<byte[], byte[]> consumer;
     private Capture<ConsumerRebalanceListener> rebalanceListener = EasyMock.newCapture();
     private Capture<Pattern> topicsRegex = EasyMock.newCapture();
@@ -176,7 +181,7 @@ public class WorkerSinkTaskTest {
             taskId, sinkTask, statusListener, initialState, workerConfig, ClusterConfigState.EMPTY, metrics,
             keyConverter, valueConverter, headerConverter,
             transformationChain, consumer, pluginLoader, time,
-            RetryWithToleranceOperatorTest.NOOP_OPERATOR);
+            RetryWithToleranceOperatorTest.NOOP_OPERATOR, statusBackingStore);
     }
 
     @After
@@ -189,6 +194,7 @@ public class WorkerSinkTaskTest {
         createTask(TargetState.PAUSED);
 
         expectInitializeTask();
+        expectTaskGetTopic(true);
         expectPollInitialAssignment();
 
         Set<TopicPartition> partitions = new HashSet<>(asList(TOPIC_PARTITION, TOPIC_PARTITION2));
@@ -217,6 +223,7 @@ public class WorkerSinkTaskTest {
         createTask(initialState);
 
         expectInitializeTask();
+        expectTaskGetTopic(true);
         expectPollInitialAssignment();
 
         expectConsumerPoll(1);
@@ -311,6 +318,7 @@ public class WorkerSinkTaskTest {
         createTask(initialState);
 
         expectInitializeTask();
+        expectTaskGetTopic(true);
         expectPollInitialAssignment();
 
         // If a retriable exception is thrown, we should redeliver the same batch, pausing the consumer in the meantime
@@ -387,6 +395,7 @@ public class WorkerSinkTaskTest {
         createTask(initialState);
 
         expectInitializeTask();
+        expectTaskGetTopic(true);
         expectPollInitialAssignment();
         expectRebalanceRevocationError(exception);
 
@@ -412,6 +421,7 @@ public class WorkerSinkTaskTest {
         createTask(initialState);
 
         expectInitializeTask();
+        expectTaskGetTopic(true);
         expectPollInitialAssignment();
         expectRebalanceAssignmentError(exception);
 
@@ -435,7 +445,7 @@ public class WorkerSinkTaskTest {
         createTask(initialState);
 
         expectInitializeTask();
-
+        expectTaskGetTopic(true);
         expectPollInitialAssignment();
 
         expectConsumerPoll(1);
@@ -529,7 +539,7 @@ public class WorkerSinkTaskTest {
         createTask(initialState);
 
         expectInitializeTask();
-
+        expectTaskGetTopic(true);
         expectPollInitialAssignment();
 
         expectConsumerPoll(1);
@@ -635,6 +645,7 @@ public class WorkerSinkTaskTest {
         createTask(initialState);
 
         expectInitializeTask();
+        expectTaskGetTopic(true);
 
         // iter 1
         expectPollInitialAssignment();
@@ -702,6 +713,7 @@ public class WorkerSinkTaskTest {
         createTask(initialState);
 
         expectInitializeTask();
+        expectTaskGetTopic(true);
 
         // iter 1
         expectPollInitialAssignment();
@@ -752,6 +764,7 @@ public class WorkerSinkTaskTest {
         createTask(initialState);
 
         expectInitializeTask();
+        expectTaskGetTopic(true);
 
         // iter 1
         expectPollInitialAssignment();
@@ -851,6 +864,7 @@ public class WorkerSinkTaskTest {
         createTask(initialState);
 
         expectInitializeTask();
+        expectTaskGetTopic(true);
 
         // iter 1
         expectPollInitialAssignment();
@@ -1071,6 +1085,7 @@ public class WorkerSinkTaskTest {
         createTask(initialState);
 
         expectInitializeTask();
+        expectTaskGetTopic(true);
 
         expectPollInitialAssignment();
 
@@ -1125,6 +1140,7 @@ public class WorkerSinkTaskTest {
         createTask(initialState);
 
         expectInitializeTask();
+        expectTaskGetTopic(true);
         expectPollInitialAssignment();
         expectConsumerPoll(1, RecordBatch.NO_TIMESTAMP, TimestampType.CREATE_TIME);
         expectConversionAndTransformation(1);
@@ -1157,6 +1173,7 @@ public class WorkerSinkTaskTest {
         createTask(initialState);
 
         expectInitializeTask();
+        expectTaskGetTopic(true);
         expectPollInitialAssignment();
         expectConsumerPoll(1, timestamp, timestampType);
         expectConversionAndTransformation(1);
@@ -1282,6 +1299,7 @@ public class WorkerSinkTaskTest {
         createTask(initialState);
 
         expectInitializeTask();
+        expectTaskGetTopic(true);
         expectPollInitialAssignment();
 
         expectConsumerPoll(1, headers);
@@ -1307,6 +1325,7 @@ public class WorkerSinkTaskTest {
         createTask(initialState, stringConverter, testConverter, stringConverter);
 
         expectInitializeTask();
+        expectTaskGetTopic(true);
         expectPollInitialAssignment();
 
         String keyA = "a";
@@ -1520,6 +1539,28 @@ public class WorkerSinkTaskTest {
                 }).times(numMessages);
     }
 
+    private void expectTaskGetTopic(boolean anyTimes) {
+        final Capture<String> connectorCapture = EasyMock.newCapture();
+        final Capture<String> topicCapture = EasyMock.newCapture();
+        IExpectationSetters<TopicStatus> expect = EasyMock.expect(statusBackingStore.getTopic(
+                EasyMock.capture(connectorCapture),
+                EasyMock.capture(topicCapture)));
+        if (anyTimes) {
+            expect.andStubAnswer(() -> new TopicStatus(
+                    topicCapture.getValue(),
+                    new ConnectorTaskId(connectorCapture.getValue(), 0),
+                    Time.SYSTEM.milliseconds()));
+        } else {
+            expect.andAnswer(() -> new TopicStatus(
+                    topicCapture.getValue(),
+                    new ConnectorTaskId(connectorCapture.getValue(), 0),
+                    Time.SYSTEM.milliseconds()));
+        }
+        if (connectorCapture.hasCaptured() && topicCapture.hasCaptured()) {
+            assertEquals("job", connectorCapture.getValue());
+            assertEquals(TOPIC, topicCapture.getValue());
+        }
+    }
 
     private void assertSinkMetricValue(String name, double expected) {
         MetricGroup sinkTaskGroup = workerTask.sinkTaskMetricsGroup().metricGroup();
