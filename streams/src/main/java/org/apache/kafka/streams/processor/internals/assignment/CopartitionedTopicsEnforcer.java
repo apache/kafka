@@ -68,9 +68,8 @@ public class CopartitionedTopicsEnforcer {
         final Collection<InternalTopicConfig> internalTopicConfigs = repartitionTopicConfigs.values();
 
         if (copartitionGroup.equals(repartitionTopicConfigs.keySet())) {
-            // if there is at least one repartiton topic with enforced number of partitions
-            // 1) validate that they all have same number of partitions
-            // 2) set all other non-enforced repartition topic
+            // if there's at least one repartition topic with enforced number of partitions
+            // validate that they all have same number of partitions
             if (internalTopicConfigs.stream().anyMatch(InternalTopicConfig::hasEnforcedNumberOfPartitions)) {
 
                 numPartitionsToUseForRepartitionTopics = validateAndGetNumOfPartitions(repartitionTopicConfigs,
