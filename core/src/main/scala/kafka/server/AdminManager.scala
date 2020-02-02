@@ -678,7 +678,8 @@ class AdminManager(val config: KafkaConfig,
     }
     val source = if (allSynonyms.isEmpty) ConfigSource.DEFAULT_CONFIG else allSynonyms.head.source
     val synonyms = if (!includeSynonyms) List.empty else allSynonyms
-    new DescribeConfigsResponse.ConfigEntry(name, valueAsString, source, isSensitive, false, synonyms.asJava)
+    new DescribeConfigsResponse.ConfigEntry(
+      name, valueAsString, source, isSensitive, false, synonyms.asJava, configEntryType.toString())
   }
 
   private def createBrokerConfigEntry(perBrokerConfig: Boolean, includeSynonyms: Boolean)
@@ -698,6 +699,7 @@ class AdminManager(val config: KafkaConfig,
     val synonyms = if (!includeSynonyms) List.empty else allSynonyms
     val source = if (allSynonyms.isEmpty) ConfigSource.DEFAULT_CONFIG else allSynonyms.head.source
     val readOnly = !DynamicBrokerConfig.AllDynamicConfigs.contains(name)
-    new DescribeConfigsResponse.ConfigEntry(name, valueAsString, source, isSensitive, readOnly, synonyms.asJava)
+    new DescribeConfigsResponse.ConfigEntry(
+      name, valueAsString, source, isSensitive, readOnly, synonyms.asJava, configEntryType.toString())
   }
 }

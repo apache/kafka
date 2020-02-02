@@ -482,11 +482,18 @@ public class RequestResponseTest {
                 assertEquals(expectedEntry.value(), entry.value());
                 assertEquals(expectedEntry.isReadOnly(), entry.isReadOnly());
                 assertEquals(expectedEntry.isSensitive(), entry.isSensitive());
+
+                if (version == 3)
+                    assertEquals(expectedEntry.type(), entry.type());
+
                 if (version == 1 || (expectedEntry.source() != DescribeConfigsResponse.ConfigSource.DYNAMIC_BROKER_CONFIG &&
                         expectedEntry.source() != DescribeConfigsResponse.ConfigSource.DYNAMIC_DEFAULT_BROKER_CONFIG))
                     assertEquals(expectedEntry.source(), entry.source());
-                else
+                else  if (version == 3) {
+                    assertEquals(DescribeConfigsResponse.ConfigSource.DYNAMIC_BROKER_CONFIG, entry.source());
+                } else  {
                     assertEquals(DescribeConfigsResponse.ConfigSource.STATIC_BROKER_CONFIG, entry.source());
+                }
             }
         }
     }
@@ -500,6 +507,10 @@ public class RequestResponseTest {
         DescribeConfigsResponse deserialized1 = (DescribeConfigsResponse) deserialize(response,
                 response.toStruct((short) 1), (short) 1);
         verifyDescribeConfigsResponse(response, deserialized1, 1);
+
+        DescribeConfigsResponse deserialized3 = (DescribeConfigsResponse) deserialize(response,
+            response.toStruct((short) 3), (short) 3);
+        verifyDescribeConfigsResponse(response, deserialized3, 3);
     }
 
     private void checkErrorResponse(AbstractRequest req, Throwable e, boolean checkEqualityAndHashCode) {
@@ -1842,7 +1853,9 @@ public class RequestResponseTest {
                 new DescribeConfigsResponse.ConfigEntry("config_name", "config_value",
                         DescribeConfigsResponse.ConfigSource.DYNAMIC_BROKER_CONFIG, true, false, synonyms),
                 new DescribeConfigsResponse.ConfigEntry("another_name", "another value",
-                        DescribeConfigsResponse.ConfigSource.DEFAULT_CONFIG, false, true, synonyms)
+                        DescribeConfigsResponse.ConfigSource.DEFAULT_CONFIG, false, true, synonyms),
+                new DescribeConfigsResponse.ConfigEntry("yet_another_name", "yet another value",
+                        DescribeConfigsResponse.ConfigSource.DEFAULT_CONFIG, false, true, synonyms, "STRING")
         );
         configs.put(new ConfigResource(ConfigResource.Type.BROKER, "0"), new DescribeConfigsResponse.Config(
                 ApiError.NONE, configEntries));

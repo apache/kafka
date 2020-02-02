@@ -60,9 +60,15 @@ public class DescribeConfigsRequest extends AbstractRequest {
      * The version number is bumped to indicate that on quota violation brokers send out responses before throttling.
      */
     private static final Schema DESCRIBE_CONFIGS_REQUEST_V2 = DESCRIBE_CONFIGS_REQUEST_V1;
+    private static final Schema DESCRIBE_CONFIGS_REQUEST_V3 = DESCRIBE_CONFIGS_REQUEST_V2;
 
     public static Schema[] schemaVersions() {
-        return new Schema[]{DESCRIBE_CONFIGS_REQUEST_V0, DESCRIBE_CONFIGS_REQUEST_V1, DESCRIBE_CONFIGS_REQUEST_V2};
+        return new Schema[] {
+            DESCRIBE_CONFIGS_REQUEST_V0,
+            DESCRIBE_CONFIGS_REQUEST_V1,
+            DESCRIBE_CONFIGS_REQUEST_V2,
+            DESCRIBE_CONFIGS_REQUEST_V3
+        };
     }
 
     public static class Builder extends AbstractRequest.Builder<DescribeConfigsRequest> {

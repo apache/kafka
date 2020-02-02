@@ -19,7 +19,7 @@
   "name": "DescribeConfigsRequest",
   // Version 1 adds IncludeSynoyms.
   // Version 2 is the same as version 1.
-  "validVersions": "0-2",
+  "validVersions": "0-3",
   "flexibleVersions": "none",
   "fields": [
     { "name": "Resources", "type": "[]DescribeConfigsResource", "versions": "0+",

@@ -1922,7 +1922,7 @@ public class KafkaAdminClient extends AdminClient {
                             configEntries.add(new ConfigEntry(configEntry.name(),
                                     configEntry.value(), configSource(configEntry.source()),
                                     configEntry.isSensitive(), configEntry.isReadOnly(),
-                                    configSynonyms(configEntry)));
+                                    configSynonyms(configEntry), configEntry.type()));
                         }
                         future.complete(new Config(configEntries));
                     }
@@ -1965,7 +1965,7 @@ public class KafkaAdminClient extends AdminClient {
                         for (DescribeConfigsResponse.ConfigEntry configEntry : config.entries()) {
                             configEntries.add(new ConfigEntry(configEntry.name(), configEntry.value(),
                                 configSource(configEntry.source()), configEntry.isSensitive(), configEntry.isReadOnly(),
-                                configSynonyms(configEntry)));
+                                configSynonyms(configEntry), configEntry.type()));
                         }
                         brokerFuture.complete(new Config(configEntries));
                     }

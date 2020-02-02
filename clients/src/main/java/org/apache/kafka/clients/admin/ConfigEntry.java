@@ -36,6 +36,7 @@ public class ConfigEntry {
     private final ConfigSource source;
     private final boolean isSensitive;
     private final boolean isReadOnly;
+    private final String type;
     private final List<ConfigSynonym> synonyms;
 
     /**
@@ -65,7 +66,8 @@ public class ConfigEntry {
              isDefault ? ConfigSource.DEFAULT_CONFIG : ConfigSource.UNKNOWN,
              isSensitive,
              isReadOnly,
-             Collections.<ConfigSynonym>emptyList());
+             Collections.<ConfigSynonym>emptyList(),
+             null);
     }
 
     /**
@@ -80,6 +82,22 @@ public class ConfigEntry {
      */
     ConfigEntry(String name, String value, ConfigSource source, boolean isSensitive, boolean isReadOnly,
                 List<ConfigSynonym> synonyms) {
+        this(name, value, source, isSensitive, isReadOnly, synonyms, null);
+    }
+
+    /**
+     * Create a configuration with the provided values.
+     *
+     * @param name the non-null config name
+     * @param value the config value or null
+     * @param source the source of this config entry
+     * @param isSensitive whether the config value is sensitive, the broker never returns the value if it is sensitive
+     * @param isReadOnly whether the config is read-only and cannot be updated
+     * @param synonyms Synonym configs in order of precedence
+     * @param type the config data type
+     */
+    ConfigEntry(String name, String value, ConfigSource source, boolean isSensitive, boolean isReadOnly,
+                List<ConfigSynonym> synonyms, String type) {
         Objects.requireNonNull(name, "name should not be null");
         this.name = name;
         this.value = value;
@@ -87,6 +105,7 @@ public class ConfigEntry {
         this.isSensitive = isSensitive;
         this.isReadOnly = isReadOnly;
         this.synonyms = synonyms;
+        this.type = type;
     }
 
     /**
@@ -139,6 +158,13 @@ public class ConfigEntry {
      */
     public List<ConfigSynonym> synonyms() {
         return  synonyms;
+    }
+
+    /**
+     * Return the config data type.
+     */
+    public String type() {
+        return type;
     }
 
     @Override
