@@ -20,7 +20,7 @@ package kafka.metrics
 import java.util.concurrent.TimeUnit
 
 import com.yammer.metrics.Metrics
-import com.yammer.metrics.core.{Gauge, MetricName}
+import com.yammer.metrics.core.{Gauge, MetricName, Meter, Histogram, Timer}
 import kafka.utils.Logging
 import org.apache.kafka.common.utils.Sanitizer
 
@@ -58,26 +58,26 @@ trait KafkaMetricsGroup extends Logging {
       nameBuilder.append(name)
     }
 
-    val scope: String = toScope(tags).getOrElse(null)
+    val scope: String = toScope(tags).orNull
     val tagsName = toMBeanName(tags)
     tagsName.foreach(nameBuilder.append(",").append(_))
 
     new MetricName(group, typeName, name, scope, nameBuilder.toString)
   }
 
-  def newGauge[T](name: String, metric: Gauge[T], tags: scala.collection.Map[String, String] = Map.empty) =
+  def newGauge[T](name: String, metric: Gauge[T], tags: scala.collection.Map[String, String] = Map.empty): Gauge[T] =
     Metrics.defaultRegistry().newGauge(metricName(name, tags), metric)
 
-  def newMeter(name: String, eventType: String, timeUnit: TimeUnit, tags: scala.collection.Map[String, String] = Map.empty) =
+  def newMeter(name: String, eventType: String, timeUnit: TimeUnit, tags: scala.collection.Map[String, String] = Map.empty): Meter =
     Metrics.defaultRegistry().newMeter(metricName(name, tags), eventType, timeUnit)
 
-  def newHistogram(name: String, biased: Boolean = true, tags: scala.collection.Map[String, String] = Map.empty) =
+  def newHistogram(name: String, biased: Boolean = true, tags: scala.collection.Map[String, String] = Map.empty): Histogram =
     Metrics.defaultRegistry().newHistogram(metricName(name, tags), biased)
 
-  def newTimer(name: String, durationUnit: TimeUnit, rateUnit: TimeUnit, tags: scala.collection.Map[String, String] = Map.empty) =
+  def newTimer(name: String, durationUnit: TimeUnit, rateUnit: TimeUnit, tags: scala.collection.Map[String, String] = Map.empty): Timer =
     Metrics.defaultRegistry().newTimer(metricName(name, tags), durationUnit, rateUnit)
 
-  def removeMetric(name: String, tags: scala.collection.Map[String, String] = Map.empty) =
+  def removeMetric(name: String, tags: scala.collection.Map[String, String] = Map.empty): Unit =
     Metrics.defaultRegistry().removeMetric(metricName(name, tags))
 
   private def toMBeanName(tags: collection.Map[String, String]): Option[String] = {

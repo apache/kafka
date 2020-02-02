@@ -45,6 +45,7 @@ import org.apache.kafka.connect.storage.CloseableOffsetStorageReader;
 import org.apache.kafka.connect.storage.Converter;
 import org.apache.kafka.connect.storage.HeaderConverter;
 import org.apache.kafka.connect.storage.OffsetStorageWriter;
+import org.apache.kafka.connect.storage.StatusBackingStore;
 import org.apache.kafka.connect.storage.StringConverter;
 import org.apache.kafka.connect.util.Callback;
 import org.apache.kafka.connect.util.ConnectorTaskId;
@@ -120,6 +121,7 @@ public class WorkerSourceTaskTest extends ThreadedTest {
     private WorkerSourceTask workerTask;
     @Mock private Future<RecordMetadata> sendFuture;
     @MockStrict private TaskStatus.Listener statusListener;
+    @Mock private StatusBackingStore statusBackingStore;
 
     private Capture<org.apache.kafka.clients.producer.Callback> producerCallbacks;
 
@@ -166,7 +168,7 @@ public class WorkerSourceTaskTest extends ThreadedTest {
     private void createWorkerTask(TargetState initialState, Converter keyConverter, Converter valueConverter, HeaderConverter headerConverter) {
         workerTask = new WorkerSourceTask(taskId, sourceTask, statusListener, initialState, keyConverter, valueConverter, headerConverter,
                 transformationChain, producer, offsetReader, offsetWriter, config, clusterConfigState, metrics, plugins.delegatingLoader(), Time.SYSTEM,
-                RetryWithToleranceOperatorTest.NOOP_OPERATOR);
+                RetryWithToleranceOperatorTest.NOOP_OPERATOR, statusBackingStore);
     }
 
     @Test
@@ -962,6 +964,7 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         if (sendSuccess) {
             // 3. As a result of a successful producer send callback, we'll notify the source task of the record commit
             expectTaskCommitRecordWithOffset(anyTimes, commitSuccess);
+            expectTaskGetTopic(anyTimes);
         }
 
         return sent;
@@ -1018,6 +1021,29 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         }
         if (anyTimes) {
             expect.anyTimes();
+        }
+    }
+
+    private void expectTaskGetTopic(boolean anyTimes) {
+        final Capture<String> connectorCapture = EasyMock.newCapture();
+        final Capture<String> topicCapture = EasyMock.newCapture();
+        IExpectationSetters<TopicStatus> expect = EasyMock.expect(statusBackingStore.getTopic(
+                EasyMock.capture(connectorCapture),
+                EasyMock.capture(topicCapture)));
+        if (anyTimes) {
+            expect.andStubAnswer(() -> new TopicStatus(
+                    topicCapture.getValue(),
+                    new ConnectorTaskId(connectorCapture.getValue(), 0),
+                    Time.SYSTEM.milliseconds()));
+        } else {
+            expect.andAnswer(() -> new TopicStatus(
+                    topicCapture.getValue(),
+                    new ConnectorTaskId(connectorCapture.getValue(), 0),
+                    Time.SYSTEM.milliseconds()));
+        }
+        if (connectorCapture.hasCaptured() && topicCapture.hasCaptured()) {
+            assertEquals("job", connectorCapture.getValue());
+            assertEquals(TOPIC, topicCapture.getValue());
         }
     }
 

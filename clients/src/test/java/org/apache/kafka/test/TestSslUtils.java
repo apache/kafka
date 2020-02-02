@@ -72,7 +72,7 @@ import java.util.Map;
 public class TestSslUtils {
 
     public static final String TRUST_STORE_PASSWORD = "TrustStorePassword";
-    public static final String DEFAULT_TLS_PROTOCOL_FOR_TESTS = "TLSv1.2";
+    public static final String DEFAULT_TLS_PROTOCOL_FOR_TESTS = SslConfigs.DEFAULT_SSL_PROTOCOL;
 
     /**
      * Create a self-signed X.509 Certificate.

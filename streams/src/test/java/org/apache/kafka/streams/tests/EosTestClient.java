@@ -19,6 +19,7 @@ package org.apache.kafka.streams.tests;
 import java.time.Duration;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
@@ -53,25 +54,21 @@ public class EosTestClient extends SmokeTestUtil {
     private volatile boolean isRunning = true;
 
     public void start() {
-        Runtime.getRuntime().addShutdownHook(new Thread(new Runnable() {
-            @Override
-            public void run() {
-                isRunning = false;
-                streams.close(Duration.ofSeconds(300));
+        Exit.addShutdownHook("streams-shutdown-hook", () -> {
+            isRunning = false;
+            streams.close(Duration.ofSeconds(300));
 
-                // need to wait for callback to avoid race condition
-                // -> make sure the callback printout to stdout is there as it is expected test output
-                waitForStateTransitionCallback();
+            // need to wait for callback to avoid race condition
+            // -> make sure the callback printout to stdout is there as it is expected test output
+            waitForStateTransitionCallback();
 
-                // do not remove these printouts since they are needed for health scripts
-                if (!uncaughtException) {
-                    System.out.println(System.currentTimeMillis());
-                    System.out.println("EOS-TEST-CLIENT-CLOSED");
-                    System.out.flush();
-                }
-
+            // do not remove these printouts since they are needed for health scripts
+            if (!uncaughtException) {
+                System.out.println(System.currentTimeMillis());
+                System.out.println("EOS-TEST-CLIENT-CLOSED");
+                System.out.flush();
             }
-        }));
+        });
 
         while (isRunning) {
             if (streams == null) {

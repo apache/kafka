@@ -45,6 +45,8 @@ import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.KeyQueryMetadata;
+import org.apache.kafka.streams.StoreQueryParams;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.Consumed;
@@ -64,7 +66,7 @@ import org.junit.experimental.categories.Category;
 @Category(IntegrationTest.class)
 public class OptimizedKTableIntegrationTest {
     private static final int NUM_BROKERS = 1;
-
+    private static int port = 0;
     private static final String INPUT_TOPIC_NAME = "input-topic";
     private static final String TABLE_NAME = "source-table";
 
@@ -151,13 +153,15 @@ public class OptimizedKTableIntegrationTest {
         assertThat(semaphore.tryAcquire(batch1NumMessages, 60, TimeUnit.SECONDS), is(equalTo(true)));
 
         final ReadOnlyKeyValueStore<Integer, Integer> store1 = kafkaStreams1
-            .store(TABLE_NAME, QueryableStoreTypes.keyValueStore());
+            .store(StoreQueryParams.fromNameAndType(TABLE_NAME, QueryableStoreTypes.keyValueStore()));
 
         final ReadOnlyKeyValueStore<Integer, Integer> store2 = kafkaStreams2
-            .store(TABLE_NAME, QueryableStoreTypes.keyValueStore());
+            .store(StoreQueryParams.fromNameAndType(TABLE_NAME, QueryableStoreTypes.keyValueStore()));
 
         final boolean kafkaStreams1WasFirstActive;
-        if (store1.get(key) != null) {
+        final KeyQueryMetadata keyQueryMetadata = kafkaStreams1.queryMetadataForKey(TABLE_NAME, key, (topic, somekey, value, numPartitions) -> 0);
+
+        if ((keyQueryMetadata.getActiveHost().port() % 2) == 1) {
             kafkaStreams1WasFirstActive = true;
         } else {
             // Assert that data from the job was sent to the store
@@ -254,6 +258,7 @@ public class OptimizedKTableIntegrationTest {
         final Properties config = new Properties();
         config.put(StreamsConfig.TOPOLOGY_OPTIMIZATION, StreamsConfig.OPTIMIZE);
         config.put(StreamsConfig.APPLICATION_ID_CONFIG, applicationId);
+        config.put(StreamsConfig.APPLICATION_SERVER_CONFIG, "localhost:" + String.valueOf(++port));
         config.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers());
         config.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory(applicationId).getPath());
         config.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.Integer().getClass());

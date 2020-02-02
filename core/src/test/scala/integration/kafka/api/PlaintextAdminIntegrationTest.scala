@@ -26,7 +26,7 @@ import java.util.{Collections, Optional, Properties}
 import java.{time, util}
 
 import kafka.log.LogConfig
-import kafka.security.auth.Group
+import kafka.security.authorizer.AclEntry
 import kafka.server.{Defaults, KafkaConfig, KafkaServer}
 import kafka.utils.TestUtils._
 import kafka.utils.{Log4jController, TestUtils}
@@ -986,7 +986,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   @Test
   def testCallInFlightTimeouts(): Unit = {
     val config = createConfig()
-    config.put(AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG, "100000000")
+    config.put(AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG, "100000000")
     val factory = new KafkaAdminClientTest.FailureInjectingTimeoutProcessorFactory()
     client = KafkaAdminClientTest.createInternal(new AdminClientConfig(config), factory)
     val future = client.createTopics(Seq("mytopic", "mytopic2").map(new NewTopic(_, 1, 1.toShort)).asJava,
@@ -1077,8 +1077,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
           assertEquals(testNumPartitions, topicPartitions.size())
           assertEquals(testNumPartitions, topicPartitions.asScala.
             count(tp => tp.topic().equals(testTopicName)))
-          val expectedOperations = Group.supportedOperations
-            .map(operation => operation.toJava).asJava
+          val expectedOperations = AclEntry.supportedOperations(ResourceType.GROUP).asJava
           assertEquals(expectedOperations, testGroupDescription.authorizedOperations())
 
           // Test that the fake group is listed as dead.

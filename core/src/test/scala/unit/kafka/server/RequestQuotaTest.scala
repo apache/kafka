@@ -404,15 +404,11 @@ class RequestQuotaTest extends BaseRequestTest {
 
         case ApiKeys.TXN_OFFSET_COMMIT =>
           new TxnOffsetCommitRequest.Builder(
-            new TxnOffsetCommitRequestData()
-              .setTransactionalId("test-transactional-id")
-              .setGroupId("test-txn-group")
-              .setProducerId(2)
-              .setProducerEpoch(0)
-              .setTopics(TxnOffsetCommitRequest.getTopics(
-                Map.empty[TopicPartition, TxnOffsetCommitRequest.CommittedOffset].asJava
-              ))
-          )
+            "test-transactional-id",
+            "test-txn-group",
+            2,
+            0,
+            Map.empty[TopicPartition, TxnOffsetCommitRequest.CommittedOffset].asJava)
 
         case ApiKeys.DESCRIBE_ACLS =>
           new DescribeAclsRequest.Builder(AclBindingFilter.ANY)

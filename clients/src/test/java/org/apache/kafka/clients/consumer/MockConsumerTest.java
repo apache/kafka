@@ -25,6 +25,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.Collection;
 
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -100,6 +101,22 @@ public class MockConsumerTest {
         ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(1));
         assertThat(records.count(), is(0));
         assertThat(records.isEmpty(), is(true));
+    }
+
+    @Test
+    public void shouldNotClearRecordsForPausedPartitions() {
+        TopicPartition partition0 = new TopicPartition("test", 0);
+        Collection<TopicPartition> testPartitionList = Collections.singletonList(partition0);
+        consumer.assign(testPartitionList);
+        consumer.addRecord(new ConsumerRecord<>("test", 0, 0, null, null));
+        consumer.updateBeginningOffsets(Collections.singletonMap(partition0, 0L));
+        consumer.seekToBeginning(testPartitionList);
+
+        consumer.pause(testPartitionList);
+        consumer.poll(Duration.ofMillis(1));
+        consumer.resume(testPartitionList);
+        ConsumerRecords<String, String> recordsSecondPoll = consumer.poll(Duration.ofMillis(1));
+        assertThat(recordsSecondPoll.count(), is(1));
     }
 
 }

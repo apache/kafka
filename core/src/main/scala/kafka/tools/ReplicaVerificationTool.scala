@@ -200,11 +200,9 @@ object ReplicaVerificationTool extends Logging {
         fetcherId = counter.incrementAndGet())
     }
 
-    Runtime.getRuntime.addShutdownHook(new Thread() {
-      override def run(): Unit = {
+    Exit.addShutdownHook("ReplicaVerificationToolShutdownHook", {
         info("Stopping all fetchers")
         fetcherThreads.foreach(_.shutdown())
-      }
     })
     fetcherThreads.foreach(_.start())
     println(s"${ReplicaVerificationTool.getCurrentTimeString()}: verification process is started.")

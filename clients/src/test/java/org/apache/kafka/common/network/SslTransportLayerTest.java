@@ -552,20 +552,54 @@ public class SslTransportLayerTest {
     }
 
     /**
-     * Tests that connections cannot be made with unsupported TLS versions
+     * Tests that connection success with the default TLS version.
      */
     @Test
-    public void testUnsupportedTLSVersion() throws Exception {
-        String node = "0";
-        sslServerConfigs.put(SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG, Arrays.asList("TLSv1.2"));
-        server = createEchoServer(SecurityProtocol.SSL);
+    public void testTLSDefaults() throws Exception {
+        sslServerConfigs = serverCertStores.getTrustingConfig(clientCertStores);
+        sslClientConfigs = clientCertStores.getTrustingConfig(serverCertStores);
 
-        sslClientConfigs.put(SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG, Arrays.asList("TLSv1.1"));
+        assertEquals(SslConfigs.DEFAULT_SSL_PROTOCOL, sslServerConfigs.get(SslConfigs.SSL_PROTOCOL_CONFIG));
+        assertEquals(SslConfigs.DEFAULT_SSL_PROTOCOL, sslClientConfigs.get(SslConfigs.SSL_PROTOCOL_CONFIG));
+
+        server = createEchoServer(SecurityProtocol.SSL);
+        createSelector(sslClientConfigs);
+
+        InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
+        selector.connect("0", addr, BUFFER_SIZE, BUFFER_SIZE);
+
+        NetworkTestUtils.checkClientConnection(selector, "0", 10, 100);
+        server.verifyAuthenticationMetrics(1, 0);
+        selector.close();
+
+        checkAuthentiationFailed("1", "TLSv1.1");
+        server.verifyAuthenticationMetrics(1, 1);
+
+        checkAuthentiationFailed("2", "TLSv1");
+        server.verifyAuthenticationMetrics(1, 2);
+    }
+
+    /** Checks connection failed using the specified {@code tlsVersion}. */
+    private void checkAuthentiationFailed(String node, String tlsVersion) throws IOException {
+        sslClientConfigs.put(SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG, Arrays.asList(tlsVersion));
         createSelector(sslClientConfigs);
         InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
         selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
 
         NetworkTestUtils.waitForChannelClose(selector, node, ChannelState.State.AUTHENTICATION_FAILED);
+
+        selector.close();
+    }
+
+    /**
+     * Tests that connections cannot be made with unsupported TLS versions
+     */
+    @Test
+    public void testUnsupportedTLSVersion() throws Exception {
+        sslServerConfigs.put(SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG, Arrays.asList("TLSv1.2"));
+        server = createEchoServer(SecurityProtocol.SSL);
+
+        checkAuthentiationFailed("0", "TLSv1.1");
         server.verifyAuthenticationMetrics(0, 1);
     }
 
