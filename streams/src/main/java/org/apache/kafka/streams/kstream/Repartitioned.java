@@ -23,14 +23,14 @@ import org.apache.kafka.streams.kstream.internals.WindowedStreamPartitioner;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 
 /**
- * This class is used to provide the optional parameters for internal repartitioned topics when using:
- * <ul>
- *     <li>{@link KStream#repartition(Repartitioned)}</li>
- *     <li>{@link KStream#repartition(KeyValueMapper, Repartitioned)}</li>
- * </ul>
+ * This class is used to provide the optional parameters for internal repartition topics.
  *
  * @param <K> key type
  * @param <V> value type
+ * @see KStream#repartition()
+ * @see KStream#repartition(Repartitioned)
+ * @see KStream#repartition(KeyValueMapper)
+ * @see KStream#repartition(KeyValueMapper, Repartitioned)
  */
 public class Repartitioned<K, V> implements NamedOperation<Repartitioned<K, V>> {
 

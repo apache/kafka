@@ -566,18 +566,18 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
     }
 
     @Override
-    public <KR> KStream<KR, V> repartition(final KeyValueMapper<? super K, ? super V, ? extends KR> selector) {
-        Objects.requireNonNull(selector, "selector can't be null");
+    public <KR> KStream<KR, V> repartition(final KeyValueMapper<? super K, ? super V, ? extends KR> keySelector) {
+        Objects.requireNonNull(keySelector, "selector can't be null");
 
-        return doRepartition(Repartitioned.as(null), selector);
+        return doRepartition(Repartitioned.as(null), keySelector);
     }
 
     @Override
-    public <KR> KStream<KR, V> repartition(final KeyValueMapper<? super K, ? super V, ? extends KR> selector,
+    public <KR> KStream<KR, V> repartition(final KeyValueMapper<? super K, ? super V, ? extends KR> keySelector,
                                            final Repartitioned<KR, V> repartitioned) {
-        Objects.requireNonNull(selector, "selector can't be null");
+        Objects.requireNonNull(keySelector, "selector can't be null");
 
-        return doRepartition(repartitioned, selector);
+        return doRepartition(repartitioned, keySelector);
     }
 
     private <KR> KStream<KR, V> doRepartition(final Repartitioned<KR, V> repartitioned,
