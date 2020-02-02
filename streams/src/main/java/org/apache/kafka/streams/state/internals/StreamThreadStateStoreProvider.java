@@ -91,7 +91,7 @@ public class StreamThreadStateStoreProvider {
         if (partition == null) {
             return null;
         }
-        final List<String> sourceTopics = internalTopologyBuilder.stateStoreNameToSourceTopics().get(storeName);
+        final List<String> sourceTopics = internalTopologyBuilder.sourceTopicsForStore(storeName);
         final Set<String> sourceTopicsSet = sourceTopics.stream().collect(Collectors.toSet());
         final Map<Integer, InternalTopologyBuilder.TopicsInfo> topicGroups = internalTopologyBuilder.topicGroups();
         for (final Map.Entry<Integer, InternalTopologyBuilder.TopicsInfo> topicGroup : topicGroups.entrySet()) {
@@ -99,7 +99,7 @@ public class StreamThreadStateStoreProvider {
                 return new TaskId(topicGroup.getKey(), partition.intValue());
             }
         }
-        throw new InvalidStateStoreException("Cannot get state store " + storeName + " because the requested partition " + partition + "is" +
+        throw new InvalidStateStoreException("Cannot get state store " + storeName + " because the requested partition " + partition + "is " +
                                                 "not available on this instance");
     }
 }

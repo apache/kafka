@@ -109,7 +109,7 @@ public class StreamsMetadataState {
             return allMetadata;
         }
 
-        final List<String> sourceTopics = builder.stateStoreNameToSourceTopics().get(storeName);
+        final List<String> sourceTopics = builder.sourceTopicsForStore(storeName);
         if (sourceTopics == null) {
             return Collections.emptyList();
         }
@@ -408,7 +408,7 @@ public class StreamsMetadataState {
     }
 
     private SourceTopicsInfo getSourceTopicsInfo(final String storeName) {
-        final List<String> sourceTopics = builder.stateStoreNameToSourceTopics().get(storeName);
+        final List<String> sourceTopics = builder.sourceTopicsForStore(storeName);
         if (sourceTopics == null || sourceTopics.isEmpty()) {
             return null;
         }

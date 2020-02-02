@@ -28,7 +28,6 @@ import org.apache.kafka.streams.StoreQueryParams;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.Consumed;
@@ -91,7 +90,7 @@ public class StoreQueryIntegrationTest {
     }
 
     @Test
-    public void shouldQueryAllActivePartitionStoresByDefault() throws Exception {
+    public void shouldQueryOnlyActivePartitionStoresByDefault() throws Exception {
         final int batch1NumMessages = 100;
         final int key = 1;
         final Semaphore semaphore = new Semaphore(0);
@@ -164,28 +163,28 @@ public class StoreQueryIntegrationTest {
 
         //key doesn't belongs to this partition
         final int keyDontBelongPartition = (keyPartition == 0) ? 1 : 0;
-        final QueryableStoreType<ReadOnlyKeyValueStore<Integer, Integer>> queryableStoreType = QueryableStoreTypes.keyValueStore();
-        ReadOnlyKeyValueStore<Integer, Integer> store1 = null;
-        ReadOnlyKeyValueStore<Integer, Integer> store2 = null;
-        try {
-            store1 = kafkaStreams1
-                    .store(StoreQueryParams.fromNameAndType(TABLE_NAME, queryableStoreType).withPartition(keyPartition));
-        } catch (final InvalidStateStoreException exception) {
-        //Only one among kafkaStreams1 and kafkaStreams2 will contain the specific active store requested. The other will throw exception
-        }
-        try {
-            store2 = kafkaStreams2
-                    .store(StoreQueryParams.fromNameAndType(TABLE_NAME, queryableStoreType).withPartition(keyPartition));
-        } catch (final InvalidStateStoreException exception) {
-            //Only one among kafkaStreams1 and kafkaStreams2 will contain the specific active store requested. The other will throw exception
-        }
         final boolean kafkaStreams1IsActive;
         if ((keyQueryMetadata.getActiveHost().port() % 2) == 1) {
             kafkaStreams1IsActive = true;
+        } else {
+            kafkaStreams1IsActive = false;
+        }
+
+        final QueryableStoreType<ReadOnlyKeyValueStore<Integer, Integer>> queryableStoreType = QueryableStoreTypes.keyValueStore();
+        ReadOnlyKeyValueStore<Integer, Integer> store1 = null;
+        ReadOnlyKeyValueStore<Integer, Integer> store2 = null;
+        if (kafkaStreams1IsActive) {
+            store1 = kafkaStreams1
+                    .store(StoreQueryParams.fromNameAndType(TABLE_NAME, queryableStoreType).withPartition(keyPartition));
+        } else {
+            store2 = kafkaStreams2
+                    .store(StoreQueryParams.fromNameAndType(TABLE_NAME, queryableStoreType).withPartition(keyPartition));
+        }
+
+        if (kafkaStreams1IsActive) {
             assertThat(store1, is(notNullValue()));
             assertThat(store2, is(nullValue()));
         } else {
-            kafkaStreams1IsActive = false;
             assertThat(store2, is(notNullValue()));
             assertThat(store1, is(nullValue()));
         }
@@ -195,17 +194,12 @@ public class StoreQueryIntegrationTest {
 
         ReadOnlyKeyValueStore<Integer, Integer> store3 = null;
         ReadOnlyKeyValueStore<Integer, Integer> store4 = null;
-        try {
+        if (!kafkaStreams1IsActive) {
             store3 = kafkaStreams1
                     .store(StoreQueryParams.fromNameAndType(TABLE_NAME, queryableStoreType).withPartition(keyDontBelongPartition));
-        } catch (final InvalidStateStoreException exception) {
-            //Only one among kafkaStreams1 and kafkaStreams2 will contain the specific active store requested. The other will throw exception
-        }
-        try {
+        } else {
             store4 = kafkaStreams2
                     .store(StoreQueryParams.fromNameAndType(TABLE_NAME, queryableStoreType).withPartition(keyDontBelongPartition));
-        } catch (final InvalidStateStoreException exception) {
-            //Only one among kafkaStreams1 and kafkaStreams2 will contain the specific active store requested. The other will throw exception
         }
 
         // Assert that key is not served when wrong specific partition is requested
@@ -246,8 +240,14 @@ public class StoreQueryIntegrationTest {
                 .store(StoreQueryParams.fromNameAndType(TABLE_NAME, queryableStoreType).enableStaleStores());
 
         // Assert that both active and standby are able to query for a key
-        assertThat(store1.get(key), is(notNullValue()));
-        assertThat(store2.get(key), is(notNullValue()));
+        TestUtils.retryOnExceptionWithTimeout(100, 60 * 1000, () -> {
+            // Assert that after failover we have recovered to the last store write
+            assertThat(store1.get(key), is(equalTo(batch1NumMessages - 1)));
+        });
+        TestUtils.retryOnExceptionWithTimeout(100, 60 * 1000, () -> {
+            // Assert that after failover we have recovered to the last store write
+            assertThat(store2.get(key), is(equalTo(batch1NumMessages - 1)));
+        });
     }
 
     @Test
