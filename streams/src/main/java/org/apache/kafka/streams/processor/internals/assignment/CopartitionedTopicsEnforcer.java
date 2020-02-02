@@ -24,9 +24,11 @@ import org.slf4j.Logger;
 
 import java.util.Collection;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 public class CopartitionedTopicsEnforcer {
@@ -68,12 +70,18 @@ public class CopartitionedTopicsEnforcer {
         final Collection<InternalTopicConfig> internalTopicConfigs = repartitionTopicConfigs.values();
 
         if (copartitionGroup.equals(repartitionTopicConfigs.keySet())) {
+            final Collection<InternalTopicConfig> internalTopicConfigsWithEnforcedNumberOfPartitions = internalTopicConfigs
+                .stream()
+                .filter(InternalTopicConfig::hasEnforcedNumberOfPartitions)
+                .collect(Collectors.toList());
+
             // if there's at least one repartition topic with enforced number of partitions
             // validate that they all have same number of partitions
-            if (internalTopicConfigs.stream().anyMatch(InternalTopicConfig::hasEnforcedNumberOfPartitions)) {
-
-                numPartitionsToUseForRepartitionTopics = validateAndGetNumOfPartitions(repartitionTopicConfigs,
-                                                                                       internalTopicConfigs);
+            if (!internalTopicConfigsWithEnforcedNumberOfPartitions.isEmpty()) {
+                numPartitionsToUseForRepartitionTopics = validateAndGetNumOfPartitions(
+                    repartitionTopicConfigs,
+                    internalTopicConfigsWithEnforcedNumberOfPartitions
+                );
             } else {
                 // If all topics for this co-partition group are repartition topics,
                 // then set the number of partitions to be the maximum of the number of partitions.
@@ -88,7 +96,9 @@ public class CopartitionedTopicsEnforcer {
         for (final InternalTopicConfig config : internalTopicConfigs) {
             maybeSetNumberOfPartitionsForInternalTopic(numPartitionsToUseForRepartitionTopics, config);
 
-            final int numberOfPartitionsOfInternalTopic = config.numberOfPartitions().get();
+            final int numberOfPartitionsOfInternalTopic = config
+                .numberOfPartitions()
+                .orElseThrow(emptyNumberOfPartitionsExceptionSupplier(config.name()));
 
             if (numberOfPartitionsOfInternalTopic != numPartitionsToUseForRepartitionTopics) {
                 final String msg = String.format("%sNumber of partitions [%s] of repartition topic [%s] " +
@@ -111,23 +121,22 @@ public class CopartitionedTopicsEnforcer {
 
     private int validateAndGetNumOfPartitions(final Map<Object, InternalTopicConfig> repartitionTopicConfigs,
                                               final Collection<InternalTopicConfig> internalTopicConfigs) {
-        final Collection<InternalTopicConfig> internalTopicConfigsWithEnforcedNumberOfPartitions = internalTopicConfigs
-            .stream()
-            .filter(InternalTopicConfig::hasEnforcedNumberOfPartitions)
-            .collect(Collectors.toList());
+        final InternalTopicConfig firstInternalTopicConfig = internalTopicConfigs.iterator().next();
 
-        final int numberOfPartitionsOfInternalTopic = internalTopicConfigsWithEnforcedNumberOfPartitions
-            .iterator()
-            .next()
+        final int firstNumberOfPartitionsOfInternalTopic = firstInternalTopicConfig
             .numberOfPartitions()
-            .get();
+            .orElseThrow(emptyNumberOfPartitionsExceptionSupplier(firstInternalTopicConfig.name()));
 
-        for (final InternalTopicConfig internalTopicConfig : internalTopicConfigsWithEnforcedNumberOfPartitions) {
-            if (internalTopicConfig.numberOfPartitions().get() != numberOfPartitionsOfInternalTopic) {
+        for (final InternalTopicConfig internalTopicConfig : internalTopicConfigs) {
+            final Integer numberOfPartitions = internalTopicConfig
+                .numberOfPartitions()
+                .orElseThrow(emptyNumberOfPartitionsExceptionSupplier(internalTopicConfig.name()));
+
+            if (numberOfPartitions != firstNumberOfPartitionsOfInternalTopic) {
                 final Map<Object, Integer> repartitionTopics = repartitionTopicConfigs
                     .entrySet()
                     .stream()
-                    .collect(Collectors.toMap(Map.Entry::getKey, entry -> entry.getValue().numberOfPartitions().get()));
+                    .collect(Collectors.toMap(Entry::getKey, entry -> entry.getValue().numberOfPartitions().get()));
 
                 final String msg = String.format("%sFollowing topics do not have the same number of partitions: [%s]",
                                                  logPrefix,
@@ -136,12 +145,16 @@ public class CopartitionedTopicsEnforcer {
             }
         }
 
-        return numberOfPartitionsOfInternalTopic;
+        return firstNumberOfPartitionsOfInternalTopic;
+    }
+
+    private static Supplier<TopologyException> emptyNumberOfPartitionsExceptionSupplier(final String topic) {
+        return () -> new TopologyException("Number of partitions is not set for topic: " + topic);
     }
 
     private int getSamePartitions(final Map<String, Integer> nonRepartitionTopicsInCopartitionGroup) {
         final int partitions = nonRepartitionTopicsInCopartitionGroup.values().iterator().next();
-        for (final Map.Entry<String, Integer> entry : nonRepartitionTopicsInCopartitionGroup.entrySet()) {
+        for (final Entry<String, Integer> entry : nonRepartitionTopicsInCopartitionGroup.entrySet()) {
             if (entry.getValue() != partitions) {
                 final TreeMap<String, Integer> sorted = new TreeMap<>(nonRepartitionTopicsInCopartitionGroup);
                 throw new TopologyException(
