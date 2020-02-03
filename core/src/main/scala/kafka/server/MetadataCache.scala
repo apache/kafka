@@ -104,23 +104,23 @@ class MetadataCache(brokerId: Int) extends Logging {
                 s"not found on leader $leaderBrokerId")
               if (errorUnavailableListeners) Errors.LISTENER_NOT_FOUND else Errors.LEADER_NOT_AVAILABLE
             }
-            new MetadataResponse.PartitionMetadata(error, topicPartition, -1,
+            new MetadataResponse.PartitionMetadata(error, topicPartition, Optional.empty(),
               Optional.of(leaderEpoch), filteredReplicas, filteredIsr, offlineReplicas)
 
           case Some(leader) =>
             if (filteredReplicas.size < replicas.size) {
               debug(s"Error while fetching metadata for $topicPartition: replica information not available for " +
                 s"following brokers ${replicas.asScala.filterNot(filteredReplicas.contains).mkString(",")}")
-              new MetadataResponse.PartitionMetadata(Errors.REPLICA_NOT_AVAILABLE, topicPartition, leader.id,
-                Optional.of(leaderEpoch), filteredReplicas, filteredIsr, offlineReplicas)
+              new MetadataResponse.PartitionMetadata(Errors.REPLICA_NOT_AVAILABLE, topicPartition,
+                Optional.of(leader.id), Optional.of(leaderEpoch), filteredReplicas, filteredIsr, offlineReplicas)
             } else if (filteredIsr.size < isr.size) {
               debug(s"Error while fetching metadata for $topicPartition: in sync replica information not available for " +
                 s"following brokers ${isr.asScala.filterNot(filteredIsr.contains).mkString(",")}")
-              new MetadataResponse.PartitionMetadata(Errors.REPLICA_NOT_AVAILABLE, topicPartition, leader.id,
-                Optional.of(leaderEpoch), filteredReplicas, filteredIsr, offlineReplicas)
+              new MetadataResponse.PartitionMetadata(Errors.REPLICA_NOT_AVAILABLE, topicPartition,
+                Optional.of(leader.id), Optional.of(leaderEpoch), filteredReplicas, filteredIsr, offlineReplicas)
             } else {
-              new MetadataResponse.PartitionMetadata(Errors.NONE, topicPartition, leader.id, Optional.of(leaderEpoch),
-                filteredReplicas, filteredIsr, offlineReplicas)
+              new MetadataResponse.PartitionMetadata(Errors.NONE, topicPartition,
+                Optional.of(leader.id), Optional.of(leaderEpoch), filteredReplicas, filteredIsr, offlineReplicas)
             }
         }
       }

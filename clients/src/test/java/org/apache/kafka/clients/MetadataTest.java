@@ -448,8 +448,8 @@ public class MetadataTest {
 
         // still works
         assertTrue(metadata.partitionMetadataIfCurrent(tp).isPresent());
-        assertEquals(metadata.partitionMetadataIfCurrent(tp).get().partition(), 0);
-        assertEquals(metadata.partitionMetadataIfCurrent(tp).get().leaderId, 0);
+        assertEquals(0, metadata.partitionMetadataIfCurrent(tp).get().partition());
+        assertEquals(Optional.of(0), metadata.partitionMetadataIfCurrent(tp).get().leaderId);
     }
 
     @Test
@@ -608,7 +608,7 @@ public class MetadataTest {
 
         MetadataResponse metadataResponse = TestUtils.metadataUpdateWith("dummy", 2, Collections.emptyMap(), partitionCounts, _tp -> 99,
             (error, partition, leader, leaderEpoch, replicas, isr, offlineReplicas) ->
-                new MetadataResponse.PartitionMetadata(error, partition, node0.id(), leaderEpoch,
+                new MetadataResponse.PartitionMetadata(error, partition, Optional.of(node0.id()), leaderEpoch,
                     Collections.singletonList(node0.id()), Collections.emptyList(),
                         Collections.singletonList(node1.id())));
         metadata.update(emptyMetadataResponse(), 0L);

@@ -1392,7 +1392,8 @@ public class ConsumerCoordinatorTest {
             Node node = new Node(0, "localhost", 9999);
             MetadataResponse.PartitionMetadata partitionMetadata =
                 new MetadataResponse.PartitionMetadata(Errors.NONE, new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0),
-                        node.id(), Optional.empty(), singletonList(node.id()), singletonList(node.id()), singletonList(node.id()));
+                        Optional.of(node.id()), Optional.empty(), singletonList(node.id()), singletonList(node.id()),
+                        singletonList(node.id()));
             MetadataResponse.TopicMetadata topicMetadata = new MetadataResponse.TopicMetadata(Errors.NONE,
                 Topic.GROUP_METADATA_TOPIC_NAME, true, singletonList(partitionMetadata));
 

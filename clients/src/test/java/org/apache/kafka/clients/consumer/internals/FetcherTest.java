@@ -1948,7 +1948,7 @@ public class FetcherTest {
                 altPartitions.add(new MetadataResponse.PartitionMetadata(
                     p.error,
                     p.topicPartition,
-                    -1, //no leader
+                    Optional.empty(), //no leader
                     Optional.empty(),
                     p.replicaIds,
                     p.inSyncReplicaIds,

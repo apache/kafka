@@ -50,7 +50,7 @@ public class MetadataCacheTest {
         MetadataResponse.PartitionMetadata partitionMetadata = new MetadataResponse.PartitionMetadata(
                 Errors.NONE,
                 topicPartition,
-                5,
+                Optional.of(5),
                 Optional.of(10),
                 Arrays.asList(5, 6, 7),
                 Arrays.asList(5, 6, 7),

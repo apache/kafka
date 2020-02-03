@@ -348,7 +348,7 @@ public class KafkaAdminClientTest {
             for (PartitionInfo pInfo : cluster.availablePartitionsForTopic(topic)) {
                 PartitionMetadata pm = new PartitionMetadata(error,
                         new TopicPartition(topic, pInfo.partition()),
-                        pInfo.leader().id(),
+                        Optional.of(pInfo.leader().id()),
                         Optional.of(234),
                         Arrays.stream(pInfo.replicas()).map(Node::id).collect(Collectors.toList()),
                         Arrays.stream(pInfo.inSyncReplicas()).map(Node::id).collect(Collectors.toList()),
@@ -614,7 +614,7 @@ public class KafkaAdminClientTest {
             // Then we respond to the DescribeTopic request
             Node leader = initializedCluster.nodes().get(0);
             MetadataResponse.PartitionMetadata partitionMetadata = new MetadataResponse.PartitionMetadata(
-                    Errors.NONE, new TopicPartition(topic, 0), leader.id(), Optional.of(10),
+                    Errors.NONE, new TopicPartition(topic, 0), Optional.of(leader.id()), Optional.of(10),
                     singletonList(leader.id()), singletonList(leader.id()), singletonList(leader.id()));
             env.kafkaClient().prepareResponse(MetadataResponse.prepareResponse(initializedCluster.nodes(),
                     initializedCluster.clusterResource().clusterId(), 1,
@@ -960,11 +960,12 @@ public class KafkaAdminClientTest {
             List<Node> nodes = env.cluster().nodes();
 
             List<MetadataResponse.PartitionMetadata> partitionMetadata = new ArrayList<>();
-            partitionMetadata.add(new MetadataResponse.PartitionMetadata(Errors.NONE, tp0, nodes.get(0).id(),
-                    Optional.of(5), singletonList(nodes.get(0).id()), singletonList(nodes.get(0).id()),
-                    Collections.emptyList()));
-            partitionMetadata.add(new MetadataResponse.PartitionMetadata(Errors.NONE, tp1, nodes.get(1).id(),
-                    Optional.of(5), singletonList(nodes.get(1).id()), singletonList(nodes.get(1).id()), Collections.emptyList()));
+            partitionMetadata.add(new MetadataResponse.PartitionMetadata(Errors.NONE, tp0,
+                    Optional.of(nodes.get(0).id()), Optional.of(5), singletonList(nodes.get(0).id()),
+                    singletonList(nodes.get(0).id()), Collections.emptyList()));
+            partitionMetadata.add(new MetadataResponse.PartitionMetadata(Errors.NONE, tp1,
+                    Optional.of(nodes.get(1).id()), Optional.of(5), singletonList(nodes.get(1).id()),
+                    singletonList(nodes.get(1).id()), Collections.emptyList()));
 
             List<MetadataResponse.TopicMetadata> topicMetadata = new ArrayList<>();
             topicMetadata.add(new MetadataResponse.TopicMetadata(Errors.NONE, topic, false, partitionMetadata));
@@ -1024,17 +1025,21 @@ public class KafkaAdminClientTest {
 
             List<MetadataResponse.TopicMetadata> t = new ArrayList<>();
             List<MetadataResponse.PartitionMetadata> p = new ArrayList<>();
-            p.add(new MetadataResponse.PartitionMetadata(Errors.NONE, myTopicPartition0, nodes.get(0).id(), Optional.of(5),
-                    singletonList(nodes.get(0).id()), singletonList(nodes.get(0).id()), Collections.emptyList()));
-            p.add(new MetadataResponse.PartitionMetadata(Errors.NONE, myTopicPartition1, nodes.get(0).id(), Optional.of(5),
-                    singletonList(nodes.get(0).id()), singletonList(nodes.get(0).id()), Collections.emptyList()));
-            p.add(new MetadataResponse.PartitionMetadata(Errors.LEADER_NOT_AVAILABLE, myTopicPartition2, -1,
-                    Optional.empty(), singletonList(nodes.get(0).id()), singletonList(nodes.get(0).id()),
-                    Collections.emptyList()));
-            p.add(new MetadataResponse.PartitionMetadata(Errors.NONE, myTopicPartition3, nodes.get(0).id(), Optional.of(5),
-                    singletonList(nodes.get(0).id()), singletonList(nodes.get(0).id()), Collections.emptyList()));
-            p.add(new MetadataResponse.PartitionMetadata(Errors.NONE, myTopicPartition4, nodes.get(0).id(), Optional.of(5),
-                    singletonList(nodes.get(0).id()), singletonList(nodes.get(0).id()), Collections.emptyList()));
+            p.add(new MetadataResponse.PartitionMetadata(Errors.NONE, myTopicPartition0,
+                    Optional.of(nodes.get(0).id()), Optional.of(5), singletonList(nodes.get(0).id()),
+                    singletonList(nodes.get(0).id()), Collections.emptyList()));
+            p.add(new MetadataResponse.PartitionMetadata(Errors.NONE, myTopicPartition1,
+                    Optional.of(nodes.get(0).id()), Optional.of(5), singletonList(nodes.get(0).id()),
+                    singletonList(nodes.get(0).id()), Collections.emptyList()));
+            p.add(new MetadataResponse.PartitionMetadata(Errors.LEADER_NOT_AVAILABLE, myTopicPartition2,
+                    Optional.empty(), Optional.empty(), singletonList(nodes.get(0).id()),
+                    singletonList(nodes.get(0).id()), Collections.emptyList()));
+            p.add(new MetadataResponse.PartitionMetadata(Errors.NONE, myTopicPartition3,
+                    Optional.of(nodes.get(0).id()), Optional.of(5), singletonList(nodes.get(0).id()),
+                    singletonList(nodes.get(0).id()), Collections.emptyList()));
+            p.add(new MetadataResponse.PartitionMetadata(Errors.NONE, myTopicPartition4,
+                    Optional.of(nodes.get(0).id()), Optional.of(5), singletonList(nodes.get(0).id()),
+                    singletonList(nodes.get(0).id()), Collections.emptyList()));
 
             t.add(new MetadataResponse.TopicMetadata(Errors.NONE, "my_topic", false, p));
 

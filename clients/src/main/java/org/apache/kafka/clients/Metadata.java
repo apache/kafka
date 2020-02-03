@@ -220,7 +220,7 @@ public class Metadata implements Closeable {
 
         MetadataResponse.PartitionMetadata partitionMetadata = maybeMetadata.get();
         Optional<Integer> leaderEpoch = partitionMetadata.leaderEpoch;
-        Optional<Node> leaderNodeOpt = cache.nodeById(partitionMetadata.leaderId);
+        Optional<Node> leaderNodeOpt = partitionMetadata.leaderId.flatMap(cache::nodeById);
         return new LeaderAndEpoch(leaderNodeOpt, leaderEpoch);
     }
 

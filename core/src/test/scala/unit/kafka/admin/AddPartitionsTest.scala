@@ -101,9 +101,14 @@ class AddPartitionsTest extends BaseRequestTest {
     assertEquals(partitions.size, 3)
     assertEquals(1, partitions(1).partition)
     assertEquals(2, partitions(2).partition)
-    val replicas = partitions(1).replicaIds
-    assertEquals(replicas.size, 2)
-    assertTrue(replicas.contains(partitions(1).leaderId))
+
+    for (partition <- partitions) {
+      val replicas = partition.replicaIds
+      assertEquals(2, replicas.size)
+      assertTrue(partition.leaderId.isPresent)
+      val leaderId = partition.leaderId.get
+      assertTrue(replicas.contains(leaderId))
+    }
   }
 
   @Test

@@ -130,7 +130,7 @@ class MetadataCacheTest {
           assertEquals(partitionId, partitionMetadata.partition)
           val partitionState = topicPartitionStates.find(_.partitionIndex == partitionId).getOrElse(
             Assertions.fail(s"Unable to find partition state for partition $partitionId"))
-          assertEquals(partitionState.leader, partitionMetadata.leaderId)
+          assertEquals(Optional.of(partitionState.leader), partitionMetadata.leaderId)
           assertEquals(Optional.of(partitionState.leaderEpoch), partitionMetadata.leaderEpoch)
           assertEquals(partitionState.isr, partitionMetadata.inSyncReplicaIds)
           assertEquals(partitionState.replicas, partitionMetadata.replicaIds)
@@ -450,7 +450,7 @@ class MetadataCacheTest {
     val topicMetadata = cache.getTopicMetadata(Set(topic), ListenerName.forSecurityProtocol(SecurityProtocol.SSL))
     assertEquals(1, topicMetadata.size)
     assertEquals(1, topicMetadata.head.partitionMetadata.size)
-    assertEquals(-1, topicMetadata.head.partitionMetadata.get(0).leaderId)
+    assertEquals(Optional.empty, topicMetadata.head.partitionMetadata.get(0).leaderId)
   }
 
   @Test

@@ -40,6 +40,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.OptionalInt;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -57,7 +58,7 @@ import java.util.stream.Collectors;
  */
 public class MetadataResponse extends AbstractResponse {
     public static final int NO_CONTROLLER_ID = -1;
-
+    public static final int NO_LEADER_ID = -1;
     public static final int AUTHORIZED_OPERATIONS_OMITTED = Integer.MIN_VALUE;
 
     private final MetadataResponseData data;
@@ -150,7 +151,7 @@ public class MetadataResponse extends AbstractResponse {
     public static PartitionInfo toPartitionInfo(PartitionMetadata metadata, Map<Integer, Node> nodesById) {
         return new PartitionInfo(metadata.topic(),
                 metadata.partition(),
-                nodesById.get(metadata.leaderId),
+                metadata.leaderId.map(nodesById::get).orElse(null),
                 convertToNodeArray(metadata.replicaIds, nodesById),
                 convertToNodeArray(metadata.inSyncReplicaIds, nodesById),
                 convertToNodeArray(metadata.offlineReplicaIds, nodesById));
@@ -328,7 +329,7 @@ public class MetadataResponse extends AbstractResponse {
     public static class PartitionMetadata {
         public final TopicPartition topicPartition;
         public final Errors error;
-        public final int leaderId;
+        public final Optional<Integer> leaderId;
         public final Optional<Integer> leaderEpoch;
         public final List<Integer> replicaIds;
         public final List<Integer> inSyncReplicaIds;
@@ -336,7 +337,7 @@ public class MetadataResponse extends AbstractResponse {
 
         public PartitionMetadata(Errors error,
                                  TopicPartition topicPartition,
-                                 int leaderId,
+                                 Optional<Integer> leaderId,
                                  Optional<Integer> leaderEpoch,
                                  List<Integer> replicaIds,
                                  List<Integer> inSyncReplicaIds,
@@ -408,10 +409,13 @@ public class MetadataResponse extends AbstractResponse {
                 for (MetadataResponsePartition partitionMetadata : topicMetadata.partitions()) {
                     Errors partitionError = Errors.forCode(partitionMetadata.errorCode());
                     int partitionIndex = partitionMetadata.partitionIndex();
-                    int leader = partitionMetadata.leaderId();
+
+                    int leaderId = partitionMetadata.leaderId();
+                    Optional<Integer> leaderIdOpt = leaderId < 0 ? Optional.empty() : Optional.of(leaderId);
+
                     Optional<Integer> leaderEpoch = RequestUtils.getLeaderEpoch(partitionMetadata.leaderEpoch());
                     TopicPartition topicPartition = new TopicPartition(topic, partitionIndex);
-                    partitionMetadataList.add(new PartitionMetadata(partitionError, topicPartition, leader,
+                    partitionMetadataList.add(new PartitionMetadata(partitionError, topicPartition, leaderIdOpt,
                             leaderEpoch, partitionMetadata.replicaNodes(), partitionMetadata.isrNodes(),
                             partitionMetadata.offlineReplicas()));
                 }
@@ -453,7 +457,7 @@ public class MetadataResponse extends AbstractResponse {
                 metadataResponseTopic.partitions().add(new MetadataResponsePartition()
                     .setErrorCode(partitionMetadata.error.code())
                     .setPartitionIndex(partitionMetadata.partition())
-                    .setLeaderId(partitionMetadata.leaderId)
+                    .setLeaderId(partitionMetadata.leaderId.orElse(NO_LEADER_ID))
                     .setLeaderEpoch(partitionMetadata.leaderEpoch.orElse(RecordBatch.NO_PARTITION_LEADER_EPOCH))
                     .setReplicaNodes(partitionMetadata.replicaIds)
                     .setIsrNodes(partitionMetadata.inSyncReplicaIds)

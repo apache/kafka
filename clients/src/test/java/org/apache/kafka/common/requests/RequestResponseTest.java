@@ -1246,13 +1246,13 @@ public class RequestResponseTest {
         List<MetadataResponse.TopicMetadata> allTopicMetadata = new ArrayList<>();
         allTopicMetadata.add(new MetadataResponse.TopicMetadata(Errors.NONE, "__consumer_offsets", true,
                 asList(new MetadataResponse.PartitionMetadata(Errors.NONE,
-                        new TopicPartition("__consumer_offsets", 1), node.id(), Optional.of(5),
-                        replicas, isr, offlineReplicas))));
+                        new TopicPartition("__consumer_offsets", 1),
+                        Optional.of(node.id()), Optional.of(5), replicas, isr, offlineReplicas))));
         allTopicMetadata.add(new MetadataResponse.TopicMetadata(Errors.LEADER_NOT_AVAILABLE, "topic2", false,
                 emptyList()));
         allTopicMetadata.add(new MetadataResponse.TopicMetadata(Errors.NONE, "topic3", false,
             asList(new MetadataResponse.PartitionMetadata(Errors.LEADER_NOT_AVAILABLE,
-                    new TopicPartition("topic3", 0), -1,
+                    new TopicPartition("topic3", 0), Optional.empty(),
                     Optional.empty(), replicas, isr, offlineReplicas))));
 
         return MetadataResponse.prepareResponse(asList(node), null, MetadataResponse.NO_CONTROLLER_ID, allTopicMetadata);

@@ -202,7 +202,8 @@ class MetadataRequestTest extends BaseRequestTest {
     val partitionMetadata = topicMetadata1.partitionMetadata.asScala.head
     assertEquals(0, partitionMetadata.partition)
     assertEquals(2, partitionMetadata.replicaIds.size)
-    assertTrue(partitionMetadata.leaderId >= 0)
+    assertTrue(partitionMetadata.leaderId.isPresent)
+    assertTrue(partitionMetadata.leaderId.get > 0)
   }
 
   @Test
