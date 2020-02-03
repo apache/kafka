@@ -56,7 +56,7 @@ class MetadataCache(brokerId: Int) extends Logging {
 
   // This method is the main hotspot when it comes to the performance of metadata requests,
   // we should be careful about adding additional logic here. Relatedly, `brokers` is
-  // `Iterable[Integer]` instead of `Iterable[Int]` to avoid a collection copy.
+  // `List[Integer]` instead of `List[Int]` to avoid a collection copy.
   // filterUnavailableEndpoints exists to support v0 MetadataResponses
   private def maybeFilterAliveReplicas(snapshot: MetadataSnapshot,
                                        brokers: java.util.List[Integer],
@@ -67,7 +67,7 @@ class MetadataCache(brokerId: Int) extends Logging {
     } else {
       val res = new util.ArrayList[Integer](math.min(snapshot.aliveBrokers.size, brokers.size))
       for (brokerId <- brokers.asScala) {
-        if (getAliveEndpoint(snapshot, brokerId, listenerName).isDefined)
+        if (hasAliveEndpoint(snapshot, brokerId, listenerName))
           res.add(brokerId)
       }
       res
@@ -105,19 +105,19 @@ class MetadataCache(brokerId: Int) extends Logging {
               if (errorUnavailableListeners) Errors.LISTENER_NOT_FOUND else Errors.LEADER_NOT_AVAILABLE
             }
             new MetadataResponse.PartitionMetadata(error, topicPartition, -1,
-              Optional.empty(), filteredReplicas, filteredIsr, offlineReplicas)
+              Optional.of(leaderEpoch), filteredReplicas, filteredIsr, offlineReplicas)
 
           case Some(leader) =>
             if (filteredReplicas.size < replicas.size) {
               debug(s"Error while fetching metadata for $topicPartition: replica information not available for " +
                 s"following brokers ${replicas.asScala.filterNot(filteredReplicas.contains).mkString(",")}")
               new MetadataResponse.PartitionMetadata(Errors.REPLICA_NOT_AVAILABLE, topicPartition, leader.id,
-                Optional.empty(), filteredReplicas, filteredIsr, offlineReplicas)
+                Optional.of(leaderEpoch), filteredReplicas, filteredIsr, offlineReplicas)
             } else if (filteredIsr.size < isr.size) {
               debug(s"Error while fetching metadata for $topicPartition: in sync replica information not available for " +
                 s"following brokers ${isr.asScala.filterNot(filteredIsr.contains).mkString(",")}")
               new MetadataResponse.PartitionMetadata(Errors.REPLICA_NOT_AVAILABLE, topicPartition, leader.id,
-                Optional.empty(), filteredReplicas, filteredIsr, offlineReplicas)
+                Optional.of(leaderEpoch), filteredReplicas, filteredIsr, offlineReplicas)
             } else {
               new MetadataResponse.PartitionMetadata(Errors.NONE, topicPartition, leader.id, Optional.of(leaderEpoch),
                 filteredReplicas, filteredIsr, offlineReplicas)
@@ -125,6 +125,10 @@ class MetadataCache(brokerId: Int) extends Logging {
         }
       }
     }
+  }
+
+  private def hasAliveEndpoint(snapshot: MetadataSnapshot, brokerId: Int, listenerName: ListenerName): Boolean = {
+    snapshot.aliveNodes.get(brokerId).exists(_.contains(listenerName))
   }
 
   private def getAliveEndpoint(snapshot: MetadataSnapshot, brokerId: Int, listenerName: ListenerName): Option[Node] =
