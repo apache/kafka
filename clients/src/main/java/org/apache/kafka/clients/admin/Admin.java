@@ -43,10 +43,6 @@ import org.apache.kafka.common.requests.LeaveGroupResponse;
  * <p>
  * The minimum broker version required is 0.10.0.0. Methods with stricter requirements will specify the minimum broker
  * version required.
- * <p>
- * This client was introduced in 0.11.0.0 and the API is still evolving. We will try to evolve the API in a compatible
- * manner, but we reserve the right to make breaking changes in minor releases, if necessary. We will update the
- * {@code InterfaceStability} annotation and this notice once the API is considered stable.
  */
 public interface Admin extends AutoCloseable {
 
