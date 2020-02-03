@@ -347,12 +347,12 @@ public class TransactionalMessageCopier {
                     numMessagesProcessedSinceLastRebalance.get(), remainingMessages.get(), transactionalId, "ProcessLoop"));
                 if (isShuttingDown.get())
                     break;
-                int messagesInCurrentTransaction = 0;
-                long numMessagesForNextTransaction = Math.min(numMessagesPerTransaction, remainingMessages.get());
+                long messagesSentWithinCurrentTxn = 0L;
+                long messagesNeededForCurrentTxn = remainingMessages.get();
 
                 try {
                     producer.beginTransaction();
-                    while (messagesInCurrentTransaction < numMessagesForNextTransaction) {
+                    while (messagesSentWithinCurrentTxn < messagesNeededForCurrentTxn) {
                         ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(200));
                         if (messageCap.get() <= 0) {
                             // We could see no more message needed for processing after poll
@@ -360,8 +360,9 @@ public class TransactionalMessageCopier {
                         }
                         for (ConsumerRecord<String, String> record : records) {
                             producer.send(producerRecordFromConsumerRecord(outputTopic, record));
-                            messagesInCurrentTransaction++;
+                            messagesSentWithinCurrentTxn++;
                         }
+                        messagesNeededForCurrentTxn = Math.min(numMessagesPerTransaction, remainingMessages.get());
                     }
 
                     if (useGroupMetadata) {
@@ -374,8 +375,8 @@ public class TransactionalMessageCopier {
                         throw new KafkaException("Aborting transaction");
                     } else {
                         producer.commitTransaction();
-                        remainingMessages.set(messageCap.get() - numMessagesProcessedSinceLastRebalance.addAndGet(messagesInCurrentTransaction));
-                        totalMessageProcessed.getAndAdd(messagesInCurrentTransaction);
+                        remainingMessages.set(messageCap.get() - numMessagesProcessedSinceLastRebalance.addAndGet(messagesSentWithinCurrentTxn));
+                        totalMessageProcessed.getAndAdd(messagesSentWithinCurrentTxn);
                     }
                 } catch (ProducerFencedException | OutOfOrderSequenceException e) {
                     // We cannot recover from these errors, so just rethrow them and let the process fail
