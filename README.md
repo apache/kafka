@@ -48,6 +48,15 @@ Change the log4j setting in either `clients/src/test/resources/log4j.properties`
 
     ./gradlew clients:test --tests RequestResponseTest
 
+### Specifying test retries ###
+By default every failed test will be retried once but it is possible to change this value with the `maxTestRetries`
+parameter. Tests will be retried at the end of a test task. By specifying `maxTestRetryFailures` one can set a limit
+on maximum number of test failures that are allowed before retrying is disabled. For instance if this is set to 5 and
+4 test fails initially and 3 again on retry then this will not be considered too many and retries would continue but if
+more than 5 failed initially then retries would be disabled.
+
+    ./gradlew test -PmaxTestRetries=1 -PmaxTestRetryFailures=5
+
 ### Generating test coverage reports ###
 Generate coverage reports for the whole project:
 
