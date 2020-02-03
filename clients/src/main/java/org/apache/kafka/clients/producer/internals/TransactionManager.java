@@ -200,6 +200,8 @@ public class TransactionManager {
     // record count to its sequence number. This is used to tell if a subsequent batch is the one immediately following
     // the expired one.
     private final Map<TopicPartition, Integer> partitionsWithUnresolvedSequences;
+    private final Set<TopicPartition> partitionsToRewriteSequences;
+    private final Set<TopicPartition> partitionsWithLaggingEpoch;
 
     private final PriorityQueue<TxnRequestHandler> pendingRequests;
     private final Set<TopicPartition> newPartitionsInTransaction;
@@ -295,6 +297,8 @@ public class TransactionManager {
         this.pendingRequests = new PriorityQueue<>(10, Comparator.comparingInt(o -> o.priority().priority));
         this.pendingTxnOffsetCommits = new HashMap<>();
         this.partitionsWithUnresolvedSequences = new HashMap<>();
+        this.partitionsToRewriteSequences = new HashSet<>();
+        this.partitionsWithLaggingEpoch = new HashSet<>();
         this.retryBackoffMs = retryBackoffMs;
         this.topicPartitionBookkeeper = new TopicPartitionBookkeeper();
         this.apiVersions = apiVersions;
@@ -519,7 +523,8 @@ public class TransactionManager {
             throw new IllegalStateException("Cannot reset producer state for a transactional producer. " +
                     "You must either abort the ongoing transaction or reinitialize the transactional producer instead");
         setProducerIdAndEpoch(ProducerIdAndEpoch.NONE);
-        resetSequenceNumbers();
+        topicPartitionBookkeeper.reset();
+        this.partitionsWithUnresolvedSequences.clear();
         transitionTo(State.UNINITIALIZED);
     }
 
@@ -549,6 +554,13 @@ public class TransactionManager {
                 setProducerIdAndEpoch(new ProducerIdAndEpoch(this.producerIdAndEpoch.producerId, (short) (this.producerIdAndEpoch.epoch + 1)));
             }
 
+            // When the epoch is bumped, rewrite all in-flight sequences for the partition(s) that triggered the epoch bump
+            for (TopicPartition topicPartition : this.partitionsToRewriteSequences) {
+                this.topicPartitionBookkeeper.startSequencesAtBeginning(topicPartition, this.producerIdAndEpoch);
+                this.partitionsWithUnresolvedSequences.remove(topicPartition);
+            }
+
+            this.partitionsToRewriteSequences.clear();
             epochBumpRequired = false;
         }
     }
@@ -706,14 +718,15 @@ public class TransactionManager {
             // If we get an UnknownProducerId for a partition, then the broker has no state for that producer. It
             // will therefore accept a write with sequence number 0. We reset the sequence number for the partition
             // here so that the producer can continue after aborting the transaction. Note that if the broker supports
-            // bumping the epoch, we will reset all sequence numbers after calling InitProducerId
+            // bumping the epoch, we will later reset all sequence numbers after calling InitProducerId
             resetSequenceForPartition(batch.topicPartition);
         } else {
             removeInFlightBatch(batch);
             if (adjustSequenceNumbers) {
                 if (!isTransactional()) {
                     epochBumpRequired = true;
-                    topicPartitionBookkeeper.startSequencesAtBeginning(batch.topicPartition, this.producerIdAndEpoch);
+                    this.partitionsToRewriteSequences.add(batch.topicPartition);
+                    // topicPartitionBookkeeper.startSequencesAtBeginning(batch.topicPartition, this.producerIdAndEpoch);
                 } else {
                     adjustSequencesDueToFailedBatch(batch);
                 }
@@ -806,6 +819,7 @@ public class TransactionManager {
                                         "Going to bump epoch and reset sequence numbers.", topicPartition,
                                 lastAckedSequence(topicPartition).orElse(NO_LAST_ACKED_SEQUENCE_NUMBER), sequenceNumber(topicPartition));
                         epochBumpRequired = true;
+                        this.partitionsToRewriteSequences.add(topicPartition);
                     }
 
                     this.partitionsWithUnresolvedSequences.remove(topicPartition);
@@ -954,6 +968,7 @@ public class TransactionManager {
         // transition to an abortable error and set a flag indicating that we need to bump the epoch
         if (error == Errors.UNKNOWN_PRODUCER_ID && !isTransactional()) {
             epochBumpRequired = true;
+            partitionsToRewriteSequences.add(batch.topicPartition);
             return true;
         } else if (error == Errors.OUT_OF_ORDER_SEQUENCE_NUMBER) {
             if (!hasUnresolvedSequence(batch.topicPartition) &&
@@ -961,12 +976,16 @@ public class TransactionManager {
                 // We should retry the OutOfOrderSequenceException if the batch is _not_ the next batch, ie. its base
                 // sequence isn't the lastAckedSequence + 1.
                 return true;
-            } /* else if (!isTransactional() && hasUnresolvedSequence(batch.topicPartition) &&
-                    isNextSequenceForUnresolvedPartition(batch.topicPartition, batch.baseSequence())) {
-                epochBumpRequired = true;
-                this.partitionsWithUnresolvedSequences.remove(batch.topicPartition);
+            } else if (!isTransactional() && hasUnresolvedSequence(batch.topicPartition)) {
+                // For the idempotent producer, retry all OUT_OF_ORDER_SEQUENCE_NUMBER errors. If this batch is the
+                // one immediately following an unresolved sequence, we know that the unresolved sequence actually
+                // failed, and we bump the epoch. Otherwise, retry without bumping and wait to see if the sequence resolves
+                if (isNextSequenceForUnresolvedPartition(batch.topicPartition, batch.baseSequence())) {
+                    epochBumpRequired = true;
+                    this.partitionsToRewriteSequences.add(batch.topicPartition);
+                }
                 return true;
-            }*/
+            }
         }
 
         // If neither of the above cases are true, retry if the exception is retriable

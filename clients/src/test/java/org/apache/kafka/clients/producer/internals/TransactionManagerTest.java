@@ -648,7 +648,7 @@ public class TransactionManagerTest {
         // Run sender loop to trigger epoch bump
         sender.runOnce();
         assertEquals(2, transactionManager.producerIdAndEpoch().epoch);
-        assertEquals(1, b2.producerEpoch());
+        assertEquals(2, b2.producerEpoch());
         assertEquals(0, b2.baseSequence());
         assertEquals(1, b3.baseSequence());
         assertEquals(2, b4.baseSequence());
@@ -2654,7 +2654,7 @@ public class TransactionManagerTest {
         assertEquals(producerIdAndEpoch, transactionManager.producerIdAndEpoch());
         assertTrue(transactionManager.hasUnresolvedSequences());
 
-        // When the last inflight batch fails, we have to reset the producerId
+        // When the last inflight batch fails, we have to bump the epoch
         transactionManager.handleFailedBatch(b3, new TimeoutException(), false);
 
         // Run sender loop to trigger epoch bump

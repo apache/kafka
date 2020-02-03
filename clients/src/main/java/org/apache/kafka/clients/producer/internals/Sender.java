@@ -687,8 +687,9 @@ public class Sender implements Runnable {
         return !batch.hasReachedDeliveryTimeout(accumulator.getDeliveryTimeoutMs(), now) &&
             batch.attempts() < this.retries &&
             !batch.isDone() &&
-            ((transactionManager == null && response.error.exception() instanceof RetriableException) ||
-                (transactionManager != null && transactionManager.canRetry(response, batch)));
+            (transactionManager == null ?
+                    response.error.exception() instanceof RetriableException :
+                    transactionManager.canRetry(response, batch));
     }
 
     /**
