@@ -18,6 +18,7 @@ package org.apache.kafka.streams.integration;
 
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.KafkaStreams;
+import org.apache.kafka.streams.StoreQueryParams;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
@@ -93,7 +94,7 @@ public class StreamStreamJoinIntegrationTest extends AbstractJoinIntegrationTest
 
             kafkaStreams.start();
             latch.await();
-            assertThrows(InvalidStateStoreException.class, () -> kafkaStreams.store("join-store", QueryableStoreTypes.keyValueStore()));
+            assertThrows(InvalidStateStoreException.class, () -> kafkaStreams.store(StoreQueryParams.fromNameAndType("join-store", QueryableStoreTypes.keyValueStore())));
         }
     }
 

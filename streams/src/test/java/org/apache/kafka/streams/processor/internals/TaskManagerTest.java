@@ -704,8 +704,6 @@ public class TaskManagerTest {
     }
 
     private static class StateMachineTask extends AbstractTask implements Task {
-        private final TaskId id;
-        private final Set<TopicPartition> partitions;
         private final boolean active;
         private boolean commitNeeded = false;
         private boolean commitRequested = false;
@@ -715,8 +713,7 @@ public class TaskManagerTest {
         StateMachineTask(final TaskId id,
                          final Set<TopicPartition> partitions,
                          final boolean active) {
-            this.id = id;
-            this.partitions = partitions;
+            super(id, null, null, null, partitions);
             this.active = active;
         }
 
@@ -751,9 +748,7 @@ public class TaskManagerTest {
         }
 
         @Override
-        public void commit() {
-
-        }
+        public void commit() {}
 
         @Override
         public void suspend() {
@@ -782,16 +777,6 @@ public class TaskManagerTest {
         @Override
         public StateStore getStore(final String name) {
             return null;
-        }
-
-        @Override
-        public TaskId id() {
-            return id;
-        }
-
-        @Override
-        public Set<TopicPartition> inputPartitions() {
-            return partitions;
         }
 
         @Override

@@ -139,11 +139,11 @@ public abstract class AbstractResponse implements AbstractRequestResponse {
             case TXN_OFFSET_COMMIT:
                 return new TxnOffsetCommitResponse(struct, version);
             case DESCRIBE_ACLS:
-                return new DescribeAclsResponse(struct);
+                return new DescribeAclsResponse(struct, version);
             case CREATE_ACLS:
-                return new CreateAclsResponse(struct);
+                return new CreateAclsResponse(struct, version);
             case DELETE_ACLS:
-                return new DeleteAclsResponse(struct);
+                return new DeleteAclsResponse(struct, version);
             case DESCRIBE_CONFIGS:
                 return new DescribeConfigsResponse(struct);
             case ALTER_CONFIGS:

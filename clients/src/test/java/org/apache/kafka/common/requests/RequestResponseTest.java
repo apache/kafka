@@ -43,21 +43,25 @@ import org.apache.kafka.common.message.ControlledShutdownRequestData;
 import org.apache.kafka.common.message.ControlledShutdownResponseData;
 import org.apache.kafka.common.message.ControlledShutdownResponseData.RemainingPartition;
 import org.apache.kafka.common.message.ControlledShutdownResponseData.RemainingPartitionCollection;
+import org.apache.kafka.common.message.CreateAclsRequestData;
+import org.apache.kafka.common.message.CreateAclsResponseData;
 import org.apache.kafka.common.message.CreateDelegationTokenRequestData;
 import org.apache.kafka.common.message.CreateDelegationTokenRequestData.CreatableRenewers;
 import org.apache.kafka.common.message.CreateDelegationTokenResponseData;
-import org.apache.kafka.common.message.CreateTopicsRequestData;
 import org.apache.kafka.common.message.CreatePartitionsRequestData;
-import org.apache.kafka.common.message.CreatePartitionsRequestData.CreatePartitionsTopic;
 import org.apache.kafka.common.message.CreatePartitionsRequestData.CreatePartitionsAssignment;
+import org.apache.kafka.common.message.CreatePartitionsRequestData.CreatePartitionsTopic;
 import org.apache.kafka.common.message.CreatePartitionsResponseData;
 import org.apache.kafka.common.message.CreatePartitionsResponseData.CreatePartitionsTopicResult;
+import org.apache.kafka.common.message.CreateTopicsRequestData;
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableReplicaAssignment;
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopic;
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreateableTopicConfig;
 import org.apache.kafka.common.message.CreateTopicsResponseData;
 import org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicConfigs;
 import org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicResult;
+import org.apache.kafka.common.message.DeleteAclsRequestData;
+import org.apache.kafka.common.message.DeleteAclsResponseData;
 import org.apache.kafka.common.message.DeleteGroupsRequestData;
 import org.apache.kafka.common.message.DeleteGroupsResponseData;
 import org.apache.kafka.common.message.DeleteGroupsResponseData.DeletableGroupResult;
@@ -65,6 +69,9 @@ import org.apache.kafka.common.message.DeleteGroupsResponseData.DeletableGroupRe
 import org.apache.kafka.common.message.DeleteTopicsRequestData;
 import org.apache.kafka.common.message.DeleteTopicsResponseData;
 import org.apache.kafka.common.message.DeleteTopicsResponseData.DeletableTopicResult;
+import org.apache.kafka.common.message.DescribeAclsResponseData;
+import org.apache.kafka.common.message.DescribeAclsResponseData.AclDescription;
+import org.apache.kafka.common.message.DescribeAclsResponseData.DescribeAclsResource;
 import org.apache.kafka.common.message.DescribeGroupsRequestData;
 import org.apache.kafka.common.message.DescribeGroupsResponseData;
 import org.apache.kafka.common.message.DescribeGroupsResponseData.DescribedGroup;
@@ -86,6 +93,7 @@ import org.apache.kafka.common.message.InitProducerIdRequestData;
 import org.apache.kafka.common.message.InitProducerIdResponseData;
 import org.apache.kafka.common.message.JoinGroupRequestData;
 import org.apache.kafka.common.message.JoinGroupResponseData;
+import org.apache.kafka.common.message.JoinGroupResponseData.JoinGroupResponseMember;
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState;
 import org.apache.kafka.common.message.LeaderAndIsrResponseData;
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity;
@@ -112,6 +120,9 @@ import org.apache.kafka.common.message.SaslAuthenticateResponseData;
 import org.apache.kafka.common.message.SaslHandshakeRequestData;
 import org.apache.kafka.common.message.SaslHandshakeResponseData;
 import org.apache.kafka.common.message.StopReplicaResponseData;
+import org.apache.kafka.common.message.SyncGroupRequestData;
+import org.apache.kafka.common.message.SyncGroupRequestData.SyncGroupRequestAssignment;
+import org.apache.kafka.common.message.SyncGroupResponseData;
 import org.apache.kafka.common.message.UpdateMetadataRequestData.UpdateMetadataBroker;
 import org.apache.kafka.common.message.UpdateMetadataRequestData.UpdateMetadataEndpoint;
 import org.apache.kafka.common.message.UpdateMetadataRequestData.UpdateMetadataPartitionState;
@@ -126,11 +137,7 @@ import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.SimpleRecord;
-import org.apache.kafka.common.requests.CreateAclsRequest.AclCreation;
-import org.apache.kafka.common.requests.CreateAclsResponse.AclCreationResponse;
 import org.apache.kafka.common.requests.CreateTopicsRequest.Builder;
-import org.apache.kafka.common.requests.DeleteAclsResponse.AclDeletionResult;
-import org.apache.kafka.common.requests.DeleteAclsResponse.AclFilterResponse;
 import org.apache.kafka.common.requests.FindCoordinatorRequest.CoordinatorType;
 import org.apache.kafka.common.resource.PatternType;
 import org.apache.kafka.common.resource.ResourcePattern;
@@ -199,10 +206,19 @@ public class RequestResponseTest {
         checkRequest(createHeartBeatRequest(), true);
         checkErrorResponse(createHeartBeatRequest(), new UnknownServerException(), true);
         checkResponse(createHeartBeatResponse(), 0, true);
-        checkRequest(createJoinGroupRequest(1), true);
-        checkErrorResponse(createJoinGroupRequest(0), new UnknownServerException(), true);
-        checkErrorResponse(createJoinGroupRequest(1), new UnknownServerException(), true);
-        checkResponse(createJoinGroupResponse(), 0, true);
+
+        for (int v = ApiKeys.JOIN_GROUP.oldestVersion(); v <= ApiKeys.JOIN_GROUP.latestVersion(); v++) {
+            checkRequest(createJoinGroupRequest(v), true);
+            checkErrorResponse(createJoinGroupRequest(v), new UnknownServerException(), true);
+            checkResponse(createJoinGroupResponse(v), v, true);
+        }
+
+        for (int v = ApiKeys.SYNC_GROUP.oldestVersion(); v <= ApiKeys.SYNC_GROUP.latestVersion(); v++) {
+            checkRequest(createSyncGroupRequest(v), true);
+            checkErrorResponse(createSyncGroupRequest(v), new UnknownServerException(), true);
+            checkResponse(createSyncGroupResponse(v), v, true);
+        }
+
         checkRequest(createLeaveGroupRequest(), true);
         checkErrorResponse(createLeaveGroupRequest(), new UnknownServerException(), true);
         checkResponse(createLeaveGroupResponse(), 0, true);
@@ -384,8 +400,8 @@ public class RequestResponseTest {
         checkErrorResponse(createTxnOffsetCommitRequest(0), new UnknownServerException(), true);
         checkErrorResponse(createTxnOffsetCommitRequest(3), new UnknownServerException(), true);
         checkResponse(createTxnOffsetCommitResponse(), 0, true);
-        checkRequest(createListAclsRequest(), true);
-        checkErrorResponse(createListAclsRequest(), new SecurityDisabledException("Security is not enabled."), true);
+        checkRequest(createDescribeAclsRequest(), true);
+        checkErrorResponse(createDescribeAclsRequest(), new SecurityDisabledException("Security is not enabled."), true);
         checkResponse(createDescribeAclsResponse(), ApiKeys.DESCRIBE_ACLS.latestVersion(), true);
         checkRequest(createCreateAclsRequest(), true);
         checkErrorResponse(createCreateAclsRequest(), new SecurityDisabledException("Security is not enabled."), true);
@@ -1000,56 +1016,104 @@ public class RequestResponseTest {
     }
 
     private JoinGroupRequest createJoinGroupRequest(int version) {
-        JoinGroupRequestData.JoinGroupRequestProtocolCollection protocols = new JoinGroupRequestData.JoinGroupRequestProtocolCollection(
+        JoinGroupRequestData.JoinGroupRequestProtocolCollection protocols =
+            new JoinGroupRequestData.JoinGroupRequestProtocolCollection(
                 Collections.singleton(
                 new JoinGroupRequestData.JoinGroupRequestProtocol()
                         .setName("consumer-range")
                         .setMetadata(new byte[0])).iterator()
         );
-        if (version <= 4) {
-            return new JoinGroupRequest.Builder(
-                    new JoinGroupRequestData()
-                            .setGroupId("group1")
-                            .setSessionTimeoutMs(30000)
-                            .setMemberId("consumer1")
-                            .setGroupInstanceId(null)
-                            .setProtocolType("consumer")
-                            .setProtocols(protocols)
-                            .setRebalanceTimeoutMs(60000)) // v1 and above contains rebalance timeout
-                    .build((short) version);
-        } else {
-            return new JoinGroupRequest.Builder(
-                    new JoinGroupRequestData()
-                            .setGroupId("group1")
-                            .setSessionTimeoutMs(30000)
-                            .setMemberId("consumer1")
-                            .setGroupInstanceId("groupInstanceId") // v5 and above could set group instance id
-                            .setProtocolType("consumer")
-                            .setProtocols(protocols)
-                            .setRebalanceTimeoutMs(60000)) // v1 and above contains rebalance timeout
-                    .build((short) version);
-        }
+
+        JoinGroupRequestData data = new JoinGroupRequestData()
+            .setGroupId("group1")
+            .setSessionTimeoutMs(30000)
+            .setMemberId("consumer1")
+            .setProtocolType("consumer")
+            .setProtocols(protocols);
+
+        // v1 and above contains rebalance timeout
+        if (version >= 1)
+            data.setRebalanceTimeoutMs(60000);
+
+        // v5 and above could set group instance id
+        if (version >= 5)
+            data.setGroupInstanceId("groupInstanceId");
+
+        return new JoinGroupRequest.Builder(data).build((short) version);
     }
 
-    private JoinGroupResponse createJoinGroupResponse() {
-        List<JoinGroupResponseData.JoinGroupResponseMember> members = Arrays.asList(
-                new JoinGroupResponseData.JoinGroupResponseMember()
-                        .setMemberId("consumer1")
-                        .setMetadata(new byte[0]),
-                new JoinGroupResponseData.JoinGroupResponseMember()
-                        .setMemberId("consumer2")
-                        .setMetadata(new byte[0])
+    private JoinGroupResponse createJoinGroupResponse(int version) {
+        List<JoinGroupResponseData.JoinGroupResponseMember> members = new ArrayList<>();
+
+        for (int i = 0; i < 2; i++) {
+            JoinGroupResponseMember member = new JoinGroupResponseData.JoinGroupResponseMember()
+                .setMemberId("consumer" + i)
+                .setMetadata(new byte[0]);
+
+            if (version >= 5)
+                member.setGroupInstanceId("instance" + i);
+
+            members.add(member);
+        }
+
+        JoinGroupResponseData data = new JoinGroupResponseData()
+            .setErrorCode(Errors.NONE.code())
+            .setGenerationId(1)
+            .setProtocolType("consumer") // Added in v7 but ignorable
+            .setProtocolName("range")
+            .setLeader("leader")
+            .setMemberId("consumer1")
+            .setMembers(members);
+
+        // v1 and above could set throttle time
+        if (version >= 1)
+            data.setThrottleTimeMs(1000);
+
+        return new JoinGroupResponse(data);
+    }
+
+    private SyncGroupRequest createSyncGroupRequest(int version) {
+        List<SyncGroupRequestAssignment> assignments = Collections.singletonList(
+            new SyncGroupRequestAssignment()
+                .setMemberId("member")
+                .setAssignment(new byte[0])
         );
 
-        return new JoinGroupResponse(
-                new JoinGroupResponseData()
-                        .setErrorCode(Errors.NONE.code())
-                        .setGenerationId(1)
-                        .setProtocolName("range")
-                        .setLeader("leader")
-                        .setMemberId("consumer1")
-                        .setMembers(members)
-        );
+        SyncGroupRequestData data = new SyncGroupRequestData()
+            .setGroupId("group1")
+            .setGenerationId(1)
+            .setMemberId("member")
+            .setProtocolType("consumer") // Added in v5 but ignorable
+            .setProtocolName("range")    // Added in v5 but ignorable
+            .setAssignments(assignments);
+
+        JoinGroupRequestData.JoinGroupRequestProtocolCollection protocols =
+            new JoinGroupRequestData.JoinGroupRequestProtocolCollection(
+                Collections.singleton(
+                    new JoinGroupRequestData.JoinGroupRequestProtocol()
+                        .setName("consumer-range")
+                        .setMetadata(new byte[0])).iterator()
+            );
+
+        // v3 and above could set group instance id
+        if (version >= 3)
+            data.setGroupInstanceId("groupInstanceId");
+
+        return new SyncGroupRequest.Builder(data).build((short) version);
+    }
+
+    private SyncGroupResponse createSyncGroupResponse(int version) {
+        SyncGroupResponseData data = new SyncGroupResponseData()
+            .setErrorCode(Errors.NONE.code())
+            .setProtocolType("consumer") // Added in v5 but ignorable
+            .setProtocolName("range")    // Added in v5 but ignorable
+            .setAssignment(new byte[0]);
+
+        // v1 and above could set throttle time
+        if (version >= 1)
+            data.setThrottleTimeMs(1000);
+
+        return new SyncGroupResponse(data);
     }
 
     private ListGroupsRequest createListGroupsRequest() {
@@ -1692,57 +1756,96 @@ public class RequestResponseTest {
         return new TxnOffsetCommitResponse(0, errorPerPartitions);
     }
 
-    private DescribeAclsRequest createListAclsRequest() {
+    private DescribeAclsRequest createDescribeAclsRequest() {
         return new DescribeAclsRequest.Builder(new AclBindingFilter(
                 new ResourcePatternFilter(ResourceType.TOPIC, "mytopic", PatternType.LITERAL),
                 new AccessControlEntryFilter(null, null, AclOperation.ANY, AclPermissionType.ANY))).build();
     }
 
     private DescribeAclsResponse createDescribeAclsResponse() {
-        return new DescribeAclsResponse(0, ApiError.NONE, Collections.singleton(new AclBinding(
-            new ResourcePattern(ResourceType.TOPIC, "mytopic", PatternType.LITERAL),
-            new AccessControlEntry("User:ANONYMOUS", "*", AclOperation.WRITE, AclPermissionType.ALLOW))));
+        DescribeAclsResponseData data = new DescribeAclsResponseData()
+                .setErrorCode(Errors.NONE.code())
+                .setErrorMessage(Errors.NONE.message())
+                .setThrottleTimeMs(0)
+                .setResources(Collections.singletonList(new DescribeAclsResource()
+                        .setType(ResourceType.TOPIC.code())
+                        .setName("mytopic")
+                        .setPatternType(PatternType.LITERAL.code())
+                        .setAcls(Collections.singletonList(new AclDescription()
+                                .setHost("*")
+                                .setOperation(AclOperation.WRITE.code())
+                                .setPermissionType(AclPermissionType.ALLOW.code())
+                                .setPrincipal("User:ANONYMOUS")))));
+        return new DescribeAclsResponse(data);
     }
 
     private CreateAclsRequest createCreateAclsRequest() {
-        List<AclCreation> creations = new ArrayList<>();
-        creations.add(new AclCreation(new AclBinding(
+        List<CreateAclsRequestData.AclCreation> creations = new ArrayList<>();
+        creations.add(CreateAclsRequest.aclCreation(new AclBinding(
             new ResourcePattern(ResourceType.TOPIC, "mytopic", PatternType.LITERAL),
             new AccessControlEntry("User:ANONYMOUS", "127.0.0.1", AclOperation.READ, AclPermissionType.ALLOW))));
-        creations.add(new AclCreation(new AclBinding(
+        creations.add(CreateAclsRequest.aclCreation(new AclBinding(
             new ResourcePattern(ResourceType.GROUP, "mygroup", PatternType.LITERAL),
             new AccessControlEntry("User:ANONYMOUS", "*", AclOperation.WRITE, AclPermissionType.DENY))));
-        return new CreateAclsRequest.Builder(creations).build();
+        CreateAclsRequestData data = new CreateAclsRequestData().setCreations(creations);
+        return new CreateAclsRequest.Builder(data).build();
     }
 
     private CreateAclsResponse createCreateAclsResponse() {
-        return new CreateAclsResponse(0, Arrays.asList(new AclCreationResponse(ApiError.NONE),
-            new AclCreationResponse(new ApiError(Errors.INVALID_REQUEST, "Foo bar"))));
+        return new CreateAclsResponse(new CreateAclsResponseData().setResults(asList(
+            new CreateAclsResponseData.AclCreationResult(),
+            new CreateAclsResponseData.AclCreationResult()
+                .setErrorCode(Errors.INVALID_REQUEST.code())
+                .setErrorMessage("Foo bar"))));
     }
 
     private DeleteAclsRequest createDeleteAclsRequest() {
-        List<AclBindingFilter> filters = new ArrayList<>();
-        filters.add(new AclBindingFilter(
-            new ResourcePatternFilter(ResourceType.ANY, null, PatternType.LITERAL),
-            new AccessControlEntryFilter("User:ANONYMOUS", null, AclOperation.ANY, AclPermissionType.ANY)));
-        filters.add(new AclBindingFilter(
-            new ResourcePatternFilter(ResourceType.ANY, null, PatternType.LITERAL),
-            new AccessControlEntryFilter("User:bob", null, AclOperation.ANY, AclPermissionType.ANY)));
-        return new DeleteAclsRequest.Builder(filters).build();
+        DeleteAclsRequestData data = new DeleteAclsRequestData().setFilters(asList(
+            new DeleteAclsRequestData.DeleteAclsFilter()
+                .setResourceTypeFilter(ResourceType.ANY.code())
+                .setResourceNameFilter(null)
+                .setPatternTypeFilter(PatternType.LITERAL.code())
+                .setPrincipalFilter("User:ANONYMOUS")
+                .setHostFilter(null)
+                .setOperation(AclOperation.ANY.code())
+                .setPermissionType(AclPermissionType.ANY.code()),
+            new DeleteAclsRequestData.DeleteAclsFilter()
+                .setResourceTypeFilter(ResourceType.ANY.code())
+                .setResourceNameFilter(null)
+                .setPatternTypeFilter(PatternType.LITERAL.code())
+                .setPrincipalFilter("User:bob")
+                .setHostFilter(null)
+                .setOperation(AclOperation.ANY.code())
+                .setPermissionType(AclPermissionType.ANY.code())
+        ));
+        return new DeleteAclsRequest.Builder(data).build();
     }
 
     private DeleteAclsResponse createDeleteAclsResponse() {
-        List<AclFilterResponse> responses = new ArrayList<>();
-        responses.add(new AclFilterResponse(Utils.mkSet(
-                new AclDeletionResult(new AclBinding(
-                        new ResourcePattern(ResourceType.TOPIC, "mytopic3", PatternType.LITERAL),
-                        new AccessControlEntry("User:ANONYMOUS", "*", AclOperation.DESCRIBE, AclPermissionType.ALLOW))),
-                new AclDeletionResult(new AclBinding(
-                        new ResourcePattern(ResourceType.TOPIC, "mytopic4", PatternType.LITERAL),
-                        new AccessControlEntry("User:ANONYMOUS", "*", AclOperation.DESCRIBE, AclPermissionType.DENY))))));
-        responses.add(new AclFilterResponse(new ApiError(Errors.SECURITY_DISABLED, "No security"),
-            Collections.<AclDeletionResult>emptySet()));
-        return new DeleteAclsResponse(0, responses);
+        List<DeleteAclsResponseData.DeleteAclsFilterResult> filterResults = new ArrayList<>();
+        filterResults.add(new DeleteAclsResponseData.DeleteAclsFilterResult().setMatchingAcls(asList(
+                new DeleteAclsResponseData.DeleteAclsMatchingAcl()
+                    .setResourceType(ResourceType.TOPIC.code())
+                    .setResourceName("mytopic3")
+                    .setPatternType(PatternType.LITERAL.code())
+                    .setPrincipal("User:ANONYMOUS")
+                    .setHost("*")
+                    .setOperation(AclOperation.DESCRIBE.code())
+                    .setPermissionType(AclPermissionType.ALLOW.code()),
+                new DeleteAclsResponseData.DeleteAclsMatchingAcl()
+                    .setResourceType(ResourceType.TOPIC.code())
+                    .setResourceName("mytopic4")
+                    .setPatternType(PatternType.LITERAL.code())
+                    .setPrincipal("User:ANONYMOUS")
+                    .setHost("*")
+                    .setOperation(AclOperation.DESCRIBE.code())
+                    .setPermissionType(AclPermissionType.DENY.code()))));
+        filterResults.add(new DeleteAclsResponseData.DeleteAclsFilterResult()
+            .setErrorCode(Errors.SECURITY_DISABLED.code())
+            .setErrorMessage("No security"));
+        return new DeleteAclsResponse(new DeleteAclsResponseData()
+            .setThrottleTimeMs(0)
+            .setFilterResults(filterResults));
     }
 
     private DescribeConfigsRequest createDescribeConfigsRequest(int version) {

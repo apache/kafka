@@ -238,7 +238,7 @@ class SslAdminIntegrationTest extends SaslSslAdminIntegrationTest {
 
   private def createAdminClient: Admin = {
     val config = createConfig()
-    config.put(AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG, "40000")
+    config.put(AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG, "40000")
     val client = Admin.create(config)
     adminClients += client
     client

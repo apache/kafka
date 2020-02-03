@@ -32,7 +32,6 @@ import org.apache.kafka.streams.processor.Cancellable;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
-import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
@@ -69,17 +68,11 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     // visible for testing
     static final byte LATEST_MAGIC_BYTE = 1;
 
-    private final TaskId id;
-    private final ProcessorTopology topology;
-    private final ProcessorStateManager stateMgr;
-    private final Set<TopicPartition> partitions;
-    private final Consumer<byte[], byte[]> consumer;
-    private final String logPrefix;
     private final Logger log;
-    private final StateDirectory stateDirectory;
-
+    private final String logPrefix;
     private final Time time;
     private final String threadId;
+    private final Consumer<byte[], byte[]> consumer;
 
     // we want to abstract eos logic out of StreamTask, however
     // there's still an optimization that requires this info to be
@@ -118,13 +111,8 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                       final Time time,
                       final ProcessorStateManager stateMgr,
                       final RecordCollector recordCollector) {
-        this.id = id;
-        this.partitions = new HashSet<>(partitions);
-        this.topology = topology;
+        super(id, topology, stateDirectory, stateMgr, partitions);
         this.consumer = consumer;
-        this.stateDirectory = stateDirectory;
-
-        this.stateMgr = stateMgr;
 
         final String threadIdPrefix = format("stream-thread [%s] ", Thread.currentThread().getName());
         logPrefix = threadIdPrefix + format("%s [%s] ", "task", id);
@@ -169,12 +157,12 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         final DeserializationExceptionHandler defaultDeserializationExceptionHandler = config.defaultDeserializationExceptionHandler();
         for (final TopicPartition partition : partitions) {
             final SourceNode source = topology.source(partition.topic());
-            final TimestampExtractor timestampExtractor = source.getTimestampExtractor();
-            final TimestampExtractor sourceTimestampExtractor = timestampExtractor != null ? timestampExtractor : defaultTimestampExtractor;
+            final TimestampExtractor sourceTimestampExtractor = source.getTimestampExtractor();
+            final TimestampExtractor timestampExtractor = sourceTimestampExtractor != null ? sourceTimestampExtractor : defaultTimestampExtractor;
             final RecordQueue queue = new RecordQueue(
                 partition,
                 source,
-                sourceTimestampExtractor,
+                timestampExtractor,
                 defaultDeserializationExceptionHandler,
                 processorContext,
                 logContext
@@ -661,24 +649,23 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
 
     private void closeTopology(final boolean clean) {
         log.trace("Closing processor topology");
-        if (state().hasBeenRunning()) {
-            // close the processors
-            // make sure close() is called for each node even when there is a RuntimeException
-            RuntimeException exception = null;
-            for (final ProcessorNode node : topology.processors()) {
-                processorContext.setCurrentNode(node);
-                try {
-                    node.close();
-                } catch (final RuntimeException e) {
-                    exception = e;
-                } finally {
-                    processorContext.setCurrentNode(null);
-                }
-            }
 
-            if (exception != null && clean) {
-                throw exception;
+        // close the processors
+        // make sure close() is called for each node even when there is a RuntimeException
+        RuntimeException exception = null;
+        for (final ProcessorNode node : topology.processors()) {
+            processorContext.setCurrentNode(node);
+            try {
+                node.close();
+            } catch (final RuntimeException e) {
+                exception = e;
+            } finally {
+                processorContext.setCurrentNode(null);
             }
+        }
+
+        if (exception != null && clean) {
+            throw exception;
         }
     }
 
@@ -850,23 +837,8 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         }
     }
 
-    @Override
-    public TaskId id() {
-        return id;
-    }
-
-    @Override
-    public Set<TopicPartition> inputPartitions() {
-        return partitions;
-    }
-
     public ProcessorContext context() {
         return processorContext;
-    }
-
-    @Override
-    public StateStore getStore(final String name) {
-        return stateMgr.getStore(name);
     }
 
     /**
@@ -908,10 +880,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             sb.append("]\n");
         }
         return sb.toString();
-    }
-
-    public boolean isClosed() {
-        return state() == State.CLOSED;
     }
 
     @Override

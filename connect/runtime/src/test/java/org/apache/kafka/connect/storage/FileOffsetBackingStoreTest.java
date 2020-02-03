@@ -30,8 +30,10 @@ import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.ThreadPoolExecutor;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 
 public class FileOffsetBackingStoreTest {
 
@@ -41,6 +43,8 @@ public class FileOffsetBackingStoreTest {
     File tempFile;
 
     private static Map<ByteBuffer, ByteBuffer> firstSet = new HashMap<>();
+    private static final Runnable EMPTY_RUNNABLE = () -> {
+    };
 
     static {
         firstSet.put(buffer("key"), buffer("value"));
@@ -98,6 +102,12 @@ public class FileOffsetBackingStoreTest {
         assertEquals(buffer("value"), values.get(buffer("key")));
 
         PowerMock.verifyAll();
+    }
+
+    @Test
+    public void testThreadName() {
+        assertTrue(((ThreadPoolExecutor) store.executor).getThreadFactory()
+                .newThread(EMPTY_RUNNABLE).getName().startsWith(FileOffsetBackingStore.class.getSimpleName()));
     }
 
     private static ByteBuffer buffer(String v) {
