@@ -93,7 +93,6 @@ public class TaskManagerTest {
     private final TopicPartition t1p2 = new TopicPartition(topic1, 2);
     private final Set<TopicPartition> taskId02Partitions = mkSet(t1p2);
 
-
     @Mock(type = MockType.STRICT)
     private InternalTopologyBuilder topologyBuilder;
     @Mock(type = MockType.NICE)
@@ -236,15 +235,23 @@ public class TaskManagerTest {
         final Map<TaskId, Set<TopicPartition>> assignment = singletonMap(taskId00, taskId00Partitions);
         final Task task00 = new StateMachineTask(taskId00, taskId00Partitions, true);
 
+        expect(changeLogReader.completedChangelogs()).andReturn(emptySet());
+        expect(consumer.assignment()).andReturn(emptySet());
+        consumer.resume(eq(emptySet()));
+        expectLastCall();
         changeLogReader.transitToRestoreActive();
         expectLastCall();
         expect(activeTaskCreator.createTasks(anyObject(), eq(assignment))).andReturn(singletonList(task00)).anyTimes();
         expect(standbyTaskCreator.createTasks(anyObject(), eq(emptyMap()))).andReturn(emptyList()).anyTimes();
-        replay(activeTaskCreator, standbyTaskCreator, changeLogReader);
+        replay(consumer, activeTaskCreator, standbyTaskCreator, changeLogReader);
 
         taskManager.handleAssignment(assignment, emptyMap());
 
-        assertThat(task00.state(), is(Task.State.RESTORING));
+        assertThat(task00.state(), is(Task.State.CREATED));
+
+        taskManager.checkForCompletedRestoration();
+
+        assertThat(task00.state(), is(Task.State.RUNNING));
         assertThat(taskManager.activeTaskMap(), Matchers.equalTo(singletonMap(taskId00, task00)));
         assertThat(taskManager.standbyTaskMap(), Matchers.anEmptyMap());
         verify(activeTaskCreator);
@@ -300,6 +307,8 @@ public class TaskManagerTest {
 
         EasyMock.resetToStrict(changeLogReader);
         changeLogReader.transitToRestoreActive();
+        expectLastCall();
+        expect(changeLogReader.completedChangelogs()).andReturn(emptySet());
         // make sure we also remove the changelog partitions from the changelog reader
         changeLogReader.remove(eq(singletonList(changelog)));
         expectLastCall();
@@ -310,6 +319,10 @@ public class TaskManagerTest {
         replay(activeTaskCreator, standbyTaskCreator, changeLogReader);
 
         taskManager.handleAssignment(assignment, emptyMap());
+
+        assertThat(task00.state(), is(Task.State.CREATED));
+
+        taskManager.checkForCompletedRestoration();
 
         assertThat(task00.state(), is(Task.State.RESTORING));
         assertThat(taskManager.activeTaskMap(), Matchers.equalTo(singletonMap(taskId00, task00)));
@@ -328,15 +341,23 @@ public class TaskManagerTest {
         final Map<TaskId, Set<TopicPartition>> assignment = singletonMap(taskId00, taskId00Partitions);
         final Task task00 = new StateMachineTask(taskId00, taskId00Partitions, false);
 
+        expect(changeLogReader.completedChangelogs()).andReturn(emptySet());
+        expect(consumer.assignment()).andReturn(emptySet());
+        consumer.resume(eq(emptySet()));
+        expectLastCall();
         expect(activeTaskCreator.createTasks(anyObject(), eq(emptyMap()))).andReturn(emptyList()).anyTimes();
         activeTaskCreator.close();
         expectLastCall();
         expect(standbyTaskCreator.createTasks(anyObject(), eq(assignment))).andReturn(singletonList(task00)).anyTimes();
-        replay(activeTaskCreator, standbyTaskCreator, changeLogReader);
+        replay(consumer, activeTaskCreator, standbyTaskCreator, changeLogReader);
 
         taskManager.handleAssignment(emptyMap(), assignment);
 
-        assertThat(task00.state(), is(Task.State.RESTORING));
+        assertThat(task00.state(), is(Task.State.CREATED));
+
+        taskManager.checkForCompletedRestoration();
+
+        assertThat(task00.state(), is(Task.State.RUNNING));
         assertThat(taskManager.activeTaskMap(), Matchers.anEmptyMap());
         assertThat(taskManager.standbyTaskMap(), Matchers.equalTo(singletonMap(taskId00, task00)));
 
