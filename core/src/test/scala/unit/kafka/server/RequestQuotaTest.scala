@@ -35,9 +35,8 @@ import org.apache.kafka.common.metrics.{KafkaMetric, Quota, Sensor}
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.record._
-import org.apache.kafka.common.requests.CreateAclsRequest.AclCreation
 import org.apache.kafka.common.requests._
-import org.apache.kafka.common.resource.{PatternType, ResourcePattern, ResourcePatternFilter, ResourceType => AdminResourceType}
+import org.apache.kafka.common.resource.{PatternType, ResourceType => AdminResourceType}
 import org.apache.kafka.common.security.auth.{AuthenticationContext, KafkaPrincipal, KafkaPrincipalBuilder, SecurityProtocol}
 import org.apache.kafka.common.utils.{Sanitizer, SecurityUtils}
 import org.apache.kafka.common.{ElectionType, IsolationLevel, Node, TopicPartition}
@@ -414,15 +413,25 @@ class RequestQuotaTest extends BaseRequestTest {
           new DescribeAclsRequest.Builder(AclBindingFilter.ANY)
 
         case ApiKeys.CREATE_ACLS =>
-          new CreateAclsRequest.Builder(Collections.singletonList(new AclCreation(new AclBinding(
-            new ResourcePattern(AdminResourceType.TOPIC, "mytopic", PatternType.LITERAL),
-            new AccessControlEntry("User:ANONYMOUS", "*", AclOperation.WRITE, AclPermissionType.DENY)))))
-
+          new CreateAclsRequest.Builder(new CreateAclsRequestData().setCreations(Collections.singletonList(
+            new CreateAclsRequestData.AclCreation()
+              .setResourceType(AdminResourceType.TOPIC.code)
+              .setResourceName("mytopic")
+              .setResourcePatternType(PatternType.LITERAL.code)
+              .setPrincipal("User:ANONYMOUS")
+              .setHost("*")
+              .setOperation(AclOperation.WRITE.code)
+              .setPermissionType(AclPermissionType.DENY.code))))
         case ApiKeys.DELETE_ACLS =>
-          new DeleteAclsRequest.Builder(Collections.singletonList(new AclBindingFilter(
-            new ResourcePatternFilter(AdminResourceType.TOPIC, null, PatternType.LITERAL),
-            new AccessControlEntryFilter("User:ANONYMOUS", "*", AclOperation.ANY, AclPermissionType.DENY))))
-
+          new DeleteAclsRequest.Builder(new DeleteAclsRequestData().setFilters(Collections.singletonList(
+            new DeleteAclsRequestData.DeleteAclsFilter()
+              .setResourceTypeFilter(AdminResourceType.TOPIC.code)
+              .setResourceNameFilter(null)
+              .setPatternTypeFilter(PatternType.LITERAL.code)
+              .setPrincipalFilter("User:ANONYMOUS")
+              .setHostFilter("*")
+              .setOperation(AclOperation.ANY.code)
+              .setPermissionType(AclPermissionType.DENY.code))))
         case ApiKeys.DESCRIBE_CONFIGS =>
           new DescribeConfigsRequest.Builder(Collections.singleton(new ConfigResource(ConfigResource.Type.TOPIC, tp.topic)))
 

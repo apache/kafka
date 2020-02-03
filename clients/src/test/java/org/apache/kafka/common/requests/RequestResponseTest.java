@@ -43,21 +43,25 @@ import org.apache.kafka.common.message.ControlledShutdownRequestData;
 import org.apache.kafka.common.message.ControlledShutdownResponseData;
 import org.apache.kafka.common.message.ControlledShutdownResponseData.RemainingPartition;
 import org.apache.kafka.common.message.ControlledShutdownResponseData.RemainingPartitionCollection;
+import org.apache.kafka.common.message.CreateAclsRequestData;
+import org.apache.kafka.common.message.CreateAclsResponseData;
 import org.apache.kafka.common.message.CreateDelegationTokenRequestData;
 import org.apache.kafka.common.message.CreateDelegationTokenRequestData.CreatableRenewers;
 import org.apache.kafka.common.message.CreateDelegationTokenResponseData;
-import org.apache.kafka.common.message.CreateTopicsRequestData;
 import org.apache.kafka.common.message.CreatePartitionsRequestData;
-import org.apache.kafka.common.message.CreatePartitionsRequestData.CreatePartitionsTopic;
 import org.apache.kafka.common.message.CreatePartitionsRequestData.CreatePartitionsAssignment;
+import org.apache.kafka.common.message.CreatePartitionsRequestData.CreatePartitionsTopic;
 import org.apache.kafka.common.message.CreatePartitionsResponseData;
 import org.apache.kafka.common.message.CreatePartitionsResponseData.CreatePartitionsTopicResult;
+import org.apache.kafka.common.message.CreateTopicsRequestData;
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableReplicaAssignment;
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopic;
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreateableTopicConfig;
 import org.apache.kafka.common.message.CreateTopicsResponseData;
 import org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicConfigs;
 import org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicResult;
+import org.apache.kafka.common.message.DeleteAclsRequestData;
+import org.apache.kafka.common.message.DeleteAclsResponseData;
 import org.apache.kafka.common.message.DeleteGroupsRequestData;
 import org.apache.kafka.common.message.DeleteGroupsResponseData;
 import org.apache.kafka.common.message.DeleteGroupsResponseData.DeletableGroupResult;
@@ -133,11 +137,7 @@ import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.SimpleRecord;
-import org.apache.kafka.common.requests.CreateAclsRequest.AclCreation;
-import org.apache.kafka.common.requests.CreateAclsResponse.AclCreationResponse;
 import org.apache.kafka.common.requests.CreateTopicsRequest.Builder;
-import org.apache.kafka.common.requests.DeleteAclsResponse.AclDeletionResult;
-import org.apache.kafka.common.requests.DeleteAclsResponse.AclFilterResponse;
 import org.apache.kafka.common.requests.FindCoordinatorRequest.CoordinatorType;
 import org.apache.kafka.common.resource.PatternType;
 import org.apache.kafka.common.resource.ResourcePattern;
@@ -1780,44 +1780,72 @@ public class RequestResponseTest {
     }
 
     private CreateAclsRequest createCreateAclsRequest() {
-        List<AclCreation> creations = new ArrayList<>();
-        creations.add(new AclCreation(new AclBinding(
+        List<CreateAclsRequestData.AclCreation> creations = new ArrayList<>();
+        creations.add(CreateAclsRequest.aclCreation(new AclBinding(
             new ResourcePattern(ResourceType.TOPIC, "mytopic", PatternType.LITERAL),
             new AccessControlEntry("User:ANONYMOUS", "127.0.0.1", AclOperation.READ, AclPermissionType.ALLOW))));
-        creations.add(new AclCreation(new AclBinding(
+        creations.add(CreateAclsRequest.aclCreation(new AclBinding(
             new ResourcePattern(ResourceType.GROUP, "mygroup", PatternType.LITERAL),
             new AccessControlEntry("User:ANONYMOUS", "*", AclOperation.WRITE, AclPermissionType.DENY))));
-        return new CreateAclsRequest.Builder(creations).build();
+        CreateAclsRequestData data = new CreateAclsRequestData().setCreations(creations);
+        return new CreateAclsRequest.Builder(data).build();
     }
 
     private CreateAclsResponse createCreateAclsResponse() {
-        return new CreateAclsResponse(0, Arrays.asList(new AclCreationResponse(ApiError.NONE),
-            new AclCreationResponse(new ApiError(Errors.INVALID_REQUEST, "Foo bar"))));
+        return new CreateAclsResponse(new CreateAclsResponseData().setResults(asList(
+            new CreateAclsResponseData.AclCreationResult(),
+            new CreateAclsResponseData.AclCreationResult()
+                .setErrorCode(Errors.INVALID_REQUEST.code())
+                .setErrorMessage("Foo bar"))));
     }
 
     private DeleteAclsRequest createDeleteAclsRequest() {
-        List<AclBindingFilter> filters = new ArrayList<>();
-        filters.add(new AclBindingFilter(
-            new ResourcePatternFilter(ResourceType.ANY, null, PatternType.LITERAL),
-            new AccessControlEntryFilter("User:ANONYMOUS", null, AclOperation.ANY, AclPermissionType.ANY)));
-        filters.add(new AclBindingFilter(
-            new ResourcePatternFilter(ResourceType.ANY, null, PatternType.LITERAL),
-            new AccessControlEntryFilter("User:bob", null, AclOperation.ANY, AclPermissionType.ANY)));
-        return new DeleteAclsRequest.Builder(filters).build();
+        DeleteAclsRequestData data = new DeleteAclsRequestData().setFilters(asList(
+            new DeleteAclsRequestData.DeleteAclsFilter()
+                .setResourceTypeFilter(ResourceType.ANY.code())
+                .setResourceNameFilter(null)
+                .setPatternTypeFilter(PatternType.LITERAL.code())
+                .setPrincipalFilter("User:ANONYMOUS")
+                .setHostFilter(null)
+                .setOperation(AclOperation.ANY.code())
+                .setPermissionType(AclPermissionType.ANY.code()),
+            new DeleteAclsRequestData.DeleteAclsFilter()
+                .setResourceTypeFilter(ResourceType.ANY.code())
+                .setResourceNameFilter(null)
+                .setPatternTypeFilter(PatternType.LITERAL.code())
+                .setPrincipalFilter("User:bob")
+                .setHostFilter(null)
+                .setOperation(AclOperation.ANY.code())
+                .setPermissionType(AclPermissionType.ANY.code())
+        ));
+        return new DeleteAclsRequest.Builder(data).build();
     }
 
     private DeleteAclsResponse createDeleteAclsResponse() {
-        List<AclFilterResponse> responses = new ArrayList<>();
-        responses.add(new AclFilterResponse(Utils.mkSet(
-                new AclDeletionResult(new AclBinding(
-                        new ResourcePattern(ResourceType.TOPIC, "mytopic3", PatternType.LITERAL),
-                        new AccessControlEntry("User:ANONYMOUS", "*", AclOperation.DESCRIBE, AclPermissionType.ALLOW))),
-                new AclDeletionResult(new AclBinding(
-                        new ResourcePattern(ResourceType.TOPIC, "mytopic4", PatternType.LITERAL),
-                        new AccessControlEntry("User:ANONYMOUS", "*", AclOperation.DESCRIBE, AclPermissionType.DENY))))));
-        responses.add(new AclFilterResponse(new ApiError(Errors.SECURITY_DISABLED, "No security"),
-            Collections.<AclDeletionResult>emptySet()));
-        return new DeleteAclsResponse(0, responses);
+        List<DeleteAclsResponseData.DeleteAclsFilterResult> filterResults = new ArrayList<>();
+        filterResults.add(new DeleteAclsResponseData.DeleteAclsFilterResult().setMatchingAcls(asList(
+                new DeleteAclsResponseData.DeleteAclsMatchingAcl()
+                    .setResourceType(ResourceType.TOPIC.code())
+                    .setResourceName("mytopic3")
+                    .setPatternType(PatternType.LITERAL.code())
+                    .setPrincipal("User:ANONYMOUS")
+                    .setHost("*")
+                    .setOperation(AclOperation.DESCRIBE.code())
+                    .setPermissionType(AclPermissionType.ALLOW.code()),
+                new DeleteAclsResponseData.DeleteAclsMatchingAcl()
+                    .setResourceType(ResourceType.TOPIC.code())
+                    .setResourceName("mytopic4")
+                    .setPatternType(PatternType.LITERAL.code())
+                    .setPrincipal("User:ANONYMOUS")
+                    .setHost("*")
+                    .setOperation(AclOperation.DESCRIBE.code())
+                    .setPermissionType(AclPermissionType.DENY.code()))));
+        filterResults.add(new DeleteAclsResponseData.DeleteAclsFilterResult()
+            .setErrorCode(Errors.SECURITY_DISABLED.code())
+            .setErrorMessage("No security"));
+        return new DeleteAclsResponse(new DeleteAclsResponseData()
+            .setThrottleTimeMs(0)
+            .setFilterResults(filterResults));
     }
 
     private DescribeConfigsRequest createDescribeConfigsRequest(int version) {
