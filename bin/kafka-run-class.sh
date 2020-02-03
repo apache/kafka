@@ -21,7 +21,7 @@ then
 fi
 
 # CYGWIN == 1 if Cygwin is detected, else 0.
-if  [[ $(uname -s) != "OS/390" ]] && [[ $(uname -a) =~ "CYGWIN" ]]; then
+if [[ $(uname -a) =~ "CYGWIN" ]]; then
   CYGWIN=1
 else
   CYGWIN=0
@@ -56,10 +56,7 @@ if [ -z "$SCALA_BINARY_VERSION" ]; then
 fi
 
 # run ./gradlew copyDependantLibs to get all dependant jars in a local dir
-if [[ $(uname -s) != "OS/390" ]] ; then
-  shopt -s nullglob
-fi
-
+shopt -s nullglob
 if [ -z "$UPGRADE_KAFKA_STREAMS_TEST_VERSION" ]; then
   for dir in "$base_dir"/core/build/dependant-libs-${SCALA_VERSION}*;
   do
@@ -84,6 +81,7 @@ else
   streams_dependant_clients_lib_dir=$streams_lib_dir
 fi
 
+
 for file in "$clients_lib_dir"/kafka-clients*.jar;
 do
   if should_include_file "$file"; then
@@ -106,8 +104,8 @@ if [ -z "$UPGRADE_KAFKA_STREAMS_TEST_VERSION" ]; then
     fi
   done
 else
-  SHORT_VERSION=${UPGRADE_KAFKA_STREAMS_TEST_VERSION%.?} # remove last number, ie, bug-fix number
-  SHORT_VERSION_NO_DOTS=`echo $SHORT_VERSION | sed 's/\.//g'`
+  VERSION_NO_DOTS=`echo $UPGRADE_KAFKA_STREAMS_TEST_VERSION | sed 's/\.//g'`
+  SHORT_VERSION_NO_DOTS=${VERSION_NO_DOTS:0:((${#VERSION_NO_DOTS} - 1))} # remove last char, ie, bug-fix number
   for file in "$base_dir"/streams/upgrade-system-tests-$SHORT_VERSION_NO_DOTS/build/libs/kafka-streams-upgrade-system-tests*.jar;
   do
     if should_include_file "$file"; then
@@ -173,10 +171,7 @@ do
     CLASSPATH="$CLASSPATH":"$file"
   fi
 done
-
-if [[ $(uname -s) != "OS/390" ]] ; then
-  shopt -u nullglob
-fi
+shopt -u nullglob
 
 if [ -z "$CLASSPATH" ] ; then
   echo "Classpath is empty. Please build the project first e.g. by running './gradlew jar -PscalaVersion=$SCALA_VERSION'"
@@ -203,9 +198,7 @@ if [ -z "$KAFKA_LOG4J_OPTS" ]; then
   # Log to console. This is a tool.
   LOG4J_DIR="$base_dir/config/tools-log4j.properties"
   # If Cygwin is detected, LOG4J_DIR is converted to Windows format.
-  if [[ $(uname -s) != "OS/390" ]] ; then
-    (( CYGWIN )) && LOG4J_DIR=$(cygpath --path --mixed "${LOG4J_DIR}")
-  fi
+  (( CYGWIN )) && LOG4J_DIR=$(cygpath --path --mixed "${LOG4J_DIR}")
   KAFKA_LOG4J_OPTS="-Dlog4j.configuration=file:${LOG4J_DIR}"
 else
   # create logs directory
@@ -215,9 +208,7 @@ else
 fi
 
 # If Cygwin is detected, LOG_DIR is converted to Windows format.
-if [[ $(uname -s) != "OS/390" ]] ; then
-  (( CYGWIN )) && LOG_DIR=$(cygpath --path --mixed "${LOG_DIR}")
-fi  
+(( CYGWIN )) && LOG_DIR=$(cygpath --path --mixed "${LOG_DIR}")
 KAFKA_LOG4J_OPTS="-Dkafka.logs.dir=$LOG_DIR $KAFKA_LOG4J_OPTS"
 
 # Generic jvm settings you want to add
@@ -314,9 +305,7 @@ fi
 CLASSPATH=${CLASSPATH#:}
 
 # If Cygwin is detected, classpath is converted to Windows format.
-if [[ $(uname -s) != "OS/390" ]] ; then
-  (( CYGWIN )) && CLASSPATH=$(cygpath --path --mixed "${CLASSPATH}")
-fi  
+(( CYGWIN )) && CLASSPATH=$(cygpath --path --mixed "${CLASSPATH}")
 
 # Launch mode
 if [ "x$DAEMON_MODE" = "xtrue" ]; then

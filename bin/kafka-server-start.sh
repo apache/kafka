@@ -26,11 +26,7 @@ if [ "x$KAFKA_LOG4J_OPTS" = "x" ]; then
 fi
 
 if [ "x$KAFKA_HEAP_OPTS" = "x" ]; then
-  if [[ $(uname -s) != "OS/390" ]] ; then
     export KAFKA_HEAP_OPTS="-Xmx1G -Xms1G"
-  else  
-    export KAFKA_HEAP_OPTS="-Xmx1G -Xms1G -Xnocompressedrefs"
-  fi  
 fi
 
 EXTRA_ARGS=${EXTRA_ARGS-'-name kafkaServer -loggc'}
