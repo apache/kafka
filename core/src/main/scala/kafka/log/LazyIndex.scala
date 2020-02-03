@@ -89,7 +89,8 @@ class LazyIndex[T <: AbstractIndex] private (@volatile private var indexWrapper:
 
   /**
    * Delete the index file that backs this index if exists.
-   * This method ensures that if the index file has already been closed, it will not be recreated as a side effect.
+   * This method ensures that if the index file has already been closed or in case it has not been created before,
+   * it will not be recreated as a side effect.
    *
    * @throws IOException if deletion fails due to an I/O error
    * @return `true` if the file was deleted by this method; `false` if the file could not be deleted because it did
@@ -98,8 +99,14 @@ class LazyIndex[T <: AbstractIndex] private (@volatile private var indexWrapper:
   def deleteIfExists(): Boolean = {
     if (isClosed)
       Files.deleteIfExists(file.toPath)
-    else
-      get.deleteIfExists()
+    else {
+      inLock(lock) {
+        indexWrapper match {
+          case indexValue: IndexValue[T] => indexValue.index.deleteIfExists()
+          case _: IndexFile => Files.deleteIfExists(file.toPath)
+        }
+      }
+    }
   }
 
   /**
