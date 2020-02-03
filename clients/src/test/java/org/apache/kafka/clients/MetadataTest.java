@@ -666,7 +666,7 @@ public class MetadataTest {
 
         assertNull(metadata.fetch().leaderFor(tp));
         assertEquals(Optional.of(10), metadata.lastSeenLeaderEpoch(tp));
-        assertFalse(metadata.currentLeader(tp).isPresent());
+        assertFalse(metadata.currentLeader(tp).leader.isPresent());
     }
 
     private MetadataResponseTopicCollection buildTopicCollection(String topic, MetadataResponsePartition partitionMetadata) {

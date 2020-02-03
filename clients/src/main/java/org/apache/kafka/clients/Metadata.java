@@ -151,6 +151,8 @@ public class Metadata implements Closeable {
      */
     public synchronized boolean updateLastSeenEpochIfNewer(TopicPartition topicPartition, int leaderEpoch) {
         Objects.requireNonNull(topicPartition, "TopicPartition cannot be null");
+        if (leaderEpoch < 0)
+            throw new IllegalArgumentException("Invalid leader epoch " + leaderEpoch + " (must be non-negative)");
         return updateLastSeenEpoch(topicPartition, leaderEpoch, oldEpoch -> leaderEpoch > oldEpoch, true);
     }
 
@@ -211,19 +213,15 @@ public class Metadata implements Closeable {
         }
     }
 
-    public synchronized Optional<LeaderAndEpoch> currentLeader(TopicPartition topicPartition) {
+    public synchronized LeaderAndEpoch currentLeader(TopicPartition topicPartition) {
         Optional<MetadataResponse.PartitionMetadata> maybeMetadata = partitionMetadataIfCurrent(topicPartition);
         if (!maybeMetadata.isPresent())
-            return Optional.empty();
+            return new LeaderAndEpoch(Optional.empty(), Optional.ofNullable(lastSeenLeaderEpochs.get(topicPartition)));
 
         MetadataResponse.PartitionMetadata partitionMetadata = maybeMetadata.get();
         Optional<Integer> leaderEpoch = partitionMetadata.leaderEpoch;
         Optional<Node> leaderNodeOpt = cache.nodeById(partitionMetadata.leaderId);
-        return leaderNodeOpt.map(leaderNode -> new LeaderAndEpoch(leaderNode, leaderEpoch));
-    }
-
-    public synchronized LeaderAndEpoch currentLeaderOrEmpty(TopicPartition tp) {
-        return currentLeader(tp).orElse(new LeaderAndEpoch(Node.noNode(), lastSeenLeaderEpoch(tp)));
+        return new LeaderAndEpoch(leaderNodeOpt, leaderEpoch);
     }
 
     public synchronized void bootstrap(List<InetSocketAddress> addresses) {
@@ -508,14 +506,20 @@ public class Metadata implements Closeable {
         }
     }
 
+    /**
+     * Represents current leader state known in metadata. It is possible that we know the leader, but not the
+     * epoch if the metadata is received from a broker which does not support a sufficient Metadata API version.
+     * It is also possible that we know of the leader epoch, but not the leader when it is derived
+     * from an external source (e.g. a committed offset).
+     */
     public static class LeaderAndEpoch {
 
-        public static final LeaderAndEpoch NO_LEADER_OR_EPOCH = new LeaderAndEpoch(Node.noNode(), Optional.empty());
+        public static final LeaderAndEpoch NO_LEADER_OR_EPOCH = new LeaderAndEpoch(Optional.empty(), Optional.empty());
 
-        public final Node leader;
+        public final Optional<Node> leader;
         public final Optional<Integer> epoch;
 
-        public LeaderAndEpoch(Node leader, Optional<Integer> epoch) {
+        public LeaderAndEpoch(Optional<Node> leader, Optional<Integer> epoch) {
             this.leader = Objects.requireNonNull(leader);
             this.epoch = Objects.requireNonNull(epoch);
         }
