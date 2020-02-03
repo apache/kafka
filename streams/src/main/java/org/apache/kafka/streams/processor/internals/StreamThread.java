@@ -739,6 +739,7 @@ public class StreamThread extends Thread {
      * @throws StreamsException      if the store's change log does not contain the partition
      */
     private void runLoop() {
+        builder.initializeSubscription();
         subscribeConsumer();
 
         while (isRunning()) {
