@@ -239,15 +239,18 @@ public class StoreQueryIntegrationTest {
         assertThat(semaphore.tryAcquire(batch1NumMessages, 60, TimeUnit.SECONDS), is(equalTo(true)));
 
         final QueryableStoreType<ReadOnlyKeyValueStore<Integer, Integer>> queryableStoreType = QueryableStoreTypes.keyValueStore();
-        final ReadOnlyKeyValueStore<Integer, Integer> store1 = kafkaStreams1
-                .store(StoreQueryParams.fromNameAndType(TABLE_NAME, queryableStoreType).enableStaleStores());
-
-        final ReadOnlyKeyValueStore<Integer, Integer> store2 = kafkaStreams2
-                .store(StoreQueryParams.fromNameAndType(TABLE_NAME, queryableStoreType).enableStaleStores());
 
         // Assert that both active and standby are able to query for a key
-        assertThat(store1.get(key), is(notNullValue()));
-        assertThat(store2.get(key), is(notNullValue()));
+        TestUtils.waitForCondition(() -> {
+            final ReadOnlyKeyValueStore<Integer, Integer> store1 = kafkaStreams1
+                .store(StoreQueryParams.fromNameAndType(TABLE_NAME, queryableStoreType).enableStaleStores());
+            return store1.get(key) != null;
+            }, "store1 cannot find results for key");
+        TestUtils.waitForCondition(() -> {
+            final ReadOnlyKeyValueStore<Integer, Integer> store2 = kafkaStreams2
+                .store(StoreQueryParams.fromNameAndType(TABLE_NAME, queryableStoreType).enableStaleStores());
+            return store2.get(key) != null;
+            }, "store2 cannot find results for key");
     }
 
     @Test
@@ -288,9 +291,8 @@ public class StoreQueryIntegrationTest {
                 .store(StoreQueryParams.fromNameAndType(TABLE_NAME, queryableStoreType).enableStaleStores().withPartition(keyPartition));
 
         // Assert that both active and standby are able to query for a key
-        assertThat(store1.get(key), is(notNullValue()));
-        assertThat(store2.get(key), is(notNullValue()));
-
+        TestUtils.waitForCondition(() -> store1.get(key) != null, "store1 cannot find results for key");
+        TestUtils.waitForCondition(() -> store2.get(key) != null, "store1 cannot find results for key");
 
         final ReadOnlyKeyValueStore<Integer, Integer> store3 = kafkaStreams1
                 .store(StoreQueryParams.fromNameAndType(TABLE_NAME, queryableStoreType).enableStaleStores().withPartition(keyDontBelongPartition));

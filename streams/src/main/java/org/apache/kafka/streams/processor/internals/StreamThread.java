@@ -882,7 +882,11 @@ public class StreamThread extends Thread {
                 }
             } while (processed > 0);
 
-            maybeCommit();
+            if (maybeCommit()) {
+                // TODO: this is a naive heuristic that when we are committing, the other threads maybe committing
+                //       too so we can try update the limit offset; this heuristic can be further improved
+                changelogReader.updateLimitOffsets();
+            }
         }
     }
 
@@ -1030,10 +1034,6 @@ public class StreamThread extends Thread {
             } else {
                 lastCommitMs = now;
             }
-
-            // TODO: this is a naive heuristic that when we are committing, the other threads maybe committing
-            //       too so we can try update the limit offset; this heuristic can be further improved
-            // changelogReader.updateLimitOffsets();
         } else {
             committed = taskManager.maybeCommitActiveTasksPerUserRequested();
             if (committed > 0) {
