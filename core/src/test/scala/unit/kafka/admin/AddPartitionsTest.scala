@@ -17,6 +17,8 @@
 
 package kafka.admin
 
+import java.util.Optional
+
 import kafka.controller.ReplicaAssignment
 import kafka.server.BaseRequestTest
 import kafka.utils.TestUtils
@@ -189,7 +191,7 @@ class AddPartitionsTest extends BaseRequestTest {
     assertTrue(s"Partition $partitionId should exist", partitionOpt.isDefined)
     val partition = partitionOpt.get
 
-    assertEquals("Partition leader id should match", expectedLeaderId, partition.leaderId)
+    assertEquals("Partition leader id should match", Optional.of(expectedLeaderId), partition.leaderId)
     assertEquals("Replica set should match", expectedReplicas, partition.replicaIds.asScala.toSet)
   }
 

@@ -17,7 +17,7 @@
 
 package kafka.server
 
-import java.util.Properties
+import java.util.{Optional, Properties}
 
 import kafka.network.SocketServer
 import kafka.utils.TestUtils
@@ -203,7 +203,7 @@ class MetadataRequestTest extends BaseRequestTest {
     assertEquals(0, partitionMetadata.partition)
     assertEquals(2, partitionMetadata.replicaIds.size)
     assertTrue(partitionMetadata.leaderId.isPresent)
-    assertTrue(partitionMetadata.leaderId.get > 0)
+    assertTrue(partitionMetadata.leaderId.get >= 0)
   }
 
   @Test
@@ -245,7 +245,7 @@ class MetadataRequestTest extends BaseRequestTest {
         val assignment = replicaAssignment(partitionMetadata.partition)
         assertEquals(assignment, partitionMetadata.replicaIds.asScala)
         assertEquals(assignment, partitionMetadata.inSyncReplicaIds.asScala)
-        assertEquals(assignment.head, partitionMetadata.leaderId)
+        assertEquals(Optional.of(assignment.head), partitionMetadata.leaderId)
       }
     }
   }
