@@ -21,9 +21,9 @@ import org.apache.kafka.streams.state.QueryableStoreType;
 import java.util.Objects;
 
 /**
- * Represents all the query options that a user can provide to state what kind of stores we are expecting.
- * The options would be whether a user would want to enable/disable stale stores
- * or whether they know the partition that they specifically want to fetch.
+ * Represents all the query options that a user can provide to control the kind of stores we would like to fetch.
+ * The options could indicate - whether we want stale stores to be included (or)
+ * we want to filter for only stores belonging to a partition.
  * If no specific partition is specified the default behavior is to fetch the stores for all the partitions
  * available on that instance for that particular store name.
  */
@@ -51,7 +51,7 @@ public class StoreQueryParams<T> {
      *
      * @param partition   The specific integer partition to be fetched from the stores list by using {@link StoreQueryParams}.
      *
-     @return StoreQueryParams a new {@code StoreQueryParams} instance configured with the specified partition
+     * @return StoreQueryParams a new {@code StoreQueryParams} instance configured with the specified partition
      */
     public StoreQueryParams<T> withPartition(final Integer partition) {
         return new StoreQueryParams<T>(this.storeName(), this.queryableStoreType(), partition, this.staleStores);
@@ -60,7 +60,7 @@ public class StoreQueryParams<T> {
     /**
      * Enable querying of stale state stores, i.e., allow to query active tasks during restore as well as standby tasks.
      *
-     @return StoreQueryParams a new {@code StoreQueryParams} instance configured with serving from stale stores enabled
+     * @return StoreQueryParams a new {@code StoreQueryParams} instance configured with serving from stale stores enabled
      */
     public StoreQueryParams<T> enableStaleStores() {
         return new StoreQueryParams<T>(this.storeName(), this.queryableStoreType(), this.partition, true);

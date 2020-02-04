@@ -1156,7 +1156,7 @@ public class InternalTopologyBuilder {
                 return results;
             }
         }
-        return null;
+        return Collections.EMPTY_LIST;
     }
 
     public synchronized Collection<Set<String>> copartitionGroups() {
