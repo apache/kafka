@@ -31,7 +31,6 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.ClusterAuthorizationException;
 import org.apache.kafka.common.errors.InvalidMetadataException;
-import org.apache.kafka.common.errors.OutOfOrderSequenceException;
 import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
@@ -308,7 +307,7 @@ public class Sender implements Runnable {
 
                 // Check whether we need a new producerId. If so, we will enqueue an InitProducerId
                 // request which will be sent below
-                transactionManager.bumpIdempotentEpochOrResetIdempotentProducerIdIfNeeded();
+                transactionManager.bumpIdempotentProducerEpochIfNeeded();
 
                 if (maybeSendAndPollTransactionalRequest()) {
                     return;
@@ -594,11 +593,6 @@ public class Sender implements Runnable {
                     this.retries - batch.attempts() - 1,
                     error);
                 reenqueueBatch(batch, now);
-            } else if (transactionManager != null && !transactionManager.hasProducerIdAndEpoch(batch)) {
-                // If we can't retry because the producer ID has changed, fail with an out of sequence error rather than the underlying failure
-                failBatch(batch, response, new OutOfOrderSequenceException("Attempted to retry sending a " +
-                        "batch but the producer id changed from " + batch.producerId() + " to " +
-                        transactionManager.producerIdAndEpoch().producerId + " in the mean time. This batch will be dropped."), false);
             } else if (error == Errors.DUPLICATE_SEQUENCE_NUMBER) {
                 // If we have received a duplicate sequence error, it means that the sequence number has advanced beyond
                 // the sequence of the current batch, and we haven't retained batch metadata on the broker to return
