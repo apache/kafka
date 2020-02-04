@@ -24,7 +24,6 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
-import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.metrics.ThreadMetrics;
@@ -39,13 +38,8 @@ import java.util.Set;
  * A StandbyTask
  */
 public class StandbyTask extends AbstractTask implements Task {
-    private final TaskId id;
     private final Logger log;
     private final String logPrefix;
-    private final ProcessorTopology topology;
-    private final Set<TopicPartition> partitions;
-    private final ProcessorStateManager stateMgr;
-    private final StateDirectory stateDirectory;
     private final Sensor closeTaskSensor;
     private final InternalProcessorContext processorContext;
 
@@ -65,11 +59,7 @@ public class StandbyTask extends AbstractTask implements Task {
                 final StreamsMetricsImpl metrics,
                 final ProcessorStateManager stateMgr,
                 final StateDirectory stateDirectory) {
-        this.id = id;
-        this.stateMgr = stateMgr;
-        this.topology = topology;
-        this.partitions = partitions;
-        this.stateDirectory = stateDirectory;
+        super(id, topology, stateDirectory, stateMgr, partitions);
 
         final String threadIdPrefix = String.format("stream-thread [%s] ", Thread.currentThread().getName());
         logPrefix = threadIdPrefix + String.format("%s [%s] ", "standby-task", id);
@@ -198,23 +188,8 @@ public class StandbyTask extends AbstractTask implements Task {
     }
 
     @Override
-    public TaskId id() {
-        return id;
-    }
-
-    @Override
-    public Set<TopicPartition> inputPartitions() {
-        return partitions;
-    }
-
-    @Override
     public void addRecords(final TopicPartition partition, final Iterable<ConsumerRecord<byte[], byte[]>> records) {
         throw new IllegalStateException("Attempted to add records to task " + id() + " for invalid input partition " + partition);
-    }
-
-    @Override
-    public StateStore getStore(final String name) {
-        return stateMgr.getStore(name);
     }
 
     /**
@@ -247,10 +222,6 @@ public class StandbyTask extends AbstractTask implements Task {
         }
 
         return sb.toString();
-    }
-
-    public boolean isClosed() {
-        return state() == State.CLOSED;
     }
 
     public boolean commitNeeded() {

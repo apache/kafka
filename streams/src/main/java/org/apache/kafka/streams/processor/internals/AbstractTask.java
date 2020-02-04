@@ -16,10 +16,54 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.TaskId;
+
+import java.util.Set;
+
 import static org.apache.kafka.streams.processor.internals.Task.State.CREATED;
 
 public abstract class AbstractTask implements Task {
     private Task.State state = CREATED;
+
+    protected final TaskId id;
+    protected final ProcessorTopology topology;
+    protected final StateDirectory stateDirectory;
+    protected final Set<TopicPartition> partitions;
+    protected final ProcessorStateManager stateMgr;
+
+    AbstractTask(final TaskId id,
+                 final ProcessorTopology topology,
+                 final StateDirectory stateDirectory,
+                 final ProcessorStateManager stateMgr,
+                 final Set<TopicPartition> partitions) {
+        this.id = id;
+        this.stateMgr = stateMgr;
+        this.topology = topology;
+        this.partitions = partitions;
+        this.stateDirectory = stateDirectory;
+    }
+
+    @Override
+    public TaskId id() {
+        return id;
+    }
+
+    @Override
+    public Set<TopicPartition> inputPartitions() {
+        return partitions;
+    }
+
+    @Override
+    public StateStore getStore(final String name) {
+        return stateMgr.getStore(name);
+    }
+
+    @Override
+    public boolean isClosed() {
+        return state() == State.CLOSED;
+    }
 
     @Override
     public final Task.State state() {

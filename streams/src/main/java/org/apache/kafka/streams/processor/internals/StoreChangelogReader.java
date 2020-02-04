@@ -188,6 +188,10 @@ public class StoreChangelogReader implements ChangelogReader {
     // to update offset limit for standby tasks;
     private Consumer<byte[], byte[]> mainConsumer;
 
+    // the flag indicating limit offsets could be updated --- this is only needed for standby tasks that have limit
+    // offsets enabled
+    private boolean updateLimitOffset;
+
     void setMainConsumer(final Consumer<byte[], byte[]> consumer) {
         this.mainConsumer = consumer;
     }
@@ -207,6 +211,7 @@ public class StoreChangelogReader implements ChangelogReader {
         this.pollTime = Duration.ofMillis(config.getLong(StreamsConfig.POLL_MS_CONFIG));
 
         this.changelogs = new HashMap<>();
+        this.updateLimitOffset = false;
     }
 
     private static String recordEndOffset(final Long endOffset) {
@@ -391,6 +396,10 @@ public class StoreChangelogReader implements ChangelogReader {
             return;
         }
 
+        if (updateLimitOffset) {
+            updateLimitOffsets();
+        }
+
         final Set<TopicPartition> restoringChangelogs = restoringChangelogs();
         if (!restoringChangelogs.isEmpty()) {
             final ConsumerRecords<byte[], byte[]> polledRecords;
@@ -415,6 +424,18 @@ public class StoreChangelogReader implements ChangelogReader {
                 // TODO: we always try to restore as a batch when some records are accumulated, which may result in
                 //       small batches; this can be optimized in the future, e.g. wait longer for larger batches.
                 restoreChangelog(changelogs.get(partition));
+            }
+        }
+
+        // for standby changelogs, if there are buffered records not applicable, it means that the limit offset
+        // is there to prevent so, we can try to update the limit offset next time.
+        final Set<ChangelogMetadata> standbyChangelogs = changelogs.values().stream()
+            .filter(metadata -> metadata.stateManager.taskType() == Task.TaskType.STANDBY)
+            .collect(Collectors.toSet());
+        for (final ChangelogMetadata metadata : standbyChangelogs) {
+            if (!metadata.bufferedRecords().isEmpty()) {
+                updateLimitOffset = true;
+                break;
             }
         }
     }
@@ -540,6 +561,8 @@ public class StoreChangelogReader implements ChangelogReader {
             .map(Map.Entry::getKey).collect(Collectors.toSet());
 
         updateLimitOffsetsForStandbyChangelogs(committedOffsetForChangelogs(changelogsWithLimitOffsets));
+
+        updateLimitOffset = false;
     }
 
     private void updateLimitOffsetsForStandbyChangelogs(final Map<TopicPartition, Long> committedOffsets) {

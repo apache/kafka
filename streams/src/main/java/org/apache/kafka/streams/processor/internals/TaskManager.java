@@ -23,6 +23,7 @@ import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.streams.errors.LockException;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskIdFormatException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
@@ -45,6 +46,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.kafka.streams.processor.internals.Task.State.CREATED;
 import static org.apache.kafka.streams.processor.internals.Task.State.RESTORING;
 
 public class TaskManager {
@@ -185,11 +187,6 @@ public class TaskManager {
             logPrefix
         );
 
-        // initialize the created tasks
-        for (final Task task : tasks.values()) {
-            task.initializeIfNeeded();
-        }
-
         changelogReader.transitToRestoreActive();
     }
 
@@ -209,15 +206,29 @@ public class TaskManager {
      * @throws StreamsException if the store's change log does not contain the partition
      */
     boolean checkForCompletedRestoration() {
+        boolean allRunning = true;
+
+        // first initialize the created tasks, then check if they can complete the restoration
         final List<Task> restoringTasks = new LinkedList<>();
         for (final Task task : tasks.values()) {
+            if (task.state() == CREATED) {
+                try {
+                    task.initializeIfNeeded();
+                } catch (final LockException e) {
+                    // it is possible that if there are multiple threads within the instance that one thread
+                    // trying to grab the task from the other, while the other has not released the lock since
+                    // it did not participate in the rebalance. In this case we can just retry in the next iteration
+                    log.debug("Could not initialize {} due to {}; will retry", task.id(), e.toString());
+                    allRunning = false;
+                }
+            }
+
             if (task.state() == RESTORING) {
                 restoringTasks.add(task);
             }
         }
 
-        boolean allRunning = true;
-        if (!restoringTasks.isEmpty()) {
+        if (allRunning && !restoringTasks.isEmpty()) {
             final Set<TopicPartition> restored = changelogReader.completedChangelogs();
             for (final Task task : restoringTasks) {
                 if (restored.containsAll(task.changelogPartitions())) {

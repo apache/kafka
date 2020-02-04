@@ -18,6 +18,7 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.streams.errors.LockException;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.processor.StateStore;
@@ -66,42 +67,12 @@ public interface Task {
      * </pre>
      */
     enum State {
-        CREATED(1, 4) {         // 0
-            @Override
-            public boolean hasBeenRunning() {
-                return false;
-            }
-        },
-        RESTORING(2, 3, 4) {    // 1
-            @Override
-            public boolean hasBeenRunning() {
-                return false;
-            }
-        },
-        RUNNING(3, 4) {         // 2
-            @Override
-            public boolean hasBeenRunning() {
-                return true;
-            }
-        },
-        SUSPENDED(1, 4) {       // 3
-            @Override
-            public boolean hasBeenRunning() {
-                return true;
-            }
-        },
-        CLOSING(4, 5) {         // 4, we allow CLOSING to transit to itself to make close idempotent
-            @Override
-            public boolean hasBeenRunning() {
-                return false;
-            }
-        },
-        CLOSED {                               // 5
-            @Override
-            public boolean hasBeenRunning() {
-                return false;
-            }
-        };
+        CREATED(1, 4),         // 0
+        RESTORING(2, 3, 4),    // 1
+        RUNNING(3, 4),         // 2
+        SUSPENDED(1, 4),       // 3
+        CLOSING(4, 5),         // 4, we allow CLOSING to transit to itself to make close idempotent
+        CLOSED;                               // 5
 
         private final Set<Integer> validTransitions = new HashSet<>();
 
@@ -112,8 +83,6 @@ public interface Task {
         public boolean isValidTransition(final State newState) {
             return validTransitions.contains(newState.ordinal());
         }
-
-        public abstract boolean hasBeenRunning();
     }
 
     enum TaskType {
@@ -136,7 +105,10 @@ public interface Task {
 
     boolean isActive();
 
+    boolean isClosed();
+
     /**
+     * @throws LockException could happen when multi-threads within the single instance, could retry
      * @throws StreamsException fatal error, should close the thread
      */
     void initializeIfNeeded();

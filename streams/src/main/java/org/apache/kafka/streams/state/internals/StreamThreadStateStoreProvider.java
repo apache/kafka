@@ -30,10 +30,10 @@ import org.apache.kafka.streams.state.TimestampedWindowStore;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 public class StreamThreadStateStoreProvider {
 
@@ -92,14 +92,14 @@ public class StreamThreadStateStoreProvider {
             return null;
         }
         final List<String> sourceTopics = internalTopologyBuilder.stateStoreNameToSourceTopics().get(storeName);
-        final Set<String> sourceTopicsSet = sourceTopics.stream().collect(Collectors.toSet());
+        final Set<String> sourceTopicsSet = new HashSet<>(sourceTopics);
         final Map<Integer, InternalTopologyBuilder.TopicsInfo> topicGroups = internalTopologyBuilder.topicGroups();
         for (final Map.Entry<Integer, InternalTopologyBuilder.TopicsInfo> topicGroup : topicGroups.entrySet()) {
             if (topicGroup.getValue().sourceTopics.containsAll(sourceTopicsSet)) {
-                return new TaskId(topicGroup.getKey(), partition.intValue());
+                return new TaskId(topicGroup.getKey(), partition);
             }
         }
-        throw new InvalidStateStoreException("Cannot get state store " + storeName + " because the requested partition " + partition + "is" +
-                                                "not available on this instance");
+        throw new InvalidStateStoreException("Cannot get state store " + storeName + " because the requested partition " +
+            partition + " is not available on this instance");
     }
 }
