@@ -220,7 +220,6 @@ public class StoreChangelogReader implements ChangelogReader {
 
     private boolean hasRestoredToEnd(final ChangelogMetadata metadata) {
         final Long endOffset = metadata.restoreEndOffset;
-        final Long currentOffset = metadata.storeMetadata.offset();
         if (endOffset == null) {
             // end offset is not initialized meaning that it is from a standby task,
             // this should never happen since we only call this function for active task in restoring phase
