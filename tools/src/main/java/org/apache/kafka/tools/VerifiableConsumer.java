@@ -28,6 +28,7 @@ import com.fasterxml.jackson.databind.module.SimpleModule;
 import net.sourceforge.argparse4j.ArgumentParsers;
 import net.sourceforge.argparse4j.inf.ArgumentParser;
 import net.sourceforge.argparse4j.inf.ArgumentParserException;
+import net.sourceforge.argparse4j.inf.MutuallyExclusiveGroup;
 import net.sourceforge.argparse4j.inf.Namespace;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
@@ -503,21 +504,23 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
                 .newArgumentParser("verifiable-consumer")
                 .defaultHelp(true)
                 .description("This tool consumes messages from a specific topic and emits consumer events (e.g. group rebalances, received messages, and offsets committed) as JSON objects to STDOUT.");
-        parser.addArgument("--bootstrap-server")
+        MutuallyExclusiveGroup connectionGroup = parser.addMutuallyExclusiveGroup("Connection Group")
+                .description("Group of arguments for connection to brokers")
+                .required(true);
+        connectionGroup.addArgument("--bootstrap-server")
                 .action(store())
                 .required(false)
                 .type(String.class)
                 .metavar("HOST1:PORT1[,HOST2:PORT2[...]]")
                 .dest("bootstrapServer")
-                .help("REQUIRED: The server(s) to connect to. Comma-separated list of Kafka brokers in the form HOST1:PORT1,HOST2:PORT2,...");
-
-        parser.addArgument("--broker-list")
+                .help("REQUIRED unless --broker-list(deprecated) is specified. The server(s) to connect to. Comma-separated list of Kafka brokers in the form HOST1:PORT1,HOST2:PORT2,...");
+        connectionGroup.addArgument("--broker-list")
                 .action(store())
                 .required(false)
                 .type(String.class)
                 .metavar("HOST1:PORT1[,HOST2:PORT2[...]]")
                 .dest("brokerList")
-                .help("Comma-separated list of Kafka brokers in the form HOST1:PORT1,HOST2:PORT2,...");
+                .help("DEPRECATED, use --bootstrap-server instead; ignored if --bootstrap-server is specified.  Comma-separated list of Kafka brokers in the form HOST1:PORT1,HOST2:PORT2,...");
 
         parser.addArgument("--topic")
                 .action(store())
@@ -607,6 +610,7 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
         int maxMessages = res.getInt("maxMessages");
         boolean verbose = res.getBoolean("verbose");
         String configFile = res.getString("consumer.config");
+        String brokerHostandPort = null;
 
         Properties consumerProps = new Properties();
         if (configFile != null) {
@@ -624,14 +628,16 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
             consumerProps.put(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG, groupInstanceId);
         }
 
+
         if(res.get("bootstrapServer") != null ) {
-            consumerProps.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, res.getString("bootstrapServer"));
+            brokerHostandPort = res.getString("bootstrapServer");
         } else if(res.getString("brokerList") != null) {
-            consumerProps.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, res.getString("brokerList"));
+            brokerHostandPort = res.getString("brokerList");
         } else {
             parser.printHelp();
             Exit.exit(0);
         }
+        consumerProps.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerHostandPort);
 
         consumerProps.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, useAutoCommit);
         consumerProps.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, res.getString("resetPolicy"));

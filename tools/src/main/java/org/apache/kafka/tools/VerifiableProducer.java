@@ -24,6 +24,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import net.sourceforge.argparse4j.ArgumentParsers;
 import net.sourceforge.argparse4j.inf.ArgumentParser;
 import net.sourceforge.argparse4j.inf.ArgumentParserException;
+import net.sourceforge.argparse4j.inf.MutuallyExclusiveGroup;
 import net.sourceforge.argparse4j.inf.Namespace;
 
 import org.apache.kafka.clients.producer.Callback;
@@ -119,8 +120,10 @@ public class VerifiableProducer implements AutoCloseable {
                 .type(String.class)
                 .metavar("TOPIC")
                 .help("Produce messages to this topic.");
-
-        parser.addArgument("--bootstrap-server")
+        MutuallyExclusiveGroup connectionGroup = parser.addMutuallyExclusiveGroup("Connection Group")
+                .description("Group of arguments for connection to brokers")
+                .required(true);
+        connectionGroup.addArgument("--bootstrap-server")
                 .action(store())
                 .required(false)
                 .type(String.class)
@@ -128,13 +131,13 @@ public class VerifiableProducer implements AutoCloseable {
                 .dest("bootstrapServer")
                 .help("REQUIRED: The server(s) to connect to. Comma-separated list of Kafka brokers in the form HOST1:PORT1,HOST2:PORT2,...");
 
-        parser.addArgument("--broker-list")
+        connectionGroup.addArgument("--broker-list")
                 .action(store())
                 .required(false)
                 .type(String.class)
                 .metavar("HOST1:PORT1[,HOST2:PORT2[...]]")
                 .dest("brokerList")
-                .help("Comma-separated list of Kafka brokers in the form HOST1:PORT1,HOST2:PORT2,...");
+                .help("DEPRECATED, use --bootstrap-server instead; ignored if --bootstrap-server is specified.  Comma-separated list of Kafka brokers in the form HOST1:PORT1,HOST2:PORT2,...");
 
         parser.addArgument("--max-messages")
                 .action(store())
