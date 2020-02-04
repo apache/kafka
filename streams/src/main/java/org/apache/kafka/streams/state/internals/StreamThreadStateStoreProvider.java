@@ -35,7 +35,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-
 public class StreamThreadStateStoreProvider {
 
     private final StreamThread streamThread;
