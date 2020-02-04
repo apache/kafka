@@ -309,6 +309,7 @@ public class TransactionalMessageCopier {
                 public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
                     messageCap.set(partitions.stream()
                         .mapToLong(partition -> messagesRemaining(consumer, partition)).sum());
+                    log.info("Message cap set to {} on rebalance complete", messageCap);
                     numMessagesProcessedSinceLastRebalance.set(0);
                     // We use message cap for remaining here as the remainingMessages are not set yet.
                     System.out.println(statusAsJson(totalMessageProcessed.get(),
@@ -352,8 +353,10 @@ public class TransactionalMessageCopier {
 
                 try {
                     producer.beginTransaction();
+                    Map<Integer, Integer> partitionCount = new HashMap<>();
                     while (messagesSentWithinCurrentTxn < messagesNeededForCurrentTxn) {
                         ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(200));
+                        log.info("number of consumer records fetched: {}", records.count());
                         if (messageCap.get() <= 0) {
                             // We could see no more message needed for processing after poll
                             break;
@@ -361,8 +364,14 @@ public class TransactionalMessageCopier {
                         for (ConsumerRecord<String, String> record : records) {
                             producer.send(producerRecordFromConsumerRecord(outputTopic, record));
                             messagesSentWithinCurrentTxn++;
+                            partitionCount.put(record.partition(), partitionCount.getOrDefault(record.partition(), 0) + 1);
                         }
                         messagesNeededForCurrentTxn = Math.min(numMessagesPerTransaction, remainingMessages.get());
+                    }
+
+                    log.info("Messages sent in current transaction: {}", messagesSentWithinCurrentTxn);
+                    for (Map.Entry<Integer, Integer> entry : partitionCount.entrySet()) {
+                        log.info("Partition {} has contributed {} records", entry.getKey(), entry.getValue());
                     }
 
                     if (useGroupMetadata) {
