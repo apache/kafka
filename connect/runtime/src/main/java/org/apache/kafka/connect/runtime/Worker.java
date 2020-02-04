@@ -537,7 +537,7 @@ public class Worker {
                                       valueConverter, headerConverter, transformationChain, consumer, loader, time,
                                       retryWithToleranceOperator, herder.statusBackingStore());
         } else {
-            log.error("Tasks must be a subclass of either SourceTask or SinkTask", task);
+            log.error("Tasks must be a subclass of either SourceTask or SinkTask and current is {}", task);
             throw new ConnectException("Tasks must be a subclass of either SourceTask or SinkTask");
         }
     }
