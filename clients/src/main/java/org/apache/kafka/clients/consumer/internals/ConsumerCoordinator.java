@@ -709,10 +709,10 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
         if (subscriptions.hasAutoAssignedPartitions() && !droppedPartitions.isEmpty()) {
             final Exception e;
-            if (generation() != Generation.NO_GENERATION) {
-                e = invokePartitionsRevoked(droppedPartitions);
-            } else {
+            if (generation() == Generation.NO_GENERATION || rebalanceInProgress()) {
                 e = invokePartitionsLost(droppedPartitions);
+            } else {
+                e = invokePartitionsRevoked(droppedPartitions);
             }
 
             subscriptions.assignFromSubscribed(Collections.emptySet());
