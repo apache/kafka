@@ -87,25 +87,23 @@ class MetricsDuringTopicCreationDeletionTest extends KafkaServerTestHarness with
 
     // Thread checking the metric continuously
     running = true
-    val thread = new Thread(new Runnable {
-      def run(): Unit = {
-        while (running) {
-          for ( s <- servers if running) {
-            underReplicatedPartitionCount = s.replicaManager.underReplicatedPartitionCount
-            if (underReplicatedPartitionCount > 0) {
-              running = false
-            }
+    val thread = new Thread(() => {
+      while (running) {
+        for (s <- servers if running) {
+          underReplicatedPartitionCount = s.replicaManager.underReplicatedPartitionCount
+          if (underReplicatedPartitionCount > 0) {
+            running = false
           }
+        }
 
-          preferredReplicaImbalanceCount = preferredReplicaImbalanceCountGauge.value
-          if (preferredReplicaImbalanceCount > 0) {
-             running = false
-          }
+        preferredReplicaImbalanceCount = preferredReplicaImbalanceCountGauge.value
+        if (preferredReplicaImbalanceCount > 0) {
+          running = false
+        }
 
-          offlinePartitionsCount = offlinePartitionsCountGauge.value
-          if (offlinePartitionsCount > 0) {
-             running = false
-          }
+        offlinePartitionsCount = offlinePartitionsCountGauge.value
+        if (offlinePartitionsCount > 0) {
+          running = false
         }
       }
     })

@@ -156,47 +156,41 @@ class PartitionLockTest extends Logging {
 
   private def scheduleAppends(): Seq[Future[_]] = {
     (0 until numProducers).map { _ =>
-      executorService.submit(new Runnable {
-        override def run(): Unit = {
-          try {
-            append(partition, numRecordsPerProducer, followerQueues)
-          } catch {
-            case e: Throwable =>
-              error("Exception during append", e)
-              throw e
-          }
+      executorService.submit((() => {
+        try {
+          append(partition, numRecordsPerProducer, followerQueues)
+        } catch {
+          case e: Throwable =>
+            error("Exception during append", e)
+            throw e
         }
-      })
+      }): Runnable)
     }
   }
 
   private def scheduleUpdateFollowers(numRecords: Int): Seq[Future[_]] = {
     (1 to numReplicaFetchers).map { index =>
-      executorService.submit(new Runnable {
-        override def run(): Unit = {
-          try {
-            updateFollowerFetchState(partition, index, numRecords, followerQueues(index - 1))
-          } catch {
-            case e: Throwable =>
-              error("Exception during updateFollowerFetchState", e)
-              throw e
-          }
+      executorService.submit((() => {
+        try {
+          updateFollowerFetchState(partition, index, numRecords, followerQueues(index - 1))
+        } catch {
+          case e: Throwable =>
+            error("Exception during updateFollowerFetchState", e)
+            throw e
         }
-      })
+      }): Runnable)
     }
   }
 
   private def scheduleShrinkIsr(activeFlag: AtomicBoolean, mockTimeSleepMs: Long): Future[_] = {
-    executorService.submit(new Runnable {
-      override def run(): Unit = {
-        while (activeFlag.get) {
-          if (mockTimeSleepMs > 0)
-            mockTime.sleep(mockTimeSleepMs)
-          partition.maybeShrinkIsr()
-          Thread.sleep(1) // just to avoid tight loop
-        }
+    executorService.submit((() => {
+      while (activeFlag.get) {
+        if (mockTimeSleepMs > 0)
+          mockTime.sleep(mockTimeSleepMs)
+        partition.maybeShrinkIsr()
+        Thread.sleep(1) // just to avoid tight loop
       }
-    })
+    }): Runnable)
   }
 
   private def setupPartitionWithMocks(logManager: LogManager, logConfig: LogConfig): Partition = {

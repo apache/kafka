@@ -41,9 +41,6 @@ import org.junit.experimental.categories.Category
  * <p>
  * The suite contains the test case using Scala APIs `testShouldCountWords` and the same test case using the
  * Java APIs `testShouldCountWordsJava`. The idea is to demonstrate that both generate the same result.
- * <p>
- * Note: In the current project settings SAM type conversion is turned off as it's experimental in Scala 2.11.
- * Hence the native Java API based version is more verbose.
  */
 @Category(Array(classOf[IntegrationTest]))
 class WordCountTest extends WordCountTestData {
@@ -58,6 +55,7 @@ class WordCountTest extends WordCountTestData {
 
   val tFolder: TemporaryFolder = new TemporaryFolder(TestUtils.tempDirectory())
   @Rule def testFolder: TemporaryFolder = tFolder
+
   @Before
   def startKafkaCluster(): Unit = {
     cluster.createTopic(inputTopic)
@@ -66,7 +64,8 @@ class WordCountTest extends WordCountTestData {
     cluster.createTopic(outputTopicJ)
   }
 
-  @Test def testShouldCountWords(): Unit = {
+  @Test
+  def testShouldCountWords(): Unit = {
     import Serdes._
 
     val streamsConfiguration = getStreamsConfiguration()
@@ -86,7 +85,7 @@ class WordCountTest extends WordCountTestData {
     // write to output topic
     wordCounts.toStream.to(outputTopic)
 
-    val streams: KafkaStreams = new KafkaStreams(streamBuilder.build(), streamsConfiguration)
+    val streams = new KafkaStreams(streamBuilder.build(), streamsConfiguration)
     streams.start()
 
     // produce and consume synchronously
@@ -98,7 +97,8 @@ class WordCountTest extends WordCountTestData {
     assertEquals(actualWordCounts.asScala.take(expectedWordCounts.size).sortBy(_.key), expectedWordCounts.sortBy(_.key))
   }
 
-  @Test def testShouldCountWordsMaterialized(): Unit = {
+  @Test
+  def testShouldCountWordsMaterialized(): Unit = {
     import Serdes._
 
     val streamsConfiguration = getStreamsConfiguration()
@@ -118,7 +118,7 @@ class WordCountTest extends WordCountTestData {
     // write to output topic
     wordCounts.toStream.to(outputTopic)
 
-    val streams: KafkaStreams = new KafkaStreams(streamBuilder.build(), streamsConfiguration)
+    val streams = new KafkaStreams(streamBuilder.build(), streamsConfiguration)
     streams.start()
 
     // produce and consume synchronously
@@ -130,7 +130,8 @@ class WordCountTest extends WordCountTestData {
     assertEquals(actualWordCounts.asScala.take(expectedWordCounts.size).sortBy(_.key), expectedWordCounts.sortBy(_.key))
   }
 
-  @Test def testShouldCountWordsJava(): Unit = {
+  @Test
+  def testShouldCountWordsJava(): Unit = {
 
     import org.apache.kafka.streams.{KafkaStreams => KafkaStreamsJ, StreamsBuilder => StreamsBuilderJ}
     import org.apache.kafka.streams.kstream.{
@@ -150,16 +151,12 @@ class WordCountTest extends WordCountTestData {
 
     val pattern = Pattern.compile("\\W+", Pattern.UNICODE_CHARACTER_CLASS)
 
-    val splits: KStreamJ[String, String] = textLines.flatMapValues {
-      new ValueMapper[String, java.lang.Iterable[String]] {
-        def apply(s: String): java.lang.Iterable[String] = pattern.split(s.toLowerCase).toIterable.asJava
-      }
+    val splits: KStreamJ[String, String] = textLines.flatMapValues { line =>
+      pattern.split(line.toLowerCase).toIterable.asJava
     }
 
-    val grouped: KGroupedStreamJ[String, String] = splits.groupBy {
-      new KeyValueMapper[String, String, String] {
-        def apply(k: String, v: String): String = v
-      }
+    val grouped: KGroupedStreamJ[String, String] = splits.groupBy { (_, v) =>
+      v
     }
 
     val wordCounts: KTableJ[String, java.lang.Long] = grouped.count()

@@ -16,7 +16,6 @@
   */
 package kafka.utils
 
-import org.apache.kafka.common.utils.Exit.ShutdownHookAdder
 import org.apache.kafka.common.utils.{Exit => JExit}
 
 /**
@@ -36,9 +35,7 @@ object Exit {
   }
 
   def addShutdownHook(name: String, shutdownHook: => Unit): Unit = {
-    JExit.addShutdownHook(name, new Runnable {
-      def run(): Unit = shutdownHook
-    })
+    JExit.addShutdownHook(name, () => shutdownHook)
   }
 
   def setExitProcedure(exitProcedure: (Int, Option[String]) => Nothing): Unit =
@@ -48,10 +45,7 @@ object Exit {
     JExit.setHaltProcedure(functionToProcedure(haltProcedure))
 
   def setShutdownHookAdder(shutdownHookAdder: (String, => Unit) => Unit): Unit = {
-    JExit.setShutdownHookAdder(new ShutdownHookAdder {
-      def addShutdownHook(name: String, runnable: Runnable): Unit =
-        shutdownHookAdder(name, runnable.run)
-    })
+    JExit.setShutdownHookAdder((name, runnable) => shutdownHookAdder(name, runnable.run))
   }
 
   def resetExitProcedure(): Unit =

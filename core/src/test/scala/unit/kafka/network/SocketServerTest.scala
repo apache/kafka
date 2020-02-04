@@ -33,7 +33,7 @@ import javax.net.ssl._
 import kafka.security.CredentialProvider
 import kafka.server.{KafkaConfig, ThrottledChannel}
 import kafka.utils.Implicits._
-import kafka.utils.{CoreUtils, TestUtils}
+import kafka.utils.TestUtils
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.memory.MemoryPool
 import org.apache.kafka.common.message.SaslAuthenticateRequestData
@@ -329,7 +329,7 @@ class SocketServerTest {
       val externalListener = new ListenerName("EXTERNAL")
       val externalEndpoint = updatedEndPoints.find(e => e.listenerName.get == externalListener.value).get
       val futures =  Map(externalEndpoint -> externalReadyFuture)
-      val startFuture = executor.submit(CoreUtils.runnable(testableServer.startDataPlaneProcessors(futures)))
+      val startFuture = executor.submit((() => testableServer.startDataPlaneProcessors(futures)): Runnable)
       TestUtils.waitUntilTrue(() => listenerStarted(config.interBrokerListenerName), "Inter-broker listener not started")
       assertFalse("Socket server startup did not wait for future to complete", startFuture.isDone)
 
@@ -967,7 +967,7 @@ class SocketServerTest {
 
   /* Test that we update request metrics if the client closes the connection while the broker response is in flight. */
   @Test
-  def testClientDisconnectionUpdatesRequestMetrics: Unit = {
+  def testClientDisconnectionUpdatesRequestMetrics(): Unit = {
     // The way we detect a connection close from the client depends on the response size. If it's small, an
     // IOException ("Connection reset by peer") is thrown when the Selector reads from the socket. If
     // it's large, an IOException ("Broken pipe") is thrown when the Selector writes to the socket. We test
@@ -1934,7 +1934,7 @@ class SocketServerTest {
     @volatile var clientConnSocket: Socket = _
     @volatile var buffer: Option[ByteBuffer] = None
 
-    executor.submit(CoreUtils.runnable({
+    executor.submit((() => {
       try {
         clientConnSocket = serverSocket.accept()
         val serverOut = serverConnSocket.getOutputStream
@@ -1954,7 +1954,7 @@ class SocketServerTest {
       }
     }): Runnable)
 
-    executor.submit(CoreUtils.runnable({
+    executor.submit((() => {
       var b: Int = -1
       val serverIn = serverConnSocket.getInputStream
       while ({b = serverIn.read(); b != -1}) {

@@ -79,11 +79,7 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
 
     val pidManager: ProducerIdManager = EasyMock.createNiceMock(classOf[ProducerIdManager])
     EasyMock.expect(pidManager.generateProducerId())
-      .andAnswer(new IAnswer[Long]() {
-        def answer(): Long = {
-          if (bumpProducerId) producerId + 1 else producerId
-        }
-      })
+      .andAnswer(() => if (bumpProducerId) producerId + 1 else producerId)
       .anyTimes()
     val txnMarkerPurgatory = new DelayedOperationPurgatory[DelayedTxnMarker]("txn-purgatory-name",
       new MockTimer,
