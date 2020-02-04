@@ -396,6 +396,10 @@ public class StoreChangelogReader implements ChangelogReader {
             return;
         }
 
+        if (updateLimitOffset) {
+            updateLimitOffsets();
+        }
+
         final Set<TopicPartition> restoringChangelogs = restoringChangelogs();
         if (!restoringChangelogs.isEmpty()) {
             final ConsumerRecords<byte[], byte[]> polledRecords;
@@ -422,6 +426,18 @@ public class StoreChangelogReader implements ChangelogReader {
                 restoreChangelog(changelogs.get(partition));
             }
         }
+
+        // for standby changelogs, if there are buffered records not applicable, it means that the limit offset
+        // is there to prevent so, we can try to update the limit offset next time.
+        final Set<ChangelogMetadata> standbyChangelogs = changelogs.values().stream()
+            .filter(metadata -> metadata.stateManager.taskType() == Task.TaskType.STANDBY)
+            .collect(Collectors.toSet());
+        for (final ChangelogMetadata metadata : standbyChangelogs) {
+            if (!metadata.bufferedRecords().isEmpty()) {
+                updateLimitOffset = true;
+                break;
+            }
+        }
     }
 
     private void bufferChangelogRecords(final ChangelogMetadata changelogMetadata, final List<ConsumerRecord<byte[], byte[]>> records) {
@@ -441,9 +457,6 @@ public class StoreChangelogReader implements ChangelogReader {
                 final long offset = record.offset();
                 if (offset < limitOffset)
                     changelogMetadata.bufferedLimitIndex = changelogMetadata.bufferedRecords.size();
-
-                if (changelogMetadata.restoreLimitOffset != null && offset >= changelogMetadata.restoreLimitOffset)
-                    updateLimitOffset = true;
             }
         }
     }
@@ -548,6 +561,8 @@ public class StoreChangelogReader implements ChangelogReader {
             .map(Map.Entry::getKey).collect(Collectors.toSet());
 
         updateLimitOffsetsForStandbyChangelogs(committedOffsetForChangelogs(changelogsWithLimitOffsets));
+
+        updateLimitOffset = false;
     }
 
     private void updateLimitOffsetsForStandbyChangelogs(final Map<TopicPartition, Long> committedOffsets) {

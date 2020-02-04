@@ -228,7 +228,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
      */
     @Override
     public void suspend() {
-        if (state() == State.CLOSING || state() == State.SUSPENDED) {
+        if (state() == State.CREATED || state() == State.CLOSING || state() == State.SUSPENDED) {
             // do nothing
             log.trace("Skip suspending since state is {}", state());
         } else {
@@ -261,6 +261,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     @Override
     public void resume() {
         switch (state()) {
+            case CREATED:
             case CLOSING:
             case RUNNING:
             case RESTORING:
