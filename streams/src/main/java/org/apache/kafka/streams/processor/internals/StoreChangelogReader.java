@@ -230,10 +230,6 @@ public class StoreChangelogReader implements ChangelogReader {
             // this is a special case, meaning there's nothing to be restored since the changelog has no data
             // OR the changelog is a source topic and there's no committed offset
             return true;
-        } else if (currentOffset == null) {
-            // current offset is not initialized meaning there's no checkpointed offset,
-            // we would start restoring from beginning and it does not end yet
-            return false;
         } else if (metadata.bufferedRecords.isEmpty()) {
             // NOTE there are several corner cases that we need to consider:
             //  1) the end / committed offset returned from the consumer is the last offset + 1
