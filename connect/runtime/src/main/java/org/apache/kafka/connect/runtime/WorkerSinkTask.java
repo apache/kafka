@@ -45,6 +45,7 @@ import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTask;
 import org.apache.kafka.connect.storage.Converter;
 import org.apache.kafka.connect.storage.HeaderConverter;
+import org.apache.kafka.connect.storage.StatusBackingStore;
 import org.apache.kafka.connect.util.ConnectUtils;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.slf4j.Logger;
@@ -71,7 +72,6 @@ class WorkerSinkTask extends WorkerTask {
     private final SinkTask task;
     private final ClusterConfigState configState;
     private Map<String, String> taskConfig;
-    private final Time time;
     private final Converter keyConverter;
     private final Converter valueConverter;
     private final HeaderConverter headerConverter;
@@ -105,8 +105,10 @@ class WorkerSinkTask extends WorkerTask {
                           KafkaConsumer<byte[], byte[]> consumer,
                           ClassLoader loader,
                           Time time,
-                          RetryWithToleranceOperator retryWithToleranceOperator) {
-        super(id, statusListener, initialState, loader, connectMetrics, retryWithToleranceOperator);
+                          RetryWithToleranceOperator retryWithToleranceOperator,
+                          StatusBackingStore statusBackingStore) {
+        super(id, statusListener, initialState, loader, connectMetrics,
+                retryWithToleranceOperator, time, statusBackingStore);
 
         this.workerConfig = workerConfig;
         this.task = task;
@@ -115,7 +117,6 @@ class WorkerSinkTask extends WorkerTask {
         this.valueConverter = valueConverter;
         this.headerConverter = headerConverter;
         this.transformationChain = transformationChain;
-        this.time = time;
         this.messageBatch = new ArrayList<>();
         this.currentOffsets = new HashMap<>();
         this.origOffsets = new HashMap<>();
@@ -504,6 +505,7 @@ class WorkerSinkTask extends WorkerTask {
                 headers);
         log.trace("{} Applying transformations to record in topic '{}' partition {} at offset {} and timestamp {} with key {} and value {}",
                 this, msg.topic(), msg.partition(), msg.offset(), timestamp, keyAndSchema.value(), valueAndSchema.value());
+        recordActiveTopic(origRecord.topic());
         return transformationChain.apply(origRecord);
     }
 

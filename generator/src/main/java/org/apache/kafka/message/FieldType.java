@@ -112,6 +112,21 @@ public interface FieldType {
         }
     }
 
+    final class Float64FieldType implements FieldType {
+        static final Float64FieldType INSTANCE = new Float64FieldType();
+        private static final String NAME = "float64";
+
+        @Override
+        public Optional<Integer> fixedLength() {
+            return Optional.of(8);
+        }
+
+        @Override
+        public String toString() {
+            return NAME;
+        }
+    }
+
     final class StringFieldType implements FieldType {
         static final StringFieldType INSTANCE = new StringFieldType();
         private static final String NAME = "string";
@@ -241,6 +256,8 @@ public interface FieldType {
                 return Int64FieldType.INSTANCE;
             case UUIDFieldType.NAME:
                 return UUIDFieldType.INSTANCE;
+            case Float64FieldType.NAME:
+                return Float64FieldType.INSTANCE;
             case StringFieldType.NAME:
                 return StringFieldType.INSTANCE;
             case BytesFieldType.NAME:
