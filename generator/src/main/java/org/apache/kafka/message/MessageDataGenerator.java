@@ -565,6 +565,7 @@ public final class MessageDataGenerator {
                     } else {
                         buffer.printf("this.%s = %s;%n", field.camelCaseName(),
                             primitiveReadExpression(field.type()));
+                        domainCheck(field);
                     }
                 }).
                 generate(buffer);
@@ -796,16 +797,7 @@ public final class MessageDataGenerator {
                                 buffer.printf("this.%s = %s;%n",
                                     field.camelCaseName(),
                                     readFieldFromStruct(field.type(), field.snakeCaseName(), field.zeroCopy()));
-                                if (field.domain() != null) {
-                                    buffer.printf("if (!is%sValid(this.%s, _version)) {%n", field.capitalizedCamelCaseName(), field.camelCaseName());
-                                    buffer.incrementIndent();
-                                    buffer.printf("throw new IllegalArgumentException(\"%s cannot have value \" + this.%s + \" (\" + %s.name(this.%s) + \") at version \" + _version);%n",
-                                            field.snakeCaseName(), field.camelCaseName(),
-                                            field.domain().name(), field.camelCaseName());
-
-                                    buffer.decrementIndent();
-                                    buffer.printf("}%n");
-                                }
+                                domainCheck(field);
                             }
                         }).
                         ifMember(presentAndTaggedVersions -> {
@@ -1008,6 +1000,7 @@ public final class MessageDataGenerator {
                                     callGenerateVariableLengthWriter.generate(presentAndUntaggedVersions);
                                 }
                             } else {
+                                domainCheck(field);
                                 buffer.printf("%s;%n",
                                     primitiveWriteExpression(field.type(), field.camelCaseName()));
                             }
@@ -1114,6 +1107,19 @@ public final class MessageDataGenerator {
             generate(buffer);
         buffer.decrementIndent();
         buffer.printf("}%n");
+    }
+
+    private void domainCheck(FieldSpec field) {
+        if (field.domain() != null) {
+            buffer.printf("if (!is%sValid(this.%s, _version)) {%n",
+                    field.capitalizedCamelCaseName(), field.camelCaseName());
+            buffer.incrementIndent();
+            buffer.printf("throw new IllegalArgumentException(\"%s cannot have value \" + this.%s + \" (\" + %s.name(this.%s) + \") at version \" + _version);%n",
+                    field.snakeCaseName(), field.camelCaseName(),
+                    field.domain().name(), field.camelCaseName());
+            buffer.decrementIndent();
+            buffer.printf("}%n");
+        }
     }
 
     private void generateCheckForUnsupportedNumTaggedFields(String conditional) {
@@ -1369,16 +1375,7 @@ public final class MessageDataGenerator {
                 (field.type() instanceof FieldType.UUIDFieldType) ||
                 (field.type() instanceof FieldType.Float64FieldType) ||
                 (field.type() instanceof FieldType.StringFieldType)) {
-            if (field.domain() != null) {
-                buffer.printf("if (!is%sValid(this.%s, _version)) {%n",
-                        field.capitalizedCamelCaseName(), field.camelCaseName());
-                buffer.incrementIndent();
-                buffer.printf("throw new IllegalArgumentException(\"%s cannot have value \" + this.%s + \" (\" + %s.name(this.%s) + \") at version \" + _version);%n",
-                        field.snakeCaseName(), field.camelCaseName(),
-                        field.domain().name(), field.camelCaseName());
-                buffer.decrementIndent();
-                buffer.printf("}%n");
-            }
+            domainCheck(field);
             buffer.printf("struct.set(\"%s\", this.%s);%n",
                 field.snakeCaseName(), field.camelCaseName());
         } else if (field.type().isBytes()) {
