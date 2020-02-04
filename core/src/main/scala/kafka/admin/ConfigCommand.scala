@@ -598,7 +598,7 @@ object ConfigCommand extends Config {
     val zkTlsConfigFile = parser.accepts("zk-tls-config-file",
       "Identifies the file where ZooKeeper client TLS connectivity properties are defined.  Any properties other than " +
         KafkaConfig.ZkSslConfigToSystemPropertyMap.keys.toList.sorted.mkString(", ") + " are ignored.")
-      .withOptionalArg().describedAs("ZooKeeper TLS configuration").ofType(classOf[String])
+      .withRequiredArg().describedAs("ZooKeeper TLS configuration").ofType(classOf[String])
     options = parser.parse(args : _*)
 
     private val entityFlags = List((topic, ConfigType.Topic),

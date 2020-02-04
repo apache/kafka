@@ -158,10 +158,11 @@ object ZkSecurityMigrator extends Logging {
       withRequiredArg().ofType(classOf[java.lang.Integer]).defaultsTo(30000)
     val enablePathCheckOpt = parser.accepts("enable.path.check", "Checks if all the root paths exist in ZooKeeper " +
       "before migration. If not, exit the command.")
+    // Tested via System Test kafkatest.tests.core.zookeeper_tls_test.ZookeeperTlsTest.test_zk_tls
     val zkTlsConfigFile = parser.accepts(tlsConfigFileOption,
       "Identifies the file where ZooKeeper client TLS connectivity properties are defined.  Any properties other than " +
         KafkaConfig.ZkSslConfigToSystemPropertyMap.keys.mkString(", ") + " are ignored.")
-      .withOptionalArg().describedAs("ZooKeeper TLS configuration").ofType(classOf[String])
+      .withRequiredArg().describedAs("ZooKeeper TLS configuration").ofType(classOf[String])
     options = parser.parse(args : _*)
   }
 }
