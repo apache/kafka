@@ -87,9 +87,7 @@ public class KafkaExactlyOnceDemo {
         CountDownLatch prePopulateLatch = new CountDownLatch(1);
 
         /* Stage 2: pre-populate records */
-        final boolean isAsync = false;
-        final boolean enableIdempotency = true;
-        Producer producerThread = new Producer(INPUT_TOPIC, isAsync, null, enableIdempotency, numRecords, prePopulateLatch);
+        Producer producerThread = new Producer(INPUT_TOPIC, false, null, true, numRecords, prePopulateLatch);
         producerThread.start();
 
         prePopulateLatch.await(5, TimeUnit.MINUTES);
