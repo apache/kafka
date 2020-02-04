@@ -188,6 +188,10 @@ public class StoreChangelogReader implements ChangelogReader {
     // to update offset limit for standby tasks;
     private Consumer<byte[], byte[]> mainConsumer;
 
+    // the flag indicating limit offsets could be updated --- this is only needed for standby tasks that have limit
+    // offsets enabled
+    private boolean updateLimitOffset;
+
     void setMainConsumer(final Consumer<byte[], byte[]> consumer) {
         this.mainConsumer = consumer;
     }
@@ -207,6 +211,7 @@ public class StoreChangelogReader implements ChangelogReader {
         this.pollTime = Duration.ofMillis(config.getLong(StreamsConfig.POLL_MS_CONFIG));
 
         this.changelogs = new HashMap<>();
+        this.updateLimitOffset = false;
     }
 
     private static String recordEndOffset(final Long endOffset) {
@@ -436,6 +441,9 @@ public class StoreChangelogReader implements ChangelogReader {
                 final long offset = record.offset();
                 if (offset < limitOffset)
                     changelogMetadata.bufferedLimitIndex = changelogMetadata.bufferedRecords.size();
+
+                if (changelogMetadata.restoreLimitOffset != null && offset >= changelogMetadata.restoreLimitOffset)
+                    updateLimitOffset = true;
             }
         }
     }
