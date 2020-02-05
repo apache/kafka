@@ -121,10 +121,18 @@ public class ExactlyOnceMessageProcessor extends Thread {
         }
 
         int messageProcessed = 0;
+        boolean abortPreviousTransaction = false;
         while (messageRemaining.get() > 0) {
             ConsumerRecords<Integer, String> records = consumer.poll(Duration.ofMillis(200));
             if (records.count() > 0) {
                 try {
+                    // Abort previous transaction if instructed.
+                    if (abortPreviousTransaction) {
+                        producer.abortTransaction();
+                        // The consumer fetch position also needs to be reset.
+                        resetToLastCommittedPositions(consumer);
+                        abortPreviousTransaction = false;
+                    }
                     // Begin a new transaction session.
                     producer.beginTransaction();
                     for (ConsumerRecord<Integer, String> record : records) {
@@ -148,8 +156,8 @@ public class ExactlyOnceMessageProcessor extends Thread {
                     producer.commitTransaction();
                     messageProcessed += records.count();
                 } catch (CommitFailedException e) {
-                    // In case of a retriable exception, suggest aborting the ongoing transaction first for correctness.
-                    producer.abortTransaction();
+                    // In case of a retriable exception, suggest aborting the ongoing transaction for correctness.
+                    abortPreviousTransaction = true;
                 } catch (ProducerFencedException | FencedInstanceIdException e) {
                     throw new KafkaException("Encountered fatal error during processing: " + e.getMessage());
                 }
@@ -186,5 +194,16 @@ public class ExactlyOnceMessageProcessor extends Thread {
             }
             return 0;
         }).sum();
+    }
+
+    private static void resetToLastCommittedPositions(KafkaConsumer<Integer, String> consumer) {
+        final Map<TopicPartition, OffsetAndMetadata> committed = consumer.committed(consumer.assignment());
+        consumer.assignment().forEach(tp -> {
+            OffsetAndMetadata offsetAndMetadata = committed.get(tp);
+            if (offsetAndMetadata != null)
+                consumer.seek(tp, offsetAndMetadata.offset());
+            else
+                consumer.seekToBeginning(Collections.singleton(tp));
+        });
     }
 }
