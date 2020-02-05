@@ -96,7 +96,7 @@ public class InternalTopologyBuilderTest {
         builder.addSource(null, "source", null, stringSerde.deserializer(), stringSerde.deserializer(), "test-topic");
         builder.initializeSubscription();
 
-        assertEquals(Collections.singleton("test-topic"), builder.sourceTopicCollection());
+        assertEquals(Arrays.asList("test-topic"), builder.sourceTopicCollection());
         assertEquals(builder.earliestResetTopicsPattern().pattern(), "");
         assertEquals(builder.latestResetTopicsPattern().pattern(), "");
     }
