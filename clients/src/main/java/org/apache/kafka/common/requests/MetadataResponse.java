@@ -60,13 +60,25 @@ public class MetadataResponse extends AbstractResponse {
 
     private final MetadataResponseData data;
     private volatile Holder holder;
+    private final boolean hasReliableLeaderEpochs;
 
     public MetadataResponse(MetadataResponseData data) {
-        this.data = data;
+        this(data, true);
     }
 
     public MetadataResponse(Struct struct, short version) {
-        this(new MetadataResponseData(struct, version));
+        // Prior to Kafka version 2.4 (which coincides with Metadata version 9), the broker
+        // does not propagate leader epoch information accurately while a reassignment is in
+        // progress. Relying on a stale epoch can lead to FENCED_LEADER_EPOCH errors which
+        // can prevent consumption throughout the course of a reassignment. It is safer in
+        // this case to revert to the behavior in previous protocol versions which checks
+        // leader status only.
+        this(new MetadataResponseData(struct, version), version >= 9);
+    }
+
+    private MetadataResponse(MetadataResponseData data, boolean hasReliableLeaderEpochs) {
+        this.data = data;
+        this.hasReliableLeaderEpochs = hasReliableLeaderEpochs;
     }
 
     @Override
@@ -205,6 +217,18 @@ public class MetadataResponse extends AbstractResponse {
         return this.data.clusterId();
     }
 
+    /**
+     * Check whether the leader epochs returned from the response can be relied on
+     * for epoch validation in Fetch, ListOffsets, and OffsetsForLeaderEpoch requests.
+     * If not, then the client will not retain the leader epochs and hence will not
+     * forward them in requests.
+     *
+     * @return true if the epoch can be used for validation
+     */
+    public boolean hasReliableLeaderEpochs() {
+        return hasReliableLeaderEpochs;
+    }
+
     public static MetadataResponse parse(ByteBuffer buffer, short version) {
         return new MetadataResponse(ApiKeys.METADATA.responseSchema(version).read(buffer), version);
     }
@@ -232,7 +256,7 @@ public class MetadataResponse extends AbstractResponse {
                              String topic,
                              boolean isInternal,
                              List<PartitionMetadata> partitionMetadata) {
-            this(error, topic, isInternal, partitionMetadata, 0);
+            this(error, topic, isInternal, partitionMetadata, AUTHORIZED_OPERATIONS_OMITTED);
         }
 
         public Errors error() {

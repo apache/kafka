@@ -199,7 +199,7 @@ public class SubscriptionStateTest {
         assertEquals(1, state.subscription().size());
         assertTrue(state.assignedPartitions().isEmpty());
         assertEquals(0, state.numAssignedPartitions());
-        assertTrue(state.partitionsAutoAssigned());
+        assertTrue(state.hasAutoAssignedPartitions());
         assertTrue(state.checkAssignmentMatchedSubscription(singleton(tp0)));
         state.assignFromSubscribed(singleton(tp0));
 

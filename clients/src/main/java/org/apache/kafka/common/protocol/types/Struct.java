@@ -97,6 +97,10 @@ public class Struct {
         return getShort(field.name);
     }
 
+    public Double get(Field.Float64 field) {
+        return getDouble(field.name);
+    }
+
     public String get(Field.Str field) {
         return getString(field.name);
     }
@@ -144,6 +148,12 @@ public class Struct {
     public Integer getOrElse(Field.Int32 field, int alternative) {
         if (hasField(field.name))
             return getInt(field.name);
+        return alternative;
+    }
+
+    public Double getOrElse(Field.Float64 field, double alternative) {
+        if (hasField(field.name))
+            return getDouble(field.name);
         return alternative;
     }
 
@@ -264,6 +274,14 @@ public class Struct {
         return (UUID) get(name);
     }
 
+    public Double getDouble(BoundField field) {
+        return (Double) get(field);
+    }
+
+    public Double getDouble(String name) {
+        return (Double) get(name);
+    }
+
     public Object[] getArray(BoundField field) {
         return (Object[]) get(field);
     }
@@ -369,6 +387,10 @@ public class Struct {
         return set(def.name, value);
     }
 
+    public Struct set(Field.Float64 def, double value) {
+        return set(def.name, value);
+    }
+
     public Struct set(Field.Bool def, boolean value) {
         return set(def.name, value);
     }
@@ -418,9 +440,8 @@ public class Struct {
         validateField(field);
         if (field.def.type instanceof Schema) {
             return new Struct((Schema) field.def.type);
-        } else if (field.def.type instanceof ArrayOf) {
-            ArrayOf array = (ArrayOf) field.def.type;
-            return new Struct((Schema) array.type());
+        } else if (field.def.type.isArray()) {
+            return new Struct((Schema) field.def.type.arrayElementType().get());
         } else {
             throw new SchemaException("Field '" + field.def.name + "' is not a container type, it is of type " + field.def.type);
         }
@@ -472,6 +493,7 @@ public class Struct {
      * @throws SchemaException If validation fails
      */
     private void validateField(BoundField field) {
+        Objects.requireNonNull(field, "`field` must be non-null");
         if (this.schema != field.schema)
             throw new SchemaException("Attempt to access field '" + field.def.name + "' from a different schema instance.");
         if (field.index > values.length)
@@ -495,7 +517,7 @@ public class Struct {
             BoundField f = this.schema.get(i);
             b.append(f.def.name);
             b.append('=');
-            if (f.def.type instanceof ArrayOf && this.values[i] != null) {
+            if (f.def.type.isArray() && this.values[i] != null) {
                 Object[] arrayValue = (Object[]) this.values[i];
                 b.append('[');
                 for (int j = 0; j < arrayValue.length; j++) {
@@ -519,7 +541,7 @@ public class Struct {
         int result = 1;
         for (int i = 0; i < this.values.length; i++) {
             BoundField f = this.schema.get(i);
-            if (f.def.type instanceof ArrayOf) {
+            if (f.def.type.isArray()) {
                 if (this.get(f) != null) {
                     Object[] arrayObject = (Object[]) this.get(f);
                     for (Object arrayItem: arrayObject)
@@ -549,7 +571,7 @@ public class Struct {
         for (int i = 0; i < this.values.length; i++) {
             BoundField f = this.schema.get(i);
             boolean result;
-            if (f.def.type instanceof ArrayOf) {
+            if (f.def.type.isArray()) {
                 result = Arrays.equals((Object[]) this.get(f), (Object[]) other.get(f));
             } else {
                 Object thisField = this.get(f);
@@ -561,5 +583,4 @@ public class Struct {
         }
         return true;
     }
-
 }

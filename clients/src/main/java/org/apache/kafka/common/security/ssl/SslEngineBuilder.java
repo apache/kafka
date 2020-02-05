@@ -156,7 +156,8 @@ public class SslEngineBuilder {
             tmf.init(ts);
 
             sslContext.init(keyManagers, tmf.getTrustManagers(), this.secureRandomImplementation);
-            log.debug("Created SSL context with keystore {}, truststore {}", keystore, truststore);
+            log.debug("Created SSL context with keystore {}, truststore {}, provider {}.",
+                    keystore, truststore, sslContext.getProvider().getName());
             return sslContext;
         } catch (Exception e) {
             throw new KafkaException(e);

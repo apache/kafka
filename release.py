@@ -60,6 +60,7 @@ import os
 import subprocess
 import sys
 import tempfile
+import time
 import re
 
 PROJECT_NAME = "kafka"
@@ -96,10 +97,11 @@ def print_output(output):
     for line in output.split('\n'):
         print(">", line)
 
-def cmd(action, cmd, *args, **kwargs):
-    if isinstance(cmd, basestring) and not kwargs.get("shell", False):
-        cmd = cmd.split()
+def cmd(action, cmd_arg, *args, **kwargs):
+    if isinstance(cmd_arg, basestring) and not kwargs.get("shell", False):
+        cmd_arg = cmd_arg.split()
     allow_failure = kwargs.pop("allow_failure", False)
+    num_retries = kwargs.pop("num_retries", 0)
 
     stdin_log = ""
     if "stdin" in kwargs and isinstance(kwargs["stdin"], basestring):
@@ -109,12 +111,19 @@ def cmd(action, cmd, *args, **kwargs):
         stdin.seek(0)
         kwargs["stdin"] = stdin
 
-    print(action, cmd, stdin_log)
+    print(action, cmd_arg, stdin_log)
     try:
-        output = subprocess.check_output(cmd, *args, stderr=subprocess.STDOUT, **kwargs)
+        output = subprocess.check_output(cmd_arg, *args, stderr=subprocess.STDOUT, **kwargs)
         print_output(output)
     except subprocess.CalledProcessError as e:
         print_output(e.output)
+
+        if num_retries > 0:
+            kwargs['num_retries'] = num_retries - 1
+            kwargs['allow_failure'] = allow_failure
+            print("Retrying... %d remaining retries" % (num_retries - 1))
+            time.sleep(4. / (num_retries + 1)) # e.g., if retries=3, sleep for 1s, 1.3s, 2s
+            return cmd(action, cmd_arg, *args, **kwargs)
 
         if allow_failure:
             return
@@ -153,7 +162,7 @@ def regexReplace(path, pattern, replacement):
 
 def user_ok(msg):
     ok = raw_input(msg)
-    return ok.lower() == 'y'
+    return ok.strip().lower() == 'y'
 
 def sftp_mkdir(dir):
     basedir, dirname = os.path.split(dir)
@@ -164,7 +173,7 @@ def sftp_mkdir(dir):
 cd %s
 -mkdir %s
 """ % (basedir, dirname)
-       cmd("Creating '%s' in '%s' in your Apache home directory if it does not exist (errors are ok if the directory already exists)" % (dirname, basedir), "sftp -b - %s@home.apache.org" % apache_id, stdin=cmd_str, allow_failure=True)
+       cmd("Creating '%s' in '%s' in your Apache home directory if it does not exist (errors are ok if the directory already exists)" % (dirname, basedir), "sftp -b - %s@home.apache.org" % apache_id, stdin=cmd_str, allow_failure=True, num_retries=3)
     except subprocess.CalledProcessError:
         # This is ok. The command fails if the directory already exists
         pass

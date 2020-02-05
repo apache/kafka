@@ -60,7 +60,12 @@ class NamedCache {
         this.streamsMetrics = streamsMetrics;
         storeName = ThreadCache.underlyingStoreNamefromCacheName(name);
         taskName = ThreadCache.taskIDfromCacheName(name);
-        hitRatioSensor = NamedCacheMetrics.hitRatioSensor(streamsMetrics, taskName, storeName);
+        hitRatioSensor = NamedCacheMetrics.hitRatioSensor(
+            streamsMetrics,
+            Thread.currentThread().getName(),
+            taskName,
+            storeName
+        );
     }
 
     synchronized final String name() {
@@ -315,7 +320,7 @@ class NamedCache {
         currentSizeBytes = 0;
         dirtyKeys.clear();
         cache.clear();
-        streamsMetrics.removeAllCacheLevelSensors(taskName, storeName);
+        streamsMetrics.removeAllCacheLevelSensors(Thread.currentThread().getName(), taskName, storeName);
     }
 
     /**

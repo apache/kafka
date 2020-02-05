@@ -265,6 +265,61 @@ public class UtilsTest {
     }
 
     @Test
+    public void testFileAsStringSimpleFile() throws IOException {
+        File tempFile = TestUtils.tempFile();
+        try {
+            String testContent = "Test Content";
+            Files.write(tempFile.toPath(), testContent.getBytes());
+            assertEquals(testContent, Utils.readFileAsString(tempFile.getPath()));
+        } finally {
+            Files.deleteIfExists(tempFile.toPath());
+        }
+    }
+
+    /**
+     * Test to read content of named pipe as string. As reading/writing to a pipe can block,
+     * timeout test after a minute (test finishes within 100 ms normally).
+     */
+    @Test(timeout = 60 * 1000)
+    public void testFileAsStringNamedPipe() throws Exception {
+
+        // Create a temporary name for named pipe
+        Random random = new Random();
+        long n = random.nextLong();
+        n = n == Long.MIN_VALUE ? 0 : Math.abs(n);
+
+        // Use the name to create a FIFO in tmp directory
+        String tmpDir = System.getProperty("java.io.tmpdir");
+        String fifoName = "fifo-" + n + ".tmp";
+        File fifo = new File(tmpDir, fifoName);
+        Thread producerThread = null;
+        try {
+            Process mkFifoCommand = new ProcessBuilder("mkfifo", fifo.getCanonicalPath()).start();
+            mkFifoCommand.waitFor();
+
+            // Send some data to fifo and then read it back, but as FIFO blocks if the consumer isn't present,
+            // we need to send data in a separate thread.
+            final String testFileContent = "This is test";
+            producerThread = new Thread(() -> {
+                try {
+                    Files.write(fifo.toPath(), testFileContent.getBytes());
+                } catch (IOException e) {
+                    fail("Error when producing to fifo : " + e.getMessage());
+                }
+            }, "FIFO-Producer");
+            producerThread.start();
+
+            assertEquals(testFileContent, Utils.readFileAsString(fifo.getCanonicalPath()));
+        } finally {
+            Files.deleteIfExists(fifo.toPath());
+            if (producerThread != null) {
+                producerThread.join(30 * 1000); // Wait for thread to terminate
+                assertFalse(producerThread.isAlive());
+            }
+        }
+    }
+
+    @Test
     public void testMin() {
         assertEquals(1, Utils.min(1));
         assertEquals(1, Utils.min(1, 2, 3));

@@ -361,6 +361,7 @@ public class StandaloneHerderTest {
 
         ClusterConfigState configState = new ClusterConfigState(
                 -1,
+                null,
                 Collections.singletonMap(CONNECTOR_NAME, 1),
                 Collections.singletonMap(CONNECTOR_NAME, connectorConfig),
                 Collections.singletonMap(CONNECTOR_NAME, TargetState.STARTED),
@@ -395,6 +396,7 @@ public class StandaloneHerderTest {
 
         ClusterConfigState configState = new ClusterConfigState(
                 -1,
+                null,
                 Collections.singletonMap(CONNECTOR_NAME, 1),
                 Collections.singletonMap(CONNECTOR_NAME, connectorConfig),
                 Collections.singletonMap(CONNECTOR_NAME, TargetState.STARTED),
@@ -570,7 +572,8 @@ public class StandaloneHerderTest {
 
         herder.putTaskConfigs(CONNECTOR_NAME,
                 Arrays.asList(singletonMap("config", "value")),
-                cb);
+                cb,
+                null);
 
         PowerMock.verifyAll();
     }
@@ -645,6 +648,7 @@ public class StandaloneHerderTest {
 
         ClusterConfigState configState = new ClusterConfigState(
                 -1,
+                null,
                 Collections.singletonMap(CONNECTOR_NAME, 1),
                 Collections.singletonMap(CONNECTOR_NAME, connectorConfig(sourceSink)),
                 Collections.singletonMap(CONNECTOR_NAME, TargetState.STARTED),

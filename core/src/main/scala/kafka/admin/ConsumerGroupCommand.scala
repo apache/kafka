@@ -26,19 +26,21 @@ import com.fasterxml.jackson.module.scala.DefaultScalaModule
 import com.fasterxml.jackson.module.scala.experimental.ScalaObjectMapper
 import kafka.utils._
 import org.apache.kafka.clients.admin._
-import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer, OffsetAndMetadata}
-import org.apache.kafka.clients.{CommonClientConfigs, admin}
-import org.apache.kafka.common.serialization.StringDeserializer
+import org.apache.kafka.clients.consumer.OffsetAndMetadata
+import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.{KafkaException, Node, TopicPartition}
 
 import scala.collection.JavaConverters._
 import scala.collection.mutable.ListBuffer
-import scala.collection.{immutable, Map, Seq, Set, mutable}
+import scala.collection.{Map, Seq, Set, immutable, mutable}
 import scala.util.{Failure, Success, Try}
 import joptsimple.OptionSpec
+import org.apache.kafka.common.protocol.Errors
+
 import scala.collection.immutable.TreeMap
 import scala.reflect.ClassTag
+import org.apache.kafka.common.requests.ListOffsetResponse
 
 object ConsumerGroupCommand extends Logging {
 
@@ -48,9 +50,9 @@ object ConsumerGroupCommand extends Logging {
     CommandLineUtils.printHelpAndExitIfNeeded(opts, "This tool helps to list all consumer groups, describe a consumer group, delete consumer group info, or reset consumer group offsets.")
 
     // should have exactly one action
-    val actions = Seq(opts.listOpt, opts.describeOpt, opts.deleteOpt, opts.resetOffsetsOpt).count(opts.options.has)
+    val actions = Seq(opts.listOpt, opts.describeOpt, opts.deleteOpt, opts.resetOffsetsOpt, opts.deleteOffsetsOpt).count(opts.options.has)
     if (actions != 1)
-      CommandLineUtils.printUsageAndDie(opts.parser, "Command must include exactly one action: --list, --describe, --delete, --reset-offsets")
+      CommandLineUtils.printUsageAndDie(opts.parser, "Command must include exactly one action: --list, --describe, --delete, --reset-offsets, --delete-offsets")
 
     opts.checkArgs()
 
@@ -70,6 +72,9 @@ object ConsumerGroupCommand extends Logging {
           println(exported)
         } else
           printOffsetsToReset(offsetsToReset)
+      }
+      else if (opts.options.has(opts.deleteOffsetsOpt)) {
+        consumerGroupService.deleteOffsets()
       }
     } catch {
       case e: Throwable =>
@@ -162,9 +167,6 @@ object ConsumerGroupCommand extends Logging {
                              private[admin] val configOverrides: Map[String, String] = Map.empty) {
 
     private val adminClient = createAdminClient(configOverrides)
-
-    // `consumers` are only needed for `describe`, so we instantiate them lazily
-    private lazy val consumers: mutable.Map[String, KafkaConsumer[String, String]] = mutable.Map.empty
 
     // We have to make sure it is evaluated once and available
     private lazy val resetPlanFromFile: Option[Map[String, Map[TopicPartition, OffsetAndMetadata]]] = {
@@ -384,8 +386,13 @@ object ConsumerGroupCommand extends Logging {
 
                 // Dry-run is the default behavior if --execute is not specified
                 val dryRun = opts.options.has(opts.dryRunOpt) || !opts.options.has(opts.executeOpt)
-                if (!dryRun)
-                  getConsumer(groupId).commitSync(preparedOffsets.asJava)
+                if (!dryRun) {
+                  adminClient.alterConsumerGroupOffsets(
+                    groupId,
+                    preparedOffsets.asJava,
+                    withTimeoutMs(new AlterConsumerGroupOffsetsOptions)
+                  ).all.get
+                }
                 acc.updated(groupId, preparedOffsets)
               case currentState =>
                 printError(s"Assignments can only be reset if the group '$groupId' is inactive, but the current state is $currentState.")
@@ -393,6 +400,93 @@ object ConsumerGroupCommand extends Logging {
             }
         }
       result
+    }
+
+    def deleteOffsets(groupId: String, topics: List[String]): (Errors, Map[TopicPartition, Throwable]) = {
+      var partitionLevelResult: Map[TopicPartition, Throwable] = mutable.HashMap()
+
+      val (topicWithPartitions, topicWithoutPartitions) = topics.partition(_.contains(":"))
+
+      val knownPartitions = topicWithPartitions.flatMap { topicArg =>
+        val split = topicArg.split(":")
+        split(1).split(",").map { partition =>
+          new TopicPartition(split(0), partition.toInt)
+        }
+      }
+
+      // Get the partitions of topics that the user did not explicitly specify the partitions
+      val describeTopicsResult = adminClient.describeTopics(
+        topicWithoutPartitions.asJava,
+        withTimeoutMs(new DescribeTopicsOptions))
+
+      val unknownPartitions = describeTopicsResult.values().asScala.flatMap { case (topic, future) =>
+        Try(future.get()) match {
+          case Success(description) => description.partitions().asScala.map { partition =>
+            new TopicPartition(topic, partition.partition())
+          }
+          case Failure(e) =>
+            partitionLevelResult += new TopicPartition(topic, -1) -> e
+            List.empty
+        }
+      }
+
+      val partitions = knownPartitions ++ unknownPartitions
+
+      val deleteResult = adminClient.deleteConsumerGroupOffsets(
+        groupId,
+        partitions.toSet.asJava,
+        withTimeoutMs(new DeleteConsumerGroupOffsetsOptions)
+      )
+
+      var topLevelException = Errors.NONE
+      Try(deleteResult.all.get) match {
+        case Success(_) =>
+        case Failure(e) => topLevelException = Errors.forException(e.getCause)
+      }
+
+      partitions.foreach { partition =>
+        Try(deleteResult.partitionResult(partition).get()) match {
+          case Success(_) => partitionLevelResult += partition -> null
+          case Failure(e) => partitionLevelResult += partition -> e
+        }
+      }
+
+      (topLevelException, partitionLevelResult)
+    }
+
+    def deleteOffsets(): Unit = {
+      val groupId = opts.options.valueOf(opts.groupOpt)
+      val topics = opts.options.valuesOf(opts.topicOpt).asScala.toList
+
+      val (topLevelResult, partitionLevelResult) = deleteOffsets(groupId, topics)
+
+      topLevelResult match {
+        case Errors.NONE =>
+          println(s"Request succeed for deleting offsets with topic ${topics.mkString(", ")} group $groupId")
+        case Errors.INVALID_GROUP_ID =>
+          printError(s"'$groupId' is not valid.")
+        case Errors.GROUP_ID_NOT_FOUND =>
+          printError(s"'$groupId' does not exist.")
+        case Errors.GROUP_AUTHORIZATION_FAILED =>
+          printError(s"Access to '$groupId' is not authorized.")
+        case Errors.NON_EMPTY_GROUP =>
+          printError(s"Deleting offsets of a consumer group '$groupId' is forbidden if the group is not empty.")
+        case Errors.GROUP_SUBSCRIBED_TO_TOPIC |
+             Errors.TOPIC_AUTHORIZATION_FAILED |
+             Errors.UNKNOWN_TOPIC_OR_PARTITION =>
+          printError(s"Encounter some partition level error, see the follow-up details:")
+        case _ =>
+          printError(s"Encounter some unknown error: $topLevelResult")
+      }
+
+      println("\n%-30s %-15s %-15s".format("TOPIC", "PARTITION", "STATUS"))
+      partitionLevelResult.toList.sortBy(t => t._1.topic + t._1.partition.toString).foreach { case (tp, error) =>
+        println("%-30s %-15s %-15s".format(
+          tp.topic,
+          if (tp.partition >= 0) tp.partition else "Not Provided",
+          if (error != null) s"Error: ${error.getMessage}" else "Successful"
+        ))
+      }
     }
 
     private[admin] def describeConsumerGroups(groupIds: Seq[String]): mutable.Map[String, ConsumerGroupDescription] = {
@@ -489,34 +583,50 @@ object ConsumerGroupCommand extends Logging {
     }
 
     private def getLogEndOffsets(groupId: String, topicPartitions: Seq[TopicPartition]): Map[TopicPartition, LogOffsetResult] = {
-      val offsets = getConsumer(groupId).endOffsets(topicPartitions.asJava)
+      val endOffsets = topicPartitions.map { topicPartition =>
+        topicPartition -> OffsetSpec.latest
+      }.toMap
+      val offsets = adminClient.listOffsets(
+        endOffsets.asJava,
+        withTimeoutMs(new ListOffsetsOptions)
+      ).all.get
       topicPartitions.map { topicPartition =>
         Option(offsets.get(topicPartition)) match {
-          case Some(logEndOffset) => topicPartition -> LogOffsetResult.LogOffset(logEndOffset)
+          case Some(listOffsetsResultInfo) => topicPartition -> LogOffsetResult.LogOffset(listOffsetsResultInfo.offset)
           case _ => topicPartition -> LogOffsetResult.Unknown
         }
       }.toMap
     }
 
     private def getLogStartOffsets(groupId: String, topicPartitions: Seq[TopicPartition]): Map[TopicPartition, LogOffsetResult] = {
-      val offsets = getConsumer(groupId).beginningOffsets(topicPartitions.asJava)
+      val startOffsets = topicPartitions.map { topicPartition =>
+        topicPartition -> OffsetSpec.earliest
+      }.toMap
+      val offsets = adminClient.listOffsets(
+        startOffsets.asJava,
+        withTimeoutMs(new ListOffsetsOptions)
+      ).all.get
       topicPartitions.map { topicPartition =>
         Option(offsets.get(topicPartition)) match {
-          case Some(logStartOffset) => topicPartition -> LogOffsetResult.LogOffset(logStartOffset)
+          case Some(listOffsetsResultInfo) => topicPartition -> LogOffsetResult.LogOffset(listOffsetsResultInfo.offset)
           case _ => topicPartition -> LogOffsetResult.Unknown
         }
       }.toMap
     }
 
     private def getLogTimestampOffsets(groupId: String, topicPartitions: Seq[TopicPartition], timestamp: java.lang.Long): Map[TopicPartition, LogOffsetResult] = {
-      val consumer = getConsumer(groupId)
-      consumer.assign(topicPartitions.asJava)
-
+      val timestampOffsets = topicPartitions.map { topicPartition =>
+        topicPartition -> OffsetSpec.forTimestamp(timestamp)
+      }.toMap
+      val offsets = adminClient.listOffsets(
+        timestampOffsets.asJava,
+        withTimeoutMs(new ListOffsetsOptions)
+      ).all.get
       val (successfulOffsetsForTimes, unsuccessfulOffsetsForTimes) =
-        consumer.offsetsForTimes(topicPartitions.map(_ -> timestamp).toMap.asJava).asScala.partition(_._2 != null)
+        offsets.asScala.partition(_._2.offset != ListOffsetResponse.UNKNOWN_OFFSET)
 
       val successfulLogTimestampOffsets = successfulOffsetsForTimes.map {
-        case (topicPartition, offsetAndTimestamp) => topicPartition -> LogOffsetResult.LogOffset(offsetAndTimestamp.offset)
+        case (topicPartition, listOffsetsResultInfo) => topicPartition -> LogOffsetResult.LogOffset(listOffsetsResultInfo.offset)
       }.toMap
 
       successfulLogTimestampOffsets ++ getLogEndOffsets(groupId, unsuccessfulOffsetsForTimes.keySet.toSeq)
@@ -524,42 +634,13 @@ object ConsumerGroupCommand extends Logging {
 
     def close(): Unit = {
       adminClient.close()
-      consumers.values.foreach(consumer =>
-        Option(consumer).foreach(_.close())
-      )
     }
 
     private def createAdminClient(configOverrides: Map[String, String]): Admin = {
       val props = if (opts.options.has(opts.commandConfigOpt)) Utils.loadProps(opts.options.valueOf(opts.commandConfigOpt)) else new Properties()
       props.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, opts.options.valueOf(opts.bootstrapServerOpt))
       configOverrides.foreach { case (k, v) => props.put(k, v)}
-      admin.AdminClient.create(props)
-    }
-
-    private def getConsumer(groupId: String) = {
-      if (consumers.get(groupId).isEmpty)
-        consumers.update(groupId, createConsumer(groupId))
-      consumers(groupId)
-    }
-
-    private def createConsumer(groupId: String): KafkaConsumer[String, String] = {
-      val properties = new Properties()
-      val deserializer = (new StringDeserializer).getClass.getName
-      val brokerUrl = opts.options.valueOf(opts.bootstrapServerOpt)
-      properties.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerUrl)
-      properties.put(ConsumerConfig.GROUP_ID_CONFIG, groupId)
-      properties.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false")
-      properties.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, "30000")
-      properties.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, deserializer)
-      properties.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, deserializer)
-
-      if (opts.options.has(opts.commandConfigOpt)) {
-        Utils.loadProps(opts.options.valueOf(opts.commandConfigOpt)).asScala.foreach {
-          case (k,v) => properties.put(k, v)
-        }
-      }
-
-      new KafkaConsumer(properties)
+      Admin.create(props)
     }
 
     private def withTimeoutMs [T <: AbstractOptions[T]] (options : T) =  {
@@ -572,8 +653,17 @@ object ConsumerGroupCommand extends Logging {
         val topicPartitions = topicArg.split(":")
         val topic = topicPartitions(0)
         topicPartitions(1).split(",").map(partition => new TopicPartition(topic, partition.toInt))
-      case topic => getConsumer(groupId).partitionsFor(topic).asScala
-        .map(partitionInfo => new TopicPartition(topic, partitionInfo.partition))
+      case topic =>
+        val descriptionMap = adminClient.describeTopics(
+          Seq(topic).asJava,
+          withTimeoutMs(new DescribeTopicsOptions)
+        ).all().get.asScala
+        val r = descriptionMap.flatMap{ case(topic, description) =>
+          description.partitions().asScala.map{ tpInfo =>
+            new TopicPartition(topic, tpInfo.partition)
+          }
+        }
+        r
     }
 
     private def getPartitionsToReset(groupId: String): Seq[TopicPartition] = {
@@ -850,6 +940,7 @@ object ConsumerGroupCommand extends Logging {
       "Example: --bootstrap-server localhost:9092 --describe --group group1 --offsets"
     val StateDoc = "Describe the group state. This option may be used with '--describe' and '--bootstrap-server' options only." + nl +
       "Example: --bootstrap-server localhost:9092 --describe --group group1 --state"
+    val DeleteOffsetsDoc = "Delete offsets of consumer group. Supports one consumer group at the time, and multiple topics."
 
     val bootstrapServerOpt = parser.accepts("bootstrap-server", BootstrapServerDoc)
                                    .withRequiredArg
@@ -878,6 +969,7 @@ object ConsumerGroupCommand extends Logging {
                                   .describedAs("command config property file")
                                   .ofType(classOf[String])
     val resetOffsetsOpt = parser.accepts("reset-offsets", ResetOffsetsDoc)
+    val deleteOffsetsOpt = parser.accepts("delete-offsets", DeleteOffsetsDoc)
     val dryRunOpt = parser.accepts("dry-run", DryRunDoc)
     val executeOpt = parser.accepts("execute", ExecuteDoc)
     val exportOpt = parser.accepts("export", ExportDoc)
@@ -921,6 +1013,7 @@ object ConsumerGroupCommand extends Logging {
     val allConsumerGroupLevelOpts: Set[OptionSpec[_]]  = Set(listOpt, describeOpt, deleteOpt, resetOffsetsOpt)
     val allResetOffsetScenarioOpts: Set[OptionSpec[_]] = Set(resetToOffsetOpt, resetShiftByOpt,
       resetToDatetimeOpt, resetByDurationOpt, resetToEarliestOpt, resetToLatestOpt, resetToCurrentOpt, resetFromFileOpt)
+    val allDeleteOffsetsOpts: Set[OptionSpec[_]] = Set(groupOpt, topicOpt)
 
     def checkArgs(): Unit = {
 
@@ -942,6 +1035,12 @@ object ConsumerGroupCommand extends Logging {
         if (options.has(topicOpt))
           CommandLineUtils.printUsageAndDie(parser, s"The consumer does not support topic-specific offset " +
             "deletion from a consumer group.")
+      }
+
+      if (options.has(deleteOffsetsOpt)) {
+        if (!options.has(groupOpt) || !options.has(topicOpt))
+          CommandLineUtils.printUsageAndDie(parser,
+            s"Option $deleteOffsetsOpt takes the following options: ${allDeleteOffsetsOpts.mkString(", ")}")
       }
 
       if (options.has(resetOffsetsOpt)) {

@@ -59,7 +59,7 @@ class AbstractFetcherManagerTest {
     EasyMock.expect(fetcher.start())
     EasyMock.expect(fetcher.addPartitions(Map(tp -> OffsetAndEpoch(fetchOffset, leaderEpoch))))
     EasyMock.expect(fetcher.fetchState(tp))
-      .andReturn(Some(PartitionFetchState(fetchOffset, leaderEpoch, Truncating)))
+      .andReturn(Some(PartitionFetchState(fetchOffset, None, leaderEpoch, Truncating)))
     EasyMock.expect(fetcher.removePartitions(Set(tp)))
     EasyMock.expect(fetcher.fetchState(tp)).andReturn(None)
     EasyMock.replay(fetcher)
@@ -96,5 +96,39 @@ class AbstractFetcherManagerTest {
     // count for failed partitions
     fetcherManager.removeFetcherForPartitions(Set(tp))
     assertEquals(0, getMetricValue(metricName))
+  }
+  @Test
+  def testDeadThreadCountMetric(): Unit = {
+    val fetcher: AbstractFetcherThread = EasyMock.mock(classOf[AbstractFetcherThread])
+    val fetcherManager = new AbstractFetcherManager[AbstractFetcherThread]("fetcher-manager", "fetcher-manager", 2) {
+      override def createFetcherThread(fetcherId: Int, sourceBroker: BrokerEndPoint): AbstractFetcherThread = {
+        fetcher
+      }
+    }
+
+    val fetchOffset = 10L
+    val leaderEpoch = 15
+    val tp = new TopicPartition("topic", 0)
+    val initialFetchState = InitialFetchState(
+      leader = new BrokerEndPoint(0, "localhost", 9092),
+      currentLeaderEpoch = leaderEpoch,
+      initOffset = fetchOffset)
+
+    EasyMock.expect(fetcher.start())
+    EasyMock.expect(fetcher.addPartitions(Map(tp -> OffsetAndEpoch(fetchOffset, leaderEpoch))))
+    EasyMock.expect(fetcher.isThreadFailed).andReturn(true)
+    EasyMock.replay(fetcher)
+
+    fetcherManager.addFetcherForPartitions(Map(tp -> initialFetchState))
+
+    assertEquals(1, fetcherManager.deadThreadCount)
+    EasyMock.verify(fetcher)
+
+    EasyMock.reset(fetcher)
+    EasyMock.expect(fetcher.isThreadFailed).andReturn(false)
+    EasyMock.replay(fetcher)
+
+    assertEquals(0, fetcherManager.deadThreadCount)
+    EasyMock.verify(fetcher)
   }
 }

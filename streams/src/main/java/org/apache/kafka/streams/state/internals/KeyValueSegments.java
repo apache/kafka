@@ -24,14 +24,14 @@ import org.apache.kafka.streams.state.internals.metrics.RocksDBMetricsRecorder;
  */
 class KeyValueSegments extends AbstractSegments<KeyValueSegment> {
 
-    final private RocksDBMetricsRecorder metricsRecorder;
+    private final RocksDBMetricsRecorder metricsRecorder;
 
     KeyValueSegments(final String name,
                      final String metricsScope,
                      final long retentionPeriod,
                      final long segmentInterval) {
         super(name, retentionPeriod, segmentInterval);
-        metricsRecorder = new RocksDBMetricsRecorder(metricsScope, name);
+        metricsRecorder = new RocksDBMetricsRecorder(metricsScope, Thread.currentThread().getName(), name);
     }
 
     @Override
@@ -50,11 +50,5 @@ class KeyValueSegments extends AbstractSegments<KeyValueSegment> {
             newSegment.openDB(context);
             return newSegment;
         }
-    }
-
-    @Override
-    public void close() {
-        metricsRecorder.close();
-        super.close();
     }
 }

@@ -104,11 +104,53 @@ public class InsertFieldTest {
 
         final SourceRecord transformedRecord = xform.apply(record);
 
-        assertEquals(42L, ((Map) transformedRecord.value()).get("magic"));
-        assertEquals("test", ((Map) transformedRecord.value()).get("topic_field"));
-        assertEquals(0, ((Map) transformedRecord.value()).get("partition_field"));
-        assertEquals(null, ((Map) transformedRecord.value()).get("timestamp_field"));
-        assertEquals("my-instance-id", ((Map) transformedRecord.value()).get("instance_id"));
+        assertEquals(42L, ((Map<?, ?>) transformedRecord.value()).get("magic"));
+        assertEquals("test", ((Map<?, ?>) transformedRecord.value()).get("topic_field"));
+        assertEquals(0, ((Map<?, ?>) transformedRecord.value()).get("partition_field"));
+        assertEquals(null, ((Map<?, ?>) transformedRecord.value()).get("timestamp_field"));
+        assertEquals("my-instance-id", ((Map<?, ?>) transformedRecord.value()).get("instance_id"));
     }
 
+
+    @Test
+    public void insertConfiguredFieldsIntoTombstoneEventWithoutSchemaLeavesValueUnchanged() {
+        final Map<String, Object> props = new HashMap<>();
+        props.put("topic.field", "topic_field!");
+        props.put("partition.field", "partition_field");
+        props.put("timestamp.field", "timestamp_field?");
+        props.put("static.field", "instance_id");
+        props.put("static.value", "my-instance-id");
+
+        xform.configure(props);
+
+        final SourceRecord record = new SourceRecord(null, null, "test", 0,
+                null, null);
+
+        final SourceRecord transformedRecord = xform.apply(record);
+
+        assertEquals(null, transformedRecord.value());
+        assertEquals(null, transformedRecord.valueSchema());
+    }
+
+    @Test
+    public void insertConfiguredFieldsIntoTombstoneEventWithSchemaLeavesValueUnchanged() {
+        final Map<String, Object> props = new HashMap<>();
+        props.put("topic.field", "topic_field!");
+        props.put("partition.field", "partition_field");
+        props.put("timestamp.field", "timestamp_field?");
+        props.put("static.field", "instance_id");
+        props.put("static.value", "my-instance-id");
+
+        xform.configure(props);
+
+        final Schema simpleStructSchema = SchemaBuilder.struct().name("name").version(1).doc("doc").field("magic", Schema.OPTIONAL_INT64_SCHEMA).build();
+
+        final SourceRecord record = new SourceRecord(null, null, "test", 0,
+                simpleStructSchema, null);
+
+        final SourceRecord transformedRecord = xform.apply(record);
+
+        assertEquals(null, transformedRecord.value());
+        assertEquals(simpleStructSchema, transformedRecord.valueSchema());
+    }
 }

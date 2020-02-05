@@ -135,6 +135,10 @@ public final class ApiMessageTypeGenerator {
         generateAccessor("responseSchemas", "Schema[]");
         buffer.printf("%n");
         generateToString();
+        buffer.printf("%n");
+        generateHeaderVersion("request");
+        buffer.printf("%n");
+        generateHeaderVersion("response");
         buffer.decrementIndent();
         buffer.printf("}%n");
         headerGenerator.generate();
@@ -241,6 +245,74 @@ public final class ApiMessageTypeGenerator {
         buffer.printf("public String toString() {%n");
         buffer.incrementIndent();
         buffer.printf("return this.name();%n");
+        buffer.decrementIndent();
+        buffer.printf("}%n");
+    }
+
+    private void generateHeaderVersion(String type) {
+        buffer.printf("public short %sHeaderVersion(short _version) {%n", type);
+        buffer.incrementIndent();
+        buffer.printf("switch (apiKey) {%n");
+        buffer.incrementIndent();
+        for (Map.Entry<Short, ApiData> entry : apis.entrySet()) {
+            short apiKey = entry.getKey();
+            buffer.printf("case %d:%n", apiKey);
+            buffer.incrementIndent();
+            if (type.equals("response") && apiKey == 18) {
+                // ApiVersionsResponse always includes a v0 header.
+                // See KIP-511 for details.
+                buffer.printf("return (short) 0;%n");
+                buffer.decrementIndent();
+                continue;
+            }
+            if (type.equals("request") && apiKey == 7) {
+                // Version 0 of ControlledShutdownRequest has a non-standard request header
+                // which does not include clientId.  Version 1 of ControlledShutdownRequest
+                // and later use the standard request header.
+                buffer.printf("if (_version == 0) {%n");
+                buffer.incrementIndent();
+                buffer.printf("return (short) 0;%n");
+                buffer.decrementIndent();
+                buffer.printf("}%n");
+            }
+            ApiData data = entry.getValue();
+            MessageSpec spec = null;
+            if (type.equals("request")) {
+                spec = data.requestSpec;
+            } else if (type.equals("response")) {
+                spec = data.responseSpec;
+            } else {
+                throw new RuntimeException("Invalid type " + type + " for generateHeaderVersion");
+            }
+            if (spec == null) {
+                throw new RuntimeException("failed to find " + type + " for API key " + apiKey);
+            }
+            VersionConditional.forVersions(spec.flexibleVersions(),
+                spec.validVersions()).
+                ifMember(__ -> {
+                    if (type.equals("request")) {
+                        buffer.printf("return (short) 2;%n");
+                    } else {
+                        buffer.printf("return (short) 1;%n");
+                    }
+                }).
+                ifNotMember(__ -> {
+                    if (type.equals("request")) {
+                        buffer.printf("return (short) 1;%n");
+                    } else {
+                        buffer.printf("return (short) 0;%n");
+                    }
+                }).generate(buffer);
+            buffer.decrementIndent();
+        }
+        buffer.printf("default:%n");
+        buffer.incrementIndent();
+        headerGenerator.addImport(MessageGenerator.UNSUPPORTED_VERSION_EXCEPTION_CLASS);
+        buffer.printf("throw new UnsupportedVersionException(\"Unsupported API key \"" +
+            " + apiKey);%n");
+        buffer.decrementIndent();
+        buffer.decrementIndent();
+        buffer.printf("}%n");
         buffer.decrementIndent();
         buffer.printf("}%n");
     }

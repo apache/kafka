@@ -102,7 +102,7 @@ public class AddPartitionsToTxnResponse extends AbstractResponse {
 
     @Override
     public Map<Errors, Integer> errorCounts() {
-        return errorCounts(errors);
+        return errorCounts(errors.values());
     }
 
     @Override

@@ -81,6 +81,8 @@ public class EmbeddedKafkaCluster extends ExternalResource {
     private final KafkaServer[] brokers;
     private final Properties brokerConfig;
     private final Time time = new MockTime();
+    private final int[] currentBrokerPorts;
+    private final String[] currentBrokerLogDirs;
 
     private EmbeddedZookeeper zookeeper = null;
     private ListenerName listenerName = new ListenerName("PLAINTEXT");
@@ -89,6 +91,8 @@ public class EmbeddedKafkaCluster extends ExternalResource {
     public EmbeddedKafkaCluster(final int numBrokers,
                                 final Properties brokerConfig) {
         brokers = new KafkaServer[numBrokers];
+        currentBrokerPorts = new int[numBrokers];
+        currentBrokerLogDirs = new String[numBrokers];
         this.brokerConfig = brokerConfig;
     }
 
@@ -102,11 +106,20 @@ public class EmbeddedKafkaCluster extends ExternalResource {
         stop();
     }
 
-    private void start() throws IOException {
-        zookeeper = new EmbeddedZookeeper();
+    public void startOnlyKafkaOnSamePorts() throws IOException {
+        start(currentBrokerPorts, currentBrokerLogDirs);
+    }
 
+    private void start() throws IOException {
+        // pick a random port
+        zookeeper = new EmbeddedZookeeper();
+        Arrays.fill(currentBrokerPorts, 0);
+        Arrays.fill(currentBrokerLogDirs, null);
+        start(currentBrokerPorts, currentBrokerLogDirs);
+    }
+
+    private void start(int[] brokerPorts, String[] logDirs) throws IOException {
         brokerConfig.put(KafkaConfig$.MODULE$.ZkConnectProp(), zKConnectString());
-        brokerConfig.put(KafkaConfig$.MODULE$.PortProp(), 0); // pick a random port
 
         putIfAbsent(brokerConfig, KafkaConfig$.MODULE$.HostNameProp(), "localhost");
         putIfAbsent(brokerConfig, KafkaConfig$.MODULE$.DeleteTopicEnableProp(), true);
@@ -121,8 +134,11 @@ public class EmbeddedKafkaCluster extends ExternalResource {
 
         for (int i = 0; i < brokers.length; i++) {
             brokerConfig.put(KafkaConfig$.MODULE$.BrokerIdProp(), i);
-            brokerConfig.put(KafkaConfig$.MODULE$.LogDirProp(), createLogDir());
+            currentBrokerLogDirs[i] = logDirs[i] == null ? createLogDir() : currentBrokerLogDirs[i];
+            brokerConfig.put(KafkaConfig$.MODULE$.LogDirProp(), currentBrokerLogDirs[i]);
+            brokerConfig.put(KafkaConfig$.MODULE$.PortProp(), brokerPorts[i]);
             brokers[i] = TestUtils.createServer(new KafkaConfig(brokerConfig, true), time);
+            currentBrokerPorts[i] = brokers[i].boundPort(listenerName);
         }
 
         Map<String, Object> producerProps = new HashMap<>();
@@ -132,8 +148,15 @@ public class EmbeddedKafkaCluster extends ExternalResource {
         producer = new KafkaProducer<>(producerProps);
     }
 
-    private void stop() {
+    public void stopOnlyKafka() {
+        stop(false, false);
+    }
 
+    private void stop() {
+        stop(true, true);
+    }
+
+    private void stop(boolean deleteLogDirs, boolean stopZK) {
         try {
             producer.close();
         } catch (Exception e) {
@@ -151,19 +174,24 @@ public class EmbeddedKafkaCluster extends ExternalResource {
             }
         }
 
-        for (KafkaServer broker : brokers) {
-            try {
-                log.info("Cleaning up kafka log dirs at {}", broker.config().logDirs());
-                CoreUtils.delete(broker.config().logDirs());
-            } catch (Throwable t) {
-                String msg = String.format("Could not clean up log dirs for broker at %s", address(broker));
-                log.error(msg, t);
-                throw new RuntimeException(msg, t);
+        if (deleteLogDirs) {
+            for (KafkaServer broker : brokers) {
+                try {
+                    log.info("Cleaning up kafka log dirs at {}", broker.config().logDirs());
+                    CoreUtils.delete(broker.config().logDirs());
+                } catch (Throwable t) {
+                    String msg = String.format("Could not clean up log dirs for broker at %s",
+                            address(broker));
+                    log.error(msg, t);
+                    throw new RuntimeException(msg, t);
+                }
             }
         }
 
         try {
-            zookeeper.shutdown();
+            if (stopZK) {
+                zookeeper.shutdown();
+            }
         } catch (Throwable t) {
             String msg = String.format("Could not shutdown zookeeper at %s", zKConnectString());
             log.error(msg, t);

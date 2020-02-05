@@ -16,23 +16,16 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.utils.FixedOrderMap;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.streams.errors.LockException;
+import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.StateStore;
-import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
+import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.state.internals.RecordConverter;
 import org.slf4j.Logger;
 
-import java.io.File;
 import java.io.IOException;
-import java.util.Collection;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Map;
-import java.util.Optional;
-import java.util.Set;
 
 import static org.apache.kafka.streams.state.internals.RecordConverters.identity;
 import static org.apache.kafka.streams.state.internals.RecordConverters.rawValueToTimestampedValue;
@@ -47,82 +40,85 @@ final class StateManagerUtil {
         return isTimestamped(store) ? rawValueToTimestampedValue() : identity();
     }
 
-    public static void reinitializeStateStoresForPartitions(final Logger log,
-                                                            final boolean eosEnabled,
-                                                            final File baseDir,
-                                                            final FixedOrderMap<String, Optional<StateStore>> stateStores,
-                                                            final Map<String, String> storeToChangelogTopic,
-                                                            final Collection<TopicPartition> partitions,
-                                                            final InternalProcessorContext processorContext,
-                                                            final OffsetCheckpoint checkpointFile,
-                                                            final Map<TopicPartition, Long> checkpointFileCache) {
-        final Map<String, String> changelogTopicToStore = inverseOneToOneMap(storeToChangelogTopic);
-        final Set<String> storesToBeReinitialized = new HashSet<>();
-
-        for (final TopicPartition topicPartition : partitions) {
-            checkpointFileCache.remove(topicPartition);
-            storesToBeReinitialized.add(changelogTopicToStore.get(topicPartition.topic()));
+    /**
+     * @throws StreamsException If the store's change log does not contain the partition
+     */
+    static void registerStateStores(final Logger log,
+                                    final String logPrefix,
+                                    final ProcessorTopology topology,
+                                    final ProcessorStateManager stateMgr,
+                                    final StateDirectory stateDirectory,
+                                    final InternalProcessorContext processorContext) {
+        if (topology.stateStores().isEmpty()) {
+            return;
         }
 
-        if (!eosEnabled) {
-            try {
-                checkpointFile.write(checkpointFileCache);
-            } catch (final IOException fatalException) {
-                log.error("Failed to write offset checkpoint file to {} while re-initializing {}: {}",
-                          checkpointFile,
-                          stateStores,
-                          fatalException);
-                throw new StreamsException("Failed to reinitialize global store.", fatalException);
+        final TaskId id = stateMgr.taskId();
+        try {
+            if (!stateDirectory.lock(id)) {
+                throw new LockException(String.format("%sFailed to lock the state directory for task %s", logPrefix, id));
             }
+        } catch (final IOException e) {
+            throw new StreamsException(
+                String.format("%sFatal error while trying to lock the state directory for task %s", logPrefix, id),
+                e
+            );
         }
+        log.debug("Acquired state directory lock");
 
-        for (final String storeName : storesToBeReinitialized) {
-            if (!stateStores.containsKey(storeName)) {
-                // the store has never been registered; carry on...
-                continue;
-            }
-            final StateStore stateStore = stateStores
-                .get(storeName)
-                .orElseThrow(
-                    () -> new IllegalStateException(
-                        "Re-initializing store that has not been initialized. This is a bug in Kafka Streams."
-                    )
-                );
-
-            try {
-                stateStore.close();
-            } catch (final RuntimeException ignoreAndSwallow) { /* ignore */ }
+        // We should only load checkpoint AFTER the corresponding state directory lock has been acquired and
+        // the state stores have been registered; we should not try to load at the state manager construction time.
+        // See https://issues.apache.org/jira/browse/KAFKA-8574
+        for (final StateStore store : topology.stateStores()) {
             processorContext.uninitialize();
-            stateStores.put(storeName, Optional.empty());
+            store.init(processorContext, store);
+            log.trace("Registered state store {}", store.name());
+        }
+        stateMgr.initializeStoreOffsetsFromCheckpoint();
+        log.debug("Initialized state stores");
+    }
 
-            // TODO remove this eventually
-            // -> (only after we are sure, we don't need it for backward compatibility reasons anymore; maybe 2.0 release?)
-            // this is an ugly "hack" that is required because RocksDBStore does not follow the pattern to put the
-            // store directory as <taskDir>/<storeName> but nests it with an intermediate <taskDir>/rocksdb/<storeName>
-            try {
-                Utils.delete(new File(baseDir + File.separator + "rocksdb" + File.separator + storeName));
-            } catch (final IOException fatalException) {
-                log.error("Failed to reinitialize store {}.", storeName, fatalException);
-                throw new StreamsException(String.format("Failed to reinitialize store %s.", storeName), fatalException);
-            }
-
-            try {
-                Utils.delete(new File(baseDir + File.separator + storeName));
-            } catch (final IOException fatalException) {
-                log.error("Failed to reinitialize store {}.", storeName, fatalException);
-                throw new StreamsException(String.format("Failed to reinitialize store %s.", storeName), fatalException);
-            }
-
-            stateStore.init(processorContext, stateStore);
+    static void wipeStateStores(final Logger log, final ProcessorStateManager stateMgr) {
+        // we can just delete the whole dir of the task, including the state store images and the checkpoint files
+        try {
+            Utils.delete(stateMgr.baseDir());
+        } catch (final IOException fatalException) {
+            // since it is only called under dirty close, we always swallow the exception
+            log.warn("Failed to wiping state stores for task {}", stateMgr.taskId());
         }
     }
 
-    private static Map<String, String> inverseOneToOneMap(final Map<String, String> origin) {
-        final Map<String, String> reversedMap = new HashMap<>();
-        for (final Map.Entry<String, String> entry : origin.entrySet()) {
-            reversedMap.put(entry.getValue(), entry.getKey());
-        }
-        return reversedMap;
-    }
+    /**
+     * @throws ProcessorStateException if there is an error while closing the state manager
+     */
+    static void closeStateManager(final Logger log,
+                                  final String logPrefix,
+                                  final boolean closeClean,
+                                  final ProcessorStateManager stateMgr,
+                                  final StateDirectory stateDirectory) {
+        ProcessorStateException exception = null;
+        log.trace("Closing state manager");
 
+        final TaskId id = stateMgr.taskId();
+        try {
+            stateMgr.close();
+        } catch (final ProcessorStateException e) {
+            exception = e;
+        } finally {
+            try {
+                stateDirectory.unlock(id);
+            } catch (final IOException e) {
+                if (exception == null) {
+                    exception = new ProcessorStateException(String.format("%sFailed to release state dir lock", logPrefix), e);
+                }
+            }
+        }
+
+        if (exception != null) {
+            if (closeClean)
+                throw exception;
+            else
+                log.warn("Closing standby task " + id + " uncleanly throws an exception " + exception);
+        }
+    }
 }

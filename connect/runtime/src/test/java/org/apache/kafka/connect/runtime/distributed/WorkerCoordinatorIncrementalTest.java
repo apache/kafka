@@ -56,6 +56,7 @@ import static org.apache.kafka.connect.runtime.WorkerTestUtils.clusterConfigStat
 import static org.apache.kafka.connect.runtime.distributed.ConnectProtocol.WorkerState;
 import static org.apache.kafka.connect.runtime.distributed.ConnectProtocolCompatibility.COMPATIBLE;
 import static org.apache.kafka.connect.runtime.distributed.ConnectProtocolCompatibility.EAGER;
+import static org.apache.kafka.connect.runtime.distributed.ConnectProtocolCompatibility.SESSIONED;
 import static org.apache.kafka.connect.runtime.distributed.IncrementalCooperativeConnectProtocol.CONNECT_PROTOCOL_V1;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
@@ -119,7 +120,7 @@ public class WorkerCoordinatorIncrementalTest {
     // - Expected metadata size
     @Parameters
     public static Iterable<?> mode() {
-        return Arrays.asList(new Object[][]{{COMPATIBLE, 2}});
+        return Arrays.asList(new Object[][]{{COMPATIBLE, 2}, {SESSIONED, 3}});
     }
 
     @Parameter
@@ -565,14 +566,18 @@ public class WorkerCoordinatorIncrementalTest {
         return IncrementalCooperativeConnectProtocol.deserializeAssignment(assignment.get(member));
     }
 
-    private static void addJoinGroupResponseMember(List<JoinGroupResponseMember> responseMembers,
+    private void addJoinGroupResponseMember(List<JoinGroupResponseMember> responseMembers,
                                                    String member,
                                                    long offset,
                                                    ExtendedAssignment assignment) {
         responseMembers.add(new JoinGroupResponseMember()
                 .setMemberId(member)
-                .setMetadata(IncrementalCooperativeConnectProtocol.serializeMetadata(
-                        new ExtendedWorkerState(expectedUrl(member), offset, assignment)).array())
+                .setMetadata(
+                    IncrementalCooperativeConnectProtocol.serializeMetadata(
+                        new ExtendedWorkerState(expectedUrl(member), offset, assignment),
+                        compatibility != COMPATIBLE
+                    ).array()
+                )
         );
     }
 }

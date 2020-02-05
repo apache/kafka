@@ -55,6 +55,7 @@ public class OffsetFetchRequestTest {
                                    new TopicPartition(topicTwo, partitionTwo));
         builder = new OffsetFetchRequest.Builder(
             groupId,
+            false,
             partitions
         );
     }
@@ -98,17 +99,23 @@ public class OffsetFetchRequestTest {
     }
 
     @Test
-    public void testConstructorFailForUnsupportedAllPartition() {
-        builder = OffsetFetchRequest.Builder.allTopicPartitions(groupId);
+    public void testConstructorFailForUnsupportedRequireStable() {
         for (short version = 0; version <= ApiKeys.OFFSET_FETCH.latestVersion(); version++) {
-            short finalVersion = version;
-            if (version <= 1) {
+            // The builder needs to be initialized every cycle as the internal data `requireStable` flag is flipped.
+            builder = new OffsetFetchRequest.Builder(groupId, true, null);
+            final short finalVersion = version;
+            if (version < 2) {
                 assertThrows(UnsupportedVersionException.class, () -> builder.build(finalVersion));
             } else {
                 OffsetFetchRequest request = builder.build(finalVersion);
                 assertEquals(groupId, request.groupId());
                 assertNull(request.partitions());
                 assertTrue(request.isAllPartitions());
+                if (version < 7) {
+                    assertFalse(request.requireStable());
+                } else {
+                    assertTrue(request.requireStable());
+                }
             }
         }
     }

@@ -23,22 +23,32 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
-public abstract class AbstractResponse extends AbstractRequestResponse {
+public abstract class AbstractResponse implements AbstractRequestResponse {
     public static final int DEFAULT_THROTTLE_TIME = 0;
 
     protected Send toSend(String destination, ResponseHeader header, short apiVersion) {
-        return new NetworkSend(destination, serialize(apiVersion, header));
+        return new NetworkSend(destination, RequestUtils.serialize(header.toStruct(), toStruct(apiVersion)));
     }
 
     /**
      * Visible for testing, typically {@link #toSend(String, ResponseHeader, short)} should be used instead.
      */
     public ByteBuffer serialize(short version, ResponseHeader responseHeader) {
-        return serialize(responseHeader.toStruct(), toStruct(version));
+        return RequestUtils.serialize(responseHeader.toStruct(), toStruct(version));
+    }
+
+    /**
+     * Visible for testing, typically {@link #toSend(String, ResponseHeader, short)} should be used instead.
+     */
+    public ByteBuffer serialize(ApiKeys apiKey, short version, int correlationId) {
+        ResponseHeader header =
+            new ResponseHeader(correlationId, apiKey.responseHeaderVersion(version));
+        return RequestUtils.serialize(header.toStruct(), toStruct(version));
     }
 
     public abstract Map<Errors, Integer> errorCounts();
@@ -47,9 +57,9 @@ public abstract class AbstractResponse extends AbstractRequestResponse {
         return Collections.singletonMap(error, 1);
     }
 
-    protected Map<Errors, Integer> errorCounts(Map<?, Errors> errors) {
+    protected Map<Errors, Integer> errorCounts(Collection<Errors> errors) {
         Map<Errors, Integer> errorCounts = new HashMap<>();
-        for (Errors error : errors.values())
+        for (Errors error : errors)
             updateErrorCounts(errorCounts, error);
         return errorCounts;
     }
@@ -93,13 +103,13 @@ public abstract class AbstractResponse extends AbstractRequestResponse {
             case SYNC_GROUP:
                 return new SyncGroupResponse(struct, version);
             case STOP_REPLICA:
-                return new StopReplicaResponse(struct);
+                return new StopReplicaResponse(struct, version);
             case CONTROLLED_SHUTDOWN:
                 return new ControlledShutdownResponse(struct, version);
             case UPDATE_METADATA:
-                return new UpdateMetadataResponse(struct);
+                return new UpdateMetadataResponse(struct, version);
             case LEADER_AND_ISR:
-                return new LeaderAndIsrResponse(struct);
+                return new LeaderAndIsrResponse(struct, version);
             case DESCRIBE_GROUPS:
                 return new DescribeGroupsResponse(struct, version);
             case LIST_GROUPS:
@@ -107,7 +117,7 @@ public abstract class AbstractResponse extends AbstractRequestResponse {
             case SASL_HANDSHAKE:
                 return new SaslHandshakeResponse(struct, version);
             case API_VERSIONS:
-                return new ApiVersionsResponse(struct);
+                return ApiVersionsResponse.fromStruct(struct, version);
             case CREATE_TOPICS:
                 return new CreateTopicsResponse(struct, version);
             case DELETE_TOPICS:
@@ -123,17 +133,17 @@ public abstract class AbstractResponse extends AbstractRequestResponse {
             case ADD_OFFSETS_TO_TXN:
                 return new AddOffsetsToTxnResponse(struct);
             case END_TXN:
-                return new EndTxnResponse(struct);
+                return new EndTxnResponse(struct, version);
             case WRITE_TXN_MARKERS:
                 return new WriteTxnMarkersResponse(struct);
             case TXN_OFFSET_COMMIT:
                 return new TxnOffsetCommitResponse(struct, version);
             case DESCRIBE_ACLS:
-                return new DescribeAclsResponse(struct);
+                return new DescribeAclsResponse(struct, version);
             case CREATE_ACLS:
-                return new CreateAclsResponse(struct);
+                return new CreateAclsResponse(struct, version);
             case DELETE_ACLS:
-                return new DeleteAclsResponse(struct);
+                return new DeleteAclsResponse(struct, version);
             case DESCRIBE_CONFIGS:
                 return new DescribeConfigsResponse(struct);
             case ALTER_CONFIGS:
@@ -145,7 +155,7 @@ public abstract class AbstractResponse extends AbstractRequestResponse {
             case SASL_AUTHENTICATE:
                 return new SaslAuthenticateResponse(struct, version);
             case CREATE_PARTITIONS:
-                return new CreatePartitionsResponse(struct);
+                return new CreatePartitionsResponse(struct, version);
             case CREATE_DELEGATION_TOKEN:
                 return new CreateDelegationTokenResponse(struct, version);
             case RENEW_DELEGATION_TOKEN:

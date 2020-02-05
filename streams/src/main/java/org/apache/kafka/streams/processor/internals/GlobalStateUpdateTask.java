@@ -21,12 +21,13 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.errors.DeserializationExceptionHandler;
 import org.apache.kafka.streams.errors.StreamsException;
-import org.apache.kafka.streams.processor.internals.metrics.ThreadMetrics;
 
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
+
+import static org.apache.kafka.streams.processor.internals.metrics.TaskMetrics.droppedRecordsSensorOrSkippedRecordsSensor;
 
 /**
  * Updates the state for all Global State Stores.
@@ -70,13 +71,17 @@ public class GlobalStateUpdateTask implements GlobalStateMaintainer {
                     source,
                     deserializationExceptionHandler,
                     logContext,
-                    ThreadMetrics.skipRecordSensor(processorContext.metrics())
+                    droppedRecordsSensorOrSkippedRecordsSensor(
+                        Thread.currentThread().getName(),
+                        processorContext.taskId().toString(),
+                        processorContext.metrics()
+                    )
                 )
             );
         }
         initTopology();
         processorContext.initialize();
-        return stateMgr.checkpointed();
+        return stateMgr.changelogOffsets();
     }
 
     @SuppressWarnings("unchecked")
@@ -101,12 +106,15 @@ public class GlobalStateUpdateTask implements GlobalStateMaintainer {
     }
 
     public void flushState() {
+        // this could theoretically throw a ProcessorStateException caused by a ProducerFencedException,
+        // but in practice this shouldn't happen for global state update tasks, since the stores are not
+        // logged and there are no downstream operators after global stores.
         stateMgr.flush();
         stateMgr.checkpoint(offsets);
     }
 
     public void close() throws IOException {
-        stateMgr.close(true);
+        stateMgr.close();
     }
 
     private void initTopology() {

@@ -321,6 +321,7 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
             super(inner);
         }
 
+        @Deprecated
         @Override
         public void put(final K key,
                         final V value) {
@@ -520,6 +521,7 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
             super(inner);
         }
 
+        @Deprecated
         @Override
         public void put(final K key,
                         final V value) {

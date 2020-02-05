@@ -21,7 +21,6 @@ import java.io._
 import java.nio.file.Files
 import java.util.concurrent._
 
-import com.yammer.metrics.core.Gauge
 import kafka.metrics.KafkaMetricsGroup
 import kafka.server.checkpoints.OffsetCheckpointFile
 import kafka.server.{BrokerState, RecoveringFromUncleanShutdown, _}
@@ -82,6 +81,13 @@ class LogManager(logDirs: Seq[File],
   @volatile private var _currentDefaultConfig = initialDefaultConfig
   @volatile private var numRecoveryThreadsPerDataDir = recoveryThreadsPerDataDir
 
+  // This map contains all partitions whose logs are getting loaded and initialized. If log configuration
+  // of these partitions get updated at the same time, the corresponding entry in this map is set to "true",
+  // which triggers a config reload after initialization is finished (to get the latest config value).
+  // See KAFKA-8813 for more detail on the race condition
+  // Visible for testing
+  private[log] val partitionsInitializing = new ConcurrentHashMap[TopicPartition, Boolean]().asScala
+
   def reconfigureDefaultLogConfig(logConfig: LogConfig): Unit = {
     this._currentDefaultConfig = logConfig
   }
@@ -111,28 +117,18 @@ class LogManager(logDirs: Seq[File],
 
   loadLogs()
 
-  // public, so we can access this from kafka.admin.DeleteTopicTest
-  val cleaner: LogCleaner =
-    if(cleanerConfig.enableCleaner)
+  private[kafka] val cleaner: LogCleaner =
+    if (cleanerConfig.enableCleaner)
       new LogCleaner(cleanerConfig, liveLogDirs, currentLogs, logDirFailureChannel, time = time)
     else
       null
 
-  val offlineLogDirectoryCount = newGauge(
-    "OfflineLogDirectoryCount",
-    new Gauge[Int] {
-      def value = offlineLogDirs.size
-    }
-  )
+  newGauge("OfflineLogDirectoryCount", () => offlineLogDirs.size)
 
   for (dir <- logDirs) {
-    newGauge(
-      "LogDirectoryOffline",
-      new Gauge[Int] {
-        def value = if (_liveLogDirs.contains(dir)) 0 else 1
-      },
-      Map("logDirectory" -> dir.getAbsolutePath)
-    )
+    newGauge("LogDirectoryOffline",
+      () => if (_liveLogDirs.contains(dir)) 0 else 1,
+      Map("logDirectory" -> dir.getAbsolutePath))
   }
 
   /**
@@ -189,7 +185,7 @@ class LogManager(logDirs: Seq[File],
 
   // dir should be an absolute path
   def handleLogDirFailure(dir: String): Unit = {
-    info(s"Stopping serving logs in dir $dir")
+    warn(s"Stopping serving logs in dir $dir")
     logCreationOrDeletionLock synchronized {
       _liveLogDirs.remove(new File(dir))
       if (_liveLogDirs.isEmpty) {
@@ -224,7 +220,7 @@ class LogManager(logDirs: Seq[File],
         }
       }}
 
-      info(s"Logs for partitions ${offlineCurrentTopicPartitions.mkString(",")} are offline and " +
+      warn(s"Logs for partitions ${offlineCurrentTopicPartitions.mkString(",")} are offline and " +
            s"logs for future partitions ${offlineFutureTopicPartitions.mkString(",")} are offline due to failure on log directory $dir")
       dirLocks.filter(_.file.getParent == dir).foreach(dir => CoreUtils.swallow(dir.destroy(), this))
     }
@@ -341,7 +337,7 @@ class LogManager(logDirs: Seq[File],
           dirContent <- Option(dir.listFiles).toList
           logDir <- dirContent if logDir.isDirectory
         } yield {
-          CoreUtils.runnable {
+          val runnable: Runnable = () => {
             try {
               loadLog(logDir, recoveryPoints, logStartOffsets)
             } catch {
@@ -350,6 +346,7 @@ class LogManager(logDirs: Seq[File],
                 error(s"Error while loading log dir ${dir.getAbsolutePath}", e)
             }
           }
+          runnable
         }
         jobs(cleanShutdownFile) = jobsForDir.map(pool.submit)
       } catch {
@@ -452,12 +449,13 @@ class LogManager(logDirs: Seq[File],
 
       val logsInDir = localLogsByDir.getOrElse(dir.toString, Map()).values
 
-      val jobsForDir = logsInDir map { log =>
-        CoreUtils.runnable {
+      val jobsForDir = logsInDir.map { log =>
+        val runnable: Runnable = () => {
           // flush the log to ensure latest possible recovery point
           log.flush()
           log.close()
         }
+        runnable
       }
 
       jobs(dir) = jobsForDir.map(pool.submit).toSeq
@@ -657,6 +655,48 @@ class LogManager(logDirs: Seq[File],
       Option(futureLogs.get(topicPartition))
     else
       Option(currentLogs.get(topicPartition))
+  }
+
+  /**
+   * Method to indicate that logs are getting initialized for the partition passed in as argument.
+   * This method should always be followed by [[kafka.log.LogManager#finishedInitializingLog]] to indicate that log
+   * initialization is done.
+   */
+  def initializingLog(topicPartition: TopicPartition): Unit = {
+    partitionsInitializing(topicPartition) = false
+  }
+
+  /**
+   * Mark the partition configuration for all partitions that are getting initialized for topic
+   * as dirty. That will result in reloading of configuration once initialization is done.
+   */
+  def topicConfigUpdated(topic: String): Unit = {
+    partitionsInitializing.keys.filter(_.topic() == topic).foreach {
+      topicPartition => partitionsInitializing.replace(topicPartition, false, true)
+    }
+  }
+
+  /**
+   * Mark all in progress partitions having dirty configuration if broker configuration is updated.
+   */
+  def brokerConfigUpdated(): Unit = {
+    partitionsInitializing.keys.foreach {
+      topicPartition => partitionsInitializing.replace(topicPartition, false, true)
+    }
+  }
+
+  /**
+   * Method to indicate that the log initialization for the partition passed in as argument is
+   * finished. This method should follow a call to [[kafka.log.LogManager#initializingLog]]
+   */
+  def finishedInitializingLog(topicPartition: TopicPartition,
+                              maybeLog: Option[Log],
+                              fetchLogConfig: () => LogConfig): Unit = {
+    if (partitionsInitializing(topicPartition)) {
+      maybeLog.foreach(_.updateConfig(fetchLogConfig()))
+    }
+
+    partitionsInitializing -= topicPartition
   }
 
   /**
@@ -955,9 +995,9 @@ class LogManager(logDirs: Seq[File],
   def allLogs: Iterable[Log] = currentLogs.values ++ futureLogs.values
 
   def logsByTopic(topic: String): Seq[Log] = {
-    (currentLogs.toList ++ futureLogs.toList).filter { case (topicPartition, _) =>
-      topicPartition.topic() == topic
-    }.map { case (_, log) => log }
+    (currentLogs.toList ++ futureLogs.toList).collect {
+      case (topicPartition, log) if topicPartition.topic == topic => log
+    }
   }
 
   /**

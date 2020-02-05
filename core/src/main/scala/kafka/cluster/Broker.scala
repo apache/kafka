@@ -29,6 +29,13 @@ import org.apache.kafka.server.authorizer.AuthorizerServerInfo
 import scala.collection.Seq
 import scala.collection.JavaConverters._
 
+object Broker {
+  private[cluster] case class ServerInfo(clusterResource: ClusterResource,
+                                         brokerId: Int,
+                                         endpoints: util.List[Endpoint],
+                                         interBrokerEndpoint: Endpoint) extends AuthorizerServerInfo
+}
+
 /**
  * A Kafka broker.
  * A broker has an id, a collection of end-points, an optional rack and a listener to security protocol map.
@@ -75,15 +82,8 @@ case class Broker(id: Int, endPoints: Seq[EndPoint], rack: Option[String]) {
 
   def toServerInfo(clusterId: String, config: KafkaConfig): AuthorizerServerInfo = {
     val clusterResource: ClusterResource = new ClusterResource(clusterId)
-    val interBrokerEndpoint: Endpoint = endPoint(config.interBrokerListenerName)
-    val brokerEndpoints: util.List[Endpoint] = endPoints.toList.map(_.asInstanceOf[Endpoint]).asJava
-    BrokerEndpointInfo(clusterResource, id, brokerEndpoints, interBrokerEndpoint)
+    val interBrokerEndpoint: Endpoint = endPoint(config.interBrokerListenerName).toJava
+    val brokerEndpoints: util.List[Endpoint] = endPoints.toList.map(_.toJava).asJava
+    Broker.ServerInfo(clusterResource, id, brokerEndpoints, interBrokerEndpoint)
   }
-
-  case class BrokerEndpointInfo(clusterResource: ClusterResource,
-                                brokerId: Int,
-                                endpoints: util.List[Endpoint],
-                                interBrokerEndpoint: Endpoint)
-    extends AuthorizerServerInfo
-
 }

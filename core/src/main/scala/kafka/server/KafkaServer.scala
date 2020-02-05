@@ -23,8 +23,7 @@ import java.util
 import java.util.concurrent._
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger}
 
-import com.yammer.metrics.core.Gauge
-import kafka.api.{KAFKA_0_9_0, KAFKA_2_2_IV0}
+import kafka.api.{KAFKA_0_9_0, KAFKA_2_2_IV0, KAFKA_2_4_IV1}
 import kafka.cluster.Broker
 import kafka.common.{GenerateBrokerIdException, InconsistentBrokerIdException, InconsistentBrokerMetadataException, InconsistentClusterIdException}
 import kafka.controller.KafkaController
@@ -154,7 +153,6 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
   private var _clusterId: String = null
   private var _brokerTopicStats: BrokerTopicStats = null
 
-
   def clusterId: String = _clusterId
 
   // Visible for testing
@@ -162,28 +160,9 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
 
   private[kafka] def brokerTopicStats = _brokerTopicStats
 
-  newGauge(
-    "BrokerState",
-    new Gauge[Int] {
-      def value = brokerState.currentState
-    }
-  )
-
-  newGauge(
-    "ClusterId",
-    new Gauge[String] {
-      def value = clusterId
-    }
-  )
-
-  newGauge(
-    "yammer-metrics-count",
-    new Gauge[Int] {
-      def value = {
-        com.yammer.metrics.Metrics.defaultRegistry.allMetrics.size
-      }
-    }
-  )
+  newGauge("BrokerState", () => brokerState.currentState)
+  newGauge("ClusterId", () => clusterId)
+  newGauge("yammer-metrics-count", () => com.yammer.metrics.Metrics.defaultRegistry.allMetrics.size)
 
   /**
    * Start up API for bringing up a single instance of the Kafka server.
@@ -299,7 +278,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
           case Some(authZ) =>
             authZ.start(brokerInfo.broker.toServerInfo(clusterId, config)).asScala.mapValues(_.toCompletableFuture).toMap
           case None =>
-            brokerInfo.broker.endPoints.map{ ep => (ep.asInstanceOf[Endpoint], CompletableFuture.completedFuture[Void](null)) }.toMap
+            brokerInfo.broker.endPoints.map { ep => ep.toJava -> CompletableFuture.completedFuture[Void](null) }.toMap
         }
 
         val fetchManager = new FetchManager(Time.SYSTEM,
@@ -449,7 +428,8 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
           config.interBrokerListenerName,
           config.saslMechanismInterBrokerProtocol,
           time,
-          config.saslInterBrokerHandshakeRequestEnable)
+          config.saslInterBrokerHandshakeRequestEnable,
+          logContext)
         val selector = new Selector(
           NetworkReceive.UNLIMITED,
           config.connectionsMaxIdleMs,
@@ -528,7 +508,8 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
               val controlledShutdownApiVersion: Short =
                 if (config.interBrokerProtocolVersion < KAFKA_0_9_0) 0
                 else if (config.interBrokerProtocolVersion < KAFKA_2_2_IV0) 1
-                else 2
+                else if (config.interBrokerProtocolVersion < KAFKA_2_4_IV1) 2
+                else 3
 
               val controlledShutdownRequest = new ControlledShutdownRequest.Builder(
                   new ControlledShutdownRequestData()

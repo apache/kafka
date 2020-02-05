@@ -24,6 +24,7 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.KeyValueTimestamp;
 import org.apache.kafka.streams.StreamsBuilder;
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.kstream.Consumed;
@@ -40,7 +41,7 @@ import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
-import org.apache.kafka.streams.test.ConsumerRecordFactory;
+import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.test.MockAggregator;
 import org.apache.kafka.test.MockInitializer;
 import org.apache.kafka.test.MockProcessorSupplier;
@@ -72,14 +73,17 @@ public class KGroupedStreamImplTest {
     private final StreamsBuilder builder = new StreamsBuilder();
     private KGroupedStream<String, String> groupedStream;
 
-    private final ConsumerRecordFactory<String, String> recordFactory =
-        new ConsumerRecordFactory<>(new StringSerializer(), new StringSerializer());
     private final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.String(), Serdes.String());
 
     @Before
     public void before() {
         final KStream<String, String> stream = builder.stream(TOPIC, Consumed.with(Serdes.String(), Serdes.String()));
         groupedStream = stream.groupByKey(Grouped.with(Serdes.String(), Serdes.String()));
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldNotHaveNullAggregatorOnCogroup() {
+        groupedStream.cogroup(null);
     }
 
     @Test(expected = NullPointerException.class)
@@ -157,12 +161,14 @@ public class KGroupedStreamImplTest {
 
     private void doAggregateSessionWindows(final MockProcessorSupplier<Windowed<String>, Integer> supplier) {
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
-            driver.pipeInput(recordFactory.create(TOPIC, "1", "1", 10));
-            driver.pipeInput(recordFactory.create(TOPIC, "2", "2", 15));
-            driver.pipeInput(recordFactory.create(TOPIC, "1", "1", 30));
-            driver.pipeInput(recordFactory.create(TOPIC, "1", "1", 70));
-            driver.pipeInput(recordFactory.create(TOPIC, "1", "1", 100));
-            driver.pipeInput(recordFactory.create(TOPIC, "1", "1", 90));
+            final TestInputTopic<String, String> inputTopic =
+                    driver.createInputTopic(TOPIC, new StringSerializer(), new StringSerializer());
+            inputTopic.pipeInput("1", "1", 10);
+            inputTopic.pipeInput("2", "2", 15);
+            inputTopic.pipeInput("1", "1", 30);
+            inputTopic.pipeInput("1", "1", 70);
+            inputTopic.pipeInput("1", "1", 100);
+            inputTopic.pipeInput("1", "1", 90);
         }
         final Map<Windowed<String>, ValueAndTimestamp<Integer>> result
             = supplier.theCapturedProcessor().lastValueAndTimestampPerKey;
@@ -213,12 +219,14 @@ public class KGroupedStreamImplTest {
     private void doCountSessionWindows(final MockProcessorSupplier<Windowed<String>, Long> supplier) {
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
-            driver.pipeInput(recordFactory.create(TOPIC, "1", "1", 10));
-            driver.pipeInput(recordFactory.create(TOPIC, "2", "2", 15));
-            driver.pipeInput(recordFactory.create(TOPIC, "1", "1", 30));
-            driver.pipeInput(recordFactory.create(TOPIC, "1", "1", 70));
-            driver.pipeInput(recordFactory.create(TOPIC, "1", "1", 100));
-            driver.pipeInput(recordFactory.create(TOPIC, "1", "1", 90));
+            final TestInputTopic<String, String> inputTopic =
+                    driver.createInputTopic(TOPIC, new StringSerializer(), new StringSerializer());
+            inputTopic.pipeInput("1", "1", 10);
+            inputTopic.pipeInput("2", "2", 15);
+            inputTopic.pipeInput("1", "1", 30);
+            inputTopic.pipeInput("1", "1", 70);
+            inputTopic.pipeInput("1", "1", 100);
+            inputTopic.pipeInput("1", "1", 90);
         }
         final Map<Windowed<String>, ValueAndTimestamp<Long>> result =
             supplier.theCapturedProcessor().lastValueAndTimestampPerKey;
@@ -257,12 +265,14 @@ public class KGroupedStreamImplTest {
 
     private void doReduceSessionWindows(final MockProcessorSupplier<Windowed<String>, String> supplier) {
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
-            driver.pipeInput(recordFactory.create(TOPIC, "1", "A", 10));
-            driver.pipeInput(recordFactory.create(TOPIC, "2", "Z", 15));
-            driver.pipeInput(recordFactory.create(TOPIC, "1", "B", 30));
-            driver.pipeInput(recordFactory.create(TOPIC, "1", "A", 70));
-            driver.pipeInput(recordFactory.create(TOPIC, "1", "B", 100));
-            driver.pipeInput(recordFactory.create(TOPIC, "1", "C", 90));
+            final TestInputTopic<String, String> inputTopic =
+                    driver.createInputTopic(TOPIC, new StringSerializer(), new StringSerializer());
+            inputTopic.pipeInput("1", "A", 10);
+            inputTopic.pipeInput("2", "Z", 15);
+            inputTopic.pipeInput("1", "B", 30);
+            inputTopic.pipeInput("1", "A", 70);
+            inputTopic.pipeInput("1", "B", 100);
+            inputTopic.pipeInput("1", "C", 90);
         }
         final Map<Windowed<String>, ValueAndTimestamp<String>> result =
             supplier.theCapturedProcessor().lastValueAndTimestampPerKey;
@@ -430,22 +440,42 @@ public class KGroupedStreamImplTest {
     }
 
     @Test
-    public void shouldLogAndMeasureSkipsInAggregate() {
+    public void shouldLogAndMeasureSkipsInAggregateWithBuiltInMetricsVersion0100To24() {
+        shouldLogAndMeasureSkipsInAggregate(StreamsConfig.METRICS_0100_TO_24);
+    }
+
+    @Test
+    public void shouldLogAndMeasureSkipsInAggregateWithBuiltInMetricsVersionLatest() {
+        shouldLogAndMeasureSkipsInAggregate(StreamsConfig.METRICS_LATEST);
+    }
+
+    private void shouldLogAndMeasureSkipsInAggregate(final String builtInMetricsVersion) {
         groupedStream.count(Materialized.<String, Long, KeyValueStore<Bytes, byte[]>>as("count").withKeySerde(Serdes.String()));
         final LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
+        props.setProperty(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, builtInMetricsVersion);
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             processData(driver);
             LogCaptureAppender.unregister(appender);
 
-            final Map<MetricName, ? extends Metric> metrics = driver.metrics();
-            assertEquals(1.0, getMetricByName(metrics, "skipped-records-total", "stream-metrics").metricValue());
-            assertNotEquals(0.0, getMetricByName(metrics, "skipped-records-rate", "stream-metrics").metricValue());
-            assertThat(appender.getMessages(), hasItem("Skipping record due to null key or value. key=[3] value=[null] topic=[topic] partition=[0] offset=[6]"));
+            if (StreamsConfig.METRICS_0100_TO_24.equals(builtInMetricsVersion)) {
+                final Map<MetricName, ? extends Metric> metrics = driver.metrics();
+                assertEquals(
+                    1.0,
+                    getMetricByName(metrics, "skipped-records-total", "stream-metrics").metricValue()
+                );
+                assertNotEquals(
+                    0.0,
+                    getMetricByName(metrics, "skipped-records-rate", "stream-metrics").metricValue()
+                );
+            }
+            assertThat(
+                appender.getMessages(),
+                hasItem("Skipping record due to null key or value. key=[3] value=[null] topic=[topic] partition=[0] "
+                    + "offset=[6]")
+            );
         }
     }
 
-
-    @SuppressWarnings("unchecked")
     @Test
     public void shouldReduceAndMaterializeResults() {
         groupedStream.reduce(
@@ -475,7 +505,16 @@ public class KGroupedStreamImplTest {
     }
 
     @Test
-    public void shouldLogAndMeasureSkipsInReduce() {
+    public void shouldLogAndMeasureSkipsInReduceWithBuiltInMetricsVersion0100To24() {
+        shouldLogAndMeasureSkipsInReduce(StreamsConfig.METRICS_0100_TO_24);
+    }
+
+    @Test
+    public void shouldLogAndMeasureSkipsInReduceWithBuiltInMetricsVersionLatest() {
+        shouldLogAndMeasureSkipsInReduce(StreamsConfig.METRICS_LATEST);
+    }
+
+    private void shouldLogAndMeasureSkipsInReduce(final String builtInMetricsVersion) {
         groupedStream.reduce(
             MockReducer.STRING_ADDER,
             Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as("reduce")
@@ -484,19 +523,30 @@ public class KGroupedStreamImplTest {
         );
 
         final LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
+        props.setProperty(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, builtInMetricsVersion);
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             processData(driver);
             LogCaptureAppender.unregister(appender);
 
-            final Map<MetricName, ? extends Metric> metrics = driver.metrics();
-            assertEquals(1.0, getMetricByName(metrics, "skipped-records-total", "stream-metrics").metricValue());
-            assertNotEquals(0.0, getMetricByName(metrics, "skipped-records-rate", "stream-metrics").metricValue());
-            assertThat(appender.getMessages(), hasItem("Skipping record due to null key or value. key=[3] value=[null] topic=[topic] partition=[0] offset=[6]"));
+            if (StreamsConfig.METRICS_0100_TO_24.equals(builtInMetricsVersion)) {
+                final Map<MetricName, ? extends Metric> metrics = driver.metrics();
+                assertEquals(
+                    1.0,
+                    getMetricByName(metrics, "skipped-records-total", "stream-metrics").metricValue()
+                );
+                assertNotEquals(
+                    0.0,
+                    getMetricByName(metrics, "skipped-records-rate", "stream-metrics").metricValue()
+                );
+            }
+            assertThat(
+                appender.getMessages(),
+                hasItem("Skipping record due to null key or value. key=[3] value=[null] topic=[topic] partition=[0] "
+                    + "offset=[6]")
+            );
         }
     }
 
-
-    @SuppressWarnings("unchecked")
     @Test
     public void shouldAggregateAndMaterializeResults() {
         groupedStream.aggregate(
@@ -526,7 +576,6 @@ public class KGroupedStreamImplTest {
         }
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     public void shouldAggregateWithDefaultSerdes() {
         final MockProcessorSupplier<String, String> supplier = new MockProcessorSupplier<>();
@@ -551,29 +600,33 @@ public class KGroupedStreamImplTest {
     }
 
     private void processData(final TopologyTestDriver driver) {
-        driver.pipeInput(recordFactory.create(TOPIC, "1", "A", 5L));
-        driver.pipeInput(recordFactory.create(TOPIC, "2", "B", 1L));
-        driver.pipeInput(recordFactory.create(TOPIC, "1", "C", 3L));
-        driver.pipeInput(recordFactory.create(TOPIC, "1", "D", 10L));
-        driver.pipeInput(recordFactory.create(TOPIC, "3", "E", 8L));
-        driver.pipeInput(recordFactory.create(TOPIC, "3", "F", 9L));
-        driver.pipeInput(recordFactory.create(TOPIC, "3", (String) null));
+        final TestInputTopic<String, String> inputTopic =
+                driver.createInputTopic(TOPIC, new StringSerializer(), new StringSerializer());
+        inputTopic.pipeInput("1", "A", 5L);
+        inputTopic.pipeInput("2", "B", 1L);
+        inputTopic.pipeInput("1", "C", 3L);
+        inputTopic.pipeInput("1", "D", 10L);
+        inputTopic.pipeInput("3", "E", 8L);
+        inputTopic.pipeInput("3", "F", 9L);
+        inputTopic.pipeInput("3", (String) null);
     }
 
     private void doCountWindowed(final  MockProcessorSupplier<Windowed<String>, Long> supplier) {
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
-            driver.pipeInput(recordFactory.create(TOPIC, "1", "A", 0L));
-            driver.pipeInput(recordFactory.create(TOPIC, "1", "A", 499L));
-            driver.pipeInput(recordFactory.create(TOPIC, "1", "A", 100L));
-            driver.pipeInput(recordFactory.create(TOPIC, "2", "B", 0L));
-            driver.pipeInput(recordFactory.create(TOPIC, "2", "B", 100L));
-            driver.pipeInput(recordFactory.create(TOPIC, "2", "B", 200L));
-            driver.pipeInput(recordFactory.create(TOPIC, "3", "C", 1L));
-            driver.pipeInput(recordFactory.create(TOPIC, "1", "A", 500L));
-            driver.pipeInput(recordFactory.create(TOPIC, "1", "A", 500L));
-            driver.pipeInput(recordFactory.create(TOPIC, "2", "B", 500L));
-            driver.pipeInput(recordFactory.create(TOPIC, "2", "B", 500L));
-            driver.pipeInput(recordFactory.create(TOPIC, "3", "B", 100L));
+            final TestInputTopic<String, String> inputTopic =
+                    driver.createInputTopic(TOPIC, new StringSerializer(), new StringSerializer());
+            inputTopic.pipeInput("1", "A", 0L);
+            inputTopic.pipeInput("1", "A", 499L);
+            inputTopic.pipeInput("1", "A", 100L);
+            inputTopic.pipeInput("2", "B", 0L);
+            inputTopic.pipeInput("2", "B", 100L);
+            inputTopic.pipeInput("2", "B", 200L);
+            inputTopic.pipeInput("3", "C", 1L);
+            inputTopic.pipeInput("1", "A", 500L);
+            inputTopic.pipeInput("1", "A", 500L);
+            inputTopic.pipeInput("2", "B", 500L);
+            inputTopic.pipeInput("2", "B", 500L);
+            inputTopic.pipeInput("3", "B", 100L);
         }
         assertThat(supplier.theCapturedProcessor().processed, equalTo(Arrays.asList(
             new KeyValueTimestamp<>(new Windowed<>("1", new TimeWindow(0L, 500L)), 1L, 0L),

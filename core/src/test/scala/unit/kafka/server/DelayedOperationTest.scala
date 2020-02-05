@@ -27,6 +27,9 @@ import kafka.utils.TestUtils
 import org.apache.kafka.common.utils.Time
 import org.junit.{After, Before, Test}
 import org.junit.Assert._
+import org.scalatest.Assertions.intercept
+
+import scala.collection.JavaConverters._
 
 class DelayedOperationTest {
 
@@ -75,6 +78,68 @@ class DelayedOperationTest {
     assertTrue("r1 completed due to expiration", r1.isCompleted)
     assertFalse("r2 hasn't completed", r2.isCompleted)
     assertTrue(s"Time for expiration $elapsed should at least $expiration", elapsed >= expiration)
+  }
+
+  @Test
+  def testDelayedFuture(): Unit = {
+    val purgatoryName = "testDelayedFuture"
+    val purgatory = new DelayedFuturePurgatory(purgatoryName, brokerId = 0)
+    val result = new AtomicInteger()
+
+    def hasExecutorThread: Boolean = Thread.getAllStackTraces.keySet.asScala.map(_.getName)
+      .exists(_.contains(s"DelayedExecutor-$purgatoryName"))
+    def updateResult(futures: List[CompletableFuture[Integer]]): Unit =
+      result.set(futures.filterNot(_.isCompletedExceptionally).map(_.get.intValue).sum)
+
+    assertFalse("Unnecessary thread created", hasExecutorThread)
+
+    // Two completed futures: callback should be executed immediately on the same thread
+    val futures1 = List(CompletableFuture.completedFuture(10.asInstanceOf[Integer]),
+      CompletableFuture.completedFuture(11.asInstanceOf[Integer]))
+    val r1 = purgatory.tryCompleteElseWatch[Integer](100000L, futures1, () => updateResult(futures1))
+    assertTrue("r1 not completed", r1.isCompleted)
+    assertEquals(21, result.get())
+    assertFalse("Unnecessary thread created", hasExecutorThread)
+
+    // Two delayed futures: callback should wait for both to complete
+    result.set(-1)
+    val futures2 = List(new CompletableFuture[Integer], new CompletableFuture[Integer])
+    val r2 = purgatory.tryCompleteElseWatch[Integer](100000L, futures2, () => updateResult(futures2))
+    assertFalse("r2 should be incomplete", r2.isCompleted)
+    futures2.head.complete(20)
+    assertFalse(r2.isCompleted)
+    assertEquals(-1, result.get())
+    futures2(1).complete(21)
+    TestUtils.waitUntilTrue(() => r2.isCompleted, "r2 not completed")
+    TestUtils.waitUntilTrue(() => result.get == 41, "callback not invoked")
+    assertTrue("Thread not created for executing delayed task", hasExecutorThread)
+
+    // One immediate and one delayed future: callback should wait for delayed task to complete
+    result.set(-1)
+    val futures3 = List(new CompletableFuture[Integer], CompletableFuture.completedFuture(31.asInstanceOf[Integer]))
+    val r3 = purgatory.tryCompleteElseWatch[Integer](100000L, futures3, () => updateResult(futures3))
+    assertFalse("r3 should be incomplete", r3.isCompleted)
+    assertEquals(-1, result.get())
+    futures3.head.complete(30)
+    TestUtils.waitUntilTrue(() => r3.isCompleted, "r3 not completed")
+    TestUtils.waitUntilTrue(() => result.get == 61, "callback not invoked")
+
+
+    // One future doesn't complete within timeout. Should expire and invoke callback after timeout.
+    result.set(-1)
+    val start = Time.SYSTEM.hiResClockMs
+    val expirationMs = 2000L
+    val futures4 = List(new CompletableFuture[Integer], new CompletableFuture[Integer])
+    val r4 = purgatory.tryCompleteElseWatch[Integer](expirationMs, futures4, () => updateResult(futures4))
+    futures4.head.complete(40)
+    TestUtils.waitUntilTrue(() => futures4(1).isDone, "r4 futures not expired")
+    assertTrue("r4 not completed after timeout", r4.isCompleted)
+    val elapsed = Time.SYSTEM.hiResClockMs - start
+    assertTrue(s"Time for expiration $elapsed should at least $expirationMs", elapsed >= expirationMs)
+    assertEquals(40, futures4.head.get)
+    assertEquals(classOf[org.apache.kafka.common.errors.TimeoutException],
+      intercept[ExecutionException](futures4(1).get).getCause.getClass)
+    assertEquals(40, result.get())
   }
 
   @Test

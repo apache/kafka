@@ -27,6 +27,7 @@ import org.apache.kafka.common.protocol.types.Struct;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -94,14 +95,13 @@ public class OffsetCommitResponse extends AbstractResponse {
 
     @Override
     public Map<Errors, Integer> errorCounts() {
-        Map<TopicPartition, Errors> errorMap = new HashMap<>();
+        List<Errors> errors = new ArrayList<>();
         for (OffsetCommitResponseTopic topic : data.topics()) {
             for (OffsetCommitResponsePartition partition : topic.partitions()) {
-                errorMap.put(new TopicPartition(topic.name(), partition.partitionIndex()),
-                        Errors.forCode(partition.errorCode()));
+                errors.add(Errors.forCode(partition.errorCode()));
             }
         }
-        return errorCounts(errorMap);
+        return errorCounts(errors);
     }
 
     public static OffsetCommitResponse parse(ByteBuffer buffer, short version) {

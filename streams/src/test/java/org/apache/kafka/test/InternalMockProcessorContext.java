@@ -41,6 +41,7 @@ import org.apache.kafka.streams.processor.internals.ToInternal;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.streams.state.internals.ThreadCache;
+import org.apache.kafka.streams.state.internals.metrics.RocksDBMetricsRecordingTrigger;
 
 import java.io.File;
 import java.time.Duration;
@@ -82,9 +83,35 @@ public class InternalMockProcessorContext extends AbstractProcessorContext imple
             stateDir,
             null,
             null,
-            new StreamsMetricsImpl(new Metrics(), "mock", StreamsConfig.METRICS_LATEST),
+            new StreamsMetricsImpl(new Metrics(), "mock", config.getString(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG)),
             config,
             null,
+            null
+        );
+    }
+
+    public InternalMockProcessorContext(final StreamsMetricsImpl streamsMetrics) {
+        this(
+            null,
+            null,
+            null,
+            streamsMetrics,
+            new StreamsConfig(StreamsTestUtils.getStreamsConfig()),
+            null,
+            null
+        );
+    }
+
+    public InternalMockProcessorContext(final File stateDir,
+                                        final StreamsConfig config,
+                                        final RecordCollector collector) {
+        this(
+            stateDir,
+            null,
+            null,
+            new StreamsMetricsImpl(new Metrics(), "mock", config.getString(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG)),
+            config,
+            () -> collector,
             null
         );
     }
@@ -155,6 +182,7 @@ public class InternalMockProcessorContext extends AbstractProcessorContext imple
         this.keySerde = keySerde;
         this.valSerde = valSerde;
         this.recordCollectorSupplier = collectorSupplier;
+        this.metrics().setRocksDBMetricsRecordingTrigger(new RocksDBMetricsRecordingTrigger());
     }
 
     @Override

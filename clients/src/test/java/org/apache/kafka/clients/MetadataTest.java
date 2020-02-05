@@ -23,7 +23,14 @@ import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.internals.Topic;
+import org.apache.kafka.common.message.MetadataResponseData;
+import org.apache.kafka.common.message.MetadataResponseData.MetadataResponseBrokerCollection;
+import org.apache.kafka.common.message.MetadataResponseData.MetadataResponsePartition;
+import org.apache.kafka.common.message.MetadataResponseData.MetadataResponseTopic;
+import org.apache.kafka.common.message.MetadataResponseData.MetadataResponseTopicCollection;
+import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
@@ -33,9 +40,13 @@ import org.apache.kafka.test.TestUtils;
 import org.junit.Test;
 
 import java.net.InetSocketAddress;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.stream.Collectors;
 
 import static org.apache.kafka.test.TestUtils.assertOptional;
 import static org.junit.Assert.assertEquals;
@@ -106,6 +117,18 @@ public class MetadataTest {
     }
 
     @Test
+    public void testUpdateMetadataAllowedImmediatelyAfterBootstrap() {
+        MockTime time = new MockTime();
+
+        Metadata metadata = new Metadata(refreshBackoffMs, metadataExpireMs, new LogContext(),
+                new ClusterResourceListeners());
+        metadata.bootstrap(Collections.singletonList(new InetSocketAddress("localhost", 9002)));
+
+        assertEquals(0, metadata.timeToAllowUpdate(time.milliseconds()));
+        assertEquals(0, metadata.timeToNextUpdate(time.milliseconds()));
+    }
+
+    @Test
     public void testTimeToNextUpdate() {
         checkTimeToNextUpdate(100, 1000);
         checkTimeToNextUpdate(1000, 100);
@@ -119,7 +142,7 @@ public class MetadataTest {
         long now = 10000;
 
         // lastRefreshMs updated to now.
-        metadata.failedUpdate(now, null);
+        metadata.failedUpdate(now);
 
         // Backing off. Remaining time until next try should be returned.
         assertEquals(refreshBackoffMs, metadata.timeToNextUpdate(now));
@@ -135,13 +158,119 @@ public class MetadataTest {
         assertEquals(0, metadata.timeToNextUpdate(now + 1));
     }
 
+    /**
+     * Prior to Kafka version 2.4 (which coincides with Metadata version 9), the broker does not propagate leader epoch
+     * information accurately while a reassignment is in progress, so we cannot rely on it. This is explained in more
+     * detail in MetadataResponse's constructor.
+     */
+    @Test
+    public void testIgnoreLeaderEpochInOlderMetadataResponse() {
+        TopicPartition tp = new TopicPartition("topic", 0);
+
+        MetadataResponsePartition partitionMetadata = new MetadataResponsePartition()
+                .setPartitionIndex(tp.partition())
+                .setLeaderId(5)
+                .setLeaderEpoch(10)
+                .setReplicaNodes(Arrays.asList(1, 2, 3))
+                .setIsrNodes(Arrays.asList(1, 2, 3))
+                .setOfflineReplicas(Collections.emptyList())
+                .setErrorCode(Errors.NONE.code());
+
+        MetadataResponseTopic topicMetadata = new MetadataResponseTopic()
+                .setName(tp.topic())
+                .setErrorCode(Errors.NONE.code())
+                .setPartitions(Collections.singletonList(partitionMetadata))
+                .setIsInternal(false);
+
+        MetadataResponseTopicCollection topics = new MetadataResponseTopicCollection();
+        topics.add(topicMetadata);
+
+        MetadataResponseData data = new MetadataResponseData()
+                .setClusterId("clusterId")
+                .setControllerId(0)
+                .setTopics(topics)
+                .setBrokers(new MetadataResponseBrokerCollection());
+
+        for (short version = ApiKeys.METADATA.oldestVersion(); version < 9; version++) {
+            Struct struct = data.toStruct(version);
+            MetadataResponse response = new MetadataResponse(struct, version);
+            assertFalse(response.hasReliableLeaderEpochs());
+            metadata.update(response, 100);
+            assertTrue(metadata.partitionInfoIfCurrent(tp).isPresent());
+            MetadataCache.PartitionInfoAndEpoch info = metadata.partitionInfoIfCurrent(tp).get();
+            assertEquals(-1, info.epoch());
+        }
+
+        for (short version = 9; version <= ApiKeys.METADATA.latestVersion(); version++) {
+            Struct struct = data.toStruct(version);
+            MetadataResponse response = new MetadataResponse(struct, version);
+            assertTrue(response.hasReliableLeaderEpochs());
+            metadata.update(response, 100);
+            assertTrue(metadata.partitionInfoIfCurrent(tp).isPresent());
+            MetadataCache.PartitionInfoAndEpoch info = metadata.partitionInfoIfCurrent(tp).get();
+            assertEquals(10, info.epoch());
+        }
+    }
+
+    @Test
+    public void testStaleMetadata() {
+        TopicPartition tp = new TopicPartition("topic", 0);
+
+        MetadataResponsePartition partitionMetadata = new MetadataResponsePartition()
+                .setPartitionIndex(tp.partition())
+                .setLeaderId(1)
+                .setLeaderEpoch(10)
+                .setReplicaNodes(Arrays.asList(1, 2, 3))
+                .setIsrNodes(Arrays.asList(1, 2, 3))
+                .setOfflineReplicas(Collections.emptyList())
+                .setErrorCode(Errors.NONE.code());
+
+        MetadataResponseTopic topicMetadata = new MetadataResponseTopic()
+                .setName(tp.topic())
+                .setErrorCode(Errors.NONE.code())
+                .setPartitions(Collections.singletonList(partitionMetadata))
+                .setIsInternal(false);
+
+        MetadataResponseTopicCollection topics = new MetadataResponseTopicCollection();
+        topics.add(topicMetadata);
+
+        MetadataResponseData data = new MetadataResponseData()
+                .setClusterId("clusterId")
+                .setControllerId(0)
+                .setTopics(topics)
+                .setBrokers(new MetadataResponseBrokerCollection());
+
+        metadata.update(new MetadataResponse(data), 100);
+
+        // Older epoch with changed ISR should be ignored
+        partitionMetadata
+                .setPartitionIndex(tp.partition())
+                .setLeaderId(1)
+                .setLeaderEpoch(9)
+                .setReplicaNodes(Arrays.asList(1, 2, 3))
+                .setIsrNodes(Arrays.asList(1, 2))
+                .setOfflineReplicas(Collections.emptyList())
+                .setErrorCode(Errors.NONE.code());
+
+        metadata.update(new MetadataResponse(data), 101);
+        assertEquals(Optional.of(10), metadata.lastSeenLeaderEpoch(tp));
+
+        assertTrue(metadata.partitionInfoIfCurrent(tp).isPresent());
+        MetadataCache.PartitionInfoAndEpoch info = metadata.partitionInfoIfCurrent(tp).get();
+
+        List<Integer> cachedIsr = Arrays.stream(info.partitionInfo().inSyncReplicas())
+                .map(Node::id).collect(Collectors.toList());
+        assertEquals(Arrays.asList(1, 2, 3), cachedIsr);
+        assertEquals(10, info.epoch());
+    }
+
     @Test
     public void testFailedUpdate() {
         long time = 100;
         metadata.update(emptyMetadataResponse(), time);
 
         assertEquals(100, metadata.timeToNextUpdate(1000));
-        metadata.failedUpdate(1100, null);
+        metadata.failedUpdate(1100);
 
         assertEquals(100, metadata.timeToNextUpdate(1100));
         assertEquals(100, metadata.lastSuccessfulUpdate());
@@ -152,14 +281,13 @@ public class MetadataTest {
 
     @Test
     public void testClusterListenerGetsNotifiedOfUpdate() {
-        long time = 0;
         MockClusterResourceListener mockClusterListener = new MockClusterResourceListener();
         ClusterResourceListeners listeners = new ClusterResourceListeners();
         listeners.maybeAdd(mockClusterListener);
         metadata = new Metadata(refreshBackoffMs, metadataExpireMs, new LogContext(), listeners);
 
         String hostName = "www.example.com";
-        metadata.bootstrap(Collections.singletonList(new InetSocketAddress(hostName, 9002)), time);
+        metadata.bootstrap(Collections.singletonList(new InetSocketAddress(hostName, 9002)));
         assertFalse("ClusterResourceListener should not called when metadata is updated with bootstrap Cluster",
                 MockClusterResourceListener.IS_ON_UPDATE_CALLED.get());
 

@@ -41,10 +41,12 @@ import org.apache.kafka.connect.runtime.distributed.DistributedHerder.HerderMetr
 import org.apache.kafka.connect.runtime.isolation.DelegatingClassLoader;
 import org.apache.kafka.connect.runtime.isolation.PluginClassLoader;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
+import org.apache.kafka.connect.runtime.rest.InternalRequestSignature;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorType;
 import org.apache.kafka.connect.runtime.rest.entities.TaskInfo;
 import org.apache.kafka.connect.runtime.rest.errors.BadRequestException;
+import org.apache.kafka.connect.runtime.rest.errors.ConnectRestException;
 import org.apache.kafka.connect.sink.SinkConnector;
 import org.apache.kafka.connect.source.SourceConnector;
 import org.apache.kafka.connect.source.SourceTask;
@@ -65,6 +67,7 @@ import org.powermock.api.easymock.annotation.Mock;
 import org.powermock.core.classloader.annotations.PowerMockIgnore;
 import org.powermock.core.classloader.annotations.PrepareForTest;
 import org.powermock.modules.junit4.PowerMockRunner;
+import org.powermock.reflect.Whitebox;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -74,20 +77,24 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
 import static java.util.Collections.singletonList;
+import static javax.ws.rs.core.Response.Status.FORBIDDEN;
 import static org.apache.kafka.connect.runtime.distributed.ConnectProtocol.CONNECT_PROTOCOL_V0;
 import static org.apache.kafka.connect.runtime.distributed.IncrementalCooperativeConnectProtocol.CONNECT_PROTOCOL_V1;
+import static org.apache.kafka.connect.runtime.distributed.IncrementalCooperativeConnectProtocol.CONNECT_PROTOCOL_V2;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 @SuppressWarnings("deprecation")
 @RunWith(PowerMockRunner.class)
 @PrepareForTest({DistributedHerder.class, Plugins.class})
-@PowerMockIgnore("javax.management.*")
+@PowerMockIgnore({"javax.management.*", "javax.crypto.*"})
 public class DistributedHerderTest {
     private static final Map<String, String> HERDER_CONFIG = new HashMap<>();
     static {
@@ -144,18 +151,20 @@ public class DistributedHerderTest {
         TASK_CONFIGS_MAP.put(TASK1, TASK_CONFIG);
         TASK_CONFIGS_MAP.put(TASK2, TASK_CONFIG);
     }
-    private static final ClusterConfigState SNAPSHOT = new ClusterConfigState(1, Collections.singletonMap(CONN1, 3),
+    private static final ClusterConfigState SNAPSHOT = new ClusterConfigState(1, null, Collections.singletonMap(CONN1, 3),
             Collections.singletonMap(CONN1, CONN1_CONFIG), Collections.singletonMap(CONN1, TargetState.STARTED),
             TASK_CONFIGS_MAP, Collections.<String>emptySet());
-    private static final ClusterConfigState SNAPSHOT_PAUSED_CONN1 = new ClusterConfigState(1, Collections.singletonMap(CONN1, 3),
+    private static final ClusterConfigState SNAPSHOT_PAUSED_CONN1 = new ClusterConfigState(1, null, Collections.singletonMap(CONN1, 3),
             Collections.singletonMap(CONN1, CONN1_CONFIG), Collections.singletonMap(CONN1, TargetState.PAUSED),
             TASK_CONFIGS_MAP, Collections.<String>emptySet());
-    private static final ClusterConfigState SNAPSHOT_UPDATED_CONN1_CONFIG = new ClusterConfigState(1, Collections.singletonMap(CONN1, 3),
+    private static final ClusterConfigState SNAPSHOT_UPDATED_CONN1_CONFIG = new ClusterConfigState(1, null, Collections.singletonMap(CONN1, 3),
             Collections.singletonMap(CONN1, CONN1_CONFIG_UPDATED), Collections.singletonMap(CONN1, TargetState.STARTED),
             TASK_CONFIGS_MAP, Collections.<String>emptySet());
 
     private static final String WORKER_ID = "localhost:8083";
     private static final String KAFKA_CLUSTER_ID = "I4ZmrWqfT2e-upky_4fdPA";
+    private static final Runnable EMPTY_RUNNABLE = () -> {
+    };
 
     @Mock private ConfigBackingStore configBackingStore;
     @Mock private StatusBackingStore statusBackingStore;
@@ -181,6 +190,7 @@ public class DistributedHerderTest {
     private short connectProtocolVersion;
     private final ConnectorClientConfigOverridePolicy
         noneConnectorClientConfigOverridePolicy = new NoneConnectorClientConfigOverridePolicy();
+
 
     @Before
     public void setUp() throws Exception {
@@ -1490,7 +1500,7 @@ public class DistributedHerderTest {
         EasyMock.expect(configTransformer.transform(EasyMock.eq(CONN1), EasyMock.anyObject()))
             .andThrow(new AssertionError("Config transformation should not occur when requesting connector or task info"));
         EasyMock.replay(configTransformer);
-        ClusterConfigState snapshotWithTransform = new ClusterConfigState(1, Collections.singletonMap(CONN1, 3),
+        ClusterConfigState snapshotWithTransform = new ClusterConfigState(1, null, Collections.singletonMap(CONN1, 3),
             Collections.singletonMap(CONN1, CONN1_CONFIG), Collections.singletonMap(CONN1, TargetState.STARTED),
             TASK_CONFIGS_MAP, Collections.<String>emptySet(), configTransformer);
 
@@ -1627,12 +1637,149 @@ public class DistributedHerderTest {
         PowerMock.verifyAll();
     }
 
+
+    @Test
+    public void testPutTaskConfigsSignatureNotRequiredV0() {
+        Callback<Void> taskConfigCb = EasyMock.mock(Callback.class);
+
+        member.wakeup();
+        EasyMock.expectLastCall().once();
+        EasyMock.expect(member.currentProtocolVersion()).andReturn(CONNECT_PROTOCOL_V0).anyTimes();
+        PowerMock.replayAll(taskConfigCb);
+
+        herder.putTaskConfigs(CONN1, TASK_CONFIGS, taskConfigCb, null);
+
+        PowerMock.verifyAll();
+    }
+    @Test
+    public void testPutTaskConfigsSignatureNotRequiredV1() {
+        Callback<Void> taskConfigCb = EasyMock.mock(Callback.class);
+
+        member.wakeup();
+        EasyMock.expectLastCall().once();
+        EasyMock.expect(member.currentProtocolVersion()).andReturn(CONNECT_PROTOCOL_V1).anyTimes();
+        PowerMock.replayAll(taskConfigCb);
+
+        herder.putTaskConfigs(CONN1, TASK_CONFIGS, taskConfigCb, null);
+
+        PowerMock.verifyAll();
+    }
+
+    @Test
+    public void testPutTaskConfigsMissingRequiredSignature() {
+        Callback<Void> taskConfigCb = EasyMock.mock(Callback.class);
+        Capture<Throwable> errorCapture = Capture.newInstance();
+        taskConfigCb.onCompletion(EasyMock.capture(errorCapture), EasyMock.eq(null));
+        EasyMock.expectLastCall().once();
+
+        EasyMock.expect(member.currentProtocolVersion()).andReturn(CONNECT_PROTOCOL_V2).anyTimes();
+        PowerMock.replayAll(taskConfigCb);
+
+        herder.putTaskConfigs(CONN1, TASK_CONFIGS, taskConfigCb, null);
+
+        PowerMock.verifyAll();
+        assertTrue(errorCapture.getValue() instanceof BadRequestException);
+    }
+
+    @Test
+    public void testPutTaskConfigsDisallowedSignatureAlgorithm() {
+        Callback<Void> taskConfigCb = EasyMock.mock(Callback.class);
+        Capture<Throwable> errorCapture = Capture.newInstance();
+        taskConfigCb.onCompletion(EasyMock.capture(errorCapture), EasyMock.eq(null));
+        EasyMock.expectLastCall().once();
+
+        EasyMock.expect(member.currentProtocolVersion()).andReturn(CONNECT_PROTOCOL_V2).anyTimes();
+
+        InternalRequestSignature signature = EasyMock.mock(InternalRequestSignature.class);
+        EasyMock.expect(signature.keyAlgorithm()).andReturn("HmacSHA489").anyTimes();
+
+        PowerMock.replayAll(taskConfigCb, signature);
+
+        herder.putTaskConfigs(CONN1, TASK_CONFIGS, taskConfigCb, signature);
+
+        PowerMock.verifyAll();
+        assertTrue(errorCapture.getValue() instanceof BadRequestException);
+    }
+
+    @Test
+    public void testPutTaskConfigsInvalidSignature() {
+        Callback<Void> taskConfigCb = EasyMock.mock(Callback.class);
+        Capture<Throwable> errorCapture = Capture.newInstance();
+        taskConfigCb.onCompletion(EasyMock.capture(errorCapture), EasyMock.eq(null));
+        EasyMock.expectLastCall().once();
+
+        EasyMock.expect(member.currentProtocolVersion()).andReturn(CONNECT_PROTOCOL_V2).anyTimes();
+
+        InternalRequestSignature signature = EasyMock.mock(InternalRequestSignature.class);
+        EasyMock.expect(signature.keyAlgorithm()).andReturn("HmacSHA256").anyTimes();
+        EasyMock.expect(signature.isValid(EasyMock.anyObject())).andReturn(false).anyTimes();
+
+        PowerMock.replayAll(taskConfigCb, signature);
+
+        herder.putTaskConfigs(CONN1, TASK_CONFIGS, taskConfigCb, signature);
+
+        PowerMock.verifyAll();
+        assertTrue(errorCapture.getValue() instanceof ConnectRestException);
+        assertEquals(FORBIDDEN.getStatusCode(), ((ConnectRestException) errorCapture.getValue()).statusCode());
+    }
+
+    @Test
+    public void testPutTaskConfigsValidRequiredSignature() {
+        Callback<Void> taskConfigCb = EasyMock.mock(Callback.class);
+
+        member.wakeup();
+        EasyMock.expectLastCall().once();
+        EasyMock.expect(member.currentProtocolVersion()).andReturn(CONNECT_PROTOCOL_V2).anyTimes();
+
+        InternalRequestSignature signature = EasyMock.mock(InternalRequestSignature.class);
+        EasyMock.expect(signature.keyAlgorithm()).andReturn("HmacSHA256").anyTimes();
+        EasyMock.expect(signature.isValid(EasyMock.anyObject())).andReturn(true).anyTimes();
+
+        PowerMock.replayAll(taskConfigCb, signature);
+
+        herder.putTaskConfigs(CONN1, TASK_CONFIGS, taskConfigCb, signature);
+
+        PowerMock.verifyAll();
+    }
+
+    @Test
+    public void testKeyExceptionDetection() {
+        assertFalse(herder.isPossibleExpiredKeyException(
+            time.milliseconds(),
+            new RuntimeException()
+        ));
+        assertFalse(herder.isPossibleExpiredKeyException(
+            time.milliseconds(),
+            new BadRequestException("")
+        ));
+        assertFalse(herder.isPossibleExpiredKeyException(
+            time.milliseconds() - TimeUnit.MINUTES.toMillis(2),
+            new ConnectRestException(FORBIDDEN.getStatusCode(), "")
+        ));
+        assertTrue(herder.isPossibleExpiredKeyException(
+            time.milliseconds(),
+            new ConnectRestException(FORBIDDEN.getStatusCode(), "")
+        ));
+    }
+
     @Test
     public void testInconsistentConfigs() {
         // FIXME: if we have inconsistent configs, we need to request forced reconfig + write of the connector's task configs
         // This requires inter-worker communication, so needs the REST API
     }
 
+
+    @Test
+    public void testThreadNames() {
+        assertTrue(Whitebox.<ThreadPoolExecutor>getInternalState(herder, "herderExecutor").
+                getThreadFactory().newThread(EMPTY_RUNNABLE).getName().startsWith(DistributedHerder.class.getSimpleName()));
+
+        assertTrue(Whitebox.<ThreadPoolExecutor>getInternalState(herder, "forwardRequestExecutor").
+                getThreadFactory().newThread(EMPTY_RUNNABLE).getName().startsWith("ForwardRequestExecutor"));
+
+        assertTrue(Whitebox.<ThreadPoolExecutor>getInternalState(herder, "startAndStopExecutor").
+                getThreadFactory().newThread(EMPTY_RUNNABLE).getName().startsWith("StartAndStopExecutor"));
+    }
 
     private void expectRebalance(final long offset,
                                  final List<String> assignedConnectors,

@@ -16,8 +16,8 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.streams.StoreQueryParams;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
-import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.QueryableStoreType;
 
 import java.util.ArrayList;
@@ -28,25 +28,26 @@ import java.util.List;
  */
 public class WrappingStoreProvider implements StateStoreProvider {
 
-    private final List<StateStoreProvider> storeProviders;
+    private final List<StreamThreadStateStoreProvider> storeProviders;
+    private StoreQueryParams storeQueryParams;
 
-    WrappingStoreProvider(final List<StateStoreProvider> storeProviders) {
+    WrappingStoreProvider(final List<StreamThreadStateStoreProvider> storeProviders,
+                          final StoreQueryParams storeQueryParams) {
         this.storeProviders = storeProviders;
+        this.storeQueryParams = storeQueryParams;
     }
 
-    /**
-     * Provides access to {@link org.apache.kafka.streams.processor.StateStore}s accepted
-     * by {@link QueryableStoreType#accepts(StateStore)}
-     * @param storeName  name of the store
-     * @param type      The {@link QueryableStoreType}
-     * @param <T>       The type of the Store, for example, {@link org.apache.kafka.streams.state.ReadOnlyKeyValueStore}
-     * @return  a List of all the stores with the storeName and are accepted by {@link QueryableStoreType#accepts(StateStore)}
-     */
+    //visible for testing
+    public void setStoreQueryParams(final StoreQueryParams storeQueryParams) {
+        this.storeQueryParams = storeQueryParams;
+    }
+
+    @Override
     public <T> List<T> stores(final String storeName,
-                              final QueryableStoreType<T> type) {
+                              final QueryableStoreType<T> queryableStoreType) {
         final List<T> allStores = new ArrayList<>();
-        for (final StateStoreProvider provider : storeProviders) {
-            final List<T> stores = provider.stores(storeName, type);
+        for (final StreamThreadStateStoreProvider provider : storeProviders) {
+            final List<T> stores = provider.stores(storeQueryParams);
             allStores.addAll(stores);
         }
         if (allStores.isEmpty()) {

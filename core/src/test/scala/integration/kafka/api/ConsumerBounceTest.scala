@@ -18,20 +18,19 @@ import java.util.concurrent._
 import java.util.{Collection, Collections, Properties}
 
 import kafka.server.KafkaConfig
-import kafka.utils.{CoreUtils, Logging, ShutdownableThread, TestUtils}
+import kafka.utils.{Logging, ShutdownableThread, TestUtils}
 import org.apache.kafka.clients.consumer._
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.GroupMaxSizeReachedException
 import org.apache.kafka.common.message.FindCoordinatorRequestData
-import org.apache.kafka.common.protocol.{ApiKeys, Errors}
+import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{FindCoordinatorRequest, FindCoordinatorResponse}
 import org.junit.Assert._
 import org.junit.{After, Ignore, Test}
 
 import scala.collection.JavaConverters._
-import scala.collection.mutable
-import scala.collection.Seq
+import scala.collection.{Seq, mutable}
 
 /**
  * Integration tests for the consumer that cover basic usage as well as server failures
@@ -108,7 +107,7 @@ class ConsumerBounceTest extends AbstractConsumerTest with Logging {
 
       if (records.nonEmpty) {
         consumer.commitSync()
-        assertEquals(consumer.position(tp), consumer.committed(tp).offset)
+        assertEquals(consumer.position(tp), consumer.committed(Set(tp).asJava).get(tp).offset)
 
         if (consumer.position(tp) == numRecords) {
           consumer.seekToBeginning(Collections.emptyList())
@@ -153,7 +152,7 @@ class ConsumerBounceTest extends AbstractConsumerTest with Logging {
       } else if (coin == 2) {
         info("Committing offset.")
         consumer.commitSync()
-        assertEquals(consumer.position(tp), consumer.committed(tp).offset)
+        assertEquals(consumer.position(tp), consumer.committed(Set(tp).asJava).get(tp).offset)
       }
     }
   }
@@ -258,14 +257,12 @@ class ConsumerBounceTest extends AbstractConsumerTest with Logging {
   }
 
   private def findCoordinator(group: String): Int = {
-    val request = new FindCoordinatorRequest.Builder(
-        new FindCoordinatorRequestData()
-          .setKeyType(FindCoordinatorRequest.CoordinatorType.GROUP.id)
-          .setKey(group)).build()
+    val request = new FindCoordinatorRequest.Builder(new FindCoordinatorRequestData()
+      .setKeyType(FindCoordinatorRequest.CoordinatorType.GROUP.id)
+      .setKey(group)).build()
     var nodeId = -1
     TestUtils.waitUntilTrue(() => {
-      val resp = connectAndSend(request, ApiKeys.FIND_COORDINATOR)
-      val response = FindCoordinatorResponse.parse(resp, ApiKeys.FIND_COORDINATOR.latestVersion)
+      val response = connectAndReceive[FindCoordinatorResponse](request)
       nodeId = response.node.id
       response.error == Errors.NONE
     }, s"Failed to find coordinator for group $group")
@@ -385,7 +382,7 @@ class ConsumerBounceTest extends AbstractConsumerTest with Logging {
   private def checkCloseDuringRebalance(groupId: String, topic: String, executor: ExecutorService, brokersAvailableDuringClose: Boolean): Unit = {
 
     def subscribeAndPoll(consumer: KafkaConsumer[Array[Byte], Array[Byte]], revokeSemaphore: Option[Semaphore] = None): Future[Any] = {
-      executor.submit(CoreUtils.runnable {
+      executor.submit(() => {
         consumer.subscribe(Collections.singletonList(topic))
         revokeSemaphore.foreach(s => s.release())
         // requires to used deprecated `poll(long)` to trigger metadata update
@@ -455,12 +452,12 @@ class ConsumerBounceTest extends AbstractConsumerTest with Logging {
 
   private def submitCloseAndValidate(consumer: KafkaConsumer[Array[Byte], Array[Byte]],
       closeTimeoutMs: Long, minCloseTimeMs: Option[Long], maxCloseTimeMs: Option[Long]): Future[Any] = {
-    executor.submit(CoreUtils.runnable {
+    executor.submit(() => {
       val closeGraceTimeMs = 2000
-      val startNanos = System.nanoTime
+      val startMs = System.currentTimeMillis()
       info("Closing consumer with timeout " + closeTimeoutMs + " ms.")
       consumer.close(time.Duration.ofMillis(closeTimeoutMs))
-      val timeTakenMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime - startNanos)
+      val timeTakenMs = System.currentTimeMillis() - startMs
       maxCloseTimeMs.foreach { ms =>
         assertTrue("Close took too long " + timeTakenMs, timeTakenMs < ms + closeGraceTimeMs)
       }
@@ -485,7 +482,7 @@ class ConsumerBounceTest extends AbstractConsumerTest with Logging {
     consumer.poll(time.Duration.ofSeconds(3L))
     assertTrue("Assignment did not complete on time", assignSemaphore.tryAcquire(1, TimeUnit.SECONDS))
     if (committedRecords > 0)
-      assertEquals(committedRecords, consumer.committed(tp).offset)
+      assertEquals(committedRecords, consumer.committed(Set(tp).asJava).get(tp).offset)
     consumer.close()
   }
 

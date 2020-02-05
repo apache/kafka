@@ -43,11 +43,11 @@ import org.rocksdb.SstFileManager;
 import org.rocksdb.Statistics;
 import org.rocksdb.TableFormatConfig;
 import org.rocksdb.WALRecoveryMode;
+import org.rocksdb.WriteBufferManager;
+import org.slf4j.LoggerFactory;
 
 import java.util.Collection;
 import java.util.List;
-import org.rocksdb.WriteBufferManager;
-import org.slf4j.LoggerFactory;
 
 /**
  * The generic {@link Options} class allows users to set all configs on one object if only default column family
@@ -56,7 +56,7 @@ import org.slf4j.LoggerFactory;
  *
  * This class do the translation between generic {@link Options} into {@link DBOptions} and {@link ColumnFamilyOptions}.
  */
-class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter extends Options {
+public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter extends Options {
     private final DBOptions dbOptions;
     private final ColumnFamilyOptions columnFamilyOptions;
 
@@ -1341,13 +1341,22 @@ class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter extends Options
 
     @Override
     public Options setCompactionOptionsFIFO(final CompactionOptionsFIFO compactionOptionsFIFO) {
+        logWarning(LOG);
         columnFamilyOptions.setCompactionOptionsFIFO(compactionOptionsFIFO);
         return this;
     }
 
     @Override
     public CompactionOptionsFIFO compactionOptionsFIFO() {
+        logWarning(LOG);
         return columnFamilyOptions.compactionOptionsFIFO();
+    }
+
+    public static void logWarning(final org.slf4j.Logger log) {
+        log.warn("RocksDB's version will be bumped to version 6+ via KAFKA-8897 in a future release. "
+            + "If you use `org.rocksdb.CompactionOptionsFIFO#setTtl(long)` or `#ttl()` you will need to rewrite "
+            + "your code after KAFKA-8897 is resolved and set TTL via `org.rocksdb.Options` "
+            + "(or `org.rocksdb.ColumnFamilyOptions`).");
     }
 
     @Override

@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.protocol;
 
+import org.apache.kafka.common.InvalidRecordException;
 import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.BrokerNotAvailableException;
 import org.apache.kafka.common.errors.ClusterAuthorizationException;
@@ -77,6 +78,7 @@ import org.apache.kafka.common.errors.OffsetNotAvailableException;
 import org.apache.kafka.common.errors.OffsetOutOfRangeException;
 import org.apache.kafka.common.errors.OperationNotAttemptedException;
 import org.apache.kafka.common.errors.OutOfOrderSequenceException;
+import org.apache.kafka.common.errors.UnstableOffsetCommitException;
 import org.apache.kafka.common.errors.PolicyViolationException;
 import org.apache.kafka.common.errors.PreferredLeaderNotAvailableException;
 import org.apache.kafka.common.errors.ProducerFencedException;
@@ -315,7 +317,9 @@ public enum Errors {
     NO_REASSIGNMENT_IN_PROGRESS(85, "No partition reassignment is in progress.",
             NoReassignmentInProgressException::new),
     GROUP_SUBSCRIBED_TO_TOPIC(86, "Deleting offsets of a topic is forbidden while the consumer group is actively subscribed to it.",
-        GroupSubscribedToTopicException::new);
+        GroupSubscribedToTopicException::new),
+    INVALID_RECORD(87, "This record has failed the validation on broker and hence be rejected.", InvalidRecordException::new),
+    UNSTABLE_OFFSET_COMMIT(88, "There are unstable offsets that need to be cleared", UnstableOffsetCommitException::new);
 
     private static final Logger log = LoggerFactory.getLogger(Errors.class);
 

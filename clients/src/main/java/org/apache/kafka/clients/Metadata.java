@@ -209,10 +209,8 @@ public class Metadata implements Closeable {
         }
     }
 
-    public synchronized void bootstrap(List<InetSocketAddress> addresses, long now) {
+    public synchronized void bootstrap(List<InetSocketAddress> addresses) {
         this.needUpdate = true;
-        this.lastRefreshMs = now;
-        this.lastSuccessfulRefreshMs = now;
         this.updateVersion += 1;
         this.cache = MetadataCache.bootstrap(addresses);
     }
@@ -300,12 +298,10 @@ public class Metadata implements Closeable {
                 if (metadata.isInternal())
                     internalTopics.add(metadata.topic());
                 for (MetadataResponse.PartitionMetadata partitionMetadata : metadata.partitionMetadata()) {
-
-                    // Even if the partition's metadata includes an error, we need to handle the update to catch new epochs
-                    updatePartitionInfo(metadata.topic(), partitionMetadata, partitionInfo -> {
-                        int epoch = partitionMetadata.leaderEpoch().orElse(RecordBatch.NO_PARTITION_LEADER_EPOCH);
-                        partitions.add(new MetadataCache.PartitionInfoAndEpoch(partitionInfo, epoch));
-                    });
+                    // Even if the partition's metadata includes an error, we need to handle
+                    // the update to catch new epochs
+                    updatePartitionInfo(metadata.topic(), partitionMetadata,
+                            metadataResponse.hasReliableLeaderEpochs(), partitions::add);
 
                     if (partitionMetadata.error().exception() instanceof InvalidMetadataException) {
                         log.debug("Requesting metadata update for partition {} due to error {}",
@@ -330,25 +326,26 @@ public class Metadata implements Closeable {
      */
     private void updatePartitionInfo(String topic,
                                      MetadataResponse.PartitionMetadata partitionMetadata,
-                                     Consumer<PartitionInfo> partitionInfoConsumer) {
-
+                                     boolean hasReliableLeaderEpoch,
+                                     Consumer<MetadataCache.PartitionInfoAndEpoch> partitionInfoConsumer) {
         TopicPartition tp = new TopicPartition(topic, partitionMetadata.partition());
-        if (partitionMetadata.leaderEpoch().isPresent()) {
+
+        if (hasReliableLeaderEpoch && partitionMetadata.leaderEpoch().isPresent()) {
             int newEpoch = partitionMetadata.leaderEpoch().get();
             // If the received leader epoch is at least the same as the previous one, update the metadata
             if (updateLastSeenEpoch(tp, newEpoch, oldEpoch -> newEpoch >= oldEpoch, false)) {
-                partitionInfoConsumer.accept(MetadataResponse.partitionMetaToInfo(topic, partitionMetadata));
+                PartitionInfo info = MetadataResponse.partitionMetaToInfo(topic, partitionMetadata);
+                partitionInfoConsumer.accept(new MetadataCache.PartitionInfoAndEpoch(info, newEpoch));
             } else {
                 // Otherwise ignore the new metadata and use the previously cached info
-                PartitionInfo previousInfo = cache.cluster().partition(tp);
-                if (previousInfo != null) {
-                    partitionInfoConsumer.accept(previousInfo);
-                }
+                cache.getPartitionInfo(tp).ifPresent(partitionInfoConsumer);
             }
         } else {
             // Handle old cluster formats as well as error responses where leader and epoch are missing
             lastSeenLeaderEpochs.remove(tp);
-            partitionInfoConsumer.accept(MetadataResponse.partitionMetaToInfo(topic, partitionMetadata));
+            PartitionInfo info = MetadataResponse.partitionMetaToInfo(topic, partitionMetadata);
+            partitionInfoConsumer.accept(new MetadataCache.PartitionInfoAndEpoch(info,
+                    RecordBatch.NO_PARTITION_LEADER_EPOCH));
         }
     }
 
@@ -419,9 +416,18 @@ public class Metadata implements Closeable {
      * Record an attempt to update the metadata that failed. We need to keep track of this
      * to avoid retrying immediately.
      */
-    public synchronized void failedUpdate(long now, KafkaException fatalException) {
+    public synchronized void failedUpdate(long now) {
         this.lastRefreshMs = now;
-        this.fatalException = fatalException;
+    }
+
+    /**
+     * Propagate a fatal error which affects the ability to fetch metadata for the cluster.
+     * Two examples are authentication and unsupported version exceptions.
+     *
+     * @param exception The fatal exception
+     */
+    public synchronized void fatalError(KafkaException exception) {
+        this.fatalException = exception;
     }
 
     /**

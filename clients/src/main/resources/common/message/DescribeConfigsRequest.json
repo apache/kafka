@@ -20,6 +20,7 @@
   // Version 1 adds IncludeSynoyms.
   // Version 2 is the same as version 1.
   "validVersions": "0-2",
+  "flexibleVersions": "none",
   "fields": [
     { "name": "Resources", "type": "[]DescribeConfigsResource", "versions": "0+",
       "about": "The resources whose configurations we want to describe.", "fields": [

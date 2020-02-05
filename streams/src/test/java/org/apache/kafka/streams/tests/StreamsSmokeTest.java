@@ -37,7 +37,7 @@ public class StreamsSmokeTest {
      *
      * @param args
      */
-    public static void main(final String[] args) throws InterruptedException, IOException {
+    public static void main(final String[] args) throws IOException {
         if (args.length < 2) {
             System.err.println("StreamsSmokeTest are expecting two parameters: propFile, command; but only see " + args.length + " parameter");
             System.exit(1);

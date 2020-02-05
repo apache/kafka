@@ -144,21 +144,10 @@ public class AlterReplicaLogDirsRequest extends AbstractRequest {
     @Override
     public AbstractResponse getErrorResponse(int throttleTimeMs, Throwable e) {
         Map<TopicPartition, Errors> responseMap = new HashMap<>();
-
         for (Map.Entry<TopicPartition, String> entry : partitionDirs.entrySet()) {
             responseMap.put(entry.getKey(), Errors.forException(e));
         }
-
-        short versionId = version();
-        switch (versionId) {
-            case 0:
-            case 1:
-                return new AlterReplicaLogDirsResponse(throttleTimeMs, responseMap);
-            default:
-                throw new IllegalArgumentException(
-                    String.format("Version %d is not valid. Valid versions for %s are 0 to %d", versionId,
-                        this.getClass().getSimpleName(), ApiKeys.ALTER_REPLICA_LOG_DIRS.latestVersion()));
-        }
+        return new AlterReplicaLogDirsResponse(throttleTimeMs, responseMap);
     }
 
     public Map<TopicPartition, String> partitionDirs() {

@@ -16,11 +16,13 @@
  */
 package org.apache.kafka.connect.runtime;
 
+import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.MetricName;
+import org.apache.kafka.common.MetricNameTemplate;
 import org.apache.kafka.common.config.ConfigValue;
 import org.apache.kafka.common.config.provider.ConfigProvider;
 import org.apache.kafka.common.metrics.Sensor;
@@ -35,7 +37,6 @@ import org.apache.kafka.connect.connector.policy.ConnectorClientConfigOverridePo
 import org.apache.kafka.connect.connector.policy.ConnectorClientConfigRequest;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.health.ConnectorType;
-import org.apache.kafka.connect.runtime.ConnectMetrics.LiteralSupplier;
 import org.apache.kafka.connect.runtime.ConnectMetrics.MetricGroup;
 import org.apache.kafka.connect.runtime.distributed.ClusterConfigState;
 import org.apache.kafka.connect.runtime.errors.DeadLetterQueueReporter;
@@ -49,10 +50,10 @@ import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTask;
 import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.kafka.connect.source.SourceTask;
+import org.apache.kafka.connect.storage.CloseableOffsetStorageReader;
 import org.apache.kafka.connect.storage.Converter;
 import org.apache.kafka.connect.storage.HeaderConverter;
 import org.apache.kafka.connect.storage.OffsetBackingStore;
-import org.apache.kafka.connect.storage.OffsetStorageReader;
 import org.apache.kafka.connect.storage.OffsetStorageReaderImpl;
 import org.apache.kafka.connect.storage.OffsetStorageWriter;
 import org.apache.kafka.connect.util.ConnectorTaskId;
@@ -94,6 +95,7 @@ public class Worker {
     private final Plugins plugins;
     private final ConnectMetrics metrics;
     private final WorkerMetricsGroup workerMetricsGroup;
+    private ConnectorStatusMetricsGroup connectorStatusMetricsGroup;
     private final WorkerConfig config;
     private final Converter internalKeyConverter;
     private final Converter internalValueConverter;
@@ -184,6 +186,8 @@ public class Worker {
         offsetBackingStore.start();
         sourceTaskOffsetCommitter = new SourceTaskOffsetCommitter(config);
 
+        connectorStatusMetricsGroup = new ConnectorStatusMetricsGroup(metrics, tasks, herder);
+
         log.info("Worker started");
     }
 
@@ -215,6 +219,7 @@ public class Worker {
         log.info("Worker stopped");
 
         workerMetricsGroup.close();
+        connectorStatusMetricsGroup.close();
     }
 
     /**
@@ -416,12 +421,13 @@ public class Worker {
             if (tasks.containsKey(id))
                 throw new ConnectException("Task already exists in this worker: " + id);
 
+            connectorStatusMetricsGroup.recordTaskAdded(id);
             ClassLoader savedLoader = plugins.currentThreadLoader();
             try {
-                final ConnectorConfig connConfig = new ConnectorConfig(plugins, connProps);
-                String connType = connConfig.getString(ConnectorConfig.CONNECTOR_CLASS_CONFIG);
+                String connType = connProps.get(ConnectorConfig.CONNECTOR_CLASS_CONFIG);
                 ClassLoader connectorLoader = plugins.delegatingLoader().connectorLoader(connType);
                 savedLoader = Plugins.compareAndSwapLoaders(connectorLoader);
+                final ConnectorConfig connConfig = new ConnectorConfig(plugins, connProps);
                 final TaskConfig taskConfig = new TaskConfig(taskProps);
                 final Class<? extends Task> taskClass = taskConfig.getClass(TaskConfig.TASK_CLASS_CONFIG).asSubclass(Task.class);
                 final Task task = plugins.newTask(taskClass);
@@ -465,6 +471,7 @@ public class Worker {
                 // Can't be put in a finally block because it needs to be swapped before the call on
                 // statusListener
                 Plugins.compareAndSwapLoaders(savedLoader);
+                connectorStatusMetricsGroup.recordTaskRemoved(id);
                 workerMetricsGroup.recordTaskFailure();
                 statusListener.onFailure(id, t);
                 return false;
@@ -505,7 +512,7 @@ public class Worker {
             retryWithToleranceOperator.reporters(sourceTaskReporters(id, connConfig, errorHandlingMetrics));
             TransformationChain<SourceRecord> transformationChain = new TransformationChain<>(connConfig.<SourceRecord>transformations(), retryWithToleranceOperator);
             log.info("Initializing: {}", transformationChain);
-            OffsetStorageReader offsetReader = new OffsetStorageReaderImpl(offsetBackingStore, id.connector(),
+            CloseableOffsetStorageReader offsetReader = new OffsetStorageReaderImpl(offsetBackingStore, id.connector(),
                     internalKeyConverter, internalValueConverter);
             OffsetStorageWriter offsetWriter = new OffsetStorageWriter(offsetBackingStore, id.connector(),
                     internalKeyConverter, internalValueConverter);
@@ -516,7 +523,7 @@ public class Worker {
             // Note we pass the configState as it performs dynamic transformations under the covers
             return new WorkerSourceTask(id, (SourceTask) task, statusListener, initialState, keyConverter, valueConverter,
                     headerConverter, transformationChain, producer, offsetReader, offsetWriter, config, configState, metrics, loader,
-                    time, retryWithToleranceOperator);
+                    time, retryWithToleranceOperator, herder.statusBackingStore());
         } else if (task instanceof SinkTask) {
             TransformationChain<SinkRecord> transformationChain = new TransformationChain<>(connConfig.<SinkRecord>transformations(), retryWithToleranceOperator);
             log.info("Initializing: {}", transformationChain);
@@ -528,7 +535,7 @@ public class Worker {
 
             return new WorkerSinkTask(id, (SinkTask) task, statusListener, initialState, config, configState, metrics, keyConverter,
                                       valueConverter, headerConverter, transformationChain, consumer, loader, time,
-                                      retryWithToleranceOperator);
+                                      retryWithToleranceOperator, herder.statusBackingStore());
         } else {
             log.error("Tasks must be a subclass of either SourceTask or SinkTask", task);
             throw new ConnectException("Tasks must be a subclass of either SourceTask or SinkTask");
@@ -601,8 +608,21 @@ public class Worker {
                                             Class<? extends Connector> connectorClass,
                                             ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy) {
         Map<String, Object> adminProps = new HashMap<>();
-        adminProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, Utils.join(config.getList(WorkerConfig.BOOTSTRAP_SERVERS_CONFIG), ","));
-        // User-specified overrides
+        // Use the top-level worker configs to retain backwards compatibility with older releases which
+        // did not require a prefix for connector admin client configs in the worker configuration file
+        // Ignore configs that begin with "admin." since those will be added next (with the prefix stripped)
+        // and those that begin with "producer." and "consumer.", since we know they aren't intended for
+        // the admin client
+        Map<String, Object> nonPrefixedWorkerConfigs = config.originals().entrySet().stream()
+            .filter(e -> !e.getKey().startsWith("admin.")
+                && !e.getKey().startsWith("producer.")
+                && !e.getKey().startsWith("consumer."))
+            .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+        adminProps.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG,
+            Utils.join(config.getList(WorkerConfig.BOOTSTRAP_SERVERS_CONFIG), ","));
+        adminProps.putAll(nonPrefixedWorkerConfigs);
+
+        // Admin client-specific overrides in the worker config
         adminProps.putAll(config.originalsWithPrefix("admin."));
 
         // Connector-specified overrides
@@ -711,6 +731,7 @@ public class Worker {
                 return;
             }
 
+            connectorStatusMetricsGroup.recordTaskRemoved(taskId);
             if (!task.awaitStop(timeout)) {
                 log.error("Graceful stop of task {} failed.", task.id());
                 task.cancel();
@@ -824,8 +845,82 @@ public class Worker {
         }
     }
 
+    ConnectorStatusMetricsGroup connectorStatusMetricsGroup() {
+        return connectorStatusMetricsGroup;
+    }
+
     WorkerMetricsGroup workerMetricsGroup() {
         return workerMetricsGroup;
+    }
+
+    static class ConnectorStatusMetricsGroup {
+        private ConnectMetrics connectMetrics;
+        private ConnectMetricsRegistry registry;
+        private ConcurrentMap<String, MetricGroup> connectorStatusMetrics = new ConcurrentHashMap<>();
+        private Herder herder;
+        private ConcurrentMap<ConnectorTaskId, WorkerTask> tasks;
+
+
+        protected ConnectorStatusMetricsGroup(
+            ConnectMetrics connectMetrics, ConcurrentMap<ConnectorTaskId, WorkerTask> tasks, Herder herder) {
+            this.connectMetrics = connectMetrics;
+            this.registry = connectMetrics.registry();
+            this.tasks = tasks;
+            this.herder = herder;
+        }
+
+        protected ConnectMetrics.LiteralSupplier<Long> taskCounter(String connName) {
+            return now -> tasks.keySet()
+                .stream()
+                .filter(taskId -> taskId.connector().equals(connName))
+                .count();
+        }
+
+        protected ConnectMetrics.LiteralSupplier<Long> taskStatusCounter(String connName, TaskStatus.State state) {
+            return now -> tasks.values()
+                .stream()
+                .filter(task ->
+                    task.id().connector().equals(connName) &&
+                    herder.taskStatus(task.id()).state().equalsIgnoreCase(state.toString()))
+                .count();
+        }
+
+        protected synchronized void recordTaskAdded(ConnectorTaskId connectorTaskId) {
+            if (connectorStatusMetrics.containsKey(connectorTaskId.connector())) {
+                return;
+            }
+
+            String connName = connectorTaskId.connector();
+
+            MetricGroup metricGroup = connectMetrics.group(registry.workerGroupName(),
+                registry.connectorTagName(), connName);
+
+            metricGroup.addValueMetric(registry.connectorTotalTaskCount, taskCounter(connName));
+            for (Map.Entry<MetricNameTemplate, TaskStatus.State> statusMetric : registry.connectorStatusMetrics
+                .entrySet()) {
+                metricGroup.addValueMetric(statusMetric.getKey(), taskStatusCounter(connName,
+                    statusMetric.getValue()));
+            }
+            connectorStatusMetrics.put(connectorTaskId.connector(), metricGroup);
+        }
+
+        protected synchronized void recordTaskRemoved(ConnectorTaskId connectorTaskId) {
+            // Unregister connector task count metric if we remove the last task of the connector
+            if (tasks.keySet().stream().noneMatch(id -> id.connector().equals(connectorTaskId.connector()))) {
+                connectorStatusMetrics.get(connectorTaskId.connector()).close();
+                connectorStatusMetrics.remove(connectorTaskId.connector());
+            }
+        }
+
+        protected synchronized void close() {
+            for (MetricGroup metricGroup: connectorStatusMetrics.values()) {
+                metricGroup.close();
+            }
+        }
+
+        protected MetricGroup metricGroup(String connectorId) {
+            return connectorStatusMetrics.get(connectorId);
+        }
     }
 
     class WorkerMetricsGroup {
@@ -843,18 +938,8 @@ public class Worker {
             ConnectMetricsRegistry registry = connectMetrics.registry();
             metricGroup = connectMetrics.group(registry.workerGroupName());
 
-            metricGroup.addValueMetric(registry.connectorCount, new LiteralSupplier<Double>() {
-                @Override
-                public Double metricValue(long now) {
-                    return (double) connectors.size();
-                }
-            });
-            metricGroup.addValueMetric(registry.taskCount, new LiteralSupplier<Double>() {
-                @Override
-                public Double metricValue(long now) {
-                    return (double) tasks.size();
-                }
-            });
+            metricGroup.addValueMetric(registry.connectorCount, now -> (double) connectors.size());
+            metricGroup.addValueMetric(registry.taskCount, now -> (double) tasks.size());
 
             MetricName connectorFailurePct = metricGroup.metricName(registry.connectorStartupFailurePercentage);
             MetricName connectorSuccessPct = metricGroup.metricName(registry.connectorStartupSuccessPercentage);

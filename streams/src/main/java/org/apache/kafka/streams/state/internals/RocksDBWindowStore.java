@@ -48,6 +48,7 @@ public class RocksDBWindowStore
         super.init(context, root);
     }
 
+    @Deprecated
     @Override
     public void put(final Bytes key, final byte[] value) {
         put(key, value, context.timestamp());

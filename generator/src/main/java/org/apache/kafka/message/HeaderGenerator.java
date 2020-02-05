@@ -52,14 +52,21 @@ public final class HeaderGenerator {
     private final TreeSet<String> imports;
     private final String packageName;
 
+    private final TreeSet<String> staticImports;
+
     public HeaderGenerator(String packageName) {
         this.buffer = new CodeBuffer();
         this.imports = new TreeSet<>();
         this.packageName = packageName;
+        this.staticImports = new TreeSet<>();
     }
 
     public void addImport(String newImport) {
         this.imports.add(newImport);
+    }
+
+    public void addStaticImport(String newImport) {
+        this.staticImports.add(newImport);
     }
 
     public void generate() {
@@ -73,6 +80,12 @@ public final class HeaderGenerator {
             buffer.printf("import %s;%n", newImport);
         }
         buffer.printf("%n");
+        if (!staticImports.isEmpty()) {
+            for (String newImport : staticImports) {
+                buffer.printf("import static %s;%n", newImport);
+            }
+            buffer.printf("%n");
+        }
     }
 
     public CodeBuffer buffer() {

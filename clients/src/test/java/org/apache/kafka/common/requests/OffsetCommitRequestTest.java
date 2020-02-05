@@ -34,7 +34,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import static org.apache.kafka.common.requests.AbstractResponse.DEFAULT_THROTTLE_TIME;
 import static org.apache.kafka.common.requests.OffsetCommitRequest.getErrorResponseTopics;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertThrows;
@@ -42,6 +41,8 @@ import static org.junit.Assert.assertThrows;
 public class OffsetCommitRequestTest {
 
     protected static String groupId = "groupId";
+    protected static String memberId = "consumerId";
+    protected static String groupInstanceId = "groupInstanceId";
     protected static String topicOne = "topicOne";
     protected static String topicTwo = "topicTwo";
     protected static int partitionOne = 1;
@@ -97,12 +98,7 @@ public class OffsetCommitRequestTest {
             OffsetCommitResponse response = request.getErrorResponse(throttleTimeMs, Errors.NOT_COORDINATOR.exception());
 
             assertEquals(Collections.singletonMap(Errors.NOT_COORDINATOR, 2), response.errorCounts());
-
-            if (version >= 3) {
-                assertEquals(throttleTimeMs, response.throttleTimeMs());
-            } else {
-                assertEquals(DEFAULT_THROTTLE_TIME, response.throttleTimeMs());
-            }
+            assertEquals(throttleTimeMs, response.throttleTimeMs());
         }
     }
 
@@ -129,9 +125,9 @@ public class OffsetCommitRequestTest {
     public void testVersionSupportForGroupInstanceId() {
         OffsetCommitRequest.Builder builder = new OffsetCommitRequest.Builder(
             new OffsetCommitRequestData()
-                .setGroupId("groupId")
-                .setMemberId("consumerId")
-                .setGroupInstanceId("groupInstanceId")
+                .setGroupId(groupId)
+                .setMemberId(memberId)
+                .setGroupInstanceId(groupInstanceId)
         );
 
         for (short version = 0; version <= ApiKeys.OFFSET_COMMIT.latestVersion(); version++) {

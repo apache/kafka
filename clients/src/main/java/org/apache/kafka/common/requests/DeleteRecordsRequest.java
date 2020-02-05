@@ -155,15 +155,7 @@ public class DeleteRecordsRequest extends AbstractRequest {
             responseMap.put(entry.getKey(), new DeleteRecordsResponse.PartitionResponse(DeleteRecordsResponse.INVALID_LOW_WATERMARK, Errors.forException(e)));
         }
 
-        short versionId = version();
-        switch (versionId) {
-            case 0:
-            case 1:
-                return new DeleteRecordsResponse(throttleTimeMs, responseMap);
-            default:
-                throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
-                    versionId, this.getClass().getSimpleName(), ApiKeys.DELETE_RECORDS.latestVersion()));
-        }
+        return new DeleteRecordsResponse(throttleTimeMs, responseMap);
     }
 
     public int timeout() {

@@ -22,6 +22,7 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.Topology;
+import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.Grouped;
 import org.apache.kafka.streams.kstream.JoinWindows;
 import org.apache.kafka.streams.kstream.KStream;
@@ -122,6 +123,28 @@ public class StreamsGraphTest {
         assertEquals(0, getCountOfRepartitionTopicsFound(attemptedOptimize.describe().toString()));
         assertEquals(0, getCountOfRepartitionTopicsFound(noOptimziation.describe().toString()));
 
+    }
+
+    @Test
+    public void shouldOptimizeSeveralMergeNodesWithCommonKeyChangingParent() {
+        final StreamsBuilder streamsBuilder = new StreamsBuilder();
+        final KStream<Integer, Integer> parentStream = streamsBuilder.stream("input_topic", Consumed.with(Serdes.Integer(), Serdes.Integer()))
+            .selectKey(Integer::sum);
+
+        final KStream<Integer, Integer> childStream1 = parentStream.mapValues(v -> v + 1);
+        final KStream<Integer, Integer> childStream2 = parentStream.mapValues(v -> v + 2);
+        final KStream<Integer, Integer> childStream3 = parentStream.mapValues(v -> v + 3);
+
+        childStream1
+            .merge(childStream2)
+            .merge(childStream3)
+            .to("output_topic");
+
+        final Properties properties = new Properties();
+        properties.setProperty(StreamsConfig.TOPOLOGY_OPTIMIZATION, StreamsConfig.OPTIMIZE);
+        final Topology topology = streamsBuilder.build(properties);
+
+        assertEquals(expectedMergeOptimizedTopology, topology.describe().toString());
     }
 
     private Topology getTopologyWithChangingValuesAfterChangingKey(final String optimizeConfig) {
@@ -241,5 +264,31 @@ public class StreamsGraphTest {
                                           + "      <-- KSTREAM-FILTER-0000000007\n"
                                           + "    Sink: KSTREAM-SINK-0000000009 (topic: output-topic)\n"
                                           + "      <-- KSTREAM-MAPVALUES-0000000008\n\n";
+
+
+    private String expectedMergeOptimizedTopology = "Topologies:\n" +
+        "   Sub-topology: 0\n" +
+        "    Source: KSTREAM-SOURCE-0000000000 (topics: [input_topic])\n" +
+        "      --> KSTREAM-KEY-SELECT-0000000001\n" +
+        "    Processor: KSTREAM-KEY-SELECT-0000000001 (stores: [])\n" +
+        "      --> KSTREAM-MAPVALUES-0000000002, KSTREAM-MAPVALUES-0000000003, KSTREAM-MAPVALUES-0000000004\n" +
+        "      <-- KSTREAM-SOURCE-0000000000\n" +
+        "    Processor: KSTREAM-MAPVALUES-0000000002 (stores: [])\n" +
+        "      --> KSTREAM-MERGE-0000000005\n" +
+        "      <-- KSTREAM-KEY-SELECT-0000000001\n" +
+        "    Processor: KSTREAM-MAPVALUES-0000000003 (stores: [])\n" +
+        "      --> KSTREAM-MERGE-0000000005\n" +
+        "      <-- KSTREAM-KEY-SELECT-0000000001\n" +
+        "    Processor: KSTREAM-MAPVALUES-0000000004 (stores: [])\n" +
+        "      --> KSTREAM-MERGE-0000000006\n" +
+        "      <-- KSTREAM-KEY-SELECT-0000000001\n" +
+        "    Processor: KSTREAM-MERGE-0000000005 (stores: [])\n" +
+        "      --> KSTREAM-MERGE-0000000006\n" +
+        "      <-- KSTREAM-MAPVALUES-0000000002, KSTREAM-MAPVALUES-0000000003\n" +
+        "    Processor: KSTREAM-MERGE-0000000006 (stores: [])\n" +
+        "      --> KSTREAM-SINK-0000000007\n" +
+        "      <-- KSTREAM-MERGE-0000000005, KSTREAM-MAPVALUES-0000000004\n" +
+        "    Sink: KSTREAM-SINK-0000000007 (topic: output_topic)\n" +
+        "      <-- KSTREAM-MERGE-0000000006\n\n";
 
 }

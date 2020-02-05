@@ -39,7 +39,8 @@ import static org.junit.Assert.assertTrue;
 
 public class KeyValueSegmentTest {
 
-    private final RocksDBMetricsRecorder metricsRecorder = new RocksDBMetricsRecorder("metrics-scope", "store-name");
+    private final RocksDBMetricsRecorder metricsRecorder =
+        new RocksDBMetricsRecorder("metrics-scope", "thread-id", "store-name");
 
     @Test
     public void shouldDeleteStateDirectoryOnDestroy() throws Exception {

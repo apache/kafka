@@ -87,7 +87,7 @@ public class RocksDBKeyValueStoreTest extends AbstractKeyValueStoreTest {
     }
 
     @Test
-    public void shouldCloseOpenIteratorsWhenStoreClosedAndThrowInvalidStateStoreOnHasNextAndNext() {
+    public void shouldCloseOpenRangeIteratorsWhenStoreClosedAndThrowInvalidStateStoreOnHasNextAndNext() {
         context.setTime(1L);
         store.put(1, "hi");
         store.put(2, "goodbye");
@@ -127,5 +127,4 @@ public class RocksDBKeyValueStoreTest extends AbstractKeyValueStoreTest {
             // ok
         }
     }
-
 }

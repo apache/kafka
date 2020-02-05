@@ -28,13 +28,17 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.net.NetworkInterface;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Consumer;
+import java.util.stream.Stream;
 
 /**
- * Uses the linux utility <pre>tc</pre> (traffic controller) to simulate latency on a specified network device
+ * Uses the linux utility <pre>tc</pre> (traffic controller) to degrade performance on a specified network device
  */
 public class DegradedNetworkFaultWorker implements TaskWorker {
 
@@ -58,10 +62,10 @@ public class DegradedNetworkFaultWorker implements TaskWorker {
         DegradedNetworkFaultSpec.NodeDegradeSpec nodeSpec = nodeSpecs.get(curNode.name());
         if (nodeSpec != null) {
             for (String device : devicesForSpec(nodeSpec)) {
-                if (nodeSpec.latencyMs() < 0) {
-                    throw new RuntimeException("Expected a positive value for latencyMs, but got " + nodeSpec.latencyMs());
+                if (nodeSpec.latencyMs() < 0 || nodeSpec.rateLimitKbit() < 0) {
+                    throw new RuntimeException("Expected non-negative values for latencyMs and rateLimitKbit, but got " + nodeSpec);
                 } else {
-                    enableTrafficControl(platform, device, nodeSpec.latencyMs());
+                    enableTrafficControl(platform, device, nodeSpec.latencyMs(), nodeSpec.rateLimitKbit());
                 }
             }
         }
@@ -96,14 +100,71 @@ public class DegradedNetworkFaultWorker implements TaskWorker {
         return devices;
     }
 
-    private void enableTrafficControl(Platform platform, String networkDevice, int delayMs) throws IOException {
-        int deviationMs = Math.max(1, (int) Math.sqrt(delayMs));
-        platform.runCommand(new String[] {
-            "sudo", "tc", "qdisc", "add", "dev", networkDevice, "root", "netem",
-            "delay", String.format("%dms", delayMs), String.format("%dms", deviationMs), "distribution", "normal"
-        });
+    /**
+     * Constructs the appropriate "tc" commands to apply latency and rate limiting, if they are non zero.
+     */
+    private void enableTrafficControl(Platform platform, String networkDevice, int delayMs, int rateLimitKbps) throws IOException {
+        if (delayMs > 0) {
+            int deviationMs = Math.max(1, (int) Math.sqrt(delayMs));
+            List<String> delay = new ArrayList<>();
+            rootHandler(networkDevice, delay::add);
+            netemDelay(delayMs, deviationMs, delay::add);
+            platform.runCommand(delay.toArray(new String[]{}));
+
+            if (rateLimitKbps > 0) {
+                List<String> rate = new ArrayList<>();
+                childHandler(networkDevice, rate::add);
+                tbfRate(rateLimitKbps, rate::add);
+                platform.runCommand(rate.toArray(new String[]{}));
+            }
+        } else if (rateLimitKbps > 0) {
+            List<String> rate = new ArrayList<>();
+            rootHandler(networkDevice, rate::add);
+            tbfRate(rateLimitKbps, rate::add);
+            platform.runCommand(rate.toArray(new String[]{}));
+        } else {
+            log.warn("Not applying any rate limiting or latency");
+        }
     }
 
+    /**
+     * Construct the first part of a "tc" command to define a qdisc root handler for the given network interface
+     */
+    private void rootHandler(String networkDevice, Consumer<String> consumer) {
+        Stream.of("sudo", "tc", "qdisc", "add", "dev", networkDevice, "root", "handle", "1:0").forEach(consumer);
+    }
+
+    /**
+     * Construct the first part of a "tc" command to define a qdisc child handler for the given interface. This can
+     * only be used if a root handler has been appropriately defined first (as in {@link #rootHandler}).
+     */
+    private void childHandler(String networkDevice, Consumer<String> consumer) {
+        Stream.of("sudo", "tc", "qdisc", "add", "dev", networkDevice, "parent", "1:1", "handle", "10:").forEach(consumer);
+    }
+
+    /**
+     * Construct the second part of a "tc" command that defines a netem (Network Emulator) filter that will apply some
+     * amount of latency with a small amount of deviation. The distribution of the latency deviation follows a so-called
+     * Pareto-normal distribution. This is the formal name for the 80/20 rule, which might better represent real-world
+     * patterns.
+     */
+    private void netemDelay(int delayMs, int deviationMs, Consumer<String> consumer) {
+        Stream.of("netem", "delay", String.format("%dms", delayMs), String.format("%dms", deviationMs),
+                "distribution", "paretonormal").forEach(consumer);
+    }
+
+    /**
+     * Construct the second part of a "tc" command that defines a tbf (token buffer filter) that will rate limit the
+     * packets going through a qdisc.
+     */
+    private void tbfRate(int rateLimitKbit, Consumer<String> consumer) {
+        Stream.of("tbf", "rate", String.format("%dkbit", rateLimitKbit), "burst", "1mbit", "latency", "500ms").forEach(consumer);
+    }
+
+    /**
+     * Delete any previously defined qdisc for the given network interface.
+     * @throws IOException
+     */
     private void disableTrafficControl(Platform platform, String networkDevice) throws IOException {
         platform.runCommand(new String[] {
             "sudo", "tc", "qdisc", "del", "dev", networkDevice, "root"

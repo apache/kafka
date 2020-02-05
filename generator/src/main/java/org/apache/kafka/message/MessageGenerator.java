@@ -55,9 +55,14 @@ public final class MessageGenerator {
 
     static final String ARRAYS_CLASS = "java.util.Arrays";
 
+    static final String OBJECTS_CLASS = "java.util.Objects";
+
     static final String LIST_CLASS = "java.util.List";
 
     static final String ARRAYLIST_CLASS = "java.util.ArrayList";
+
+    static final String IMPLICIT_LINKED_HASH_COLLECTION_CLASS =
+        "org.apache.kafka.common.utils.ImplicitLinkedHashCollection";
 
     static final String IMPLICIT_LINKED_HASH_MULTI_COLLECTION_CLASS =
         "org.apache.kafka.common.utils.ImplicitLinkedHashMultiCollection";
@@ -75,6 +80,8 @@ public final class MessageGenerator {
 
     static final String ARRAYOF_CLASS = "org.apache.kafka.common.protocol.types.ArrayOf";
 
+    static final String COMPACT_ARRAYOF_CLASS = "org.apache.kafka.common.protocol.types.CompactArrayOf";
+
     static final String STRUCT_CLASS = "org.apache.kafka.common.protocol.types.Struct";
 
     static final String BYTES_CLASS = "org.apache.kafka.common.utils.Bytes";
@@ -84,6 +91,26 @@ public final class MessageGenerator {
     static final String REQUEST_SUFFIX = "Request";
 
     static final String RESPONSE_SUFFIX = "Response";
+
+    static final String BYTE_UTILS_CLASS = "org.apache.kafka.common.utils.ByteUtils";
+
+    static final String STANDARD_CHARSETS = "java.nio.charset.StandardCharsets";
+
+    static final String TAGGED_FIELDS_SECTION_CLASS = "org.apache.kafka.common.protocol.types.Field.TaggedFieldsSection";
+
+    static final String OBJECT_SERIALIZATION_CACHE_CLASS = "org.apache.kafka.common.protocol.ObjectSerializationCache";
+
+    static final String RAW_TAGGED_FIELD_CLASS = "org.apache.kafka.common.protocol.types.RawTaggedField";
+
+    static final String RAW_TAGGED_FIELD_WRITER_CLASS = "org.apache.kafka.common.protocol.types.RawTaggedFieldWriter";
+
+    static final String TREE_MAP_CLASS = "java.util.TreeMap";
+
+    static final String BYTE_BUFFER_CLASS = "java.nio.ByteBuffer";
+
+    static final String NAVIGABLE_MAP_CLASS = "java.util.NavigableMap";
+
+    static final String MAP_ENTRY_CLASS = "java.util.Map.Entry";
 
     /**
      * The Jackson serializer we use for JSON objects.
@@ -196,6 +223,18 @@ public final class MessageGenerator {
             throw new RuntimeException("String " + str + " does not end with the " +
                 "expected suffix " + suffix);
         }
+    }
+
+    /**
+     * Return the number of bytes needed to encode an integer in unsigned variable-length format.
+     */
+    static int sizeOfUnsignedVarint(int value) {
+        int bytes = 1;
+        while ((value & 0xffffff80) != 0L) {
+            bytes += 1;
+            value >>>= 7;
+        }
+        return bytes;
     }
 
     private final static String USAGE = "MessageGenerator: [output Java package] [output Java file] [input JSON file]";
