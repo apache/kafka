@@ -479,7 +479,7 @@ class KafkaController(val config: KafkaConfig,
     partitionStateMachine.handleStateChanges(
       newPartitions.toSeq,
       OnlinePartition,
-      Some(OfflinePartitionLeaderElectionStrategy(false))
+      Some(OfflinePartitionLeaderElectionStrategy(forceUncleanElection = false))
     )
     replicaStateMachine.handleStateChanges(controllerContext.replicasForPartition(newPartitions).toSeq, OnlineReplica)
   }
@@ -693,7 +693,7 @@ class KafkaController(val config: KafkaConfig,
           /* Let's be conservative and only trigger unclean election if the election type is unclean and it was
            * triggered by the admin client
            */
-          OfflinePartitionLeaderElectionStrategy(allowUnclean = electionTrigger == AdminClientTriggered)
+          OfflinePartitionLeaderElectionStrategy(forceUncleanElection = electionTrigger == AdminClientTriggered)
       }
 
       val results = partitionStateMachine.handleStateChanges(
