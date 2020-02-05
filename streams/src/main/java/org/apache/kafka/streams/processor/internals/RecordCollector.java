@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.header.Headers;
@@ -44,11 +45,7 @@ public interface RecordCollector extends AutoCloseable {
                      final Serializer<V> valueSerializer,
                      final StreamPartitioner<? super K, ? super V> partitioner);
 
-    /**
-     * Initialize the collector with a producer.
-     * @param producer the producer that should be used by this collector
-     */
-    void init(final Producer<byte[], byte[]> producer);
+    void commit(final Map<TopicPartition, OffsetAndMetadata> offsets);
 
     /**
      * Flush the internal {@link Producer}.
@@ -70,6 +67,8 @@ public interface RecordCollector extends AutoCloseable {
     /**
      * A supplier of a {@link RecordCollectorImpl} instance.
      */
+    // TODO: after we have done KAFKA-9088 we should just add this function
+    // to InternalProcessorContext interface
     interface Supplier {
         /**
          * Get the record collector.

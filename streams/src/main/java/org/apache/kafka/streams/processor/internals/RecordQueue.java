@@ -157,12 +157,11 @@ public class RecordQueue {
     }
 
     /**
-     * Clear the fifo queue of its elements, also clear the time tracker's kept stamped elements
+     * Clear the fifo queue of its elements
      */
     public void clear() {
         fifoQueue.clear();
         headRecord = null;
-        partitionTime = RecordQueue.UNKNOWN;
     }
 
     private void updateHead() {

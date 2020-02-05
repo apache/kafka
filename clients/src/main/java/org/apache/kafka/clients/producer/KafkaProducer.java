@@ -1143,7 +1143,9 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      * block forever.</strong>
      * <p>
      *
-     * @throws InterruptException If the thread is interrupted while blocked
+     * @throws InterruptException If the thread is interrupted while blocked.
+     * @throws KafkaException If a unexpected error occurs while trying to close the client, this error should be treated
+     *                        as fatal and indicate the client is no longer functionable.
      */
     @Override
     public void close() {
@@ -1163,7 +1165,9 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      *
      * @param timeout The maximum time to wait for producer to complete any pending requests. The value should be
      *                non-negative. Specifying a timeout of zero means do not wait for pending send requests to complete.
-     * @throws InterruptException If the thread is interrupted while blocked
+     * @throws InterruptException If the thread is interrupted while blocked.
+     * @throws KafkaException If a unexpected error occurs while trying to close the client, this error should be treated
+     *                        as fatal and indicate the client is no longer functionable.
      * @throws IllegalArgumentException If the <code>timeout</code> is negative.
      *
      */
