@@ -200,6 +200,8 @@ The following options should be set with a `-P` switch, for example `./gradlew -
 * `skipSigning`: skips signing of artifacts.
 * `testLoggingEvents`: unit test events to be logged, separated by comma. For example `./gradlew -PtestLoggingEvents=started,passed,skipped,failed test`.
 * `xmlSpotBugsReport`: enable XML reports for spotBugs. This also disables HTML reports as only one can be enabled at a time.
+* `maxTestRetries`: the maximum number of retries for a failing test case
+* `maxTestRetryFailures`: maximum number of test failures that are allowed before retrying is disabled
 
 ### Dependency Analysis ###
 
