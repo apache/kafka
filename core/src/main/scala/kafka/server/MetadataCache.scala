@@ -127,14 +127,24 @@ class MetadataCache(brokerId: Int) extends Logging {
     }
   }
 
+  /**
+   * Check whether a broker is alive and has a registered listener matching the provided name.
+   * This method was added to avoid unnecessary allocations in [[maybeFilterAliveReplicas]], which is
+   * a hotspot in metadata handling.
+   */
   private def hasAliveEndpoint(snapshot: MetadataSnapshot, brokerId: Int, listenerName: ListenerName): Boolean = {
     snapshot.aliveNodes.get(brokerId).exists(_.contains(listenerName))
   }
 
-  private def getAliveEndpoint(snapshot: MetadataSnapshot, brokerId: Int, listenerName: ListenerName): Option[Node] =
-    // Returns None if broker is not alive or if the broker does not have a listener named `listenerName`.
-    // Since listeners can be added dynamically, a broker with a missing listener could be a transient error.
+  /**
+   * Get the endpoint matching the provided listener if the broker is alive. Note that listeners can
+   * be added dynamically, so a broker with a missing listener could be a transient error.
+   *
+   * @return None if broker is not alive or if the broker does not have a listener named `listenerName`.
+   */
+  private def getAliveEndpoint(snapshot: MetadataSnapshot, brokerId: Int, listenerName: ListenerName): Option[Node] = {
     snapshot.aliveNodes.get(brokerId).flatMap(_.get(listenerName))
+  }
 
   // errorUnavailableEndpoints exists to support v0 MetadataResponses
   def getTopicMetadata(topics: Set[String],
