@@ -74,12 +74,16 @@ public final class StreamsTestUtils {
     }
 
     public static Properties getStreamsConfig(final String applicationId) {
+        return getStreamsConfig(applicationId, new Properties());
+    }
+
+    public static Properties getStreamsConfig(final String applicationId, final Properties additional) {
         return getStreamsConfig(
             applicationId,
             "localhost:9091",
             Serdes.ByteArraySerde.class.getName(),
             Serdes.ByteArraySerde.class.getName(),
-            new Properties());
+            additional);
     }
 
     public static Properties getStreamsConfig() {

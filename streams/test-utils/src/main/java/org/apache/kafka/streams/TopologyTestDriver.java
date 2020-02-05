@@ -390,6 +390,7 @@ public class TopologyTestDriver implements Closeable {
                 stateDirectory,
                 processorTopology.storeToChangelogTopic(),
                 new StoreChangelogReader(
+                    mockWallClockTime,
                     streamsConfig,
                     logContext,
                     createRestoreConsumer(processorTopology.storeToChangelogTopic()),
