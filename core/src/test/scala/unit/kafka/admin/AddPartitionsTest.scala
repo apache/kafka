@@ -17,6 +17,8 @@
 
 package kafka.admin
 
+import java.util.Optional
+
 import kafka.controller.ReplicaAssignment
 import kafka.server.BaseRequestTest
 import kafka.utils.TestUtils
@@ -101,9 +103,14 @@ class AddPartitionsTest extends BaseRequestTest {
     assertEquals(partitions.size, 3)
     assertEquals(1, partitions(1).partition)
     assertEquals(2, partitions(2).partition)
-    val replicas = partitions(1).replicas
-    assertEquals(replicas.size, 2)
-    assertTrue(replicas.contains(partitions(1).leader))
+
+    for (partition <- partitions) {
+      val replicas = partition.replicaIds
+      assertEquals(2, replicas.size)
+      assertTrue(partition.leaderId.isPresent)
+      val leaderId = partition.leaderId.get
+      assertTrue(replicas.contains(leaderId))
+    }
   }
 
   @Test
@@ -131,10 +138,9 @@ class AddPartitionsTest extends BaseRequestTest {
     assertEquals(0, partitionMetadata(0).partition)
     assertEquals(1, partitionMetadata(1).partition)
     assertEquals(2, partitionMetadata(2).partition)
-    val replicas = partitionMetadata(1).replicas
+    val replicas = partitionMetadata(1).replicaIds
     assertEquals(2, replicas.size)
-    assertTrue(replicas.asScala.head.id == 0 || replicas.asScala.head.id == 1)
-    assertTrue(replicas.asScala(1).id == 0 || replicas.asScala(1).id == 1)
+    assertEquals(Set(0, 1), replicas.asScala.toSet)
   }
 
   @Test
@@ -185,9 +191,8 @@ class AddPartitionsTest extends BaseRequestTest {
     assertTrue(s"Partition $partitionId should exist", partitionOpt.isDefined)
     val partition = partitionOpt.get
 
-    assertNotNull("Partition leader should exist", partition.leader)
-    assertEquals("Partition leader id should match", expectedLeaderId, partition.leaderId)
-    assertEquals("Replica set should match", expectedReplicas, partition.replicas.asScala.map(_.id).toSet)
+    assertEquals("Partition leader id should match", Optional.of(expectedLeaderId), partition.leaderId)
+    assertEquals("Replica set should match", expectedReplicas, partition.replicaIds.asScala.toSet)
   }
 
 }
