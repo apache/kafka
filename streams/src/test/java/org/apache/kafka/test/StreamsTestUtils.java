@@ -114,15 +114,6 @@ public final class StreamsTestUtils {
         return results;
     }
 
-    public static <K, V> List<V> valuesToList(final Iterator<KeyValue<K, V>> iterator) {
-        final List<V> results = new ArrayList<>();
-
-        while (iterator.hasNext()) {
-            results.add(iterator.next().value);
-        }
-        return results;
-    }
-
     public static <K, V> Set<KeyValue<K, V>> toSet(final Iterator<KeyValue<K, V>> iterator) {
         final Set<KeyValue<K, V>> results = new HashSet<>();
 

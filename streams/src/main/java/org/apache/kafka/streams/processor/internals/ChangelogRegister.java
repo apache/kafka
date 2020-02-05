@@ -16,18 +16,17 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.TopicPartition;
 
 /**
- * Denotes an exception that is recoverable by re-creating the client (ie, the client is no longer in a valid state),
- * as opposed to retriable (the failure was transient, so the same client can be used again later),
- * or fatal (the request was actually invalid, so retrying or recovering would not help)
- *
- * This class also serves the dual purpose of capturing the stack trace as early as possible,
- * at the site of the Producer call, since the exeptions that cause this don't record stack traces.
+ * See {@link StoreChangelogReader}.
  */
-public class RecoverableClientException extends KafkaException {
-    public RecoverableClientException(final String message, final Throwable cause) {
-        super(message, cause);
-    }
+interface ChangelogRegister {
+    /**
+     * Register a state store for restoration.
+     *
+     * @param partition the state store's changelog partition for restoring
+     * @param stateManager the state manager used for restoring (one per task)
+     */
+    void register(final TopicPartition partition, final ProcessorStateManager stateManager);
 }

@@ -30,6 +30,7 @@ import org.apache.kafka.streams.state.TimestampedWindowStore;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -57,17 +58,17 @@ public class StreamThreadStateStoreProvider {
         }
         final StreamThread.State state = streamThread.state();
         if (storeQueryParams.staleStoresEnabled() ? state.isAlive() : state == StreamThread.State.RUNNING) {
-            final Map<TaskId, ? extends Task> tasks = storeQueryParams.staleStoresEnabled() ? streamThread.allTasks() : streamThread.activeTasks();
+            final Iterable<? extends Task> tasks = storeQueryParams.staleStoresEnabled() ? streamThread.allTasks().values() : streamThread.activeTasks();
             final List<T> stores = new ArrayList<>();
-            for (final Task streamTask : tasks.values()) {
-                if (keyTaskId != null && !keyTaskId.equals(streamTask.id())) {
+            for (final Task task : tasks) {
+                if (keyTaskId != null && !keyTaskId.equals(task.id())) {
                     continue;
                 }
-                final StateStore store = streamTask.getStore(storeName);
+                final StateStore store = task.getStore(storeName);
                 if (store != null && queryableStoreType.accepts(store)) {
                     if (!store.isOpen()) {
                         throw new InvalidStateStoreException(
-                            "Cannot get state store " + storeName + " for task " + streamTask +
+                            "Cannot get state store " + storeName + " for task " + task +
                                 " because the store is not open. " +
                                 "The state store may have migrated to another instances.");
                     }
@@ -97,10 +98,10 @@ public class StreamThreadStateStoreProvider {
         final Map<Integer, InternalTopologyBuilder.TopicsInfo> topicGroups = internalTopologyBuilder.topicGroups();
         for (final Map.Entry<Integer, InternalTopologyBuilder.TopicsInfo> topicGroup : topicGroups.entrySet()) {
             if (topicGroup.getValue().sourceTopics.containsAll(sourceTopicsSet)) {
-                return new TaskId(topicGroup.getKey(), partition.intValue());
+                return new TaskId(topicGroup.getKey(), partition);
             }
         }
-        throw new InvalidStateStoreException("Cannot get state store " + storeName + " because the requested partition " + partition + "is " +
-                                                "not available on this instance");
+        throw new InvalidStateStoreException("Cannot get state store " + storeName + " because the requested partition " +
+            partition + " is not available on this instance");
     }
 }
