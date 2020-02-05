@@ -795,6 +795,8 @@ public class InternalTopologyBuilder {
             nodeGroup.addAll(value);
         }
         nodeGroup.removeAll(globalNodeGroups());
+
+        initializeSubscription();
         return build(nodeGroup);
     }
 
