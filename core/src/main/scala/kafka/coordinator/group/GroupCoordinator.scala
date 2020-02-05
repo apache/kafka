@@ -1086,7 +1086,8 @@ class GroupCoordinator(val brokerId: Int,
     group.inLock {
       if (group.hasAllMembersJoined)
         forceComplete()
-      else false
+      else
+        false
     }
   }
 

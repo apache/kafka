@@ -353,7 +353,10 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
 
   def notYetRejoinedMembers = members.values.filter(!_.isAwaitingJoin).toList
 
-  def hasAllMembersJoined = members.size == numMembersAwaitingJoin && pendingMembers.isEmpty
+  def hasAllMembersJoined = {
+    info(s"The join complete condition checking: members => $members, members waiting join count: $numMembersAwaitingJoin, pending members: $pendingMembers")
+    members.size == numMembersAwaitingJoin && pendingMembers.isEmpty
+  }
 
   def allMembers = members.keySet
 

@@ -356,7 +356,7 @@ public class TransactionalMessageCopier {
                     Map<Integer, Integer> partitionCount = new HashMap<>();
                     while (messagesSentWithinCurrentTxn < messagesNeededForCurrentTxn) {
                         ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(200));
-                        log.info("number of consumer records fetched: {}", records.count());
+                        log.info("number of consumer records fetched: {}, with current sent txn data {}", records.count(), messagesSentWithinCurrentTxn);
                         if (messageCap.get() <= 0) {
                             // We could see no more message needed for processing after poll
                             break;
@@ -366,6 +366,7 @@ public class TransactionalMessageCopier {
                             messagesSentWithinCurrentTxn++;
                             partitionCount.put(record.partition(), partitionCount.getOrDefault(record.partition(), 0) + 1);
                         }
+                        log.info("message sent within current txn so far: {}", messagesNeededForCurrentTxn);
                         messagesNeededForCurrentTxn = Math.min(numMessagesPerTransaction, remainingMessages.get());
                     }
 
