@@ -850,6 +850,7 @@ public class IntegrationTestUtils {
             this.adminClient = adminClient;
             this.applicationId = applicationId;
         }
+
         @Override
         public boolean conditionMet() {
             try {
@@ -1052,7 +1053,6 @@ public class IntegrationTestUtils {
         final List<KeyValue<K, V>> consumedValues = new ArrayList<>();
         final List<ConsumerRecord<K, V>> records = readRecords(topic, consumer, waitTime, maxMessages);
         for (final ConsumerRecord<K, V> record : records) {
-            System.out.println("mjsax -> " + record.offset());
             consumedValues.add(new KeyValue<>(record.key(), record.value()));
         }
         return consumedValues;

@@ -148,9 +148,6 @@ public class EosIntegrationTest {
 
             consumer.assign(Collections.singleton(topicPartition));
 
-            System.out.println("mjsax pos -> " + consumer.position(topicPartition));
-            System.out.println("mjsax end -> " + consumer.position(topicPartition));
-
             assertThat(consumer.position(topicPartition),
                 equalTo(consumer.endOffsets(topicPartitions).get(topicPartition)));
         }
@@ -214,7 +211,6 @@ public class EosIntegrationTest {
                 startKafkaStreamsAndWaitForRunningState(streams, MAX_WAIT_TIME_MS);
 
                 final List<KeyValue<Long, Long>> inputData = prepareData(i * 100, i * 100 + 10L, 0L, 1L);
-                System.out.println("mjsax: " + inputData.size());
 
                 final Properties producerConfigs = new Properties();
                 if (inputTopicTransactional) {
