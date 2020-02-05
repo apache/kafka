@@ -150,12 +150,12 @@ public class InternalTopicManagerTest {
         final TopicPartitionInfo partitionInfo = new TopicPartitionInfo(0, broker1,
             Collections.singletonList(broker1), Collections.singletonList(broker1));
 
-        KafkaFutureImpl<TopicDescription> topicDescriptionSuccessFuture = new KafkaFutureImpl<>();
-        KafkaFutureImpl<TopicDescription> topicDescriptionFailFuture = new KafkaFutureImpl<>();
+        final KafkaFutureImpl<TopicDescription> topicDescriptionSuccessFuture = new KafkaFutureImpl<>();
+        final KafkaFutureImpl<TopicDescription> topicDescriptionFailFuture = new KafkaFutureImpl<>();
         topicDescriptionSuccessFuture.complete(new TopicDescription(topic, false, Collections.singletonList(partitionInfo), Collections.emptySet()));
         topicDescriptionFailFuture.completeExceptionally(new UnknownTopicOrPartitionException("KABOOM!"));
 
-        KafkaFutureImpl<CreateTopicsResult.TopicMetadataAndConfig> topicCreationFuture = new KafkaFutureImpl<>();
+        final KafkaFutureImpl<CreateTopicsResult.TopicMetadataAndConfig> topicCreationFuture = new KafkaFutureImpl<>();
         topicCreationFuture.completeExceptionally(new TopicExistsException("KABOOM!"));
 
         // let the first describe succeed on topic, and fail on topic2, and then let creation throws topics-existed;
