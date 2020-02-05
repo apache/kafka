@@ -1173,7 +1173,7 @@ public class KafkaStreams implements AutoCloseable {
      * Get a facade wrapping the local {@link StateStore} instances with the provided {@link StoreQueryParams}.
      * The returned object can be used to query the {@link StateStore} instances.
      *
-     * @param storeQueryParams   the parameteres used to fetch a type of queryable store
+     * @param storeQueryParams   the parameters used to fetch a queryable store
      * @return A facade wrapping the local {@link StateStore} instances
      * @throws InvalidStateStoreException if Kafka Streams is (re-)initializing or a store with {@code storeName} and
      * {@code queryableStoreType} doesn't exist

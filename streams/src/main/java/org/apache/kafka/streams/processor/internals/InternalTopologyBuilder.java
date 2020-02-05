@@ -1148,15 +1148,8 @@ public class InternalTopologyBuilder {
         return results;
     }
 
-    public List<String> sourceTopicsForStore(final String storeName) {
-        final List<String> results = new ArrayList<>();
-        for (final Map.Entry<String, Set<String>> entry : stateStoreNameToSourceTopics.entrySet()) {
-            if (entry.getKey().equals(storeName)) {
-                results.addAll(maybeDecorateInternalSourceTopics(entry.getValue()));
-                return results;
-            }
-        }
-        return Collections.EMPTY_LIST;
+    public Collection<String> sourceTopicsForStore(final String storeName) {
+        return maybeDecorateInternalSourceTopics(stateStoreNameToSourceTopics.get(storeName));
     }
 
     public synchronized Collection<Set<String>> copartitionGroups() {

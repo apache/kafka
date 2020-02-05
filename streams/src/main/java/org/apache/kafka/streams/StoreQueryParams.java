@@ -21,11 +21,7 @@ import org.apache.kafka.streams.state.QueryableStoreType;
 import java.util.Objects;
 
 /**
- * Represents all the query options that a user can provide to control the kind of stores we would like to fetch.
- * The options could indicate - whether we want stale stores to be included (or)
- * we want to filter for only stores belonging to a partition.
- * If no specific partition is specified the default behavior is to fetch the stores for all the partitions
- * available on that instance for that particular store name.
+ * {@code StoreQueryParams} allows you to pass a variety of parameters when fetching a store for interactive query.
  */
 public class StoreQueryParams<T> {
 

@@ -33,6 +33,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.Collection;
 import java.util.stream.Collectors;
 
 public class StreamThreadStateStoreProvider {
@@ -91,7 +92,7 @@ public class StreamThreadStateStoreProvider {
         if (partition == null) {
             return null;
         }
-        final List<String> sourceTopics = internalTopologyBuilder.sourceTopicsForStore(storeName);
+        final Collection<String> sourceTopics = internalTopologyBuilder.sourceTopicsForStore(storeName);
         final Set<String> sourceTopicsSet = sourceTopics.stream().collect(Collectors.toSet());
         final Map<Integer, InternalTopologyBuilder.TopicsInfo> topicGroups = internalTopologyBuilder.topicGroups();
         for (final Map.Entry<Integer, InternalTopologyBuilder.TopicsInfo> topicGroup : topicGroups.entrySet()) {
