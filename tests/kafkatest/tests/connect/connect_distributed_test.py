@@ -509,7 +509,6 @@ class ConnectDistributedTest(Test):
     @parametrize(broker_version=str(LATEST_0_10_2), auto_create_topics=False, security_protocol=SecurityConfig.PLAINTEXT)
     @parametrize(broker_version=str(LATEST_0_10_1), auto_create_topics=False, security_protocol=SecurityConfig.PLAINTEXT)
     @parametrize(broker_version=str(LATEST_0_10_0), auto_create_topics=True, security_protocol=SecurityConfig.PLAINTEXT)
-    @parametrize(broker_version=str(LATEST_0_9), auto_create_topics=True, security_protocol=SecurityConfig.PLAINTEXT)
     def test_broker_compatibility(self, broker_version, auto_create_topics, security_protocol):
         """
         Verify that Connect will start up with various broker versions with various configurations. 
