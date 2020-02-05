@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.connect.mirror;
 
+import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
+import org.apache.kafka.connect.runtime.rest.errors.ConnectRestException;
 import org.apache.kafka.connect.util.clusters.EmbeddedConnectCluster;
 import org.apache.kafka.connect.util.clusters.EmbeddedKafkaCluster;
 import org.apache.kafka.test.IntegrationTest;
@@ -34,9 +36,9 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.Properties;
-import java.util.concurrent.TimeoutException;
 import java.time.Duration;
 
 import static org.junit.Assert.assertEquals;
@@ -66,7 +68,7 @@ public class MirrorConnectorsIntegrationTest {
     private EmbeddedConnectCluster backup;
 
     @Before
-    public void setup() throws IOException {
+    public void setup() throws IOException, InterruptedException {
         Properties brokerProps = new Properties();
         brokerProps.put("auto.create.topics.enable", "false");
 
@@ -150,23 +152,73 @@ public class MirrorConnectorsIntegrationTest {
         mm2Props.put("backup.bootstrap.servers", backup.kafka().bootstrapServers());
         mm2Config = new MirrorMakerConfig(mm2Props);
 
+        // we wait for the connector and tasks to come up for each connector, so that when we do the
+        // actual testing, we are certain that the tasks are up and running; this will prevent
+        // flaky tests where the connector and tasks didn't start up in time for the tests to be
+        // run
         backup.configureConnector("MirrorSourceConnector", mm2Config.connectorBaseConfig(new SourceAndTarget("primary", "backup"),
             MirrorSourceConnector.class));
+        waitForConnectorToBeUp(backup, "MirrorSourceConnector");
+        waitForTasksToBeUp(backup, "MirrorSourceConnector");
 
         backup.configureConnector("MirrorCheckpointConnector", mm2Config.connectorBaseConfig(new SourceAndTarget("primary", "backup"),
             MirrorCheckpointConnector.class));
+        waitForConnectorToBeUp(backup, "MirrorCheckpointConnector");
+        waitForTasksToBeUp(backup, "MirrorCheckpointConnector");
 
         backup.configureConnector("MirrorHeartbeatConnector", mm2Config.connectorBaseConfig(new SourceAndTarget("primary", "backup"),
             MirrorHeartbeatConnector.class));
+        waitForConnectorToBeUp(backup, "MirrorHeartbeatConnector");
+        waitForTasksToBeUp(backup, "MirrorHeartbeatConnector");
 
         primary.configureConnector("MirrorSourceConnector", mm2Config.connectorBaseConfig(new SourceAndTarget("backup", "primary"),
             MirrorSourceConnector.class));
+        waitForConnectorToBeUp(primary, "MirrorSourceConnector");
+        waitForTasksToBeUp(primary, "MirrorSourceConnector");
 
         primary.configureConnector("MirrorCheckpointConnector", mm2Config.connectorBaseConfig(new SourceAndTarget("backup", "primary"),
             MirrorCheckpointConnector.class));
+        waitForConnectorToBeUp(primary, "MirrorCheckpointConnector");
+        waitForTasksToBeUp(primary, "MirrorCheckpointConnector");
 
         primary.configureConnector("MirrorHeartbeatConnector", mm2Config.connectorBaseConfig(new SourceAndTarget("backup", "primary"),
             MirrorHeartbeatConnector.class));
+        waitForConnectorToBeUp(primary, "MirrorHeartbeatConnector");
+        waitForTasksToBeUp(primary, "MirrorHeartbeatConnector");
+
+    }
+
+    private void waitForConnectorToBeUp(EmbeddedConnectCluster connectCluster, String connName)
+        throws InterruptedException {
+        Collection<String> connectors = connectCluster.connectors();
+        while (!connectors.contains(connName)) {
+            // this means the connector hasn't been registered yet in the REST endpoint, so we
+            // sleep for 3 seconds and try again
+            Thread.sleep(3_000);
+            connectors = connectCluster.connectors();
+        }
+    }
+
+    private void waitForTasksToBeUp(EmbeddedConnectCluster connectCluster, String connectorName)
+        throws InterruptedException {
+        ConnectorStateInfo connector = null;
+        while (connector == null) {
+            try {
+                connector = connectCluster.connectorStatus(connectorName);
+                while (connector.tasks().size() == 0) {
+                    // this means the connector has started but the tasks haven't been initialized
+                    // yet, so we sleep for 3 seconds and try again to see if the tasks have started
+                    // up
+                    Thread.sleep(3_000);
+                    connector = connectCluster.connectorStatus(connectorName);
+                }
+                return;
+            } catch (ConnectRestException ignored) {
+                // ignoring ConnectRestException here as it is likely because of REST endpoint not
+                // being up yet, so we sleep for 3 seconds and try again to get the status
+                Thread.sleep(3_000);
+            }
+        }
     }
 
     @After
@@ -184,7 +236,7 @@ public class MirrorConnectorsIntegrationTest {
     }
 
     @Test
-    public void testReplication() throws InterruptedException, TimeoutException {
+    public void testReplication() throws InterruptedException {
         MirrorClient primaryClient = new MirrorClient(mm2Config.clientConfig("primary"));
         MirrorClient backupClient = new MirrorClient(mm2Config.clientConfig("backup"));
 
