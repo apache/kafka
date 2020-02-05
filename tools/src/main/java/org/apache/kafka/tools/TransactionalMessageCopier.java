@@ -259,22 +259,22 @@ public class TransactionalMessageCopier {
         return json;
     }
 
-    private static String statusAsJson(long totalProcessed, long consumed, long remaining, String transactionalId, String stage) {
+    private static String statusAsJson(long totalProcessed, long consumedSinceLastRebalanced, long remaining, String transactionalId, String stage) {
         Map<String, Object> statusData = new HashMap<>();
         statusData.put("progress", transactionalId);
         statusData.put("totalProcessed", totalProcessed);
-        statusData.put("consumed", consumed);
+        statusData.put("consumedSinceLastRebalanced", consumedSinceLastRebalanced);
         statusData.put("remaining", remaining);
         statusData.put("time", FORMAT.format(new Date()));
         statusData.put("stage", stage);
         return toJsonString(statusData);
     }
 
-    private static String shutDownString(long totalProcessed, long consumed, long remaining, String transactionalId) {
+    private static String shutDownString(long totalProcessed, long consumedSinceLastRebalanced, long remaining, String transactionalId) {
         Map<String, Object> shutdownData = new HashMap<>();
         shutdownData.put("shutdown_complete", transactionalId);
         shutdownData.put("totalProcessed", totalProcessed);
-        shutdownData.put("consumed", consumed);
+        shutdownData.put("consumedSinceLastRebalanced", consumedSinceLastRebalanced);
         shutdownData.put("remaining", remaining);
         shutdownData.put("time", FORMAT.format(new Date()));
         return toJsonString(shutdownData);
@@ -291,12 +291,11 @@ public class TransactionalMessageCopier {
         final KafkaProducer<String, String> producer = createProducer(parsedArgs);
         final KafkaConsumer<String, String> consumer = createConsumer(parsedArgs);
 
-        final AtomicLong messageCap = new AtomicLong(
+        final AtomicLong remainingMessages = new AtomicLong(
             parsedArgs.getInt("maxMessages") == -1 ? Long.MAX_VALUE : parsedArgs.getInt("maxMessages"));
 
         boolean groupMode = parsedArgs.getBoolean("groupMode");
         String topicName = parsedArgs.getString("inputTopic");
-        final AtomicLong remainingMessages = new AtomicLong(messageCap.get());
         final AtomicLong numMessagesProcessedSinceLastRebalance = new AtomicLong(0);
         final AtomicLong totalMessageProcessed = new AtomicLong(0);
         if (groupMode) {
@@ -307,20 +306,19 @@ public class TransactionalMessageCopier {
 
                 @Override
                 public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
-                    messageCap.set(partitions.stream()
+                    remainingMessages.set(partitions.stream()
                         .mapToLong(partition -> messagesRemaining(consumer, partition)).sum());
-                    log.info("Message cap set to {} on rebalance complete", messageCap);
+                    log.info("Remaining messages set to {} on rebalance complete", remainingMessages);
                     numMessagesProcessedSinceLastRebalance.set(0);
                     // We use message cap for remaining here as the remainingMessages are not set yet.
                     System.out.println(statusAsJson(totalMessageProcessed.get(),
-                        numMessagesProcessedSinceLastRebalance.get(), messageCap.get(), transactionalId, "RebalanceComplete"));
+                        numMessagesProcessedSinceLastRebalance.get(), remainingMessages.get(), transactionalId, "RebalanceComplete"));
                 }
             });
         } else {
             TopicPartition inputPartition = new TopicPartition(topicName, parsedArgs.getInt("inputPartition"));
             consumer.assign(singleton(inputPartition));
-            messageCap.set(Math.min(messagesRemaining(consumer, inputPartition), messageCap.get()));
-            remainingMessages.set(messageCap.get());
+            remainingMessages.set(Math.min(messagesRemaining(consumer, inputPartition), remainingMessages.get()));
         }
 
         final boolean enableRandomAborts = parsedArgs.getBoolean("enableRandomAborts");
@@ -357,17 +355,13 @@ public class TransactionalMessageCopier {
                     while (messagesSentWithinCurrentTxn < messagesNeededForCurrentTxn) {
                         ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(200));
                         log.info("number of consumer records fetched: {}, with current sent txn data {}", records.count(), messagesSentWithinCurrentTxn);
-                        if (messageCap.get() <= 0) {
-                            // We could see no more message needed for processing after poll
-                            break;
-                        }
                         for (ConsumerRecord<String, String> record : records) {
                             producer.send(producerRecordFromConsumerRecord(outputTopic, record));
                             messagesSentWithinCurrentTxn++;
                             partitionCount.put(record.partition(), partitionCount.getOrDefault(record.partition(), 0) + 1);
                         }
-                        log.info("message sent within current txn so far: {}", messagesNeededForCurrentTxn);
                         messagesNeededForCurrentTxn = Math.min(numMessagesPerTransaction, remainingMessages.get());
+                        log.info("message needed within current txn so far: {}", messagesNeededForCurrentTxn);
                     }
 
                     log.info("Messages sent in current transaction: {}", messagesSentWithinCurrentTxn);
@@ -385,7 +379,8 @@ public class TransactionalMessageCopier {
                         throw new KafkaException("Aborting transaction");
                     } else {
                         producer.commitTransaction();
-                        remainingMessages.set(messageCap.get() - numMessagesProcessedSinceLastRebalance.addAndGet(messagesSentWithinCurrentTxn));
+                        remainingMessages.getAndAdd(-messagesSentWithinCurrentTxn);
+                        numMessagesProcessedSinceLastRebalance.getAndAdd(messagesSentWithinCurrentTxn);
                         totalMessageProcessed.getAndAdd(messagesSentWithinCurrentTxn);
                     }
                 } catch (ProducerFencedException | OutOfOrderSequenceException e) {
