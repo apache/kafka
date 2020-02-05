@@ -30,7 +30,7 @@
   //
   // Version 6 is the first flexible version.
   //
-  // Starting from version 7, the broker sends back the Protocol Type to the client (KIP-599).
+  // Starting from version 7, the broker sends back the Protocol Type to the client (KIP-559).
   "validVersions": "0-7",
   "flexibleVersions": "6+",
   "fields": [
