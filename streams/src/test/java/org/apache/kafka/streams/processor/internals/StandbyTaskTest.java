@@ -105,13 +105,7 @@ public class StandbyTaskTest {
     );
 
     @Mock(type = MockType.NICE)
-    private ChangelogReader changelogReader;
-
-    @Mock(type = MockType.NICE)
     private ProcessorStateManager stateManager;
-
-    @Mock(type = MockType.NICE)
-    private RecordCollector recordCollector;
 
     @Before
     public void setup() throws Exception {
