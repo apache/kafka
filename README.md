@@ -49,13 +49,11 @@ Change the log4j setting in either `clients/src/test/resources/log4j.properties`
     ./gradlew clients:test --tests RequestResponseTest
 
 ### Specifying test retries ###
-By default every failed test will be retried once but it is possible to change this value with the `maxTestRetries`
-parameter. Tests will be retried at the end of a test task. By specifying `maxTestRetryFailures` one can set a limit
-on maximum number of test failures that are allowed before retrying is disabled. For instance if this is set to 5 and
-4 test fails initially and 3 again on retry then this will not be considered too many and retries would continue but if
-more than 5 failed initially then retries would be disabled.
+By default, each failed test is retried once up to a maximum of five retries per test run. Tests are retried at the end of the test task. Adjust these parameters in the following way:
 
     ./gradlew test -PmaxTestRetries=1 -PmaxTestRetryFailures=5
+    
+See [Test Retry Gradle Plugin](https://github.com/gradle/test-retry-gradle-plugin) for more details.
 
 ### Generating test coverage reports ###
 Generate coverage reports for the whole project:
@@ -200,8 +198,8 @@ The following options should be set with a `-P` switch, for example `./gradlew -
 * `skipSigning`: skips signing of artifacts.
 * `testLoggingEvents`: unit test events to be logged, separated by comma. For example `./gradlew -PtestLoggingEvents=started,passed,skipped,failed test`.
 * `xmlSpotBugsReport`: enable XML reports for spotBugs. This also disables HTML reports as only one can be enabled at a time.
-* `maxTestRetries`: the maximum number of retries for a failing test case
-* `maxTestRetryFailures`: maximum number of test failures that are allowed before retrying is disabled
+* `maxTestRetries`: the maximum number of retries for a failing test case.
+* `maxTestRetryFailures`: maximum number of test failures before retrying is disabled for subsequent tests.
 
 ### Dependency Analysis ###
 
