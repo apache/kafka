@@ -75,7 +75,7 @@ public class RecordQueue {
         );
         this.log = logContext.logger(RecordQueue.class);
     }
- 
+
     void setPartitionTime(final long partitionTime) {
         this.partitionTime = partitionTime;
     }
@@ -154,6 +154,10 @@ public class RecordQueue {
      */
     public long headRecordTimestamp() {
         return headRecord == null ? UNKNOWN : headRecord.timestamp;
+    }
+
+    public Long headRecordOffset() {
+        return headRecord == null ? null : headRecord.offset();
     }
 
     /**

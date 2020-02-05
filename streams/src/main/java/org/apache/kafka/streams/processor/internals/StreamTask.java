@@ -496,9 +496,15 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         }
 
         final Map<TopicPartition, OffsetAndMetadata> consumedOffsetsAndMetadata = new HashMap<>(consumedOffsets.size());
+
         for (final Map.Entry<TopicPartition, Long> entry : consumedOffsets.entrySet()) {
             final TopicPartition partition = entry.getKey();
-            final long offset = entry.getValue() + 1;
+            Long offset = partitionGroup.headRecordOffset(partition);
+            if (offset == null) {
+                // this call should never block, because we know that we did process data for this partition
+                // and thus the consumer should have a valid local position that it can return immediately
+                offset = consumer.position(partition);
+            }
             final long partitionTime = partitionTimes.get(partition);
             consumedOffsetsAndMetadata.put(partition, new OffsetAndMetadata(offset, encodeTimestamp(partitionTime)));
         }
