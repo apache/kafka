@@ -17,7 +17,6 @@
 package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.common.annotation.InterfaceStability;
-import org.apache.kafka.common.message.LeaveGroupRequestData;
 
 import java.util.Collection;
 import java.util.HashSet;
@@ -32,13 +31,13 @@ import java.util.Set;
 @InterfaceStability.Evolving
 public class RemoveMembersFromConsumerGroupOptions extends AbstractOptions<RemoveMembersFromConsumerGroupOptions> {
 
-    private Set<LeaveGroupRequestData.MemberIdentity> members;
+    private Set<MemberToRemove> members;
 
-    public RemoveMembersFromConsumerGroupOptions(Collection<LeaveGroupRequestData.MemberIdentity> members) {
+    public RemoveMembersFromConsumerGroupOptions(Collection<MemberToRemove> members) {
         this.members = new HashSet<>(members);
     }
 
-    public Set<LeaveGroupRequestData.MemberIdentity> members() {
+    public Set<MemberToRemove> members() {
         return members;
     }
 }

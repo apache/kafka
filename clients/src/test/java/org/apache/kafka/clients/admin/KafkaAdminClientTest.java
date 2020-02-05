@@ -1958,15 +1958,15 @@ public class KafkaAdminClientTest {
                                                                          .setErrorCode(Errors.UNKNOWN_SERVER_ERROR.code())));
 
             String groupId = "groupId";
-            Collection<MemberIdentity> membersToRemove = Arrays.asList(new MemberIdentity().setGroupInstanceId(instanceOne),
-                                                                       new MemberIdentity().setGroupInstanceId(instanceTwo));
+            Collection<MemberToRemove> membersToRemove = Arrays.asList(new MemberToRemove(instanceOne),
+                                                                       new MemberToRemove(instanceTwo));
             final RemoveMembersFromConsumerGroupResult unknownErrorResult = env.adminClient().removeMembersFromConsumerGroup(
                 groupId,
                 new RemoveMembersFromConsumerGroupOptions(membersToRemove)
             );
 
-            MemberIdentity memberOne = new MemberIdentity().setGroupInstanceId(instanceOne);
-            MemberIdentity memberTwo = new MemberIdentity().setGroupInstanceId(instanceTwo);
+            MemberToRemove memberOne = new MemberToRemove(instanceOne);
+            MemberToRemove memberTwo = new MemberToRemove(instanceTwo);
 
             TestUtils.assertFutureError(unknownErrorResult.all(), UnknownServerException.class);
             TestUtils.assertFutureError(unknownErrorResult.memberResult(memberOne), UnknownServerException.class);

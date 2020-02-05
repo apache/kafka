@@ -37,7 +37,6 @@ import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.acl.{AccessControlEntry, AclBinding, AclBindingFilter, AclOperation, AclPermissionType}
 import org.apache.kafka.common.config.{ConfigResource, LogLevelConfig}
 import org.apache.kafka.common.errors._
-import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity
 import org.apache.kafka.common.requests.{DeleteRecordsRequest, MetadataResponse}
 import org.apache.kafka.common.resource.{PatternType, ResourcePattern, ResourceType}
 import org.apache.kafka.common.utils.{Time, Utils}
@@ -1105,11 +1104,11 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
           // Test delete non-exist consumer instance
           val invalidInstanceId = "invalid-instance-id"
           var removeMembersResult = client.removeMembersFromConsumerGroup(testGroupId, new RemoveMembersFromConsumerGroupOptions(
-            Collections.singleton(new MemberIdentity().setGroupInstanceId(invalidInstanceId))
+            Collections.singleton(new MemberToRemove(invalidInstanceId))
           ))
 
           TestUtils.assertFutureExceptionTypeEquals(removeMembersResult.all, classOf[UnknownMemberIdException])
-          val firstMemberFuture = removeMembersResult.memberResult(new MemberIdentity().setGroupInstanceId(invalidInstanceId))
+          val firstMemberFuture = removeMembersResult.memberResult(new MemberToRemove(invalidInstanceId))
           TestUtils.assertFutureExceptionTypeEquals(firstMemberFuture, classOf[UnknownMemberIdException])
 
           // Test consumer group deletion
@@ -1128,11 +1127,11 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
 
           // Test delete correct member
           removeMembersResult = client.removeMembersFromConsumerGroup(testGroupId, new RemoveMembersFromConsumerGroupOptions(
-            Collections.singleton(new MemberIdentity().setGroupInstanceId(testInstanceId))
+            Collections.singleton(new MemberToRemove(testInstanceId))
           ))
 
           assertNull(removeMembersResult.all().get())
-          val validMemberFuture = removeMembersResult.memberResult(new MemberIdentity().setGroupInstanceId(testInstanceId))
+          val validMemberFuture = removeMembersResult.memberResult(new MemberToRemove(testInstanceId))
           assertNull(validMemberFuture.get())
 
           // The group should contain no member now.
