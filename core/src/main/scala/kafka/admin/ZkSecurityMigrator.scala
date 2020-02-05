@@ -75,11 +75,7 @@ object ZkSecurityMigrator extends Logging {
     // Instantiate the client config we will use so that we take into account config provided via the CLI option
     // and system properties passed via -D parameters if no CLI option is given.
     val zkClientConfig = createZkClientConfigFromOption(opts.options, opts.zkTlsConfigFile).getOrElse(new ZKClientConfig())
-    // For TLS client authentication to be enabled the client must (at a minimum) configure itself as using TLS
-    // with both a client connection socket and a key store location explicitly set.
-    val tlsClientAuthEnabled = KafkaConfig.getZooKeeperClientProperty(zkClientConfig, KafkaConfig.ZkSslClientEnableProp).getOrElse("false") == "true" &&
-      KafkaConfig.getZooKeeperClientProperty(zkClientConfig, KafkaConfig.ZkClientCnxnSocketProp).isDefined &&
-      KafkaConfig.getZooKeeperClientProperty(zkClientConfig, KafkaConfig.ZkSslKeyStoreLocationProp).isDefined
+    val tlsClientAuthEnabled = KafkaConfig.zlTlsClientAuthEnabled(zkClientConfig)
     if (jaasFile == null && !tlsClientAuthEnabled) {
       val errorMsg = "No JAAS configuration file has been specified and no TLS client certificate has been specified. Please make sure that you have set " +
         "the system property %s or provide a ZooKeeper client TLS configuration via --%s <filename> identifying at least %s, %s, and %s".format(JaasUtils.JAVA_LOGIN_CONFIG_PARAM,

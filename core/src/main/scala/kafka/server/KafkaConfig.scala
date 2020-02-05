@@ -309,8 +309,7 @@ object KafkaConfig {
     ZkSslOcspEnableProp -> "zookeeper.ssl.ocsp")
 
   private[kafka] def getZooKeeperClientProperty(clientConfig: ZKClientConfig, kafkaPropName: String): Option[String] = {
-    val value = clientConfig.getProperty(ZkSslConfigToSystemPropertyMap(kafkaPropName))
-    if (value == null) None else Some(value)
+    Option(clientConfig.getProperty(ZkSslConfigToSystemPropertyMap(kafkaPropName)))
   }
 
   private[kafka] def setZooKeeperClientProperty(clientConfig: ZKClientConfig, kafkaPropName: String, kafkaPropValue: Any): Unit = {
@@ -323,6 +322,14 @@ object KafkaConfig {
         }
         case _ => kafkaPropValue.toString
     })
+  }
+
+  // For ZooKeeper TLS client authentication to be enabled the client must (at a minimum) configure itself as using TLS
+  // with both a client connection socket and a key store location explicitly set.
+  private[kafka] def zlTlsClientAuthEnabled(zkClientConfig: ZKClientConfig) = {
+    getZooKeeperClientProperty(zkClientConfig, ZkSslClientEnableProp).getOrElse("false") == "true" &&
+      getZooKeeperClientProperty(zkClientConfig, ZkClientCnxnSocketProp).isDefined &&
+      getZooKeeperClientProperty(zkClientConfig, ZkSslKeyStoreLocationProp).isDefined
   }
 
   /** ********* General Configuration ***********/

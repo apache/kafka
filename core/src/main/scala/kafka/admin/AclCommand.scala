@@ -601,7 +601,9 @@ object AclCommand extends Logging {
     // Tested via System Test kafkatest.tests.core.zookeeper_tls_test.ZookeeperTlsTest.test_zk_tls
     val zkTlsConfigFile = parser.accepts("zk-tls-config-file",
       "Identifies the file where ZooKeeper client TLS connectivity properties for the authorizer are defined.  Any properties other than the following (with or without an \"authorizer.\" prefix) are ignored: " +
-        KafkaConfig.ZkSslConfigToSystemPropertyMap.keys.toList.sorted.mkString(", "))
+        KafkaConfig.ZkSslConfigToSystemPropertyMap.keys.toList.sorted.mkString(", ") +
+        ". Note that if SASL is not configured and zookeeper.set.acl is supposed to be true due to mutual certificate authentication being used" +
+        " then it is necessary to explicitly specify --authorizer-properties zookeeper.set.acl=true")
       .withRequiredArg().describedAs("Authorizer ZooKeeper TLS configuration").ofType(classOf[String])
 
     options = parser.parse(args: _*)

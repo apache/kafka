@@ -385,10 +385,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
     }
 
     val secureAclsEnabled = config.zkEnableSecureAcls
-    val tlsClientAuthEnabled = KafkaConfig.getZooKeeperClientProperty(zkClientConfig, KafkaConfig.ZkSslClientEnableProp).getOrElse("false") == "true" &&
-      KafkaConfig.getZooKeeperClientProperty(zkClientConfig, KafkaConfig.ZkClientCnxnSocketProp).isDefined &&
-      KafkaConfig.getZooKeeperClientProperty(zkClientConfig, KafkaConfig.ZkSslKeyStoreLocationProp).isDefined
-    val isZkSecurityEnabled = tlsClientAuthEnabled || JaasUtils.isZkSecurityEnabled()
+    val isZkSecurityEnabled = JaasUtils.isZkSecurityEnabled() || KafkaConfig.zlTlsClientAuthEnabled(zkClientConfig)
 
     if (secureAclsEnabled && !isZkSecurityEnabled)
       throw new java.lang.SecurityException(s"${KafkaConfig.ZkEnableSecureAclsProp} is true, but ZooKeeper client TLS configuration identifying at least $KafkaConfig.ZkSslClientEnableProp, $KafkaConfig.ZkClientCnxnSocketProp, and $KafkaConfig.ZkSslKeyStoreLocationProp was not present and the " +
