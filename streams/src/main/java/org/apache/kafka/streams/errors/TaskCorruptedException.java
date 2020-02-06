@@ -16,20 +16,29 @@
  */
 package org.apache.kafka.streams.errors;
 
+import org.apache.kafka.streams.processor.TaskId;
+
+import java.util.Set;
 
 /**
- * Indicates that one or more tasks got migrated to another thread.
+ * Indicates a specific task is corrupted and need to be re-initialized. It can be thrown when
  *
- * 1) if the task field is specified, then that single task should be cleaned up and closed as "zombie" while the
- *    thread can continue as normal;
- * 2) if no tasks are specified (i.e. taskId == null), it means that the hosted thread has been fenced and all
- *    tasks are migrated, in which case the thread should rejoin the group
+ * 1) Under EOS, if the checkpoint file does not contain offsets for corresponding store's changelogs, meaning
+ *    previously it was not close cleanly;
+ * 2) Out-of-range exception thrown during restoration, meaning that the changelog has been modified and we re-bootstrap
+ *    the store.
  */
-public class TaskMigratedException extends StreamsException {
+public class TaskCorruptedException extends StreamsException {
 
-    private final static long serialVersionUID = 1L;
+    private final Set<TaskId> taskIds;
 
-    public TaskMigratedException(final String message, final Throwable throwable) {
-        super(message + "; It means all tasks belonging to this thread have been migrated", throwable);
+    public TaskCorruptedException(final Set<TaskId> taskIds) {
+        super("Tasks " + taskIds + " are corrupted and hence needs to be re-initialized");
+
+        this.taskIds = taskIds;
+    }
+
+    public Set<TaskId> corruptedTaskIds() {
+        return taskIds;
     }
 }

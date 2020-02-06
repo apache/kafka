@@ -22,6 +22,7 @@ import org.apache.kafka.streams.processor.TaskId;
 
 import java.util.Set;
 
+import static org.apache.kafka.streams.processor.internals.Task.State.CLOSED;
 import static org.apache.kafka.streams.processor.internals.Task.State.CREATED;
 
 public abstract class AbstractTask implements Task {
@@ -68,6 +69,15 @@ public abstract class AbstractTask implements Task {
     @Override
     public final Task.State state() {
         return state;
+    }
+
+    @Override
+    public void revive() {
+        if (state == CLOSED) {
+            transitionTo(CREATED);
+        } else {
+            throw new IllegalStateException("Illegal state " + state() + " while committing standby task " + id);
+        }
     }
 
     final void transitionTo(final Task.State newState) {

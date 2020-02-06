@@ -39,30 +39,30 @@ public interface Task {
      *
      * <pre>
      *                 +-------------+
-     *          +<---- | Created (0) |
-     *          |      +-----+-------+
-     *          |            |
-     *          |            v
-     *          |      +-----+-------+
-     *          +<---- | Restoring(1)|<---------------+
-     *          |      +-----+-------+                |
-     *          |            |                        |
-     *          |            +--------------------+   |
-     *          |            |                    |   |
-     *          |            v                    v   |
-     *          |      +-----+-------+       +----+---+----+
-     *          |      | Running (2) | ----> | Suspended(3)|   * //TODO Suspended(3) could be removed after we've stable on KIP-429
-     *          |      +-----+-------+       +------+------+
-     *          |            |                      |
-     *          |            |                      |
-     *          |            v                      |
-     *          |      +-----+-------+              |
-     *          +----> | Closing (4) | <------------+
-     *                 +-----+-------+
-     *                       |
-     *                       v
-     *                 +-----+-------+
-     *                 | Closed (5)  |
+     *          +<---- | Created (0) | <----------------------+
+     *          |      +-----+-------+                        |
+     *          |            |                                |
+     *          |            v                                |
+     *          |      +-----+-------+                        |
+     *          +<---- | Restoring(1)|<---------------+       |
+     *          |      +-----+-------+                |       |
+     *          |            |                        |       |
+     *          |            +--------------------+   |       |
+     *          |            |                    |   |       |
+     *          |            v                    v   |       |
+     *          |      +-----+-------+       +----+---+----+  |
+     *          |      | Running (2) | ----> | Suspended(3)|  |    * //TODO Suspended(3) could be removed after we've stable on KIP-429
+     *          |      +-----+-------+       +------+------+  |
+     *          |            |                      |         |
+     *          |            |                      |         |
+     *          |            v                      |         |
+     *          |      +-----+-------+              |         |
+     *          +----> | Closing (4) | <------------+         |
+     *                 +-----+-------+                        |
+     *                       |                                |
+     *                       v                                |
+     *                 +-----+-------+                        |
+     *                 | Closed (5)  | -----------------------+
      *                 +-------------+
      * </pre>
      */
@@ -72,7 +72,7 @@ public interface Task {
         RUNNING(3, 4),         // 2
         SUSPENDED(1, 4),       // 3
         CLOSING(4, 5),         // 4, we allow CLOSING to transit to itself to make close idempotent
-        CLOSED;                               // 5
+        CLOSED(0);             // 5, we allow CLOSED to transit to CREATED to handle corrupted tasks
 
         private final Set<Integer> validTransitions = new HashSet<>();
 
@@ -153,6 +153,11 @@ public interface Task {
      * Never throws an exception, but just makes all attempts to release resources while closing.
      */
     void closeDirty();
+
+    /**
+     * Revive a closed task to a created one; should never throw an exception
+     */
+    void revive();
 
     StateStore getStore(final String name);
 

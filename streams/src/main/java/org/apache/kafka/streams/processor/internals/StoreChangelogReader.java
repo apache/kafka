@@ -19,6 +19,7 @@ package org.apache.kafka.streams.processor.internals;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
+import org.apache.kafka.clients.consumer.InvalidOffsetException;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.errors.FencedInstanceIdException;
 import org.apache.kafka.common.errors.TimeoutException;
@@ -27,7 +28,9 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.errors.TaskCorruptedException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
+import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager.StateStoreMetadata;
 import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.slf4j.Logger;
@@ -52,7 +55,6 @@ import java.util.stream.Collectors;
  * The reader also maintains the source of truth for restoration state: only active tasks restoring changelog could
  * be completed, while standby tasks updating changelog would always be in restoring state after being initialized.
  */
-// TODO K9113: we need to consider how to handle InvalidOffsetException for consumer#poll / position
 public class StoreChangelogReader implements ChangelogReader {
 
     enum ChangelogState {
@@ -411,6 +413,15 @@ public class StoreChangelogReader implements ChangelogReader {
             } catch (final FencedInstanceIdException e) {
                 // when the consumer gets fenced, all its tasks should be migrated
                 throw new TaskMigratedException("Restore consumer get fenced by instance-id polling records.", e);
+            } catch (final InvalidOffsetException e) {
+                log.warn("Encountered {} fetching records from restore consumer for partitions {}, " +
+                    "marking the corresponding tasks as corrupted.", e.toString(), e.partitions());
+
+                final Set<TaskId> taskIds = new HashSet<>();
+                for (final TopicPartition partition : e.partitions()) {
+                    taskIds.add(changelogs.get(partition).stateManager.taskId());
+                }
+                throw new TaskCorruptedException(taskIds);
             } catch (final KafkaException e) {
                 throw new StreamsException("Restore consumer get unexpected error polling records.", e);
             }
@@ -428,18 +439,21 @@ public class StoreChangelogReader implements ChangelogReader {
                 restoreChangelog(changelogs.get(partition));
             }
 
+            maybeUpdateLimitOffsetsForStandbyChangelogs();
+        }
+    }
 
-            // for standby changelogs, if the interval has elapsed and there are buffered records not applicable,
-            // we can try to update the limit offset next time.
-            if (updateOffsetIntervalMs < time.milliseconds() - lastUpdateOffsetTime) {
-                final Set<ChangelogMetadata> standbyChangelogs = changelogs.values().stream()
-                    .filter(metadata -> metadata.stateManager.taskType() == Task.TaskType.STANDBY)
-                    .collect(Collectors.toSet());
-                for (final ChangelogMetadata metadata : standbyChangelogs) {
-                    if (!metadata.bufferedRecords().isEmpty()) {
-                        updateLimitOffsets();
-                        break;
-                    }
+    private void maybeUpdateLimitOffsetsForStandbyChangelogs() {
+        // for standby changelogs, if the interval has elapsed and there are buffered records not applicable,
+        // we can try to update the limit offset next time.
+        if (updateOffsetIntervalMs < time.milliseconds() - lastUpdateOffsetTime) {
+            final Set<ChangelogMetadata> standbyChangelogs = changelogs.values().stream()
+                .filter(metadata -> metadata.stateManager.taskType() == Task.TaskType.STANDBY)
+                .collect(Collectors.toSet());
+            for (final ChangelogMetadata metadata : standbyChangelogs) {
+                if (!metadata.bufferedRecords().isEmpty()) {
+                    updateLimitOffsets();
+                    break;
                 }
             }
         }

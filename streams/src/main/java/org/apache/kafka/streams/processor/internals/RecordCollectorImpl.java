@@ -124,7 +124,7 @@ public class RecordCollectorImpl implements RecordCollector {
             try {
                 producer.beginTransaction();
             } catch (final ProducerFencedException error) {
-                throw new TaskMigratedException(taskId, "Producer get fenced trying to begin a new transaction", error);
+                throw new TaskMigratedException("Producer get fenced trying to begin a new transaction", error);
             } catch (final KafkaException error) {
                 throw new StreamsException("Producer encounter unexpected error trying to begin a new transaction", error);
             }
@@ -161,7 +161,7 @@ public class RecordCollectorImpl implements RecordCollector {
                 producer.commitTransaction();
                 transactionInFlight = false;
             } catch (final ProducerFencedException error) {
-                throw new TaskMigratedException(taskId, "Producer get fenced trying to commit a transaction", error);
+                throw new TaskMigratedException("Producer get fenced trying to commit a transaction", error);
             } catch (final TimeoutException error) {
                 // TODO K9113: currently handle timeout exception as a fatal error, should discuss whether we want to handle it
                 throw new StreamsException("Timed out while committing transaction via producer for task " + taskId, error);
@@ -173,7 +173,7 @@ public class RecordCollectorImpl implements RecordCollector {
             try {
                 consumer.commitSync(offsets);
             } catch (final CommitFailedException error) {
-                throw new TaskMigratedException(taskId, "Consumer committing offsets failed, " +
+                throw new TaskMigratedException("Consumer committing offsets failed, " +
                     "indicating the corresponding thread is no longer part of the group.", error);
             } catch (final TimeoutException error) {
                 // TODO K9113: currently handle timeout exception as a fatal error
@@ -208,7 +208,7 @@ public class RecordCollectorImpl implements RecordCollector {
         } else if (exception instanceof ProducerFencedException || exception instanceof OutOfOrderSequenceException) {
             errorMessage += "\nWritten offsets would not be recorded and no more records would be sent since the producer is fenced, " +
                 "indicating the task may be migrated out.";
-            sendException = new TaskMigratedException(taskId, errorMessage, exception);
+            sendException = new TaskMigratedException(errorMessage, exception);
         } else {
             if (exception instanceof RetriableException) {
                 errorMessage += "\nThe broker is either slow or in bad state (like not having enough replicas) in responding the request, " +
@@ -299,7 +299,7 @@ public class RecordCollectorImpl implements RecordCollector {
             if (isRecoverable(uncaughtException)) {
                 // producer.send() call may throw a KafkaException which wraps a FencedException,
                 // in this case we should throw its wrapped inner cause so that it can be captured and re-wrapped as TaskMigrationException
-                throw new TaskMigratedException(taskId, "Producer cannot send records anymore since it got fenced", uncaughtException.getCause());
+                throw new TaskMigratedException("Producer cannot send records anymore since it got fenced", uncaughtException.getCause());
             } else {
                 final String errorMessage = String.format(SEND_EXCEPTION_MESSAGE, topic, taskId, uncaughtException.toString());
                 throw new StreamsException(errorMessage, uncaughtException);

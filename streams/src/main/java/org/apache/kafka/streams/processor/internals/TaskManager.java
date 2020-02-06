@@ -28,6 +28,7 @@ import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskIdFormatException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.slf4j.Logger;
 
 import java.io.File;
@@ -55,40 +56,42 @@ public class TaskManager {
     // by QueryableState
     private final Logger log;
     private final UUID processId;
-    private final ChangelogReader changelogReader;
     private final String logPrefix;
-    private final StreamThread.AbstractTaskCreator<? extends Task> taskCreator;
+    private final InternalTopologyBuilder builder;
+    private final ChangelogReader changelogReader;
+    private final StreamsMetricsImpl streamsMetrics;
+    private final StreamThread.AbstractTaskCreator<? extends Task> activeTaskCreator;
     private final StreamThread.AbstractTaskCreator<? extends Task> standbyTaskCreator;
-
-    private final Admin adminClient;
-    private DeleteRecordsResult deleteRecordsResult;
-    private boolean rebalanceInProgress = false;  // if we are in the middle of a rebalance, it is not safe to commit
 
     private final Map<TaskId, Task> tasks = new TreeMap<>();
     // materializing this relationship because the lookup is on the hot path
     private final Map<TopicPartition, Task> partitionToTask = new HashMap<>();
 
+    private final Admin adminClient;
     private Consumer<byte[], byte[]> consumer;
-    private final InternalTopologyBuilder builder;
+    private DeleteRecordsResult deleteRecordsResult;
+
+    private boolean rebalanceInProgress = false;  // if we are in the middle of a rebalance, it is not safe to commit
 
     TaskManager(final ChangelogReader changelogReader,
                 final UUID processId,
                 final String logPrefix,
-                final StreamThread.AbstractTaskCreator<? extends Task> taskCreator,
+                final StreamsMetricsImpl streamsMetrics,
+                final StreamThread.AbstractTaskCreator<? extends Task> activeTaskCreator,
                 final StreamThread.AbstractTaskCreator<? extends Task> standbyTaskCreator,
                 final InternalTopologyBuilder builder,
                 final Admin adminClient) {
-        this.changelogReader = changelogReader;
+        this.builder = builder;
         this.processId = processId;
         this.logPrefix = logPrefix;
-        this.taskCreator = taskCreator;
-        this.standbyTaskCreator = standbyTaskCreator;
-        this.builder = builder;
-        final LogContext logContext = new LogContext(logPrefix);
-
-        log = logContext.logger(getClass());
-
         this.adminClient = adminClient;
+        this.streamsMetrics = streamsMetrics;
+        this.changelogReader = changelogReader;
+        this.activeTaskCreator = activeTaskCreator;
+        this.standbyTaskCreator = standbyTaskCreator;
+
+        final LogContext logContext = new LogContext(logPrefix);
+        this.log = logContext.logger(getClass());
     }
 
     void setConsumer(final Consumer<byte[], byte[]> consumer) {
@@ -147,10 +150,8 @@ public class TaskManager {
                 task.resume();
                 standbyTasksToCreate.remove(task.id());
             } else /* we previously owned this task, and we don't have it anymore, or it has changed active/standby state */ {
-                final Set<TopicPartition> inputPartitions = task.inputPartitions();
                 try {
                     task.closeClean();
-                    changelogReader.remove(task.changelogPartitions());
                 } catch (final RuntimeException e) {
                     log.error("Failed to close task {} cleanly. Attempting to close remaining tasks before re-throwing.", task.id());
                     taskCloseExceptions.put(task.id(), e);
@@ -158,9 +159,8 @@ public class TaskManager {
                     // Now, we should go ahead and complete the close because a half-closed task is no good to anyone.
                     task.closeDirty();
                 }
-                for (final TopicPartition inputPartition : inputPartitions) {
-                    partitionToTask.remove(inputPartition);
-                }
+                cleanupTask(task);
+
                 iterator.remove();
             }
         }
@@ -175,7 +175,7 @@ public class TaskManager {
         }
 
         if (!activeTasksToCreate.isEmpty()) {
-            taskCreator.createTasks(consumer, activeTasksToCreate).forEach(this::addNewTask);
+            activeTaskCreator.createTasks(consumer, activeTasksToCreate).forEach(this::addNewTask);
         }
 
         if (!standbyTasksToCreate.isEmpty()) {
@@ -285,18 +285,13 @@ public class TaskManager {
         final Iterator<Task> iterator = tasks.values().iterator();
         while (iterator.hasNext()) {
             final Task task = iterator.next();
-            final Set<TopicPartition> inputPartitions = task.inputPartitions();
             // Even though we've apparently dropped out of the group, we can continue safely to maintain our
             // standby tasks while we rejoin.
             if (task.isActive()) {
                 task.closeDirty();
-                changelogReader.remove(task.changelogPartitions());
+                cleanupTask(task);
+                iterator.remove();
             }
-
-            for (final TopicPartition inputPartition : inputPartitions) {
-                partitionToTask.remove(inputPartition);
-            }
-            iterator.remove();
         }
     }
 
@@ -312,7 +307,7 @@ public class TaskManager {
 
         final Set<TaskId> locallyStoredTasks = new HashSet<>();
 
-        final File[] stateDirs = taskCreator.stateDirectory().listTaskDirectories();
+        final File[] stateDirs = activeTaskCreator.stateDirectory().listTaskDirectories();
         if (stateDirs != null) {
             for (final File dir : stateDirs) {
                 try {
@@ -331,12 +326,25 @@ public class TaskManager {
         return locallyStoredTasks;
     }
 
+    private void cleanupTask(final Task task) {
+        // 1. remove the changelog partitions from changelog reader;
+        // 2. remove the input partitions from the materialized map;
+        // 3. remove the task metrics from the metrics registry
+        changelogReader.remove(task.changelogPartitions());
+
+        for (final TopicPartition inputPartition : task.inputPartitions()) {
+            partitionToTask.remove(inputPartition);
+        }
+
+        final String threadId = Thread.currentThread().getName();
+        streamsMetrics.removeAllTaskLevelSensors(threadId, task.id().toString());
+    }
+
     void shutdown(final boolean clean) {
         final AtomicReference<RuntimeException> firstException = new AtomicReference<>(null);
         final Iterator<Task> iterator = tasks.values().iterator();
         while (iterator.hasNext()) {
             final Task task = iterator.next();
-            final Set<TopicPartition> inputPartitions = task.inputPartitions();
             if (clean) {
                 try {
                     task.closeClean();
@@ -350,16 +358,12 @@ public class TaskManager {
             } else {
                 task.closeDirty();
             }
-            changelogReader.remove(task.changelogPartitions());
-
-            for (final TopicPartition inputPartition : inputPartitions) {
-                partitionToTask.remove(inputPartition);
-            }
+            cleanupTask(task);
 
             iterator.remove();
         }
 
-        taskCreator.close();
+        activeTaskCreator.close();
 
         final RuntimeException fatalException = firstException.get();
         if (fatalException != null) {

@@ -35,6 +35,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KafkaClientSupplier;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.errors.TaskCorruptedException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.TaskId;
@@ -261,7 +262,6 @@ public class StreamThread extends Thread {
         final ChangelogReader storeChangelogReader;
         final Time time;
         final Logger log;
-
 
         AbstractTaskCreator(final InternalTopologyBuilder builder,
                             final StreamsConfig config,
@@ -573,6 +573,7 @@ public class StreamThread extends Thread {
             changelogReader,
             processId,
             logPrefix,
+            streamsMetrics,
             activeTaskCreator,
             standbyTaskCreator,
             builder,
@@ -718,14 +719,19 @@ public class StreamThread extends Thread {
         try {
             runLoop();
             cleanRun = true;
+        } catch (final StreamsException e) {
+            // do not need to rethrow
+            log.error("Encountered the following Streams exception during processing, " +
+                "this indicates an unrecoverable error and the thread is going to shutdown: ", e);
         } catch (final KafkaException e) {
             log.error("Encountered the following unexpected Kafka exception during processing, " +
-                          "this usually indicate Streams internal errors:", e);
+                "this indicates an internal error and thread is going to shutdown:", e);
             throw e;
         } catch (final Exception e) {
             // we have caught all Kafka related exceptions, and other runtime exceptions
             // should be due to user application errors
-            log.error("Encountered the following error during processing:", e);
+            log.error("Encountered the following unexpected exception during processing " +
+                "and the thread is going to shutdown:", e);
             throw e;
         } finally {
             completeShutdown(cleanRun);
@@ -745,14 +751,23 @@ public class StreamThread extends Thread {
             try {
                 runOnce();
                 if (assignmentErrorCode.get() == AssignorError.VERSION_PROBING.code()) {
-                    log.info("Version probing detected. Triggering new rebalance.");
+                    log.info("Version probing detected. Rejoin the consumer group to trigger a new rebalance.");
                     assignmentErrorCode.set(AssignorError.NONE.code());
                     enforceRebalance();
                 }
-            } catch (final TaskMigratedException ignoreAndRejoinGroup) {
-                log.warn("Detected task {} that got migrated to another thread. " +
-                             "This implies that this thread missed a rebalance and dropped out of the consumer group. " +
-                             "Will try to rejoin the consumer group.", ignoreAndRejoinGroup.migratedTaskId());
+            } catch (final TaskCorruptedException e) {
+                log.warn("Detected the states of tasks {} are corrupted. " +
+                    "Will close the task as dirty and re-create and bootstrap from scratch.");
+
+                for (final TaskId taskId : e.corruptedTaskIds()) {
+                    final Task task = taskManager.tasks().get(taskId);
+                    task.closeDirty();
+                    task.revive();
+                }
+            } catch (final TaskMigratedException e) {
+                log.warn("Detected that the thread is being fenced. " +
+                    "This implies that this thread missed a rebalance and dropped out of the consumer group. " +
+                    "Will migrate out all assigned tasks and rejoin the consumer group.");
 
                 enforceRebalance();
             }
@@ -964,16 +979,12 @@ public class StreamThread extends Thread {
      * @param records Records, can be null
      */
     private void addRecordsToTasks(final ConsumerRecords<byte[], byte[]> records) {
-
         for (final TopicPartition partition : records.partitions()) {
             final Task task = taskManager.taskForInputPartition(partition);
 
             if (task == null) {
-                log.error(
-                    "Unable to locate active task for received-record partition {}. Current tasks: {}",
-                    partition,
-                    taskManager.toString(">")
-                );
+                log.error("Unable to locate active task for received-record partition {}. Current tasks: {}",
+                    partition, taskManager.toString(">"));
                 throw new NullPointerException("Task was unexpectedly missing for partition " + partition);
             }
 
