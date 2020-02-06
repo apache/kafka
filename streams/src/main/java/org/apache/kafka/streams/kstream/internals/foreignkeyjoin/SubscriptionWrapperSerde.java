@@ -20,16 +20,19 @@ import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.streams.kstream.internals.WrappingNullableDeserializer;
+import org.apache.kafka.streams.kstream.internals.WrappingNullableSerializer;
 
 import java.nio.ByteBuffer;
+import java.util.Objects;
 
 public class SubscriptionWrapperSerde<K> implements Serde<SubscriptionWrapper<K>> {
     private final SubscriptionWrapperSerializer<K> serializer;
     private final SubscriptionWrapperDeserializer<K> deserializer;
 
     public SubscriptionWrapperSerde(final Serde<K> primaryKeySerde) {
-        serializer = new SubscriptionWrapperSerializer<>(primaryKeySerde.serializer());
-        deserializer = new SubscriptionWrapperDeserializer<>(primaryKeySerde.deserializer());
+        serializer = new SubscriptionWrapperSerializer<>(primaryKeySerde == null ? null : primaryKeySerde.serializer());
+        deserializer = new SubscriptionWrapperDeserializer<>(primaryKeySerde == null ? null : primaryKeySerde.deserializer());
     }
 
     @Override
@@ -42,10 +45,20 @@ public class SubscriptionWrapperSerde<K> implements Serde<SubscriptionWrapper<K>
         return deserializer;
     }
 
-    private static class SubscriptionWrapperSerializer<K> implements Serializer<SubscriptionWrapper<K>> {
-        private final Serializer<K> primaryKeySerializer;
+    public static class SubscriptionWrapperSerializer<K>
+        implements Serializer<SubscriptionWrapper<K>>, WrappingNullableSerializer<SubscriptionWrapper<K>, K> {
+
+        private Serializer<K> primaryKeySerializer;
+
         SubscriptionWrapperSerializer(final Serializer<K> primaryKeySerializer) {
             this.primaryKeySerializer = primaryKeySerializer;
+        }
+
+        @Override
+        public void setIfUnset(final Serializer<K> defaultSerializer) {
+            if (primaryKeySerializer == null) {
+                primaryKeySerializer = Objects.requireNonNull(defaultSerializer, "defaultSerializer cannot be null");
+            }
         }
 
         @Override
@@ -81,10 +94,20 @@ public class SubscriptionWrapperSerde<K> implements Serde<SubscriptionWrapper<K>
 
     }
 
-    private static class SubscriptionWrapperDeserializer<K> implements Deserializer<SubscriptionWrapper<K>> {
-        private final Deserializer<K> primaryKeyDeserializer;
+    public static class SubscriptionWrapperDeserializer<K>
+        implements Deserializer<SubscriptionWrapper<K>>, WrappingNullableDeserializer<SubscriptionWrapper<K>, K> {
+
+        private Deserializer<K> primaryKeyDeserializer;
+
         SubscriptionWrapperDeserializer(final Deserializer<K> primaryKeyDeserializer) {
             this.primaryKeyDeserializer = primaryKeyDeserializer;
+        }
+
+        @Override
+        public void setIfUnset(final Deserializer<K> defaultDeserializer) {
+            if (primaryKeyDeserializer == null) {
+                primaryKeyDeserializer = Objects.requireNonNull(defaultDeserializer, "defaultDeserializer cannot be null");
+            }
         }
 
         @Override
