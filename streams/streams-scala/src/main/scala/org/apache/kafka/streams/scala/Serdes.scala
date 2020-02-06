@@ -19,9 +19,11 @@
  */
 package org.apache.kafka.streams.scala
 
+import java.nio.ByteBuffer
 import java.util
+import java.util.UUID
 
-import org.apache.kafka.common.serialization.{Deserializer, Serde, Serdes => JSerdes, Serializer}
+import org.apache.kafka.common.serialization.{Deserializer, Serde, Serializer, Serdes => JSerdes}
 import org.apache.kafka.streams.kstream.WindowedSerdes
 
 object Serdes {
@@ -30,12 +32,15 @@ object Serdes {
   implicit def JavaLong: Serde[java.lang.Long] = JSerdes.Long()
   implicit def ByteArray: Serde[Array[Byte]] = JSerdes.ByteArray()
   implicit def Bytes: Serde[org.apache.kafka.common.utils.Bytes] = JSerdes.Bytes()
+  implicit def byteBufferSerde: Serde[ByteBuffer] = JSerdes.ByteBuffer()
+  implicit def shortSerde: Serde[Short] = JSerdes.Short().asInstanceOf[Serde[Short]]
   implicit def Float: Serde[Float] = JSerdes.Float().asInstanceOf[Serde[Float]]
   implicit def JavaFloat: Serde[java.lang.Float] = JSerdes.Float()
   implicit def Double: Serde[Double] = JSerdes.Double().asInstanceOf[Serde[Double]]
   implicit def JavaDouble: Serde[java.lang.Double] = JSerdes.Double()
   implicit def Integer: Serde[Int] = JSerdes.Integer().asInstanceOf[Serde[Int]]
   implicit def JavaInteger: Serde[java.lang.Integer] = JSerdes.Integer()
+  implicit def uuidSerde: Serde[UUID] = JSerdes.UUID()
 
   implicit def timeWindowedSerde[T](implicit tSerde: Serde[T]): WindowedSerdes.TimeWindowedSerde[T] =
     new WindowedSerdes.TimeWindowedSerde[T](tSerde)
