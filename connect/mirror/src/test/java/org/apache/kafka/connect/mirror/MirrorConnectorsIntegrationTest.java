@@ -191,7 +191,7 @@ public class MirrorConnectorsIntegrationTest {
         for (String connector : connNames) {
             TestUtils.waitForCondition(() -> areConnectorAndTasksRunning(connectCluster,
                 connector), "Timed out trying to verify connector " +
-                connector + " was up!" );
+                connector + " was up!");
         }
     }
 
