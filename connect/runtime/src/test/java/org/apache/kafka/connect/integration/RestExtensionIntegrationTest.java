@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.integration;
 
+import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.health.ConnectClusterState;
 import org.apache.kafka.connect.health.ConnectorHealth;
 import org.apache.kafka.connect.health.ConnectorState;
@@ -23,7 +24,6 @@ import org.apache.kafka.connect.health.ConnectorType;
 import org.apache.kafka.connect.health.TaskState;
 import org.apache.kafka.connect.rest.ConnectRestExtension;
 import org.apache.kafka.connect.rest.ConnectRestExtensionContext;
-import org.apache.kafka.connect.runtime.rest.errors.ConnectRestException;
 import org.apache.kafka.connect.util.clusters.EmbeddedConnectCluster;
 import org.apache.kafka.connect.util.clusters.WorkerHandle;
 import org.apache.kafka.test.IntegrationTest;
@@ -33,7 +33,9 @@ import org.junit.experimental.categories.Category;
 
 import javax.ws.rs.GET;
 import javax.ws.rs.Path;
+import javax.ws.rs.core.Response;
 import java.io.IOException;
+import java.net.HttpURLConnection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
@@ -138,8 +140,9 @@ public class RestExtensionIntegrationTest {
     private boolean extensionIsRegistered() {
         try {
             String extensionUrl = connect.endpointForResource("integration-test-rest-extension/registered");
-            return "true".equals(connect.executeGet(extensionUrl));
-        } catch (ConnectRestException | IOException e) {
+            Response response = connect.executeGet(extensionUrl);
+            return response.getStatus() < HttpURLConnection.HTTP_BAD_REQUEST;
+        } catch (ConnectException e) {
             return false;
         }
     }

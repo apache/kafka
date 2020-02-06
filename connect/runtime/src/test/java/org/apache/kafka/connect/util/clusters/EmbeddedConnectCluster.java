@@ -25,7 +25,6 @@ import org.apache.kafka.connect.runtime.rest.errors.ConnectRestException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.servlet.http.HttpServletResponse;
 import javax.ws.rs.core.Response;
 import java.io.IOException;
 import java.io.InputStream;
@@ -33,6 +32,7 @@ import java.io.OutputStreamWriter;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedHashSet;
@@ -124,7 +124,7 @@ public class EmbeddedConnectCluster {
     /**
      * Start the connect cluster and the embedded Kafka and Zookeeper cluster.
      */
-    public void start() throws IOException {
+    public void start() {
         if (maskExitProcedures) {
             Exit.setExitProcedure(exitProcedure);
             Exit.setHaltProcedure(haltProcedure);
@@ -238,7 +238,7 @@ public class EmbeddedConnectCluster {
                 .filter(w -> {
                     try {
                         mapper.readerFor(ServerInfo.class)
-                                .readValue(executeGet(w.url().toString()));
+                                .readValue(responseToString(executeGet(w.url().toString())));
                         return true;
                     } catch (IOException e) {
                         // Worker failed to respond. Consider it's offline
@@ -263,36 +263,35 @@ public class EmbeddedConnectCluster {
      *
      * @param connName   the name of the connector
      * @param connConfig the intended configuration
-     * @throws IOException          if call to the REST api fails.
      * @throws ConnectRestException if REST api returns error status
      */
-    public void configureConnector(String connName, Map<String, String> connConfig) throws IOException {
+    public String configureConnector(String connName, Map<String, String> connConfig) {
         String url = endpointForResource(String.format("connectors/%s/config", connName));
         ObjectMapper mapper = new ObjectMapper();
-        int status;
+        String content;
         try {
-            String content = mapper.writeValueAsString(connConfig);
-            status = executePut(url, content);
+            content = mapper.writeValueAsString(connConfig);
         } catch (IOException e) {
-            log.error("Could not execute PUT request to " + url, e);
-            throw e;
+            throw new ConnectException("Could not serialize connector configuration and execute PUT request");
         }
-        if (status >= HttpServletResponse.SC_BAD_REQUEST) {
-            throw new ConnectRestException(status, "Could not execute PUT request");
+        Response response = executePut(url, content);
+        if (response.getStatus() < Response.Status.BAD_REQUEST.getStatusCode()) {
+            return responseToString(response);
         }
+        throw new ConnectRestException(response.getStatus(), "Could not execute PUT request");
     }
 
     /**
      * Delete an existing connector.
      *
      * @param connName name of the connector to be deleted
-     * @throws IOException if call to the REST api fails.
+     * @throws ConnectRestException if REST api returns error status
      */
-    public void deleteConnector(String connName) throws IOException {
+    public void deleteConnector(String connName) {
         String url = endpointForResource(String.format("connectors/%s", connName));
-        int status = executeDelete(url);
-        if (status >= HttpServletResponse.SC_BAD_REQUEST) {
-            throw new ConnectRestException(status, "Could not execute DELETE request.");
+        Response response = executeDelete(url);
+        if (response.getStatus() >= Response.Status.BAD_REQUEST.getStatusCode()) {
+            throw new ConnectRestException(response.getStatus(), "Could not execute DELETE request.");
         }
     }
 
@@ -305,13 +304,18 @@ public class EmbeddedConnectCluster {
      */
     public Collection<String> connectors() {
         ObjectMapper mapper = new ObjectMapper();
-        try {
-            String url = endpointForResource("connectors");
-            return mapper.readerFor(Collection.class).readValue(executeGet(url));
-        } catch (IOException e) {
-            log.error("Could not read connector list", e);
-            throw new ConnectException("Could not read connector list", e);
+        String url = endpointForResource("connectors");
+        Response response = executeGet(url);
+        if (response.getStatus() < Response.Status.BAD_REQUEST.getStatusCode()) {
+            try {
+                return mapper.readerFor(Collection.class).readValue(responseToString(response));
+            } catch(IOException e){
+                log.error("Could not parse connector list from response: {}", response, e);
+                throw new ConnectException("Could not not parse connector list", e);
+            }
         }
+        throw new ConnectException("Could not read connector list. Error response: "
+                + responseToString(response));
     }
 
     /**
@@ -324,31 +328,36 @@ public class EmbeddedConnectCluster {
      */
     public ConnectorStateInfo connectorStatus(String connectorName) {
         ObjectMapper mapper = new ObjectMapper();
+        String url = endpointForResource(String.format("connectors/%s/status", connectorName));
+        Response response = executeGet(url);
         try {
-            String url = endpointForResource(String.format("connectors/%s/status", connectorName));
-            return mapper.readerFor(ConnectorStateInfo.class).readValue(executeGet(url));
+            if (response.getStatus() < Response.Status.BAD_REQUEST.getStatusCode()) {
+                return mapper.readerFor(ConnectorStateInfo.class)
+                        .readValue(responseToString(response));
+            }
         } catch (IOException e) {
             log.error("Could not read connector state", e);
-            throw new ConnectException("Could not read connector state", e);
         }
+        throw new ConnectRestException(response.getStatus(),
+                "Could not read connector state. Error response: " + responseToString(response));
     }
 
-    public String adminEndpoint(String resource) throws IOException {
+    public String adminEndpoint(String resource) {
         String url = connectCluster.stream()
                 .map(WorkerHandle::adminUrl)
                 .filter(Objects::nonNull)
                 .findFirst()
-                .orElseThrow(() -> new IOException("Admin endpoint is disabled."))
+                .orElseThrow(() -> new ConnectException("Admin endpoint is disabled."))
                 .toString();
         return url + resource;
     }
 
-    public String endpointForResource(String resource) throws IOException {
+    public String endpointForResource(String resource) {
         String url = connectCluster.stream()
                 .map(WorkerHandle::url)
                 .filter(Objects::nonNull)
                 .findFirst()
-                .orElseThrow(() -> new IOException("Connect workers have not been provisioned"))
+                .orElseThrow(() -> new ConnectException("Connect workers have not been provisioned"))
                 .toString();
         return url + resource;
     }
@@ -363,87 +372,92 @@ public class EmbeddedConnectCluster {
         return kafkaCluster;
     }
 
-    public int executePut(String url, String body) throws IOException {
-        log.debug("Executing PUT request to URL={}. Payload={}", url, body);
-        HttpURLConnection httpCon = (HttpURLConnection) new URL(url).openConnection();
-        httpCon.setDoOutput(true);
-        httpCon.setRequestProperty("Content-Type", "application/json");
-        httpCon.setRequestMethod("PUT");
-        try (OutputStreamWriter out = new OutputStreamWriter(httpCon.getOutputStream())) {
-            out.write(body);
-        }
-        if (httpCon.getResponseCode() < HttpURLConnection.HTTP_BAD_REQUEST) {
-            try (InputStream is = httpCon.getInputStream()) {
-                log.info("PUT response for URL={} is {}", url, responseToString(is));
-            }
-        } else {
-            try (InputStream is = httpCon.getErrorStream()) {
-                log.info("PUT error response for URL={} is {}", url, responseToString(is));
-            }
-        }
-        return httpCon.getResponseCode();
-    }
-
-    public int executePost(String url, String body, Map<String, String> headers) throws IOException {
-        log.debug("Executing POST request to URL={}. Payload={}", url, body);
-        HttpURLConnection httpCon = (HttpURLConnection) new URL(url).openConnection();
-        httpCon.setDoOutput(true);
-        httpCon.setRequestProperty("Content-Type", "application/json");
-        headers.forEach(httpCon::setRequestProperty);
-        httpCon.setRequestMethod("POST");
-        try (OutputStreamWriter out = new OutputStreamWriter(httpCon.getOutputStream())) {
-            out.write(body);
-        }
-        if (httpCon.getResponseCode() < HttpURLConnection.HTTP_BAD_REQUEST) {
-            try (InputStream is = httpCon.getInputStream()) {
-                log.info("POST response for URL={} is {}", url, responseToString(is));
-            }
-        } else {
-            try (InputStream is = httpCon.getErrorStream()) {
-                log.info("POST error response for URL={} is {}", url, responseToString(is));
-            }
-        }
-        return httpCon.getResponseCode();
-    }
-
     /**
      * Execute a GET request on the given URL.
      *
      * @param url the HTTP endpoint
-     * @return response body encoded as a String
-     * @throws ConnectRestException if the HTTP request fails with a valid status code
-     * @throws IOException for any other I/O error.
+     * @return the response to the GET request
      */
-    public String executeGet(String url) throws IOException {
-        log.debug("Executing GET request to URL={}.", url);
-        HttpURLConnection httpCon = (HttpURLConnection) new URL(url).openConnection();
-        httpCon.setDoOutput(true);
-        httpCon.setRequestMethod("GET");
-        try (InputStream is = httpCon.getInputStream()) {
-            int c;
-            StringBuilder response = new StringBuilder();
-            while ((c = is.read()) != -1) {
-                response.append((char) c);
+    public Response executeGet(String url) {
+        return executeHttpMethod(url, null, Collections.emptyMap(), "GET");
+    }
+
+    /**
+     * Execute a PUT request on the given URL.
+     *
+     * @param url the HTTP endpoint
+     * @param body the payload of the PUT request
+     * @return the response to the PUT request
+     */
+    public Response executePut(String url, String body) {
+        return executeHttpMethod(url, body, Collections.emptyMap(), "PUT");
+    }
+
+    /**
+     * Execute a POST request on the given URL.
+     *
+     * @param url the HTTP endpoint
+     * @param body the payload of the POST request
+     * @param headers a map that stores the POST request headers
+     * @return the response to the POST request
+     */
+    public Response executePost(String url, String body, Map<String, String> headers) {
+        return executeHttpMethod(url, body, headers, "POST");
+    }
+
+    /**
+     * Execute a DELETE request on the given URL.
+     *
+     * @param url the HTTP endpoint
+     * @return the response to the DELETE request
+     */
+    public Response executeDelete(String url) {
+        return executeHttpMethod(url, null, Collections.emptyMap(), "DELETE");
+    }
+
+    /**
+     * A general method that executes an HTTP request on a given URL.
+     *
+     * @param url the HTTP endpoint
+     * @param body the payload of the request; null if there isn't one
+     * @param headers a map that stores the request headers; empty if there are no headers
+     * @param httpMethod the name of the HTTP method to execute
+     * @return the response to the HTTP request
+     */
+    protected Response executeHttpMethod(String url, String body, Map<String, String> headers,
+                                      String httpMethod) {
+        log.debug("Executing {} request to URL={}." + (body != null ? " Payload={}" : ""),
+                httpMethod , url, body);
+        try {
+            HttpURLConnection httpCon = (HttpURLConnection) new URL(url).openConnection();
+            httpCon.setDoOutput(true);
+            httpCon.setRequestMethod(httpMethod);
+            if (body != null) {
+                httpCon.setRequestProperty("Content-Type", "application/json");
+                headers.forEach(httpCon::setRequestProperty);
+                try (OutputStreamWriter out = new OutputStreamWriter(httpCon.getOutputStream())) {
+                    out.write(body);
+                }
             }
-            log.debug("GET response for URL={} is {}", url, response);
-            return response.toString();
+            try (InputStream is = httpCon.getResponseCode() < HttpURLConnection.HTTP_BAD_REQUEST
+                                  ? httpCon.getInputStream()
+                                  : httpCon.getErrorStream()
+            ){
+                String responseEntity = responseToString(is);
+                log.info("{} response for URL={} is {}",
+                        httpMethod, url, responseEntity.isEmpty() ? "empty" : responseEntity);
+                return Response.status(Response.Status.fromStatusCode(httpCon.getResponseCode()))
+                        .entity(responseEntity)
+                        .build();
+            }
         } catch (IOException e) {
-            Response.Status status = Response.Status.fromStatusCode(httpCon.getResponseCode());
-            if (status != null) {
-                throw new ConnectRestException(status, "Invalid endpoint: " + url, e);
-            }
-            // invalid response code, re-throw the IOException.
-            throw e;
+            log.error("Could not execute " + httpMethod + " request to " + url, e);
+            throw new ConnectException(e);
         }
     }
 
-    public int executeDelete(String url) throws IOException {
-        log.debug("Executing DELETE request to URL={}", url);
-        HttpURLConnection httpCon = (HttpURLConnection) new URL(url).openConnection();
-        httpCon.setDoOutput(true);
-        httpCon.setRequestMethod("DELETE");
-        httpCon.connect();
-        return httpCon.getResponseCode();
+    private String responseToString(Response response) {
+        return response == null ? "empty" : (String) response.getEntity();
     }
 
     private String responseToString(InputStream stream) throws IOException {

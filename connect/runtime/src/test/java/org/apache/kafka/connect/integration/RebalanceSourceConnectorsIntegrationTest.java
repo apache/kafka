@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.connect.integration;
 
-import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.runtime.AbstractStatus;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
 import org.apache.kafka.connect.storage.StringConverter;
@@ -209,14 +208,7 @@ public class RebalanceSourceConnectorsIntegrationTest {
                 WORKER_SETUP_DURATION_MS, "Connect workers did not start in time.");
 
         // start a source connector
-        IntStream.range(0, 4).forEachOrdered(
-            i -> {
-                try {
-                    connect.configureConnector(CONNECTOR_NAME + i, props);
-                } catch (IOException e) {
-                    throw new ConnectException(e);
-                }
-            });
+        IntStream.range(0, 4).forEachOrdered(i -> connect.configureConnector(CONNECTOR_NAME + i, props));
 
         waitForCondition(() -> this.assertConnectorAndTasksRunning(CONNECTOR_NAME + 3, NUM_TASKS).orElse(true),
                 CONNECTOR_SETUP_DURATION_MS, "Connector tasks did not start in time.");
@@ -250,14 +242,7 @@ public class RebalanceSourceConnectorsIntegrationTest {
                 WORKER_SETUP_DURATION_MS, "Connect workers did not start in time.");
 
         // start a source connector
-        IntStream.range(0, 4).forEachOrdered(
-            i -> {
-                try {
-                    connect.configureConnector(CONNECTOR_NAME + i, props);
-                } catch (IOException e) {
-                    throw new ConnectException(e);
-                }
-            });
+        IntStream.range(0, 4).forEachOrdered(i -> connect.configureConnector(CONNECTOR_NAME + i, props));
 
         waitForCondition(() -> this.assertConnectorAndTasksRunning(CONNECTOR_NAME + 3, NUM_TASKS).orElse(false),
                 CONNECTOR_SETUP_DURATION_MS, "Connector tasks did not start in time.");
@@ -293,14 +278,7 @@ public class RebalanceSourceConnectorsIntegrationTest {
                 WORKER_SETUP_DURATION_MS, "Connect workers did not start in time.");
 
         // start a source connector
-        IntStream.range(0, 4).forEachOrdered(
-            i -> {
-                try {
-                    connect.configureConnector(CONNECTOR_NAME + i, props);
-                } catch (IOException e) {
-                    throw new ConnectException(e);
-                }
-            });
+        IntStream.range(0, 4).forEachOrdered(i -> connect.configureConnector(CONNECTOR_NAME + i, props));
 
         waitForCondition(() -> this.assertConnectorAndTasksRunning(CONNECTOR_NAME + 3, NUM_TASKS).orElse(false),
                 CONNECTOR_SETUP_DURATION_MS, "Connector tasks did not start in time.");
