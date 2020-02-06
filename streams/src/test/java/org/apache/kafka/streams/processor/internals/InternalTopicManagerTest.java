@@ -144,7 +144,7 @@ public class InternalTopicManagerTest {
     }
 
     @Test
-    public void shouldRetryValidatingTopics() {
+    public void shouldCompleteTopicValidationOnRetry() {
         final AdminClient admin = EasyMock.createNiceMock(AdminClient.class);
         final InternalTopicManager topicManager = new InternalTopicManager(admin, new StreamsConfig(config));
         final TopicPartitionInfo partitionInfo = new TopicPartitionInfo(0, broker1,

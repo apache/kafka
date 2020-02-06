@@ -218,7 +218,7 @@ public class InternalTopicManager {
      */
     private Set<String> validateTopics(final Set<String> topicsToValidate, final Map<String, InternalTopicConfig> topicsMap) {
         if (!topicsMap.keySet().containsAll(topicsToValidate)) {
-            throw new IllegalStateException("The topics map " + topicsMap + " does not contain all the topics " +
+            throw new IllegalStateException("The topics map " + topicsMap.keySet() + " does not contain all the topics " +
                 topicsToValidate + " trying to validate.");
         }
 
