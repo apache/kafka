@@ -117,7 +117,7 @@ class GroupModeTransactionsTest(Test):
                    err_msg="Message copier failed to start after 10 s")
         return message_copier
 
-    def bounce_copiers(self, copiers, clean_shutdown, timeout_sec=60):
+    def bounce_copiers(self, copiers, clean_shutdown, timeout_sec=240):
         for _ in range(3):
             for copier in copiers:
                 wait_until(lambda: copier.progress_percent() >= 20.0,
@@ -223,7 +223,7 @@ class GroupModeTransactionsTest(Test):
         elif bounce_target == "clients":
             self.bounce_copiers(copiers, clean_shutdown)
 
-        copier_timeout_sec = 120
+        copier_timeout_sec = 240
         for copier in copiers:
             wait_until(lambda: copier.is_done,
                        timeout_sec=copier_timeout_sec,

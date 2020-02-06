@@ -263,7 +263,7 @@ public class TransactionalMessageCopier {
         Map<String, Object> statusData = new HashMap<>();
         statusData.put("progress", transactionalId);
         statusData.put("totalProcessed", totalProcessed);
-        statusData.put("consumedSinceLastRebalanced", consumedSinceLastRebalanced);
+        statusData.put("consumed", consumedSinceLastRebalanced);
         statusData.put("remaining", remaining);
         statusData.put("time", FORMAT.format(new Date()));
         statusData.put("stage", stage);
@@ -274,7 +274,7 @@ public class TransactionalMessageCopier {
         Map<String, Object> shutdownData = new HashMap<>();
         shutdownData.put("shutdown_complete", transactionalId);
         shutdownData.put("totalProcessed", totalProcessed);
-        shutdownData.put("consumedSinceLastRebalanced", consumedSinceLastRebalanced);
+        shutdownData.put("consumed", consumedSinceLastRebalanced);
         shutdownData.put("remaining", remaining);
         shutdownData.put("time", FORMAT.format(new Date()));
         return toJsonString(shutdownData);
