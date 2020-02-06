@@ -882,7 +882,7 @@ public class KafkaAdminClient extends AdminClient {
                 Call call = iter.next();
                 int remainingMs = calcTimeoutMsRemainingAsInt(now, call.deadlineMs);
                 if (remainingMs < 0) {
-                    call.fail(now, new TimeoutException(msg));
+                    call.fail(now, new TimeoutException(msg + " Call: " + call.callName));
                     iter.remove();
                     numTimedOut++;
                 } else {
