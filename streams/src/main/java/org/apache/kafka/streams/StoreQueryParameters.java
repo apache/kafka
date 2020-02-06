@@ -21,45 +21,45 @@ import org.apache.kafka.streams.state.QueryableStoreType;
 import java.util.Objects;
 
 /**
- * {@code StoreQueryParams} allows you to pass a variety of parameters when fetching a store for interactive query.
+ * {@code StoreQueryParameters} allows you to pass a variety of parameters when fetching a store for interactive query.
  */
-public class StoreQueryParams<T> {
+public class StoreQueryParameters<T> {
 
     private Integer partition;
     private boolean staleStores;
     private final String storeName;
     private final QueryableStoreType<T> queryableStoreType;
 
-    private StoreQueryParams(final String storeName, final QueryableStoreType<T>  queryableStoreType, final Integer partition, final boolean staleStores) {
+    private StoreQueryParameters(final String storeName, final QueryableStoreType<T>  queryableStoreType, final Integer partition, final boolean staleStores) {
         this.storeName = storeName;
         this.queryableStoreType = queryableStoreType;
         this.partition = partition;
         this.staleStores = staleStores;
     }
 
-    public static <T> StoreQueryParams<T> fromNameAndType(final String storeName,
+    public static <T> StoreQueryParameters<T> fromNameAndType(final String storeName,
                                                           final QueryableStoreType<T>  queryableStoreType) {
-        return new StoreQueryParams<T>(storeName, queryableStoreType, null, false);
+        return new StoreQueryParameters<T>(storeName, queryableStoreType, null, false);
     }
 
     /**
      * Set a specific partition that should be queried exclusively.
      *
-     * @param partition   The specific integer partition to be fetched from the stores list by using {@link StoreQueryParams}.
+     * @param partition   The specific integer partition to be fetched from the stores list by using {@link StoreQueryParameters}.
      *
-     * @return StoreQueryParams a new {@code StoreQueryParams} instance configured with the specified partition
+     * @return StoreQueryParameters a new {@code StoreQueryParameters} instance configured with the specified partition
      */
-    public StoreQueryParams<T> withPartition(final Integer partition) {
-        return new StoreQueryParams<T>(this.storeName(), this.queryableStoreType(), partition, this.staleStores);
+    public StoreQueryParameters<T> withPartition(final Integer partition) {
+        return new StoreQueryParameters<T>(storeName, queryableStoreType, partition, staleStores);
     }
 
     /**
      * Enable querying of stale state stores, i.e., allow to query active tasks during restore as well as standby tasks.
      *
-     * @return StoreQueryParams a new {@code StoreQueryParams} instance configured with serving from stale stores enabled
+     * @return StoreQueryParameters a new {@code StoreQueryParameters} instance configured with serving from stale stores enabled
      */
-    public StoreQueryParams<T> enableStaleStores() {
-        return new StoreQueryParams<T>(this.storeName(), this.queryableStoreType(), this.partition, true);
+    public StoreQueryParameters<T> enableStaleStores() {
+        return new StoreQueryParameters<T>(storeName, queryableStoreType, partition, true);
     }
 
     /**
@@ -102,19 +102,19 @@ public class StoreQueryParams<T> {
 
     @Override
     public boolean equals(final Object obj) {
-        if (!(obj instanceof StoreQueryParams)) {
+        if (!(obj instanceof StoreQueryParameters)) {
             return false;
         }
-        final StoreQueryParams storeQueryParams = (StoreQueryParams) obj;
-        return Objects.equals(storeQueryParams.partition, partition)
-                && Objects.equals(storeQueryParams.staleStores, staleStores)
-                && Objects.equals(storeQueryParams.storeName, storeName)
-                && Objects.equals(storeQueryParams.queryableStoreType, queryableStoreType);
+        final StoreQueryParameters storeQueryParameters = (StoreQueryParameters) obj;
+        return Objects.equals(storeQueryParameters.partition, partition)
+                && Objects.equals(storeQueryParameters.staleStores, staleStores)
+                && Objects.equals(storeQueryParameters.storeName, storeName)
+                && Objects.equals(storeQueryParameters.queryableStoreType, queryableStoreType);
     }
 
     @Override
     public String toString() {
-        return "StoreQueryParams {" +
+        return "StoreQueryParameters {" +
                 "partition=" + partition +
                 ", staleStores=" + staleStores +
                 ", storeName=" + storeName +

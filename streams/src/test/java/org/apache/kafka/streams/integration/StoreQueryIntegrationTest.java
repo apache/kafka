@@ -24,10 +24,10 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyQueryMetadata;
-import org.apache.kafka.streams.StoreQueryParams;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.StoreQueryParameters;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.Consumed;
@@ -116,10 +116,10 @@ public class StoreQueryIntegrationTest {
 
         final QueryableStoreType<ReadOnlyKeyValueStore<Integer, Integer>> queryableStoreType = QueryableStoreTypes.keyValueStore();
         final ReadOnlyKeyValueStore<Integer, Integer> store1 = kafkaStreams1
-                .store(StoreQueryParams.fromNameAndType(TABLE_NAME, queryableStoreType));
+                .store(StoreQueryParameters.fromNameAndType(TABLE_NAME, queryableStoreType));
 
         final ReadOnlyKeyValueStore<Integer, Integer> store2 = kafkaStreams2
-                .store(StoreQueryParams.fromNameAndType(TABLE_NAME, queryableStoreType));
+                .store(StoreQueryParameters.fromNameAndType(TABLE_NAME, queryableStoreType));
 
         final boolean kafkaStreams1IsActive;
         if ((keyQueryMetadata.getActiveHost().port() % 2) == 1) {
@@ -175,10 +175,10 @@ public class StoreQueryIntegrationTest {
         ReadOnlyKeyValueStore<Integer, Integer> store2 = null;
         if (kafkaStreams1IsActive) {
             store1 = kafkaStreams1
-                    .store(StoreQueryParams.fromNameAndType(TABLE_NAME, queryableStoreType).withPartition(keyPartition));
+                    .store(StoreQueryParameters.fromNameAndType(TABLE_NAME, queryableStoreType).withPartition(keyPartition));
         } else {
             store2 = kafkaStreams2
-                    .store(StoreQueryParams.fromNameAndType(TABLE_NAME, queryableStoreType).withPartition(keyPartition));
+                    .store(StoreQueryParameters.fromNameAndType(TABLE_NAME, queryableStoreType).withPartition(keyPartition));
         }
 
         if (kafkaStreams1IsActive) {
@@ -196,10 +196,10 @@ public class StoreQueryIntegrationTest {
         ReadOnlyKeyValueStore<Integer, Integer> store4 = null;
         if (!kafkaStreams1IsActive) {
             store3 = kafkaStreams1
-                    .store(StoreQueryParams.fromNameAndType(TABLE_NAME, queryableStoreType).withPartition(keyDontBelongPartition));
+                    .store(StoreQueryParameters.fromNameAndType(TABLE_NAME, queryableStoreType).withPartition(keyDontBelongPartition));
         } else {
             store4 = kafkaStreams2
-                    .store(StoreQueryParams.fromNameAndType(TABLE_NAME, queryableStoreType).withPartition(keyDontBelongPartition));
+                    .store(StoreQueryParameters.fromNameAndType(TABLE_NAME, queryableStoreType).withPartition(keyDontBelongPartition));
         }
 
         // Assert that key is not served when wrong specific partition is requested
@@ -234,10 +234,10 @@ public class StoreQueryIntegrationTest {
 
         final QueryableStoreType<ReadOnlyKeyValueStore<Integer, Integer>> queryableStoreType = QueryableStoreTypes.keyValueStore();
         final ReadOnlyKeyValueStore<Integer, Integer> store1 = kafkaStreams1
-                .store(StoreQueryParams.fromNameAndType(TABLE_NAME, queryableStoreType).enableStaleStores());
+                .store(StoreQueryParameters.fromNameAndType(TABLE_NAME, queryableStoreType).enableStaleStores());
 
         final ReadOnlyKeyValueStore<Integer, Integer> store2 = kafkaStreams2
-                .store(StoreQueryParams.fromNameAndType(TABLE_NAME, queryableStoreType).enableStaleStores());
+                .store(StoreQueryParameters.fromNameAndType(TABLE_NAME, queryableStoreType).enableStaleStores());
 
         // Assert that both active and standby are able to query for a key
         TestUtils.retryOnExceptionWithTimeout(100, 60 * 1000, () -> {
@@ -282,10 +282,10 @@ public class StoreQueryIntegrationTest {
         final int keyDontBelongPartition = (keyPartition == 0) ? 1 : 0;
         final QueryableStoreType<ReadOnlyKeyValueStore<Integer, Integer>> queryableStoreType = QueryableStoreTypes.keyValueStore();
         final ReadOnlyKeyValueStore<Integer, Integer> store1 = kafkaStreams1
-                .store(StoreQueryParams.fromNameAndType(TABLE_NAME, queryableStoreType).enableStaleStores().withPartition(keyPartition));
+                .store(StoreQueryParameters.fromNameAndType(TABLE_NAME, queryableStoreType).enableStaleStores().withPartition(keyPartition));
 
         final ReadOnlyKeyValueStore<Integer, Integer> store2 = kafkaStreams2
-                .store(StoreQueryParams.fromNameAndType(TABLE_NAME, queryableStoreType).enableStaleStores().withPartition(keyPartition));
+                .store(StoreQueryParameters.fromNameAndType(TABLE_NAME, queryableStoreType).enableStaleStores().withPartition(keyPartition));
 
         // Assert that both active and standby are able to query for a key
         assertThat(store1.get(key), is(notNullValue()));
@@ -293,10 +293,10 @@ public class StoreQueryIntegrationTest {
 
 
         final ReadOnlyKeyValueStore<Integer, Integer> store3 = kafkaStreams1
-                .store(StoreQueryParams.fromNameAndType(TABLE_NAME, queryableStoreType).enableStaleStores().withPartition(keyDontBelongPartition));
+                .store(StoreQueryParameters.fromNameAndType(TABLE_NAME, queryableStoreType).enableStaleStores().withPartition(keyDontBelongPartition));
 
         final ReadOnlyKeyValueStore<Integer, Integer> store4 = kafkaStreams2
-                .store(StoreQueryParams.fromNameAndType(TABLE_NAME, queryableStoreType).enableStaleStores().withPartition(keyDontBelongPartition));
+                .store(StoreQueryParameters.fromNameAndType(TABLE_NAME, queryableStoreType).enableStaleStores().withPartition(keyDontBelongPartition));
 
         // Assert that
         assertThat(store3.get(key), is(nullValue()));
