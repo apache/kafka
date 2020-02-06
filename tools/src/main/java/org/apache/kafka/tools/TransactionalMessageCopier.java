@@ -379,7 +379,10 @@ public class TransactionalMessageCopier {
                         throw new KafkaException("Aborting transaction");
                     } else {
                         producer.commitTransaction();
-                        remainingMessages.getAndAdd(-messagesSentWithinCurrentTxn);
+                        // Remaining messages set to 0 means we do not have any further work to be done.
+                        if (remainingMessages.get() != 0L) {
+                            remainingMessages.getAndAdd(-messagesSentWithinCurrentTxn);
+                        }
                         numMessagesProcessedSinceLastRebalance.getAndAdd(messagesSentWithinCurrentTxn);
                         totalMessageProcessed.getAndAdd(messagesSentWithinCurrentTxn);
                     }
