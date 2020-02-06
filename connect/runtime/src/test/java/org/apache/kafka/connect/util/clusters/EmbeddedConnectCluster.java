@@ -322,7 +322,7 @@ public class EmbeddedConnectCluster {
      * Get the status for a connector running in this cluster.
      *
      * @param connectorName name of the connector
-     * @return an instance of {@link ConnectorStateInfo} populated with state informaton of the connector and it's tasks.
+     * @return an instance of {@link ConnectorStateInfo} populated with state information of the connector and its tasks.
      * @throws ConnectRestException if the HTTP request to the REST API failed with a valid status code.
      * @throws ConnectException for any other error.
      */
