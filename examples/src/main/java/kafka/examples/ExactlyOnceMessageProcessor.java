@@ -20,14 +20,23 @@ import org.apache.kafka.clients.consumer.CommitFailedException;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
+import org.apache.kafka.clients.consumer.InvalidOffsetException;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.AuthenticationException;
+import org.apache.kafka.common.errors.AuthorizationException;
 import org.apache.kafka.common.errors.FencedInstanceIdException;
+import org.apache.kafka.common.errors.InterruptException;
+import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.ProducerFencedException;
+import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.errors.UnsupportedForMessageFormatException;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
+import org.apache.kafka.common.errors.WakeupException;
 
 import java.time.Duration;
 import java.util.ArrayList;
@@ -125,14 +134,14 @@ public class ExactlyOnceMessageProcessor extends Thread {
 
         int messageProcessed = 0;
         while (messageRemaining.get() > 0) {
-            ConsumerRecords<Integer, String> records = consumer.poll(Duration.ofMillis(200));
-            if (records.count() > 0) {
-                try {
-                    messageProcessed = processMessages(messageProcessed, records);
-                } catch (ProducerFencedException | FencedInstanceIdException e) {
-                    // Normally fenced exceptions are fatal, we catch them here just for demo purpose.
-                    throw new KafkaException("Encountered fatal error during processing: " + e.getMessage());
-                }
+            try {
+                messageProcessed += processMessages();
+            } catch (ProducerFencedException | FencedInstanceIdException | AuthorizationException |
+                         AuthenticationException | UnsupportedVersionException |
+                         UnsupportedForMessageFormatException | InvalidTopicException |
+                         InvalidOffsetException e) {
+                // Normally fenced exceptions are fatal, we catch them here just for demo purpose.
+                throw new KafkaException("Encountered fatal error during processing: " + e.getMessage());
             }
             messageRemaining.set(messagesRemaining(consumer));
             printWithTxnId("Message remaining: " + messageRemaining);
@@ -142,38 +151,41 @@ public class ExactlyOnceMessageProcessor extends Thread {
         latch.countDown();
     }
 
-    private int processMessages(int messageProcessed, ConsumerRecords<Integer, String> records)
+    private int processMessages()
         throws ProducerFencedException, FencedInstanceIdException {
         try {
-            // Begin a new transaction session.
-            producer.beginTransaction();
-            for (ConsumerRecord<Integer, String> record : records) {
-                // Process the record and send to downstream.
-                ProducerRecord<Integer, String> customizedRecord = transform(record);
-                producer.send(customizedRecord);
-            }
-            Map<TopicPartition, OffsetAndMetadata> positions = new HashMap<>();
-            for (TopicPartition topicPartition : consumer.assignment()) {
-                positions.put(topicPartition, new OffsetAndMetadata(consumer.position(topicPartition), null));
-            }
-            // Checkpoint the progress by sending offsets to group coordinator broker.
-            // Under group mode, we must apply consumer group metadata for proper fencing.
-            if (this.mode.equals("groupMode")) {
-                producer.sendOffsetsToTransaction(positions, consumer.groupMetadata());
-            } else {
-                producer.sendOffsetsToTransaction(positions, consumerGroupId);
-            }
+            ConsumerRecords<Integer, String> records = consumer.poll(Duration.ofMillis(200));
+            if (records.count() > 0) {
+                // Begin a new transaction session.
+                producer.beginTransaction();
+                for (ConsumerRecord<Integer, String> record : records) {
+                    // Process the record and send to downstream.
+                    ProducerRecord<Integer, String> customizedRecord = transform(record);
+                    producer.send(customizedRecord);
+                }
+                Map<TopicPartition, OffsetAndMetadata> positions = new HashMap<>();
+                for (TopicPartition topicPartition : consumer.assignment()) {
+                    positions.put(topicPartition, new OffsetAndMetadata(consumer.position(topicPartition), null));
+                }
+                // Checkpoint the progress by sending offsets to group coordinator broker.
+                // Under group mode, we must apply consumer group metadata for proper fencing.
+                if (this.mode.equals("groupMode")) {
+                    producer.sendOffsetsToTransaction(positions, consumer.groupMetadata());
+                } else {
+                    producer.sendOffsetsToTransaction(positions, consumerGroupId);
+                }
 
-            // Finish the transaction. All sent records should be visible for consumption now.
-            producer.commitTransaction();
-            messageProcessed += records.count();
-        } catch (CommitFailedException e) {
+                // Finish the transaction. All sent records should be visible for consumption now.
+                producer.commitTransaction();
+                return records.count();
+            }
+        } catch (CommitFailedException | WakeupException | InterruptException | TimeoutException e) {
             // In case of a retriable exception, suggest aborting the ongoing transaction for correctness.
             producer.abortTransaction();
             // The consumer fetch position also needs to be reset.
             resetToLastCommittedPositions(consumer);
         }
-        return messageProcessed;
+        return 0;
     }
 
     private void printWithTxnId(final String message) {
