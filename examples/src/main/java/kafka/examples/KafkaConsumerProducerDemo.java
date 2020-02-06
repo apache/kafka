@@ -16,12 +16,13 @@
  */
 package kafka.examples;
 
+import org.apache.kafka.common.errors.TimeoutException;
+
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 
 public class KafkaConsumerProducerDemo {
-    public static void main(String[] args) throws InterruptedException, TimeoutException {
+    public static void main(String[] args) throws InterruptedException {
         boolean isAsync = args.length == 0 || !args[0].trim().equalsIgnoreCase("sync");
         CountDownLatch latch = new CountDownLatch(2);
         Producer producerThread = new Producer(KafkaProperties.TOPIC, isAsync, null, false, 10000, latch);
