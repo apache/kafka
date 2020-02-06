@@ -27,25 +27,25 @@ import static org.hamcrest.Matchers.notNullValue;
 import static org.hamcrest.Matchers.nullValue;
 
 public class ValueAndTimestampSerializerTest {
-    private static final String topic = "some-topic";
-    private static final long timestamp = 23;
+    private static final String TOPIC = "some-topic";
+    private static final long TIMESTAMP = 23;
 
-    private static final ValueAndTimestampSerde<String> stringSerde =
+    private static final ValueAndTimestampSerde<String> STRING_SERDE =
             new ValueAndTimestampSerde<>(Serdes.String());
 
     @Test
     public void shouldSerializeNonNullDataUsingTheInternalSerializer() {
         final String value = "some-string";
 
-        final ValueAndTimestamp<String> valueAndTimestamp = ValueAndTimestamp.make(value, timestamp);
+        final ValueAndTimestamp<String> valueAndTimestamp = ValueAndTimestamp.make(value, TIMESTAMP);
 
         final byte[] serialized =
-                stringSerde.serializer().serialize(topic, valueAndTimestamp);
+                STRING_SERDE.serializer().serialize(TOPIC, valueAndTimestamp);
 
         assertThat(serialized, is(notNullValue()));
 
         final ValueAndTimestamp<String> deserialized =
-                stringSerde.deserializer().deserialize(topic, serialized);
+                STRING_SERDE.deserializer().deserialize(TOPIC, serialized);
 
         assertThat(deserialized, is(valueAndTimestamp));
     }
@@ -53,7 +53,7 @@ public class ValueAndTimestampSerializerTest {
     @Test
     public void shouldSerializeNullDataAsNull() {
         final byte[] serialized =
-                stringSerde.serializer().serialize(topic, ValueAndTimestamp.make(null, timestamp));
+                STRING_SERDE.serializer().serialize(TOPIC, ValueAndTimestamp.make(null, TIMESTAMP));
 
         assertThat(serialized, is(nullValue()));
     }
@@ -67,7 +67,7 @@ public class ValueAndTimestampSerializerTest {
         final ValueAndTimestampSerializer<String> serializer =
                 new ValueAndTimestampSerializer<>(alwaysNullSerializer);
 
-        final byte[] serialized = serializer.serialize(topic, "non-null-data", timestamp);
+        final byte[] serialized = serializer.serialize(TOPIC, "non-null-data", TIMESTAMP);
 
         assertThat(serialized, is(nullValue()));
     }

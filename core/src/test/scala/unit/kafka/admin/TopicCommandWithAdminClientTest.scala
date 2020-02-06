@@ -584,7 +584,7 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
               testPartitionMetadata match {
                 case None => fail(s"Partition metadata is not found in metadata cache")
                 case Some(metadata) => {
-                  result && metadata.error() == Errors.LEADER_NOT_AVAILABLE
+                  result && metadata.error == Errors.LEADER_NOT_AVAILABLE
                 }
               }
             }

@@ -83,8 +83,8 @@ public final class MetadataOperationContext<T, O extends AbstractOptions<O>> {
     public static void handleMetadataErrors(MetadataResponse response) {
         for (TopicMetadata tm : response.topicMetadata()) {
             for (PartitionMetadata pm : tm.partitionMetadata()) {
-                if (shouldRefreshMetadata(pm.error())) {
-                    throw pm.error().exception();
+                if (shouldRefreshMetadata(pm.error)) {
+                    throw pm.error.exception();
                 }
             }
         }

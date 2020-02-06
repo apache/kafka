@@ -1604,7 +1604,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             SubscriptionState.FetchPosition newPosition = new SubscriptionState.FetchPosition(
                     offset,
                     Optional.empty(), // This will ensure we skip validation
-                    this.metadata.leaderAndEpoch(partition));
+                    this.metadata.currentLeader(partition));
             this.subscriptions.seekUnvalidated(partition, newPosition);
         } finally {
             release();
@@ -1635,7 +1635,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             } else {
                 log.info("Seeking to offset {} for partition {}", offset, partition);
             }
-            Metadata.LeaderAndEpoch currentLeaderAndEpoch = this.metadata.leaderAndEpoch(partition);
+            Metadata.LeaderAndEpoch currentLeaderAndEpoch = this.metadata.currentLeader(partition);
             SubscriptionState.FetchPosition newPosition = new SubscriptionState.FetchPosition(
                     offsetAndMetadata.offset(),
                     offsetAndMetadata.leaderEpoch(),
