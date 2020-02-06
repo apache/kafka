@@ -317,7 +317,7 @@ public class RecordQueueTest {
             "headers = RecordHeaders(headers = [], isReadOnly = false), key = 1, value = 10) has invalid (negative) " +
             "timestamp. Possibly because a pre-0.10 producer client was used to write this record to Kafka without " +
             "embedding a timestamp, or because the input topic was created before upgrading the Kafka cluster to 0.10+. " +
-            "xUse a different TimestampExtractor to process this data."));
+            "Use a different TimestampExtractor to process this data."));
     }
 
     @Test
