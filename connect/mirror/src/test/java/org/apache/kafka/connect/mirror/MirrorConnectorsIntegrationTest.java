@@ -65,7 +65,6 @@ public class MirrorConnectorsIntegrationTest {
     private static final int NUM_PARTITIONS = 10;
     private static final int RECORD_TRANSFER_DURATION_MS = 10_000;
     private static final int CHECKPOINT_DURATION_MS = 20_000;
-    private static final int MIN_TASKS = 1;
 
     private MirrorMakerConfig mm2Config; 
     private EmbeddedConnectCluster primary;
@@ -191,21 +190,20 @@ public class MirrorConnectorsIntegrationTest {
         Set<String> connNames) throws InterruptedException {
         for (String connector : connNames) {
             TestUtils.waitForCondition(() -> areConnectorAndTasksRunning(connectCluster,
-                connector, MIN_TASKS), "Timed out trying to verify connector " +
+                connector), "Timed out trying to verify connector " +
                 connector + " was up!" );
         }
-
     }
 
     private boolean areConnectorAndTasksRunning(EmbeddedConnectCluster connectCluster,
-        String connectorName, int numTasks) {
+        String connectorName) {
         try {
             ConnectorStateInfo info = connectCluster.connectorStatus(connectorName);
             boolean result = info != null
-                && info.tasks().size() >= numTasks
+                && !info.tasks().isEmpty()
                 && info.connector().state().equals(AbstractStatus.State.RUNNING.toString())
                 && info.tasks().stream().allMatch(s -> s.state().equals(AbstractStatus.State.RUNNING.toString()));
-            log.info("Found connector and tasks running: {}", result);
+            log.debug("Found connector and tasks running: {}", result);
             return result;
         } catch (Exception e) {
             log.error("Could not check connector state info.", e);
