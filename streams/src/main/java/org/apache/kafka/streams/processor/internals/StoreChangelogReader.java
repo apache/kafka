@@ -258,6 +258,8 @@ public class StoreChangelogReader implements ChangelogReader {
                 // if we cannot get the position of the consumer within timeout, just return false
                 return false;
             } catch (final KafkaException e) {
+                // this also includes InvalidOffsetException, which should not happen under normal
+                // execution, hence it is also okay to wrap it as fatal StreamsException
                 throw new StreamsException("Restore consumer get unexpected error trying to get the position " +
                     " of " + partition, e);
             }
@@ -755,6 +757,8 @@ public class StoreChangelogReader implements ChangelogReader {
                 } catch (final TimeoutException e) {
                     // if we cannot find the starting position at the beginning, just use the default 0L
                 } catch (final KafkaException e) {
+                    // this also includes InvalidOffsetException, which should not happen under normal
+                    // execution, hence it is also okay to wrap it as fatal StreamsException
                     throw new StreamsException("Restore consumer get unexpected error trying to get the position " +
                         " of " + partition, e);
                 }
