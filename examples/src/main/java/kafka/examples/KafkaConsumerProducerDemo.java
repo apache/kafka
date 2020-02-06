@@ -16,14 +16,20 @@
  */
 package kafka.examples;
 
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+
 public class KafkaConsumerProducerDemo {
-    public static void main(String[] args) {
+    public static void main(String[] args) throws InterruptedException {
         boolean isAsync = args.length == 0 || !args[0].trim().equalsIgnoreCase("sync");
-        Producer producerThread = new Producer(KafkaProperties.TOPIC, isAsync);
+        CountDownLatch latch = new CountDownLatch(2);
+        Producer producerThread = new Producer(KafkaProperties.TOPIC, isAsync, null, false, 10000, latch);
         producerThread.start();
 
-        Consumer consumerThread = new Consumer(KafkaProperties.TOPIC);
+        Consumer consumerThread = new Consumer(KafkaProperties.TOPIC, "DemoConsumer", false, 10000, latch);
         consumerThread.start();
-
+        latch.await(5, TimeUnit.MINUTES);
+        consumerThread.shutdown();
+        System.out.println("All finished!");
     }
 }
