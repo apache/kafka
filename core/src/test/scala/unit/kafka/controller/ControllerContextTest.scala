@@ -18,6 +18,7 @@
 package unit.kafka.controller
 
 import kafka.cluster.{Broker, EndPoint}
+import kafka.controller.PartitionAndReplica
 import kafka.controller.{ControllerContext, ReplicaAssignment}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.network.ListenerName
@@ -50,15 +51,36 @@ class ControllerContextTest {
 
     // Simple round-robin replica assignment
     var leaderIndex = 0
-    Seq(tp1, tp2, tp3).foreach {
-      partition =>
-        val replicas = brokers.indices.map { i =>
-          val replica = brokers((i + leaderIndex) % brokers.size)
-          replica
-        }
-        context.updatePartitionFullReplicaAssignment(partition, ReplicaAssignment(replicas))
-        leaderIndex += 1
+    Seq(tp1, tp2, tp3).foreach { partition =>
+      val replicas = brokers.indices.map { i =>
+        brokers((i + leaderIndex) % brokers.size)
+      }
+      context.updatePartitionFullReplicaAssignment(partition, ReplicaAssignment(replicas))
+      leaderIndex += 1
     }
+  }
+
+  @Test
+  def testLiveReplicasForTopic(): Unit = {
+    assertEquals(Set(
+      PartitionAndReplica(tp1, 1),
+      PartitionAndReplica(tp1, 2),
+      PartitionAndReplica(tp1, 3),
+      PartitionAndReplica(tp2, 1),
+      PartitionAndReplica(tp2, 2),
+      PartitionAndReplica(tp2, 3)
+    ), context.liveReplicasForTopic(tp1.topic()))
+  }
+
+  @Test
+  def testLiveReplicasForTopicWithOfflineBroker(): Unit = {
+    context.removeLiveBrokers(Set(3))
+    assertEquals(Set(
+      PartitionAndReplica(tp1, 1),
+      PartitionAndReplica(tp1, 2),
+      PartitionAndReplica(tp2, 1),
+      PartitionAndReplica(tp2, 2)
+    ), context.liveReplicasForTopic(tp1.topic()))
   }
 
   @Test

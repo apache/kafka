@@ -221,7 +221,9 @@ class ControllerContext {
 
   def replicasForTopic(topic: String): Set[PartitionAndReplica] = {
     partitionAssignments.getOrElse(topic, mutable.Map.empty).flatMap {
-      case (partition, assignment) => assignment.replicas.map(r => PartitionAndReplica(new TopicPartition(topic, partition), r))
+      case (partition, assignment) => assignment.replicas.map { r =>
+        PartitionAndReplica(new TopicPartition(topic, partition), r)
+      }
     }.toSet
   }
 
@@ -231,8 +233,8 @@ class ControllerContext {
     }.toSet
   }
 
-  def allLiveReplicas(): Set[PartitionAndReplica] = {
-    replicasOnBrokers(liveBrokerIds).filter { partitionAndReplica =>
+  def liveReplicasForTopic(topic: String): Set[PartitionAndReplica] = {
+    replicasForTopic(topic).filter { partitionAndReplica =>
       isReplicaOnline(partitionAndReplica.replica, partitionAndReplica.topicPartition)
     }
   }
