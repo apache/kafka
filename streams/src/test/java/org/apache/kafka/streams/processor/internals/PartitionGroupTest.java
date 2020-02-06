@@ -50,7 +50,7 @@ public class PartitionGroupTest {
     private final Serializer<Integer> intSerializer = new IntegerSerializer();
     private final Deserializer<Integer> intDeserializer = new IntegerDeserializer();
     private final TimestampExtractor timestampExtractor = new MockTimestampExtractor();
-    private final TopicPartition unknownPartition = new TopicPartition("unknonw-partition", 0);
+    private final TopicPartition unknownPartition = new TopicPartition("unknown-partition", 0);
     private final String errMessage = "Partition " + unknownPartition + " not found.";
     private final String[] topics = {"topic"};
     private final TopicPartition partition1 = new TopicPartition(topics[0], 1);

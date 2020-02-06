@@ -215,7 +215,6 @@ public class EosIntegrationTest {
                 final Properties producerConfigs = new Properties();
                 if (inputTopicTransactional) {
                     producerConfigs.setProperty(ProducerConfig.TRANSACTIONAL_ID_CONFIG, applicationId + "-input-producer");
-                    producerConfigs.setProperty(ProducerConfig.RETRIES_CONFIG, "" + Integer.MAX_VALUE);
                 }
 
                 IntegrationTestUtils.produceKeyValuesSynchronously(
