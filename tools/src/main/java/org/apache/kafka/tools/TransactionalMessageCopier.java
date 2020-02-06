@@ -352,6 +352,7 @@ public class TransactionalMessageCopier {
                 try {
                     producer.beginTransaction();
                     Map<Integer, Integer> partitionCount = new HashMap<>();
+
                     while (messagesSentWithinCurrentTxn < messagesNeededForCurrentTxn) {
                         ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(200));
                         log.info("number of consumer records fetched: {}, with current sent txn data {}", records.count(), messagesSentWithinCurrentTxn);
@@ -379,10 +380,7 @@ public class TransactionalMessageCopier {
                         throw new KafkaException("Aborting transaction");
                     } else {
                         producer.commitTransaction();
-                        // Remaining messages set to 0 means we do not have any further work to be done.
-                        if (remainingMessages.get() != 0L) {
-                            remainingMessages.getAndAdd(-messagesSentWithinCurrentTxn);
-                        }
+                        remainingMessages.getAndAdd(-messagesSentWithinCurrentTxn);
                         numMessagesProcessedSinceLastRebalance.getAndAdd(messagesSentWithinCurrentTxn);
                         totalMessageProcessed.getAndAdd(messagesSentWithinCurrentTxn);
                     }
