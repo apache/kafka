@@ -1168,6 +1168,7 @@ class GroupCoordinator(val brokerId: Int,
           forceComplete()
         } else false
       } else {
+        info(s"try complete heartbeat for $memberId")
         if (shouldCompleteNonPendingHeartbeat(group, memberId, heartbeatDeadline)) {
           forceComplete()
         } else false
@@ -1196,6 +1197,7 @@ class GroupCoordinator(val brokerId: Int,
         debug(s"Member $memberId has already been removed from the group.")
       } else {
         val member = group.get(memberId)
+        info(s"on expire heartbeat for $member")
         if (!member.shouldKeepAlive(heartbeatDeadline)) {
           info(s"Member ${member.memberId} in group ${group.groupId} has failed, removing it from the group")
           removeMemberAndUpdateGroup(group, member, s"removing member ${member.memberId} on heartbeat expiration")
