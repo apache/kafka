@@ -30,11 +30,10 @@ import org.apache.kafka.streams.state.TimestampedWindowStore;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.Collection;
-import java.util.stream.Collectors;
 
 public class StreamThreadStateStoreProvider {
 
@@ -48,16 +47,16 @@ public class StreamThreadStateStoreProvider {
     }
 
     @SuppressWarnings("unchecked")
-    public <T> List<T> stores(final StoreQueryParameters storeQueryParameters) {
-        final String storeName = storeQueryParameters.storeName();
-        final QueryableStoreType<T> queryableStoreType = storeQueryParameters.queryableStoreType();
-        final TaskId keyTaskId = createKeyTaskId(storeName, storeQueryParameters.partition());
+    public <T> List<T> stores(final StoreQueryParameters storeQueryParams) {
+        final String storeName = storeQueryParams.storeName();
+        final QueryableStoreType<T> queryableStoreType = storeQueryParams.queryableStoreType();
+        final TaskId keyTaskId = createKeyTaskId(storeName, storeQueryParams.partition());
         if (streamThread.state() == StreamThread.State.DEAD) {
             return Collections.emptyList();
         }
         final StreamThread.State state = streamThread.state();
-        if (storeQueryParameters.staleStoresEnabled() ? state.isAlive() : state == StreamThread.State.RUNNING) {
-            final Map<TaskId, ? extends Task> tasks = storeQueryParameters.staleStoresEnabled() ? streamThread.allTasks() : streamThread.activeTasks();
+        if (storeQueryParams.staleStoresEnabled() ? state.isAlive() : state == StreamThread.State.RUNNING) {
+            final Map<TaskId, ? extends Task> tasks = storeQueryParams.staleStoresEnabled() ? streamThread.allTasks() : streamThread.activeTaskMap();
             final List<T> stores = new ArrayList<>();
             if (keyTaskId != null) {
                 final T store = validateAndListStores(tasks.get(keyTaskId).getStore(storeName), queryableStoreType, storeName, keyTaskId);
@@ -75,8 +74,8 @@ public class StreamThreadStateStoreProvider {
             return stores;
         } else {
             throw new InvalidStateStoreException("Cannot get state store " + storeName + " because the stream thread is " +
-                                                     state + ", not RUNNING" +
-                                                     (storeQueryParameters.staleStoresEnabled() ? " or REBALANCING" : ""));
+                                                    state + ", not RUNNING" +
+                                                    (storeQueryParams.staleStoresEnabled() ? " or REBALANCING" : ""));
         }
     }
 
@@ -105,15 +104,15 @@ public class StreamThreadStateStoreProvider {
         if (partition == null) {
             return null;
         }
-        final Collection<String> sourceTopics = internalTopologyBuilder.sourceTopicsForStore(storeName);
-        final Set<String> sourceTopicsSet = sourceTopics.stream().collect(Collectors.toSet());
+        final List<String> sourceTopics = internalTopologyBuilder.stateStoreNameToSourceTopics().get(storeName);
+        final Set<String> sourceTopicsSet = new HashSet<>(sourceTopics);
         final Map<Integer, InternalTopologyBuilder.TopicsInfo> topicGroups = internalTopologyBuilder.topicGroups();
         for (final Map.Entry<Integer, InternalTopologyBuilder.TopicsInfo> topicGroup : topicGroups.entrySet()) {
             if (topicGroup.getValue().sourceTopics.containsAll(sourceTopicsSet)) {
-                return new TaskId(topicGroup.getKey(), partition.intValue());
+                return new TaskId(topicGroup.getKey(), partition);
             }
         }
-        throw new InvalidStateStoreException("Cannot get state store " + storeName + " because the requested partition " + partition + "is " +
-                                                "not available on this instance");
+        throw new InvalidStateStoreException("Cannot get state store " + storeName + " because the requested partition " +
+            partition + " is not available on this instance");
     }
 }

@@ -24,6 +24,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import org.apache.kafka.common.acl.AccessControlEntry;
 import org.apache.kafka.common.acl.AclBinding;
@@ -105,9 +107,8 @@ public class DescribeAclsResponse extends AbstractResponse {
         }
     }
 
-    private static List<AclBinding> aclBindings(DescribeAclsResource resource) {
-        List<AclBinding> acls = new ArrayList<>();
-        for (AclDescription acl : resource.acls()) {
+    private static Stream<AclBinding> aclBindings(DescribeAclsResource resource) {
+        return resource.acls().stream().map(acl -> {
             ResourcePattern pattern = new ResourcePattern(
                     ResourceType.fromCode(resource.type()),
                     resource.name(),
@@ -117,26 +118,21 @@ public class DescribeAclsResponse extends AbstractResponse {
                     acl.host(),
                     AclOperation.fromCode(acl.operation()),
                     AclPermissionType.fromCode(acl.permissionType()));
-            acls.add(new AclBinding(pattern, entry));
-        }
-        return acls;
+            return new AclBinding(pattern, entry);
+        });
     }
 
     public static List<AclBinding> aclBindings(List<DescribeAclsResource> resources) {
-        List<AclBinding> acls = new ArrayList<>();
-        for (DescribeAclsResource resource : resources) {
-            acls.addAll(aclBindings(resource));
-        }
-        return acls;
+        return resources.stream().flatMap(DescribeAclsResponse::aclBindings).collect(Collectors.toList());
     }
 
-    public static DescribeAclsResponse prepareResponse(int throttleTimeMs, ApiError error, Collection<AclBinding> acls) {
-        Map<ResourcePattern, List<AccessControlEntry>> map = new HashMap<>();
+    public static List<DescribeAclsResource> aclsResources(Collection<AclBinding> acls) {
+        Map<ResourcePattern, List<AccessControlEntry>> patternToEntries = new HashMap<>();
         for (AclBinding acl : acls) {
-            map.computeIfAbsent(acl.pattern(), v -> new ArrayList<>()).add(acl.entry());
+            patternToEntries.computeIfAbsent(acl.pattern(), v -> new ArrayList<>()).add(acl.entry());
         }
-        List<DescribeAclsResource> resources = new ArrayList<>();
-        for (Entry<ResourcePattern, List<AccessControlEntry>> entry : map.entrySet()) {
+        List<DescribeAclsResource> resources = new ArrayList<>(patternToEntries.size());
+        for (Entry<ResourcePattern, List<AccessControlEntry>> entry : patternToEntries.entrySet()) {
             ResourcePattern key = entry.getKey();
             List<AclDescription> aclDescriptions = new ArrayList<>();
             for (AccessControlEntry ace : entry.getValue()) {
@@ -148,17 +144,12 @@ public class DescribeAclsResponse extends AbstractResponse {
                 aclDescriptions.add(ad);
             }
             DescribeAclsResource dar = new DescribeAclsResource()
-                    .setName(key.name())
-                    .setPatternType(key.patternType().code())
-                    .setType(key.resourceType().code())
-                    .setAcls(aclDescriptions);
+                .setName(key.name())
+                .setPatternType(key.patternType().code())
+                .setType(key.resourceType().code())
+                .setAcls(aclDescriptions);
             resources.add(dar);
         }
-        DescribeAclsResponseData data = new DescribeAclsResponseData()
-                .setThrottleTimeMs(throttleTimeMs)
-                .setErrorCode(error.error().code())
-                .setErrorMessage(error.message())
-                .setResources(resources);
-        return new DescribeAclsResponse(data);
+        return resources;
     }
 }

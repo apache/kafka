@@ -23,7 +23,6 @@ import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor;
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.RebalanceProtocol;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.common.Cluster;
-import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.utils.ByteBufferInputStream;
@@ -43,7 +42,6 @@ import org.apache.kafka.streams.processor.internals.assignment.AssignmentInfo;
 import org.apache.kafka.streams.processor.internals.assignment.AssignorError;
 import org.apache.kafka.streams.processor.internals.assignment.LegacySubscriptionInfoSerde;
 import org.apache.kafka.streams.processor.internals.assignment.SubscriptionInfo;
-import org.apache.kafka.streams.state.HostInfo;
 
 import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
@@ -149,7 +147,7 @@ public class StreamsUpgradeTest {
             // 3. Task ids of valid local states on the client's state directory.
             final TaskManager taskManager = taskManger();
 
-            final Set<TaskId> standbyTasks = taskManager.cachedTasksIds();
+            final Set<TaskId> standbyTasks = taskManager.tasksOnLocalStorage();
             final Set<TaskId> activeTasks = prepareForSubscription(taskManager,
                                                                    topics,
                                                                    standbyTasks,
@@ -213,24 +211,10 @@ public class StreamsUpgradeTest {
             final List<TopicPartition> partitions = new ArrayList<>(assignment.partitions());
             partitions.sort(PARTITION_COMPARATOR);
 
-            // version 1 field
-            final Map<TaskId, Set<TopicPartition>> activeTasks = new HashMap<>();
-            // version 2 fields
-            final Map<TopicPartition, PartitionInfo> topicToPartitionInfo = new HashMap<>();
-            final Map<HostInfo, Set<TopicPartition>> partitionsByHost;
-
-            final Map<TopicPartition, TaskId> partitionsToTaskId = new HashMap<>();
-
-            processVersionTwoAssignment("test ", info, partitions, activeTasks, topicToPartitionInfo, partitionsToTaskId);
-            partitionsByHost = info.partitionsByHost();
+            final Map<TaskId, Set<TopicPartition>> activeTasks = getActiveTasks(partitions, info);
 
             final TaskManager taskManager = taskManger();
-            taskManager.setClusterMetadata(Cluster.empty().withPartitions(topicToPartitionInfo));
-            taskManager.setHostPartitionMappings(partitionsByHost, info.standbyPartitionByHost());
-            taskManager.setPartitionsToTaskId(partitionsToTaskId);
-            taskManager.setAssignmentMetadata(activeTasks, info.standbyTasks());
-            taskManager.updateSubscriptionsFromAssignment(partitions);
-            taskManager.setRebalanceInProgress(false);
+            taskManager.handleAssignment(activeTasks, info.standbyTasks());
             usedSubscriptionMetadataVersionPeek.set(usedSubscriptionMetadataVersion);
         }
 
@@ -263,8 +247,8 @@ public class StreamsUpgradeTest {
                     final Subscription subscription = entry.getValue();
 
                     final SubscriptionInfo info = SubscriptionInfo.decode(subscription.userData()
-                                                                                      .putInt(0, LATEST_SUPPORTED_VERSION)
-                                                                                      .putInt(4, LATEST_SUPPORTED_VERSION));
+                        .putInt(0, LATEST_SUPPORTED_VERSION)
+                        .putInt(4, LATEST_SUPPORTED_VERSION));
 
                     downgradedSubscriptions.put(
                         entry.getKey(),
@@ -327,7 +311,7 @@ public class StreamsUpgradeTest {
             }
         }
 
-        public ByteBuffer encode() {
+        private ByteBuffer encode() {
             final ByteBuffer buf = encodeFutureVersion();
             buf.rewind();
             return buf;
