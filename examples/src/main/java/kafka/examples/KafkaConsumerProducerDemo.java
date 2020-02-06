@@ -16,6 +16,8 @@
  */
 package kafka.examples;
 
+import org.apache.kafka.common.errors.TimeoutException;
+
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
@@ -28,7 +30,11 @@ public class KafkaConsumerProducerDemo {
 
         Consumer consumerThread = new Consumer(KafkaProperties.TOPIC, "DemoConsumer", false, 10000, latch);
         consumerThread.start();
-        latch.await(5, TimeUnit.MINUTES);
+
+        if (!latch.await(5, TimeUnit.MINUTES)) {
+            throw new TimeoutException("Timeout after 5 minutes waiting for demo producer and consumer to finish");
+        }
+
         consumerThread.shutdown();
         System.out.println("All finished!");
     }
