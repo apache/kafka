@@ -18,9 +18,10 @@ package kafka.examples;
 
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 public class KafkaConsumerProducerDemo {
-    public static void main(String[] args) throws InterruptedException {
+    public static void main(String[] args) throws InterruptedException, TimeoutException {
         boolean isAsync = args.length == 0 || !args[0].trim().equalsIgnoreCase("sync");
         CountDownLatch latch = new CountDownLatch(2);
         Producer producerThread = new Producer(KafkaProperties.TOPIC, isAsync, null, false, 10000, latch);
@@ -28,7 +29,11 @@ public class KafkaConsumerProducerDemo {
 
         Consumer consumerThread = new Consumer(KafkaProperties.TOPIC, "DemoConsumer", false, 10000, latch);
         consumerThread.start();
-        latch.await(5, TimeUnit.MINUTES);
+
+        if (!latch.await(5, TimeUnit.MINUTES)) {
+            throw new TimeoutException("Timeout after 5 minutes waiting for demo producer and consumer to finish");
+        }
+
         consumerThread.shutdown();
         System.out.println("All finished!");
     }
