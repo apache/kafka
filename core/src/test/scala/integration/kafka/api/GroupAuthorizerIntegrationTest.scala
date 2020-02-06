@@ -12,7 +12,7 @@
  */
 package kafka.api
 
-import java.util.{Collections, Properties}
+import java.util.Properties
 import java.util.concurrent.ExecutionException
 
 import kafka.api.GroupAuthorizerIntegrationTest._
@@ -21,7 +21,7 @@ import kafka.security.authorizer.AclEntry.WildcardHost
 import kafka.server.{BaseRequestTest, KafkaConfig}
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.consumer.ConsumerConfig
-import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
+import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.acl.{AccessControlEntry, AclOperation, AclPermissionType}
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
@@ -101,16 +101,18 @@ class GroupAuthorizerIntegrationTest extends BaseRequestTest {
     createTopic(topic)
 
     val producer = createProducer()
-    intercept[TopicAuthorizationException] {
-      sendRecords(producer, numRecords = 10, topicPartition)
-    }
+    val produceException = intercept[ExecutionException] {
+      producer.send(new ProducerRecord[Array[Byte], Array[Byte]](topic, "message".getBytes)).get()
+    }.getCause
+    assertTrue(produceException.isInstanceOf[TopicAuthorizationException])
+    assertEquals(Set(topic), produceException.asInstanceOf[TopicAuthorizationException].unauthorizedTopics.asScala)
 
     val consumer = createConsumer(configsToRemove = List(ConsumerConfig.GROUP_ID_CONFIG))
     consumer.assign(List(topicPartition).asJava)
-    val e = intercept[TopicAuthorizationException] {
-      TestUtils.pollUntilAtLeastNumRecords(consumer, numRecords = 10)
+    val consumeException = intercept[TopicAuthorizationException] {
+      TestUtils.pollUntilAtLeastNumRecords(consumer, numRecords = 1)
     }
-    assertEquals(Collections.singleton(topic), e.unauthorizedTopics())
+    assertEquals(Set(topic), consumeException.unauthorizedTopics.asScala)
   }
 
   @Test
@@ -124,27 +126,14 @@ class GroupAuthorizerIntegrationTest extends BaseRequestTest {
       Set(createAcl(AclOperation.WRITE, AclPermissionType.ALLOW)),
       new ResourcePattern(ResourceType.TOPIC, topic, PatternType.LITERAL))
     val producer = createProducer()
-    sendRecords(producer, numRecords = 10, topicPartition)
+    producer.send(new ProducerRecord[Array[Byte], Array[Byte]](topic, "message".getBytes)).get()
 
     TestUtils.addAndVerifyAcls(servers.head,
       Set(createAcl(AclOperation.READ, AclPermissionType.ALLOW)),
       new ResourcePattern(ResourceType.TOPIC, topic, PatternType.LITERAL))
     val consumer = createConsumer(configsToRemove = List(ConsumerConfig.GROUP_ID_CONFIG))
     consumer.assign(List(topicPartition).asJava)
-    TestUtils.pollUntilAtLeastNumRecords(consumer, numRecords = 10)
-  }
-
-  private def sendRecords(producer: KafkaProducer[Array[Byte], Array[Byte]],
-                          numRecords: Int,
-                          tp: TopicPartition): Unit = {
-    val futures = (0 until numRecords).map { i =>
-      producer.send(new ProducerRecord(tp.topic(), tp.partition(), i.toString.getBytes, i.toString.getBytes))
-    }
-    try {
-      futures.foreach(_.get)
-    } catch {
-      case e: ExecutionException => throw e.getCause
-    }
+    TestUtils.pollUntilAtLeastNumRecords(consumer, numRecords = 1)
   }
 
 }

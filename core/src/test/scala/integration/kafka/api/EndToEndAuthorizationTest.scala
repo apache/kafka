@@ -94,61 +94,58 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
   def clientPrincipal: KafkaPrincipal
   def kafkaPrincipal: KafkaPrincipal
 
-  def kafkaPrincipalStr: String = kafkaPrincipal.toString
-  def clientPrincipalStr: String = clientPrincipal.toString
-
   // Arguments to AclCommand to set ACLs.
   def clusterActionArgs: Array[String] = Array("--authorizer-properties",
                                           s"zookeeper.connect=$zkConnect",
                                           s"--add",
                                           s"--cluster",
                                           s"--operation=ClusterAction",
-                                          s"--allow-principal=$kafkaPrincipalStr")
+                                          s"--allow-principal=$kafkaPrincipal")
   def topicBrokerReadAclArgs: Array[String] = Array("--authorizer-properties",
                                           s"zookeeper.connect=$zkConnect",
                                           s"--add",
                                           s"--topic=$wildcard",
                                           s"--operation=Read",
-                                          s"--allow-principal=$kafkaPrincipalStr")
+                                          s"--allow-principal=$kafkaPrincipal")
   def produceAclArgs(topic: String): Array[String] = Array("--authorizer-properties",
                                           s"zookeeper.connect=$zkConnect",
                                           s"--add",
                                           s"--topic=$topic",
                                           s"--producer",
-                                          s"--allow-principal=$clientPrincipalStr")
+                                          s"--allow-principal=$clientPrincipal")
   def describeAclArgs: Array[String] = Array("--authorizer-properties",
                                           s"zookeeper.connect=$zkConnect",
                                           s"--add",
                                           s"--topic=$topic",
                                           s"--operation=Describe",
-                                          s"--allow-principal=$clientPrincipalStr")
+                                          s"--allow-principal=$clientPrincipal")
   def deleteDescribeAclArgs: Array[String] = Array("--authorizer-properties",
                                           s"zookeeper.connect=$zkConnect",
                                           s"--remove",
                                           s"--force",
                                           s"--topic=$topic",
                                           s"--operation=Describe",
-                                          s"--allow-principal=$clientPrincipalStr")
+                                          s"--allow-principal=$clientPrincipal")
   def deleteWriteAclArgs: Array[String] = Array("--authorizer-properties",
                                           s"zookeeper.connect=$zkConnect",
                                           s"--remove",
                                           s"--force",
                                           s"--topic=$topic",
                                           s"--operation=Write",
-                                          s"--allow-principal=$clientPrincipalStr")
+                                          s"--allow-principal=$clientPrincipal")
   def consumeAclArgs(topic: String): Array[String] = Array("--authorizer-properties",
                                           s"zookeeper.connect=$zkConnect",
                                           s"--add",
                                           s"--topic=$topic",
                                           s"--group=$group",
                                           s"--consumer",
-                                          s"--allow-principal=$clientPrincipalStr")
+                                          s"--allow-principal=$clientPrincipal")
   def groupAclArgs: Array[String] = Array("--authorizer-properties",
                                           s"zookeeper.connect=$zkConnect",
                                           s"--add",
                                           s"--group=$group",
                                           s"--operation=Read",
-                                          s"--allow-principal=$clientPrincipalStr")
+                                          s"--allow-principal=$clientPrincipal")
   def produceConsumeWildcardAclArgs: Array[String] = Array("--authorizer-properties",
                                           s"zookeeper.connect=$zkConnect",
                                           s"--add",
@@ -156,7 +153,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
                                           s"--group=$wildcard",
                                           s"--consumer",
                                           s"--producer",
-                                          s"--allow-principal=$clientPrincipalStr")
+                                          s"--allow-principal=$clientPrincipal")
   def produceConsumePrefixedAclsArgs: Array[String] = Array("--authorizer-properties",
                                           s"zookeeper.connect=$zkConnect",
                                           s"--add",
@@ -165,15 +162,15 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
                                           s"--resource-pattern-type=prefixed",
                                           s"--consumer",
                                           s"--producer",
-                                          s"--allow-principal=$clientPrincipalStr")
+                                          s"--allow-principal=$clientPrincipal")
 
-  def ClusterActionAcl = Set(new AccessControlEntry(kafkaPrincipalStr, WildcardHost, CLUSTER_ACTION, ALLOW))
-  def TopicBrokerReadAcl = Set(new AccessControlEntry(kafkaPrincipalStr, WildcardHost, READ, ALLOW))
-  def GroupReadAcl = Set(new AccessControlEntry(clientPrincipalStr, WildcardHost, READ, ALLOW))
-  def TopicReadAcl = Set(new AccessControlEntry(clientPrincipalStr, WildcardHost, READ, ALLOW))
-  def TopicWriteAcl = Set(new AccessControlEntry(clientPrincipalStr, WildcardHost, WRITE, ALLOW))
-  def TopicDescribeAcl = Set(new AccessControlEntry(clientPrincipalStr, WildcardHost, DESCRIBE, ALLOW))
-  def TopicCreateAcl = Set(new AccessControlEntry(clientPrincipalStr, WildcardHost, CREATE, ALLOW))
+  def ClusterActionAcl = Set(new AccessControlEntry(kafkaPrincipal.toString, WildcardHost, CLUSTER_ACTION, ALLOW))
+  def TopicBrokerReadAcl = Set(new AccessControlEntry(kafkaPrincipal.toString, WildcardHost, READ, ALLOW))
+  def GroupReadAcl = Set(new AccessControlEntry(clientPrincipal.toString, WildcardHost, READ, ALLOW))
+  def TopicReadAcl = Set(new AccessControlEntry(clientPrincipal.toString, WildcardHost, READ, ALLOW))
+  def TopicWriteAcl = Set(new AccessControlEntry(clientPrincipal.toString, WildcardHost, WRITE, ALLOW))
+  def TopicDescribeAcl = Set(new AccessControlEntry(clientPrincipal.toString, WildcardHost, DESCRIBE, ALLOW))
+  def TopicCreateAcl = Set(new AccessControlEntry(clientPrincipal.toString, WildcardHost, CREATE, ALLOW))
   // The next two configuration parameters enable ZooKeeper secure ACLs
   // and sets the Kafka authorizer, both necessary to enable security.
   this.serverConfig.setProperty(KafkaConfig.ZkEnableSecureAclsProp, "true")

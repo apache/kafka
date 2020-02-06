@@ -211,14 +211,6 @@ object TestUtils extends Logging {
     }.mkString(",")
   }
 
-  def getBrokerListStrFromServers(servers: Seq[KafkaServer], listenerName: ListenerName): String = {
-    servers.map { s =>
-      val listener = s.config.advertisedListeners.find(_.listenerName == listenerName).getOrElse(
-        sys.error(s"Could not find listener $listenerName"))
-      formatAddress(listener.host, s.boundPort(listenerName))
-    }.mkString(",")
-  }
-
   def bootstrapServers(servers: Seq[KafkaServer], listenerName: ListenerName): String = {
     servers.map { s =>
       val listener = s.config.advertisedListeners.find(_.listenerName == listenerName).getOrElse(
@@ -1214,18 +1206,16 @@ object TestUtils extends Logging {
     val filter = new AclBindingFilter(resource.toFilter, accessControlEntryFilter)
     waitUntilTrue(() => authorizer.acls(filter).asScala.map(_.entry).toSet == expected,
       s"expected acls:${expected.mkString(newLine + "\t", newLine + "\t", newLine)}" +
-        s"but got:${authorizer.acls(filter).asScala.map(_.entry).mkString(newLine + "\t", newLine + "\t", newLine)}",
-      waitTimeMs = JTestUtils.DEFAULT_MAX_WAIT_MS)
+        s"but got:${authorizer.acls(filter).asScala.map(_.entry).mkString(newLine + "\t", newLine + "\t", newLine)}")
   }
 
   @deprecated("Use org.apache.kafka.server.authorizer.Authorizer", "Since 2.5")
-  def waitAndVerifyAcls(expected: Set[Acl], authorizer: LegacyAuthorizer, resource: Resource) = {
+  def waitAndVerifyAcls(expected: Set[Acl], authorizer: LegacyAuthorizer, resource: Resource): Unit = {
     val newLine = scala.util.Properties.lineSeparator
 
     waitUntilTrue(() => authorizer.getAcls(resource) == expected,
       s"expected acls:${expected.mkString(newLine + "\t", newLine + "\t", newLine)}" +
-        s"but got:${authorizer.getAcls(resource).mkString(newLine + "\t", newLine + "\t", newLine)}",
-      waitTimeMs = JTestUtils.DEFAULT_MAX_WAIT_MS)
+        s"but got:${authorizer.getAcls(resource).mkString(newLine + "\t", newLine + "\t", newLine)}")
   }
 
   /**
@@ -1753,15 +1743,17 @@ object TestUtils extends Logging {
   }
 
   def addAndVerifyAcls(server: KafkaServer, acls: Set[AccessControlEntry], resource: ResourcePattern): Unit = {
+    val authorizer = server.dataPlaneRequestProcessor.authorizer.get
     val aclBindings = acls.map { acl => new AclBinding(resource, acl) }
-    server.dataPlaneRequestProcessor.authorizer.get
-      .createAcls(null, aclBindings.toList.asJava).asScala.map(_.toCompletableFuture.get).foreach {result =>
-      result.exception.asScala.foreach { e => throw e }
-    }
+    authorizer.createAcls(null, aclBindings.toList.asJava).asScala
+      .map(_.toCompletableFuture.get)
+      .foreach { result =>
+        result.exception.asScala.foreach { e => throw e }
+      }
     val aclFilter = new AclBindingFilter(resource.toFilter, AccessControlEntryFilter.ANY)
     waitAndVerifyAcls(
-      server.dataPlaneRequestProcessor.authorizer.get.acls(aclFilter).asScala.map(_.entry).toSet ++ acls,
-      server.dataPlaneRequestProcessor.authorizer.get, resource)
+      authorizer.acls(aclFilter).asScala.map(_.entry).toSet ++ acls,
+      authorizer, resource)
   }
 
 }
