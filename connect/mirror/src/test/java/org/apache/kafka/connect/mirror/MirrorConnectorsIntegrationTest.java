@@ -16,10 +16,8 @@
  */
 package org.apache.kafka.connect.mirror;
 
-import java.util.Optional;
 import org.apache.kafka.connect.runtime.AbstractStatus;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
-import org.apache.kafka.connect.runtime.rest.errors.ConnectRestException;
 import org.apache.kafka.connect.util.clusters.EmbeddedConnectCluster;
 import org.apache.kafka.connect.util.clusters.EmbeddedKafkaCluster;
 import org.apache.kafka.test.IntegrationTest;
@@ -36,10 +34,12 @@ import org.junit.experimental.categories.Category;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.Arrays;
 import java.io.IOException;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
-import java.util.Collection;
+import java.util.Set;
 import java.util.Collections;
 import java.util.Properties;
 import java.time.Duration;
@@ -160,50 +160,44 @@ public class MirrorConnectorsIntegrationTest {
         // actual testing, we are certain that the tasks are up and running; this will prevent
         // flaky tests where the connector and tasks didn't start up in time for the tests to be
         // run
+        Set<String> connectorNames = new HashSet<>(Arrays.asList("MirrorSourceConnector",
+            "MirrorCheckpointConnector", "MirrorHeartbeatConnector"));
+
         backup.configureConnector("MirrorSourceConnector", mm2Config.connectorBaseConfig(new SourceAndTarget("primary", "backup"),
             MirrorSourceConnector.class));
-        TestUtils.waitForCondition(() -> assertConnectorAndTasksRunning(backup,
-            "MirrorSourceConnector", MIN_TASKS).isPresent(),
-            "Timed out trying to verify connector MirrorSourceConnector was up on"
-                + " backup cluster!");
 
         backup.configureConnector("MirrorCheckpointConnector", mm2Config.connectorBaseConfig(new SourceAndTarget("primary", "backup"),
             MirrorCheckpointConnector.class));
-        TestUtils.waitForCondition(() -> assertConnectorAndTasksRunning(backup,
-            "MirrorCheckpointConnector", MIN_TASKS).isPresent(),
-            "Timed out trying to verify connector MirrorCheckpointConnector was up on"
-                + " backup cluster!");
 
         backup.configureConnector("MirrorHeartbeatConnector", mm2Config.connectorBaseConfig(new SourceAndTarget("primary", "backup"),
             MirrorHeartbeatConnector.class));
-        TestUtils.waitForCondition(() -> assertConnectorAndTasksRunning(backup,
-            "MirrorHeartbeatConnector", MIN_TASKS).isPresent(),
-            "Timed out trying to verify connector MirrorHeartbeatConnector was up on"
-                + " backup cluster!");
+
+        waitUntilMirrorMakerIsRunning(backup, connectorNames);
 
         primary.configureConnector("MirrorSourceConnector", mm2Config.connectorBaseConfig(new SourceAndTarget("backup", "primary"),
             MirrorSourceConnector.class));
-        TestUtils.waitForCondition(() -> assertConnectorAndTasksRunning(primary,
-            "MirrorSourceConnector", MIN_TASKS).isPresent(),
-            "Timed out trying to verify connector MirrorSourceConnector was up on"
-                + " primary cluster!");
 
         primary.configureConnector("MirrorCheckpointConnector", mm2Config.connectorBaseConfig(new SourceAndTarget("backup", "primary"),
             MirrorCheckpointConnector.class));
-        TestUtils.waitForCondition(() -> assertConnectorAndTasksRunning(primary,
-            "MirrorCheckpointConnector", MIN_TASKS).isPresent(),
-            "Timed out trying to verify connector MirrorCheckpointConnector was up on"
-                + " primary cluster!");
 
         primary.configureConnector("MirrorHeartbeatConnector", mm2Config.connectorBaseConfig(new SourceAndTarget("backup", "primary"),
             MirrorHeartbeatConnector.class));
-        TestUtils.waitForCondition(() -> assertConnectorAndTasksRunning(primary,
-            "MirrorHeartbeatConnector", MIN_TASKS).isPresent(),
-            "Timed out trying to verify connector MirrorHeartbeatConnector was up on"
-                + " primary cluster!");
+
+        waitUntilMirrorMakerIsRunning(primary, connectorNames);
     }
 
-    private Optional<Boolean> assertConnectorAndTasksRunning(EmbeddedConnectCluster connectCluster,
+
+    private void waitUntilMirrorMakerIsRunning(EmbeddedConnectCluster connectCluster,
+        Set<String> connNames) throws InterruptedException {
+        for (String connector : connNames) {
+            TestUtils.waitForCondition(() -> areConnectorAndTasksRunning(connectCluster,
+                connector, MIN_TASKS), "Timed out trying to verify connector " +
+                connector + " was up!" );
+        }
+
+    }
+
+    private boolean areConnectorAndTasksRunning(EmbeddedConnectCluster connectCluster,
         String connectorName, int numTasks) {
         try {
             ConnectorStateInfo info = connectCluster.connectorStatus(connectorName);
@@ -212,10 +206,10 @@ public class MirrorConnectorsIntegrationTest {
                 && info.connector().state().equals(AbstractStatus.State.RUNNING.toString())
                 && info.tasks().stream().allMatch(s -> s.state().equals(AbstractStatus.State.RUNNING.toString()));
             log.info("Found connector and tasks running: {}", result);
-            return Optional.of(result);
+            return result;
         } catch (Exception e) {
             log.error("Could not check connector state info.", e);
-            return Optional.empty();
+            return false;
         }
     }
 
