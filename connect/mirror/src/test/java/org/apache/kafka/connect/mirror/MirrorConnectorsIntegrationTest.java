@@ -208,7 +208,7 @@ public class MirrorConnectorsIntegrationTest {
         try {
             ConnectorStateInfo info = connectCluster.connectorStatus(connectorName);
             boolean result = info != null
-                && info.tasks().size() == numTasks
+                && info.tasks().size() >= numTasks
                 && info.connector().state().equals(AbstractStatus.State.RUNNING.toString())
                 && info.tasks().stream().allMatch(s -> s.state().equals(AbstractStatus.State.RUNNING.toString()));
             log.info("Found connector and tasks running: {}", result);
