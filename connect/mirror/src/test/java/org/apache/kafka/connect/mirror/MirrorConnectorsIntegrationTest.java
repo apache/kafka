@@ -201,7 +201,6 @@ public class MirrorConnectorsIntegrationTest {
             "MirrorHeartbeatConnector", MIN_TASKS).isPresent(),
             "Timed out trying to verify connector MirrorHeartbeatConnector was up on"
                 + " primary cluster!");
-
     }
 
     private Optional<Boolean> assertConnectorAndTasksRunning(EmbeddedConnectCluster connectCluster,
