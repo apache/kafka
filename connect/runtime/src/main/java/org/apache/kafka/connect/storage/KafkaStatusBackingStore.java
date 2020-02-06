@@ -87,8 +87,8 @@ public class KafkaStatusBackingStore implements StatusBackingStore {
 
     private static final String TASK_STATUS_PREFIX = "status-task-";
     private static final String CONNECTOR_STATUS_PREFIX = "status-connector-";
-    private static final String TOPIC_STATUS_PREFIX = "status-topic-";
-    private static final String TOPIC_STATUS_SEPARATOR = ":connector-";
+    protected static final String TOPIC_STATUS_PREFIX = "status-topic-";
+    protected static final String TOPIC_STATUS_SEPARATOR = ":connector-";
 
     public static final String STATE_KEY_NAME = "state";
     public static final String TRACE_KEY_NAME = "trace";
@@ -435,7 +435,7 @@ public class KafkaStatusBackingStore implements StatusBackingStore {
         }
     }
 
-    private TopicStatus parseTopicStatus(byte[] data) {
+    protected TopicStatus parseTopicStatus(byte[] data) {
         try {
             SchemaAndValue schemaAndValue = converter.toConnectData(statusTopic, data);
             if (!(schemaAndValue.value() instanceof Map)) {
