@@ -112,6 +112,7 @@ versions += [
   spotbugs: "3.1.12",
   spotbugsPlugin: "3.0.0",
   spotlessPlugin: "3.27.1",
+  testRetryPlugin: "1.1.0",
   zookeeper: "3.5.6",
   zstd: "1.4.4-7"
 ]
