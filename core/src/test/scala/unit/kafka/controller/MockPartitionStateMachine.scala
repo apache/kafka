@@ -27,11 +27,23 @@ class MockPartitionStateMachine(controllerContext: ControllerContext,
                                 uncleanLeaderElectionEnabled: Boolean)
   extends PartitionStateMachine(controllerContext) {
 
+  var stateChangesByTargetState = mutable.Map.empty[PartitionState, Int].withDefaultValue(0)
+
+  def stateChangesCalls(targetState: PartitionState): Int = {
+    stateChangesByTargetState(targetState)
+  }
+
+  def clear(): Unit = {
+    stateChangesByTargetState.clear()
+  }
+
   override def handleStateChanges(
     partitions: Seq[TopicPartition],
     targetState: PartitionState,
     leaderElectionStrategy: Option[PartitionLeaderElectionStrategy]
   ): Map[TopicPartition, Either[Throwable, LeaderAndIsr]] = {
+    stateChangesByTargetState(targetState) = stateChangesByTargetState(targetState) + 1
+
     partitions.foreach(partition => controllerContext.putPartitionStateIfNotExists(partition, NonExistentPartition))
     val (validPartitions, invalidPartitions) = controllerContext.checkValidPartitionStateChange(partitions, targetState)
     if (invalidPartitions.nonEmpty) {

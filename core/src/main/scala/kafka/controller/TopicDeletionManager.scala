@@ -227,12 +227,14 @@ class TopicDeletionManager(config: KafkaConfig,
   /**
    * If the topic is queued for deletion but deletion is not currently under progress, then deletion is retried for that topic
    * To ensure a successful retry, reset states for respective replicas from ReplicaDeletionIneligible to OfflineReplica state
-   *@param topic Topic for which deletion should be retried
+   *@param topics Topics for which deletion should be retried
    */
-  private def retryDeletionForIneligibleReplicas(topic: String): Unit = {
+  private def retryDeletionForIneligibleReplicas(topics: Set[String]): Unit = {
     // reset replica states from ReplicaDeletionIneligible to OfflineReplica
-    val failedReplicas = controllerContext.replicasInState(topic, ReplicaDeletionIneligible)
-    info(s"Retrying deletion of topic $topic since replicas ${failedReplicas.mkString(",")} were not successfully deleted")
+    val failedReplicas = topics.flatMap { topic =>
+      controllerContext.replicasInState(topic, ReplicaDeletionIneligible)
+    }
+    info(s"Retrying deletion of topic $topics since replicas ${failedReplicas.mkString(",")} were not successfully deleted")
     replicaStateMachine.handleStateChanges(failedReplicas.toSeq, OfflineReplica)
   }
 
@@ -328,7 +330,9 @@ class TopicDeletionManager(config: KafkaConfig,
   }
 
   private def resumeDeletions(): Unit = {
+    println("resumeDeletions")
     val topicsQueuedForDeletion = Set.empty[String] ++ controllerContext.topicsToBeDeleted
+    val topicsEligibleForRetry = mutable.Set.empty[String]
     val topicsEligibleForDeletion = mutable.Set.empty[String]
 
     if (topicsQueuedForDeletion.nonEmpty)
@@ -345,7 +349,7 @@ class TopicDeletionManager(config: KafkaConfig,
         // TopicDeletionSuccessful. That means, that either given topic haven't initiated deletion
         // or there is at least one failed replica (which means topic deletion should be retried).
         if (controllerContext.isAnyReplicaInState(topic, ReplicaDeletionIneligible)) {
-          retryDeletionForIneligibleReplicas(topic)
+          topicsEligibleForRetry += topic
         }
       }
 
@@ -354,6 +358,11 @@ class TopicDeletionManager(config: KafkaConfig,
         info(s"Deletion of topic $topic (re)started")
         topicsEligibleForDeletion += topic
       }
+    }
+
+    // topic deletion retry will be kicked off
+    if (topicsEligibleForRetry.nonEmpty) {
+      retryDeletionForIneligibleReplicas(topicsEligibleForRetry)
     }
 
     // topic deletion will be kicked off
