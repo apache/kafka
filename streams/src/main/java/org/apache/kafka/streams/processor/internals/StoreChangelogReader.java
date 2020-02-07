@@ -629,7 +629,7 @@ public class StoreChangelogReader implements ChangelogReader {
             final ChangelogMetadata changelogMetadata = changelogs.get(partition);
             final Long endOffset = endOffsets.get(partition);
             final Long committedOffset = newPartitionsToFindCommittedOffset.contains(partition) ?
-                committedOffsets.get(partition) : Long.MAX_VALUE;
+                committedOffsets.get(partition) : Long.valueOf(Long.MAX_VALUE);
 
             if (endOffset != null && committedOffset != null) {
                 if (changelogMetadata.restoreEndOffset != null)
