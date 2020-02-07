@@ -81,7 +81,7 @@ public class GlobalStateUpdateTask implements GlobalStateMaintainer {
         }
         initTopology();
         processorContext.initialize();
-        return stateMgr.checkpointed();
+        return stateMgr.changelogOffsets();
     }
 
     @SuppressWarnings("unchecked")
@@ -114,7 +114,7 @@ public class GlobalStateUpdateTask implements GlobalStateMaintainer {
     }
 
     public void close() throws IOException {
-        stateMgr.close(true);
+        stateMgr.close();
     }
 
     private void initTopology() {

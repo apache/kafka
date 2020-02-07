@@ -490,8 +490,9 @@ class Partition(val topicPartition: TopicPartition,
 
       val leaderLog = localLogOrException
       val leaderEpochStartOffset = leaderLog.logEndOffset
-      info(s"$topicPartition starts at Leader Epoch ${partitionState.leaderEpoch} from " +
-        s"offset $leaderEpochStartOffset. Previous Leader Epoch was: $leaderEpoch")
+      info(s"$topicPartition starts at leader epoch ${partitionState.leaderEpoch} from " +
+        s"offset $leaderEpochStartOffset with high watermark ${leaderLog.highWatermark}. " +
+        s"Previous leader epoch was $leaderEpoch.")
 
       //We cache the leader epoch here, persisting it only if it's local (hence having a log dir)
       leaderEpoch = partitionState.leaderEpoch
@@ -506,12 +507,11 @@ class Partition(val topicPartition: TopicPartition,
       leaderLog.maybeAssignEpochStartOffset(leaderEpoch, leaderEpochStartOffset)
 
       val isNewLeader = !isLeader
-      val curLeaderLogEndOffset = leaderLog.logEndOffset
       val curTimeMs = time.milliseconds
       // initialize lastCaughtUpTime of replicas as well as their lastFetchTimeMs and lastFetchLeaderLogEndOffset.
       remoteReplicas.foreach { replica =>
         val lastCaughtUpTimeMs = if (inSyncReplicaIds.contains(replica.brokerId)) curTimeMs else 0L
-        replica.resetLastCaughtUpTime(curLeaderLogEndOffset, curTimeMs, lastCaughtUpTimeMs)
+        replica.resetLastCaughtUpTime(leaderEpochStartOffset, curTimeMs, lastCaughtUpTimeMs)
       }
 
       if (isNewLeader) {

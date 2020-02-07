@@ -128,9 +128,6 @@ public class StreamsMetricsImpl implements StreamsMetrics {
     public static final String TOTAL_SUFFIX = "-total";
     public static final String RATIO_SUFFIX = "-ratio";
 
-    public static final String AVG_VALUE_DOC = "The average value of ";
-    public static final String MAX_VALUE_DOC = "The maximum value of ";
-
     public static final String GROUP_PREFIX_WO_DELIMITER = "stream";
     public static final String GROUP_PREFIX = GROUP_PREFIX_WO_DELIMITER + "-";
     public static final String GROUP_SUFFIX = "-metrics";

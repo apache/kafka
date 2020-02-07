@@ -14,20 +14,22 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.processor.internals;
+package org.apache.kafka.connect.mirror;
 
-import org.apache.kafka.common.KafkaException;
+import java.util.HashMap;
+import java.util.Map;
 
-/**
- * Denotes an exception that is recoverable by re-creating the client (ie, the client is no longer in a valid state),
- * as opposed to retriable (the failure was transient, so the same client can be used again later),
- * or fatal (the request was actually invalid, so retrying or recovering would not help)
- *
- * This class also serves the dual purpose of capturing the stack trace as early as possible,
- * at the site of the Producer call, since the exeptions that cause this don't record stack traces.
- */
-public class RecoverableClientException extends KafkaException {
-    public RecoverableClientException(final String message, final Throwable cause) {
-        super(message, cause);
+public class TestUtils {
+
+    static Map<String, String> makeProps(String... keyValues) {
+        Map<String, String> props = new HashMap<>();
+        props.put("name", "ConnectorName");
+        props.put("connector.class", "ConnectorClass");
+        props.put("source.cluster.alias", "source1");
+        props.put("target.cluster.alias", "target2");
+        for (int i = 0; i < keyValues.length; i += 2) {
+            props.put(keyValues[i], keyValues[i + 1]);
+        }
+        return props;
     }
 }

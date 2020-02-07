@@ -14,14 +14,30 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.processor.internals;
+package org.apache.kafka.connect.runtime.rest.entities;
 
-import org.apache.kafka.common.TopicPartition;
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonProperty;
 
-import java.util.Map;
+import java.util.Collection;
 
-// Interface to indicate that an object has associated partition offsets that can be checkpointed
-interface Checkpointable {
-    void checkpoint(final Map<TopicPartition, Long> offsets);
-    Map<TopicPartition, Long> checkpointed();
+public class ActiveTopicsInfo {
+    private final String connector;
+    private final Collection<String> topics;
+
+    @JsonCreator
+    public ActiveTopicsInfo(String connector, @JsonProperty("topics") Collection<String> topics) {
+        this.connector = connector;
+        this.topics = topics;
+    }
+
+    public String connector() {
+        return connector;
+    }
+
+    @JsonProperty
+    public Collection<String> topics() {
+        return topics;
+    }
+
 }

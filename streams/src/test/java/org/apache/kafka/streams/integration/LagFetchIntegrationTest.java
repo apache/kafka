@@ -303,9 +303,10 @@ public class LagFetchIntegrationTest {
             assertThat(fullLagInfo.endOffsetPosition(), equalTo(5L));
             assertThat(fullLagInfo.offsetLag(), equalTo(5L));
 
-            assertThat(zeroLagInfo, equalTo(restoreEndLagInfo.get(stateStoreName).get(0)));
+            assertThat(restoreEndLagInfo.get(stateStoreName).get(0), equalTo(zeroLagInfo));
         } finally {
             streams.close();
+            streams.cleanUp();
         }
     }
 }

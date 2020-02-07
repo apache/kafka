@@ -43,6 +43,7 @@ import org.apache.kafka.connect.storage.CloseableOffsetStorageReader;
 import org.apache.kafka.connect.storage.Converter;
 import org.apache.kafka.connect.storage.HeaderConverter;
 import org.apache.kafka.connect.storage.OffsetStorageWriter;
+import org.apache.kafka.connect.storage.StatusBackingStore;
 import org.apache.kafka.connect.util.ConnectUtils;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.slf4j.Logger;
@@ -77,7 +78,6 @@ class WorkerSourceTask extends WorkerTask {
     private KafkaProducer<byte[], byte[]> producer;
     private final CloseableOffsetStorageReader offsetReader;
     private final OffsetStorageWriter offsetWriter;
-    private final Time time;
     private final SourceTaskMetricsGroup sourceTaskMetricsGroup;
     private final AtomicReference<Exception> producerSendException;
 
@@ -112,9 +112,11 @@ class WorkerSourceTask extends WorkerTask {
                             ConnectMetrics connectMetrics,
                             ClassLoader loader,
                             Time time,
-                            RetryWithToleranceOperator retryWithToleranceOperator) {
+                            RetryWithToleranceOperator retryWithToleranceOperator,
+                            StatusBackingStore statusBackingStore) {
 
-        super(id, statusListener, initialState, loader, connectMetrics, retryWithToleranceOperator);
+        super(id, statusListener, initialState, loader, connectMetrics,
+                retryWithToleranceOperator, time, statusBackingStore);
 
         this.workerConfig = workerConfig;
         this.task = task;
@@ -126,7 +128,6 @@ class WorkerSourceTask extends WorkerTask {
         this.producer = producer;
         this.offsetReader = offsetReader;
         this.offsetWriter = offsetWriter;
-        this.time = time;
 
         this.toSend = null;
         this.lastSendFailed = false;
@@ -355,6 +356,7 @@ class WorkerSourceTask extends WorkerTask {
                                             recordMetadata.topic(), recordMetadata.partition(),
                                             recordMetadata.offset());
                                     commitTaskRecord(preTransformRecord, recordMetadata);
+                                    recordActiveTopic(producerRecord.topic());
                                 }
                             }
                         });

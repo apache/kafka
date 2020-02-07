@@ -103,7 +103,18 @@ public class ConsumerConfig extends AbstractConfig {
      * <code>partition.assignment.strategy</code>
      */
     public static final String PARTITION_ASSIGNMENT_STRATEGY_CONFIG = "partition.assignment.strategy";
-    private static final String PARTITION_ASSIGNMENT_STRATEGY_DOC = "A list of class names or class types, ordered by preference, of supported assignors responsible for the partition assignment strategy that the client will use to distribute partition ownership amongst consumer instances when group management is used. Implementing the <code>org.apache.kafka.clients.consumer.ConsumerPartitionAssignor</code> interface allows you to plug in a custom assignment strategy.";
+    private static final String PARTITION_ASSIGNMENT_STRATEGY_DOC = "A list of class names or class types, " +
+            "ordered by preference, of supported partition assignment " +
+            "strategies that the client will use to distribute partition " +
+            "ownership amongst consumer instances when group management is " +
+            "used.<p>In addition to the default class specified below, " +
+            "you can use the " +
+            "<code>org.apache.kafka.clients.consumer.RoundRobinAssignor</code>" +
+            "class for round robin assignments of partitions to consumers. " +
+            "</p><p>Implementing the " +
+            "<code>org.apache.kafka.clients.consumer.ConsumerPartitionAssignor" +
+            "</code> interface allows you to plug in a custom assignment" +
+            "strategy.";
 
     /**
      * <code>auto.offset.reset</code>
@@ -222,8 +233,7 @@ public class ConsumerConfig extends AbstractConfig {
     private static final String REQUEST_TIMEOUT_MS_DOC = CommonClientConfigs.REQUEST_TIMEOUT_MS_DOC;
 
     /** <code>default.api.timeout.ms</code> */
-    public static final String DEFAULT_API_TIMEOUT_MS_CONFIG = "default.api.timeout.ms";
-    public static final String DEFAULT_API_TIMEOUT_MS_DOC = "Specifies the timeout (in milliseconds) for consumer APIs that could block. This configuration is used as the default timeout for all consumer operations that do not explicitly accept a <code>timeout</code> parameter.";
+    public static final String DEFAULT_API_TIMEOUT_MS_CONFIG = CommonClientConfigs.DEFAULT_API_TIMEOUT_MS_CONFIG;
 
     /** <code>interceptor.classes</code> */
     public static final String INTERCEPTOR_CLASSES_CONFIG = "interceptor.classes";
@@ -447,7 +457,7 @@ public class ConsumerConfig extends AbstractConfig {
                                         60 * 1000,
                                         atLeast(0),
                                         Importance.MEDIUM,
-                                        DEFAULT_API_TIMEOUT_MS_DOC)
+                                        CommonClientConfigs.DEFAULT_API_TIMEOUT_MS_DOC)
                                 /* default is set to be a bit lower than the server default (10 min), to avoid both client and server closing connection at same time */
                                 .define(CONNECTIONS_MAX_IDLE_MS_CONFIG,
                                         Type.LONG,

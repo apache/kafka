@@ -49,11 +49,12 @@ import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.FatalExitError
 import org.apache.kafka.common.internals.Topic.{GROUP_METADATA_TOPIC_NAME, TRANSACTION_STATE_TOPIC_NAME, isInternal}
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopic
-import org.apache.kafka.common.message.{AlterPartitionReassignmentsResponseData, CreatePartitionsResponseData, CreateTopicsResponseData, DeleteGroupsResponseData, DeleteTopicsResponseData, DescribeGroupsResponseData, EndTxnResponseData, ExpireDelegationTokenResponseData, FindCoordinatorResponseData, HeartbeatResponseData, InitProducerIdResponseData, JoinGroupResponseData, LeaveGroupResponseData, ListGroupsResponseData, ListPartitionReassignmentsResponseData, OffsetCommitRequestData, OffsetCommitResponseData, OffsetDeleteResponseData, RenewDelegationTokenResponseData, SaslAuthenticateResponseData, SaslHandshakeResponseData, StopReplicaResponseData, SyncGroupResponseData, UpdateMetadataResponseData}
+import org.apache.kafka.common.message.CreatePartitionsResponseData.CreatePartitionsTopicResult
+import org.apache.kafka.common.message.{AlterPartitionReassignmentsResponseData, CreateAclsResponseData, CreatePartitionsResponseData, CreateTopicsResponseData, DeleteAclsResponseData, DeleteGroupsResponseData, DeleteTopicsResponseData, DescribeAclsResponseData, DescribeGroupsResponseData, EndTxnResponseData, ExpireDelegationTokenResponseData, FindCoordinatorResponseData, HeartbeatResponseData, InitProducerIdResponseData, JoinGroupResponseData, LeaveGroupResponseData, ListGroupsResponseData, ListPartitionReassignmentsResponseData, OffsetCommitRequestData, OffsetCommitResponseData, OffsetDeleteResponseData, RenewDelegationTokenResponseData, SaslAuthenticateResponseData, SaslHandshakeResponseData, StopReplicaResponseData, SyncGroupResponseData, UpdateMetadataResponseData}
 import org.apache.kafka.common.message.CreateTopicsResponseData.{CreatableTopicResult, CreatableTopicResultCollection}
 import org.apache.kafka.common.message.DeleteGroupsResponseData.{DeletableGroupResult, DeletableGroupResultCollection}
 import org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData.{ReassignablePartitionResponse, ReassignableTopicResponse}
-import org.apache.kafka.common.message.CreatePartitionsResponseData.CreatePartitionsTopicResult
+import org.apache.kafka.common.message.CreateAclsResponseData.AclCreationResult
 import org.apache.kafka.common.message.DeleteTopicsResponseData.{DeletableTopicResult, DeletableTopicResultCollection}
 import org.apache.kafka.common.message.ElectLeadersResponseData.PartitionResult
 import org.apache.kafka.common.message.ElectLeadersResponseData.ReplicaElectionResult
@@ -64,8 +65,6 @@ import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.replica.ClientMetadata
 import org.apache.kafka.common.replica.ClientMetadata.DefaultClientMetadata
-import org.apache.kafka.common.requests.CreateAclsResponse.AclCreationResponse
-import org.apache.kafka.common.requests.DeleteAclsResponse.{AclDeletionResult, AclFilterResponse}
 import org.apache.kafka.common.requests.DescribeLogDirsResponse.LogDirInfo
 import org.apache.kafka.common.requests.FindCoordinatorRequest.CoordinatorType
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
@@ -81,6 +80,7 @@ import org.apache.kafka.server.authorizer._
 
 import scala.compat.java8.OptionConverters._
 import scala.collection.JavaConverters._
+import scala.collection.mutable.ArrayBuffer
 import scala.collection.{Map, Seq, Set, immutable, mutable}
 import scala.util.{Failure, Success, Try}
 
@@ -1290,11 +1290,13 @@ class KafkaApis(val requestChannel: RequestChannel,
         } else {
           val coordinatorEndpoint = topicMetadata.partitionMetadata.asScala
             .find(_.partition == partition)
-            .map(_.leader)
-            .flatMap(p => Option(p))
+            .filter(_.leaderId.isPresent)
+            .flatMap(metadata => metadataCache.getAliveBroker(metadata.leaderId.get))
+            .flatMap(_.getNode(request.context.listenerName))
+            .filterNot(_.isEmpty)
 
           coordinatorEndpoint match {
-            case Some(endpoint) if !endpoint.isEmpty =>
+            case Some(endpoint) =>
               createFindCoordinatorResponse(Errors.NONE, endpoint)
             case _ =>
               createFindCoordinatorResponse(Errors.COORDINATOR_NOT_AVAILABLE, Node.noNode)
@@ -1390,12 +1392,18 @@ class KafkaApis(val requestChannel: RequestChannel,
     // the callback for sending a join-group response
     def sendResponseCallback(joinResult: JoinGroupResult): Unit = {
       def createResponse(requestThrottleMs: Int): AbstractResponse = {
+        val protocolName = if (request.context.apiVersion() >= 7)
+          joinResult.protocolName.orNull
+        else
+          joinResult.protocolName.getOrElse(GroupCoordinator.NoProtocol)
+
         val responseBody = new JoinGroupResponse(
           new JoinGroupResponseData()
             .setThrottleTimeMs(requestThrottleMs)
             .setErrorCode(joinResult.error.code)
             .setGenerationId(joinResult.generationId)
-            .setProtocolName(joinResult.subProtocol)
+            .setProtocolType(joinResult.protocolType.orNull)
+            .setProtocolName(protocolName)
             .setLeader(joinResult.leaderId)
             .setMemberId(joinResult.memberId)
             .setMembers(joinResult.members.asJava)
@@ -1412,28 +1420,10 @@ class KafkaApis(val requestChannel: RequestChannel,
       // Only enable static membership when IBP >= 2.3, because it is not safe for the broker to use the static member logic
       // until we are sure that all brokers support it. If static group being loaded by an older coordinator, it will discard
       // the group.instance.id field, so static members could accidentally become "dynamic", which leads to wrong states.
-      sendResponseCallback(JoinGroupResult(
-        List.empty,
-        JoinGroupRequest.UNKNOWN_MEMBER_ID,
-        JoinGroupRequest.UNKNOWN_GENERATION_ID,
-        JoinGroupRequest.UNKNOWN_PROTOCOL,
-        JoinGroupRequest.UNKNOWN_MEMBER_ID,
-        Errors.UNSUPPORTED_VERSION
-      ))
+      sendResponseCallback(JoinGroupResult(JoinGroupRequest.UNKNOWN_MEMBER_ID, Errors.UNSUPPORTED_VERSION))
     } else if (!authorize(request, READ, GROUP, joinGroupRequest.data.groupId)) {
-      sendResponseMaybeThrottle(request, requestThrottleMs =>
-        new JoinGroupResponse(
-          new JoinGroupResponseData()
-            .setThrottleTimeMs(requestThrottleMs)
-            .setErrorCode(Errors.GROUP_AUTHORIZATION_FAILED.code)
-            .setGenerationId(JoinGroupRequest.UNKNOWN_GENERATION_ID)
-            .setProtocolName(JoinGroupRequest.UNKNOWN_PROTOCOL)
-            .setLeader(JoinGroupRequest.UNKNOWN_MEMBER_ID)
-            .setMemberId(JoinGroupRequest.UNKNOWN_MEMBER_ID)
-            .setMembers(util.Collections.emptyList())
-        )
-      )
-    }  else {
+      sendResponseCallback(JoinGroupResult(JoinGroupRequest.UNKNOWN_MEMBER_ID, Errors.GROUP_AUTHORIZATION_FAILED))
+    } else {
       val groupInstanceId = Option(joinGroupRequest.data.groupInstanceId)
 
       // Only return MEMBER_ID_REQUIRED error if joinGroupRequest version is >= 4
@@ -1443,6 +1433,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       // let the coordinator handle join-group
       val protocols = joinGroupRequest.data.protocols.valuesList.asScala.map(protocol =>
         (protocol.name, protocol.metadata)).toList
+
       groupCoordinator.handleJoinGroup(
         joinGroupRequest.data.groupId,
         joinGroupRequest.data.memberId,
@@ -1466,6 +1457,8 @@ class KafkaApis(val requestChannel: RequestChannel,
         new SyncGroupResponse(
           new SyncGroupResponseData()
             .setErrorCode(syncGroupResult.error.code)
+            .setProtocolType(syncGroupResult.protocolType.orNull)
+            .setProtocolName(syncGroupResult.protocolName.orNull)
             .setAssignment(syncGroupResult.memberAssignment)
             .setThrottleTimeMs(requestThrottleMs)
         ))
@@ -1475,9 +1468,12 @@ class KafkaApis(val requestChannel: RequestChannel,
       // Only enable static membership when IBP >= 2.3, because it is not safe for the broker to use the static member logic
       // until we are sure that all brokers support it. If static group being loaded by an older coordinator, it will discard
       // the group.instance.id field, so static members could accidentally become "dynamic", which leads to wrong states.
-      sendResponseCallback(SyncGroupResult(Array[Byte](), Errors.UNSUPPORTED_VERSION))
+      sendResponseCallback(SyncGroupResult(Errors.UNSUPPORTED_VERSION))
+    } else if (!syncGroupRequest.areMandatoryProtocolTypeAndNamePresent()) {
+      // Starting from version 5, ProtocolType and ProtocolName fields are mandatory.
+      sendResponseCallback(SyncGroupResult(Errors.INCONSISTENT_GROUP_PROTOCOL))
     } else if (!authorize(request, READ, GROUP, syncGroupRequest.data.groupId)) {
-      sendResponseCallback(SyncGroupResult(Array[Byte](), Errors.GROUP_AUTHORIZATION_FAILED))
+      sendResponseCallback(SyncGroupResult(Errors.GROUP_AUTHORIZATION_FAILED))
     } else {
       val assignmentMap = immutable.Map.newBuilder[String, Array[Byte]]
       syncGroupRequest.data.assignments.asScala.foreach { assignment =>
@@ -1488,6 +1484,8 @@ class KafkaApis(val requestChannel: RequestChannel,
         syncGroupRequest.data.groupId,
         syncGroupRequest.data.generationId,
         syncGroupRequest.data.memberId,
+        Option(syncGroupRequest.data.protocolType),
+        Option(syncGroupRequest.data.protocolName),
         Option(syncGroupRequest.data.groupInstanceId),
         assignmentMap.result,
         sendResponseCallback
@@ -2214,14 +2212,18 @@ class KafkaApis(val requestChannel: RequestChannel,
     authorizer match {
       case None =>
         sendResponseMaybeThrottle(request, requestThrottleMs =>
-          new DescribeAclsResponse(requestThrottleMs,
-            new ApiError(Errors.SECURITY_DISABLED, "No Authorizer is configured on the broker"), util.Collections.emptySet()))
+          new DescribeAclsResponse(new DescribeAclsResponseData()
+            .setErrorCode(Errors.SECURITY_DISABLED.code)
+            .setErrorMessage("No Authorizer is configured on the broker")
+            .setThrottleTimeMs(requestThrottleMs)))
       case Some(auth) =>
         val filter = describeAclsRequest.filter
         val returnedAcls = new util.HashSet[AclBinding]()
-        auth.acls(filter).asScala.foreach(returnedAcls.add)
+        auth.acls(filter).forEach(returnedAcls.add)
         sendResponseMaybeThrottle(request, requestThrottleMs =>
-          new DescribeAclsResponse(requestThrottleMs, ApiError.NONE, returnedAcls))
+          new DescribeAclsResponse(new DescribeAclsResponseData()
+            .setThrottleTimeMs(requestThrottleMs)
+            .setResources(DescribeAclsResponse.aclsResources(returnedAcls))))
     }
   }
 
@@ -2230,40 +2232,46 @@ class KafkaApis(val requestChannel: RequestChannel,
     val createAclsRequest = request.body[CreateAclsRequest]
 
     authorizer match {
-      case None =>
-        sendResponseMaybeThrottle(request, requestThrottleMs =>
-          createAclsRequest.getErrorResponse(requestThrottleMs,
-            new SecurityDisabledException("No Authorizer is configured on the broker.")))
+      case None => sendResponseMaybeThrottle(request, requestThrottleMs =>
+        createAclsRequest.getErrorResponse(requestThrottleMs,
+          new SecurityDisabledException("No Authorizer is configured on the broker.")))
       case Some(auth) =>
-
+        val allBindings = createAclsRequest.aclCreations.asScala.map(CreateAclsRequest.aclBinding)
         val errorResults = mutable.Map[AclBinding, AclCreateResult]()
-        val aclBindings = createAclsRequest.aclCreations.asScala.map(_.acl)
-        val validBindings = aclBindings
-          .filter { acl =>
-            val resource = acl.pattern
-            val throwable = if (resource.resourceType == ResourceType.CLUSTER && !AuthorizerUtils.isClusterResource(resource.name))
-                new InvalidRequestException("The only valid name for the CLUSTER resource is " + CLUSTER_NAME)
-            else if (resource.name.isEmpty)
-              new InvalidRequestException("Invalid empty resource name")
-            else
-              null
-            if (throwable != null) {
-              debug(s"Failed to add acl $acl to $resource", throwable)
-              errorResults(acl) = new AclCreateResult(throwable)
-              false
-            } else
-              true
-          }
+        val validBindings = new ArrayBuffer[AclBinding]
+        allBindings.foreach { acl =>
+          val resource = acl.pattern
+          val throwable = if (resource.resourceType == ResourceType.CLUSTER && !AuthorizerUtils.isClusterResource(resource.name))
+              new InvalidRequestException("The only valid name for the CLUSTER resource is " + CLUSTER_NAME)
+          else if (resource.name.isEmpty)
+            new InvalidRequestException("Invalid empty resource name")
+          else
+            null
+          if (throwable != null) {
+            debug(s"Failed to add acl $acl to $resource", throwable)
+            errorResults(acl) = new AclCreateResult(throwable)
+          } else
+            validBindings += acl
+        }
 
-        val createResults = auth.createAcls(request.context, validBindings.asJava)
-          .asScala.map(_.toCompletableFuture).toList
+        val createResults = auth.createAcls(request.context, validBindings.asJava).asScala.map(_.toCompletableFuture)
+
         def sendResponseCallback(): Unit = {
-          val aclCreationResults = aclBindings.map { acl =>
+          val aclCreationResults = allBindings.map { acl =>
             val result = errorResults.getOrElse(acl, createResults(validBindings.indexOf(acl)).get)
-            new AclCreationResponse(result.exception.asScala.map(ApiError.fromThrowable).getOrElse(ApiError.NONE))
+            val creationResult = new AclCreationResult()
+            result.exception.asScala.foreach { throwable =>
+              val apiError = ApiError.fromThrowable(throwable)
+              creationResult
+                .setErrorCode(apiError.error.code)
+                .setErrorMessage(apiError.message)
+            }
+            creationResult
           }
           sendResponseMaybeThrottle(request, requestThrottleMs =>
-            new CreateAclsResponse(requestThrottleMs, aclCreationResults.asJava))
+            new CreateAclsResponse(new CreateAclsResponseData()
+              .setThrottleTimeMs(requestThrottleMs)
+              .setResults(aclCreationResults.asJava)))
         }
 
         alterAclsPurgatory.tryCompleteElseWatch(config.connectionsMaxIdleMs, createResults, sendResponseCallback)
@@ -2283,19 +2291,12 @@ class KafkaApis(val requestChannel: RequestChannel,
         val deleteResults = auth.deleteAcls(request.context, deleteAclsRequest.filters)
           .asScala.map(_.toCompletableFuture).toList
 
-        def toErrorCode(exception: Optional[ApiException]): ApiError = {
-          exception.asScala.map(ApiError.fromThrowable).getOrElse(ApiError.NONE)
-        }
-
         def sendResponseCallback(): Unit = {
-          val filterResponses = deleteResults.map(_.get).map { result =>
-            val deletions = result.aclBindingDeleteResults().asScala.toList.map { deletionResult =>
-              new AclDeletionResult(toErrorCode(deletionResult.exception), deletionResult.aclBinding)
-            }.asJava
-            new AclFilterResponse(toErrorCode(result.exception), deletions)
-          }.asJava
+          val filterResults = deleteResults.map(_.get).map(DeleteAclsResponse.filterResult).asJava
           sendResponseMaybeThrottle(request, requestThrottleMs =>
-            new DeleteAclsResponse(requestThrottleMs, filterResponses))
+            new DeleteAclsResponse(new DeleteAclsResponseData()
+              .setThrottleTimeMs(requestThrottleMs)
+              .setFilterResults(filterResults)))
         }
         alterAclsPurgatory.tryCompleteElseWatch(config.connectionsMaxIdleMs, deleteResults, sendResponseCallback)
     }
