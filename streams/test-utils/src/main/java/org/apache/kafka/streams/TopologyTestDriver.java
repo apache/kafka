@@ -292,7 +292,7 @@ public class TopologyTestDriver implements Closeable {
         internalTopologyBuilder = builder;
         internalTopologyBuilder.rewriteTopology(streamsConfig);
 
-        processorTopology = internalTopologyBuilder.build(null);
+        processorTopology = internalTopologyBuilder.build();
         globalTopology = internalTopologyBuilder.buildGlobalStateTopology();
         final boolean createStateDirectory = processorTopology.hasPersistentLocalStore() ||
             (globalTopology != null && globalTopology.hasPersistentGlobalStore());
@@ -390,6 +390,7 @@ public class TopologyTestDriver implements Closeable {
                 stateDirectory,
                 processorTopology.storeToChangelogTopic(),
                 new StoreChangelogReader(
+                    mockWallClockTime,
                     streamsConfig,
                     logContext,
                     createRestoreConsumer(processorTopology.storeToChangelogTopic()),
