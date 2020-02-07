@@ -255,8 +255,8 @@ public class InternalTopologyBuilderTest {
         builder.addSource(null, "source-3", null, null, null, "topic-3");
         builder.addSource(null, "source-4", null, null, null, sourcePattern);
 
-        builder.initializeSubscription();
         builder.addInternalTopic("topic-3", InternalTopicProperties.empty());
+        builder.initializeSubscription();
 
         final Pattern expectedPattern = Pattern.compile("X-topic-3|topic-1|topic-2|topic-4|topic-5");
 
