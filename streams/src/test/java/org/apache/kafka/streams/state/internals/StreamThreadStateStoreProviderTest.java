@@ -318,6 +318,7 @@ public class StreamThreadStateStoreProviderTest {
             stateDirectory,
             topology.storeToChangelogTopic(),
             new StoreChangelogReader(
+                new MockTime(),
                 streamsConfig,
                 logContext,
                 clientSupplier.restoreConsumer,

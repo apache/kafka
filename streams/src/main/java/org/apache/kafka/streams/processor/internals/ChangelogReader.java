@@ -31,11 +31,6 @@ public interface ChangelogReader extends ChangelogRegister {
     void restore();
 
     /**
-     * Update offset limit of a given changelog partition
-     */
-    void updateLimitOffsets();
-
-    /**
      * Transit to restore active changelogs mode
      */
     void transitToRestoreActive();
