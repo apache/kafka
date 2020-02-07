@@ -22,10 +22,9 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.requests.MetadataResponse;
+import org.apache.kafka.common.requests.MetadataResponse.PartitionMetadata;
 
 import java.net.InetSocketAddress;
-import java.util.Arrays;
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -49,13 +48,13 @@ public class MetadataCache {
     private final Set<String> invalidTopics;
     private final Set<String> internalTopics;
     private final Node controller;
-    private final Map<TopicPartition, MetadataResponse.PartitionMetadata> metadataByPartition;
+    private final Map<TopicPartition, PartitionMetadata> metadataByPartition;
 
     private Cluster clusterInstance;
 
     MetadataCache(String clusterId,
                   Map<Integer, Node> nodes,
-                  Collection<MetadataResponse.PartitionMetadata> partitions,
+                  Collection<PartitionMetadata> partitions,
                   Set<String> unauthorizedTopics,
                   Set<String> invalidTopics,
                   Set<String> internalTopics,
@@ -65,7 +64,7 @@ public class MetadataCache {
 
     private MetadataCache(String clusterId,
                           Map<Integer, Node> nodes,
-                          Collection<MetadataResponse.PartitionMetadata> partitions,
+                          Collection<PartitionMetadata> partitions,
                           Set<String> unauthorizedTopics,
                           Set<String> invalidTopics,
                           Set<String> internalTopics,
@@ -79,7 +78,7 @@ public class MetadataCache {
         this.controller = controller;
 
         this.metadataByPartition = new HashMap<>(partitions.size());
-        for (MetadataResponse.PartitionMetadata p : partitions) {
+        for (PartitionMetadata p : partitions) {
             this.metadataByPartition.put(p.topicPartition, p);
         }
 
@@ -90,7 +89,7 @@ public class MetadataCache {
         }
     }
 
-    Optional<MetadataResponse.PartitionMetadata> partitionMetadata(TopicPartition topicPartition) {
+    Optional<PartitionMetadata> partitionMetadata(TopicPartition topicPartition) {
         return Optional.ofNullable(metadataByPartition.get(topicPartition));
     }
 
@@ -111,31 +110,6 @@ public class MetadataCache {
     }
 
     /**
-     * Replaces all nodes in {@code oldNodeArray} with the corresponding node object with the same id in {@code nodeMap}.
-     * If a node is not found, then it is removed from the array.
-     *
-     * @param nodeMap mapping of node ids to nodes
-     * @param oldNodeArray the original node array
-     * @return the updated node array
-     */
-    private Node[] resolveNodeArray(Map<Integer, Node> nodeMap, Node[] oldNodeArray) {
-        Node[] newNodeArray = new Node[oldNodeArray.length];
-        int index = 0;
-        for (Node oldNode : oldNodeArray) {
-            Node newNode = nodeMap.get(oldNode.id());
-            if (newNode == null) {
-                continue;
-            }
-            newNodeArray[index] = newNode;
-            ++index;
-        }
-        if (index != newNodeArray.length) {
-            newNodeArray = Arrays.copyOf(newNodeArray, index);
-        }
-        return newNodeArray;
-    }
-
-    /**
      * Merges the metadata cache's contents with the provided metadata, returning a new metadata cache. The provided
      * metadata is presumed to be more recent than the cache's metadata, and therefore all overlapping metadata will
      * be overridden.
@@ -150,8 +124,8 @@ public class MetadataCache {
      * @return the merged metadata cache
      */
     MetadataCache mergeWith(String newClusterId,
-                            List<Node> newNodes,
-                            Collection<PartitionInfoAndEpoch> addPartitions,
+                            Map<Integer, Node> newNodes,
+                            Collection<PartitionMetadata> addPartitions,
                             Set<String> addUnauthorizedTopics,
                             Set<String> addInvalidTopics,
                             Set<String> addInternalTopics,
@@ -160,35 +134,21 @@ public class MetadataCache {
 
         Predicate<String> shouldRetainTopic = topic -> retainTopic.test(topic, internalTopics.contains(topic));
 
-        Map<Integer, Node> nodeMap = new HashMap<>(newNodes.size());
-        for (Node node : newNodes) {
-            nodeMap.put(node.id(), node);
+        Map<TopicPartition, PartitionMetadata> newMetadataByPartition = new HashMap<>(addPartitions.size());
+        for (PartitionMetadata partition : addPartitions) {
+            newMetadataByPartition.put(partition.topicPartition, partition);
         }
-
-        // For all topic metadata that's to be retained, we must update the partition info's nodes since it's possible that
-        // a node has been modified or removed. Update the node object for known nodes, otherwise clear all nodes that were
-        // removed and let the metadata resolution process request an update, if necessary.
-        ArrayList<PartitionInfoAndEpoch> newPartitions = new ArrayList<>(addPartitions);
-        for (Map.Entry<TopicPartition, MetadataCache.PartitionInfoAndEpoch> entry : metadataByPartition.entrySet()) {
-            if (!shouldRetainTopic.test(entry.getKey().topic())) {
-                continue;
+        for (Map.Entry<TopicPartition, PartitionMetadata> entry : metadataByPartition.entrySet()) {
+            if (shouldRetainTopic.test(entry.getKey().topic())) {
+                newMetadataByPartition.putIfAbsent(entry.getKey(), entry.getValue());
             }
-
-            PartitionInfo oldPartitionInfo = entry.getValue().partitionInfo();
-            PartitionInfo newPartitionInfo = new PartitionInfo(entry.getKey().topic(),
-                                                               entry.getKey().partition(),
-                                                               nodeMap.get(oldPartitionInfo.leader().id()),
-                                                               resolveNodeArray(nodeMap, oldPartitionInfo.replicas()),
-                                                               resolveNodeArray(nodeMap, oldPartitionInfo.inSyncReplicas()),
-                                                               resolveNodeArray(nodeMap, oldPartitionInfo.offlineReplicas()));
-            newPartitions.add(new PartitionInfoAndEpoch(newPartitionInfo, entry.getValue().epoch()));
         }
 
         Set<String> newUnauthorizedTopics = fillSet(addUnauthorizedTopics, unauthorizedTopics, shouldRetainTopic);
         Set<String> newInvalidTopics = fillSet(addInvalidTopics, invalidTopics, shouldRetainTopic);
         Set<String> newInternalTopics = fillSet(addInternalTopics, internalTopics, shouldRetainTopic);
 
-        return new MetadataCache(newClusterId, newNodes, newPartitions, newUnauthorizedTopics,
+        return new MetadataCache(newClusterId, newNodes, newMetadataByPartition.values(), newUnauthorizedTopics,
                 newInvalidTopics, newInternalTopics, newController);
     }
 
@@ -202,8 +162,7 @@ public class MetadataCache {
      * @param predicate tested against the fill set to determine whether elements should be added to the base set
      */
     private static <T> Set<T> fillSet(Set<T> baseSet, Set<T> fillSet, Predicate<T> predicate) {
-        Set<T> result = new HashSet<>(baseSet.size());
-        result.addAll(baseSet);
+        Set<T> result = new HashSet<>(baseSet);
         for (T element : fillSet) {
             if (predicate.test(element)) {
                 result.add(element);

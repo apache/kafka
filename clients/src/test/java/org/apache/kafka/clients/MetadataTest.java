@@ -50,7 +50,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.stream.Collectors;
 
 import static org.apache.kafka.test.TestUtils.assertOptional;
 import static org.junit.Assert.assertEquals;
@@ -722,15 +721,15 @@ public class MetadataTest {
                 .setIsrNodes(Arrays.asList(1, 2))
                 .setOfflineReplicas(Collections.singletonList(0));
 
-        metadata.update(new MetadataResponse(new MetadataResponseData()
+        metadata.updateWithCurrentRequestVersion(new MetadataResponse(new MetadataResponseData()
                         .setTopics(buildTopicCollection(tp.topic(), firstPartitionMetadata))
                         .setBrokers(buildBrokerCollection(Arrays.asList(node0, node1, node2)))),
-                10L);
+                false, 10L);
 
-        metadata.update(new MetadataResponse(new MetadataResponseData()
+        metadata.updateWithCurrentRequestVersion(new MetadataResponse(new MetadataResponseData()
                         .setTopics(buildTopicCollection(tp.topic(), secondPartitionMetadata))
                         .setBrokers(buildBrokerCollection(Arrays.asList(node1, node2)))),
-                20L);
+                false, 20L);
 
         assertNull(metadata.fetch().leaderFor(tp));
         assertEquals(Optional.of(10), metadata.lastSeenLeaderEpoch(tp));

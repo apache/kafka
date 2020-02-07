@@ -164,7 +164,7 @@ public class Metadata implements Closeable {
             throw new IllegalArgumentException("Invalid leader epoch " + leaderEpoch + " (must be non-negative)");
 
         boolean updated = updateLastSeenEpoch(topicPartition, leaderEpoch, oldEpoch -> leaderEpoch > oldEpoch);
-        this.needUpdate = this.needUpdate || updated;
+        this.needFullUpdate = this.needFullUpdate || updated;
         return updated;
     }
 
@@ -352,7 +352,7 @@ public class Metadata implements Closeable {
             }
         }
 
-        Map<Integer, Node> nodes = new ArrayList<>(metadataResponse.brokersById());
+        Map<Integer, Node> nodes = metadataResponse.brokersById();
         if (isPartialUpdate)
             return this.cache.mergeWith(metadataResponse.clusterId(), nodes, partitions,
                 unauthorizedTopics, invalidTopics, internalTopics, metadataResponse.controller(),
