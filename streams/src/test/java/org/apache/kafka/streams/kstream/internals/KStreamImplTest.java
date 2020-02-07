@@ -2957,10 +2957,7 @@ public class KStreamImplTest {
 
     private static Map<String, String> asMap(final KeyValueStore<String, String> store) {
         final HashMap<String, String> result = new HashMap<>();
-        store.all().forEachRemaining(kv -> {
-            System.out.println(kv);
-            result.put(kv.key, kv.value);
-        });
+        store.all().forEachRemaining(kv -> result.put(kv.key, kv.value));
         return result;
     }
 }
