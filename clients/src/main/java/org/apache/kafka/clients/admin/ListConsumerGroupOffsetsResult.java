@@ -40,7 +40,7 @@ public class ListConsumerGroupOffsetsResult {
 
     /**
      * Return a future which yields a map of topic partitions to OffsetAndMetadata objects.
-     * If the partition does not have a committed offset, the corresponding value will be null
+     * If the group does not have a committed offset for this partition, the corresponding value in the returned map will be null.
      */
     public KafkaFuture<Map<TopicPartition, OffsetAndMetadata>> partitionsToOffsetAndMetadata() {
         return future;

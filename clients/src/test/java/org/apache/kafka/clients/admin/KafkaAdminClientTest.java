@@ -1503,7 +1503,7 @@ public class KafkaAdminClientTest {
                     Optional.empty(), "", Errors.NONE));
             responseData.put(myTopicPartition2, new OffsetFetchResponse.PartitionData(20,
                     Optional.empty(), "", Errors.NONE));
-            responseData.put(myTopicPartition3, new OffsetFetchResponse.PartitionData(-1,
+            responseData.put(myTopicPartition3, new OffsetFetchResponse.PartitionData(OffsetFetchResponse.INVALID_OFFSET,
                     Optional.empty(), "", Errors.NONE));
             env.kafkaClient().prepareResponse(new OffsetFetchResponse(Errors.NONE, responseData));
 
@@ -1514,6 +1514,7 @@ public class KafkaAdminClientTest {
             assertEquals(10, partitionToOffsetAndMetadata.get(myTopicPartition0).offset());
             assertEquals(0, partitionToOffsetAndMetadata.get(myTopicPartition1).offset());
             assertEquals(20, partitionToOffsetAndMetadata.get(myTopicPartition2).offset());
+            assertTrue(partitionToOffsetAndMetadata.containsKey(myTopicPartition3));
             assertNull(partitionToOffsetAndMetadata.get(myTopicPartition3));
         }
     }
