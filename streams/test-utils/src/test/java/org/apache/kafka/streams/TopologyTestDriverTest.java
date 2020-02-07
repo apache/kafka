@@ -33,6 +33,7 @@ import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.Materialized;
+import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
@@ -40,6 +41,7 @@ import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.To;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
@@ -73,6 +75,8 @@ import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkProperties;
 import static org.hamcrest.CoreMatchers.equalTo;
+import static org.hamcrest.CoreMatchers.is;
+import static org.hamcrest.CoreMatchers.notNullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -1209,7 +1213,7 @@ public class TopologyTestDriverTest {
         testDriver.pipeRecord(topic, new TestRecord<>(key, value, null, time),
                 new StringSerializer(), new LongSerializer(), null);
     }
-    
+
     private void compareKeyValue(final TestRecord<String, Long> record, final String key, final Long value) {
         assertThat(record.getKey(), equalTo(key));
         assertThat(record.getValue(), equalTo(value));
@@ -1521,5 +1525,131 @@ public class TopologyTestDriverTest {
 
         final TaskId taskId = new TaskId(0, 0);
         assertTrue(new File(appDir, taskId.toString()).exists());
+    }
+
+    @Test
+    public void shouldEnqueueLaterOutputsAfterEarlierOnes() {
+        final Properties properties = new Properties();
+        properties.setProperty(StreamsConfig.APPLICATION_ID_CONFIG, "dummy");
+        properties.setProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy");
+
+        final Topology topology = new Topology();
+        topology.addSource("source", new StringDeserializer(), new StringDeserializer(), "input");
+        topology.addProcessor(
+            "recursiveProcessor",
+            () -> new AbstractProcessor<String, String>() {
+                @Override
+                public void process(final String key, final String value) {
+                    if (!value.startsWith("recurse-")) {
+                        context().forward(key, "recurse-" + value, To.child("recursiveSink"));
+                    }
+                    context().forward(key, value, To.child("sink"));
+                }
+            },
+            "source"
+        );
+        topology.addSink("recursiveSink", "input", new StringSerializer(), new StringSerializer(), "recursiveProcessor");
+        topology.addSink("sink", "output", new StringSerializer(), new StringSerializer(), "recursiveProcessor");
+
+        try (final TopologyTestDriver topologyTestDriver = new TopologyTestDriver(topology, properties)) {
+            final TestInputTopic<String, String> in = topologyTestDriver.createInputTopic("input", new StringSerializer(), new StringSerializer());
+            final TestOutputTopic<String, String> out = topologyTestDriver.createOutputTopic("output", new StringDeserializer(), new StringDeserializer());
+
+            // given the topology above, we expect to see the output _first_ echo the input
+            // and _then_ print it with "recurse-" prepended.
+
+            // Since this is a table operation, here's what we expect the final "table view" to look like:
+            in.pipeInput("A", "alpha");
+            final Map<String, String> table = out.readKeyValuesToMap();
+            assertThat(table, is(Collections.singletonMap("A", "recurse-alpha")));
+
+            // Also, just to make sure that nothing extra happened in the intermediate states:
+            in.pipeInput("B", "beta");
+            final List<KeyValue<String, String>> events = out.readKeyValuesToList();
+            assertThat(
+                events,
+                is(Arrays.asList(
+                    new KeyValue<>("B", "beta"),
+                    new KeyValue<>("B", "recurse-beta")
+                ))
+            );
+
+        }
+    }
+
+    @Test
+    public void shouldApplyGlobalUpdatesCorrectlyInRecursiveTopologies() {
+        final Properties properties = new Properties();
+        properties.setProperty(StreamsConfig.APPLICATION_ID_CONFIG, "dummy");
+        properties.setProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy");
+
+        final Topology topology = new Topology();
+        topology.addSource("source", new StringDeserializer(), new StringDeserializer(), "input");
+        topology.addGlobalStore(
+            Stores.keyValueStoreBuilder(Stores.inMemoryKeyValueStore("globule-store"), Serdes.String(), Serdes.String()).withLoggingDisabled(),
+            "globuleSource",
+            new StringDeserializer(),
+            new StringDeserializer(),
+            "globule-topic",
+            "globuleProcessor",
+            () -> new Processor<String, String>() {
+                private KeyValueStore<String, String> stateStore;
+
+                @SuppressWarnings("unchecked")
+                @Override
+                public void init(final ProcessorContext context) {
+                    stateStore = (KeyValueStore<String, String>) context.getStateStore("globule-store");
+                }
+
+                @Override
+                public void process(final String key, final String value) {
+                    stateStore.put(key, value);
+                }
+
+                @Override
+                public void close() {
+
+                }
+            }
+        );
+        topology.addProcessor(
+            "recursiveProcessor",
+            () -> new AbstractProcessor<String, String>() {
+                @Override
+                public void process(final String key, final String value) {
+                    if (!value.startsWith("recurse-")) {
+                        context().forward(key, "recurse-" + value, To.child("recursiveSink"));
+                    }
+                    context().forward(key, value, To.child("sink"));
+                    context().forward(key, value, To.child("globuleSink"));
+                }
+            },
+            "source"
+        );
+        topology.addSink("recursiveSink", "input", new StringSerializer(), new StringSerializer(), "recursiveProcessor");
+        topology.addSink("sink", "output", new StringSerializer(), new StringSerializer(), "recursiveProcessor");
+        topology.addSink("globuleSink", "globule-topic", new StringSerializer(), new StringSerializer(), "recursiveProcessor");
+
+        try (final TopologyTestDriver topologyTestDriver = new TopologyTestDriver(topology, properties)) {
+            final TestInputTopic<String, String> in = topologyTestDriver.createInputTopic("input", new StringSerializer(), new StringSerializer());
+            final TestOutputTopic<String, String> globalTopic = topologyTestDriver.createOutputTopic("globule-topic", new StringDeserializer(), new StringDeserializer());
+
+            in.pipeInput("A", "alpha");
+
+            // expect the global store to correctly reflect the last update
+            final KeyValueStore<String, String> keyValueStore = topologyTestDriver.getKeyValueStore("globule-store");
+            assertThat(keyValueStore, notNullValue());
+            assertThat(keyValueStore.get("A"), is("recurse-alpha"));
+
+            // and also just make sure the test really sent both events to the topic.
+            final List<KeyValue<String, String>> events = globalTopic.readKeyValuesToList();
+            assertThat(
+                events,
+                is(Arrays.asList(
+                    new KeyValue<>("A", "alpha"),
+                    new KeyValue<>("A", "recurse-alpha")
+                ))
+            );
+        }
     }
 }

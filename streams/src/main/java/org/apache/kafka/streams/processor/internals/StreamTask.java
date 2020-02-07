@@ -907,6 +907,10 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         }
     }
 
+    public boolean hasRecordsQueued() {
+        return numBuffered() > 0;
+    }
+
     // below are visible for testing only
     RecordCollector recordCollector() {
         return recordCollector;
