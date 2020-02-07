@@ -15,14 +15,13 @@
 # limitations under the License.
 SIGNAL=${SIGNAL:-TERM}
 
-if [ -z $JOBNAME ];then
+if [[ $(uname -s) == "OS/390" ]]; then
+    if [ -z $JOBNAME ]; then
         JOBNAME="ZKEESTRT"
-fi
-
-if [[ $(uname -s) == "OS/390" ]] ; then
-        PIDS=$(ps -A -o pid,jobname,comm | grep -i $JOBNAME | grep java | grep -v grep | awk '{print $1}')
+    fi
+    PIDS=$(ps -A -o pid,jobname,comm | grep -i $JOBNAME | grep java | grep -v grep | awk '{print $1}')
 else
-        PIDS=$(ps ax | grep java | grep -i QuorumPeerMain | grep -v grep | awk '{print $1}')
+    PIDS=$(ps ax | grep java | grep -i QuorumPeerMain | grep -v grep | awk '{print $1}')
 fi
 
 if [ -z "$PIDS" ]; then
