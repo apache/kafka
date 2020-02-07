@@ -179,7 +179,7 @@ public class StoreChangelogReader implements ChangelogReader {
 
     private final Time time;
     private final Logger log;
-    private final Duration pollTimeMs;
+    private final Duration pollTime;
     private final long updateOffsetIntervalMs;
 
     // 1) we keep adding partitions to restore consumer whenever new tasks are registered with the state manager;
@@ -217,7 +217,7 @@ public class StoreChangelogReader implements ChangelogReader {
         // NOTE for restoring active and updating standby we may prefer different poll time
         // in order to make sure we call the main consumer#poll in time.
         // TODO: once both of these are moved to a separate thread this may no longer be a concern
-        this.pollTimeMs = Duration.ofMillis(config.getLong(StreamsConfig.POLL_MS_CONFIG));
+        this.pollTime = Duration.ofMillis(config.getLong(StreamsConfig.POLL_MS_CONFIG));
         this.updateOffsetIntervalMs = config.getLong(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG) == Long.MAX_VALUE ?
             DEFAULT_OFFSET_UPDATE_MS : config.getLong(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG);
         this.lastUpdateOffsetTime = 0L;
@@ -409,7 +409,7 @@ public class StoreChangelogReader implements ChangelogReader {
             final ConsumerRecords<byte[], byte[]> polledRecords;
 
             try {
-                polledRecords = restoreConsumer.poll(pollTimeMs);
+                polledRecords = restoreConsumer.poll(pollTime);
             } catch (final FencedInstanceIdException e) {
                 // when the consumer gets fenced, all its tasks should be migrated
                 throw new TaskMigratedException("Restore consumer get fenced by instance-id polling records.", e);
