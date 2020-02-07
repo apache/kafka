@@ -258,11 +258,18 @@ class TopicDeletionManager(config: KafkaConfig,
    */
   private def onTopicDeletion(topics: Set[String]): Unit = {
     info(s"Topic deletion callback for ${topics.mkString(",")}")
-    // send update metadata so that brokers stop serving data for topics to be deleted
-    val partitions = topics.flatMap(controllerContext.partitionsForTopic)
+    val partitions = mutable.Set.empty[TopicPartition]
+    val mapBuilder = Map.newBuilder[String, Set[TopicPartition]]
+    topics.foreach { topic =>
+      val topicPartitions = controllerContext.partitionsForTopic(topic)
+      mapBuilder += topic -> topicPartitions
+      partitions ++= topicPartitions
+    }
+    val partitionsByTopic = mapBuilder.result
+
     val unseenTopicsForDeletion = topics -- controllerContext.topicsWithDeletionStarted
     if (unseenTopicsForDeletion.nonEmpty) {
-      val unseenPartitionsForDeletion = unseenTopicsForDeletion.flatMap(controllerContext.partitionsForTopic)
+      val unseenPartitionsForDeletion = unseenTopicsForDeletion.flatMap(partitionsByTopic)
       partitionStateMachine.handleStateChanges(unseenPartitionsForDeletion.toSeq, OfflinePartition)
       partitionStateMachine.handleStateChanges(unseenPartitionsForDeletion.toSeq, NonExistentPartition)
       // adding of unseenTopicsForDeletion to topics with deletion started must be done after the partition
@@ -270,8 +277,10 @@ class TopicDeletionManager(config: KafkaConfig,
       controllerContext.beginTopicDeletion(unseenTopicsForDeletion)
     }
 
+    // send update metadata so that brokers stop serving data for topics to be deleted
     client.sendMetadataUpdate(partitions)
-    onPartitionDeletion(partitions)
+
+    onPartitionDeletion(partitionsByTopic)
   }
 
   /**
@@ -288,14 +297,13 @@ class TopicDeletionManager(config: KafkaConfig,
    * 1. Move all dead replicas directly to ReplicaDeletionIneligible state. Also mark the respective topics ineligible
    *    for deletion if some replicas are dead since it won't complete successfully anyway
    * 2. Move all alive replicas to ReplicaDeletionStarted state so they can be deleted successfully
-   * @param replicasForTopicsToBeDeleted
    */
-  private def startReplicaDeletion(replicasForTopicsToBeDeleted: Set[PartitionAndReplica]): Unit = {
-    val allDeadReplicasForTopic = mutable.Set.empty[PartitionAndReplica]
-    val allReplicasForDeletionRetry = mutable.Set.empty[PartitionAndReplica]
+  private def startReplicaDeletion(replicasForTopicsToBeDeleted: Map[String, Set[PartitionAndReplica]]): Unit = {
+    val allDeadReplicasForTopic = mutable.ListBuffer.empty[PartitionAndReplica]
+    val allReplicasForDeletionRetry = mutable.ListBuffer.empty[PartitionAndReplica]
     val allTopicsIneligibleForDeletion = mutable.Set.empty[String]
 
-    replicasForTopicsToBeDeleted.groupBy(_.topic).foreach { case (topic, replicasForTopicToBeDeleted) =>
+    replicasForTopicsToBeDeleted.foreach { case (topic, replicasForTopicToBeDeleted) =>
       val aliveReplicasForTopic = controllerContext.liveReplicasForTopic(topic)
       val deadReplicasForTopic = replicasForTopicToBeDeleted -- aliveReplicasForTopic
       val successfullyDeletedReplicas = controllerContext.replicasInState(topic, ReplicaDeletionSuccessful)
@@ -311,11 +319,11 @@ class TopicDeletionManager(config: KafkaConfig,
     }
 
     // move dead replicas directly to failed state
-    replicaStateMachine.handleStateChanges(allDeadReplicasForTopic.toSeq, ReplicaDeletionIneligible)
+    replicaStateMachine.handleStateChanges(allDeadReplicasForTopic, ReplicaDeletionIneligible)
     // send stop replica to all followers that are not in the OfflineReplica state so they stop sending fetch requests to the leader
-    replicaStateMachine.handleStateChanges(allReplicasForDeletionRetry.toSeq, OfflineReplica)
+    replicaStateMachine.handleStateChanges(allReplicasForDeletionRetry, OfflineReplica)
     debug(s"Deletion started for replicas ${allReplicasForDeletionRetry.mkString(",")}")
-    replicaStateMachine.handleStateChanges(allReplicasForDeletionRetry.toSeq, ReplicaDeletionStarted)
+    replicaStateMachine.handleStateChanges(allReplicasForDeletionRetry, ReplicaDeletionStarted)
 
     if (allTopicsIneligibleForDeletion.nonEmpty) {
       markTopicIneligibleForDeletion(allTopicsIneligibleForDeletion, reason = "offline replicas")
@@ -333,10 +341,8 @@ class TopicDeletionManager(config: KafkaConfig,
    * 3. Move all replicas to ReplicaDeletionStarted state. This will send StopReplicaRequest with deletePartition=true. And
    *    will delete all persistent data from all replicas of the respective partitions
    */
-  private def onPartitionDeletion(partitionsToBeDeleted: Set[TopicPartition]): Unit = {
-    info(s"Partition deletion callback for ${partitionsToBeDeleted.mkString(",")}")
-    val replicasPerPartition = controllerContext.replicasForPartition(partitionsToBeDeleted)
-    startReplicaDeletion(replicasPerPartition)
+  private def onPartitionDeletion(partitionsToBeDeleted: Map[String, Set[TopicPartition]]): Unit = {
+    startReplicaDeletion(partitionsToBeDeleted.mapValues(controllerContext.replicasForPartition))
   }
 
   private def resumeDeletions(): Unit = {
