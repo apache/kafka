@@ -1051,8 +1051,15 @@ class GroupCoordinator(val brokerId: Int,
 
     info(s"Preparing to rebalance group ${group.groupId} in state ${group.currentState} with old generation " +
       s"${group.generationId} (${Topic.GROUP_METADATA_TOPIC_NAME}-${partitionFor(group.groupId)}) (reason: $reason), " +
-      s"the remaining instances are ${group.allMembers}, and the delayed rebalance is $startEmpty " +
-      s"with initial delay ${groupConfig.groupInitialRebalanceDelayMs}")
+      s"the remaining instances are ${group.allMembers}")
+
+    group.members.foreach(member => {
+      info(s"member ${member._2.memberId} is awaiting join ${member._2.isAwaitingJoin} or " +
+        s"awaiting sync ${member._2.isAwaitingSync}" )
+    })
+
+    info(s"The join complete condition checking: all members joined ${group.hasAllMembersJoined}, " +
+      s"members waiting join count: ${group.numMembersAwaitingJoin}, pending members: ${group.pendingMembers} ")
 
     val groupKey = GroupKey(group.groupId)
     joinPurgatory.tryCompleteElseWatch(delayedRebalance, Seq(groupKey))

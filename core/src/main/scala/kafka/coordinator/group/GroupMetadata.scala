@@ -203,11 +203,11 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
   var generationId = 0
   private var leaderId: Option[String] = None
 
-  private val members = new mutable.HashMap[String, MemberMetadata]
+  val members = new mutable.HashMap[String, MemberMetadata]
   // Static membership mapping [key: group.instance.id, value: member.id]
   private val staticMembers = new mutable.HashMap[String, String]
-  private val pendingMembers = new mutable.HashSet[String]
-  private var numMembersAwaitingJoin = 0
+  val pendingMembers = new mutable.HashSet[String]
+  var numMembersAwaitingJoin = 0
   private val supportedProtocols = new mutable.HashMap[String, Integer]().withDefaultValue(0)
   private val offsets = new mutable.HashMap[TopicPartition, CommitRecordMetadataAndOffset]
   private val pendingOffsetCommits = new mutable.HashMap[TopicPartition, OffsetAndMetadata]
@@ -354,7 +354,6 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
   def notYetRejoinedMembers = members.values.filter(!_.isAwaitingJoin).toList
 
   def hasAllMembersJoined = {
-    info(s"The join complete condition checking: members => $members, members waiting join count: $numMembersAwaitingJoin, pending members: $pendingMembers")
     members.size == numMembersAwaitingJoin && pendingMembers.isEmpty
   }
 
