@@ -576,7 +576,7 @@ public final class Utils {
             System.out.println("Did not load any properties since the property file is not specified");
         }
 
-        if (onlyIncludeKeys == null || onlyIncludeKeys.size() == 0)
+        if (onlyIncludeKeys == null || onlyIncludeKeys.isEmpty())
             return props;
         Properties requestedProps = new Properties();
         onlyIncludeKeys.forEach(key -> {

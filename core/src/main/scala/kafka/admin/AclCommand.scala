@@ -190,7 +190,7 @@ object AclCommand extends Logging {
       // We will default the value of zookeeper.set.acl to true or false based on whether SASL is configured,
       // but if SASL is not configured and zookeeper.set.acl is supposed to be true due to mutual certificate authentication
       // then it will be up to the user to explicitly specify zookeeper.set.acl=true in the authorizer-properties.
-      val defaultProps = Map(KafkaConfig.ZkEnableSecureAclsProp -> JaasUtils.isZkSecurityEnabled)
+      val defaultProps = Map(KafkaConfig.ZkEnableSecureAclsProp -> JaasUtils.isZkSaslEnabled)
       val authorizerPropertiesWithoutTls =
         if (opts.options.has(opts.authorizerPropertiesOpt)) {
           val authorizerProperties = opts.options.valuesOf(opts.authorizerPropertiesOpt).asScala
@@ -201,7 +201,6 @@ object AclCommand extends Logging {
       val authorizerProperties =
         if (opts.options.has(opts.zkTlsConfigFile)) {
           // load in TLS configs both with and without the "authorizer." prefix
-          // Tested via System Test kafkatest.tests.core.zookeeper_tls_test.ZookeeperTlsTest.test_zk_tls
           val validKeys = (KafkaConfig.ZkSslConfigToSystemPropertyMap.keys.toList ++ KafkaConfig.ZkSslConfigToSystemPropertyMap.keys.map("authorizer." + _).toList).asJava
           authorizerPropertiesWithoutTls ++ Utils.loadProps(opts.options.valueOf(opts.zkTlsConfigFile), validKeys).asInstanceOf[java.util.Map[String, Any]].asScala
         }
@@ -598,7 +597,6 @@ object AclCommand extends Logging {
 
     val forceOpt = parser.accepts("force", "Assume Yes to all queries and do not prompt.")
 
-    // Tested via System Test kafkatest.tests.core.zookeeper_tls_test.ZookeeperTlsTest.test_zk_tls
     val zkTlsConfigFile = parser.accepts("zk-tls-config-file",
       "Identifies the file where ZooKeeper client TLS connectivity properties for the authorizer are defined.  Any properties other than the following (with or without an \"authorizer.\" prefix) are ignored: " +
         KafkaConfig.ZkSslConfigToSystemPropertyMap.keys.toList.sorted.mkString(", ") +
