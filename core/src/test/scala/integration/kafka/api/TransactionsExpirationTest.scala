@@ -34,8 +34,8 @@ import org.scalatest.Assertions.fail
 import scala.collection.JavaConverters._
 import scala.collection.Seq
 
-// Test class that uses a very small
-class TransactionsEpochBumpTest extends KafkaServerTestHarness {
+// Test class that uses a very small transaction timeout to trigger InvalidPidMapping errors
+class TransactionsExpirationTest extends KafkaServerTestHarness {
   val topic1 = "topic1"
   val topic2 = "topic2"
   val numPartitions = 4
