@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.metrics;
 
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.utils.Sanitizer;
 import org.slf4j.Logger;
@@ -172,12 +173,7 @@ public class JmxReporter implements MetricsReporter {
         Map<String, List<KafkaMetric>> result = new HashMap<>();
         for (KafkaMetric metric : metrics) {
             String name = getMBeanName(prefix, metric.metricName());
-            List<KafkaMetric> list = result.get(name);
-            if (list == null) {
-                list = new ArrayList<>();
-                result.put(name, list);
-            }
-            list.add(metric);
+            result.computeIfAbsent(name, __ -> new ArrayList<>()).add(metric);
         }
         return result;
     }
@@ -382,6 +378,9 @@ public class JmxReporter implements MetricsReporter {
          */
         void addMetrics(Collection<KafkaMetric> metrics) {
             checkLocked();
+            if (metrics.isEmpty()) {
+                return;
+            }
             if (!beanMetrics.isEmpty()) {
                 unregister();
             }
@@ -393,6 +392,9 @@ public class JmxReporter implements MetricsReporter {
 
         void removeMetrics(Collection<KafkaMetric> metrics) {
             checkLocked();
+            if (metrics.isEmpty()) {
+                return;
+            }
             if (!beanMetrics.isEmpty()) {
                 unregister();
             }
@@ -409,7 +411,7 @@ public class JmxReporter implements MetricsReporter {
             try {
                 owner.mbeanServer.registerMBean(this, objectName);
             } catch (Exception e) {
-                throw new RuntimeException("Failed to reregister bean " + mbeanName, e);
+                throw new KafkaException("Failed to register bean " + mbeanName, e);
             }
         }
 
@@ -418,7 +420,7 @@ public class JmxReporter implements MetricsReporter {
             try {
                 owner.mbeanServer.unregisterMBean(objectName);
             } catch (Exception e) {
-                throw new RuntimeException("Failed to reregister bean " + mbeanName, e);
+                throw new KafkaException("Failed to unreregister bean " + mbeanName, e);
             }
         }
 
