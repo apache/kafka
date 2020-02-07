@@ -180,7 +180,7 @@ public class ConnectWorkerIntegrationTest {
         // Restart the failed task
         String taskRestartEndpoint = connect.endpointForResource(
             String.format("connectors/%s/tasks/0/restart", CONNECTOR_NAME));
-        connect.executePost(taskRestartEndpoint, "", Collections.emptyMap());
+        connect.requestPost(taskRestartEndpoint, "", Collections.emptyMap());
 
         // Ensure the task started successfully this time
         waitForCondition(() -> assertConnectorAndTasksRunning(CONNECTOR_NAME, numTasks).orElse(false),

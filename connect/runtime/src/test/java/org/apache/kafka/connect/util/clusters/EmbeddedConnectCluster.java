@@ -241,9 +241,9 @@ public class EmbeddedConnectCluster {
                 .filter(w -> {
                     try {
                         mapper.readerFor(ServerInfo.class)
-                                .readValue(responseToString(executeGet(w.url().toString())));
+                                .readValue(responseToString(requestGet(w.url().toString())));
                         return true;
-                    } catch (IOException e) {
+                    } catch (ConnectException | IOException e) {
                         // Worker failed to respond. Consider it's offline
                         return false;
                     }
@@ -266,8 +266,8 @@ public class EmbeddedConnectCluster {
      *
      * @param connName   the name of the connector
      * @param connConfig the intended configuration
-     * @throws ConnectException if the configuration fails to be serialized
-     * @throws ConnectRestException if REST api returns error status
+     * @throws ConnectRestException if the REST api returns error status
+     * @throws ConnectException if the configuration fails to be serialized or if the request could not be sent
      */
     public String configureConnector(String connName, Map<String, String> connConfig) {
         String url = endpointForResource(String.format("connectors/%s/config", connName));
@@ -278,7 +278,7 @@ public class EmbeddedConnectCluster {
         } catch (IOException e) {
             throw new ConnectException("Could not serialize connector configuration and execute PUT request");
         }
-        Response response = executePut(url, content);
+        Response response = requestPut(url, content);
         if (response.getStatus() < Response.Status.BAD_REQUEST.getStatusCode()) {
             return responseToString(response);
         }
@@ -289,12 +289,12 @@ public class EmbeddedConnectCluster {
      * Delete an existing connector.
      *
      * @param connName name of the connector to be deleted
-     * @throws ConnectRestException if REST api returns error status
+     * @throws ConnectRestException if the REST api returns error status
      * @throws ConnectException for any other error.
      */
     public void deleteConnector(String connName) {
         String url = endpointForResource(String.format("connectors/%s", connName));
-        Response response = executeDelete(url);
+        Response response = requestDelete(url);
         if (response.getStatus() >= Response.Status.BAD_REQUEST.getStatusCode()) {
             throw new ConnectRestException(response.getStatus(), "Could not execute DELETE request.");
         }
@@ -310,13 +310,14 @@ public class EmbeddedConnectCluster {
     public Collection<String> connectors() {
         ObjectMapper mapper = new ObjectMapper();
         String url = endpointForResource("connectors");
-        Response response = executeGet(url);
+        Response response = requestGet(url);
         if (response.getStatus() < Response.Status.BAD_REQUEST.getStatusCode()) {
             try {
                 return mapper.readerFor(Collection.class).readValue(responseToString(response));
-            } catch(IOException e){
+            } catch (IOException e) {
                 log.error("Could not parse connector list from response: {}",
-                        responseToString(response), e);
+                        responseToString(response), e
+                );
                 throw new ConnectException("Could not not parse connector list", e);
             }
         }
@@ -335,7 +336,7 @@ public class EmbeddedConnectCluster {
     public ConnectorStateInfo connectorStatus(String connectorName) {
         ObjectMapper mapper = new ObjectMapper();
         String url = endpointForResource(String.format("connectors/%s/status", connectorName));
-        Response response = executeGet(url);
+        Response response = requestGet(url);
         try {
             if (response.getStatus() < Response.Status.BAD_REQUEST.getStatusCode()) {
                 return mapper.readerFor(ConnectorStateInfo.class)
@@ -350,6 +351,13 @@ public class EmbeddedConnectCluster {
                 "Could not read connector state. Error response: " + responseToString(response));
     }
 
+    /**
+     * Get the full URL of the admin endpoint that corresponds to the given REST resource
+     *
+     * @param resource the resource under the worker's admin endpoint
+     * @return the admin endpoint URL
+     * @throws ConnectRestException if no admin REST endpoint is available
+     */
     public String adminEndpoint(String resource) {
         String url = connectCluster.stream()
                 .map(WorkerHandle::adminUrl)
@@ -360,6 +368,13 @@ public class EmbeddedConnectCluster {
         return url + resource;
     }
 
+    /**
+     * Get the full URL of the endpoint that corresponds to the given REST resource
+     *
+     * @param resource the resource under the worker's admin endpoint
+     * @return the admin endpoint URL
+     * @throws ConnectRestException if no REST endpoint is available
+     */
     public String endpointForResource(String resource) {
         String url = connectCluster.stream()
                 .map(WorkerHandle::url)
@@ -376,6 +391,11 @@ public class EmbeddedConnectCluster {
         }
     }
 
+    /**
+     * Return the handle to the Kafka cluster this Connect cluster connects to.
+     *
+     * @return the Kafka cluster handle
+     */
     public EmbeddedKafkaCluster kafka() {
         return kafkaCluster;
     }
@@ -386,9 +406,36 @@ public class EmbeddedConnectCluster {
      * @param url the HTTP endpoint
      * @return the response to the GET request
      * @throws ConnectException if execution of the GET request fails
+     * @deprecated Use {@link #requestGet(String)} instead.
      */
-    public Response executeGet(String url) {
-        return executeHttpMethod(url, null, Collections.emptyMap(), "GET");
+    @Deprecated
+    public String executeGet(String url) {
+        return responseToString(requestGet(url));
+    }
+
+    /**
+     * Execute a GET request on the given URL.
+     *
+     * @param url the HTTP endpoint
+     * @return the response to the GET request
+     * @throws ConnectException if execution of the GET request fails
+     */
+    public Response requestGet(String url) {
+        return requestHttpMethod(url, null, Collections.emptyMap(), "GET");
+    }
+
+    /**
+     * Execute a PUT request on the given URL.
+     *
+     * @param url the HTTP endpoint
+     * @param body the payload of the PUT request
+     * @return the response to the PUT request
+     * @throws ConnectException if execution of the PUT request fails
+     * @deprecated Use {@link #requestPut(String, String)} instead.
+     */
+    @Deprecated
+    public int executePut(String url, String body) {
+        return requestPut(url, body).getStatus();
     }
 
     /**
@@ -399,8 +446,23 @@ public class EmbeddedConnectCluster {
      * @return the response to the PUT request
      * @throws ConnectException if execution of the PUT request fails
      */
-    public Response executePut(String url, String body) {
-        return executeHttpMethod(url, body, Collections.emptyMap(), "PUT");
+    public Response requestPut(String url, String body) {
+        return requestHttpMethod(url, body, Collections.emptyMap(), "PUT");
+    }
+
+    /**
+     * Execute a POST request on the given URL.
+     *
+     * @param url the HTTP endpoint
+     * @param body the payload of the POST request
+     * @param headers a map that stores the POST request headers
+     * @return the response to the POST request
+     * @throws ConnectException if execution of the POST request fails
+     * @deprecated Use {@link #requestPost(String, String, java.util.Map)} instead.
+     */
+    @Deprecated
+    public int executePost(String url, String body, Map<String, String> headers) {
+        return requestPost(url, body, headers).getStatus();
     }
 
     /**
@@ -412,8 +474,21 @@ public class EmbeddedConnectCluster {
      * @return the response to the POST request
      * @throws ConnectException if execution of the POST request fails
      */
-    public Response executePost(String url, String body, Map<String, String> headers) {
-        return executeHttpMethod(url, body, headers, "POST");
+    public Response requestPost(String url, String body, Map<String, String> headers) {
+        return requestHttpMethod(url, body, headers, "POST");
+    }
+
+    /**
+     * Execute a DELETE request on the given URL.
+     *
+     * @param url the HTTP endpoint
+     * @return the response to the DELETE request
+     * @throws ConnectException if execution of the DELETE request fails
+     * @deprecated Use {@link #requestDelete(String)} instead.
+     */
+    @Deprecated
+    public int executeDelete(String url) {
+        return requestDelete(url).getStatus();
     }
 
     /**
@@ -423,8 +498,8 @@ public class EmbeddedConnectCluster {
      * @return the response to the DELETE request
      * @throws ConnectException if execution of the DELETE request fails
      */
-    public Response executeDelete(String url) {
-        return executeHttpMethod(url, null, Collections.emptyMap(), "DELETE");
+    public Response requestDelete(String url) {
+        return requestHttpMethod(url, null, Collections.emptyMap(), "DELETE");
     }
 
     /**
@@ -437,10 +512,10 @@ public class EmbeddedConnectCluster {
      * @return the response to the HTTP request
      * @throws ConnectException if execution of the HTTP method fails
      */
-    protected Response executeHttpMethod(String url, String body, Map<String, String> headers,
+    protected Response requestHttpMethod(String url, String body, Map<String, String> headers,
                                       String httpMethod) {
         log.debug("Executing {} request to URL={}." + (body != null ? " Payload={}" : ""),
-                httpMethod , url, body);
+                httpMethod, url, body);
         try {
             HttpURLConnection httpCon = (HttpURLConnection) new URL(url).openConnection();
             httpCon.setDoOutput(true);
@@ -455,7 +530,7 @@ public class EmbeddedConnectCluster {
             try (InputStream is = httpCon.getResponseCode() < HttpURLConnection.HTTP_BAD_REQUEST
                                   ? httpCon.getInputStream()
                                   : httpCon.getErrorStream()
-            ){
+            ) {
                 String responseEntity = responseToString(is);
                 log.info("{} response for URL={} is {}",
                         httpMethod, url, responseEntity.isEmpty() ? "empty" : responseEntity);

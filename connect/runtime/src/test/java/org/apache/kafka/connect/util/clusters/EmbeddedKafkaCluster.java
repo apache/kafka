@@ -106,7 +106,13 @@ public class EmbeddedKafkaCluster extends ExternalResource {
         stop();
     }
 
-    public void startOnlyKafkaOnSamePorts() throws IOException {
+    /**
+     * Starts the Kafka cluster alone using the ports that were assigned during initialization of
+     * the harness.
+     *
+     * @throws ConnectException if a directory to store the data cannot be created
+     */
+    public void startOnlyKafkaOnSamePorts() {
         start(currentBrokerPorts, currentBrokerLogDirs);
     }
 
