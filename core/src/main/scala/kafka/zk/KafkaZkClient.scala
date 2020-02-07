@@ -457,17 +457,24 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
 
   /**
    * Gets all topics in the cluster.
+   * @param registerWatch indicates if a what must be registered or not
    * @return sequence of topics in the cluster.
    */
-  def getAllTopicsInCluster: Set[String] = {
-    val getChildrenResponse = retryRequestUntilConnected(GetChildrenRequest(TopicsZNode.path))
+  def getAllTopicsInCluster(registerWatch: Boolean): Set[String] = {
+    val getChildrenResponse = retryRequestUntilConnected(
+      GetChildrenRequest(TopicsZNode.path, registerWatch))
     getChildrenResponse.resultCode match {
       case Code.OK => getChildrenResponse.children.toSet
       case Code.NONODE => Set.empty
       case _ => throw getChildrenResponse.resultException.get
     }
-
   }
+
+  /**
+   * Gets all topics in the cluster. It does not register a watch.
+   * @return sequence of topics in the cluster.
+   */
+  def getAllTopicsInCluster(): Set[String] = getAllTopicsInCluster(false)
 
   /**
    * Checks the topic existence
