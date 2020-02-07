@@ -691,7 +691,7 @@ public class TransactionManagerTest {
                 Errors.NONE, -1, -1, 400L);
         transactionManager.handleCompletedBatch(tp1b1, b2Response);
 
-        transactionManager.bumpIdempotentProducerEpochIfNeeded();
+        transactionManager.bumpIdempotentEpochAndResetIdIfNeeded();
 
         assertEquals(1, transactionManager.sequenceNumber(tp0).intValue());
         assertEquals(tp0b2, transactionManager.nextBatchBySequence(tp0));
@@ -715,7 +715,7 @@ public class TransactionManagerTest {
 
         // The producerId might be reset due to a failure on another partition
         transactionManager.requestEpochBumpForPartition(tp1);
-        transactionManager.bumpIdempotentProducerEpochIfNeeded();
+        transactionManager.bumpIdempotentEpochAndResetIdIfNeeded();
         initializeIdempotentProducerId(producerId + 1, (short) 0);
 
         // We continue to track the state of tp0 until in-flight requests complete
@@ -782,7 +782,7 @@ public class TransactionManagerTest {
         assertEquals((int) transactionManager.sequenceNumber(tp1), 3);
 
         transactionManager.requestEpochBumpForPartition(tp0);
-        transactionManager.bumpIdempotentProducerEpochIfNeeded();
+        transactionManager.bumpIdempotentEpochAndResetIdIfNeeded();
         assertEquals((int) transactionManager.sequenceNumber(tp0), 0);
         assertEquals((int) transactionManager.sequenceNumber(tp1), 3);
     }
@@ -2560,7 +2560,7 @@ public class TransactionManagerTest {
         initializeIdempotentProducerId(producerId, epoch);
 
         // Nothing to resolve, so no reset is needed
-        transactionManager.bumpIdempotentProducerEpochIfNeeded();
+        transactionManager.bumpIdempotentEpochAndResetIdIfNeeded();
         assertEquals(producerIdAndEpoch, transactionManager.producerIdAndEpoch());
 
         TopicPartition tp0 = new TopicPartition("foo", 0);
@@ -2615,13 +2615,13 @@ public class TransactionManagerTest {
         assertTrue(transactionManager.hasUnresolvedSequences());
 
         // The reset should not occur until sequence numbers have been resolved
-        transactionManager.bumpIdempotentProducerEpochIfNeeded();
+        transactionManager.bumpIdempotentEpochAndResetIdIfNeeded();
         assertEquals(producerIdAndEpoch, transactionManager.producerIdAndEpoch());
         assertTrue(transactionManager.hasUnresolvedSequences());
 
         // The second batch fails as well with a timeout
         transactionManager.handleFailedBatch(b2, new TimeoutException(), false);
-        transactionManager.bumpIdempotentProducerEpochIfNeeded();
+        transactionManager.bumpIdempotentEpochAndResetIdIfNeeded();
         assertEquals(producerIdAndEpoch, transactionManager.producerIdAndEpoch());
         assertTrue(transactionManager.hasUnresolvedSequences());
 
@@ -2636,7 +2636,7 @@ public class TransactionManagerTest {
     }
 
     @Test
-    public void testEpochBumpAfterLastInFlightBatchFails() {
+    public void testEpochBumpAfterLastInflightBatchFails() {
         initializeTransactionManager(Optional.empty());
         long producerId = 15L;
         short epoch = 5;
@@ -2657,7 +2657,7 @@ public class TransactionManagerTest {
         // The second batch succeeds, but sequence numbers are still not resolved
         transactionManager.handleCompletedBatch(b2, new ProduceResponse.PartitionResponse(
                 Errors.NONE, 500L, time.milliseconds(), 0L));
-        transactionManager.bumpIdempotentProducerEpochIfNeeded();
+        transactionManager.bumpIdempotentEpochAndResetIdIfNeeded();
         assertEquals(producerIdAndEpoch, transactionManager.producerIdAndEpoch());
         assertTrue(transactionManager.hasUnresolvedSequences());
 
@@ -2796,7 +2796,7 @@ public class TransactionManagerTest {
     public void testBumpTransactionalEpochOnError() throws InterruptedException {
         final long pid = 13131L;
         final short initialEpoch = 1;
-        final short bumpedEpoch = 2;
+        final short bumpedEpoch = initialEpoch + 1;
 
         doInitTransactions(pid, initialEpoch);
 
@@ -3042,56 +3042,6 @@ public class TransactionManagerTest {
     }
 
     @Test
-    public void testBumpTransactionalEpochOnRecoverableCommitOffsetRequestError() throws InterruptedException {
-        final long producerId = 13131L;
-        final short initialEpoch = 1;
-        final short bumpedEpoch = 2;
-        final String consumerGroupId = "myconsumergroup";
-
-        doInitTransactions(producerId, initialEpoch);
-
-        transactionManager.beginTransaction();
-        transactionManager.failIfNotReadyForSend();
-        transactionManager.maybeAddPartitionToTransaction(tp0);
-
-        Future<RecordMetadata> responseFuture = appendToAccumulator(tp0);
-        assertFalse(responseFuture.isDone());
-        prepareAddPartitionsToTxnResponse(Errors.NONE, tp0, initialEpoch, producerId);
-        prepareProduceResponse(Errors.NONE, producerId, initialEpoch);
-        sender.runOnce();
-        sender.runOnce();
-
-        Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
-        offsets.put(tp0, new OffsetAndMetadata(1));
-        transactionManager.sendOffsetsToTransaction(offsets, new ConsumerGroupMetadata(consumerGroupId));
-        assertFalse(transactionManager.hasPendingOffsetCommits());
-        prepareAddOffsetsToTxnResponse(Errors.NONE, consumerGroupId, producerId, initialEpoch);
-        sender.runOnce();  // Send AddOffsetsRequest
-
-        Map<TopicPartition, Errors> txnOffsetCommitResponse = new HashMap<>();
-        txnOffsetCommitResponse.put(tp1, Errors.INVALID_PRODUCER_ID_MAPPING);
-
-        prepareFindCoordinatorResponse(Errors.NONE, false, CoordinatorType.GROUP, consumerGroupId);
-        prepareTxnOffsetCommitResponse(consumerGroupId, producerId, initialEpoch, txnOffsetCommitResponse);
-
-        sender.runOnce();  // try to send TxnOffsetCommitRequest, but find we don't have a group coordinator.
-        sender.runOnce();  // send find coordinator for group request
-        sender.runOnce();  // send TxnOffsetCommitRequest commit.
-
-        assertTrue(transactionManager.hasAbortableError());
-        TransactionalRequestResult abortResult = transactionManager.beginAbort();
-
-        prepareEndTxnResponse(Errors.NONE, TransactionResult.ABORT, producerId, initialEpoch);
-        sender.runOnce();
-        prepareInitPidResponse(Errors.NONE, false, producerId, bumpedEpoch);
-        sender.runOnce();  // Receive InitProducerId response
-        assertEquals(bumpedEpoch, transactionManager.producerIdAndEpoch().epoch);
-        assertTrue(abortResult.isCompleted());
-        assertTrue(abortResult.isSuccessful());
-        assertTrue(transactionManager.isReady());  // make sure we are ready for a transaction now.
-    }
-
-    @Test
     public void testHealthyPartitionRetriesDuringEpochBump() throws InterruptedException {
         final long producerId = 13131L;
         final short epoch = 1;
@@ -3105,7 +3055,7 @@ public class TransactionManagerTest {
 
         ProducerBatch tp0b1 = writeIdempotentBatchWithValue(transactionManager, tp0, "1");
         ProducerBatch tp0b2 = writeIdempotentBatchWithValue(transactionManager, tp0, "2");
-        ProducerBatch tp0b3 = writeIdempotentBatchWithValue(transactionManager, tp0, "3");
+        writeIdempotentBatchWithValue(transactionManager, tp0, "3");
         ProducerBatch tp1b1 = writeIdempotentBatchWithValue(transactionManager, tp1, "4");
         ProducerBatch tp1b2 = writeIdempotentBatchWithValue(transactionManager, tp1, "5");
         assertEquals(3, transactionManager.sequenceNumber(tp0).intValue());

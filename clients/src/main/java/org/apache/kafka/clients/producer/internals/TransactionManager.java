@@ -107,8 +107,7 @@ public class TransactionManager {
         }
 
         public void addPartition(TopicPartition topicPartition) {
-            if (!topicPartitions.containsKey(topicPartition))
-                topicPartitions.put(topicPartition, new TopicPartitionEntry());
+            this.topicPartitions.putIfAbsent(topicPartition, new TopicPartitionEntry());
         }
 
         boolean contains(TopicPartition topicPartition) {
@@ -315,6 +314,7 @@ public class TransactionManager {
             // If this is an epoch bump, we will transition the state as part of handling the EndTxnRequest
             if (!isEpochBump) {
                 transitionTo(State.INITIALIZING);
+                log.info("Invoking InitProducerId with current producer ID and epoch {} in order to bump the epoch", producerIdAndEpoch);
             }
             InitProducerIdRequestData requestData = new InitProducerIdRequestData()
                     .setTransactionalId(transactionalId)
@@ -514,26 +514,15 @@ public class TransactionManager {
     }
 
     /**
-     * This method is used when the producer needs to reset its internal state because of an irrecoverable exception
-     * from the broker.
-     *
-     * We need to reset the producer id and associated state when we have sent a batch to the broker, but we either get
-     * a non-retriable exception or we run out of retries, or the batch expired in the producer queue after it was already
-     * sent to the broker.
-     *
-     * In all of these cases, we don't know whether batch was actually committed on the broker, and hence whether the
-     * sequence number was actually updated. If we don't reset the producer state, we risk the chance that all future
-     * messages will return an OutOfOrderSequenceException.
-     *
-     * Note that we can't reset the producer state for the transactional producer as this would mean bumping the epoch
-     * for the same producer id. This might involve aborting the ongoing transaction during the initPidRequest, and the user
-     * would not have any way of knowing this happened. So for the transactional producer, it's best to return the
-     * produce error to the user and let them abort the transaction and close the producer explicitly.
+     * This method resets the producer ID and epoch and sets the state to UNINITIALIZED, which will trigger a new
+     * InitProducerId request. This method is only called when the producer epoch is exhausted; we will bump the epoch
+     * instead.
      */
     private synchronized void resetIdempotentProducerId() {
         if (isTransactional())
             throw new IllegalStateException("Cannot reset producer state for a transactional producer. " +
                     "You must either abort the ongoing transaction or reinitialize the transactional producer instead");
+        log.debug("Resetting idempotent producer ID. ID and epoch before reset are {}", this.producerIdAndEpoch);
         setProducerIdAndEpoch(ProducerIdAndEpoch.NONE);
         transitionTo(State.UNINITIALIZED);
     }
@@ -553,34 +542,29 @@ public class TransactionManager {
         this.partitionsToRewriteSequences.add(tp);
     }
 
-    // package-private for unit testing
-    synchronized boolean shouldBumpEpoch() {
+    private boolean shouldBumpEpoch() {
         return epochBumpRequired;
     }
 
-    synchronized void bumpIdempotentProducerEpoch() {
-        if (isTransactional()) {
-            log.debug("Skipping epoch bump for transactional producer. The epoch will be bumped after the ongoing " +
-                    "transaction is aborted");
+    private void bumpIdempotentProducerEpoch() {
+        if (this.producerIdAndEpoch.epoch == Short.MAX_VALUE) {
+            resetIdempotentProducerId();
         } else {
-            if (this.producerIdAndEpoch.epoch == Short.MAX_VALUE) {
-                resetIdempotentProducerId();
-            } else {
-                setProducerIdAndEpoch(new ProducerIdAndEpoch(this.producerIdAndEpoch.producerId, (short) (this.producerIdAndEpoch.epoch + 1)));
-            }
-
-            // When the epoch is bumped, rewrite all in-flight sequences for the partition(s) that triggered the epoch bump
-            for (TopicPartition topicPartition : this.partitionsToRewriteSequences) {
-                this.topicPartitionBookkeeper.startSequencesAtBeginning(topicPartition, this.producerIdAndEpoch);
-                this.partitionsWithUnresolvedSequences.remove(topicPartition);
-            }
-
-            this.partitionsToRewriteSequences.clear();
-            epochBumpRequired = false;
+            setProducerIdAndEpoch(new ProducerIdAndEpoch(this.producerIdAndEpoch.producerId, (short) (this.producerIdAndEpoch.epoch + 1)));
+            log.debug("Incremented producer epoch, current producer ID and epoch are now {}", this.producerIdAndEpoch);
         }
+
+        // When the epoch is bumped, rewrite all in-flight sequences for the partition(s) that triggered the epoch bump
+        for (TopicPartition topicPartition : this.partitionsToRewriteSequences) {
+            this.topicPartitionBookkeeper.startSequencesAtBeginning(topicPartition, this.producerIdAndEpoch);
+            this.partitionsWithUnresolvedSequences.remove(topicPartition);
+        }
+
+        this.partitionsToRewriteSequences.clear();
+        epochBumpRequired = false;
     }
 
-    synchronized void bumpIdempotentProducerEpochIfNeeded() {
+    synchronized void bumpIdempotentEpochAndResetIdIfNeeded() {
         if (!isTransactional()) {
             if (shouldBumpEpoch()) {
                 bumpIdempotentProducerEpoch();
@@ -779,7 +763,7 @@ public class TransactionManager {
         });
     }
 
-    boolean hasInflightBatches(TopicPartition topicPartition) {
+    synchronized boolean hasInflightBatches(TopicPartition topicPartition) {
         return topicPartitionBookkeeper.contains(topicPartition)
                 && !topicPartitionBookkeeper.getPartition(topicPartition).inflightBatchesBySequence.isEmpty();
     }
@@ -800,7 +784,7 @@ public class TransactionManager {
 
     // Attempts to resolve unresolved sequences. If all in-flight requests are complete and some partitions are still
     // unresolved, either bump the epoch if possible, or transition to a fatal error
-    public void maybeResolveSequences() {
+    synchronized void maybeResolveSequences() {
         for (Iterator<TopicPartition> iter = partitionsWithUnresolvedSequences.keySet().iterator(); iter.hasNext(); ) {
             TopicPartition topicPartition = iter.next();
             if (!hasInflightBatches(topicPartition)) {
@@ -815,7 +799,7 @@ public class TransactionManager {
                     if (isTransactional()) {
                         // For the transactional producer, we bump the epoch if possible, otherwise we transition to a fatal error
                         String unackedMessagesErr = "The client hasn't received acknowledgment for some previously " +
-                                "sent messages and can no longer retry them.";
+                                "sent messages and can no longer retry them. ";
                         if (canBumpEpoch()) {
                             epochBumpRequired = true;
                             KafkaException exception = new KafkaException(unackedMessagesErr + "It is safe to abort " +
@@ -848,10 +832,8 @@ public class TransactionManager {
     }
 
     private boolean isNextSequenceForUnresolvedPartition(TopicPartition topicPartition, int sequence) {
-        if (this.hasUnresolvedSequence(topicPartition)) {
-            return sequence == this.partitionsWithUnresolvedSequences.get(topicPartition);
-        }
-        return false;
+        return this.hasUnresolvedSequence(topicPartition) &&
+                sequence == this.partitionsWithUnresolvedSequences.get(topicPartition);
     }
 
     synchronized TxnRequestHandler nextRequest(boolean hasIncompleteBatches) {
@@ -1653,8 +1635,6 @@ public class TransactionManager {
                 } else if (isFatalException(error)) {
                     fatalError(error.exception());
                     break;
-                } else if (error == Errors.UNKNOWN_PRODUCER_ID || error == Errors.INVALID_PRODUCER_ID_MAPPING) {
-                    abortableErrorIfPossible(error.exception());
                 } else {
                     fatalError(new KafkaException("Unexpected error in TxnOffsetCommitResponse: " + error.message()));
                     break;

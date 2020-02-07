@@ -525,7 +525,7 @@ public class SenderTest {
     }
 
     @Test
-    public void testInitProducerIdRequest() throws Exception {
+    public void testInitProducerIdRequest() {
         final long producerId = 343434L;
         TransactionManager transactionManager = createTransactionManager();
         setupWithTransactionState(transactionManager);
@@ -1146,7 +1146,7 @@ public class SenderTest {
         sender.runOnce();  // send request
 
         time.sleep(1000L);
-        Future<RecordMetadata> request2 = appendToAccumulator(tp0);
+        appendToAccumulator(tp0);
         sender.runOnce();  // send request
 
         assertEquals(2, client.inFlightRequestCount());
@@ -1163,7 +1163,7 @@ public class SenderTest {
         assertFutureFailure(request1, TimeoutException.class);
         assertTrue(txnManager.hasUnresolvedSequence(tp0));
         // let's enqueue another batch, which should not be dequeued until the unresolved state is clear.
-        Future<RecordMetadata> request3 = appendToAccumulator(tp0);
+        appendToAccumulator(tp0);
 
         // Loop once and confirm that the transaction manager does not enter a fatal error state
         sender.runOnce();
@@ -1311,8 +1311,6 @@ public class SenderTest {
         responses.put(tp0, new OffsetAndError(-1, Errors.OUT_OF_ORDER_SEQUENCE_NUMBER));
         client.respond(produceResponse(responses));
         sender.runOnce(); // out of order sequence error triggers producer ID reset because epoch is maxed out
-        // assertTrue(failedResponse.isDone());
-        // assertFalse("Expected transaction state to be reset upon receiving an OutOfOrderSequenceException", transactionManager.hasProducerId());
         sender.forceClose(); // initiate force close
         sender.runOnce(); // this should not block
         sender.run(); // run main loop to test forceClose flag

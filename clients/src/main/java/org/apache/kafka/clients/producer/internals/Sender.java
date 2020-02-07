@@ -307,7 +307,7 @@ public class Sender implements Runnable {
 
                 // Check whether we need a new producerId. If so, we will enqueue an InitProducerId
                 // request which will be sent below
-                transactionManager.bumpIdempotentProducerEpochIfNeeded();
+                transactionManager.bumpIdempotentEpochAndResetIdIfNeeded();
 
                 if (maybeSendAndPollTransactionalRequest()) {
                     return;
