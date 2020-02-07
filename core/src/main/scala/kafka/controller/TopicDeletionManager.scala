@@ -284,26 +284,23 @@ class TopicDeletionManager(config: KafkaConfig,
   }
 
   /**
-   * Invoked by onPartitionDeletion. It is the 2nd step of topic deletion, the first being sending
-   * UpdateMetadata requests to all brokers to start rejecting requests for deleted topics. As part of starting deletion,
-   * the topics are added to the in progress list. As long as a topic is in the in progress list, deletion for that topic
-   * is never retried. A topic is removed from the in progress list when
-   * 1. Either the topic is successfully deleted OR
-   * 2. No replica for the topic is in ReplicaDeletionStarted state and at least one replica is in ReplicaDeletionIneligible state
-   * If the topic is queued for deletion but deletion is not currently under progress, then deletion is retried for that topic
-   * As part of starting deletion, all replicas are moved to the ReplicaDeletionStarted state where the controller sends
-   * the replicas a StopReplicaRequest (delete=true)
-   * This method does the following things -
+   * Invoked by onTopicDeletion with the list of partitions for topics to be deleted
+   * It does the following -
    * 1. Move all dead replicas directly to ReplicaDeletionIneligible state. Also mark the respective topics ineligible
    *    for deletion if some replicas are dead since it won't complete successfully anyway
-   * 2. Move all alive replicas to ReplicaDeletionStarted state so they can be deleted successfully
+   * 2. Move all replicas for the partitions to OfflineReplica state. This will send StopReplicaRequest to the replicas
+   *    and LeaderAndIsrRequest to the leader with the shrunk ISR. When the leader replica itself is moved to OfflineReplica state,
+   *    it will skip sending the LeaderAndIsrRequest since the leader will be updated to -1
+   * 3. Move all replicas to ReplicaDeletionStarted state. This will send StopReplicaRequest with deletePartition=true. And
+   *    will delete all persistent data from all replicas of the respective partitions
    */
-  private def startReplicaDeletion(replicasForTopicsToBeDeleted: Map[String, Set[PartitionAndReplica]]): Unit = {
+  private def onPartitionDeletion(partitionsToBeDeleted: Map[String, Set[TopicPartition]]): Unit = {
     val allDeadReplicasForTopic = mutable.ListBuffer.empty[PartitionAndReplica]
     val allReplicasForDeletionRetry = mutable.ListBuffer.empty[PartitionAndReplica]
     val allTopicsIneligibleForDeletion = mutable.Set.empty[String]
 
-    replicasForTopicsToBeDeleted.foreach { case (topic, replicasForTopicToBeDeleted) =>
+    partitionsToBeDeleted.foreach { case (topic, partitions) =>
+      val replicasForTopicToBeDeleted = controllerContext.replicasForPartition(partitions)
       val aliveReplicasForTopic = controllerContext.liveReplicasForTopic(topic)
       val deadReplicasForTopic = replicasForTopicToBeDeleted -- aliveReplicasForTopic
       val successfullyDeletedReplicas = controllerContext.replicasInState(topic, ReplicaDeletionSuccessful)
@@ -328,21 +325,6 @@ class TopicDeletionManager(config: KafkaConfig,
     if (allTopicsIneligibleForDeletion.nonEmpty) {
       markTopicIneligibleForDeletion(allTopicsIneligibleForDeletion, reason = "offline replicas")
     }
-  }
-
-  /**
-   * Invoked by onTopicDeletion with the list of partitions for topics to be deleted
-   * It does the following -
-   * 1. Send UpdateMetadataRequest to all live brokers (that are not shutting down) for partitions that are being
-   *    deleted. The brokers start rejecting all client requests with UnknownTopicOrPartitionException
-   * 2. Move all replicas for the partitions to OfflineReplica state. This will send StopReplicaRequest to the replicas
-   *    and LeaderAndIsrRequest to the leader with the shrunk ISR. When the leader replica itself is moved to OfflineReplica state,
-   *    it will skip sending the LeaderAndIsrRequest since the leader will be updated to -1
-   * 3. Move all replicas to ReplicaDeletionStarted state. This will send StopReplicaRequest with deletePartition=true. And
-   *    will delete all persistent data from all replicas of the respective partitions
-   */
-  private def onPartitionDeletion(partitionsToBeDeleted: Map[String, Set[TopicPartition]]): Unit = {
-    startReplicaDeletion(partitionsToBeDeleted.mapValues(controllerContext.replicasForPartition))
   }
 
   private def resumeDeletions(): Unit = {
