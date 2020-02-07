@@ -120,6 +120,19 @@ public class TaskManager {
         rebalanceInProgress = false;
     }
 
+    void handleCorruption(final Set<TaskId> taskIds) {
+        for (final TaskId taskId : taskIds) {
+            final Task task = tasks.get(taskId);
+
+            // this call is idempotent so even if the task is only CREATED we can still call it
+            changelogReader.remove(task.changelogPartitions());
+
+            task.closeDirty();
+
+            task.revive();
+        }
+    }
+
     /**
      * @throws TaskMigratedException if the task producer got fenced (EOS only)
      * @throws StreamsException fatal error while creating / initializing the task
@@ -150,6 +163,8 @@ public class TaskManager {
                 task.resume();
                 standbyTasksToCreate.remove(task.id());
             } else /* we previously owned this task, and we don't have it anymore, or it has changed active/standby state */ {
+                cleanupTask(task);
+
                 try {
                     task.closeClean();
                 } catch (final RuntimeException e) {
@@ -159,7 +174,6 @@ public class TaskManager {
                     // Now, we should go ahead and complete the close because a half-closed task is no good to anyone.
                     task.closeDirty();
                 }
-                cleanupTask(task);
 
                 iterator.remove();
             }
@@ -288,8 +302,8 @@ public class TaskManager {
             // Even though we've apparently dropped out of the group, we can continue safely to maintain our
             // standby tasks while we rejoin.
             if (task.isActive()) {
-                task.closeDirty();
                 cleanupTask(task);
+                task.closeDirty();
                 iterator.remove();
             }
         }
@@ -345,6 +359,8 @@ public class TaskManager {
         final Iterator<Task> iterator = tasks.values().iterator();
         while (iterator.hasNext()) {
             final Task task = iterator.next();
+            cleanupTask(task);
+
             if (clean) {
                 try {
                     task.closeClean();
@@ -358,8 +374,6 @@ public class TaskManager {
             } else {
                 task.closeDirty();
             }
-            cleanupTask(task);
-
             iterator.remove();
         }
 

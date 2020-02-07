@@ -415,6 +415,8 @@ public class ProcessorStateManager implements StateManager {
                     log.error("Failed to close state store {}: ", store.name(), exception);
                 }
             }
+
+            stores.clear();
         }
 
         if (firstException != null) {

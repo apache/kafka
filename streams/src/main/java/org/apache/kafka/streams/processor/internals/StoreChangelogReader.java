@@ -415,7 +415,7 @@ public class StoreChangelogReader implements ChangelogReader {
                 throw new TaskMigratedException("Restore consumer get fenced by instance-id polling records.", e);
             } catch (final InvalidOffsetException e) {
                 log.warn("Encountered {} fetching records from restore consumer for partitions {}, " +
-                    "marking the corresponding tasks as corrupted.", e.toString(), e.partitions());
+                    "marking the corresponding tasks as corrupted.", e.getClass().getName(), e.partitions());
 
                 final Set<TaskId> taskIds = new HashSet<>();
                 for (final TopicPartition partition : e.partitions()) {
@@ -691,6 +691,8 @@ public class StoreChangelogReader implements ChangelogReader {
         }
         assignment.addAll(partitions);
         restoreConsumer.assign(assignment);
+
+        log.debug("Added partitions {} to the restore consumer, current assignment is {}", partitions, assignment);
     }
 
     private void pauseChangelogsFromRestoreConsumer(final Collection<TopicPartition> partitions) {
@@ -702,18 +704,18 @@ public class StoreChangelogReader implements ChangelogReader {
                 "does not contain some of the partitions " + partitions + " for pausing.");
         }
         restoreConsumer.pause(partitions);
+
+        log.debug("Paused partitions {} from the restore consumer", partitions);
     }
 
     private void removeChangelogsFromRestoreConsumer(final Collection<TopicPartition> partitions) {
         final Set<TopicPartition> assignment = new HashSet<>(restoreConsumer.assignment());
 
-        // the current assignment should contain the all partitions to remove
-        if (!assignment.containsAll(partitions)) {
-            throw new IllegalStateException("The current assignment " + assignment + " " +
-                "does not contain some of the partitions " + partitions + " for removing.");
+        if (assignment.removeAll(partitions)) {
+            restoreConsumer.assign(assignment);
+
+            log.debug("Removed partitions {} from the restore consumer, current assignment is {}", partitions, assignment);
         }
-        assignment.removeAll(partitions);
-        restoreConsumer.assign(assignment);
     }
 
     private void resumeChangelogsFromRestoreConsumer(final Collection<TopicPartition> partitions) {
@@ -725,6 +727,8 @@ public class StoreChangelogReader implements ChangelogReader {
                 "does not contain some of the partitions " + partitions + " for resuming.");
         }
         restoreConsumer.resume(partitions);
+
+        log.debug("Resumed partitions {} from the restore consumer", partitions);
     }
 
     private void prepareChangelogs(final Set<ChangelogMetadata> newPartitionsToRestore) {

@@ -723,6 +723,7 @@ public class StreamThread extends Thread {
             // do not need to rethrow
             log.error("Encountered the following Streams exception during processing, " +
                 "this indicates an unrecoverable error and the thread is going to shutdown: ", e);
+            throw e;
         } catch (final KafkaException e) {
             log.error("Encountered the following unexpected Kafka exception during processing, " +
                 "this indicates an internal error and thread is going to shutdown:", e);
@@ -752,18 +753,15 @@ public class StreamThread extends Thread {
                 runOnce();
                 if (assignmentErrorCode.get() == AssignorError.VERSION_PROBING.code()) {
                     log.info("Version probing detected. Rejoin the consumer group to trigger a new rebalance.");
+
                     assignmentErrorCode.set(AssignorError.NONE.code());
                     enforceRebalance();
                 }
             } catch (final TaskCorruptedException e) {
                 log.warn("Detected the states of tasks {} are corrupted. " +
-                    "Will close the task as dirty and re-create and bootstrap from scratch.");
+                    "Will close the task as dirty and re-create and bootstrap from scratch.", e.corruptedTaskIds());
 
-                for (final TaskId taskId : e.corruptedTaskIds()) {
-                    final Task task = taskManager.tasks().get(taskId);
-                    task.closeDirty();
-                    task.revive();
-                }
+                taskManager.handleCorruption(e.corruptedTaskIds());
             } catch (final TaskMigratedException e) {
                 log.warn("Detected that the thread is being fenced. " +
                     "This implies that this thread missed a rebalance and dropped out of the consumer group. " +
@@ -862,7 +860,7 @@ public class StreamThread extends Thread {
              *  5. If one of the above happens, half the value of N.
              */
             int processed = 0;
-            long timeSinceLastPoll = 0L;
+            long timeSinceLastPoll;
 
             do {
                 for (int i = 0; i < numIterations; i++) {
@@ -951,7 +949,7 @@ public class StreamThread extends Thread {
 
                 if (originalReset.equals("earliest")) {
                     addToResetList(partition, seekToBeginning, "No custom setting defined for topic '{}' using original config '{}' for offset reset", "earliest", loggedTopics);
-                } else if (originalReset.equals("latest")) {
+                } else {
                     addToResetList(partition, seekToEnd, "No custom setting defined for topic '{}' using original config '{}' for offset reset", "latest", loggedTopics);
                 }
             }

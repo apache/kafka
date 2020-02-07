@@ -73,7 +73,6 @@ import org.apache.kafka.test.TestUtils;
 import org.easymock.EasyMock;
 import org.junit.Assert;
 import org.junit.Before;
-import org.junit.Ignore;
 import org.junit.Test;
 import org.slf4j.Logger;
 
@@ -1366,12 +1365,11 @@ public class StreamThreadTest {
         assertTrue(metadata.standbyTasks().isEmpty());
     }
 
-    @Ignore
     @Test
-    // FIXME: should unblock this test after we added invalid offset handling
     public void shouldRecoverFromInvalidOffsetExceptionOnRestoreAndFinishRestore() throws Exception {
         internalStreamsBuilder.stream(Collections.singleton("topic"), consumed)
-                              .groupByKey().count(Materialized.as("count"));
+            .groupByKey()
+            .count(Materialized.as("count"));
         internalStreamsBuilder.buildAndOptimizeTopology();
 
         final StreamThread thread = createStreamThread("clientId", config, false);
