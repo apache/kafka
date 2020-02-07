@@ -346,50 +346,45 @@ public class TransactionalMessageCopier {
                     numMessagesProcessedSinceLastRebalance.get(), remainingMessages.get(), transactionalId, "ProcessLoop"));
                 if (isShuttingDown.get())
                     break;
-                long messagesSentWithinCurrentTxn = 0L;
-                long messagesNeededForCurrentTxn = remainingMessages.get();
 
-                try {
-                    producer.beginTransaction();
-                    Map<Integer, Integer> partitionCount = new HashMap<>();
+                ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(200));
+                if (records.count() > 0) {
+                    try {
+                        producer.beginTransaction();
+                        Map<Integer, Integer> partitionCount = new HashMap<>();
 
-                    while (messagesSentWithinCurrentTxn < messagesNeededForCurrentTxn) {
-                        ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(200));
-                        log.info("number of consumer records fetched: {}, with current sent txn data {}", records.count(), messagesSentWithinCurrentTxn);
                         for (ConsumerRecord<String, String> record : records) {
                             producer.send(producerRecordFromConsumerRecord(outputTopic, record));
-                            messagesSentWithinCurrentTxn++;
                             partitionCount.put(record.partition(), partitionCount.getOrDefault(record.partition(), 0) + 1);
                         }
-                        messagesNeededForCurrentTxn = Math.min(numMessagesPerTransaction, remainingMessages.get());
-                        log.info("message needed within current txn so far: {}", messagesNeededForCurrentTxn);
-                    }
+                        long messagesSentWithinCurrentTxn = records.count();
 
-                    log.info("Messages sent in current transaction: {}", messagesSentWithinCurrentTxn);
-                    for (Map.Entry<Integer, Integer> entry : partitionCount.entrySet()) {
-                        log.info("Partition {} has contributed {} records", entry.getKey(), entry.getValue());
-                    }
+                        log.info("Messages sent in current transaction: {}", messagesSentWithinCurrentTxn);
+                        for (Map.Entry<Integer, Integer> entry : partitionCount.entrySet()) {
+                            log.info("Partition {} has contributed {} records", entry.getKey(), entry.getValue());
+                        }
 
-                    if (useGroupMetadata) {
-                        producer.sendOffsetsToTransaction(consumerPositions(consumer), consumer.groupMetadata());
-                    } else {
-                        producer.sendOffsetsToTransaction(consumerPositions(consumer), consumerGroup);
-                    }
+                        if (useGroupMetadata) {
+                            producer.sendOffsetsToTransaction(consumerPositions(consumer), consumer.groupMetadata());
+                        } else {
+                            producer.sendOffsetsToTransaction(consumerPositions(consumer), consumerGroup);
+                        }
 
-                    if (enableRandomAborts && random.nextInt() % 3 == 0) {
-                        throw new KafkaException("Aborting transaction");
-                    } else {
-                        producer.commitTransaction();
-                        remainingMessages.getAndAdd(-messagesSentWithinCurrentTxn);
-                        numMessagesProcessedSinceLastRebalance.getAndAdd(messagesSentWithinCurrentTxn);
-                        totalMessageProcessed.getAndAdd(messagesSentWithinCurrentTxn);
+                        if (enableRandomAborts && random.nextInt() % 3 == 0) {
+                            throw new KafkaException("Aborting transaction");
+                        } else {
+                            producer.commitTransaction();
+                            remainingMessages.getAndAdd(-messagesSentWithinCurrentTxn);
+                            numMessagesProcessedSinceLastRebalance.getAndAdd(messagesSentWithinCurrentTxn);
+                            totalMessageProcessed.getAndAdd(messagesSentWithinCurrentTxn);
+                        }
+                    } catch (ProducerFencedException | OutOfOrderSequenceException e) {
+                        // We cannot recover from these errors, so just rethrow them and let the process fail
+                        throw e;
+                    } catch (KafkaException e) {
+                        producer.abortTransaction();
+                        resetToLastCommittedPositions(consumer);
                     }
-                } catch (ProducerFencedException | OutOfOrderSequenceException e) {
-                    // We cannot recover from these errors, so just rethrow them and let the process fail
-                    throw e;
-                } catch (KafkaException e) {
-                    producer.abortTransaction();
-                    resetToLastCommittedPositions(consumer);
                 }
             }
         } finally {
