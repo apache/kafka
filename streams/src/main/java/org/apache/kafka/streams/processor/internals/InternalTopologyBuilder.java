@@ -800,7 +800,7 @@ public class InternalTopologyBuilder {
         return build(nodeGroup);
     }
 
-    public synchronized ProcessorTopology build(final Integer topicGroupId) {
+    public synchronized ProcessorTopology build(final int topicGroupId) {
         final Set<String> nodeGroup = nodeGroups().get(topicGroupId);
         return build(nodeGroup);
     }
@@ -1882,7 +1882,7 @@ public class InternalTopologyBuilder {
     private void updateSubscribedTopics(final Set<String> topics, final String logPrefix) {
         final Collection<String> existingTopics = subscriptionUpdates();
 
-        if  (usesPatternSubscription() && !existingTopics.equals(topics)) {
+        if  (!existingTopics.equals(topics)) {
             topics.addAll(existingTopics);
 
             subscriptionUpdates.clear();
