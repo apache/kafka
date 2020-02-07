@@ -136,6 +136,8 @@ public class EmbeddedConnectCluster {
     /**
      * Stop the connect cluster and the embedded Kafka and Zookeeper cluster.
      * Clean up any temp directories created locally.
+     *
+     * @throws RuntimeException if Kafka brokers fail to stop
      */
     public void stop() {
         connectCluster.forEach(this::stopWorker);
@@ -182,6 +184,7 @@ public class EmbeddedConnectCluster {
      * Decommission a specific worker from this Connect cluster.
      *
      * @param worker the handle of the worker to remove from the cluster
+     * @throws IllegalStateException if the Connect cluster has no workers
      */
     public void removeWorker(WorkerHandle worker) {
         if (connectCluster.isEmpty()) {
@@ -263,6 +266,7 @@ public class EmbeddedConnectCluster {
      *
      * @param connName   the name of the connector
      * @param connConfig the intended configuration
+     * @throws ConnectException if the configuration fails to be serialized
      * @throws ConnectRestException if REST api returns error status
      */
     public String configureConnector(String connName, Map<String, String> connConfig) {
@@ -286,6 +290,7 @@ public class EmbeddedConnectCluster {
      *
      * @param connName name of the connector to be deleted
      * @throws ConnectRestException if REST api returns error status
+     * @throws ConnectException for any other error.
      */
     public void deleteConnector(String connName) {
         String url = endpointForResource(String.format("connectors/%s", connName));
@@ -310,12 +315,13 @@ public class EmbeddedConnectCluster {
             try {
                 return mapper.readerFor(Collection.class).readValue(responseToString(response));
             } catch(IOException e){
-                log.error("Could not parse connector list from response: {}", response, e);
+                log.error("Could not parse connector list from response: {}",
+                        responseToString(response), e);
                 throw new ConnectException("Could not not parse connector list", e);
             }
         }
-        throw new ConnectException("Could not read connector list. Error response: "
-                + responseToString(response));
+        throw new ConnectRestException(response.getStatus(),
+                "Could not read connector list. Error response: " + responseToString(response));
     }
 
     /**
@@ -336,7 +342,9 @@ public class EmbeddedConnectCluster {
                         .readValue(responseToString(response));
             }
         } catch (IOException e) {
-            log.error("Could not read connector state", e);
+            log.error("Could not read connector state from response: {}",
+                    responseToString(response), e);
+            throw new ConnectException("Could not not parse connector state", e);
         }
         throw new ConnectRestException(response.getStatus(),
                 "Could not read connector state. Error response: " + responseToString(response));
@@ -377,6 +385,7 @@ public class EmbeddedConnectCluster {
      *
      * @param url the HTTP endpoint
      * @return the response to the GET request
+     * @throws ConnectException if execution of the GET request fails
      */
     public Response executeGet(String url) {
         return executeHttpMethod(url, null, Collections.emptyMap(), "GET");
@@ -388,6 +397,7 @@ public class EmbeddedConnectCluster {
      * @param url the HTTP endpoint
      * @param body the payload of the PUT request
      * @return the response to the PUT request
+     * @throws ConnectException if execution of the PUT request fails
      */
     public Response executePut(String url, String body) {
         return executeHttpMethod(url, body, Collections.emptyMap(), "PUT");
@@ -400,6 +410,7 @@ public class EmbeddedConnectCluster {
      * @param body the payload of the POST request
      * @param headers a map that stores the POST request headers
      * @return the response to the POST request
+     * @throws ConnectException if execution of the POST request fails
      */
     public Response executePost(String url, String body, Map<String, String> headers) {
         return executeHttpMethod(url, body, headers, "POST");
@@ -410,6 +421,7 @@ public class EmbeddedConnectCluster {
      *
      * @param url the HTTP endpoint
      * @return the response to the DELETE request
+     * @throws ConnectException if execution of the DELETE request fails
      */
     public Response executeDelete(String url) {
         return executeHttpMethod(url, null, Collections.emptyMap(), "DELETE");
@@ -423,6 +435,7 @@ public class EmbeddedConnectCluster {
      * @param headers a map that stores the request headers; empty if there are no headers
      * @param httpMethod the name of the HTTP method to execute
      * @return the response to the HTTP request
+     * @throws ConnectException if execution of the HTTP method fails
      */
     protected Response executeHttpMethod(String url, String body, Map<String, String> headers,
                                       String httpMethod) {
