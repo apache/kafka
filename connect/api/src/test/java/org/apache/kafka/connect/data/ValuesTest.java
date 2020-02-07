@@ -21,6 +21,7 @@ import org.apache.kafka.connect.data.Values.Parser;
 import org.apache.kafka.connect.errors.DataException;
 import org.junit.Test;
 
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -383,6 +384,146 @@ public class ValuesTest {
         assertEquals(str, result.value());
     }
 
+    @Test
+    public void shouldParseTimestampStringAsTimestamp() throws Exception {
+        String str = "2019-08-23T14:34:54.346Z";
+        SchemaAndValue result = Values.parseString(str);
+        assertEquals(Type.INT64, result.schema().type());
+        assertEquals(Timestamp.LOGICAL_NAME, result.schema().name());
+        java.util.Date expected = new SimpleDateFormat(Values.ISO_8601_TIMESTAMP_FORMAT_PATTERN).parse(str);
+        assertEquals(expected, result.value());
+    }
+
+    @Test
+    public void shouldParseDateStringAsDate() throws Exception {
+        String str = "2019-08-23";
+        SchemaAndValue result = Values.parseString(str);
+        assertEquals(Type.INT32, result.schema().type());
+        assertEquals(Date.LOGICAL_NAME, result.schema().name());
+        java.util.Date expected = new SimpleDateFormat(Values.ISO_8601_DATE_FORMAT_PATTERN).parse(str);
+        assertEquals(expected, result.value());
+    }
+
+    @Test
+    public void shouldParseTimeStringAsDate() throws Exception {
+        String str = "14:34:54.346Z";
+        SchemaAndValue result = Values.parseString(str);
+        assertEquals(Type.INT32, result.schema().type());
+        assertEquals(Time.LOGICAL_NAME, result.schema().name());
+        java.util.Date expected = new SimpleDateFormat(Values.ISO_8601_TIME_FORMAT_PATTERN).parse(str);
+        assertEquals(expected, result.value());
+    }
+
+    @Test
+    public void shouldParseTimestampStringWithEscapedColonsAsTimestamp() throws Exception {
+        String str = "2019-08-23T14\\:34\\:54.346Z";
+        SchemaAndValue result = Values.parseString(str);
+        assertEquals(Type.INT64, result.schema().type());
+        assertEquals(Timestamp.LOGICAL_NAME, result.schema().name());
+        String expectedStr = "2019-08-23T14:34:54.346Z";
+        java.util.Date expected = new SimpleDateFormat(Values.ISO_8601_TIMESTAMP_FORMAT_PATTERN).parse(expectedStr);
+        assertEquals(expected, result.value());
+    }
+
+    @Test
+    public void shouldParseTimeStringWithEscapedColonsAsDate() throws Exception {
+        String str = "14\\:34\\:54.346Z";
+        SchemaAndValue result = Values.parseString(str);
+        assertEquals(Type.INT32, result.schema().type());
+        assertEquals(Time.LOGICAL_NAME, result.schema().name());
+        String expectedStr = "14:34:54.346Z";
+        java.util.Date expected = new SimpleDateFormat(Values.ISO_8601_TIME_FORMAT_PATTERN).parse(expectedStr);
+        assertEquals(expected, result.value());
+    }
+
+    @Test
+    public void shouldParseDateStringAsDateInArray() throws Exception {
+        String dateStr = "2019-08-23";
+        String arrayStr = "[" + dateStr + "]";
+        SchemaAndValue result = Values.parseString(arrayStr);
+        assertEquals(Type.ARRAY, result.schema().type());
+        Schema elementSchema = result.schema().valueSchema();
+        assertEquals(Type.INT32, elementSchema.type());
+        assertEquals(Date.LOGICAL_NAME, elementSchema.name());
+        java.util.Date expected = new SimpleDateFormat(Values.ISO_8601_DATE_FORMAT_PATTERN).parse(dateStr);
+        assertEquals(Collections.singletonList(expected), result.value());
+    }
+
+    @Test
+    public void shouldParseTimeStringAsTimeInArray() throws Exception {
+        String timeStr = "14:34:54.346Z";
+        String arrayStr = "[" + timeStr + "]";
+        SchemaAndValue result = Values.parseString(arrayStr);
+        assertEquals(Type.ARRAY, result.schema().type());
+        Schema elementSchema = result.schema().valueSchema();
+        assertEquals(Type.INT32, elementSchema.type());
+        assertEquals(Time.LOGICAL_NAME, elementSchema.name());
+        java.util.Date expected = new SimpleDateFormat(Values.ISO_8601_TIME_FORMAT_PATTERN).parse(timeStr);
+        assertEquals(Collections.singletonList(expected), result.value());
+    }
+
+    @Test
+    public void shouldParseTimestampStringAsTimestampInArray() throws Exception {
+        String tsStr = "2019-08-23T14:34:54.346Z";
+        String arrayStr = "[" + tsStr + "]";
+        SchemaAndValue result = Values.parseString(arrayStr);
+        assertEquals(Type.ARRAY, result.schema().type());
+        Schema elementSchema = result.schema().valueSchema();
+        assertEquals(Type.INT64, elementSchema.type());
+        assertEquals(Timestamp.LOGICAL_NAME, elementSchema.name());
+        java.util.Date expected = new SimpleDateFormat(Values.ISO_8601_TIMESTAMP_FORMAT_PATTERN).parse(tsStr);
+        assertEquals(Collections.singletonList(expected), result.value());
+    }
+
+    @Test
+    public void shouldParseMultipleTimestampStringAsTimestampInArray() throws Exception {
+        String tsStr1 = "2019-08-23T14:34:54.346Z";
+        String tsStr2 = "2019-01-23T15:12:34.567Z";
+        String tsStr3 = "2019-04-23T19:12:34.567Z";
+        String arrayStr = "[" + tsStr1 + "," + tsStr2 + ",   " + tsStr3 + "]";
+        SchemaAndValue result = Values.parseString(arrayStr);
+        assertEquals(Type.ARRAY, result.schema().type());
+        Schema elementSchema = result.schema().valueSchema();
+        assertEquals(Type.INT64, elementSchema.type());
+        assertEquals(Timestamp.LOGICAL_NAME, elementSchema.name());
+        java.util.Date expected1 = new SimpleDateFormat(Values.ISO_8601_TIMESTAMP_FORMAT_PATTERN).parse(tsStr1);
+        java.util.Date expected2 = new SimpleDateFormat(Values.ISO_8601_TIMESTAMP_FORMAT_PATTERN).parse(tsStr2);
+        java.util.Date expected3 = new SimpleDateFormat(Values.ISO_8601_TIMESTAMP_FORMAT_PATTERN).parse(tsStr3);
+        assertEquals(Arrays.asList(expected1, expected2, expected3), result.value());
+    }
+
+    @Test
+    public void shouldParseQuotedTimeStringAsTimeInMap() throws Exception {
+        String keyStr = "k1";
+        String timeStr = "14:34:54.346Z";
+        String mapStr = "{\"" + keyStr + "\":\"" + timeStr + "\"}";
+        SchemaAndValue result = Values.parseString(mapStr);
+        assertEquals(Type.MAP, result.schema().type());
+        Schema keySchema = result.schema().keySchema();
+        Schema valueSchema = result.schema().valueSchema();
+        assertEquals(Type.STRING, keySchema.type());
+        assertEquals(Type.INT32, valueSchema.type());
+        assertEquals(Time.LOGICAL_NAME, valueSchema.name());
+        java.util.Date expected = new SimpleDateFormat(Values.ISO_8601_TIME_FORMAT_PATTERN).parse(timeStr);
+        assertEquals(Collections.singletonMap(keyStr, expected), result.value());
+    }
+
+    @Test
+    public void shouldParseTimeStringAsTimeInMap() throws Exception {
+        String keyStr = "k1";
+        String timeStr = "14:34:54.346Z";
+        String mapStr = "{\"" + keyStr + "\":" + timeStr + "}";
+        SchemaAndValue result = Values.parseString(mapStr);
+        assertEquals(Type.MAP, result.schema().type());
+        Schema keySchema = result.schema().keySchema();
+        Schema valueSchema = result.schema().valueSchema();
+        assertEquals(Type.STRING, keySchema.type());
+        assertEquals(Type.INT32, valueSchema.type());
+        assertEquals(Time.LOGICAL_NAME, valueSchema.name());
+        java.util.Date expected = new SimpleDateFormat(Values.ISO_8601_TIME_FORMAT_PATTERN).parse(timeStr);
+        assertEquals(Collections.singletonMap(keyStr, expected), result.value());
+    }
+
     /**
      * This is technically invalid JSON, and we don't want to simply ignore the blank elements.
      */
@@ -430,6 +571,20 @@ public class ValuesTest {
     @Test(expected = DataException.class)
     public void shouldFailToParseStringOfMapWithIntValuesWithBlankEntries() {
         Values.convertToMap(Schema.STRING_SCHEMA, " { \"foo\" :  \"1234567890\" ,, \"bar\" : \"0\",  \"baz\" : \"boz\" }  ");
+    }
+
+    @Test
+    public void shouldConsumeMultipleTokens() {
+        String value = "a:b:c:d:e:f:g:h";
+        Parser parser = new Parser(value);
+        String firstFive = parser.next(5);
+        assertEquals("a:b:c", firstFive);
+        assertEquals(":", parser.next());
+        assertEquals("d", parser.next());
+        assertEquals(":", parser.next());
+        String lastEight = parser.next(8); // only 7 remain
+        assertNull(lastEight);
+        assertEquals("e", parser.next());
     }
 
     @Test

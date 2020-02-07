@@ -1313,7 +1313,7 @@ public class KStreamImplTest {
                 1 + // to
                 2 + // through
                 1, // process
-            TopologyWrapper.getInternalTopologyBuilder(builder.build()).setApplicationId("X").build(null).processors().size());
+            TopologyWrapper.getInternalTopologyBuilder(builder.build()).setApplicationId("X").build().processors().size());
     }
 
     @SuppressWarnings("rawtypes")
@@ -1417,7 +1417,7 @@ public class KStreamImplTest {
         stream1.to("topic-5");
         stream2.through("topic-6");
 
-        final ProcessorTopology processorTopology = TopologyWrapper.getInternalTopologyBuilder(builder.build()).setApplicationId("X").build(null);
+        final ProcessorTopology processorTopology = TopologyWrapper.getInternalTopologyBuilder(builder.build()).setApplicationId("X").build();
         assertThat(processorTopology.source("topic-6").getTimestampExtractor(), instanceOf(FailOnInvalidTimestamp.class));
         assertNull(processorTopology.source("topic-4").getTimestampExtractor());
         assertNull(processorTopology.source("topic-3").getTimestampExtractor());

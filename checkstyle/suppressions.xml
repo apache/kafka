@@ -161,6 +161,8 @@
     <suppress checks="ParameterNumber"
               files="StreamTask.java"/>
     <suppress checks="ParameterNumber"
+              files="StreamThread.java"/>
+    <suppress checks="ParameterNumber"
               files="RocksDBWindowStoreSupplier.java"/>
 
     <suppress checks="ClassDataAbstractionCoupling"

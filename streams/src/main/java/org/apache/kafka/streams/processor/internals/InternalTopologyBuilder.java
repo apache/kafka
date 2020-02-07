@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.StreamsConfig;
@@ -117,9 +118,9 @@ public class InternalTopologyBuilder {
 
     private String applicationId = null;
 
-    private Pattern topicPattern = null;
+    private Pattern sourceTopicPattern = null;
 
-    private List<String> topicCollection = null;
+    private List<String> sourceTopicCollection = null;
 
     private Map<Integer, Set<String>> nodeGroups = null;
 
@@ -789,23 +790,18 @@ public class InternalTopologyBuilder {
     }
 
     public synchronized ProcessorTopology build() {
-        return build((Integer) null);
+        final Set<String> nodeGroup = new HashSet<>();
+        for (final Set<String> value : nodeGroups().values()) {
+            nodeGroup.addAll(value);
+        }
+        nodeGroup.removeAll(globalNodeGroups());
+
+        initializeSubscription();
+        return build(nodeGroup);
     }
 
-    public synchronized ProcessorTopology build(final Integer topicGroupId) {
-        final Set<String> nodeGroup;
-        if (topicGroupId != null) {
-            nodeGroup = nodeGroups().get(topicGroupId);
-        } else {
-            // when topicGroupId is null, we build the full topology minus the global groups
-            final Set<String> globalNodeGroups = globalNodeGroups();
-            final Collection<Set<String>> values = nodeGroups().values();
-            nodeGroup = new HashSet<>();
-            for (final Set<String> value : values) {
-                nodeGroup.addAll(value);
-            }
-            nodeGroup.removeAll(globalNodeGroups);
-        }
+    public synchronized ProcessorTopology build(final int topicGroupId) {
+        final Set<String> nodeGroup = nodeGroups().get(topicGroupId);
         return build(nodeGroup);
     }
 
@@ -1209,31 +1205,29 @@ public class InternalTopologyBuilder {
         return applicationId + "-" + topic;
     }
 
+    void initializeSubscription() {
+        if (usesPatternSubscription()) {
+            log.debug("Found pattern subscribed source topics, initializing consumer's subscription pattern.");
+            final List<String> allSourceTopics = maybeDecorateInternalSourceTopics(sourceTopicNames);
+            Collections.sort(allSourceTopics);
+            sourceTopicPattern = buildPattern(allSourceTopics, nodeToSourcePatterns.values());
+        } else {
+            log.debug("No source topics using pattern subscription found, initializing consumer's subscription collection.");
+            sourceTopicCollection = maybeDecorateInternalSourceTopics(sourceTopicNames);
+            Collections.sort(sourceTopicCollection);
+        }
+    }
+
     boolean usesPatternSubscription() {
         return !nodeToSourcePatterns.isEmpty();
     }
 
     synchronized Collection<String> sourceTopicCollection() {
-        log.debug("No source topics using pattern subscription found, using regular subscription for the main consumer.");
-
-        if (topicCollection == null) {
-            topicCollection = maybeDecorateInternalSourceTopics(sourceTopicNames);
-            Collections.sort(topicCollection);
-        }
-
-        return topicCollection;
+        return sourceTopicCollection;
     }
 
     synchronized Pattern sourceTopicPattern() {
-        log.debug("Found pattern subscribed source topics, falling back to pattern subscription for the main consumer.");
-
-        if (topicPattern == null) {
-            final List<String> allSourceTopics = maybeDecorateInternalSourceTopics(sourceTopicNames);
-            Collections.sort(allSourceTopics);
-            topicPattern = buildPattern(allSourceTopics, nodeToSourcePatterns.values());
-        }
-
-        return topicPattern;
+        return sourceTopicPattern;
     }
 
     private boolean isGlobalSource(final String nodeName) {
@@ -1861,26 +1855,47 @@ public class InternalTopologyBuilder {
         return sb.toString();
     }
 
-    Set<String> subscriptionUpdates() {
+    private Set<String> subscriptionUpdates() {
         return Collections.unmodifiableSet(subscriptionUpdates);
     }
 
-    boolean hasSubscriptionUpdates() {
+    private boolean hasSubscriptionUpdates() {
         return !subscriptionUpdates.isEmpty();
     }
 
-    synchronized void updateSubscribedTopics(final Set<String> topics,
-                                             final String logPrefix) {
-        log.debug("{}found {} topics possibly matching subscription", logPrefix, topics.size());
-        subscriptionUpdates.clear();
-        subscriptionUpdates.addAll(topics);
+    synchronized void addSubscribedTopicsFromAssignment(final List<TopicPartition> partitions, final String logPrefix) {
+        if (usesPatternSubscription()) {
+            final Set<String> assignedTopics = new HashSet<>();
+            for (final TopicPartition topicPartition : partitions) {
+                assignedTopics.add(topicPartition.topic());
+            }
+            updateSubscribedTopics(assignedTopics, logPrefix);
+        }
+    }
 
-        setRegexMatchedTopicsToSourceNodes();
-        setRegexMatchedTopicToStateStore();
+    synchronized void addSubscribedTopicsFromMetadata(final Set<String> topics, final String logPrefix) {
+        if (usesPatternSubscription()) {
+            updateSubscribedTopics(topics, logPrefix);
+        }
+    }
+
+    private void updateSubscribedTopics(final Set<String> topics, final String logPrefix) {
+        final Collection<String> existingTopics = subscriptionUpdates();
+
+        if  (!existingTopics.equals(topics)) {
+            topics.addAll(existingTopics);
+
+            subscriptionUpdates.clear();
+            subscriptionUpdates.addAll(topics);
+
+            log.debug("{}found {} topics possibly matching subscription", logPrefix, topics.size());
+
+            setRegexMatchedTopicsToSourceNodes();
+            setRegexMatchedTopicToStateStore();
+        }
     }
 
     // following functions are for test only
-
     public synchronized Set<String> sourceTopicNames() {
         return sourceTopicNames;
     }

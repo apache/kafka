@@ -169,6 +169,8 @@ import java.util.Optional;
 import java.util.Set;
 
 import static java.util.Arrays.asList;
+import static java.util.Collections.emptyList;
+import static java.util.Collections.singletonList;
 import static org.apache.kafka.common.protocol.ApiKeys.FETCH;
 import static org.apache.kafka.common.requests.FetchMetadata.INVALID_SESSION_ID;
 import static org.apache.kafka.test.TestUtils.toBuffer;
@@ -603,57 +605,6 @@ public class RequestResponseTest {
     }
 
     @Test
-    public void produceResponseV5Test() {
-        Map<TopicPartition, ProduceResponse.PartitionResponse> responseData = new HashMap<>();
-        TopicPartition tp0 = new TopicPartition("test", 0);
-        responseData.put(tp0, new ProduceResponse.PartitionResponse(Errors.NONE,
-                10000, RecordBatch.NO_TIMESTAMP, 100));
-
-        ProduceResponse v5Response = new ProduceResponse(responseData, 10);
-        short version = 5;
-
-        ByteBuffer buffer = v5Response.serialize(ApiKeys.PRODUCE, version, 0);
-        buffer.rewind();
-
-        ResponseHeader.parse(buffer, ApiKeys.PRODUCE.responseHeaderVersion(version)); // throw away.
-
-        Struct deserializedStruct = ApiKeys.PRODUCE.parseResponse(version, buffer);
-
-        ProduceResponse v5FromBytes = (ProduceResponse) AbstractResponse.parseResponse(ApiKeys.PRODUCE,
-                deserializedStruct, version);
-
-        assertEquals(1, v5FromBytes.responses().size());
-        assertTrue(v5FromBytes.responses().containsKey(tp0));
-        ProduceResponse.PartitionResponse partitionResponse = v5FromBytes.responses().get(tp0);
-        assertEquals(100, partitionResponse.logStartOffset);
-        assertEquals(10000, partitionResponse.baseOffset);
-        assertEquals(10, v5FromBytes.throttleTimeMs());
-        assertEquals(responseData, v5Response.responses());
-    }
-
-    @Test
-    public void produceResponseVersionTest() {
-        Map<TopicPartition, ProduceResponse.PartitionResponse> responseData = new HashMap<>();
-        responseData.put(new TopicPartition("test", 0), new ProduceResponse.PartitionResponse(Errors.NONE,
-                10000, RecordBatch.NO_TIMESTAMP, 100));
-        ProduceResponse v0Response = new ProduceResponse(responseData);
-        ProduceResponse v1Response = new ProduceResponse(responseData, 10);
-        ProduceResponse v2Response = new ProduceResponse(responseData, 10);
-        assertEquals("Throttle time must be zero", 0, v0Response.throttleTimeMs());
-        assertEquals("Throttle time must be 10", 10, v1Response.throttleTimeMs());
-        assertEquals("Throttle time must be 10", 10, v2Response.throttleTimeMs());
-        assertEquals("Should use schema version 0", ApiKeys.PRODUCE.responseSchema((short) 0),
-                v0Response.toStruct((short) 0).schema());
-        assertEquals("Should use schema version 1", ApiKeys.PRODUCE.responseSchema((short) 1),
-                v1Response.toStruct((short) 1).schema());
-        assertEquals("Should use schema version 2", ApiKeys.PRODUCE.responseSchema((short) 2),
-                v2Response.toStruct((short) 2).schema());
-        assertEquals("Response data does not match", responseData, v0Response.responses());
-        assertEquals("Response data does not match", responseData, v1Response.responses());
-        assertEquals("Response data does not match", responseData, v2Response.responses());
-    }
-
-    @Test
     public void fetchResponseVersionTest() {
         LinkedHashMap<TopicPartition, FetchResponse.PartitionData<MemoryRecords>> responseData = new LinkedHashMap<>();
 
@@ -688,7 +639,7 @@ public class RequestResponseTest {
         responseData.put(new TopicPartition("bar", 1), new FetchResponse.PartitionData<>(Errors.NONE, 900000,
                 5, FetchResponse.INVALID_LOG_START_OFFSET, Optional.empty(), null, records));
         responseData.put(new TopicPartition("foo", 0), new FetchResponse.PartitionData<>(Errors.NONE, 70000,
-                6, FetchResponse.INVALID_LOG_START_OFFSET, Optional.empty(), Collections.emptyList(), records));
+                6, FetchResponse.INVALID_LOG_START_OFFSET, Optional.empty(), emptyList(), records));
 
         FetchResponse<MemoryRecords> response = new FetchResponse<>(Errors.NONE, responseData, 10, INVALID_SESSION_ID);
         FetchResponse deserialized = FetchResponse.parse(toBuffer(response.toStruct((short) 4)), (short) 4);
@@ -1237,19 +1188,21 @@ public class RequestResponseTest {
 
     private MetadataResponse createMetadataResponse() {
         Node node = new Node(1, "host1", 1001);
-        List<Node> replicas = asList(node);
-        List<Node> isr = asList(node);
-        List<Node> offlineReplicas = asList();
+        List<Integer> replicas = singletonList(node.id());
+        List<Integer> isr = singletonList(node.id());
+        List<Integer> offlineReplicas = emptyList();
 
         List<MetadataResponse.TopicMetadata> allTopicMetadata = new ArrayList<>();
         allTopicMetadata.add(new MetadataResponse.TopicMetadata(Errors.NONE, "__consumer_offsets", true,
-                asList(new MetadataResponse.PartitionMetadata(Errors.NONE, 1, node,
-                        Optional.of(5), replicas, isr, offlineReplicas))));
+                asList(new MetadataResponse.PartitionMetadata(Errors.NONE,
+                        new TopicPartition("__consumer_offsets", 1),
+                        Optional.of(node.id()), Optional.of(5), replicas, isr, offlineReplicas))));
         allTopicMetadata.add(new MetadataResponse.TopicMetadata(Errors.LEADER_NOT_AVAILABLE, "topic2", false,
-                Collections.emptyList()));
+                emptyList()));
         allTopicMetadata.add(new MetadataResponse.TopicMetadata(Errors.NONE, "topic3", false,
-            asList(new MetadataResponse.PartitionMetadata(Errors.LEADER_NOT_AVAILABLE, 0, null,
-                Optional.empty(), replicas, isr, offlineReplicas))));
+            asList(new MetadataResponse.PartitionMetadata(Errors.LEADER_NOT_AVAILABLE,
+                    new TopicPartition("topic3", 0), Optional.empty(),
+                    Optional.empty(), replicas, isr, offlineReplicas))));
 
         return MetadataResponse.prepareResponse(asList(node), null, MetadataResponse.NO_CONTROLLER_ID, allTopicMetadata);
     }
@@ -1859,13 +1812,13 @@ public class RequestResponseTest {
         Map<ConfigResource, Collection<String>> resources = new HashMap<>();
         resources.put(new ConfigResource(ConfigResource.Type.BROKER, "0"), asList("foo", "bar"));
         resources.put(new ConfigResource(ConfigResource.Type.TOPIC, "topic"), null);
-        resources.put(new ConfigResource(ConfigResource.Type.TOPIC, "topic a"), Collections.emptyList());
+        resources.put(new ConfigResource(ConfigResource.Type.TOPIC, "topic a"), emptyList());
         return new DescribeConfigsRequest.Builder(resources).build((short) version);
     }
 
     private DescribeConfigsResponse createDescribeConfigsResponse() {
         Map<ConfigResource, DescribeConfigsResponse.Config> configs = new HashMap<>();
-        List<DescribeConfigsResponse.ConfigSynonym> synonyms = Collections.emptyList();
+        List<DescribeConfigsResponse.ConfigSynonym> synonyms = emptyList();
         List<DescribeConfigsResponse.ConfigEntry> configEntries = asList(
                 new DescribeConfigsResponse.ConfigEntry("config_name", "config_value",
                         DescribeConfigsResponse.ConfigSource.DYNAMIC_BROKER_CONFIG, true, false, synonyms),

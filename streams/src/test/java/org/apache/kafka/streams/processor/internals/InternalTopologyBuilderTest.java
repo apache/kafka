@@ -72,6 +72,7 @@ public class InternalTopologyBuilderTest {
 
         builder.addSource(Topology.AutoOffsetReset.EARLIEST, "source", null, null, null, earliestTopic);
         builder.addSource(Topology.AutoOffsetReset.LATEST, "source2", null, null, null, latestTopic);
+        builder.initializeSubscription();
 
         assertTrue(builder.earliestResetTopicsPattern().matcher(earliestTopic).matches());
         assertTrue(builder.latestResetTopicsPattern().matcher(latestTopic).matches());
@@ -84,6 +85,7 @@ public class InternalTopologyBuilderTest {
 
         builder.addSource(Topology.AutoOffsetReset.EARLIEST, "source", null, null, null, Pattern.compile(earliestTopicPattern));
         builder.addSource(Topology.AutoOffsetReset.LATEST, "source2", null, null, null,  Pattern.compile(latestTopicPattern));
+        builder.initializeSubscription();
 
         assertTrue(builder.earliestResetTopicsPattern().matcher("earliestTestTopic").matches());
         assertTrue(builder.latestResetTopicsPattern().matcher("latestTestTopic").matches());
@@ -91,11 +93,10 @@ public class InternalTopologyBuilderTest {
 
     @Test
     public void shouldAddSourceWithoutOffsetReset() {
-        final Pattern expectedPattern = Pattern.compile("test-topic");
-
         builder.addSource(null, "source", null, stringSerde.deserializer(), stringSerde.deserializer(), "test-topic");
+        builder.initializeSubscription();
 
-        assertEquals(expectedPattern.pattern(), builder.sourceTopicPattern().pattern());
+        assertEquals(Arrays.asList("test-topic"), builder.sourceTopicCollection());
         assertEquals(builder.earliestResetTopicsPattern().pattern(), "");
         assertEquals(builder.latestResetTopicsPattern().pattern(), "");
     }
@@ -105,6 +106,7 @@ public class InternalTopologyBuilderTest {
         final Pattern expectedPattern = Pattern.compile("test-.*");
 
         builder.addSource(null, "source", null, stringSerde.deserializer(), stringSerde.deserializer(), Pattern.compile("test-.*"));
+        builder.initializeSubscription();
 
         assertEquals(expectedPattern.pattern(), builder.sourceTopicPattern().pattern());
         assertEquals(builder.earliestResetTopicsPattern().pattern(), "");
@@ -237,29 +239,35 @@ public class InternalTopologyBuilderTest {
         builder.addSource(null, "source-2", null, null, null, "topic-2");
         builder.addSource(null, "source-3", null, null, null, "topic-3");
         builder.addInternalTopic("topic-3");
+        builder.initializeSubscription();
 
         assertFalse(builder.usesPatternSubscription());
         assertEquals(Arrays.asList("X-topic-3", "topic-1", "topic-2"), builder.sourceTopicCollection());
     }
 
     @Test
-    public void testPatternSourceTopics() {
+    public void testPatternAndNameSourceTopics() {
+        final Pattern sourcePattern = Pattern.compile("topic-4|topic-5");
+
         builder.setApplicationId("X");
         builder.addSource(null, "source-1", null, null, null, "topic-1");
         builder.addSource(null, "source-2", null, null, null, "topic-2");
         builder.addSource(null, "source-3", null, null, null, "topic-3");
-        builder.addInternalTopic("topic-3");
+        builder.addSource(null, "source-4", null, null, null, sourcePattern);
 
-        final Pattern expectedPattern = Pattern.compile("X-topic-3|topic-1|topic-2");
+        builder.addInternalTopic("topic-3");
+        builder.initializeSubscription();
+
+        final Pattern expectedPattern = Pattern.compile("X-topic-3|topic-1|topic-2|topic-4|topic-5");
 
         assertEquals(expectedPattern.pattern(), builder.sourceTopicPattern().pattern());
     }
 
     @Test
-    public void testSourceTopicsWithGlobalTopics() {
+    public void testPatternSourceTopicsWithGlobalTopics() {
         builder.setApplicationId("X");
-        builder.addSource(null, "source-1", null, null, null, "topic-1");
-        builder.addSource(null, "source-2", null, null, null, "topic-2");
+        builder.addSource(null, "source-1", null, null, null, Pattern.compile("topic-1"));
+        builder.addSource(null, "source-2", null, null, null, Pattern.compile("topic-2"));
         builder.addGlobalStore(
                 new MockKeyValueStoreBuilder("global-store", false).withLoggingDisabled(),
                 "globalSource",
@@ -269,6 +277,7 @@ public class InternalTopologyBuilderTest {
                 "globalTopic",
                 "global-processor",
                 new MockProcessorSupplier());
+        builder.initializeSubscription();
 
         final Pattern expectedPattern = Pattern.compile("topic-1|topic-2");
 
@@ -276,9 +285,29 @@ public class InternalTopologyBuilderTest {
     }
 
     @Test
+    public void testNameSourceTopicsWithGlobalTopics() {
+        builder.setApplicationId("X");
+        builder.addSource(null, "source-1", null, null, null, "topic-1");
+        builder.addSource(null, "source-2", null, null, null, "topic-2");
+        builder.addGlobalStore(
+            new MockKeyValueStoreBuilder("global-store", false).withLoggingDisabled(),
+            "globalSource",
+            null,
+            null,
+            null,
+            "globalTopic",
+            "global-processor",
+            new MockProcessorSupplier());
+        builder.initializeSubscription();
+
+        assertThat(builder.sourceTopicCollection(), equalTo(asList("topic-1", "topic-2")));
+    }
+
+    @Test
     public void testPatternSourceTopic() {
         final Pattern expectedPattern = Pattern.compile("topic-\\d");
         builder.addSource(null, "source-1", null, null, null, expectedPattern);
+        builder.initializeSubscription();
         assertEquals(expectedPattern.pattern(), builder.sourceTopicPattern().pattern());
     }
 
@@ -287,6 +316,7 @@ public class InternalTopologyBuilderTest {
         final Pattern expectedPattern = Pattern.compile("topics[A-Z]|.*-\\d");
         builder.addSource(null, "source-1", null, null, null, Pattern.compile("topics[A-Z]"));
         builder.addSource(null, "source-2", null, null, null, Pattern.compile(".*-\\d"));
+        builder.initializeSubscription();
         assertEquals(expectedPattern.pattern(), builder.sourceTopicPattern().pattern());
     }
 
@@ -295,6 +325,7 @@ public class InternalTopologyBuilderTest {
         final Pattern expectedPattern = Pattern.compile("topic-bar|topic-foo|.*-\\d");
         builder.addSource(null, "source-1", null, null, null, "topic-foo", "topic-bar");
         builder.addSource(null, "source-2", null, null, null, Pattern.compile(".*-\\d"));
+        builder.initializeSubscription();
         assertEquals(expectedPattern.pattern(), builder.sourceTopicPattern().pattern());
     }
 
@@ -356,11 +387,11 @@ public class InternalTopologyBuilderTest {
         builder.addSource(null, "source-1", null, null, null, "topic-1");
         builder.addProcessor("processor-1", new MockProcessorSupplier(), "source-1");
 
-        assertEquals(0, builder.build(null).stateStores().size());
+        assertEquals(0, builder.build().stateStores().size());
 
         builder.connectProcessorAndStateStores("processor-1", storeBuilder.name());
 
-        final List<StateStore> suppliers = builder.build(null).stateStores();
+        final List<StateStore> suppliers = builder.build().stateStores();
         assertEquals(1, suppliers.size());
         assertEquals(storeBuilder.name(), suppliers.get(0).name());
     }
@@ -690,7 +721,7 @@ public class InternalTopologyBuilderTest {
         updatedTopics.add("topic-3");
         updatedTopics.add("topic-A");
 
-        builder.updateSubscribedTopics(updatedTopics, null);
+        builder.addSubscribedTopicsFromMetadata(updatedTopics, null);
         builder.setApplicationId("test-id");
 
         final Map<Integer, InternalTopologyBuilder.TopicsInfo> topicGroups = builder.topicGroups();
@@ -703,7 +734,7 @@ public class InternalTopologyBuilderTest {
     @Test
     public void shouldAddTimestampExtractorPerSource() {
         builder.addSource(null, "source", new MockTimestampExtractor(), null, null, "topic");
-        final ProcessorTopology processorTopology = builder.rewriteTopology(new StreamsConfig(StreamsTestUtils.getStreamsConfig())).build(null);
+        final ProcessorTopology processorTopology = builder.rewriteTopology(new StreamsConfig(StreamsTestUtils.getStreamsConfig())).build();
         assertThat(processorTopology.source("topic").getTimestampExtractor(), instanceOf(MockTimestampExtractor.class));
     }
 
@@ -711,7 +742,7 @@ public class InternalTopologyBuilderTest {
     public void shouldAddTimestampExtractorWithPatternPerSource() {
         final Pattern pattern = Pattern.compile("t.*");
         builder.addSource(null, "source", new MockTimestampExtractor(), null, null, pattern);
-        final ProcessorTopology processorTopology = builder.rewriteTopology(new StreamsConfig(StreamsTestUtils.getStreamsConfig())).build(null);
+        final ProcessorTopology processorTopology = builder.rewriteTopology(new StreamsConfig(StreamsTestUtils.getStreamsConfig())).build();
         assertThat(processorTopology.source(pattern.pattern()).getTimestampExtractor(), instanceOf(MockTimestampExtractor.class));
     }
 
@@ -772,7 +803,7 @@ public class InternalTopologyBuilderTest {
         updatedTopics.add("topic-3");
         updatedTopics.add("topic-A");
 
-        builder.updateSubscribedTopics(updatedTopics, "test-thread");
+        builder.addSubscribedTopicsFromMetadata(updatedTopics, "test-thread");
         builder.setApplicationId("test-app");
 
         final Map<String, List<String>> stateStoreAndTopics = builder.stateStoreNameToSourceTopics();

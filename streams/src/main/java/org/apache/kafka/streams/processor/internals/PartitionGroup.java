@@ -207,11 +207,11 @@ public class PartitionGroup {
     public void close() {
         clear();
         partitionQueues.clear();
+        streamTime = RecordQueue.UNKNOWN;
     }
 
     public void clear() {
         nonEmptyQueuesByTime.clear();
-        streamTime = RecordQueue.UNKNOWN;
         for (final RecordQueue queue : partitionQueues.values()) {
             queue.clear();
         }
