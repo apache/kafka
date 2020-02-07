@@ -765,8 +765,9 @@ public class StreamThread extends Thread {
             } catch (final TaskMigratedException e) {
                 log.warn("Detected that the thread is being fenced. " +
                     "This implies that this thread missed a rebalance and dropped out of the consumer group. " +
-                    "Will migrate out all assigned tasks and rejoin the consumer group.");
+                    "Will close out all assigned tasks and rejoin the consumer group.");
 
+                taskManager.handleLostAll();
                 enforceRebalance();
             }
         }

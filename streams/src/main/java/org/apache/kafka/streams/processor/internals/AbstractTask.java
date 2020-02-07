@@ -76,7 +76,7 @@ public abstract class AbstractTask implements Task {
         if (state == CLOSED) {
             transitionTo(CREATED);
         } else {
-            throw new IllegalStateException("Illegal state " + state() + " while committing standby task " + id);
+            throw new IllegalStateException("Illegal state " + state() + " while reviving task " + id);
         }
     }
 
