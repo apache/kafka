@@ -20,7 +20,7 @@ import org.junit.Test;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verifyZeroInteractions;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 import java.util.concurrent.ThreadLocalRandom;
 
@@ -38,7 +38,7 @@ public class WebClientTest {
     WebClient.send(customerId, nullData, p, null);
 
     // Then
-    verifyZeroInteractions(p);
+    verifyNoInteractions(p);
   }
 
   @Test
@@ -51,7 +51,7 @@ public class WebClientTest {
     WebClient.send(customerId, emptyData, p, null);
 
     // Then
-    verifyZeroInteractions(p);
+    verifyNoInteractions(p);
   }
 
   @Test

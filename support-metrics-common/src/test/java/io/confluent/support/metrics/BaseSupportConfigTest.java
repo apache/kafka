@@ -15,13 +15,11 @@ package io.confluent.support.metrics;
 
 import org.junit.Test;
 
-import java.io.IOException;
 import java.util.Arrays;
 import java.util.Properties;
 import java.util.stream.Stream;
 
 import io.confluent.support.metrics.utils.CustomerIdExamples;
-import kafka.server.KafkaConfig;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -125,39 +123,6 @@ public class BaseSupportConfigTest {
                  BaseSupportConfig.isCaseSensitiveCustomerId(validValue));
     }
   }
-
-  @Test
-  public void proactiveSupportConfigIsValidKafkaConfig() throws IOException {
-    // Given
-    Properties brokerConfiguration = defaultBrokerConfiguration();
-
-    // When
-    KafkaConfig cfg = KafkaConfig.fromProps(brokerConfiguration);
-
-    // Then
-    assertEquals(0, cfg.brokerId());
-    assertTrue(cfg.zkConnect().startsWith("localhost:"));
-  }
-
-  private Properties defaultBrokerConfiguration() throws IOException {
-    Properties brokerConfiguration = new Properties();
-    brokerConfiguration.load(BaseSupportConfigTest.class.getResourceAsStream("/default-server"
-                                                                             + ".properties"));
-    return brokerConfiguration;
-  }
-
-  @Test
-  public void canParseProactiveSupportConfiguration() throws IOException {
-    // Given
-    Properties brokerConfiguration = defaultBrokerConfiguration();
-
-    BaseSupportConfig supportConfig = new TestSupportConfig(brokerConfiguration);
-    // When/Then
-    assertTrue(supportConfig.getMetricsEnabled());
-    assertEquals("c0", supportConfig.getCustomerId());
-    assertTrue(supportConfig.isProactiveSupportEnabled());
-  }
-
 
   @Test
   public void testGetDefaultProps() {

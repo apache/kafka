@@ -268,10 +268,6 @@
 
     <!-- proactive support -->
     <suppress checks=".+"
-        files="support-metrics-client/src/main/generated/.*"/>
-    <suppress checks=".+"
-        files="support-metrics-client/src/test/generated/.*"/>
-    <suppress checks=".+"
         files="support-metrics-common/src/main/generated/.*"/>
     <suppress checks=".+"
         files="support-metrics-common/src/test/generated/.*"/>

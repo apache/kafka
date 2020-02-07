@@ -26,8 +26,9 @@ import static org.junit.Assert.fail;
 import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyZeroInteractions;
+import static org.mockito.Mockito.verifyNoInteractions;
 
+@SuppressWarnings("unchecked")
 public class KafkaSubmitterTest {
 
   private static ZkClientProvider zkClientProvider;
@@ -93,7 +94,7 @@ public class KafkaSubmitterTest {
     k.submit(nullData, producer);
 
     // Then
-    verifyZeroInteractions(producer);
+    verifyNoInteractions(producer);
   }
 
   @Test
@@ -108,7 +109,7 @@ public class KafkaSubmitterTest {
     k.submit(emptyData, producer);
 
     // Then
-    verifyZeroInteractions(producer);
+    verifyNoInteractions(producer);
   }
 
   @Test
