@@ -18,12 +18,15 @@ package org.apache.kafka.clients.producer.internals;
 
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.ClientResponse;
+import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.clients.RequestCompletionHandler;
 import org.apache.kafka.clients.consumer.CommitFailedException;
 import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.common.errors.InvalidPidMappingException;
 import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.UnknownProducerIdException;
+import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.utils.ProducerIdAndEpoch;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
@@ -39,7 +42,6 @@ import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.EndTxnRequestData;
 import org.apache.kafka.common.message.FindCoordinatorRequestData;
 import org.apache.kafka.common.message.InitProducerIdRequestData;
-import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.DefaultRecordBatch;
 import org.apache.kafka.common.record.RecordBatch;
@@ -133,11 +135,6 @@ public class TransactionManager {
                 return OptionalInt.empty();
         }
 
-        void startAllSequencesFromBeginning(ProducerIdAndEpoch newProducerIdAndEpoch) {
-            topicPartitions.keySet().forEach(topicPartition ->
-                    startSequencesAtBeginning(topicPartition, newProducerIdAndEpoch));
-        }
-
         void startSequencesAtBeginning(TopicPartition topicPartition, ProducerIdAndEpoch newProducerIdAndEpoch) {
             final PrimitiveRef.IntRef sequence = PrimitiveRef.ofInt(0);
             TopicPartitionEntry topicPartitionEntry = getPartition(topicPartition);
@@ -223,6 +220,7 @@ public class TransactionManager {
     private int inFlightRequestCorrelationId = NO_INFLIGHT_REQUEST_CORRELATION_ID;
     private Node transactionCoordinator;
     private Node consumerGroupCoordinator;
+    private boolean coordinatorSupportsBumpingEpoch;
 
     private volatile State currentState = State.UNINITIALIZED;
     private volatile RuntimeException lastError = null;
@@ -268,12 +266,14 @@ public class TransactionManager {
 
     // We use the priority to determine the order in which requests need to be sent out. For instance, if we have
     // a pending FindCoordinator request, that must always go first. Next, If we need a producer id, that must go second.
-    // The endTxn request must always go last.
+    // The endTxn request must always go last, unless we are bumping the epoch (a special case of InitProducerId)as
+    // part of ending the transaction.
     private enum Priority {
         FIND_COORDINATOR(0),
         INIT_PRODUCER_ID(1),
         ADD_PARTITIONS_OR_OFFSETS(2),
-        END_TXN(3);
+        END_TXN(3),
+        EPOCH_BUMP(4);
 
         final int priority;
 
@@ -306,14 +306,21 @@ public class TransactionManager {
     }
 
     public synchronized TransactionalRequestResult initializeTransactions() {
-        boolean isEpochBump = this.producerIdAndEpoch != ProducerIdAndEpoch.NONE;
+        return initializeTransactions(ProducerIdAndEpoch.NONE);
+    }
+
+    synchronized TransactionalRequestResult initializeTransactions(ProducerIdAndEpoch producerIdAndEpoch) {
+        boolean isEpochBump = producerIdAndEpoch != ProducerIdAndEpoch.NONE;
         return handleCachedTransactionRequestResult(() -> {
-            transitionTo(State.INITIALIZING);
+            // If this is an epoch bump, we will transition the state as part of handling the EndTxnRequest
+            if (!isEpochBump) {
+                transitionTo(State.INITIALIZING);
+            }
             InitProducerIdRequestData requestData = new InitProducerIdRequestData()
                     .setTransactionalId(transactionalId)
                     .setTransactionTimeoutMs(transactionTimeoutMs)
-                    .setProducerId(this.producerIdAndEpoch.producerId)
-                    .setProducerEpoch(this.producerIdAndEpoch.epoch);
+                    .setProducerId(producerIdAndEpoch.producerId)
+                    .setProducerEpoch(producerIdAndEpoch.epoch);
             InitProducerIdHandler handler = new InitProducerIdHandler(new InitProducerIdRequest.Builder(requestData),
                     isEpochBump);
             enqueueRequest(handler);
@@ -351,22 +358,26 @@ public class TransactionManager {
         if (!newPartitionsInTransaction.isEmpty())
             enqueueRequest(addPartitionsToTransactionHandler());
 
-        // If we are bumping the epoch, call InitProducerId instead of EndTxn. This will automatically abort the
-        // transaction on the broker side and return a CONCURRENT_TRANSACTIONS, which will be retried until successful
-        if (shouldBumpEpoch()) {
-            log.info("Invoking InitProducerId with current producer ID and epoch {} in order to bump the epoch", producerIdAndEpoch);
-            return initializeTransactions();
-        } else {
+        // If the error is an INVALID_PRODUCER_ID_MAPPING error, the server will not accept an EndTxnRequest, so skip
+        // directly to InitProducerId. Otherwise, we must first abort the transactions, because the producer will be
+        // fenced if we directly call InitProducerId.
+        if (!(lastError instanceof InvalidPidMappingException)) {
             EndTxnRequest.Builder builder = new EndTxnRequest.Builder(
                     new EndTxnRequestData()
                             .setTransactionalId(transactionalId)
                             .setProducerId(producerIdAndEpoch.producerId)
                             .setProducerEpoch(producerIdAndEpoch.epoch)
                             .setCommitted(transactionResult.id));
+
             EndTxnHandler handler = new EndTxnHandler(builder);
             enqueueRequest(handler);
-            return handler.result;
+            if (!shouldBumpEpoch()) {
+                return handler.result;
+            }
         }
+
+        return initializeTransactions(this.producerIdAndEpoch);
+        // }
     }
 
     public synchronized TransactionalRequestResult sendOffsetsToTransaction(final Map<TopicPartition, OffsetAndMetadata> offsets,
@@ -1122,12 +1133,20 @@ public class TransactionManager {
     }
 
     private boolean canBumpEpoch() {
-        return !isTransactional() ||
-                apiVersions.get(transactionCoordinator.idString()).apiVersion(ApiKeys.INIT_PRODUCER_ID).maxVersion >= 3;
+        if (!isTransactional()) {
+            return true;
+        }
+
+        NodeApiVersions nodeApiVersions = apiVersions.get(transactionCoordinator.idString());
+        return nodeApiVersions != null && nodeApiVersions.apiVersion(ApiKeys.INIT_PRODUCER_ID).maxVersion >= 3;
     }
 
     private void completeTransaction() {
-        transitionTo(State.READY);
+        if (epochBumpRequired) {
+            transitionTo(State.INITIALIZING);
+        } else {
+            transitionTo(State.READY);
+        }
         lastError = null;
         epochBumpRequired = false;
         transactionStarted = false;
@@ -1255,7 +1274,7 @@ public class TransactionManager {
 
         @Override
         Priority priority() {
-            return Priority.INIT_PRODUCER_ID;
+            return this.isEpochBump ? Priority.EPOCH_BUMP : Priority.INIT_PRODUCER_ID;
         }
 
         @Override
@@ -1276,13 +1295,10 @@ public class TransactionManager {
                 ProducerIdAndEpoch producerIdAndEpoch = new ProducerIdAndEpoch(initProducerIdResponse.data.producerId(),
                         initProducerIdResponse.data.producerEpoch());
                 setProducerIdAndEpoch(producerIdAndEpoch);
+                transitionTo(State.READY);
+                lastError = null;
                 if (this.isEpochBump) {
-                    // If this is a transactional epoch bump, reset the sequence numbers and clear the previous transaction state
                     resetSequenceNumbers();
-                    completeTransaction();
-                } else {
-                    transitionTo(State.READY);
-                    lastError = null;
                 }
                 result.done();
             } else if (error == Errors.NOT_COORDINATOR || error == Errors.COORDINATOR_NOT_AVAILABLE) {
@@ -1361,6 +1377,7 @@ public class TransactionManager {
                     hasPartitionErrors = true;
                 } else if (error == Errors.UNKNOWN_PRODUCER_ID || error == Errors.INVALID_PRODUCER_ID_MAPPING) {
                     abortableErrorIfPossible(error.exception());
+                    return;
                 } else {
                     log.error("Could not add partition {} due to unexpected error {}", topicPartition, error);
                     hasPartitionErrors = true;
@@ -1447,6 +1464,7 @@ public class TransactionManager {
                         break;
                     case TRANSACTION:
                         transactionCoordinator = node;
+
                 }
                 result.done();
             } else if (error == Errors.COORDINATOR_NOT_AVAILABLE) {
