@@ -1209,7 +1209,7 @@ public class TopologyTestDriverTest {
         testDriver.pipeRecord(topic, new TestRecord<>(key, value, null, time),
                 new StringSerializer(), new LongSerializer(), null);
     }
-
+    
     private void compareKeyValue(final TestRecord<String, Long> record, final String key, final Long value) {
         assertThat(record.getKey(), equalTo(key));
         assertThat(record.getValue(), equalTo(value));
