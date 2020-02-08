@@ -128,17 +128,8 @@ public class MeteredWindowStoreTest {
         replay(innerStoreMock);
         store.init(context, store);
         final JmxReporter reporter = new JmxReporter("kafka.streams");
-        metrics.addReporter(reporter);
-        assertTrue(reporter.containsMbean(String.format(
-            "kafka.streams:type=%s,%s=%s,task-id=%s,%s-state-id=%s",
-            storeLevelGroup,
-            threadIdTagKey,
-            threadId,
-            context.taskId().toString(),
-            STORE_TYPE,
-            STORE_NAME
-        )));
-        if (StreamsConfig.METRICS_0100_TO_24.equals(builtInMetricsVersion)) {
+        try {
+            metrics.addReporter(reporter);
             assertTrue(reporter.containsMbean(String.format(
                 "kafka.streams:type=%s,%s=%s,task-id=%s,%s-state-id=%s",
                 storeLevelGroup,
@@ -146,8 +137,21 @@ public class MeteredWindowStoreTest {
                 threadId,
                 context.taskId().toString(),
                 STORE_TYPE,
-                ROLLUP_VALUE
+                STORE_NAME
             )));
+            if (StreamsConfig.METRICS_0100_TO_24.equals(builtInMetricsVersion)) {
+                assertTrue(reporter.containsMbean(String.format(
+                    "kafka.streams:type=%s,%s=%s,task-id=%s,%s-state-id=%s",
+                    storeLevelGroup,
+                    threadIdTagKey,
+                    threadId,
+                    context.taskId().toString(),
+                    STORE_TYPE,
+                    ROLLUP_VALUE
+                )));
+            }
+        } finally {
+            reporter.close();
         }
     }
 
