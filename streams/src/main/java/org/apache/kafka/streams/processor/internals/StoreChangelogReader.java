@@ -414,8 +414,10 @@ public class StoreChangelogReader implements ChangelogReader {
                 // when the consumer gets fenced, all its tasks should be migrated
                 throw new TaskMigratedException("Restore consumer get fenced by instance-id polling records.", e);
             } catch (final InvalidOffsetException e) {
-                log.warn("Encountered {} fetching records from restore consumer for partitions {}, " +
-                    "marking the corresponding tasks as corrupted.", e.getClass().getName(), e.partitions());
+                log.warn("Encountered {} fetching records from restore consumer for partitions {}, it is likely that " +
+                    "the consumer's position has fallen out of the topic partition offset range because the topic was " +
+                    "truncated or compacted on the broker, marking the corresponding tasks as corrupted and re-initializing"
+                    "it later.", e.getClass().getName(), e.partitions());
 
                 final Set<TaskId> taskIds = new HashSet<>();
                 for (final TopicPartition partition : e.partitions()) {
