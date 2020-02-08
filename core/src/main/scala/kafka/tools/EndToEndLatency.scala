@@ -80,7 +80,7 @@ object EndToEndLatency {
     consumerProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArrayDeserializer")
     consumerProps.put(ConsumerConfig.FETCH_MAX_WAIT_MS_CONFIG, "0") //ensure we have no temporal batching
 
-    consumerProps.putAll(loadProps);
+    consumerProps.putAll(loadPropsWithBootstrapServers);
     val consumer = new KafkaConsumer[Array[Byte], Array[Byte]](consumerProps)
 
     val producerProps: Properties = new Properties()
@@ -91,7 +91,7 @@ object EndToEndLatency {
     producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer")
     producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer")
 
-    producerProps.putAll(loadProps)
+    producerProps.putAll(loadPropsWithBootstrapServers)
     val producer = new KafkaProducer[Array[Byte], Array[Byte]](producerProps)
 
     def finalise(): Unit = {
