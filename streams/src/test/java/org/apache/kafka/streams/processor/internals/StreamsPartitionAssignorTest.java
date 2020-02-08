@@ -1729,25 +1729,50 @@ public class StreamsPartitionAssignorTest {
     @Test
     public void shouldNotFailOnBranchedMultiLevelRepartitionConnectedTopology() {
         // This test is converted from integration test BranchedMultiLevelRepartitionConnectedTopologyTest
-
         final String applicationId = "test";
         builder.setApplicationId(applicationId);
-        builder.addInternalTopic("topicX");
-        builder.addSource(null, "source1", null, null, null, "topic1");
-        builder.addProcessor("processor1", new MockProcessorSupplier(), "source1");
-        builder.addSink("sink1", "topicX", null, null, null, "processor1");
-        builder.addSource(null, "source2", null, null, null, "topicX");
-        builder.addInternalTopic("topicZ");
-        builder.addProcessor("processor2", new MockProcessorSupplier(), "source2");
-        builder.addSink("sink2", "topicZ", null, null, null, "processor2");
-        builder.addSource(null, "source3", null, null, null, "topicZ");
-        builder.topicGroups();
-        final List<String> topics = asList("topic1", "test-topicX", "test-topicZ");
+        builder.addSource(null, "source0", null, null, null, "topic1");
+        builder.addInternalTopic("internal-topicX");
+        builder.addSink("sink1", "internal-topicX", null, null, null, "source0");
+        builder.addProcessor("Processor1", new MockProcessorSupplier(), "sink1");
+
+        builder.addInternalTopic("internal-topicY");
+        builder.addSink("sink2", "internal-topicY", null, null, null, "source0");
+        builder.addProcessor("Processor2", new MockProcessorSupplier(), "sink2");
+
+//        builder.addSource(null, "source2", null, null, null, "internal-topicY");
+
+        builder.addInternalTopic("internal-topicZ");
+        builder.addSink("sink3", "internal-topicZ", null, null, null, "Processor1", "Processor2");
+
+//        builder.addSource(null, "source4", null, null, null, "internal-topicZ");
+
+        // Source4 is added later.
+//        builder.addProcessor("Processor1", new MockProcessorSupplier(), "source2", "source4");
+
+        final List<String> topics = asList("topic1", "test-internal-topicX", "test-internal-topicY", "test-internal-topicZ");
         final Set<TaskId> allTasks = mkSet(task0_0, task0_1, task0_2);
 
         final UUID uuid1 = UUID.randomUUID();
         createMockTaskManager(emptyTasks, emptyTasks, uuid1, builder);
         EasyMock.replay(taskManager);
+
+        streamsMetadataState = EasyMock.createNiceMock(StreamsMetadataState.class);
+        configurePartitionAssignor(emptyMap());
+        final MockInternalTopicManager internalTopicManager =
+            new MockInternalTopicManager(streamsConfig, mockClientSupplier.restoreConsumer);
+        partitionAssignor.setInternalTopicManager(internalTopicManager);
+
+        subscriptions.put("consumer10",
+            new ConsumerPartitionAssignor.Subscription(
+                topics,
+                getInfo(uuid1, emptyTasks, emptyTasks).encode())
+        );
+
+        partitionAssignor.assign(metadata, new GroupSubscription(subscriptions)).groupAssignment();
+        // check prepared internal topics
+//        assertEquals(3, internalTopicManager.readyTopics.size());
+//        assertEquals(allTasks.size(), (long) internalTopicManager.readyTopics.get("test-topicZ"));
     }
 
     private static ByteBuffer encodeFutureSubscription() {
