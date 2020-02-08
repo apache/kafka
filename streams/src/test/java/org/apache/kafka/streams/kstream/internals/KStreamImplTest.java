@@ -2901,10 +2901,10 @@ public class KStreamImplTest {
         builder.stream(input, consumed)
             .toTable()
             .mapValues(
-                value -> String.valueOf(value.charAt(0) - (int) 'a'),
-                Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as(storeName)
+                value -> value.charAt(0) - (int) 'a',
+                Materialized.<String, Integer, KeyValueStore<Bytes, byte[]>>as(storeName)
                     .withKeySerde(Serdes.String())
-                    .withValueSerde(Serdes.String()))
+                    .withValueSerde(Serdes.Integer()))
             .toStream()
             .to(output);
 
@@ -2943,21 +2943,21 @@ public class KStreamImplTest {
             inputTopic.pipeInput("C", "yellow", 15L);
             inputTopic.pipeInput("D", "green", 11L);
 
-            final Map<String, String> expectedStore = new HashMap<>();
-            expectedStore.putIfAbsent("A", "1");
-            expectedStore.putIfAbsent("B", "6");
-            expectedStore.putIfAbsent("C", "24");
-            expectedStore.putIfAbsent("D", "6");
+            final Map<String, Integer> expectedStore = new HashMap<>();
+            expectedStore.putIfAbsent("A", 1);
+            expectedStore.putIfAbsent("B", 6);
+            expectedStore.putIfAbsent("C", 24);
+            expectedStore.putIfAbsent("D", 6);
 
             assertEquals(expectedStore, asMap(store));
 
             assertEquals(
                 asList(
-                    new TestRecord<>("A", "6", Instant.ofEpochMilli(10)),
-                    new TestRecord<>("B", "6", Instant.ofEpochMilli(9)),
-                    new TestRecord<>("A", "1", Instant.ofEpochMilli(12)),
-                    new TestRecord<>("C", "24", Instant.ofEpochMilli(15)),
-                    new TestRecord<>("D", "6", Instant.ofEpochMilli(11))),
+                    new TestRecord<>("A", 6, Instant.ofEpochMilli(10)),
+                    new TestRecord<>("B", 6, Instant.ofEpochMilli(9)),
+                    new TestRecord<>("A", 1, Instant.ofEpochMilli(12)),
+                    new TestRecord<>("C", 24, Instant.ofEpochMilli(15)),
+                    new TestRecord<>("D", 6, Instant.ofEpochMilli(11))),
                 outputTopic.readRecordsToList());
 
         }
