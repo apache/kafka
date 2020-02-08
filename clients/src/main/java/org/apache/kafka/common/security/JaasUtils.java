@@ -49,7 +49,10 @@ public final class JaasUtils {
                 "]";
     }
 
-    public static boolean isZkSecurityEnabled() {
+    public static boolean isZkSaslEnabled() {
+        // Technically a client must also check if TLS mutual authentication has been configured,
+        // but we will leave that up to the client code to determine since direct connectivity to ZooKeeper
+        // has been deprecated in many clients and we don't wish to re-introduce a ZooKeeper jar dependency here.
         boolean zkSaslEnabled = Boolean.parseBoolean(System.getProperty(ZK_SASL_CLIENT, DEFAULT_ZK_SASL_CLIENT));
         String zkLoginContextName = System.getProperty(ZK_LOGIN_CONTEXT_NAME_KEY, DEFAULT_ZK_LOGIN_CONTEXT_NAME);
 

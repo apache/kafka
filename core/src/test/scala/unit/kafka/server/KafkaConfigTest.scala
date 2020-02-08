@@ -590,6 +590,20 @@ class KafkaConfigTest {
         case KafkaConfig.ZkSyncTimeMsProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number")
         case KafkaConfig.ZkEnableSecureAclsProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_boolean")
         case KafkaConfig.ZkMaxInFlightRequestsProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number", "0")
+        case KafkaConfig.ZkSslClientEnableProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_boolean")
+        case KafkaConfig.ZkClientCnxnSocketProp =>  //ignore string
+        case KafkaConfig.ZkSslKeyStoreLocationProp =>  //ignore string
+        case KafkaConfig.ZkSslKeyStorePasswordProp =>  //ignore string
+        case KafkaConfig.ZkSslKeyStoreTypeProp =>  //ignore string
+        case KafkaConfig.ZkSslTrustStoreLocationProp =>  //ignore string
+        case KafkaConfig.ZkSslTrustStorePasswordProp =>  //ignore string
+        case KafkaConfig.ZkSslTrustStoreTypeProp =>  //ignore string
+        case KafkaConfig.ZkSslProtocolProp =>  //ignore string
+        case KafkaConfig.ZkSslEnabledProtocolsProp =>  //ignore string
+        case KafkaConfig.ZkSslCipherSuitesProp =>  //ignore string
+        case KafkaConfig.ZkSslEndpointIdentificationAlgorithmProp => //ignore string
+        case KafkaConfig.ZkSslCrlEnableProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_boolean")
+        case KafkaConfig.ZkSslOcspEnableProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_boolean")
 
         case KafkaConfig.BrokerIdProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number")
         case KafkaConfig.NumNetworkThreadsProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number", "0")
