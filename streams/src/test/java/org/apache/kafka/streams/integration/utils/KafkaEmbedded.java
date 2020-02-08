@@ -22,7 +22,7 @@ import kafka.server.KafkaServer;
 import kafka.utils.MockTime;
 import kafka.utils.TestUtils;
 import org.apache.kafka.clients.CommonClientConfigs;
-import org.apache.kafka.clients.admin.AdminClient;
+import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.common.config.SslConfigs;
@@ -180,7 +180,7 @@ public class KafkaEmbedded {
         final NewTopic newTopic = new NewTopic(topic, partitions, (short) replication);
         newTopic.configs(topicConfig);
 
-        try (final AdminClient adminClient = createAdminClient()) {
+        try (final Admin adminClient = createAdminClient()) {
             adminClient.createTopics(Collections.singletonList(newTopic)).all().get();
         } catch (final InterruptedException | ExecutionException e) {
             throw new RuntimeException(e);
@@ -188,7 +188,7 @@ public class KafkaEmbedded {
     }
 
     @SuppressWarnings("WeakerAccess")
-    public AdminClient createAdminClient() {
+    public Admin createAdminClient() {
         final Properties adminClientConfig = new Properties();
         adminClientConfig.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList());
         final Object listeners = effectiveConfig.get(KafkaConfig$.MODULE$.ListenersProp());
@@ -197,13 +197,13 @@ public class KafkaEmbedded {
             adminClientConfig.put(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, ((Password) effectiveConfig.get(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG)).value());
             adminClientConfig.put(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, "SSL");
         }
-        return AdminClient.create(adminClientConfig);
+        return Admin.create(adminClientConfig);
     }
 
     @SuppressWarnings("WeakerAccess")
     public void deleteTopic(final String topic) {
         log.debug("Deleting topic { name: {} }", topic);
-        try (final AdminClient adminClient = createAdminClient()) {
+        try (final Admin adminClient = createAdminClient()) {
             adminClient.deleteTopics(Collections.singletonList(topic)).all().get();
         } catch (final InterruptedException | ExecutionException e) {
             if (!(e.getCause() instanceof UnknownTopicOrPartitionException)) {

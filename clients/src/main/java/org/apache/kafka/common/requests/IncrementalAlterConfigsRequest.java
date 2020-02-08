@@ -20,7 +20,7 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData;
 import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData.AlterConfigsResource;
 import org.apache.kafka.common.message.IncrementalAlterConfigsResponseData;
-import org.apache.kafka.common.message.IncrementalAlterConfigsResponseData.AlterConfigsResourceResult;
+import org.apache.kafka.common.message.IncrementalAlterConfigsResponseData.AlterConfigsResourceResponse;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.types.Struct;
 
@@ -80,7 +80,7 @@ public class IncrementalAlterConfigsRequest extends AbstractRequest {
         IncrementalAlterConfigsResponseData response = new IncrementalAlterConfigsResponseData();
         ApiError apiError = ApiError.fromThrowable(e);
         for (AlterConfigsResource resource : data.resources()) {
-            response.responses().add(new AlterConfigsResourceResult()
+            response.responses().add(new AlterConfigsResourceResponse()
                     .setResourceName(resource.resourceName())
                     .setResourceType(resource.resourceType())
                     .setErrorCode(apiError.error().code())

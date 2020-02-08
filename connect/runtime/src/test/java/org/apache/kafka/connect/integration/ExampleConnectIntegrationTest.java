@@ -31,6 +31,7 @@ import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
+import java.util.concurrent.TimeUnit;
 
 import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.KEY_CONVERTER_CLASS_CONFIG;
@@ -55,8 +56,8 @@ public class ExampleConnectIntegrationTest {
 
     private static final int NUM_RECORDS_PRODUCED = 2000;
     private static final int NUM_TOPIC_PARTITIONS = 3;
-    private static final int RECORD_TRANSFER_DURATION_MS = 5000;
-    private static final int CONNECTOR_SETUP_DURATION_MS = 15000;
+    private static final long RECORD_TRANSFER_DURATION_MS = TimeUnit.SECONDS.toMillis(30);
+    private static final long CONNECTOR_SETUP_DURATION_MS = TimeUnit.SECONDS.toMillis(60);
     private static final int NUM_TASKS = 3;
     private static final int NUM_WORKERS = 3;
     private static final String CONNECTOR_NAME = "simple-conn";
@@ -142,7 +143,7 @@ public class ExampleConnectIntegrationTest {
         connectorHandle.awaitRecords(RECORD_TRANSFER_DURATION_MS);
 
         // wait for the connector tasks to commit all records.
-        connectorHandle.awaitCommits(CONNECTOR_SETUP_DURATION_MS);
+        connectorHandle.awaitCommits(RECORD_TRANSFER_DURATION_MS);
 
         // delete connector
         connect.deleteConnector(CONNECTOR_NAME);
@@ -162,6 +163,7 @@ public class ExampleConnectIntegrationTest {
         props.put(CONNECTOR_CLASS_CONFIG, MonitorableSourceConnector.class.getSimpleName());
         props.put(TASKS_MAX_CONFIG, String.valueOf(NUM_TASKS));
         props.put("topic", "test-topic");
+        props.put("throughput", String.valueOf(500));
         props.put(KEY_CONVERTER_CLASS_CONFIG, StringConverter.class.getName());
         props.put(VALUE_CONVERTER_CLASS_CONFIG, StringConverter.class.getName());
 
@@ -178,7 +180,7 @@ public class ExampleConnectIntegrationTest {
         connectorHandle.awaitRecords(RECORD_TRANSFER_DURATION_MS);
 
         // wait for the connector tasks to commit enough records
-        connectorHandle.awaitCommits(CONNECTOR_SETUP_DURATION_MS);
+        connectorHandle.awaitCommits(RECORD_TRANSFER_DURATION_MS);
 
         // consume all records from the source topic or fail, to ensure that they were correctly produced
         int recordNum = connect.kafka().consume(NUM_RECORDS_PRODUCED, RECORD_TRANSFER_DURATION_MS, "test-topic").count();

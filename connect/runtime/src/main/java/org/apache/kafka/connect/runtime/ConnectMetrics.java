@@ -81,7 +81,7 @@ public class ConnectMetrics {
         reporters.add(new JmxReporter(JMX_PREFIX));
         this.metrics = new Metrics(metricConfig, reporters, time);
         LOG.debug("Registering Connect metrics with JMX for worker '{}'", workerId);
-        AppInfoParser.registerAppInfo(JMX_PREFIX, workerId, metrics);
+        AppInfoParser.registerAppInfo(JMX_PREFIX, workerId, metrics, time.milliseconds());
     }
 
     /**
@@ -305,12 +305,7 @@ public class ConnectMetrics {
         public <T> void addValueMetric(MetricNameTemplate nameTemplate, final LiteralSupplier<T> supplier) {
             MetricName metricName = metricName(nameTemplate);
             if (metrics().metric(metricName) == null) {
-                metrics().addMetric(metricName, new Gauge<T>() {
-                    @Override
-                    public T value(MetricConfig config, long now) {
-                        return supplier.metricValue(now);
-                    }
-                });
+                metrics().addMetric(metricName, (Gauge<T>) (config, now) -> supplier.metricValue(now));
             }
         }
 
@@ -324,12 +319,7 @@ public class ConnectMetrics {
         public <T> void addImmutableValueMetric(MetricNameTemplate nameTemplate, final T value) {
             MetricName metricName = metricName(nameTemplate);
             if (metrics().metric(metricName) == null) {
-                metrics().addMetric(metricName, new Gauge<T>() {
-                    @Override
-                    public T value(MetricConfig config, long now) {
-                        return value;
-                    }
-                });
+                metrics().addMetric(metricName, (Gauge<T>) (config, now) -> value);
             }
         }
 

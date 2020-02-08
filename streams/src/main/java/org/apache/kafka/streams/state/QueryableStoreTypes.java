@@ -24,6 +24,11 @@ import org.apache.kafka.streams.state.internals.CompositeReadOnlySessionStore;
 import org.apache.kafka.streams.state.internals.CompositeReadOnlyWindowStore;
 import org.apache.kafka.streams.state.internals.StateStoreProvider;
 
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.Set;
+
 /**
  * Provides access to the {@link QueryableStoreType}s provided with {@link KafkaStreams}.
  * These can be used with {@link KafkaStreams#store(String, QueryableStoreType)}.
@@ -88,23 +93,28 @@ public final class QueryableStoreTypes {
 
     private static abstract class QueryableStoreTypeMatcher<T> implements QueryableStoreType<T> {
 
-        private final Class matchTo;
+        private final Set<Class> matchTo;
 
-        QueryableStoreTypeMatcher(final Class matchTo) {
+        QueryableStoreTypeMatcher(final Set<Class> matchTo) {
             this.matchTo = matchTo;
         }
 
         @SuppressWarnings("unchecked")
         @Override
         public boolean accepts(final StateStore stateStore) {
-            return matchTo.isAssignableFrom(stateStore.getClass());
+            for (final Class matchToClass : matchTo) {
+                if (!matchToClass.isAssignableFrom(stateStore.getClass())) {
+                    return false;
+                }
+            }
+            return true;
         }
     }
 
     public static class KeyValueStoreType<K, V> extends QueryableStoreTypeMatcher<ReadOnlyKeyValueStore<K, V>> {
 
         KeyValueStoreType() {
-            super(ReadOnlyKeyValueStore.class);
+            super(Collections.singleton(ReadOnlyKeyValueStore.class));
         }
 
         @Override
@@ -119,7 +129,9 @@ public final class QueryableStoreTypes {
         extends QueryableStoreTypeMatcher<ReadOnlyKeyValueStore<K, ValueAndTimestamp<V>>> {
 
         TimestampedKeyValueStoreType() {
-            super(ReadOnlyKeyValueStore.class);
+            super(new HashSet<>(Arrays.asList(
+                TimestampedKeyValueStore.class,
+                ReadOnlyKeyValueStore.class)));
         }
 
         @Override
@@ -132,7 +144,7 @@ public final class QueryableStoreTypes {
     public static class WindowStoreType<K, V> extends QueryableStoreTypeMatcher<ReadOnlyWindowStore<K, V>> {
 
         WindowStoreType() {
-            super(ReadOnlyWindowStore.class);
+            super(Collections.singleton(ReadOnlyWindowStore.class));
         }
 
         @Override
@@ -146,7 +158,9 @@ public final class QueryableStoreTypes {
         extends QueryableStoreTypeMatcher<ReadOnlyWindowStore<K, ValueAndTimestamp<V>>> {
 
         TimestampedWindowStoreType() {
-            super(ReadOnlyWindowStore.class);
+            super(new HashSet<>(Arrays.asList(
+                TimestampedWindowStore.class,
+                ReadOnlyWindowStore.class)));
         }
 
         @Override
@@ -159,7 +173,7 @@ public final class QueryableStoreTypes {
     public static class SessionStoreType<K, V> extends QueryableStoreTypeMatcher<ReadOnlySessionStore<K, V>> {
 
         SessionStoreType() {
-            super(ReadOnlySessionStore.class);
+            super(Collections.singleton(ReadOnlySessionStore.class));
         }
 
         @Override

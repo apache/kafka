@@ -132,7 +132,7 @@ public class InternalStreamsBuilderTest {
         builder.buildAndOptimizeTopology();
         final ProcessorTopology topology = builder.internalTopologyBuilder
             .rewriteTopology(new StreamsConfig(StreamsTestUtils.getStreamsConfig(APP_ID)))
-            .build(null);
+            .build();
 
         assertEquals(0, topology.stateStores().size());
         assertEquals(0, topology.storeToChangelogTopic().size());
@@ -352,7 +352,7 @@ public class InternalStreamsBuilderTest {
         builder.stream(Collections.singleton("topic"), consumed);
         builder.buildAndOptimizeTopology();
         builder.internalTopologyBuilder.rewriteTopology(new StreamsConfig(StreamsTestUtils.getStreamsConfig(APP_ID)));
-        final ProcessorTopology processorTopology = builder.internalTopologyBuilder.build(null);
+        final ProcessorTopology processorTopology = builder.internalTopologyBuilder.build();
         assertNull(processorTopology.source("topic").getTimestampExtractor());
     }
 
@@ -363,7 +363,7 @@ public class InternalStreamsBuilderTest {
         builder.buildAndOptimizeTopology();
         final ProcessorTopology processorTopology = builder.internalTopologyBuilder
             .rewriteTopology(new StreamsConfig(StreamsTestUtils.getStreamsConfig(APP_ID)))
-            .build(null);
+            .build();
         assertThat(processorTopology.source("topic").getTimestampExtractor(), instanceOf(MockTimestampExtractor.class));
     }
 
@@ -373,7 +373,7 @@ public class InternalStreamsBuilderTest {
         builder.buildAndOptimizeTopology();
         final ProcessorTopology processorTopology = builder.internalTopologyBuilder
             .rewriteTopology(new StreamsConfig(StreamsTestUtils.getStreamsConfig(APP_ID)))
-            .build(null);
+            .build();
         assertNull(processorTopology.source("topic").getTimestampExtractor());
     }
 
@@ -384,7 +384,7 @@ public class InternalStreamsBuilderTest {
         builder.buildAndOptimizeTopology();
         final ProcessorTopology processorTopology = builder.internalTopologyBuilder
             .rewriteTopology(new StreamsConfig(StreamsTestUtils.getStreamsConfig(APP_ID)))
-            .build(null);
+            .build();
         assertThat(processorTopology.source("topic").getTimestampExtractor(), instanceOf(MockTimestampExtractor.class));
     }
 

@@ -23,16 +23,22 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.metrics.{MetricConfig, Metrics, Quota}
 import org.apache.kafka.common.utils.MockTime
 import org.junit.Assert.{assertEquals, assertFalse, assertTrue}
-import org.junit.Test
+import org.junit.{After, Test}
 
 import scala.collection.JavaConverters._
 
 class ReplicationQuotaManagerTest {
   private val time = new MockTime
+  private val metrics = new Metrics(new MetricConfig(), Collections.emptyList(), time)
+
+  @After
+  def tearDown(): Unit = {
+    metrics.close()
+  }
 
   @Test
-  def shouldThrottleOnlyDefinedReplicas() {
-    val quota = new ReplicationQuotaManager(ReplicationQuotaManagerConfig(), newMetrics, QuotaType.Fetch, time)
+  def shouldThrottleOnlyDefinedReplicas(): Unit = {
+    val quota = new ReplicationQuotaManager(ReplicationQuotaManagerConfig(), metrics, QuotaType.Fetch, time)
     quota.markThrottled("topic1", Seq(1, 2, 3))
 
     assertTrue(quota.isThrottled(tp1(1)))
@@ -43,7 +49,6 @@ class ReplicationQuotaManagerTest {
 
   @Test
   def shouldExceedQuotaThenReturnBackBelowBoundAsTimePasses(): Unit = {
-    val metrics = newMetrics()
     val quota = new ReplicationQuotaManager(ReplicationQuotaManagerConfig(numQuotaSamples = 10, quotaWindowSizeSeconds = 1), metrics, LeaderReplication, time)
 
     //Given
@@ -105,7 +110,7 @@ class ReplicationQuotaManagerTest {
 
   @Test
   def shouldSupportWildcardThrottledReplicas(): Unit = {
-    val quota = new ReplicationQuotaManager(ReplicationQuotaManagerConfig(), newMetrics, LeaderReplication, time)
+    val quota = new ReplicationQuotaManager(ReplicationQuotaManagerConfig(), metrics, LeaderReplication, time)
 
     //When
     quota.markThrottled("MyTopic")
@@ -116,8 +121,4 @@ class ReplicationQuotaManagerTest {
   }
 
   private def tp1(id: Int): TopicPartition = new TopicPartition("topic1", id)
-
-  private def newMetrics(): Metrics = {
-    new Metrics(new MetricConfig(), Collections.emptyList(), time)
-  }
 }

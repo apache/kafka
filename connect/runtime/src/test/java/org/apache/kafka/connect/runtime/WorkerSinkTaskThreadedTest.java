@@ -23,6 +23,7 @@ import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.data.Schema;
@@ -37,6 +38,7 @@ import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTask;
 import org.apache.kafka.connect.storage.Converter;
 import org.apache.kafka.connect.storage.HeaderConverter;
+import org.apache.kafka.connect.storage.StatusBackingStore;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.connect.util.ThreadedTest;
@@ -118,6 +120,7 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
     @Mock private KafkaConsumer<byte[], byte[]> consumer;
     private Capture<ConsumerRebalanceListener> rebalanceListener = EasyMock.newCapture();
     @Mock private TaskStatus.Listener statusListener;
+    @Mock private StatusBackingStore statusBackingStore;
 
     private long recordsReturned;
 
@@ -141,7 +144,7 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
                 taskId, sinkTask, statusListener, initialState, workerConfig, ClusterConfigState.EMPTY, metrics, keyConverter,
                 valueConverter, headerConverter,
                 new TransformationChain<>(Collections.emptyList(), RetryWithToleranceOperatorTest.NOOP_OPERATOR),
-                consumer, pluginLoader, time, RetryWithToleranceOperatorTest.NOOP_OPERATOR);
+                consumer, pluginLoader, time, RetryWithToleranceOperatorTest.NOOP_OPERATOR, statusBackingStore);
 
         recordsReturned = 0;
     }
@@ -154,6 +157,7 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
     @Test
     public void testPollsInBackground() throws Exception {
         expectInitializeTask();
+        expectTaskGetTopic(true);
         expectPollInitialAssignment();
 
         Capture<Collection<SinkRecord>> capturedRecords = expectPolls(1L);
@@ -194,6 +198,7 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
     @Test
     public void testCommit() throws Exception {
         expectInitializeTask();
+        expectTaskGetTopic(true);
         expectPollInitialAssignment();
 
         // Make each poll() take the offset commit interval
@@ -227,6 +232,7 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
     @Test
     public void testCommitFailure() throws Exception {
         expectInitializeTask();
+        expectTaskGetTopic(true);
         expectPollInitialAssignment();
 
         Capture<Collection<SinkRecord>> capturedRecords = expectPolls(WorkerConfig.OFFSET_COMMIT_INTERVAL_MS_DEFAULT);
@@ -266,6 +272,7 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
         // Validate that we rewind to the correct offsets if a task's preCommit() method throws an exception
 
         expectInitializeTask();
+        expectTaskGetTopic(true);
         expectPollInitialAssignment();
         Capture<Collection<SinkRecord>> capturedRecords = expectPolls(WorkerConfig.OFFSET_COMMIT_INTERVAL_MS_DEFAULT);
         expectOffsetCommit(1L, null, null, 0, true);
@@ -304,6 +311,7 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
     @Test
     public void testCommitConsumerFailure() throws Exception {
         expectInitializeTask();
+        expectTaskGetTopic(true);
         expectPollInitialAssignment();
 
         Capture<Collection<SinkRecord>> capturedRecords
@@ -335,6 +343,7 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
     @Test
     public void testCommitTimeout() throws Exception {
         expectInitializeTask();
+        expectTaskGetTopic(true);
         expectPollInitialAssignment();
 
         // Cut down amount of time to pass in each poll so we trigger exactly 1 offset commit
@@ -372,6 +381,7 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
         // Just validate that the calls are passed through to the consumer, and that where appropriate errors are
         // converted
         expectInitializeTask();
+        expectTaskGetTopic(true);
 
         expectPollInitialAssignment();
         expectOnePoll().andAnswer(new IAnswer<Object>() {
@@ -440,6 +450,7 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
     @Test
     public void testRewind() throws Exception {
         expectInitializeTask();
+        expectTaskGetTopic(true);
         expectPollInitialAssignment();
 
         final long startOffset = 40L;
@@ -483,6 +494,7 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
     @Test
     public void testRewindOnRebalanceDuringPoll() throws Exception {
         expectInitializeTask();
+        expectTaskGetTopic(true);
         expectPollInitialAssignment();
 
         expectRebalanceDuringPoll().andAnswer(new IAnswer<Object>() {
@@ -572,8 +584,8 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
                         return records;
                     }
                 });
-        EasyMock.expect(keyConverter.toConnectData(TOPIC, RAW_KEY)).andReturn(new SchemaAndValue(KEY_SCHEMA, KEY)).anyTimes();
-        EasyMock.expect(valueConverter.toConnectData(TOPIC, RAW_VALUE)).andReturn(new SchemaAndValue(VALUE_SCHEMA, VALUE)).anyTimes();
+        EasyMock.expect(keyConverter.toConnectData(TOPIC, emptyHeaders(), RAW_KEY)).andReturn(new SchemaAndValue(KEY_SCHEMA, KEY)).anyTimes();
+        EasyMock.expect(valueConverter.toConnectData(TOPIC, emptyHeaders(), RAW_VALUE)).andReturn(new SchemaAndValue(VALUE_SCHEMA, VALUE)).anyTimes();
 
         final Capture<SinkRecord> recordCapture = EasyMock.newCapture();
         EasyMock.expect(transformationChain.apply(EasyMock.capture(recordCapture))).andAnswer(
@@ -606,8 +618,8 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
                         return records;
                     }
                 });
-        EasyMock.expect(keyConverter.toConnectData(TOPIC, RAW_KEY)).andReturn(new SchemaAndValue(KEY_SCHEMA, KEY));
-        EasyMock.expect(valueConverter.toConnectData(TOPIC, RAW_VALUE)).andReturn(new SchemaAndValue(VALUE_SCHEMA, VALUE));
+        EasyMock.expect(keyConverter.toConnectData(TOPIC, emptyHeaders(), RAW_KEY)).andReturn(new SchemaAndValue(KEY_SCHEMA, KEY));
+        EasyMock.expect(valueConverter.toConnectData(TOPIC, emptyHeaders(), RAW_VALUE)).andReturn(new SchemaAndValue(VALUE_SCHEMA, VALUE));
         sinkTask.put(EasyMock.anyObject(Collection.class));
         return EasyMock.expectLastCall();
     }
@@ -651,8 +663,8 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
         consumer.seek(TOPIC_PARTITION, startOffset);
         EasyMock.expectLastCall();
 
-        EasyMock.expect(keyConverter.toConnectData(TOPIC, RAW_KEY)).andReturn(new SchemaAndValue(KEY_SCHEMA, KEY));
-        EasyMock.expect(valueConverter.toConnectData(TOPIC, RAW_VALUE)).andReturn(new SchemaAndValue(VALUE_SCHEMA, VALUE));
+        EasyMock.expect(keyConverter.toConnectData(TOPIC, emptyHeaders(), RAW_KEY)).andReturn(new SchemaAndValue(KEY_SCHEMA, KEY));
+        EasyMock.expect(valueConverter.toConnectData(TOPIC, emptyHeaders(), RAW_VALUE)).andReturn(new SchemaAndValue(VALUE_SCHEMA, VALUE));
         sinkTask.put(EasyMock.anyObject(Collection.class));
         return EasyMock.expectLastCall();
     }
@@ -692,6 +704,33 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
             }
         });
         return capturedCallback;
+    }
+
+    private void expectTaskGetTopic(boolean anyTimes) {
+        final Capture<String> connectorCapture = EasyMock.newCapture();
+        final Capture<String> topicCapture = EasyMock.newCapture();
+        IExpectationSetters<TopicStatus> expect = EasyMock.expect(statusBackingStore.getTopic(
+                EasyMock.capture(connectorCapture),
+                EasyMock.capture(topicCapture)));
+        if (anyTimes) {
+            expect.andStubAnswer(() -> new TopicStatus(
+                    topicCapture.getValue(),
+                    new ConnectorTaskId(connectorCapture.getValue(), 0),
+                    Time.SYSTEM.milliseconds()));
+        } else {
+            expect.andAnswer(() -> new TopicStatus(
+                    topicCapture.getValue(),
+                    new ConnectorTaskId(connectorCapture.getValue(), 0),
+                    Time.SYSTEM.milliseconds()));
+        }
+        if (connectorCapture.hasCaptured() && topicCapture.hasCaptured()) {
+            assertEquals("job", connectorCapture.getValue());
+            assertEquals(TOPIC, topicCapture.getValue());
+        }
+    }
+
+    private RecordHeaders emptyHeaders() {
+        return new RecordHeaders();
     }
 
     private static abstract class TestSinkTask extends SinkTask {

@@ -23,7 +23,7 @@ import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.locks.Lock
 
 import kafka.coordinator.AbstractCoordinatorConcurrencyTest._
-import kafka.log.Log
+import kafka.log.{AppendOrigin, Log}
 import kafka.server._
 import kafka.utils._
 import kafka.utils.timer.MockTimer
@@ -52,7 +52,7 @@ abstract class AbstractCoordinatorConcurrencyTest[M <: CoordinatorMember] {
   val random = new Random
 
   @Before
-  def setUp() {
+  def setUp(): Unit = {
 
     replicaManager = EasyMock.partialMockBuilder(classOf[TestReplicaManager]).createMock()
     replicaManager.createDelayedProducePurgatory(timer)
@@ -61,7 +61,7 @@ abstract class AbstractCoordinatorConcurrencyTest[M <: CoordinatorMember] {
   }
 
   @After
-  def tearDown() {
+  def tearDown(): Unit = {
     EasyMock.reset(replicaManager)
     if (executor != null)
       executor.shutdownNow()
@@ -70,7 +70,7 @@ abstract class AbstractCoordinatorConcurrencyTest[M <: CoordinatorMember] {
   /**
     * Verify that concurrent operations run in the normal sequence produce the expected results.
     */
-  def verifyConcurrentOperations(createMembers: String => Set[M], operations: Seq[Operation]) {
+  def verifyConcurrentOperations(createMembers: String => Set[M], operations: Seq[Operation]): Unit = {
     OrderedOperationSequence(createMembers("verifyConcurrentOperations"), operations).run()
   }
 
@@ -78,7 +78,7 @@ abstract class AbstractCoordinatorConcurrencyTest[M <: CoordinatorMember] {
     * Verify that arbitrary operations run in some random sequence don't leave the coordinator
     * in a bad state. Operations in the normal sequence should continue to work as expected.
     */
-  def verifyConcurrentRandomSequences(createMembers: String => Set[M], operations: Seq[Operation]) {
+  def verifyConcurrentRandomSequences(createMembers: String => Set[M], operations: Seq[Operation]): Unit = {
     EasyMock.reset(replicaManager)
     for (i <- 0 to 10) {
       // Run some random operations
@@ -89,7 +89,7 @@ abstract class AbstractCoordinatorConcurrencyTest[M <: CoordinatorMember] {
     }
   }
 
-  def verifyConcurrentActions(actions: Set[Action]) {
+  def verifyConcurrentActions(actions: Set[Action]): Unit = {
     val futures = actions.map(executor.submit)
     futures.map(_.get)
     enableCompletion()
@@ -173,11 +173,11 @@ object AbstractCoordinatorConcurrencyTest {
     override def appendRecords(timeout: Long,
                                requiredAcks: Short,
                                internalTopicsAllowed: Boolean,
-                               isFromClient: Boolean,
+                               origin: AppendOrigin,
                                entriesPerPartition: Map[TopicPartition, MemoryRecords],
                                responseCallback: Map[TopicPartition, PartitionResponse] => Unit,
                                delayedProduceLock: Option[Lock] = None,
-                               processingStatsCallback: Map[TopicPartition, RecordConversionStats] => Unit = _ => ()) {
+                               processingStatsCallback: Map[TopicPartition, RecordConversionStats] => Unit = _ => ()): Unit = {
 
       if (entriesPerPartition.isEmpty)
         return
@@ -194,14 +194,14 @@ object AbstractCoordinatorConcurrencyTest {
           else
             false
         }
-        override def onComplete() {
+        override def onComplete(): Unit = {
           responseCallback(entriesPerPartition.map {
             case (tp, _) =>
               (tp, new PartitionResponse(Errors.NONE, 0L, RecordBatch.NO_TIMESTAMP, 0L))
           })
         }
       }
-      val producerRequestKeys = entriesPerPartition.keys.map(new TopicPartitionOperationKey(_)).toSeq
+      val producerRequestKeys = entriesPerPartition.keys.map(TopicPartitionOperationKey(_)).toSeq
       watchKeys ++= producerRequestKeys
       producePurgatory.tryCompleteElseWatch(delayedProduce, producerRequestKeys)
       tryCompleteDelayedRequests()

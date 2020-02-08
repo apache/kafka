@@ -183,6 +183,46 @@ public class FlattenTest {
     }
 
     @Test
+    public void testOptionalStruct() {
+        xformValue.configure(Collections.<String, String>emptyMap());
+
+        SchemaBuilder builder = SchemaBuilder.struct().optional();
+        builder.field("opt_int32", Schema.OPTIONAL_INT32_SCHEMA);
+        Schema schema = builder.build();
+
+        SourceRecord transformed = xformValue.apply(new SourceRecord(null, null,
+            "topic", 0,
+            schema, null));
+
+        assertEquals(Schema.Type.STRUCT, transformed.valueSchema().type());
+        assertNull(transformed.value());
+    }
+
+    @Test
+    public void testOptionalNestedStruct() {
+        xformValue.configure(Collections.<String, String>emptyMap());
+
+        SchemaBuilder builder = SchemaBuilder.struct().optional();
+        builder.field("opt_int32", Schema.OPTIONAL_INT32_SCHEMA);
+        Schema supportedTypesSchema = builder.build();
+
+        builder = SchemaBuilder.struct();
+        builder.field("B", supportedTypesSchema);
+        Schema oneLevelNestedSchema = builder.build();
+
+        Struct oneLevelNestedStruct = new Struct(oneLevelNestedSchema);
+        oneLevelNestedStruct.put("B", null);
+
+        SourceRecord transformed = xformValue.apply(new SourceRecord(null, null,
+            "topic", 0,
+            oneLevelNestedSchema, oneLevelNestedStruct));
+
+        assertEquals(Schema.Type.STRUCT, transformed.valueSchema().type());
+        Struct transformedStruct = (Struct) transformed.value();
+        assertNull(transformedStruct.get("B.opt_int32"));
+    }
+
+    @Test
     public void testOptionalFieldMap() {
         xformValue.configure(Collections.<String, String>emptyMap());
 

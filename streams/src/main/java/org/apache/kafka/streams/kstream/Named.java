@@ -26,6 +26,10 @@ public class Named implements NamedOperation<Named> {
 
     protected String name;
 
+    protected Named(final Named named) {
+        this(Objects.requireNonNull(named, "named can't be null").name);
+    }
+
     protected Named(final String name) {
         this.name = name;
         if (name != null) {
@@ -51,7 +55,7 @@ public class Named implements NamedOperation<Named> {
         return new Named(name);
     }
 
-    static void validate(final String name) {
+    protected static void validate(final String name) {
         if (name.isEmpty())
             throw new TopologyException("Name is illegal, it can't be empty");
         if (name.equals(".") || name.equals(".."))

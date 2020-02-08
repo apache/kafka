@@ -148,7 +148,9 @@ public class StreamsBuilder {
      * deserializers as specified in the {@link StreamsConfig config} are used.
      * <p>
      * If multiple topics are matched by the specified pattern, the created {@link KStream} will read data from all of
-     * them and there is no ordering guarantee between records from different topics.
+     * them and there is no ordering guarantee between records from different topics. This also means that the work
+     * will not be parallelized for multiple topics, and the number of tasks will scale with the maximum partition
+     * count of any matching topic rather than the total number of partitions across all topics.
      * <p>
      * Note that the specified input topics must be partitioned by key.
      * If this is not the case it is the user's responsibility to repartition the data before any key based operation
@@ -167,7 +169,9 @@ public class StreamsBuilder {
      * are defined by the options in {@link Consumed} are used.
      * <p>
      * If multiple topics are matched by the specified pattern, the created {@link KStream} will read data from all of
-     * them and there is no ordering guarantee between records from different topics.
+     * them and there is no ordering guarantee between records from different topics. This also means that the work
+     * will not be parallelized for multiple topics, and the number of tasks will scale with the maximum partition
+     * count of any matching topic rather than the total number of partitions across all topics.
      * <p>
      * Note that the specified input topics must be partitioned by key.
      * If this is not the case it is the user's responsibility to repartition the data before any key based operation
@@ -507,7 +511,9 @@ public class StreamsBuilder {
      * of the input topic.
      * <p>
      * The provided {@link ProcessorSupplier} will be used to create an {@link ProcessorNode} that will receive all
-     * records forwarded from the {@link SourceNode}.
+     * records forwarded from the {@link SourceNode}. NOTE: you should not use the {@code Processor} to insert transformed records into
+     * the global state store. This store uses the source topic as changelog and during restore will insert records directly
+     * from the source.
      * This {@link ProcessorNode} should be used to keep the {@link StateStore} up-to-date.
      * The default {@link TimestampExtractor} as specified in the {@link StreamsConfig config} is used.
      * <p>

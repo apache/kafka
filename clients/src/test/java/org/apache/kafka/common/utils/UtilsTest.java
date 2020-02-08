@@ -32,6 +32,7 @@ import java.nio.file.Files;
 import java.nio.file.StandardOpenOption;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Random;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -43,6 +44,7 @@ import static org.apache.kafka.common.utils.Utils.formatBytes;
 import static org.apache.kafka.common.utils.Utils.getHost;
 import static org.apache.kafka.common.utils.Utils.getPort;
 import static org.apache.kafka.common.utils.Utils.mkSet;
+import static org.apache.kafka.common.utils.Utils.murmur2;
 import static org.apache.kafka.common.utils.Utils.validHostPattern;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
@@ -57,6 +59,21 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 public class UtilsTest {
+
+    @Test
+    public void testMurmur2() {
+        Map<byte[], Integer> cases = new java.util.HashMap<>();
+        cases.put("21".getBytes(), -973932308);
+        cases.put("foobar".getBytes(), -790332482);
+        cases.put("a-little-bit-long-string".getBytes(), -985981536);
+        cases.put("a-little-bit-longer-string".getBytes(), -1486304829);
+        cases.put("lkjh234lh9fiuh90y23oiuhsafujhadof229phr9h19h89h8".getBytes(), -58897971);
+        cases.put(new byte[]{'a', 'b', 'c'}, 479470107);
+
+        for (Map.Entry c : cases.entrySet()) {
+            assertEquals((int) c.getValue(), murmur2((byte[]) c.getKey()));
+        }
+    }
 
     @Test
     public void testGetHost() {
@@ -245,6 +262,61 @@ public class UtilsTest {
         // test readonly buffer, different path
         buffer = ByteBuffer.wrap(myvar).asReadOnlyBuffer();
         this.subTest(buffer);
+    }
+
+    @Test
+    public void testFileAsStringSimpleFile() throws IOException {
+        File tempFile = TestUtils.tempFile();
+        try {
+            String testContent = "Test Content";
+            Files.write(tempFile.toPath(), testContent.getBytes());
+            assertEquals(testContent, Utils.readFileAsString(tempFile.getPath()));
+        } finally {
+            Files.deleteIfExists(tempFile.toPath());
+        }
+    }
+
+    /**
+     * Test to read content of named pipe as string. As reading/writing to a pipe can block,
+     * timeout test after a minute (test finishes within 100 ms normally).
+     */
+    @Test(timeout = 60 * 1000)
+    public void testFileAsStringNamedPipe() throws Exception {
+
+        // Create a temporary name for named pipe
+        Random random = new Random();
+        long n = random.nextLong();
+        n = n == Long.MIN_VALUE ? 0 : Math.abs(n);
+
+        // Use the name to create a FIFO in tmp directory
+        String tmpDir = System.getProperty("java.io.tmpdir");
+        String fifoName = "fifo-" + n + ".tmp";
+        File fifo = new File(tmpDir, fifoName);
+        Thread producerThread = null;
+        try {
+            Process mkFifoCommand = new ProcessBuilder("mkfifo", fifo.getCanonicalPath()).start();
+            mkFifoCommand.waitFor();
+
+            // Send some data to fifo and then read it back, but as FIFO blocks if the consumer isn't present,
+            // we need to send data in a separate thread.
+            final String testFileContent = "This is test";
+            producerThread = new Thread(() -> {
+                try {
+                    Files.write(fifo.toPath(), testFileContent.getBytes());
+                } catch (IOException e) {
+                    fail("Error when producing to fifo : " + e.getMessage());
+                }
+            }, "FIFO-Producer");
+            producerThread.start();
+
+            assertEquals(testFileContent, Utils.readFileAsString(fifo.getCanonicalPath()));
+        } finally {
+            Files.deleteIfExists(fifo.toPath());
+            if (producerThread != null) {
+                producerThread.join(30 * 1000); // Wait for thread to terminate
+                assertFalse(producerThread.isAlive());
+            }
+        }
     }
 
     @Test

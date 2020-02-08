@@ -28,6 +28,7 @@ import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.junit.{After, Before, Test}
 import org.junit.Assert._
+import org.scalatest.Assertions.fail
 
 import scala.collection.JavaConverters._
 
@@ -133,7 +134,7 @@ class MetricsTest extends IntegrationTestHarness with SaslSetup {
   }
 
   private def verifyKafkaRateMetricsHaveCumulativeCount(producer: KafkaProducer[Array[Byte], Array[Byte]],
-                                                        consumer: KafkaConsumer[Array[Byte], Array[Byte]]): Unit =  {
+                                                        consumer: KafkaConsumer[Array[Byte], Array[Byte]]): Unit = {
 
     def exists(name: String, rateMetricName: MetricName, allMetricNames: Set[MetricName]): Boolean = {
       allMetricNames.contains(new MetricName(name, rateMetricName.group, "", rateMetricName.tags))

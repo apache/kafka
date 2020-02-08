@@ -165,10 +165,10 @@ The created topic can be described with the same <b>kafka-topics</b> tool:
 <pre class="brush: bash;">
 &gt; bin/kafka-topics.sh --bootstrap-server localhost:9092 --describe
 
-Topic:streams-plaintext-input	PartitionCount:1	ReplicationFactor:1	Configs:
-    Topic: streams-plaintext-input	Partition: 0	Leader: 0	Replicas: 0	Isr: 0
-Topic:streams-wordcount-output	PartitionCount:1	ReplicationFactor:1	Configs:cleanup.policy=compact
+Topic:streams-wordcount-output	PartitionCount:1	ReplicationFactor:1	Configs:cleanup.policy=compact,segment.bytes=1073741824
 	Topic: streams-wordcount-output	Partition: 0	Leader: 0	Replicas: 0	Isr: 0
+Topic:streams-plaintext-input	PartitionCount:1	ReplicationFactor:1	Configs:segment.bytes=1073741824
+	Topic: streams-plaintext-input	Partition: 0	Leader: 0	Replicas: 0	Isr: 0
 </pre>
 
 <h4><a id="quickstart_streams_start" href="#quickstart_streams_start">Step 4: Start the Wordcount Application</a></h4>

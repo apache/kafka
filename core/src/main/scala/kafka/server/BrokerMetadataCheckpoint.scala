@@ -24,7 +24,13 @@ import java.util.Properties
 import kafka.utils._
 import org.apache.kafka.common.utils.Utils
 
-case class BrokerMetadata(brokerId: Int)
+case class BrokerMetadata(brokerId: Int,
+                          clusterId: Option[String]) {
+
+  override def toString: String  = {
+    s"BrokerMetadata(brokerId=$brokerId, clusterId=${clusterId.map(_.toString).getOrElse("None")})"
+  }
+}
 
 /**
   * This class saves broker's metadata to a file
@@ -38,6 +44,9 @@ class BrokerMetadataCheckpoint(val file: File) extends Logging {
         val brokerMetaProps = new Properties()
         brokerMetaProps.setProperty("version", 0.toString)
         brokerMetaProps.setProperty("broker.id", brokerMetadata.brokerId.toString)
+        brokerMetadata.clusterId.foreach { clusterId =>
+          brokerMetaProps.setProperty("cluster.id", clusterId)
+        }
         val temp = new File(file.getAbsolutePath + ".tmp")
         val fileOutputStream = new FileOutputStream(temp)
         try {
@@ -66,7 +75,8 @@ class BrokerMetadataCheckpoint(val file: File) extends Logging {
         version match {
           case 0 =>
             val brokerId = brokerMetaProps.getIntInRange("broker.id", (0, Int.MaxValue))
-            return Some(BrokerMetadata(brokerId))
+            val clusterId = Option(brokerMetaProps.getString("cluster.id", null))
+            return Some(BrokerMetadata(brokerId, clusterId))
           case _ =>
             throw new IOException("Unrecognized version of the server meta.properties file: " + version)
         }

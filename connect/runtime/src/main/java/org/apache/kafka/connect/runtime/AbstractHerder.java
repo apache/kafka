@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.connect.runtime;
 
+import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.Config;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.ConfigKey;
@@ -23,9 +25,12 @@ import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.common.config.ConfigTransformer;
 import org.apache.kafka.common.config.ConfigValue;
 import org.apache.kafka.connect.connector.Connector;
+import org.apache.kafka.connect.connector.policy.ConnectorClientConfigOverridePolicy;
+import org.apache.kafka.connect.connector.policy.ConnectorClientConfigRequest;
 import org.apache.kafka.connect.errors.NotFoundException;
 import org.apache.kafka.connect.runtime.distributed.ClusterConfigState;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
+import org.apache.kafka.connect.runtime.rest.entities.ActiveTopicsInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigInfos;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigKeyInfo;
@@ -58,6 +63,7 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 /**
  * Abstract Herder implementation which handles connector/task lifecycle tracking. Extensions
@@ -87,6 +93,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
     private final String kafkaClusterId;
     protected final StatusBackingStore statusBackingStore;
     protected final ConfigBackingStore configBackingStore;
+    private final ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy;
 
     private Map<String, Connector> tempConnectors = new ConcurrentHashMap<>();
 
@@ -94,13 +101,15 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
                           String workerId,
                           String kafkaClusterId,
                           StatusBackingStore statusBackingStore,
-                          ConfigBackingStore configBackingStore) {
+                          ConfigBackingStore configBackingStore,
+                          ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy) {
         this.worker = worker;
         this.worker.herder = this;
         this.workerId = workerId;
         this.kafkaClusterId = kafkaClusterId;
         this.statusBackingStore = statusBackingStore;
         this.configBackingStore = configBackingStore;
+        this.connectorClientConfigOverridePolicy = connectorClientConfigOverridePolicy;
     }
 
     @Override
@@ -209,6 +218,27 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
     protected abstract Map<String, String> config(String connName);
 
     @Override
+    public Collection<String> connectors() {
+        return configBackingStore.snapshot().connectors();
+    }
+
+    @Override
+    public ConnectorInfo connectorInfo(String connector) {
+        final ClusterConfigState configState = configBackingStore.snapshot();
+
+        if (!configState.contains(connector))
+            return null;
+        Map<String, String> config = configState.rawConnectorConfig(connector);
+
+        return new ConnectorInfo(
+            connector,
+            config,
+            configState.tasks(connector),
+            connectorTypeForClass(config.get(ConnectorConfig.CONNECTOR_CLASS_CONFIG))
+        );
+    }
+
+    @Override
     public ConnectorStateInfo connectorStatus(String connName) {
         ConnectorStatus connector = statusBackingStore.get(connName);
         if (connector == null)
@@ -230,6 +260,25 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
         Map<String, String> conf = config(connName);
         return new ConnectorStateInfo(connName, connectorState, taskStates,
             conf == null ? ConnectorType.UNKNOWN : connectorTypeForClass(conf.get(ConnectorConfig.CONNECTOR_CLASS_CONFIG)));
+    }
+
+    @Override
+    public ActiveTopicsInfo connectorActiveTopics(String connName) {
+        Collection<String> topics = statusBackingStore.getAllTopics(connName).stream()
+                .map(TopicStatus::topic)
+                .collect(Collectors.toList());
+        return new ActiveTopicsInfo(connName, topics);
+    }
+
+    @Override
+    public void resetConnectorActiveTopics(String connName) {
+        statusBackingStore.getAllTopics(connName).stream()
+                .forEach(status -> statusBackingStore.deleteTopic(status.connector(), status.topic()));
+    }
+
+    @Override
+    public StatusBackingStore statusBackingStore() {
+        return statusBackingStore;
     }
 
     @Override
@@ -259,14 +308,17 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
             throw new BadRequestException("Connector config " + connectorProps + " contains no connector type");
 
         Connector connector = getConnector(connType);
+        org.apache.kafka.connect.health.ConnectorType connectorType;
         ClassLoader savedLoader = plugins().compareAndSwapLoaders(connector);
         try {
             ConfigDef baseConfigDef;
             if (connector instanceof SourceConnector) {
                 baseConfigDef = SourceConnectorConfig.configDef();
+                connectorType = org.apache.kafka.connect.health.ConnectorType.SOURCE;
             } else {
                 baseConfigDef = SinkConnectorConfig.configDef();
                 SinkConnectorConfig.validate(connectorProps);
+                connectorType = org.apache.kafka.connect.health.ConnectorType.SINK;
             }
             ConfigDef enrichedConfigDef = ConnectorConfig.enrich(plugins(), baseConfigDef, connectorProps, false);
             Map<String, ConfigValue> validatedConnectorConfig = validateBasicConnectorConfig(
@@ -300,10 +352,112 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
             configKeys.putAll(configDef.configKeys());
             allGroups.addAll(configDef.groups());
             configValues.addAll(config.configValues());
-            return generateResult(connType, configKeys, configValues, new ArrayList<>(allGroups));
+            ConfigInfos configInfos =  generateResult(connType, configKeys, configValues, new ArrayList<>(allGroups));
+
+            AbstractConfig connectorConfig = new AbstractConfig(new ConfigDef(), connectorProps);
+            String connName = connectorProps.get(ConnectorConfig.NAME_CONFIG);
+            ConfigInfos producerConfigInfos = null;
+            ConfigInfos consumerConfigInfos = null;
+            ConfigInfos adminConfigInfos = null;
+            if (connectorType.equals(org.apache.kafka.connect.health.ConnectorType.SOURCE)) {
+                producerConfigInfos = validateClientOverrides(connName,
+                                                              ConnectorConfig.CONNECTOR_CLIENT_PRODUCER_OVERRIDES_PREFIX,
+                                                              connectorConfig,
+                                                              ProducerConfig.configDef(),
+                                                              connector.getClass(),
+                                                              connectorType,
+                                                              ConnectorClientConfigRequest.ClientType.PRODUCER,
+                                                              connectorClientConfigOverridePolicy);
+                return mergeConfigInfos(connType, configInfos, producerConfigInfos);
+            } else {
+                consumerConfigInfos = validateClientOverrides(connName,
+                                                              ConnectorConfig.CONNECTOR_CLIENT_CONSUMER_OVERRIDES_PREFIX,
+                                                              connectorConfig,
+                                                              ProducerConfig.configDef(),
+                                                              connector.getClass(),
+                                                              connectorType,
+                                                              ConnectorClientConfigRequest.ClientType.CONSUMER,
+                                                              connectorClientConfigOverridePolicy);
+                // check if topic for dead letter queue exists
+                String topic = connectorProps.get(SinkConnectorConfig.DLQ_TOPIC_NAME_CONFIG);
+                if (topic != null && !topic.isEmpty()) {
+                    adminConfigInfos = validateClientOverrides(connName,
+                                                               ConnectorConfig.CONNECTOR_CLIENT_ADMIN_OVERRIDES_PREFIX,
+                                                               connectorConfig,
+                                                               ProducerConfig.configDef(),
+                                                               connector.getClass(),
+                                                               connectorType,
+                                                               ConnectorClientConfigRequest.ClientType.ADMIN,
+                                                               connectorClientConfigOverridePolicy);
+                }
+
+            }
+            return mergeConfigInfos(connType, configInfos, producerConfigInfos, consumerConfigInfos, adminConfigInfos);
         } finally {
             Plugins.compareAndSwapLoaders(savedLoader);
         }
+    }
+
+    private static ConfigInfos mergeConfigInfos(String connType, ConfigInfos... configInfosList) {
+        int errorCount = 0;
+        List<ConfigInfo> configInfoList = new LinkedList<>();
+        Set<String> groups = new LinkedHashSet<>();
+        for (ConfigInfos configInfos : configInfosList) {
+            if (configInfos != null) {
+                errorCount += configInfos.errorCount();
+                configInfoList.addAll(configInfos.values());
+                groups.addAll(configInfos.groups());
+            }
+        }
+        return new ConfigInfos(connType, errorCount, new ArrayList<>(groups), configInfoList);
+    }
+
+    private static ConfigInfos validateClientOverrides(String connName,
+                                                      String prefix,
+                                                      AbstractConfig connectorConfig,
+                                                      ConfigDef configDef,
+                                                      Class<? extends Connector> connectorClass,
+                                                      org.apache.kafka.connect.health.ConnectorType connectorType,
+                                                      ConnectorClientConfigRequest.ClientType clientType,
+                                                      ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy) {
+        int errorCount = 0;
+        List<ConfigInfo> configInfoList = new LinkedList<>();
+        Map<String, ConfigKey> configKeys = configDef.configKeys();
+        Set<String> groups = new LinkedHashSet<>();
+        Map<String, Object> clientConfigs = new HashMap<>();
+        for (Map.Entry<String, Object> rawClientConfig : connectorConfig.originalsWithPrefix(prefix).entrySet()) {
+            String configName = rawClientConfig.getKey();
+            Object rawConfigValue = rawClientConfig.getValue();
+            ConfigKey configKey = configDef.configKeys().get(configName);
+            Object parsedConfigValue = configKey != null
+                ? ConfigDef.parseType(configName, rawConfigValue, configKey.type)
+                : rawConfigValue;
+            clientConfigs.put(configName, parsedConfigValue);
+        }
+        ConnectorClientConfigRequest connectorClientConfigRequest = new ConnectorClientConfigRequest(
+            connName, connectorType, connectorClass, clientConfigs, clientType);
+        List<ConfigValue> configValues = connectorClientConfigOverridePolicy.validate(connectorClientConfigRequest);
+        if (configValues != null) {
+            for (ConfigValue validatedConfigValue : configValues) {
+                ConfigKey configKey = configKeys.get(validatedConfigValue.name());
+                ConfigKeyInfo configKeyInfo = null;
+                if (configKey != null) {
+                    if (configKey.group != null) {
+                        groups.add(configKey.group);
+                    }
+                    configKeyInfo = convertConfigKey(configKey, prefix);
+                }
+
+                ConfigValue configValue = new ConfigValue(prefix + validatedConfigValue.name(), validatedConfigValue.value(),
+                                                          validatedConfigValue.recommendedValues(), validatedConfigValue.errorMessages());
+                if (configValue.errorMessages().size() > 0) {
+                    errorCount++;
+                }
+                ConfigValueInfo configValueInfo = convertConfigValue(configValue, configKey != null ? configKey.type : null);
+                configInfoList.add(new ConfigInfo(configKeyInfo, configValueInfo));
+            }
+        }
+        return new ConfigInfos(connectorClass.toString(), errorCount, new ArrayList<>(groups), configInfoList);
     }
 
     // public for testing
@@ -337,7 +491,11 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
     }
 
     private static ConfigKeyInfo convertConfigKey(ConfigKey configKey) {
-        String name = configKey.name;
+        return convertConfigKey(configKey, "");
+    }
+
+    private static ConfigKeyInfo convertConfigKey(ConfigKey configKey, String prefix) {
+        String name = prefix + configKey.name;
         Type type = configKey.type;
         String typeName = configKey.type.name();
 
@@ -461,12 +619,13 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
         return result;
     }
 
-    private static Set<String> keysWithVariableValues(Map<String, String> rawConfig, Pattern pattern) {
+    // Visible for testing
+    static Set<String> keysWithVariableValues(Map<String, String> rawConfig, Pattern pattern) {
         Set<String> keys = new HashSet<>();
         for (Map.Entry<String, String> config : rawConfig.entrySet()) {
             if (config.getValue() != null) {
                 Matcher matcher = pattern.matcher(config.getValue());
-                if (matcher.matches()) {
+                if (matcher.find()) {
                     keys.add(config.getKey());
                 }
             }

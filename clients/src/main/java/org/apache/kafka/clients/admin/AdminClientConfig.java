@@ -23,12 +23,14 @@ import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Type;
+import org.apache.kafka.common.config.SecurityConfig;
 import org.apache.kafka.common.metrics.Sensor;
 
 import java.util.Map;
 import java.util.Set;
 
 import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
+import static org.apache.kafka.common.config.ConfigDef.Range.between;
 import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
 
 /**
@@ -106,6 +108,13 @@ public class AdminClientConfig extends AbstractConfig {
     private static final String METRICS_RECORDING_LEVEL_DOC = CommonClientConfigs.METRICS_RECORDING_LEVEL_DOC;
 
     public static final String RETRIES_CONFIG = CommonClientConfigs.RETRIES_CONFIG;
+    public static final String DEFAULT_API_TIMEOUT_MS_CONFIG = CommonClientConfigs.DEFAULT_API_TIMEOUT_MS_CONFIG;
+
+    /**
+     * <code>security.providers</code>
+     */
+    public static final String SECURITY_PROVIDERS_CONFIG = SecurityConfig.SECURITY_PROVIDERS_CONFIG;
+    private static final String SECURITY_PROVIDERS_DOC = SecurityConfig.SECURITY_PROVIDERS_DOC;
 
     static {
         CONFIG = new ConfigDef().define(BOOTSTRAP_SERVERS_CONFIG,
@@ -136,7 +145,7 @@ public class AdminClientConfig extends AbstractConfig {
                                         RETRY_BACKOFF_MS_DOC)
                                 .define(REQUEST_TIMEOUT_MS_CONFIG,
                                         Type.INT,
-                                        120000,
+                                        30000,
                                         atLeast(0),
                                         Importance.MEDIUM,
                                         REQUEST_TIMEOUT_MS_DOC)
@@ -147,10 +156,16 @@ public class AdminClientConfig extends AbstractConfig {
                                         CONNECTIONS_MAX_IDLE_MS_DOC)
                                 .define(RETRIES_CONFIG,
                                         Type.INT,
-                                        5,
-                                        atLeast(0),
+                                        Integer.MAX_VALUE,
+                                        between(0, Integer.MAX_VALUE),
                                         Importance.LOW,
                                         CommonClientConfigs.RETRIES_DOC)
+                                .define(DEFAULT_API_TIMEOUT_MS_CONFIG,
+                                        Type.INT,
+                                        60000,
+                                        atLeast(0),
+                                        Importance.MEDIUM,
+                                        CommonClientConfigs.DEFAULT_API_TIMEOUT_MS_DOC)
                                 .define(METRICS_SAMPLE_WINDOW_MS_CONFIG,
                                         Type.LONG,
                                         30000,
@@ -174,6 +189,11 @@ public class AdminClientConfig extends AbstractConfig {
                                         Importance.MEDIUM,
                                         CLIENT_DNS_LOOKUP_DOC)
                                 // security support
+                                .define(SECURITY_PROVIDERS_CONFIG,
+                                        Type.STRING,
+                                        null,
+                                        Importance.LOW,
+                                        SECURITY_PROVIDERS_DOC)
                                 .define(SECURITY_PROTOCOL_CONFIG,
                                         Type.STRING,
                                         DEFAULT_SECURITY_PROTOCOL,
@@ -200,8 +220,12 @@ public class AdminClientConfig extends AbstractConfig {
         return CONFIG.names();
     }
 
+    public static ConfigDef configDef() {
+        return  new ConfigDef(CONFIG);
+    }
+
     public static void main(String[] args) {
-        System.out.println(CONFIG.toHtmlTable());
+        System.out.println(CONFIG.toHtml());
     }
 
 }

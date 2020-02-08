@@ -18,6 +18,7 @@
 package kafka.api
 
 import java.lang.{Long => JLong}
+import java.nio.charset.StandardCharsets
 import java.time.Duration
 import java.util.{Optional, Properties}
 import java.util.concurrent.TimeUnit
@@ -26,15 +27,17 @@ import kafka.integration.KafkaServerTestHarness
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
 import kafka.utils.TestUtils.consumeRecords
-import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer, OffsetAndMetadata}
+import org.apache.kafka.clients.consumer.{ConsumerConfig, ConsumerGroupMetadata, KafkaConsumer, OffsetAndMetadata}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.apache.kafka.common.errors.{ProducerFencedException, TimeoutException}
 import org.junit.{After, Before, Test}
 import org.junit.Assert._
+import org.scalatest.Assertions.fail
 
 import scala.collection.JavaConverters._
 import scala.collection.mutable.Buffer
+import scala.collection.Seq
 import scala.concurrent.ExecutionException
 
 class TransactionsTest extends KafkaServerTestHarness {
@@ -225,7 +228,20 @@ class TransactionsTest extends KafkaServerTestHarness {
   }
 
   @Test
-  def testSendOffsets() = {
+  def testSendOffsetsWithGroupId() = {
+    sendOffset((producer, groupId, consumer) =>
+      producer.sendOffsetsToTransaction(TestUtils.consumerPositions(consumer).asJava, groupId))
+  }
+
+  @Test
+  def testSendOffsetsWithGroupMetadata() = {
+    sendOffset((producer, _, consumer) =>
+      producer.sendOffsetsToTransaction(TestUtils.consumerPositions(consumer).asJava, consumer.groupMetadata()))
+  }
+
+  private def sendOffset(commit: (KafkaProducer[Array[Byte], Array[Byte]],
+    String, KafkaConsumer[Array[Byte], Array[Byte]]) => Unit) = {
+
     // The basic plan for the test is as follows:
     //  1. Seed topic1 with 1000 unique, numbered, messages.
     //  2. Run a consume/process/produce loop to transactionally copy messages from topic1 to topic2 and commit
@@ -240,7 +256,7 @@ class TransactionsTest extends KafkaServerTestHarness {
 
     TestUtils.seedTopicWithNumberedRecords(topic1, numSeedMessages, servers)
 
-    val producer = transactionalProducers(0)
+    val producer = transactionalProducers.head
 
     val consumer = createReadCommittedConsumer(consumerGroupId, maxPollRecords = numSeedMessages / 4)
     consumer.subscribe(List(topic1).asJava)
@@ -256,23 +272,23 @@ class TransactionsTest extends KafkaServerTestHarness {
         shouldCommit = !shouldCommit
 
         records.foreach { record =>
-          val key = new String(record.key(), "UTF-8")
-          val value = new String(record.value(), "UTF-8")
+          val key = new String(record.key(), StandardCharsets.UTF_8)
+          val value = new String(record.value(), StandardCharsets.UTF_8)
           producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic2, key, value, willBeCommitted = shouldCommit))
         }
 
-        producer.sendOffsetsToTransaction(TestUtils.consumerPositions(consumer).asJava, consumerGroupId)
+        commit(producer, consumerGroupId, consumer)
         if (shouldCommit) {
           producer.commitTransaction()
           recordsProcessed += records.size
-          debug(s"committed transaction.. Last committed record: ${new String(records.last.value(), "UTF-8")}. Num " +
+          debug(s"committed transaction.. Last committed record: ${new String(records.last.value(), StandardCharsets.UTF_8)}. Num " +
             s"records written to $topic2: $recordsProcessed")
         } else {
           producer.abortTransaction()
-          debug(s"aborted transaction Last committed record: ${new String(records.last.value(), "UTF-8")}. Num " +
+          debug(s"aborted transaction Last committed record: ${new String(records.last.value(), StandardCharsets.UTF_8)}. Num " +
             s"records written to $topic2: $recordsProcessed")
           TestUtils.resetToCommittedPositions(consumer)
-       }
+        }
       }
     } finally {
       consumer.close()
@@ -387,11 +403,11 @@ class TransactionsTest extends KafkaServerTestHarness {
     val producer2 = transactionalProducers(1)
     producer2.initTransactions()
 
-    assertEquals(offsetAndMetadata, consumer.committed(tp))
+    TestUtils.waitUntilTrue(() => offsetAndMetadata.equals(consumer.committed(Set(tp).asJava).get(tp)), "cannot read committed offset")
   }
 
   @Test
-  def testFencingOnSend() {
+  def testFencingOnSend(): Unit = {
     val producer1 = transactionalProducers(0)
     val producer2 = transactionalProducers(1)
     val consumer = transactionalConsumers(0)
@@ -496,7 +512,7 @@ class TransactionsTest extends KafkaServerTestHarness {
 
     try {
       // Now that the transaction has expired, the second send should fail with a ProducerFencedException.
-      producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic2, "2", "2", willBeCommitted = false)).get()
+      producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic1, "2", "2", willBeCommitted = false)).get()
       fail("should have raised a ProducerFencedException since the transaction has expired")
     } catch {
       case _: ProducerFencedException =>
@@ -505,9 +521,13 @@ class TransactionsTest extends KafkaServerTestHarness {
     }
 
     // Verify that the first message was aborted and the second one was never written at all.
-    val nonTransactionalConsumer = nonTransactionalConsumers(0)
+    val nonTransactionalConsumer = nonTransactionalConsumers.head
     nonTransactionalConsumer.subscribe(List(topic1).asJava)
-    val records = TestUtils.consumeRecordsFor(nonTransactionalConsumer, 1000)
+
+    // Attempt to consume the one written record. We should not see the second. The
+    // assertion does not strictly guarantee that the record wasn't written, but the
+    // data is small enough that had it been written, it would have been in the first fetch.
+    val records = TestUtils.consumeRecords(nonTransactionalConsumer, numRecords = 1)
     assertEquals(1, records.size)
     assertEquals("1", TestUtils.recordValueAsString(records.head))
 

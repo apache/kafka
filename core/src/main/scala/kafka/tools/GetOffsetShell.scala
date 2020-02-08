@@ -28,6 +28,7 @@ import org.apache.kafka.common.requests.ListOffsetRequest
 import org.apache.kafka.common.serialization.ByteArrayDeserializer
 
 import scala.collection.JavaConverters._
+import scala.collection.Seq
 
 object GetOffsetShell {
 
@@ -127,7 +128,9 @@ object GetOffsetShell {
       case ListOffsetRequest.LATEST_TIMESTAMP => consumer.endOffsets(topicPartitions.asJava).asScala
       case _ =>
         val timestampsToSearch = topicPartitions.map(tp => tp -> (listOffsetsTimestamp: java.lang.Long)).toMap.asJava
-        consumer.offsetsForTimes(timestampsToSearch).asScala.mapValues(x => if (x == null) null else x.offset)
+        consumer.offsetsForTimes(timestampsToSearch).asScala.map { case (k, x) =>
+          if (x == null) (k, null) else (k, x.offset: java.lang.Long)
+        }
     }
 
     partitionOffsets.toSeq.sortBy { case (tp, _) => tp.partition }.foreach { case (tp, offset) =>

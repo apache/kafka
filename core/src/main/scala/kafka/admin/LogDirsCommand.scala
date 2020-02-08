@@ -21,7 +21,7 @@ import java.io.PrintStream
 import java.util.Properties
 
 import kafka.utils.{CommandDefaultOptions, CommandLineUtils, Json}
-import org.apache.kafka.clients.admin.{AdminClientConfig, DescribeLogDirsResult, AdminClient => JAdminClient}
+import org.apache.kafka.clients.admin.{Admin, AdminClientConfig, DescribeLogDirsResult}
 import org.apache.kafka.common.requests.DescribeLogDirsResponse.LogDirInfo
 import org.apache.kafka.common.utils.Utils
 
@@ -48,7 +48,7 @@ object LogDirsCommand {
 
         out.println("Querying brokers for log directories information")
         val describeLogDirsResult: DescribeLogDirsResult = adminClient.describeLogDirs(brokerList.map(Integer.valueOf).toSeq.asJava)
-        val logDirInfosByBroker = describeLogDirsResult.all.get().asScala.mapValues(_.asScala)
+        val logDirInfosByBroker = describeLogDirsResult.all.get().asScala.mapValues(_.asScala).toMap
 
         out.println(s"Received log directory information from brokers ${brokerList.mkString(",")}")
         out.println(formatAsJson(logDirInfosByBroker, topicList.toSet))
@@ -82,14 +82,14 @@ object LogDirsCommand {
         ).asJava)
     }
 
-    private def createAdminClient(opts: LogDirsCommandOptions): JAdminClient = {
+    private def createAdminClient(opts: LogDirsCommandOptions): Admin = {
         val props = if (opts.options.has(opts.commandConfigOpt))
             Utils.loadProps(opts.options.valueOf(opts.commandConfigOpt))
         else
             new Properties()
         props.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, opts.options.valueOf(opts.bootstrapServerOpt))
         props.putIfAbsent(AdminClientConfig.CLIENT_ID_CONFIG, "log-dirs-tool")
-        JAdminClient.create(props)
+        Admin.create(props)
     }
 
     class LogDirsCommandOptions(args: Array[String]) extends CommandDefaultOptions(args){

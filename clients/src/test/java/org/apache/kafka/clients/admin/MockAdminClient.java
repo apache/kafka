@@ -21,6 +21,8 @@ import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.common.ElectionType;
 import org.apache.kafka.common.TopicPartitionInfo;
 import org.apache.kafka.common.TopicPartitionReplica;
 import org.apache.kafka.common.acl.AclBinding;
@@ -39,6 +41,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 
 public class MockAdminClient extends AdminClient {
@@ -147,13 +150,13 @@ public class MockAdminClient extends AdminClient {
 
     @Override
     public CreateTopicsResult createTopics(Collection<NewTopic> newTopics, CreateTopicsOptions options) {
-        Map<String, KafkaFuture<Void>> createTopicResult = new HashMap<>();
+        Map<String, KafkaFuture<CreateTopicsResult.TopicMetadataAndConfig>> createTopicResult = new HashMap<>();
 
         if (timeoutNextRequests > 0) {
             for (final NewTopic newTopic : newTopics) {
                 String topicName = newTopic.name();
 
-                KafkaFutureImpl<Void> future = new KafkaFutureImpl<>();
+                KafkaFutureImpl<CreateTopicsResult.TopicMetadataAndConfig> future = new KafkaFutureImpl<>();
                 future.completeExceptionally(new TimeoutException());
                 createTopicResult.put(topicName, future);
             }
@@ -163,7 +166,7 @@ public class MockAdminClient extends AdminClient {
         }
 
         for (final NewTopic newTopic : newTopics) {
-            KafkaFutureImpl<Void> future = new KafkaFutureImpl<>();
+            KafkaFutureImpl<CreateTopicsResult.TopicMetadataAndConfig> future = new KafkaFutureImpl<>();
 
             String topicName = newTopic.name();
             if (allTopics.containsKey(topicName)) {
@@ -172,6 +175,11 @@ public class MockAdminClient extends AdminClient {
                 continue;
             }
             int replicationFactor = newTopic.replicationFactor();
+            if (replicationFactor > brokers.size())
+                throw new IllegalArgumentException(
+                    String.format("NewTopic %s cannot have a replication factor of %d that is larger than the number of brokers %s",
+                        newTopic, replicationFactor, brokers));
+
             List<Node> replicas = new ArrayList<>(replicationFactor);
             for (int i = 0; i < replicationFactor; ++i) {
                 replicas.add(brokers.get(i));
@@ -204,7 +212,11 @@ public class MockAdminClient extends AdminClient {
 
         for (Map.Entry<String, TopicMetadata> topicDescription : allTopics.entrySet()) {
             String topicName = topicDescription.getKey();
-            topicListings.put(topicName, new TopicListing(topicName, topicDescription.getValue().isInternalTopic));
+            if (topicDescription.getValue().fetchesRemainingUntilVisible > 0) {
+                topicDescription.getValue().fetchesRemainingUntilVisible--;
+            } else {
+                topicListings.put(topicName, new TopicListing(topicName, topicDescription.getValue().isInternalTopic));
+            }
         }
 
         KafkaFutureImpl<Map<String, TopicListing>> future = new KafkaFutureImpl<>();
@@ -231,12 +243,16 @@ public class MockAdminClient extends AdminClient {
             for (Map.Entry<String, TopicMetadata> topicDescription : allTopics.entrySet()) {
                 String topicName = topicDescription.getKey();
                 if (topicName.equals(requestedTopic) && !topicDescription.getValue().markedForDeletion) {
-                    TopicMetadata topicMetadata = topicDescription.getValue();
-                    KafkaFutureImpl<TopicDescription> future = new KafkaFutureImpl<>();
-                    future.complete(new TopicDescription(topicName, topicMetadata.isInternalTopic, topicMetadata.partitions,
-                            Collections.emptySet()));
-                    topicDescriptions.put(topicName, future);
-                    break;
+                    if (topicDescription.getValue().fetchesRemainingUntilVisible > 0) {
+                        topicDescription.getValue().fetchesRemainingUntilVisible--;
+                    } else {
+                        TopicMetadata topicMetadata = topicDescription.getValue();
+                        KafkaFutureImpl<TopicDescription> future = new KafkaFutureImpl<>();
+                        future.complete(new TopicDescription(topicName, topicMetadata.isInternalTopic, topicMetadata.partitions,
+                                Collections.emptySet()));
+                        topicDescriptions.put(topicName, future);
+                        break;
+                    }
                 }
             }
             if (!topicDescriptions.containsKey(requestedTopic)) {
@@ -333,7 +349,27 @@ public class MockAdminClient extends AdminClient {
         throw new UnsupportedOperationException("Not implemented yet");
     }
 
+    @Override
+    public DeleteConsumerGroupOffsetsResult deleteConsumerGroupOffsets(String groupId, Set<TopicPartition> partitions, DeleteConsumerGroupOffsetsOptions options) {
+        throw new UnsupportedOperationException("Not implemented yet");
+    }
+
+    @Deprecated
+    @Override
     public ElectPreferredLeadersResult electPreferredLeaders(Collection<TopicPartition> partitions, ElectPreferredLeadersOptions options) {
+        throw new UnsupportedOperationException("Not implemented yet");
+    }
+
+    @Override
+    public ElectLeadersResult electLeaders(
+            ElectionType electionType,
+            Set<TopicPartition> partitions,
+            ElectLeadersOptions options) {
+        throw new UnsupportedOperationException("Not implemented yet");
+    }
+
+    @Override
+    public RemoveMembersFromConsumerGroupResult removeMembersFromConsumerGroup(String groupId, RemoveMembersFromConsumerGroupOptions options) {
         throw new UnsupportedOperationException("Not implemented yet");
     }
 
@@ -402,6 +438,27 @@ public class MockAdminClient extends AdminClient {
     }
 
     @Override
+    public AlterPartitionReassignmentsResult alterPartitionReassignments(Map<TopicPartition, Optional<NewPartitionReassignment>> reassignments,
+                                                                         AlterPartitionReassignmentsOptions options) {
+        throw new UnsupportedOperationException("Not implemented yet");
+    }
+
+    @Override
+    public ListPartitionReassignmentsResult listPartitionReassignments(Optional<Set<TopicPartition>> partitions, ListPartitionReassignmentsOptions options) {
+        throw new UnsupportedOperationException("Not implemented yet");
+    }
+
+    @Override
+    public AlterConsumerGroupOffsetsResult alterConsumerGroupOffsets(String groupId, Map<TopicPartition, OffsetAndMetadata> offsets, AlterConsumerGroupOffsetsOptions options) {
+        throw new UnsupportedOperationException("Not implement yet");
+    }
+
+    @Override
+    public ListOffsetsResult listOffsets(Map<TopicPartition, OffsetSpec> topicPartitionOffsets, ListOffsetsOptions options) {
+        throw new UnsupportedOperationException("Not implement yet");
+    }
+
+    @Override
     public void close(Duration timeout) {}
 
 
@@ -409,6 +466,7 @@ public class MockAdminClient extends AdminClient {
         final boolean isInternalTopic;
         final List<TopicPartitionInfo> partitions;
         final Map<String, String> configs;
+        int fetchesRemainingUntilVisible;
 
         public boolean markedForDeletion;
 
@@ -419,6 +477,7 @@ public class MockAdminClient extends AdminClient {
             this.partitions = partitions;
             this.configs = configs != null ? configs : Collections.emptyMap();
             this.markedForDeletion = false;
+            this.fetchesRemainingUntilVisible = 0;
         }
     }
 
@@ -429,5 +488,13 @@ public class MockAdminClient extends AdminClient {
     @Override
     public Map<MetricName, ? extends Metric> metrics() {
         return mockMetrics;
+    }
+
+    public void setFetchesRemainingUntilVisible(String topicName, int fetchesRemainingUntilVisible) {
+        TopicMetadata metadata = allTopics.get(topicName);
+        if (metadata == null) {
+            throw new RuntimeException("No such topic as " + topicName);
+        }
+        metadata.fetchesRemainingUntilVisible = fetchesRemainingUntilVisible;
     }
 }

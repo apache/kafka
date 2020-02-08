@@ -23,6 +23,7 @@ import org.apache.kafka.clients.consumer.InvalidOffsetException;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.utils.FixedOrderMap;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
@@ -32,6 +33,7 @@ import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
 import org.apache.kafka.streams.state.internals.RecordConverter;
 import org.slf4j.Logger;
 
@@ -39,7 +41,6 @@ import java.io.File;
 import java.io.IOException;
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -48,22 +49,29 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
+import static org.apache.kafka.streams.processor.internals.StateManagerUtil.CHECKPOINT_FILE_NAME;
+import static org.apache.kafka.streams.processor.internals.StateManagerUtil.converterForStore;
+
 /**
  * This class is responsible for the initialization, restoration, closing, flushing etc
  * of Global State Stores. There is only ever 1 instance of this class per Application Instance.
  */
-public class GlobalStateManagerImpl extends AbstractStateManager implements GlobalStateManager {
+public class GlobalStateManagerImpl implements GlobalStateManager {
     private final Logger log;
     private final ProcessorTopology topology;
     private final Consumer<byte[], byte[]> globalConsumer;
+    private final File baseDir;
     private final StateDirectory stateDirectory;
     private final Set<String> globalStoreNames = new HashSet<>();
+    private final FixedOrderMap<String, Optional<StateStore>> globalStores = new FixedOrderMap<>();
     private final StateRestoreListener stateRestoreListener;
-    private InternalProcessorContext processorContext;
+    private InternalProcessorContext globalProcessorContext;
     private final int retries;
     private final long retryBackoffMs;
     private final Duration pollTime;
     private final Set<String> globalNonPersistentStoresTopics = new HashSet<>();
+    private final OffsetCheckpoint checkpointFile;
+    private final Map<TopicPartition, Long> checkpointFileCache;
 
     public GlobalStateManagerImpl(final LogContext logContext,
                                   final ProcessorTopology topology,
@@ -71,7 +79,9 @@ public class GlobalStateManagerImpl extends AbstractStateManager implements Glob
                                   final StateDirectory stateDirectory,
                                   final StateRestoreListener stateRestoreListener,
                                   final StreamsConfig config) {
-        super(stateDirectory.globalStateDir(), StreamsConfig.EXACTLY_ONCE.equals(config.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG)));
+        baseDir = stateDirectory.globalStateDir();
+        checkpointFile = new OffsetCheckpoint(new File(baseDir, CHECKPOINT_FILE_NAME));
+        checkpointFileCache = new HashMap<>();
 
         // Find non persistent store's topics
         final Map<String, String> storeToChangelogTopic = topology.storeToChangelogTopic();
@@ -81,19 +91,19 @@ public class GlobalStateManagerImpl extends AbstractStateManager implements Glob
             }
         }
 
-        this.log = logContext.logger(GlobalStateManagerImpl.class);
+        log = logContext.logger(GlobalStateManagerImpl.class);
         this.topology = topology;
         this.globalConsumer = globalConsumer;
         this.stateDirectory = stateDirectory;
         this.stateRestoreListener = stateRestoreListener;
-        this.retries = config.getInt(StreamsConfig.RETRIES_CONFIG);
-        this.retryBackoffMs = config.getLong(StreamsConfig.RETRY_BACKOFF_MS_CONFIG);
-        this.pollTime = Duration.ofMillis(config.getLong(StreamsConfig.POLL_MS_CONFIG));
+        retries = config.getInt(StreamsConfig.RETRIES_CONFIG);
+        retryBackoffMs = config.getLong(StreamsConfig.RETRY_BACKOFF_MS_CONFIG);
+        pollTime = Duration.ofMillis(config.getLong(StreamsConfig.POLL_MS_CONFIG));
     }
 
     @Override
-    public void setGlobalProcessorContext(final InternalProcessorContext processorContext) {
-        this.processorContext = processorContext;
+    public void setGlobalProcessorContext(final InternalProcessorContext globalProcessorContext) {
+        this.globalProcessorContext = globalProcessorContext;
     }
 
     @Override
@@ -103,11 +113,11 @@ public class GlobalStateManagerImpl extends AbstractStateManager implements Glob
                 throw new LockException(String.format("Failed to lock the global state directory: %s", baseDir));
             }
         } catch (final IOException e) {
-            throw new LockException(String.format("Failed to lock the global state directory: %s", baseDir));
+            throw new LockException(String.format("Failed to lock the global state directory: %s", baseDir), e);
         }
 
         try {
-            this.checkpointableOffsets.putAll(checkpoint.read());
+            checkpointFileCache.putAll(checkpointFile.read());
         } catch (final IOException e) {
             try {
                 stateDirectory.unlockGlobalState();
@@ -118,28 +128,33 @@ public class GlobalStateManagerImpl extends AbstractStateManager implements Glob
         }
 
         final List<StateStore> stateStores = topology.globalStateStores();
+        final Map<String, String> storeNameToChangelog = topology.storeToChangelogTopic();
+        final Set<String> changelogTopics = new HashSet<>();
         for (final StateStore stateStore : stateStores) {
             globalStoreNames.add(stateStore.name());
-            stateStore.init(processorContext, stateStore);
+            final String sourceTopic = storeNameToChangelog.get(stateStore.name());
+            changelogTopics.add(sourceTopic);
+            stateStore.init(globalProcessorContext, stateStore);
         }
+
+        // make sure each topic-partition from checkpointFileCache is associated with a global state store
+        checkpointFileCache.keySet().forEach(tp -> {
+            if (!changelogTopics.contains(tp.topic())) {
+                log.error("Encountered a topic-partition in the global checkpoint file not associated with any global" +
+                    " state store, topic-partition: {}, checkpoint file: {}. If this topic-partition is no longer valid," +
+                    " an application reset and state store directory cleanup will be required.",
+                    tp.topic(), checkpointFile.toString());
+                try {
+                    stateDirectory.unlockGlobalState();
+                } catch (final IOException e) {
+                    log.error("Failed to unlock the global state directory", e);
+                }
+                throw new StreamsException("Encountered a topic-partition not associated with any global state store");
+            }
+        });
         return Collections.unmodifiableSet(globalStoreNames);
     }
 
-    @Override
-    public void reinitializeStateStoresForPartitions(final Collection<TopicPartition> partitions,
-                                                     final InternalProcessorContext processorContext) {
-        super.reinitializeStateStoresForPartitions(
-            log,
-            globalStores,
-            topology.storeToChangelogTopic(),
-            partitions,
-            processorContext);
-
-        globalConsumer.assign(partitions);
-        globalConsumer.seekToBeginning(partitions);
-    }
-
-    @Override
     public StateStore getGlobalStore(final String name) {
         return globalStores.getOrDefault(name, Optional.empty()).orElse(null);
     }
@@ -153,9 +168,8 @@ public class GlobalStateManagerImpl extends AbstractStateManager implements Glob
         return baseDir;
     }
 
-    public void register(final StateStore store,
-                         final StateRestoreCallback stateRestoreCallback) {
-
+    @Override
+    public void registerStore(final StateStore store, final StateRestoreCallback stateRestoreCallback) {
         if (globalStores.containsKey(store.name())) {
             throw new IllegalArgumentException(String.format("Global Store %s has already been registered", store.name()));
         }
@@ -261,7 +275,7 @@ public class GlobalStateManagerImpl extends AbstractStateManager implements Glob
                               final RecordConverter recordConverter) {
         for (final TopicPartition topicPartition : topicPartitions) {
             globalConsumer.assign(Collections.singletonList(topicPartition));
-            final Long checkpoint = checkpointableOffsets.get(topicPartition);
+            final Long checkpoint = checkpointFileCache.get(topicPartition);
             if (checkpoint != null) {
                 globalConsumer.seek(topicPartition, checkpoint);
             } else {
@@ -293,14 +307,14 @@ public class GlobalStateManagerImpl extends AbstractStateManager implements Glob
                     log.warn("Restoring GlobalStore {} failed due to: {}. Deleting global store to recreate from scratch.",
                         storeName,
                         recoverableException.toString());
-                    reinitializeStateStoresForPartitions(recoverableException.partitions(), processorContext);
 
-                    stateRestoreListener.onRestoreStart(topicPartition, storeName, offset, highWatermark);
+                    // TODO K9113: we remove the re-init logic and push it to be handled by the thread directly
+
                     restoreCount = 0L;
                 }
             }
             stateRestoreListener.onRestoreEnd(topicPartition, storeName, restoreCount);
-            checkpointableOffsets.put(topicPartition, offset);
+            checkpointFileCache.put(topicPartition, offset);
         }
     }
 
@@ -313,7 +327,7 @@ public class GlobalStateManagerImpl extends AbstractStateManager implements Glob
                 try {
                     log.trace("Flushing global store={}", store.name());
                     store.flush();
-                } catch (final Exception e) {
+                } catch (final RuntimeException e) {
                     throw new ProcessorStateException(
                         String.format("Failed to flush global state store %s", store.name()),
                         e
@@ -327,7 +341,7 @@ public class GlobalStateManagerImpl extends AbstractStateManager implements Glob
 
 
     @Override
-    public void close(final boolean clean) throws IOException {
+    public void close() throws IOException {
         try {
             if (globalStores.isEmpty()) {
                 return;
@@ -338,12 +352,12 @@ public class GlobalStateManagerImpl extends AbstractStateManager implements Glob
                     log.debug("Closing global storage engine {}", entry.getKey());
                     try {
                         entry.getValue().get().close();
-                    } catch (final Exception e) {
+                    } catch (final RuntimeException e) {
                         log.error("Failed to close global state store {}", entry.getKey(), e);
                         closeFailed.append("Failed to close global state store:")
                                    .append(entry.getKey())
                                    .append(". Reason: ")
-                                   .append(e.toString())
+                                   .append(e)
                                    .append("\n");
                     }
                     globalStores.put(entry.getKey(), Optional.empty());
@@ -361,12 +375,12 @@ public class GlobalStateManagerImpl extends AbstractStateManager implements Glob
 
     @Override
     public void checkpoint(final Map<TopicPartition, Long> offsets) {
-        checkpointableOffsets.putAll(offsets);
+        checkpointFileCache.putAll(offsets);
 
         final Map<TopicPartition, Long> filteredOffsets = new HashMap<>();
 
         // Skip non persistent store
-        for (final Map.Entry<TopicPartition, Long> topicPartitionOffset : checkpointableOffsets.entrySet()) {
+        for (final Map.Entry<TopicPartition, Long> topicPartitionOffset : checkpointFileCache.entrySet()) {
             final String topic = topicPartitionOffset.getKey().topic();
             if (!globalNonPersistentStoresTopics.contains(topic)) {
                 filteredOffsets.put(topicPartitionOffset.getKey(), topicPartitionOffset.getValue());
@@ -374,16 +388,15 @@ public class GlobalStateManagerImpl extends AbstractStateManager implements Glob
         }
 
         try {
-            checkpoint.write(filteredOffsets);
+            checkpointFile.write(filteredOffsets);
         } catch (final IOException e) {
-            log.warn("Failed to write offset checkpoint file to {} for global stores: {}", checkpoint, e);
+            log.warn("Failed to write offset checkpoint file to {} for global stores: {}", checkpointFile, e);
         }
     }
 
+
     @Override
-    public Map<TopicPartition, Long> checkpointed() {
-        return Collections.unmodifiableMap(checkpointableOffsets);
+    public Map<TopicPartition, Long> changelogOffsets() {
+        return Collections.unmodifiableMap(checkpointFileCache);
     }
-
-
 }

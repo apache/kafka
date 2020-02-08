@@ -48,7 +48,7 @@
           <ul>
               <li><a class="reference internal" href="#primitive-and-basic-types" id="id4">Primitive and basic types</a></li>
               <li><a class="reference internal" href="#json" id="id6">JSON</a></li>
-              <li><a class="reference internal" href="#further-serdes" id="id7">Further serdes</a></li>
+              <li><a class="reference internal" href="#implementing-custom-serdes" id="id5">Implementing custom serdes</a></li>
           </ul>
           <li><a class="reference internal" href="#scala-dsl-serdes" id="id8">Kafka Streams DSL for Scala Implicit SerDes</a></li>
       </ul>
@@ -68,7 +68,7 @@
     </div>
     <div class="section" id="overriding-default-serdes">
       <h2>Overriding default SerDes<a class="headerlink" href="#overriding-default-serdes" title="Permalink to this headline"></a></h2>
-      <p>You can also specify SerDes explicitly by passing them to the appropriate API methods, which overrides the default SerDe settings. For this case, Kafka Streams will auto-configure the passed-in SerDes objects, i.e., you don't need to call <code>configure()</code> manually.</p>
+      <p>You can also specify SerDes explicitly by passing them to the appropriate API methods, which overrides the default serde settings:</p>
       <div class="highlight-java"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">org.apache.kafka.common.serialization.Serde</span><span class="o">;</span>
 <span class="kn">import</span> <span class="nn">org.apache.kafka.common.serialization.Serdes</span><span class="o">;</span>
 

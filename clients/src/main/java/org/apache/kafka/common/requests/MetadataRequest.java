@@ -133,24 +133,8 @@ public class MetadataRequest extends AbstractRequest {
                     .setPartitions(Collections.emptyList()));
         }
 
-        short versionId = version();
-        switch (versionId) {
-            case 0:
-            case 1:
-            case 2:
-                return new MetadataResponse(responseData);
-            case 3:
-            case 4:
-            case 5:
-            case 6:
-            case 7:
-            case 8:
-                responseData.setThrottleTimeMs(throttleTimeMs);
-                return new MetadataResponse(responseData);
-            default:
-                throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
-                        versionId, this.getClass().getSimpleName(), ApiKeys.METADATA.latestVersion()));
-        }
+        responseData.setThrottleTimeMs(throttleTimeMs);
+        return new MetadataResponse(responseData);
     }
 
     public boolean isAllTopics() {

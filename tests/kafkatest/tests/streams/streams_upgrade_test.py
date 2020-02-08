@@ -23,18 +23,20 @@ from kafkatest.services.kafka import KafkaService
 from kafkatest.services.streams import StreamsSmokeTestDriverService, StreamsSmokeTestJobRunnerService, \
     StreamsUpgradeTestJobRunnerService
 from kafkatest.services.zookeeper import ZookeeperService
+from kafkatest.tests.streams.utils import extract_generation_from_logs
 from kafkatest.version import LATEST_0_10_0, LATEST_0_10_1, LATEST_0_10_2, LATEST_0_11_0, LATEST_1_0, LATEST_1_1, \
-    LATEST_2_0, LATEST_2_1, DEV_BRANCH, DEV_VERSION, KafkaVersion
+    LATEST_2_0, LATEST_2_1, LATEST_2_2, LATEST_2_3, LATEST_2_4, DEV_BRANCH, DEV_VERSION, KafkaVersion
 
 # broker 0.10.0 is not compatible with newer Kafka Streams versions
-broker_upgrade_versions = [str(LATEST_0_10_1), str(LATEST_0_10_2), str(LATEST_0_11_0), str(LATEST_1_0), str(LATEST_1_1), str(LATEST_2_0), str(LATEST_2_1), str(DEV_BRANCH)]
+broker_upgrade_versions = [str(LATEST_0_10_1), str(LATEST_0_10_2), str(LATEST_0_11_0), str(LATEST_1_0), str(LATEST_1_1), \
+                           str(LATEST_2_0), str(LATEST_2_1), str(LATEST_2_2), str(LATEST_2_3), str(LATEST_2_4), str(DEV_BRANCH)]
 
 metadata_1_versions = [str(LATEST_0_10_0)]
 metadata_2_versions = [str(LATEST_0_10_1), str(LATEST_0_10_2), str(LATEST_0_11_0), str(LATEST_1_0), str(LATEST_1_1)]
 # once 0.10.1.2 is available backward_compatible_metadata_2_versions
 # can be replaced with metadata_2_versions
 backward_compatible_metadata_2_versions = [str(LATEST_0_10_2), str(LATEST_0_11_0), str(LATEST_1_0), str(LATEST_1_1)]
-metadata_3_or_higher_versions = [str(LATEST_2_0), str(LATEST_2_1), str(DEV_VERSION)]
+metadata_3_or_higher_versions = [str(LATEST_2_0), str(LATEST_2_1), str(LATEST_2_2), str(LATEST_2_3), str(LATEST_2_4), str(DEV_VERSION)]
 
 """
 After each release one should first check that the released version has been uploaded to 
@@ -43,7 +45,7 @@ anyone can verify that by calling
 curl https://s3-us-west-2.amazonaws.com/kafka-packages/kafka_$scala_version-$version.tgz to download the jar
 and if it is not uploaded yet, ping the dev@kafka mailing list to request it being uploaded.
 
-This test needs to get updated, but this requires several steps
+This test needs to get updated, but this requires several steps,
 which are outlined here:
 
 1. Update all relevant versions in tests/kafkatest/version.py this will include adding a new version for the new
@@ -54,21 +56,22 @@ which are outlined here:
    "StreamsUpgradeTestJobRunnerService" on line 484 to make sure the correct arguments are passed
    during the system test run.
    
-3. Update the vagrant/bash.sh file to include all new versions, including the newly released version
-   and all point releases for existing releases.  You only need to list the latest version in 
+3. Update the vagrant/base.sh file to include all new versions, including the newly released version
+   and all point releases for existing releases. You only need to list the latest version in 
    this file.
    
 4. Then update all relevant versions in the tests/docker/Dockerfile
 
-5. Add a new "upgrade-system-tests-XXXX module under streams.  You can probably just copy the 
-   latest system test module from the last release.  Just make sure to update the systout print
-   statement in StreamsUpgradeTest to the version for the release.  After you add the new module
+5. Add a new upgrade-system-tests-XXXX module under streams. You can probably just copy the 
+   latest system test module from the last release. Just make sure to update the systout print
+   statement in StreamsUpgradeTest to the version for the release. After you add the new module
    you'll need to update settings.gradle file to include the name of the module you just created
-   for gradle to recognize the newly added module
-   
+   for gradle to recognize the newly added module.
+
 6. Then you'll need to update any version changes in gradle/dependencies.gradle
 
 """
+
 
 class StreamsUpgradeTest(Test):
     """
@@ -84,10 +87,9 @@ class StreamsUpgradeTest(Test):
             'echo' : { 'partitions': 5 },
             'data' : { 'partitions': 5 },
         }
-        self.leader = None
-        self.leader_counter = {}
 
     processed_msg = "processed [0-9]* records"
+    base_version_number = str(DEV_VERSION).split("-")[0]
 
     def perform_broker_upgrade(self, to_version):
         self.logger.info("First pass bounce - rolling broker upgrade")
@@ -311,13 +313,6 @@ class StreamsUpgradeTest(Test):
         self.processors = [self.processor1, self.processor2, self.processor3]
         self.old_processors = [self.processor1, self.processor2, self.processor3]
         self.upgraded_processors = []
-        for p in self.processors:
-            self.leader_counter[p] = 2
-
-        self.update_leader()
-        for p in self.processors:
-            self.leader_counter[p] = 0
-        self.leader_counter[self.leader] = 3
 
         counter = 1
         current_generation = 3
@@ -342,31 +337,12 @@ class StreamsUpgradeTest(Test):
                                    timeout_sec=60,
                                    err_msg="Never saw output 'UPGRADE-TEST-CLIENT-CLOSED' on" + str(node.account))
 
-    def update_leader(self):
-        self.leader = None
-        retries = 10
-        while retries > 0:
-            for p in self.processors:
-                found = list(p.node.account.ssh_capture("grep \"Finished assignment for group\" %s" % p.LOG_FILE, allow_fail=True))
-                if len(found) == self.leader_counter[p] + 1:
-                    if self.leader is not None:
-                        raise Exception("Could not uniquely identify leader")
-                    self.leader = p
-                    self.leader_counter[p] = self.leader_counter[p] + 1
-
-            if self.leader is None:
-                retries = retries - 1
-                time.sleep(5)
-            else:
-                break
-
-        if self.leader is None:
-            raise Exception("Could not identify leader")
-
     def get_version_string(self, version):
         if version.startswith("0") or version.startswith("1") \
           or version.startswith("2.0") or version.startswith("2.1"):
             return "Kafka version : " + version
+        elif "SNAPSHOT" in version:
+            return "Kafka version.*" + self.base_version_number + ".*SNAPSHOT"
         else:
             return "Kafka version: " + version
 
@@ -403,8 +379,7 @@ class StreamsUpgradeTest(Test):
                                               timeout_sec=60,
                                               err_msg="Never saw output '%s' on " % self.processed_msg + str(node2.account))
 
-
-                    # start third with <version>
+        # start third with <version>
         self.prepare_for(self.processor3, version)
         node3 = self.processor3.node
         with node1.account.monitor_log(self.processor1.STDOUT_FILE) as first_monitor:
@@ -424,7 +399,6 @@ class StreamsUpgradeTest(Test):
                         third_monitor.wait_until(self.processed_msg,
                                                  timeout_sec=60,
                                                  err_msg="Never saw output '%s' on " % self.processed_msg + str(node3.account))
-
 
     @staticmethod
     def prepare_for(processor, version):
@@ -465,7 +439,7 @@ class StreamsUpgradeTest(Test):
         if upgrade_from is None:  # upgrade disabled -- second round of rolling bounces
             roll_counter = ".1-"  # second round of rolling bounces
         else:
-            roll_counter = ".0-"  # first  round of rolling boundes
+            roll_counter = ".0-"  # first  round of rolling bounces
 
         node.account.ssh("mv " + processor.STDOUT_FILE + " " + processor.STDOUT_FILE + roll_counter + str(counter), allow_fail=False)
         node.account.ssh("mv " + processor.STDERR_FILE + " " + processor.STDERR_FILE + roll_counter + str(counter), allow_fail=False)
@@ -529,7 +503,6 @@ class StreamsUpgradeTest(Test):
                 node.account.ssh("mv " + processor.STDOUT_FILE + " " + processor.STDOUT_FILE + "." + str(counter), allow_fail=False)
                 node.account.ssh("mv " + processor.STDERR_FILE + " " + processor.STDERR_FILE + "." + str(counter), allow_fail=False)
                 node.account.ssh("mv " + processor.LOG_FILE + " " + processor.LOG_FILE + "." + str(counter), allow_fail=False)
-                self.leader_counter[processor] = 0
 
                 with node.account.monitor_log(processor.LOG_FILE) as log_monitor:
                     processor.set_upgrade_to("future_version")
@@ -537,7 +510,8 @@ class StreamsUpgradeTest(Test):
                     self.old_processors.remove(processor)
                     self.upgraded_processors.append(processor)
 
-                    log_monitor.wait_until("Kafka version: " + str(DEV_VERSION),
+                    # checking for the dev version which should be the only SNAPSHOT
+                    log_monitor.wait_until("Kafka version.*" + self.base_version_number + ".*SNAPSHOT",
                                            timeout_sec=60,
                                            err_msg="Could not detect Kafka Streams version " + str(DEV_VERSION) + " in " + str(node.account))
                     log_monitor.offset = 5
@@ -545,43 +519,25 @@ class StreamsUpgradeTest(Test):
                                            timeout_sec=60,
                                            err_msg="Could not detect FutureStreamsPartitionAssignor in " + str(node.account))
 
-                    if processor == self.leader:
-                        self.update_leader()
-                    else:
-                        self.leader_counter[self.leader] = self.leader_counter[self.leader] + 1
-
-                    if processor == self.leader:
-                        leader_monitor = log_monitor
-                    elif first_other_processor == self.leader:
-                        leader_monitor = first_other_monitor
-                    elif second_other_processor == self.leader:
-                        leader_monitor = second_other_monitor
-                    else:
-                        raise Exception("Could not identify leader.")
-
                     monitors = {}
                     monitors[processor] = log_monitor
                     monitors[first_other_processor] = first_other_monitor
                     monitors[second_other_processor] = second_other_monitor
 
-                    leader_monitor.wait_until("Received a future (version probing) subscription (version: 5). Sending empty assignment back (with supported version 4).",
-                                              timeout_sec=60,
-                                              err_msg="Could not detect 'version probing' attempt at leader " + str(self.leader.node.account))
-
                     if len(self.old_processors) > 0:
-                        log_monitor.wait_until("Sent a version 5 subscription and got version 4 assignment back (successful version probing). Downgrading subscription metadata to received version and trigger new rebalance.",
+                        log_monitor.wait_until("Sent a version 7 subscription and got version 6 assignment back (successful version probing). Downgrade subscription metadata to commonly supported version 6 and trigger new rebalance.",
                                                timeout_sec=60,
                                                err_msg="Could not detect 'successful version probing' at upgrading node " + str(node.account))
                     else:
-                        log_monitor.wait_until("Sent a version 5 subscription and got version 4 assignment back (successful version probing). Setting subscription metadata to leaders supported version 5 and trigger new rebalance.",
+                        log_monitor.wait_until("Sent a version 7 subscription and got version 6 assignment back (successful version probing). Downgrade subscription metadata to commonly supported version 7 and trigger new rebalance.",
                                                timeout_sec=60,
                                                err_msg="Could not detect 'successful version probing with upgraded leader' at upgrading node " + str(node.account))
-                        first_other_monitor.wait_until("Sent a version 4 subscription and group leader.s latest supported version is 5. Upgrading subscription metadata version to 5 for next rebalance.",
+                        first_other_monitor.wait_until("Sent a version 6 subscription and group.s latest commonly supported version is 7 (successful version probing and end of rolling upgrade). Upgrading subscription metadata version to 7 for next rebalance.",
                                                        timeout_sec=60,
-                                                       err_msg="Never saw output 'Upgrade metadata to version 4' on" + str(first_other_node.account))
-                        second_other_monitor.wait_until("Sent a version 4 subscription and group leader.s latest supported version is 5. Upgrading subscription metadata version to 5 for next rebalance.",
+                                                       err_msg="Never saw output 'Upgrade metadata to version 7' on" + str(first_other_node.account))
+                        second_other_monitor.wait_until("Sent a version 6 subscription and group.s latest commonly supported version is 7 (successful version probing and end of rolling upgrade). Upgrading subscription metadata version to 7 for next rebalance.",
                                                         timeout_sec=60,
-                                                        err_msg="Never saw output 'Upgrade metadata to version 4' on" + str(second_other_node.account))
+                                                        err_msg="Never saw output 'Upgrade metadata to version 7' on" + str(second_other_node.account))
 
                     log_monitor.wait_until("Version probing detected. Triggering new rebalance.",
                                            timeout_sec=60,
@@ -593,9 +549,9 @@ class StreamsUpgradeTest(Test):
                     retries = 0
 
                     while retries < 10:
-                        processor_found = self.extract_generation_from_logs(processor)
-                        first_other_processor_found = self.extract_generation_from_logs(first_other_processor)
-                        second_other_processor_found = self.extract_generation_from_logs(second_other_processor)
+                        processor_found = extract_generation_from_logs(processor)
+                        first_other_processor_found = extract_generation_from_logs(first_other_processor)
+                        second_other_processor_found = extract_generation_from_logs(second_other_processor)
 
                         if len(processor_found) > 0 and len(first_other_processor_found) > 0 and len(second_other_processor_found) > 0:
                             self.logger.info("processor: " + str(processor_found))
@@ -617,27 +573,20 @@ class StreamsUpgradeTest(Test):
                     if generation_synchronized == False:
                         raise Exception("Never saw all three processors have the synchronized generation number")
 
-                    if processor == self.leader:
-                        self.update_leader()
-                    else:
-                        self.leader_counter[self.leader] = self.leader_counter[self.leader] + 1
 
-                    if self.leader in self.old_processors or len(self.old_processors) > 0:
+                    if len(self.old_processors) > 0:
                         self.verify_metadata_no_upgraded_yet()
 
         return current_generation
-
-    def extract_generation_from_logs(self, processor):
-        return list(processor.node.account.ssh_capture("grep \"Successfully joined group with generation\" %s| awk \'{for(i=1;i<=NF;i++) {if ($i == \"generation\") beginning=i+1; if($i== \"(org.apache.kafka.clients.consumer.internals.AbstractCoordinator)\") ending=i }; for (j=beginning;j<ending;j++) printf $j; printf \"\\n\"}\'" % processor.LOG_FILE, allow_fail=True))
 
     def extract_highest_generation(self, found_generations):
         return int(found_generations[-1])
 
     def verify_metadata_no_upgraded_yet(self):
         for p in self.processors:
-            found = list(p.node.account.ssh_capture("grep \"Sent a version 4 subscription and group leader.s latest supported version is 5. Upgrading subscription metadata version to 5 for next rebalance.\" " + p.LOG_FILE, allow_fail=True))
+            found = list(p.node.account.ssh_capture("grep \"Sent a version 6 subscription and group.s latest commonly supported version is 7 (successful version probing and end of rolling upgrade). Upgrading subscription metadata version to 7 for next rebalance.\" " + p.LOG_FILE, allow_fail=True))
             if len(found) > 0:
-                raise Exception("Kafka Streams failed with 'group member upgraded to metadata 4 too early'")
+                raise Exception("Kafka Streams failed with 'group member upgraded to metadata 7 too early'")
 
     def confirm_topics_on_all_brokers(self, expected_topic_set):
         for node in self.kafka.nodes:

@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.runtime.standalone;
 
+import org.apache.kafka.connect.connector.policy.ConnectorClientConfigOverridePolicy;
 import org.apache.kafka.connect.errors.AlreadyExistsException;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.errors.NotFoundException;
@@ -23,11 +24,13 @@ import org.apache.kafka.connect.runtime.AbstractHerder;
 import org.apache.kafka.connect.runtime.ConnectorConfig;
 import org.apache.kafka.connect.runtime.HerderConnectorContext;
 import org.apache.kafka.connect.runtime.HerderRequest;
+import org.apache.kafka.connect.runtime.SessionKey;
 import org.apache.kafka.connect.runtime.SinkConnectorConfig;
 import org.apache.kafka.connect.runtime.SourceConnectorConfig;
 import org.apache.kafka.connect.runtime.TargetState;
 import org.apache.kafka.connect.runtime.Worker;
 import org.apache.kafka.connect.runtime.distributed.ClusterConfigState;
+import org.apache.kafka.connect.runtime.rest.InternalRequestSignature;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorInfo;
 import org.apache.kafka.connect.runtime.rest.entities.TaskInfo;
 import org.apache.kafka.connect.storage.ConfigBackingStore;
@@ -62,12 +65,14 @@ public class StandaloneHerder extends AbstractHerder {
 
     private ClusterConfigState configState;
 
-    public StandaloneHerder(Worker worker, String kafkaClusterId) {
+    public StandaloneHerder(Worker worker, String kafkaClusterId,
+                            ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy) {
         this(worker,
                 worker.workerId(),
                 kafkaClusterId,
                 new MemoryStatusBackingStore(),
-                new MemoryConfigBackingStore(worker.configTransformer()));
+                new MemoryConfigBackingStore(worker.configTransformer()),
+             connectorClientConfigOverridePolicy);
     }
 
     // visible for testing
@@ -75,8 +80,9 @@ public class StandaloneHerder extends AbstractHerder {
                      String workerId,
                      String kafkaClusterId,
                      StatusBackingStore statusBackingStore,
-                     MemoryConfigBackingStore configBackingStore) {
-        super(worker, workerId, kafkaClusterId, statusBackingStore, configBackingStore);
+                     MemoryConfigBackingStore configBackingStore,
+                     ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy) {
+        super(worker, workerId, kafkaClusterId, statusBackingStore, configBackingStore, connectorClientConfigOverridePolicy);
         this.configState = ClusterConfigState.EMPTY;
         this.requestExecutorService = Executors.newSingleThreadScheduledExecutor();
         configBackingStore.setUpdateListener(new ConfigUpdateListener());
@@ -103,7 +109,7 @@ public class StandaloneHerder extends AbstractHerder {
         // There's no coordination/hand-off to do here since this is all standalone. Instead, we
         // should just clean up the stuff we normally would, i.e. cleanly checkpoint and shutdown all
         // the tasks.
-        for (String connName : configState.connectors()) {
+        for (String connName : connectors()) {
             removeConnectorTasks(connName);
             worker.stopConnector(connName);
         }
@@ -118,12 +124,12 @@ public class StandaloneHerder extends AbstractHerder {
 
     @Override
     public synchronized void connectors(Callback<Collection<String>> callback) {
-        callback.onCompletion(null, configState.connectors());
+        callback.onCompletion(null, connectors());
     }
-
+    
     @Override
     public synchronized void connectorInfo(String connName, Callback<ConnectorInfo> callback) {
-        ConnectorInfo connectorInfo = createConnectorInfo(connName);
+        ConnectorInfo connectorInfo = connectorInfo(connName);
         if (connectorInfo == null) {
             callback.onCompletion(new NotFoundException("Connector " + connName + " not found"), null);
             return;
@@ -237,7 +243,7 @@ public class StandaloneHerder extends AbstractHerder {
     }
 
     @Override
-    public void putTaskConfigs(String connName, List<Map<String, String>> configs, Callback<Void> callback) {
+    public void putTaskConfigs(String connName, List<Map<String, String>> configs, Callback<Void> callback, InternalRequestSignature requestSignature) {
         throw new UnsupportedOperationException("Kafka Connect in standalone mode does not support externally setting task configurations.");
     }
 
@@ -374,6 +380,11 @@ public class StandaloneHerder extends AbstractHerder {
                 if (targetState == TargetState.STARTED)
                     updateConnectorTasks(connector);
             }
+        }
+
+        @Override
+        public void onSessionKeyUpdate(SessionKey sessionKey) {
+            // no-op
         }
     }
 

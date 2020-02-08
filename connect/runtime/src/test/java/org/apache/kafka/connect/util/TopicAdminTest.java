@@ -73,6 +73,18 @@ public class TopicAdminTest {
     }
 
     @Test
+    public void returnNullWithTopicAuthorizationFailure() {
+        final NewTopic newTopic = TopicAdmin.defineTopic("myTopic").partitions(1).compacted().build();
+        Cluster cluster = createCluster(1);
+        try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(new MockTime(), cluster)) {
+            env.kafkaClient().prepareResponse(createTopicResponseWithTopicAuthorizationException(newTopic));
+            TopicAdmin admin = new TopicAdmin(null, env.adminClient());
+            boolean created = admin.createTopic(newTopic);
+            assertFalse(created);
+        }
+    }
+
+    @Test
     public void shouldNotCreateTopicWhenItAlreadyExists() {
         NewTopic newTopic = TopicAdmin.defineTopic("myTopic").partitions(1).compacted().build();
         Cluster cluster = createCluster(1);
@@ -134,6 +146,10 @@ public class TopicAdminTest {
 
     private CreateTopicsResponse createTopicResponseWithClusterAuthorizationException(NewTopic... topics) {
         return createTopicResponse(new ApiError(Errors.CLUSTER_AUTHORIZATION_FAILED, "Not authorized to create topic(s)"), topics);
+    }
+
+    private CreateTopicsResponse createTopicResponseWithTopicAuthorizationException(NewTopic... topics) {
+        return createTopicResponse(new ApiError(Errors.TOPIC_AUTHORIZATION_FAILED, "Not authorized to create topic(s)"), topics);
     }
 
     private CreateTopicsResponse createTopicResponse(ApiError error, NewTopic... topics) {

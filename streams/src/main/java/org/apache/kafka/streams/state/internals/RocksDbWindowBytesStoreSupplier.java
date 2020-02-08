@@ -49,33 +49,32 @@ public class RocksDbWindowBytesStoreSupplier implements WindowBytesStoreSupplier
 
     @Override
     public WindowStore<Bytes, byte[]> get() {
-        final SegmentedBytesStore segmentedBytesStore;
         if (!returnTimestampedStore) {
-            segmentedBytesStore = new RocksDBSegmentedBytesStore(
-                name,
-                metricsScope(),
-                retentionPeriod,
-                segmentInterval,
-                new WindowKeySchema()
-            );
+            return new RocksDBWindowStore(
+                new RocksDBSegmentedBytesStore(
+                    name,
+                    metricsScope(),
+                    retentionPeriod,
+                    segmentInterval,
+                    new WindowKeySchema()),
+                retainDuplicates,
+                windowSize);
         } else {
-            segmentedBytesStore = new RocksDBTimestampedSegmentedBytesStore(
-                name,
-                metricsScope(),
-                retentionPeriod,
-                segmentInterval,
-                new WindowKeySchema()
-            );
+            return new RocksDBTimestampedWindowStore(
+                new RocksDBTimestampedSegmentedBytesStore(
+                    name,
+                    metricsScope(),
+                    retentionPeriod,
+                    segmentInterval,
+                    new WindowKeySchema()),
+                retainDuplicates,
+                windowSize);
         }
-        return new RocksDBWindowStore(
-            segmentedBytesStore,
-            retainDuplicates,
-            windowSize);
     }
 
     @Override
     public String metricsScope() {
-        return "rocksdb-window-state";
+        return "rocksdb-window";
     }
 
     @Deprecated

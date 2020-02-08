@@ -31,19 +31,18 @@ import java.io.StringWriter;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
 import java.nio.ByteBuffer;
-import java.nio.MappedByteBuffer;
 import java.nio.channels.FileChannel;
-import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
 import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
-import java.nio.file.SimpleFileVisitor;
 import java.nio.file.Paths;
+import java.nio.file.SimpleFileVisitor;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.text.DecimalFormat;
+import java.text.DecimalFormatSymbols;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -53,10 +52,12 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -74,7 +75,8 @@ public final class Utils {
     private static final Pattern VALID_HOST_CHARACTERS = Pattern.compile("([0-9a-zA-Z\\-%._:]*)");
 
     // Prints up to 2 decimal digits. Used for human readable printing
-    private static final DecimalFormat TWO_DIGIT_FORMAT = new DecimalFormat("0.##");
+    private static final DecimalFormat TWO_DIGIT_FORMAT = new DecimalFormat("0.##",
+        DecimalFormatSymbols.getInstance(Locale.ENGLISH));
 
     private static final String[] BYTE_SCALE_SUFFIXES = new String[] {"B", "KB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB"};
 
@@ -281,20 +283,6 @@ public final class Utils {
      */
     public static byte[] copyArray(byte[] src) {
         return Arrays.copyOf(src, src.length);
-    }
-
-    /**
-     * Check that the parameter t is not null
-     *
-     * @param t The object to check
-     * @return t if it isn't null
-     * @throws NullPointerException if t is null.
-     */
-    public static <T> T notNull(T t) {
-        if (t == null)
-            throw new NullPointerException();
-        else
-            return t;
     }
 
     /**
@@ -602,15 +590,6 @@ public final class Utils {
     }
 
     /**
-     * Print an error message and shutdown the JVM
-     * @param message The error message
-     */
-    public static void croak(String message) {
-        System.err.println(message);
-        Exit.exit(1);
-    }
-
-    /**
      * Read a buffer into a Byte array for the given offset and length
      */
     public static byte[] readBytes(ByteBuffer buffer, int offset, int length) {
@@ -620,7 +599,7 @@ public final class Utils {
         } else {
             buffer.mark();
             buffer.position(offset);
-            buffer.get(dest, 0, length);
+            buffer.get(dest);
             buffer.reset();
         }
         return dest;
@@ -634,21 +613,16 @@ public final class Utils {
     }
 
     /**
-     * Attempt to read a file as a string
-     * @throws IOException
+     * Read a file as string and return the content. The file is treated as a stream and no seek is performed.
+     * This allows the program to read from a regular file as well as from a pipe/fifo.
      */
-    public static String readFileAsString(String path, Charset charset) throws IOException {
-        if (charset == null) charset = Charset.defaultCharset();
-
-        try (FileChannel fc = FileChannel.open(Paths.get(path))) {
-            MappedByteBuffer bb = fc.map(FileChannel.MapMode.READ_ONLY, 0, fc.size());
-            return charset.decode(bb).toString();
-        }
-
-    }
-
     public static String readFileAsString(String path) throws IOException {
-        return Utils.readFileAsString(path, Charset.defaultCharset());
+        try {
+            byte[] allBytes = Files.readAllBytes(Paths.get(path));
+            return new String(allBytes, StandardCharsets.UTF_8);
+        } catch (IOException ex) {
+            throw new IOException("Unable to read file " + path, ex);
+        }
     }
 
     /**
@@ -857,6 +831,17 @@ public final class Utils {
         }
     }
 
+    public static void closeQuietly(AutoCloseable closeable, String name, AtomicReference<Throwable> firstException) {
+        if (closeable != null) {
+            try {
+                closeable.close();
+            } catch (Throwable t) {
+                firstException.compareAndSet(null, t);
+                log.error("Failed to close {} with type {}", name, closeable.getClass().getName(), t);
+            }
+        }
+    }
+
     /**
      * A cheap way to deterministically convert a number to a positive value. When the input is
      * positive, the original value is returned. When the input number is negative, the returned
@@ -872,10 +857,6 @@ public final class Utils {
      */
     public static int toPositive(int number) {
         return number & 0x7fffffff;
-    }
-
-    public static int longHashcode(long value) {
-        return (int) (value ^ (value >>> 32));
     }
 
     /**

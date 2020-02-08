@@ -15,12 +15,11 @@
 
 import time
 from ducktape.tests.test import Test
-from ducktape.utils.util import wait_until
 from kafkatest.services.kafka import KafkaService
 from kafkatest.services.streams import StreamsOptimizedUpgradeTestService
 from kafkatest.services.verifiable_producer import VerifiableProducer
 from kafkatest.services.zookeeper import ZookeeperService
-
+from kafkatest.tests.streams.utils import stop_processors
 
 class StreamsOptimizedTest(Test):
     """
@@ -33,6 +32,7 @@ class StreamsOptimizedTest(Test):
     reduce_topic = 'reduceTopic'
     join_topic = 'joinTopic'
     operation_pattern = 'AGGREGATED\|REDUCED\|JOINED'
+    stopped_message = 'OPTIMIZE_TEST Streams Stopped'
 
     def __init__(self, test_context):
         super(StreamsOptimizedTest, self).__init__(test_context)
@@ -75,7 +75,7 @@ class StreamsOptimizedTest(Test):
 
         self.verify_processing(processors, verify_individual_operations=False)
 
-        self.stop_processors(processors)
+        stop_processors(processors, self.stopped_message)
 
         # start again with topology optimized
         for processor in processors:
@@ -84,7 +84,7 @@ class StreamsOptimizedTest(Test):
 
         self.verify_processing(processors, verify_individual_operations=True)
 
-        self.stop_processors(processors)
+        stop_processors(processors, self.stopped_message)
 
         self.producer.stop()
         self.kafka.stop()
@@ -99,15 +99,6 @@ class StreamsOptimizedTest(Test):
                                timeout_sec=120,
                                err_msg="Never saw 'REBALANCING -> RUNNING with REPARTITION TOPIC COUNT=%s' message "
                                        % repartition_topic_count + str(processor.node.account))
-
-    @staticmethod
-    def verify_stopped(processor):
-        node = processor.node
-        with node.account.monitor_log(processor.STDOUT_FILE) as monitor:
-            processor.stop()
-            monitor.wait_until('OPTIMIZE_TEST Streams Stopped',
-                               timeout_sec=60,
-                               err_msg="'OPTIMIZE_TEST Streams Stopped' message" + str(processor.node.account))
 
     def verify_processing(self, processors, verify_individual_operations):
         for processor in processors:
@@ -138,10 +129,6 @@ class StreamsOptimizedTest(Test):
             time.sleep(1)
 
         return False
-
-    def stop_processors(self, processors):
-        for processor in processors:
-            self.verify_stopped(processor)
 
     def set_topics(self, processor):
         processor.INPUT_TOPIC = self.input_topic

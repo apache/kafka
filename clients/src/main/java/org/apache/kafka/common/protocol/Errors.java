@@ -16,10 +16,12 @@
  */
 package org.apache.kafka.common.protocol;
 
+import org.apache.kafka.common.InvalidRecordException;
 import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.BrokerNotAvailableException;
 import org.apache.kafka.common.errors.ClusterAuthorizationException;
 import org.apache.kafka.common.errors.ConcurrentTransactionsException;
+import org.apache.kafka.common.errors.GroupSubscribedToTopicException;
 import org.apache.kafka.common.errors.ControllerMovedException;
 import org.apache.kafka.common.errors.CoordinatorLoadInProgressException;
 import org.apache.kafka.common.errors.CoordinatorNotAvailableException;
@@ -62,7 +64,10 @@ import org.apache.kafka.common.errors.LeaderNotAvailableException;
 import org.apache.kafka.common.errors.LogDirNotFoundException;
 import org.apache.kafka.common.errors.FencedInstanceIdException;
 import org.apache.kafka.common.errors.MemberIdRequiredException;
+import org.apache.kafka.common.errors.ElectionNotNeededException;
+import org.apache.kafka.common.errors.EligibleLeadersNotAvailableException;
 import org.apache.kafka.common.errors.NetworkException;
+import org.apache.kafka.common.errors.NoReassignmentInProgressException;
 import org.apache.kafka.common.errors.NotControllerException;
 import org.apache.kafka.common.errors.NotCoordinatorException;
 import org.apache.kafka.common.errors.NotEnoughReplicasAfterAppendException;
@@ -73,6 +78,7 @@ import org.apache.kafka.common.errors.OffsetNotAvailableException;
 import org.apache.kafka.common.errors.OffsetOutOfRangeException;
 import org.apache.kafka.common.errors.OperationNotAttemptedException;
 import org.apache.kafka.common.errors.OutOfOrderSequenceException;
+import org.apache.kafka.common.errors.UnstableOffsetCommitException;
 import org.apache.kafka.common.errors.PolicyViolationException;
 import org.apache.kafka.common.errors.PreferredLeaderNotAvailableException;
 import org.apache.kafka.common.errors.ProducerFencedException;
@@ -183,10 +189,8 @@ public enum Errors {
             RebalanceInProgressException::new),
     INVALID_COMMIT_OFFSET_SIZE(28, "The committing offset data size is not valid.",
             InvalidCommitOffsetSizeException::new),
-    TOPIC_AUTHORIZATION_FAILED(29, "Topic authorization failed.",
-            TopicAuthorizationException::new),
-    GROUP_AUTHORIZATION_FAILED(30, "Group authorization failed.",
-            GroupAuthorizationException::new),
+    TOPIC_AUTHORIZATION_FAILED(29, "Topic authorization failed.", TopicAuthorizationException::new),
+    GROUP_AUTHORIZATION_FAILED(30, "Group authorization failed.", GroupAuthorizationException::new),
     CLUSTER_AUTHORIZATION_FAILED(31, "Cluster authorization failed.",
             ClusterAuthorizationException::new),
     INVALID_TIMESTAMP(32, "The timestamp of the message is out of acceptable range.",
@@ -304,8 +308,18 @@ public enum Errors {
     PREFERRED_LEADER_NOT_AVAILABLE(80, "The preferred leader was not available",
             PreferredLeaderNotAvailableException::new),
     GROUP_MAX_SIZE_REACHED(81, "The consumer group has reached its max size.", GroupMaxSizeReachedException::new),
-    FENCED_INSTANCE_ID(82, "The coordinator reports a more recent member.id associated with the consumer's group.instance.id.",
-            FencedInstanceIdException::new);
+    FENCED_INSTANCE_ID(82, "The broker rejected this static consumer since " +
+            "another consumer with the same group.instance.id has registered with a different member.id.",
+            FencedInstanceIdException::new),
+    ELIGIBLE_LEADERS_NOT_AVAILABLE(83, "Eligible topic partition leaders are not available",
+            EligibleLeadersNotAvailableException::new),
+    ELECTION_NOT_NEEDED(84, "Leader election not needed for topic partition", ElectionNotNeededException::new),
+    NO_REASSIGNMENT_IN_PROGRESS(85, "No partition reassignment is in progress.",
+            NoReassignmentInProgressException::new),
+    GROUP_SUBSCRIBED_TO_TOPIC(86, "Deleting offsets of a topic is forbidden while the consumer group is actively subscribed to it.",
+        GroupSubscribedToTopicException::new),
+    INVALID_RECORD(87, "This record has failed the validation on broker and hence be rejected.", InvalidRecordException::new),
+    UNSTABLE_OFFSET_COMMIT(88, "There are unstable offsets that need to be cleared", UnstableOffsetCommitException::new);
 
     private static final Logger log = LoggerFactory.getLogger(Errors.class);
 

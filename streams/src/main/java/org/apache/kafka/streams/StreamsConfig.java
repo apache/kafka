@@ -17,7 +17,7 @@
 package org.apache.kafka.streams;
 
 import org.apache.kafka.clients.CommonClientConfigs;
-import org.apache.kafka.clients.admin.AdminClient;
+import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
@@ -37,7 +37,6 @@ import org.apache.kafka.streams.errors.DeserializationExceptionHandler;
 import org.apache.kafka.streams.errors.LogAndFailExceptionHandler;
 import org.apache.kafka.streams.errors.ProductionExceptionHandler;
 import org.apache.kafka.streams.errors.StreamsException;
-import org.apache.kafka.streams.processor.DefaultPartitionGrouper;
 import org.apache.kafka.streams.processor.FailOnInvalidTimestamp;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 import org.apache.kafka.streams.processor.internals.StreamsPartitionAssignor;
@@ -51,14 +50,14 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 
+import static org.apache.kafka.common.IsolationLevel.READ_COMMITTED;
 import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
 import static org.apache.kafka.common.config.ConfigDef.Range.between;
 import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
-import static org.apache.kafka.common.requests.IsolationLevel.READ_COMMITTED;
 
 /**
  * Configuration for a {@link KafkaStreams} instance.
- * Can also be used to configure the Kafka Streams internal {@link KafkaConsumer}, {@link KafkaProducer} and {@link AdminClient}.
+ * Can also be used to configure the Kafka Streams internal {@link KafkaConsumer}, {@link KafkaProducer} and {@link Admin}.
  * To avoid consumer/producer/admin property conflicts, you should prefix those properties using
  * {@link #consumerPrefix(String)}, {@link #producerPrefix(String)} and {@link #adminClientPrefix(String)}, respectively.
  * <p>
@@ -129,6 +128,7 @@ import static org.apache.kafka.common.requests.IsolationLevel.READ_COMMITTED;
  * @see ConsumerConfig
  * @see ProducerConfig
  */
+@SuppressWarnings("deprecation")
 public class StreamsConfig extends AbstractConfig {
 
     private final static Logger log = LoggerFactory.getLogger(StreamsConfig.class);
@@ -138,6 +138,8 @@ public class StreamsConfig extends AbstractConfig {
     private final boolean eosEnabled;
     private final static long DEFAULT_COMMIT_INTERVAL_MS = 30000L;
     private final static long EOS_DEFAULT_COMMIT_INTERVAL_MS = 100L;
+
+    public final static int DUMMY_THREAD_INDEX = 1;
 
     /**
      * Prefix used to provide default topic configs to be applied when creating internal topics.
@@ -196,7 +198,7 @@ public class StreamsConfig extends AbstractConfig {
     public static final String PRODUCER_PREFIX = "producer.";
 
     /**
-     * Prefix used to isolate {@link org.apache.kafka.clients.admin.AdminClient admin} configs from other client configs.
+     * Prefix used to isolate {@link Admin admin} configs from other client configs.
      * It is recommended to use {@link #adminClientPrefix(String)} to add this prefix to {@link ProducerConfig producer
      * properties}.
      */
@@ -250,6 +252,30 @@ public class StreamsConfig extends AbstractConfig {
     public static final String UPGRADE_FROM_11 = "1.1";
 
     /**
+     * Config value for parameter {@link #UPGRADE_FROM_CONFIG "upgrade.from"} for upgrading an application from version {@code 2.0.x}.
+     */
+    @SuppressWarnings("WeakerAccess")
+    public static final String UPGRADE_FROM_20 = "2.0";
+
+    /**
+     * Config value for parameter {@link #UPGRADE_FROM_CONFIG "upgrade.from"} for upgrading an application from version {@code 2.1.x}.
+     */
+    @SuppressWarnings("WeakerAccess")
+    public static final String UPGRADE_FROM_21 = "2.1";
+
+    /**
+     * Config value for parameter {@link #UPGRADE_FROM_CONFIG "upgrade.from"} for upgrading an application from version {@code 2.2.x}.
+     */
+    @SuppressWarnings("WeakerAccess")
+    public static final String UPGRADE_FROM_22 = "2.2";
+
+    /**
+     * Config value for parameter {@link #UPGRADE_FROM_CONFIG "upgrade.from"} for upgrading an application from version {@code 2.3.x}.
+     */
+    @SuppressWarnings("WeakerAccess")
+    public static final String UPGRADE_FROM_23 = "2.3";
+
+    /**
      * Config value for parameter {@link #PROCESSING_GUARANTEE_CONFIG "processing.guarantee"} for at-least-once processing guarantees.
      */
     @SuppressWarnings("WeakerAccess")
@@ -261,15 +287,25 @@ public class StreamsConfig extends AbstractConfig {
     @SuppressWarnings("WeakerAccess")
     public static final String EXACTLY_ONCE = "exactly_once";
 
+    /**
+     * Config value for parameter {@link #BUILT_IN_METRICS_VERSION_CONFIG "built.in.metrics.version"} for built-in metrics from version 0.10.0. to 2.4
+     */
+    public static final String METRICS_0100_TO_24 = "0.10.0-2.4";
+
+    /**
+     * Config value for parameter {@link #BUILT_IN_METRICS_VERSION_CONFIG "built.in.metrics.version"} for the latest built-in metrics version.
+     */
+    public static final String METRICS_LATEST = "latest";
+
     /** {@code application.id} */
     @SuppressWarnings("WeakerAccess")
     public static final String APPLICATION_ID_CONFIG = "application.id";
     private static final String APPLICATION_ID_DOC = "An identifier for the stream processing application. Must be unique within the Kafka cluster. It is used as 1) the default client-id prefix, 2) the group-id for membership management, 3) the changelog topic prefix.";
 
-    /**{@code user.endpoint} */
+    /**{@code application.server} */
     @SuppressWarnings("WeakerAccess")
     public static final String APPLICATION_SERVER_CONFIG = "application.server";
-    private static final String APPLICATION_SERVER_DOC = "A host:port pair pointing to an embedded user defined endpoint that can be used for discovering the locations of state stores within a single KafkaStreams application";
+    private static final String APPLICATION_SERVER_DOC = "A host:port pair pointing to a user-defined endpoint that can be used for state store discovery and interactive queries on this KafkaStreams instance.";
 
     /** {@code bootstrap.servers} */
     @SuppressWarnings("WeakerAccess")
@@ -279,6 +315,10 @@ public class StreamsConfig extends AbstractConfig {
     @SuppressWarnings("WeakerAccess")
     public static final String BUFFERED_RECORDS_PER_PARTITION_CONFIG = "buffered.records.per.partition";
     private static final String BUFFERED_RECORDS_PER_PARTITION_DOC = "Maximum number of records to buffer per partition.";
+
+    /** {@code built.in.metrics.version} */
+    public static final String BUILT_IN_METRICS_VERSION_CONFIG = "built.in.metrics.version";
+    private static final String BUILT_IN_METRICS_VERSION_DOC = "Version of the built-in metrics to use.";
 
     /** {@code cache.max.bytes.buffering} */
     @SuppressWarnings("WeakerAccess")
@@ -382,11 +422,6 @@ public class StreamsConfig extends AbstractConfig {
     public static final String NUM_STREAM_THREADS_CONFIG = "num.stream.threads";
     private static final String NUM_STREAM_THREADS_DOC = "The number of threads to execute stream processing.";
 
-    /** {@code partition.grouper} */
-    @SuppressWarnings("WeakerAccess")
-    public static final String PARTITION_GROUPER_CLASS_CONFIG = "partition.grouper";
-    private static final String PARTITION_GROUPER_CLASS_DOC = "Partition grouper class that implements the <code>org.apache.kafka.streams.processor.PartitionGrouper</code> interface.";
-
     /** {@code poll.ms} */
     @SuppressWarnings("WeakerAccess")
     public static final String POLL_MS_CONFIG = "poll.ms";
@@ -449,7 +484,7 @@ public class StreamsConfig extends AbstractConfig {
     /** {@code state.dir} */
     @SuppressWarnings("WeakerAccess")
     public static final String STATE_DIR_CONFIG = "state.dir";
-    private static final String STATE_DIR_DOC = "Directory location for state store.";
+    private static final String STATE_DIR_DOC = "Directory location for state store. This path must be unique for each streams instance sharing the same underlying filesystem.";
 
     /** {@code topology.optimization} */
     public static final String TOPOLOGY_OPTIMIZATION = "topology.optimization";
@@ -458,14 +493,25 @@ public class StreamsConfig extends AbstractConfig {
     /** {@code upgrade.from} */
     @SuppressWarnings("WeakerAccess")
     public static final String UPGRADE_FROM_CONFIG = "upgrade.from";
-    private static final String UPGRADE_FROM_DOC = "Allows upgrading from versions 0.10.0/0.10.1/0.10.2/0.11.0/1.0/1.1 to version 1.2 (or newer) in a backward compatible way. " +
-        "When upgrading from 1.2 to a newer version it is not required to specify this config." +
-        "Default is null. Accepted values are \"" + UPGRADE_FROM_0100 + "\", \"" + UPGRADE_FROM_0101 + "\", \"" + UPGRADE_FROM_0102 + "\", \"" + UPGRADE_FROM_0110 + "\", \"" + UPGRADE_FROM_10 + "\", \"" + UPGRADE_FROM_11 + "\" (for upgrading from the corresponding old version).";
+    private static final String UPGRADE_FROM_DOC = "Allows upgrading in a backward compatible way. " +
+        "This is needed when upgrading from [0.10.0, 1.1] to 2.0+, or when upgrading from [2.0, 2.3] to 2.4+. " +
+        "When upgrading from 2.4 to a newer version it is not required to specify this config. " +
+        "Default is null. Accepted values are \"" + UPGRADE_FROM_0100 + "\", \"" + UPGRADE_FROM_0101 + "\", \"" + UPGRADE_FROM_0102 + "\", \"" + UPGRADE_FROM_0110 + "\", \"" + UPGRADE_FROM_10 + "\", \"" + UPGRADE_FROM_11 + "\", \"" + UPGRADE_FROM_20 + "\", \"" + UPGRADE_FROM_21 + "\", \"" + UPGRADE_FROM_22 + "\", \"" + UPGRADE_FROM_23 + "\" (for upgrading from the corresponding old version).";
 
     /** {@code windowstore.changelog.additional.retention.ms} */
     @SuppressWarnings("WeakerAccess")
     public static final String WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_CONFIG = "windowstore.changelog.additional.retention.ms";
     private static final String WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_DOC = "Added to a windows maintainMs to ensure data is not deleted from the log prematurely. Allows for clock drift. Default is 1 day";
+
+    // deprecated
+
+    /** {@code partition.grouper} */
+    @SuppressWarnings("WeakerAccess")
+    @Deprecated
+    public static final String PARTITION_GROUPER_CLASS_CONFIG = "partition.grouper";
+    private static final String PARTITION_GROUPER_CLASS_DOC = "Partition grouper class that implements the <code>org.apache.kafka.streams.processor.PartitionGrouper</code> interface." +
+        " WARNING: This config is deprecated and will be removed in 3.0.0 release.";
+
 
     private static final String[] NON_CONFIGURABLE_CONSUMER_DEFAULT_CONFIGS = new String[] {ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG};
     private static final String[] NON_CONFIGURABLE_CONSUMER_EOS_CONFIGS = new String[] {ConsumerConfig.ISOLATION_LEVEL_CONFIG};
@@ -579,6 +625,15 @@ public class StreamsConfig extends AbstractConfig {
                     1000,
                     Importance.LOW,
                     BUFFERED_RECORDS_PER_PARTITION_DOC)
+            .define(BUILT_IN_METRICS_VERSION_CONFIG,
+                    Type.STRING,
+                    METRICS_LATEST,
+                    in(
+                        METRICS_0100_TO_24,
+                        METRICS_LATEST
+                    ),
+                    Importance.LOW,
+                    BUILT_IN_METRICS_VERSION_DOC)
             .define(COMMIT_INTERVAL_MS_CONFIG,
                     Type.LONG,
                     DEFAULT_COMMIT_INTERVAL_MS,
@@ -621,7 +676,7 @@ public class StreamsConfig extends AbstractConfig {
                     CommonClientConfigs.METRICS_SAMPLE_WINDOW_MS_DOC)
             .define(PARTITION_GROUPER_CLASS_CONFIG,
                     Type.CLASS,
-                    DefaultPartitionGrouper.class.getName(),
+                    org.apache.kafka.streams.processor.DefaultPartitionGrouper.class.getName(),
                     Importance.LOW,
                     PARTITION_GROUPER_CLASS_DOC)
             .define(POLL_MS_CONFIG,
@@ -684,7 +739,17 @@ public class StreamsConfig extends AbstractConfig {
             .define(UPGRADE_FROM_CONFIG,
                     ConfigDef.Type.STRING,
                     null,
-                    in(null, UPGRADE_FROM_0100, UPGRADE_FROM_0101, UPGRADE_FROM_0102, UPGRADE_FROM_0110, UPGRADE_FROM_10, UPGRADE_FROM_11),
+                    in(null,
+                       UPGRADE_FROM_0100,
+                       UPGRADE_FROM_0101,
+                       UPGRADE_FROM_0102,
+                       UPGRADE_FROM_0110,
+                       UPGRADE_FROM_10,
+                       UPGRADE_FROM_11,
+                       UPGRADE_FROM_20,
+                       UPGRADE_FROM_21,
+                       UPGRADE_FROM_22,
+                       UPGRADE_FROM_23),
                     Importance.LOW,
                     UPGRADE_FROM_DOC)
             .define(WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_CONFIG,
@@ -731,6 +796,8 @@ public class StreamsConfig extends AbstractConfig {
 
     public static class InternalConfig {
         public static final String TASK_MANAGER_FOR_PARTITION_ASSIGNOR = "__task.manager.instance__";
+        public static final String STREAMS_METADATA_STATE_FOR_PARTITION_ASSIGNOR = "__streams.metadata.state.instance__";
+        public static final String STREAMS_ADMIN_CLIENT = "__streams.admin.client.instance__";
         public static final String ASSIGNMENT_ERROR_CODE = "__assignment.error.code__";
     }
 
@@ -841,6 +908,9 @@ public class StreamsConfig extends AbstractConfig {
                             final boolean doLog) {
         super(CONFIG, props, doLog);
         eosEnabled = EXACTLY_ONCE.equals(getString(PROCESSING_GUARANTEE_CONFIG));
+        if (props.containsKey(PARTITION_GROUPER_CLASS_CONFIG)) {
+            log.warn("Configuration parameter `{}` is deprecated and will be removed in 3.0.0 release.", PARTITION_GROUPER_CLASS_CONFIG);
+        }
     }
 
     @Override
@@ -943,12 +1013,12 @@ public class StreamsConfig extends AbstractConfig {
      * @param groupId      consumer groupId
      * @param clientId     clientId
      * @return Map of the consumer configuration.
-     * @deprecated use {@link StreamsConfig#getMainConsumerConfigs(String, String)}
+     * @deprecated use {@link StreamsConfig#getMainConsumerConfigs(String, String, int)}
      */
     @SuppressWarnings("WeakerAccess")
     @Deprecated
     public Map<String, Object> getConsumerConfigs(final String groupId, final String clientId) {
-        return getMainConsumerConfigs(groupId, clientId);
+        return getMainConsumerConfigs(groupId, clientId, DUMMY_THREAD_INDEX);
     }
 
     /**
@@ -963,10 +1033,11 @@ public class StreamsConfig extends AbstractConfig {
      *
      * @param groupId      consumer groupId
      * @param clientId     clientId
+     * @param threadIdx    stream thread index
      * @return Map of the consumer configuration.
      */
     @SuppressWarnings("WeakerAccess")
-    public Map<String, Object> getMainConsumerConfigs(final String groupId, final String clientId) {
+    public Map<String, Object> getMainConsumerConfigs(final String groupId, final String clientId, final int threadIdx) {
         final Map<String, Object> consumerProps = getCommonConsumerConfigs();
 
         // Get main consumer override configs
@@ -977,9 +1048,15 @@ public class StreamsConfig extends AbstractConfig {
 
         // this is a hack to work around StreamsConfig constructor inside StreamsPartitionAssignor to avoid casting
         consumerProps.put(APPLICATION_ID_CONFIG, groupId);
-        // add client id with stream client id prefix, and group id
+
+        // add group id, client id with stream client id prefix, and group instance id
         consumerProps.put(ConsumerConfig.GROUP_ID_CONFIG, groupId);
         consumerProps.put(CommonClientConfigs.CLIENT_ID_CONFIG, clientId);
+        final String groupInstanceId = (String) consumerProps.get(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG);
+        // Suffix each thread consumer with thread.id to enforce uniqueness of group.instance.id.
+        if (groupInstanceId != null) {
+            consumerProps.put(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG, groupInstanceId + "-" + threadIdx);
+        }
 
         // add configs required for stream partition assignor
         consumerProps.put(UPGRADE_FROM_CONFIG, getString(UPGRADE_FROM_CONFIG));
@@ -988,6 +1065,9 @@ public class StreamsConfig extends AbstractConfig {
         consumerProps.put(NUM_STANDBY_REPLICAS_CONFIG, getInt(NUM_STANDBY_REPLICAS_CONFIG));
         consumerProps.put(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG, StreamsPartitionAssignor.class.getName());
         consumerProps.put(WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_CONFIG, getLong(WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_CONFIG));
+
+        // disable auto topic creation
+        consumerProps.put(ConsumerConfig.ALLOW_AUTO_CREATE_TOPICS_CONFIG, "false");
 
         // add admin retries configs for creating topics
         final AdminClientConfig adminClientDefaultConfig = new AdminClientConfig(getClientPropsWithPrefix(ADMIN_CLIENT_PREFIX, AdminClientConfig.configNames()));
@@ -1107,7 +1187,7 @@ public class StreamsConfig extends AbstractConfig {
     }
 
     /**
-     * Get the configs for the {@link org.apache.kafka.clients.admin.AdminClient admin client}.
+     * Get the configs for the {@link Admin admin client}.
      * @param clientId clientId
      * @return Map of the admin client configuration.
      */
@@ -1227,6 +1307,6 @@ public class StreamsConfig extends AbstractConfig {
     }
 
     public static void main(final String[] args) {
-        System.out.println(CONFIG.toHtmlTable());
+        System.out.println(CONFIG.toHtml());
     }
 }

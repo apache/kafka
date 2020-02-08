@@ -496,7 +496,7 @@ public class RepartitionTopicNamingTest {
         mappedStream.filter((k, v) -> k.equals("A"))
                 .join(countStream, (v1, v2) -> v1 + ":" + v2.toString(),
                         JoinWindows.of(Duration.ofMillis(5000L)),
-                        Joined.with(Serdes.String(), Serdes.String(), Serdes.Long(), fourthRepartitionTopicName))
+                        StreamJoined.with(Serdes.String(), Serdes.String(), Serdes.Long()).withStoreName(fourthRepartitionTopicName).withName(fourthRepartitionTopicName))
                 .to(JOINED_TOPIC);
 
         final Properties properties = new Properties();
@@ -698,6 +698,4 @@ public class RepartitionTopicNamingTest {
             "      <-- KSTREAM-REDUCE-0000000023\n" +
             "    Sink: KSTREAM-SINK-0000000028 (topic: outputTopic_2, keySerde: StringSerializer, valueSerde: StringSerializer)\n" +
             "      <-- KTABLE-TOSTREAM-0000000027\n\n";
-
-
 }

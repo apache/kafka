@@ -55,7 +55,7 @@ object EndToEndClusterIdTest {
 
   class MockConsumerMetricsReporter extends MockMetricsReporter with ClusterResourceListener {
 
-    override def onUpdate(clusterMetadata: ClusterResource) {
+    override def onUpdate(clusterMetadata: ClusterResource): Unit = {
       MockConsumerMetricsReporter.CLUSTER_META.set(clusterMetadata)
     }
   }
@@ -66,7 +66,7 @@ object EndToEndClusterIdTest {
 
   class MockProducerMetricsReporter extends MockMetricsReporter with ClusterResourceListener {
 
-    override def onUpdate(clusterMetadata: ClusterResource) {
+    override def onUpdate(clusterMetadata: ClusterResource): Unit = {
       MockProducerMetricsReporter.CLUSTER_META.set(clusterMetadata)
     }
   }
@@ -77,7 +77,7 @@ object EndToEndClusterIdTest {
 
   class MockBrokerMetricsReporter extends MockMetricsReporter with ClusterResourceListener {
 
-    override def onUpdate(clusterMetadata: ClusterResource) {
+    override def onUpdate(clusterMetadata: ClusterResource): Unit = {
       MockBrokerMetricsReporter.CLUSTER_META.set(clusterMetadata)
     }
   }
@@ -107,7 +107,7 @@ class EndToEndClusterIdTest extends KafkaServerTestHarness {
   }
 
   @Before
-  override def setUp() {
+  override def setUp(): Unit = {
     super.setUp()
     MockDeserializer.resetStaticVariables
     // create the consumer offset topic
@@ -115,7 +115,7 @@ class EndToEndClusterIdTest extends KafkaServerTestHarness {
   }
 
   @Test
-  def testEndToEnd() {
+  def testEndToEnd(): Unit = {
     val appendStr = "mock"
     MockConsumerInterceptor.resetCounters()
     MockProducerInterceptor.resetCounters()
@@ -183,7 +183,7 @@ class EndToEndClusterIdTest extends KafkaServerTestHarness {
     MockProducerInterceptor.resetCounters()
   }
 
-  private def sendRecords(producer: KafkaProducer[Array[Byte], Array[Byte]], numRecords: Int, tp: TopicPartition) {
+  private def sendRecords(producer: KafkaProducer[Array[Byte], Array[Byte]], numRecords: Int, tp: TopicPartition): Unit = {
     val futures = (0 until numRecords).map { i =>
       val record = new ProducerRecord(tp.topic(), tp.partition(), s"$i".getBytes, s"$i".getBytes)
       debug(s"Sending this record: $record")
@@ -200,7 +200,7 @@ class EndToEndClusterIdTest extends KafkaServerTestHarness {
                              numRecords: Int,
                              startingOffset: Int = 0,
                              topic: String = topic,
-                             part: Int = part) {
+                             part: Int = part): Unit = {
     val records = TestUtils.consumeRecords(consumer, numRecords)
 
     for (i <- 0 until numRecords) {

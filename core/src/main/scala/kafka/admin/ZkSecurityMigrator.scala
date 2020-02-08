@@ -17,9 +17,8 @@
 
 package kafka.admin
 
-import kafka.utils.{CommandDefaultOptions, CommandLineUtils, Logging}
-import kafka.zk.{KafkaZkClient, ZkData, ZkSecurityMigratorUtils}
-import org.I0Itec.zkclient.exception.ZkException
+import kafka.utils.{CommandDefaultOptions, CommandLineUtils, Exit, Logging}
+import kafka.zk.{ControllerZNode, KafkaZkClient, ZkData, ZkSecurityMigratorUtils}
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.utils.Time
 import org.apache.zookeeper.AsyncCallback.{ChildrenCallback, StatCallback}
@@ -62,7 +61,7 @@ object ZkSecurityMigrator extends Logging {
                       + "znodes as part of the process of setting up ZooKeeper "
                       + "authentication.")
 
-  def run(args: Array[String]) {
+  def run(args: Array[String]): Unit = {
     val jaasFile = System.getProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM)
     val opts = new ZkSecurityMigratorOptions(args)
 
@@ -96,11 +95,12 @@ object ZkSecurityMigrator extends Logging {
     val zkConnectionTimeout = opts.options.valueOf(opts.zkConnectionTimeoutOpt).intValue
     val zkClient = KafkaZkClient(zkUrl, zkAcl, zkSessionTimeout, zkConnectionTimeout,
       Int.MaxValue, Time.SYSTEM)
+    val enablePathCheck = opts.options.has(opts.enablePathCheckOpt)
     val migrator = new ZkSecurityMigrator(zkClient)
-    migrator.run()
+    migrator.run(enablePathCheck)
   }
 
-  def main(args: Array[String]) {
+  def main(args: Array[String]): Unit = {
     try {
       run(args)
     } catch {
@@ -119,6 +119,8 @@ object ZkSecurityMigrator extends Logging {
       withRequiredArg().ofType(classOf[java.lang.Integer]).defaultsTo(30000)
     val zkConnectionTimeoutOpt = parser.accepts("zookeeper.connection.timeout", "Sets the ZooKeeper connection timeout.").
       withRequiredArg().ofType(classOf[java.lang.Integer]).defaultsTo(30000)
+    val enablePathCheckOpt = parser.accepts("enable.path.check", "Checks if all the root paths exist in ZooKeeper " +
+      "before migration. If not, exit the command.")
     options = parser.parse(args : _*)
   }
 }
@@ -160,7 +162,7 @@ class ZkSecurityMigrator(zkClient: KafkaZkClient) extends Logging {
     def processResult(rc: Int,
                       path: String,
                       ctx: Object,
-                      children: java.util.List[String]) {
+                      children: java.util.List[String]): Unit = {
       val zkHandle = zkSecurityMigratorUtils.currentZooKeeper
       val promise = ctx.asInstanceOf[Promise[String]]
       Code.get(rc) match {
@@ -182,10 +184,10 @@ class ZkSecurityMigrator(zkClient: KafkaZkClient) extends Logging {
           // Starting a new session isn't really a problem, but it'd complicate
           // the logic of the tool, so we quit and let the user re-run it.
           System.out.println("ZooKeeper session expired while changing ACLs")
-          promise failure ZkException.create(KeeperException.create(Code.get(rc)))
+          promise failure KeeperException.create(Code.get(rc))
         case _ =>
           System.out.println("Unexpected return code: %d".format(rc))
-          promise failure ZkException.create(KeeperException.create(Code.get(rc)))
+          promise failure KeeperException.create(Code.get(rc))
       }
     }
   }
@@ -194,7 +196,7 @@ class ZkSecurityMigrator(zkClient: KafkaZkClient) extends Logging {
     def processResult(rc: Int,
                       path: String,
                       ctx: Object,
-                      stat: Stat) {
+                      stat: Stat): Unit = {
       val zkHandle = zkSecurityMigratorUtils.currentZooKeeper
       val promise = ctx.asInstanceOf[Promise[String]]
 
@@ -211,21 +213,26 @@ class ZkSecurityMigrator(zkClient: KafkaZkClient) extends Logging {
           // Starting a new session isn't really a problem, but it'd complicate
           // the logic of the tool, so we quit and let the user re-run it.
           System.out.println("ZooKeeper session expired while changing ACLs")
-          promise failure ZkException.create(KeeperException.create(Code.get(rc)))
+          promise failure KeeperException.create(Code.get(rc))
         case _ =>
           System.out.println("Unexpected return code: %d".format(rc))
-          promise failure ZkException.create(KeeperException.create(Code.get(rc)))
+          promise failure KeeperException.create(Code.get(rc))
       }
     }
   }
 
-  private def run(): Unit = {
+  private def run(enablePathCheck: Boolean): Unit = {
     try {
       setAclIndividually("/")
+      checkPathExistenceAndMaybeExit(enablePathCheck)
       for (path <- ZkData.SecureRootPaths) {
         debug("Going to set ACL for %s".format(path))
-        zkClient.makeSurePersistentPathExists(path)
-        setAclsRecursively(path)
+        if (path == ControllerZNode.path && !zkClient.pathExists(path)) {
+          debug("Ignoring to set ACL for %s, because it doesn't exist".format(path))
+        } else {
+          zkClient.makeSurePersistentPathExists(path)
+          setAclsRecursively(path)
+        }
       }
 
       @tailrec
@@ -245,6 +252,18 @@ class ZkSecurityMigrator(zkClient: KafkaZkClient) extends Logging {
 
     } finally {
       zkClient.close
+    }
+  }
+
+  private def checkPathExistenceAndMaybeExit(enablePathCheck: Boolean): Unit = {
+    val nonExistingSecureRootPaths = ZkData.SecureRootPaths.filterNot(zkClient.pathExists)
+    if (nonExistingSecureRootPaths.nonEmpty) {
+      println(s"Warning: The following secure root paths do not exist in ZooKeeper: ${nonExistingSecureRootPaths.mkString(",")}")
+      println("That might be due to an incorrect chroot is specified when executing the command.")
+      if (enablePathCheck) {
+        println("Exit the command.")
+        Exit.exit(0)
+      }
     }
   }
 }

@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
@@ -63,6 +64,7 @@ public class FetchRequest extends AbstractRequest {
                     "consumers to discard ABORTED transactional records");
     private static final Field.Int32 SESSION_ID = new Field.Int32("session_id", "The fetch session ID");
     private static final Field.Int32 SESSION_EPOCH = new Field.Int32("session_epoch", "The fetch session epoch");
+    private static final Field.Str RACK_ID = new Field.Str("rack_id", "The consumer's rack id");
 
     // topic level fields
     private static final Field.ComplexArray PARTITIONS = new Field.ComplexArray("partitions",
@@ -194,10 +196,23 @@ public class FetchRequest extends AbstractRequest {
     // V10 bumped up to indicate ZStandard capability. (see KIP-110)
     private static final Schema FETCH_REQUEST_V10 = FETCH_REQUEST_V9;
 
+    // V11 added rack ID to support read from followers (KIP-392)
+    private static final Schema FETCH_REQUEST_V11 = new Schema(
+            REPLICA_ID,
+            MAX_WAIT_TIME,
+            MIN_BYTES,
+            MAX_BYTES,
+            ISOLATION_LEVEL,
+            SESSION_ID,
+            SESSION_EPOCH,
+            FETCH_REQUEST_TOPIC_V9,
+            FORGOTTEN_TOPIC_DATA_V7,
+            RACK_ID);
+
     public static Schema[] schemaVersions() {
         return new Schema[]{FETCH_REQUEST_V0, FETCH_REQUEST_V1, FETCH_REQUEST_V2, FETCH_REQUEST_V3, FETCH_REQUEST_V4,
             FETCH_REQUEST_V5, FETCH_REQUEST_V6, FETCH_REQUEST_V7, FETCH_REQUEST_V8, FETCH_REQUEST_V9,
-            FETCH_REQUEST_V10};
+            FETCH_REQUEST_V10, FETCH_REQUEST_V11};
     }
 
     // default values for older versions where a request level limit did not exist
@@ -217,6 +232,7 @@ public class FetchRequest extends AbstractRequest {
 
     private final List<TopicPartition> toForget;
     private final FetchMetadata metadata;
+    private final String rackId;
 
     public static final class PartitionData {
         public final long fetchOffset;
@@ -290,6 +306,7 @@ public class FetchRequest extends AbstractRequest {
         private int maxBytes = DEFAULT_RESPONSE_MAX_BYTES;
         private FetchMetadata metadata = FetchMetadata.LEGACY;
         private List<TopicPartition> toForget = Collections.emptyList();
+        private String rackId = "";
 
         public static Builder forConsumer(int maxWait, int minBytes, Map<TopicPartition, PartitionData> fetchData) {
             return new Builder(ApiKeys.FETCH.oldestVersion(), ApiKeys.FETCH.latestVersion(),
@@ -320,6 +337,11 @@ public class FetchRequest extends AbstractRequest {
             return this;
         }
 
+        public Builder rackId(String rackId) {
+            this.rackId = rackId;
+            return this;
+        }
+
         public Map<TopicPartition, PartitionData> fetchData() {
             return this.fetchData;
         }
@@ -345,7 +367,7 @@ public class FetchRequest extends AbstractRequest {
             }
 
             return new FetchRequest(version, replicaId, maxWait, minBytes, maxBytes, fetchData,
-                isolationLevel, toForget, metadata);
+                isolationLevel, toForget, metadata, rackId);
         }
 
         @Override
@@ -360,6 +382,7 @@ public class FetchRequest extends AbstractRequest {
                     append(", isolationLevel=").append(isolationLevel).
                     append(", toForget=").append(Utils.join(toForget, ", ")).
                     append(", metadata=").append(metadata).
+                    append(", rackId=").append(rackId).
                     append(")");
             return bld.toString();
         }
@@ -367,7 +390,7 @@ public class FetchRequest extends AbstractRequest {
 
     private FetchRequest(short version, int replicaId, int maxWait, int minBytes, int maxBytes,
                          Map<TopicPartition, PartitionData> fetchData, IsolationLevel isolationLevel,
-                         List<TopicPartition> toForget, FetchMetadata metadata) {
+                         List<TopicPartition> toForget, FetchMetadata metadata, String rackId) {
         super(ApiKeys.FETCH, version);
         this.replicaId = replicaId;
         this.maxWait = maxWait;
@@ -377,6 +400,7 @@ public class FetchRequest extends AbstractRequest {
         this.isolationLevel = isolationLevel;
         this.toForget = toForget;
         this.metadata = metadata;
+        this.rackId = rackId;
     }
 
     public FetchRequest(Struct struct, short version) {
@@ -421,6 +445,7 @@ public class FetchRequest extends AbstractRequest {
                 fetchData.put(new TopicPartition(topic, partition), partitionData);
             }
         }
+        rackId = struct.getOrElse(RACK_ID, "");
     }
 
     @Override
@@ -436,7 +461,7 @@ public class FetchRequest extends AbstractRequest {
         for (Map.Entry<TopicPartition, PartitionData> entry : fetchData.entrySet()) {
             FetchResponse.PartitionData<MemoryRecords> partitionResponse = new FetchResponse.PartitionData<>(error,
                 FetchResponse.INVALID_HIGHWATERMARK, FetchResponse.INVALID_LAST_STABLE_OFFSET,
-                FetchResponse.INVALID_LOG_START_OFFSET, null, MemoryRecords.EMPTY);
+                FetchResponse.INVALID_LOG_START_OFFSET, Optional.empty(), null, MemoryRecords.EMPTY);
             responseData.put(entry.getKey(), partitionResponse);
         }
         return new FetchResponse<>(error, responseData, throttleTimeMs, metadata.sessionId());
@@ -476,6 +501,10 @@ public class FetchRequest extends AbstractRequest {
 
     public FetchMetadata metadata() {
         return metadata;
+    }
+
+    public String rackId() {
+        return rackId;
     }
 
     public static FetchRequest parse(ByteBuffer buffer, short version) {
@@ -530,6 +559,7 @@ public class FetchRequest extends AbstractRequest {
             }
             struct.set(FORGOTTEN_TOPICS, toForgetStructs.toArray());
         }
+        struct.setIfExists(RACK_ID, rackId);
         return struct;
     }
 }

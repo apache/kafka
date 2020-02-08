@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.processor;
 
-import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.StreamsMetrics;
@@ -29,7 +28,6 @@ import java.util.Map;
 /**
  * Processor context interface.
  */
-@InterfaceStability.Evolving
 public interface ProcessorContext {
 
     /**

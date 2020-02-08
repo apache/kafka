@@ -51,7 +51,7 @@ import org.apache.kafka.common.record.RecordBatch
  */
 // Avoid shadowing mutable file in AbstractIndex
 class TimeIndex(_file: File, baseOffset: Long, maxIndexSize: Int = -1, writable: Boolean = true)
-    extends AbstractIndex[Long, Long](_file, baseOffset, maxIndexSize, writable) {
+    extends AbstractIndex(_file, baseOffset, maxIndexSize, writable) {
   import TimeIndex._
 
   @volatile private var _lastEntry = lastEntryFromIndexFile
@@ -110,7 +110,7 @@ class TimeIndex(_file: File, baseOffset: Long, maxIndexSize: Int = -1, writable:
    * @param skipFullCheck To skip checking whether the segment is full or not. We only skip the check when the segment
    *                      gets rolled or the segment is closed.
    */
-  def maybeAppend(timestamp: Long, offset: Long, skipFullCheck: Boolean = false) {
+  def maybeAppend(timestamp: Long, offset: Long, skipFullCheck: Boolean = false): Unit = {
     inLock(lock) {
       if (!skipFullCheck)
         require(!isFull, "Attempt to append to a full time index (size = " + _entries + ").")
@@ -165,7 +165,7 @@ class TimeIndex(_file: File, baseOffset: Long, maxIndexSize: Int = -1, writable:
    * Remove all entries from the index which have an offset greater than or equal to the given offset.
    * Truncating to an offset larger than the largest in the index has no effect.
    */
-  override def truncateTo(offset: Long) {
+  override def truncateTo(offset: Long): Unit = {
     inLock(lock) {
       val idx = mmap.duplicate
       val slot = largestLowerBoundSlotFor(idx, offset, IndexSearchType.VALUE)
@@ -199,7 +199,7 @@ class TimeIndex(_file: File, baseOffset: Long, maxIndexSize: Int = -1, writable:
   /**
    * Truncates index to a known number of entries.
    */
-  private def truncateToEntries(entries: Int) {
+  private def truncateToEntries(entries: Int): Unit = {
     inLock(lock) {
       _entries = entries
       mmap.position(_entries * entrySize)
@@ -208,7 +208,7 @@ class TimeIndex(_file: File, baseOffset: Long, maxIndexSize: Int = -1, writable:
     }
   }
 
-  override def sanityCheck() {
+  override def sanityCheck(): Unit = {
     val lastTimestamp = lastEntry.timestamp
     val lastOffset = lastEntry.offset
     if (_entries != 0 && lastTimestamp < timestamp(mmap, 0))
@@ -226,38 +226,4 @@ class TimeIndex(_file: File, baseOffset: Long, maxIndexSize: Int = -1, writable:
 
 object TimeIndex extends Logging {
   override val loggerName: String = classOf[TimeIndex].getName
-}
-
-
-
-/**
-  * A thin wrapper on top of the raw TimeIndex object to avoid initialization on construction. This defers the TimeIndex
-  * initialization to the time it gets accessed so the cost of the heavy memory mapped operation gets amortized over time.
-  *
-  * Combining with skipping sanity check for safely flushed segments, the startup time of a broker can be reduced, especially
-  * for the the broker with a lot of log segments
-  *
-  */
-class LazyTimeIndex(@volatile private var _file: File, baseOffset: Long, maxIndexSize: Int = -1, writable: Boolean = true) {
-  @volatile private var timeIndex: Option[TimeIndex] = None
-
-  def file: File = {
-    if (timeIndex.isDefined)
-      timeIndex.get.file
-    else
-      _file
-  }
-
-  def file_=(f: File) {
-    if (timeIndex.isDefined)
-      timeIndex.get.file = f
-    else
-      _file = f
-  }
-
-  def get: TimeIndex = {
-    if (timeIndex.isEmpty)
-      timeIndex = Some(new TimeIndex(_file, baseOffset, maxIndexSize, writable))
-    timeIndex.get
-  }
 }

@@ -19,15 +19,18 @@ package org.apache.kafka.streams.kstream.internals;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.streams.KeyValueTimestamp;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.KStream;
-import org.apache.kafka.streams.test.ConsumerRecordFactory;
+import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.junit.Test;
 
+import java.time.Duration;
+import java.time.Instant;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
@@ -36,8 +39,6 @@ import static org.junit.Assert.assertEquals;
 
 public class KStreamSelectKeyTest {
     private final String topicName = "topic_key_select";
-    private final ConsumerRecordFactory<String, Integer> recordFactory =
-        new ConsumerRecordFactory<>(topicName, new StringSerializer(), new IntegerSerializer(), 0L);
     private final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.String(), Serdes.Integer());
 
     @Test
@@ -49,7 +50,9 @@ public class KStreamSelectKeyTest {
         keyMap.put(2, "TWO");
         keyMap.put(3, "THREE");
 
-        final String[] expected = new String[]{"ONE:1 (ts: 0)", "TWO:2 (ts: 0)", "THREE:3 (ts: 0)"};
+        final KeyValueTimestamp[] expected = new KeyValueTimestamp[]{new KeyValueTimestamp<>("ONE", 1, 0),
+            new KeyValueTimestamp<>("TWO", 2, 0),
+            new KeyValueTimestamp<>("THREE", 3, 0)};
         final int[] expectedValues = new int[]{1, 2, 3};
 
         final KStream<String, Integer>  stream =
@@ -58,8 +61,10 @@ public class KStreamSelectKeyTest {
         stream.selectKey((key, value) -> keyMap.get(value)).process(supplier);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+            final TestInputTopic<String, Integer> inputTopic =
+                    driver.createInputTopic(topicName, new StringSerializer(), new IntegerSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             for (final int expectedValue : expectedValues) {
-                driver.pipeInput(recordFactory.create(expectedValue));
+                inputTopic.pipeInput(expectedValue);
             }
         }
 

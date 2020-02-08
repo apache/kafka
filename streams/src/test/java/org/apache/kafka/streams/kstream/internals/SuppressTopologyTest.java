@@ -47,10 +47,10 @@ public class SuppressTopologyTest {
         "    Source: KSTREAM-SOURCE-0000000000 (topics: [input], keySerde: StringDeserializer, valueSerde: StringDeserializer)\n" +
         "      --> KSTREAM-KEY-SELECT-0000000001\n" +
         "    Processor: KSTREAM-KEY-SELECT-0000000001 (stores: [])\n" +
-        "      --> KSTREAM-FILTER-0000000004\n" +
+        "      --> counts-repartition-filter\n" +
         "      <-- KSTREAM-SOURCE-0000000000\n" +
-        "    Processor: KSTREAM-FILTER-0000000004 (stores: [])\n" +
-        "      --> KSTREAM-SINK-0000000003\n" +
+        "    Processor: counts-repartition-filter (stores: [])\n" +
+        "      --> counts-repartition-sink\n" +
         "      <-- KSTREAM-KEY-SELECT-0000000001\n" +
         "    Sink: KSTREAM-SINK-0000000003 (topic: counts-repartition, keySerde: StringSerializer, valueSerde: StringSerializer)\n" +
         "      <-- KSTREAM-FILTER-0000000004\n" +
@@ -79,10 +79,10 @@ public class SuppressTopologyTest {
         "    Source: KSTREAM-SOURCE-0000000000 (topics: [input], keySerde: StringDeserializer, valueSerde: StringDeserializer)\n" +
         "      --> KSTREAM-KEY-SELECT-0000000001\n" +
         "    Processor: KSTREAM-KEY-SELECT-0000000001 (stores: [])\n" +
-        "      --> KSTREAM-FILTER-0000000004\n" +
+        "      --> counts-repartition-filter\n" +
         "      <-- KSTREAM-SOURCE-0000000000\n" +
-        "    Processor: KSTREAM-FILTER-0000000004 (stores: [])\n" +
-        "      --> KSTREAM-SINK-0000000003\n" +
+        "    Processor: counts-repartition-filter (stores: [])\n" +
+        "      --> counts-repartition-sink\n" +
         "      <-- KSTREAM-KEY-SELECT-0000000001\n" +
         "    Sink: KSTREAM-SINK-0000000003 (topic: counts-repartition, keySerde: StringSerializer, valueSerde: StringSerializer)\n" +
         "      <-- KSTREAM-FILTER-0000000004\n" +
@@ -92,8 +92,8 @@ public class SuppressTopologyTest {
         "      --> KSTREAM-AGGREGATE-0000000002\n" +
         "    Processor: KSTREAM-AGGREGATE-0000000002 (stores: [(counts, serdes: [StringSerde, LongSerde])])\n" +
         "      --> KTABLE-SUPPRESS-0000000006\n" +
-        "      <-- KSTREAM-SOURCE-0000000005\n" +
-        "    Processor: KTABLE-SUPPRESS-0000000006 (stores: [(KTABLE-SUPPRESS-STATE-STORE-0000000007, serdes: [SessionWindowedSerde, FullChangeSerde])])\n" +
+        "      <-- counts-repartition-source\n" +
+        "    Processor: KTABLE-SUPPRESS-0000000006 (stores: [KTABLE-SUPPRESS-STATE-STORE-0000000007])\n" +
         "      --> KTABLE-TOSTREAM-0000000008\n" +
         "      <-- KSTREAM-AGGREGATE-0000000002\n" +
         "    Processor: KTABLE-TOSTREAM-0000000008 (stores: [])\n" +

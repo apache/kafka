@@ -61,6 +61,8 @@ abstract class AbstractConsumerTest extends BaseRequestTest {
   this.consumerConfig.setProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
   this.consumerConfig.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false")
   this.consumerConfig.setProperty(ConsumerConfig.METADATA_MAX_AGE_CONFIG, "100")
+  this.consumerConfig.setProperty(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, "6000")
+
 
   override protected def brokerPropertyOverrides(properties: Properties): Unit = {
     properties.setProperty(KafkaConfig.ControlledShutdownEnableProp, "false") // speed up shutdown
@@ -72,7 +74,7 @@ abstract class AbstractConsumerTest extends BaseRequestTest {
   }
 
   @Before
-  override def setUp() {
+  override def setUp(): Unit = {
     super.setUp()
 
     // create the test topic with all the brokers as replicas
@@ -83,12 +85,12 @@ abstract class AbstractConsumerTest extends BaseRequestTest {
     var callsToAssigned = 0
     var callsToRevoked = 0
 
-    def onPartitionsAssigned(partitions: java.util.Collection[TopicPartition]) {
+    def onPartitionsAssigned(partitions: java.util.Collection[TopicPartition]): Unit = {
       info("onPartitionsAssigned called.")
       callsToAssigned += 1
     }
 
-    def onPartitionsRevoked(partitions: java.util.Collection[TopicPartition]) {
+    def onPartitionsRevoked(partitions: java.util.Collection[TopicPartition]): Unit = {
       info("onPartitionsRevoked called.")
       callsToRevoked += 1
     }
@@ -119,7 +121,7 @@ abstract class AbstractConsumerTest extends BaseRequestTest {
                                         startingTimestamp: Long = 0L,
                                         timestampType: TimestampType = TimestampType.CREATE_TIME,
                                         tp: TopicPartition = tp,
-                                        maxPollRecords: Int = Int.MaxValue) {
+                                        maxPollRecords: Int = Int.MaxValue): Unit = {
     val records = consumeRecords(consumer, numRecords, maxPollRecords = maxPollRecords)
     val now = System.currentTimeMillis()
     for (i <- 0 until numRecords) {
@@ -332,28 +334,28 @@ abstract class AbstractConsumerTest extends BaseRequestTest {
     @volatile var thrownException: Option[Throwable] = None
     @volatile var receivedMessages = 0
 
-    @volatile private var partitionAssignment: Set[TopicPartition] = partitionsToAssign
+    private val partitionAssignment = mutable.Set[TopicPartition]()
     @volatile private var subscriptionChanged = false
     private var topicsSubscription = topicsToSubscribe
 
     val rebalanceListener: ConsumerRebalanceListener = new ConsumerRebalanceListener {
       override def onPartitionsAssigned(partitions: util.Collection[TopicPartition]) = {
-        partitionAssignment = collection.immutable.Set(consumer.assignment().asScala.toArray: _*)
+        partitionAssignment ++= partitions.toArray(new Array[TopicPartition](0))
       }
 
       override def onPartitionsRevoked(partitions: util.Collection[TopicPartition]) = {
-        partitionAssignment = Set.empty[TopicPartition]
+        partitionAssignment --= partitions.toArray(new Array[TopicPartition](0))
       }
     }
 
-    if (partitionAssignment.isEmpty) {
+    if (partitionsToAssign.isEmpty) {
       consumer.subscribe(topicsToSubscribe.asJava, rebalanceListener)
     } else {
-      consumer.assign(partitionAssignment.asJava)
+      consumer.assign(partitionsToAssign.asJava)
     }
 
     def consumerAssignment(): Set[TopicPartition] = {
-      partitionAssignment
+      partitionAssignment.toSet
     }
 
     /**
@@ -422,7 +424,7 @@ abstract class AbstractConsumerTest extends BaseRequestTest {
     }
 
     // make sure that sum of all partitions to all consumers equals total number of partitions
-    val totalPartitionsInAssignments = (0 /: assignments) (_ + _.size)
+    val totalPartitionsInAssignments = assignments.foldLeft(0)(_ + _.size)
     if (totalPartitionsInAssignments != partitions.size) {
       // either same partitions got assigned to more than one consumer or some
       // partitions were not assigned
@@ -432,7 +434,7 @@ abstract class AbstractConsumerTest extends BaseRequestTest {
     // The above checks could miss the case where one or more partitions were assigned to more
     // than one consumer and the same number of partitions were missing from assignments.
     // Make sure that all unique assignments are the same as 'partitions'
-    val uniqueAssignedPartitions = (Set[TopicPartition]() /: assignments) (_ ++ _)
+    val uniqueAssignedPartitions = assignments.foldLeft(Set.empty[TopicPartition])(_ ++ _)
     uniqueAssignedPartitions == partitions
   }
 

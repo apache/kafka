@@ -24,7 +24,7 @@ import java.nio.ByteBuffer;
 import java.util.Map;
 import java.util.Objects;
 
-class ValueAndTimestampSerializer<V> implements Serializer<ValueAndTimestamp<V>> {
+public class ValueAndTimestampSerializer<V> implements Serializer<ValueAndTimestamp<V>> {
     public final Serializer<V> valueSerializer;
     private final Serializer<Long> timestampSerializer;
 
@@ -57,6 +57,16 @@ class ValueAndTimestampSerializer<V> implements Serializer<ValueAndTimestamp<V>>
             return null;
         }
         final byte[] rawValue = valueSerializer.serialize(topic, data);
+
+        // Since we can't control the result of the internal serializer, we make sure that the result
+        // is not null as well.
+        // Serializing non-null values to null can be useful when working with Optional-like values
+        // where the Optional.empty case is serialized to null.
+        // See the discussion here: https://github.com/apache/kafka/pull/7679
+        if (rawValue == null) {
+            return null;
+        }
+
         final byte[] rawTimestamp = timestampSerializer.serialize(topic, timestamp);
         return ByteBuffer
             .allocate(rawTimestamp.length + rawValue.length)

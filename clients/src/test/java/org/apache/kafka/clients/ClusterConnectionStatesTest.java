@@ -310,4 +310,15 @@ public class ClusterConnectionStatesTest {
 
         assertNotSame(addr1, addr2);
     }
+
+    @Test
+    public void testIsPreparingConnection() {
+        assertFalse(connectionStates.isPreparingConnection(nodeId1));
+        connectionStates.connecting(nodeId1, time.milliseconds(), "localhost", ClientDnsLookup.DEFAULT);
+        assertTrue(connectionStates.isPreparingConnection(nodeId1));
+        connectionStates.checkingApiVersions(nodeId1);
+        assertTrue(connectionStates.isPreparingConnection(nodeId1));
+        connectionStates.disconnected(nodeId1, time.milliseconds());
+        assertFalse(connectionStates.isPreparingConnection(nodeId1));
+    }
 }

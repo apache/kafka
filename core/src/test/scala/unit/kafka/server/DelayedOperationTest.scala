@@ -27,6 +27,9 @@ import kafka.utils.TestUtils
 import org.apache.kafka.common.utils.Time
 import org.junit.{After, Before, Test}
 import org.junit.Assert._
+import org.scalatest.Assertions.intercept
+
+import scala.collection.JavaConverters._
 
 class DelayedOperationTest {
 
@@ -34,19 +37,19 @@ class DelayedOperationTest {
   var executorService: ExecutorService = null
 
   @Before
-  def setUp() {
+  def setUp(): Unit = {
     purgatory = DelayedOperationPurgatory[MockDelayedOperation](purgatoryName = "mock")
   }
 
   @After
-  def tearDown() {
+  def tearDown(): Unit = {
     purgatory.shutdown()
     if (executorService != null)
       executorService.shutdown()
   }
 
   @Test
-  def testRequestSatisfaction() {
+  def testRequestSatisfaction(): Unit = {
     val r1 = new MockDelayedOperation(100000L)
     val r2 = new MockDelayedOperation(100000L)
     assertEquals("With no waiting requests, nothing should be satisfied", 0, purgatory.checkAndComplete("test1"))
@@ -63,7 +66,7 @@ class DelayedOperationTest {
   }
 
   @Test
-  def testRequestExpiry() {
+  def testRequestExpiry(): Unit = {
     val expiration = 20L
     val start = Time.SYSTEM.hiResClockMs
     val r1 = new MockDelayedOperation(expiration)
@@ -78,7 +81,69 @@ class DelayedOperationTest {
   }
 
   @Test
-  def testRequestPurge() {
+  def testDelayedFuture(): Unit = {
+    val purgatoryName = "testDelayedFuture"
+    val purgatory = new DelayedFuturePurgatory(purgatoryName, brokerId = 0)
+    val result = new AtomicInteger()
+
+    def hasExecutorThread: Boolean = Thread.getAllStackTraces.keySet.asScala.map(_.getName)
+      .exists(_.contains(s"DelayedExecutor-$purgatoryName"))
+    def updateResult(futures: List[CompletableFuture[Integer]]): Unit =
+      result.set(futures.filterNot(_.isCompletedExceptionally).map(_.get.intValue).sum)
+
+    assertFalse("Unnecessary thread created", hasExecutorThread)
+
+    // Two completed futures: callback should be executed immediately on the same thread
+    val futures1 = List(CompletableFuture.completedFuture(10.asInstanceOf[Integer]),
+      CompletableFuture.completedFuture(11.asInstanceOf[Integer]))
+    val r1 = purgatory.tryCompleteElseWatch[Integer](100000L, futures1, () => updateResult(futures1))
+    assertTrue("r1 not completed", r1.isCompleted)
+    assertEquals(21, result.get())
+    assertFalse("Unnecessary thread created", hasExecutorThread)
+
+    // Two delayed futures: callback should wait for both to complete
+    result.set(-1)
+    val futures2 = List(new CompletableFuture[Integer], new CompletableFuture[Integer])
+    val r2 = purgatory.tryCompleteElseWatch[Integer](100000L, futures2, () => updateResult(futures2))
+    assertFalse("r2 should be incomplete", r2.isCompleted)
+    futures2.head.complete(20)
+    assertFalse(r2.isCompleted)
+    assertEquals(-1, result.get())
+    futures2(1).complete(21)
+    TestUtils.waitUntilTrue(() => r2.isCompleted, "r2 not completed")
+    TestUtils.waitUntilTrue(() => result.get == 41, "callback not invoked")
+    assertTrue("Thread not created for executing delayed task", hasExecutorThread)
+
+    // One immediate and one delayed future: callback should wait for delayed task to complete
+    result.set(-1)
+    val futures3 = List(new CompletableFuture[Integer], CompletableFuture.completedFuture(31.asInstanceOf[Integer]))
+    val r3 = purgatory.tryCompleteElseWatch[Integer](100000L, futures3, () => updateResult(futures3))
+    assertFalse("r3 should be incomplete", r3.isCompleted)
+    assertEquals(-1, result.get())
+    futures3.head.complete(30)
+    TestUtils.waitUntilTrue(() => r3.isCompleted, "r3 not completed")
+    TestUtils.waitUntilTrue(() => result.get == 61, "callback not invoked")
+
+
+    // One future doesn't complete within timeout. Should expire and invoke callback after timeout.
+    result.set(-1)
+    val start = Time.SYSTEM.hiResClockMs
+    val expirationMs = 2000L
+    val futures4 = List(new CompletableFuture[Integer], new CompletableFuture[Integer])
+    val r4 = purgatory.tryCompleteElseWatch[Integer](expirationMs, futures4, () => updateResult(futures4))
+    futures4.head.complete(40)
+    TestUtils.waitUntilTrue(() => futures4(1).isDone, "r4 futures not expired")
+    assertTrue("r4 not completed after timeout", r4.isCompleted)
+    val elapsed = Time.SYSTEM.hiResClockMs - start
+    assertTrue(s"Time for expiration $elapsed should at least $expirationMs", elapsed >= expirationMs)
+    assertEquals(40, futures4.head.get)
+    assertEquals(classOf[org.apache.kafka.common.errors.TimeoutException],
+      intercept[ExecutionException](futures4(1).get).getCause.getClass)
+    assertEquals(40, result.get())
+  }
+
+  @Test
+  def testRequestPurge(): Unit = {
     val r1 = new MockDelayedOperation(100000L)
     val r2 = new MockDelayedOperation(100000L)
     val r3 = new MockDelayedOperation(100000L)
@@ -86,17 +151,17 @@ class DelayedOperationTest {
     purgatory.tryCompleteElseWatch(r2, Array("test1", "test2"))
     purgatory.tryCompleteElseWatch(r3, Array("test1", "test2", "test3"))
 
-    assertEquals("Purgatory should have 3 total delayed operations", 3, purgatory.delayed)
+    assertEquals("Purgatory should have 3 total delayed operations", 3, purgatory.numDelayed)
     assertEquals("Purgatory should have 6 watched elements", 6, purgatory.watched)
 
     // complete the operations, it should immediately be purged from the delayed operation
     r2.completable = true
     r2.tryComplete()
-    assertEquals("Purgatory should have 2 total delayed operations instead of " + purgatory.delayed, 2, purgatory.delayed)
+    assertEquals("Purgatory should have 2 total delayed operations instead of " + purgatory.numDelayed, 2, purgatory.numDelayed)
 
     r3.completable = true
     r3.tryComplete()
-    assertEquals("Purgatory should have 1 total delayed operations instead of " + purgatory.delayed, 1, purgatory.delayed)
+    assertEquals("Purgatory should have 1 total delayed operations instead of " + purgatory.numDelayed, 1, purgatory.numDelayed)
 
     // checking a watch should purge the watch list
     purgatory.checkAndComplete("test1")
@@ -110,19 +175,19 @@ class DelayedOperationTest {
   }
 
   @Test
-  def shouldCancelForKeyReturningCancelledOperations() {
+  def shouldCancelForKeyReturningCancelledOperations(): Unit = {
     purgatory.tryCompleteElseWatch(new MockDelayedOperation(10000L), Seq("key"))
     purgatory.tryCompleteElseWatch(new MockDelayedOperation(10000L), Seq("key"))
     purgatory.tryCompleteElseWatch(new MockDelayedOperation(10000L), Seq("key2"))
 
     val cancelledOperations = purgatory.cancelForKey("key")
     assertEquals(2, cancelledOperations.size)
-    assertEquals(1, purgatory.delayed)
+    assertEquals(1, purgatory.numDelayed)
     assertEquals(1, purgatory.watched)
   }
 
   @Test
-  def shouldReturnNilOperationsOnCancelForKeyWhenKeyDoesntExist() {
+  def shouldReturnNilOperationsOnCancelForKeyWhenKeyDoesntExist(): Unit = {
     val cancelledOperations = purgatory.cancelForKey("key")
     assertEquals(Nil, cancelledOperations)
   }
@@ -216,12 +281,12 @@ class DelayedOperationTest {
   }
 
   @Test
-  def testDelayedOperationLock() {
+  def testDelayedOperationLock(): Unit = {
     verifyDelayedOperationLock(new MockDelayedOperation(100000L), mismatchedLocks = false)
   }
 
   @Test
-  def testDelayedOperationLockOverride() {
+  def testDelayedOperationLockOverride(): Unit = {
     def newMockOperation = {
       val lock = new ReentrantLock
       new MockDelayedOperation(100000L, Some(lock), Some(lock))
@@ -232,7 +297,7 @@ class DelayedOperationTest {
         mismatchedLocks = true)
   }
 
-  def verifyDelayedOperationLock(mockDelayedOperation: => MockDelayedOperation, mismatchedLocks: Boolean) {
+  def verifyDelayedOperationLock(mockDelayedOperation: => MockDelayedOperation, mismatchedLocks: Boolean): Unit = {
     val key = "key"
     executorService = Executors.newSingleThreadExecutor
     def createDelayedOperations(count: Int): Seq[MockDelayedOperation] = {
@@ -327,7 +392,7 @@ class DelayedOperationTest {
                              extends DelayedOperation(delayMs, lockOpt) {
     var completable = false
 
-    def awaitExpiration() {
+    def awaitExpiration(): Unit = {
       synchronized {
         wait()
       }
@@ -340,11 +405,11 @@ class DelayedOperationTest {
         false
     }
 
-    override def onExpiration() {
+    override def onExpiration(): Unit = {
 
     }
 
-    override def onComplete() {
+    override def onComplete(): Unit = {
       responseLockOpt.foreach { lock =>
         if (!lock.tryLock())
           throw new IllegalStateException("Response callback lock could not be acquired in callback")

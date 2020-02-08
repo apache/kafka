@@ -23,9 +23,9 @@ import com.fasterxml.jackson.databind.node.NullNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.databind.node.TextNode;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
+import org.apache.kafka.common.utils.ThreadUtils;
 import org.apache.kafka.trogdor.common.JsonUtil;
 import org.apache.kafka.trogdor.common.Platform;
-import org.apache.kafka.trogdor.common.ThreadUtils;
 import org.apache.kafka.trogdor.task.TaskWorker;
 import org.apache.kafka.trogdor.task.WorkerStatusTracker;
 import org.slf4j.Logger;
@@ -389,7 +389,7 @@ public class ExternalCommandWorker implements TaskWorker {
             spec.shutdownGracePeriodMs().get() : DEFAULT_SHUTDOWN_GRACE_PERIOD_MS;
         if (!executor.awaitTermination(shutdownGracePeriodMs, TimeUnit.MILLISECONDS)) {
             terminatorActionQueue.add(TerminatorAction.DESTROY_FORCIBLY);
-            executor.awaitTermination(1000, TimeUnit.DAYS);
+            executor.awaitTermination(1, TimeUnit.DAYS);
         }
         this.status = null;
         this.doneFuture = null;

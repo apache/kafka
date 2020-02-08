@@ -19,17 +19,16 @@ package kafka.admin
 import kafka.utils.Exit
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
-import org.scalatest.junit.JUnitSuite
 
-class ReassignPartitionsCommandArgsTest extends JUnitSuite {
+class ReassignPartitionsCommandArgsTest {
 
   @Before
-  def setUp() {
+  def setUp(): Unit = {
     Exit.setExitProcedure((_, message) => throw new IllegalArgumentException(message.orNull))
   }
 
   @After
-  def tearDown() {
+  def tearDown(): Unit = {
     Exit.resetExitProcedure()
   }
 

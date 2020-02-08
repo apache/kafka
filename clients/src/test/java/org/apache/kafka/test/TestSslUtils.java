@@ -62,13 +62,17 @@ import org.bouncycastle.operator.DefaultDigestAlgorithmIdentifierFinder;
 import org.bouncycastle.operator.DefaultSignatureAlgorithmIdentifierFinder;
 import org.bouncycastle.operator.bc.BcRSAContentSignerBuilder;
 
+import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashMap;
-import java.util.Map;
 import java.util.List;
-import java.util.ArrayList;
+import java.util.Locale;
+import java.util.Map;
 
 public class TestSslUtils {
+
+    public static final String TRUST_STORE_PASSWORD = "TrustStorePassword";
+    public static final String DEFAULT_TLS_PROTOCOL_FOR_TESTS = SslConfigs.DEFAULT_SSL_PROTOCOL;
 
     /**
      * Create a self-signed X.509 Certificate.
@@ -150,26 +154,15 @@ public class TestSslUtils {
         saveKeyStore(ks, filename, password);
     }
 
-    private static Map<String, Object> createSslConfig(Mode mode, File keyStoreFile, Password password, Password keyPassword,
-                                                       File trustStoreFile, Password trustStorePassword) {
+    public static Map<String, Object> createSslConfig(String keyManagerAlgorithm, String trustManagerAlgorithm, String tlsProtocol) {
         Map<String, Object> sslConfigs = new HashMap<>();
-        sslConfigs.put(SslConfigs.SSL_PROTOCOL_CONFIG, "TLSv1.2"); // protocol to create SSLContext
+        sslConfigs.put(SslConfigs.SSL_PROTOCOL_CONFIG, tlsProtocol); // protocol to create SSLContext
 
-        if (mode == Mode.SERVER || (mode == Mode.CLIENT && keyStoreFile != null)) {
-            sslConfigs.put(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG, keyStoreFile.getPath());
-            sslConfigs.put(SslConfigs.SSL_KEYSTORE_TYPE_CONFIG, "JKS");
-            sslConfigs.put(SslConfigs.SSL_KEYMANAGER_ALGORITHM_CONFIG, TrustManagerFactory.getDefaultAlgorithm());
-            sslConfigs.put(SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG, password);
-            sslConfigs.put(SslConfigs.SSL_KEY_PASSWORD_CONFIG, keyPassword);
-        }
-
-        sslConfigs.put(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG, trustStoreFile.getPath());
-        sslConfigs.put(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, trustStorePassword);
-        sslConfigs.put(SslConfigs.SSL_TRUSTSTORE_TYPE_CONFIG, "JKS");
-        sslConfigs.put(SslConfigs.SSL_TRUSTMANAGER_ALGORITHM_CONFIG, TrustManagerFactory.getDefaultAlgorithm());
+        sslConfigs.put(SslConfigs.SSL_KEYMANAGER_ALGORITHM_CONFIG, keyManagerAlgorithm);
+        sslConfigs.put(SslConfigs.SSL_TRUSTMANAGER_ALGORITHM_CONFIG, trustManagerAlgorithm);
 
         List<String> enabledProtocols  = new ArrayList<>();
-        enabledProtocols.add("TLSv1.2");
+        enabledProtocols.add(tlsProtocol);
         sslConfigs.put(SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG, enabledProtocols);
 
         return sslConfigs;
@@ -186,37 +179,19 @@ public class TestSslUtils {
         return createSslConfig(useClientCert, trustStore, mode, trustStoreFile, certAlias, cn, new CertificateBuilder());
     }
 
-    public static  Map<String, Object> createSslConfig(boolean useClientCert, boolean trustStore,
+    public static  Map<String, Object> createSslConfig(boolean useClientCert, boolean createTrustStore,
             Mode mode, File trustStoreFile, String certAlias, String cn, CertificateBuilder certBuilder)
             throws IOException, GeneralSecurityException {
-        Map<String, X509Certificate> certs = new HashMap<>();
-        File keyStoreFile = null;
-        Password password = mode == Mode.SERVER ? new Password("ServerPassword") : new Password("ClientPassword");
-
-        Password trustStorePassword = new Password("TrustStorePassword");
-
-        if (mode == Mode.CLIENT && useClientCert) {
-            keyStoreFile = File.createTempFile("clientKS", ".jks");
-            KeyPair cKP = generateKeyPair("RSA");
-            X509Certificate cCert = certBuilder.generate("CN=" + cn + ", O=A client", cKP);
-            createKeyStore(keyStoreFile.getPath(), password, "client", cKP.getPrivate(), cCert);
-            certs.put(certAlias, cCert);
-            keyStoreFile.deleteOnExit();
-        } else if (mode == Mode.SERVER) {
-            keyStoreFile = File.createTempFile("serverKS", ".jks");
-            KeyPair sKP = generateKeyPair("RSA");
-            X509Certificate sCert = certBuilder.generate("CN=" + cn + ", O=A server", sKP);
-            createKeyStore(keyStoreFile.getPath(), password, password, "server", sKP.getPrivate(), sCert);
-            certs.put(certAlias, sCert);
-            keyStoreFile.deleteOnExit();
-        }
-
-        if (trustStore) {
-            createTrustStore(trustStoreFile.getPath(), trustStorePassword, certs);
-            trustStoreFile.deleteOnExit();
-        }
-
-        return createSslConfig(mode, keyStoreFile, password, password, trustStoreFile, trustStorePassword);
+        SslConfigsBuilder builder = new SslConfigsBuilder(mode)
+                .useClientCert(useClientCert)
+                .certAlias(certAlias)
+                .cn(cn)
+                .certBuilder(certBuilder);
+        if (createTrustStore)
+            builder = builder.createNewTrustStore(trustStoreFile);
+        else
+            builder = builder.useExistingTrustStore(trustStoreFile);
+        return builder.build();
     }
 
     public static class CertificateBuilder {
@@ -266,6 +241,123 @@ public class TestSslUtils {
             } catch (Exception e) {
                 throw new CertificateException(e);
             }
+        }
+    }
+
+    public static class SslConfigsBuilder {
+        final Mode mode;
+        String tlsProtocol;
+        boolean useClientCert;
+        boolean createTrustStore;
+        File trustStoreFile;
+        Password trustStorePassword;
+        File keyStoreFile;
+        Password keyStorePassword;
+        Password keyPassword;
+        String certAlias;
+        String cn;
+        CertificateBuilder certBuilder;
+
+        public SslConfigsBuilder(Mode mode) {
+            this.mode = mode;
+            this.tlsProtocol = DEFAULT_TLS_PROTOCOL_FOR_TESTS;
+            trustStorePassword = new Password(TRUST_STORE_PASSWORD);
+            keyStorePassword = mode == Mode.SERVER ? new Password("ServerPassword") : new Password("ClientPassword");
+            keyPassword = keyStorePassword;
+            this.certBuilder = new CertificateBuilder();
+            this.cn = "localhost";
+            this.certAlias = mode.name().toLowerCase(Locale.ROOT);
+        }
+
+        public SslConfigsBuilder tlsProtocol(String tlsProtocol) {
+            this.tlsProtocol = tlsProtocol;
+            return this;
+        }
+
+        public SslConfigsBuilder createNewTrustStore(File trustStoreFile) {
+            this.trustStoreFile = trustStoreFile;
+            this.createTrustStore = true;
+            return this;
+        }
+
+        public SslConfigsBuilder useExistingTrustStore(File trustStoreFile) {
+            this.trustStoreFile = trustStoreFile;
+            this.createTrustStore = false;
+            return this;
+        }
+
+        public SslConfigsBuilder createNewKeyStore(File keyStoreFile) {
+            this.keyStoreFile = keyStoreFile;
+            return this;
+        }
+
+        public SslConfigsBuilder useClientCert(boolean useClientCert) {
+            this.useClientCert = useClientCert;
+            return this;
+        }
+
+        public SslConfigsBuilder certAlias(String certAlias) {
+            this.certAlias = certAlias;
+            return this;
+        }
+
+        public SslConfigsBuilder cn(String cn) {
+            this.cn = cn;
+            return this;
+        }
+
+        public SslConfigsBuilder certBuilder(CertificateBuilder certBuilder) {
+            this.certBuilder = certBuilder;
+            return this;
+        }
+
+        public  Map<String, Object> build() throws IOException, GeneralSecurityException {
+            Map<String, X509Certificate> certs = new HashMap<>();
+            File keyStoreFile = null;
+
+            if (mode == Mode.CLIENT && useClientCert) {
+                keyStoreFile = File.createTempFile("clientKS", ".jks");
+                KeyPair cKP = generateKeyPair("RSA");
+                X509Certificate cCert = certBuilder.generate("CN=" + cn + ", O=A client", cKP);
+                createKeyStore(keyStoreFile.getPath(), keyStorePassword, "client", cKP.getPrivate(), cCert);
+                certs.put(certAlias, cCert);
+                keyStoreFile.deleteOnExit();
+            } else if (mode == Mode.SERVER) {
+                keyStoreFile = File.createTempFile("serverKS", ".jks");
+                KeyPair sKP = generateKeyPair("RSA");
+                X509Certificate sCert = certBuilder.generate("CN=" + cn + ", O=A server", sKP);
+                createKeyStore(keyStoreFile.getPath(), keyStorePassword, keyStorePassword, "server", sKP.getPrivate(), sCert);
+                certs.put(certAlias, sCert);
+                keyStoreFile.deleteOnExit();
+            }
+
+            if (createTrustStore) {
+                createTrustStore(trustStoreFile.getPath(), trustStorePassword, certs);
+                trustStoreFile.deleteOnExit();
+            }
+
+            Map<String, Object> sslConfigs = new HashMap<>();
+
+            sslConfigs.put(SslConfigs.SSL_PROTOCOL_CONFIG, tlsProtocol); // protocol to create SSLContext
+
+            if (mode == Mode.SERVER || (mode == Mode.CLIENT && keyStoreFile != null)) {
+                sslConfigs.put(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG, keyStoreFile.getPath());
+                sslConfigs.put(SslConfigs.SSL_KEYSTORE_TYPE_CONFIG, "JKS");
+                sslConfigs.put(SslConfigs.SSL_KEYMANAGER_ALGORITHM_CONFIG, TrustManagerFactory.getDefaultAlgorithm());
+                sslConfigs.put(SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG, keyStorePassword);
+                sslConfigs.put(SslConfigs.SSL_KEY_PASSWORD_CONFIG, keyPassword);
+            }
+
+            sslConfigs.put(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG, trustStoreFile.getPath());
+            sslConfigs.put(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, trustStorePassword);
+            sslConfigs.put(SslConfigs.SSL_TRUSTSTORE_TYPE_CONFIG, "JKS");
+            sslConfigs.put(SslConfigs.SSL_TRUSTMANAGER_ALGORITHM_CONFIG, TrustManagerFactory.getDefaultAlgorithm());
+
+            List<String> enabledProtocols  = new ArrayList<>();
+            enabledProtocols.add(tlsProtocol);
+            sslConfigs.put(SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG, enabledProtocols);
+
+            return sslConfigs;
         }
     }
 }

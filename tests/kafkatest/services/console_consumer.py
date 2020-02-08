@@ -86,6 +86,7 @@ class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService)
             jaas_override_variables     A dict of variables to be used in the jaas.conf template file
             kafka_opts_override         Override parameters of the KAFKA_OPTS environment variable
             client_prop_file_override   Override client.properties file used by the consumer
+            consumer_properties         A dict of values to pass in as --consumer-property key=value
         """
         JmxMixin.__init__(self, num_nodes=num_nodes, jmx_object_names=jmx_object_names, jmx_attributes=(jmx_attributes or []),
                           root=ConsoleConsumer.PERSISTENT_ROOT)
@@ -208,7 +209,7 @@ class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService)
 
         if self.consumer_properties is not None:
             for k, v in self.consumer_properties.items():
-                cmd += "--consumer_properties %s=%s" % (k, v)
+                cmd += " --consumer-property %s=%s" % (k, v)
 
         cmd += " 2>> %(stderr)s | tee -a %(stdout)s &" % args
         return cmd
@@ -248,7 +249,6 @@ class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService)
         consumer_output = node.account.ssh_capture(cmd, allow_fail=False)
 
         with self.lock:
-            self._init_jmx_attributes()
             self.logger.debug("collecting following jmx objects: %s", self.jmx_object_names)
             self.start_jmx_tool(idx, node)
 
@@ -291,28 +291,3 @@ class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService)
 
     def java_class_name(self):
         return "ConsoleConsumer"
-
-    def has_partitions_assigned(self, node):
-        if self.new_consumer is False:
-            return False
-        idx = self.idx(node)
-        with self.lock:
-            self._init_jmx_attributes()
-            self.start_jmx_tool(idx, node)
-            self.read_jmx_output(idx, node)
-        if not self.assigned_partitions_jmx_attr in self.maximum_jmx_value:
-            return False
-        self.logger.debug("Number of partitions assigned %f" % self.maximum_jmx_value[self.assigned_partitions_jmx_attr])
-        return self.maximum_jmx_value[self.assigned_partitions_jmx_attr] > 0.0
-
-    def _init_jmx_attributes(self):
-        # Must hold lock
-        if self.new_consumer:
-            # We use a flag to track whether we're using this automatically generated ID because the service could be
-            # restarted multiple times and the client ID may be changed.
-            if getattr(self, '_automatic_metrics', False) or not self.jmx_object_names:
-                self._automatic_metrics = True
-                self.jmx_object_names = ["kafka.consumer:type=consumer-coordinator-metrics,client-id=%s" % self.client_id]
-                self.jmx_attributes = ["assigned-partitions"]
-                self.assigned_partitions_jmx_attr = "kafka.consumer:type=consumer-coordinator-metrics,client-id=%s:assigned-partitions" % self.client_id
-

@@ -508,7 +508,39 @@
     </p>
 
     <p>
-    When a connector is first submitted to the cluster, the workers rebalance the full set of connectors in the cluster and their tasks so that each worker has approximately the same amount of work. This same rebalancing procedure is also used when connectors increase or decrease the number of tasks they require, or when a connector's configuration is changed. You can use the REST API to view the current status of a connector and its tasks, including the id of the worker to which each was assigned. For example, querying the status of a file source (using <code>GET /connectors/file-source/status</code>) might produce output like the following:
+    When a connector is first submitted to the cluster, a rebalance is triggered between the Connect workers in order to distribute the load that consists of the tasks of the new connector.
+    This same rebalancing procedure is also used when connectors increase or decrease the number of tasks they require, when a connector's configuration is changed, or when a
+    worker is added or removed from the group as part of an intentional upgrade of the Connect cluster or due to a failure.
+    </p>
+
+    <p>
+    In versions prior to 2.3.0, the Connect workers would rebalance the full set of connectors and their tasks in the cluster as a simple way to make sure that each worker has approximately the same amount of work.
+    This behavior can be still enabled by setting <code>connect.protocol=eager</code>.
+    </p>
+
+    <p>
+    Starting with 2.3.0, Kafka Connect is using by default a protocol that performs
+    <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-415%3A+Incremental+Cooperative+Rebalancing+in+Kafka+Connect">incremental cooperative rebalancing</a>
+    that incrementally balances the connectors and tasks across the Connect workers, affecting only tasks that are new, to be removed, or need to move from one worker to another.
+    Other tasks are not stopped and restarted during the rebalance, as they would have been with the old protocol.
+    </p>
+
+    <p>
+    If a Connect worker leaves the group, intentionally or due to a failure, Connect waits for <code>scheduled.rebalance.max.delay.ms</code> before triggering a rebalance.
+    This delay defaults to five minutes (<code>300000ms</code>) to tolerate failures or upgrades of workers without immediately redistributing the load of a departing worker.
+    If this worker returns within the configured delay, it gets its previously assigned tasks in full.
+    However, this means that the tasks will remain unassigned until the time specified by <code>scheduled.rebalance.max.delay.ms</code> elapses.
+    If a worker does not return within that time limit, Connect will reassign those tasks among the remaining workers in the Connect cluster.
+    </p>
+
+    <p>
+    The new Connect protocol is enabled when all the workers that form the Connect cluster are configured with <code>connect.protocol=compatible</code>, which is also the default value when this property is missing.
+    Therefore, upgrading to the new Connect protocol happens automatically when all the workers upgrade to 2.3.0.
+    A rolling upgrade of the Connect cluster will activate incremental cooperative rebalancing when the last worker joins on version 2.3.0.
+    </p>
+
+    <p>
+    You can use the REST API to view the current status of a connector and its tasks, including the ID of the worker to which each was assigned. For example, the <code>GET /connectors/file-source/status</code> request shows the status of a connector named <code>file-source</code>:
     </p>
 
     <pre class="brush: json;">
@@ -537,6 +569,7 @@
     <li><b>RUNNING:</b> The connector/task is running.</li>
     <li><b>PAUSED:</b> The connector/task has been administratively paused.</li>
     <li><b>FAILED:</b> The connector/task has failed (usually by raising an exception, which is reported in the status output).</li>
+    <li><b>DESTROYED:</b> The connector/task has been administratively removed and will stop appearing in the Connect cluster.</li>
     </ul>
 
     <p>

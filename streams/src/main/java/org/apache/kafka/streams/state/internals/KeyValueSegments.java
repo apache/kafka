@@ -17,16 +17,21 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
+import org.apache.kafka.streams.state.internals.metrics.RocksDBMetricsRecorder;
 
 /**
  * Manages the {@link KeyValueSegment}s that are used by the {@link RocksDBSegmentedBytesStore}
  */
 class KeyValueSegments extends AbstractSegments<KeyValueSegment> {
 
+    private final RocksDBMetricsRecorder metricsRecorder;
+
     KeyValueSegments(final String name,
+                     final String metricsScope,
                      final long retentionPeriod,
                      final long segmentInterval) {
         super(name, retentionPeriod, segmentInterval);
+        metricsRecorder = new RocksDBMetricsRecorder(metricsScope, Thread.currentThread().getName(), name);
     }
 
     @Override
@@ -35,7 +40,8 @@ class KeyValueSegments extends AbstractSegments<KeyValueSegment> {
         if (segments.containsKey(segmentId)) {
             return segments.get(segmentId);
         } else {
-            final KeyValueSegment newSegment = new KeyValueSegment(segmentName(segmentId), name, segmentId);
+            final KeyValueSegment newSegment =
+                new KeyValueSegment(segmentName(segmentId), name, segmentId, metricsRecorder);
 
             if (segments.put(segmentId, newSegment) != null) {
                 throw new IllegalStateException("KeyValueSegment already exists. Possible concurrent access.");

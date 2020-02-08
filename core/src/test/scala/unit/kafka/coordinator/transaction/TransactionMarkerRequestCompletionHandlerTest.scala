@@ -22,8 +22,9 @@ import java.util.Arrays.asList
 import org.apache.kafka.clients.ClientResponse
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
+import org.apache.kafka.common.record.RecordBatch
 import org.apache.kafka.common.requests.{RequestHeader, TransactionResult, WriteTxnMarkersRequest, WriteTxnMarkersResponse}
-import org.easymock.{EasyMock, IAnswer}
+import org.easymock.EasyMock
 import org.junit.Assert._
 import org.junit.Test
 
@@ -36,6 +37,7 @@ class TransactionMarkerRequestCompletionHandlerTest {
   private val transactionalId = "txnId1"
   private val producerId = 0.asInstanceOf[Long]
   private val producerEpoch = 0.asInstanceOf[Short]
+  private val lastProducerEpoch = RecordBatch.NO_PRODUCER_EPOCH
   private val txnTimeoutMs = 0
   private val coordinatorEpoch = 0
   private val txnResult = TransactionResult.COMMIT
@@ -43,8 +45,8 @@ class TransactionMarkerRequestCompletionHandlerTest {
   private val txnIdAndMarkers = asList(
       TxnIdAndMarkerEntry(transactionalId, new WriteTxnMarkersRequest.TxnMarkerEntry(producerId, producerEpoch, coordinatorEpoch, txnResult, asList(topicPartition))))
 
-  private val txnMetadata = new TransactionMetadata(transactionalId, producerId, producerEpoch, txnTimeoutMs,
-    PrepareCommit, mutable.Set[TopicPartition](topicPartition), 0L, 0L)
+  private val txnMetadata = new TransactionMetadata(transactionalId, producerId, producerId, producerEpoch, lastProducerEpoch,
+    txnTimeoutMs, PrepareCommit, mutable.Set[TopicPartition](topicPartition), 0L, 0L)
 
   private val markerChannelManager: TransactionMarkerChannelManager =
     EasyMock.createNiceMock(classOf[TransactionMarkerChannelManager])
@@ -227,11 +229,7 @@ class TransactionMarkerRequestCompletionHandlerTest {
 
     var completed = false
     EasyMock.expect(markerChannelManager.completeSendMarkersForTxnId(transactionalId))
-      .andAnswer(new IAnswer[Unit] {
-        override def answer(): Unit = {
-          completed = true
-        }
-      })
+      .andAnswer(() => completed = true)
       .once()
     EasyMock.replay(markerChannelManager)
 
@@ -247,11 +245,7 @@ class TransactionMarkerRequestCompletionHandlerTest {
 
     var removed = false
     EasyMock.expect(markerChannelManager.removeMarkersForTxnId(transactionalId))
-      .andAnswer(new IAnswer[Unit] {
-        override def answer(): Unit = {
-          removed = true
-        }
-      })
+      .andAnswer(() => removed = true)
       .once()
     EasyMock.replay(markerChannelManager)
 

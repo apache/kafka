@@ -45,7 +45,7 @@ private class KafkaCSVMetricsReporter extends KafkaMetricsReporter
   override def getMBeanName = "kafka:type=kafka.metrics.KafkaCSVMetricsReporter"
 
 
-  override def init(props: VerifiableProperties) {
+  override def init(props: VerifiableProperties): Unit = {
     synchronized {
       if (!initialized) {
         val metricsConfig = new KafkaMetricsConfig(props)
@@ -62,7 +62,7 @@ private class KafkaCSVMetricsReporter extends KafkaMetricsReporter
   }
 
 
-  override def startReporter(pollingPeriodSecs: Long) {
+  override def startReporter(pollingPeriodSecs: Long): Unit = {
     synchronized {
       if (initialized && !running) {
         underlying.start(pollingPeriodSecs, TimeUnit.SECONDS)
@@ -73,7 +73,7 @@ private class KafkaCSVMetricsReporter extends KafkaMetricsReporter
   }
 
 
-  override def stopReporter() {
+  override def stopReporter(): Unit = {
     synchronized {
       if (initialized && running) {
         underlying.shutdown()

@@ -20,7 +20,6 @@ package kafka.server
 import kafka.utils.Logging
 import kafka.cluster.BrokerEndPoint
 import kafka.metrics.KafkaMetricsGroup
-import com.yammer.metrics.core.Gauge
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.utils.Utils
 
@@ -34,37 +33,32 @@ abstract class AbstractFetcherManager[T <: AbstractFetcherThread](val name: Stri
   private[server] val fetcherThreadMap = new mutable.HashMap[BrokerIdAndFetcherId, T]
   private val lock = new Object
   private var numFetchersPerBroker = numFetchers
+  val failedPartitions = new FailedPartitions
   this.logIdent = "[" + name + "] "
 
-  newGauge(
-    "MaxLag",
-    new Gauge[Long] {
-      // current max lag across all fetchers/topics/partitions
-      def value = fetcherThreadMap.foldLeft(0L)((curMaxAll, fetcherThreadMapEntry) => {
-        fetcherThreadMapEntry._2.fetcherLagStats.stats.foldLeft(0L)((curMaxThread, fetcherLagStatsEntry) => {
-          curMaxThread.max(fetcherLagStatsEntry._2.lag)
-        }).max(curMaxAll)
-      })
-    },
-    Map("clientId" -> clientId)
-  )
+  private val tags = Map("clientId" -> clientId)
 
-  newGauge(
-  "MinFetchRate", {
-    new Gauge[Double] {
-      // current min fetch rate across all fetchers/topics/partitions
-      def value = {
-        val headRate: Double =
-          fetcherThreadMap.headOption.map(_._2.fetcherStats.requestRate.oneMinuteRate).getOrElse(0)
-
-        fetcherThreadMap.foldLeft(headRate)((curMinAll, fetcherThreadMapEntry) => {
-          fetcherThreadMapEntry._2.fetcherStats.requestRate.oneMinuteRate.min(curMinAll)
-        })
-      }
+  newGauge("MaxLag", () => {
+    // current max lag across all fetchers/topics/partitions
+    fetcherThreadMap.values.foldLeft(0L) { (curMaxLagAll, fetcherThread) =>
+      val maxLagThread = fetcherThread.fetcherLagStats.stats.values.foldLeft(0L)((curMaxLagThread, lagMetrics) =>
+        math.max(curMaxLagThread, lagMetrics.lag))
+      math.max(curMaxLagAll, maxLagThread)
     }
-  },
-  Map("clientId" -> clientId)
-  )
+  }, tags)
+
+  newGauge("MinFetchRate", () => {
+    // current min fetch rate across all fetchers/topics/partitions
+    val headRate = fetcherThreadMap.values.headOption.map(_.fetcherStats.requestRate.oneMinuteRate).getOrElse(0.0)
+    fetcherThreadMap.values.foldLeft(headRate)((curMinAll, fetcherThread) =>
+      math.min(curMinAll, fetcherThread.fetcherStats.requestRate.oneMinuteRate))
+  }, tags)
+
+  newGauge("FailedPartitionsCount", () => failedPartitions.size, tags)
+
+  newGauge("DeadThreadCount", () => deadThreadCount, tags)
+
+  private[server] def deadThreadCount: Int = lock synchronized { fetcherThreadMap.values.count(_.isThreadFailed) }
 
   def resizeThreadPool(newSize: Int): Unit = {
     def migratePartitions(newSize: Int): Unit = {
@@ -107,7 +101,7 @@ abstract class AbstractFetcherManager[T <: AbstractFetcherThread](val name: Stri
   }
 
   // This method is only needed by ReplicaAlterDirManager
-  def markPartitionsForTruncation(brokerId: Int, topicPartition: TopicPartition, truncationOffset: Long) {
+  def markPartitionsForTruncation(brokerId: Int, topicPartition: TopicPartition, truncationOffset: Long): Unit = {
     lock synchronized {
       val fetcherId = getFetcherId(topicPartition)
       val brokerIdAndFetcherId = BrokerIdAndFetcherId(brokerId, fetcherId)
@@ -120,7 +114,7 @@ abstract class AbstractFetcherManager[T <: AbstractFetcherThread](val name: Stri
   // to be defined in subclass to create a specific fetcher
   def createFetcherThread(fetcherId: Int, sourceBroker: BrokerEndPoint): T
 
-  def addFetcherForPartitions(partitionAndOffsets: Map[TopicPartition, InitialFetchState]) {
+  def addFetcherForPartitions(partitionAndOffsets: Map[TopicPartition, InitialFetchState]): Unit = {
     lock synchronized {
       val partitionsPerFetcher = partitionAndOffsets.groupBy { case (topicPartition, brokerAndInitialFetchOffset) =>
         BrokerAndFetcherId(brokerAndInitialFetchOffset.leader, getFetcherId(topicPartition))
@@ -152,19 +146,23 @@ abstract class AbstractFetcherManager[T <: AbstractFetcherThread](val name: Stri
 
         fetcherThread.addPartitions(initialOffsetAndEpochs)
         info(s"Added fetcher to broker ${brokerAndFetcherId.broker} for partitions $initialOffsetAndEpochs")
+
+        failedPartitions.removeAll(partitionAndOffsets.keySet)
       }
     }
   }
 
-  def removeFetcherForPartitions(partitions: Set[TopicPartition]) {
+  def removeFetcherForPartitions(partitions: Set[TopicPartition]): Unit = {
     lock synchronized {
       for (fetcher <- fetcherThreadMap.values)
         fetcher.removePartitions(partitions)
+      failedPartitions.removeAll(partitions)
     }
-    info(s"Removed fetcher for partitions $partitions")
+    if (partitions.nonEmpty)
+      info(s"Removed fetcher for partitions $partitions")
   }
 
-  def shutdownIdleFetcherThreads() {
+  def shutdownIdleFetcherThreads(): Unit = {
     lock synchronized {
       val keysToBeRemoved = new mutable.HashSet[BrokerIdAndFetcherId]
       for ((key, fetcher) <- fetcherThreadMap) {
@@ -177,7 +175,7 @@ abstract class AbstractFetcherManager[T <: AbstractFetcherThread](val name: Stri
     }
   }
 
-  def closeAllFetchers() {
+  def closeAllFetchers(): Unit = {
     lock synchronized {
       for ( (_, fetcher) <- fetcherThreadMap) {
         fetcher.initiateShutdown()
@@ -188,6 +186,37 @@ abstract class AbstractFetcherManager[T <: AbstractFetcherThread](val name: Stri
       }
       fetcherThreadMap.clear()
     }
+  }
+}
+
+/**
+  * The class FailedPartitions would keep a track of partitions marked as failed either during truncation or appending
+  * resulting from one of the following errors -
+  * <ol>
+  *   <li> Storage exception
+  *   <li> Fenced epoch
+  *   <li> Unexpected errors
+  * </ol>
+  * The partitions which fail due to storage error are eventually removed from this set after the log directory is
+  * taken offline.
+  */
+class FailedPartitions {
+  private val failedPartitionsSet = new mutable.HashSet[TopicPartition]
+
+  def size: Int = synchronized {
+    failedPartitionsSet.size
+  }
+
+  def add(topicPartition: TopicPartition): Unit = synchronized {
+    failedPartitionsSet += topicPartition
+  }
+
+  def removeAll(topicPartitions: Set[TopicPartition]): Unit = synchronized {
+    failedPartitionsSet --= topicPartitions
+  }
+
+  def contains(topicPartition: TopicPartition): Boolean = synchronized {
+    failedPartitionsSet.contains(topicPartition)
   }
 }
 

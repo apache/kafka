@@ -27,9 +27,11 @@ import collection.JavaConverters._
 class Pool[K,V](valueFactory: Option[K => V] = None) extends Iterable[(K, V)] {
 
   private val pool: ConcurrentMap[K, V] = new ConcurrentHashMap[K, V]
-  
+
   def put(k: K, v: V): V = pool.put(k, v)
-  
+
+  def putAll(map: java.util.Map[K, V]): Unit = pool.putAll(map)
+
   def putIfNotExists(k: K, v: V): V = pool.putIfAbsent(k, v)
 
   /**
@@ -57,9 +59,7 @@ class Pool[K,V](valueFactory: Option[K => V] = None) extends Iterable[(K, V)] {
     * @return The final value associated with the key.
     */
   def getAndMaybePut(key: K, createValue: => V): V =
-    pool.computeIfAbsent(key, new java.util.function.Function[K, V] {
-      override def apply(k: K): V = createValue
-    })
+    pool.computeIfAbsent(key, _ => createValue)
 
   def contains(id: K): Boolean = pool.containsKey(id)
   
@@ -73,7 +73,7 @@ class Pool[K,V](valueFactory: Option[K => V] = None) extends Iterable[(K, V)] {
 
   def values: Iterable[V] = pool.values.asScala
 
-  def clear() { pool.clear() }
+  def clear(): Unit = { pool.clear() }
   
   override def size: Int = pool.size
   

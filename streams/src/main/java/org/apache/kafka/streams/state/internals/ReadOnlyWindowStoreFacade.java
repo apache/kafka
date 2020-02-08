@@ -26,6 +26,8 @@ import org.apache.kafka.streams.state.WindowStoreIterator;
 
 import java.time.Instant;
 
+import static org.apache.kafka.streams.state.ValueAndTimestamp.getValueOrNull;
+
 public class ReadOnlyWindowStoreFacade<K, V> implements ReadOnlyWindowStore<K, V> {
     protected final TimestampedWindowStore<K, V> inner;
 
@@ -36,8 +38,7 @@ public class ReadOnlyWindowStoreFacade<K, V> implements ReadOnlyWindowStore<K, V
     @Override
     public V fetch(final K key,
                    final long time) {
-        final ValueAndTimestamp<V> valueAndTimestamp = inner.fetch(key, time);
-        return valueAndTimestamp == null ? null : valueAndTimestamp.value();
+        return getValueOrNull(inner.fetch(key, time));
     }
 
     @Override
@@ -117,7 +118,7 @@ public class ReadOnlyWindowStoreFacade<K, V> implements ReadOnlyWindowStore<K, V
         @Override
         public KeyValue<Long, V> next() {
             final KeyValue<Long, ValueAndTimestamp<V>> innerKeyValue = innerIterator.next();
-            return KeyValue.pair(innerKeyValue.key, innerKeyValue.value.value());
+            return KeyValue.pair(innerKeyValue.key, getValueOrNull(innerKeyValue.value));
         }
     }
 }

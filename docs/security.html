@@ -265,7 +265,7 @@
             <p>ZooKeeper uses "zookeeper" as the service name by default. If you
             want to change this, set the system property
             <tt>zookeeper.sasl.client.username</tt> to the appropriate name
-            (<i>e.g.</i>, <tt>-Dzookeeper.sasl.client.username=zk</tt>).</p></li>
+            (<i>e.g.</i>, <tt>-Dzookeeper.sasl.client.username=zk</tt>).</p>
 
             <p>Brokers may also configure JAAS using the broker configuration property <code>sasl.jaas.config</code>.
             The property name must be prefixed with the listener prefix including the SASL mechanism,
@@ -296,7 +296,7 @@
             <a href="#security_sasl_scram_brokerconfig">SCRAM</a> or
             <a href="#security_sasl_oauthbearer_brokerconfig">OAUTHBEARER</a> for example broker configurations.</p></li>
 
-
+        </li>
         <li><h5><a id="security_jaas_client"
             href="#security_jaas_client">JAAS configuration for Kafka clients</a></h5>
 
@@ -920,7 +920,7 @@
         <p>Typical steps for delegation token usage are:</p>
         <ol>
         <li>User authenticates with the Kafka cluster via SASL or SSL, and obtains a delegation token. This can be done
-            using AdminClient APIs or using <tt>kafka-delegation-tokens.sh</tt> script.</li>
+            using Admin APIs or using <tt>kafka-delegation-tokens.sh</tt> script.</li>
         <li>User securely passes the delegation token to Kafka clients for authenticating with the Kafka cluster.</li>
         <li>Token owner/renewer can renew/expire the delegation tokens.</li>
         </ol>
@@ -944,7 +944,7 @@
         </li>
 
         <li><h5><a id="security_sasl_create_tokens" href="#security_sasl_create_tokens">Creating Delegation Tokens</a></h5>
-        <p>Tokens can be created by using AdminClient APIs or using <tt>kafka-delegation-tokens.sh</tt> script.
+        <p>Tokens can be created by using Admin APIs or using <tt>kafka-delegation-tokens.sh</tt> script.
             Delegation token requests (create/renew/expire/describe) should be issued only on SASL or SSL authenticated channels.
             Tokens can not be requests if the initial authentication is done through delegation token.
             <tt>kafka-delegation-tokens.sh</tt> script examples are given below.</p>
@@ -1052,13 +1052,15 @@
     <h5><a id="security_authz_sasl" href="#security_authz_sasl">Customizing SASL User Name</a></h5>
 
     By default, the SASL user name will be the primary part of the Kerberos principal. One can change that by setting <code>sasl.kerberos.principal.to.local.rules</code> to a customized rule in server.properties.
-    The format of <code>sasl.kerberos.principal.to.local.rules</code> is a list where each rule works in the same way as the auth_to_local in <a href="http://web.mit.edu/Kerberos/krb5-latest/doc/admin/conf_files/krb5_conf.html">Kerberos configuration file (krb5.conf)</a>. This also support additional lowercase rule, to force the translated result to be all lower case. This is done by adding a "/L" to the end of the rule. check below formats for syntax.
+    The format of <code>sasl.kerberos.principal.to.local.rules</code> is a list where each rule works in the same way as the auth_to_local in <a href="http://web.mit.edu/Kerberos/krb5-latest/doc/admin/conf_files/krb5_conf.html">Kerberos configuration file (krb5.conf)</a>. This also support additional lowercase/uppercase rule, to force the translated result to be all lowercase/uppercase. This is done by adding a "/L" or "/U" to the end of the rule. check below formats for syntax.
     Each rules starts with RULE: and contains an expression as the following formats. See the kerberos documentation for more details.
     <pre>
         RULE:[n:string](regexp)s/pattern/replacement/
         RULE:[n:string](regexp)s/pattern/replacement/g
         RULE:[n:string](regexp)s/pattern/replacement//L
         RULE:[n:string](regexp)s/pattern/replacement/g/L
+        RULE:[n:string](regexp)s/pattern/replacement//U
+        RULE:[n:string](regexp)s/pattern/replacement/g/U
     </pre>
 
     An example of adding a rule to properly translate user@MYDOMAIN.COM to user while also keeping the default rule in place is:
@@ -1281,8 +1283,8 @@
                 Note that for consumer option we must also specify the consumer group.
                 In order to remove a principal from producer or consumer role we just need to pass --remove option. </li>
 
-        <li><b>AdminClient API based acl management</b><br>
-            Users having Alter permission on ClusterResource can use AdminClient API for ACL management. kafka-acls.sh script supports AdminClient API to manage ACLs without interacting with zookeeper/authorizer directly.
+        <li><b>Admin API based acl management</b><br>
+            Users having Alter permission on ClusterResource can use Admin API for ACL management. kafka-acls.sh script supports AdminClient API to manage ACLs without interacting with zookeeper/authorizer directly.
             All the above examples can be executed by using <b>--bootstrap-server</b> option. For example:
 
             <pre class="brush: bash;">
@@ -1733,6 +1735,48 @@
             <td>Group</td>
             <td></td>
         </tr>
+        <tr>
+            <td>ELECT_PREFERRED_LEADERS (43)</td>
+            <td>ClusterAction</td>
+            <td>Cluster</td>
+            <td></td>
+        </tr>
+        <tr>
+            <td>INCREMENTAL_ALTER_CONFIGS (44)</td>
+            <td>AlterConfigs</td>
+            <td>Cluster</td>
+            <td>If broker configs are altered, then the broker will check cluster level privileges.</td>
+        </tr>
+        <tr>
+            <td>INCREMENTAL_ALTER_CONFIGS (44)</td>
+            <td>AlterConfigs</td>
+            <td>Topic</td>
+            <td>If topic configs are altered, then the broker will check topic level privileges.</td>
+        </tr>
+        <tr>
+            <td>ALTER_PARTITION_REASSIGNMENTS (45)</td>
+            <td>Alter</td>
+            <td>Cluster</td>
+            <td></td>
+        </tr>
+        <tr>
+            <td>LIST_PARTITION_REASSIGNMENTS (46)</td>
+            <td>Describe</td>
+            <td>Cluster</td>
+            <td></td>
+        </tr>
+        <tr>
+            <td>OFFSET_DELETE (47)</td>
+            <td>Delete</td>
+            <td>Group</td>
+            <td></td>
+        </tr>
+        <tr>
+            <td>OFFSET_DELETE (47)</td>
+            <td>Read</td>
+            <td>Topic</td>
+            <td></td>
+        </tr>
         </tbody>
     </table>
 
@@ -1755,7 +1799,7 @@
 
         When performing an incremental bounce stop the brokers cleanly via a SIGTERM. It's also good practice to wait for restarted replicas to return to the ISR list before moving onto the next node.
         <p></p>
-        As an example, say we wish to encrypt both broker-client and broker-broker communication with SSL. In the first incremental bounce, a SSL port is opened on each node:
+        As an example, say we wish to encrypt both broker-client and broker-broker communication with SSL. In the first incremental bounce, an SSL port is opened on each node:
             <pre>
             listeners=PLAINTEXT://broker1:9091,SSL://broker1:9092
             </pre>
@@ -1847,7 +1891,7 @@
     <h4><a id="zk_authz_ensemble" href="#zk_authz_ensemble">7.6.3 Migrating the ZooKeeper ensemble</a></h4>
     It is also necessary to enable authentication on the ZooKeeper ensemble. To do it, we need to perform a rolling restart of the server and set a few properties. Please refer to the ZooKeeper documentation for more detail:
     <ol>
-        <li><a href="http://zookeeper.apache.org/doc/r3.4.9/zookeeperProgrammers.html#sc_ZooKeeperAccessControl">Apache ZooKeeper documentation</a></li>
+        <li><a href="http://zookeeper.apache.org/doc/r3.5.5/zookeeperProgrammers.html#sc_ZooKeeperAccessControl">Apache ZooKeeper documentation</a></li>
         <li><a href="https://cwiki.apache.org/confluence/display/ZOOKEEPER/Zookeeper+and+SASL">Apache ZooKeeper wiki</a></li>
     </ol>
 </script>

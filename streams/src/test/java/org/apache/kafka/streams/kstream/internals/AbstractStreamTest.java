@@ -31,7 +31,7 @@ import org.apache.kafka.streams.kstream.internals.graph.ProcessorParameters;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
-import org.apache.kafka.streams.test.ConsumerRecordFactory;
+import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.TestUtils;
 import org.junit.Test;
@@ -88,10 +88,10 @@ public class AbstractStreamTest {
         props.setProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9091");
         props.setProperty(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getAbsolutePath());
 
-        final ConsumerRecordFactory<Integer, String> recordFactory = new ConsumerRecordFactory<>(new IntegerSerializer(), new StringSerializer());
         final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props);
+        final TestInputTopic<Integer, String> inputTopic = driver.createInputTopic(topicName, new IntegerSerializer(), new StringSerializer());
         for (final int expectedKey : expectedKeys) {
-            driver.pipeInput(recordFactory.create(topicName, expectedKey, "V" + expectedKey));
+            inputTopic.pipeInput(expectedKey, "V" + expectedKey);
         }
 
         assertTrue(supplier.theCapturedProcessor().processed.size() <= expectedKeys.length);

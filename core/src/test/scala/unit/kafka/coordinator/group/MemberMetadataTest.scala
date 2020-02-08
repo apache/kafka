@@ -20,9 +20,8 @@ import java.util.Arrays
 
 import org.junit.Assert._
 import org.junit.Test
-import org.scalatest.junit.JUnitSuite
 
-class MemberMetadataTest extends JUnitSuite {
+class MemberMetadataTest {
   val groupId = "groupId"
   val groupInstanceId = Some("groupInstanceId")
   val clientId = "clientId"
@@ -34,7 +33,7 @@ class MemberMetadataTest extends JUnitSuite {
 
 
   @Test
-  def testMatchesSupportedProtocols() {
+  def testMatchesSupportedProtocols(): Unit = {
     val protocols = List(("range", Array.empty[Byte]))
 
     val member = new MemberMetadata(memberId, groupId, groupInstanceId, clientId, clientHost, rebalanceTimeoutMs, sessionTimeoutMs,
@@ -46,7 +45,7 @@ class MemberMetadataTest extends JUnitSuite {
   }
 
   @Test
-  def testVoteForPreferredProtocol() {
+  def testVoteForPreferredProtocol(): Unit = {
     val protocols = List(("range", Array.empty[Byte]), ("roundrobin", Array.empty[Byte]))
 
     val member = new MemberMetadata(memberId, groupId, groupInstanceId, clientId, clientHost, rebalanceTimeoutMs, sessionTimeoutMs,
@@ -56,7 +55,7 @@ class MemberMetadataTest extends JUnitSuite {
   }
 
   @Test
-  def testMetadata() {
+  def testMetadata(): Unit = {
     val protocols = List(("range", Array[Byte](0)), ("roundrobin", Array[Byte](1)))
 
     val member = new MemberMetadata(memberId, groupId, groupInstanceId, clientId, clientHost, rebalanceTimeoutMs, sessionTimeoutMs,
@@ -66,7 +65,7 @@ class MemberMetadataTest extends JUnitSuite {
   }
 
   @Test(expected = classOf[IllegalArgumentException])
-  def testMetadataRaisesOnUnsupportedProtocol() {
+  def testMetadataRaisesOnUnsupportedProtocol(): Unit = {
     val protocols = List(("range", Array.empty[Byte]), ("roundrobin", Array.empty[Byte]))
 
     val member = new MemberMetadata(memberId, groupId, groupInstanceId, clientId, clientHost, rebalanceTimeoutMs, sessionTimeoutMs,
@@ -76,7 +75,7 @@ class MemberMetadataTest extends JUnitSuite {
   }
 
   @Test(expected = classOf[IllegalArgumentException])
-  def testVoteRaisesOnNoSupportedProtocols() {
+  def testVoteRaisesOnNoSupportedProtocols(): Unit = {
     val protocols = List(("range", Array.empty[Byte]), ("roundrobin", Array.empty[Byte]))
 
     val member = new MemberMetadata(memberId, groupId, groupInstanceId, clientId, clientHost, rebalanceTimeoutMs, sessionTimeoutMs,
@@ -86,7 +85,7 @@ class MemberMetadataTest extends JUnitSuite {
   }
 
   @Test
-  def testHasValidGroupInstanceId() {
+  def testHasValidGroupInstanceId(): Unit = {
     val protocols = List(("range", Array[Byte](0)), ("roundrobin", Array[Byte](1)))
 
     val member = new MemberMetadata(memberId, groupId, groupInstanceId, clientId, clientHost, rebalanceTimeoutMs, sessionTimeoutMs,

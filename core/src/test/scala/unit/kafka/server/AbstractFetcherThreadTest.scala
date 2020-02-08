@@ -25,8 +25,10 @@ import com.yammer.metrics.Metrics
 import kafka.cluster.BrokerEndPoint
 import kafka.log.LogAppendInfo
 import kafka.message.NoCompressionCodec
+import kafka.server.AbstractFetcherThread.ReplicaFetch
 import kafka.server.AbstractFetcherThread.ResultWithPartitions
 import kafka.utils.TestUtils
+import org.apache.kafka.common.KafkaException
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.{FencedLeaderEpochException, UnknownLeaderEpochException}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
@@ -37,7 +39,7 @@ import org.junit.Assert._
 import org.junit.{Before, Test}
 
 import scala.collection.JavaConverters._
-import scala.collection.{Map, Set, mutable}
+import scala.collection.{mutable, Map, Set}
 import scala.util.Random
 import org.scalatest.Assertions.assertThrows
 
@@ -45,10 +47,13 @@ import scala.collection.mutable.ArrayBuffer
 
 class AbstractFetcherThreadTest {
 
+  private val partition1 = new TopicPartition("topic1", 0)
+  private val partition2 = new TopicPartition("topic2", 0)
+  private val failedPartitions = new FailedPartitions
+
   @Before
   def cleanMetricRegistry(): Unit = {
-    for (metricName <- Metrics.defaultRegistry().allMetrics().keySet().asScala)
-      Metrics.defaultRegistry().removeMetric(metricName)
+    TestUtils.clearYammerMetrics()
   }
 
   private def allMetricsNames: Set[String] = Metrics.defaultRegistry().allMetrics().asScala.keySet.map(_.getName)
@@ -74,15 +79,19 @@ class AbstractFetcherThreadTest {
 
     fetcher.start()
 
+    val brokerTopicStatsMetrics = fetcher.brokerTopicStats.allTopicsStats.metricMap.keySet
+    val fetcherMetrics = Set(FetcherMetrics.BytesPerSec, FetcherMetrics.RequestsPerSec, FetcherMetrics.ConsumerLag)
+
     // wait until all fetcher metrics are present
-    TestUtils.waitUntilTrue(() =>
-      allMetricsNames == Set(FetcherMetrics.BytesPerSec, FetcherMetrics.RequestsPerSec, FetcherMetrics.ConsumerLag),
+    TestUtils.waitUntilTrue(() => allMetricsNames == brokerTopicStatsMetrics ++ fetcherMetrics,
       "Failed waiting for all fetcher metrics to be registered")
 
     fetcher.shutdown()
 
-    // after shutdown, they should be gone
-    assertTrue(Metrics.defaultRegistry().allMetrics().isEmpty)
+    // verify that all the fetcher metrics are removed and only brokerTopicStats left
+    val metricNames = Metrics.defaultRegistry().allMetrics().asScala.keySet.map(_.getName).toSet
+    assertTrue(metricNames.intersect(fetcherMetrics).isEmpty)
+    assertEquals(brokerTopicStatsMetrics, metricNames.intersect(brokerTopicStatsMetrics))
   }
 
   @Test
@@ -147,8 +156,9 @@ class AbstractFetcherThreadTest {
     assertEquals(0L, replicaState.logEndOffset)
     assertEquals(0L, replicaState.highWatermark)
 
-    // After fencing, the fetcher should remove the partition from tracking
+    // After fencing, the fetcher should remove the partition from tracking and mark as failed
     assertTrue(fetcher.fetchState(partition).isEmpty)
+    assertTrue(failedPartitions.contains(partition))
   }
 
   @Test
@@ -176,8 +186,9 @@ class AbstractFetcherThreadTest {
 
     fetcher.doWork()
 
-    // After fencing, the fetcher should remove the partition from tracking
+    // After fencing, the fetcher should remove the partition from tracking and mark as failed
     assertTrue(fetcher.fetchState(partition).isEmpty)
+    assertTrue(failedPartitions.contains(partition))
   }
 
   @Test
@@ -480,11 +491,12 @@ class AbstractFetcherThreadTest {
     val leaderState = MockFetcherThread.PartitionState(leaderLog, leaderEpoch = 4, highWatermark = 2L)
     fetcher.setLeaderState(partition, leaderState)
 
-    // After the out of range error, we get a fenced error and remove the partition
+    // After the out of range error, we get a fenced error and remove the partition and mark as failed
     fetcher.doWork()
     assertEquals(0, replicaState.logEndOffset)
     assertTrue(fetchedEarliestOffset)
     assertTrue(fetcher.fetchState(partition).isEmpty)
+    assertTrue(failedPartitions.contains(partition))
   }
 
   @Test
@@ -568,7 +580,7 @@ class AbstractFetcherThreadTest {
 
     val fetcher = new MockFetcherThread {
       var fetchedOnce = false
-      override def fetchFromLeader(fetchRequest: FetchRequest.Builder): Seq[(TopicPartition, FetchData)] = {
+      override def fetchFromLeader(fetchRequest: FetchRequest.Builder): Map[TopicPartition, FetchData] = {
         val fetchedData = super.fetchFromLeader(fetchRequest)
         if (!fetchedOnce) {
           val records = fetchedData.head._2.records.asInstanceOf[MemoryRecords]
@@ -722,6 +734,67 @@ class AbstractFetcherThreadTest {
     }
   }
 
+  @Test
+  def testFetcherThreadHandlingPartitionFailureDuringAppending(): Unit = {
+    val fetcherForAppend = new MockFetcherThread {
+      override def processPartitionData(topicPartition: TopicPartition, fetchOffset: Long, partitionData: FetchData): Option[LogAppendInfo] = {
+        if (topicPartition == partition1) {
+          throw new KafkaException()
+        } else {
+          super.processPartitionData(topicPartition, fetchOffset, partitionData)
+        }
+      }
+    }
+    verifyFetcherThreadHandlingPartitionFailure(fetcherForAppend)
+  }
+
+  @Test
+  def testFetcherThreadHandlingPartitionFailureDuringTruncation(): Unit = {
+    val fetcherForTruncation = new MockFetcherThread {
+      override def truncate(topicPartition: TopicPartition, truncationState: OffsetTruncationState): Unit = {
+        if(topicPartition == partition1)
+          throw new Exception()
+        else {
+          super.truncate(topicPartition: TopicPartition, truncationState: OffsetTruncationState)
+        }
+      }
+    }
+    verifyFetcherThreadHandlingPartitionFailure(fetcherForTruncation)
+  }
+
+  private def verifyFetcherThreadHandlingPartitionFailure(fetcher: MockFetcherThread): Unit = {
+
+    fetcher.setReplicaState(partition1, MockFetcherThread.PartitionState(leaderEpoch = 0))
+    fetcher.addPartitions(Map(partition1 -> offsetAndEpoch(0L, leaderEpoch = 0)))
+    fetcher.setLeaderState(partition1, MockFetcherThread.PartitionState(leaderEpoch = 0))
+
+    fetcher.setReplicaState(partition2, MockFetcherThread.PartitionState(leaderEpoch = 0))
+    fetcher.addPartitions(Map(partition2 -> offsetAndEpoch(0L, leaderEpoch = 0)))
+    fetcher.setLeaderState(partition2, MockFetcherThread.PartitionState(leaderEpoch = 0))
+
+    // processing data fails for partition1
+    fetcher.doWork()
+
+    // partition1 marked as failed
+    assertTrue(failedPartitions.contains(partition1))
+    assertEquals(None, fetcher.fetchState(partition1))
+
+    // make sure the fetcher continues to work with rest of the partitions
+    fetcher.doWork()
+    assertEquals(Some(Fetching), fetcher.fetchState(partition2).map(_.state))
+    assertFalse(failedPartitions.contains(partition2))
+
+    // simulate a leader change
+    fetcher.removePartitions(Set(partition1))
+    failedPartitions.removeAll(Set(partition1))
+    fetcher.addPartitions(Map(partition1 -> offsetAndEpoch(0L, leaderEpoch = 1)))
+
+    // partition1 added back
+    assertEquals(Some(Truncating), fetcher.fetchState(partition1).map(_.state))
+    assertFalse(failedPartitions.contains(partition1))
+
+  }
+
   object MockFetcherThread {
     class PartitionState(var log: mutable.Buffer[RecordBatch],
                          var leaderEpoch: Int,
@@ -745,7 +818,9 @@ class AbstractFetcherThreadTest {
   class MockFetcherThread(val replicaId: Int = 0, val leaderId: Int = 1)
     extends AbstractFetcherThread("mock-fetcher",
       clientId = "mock-fetcher",
-      sourceBroker = new BrokerEndPoint(leaderId, host = "localhost", port = Random.nextInt())) {
+      sourceBroker = new BrokerEndPoint(leaderId, host = "localhost", port = Random.nextInt()),
+      failedPartitions,
+      brokerTopicStats = new BrokerTopicStats) {
 
     import MockFetcherThread.PartitionState
 
@@ -832,7 +907,7 @@ class AbstractFetcherThreadTest {
       state.highWatermark = offset
     }
 
-    override def buildFetch(partitionMap: Map[TopicPartition, PartitionFetchState]): ResultWithPartitions[Option[FetchRequest.Builder]] = {
+    override def buildFetch(partitionMap: Map[TopicPartition, PartitionFetchState]): ResultWithPartitions[Option[ReplicaFetch]] = {
       val fetchData = mutable.Map.empty[TopicPartition, FetchRequest.PartitionData]
       partitionMap.foreach { case (partition, state) =>
         if (state.isReadyForFetch) {
@@ -842,13 +917,15 @@ class AbstractFetcherThreadTest {
         }
       }
       val fetchRequest = FetchRequest.Builder.forReplica(ApiKeys.FETCH.latestVersion, replicaId, 0, 1, fetchData.asJava)
-      ResultWithPartitions(Some(fetchRequest), Set.empty)
+      ResultWithPartitions(Some(ReplicaFetch(fetchData.asJava, fetchRequest)), Set.empty)
     }
 
     override def latestEpoch(topicPartition: TopicPartition): Option[Int] = {
       val state = replicaPartitionState(topicPartition)
       state.log.lastOption.map(_.partitionLeaderEpoch).orElse(Some(EpochEndOffset.UNDEFINED_EPOCH))
     }
+
+    override def logStartOffset(topicPartition: TopicPartition): Long = replicaPartitionState(topicPartition).logStartOffset
 
     override def logEndOffset(topicPartition: TopicPartition): Long = replicaPartitionState(topicPartition).logEndOffset
 
@@ -904,7 +981,7 @@ class AbstractFetcherThreadTest {
 
     override protected def isOffsetForLeaderEpochSupported: Boolean = true
 
-    override def fetchFromLeader(fetchRequest: FetchRequest.Builder): Seq[(TopicPartition, FetchData)] = {
+    override def fetchFromLeader(fetchRequest: FetchRequest.Builder): Map[TopicPartition, FetchData] = {
       fetchRequest.fetchData.asScala.map { case (partition, fetchData) =>
         val leaderState = leaderPartitionState(partition)
         val epochCheckError = checkExpectedLeaderEpoch(fetchData.currentLeaderEpoch, leaderState)
@@ -931,7 +1008,7 @@ class AbstractFetcherThreadTest {
 
         (partition, new FetchData(error, leaderState.highWatermark, leaderState.highWatermark, leaderState.logStartOffset,
           List.empty.asJava, records))
-      }.toSeq
+      }.toMap
     }
 
     private def checkLeaderEpochAndThrow(expectedEpoch: Int, partitionState: PartitionState): Unit = {

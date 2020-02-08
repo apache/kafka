@@ -19,7 +19,8 @@ package org.apache.kafka.streams.kstream.internals;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.TimestampedKeyValueStore;
+import org.apache.kafka.streams.state.ValueAndTimestamp;
 
 import java.util.Collections;
 import java.util.HashSet;
@@ -94,17 +95,19 @@ public class KTableKTableJoinMerger<K, V> implements KTableProcessorSupplier<K, 
     }
 
     private class KTableKTableJoinMergeProcessor extends AbstractProcessor<K, Change<V>> {
-        private KeyValueStore<K, V> store;
-        private TupleForwarder<K, V> tupleForwarder;
+        private TimestampedKeyValueStore<K, V> store;
+        private TimestampedTupleForwarder<K, V> tupleForwarder;
 
         @SuppressWarnings("unchecked")
         @Override
         public void init(final ProcessorContext context) {
             super.init(context);
             if (queryableName != null) {
-                store = (KeyValueStore<K, V>) context.getStateStore(queryableName);
-                tupleForwarder = new TupleForwarder<>(store, context,
-                    new ForwardingCacheFlushListener<K, V>(context),
+                store = (TimestampedKeyValueStore<K, V>) context.getStateStore(queryableName);
+                tupleForwarder = new TimestampedTupleForwarder<>(
+                    store,
+                    context,
+                    new TimestampedCacheFlushListener<>(context),
                     sendOldValues);
             }
         }
@@ -112,7 +115,7 @@ public class KTableKTableJoinMerger<K, V> implements KTableProcessorSupplier<K, 
         @Override
         public void process(final K key, final Change<V> value) {
             if (queryableName != null) {
-                store.put(key, value.newValue);
+                store.put(key, ValueAndTimestamp.make(value.newValue, context().timestamp()));
                 tupleForwarder.maybeForward(key, value.newValue, sendOldValues ? value.oldValue : null);
             } else {
                 if (sendOldValues) {

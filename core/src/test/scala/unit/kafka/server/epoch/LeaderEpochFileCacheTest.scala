@@ -19,14 +19,15 @@ package kafka.server.epoch
 
 import java.io.File
 
+import scala.collection.Seq
+import scala.collection.mutable.ListBuffer
+
 import kafka.server.checkpoints.{LeaderEpochCheckpoint, LeaderEpochCheckpointFile}
 import org.apache.kafka.common.requests.EpochEndOffset.{UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET}
 import kafka.utils.TestUtils
 import org.apache.kafka.common.TopicPartition
 import org.junit.Assert._
 import org.junit.Test
-
-import scala.collection.mutable.ListBuffer
 
 /**
   * Unit test for the LeaderEpochFileCache.
@@ -119,13 +120,13 @@ class LeaderEpochFileCacheTest {
   }
 
   @Test
-  def shouldReturnUnsupportedIfNoEpochRecorded(){
+  def shouldReturnUnsupportedIfNoEpochRecorded(): Unit = {
     //Then
     assertEquals((UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET), cache.endOffsetFor(0))
   }
 
   @Test
-  def shouldReturnUnsupportedIfNoEpochRecordedAndUndefinedEpochRequested(){
+  def shouldReturnUnsupportedIfNoEpochRecordedAndUndefinedEpochRequested(): Unit = {
     logEndOffset = 73
 
     //When (say a follower on older message format version) sends request for UNDEFINED_EPOCH
@@ -137,7 +138,7 @@ class LeaderEpochFileCacheTest {
   }
 
   @Test
-  def shouldReturnFirstEpochIfRequestedEpochLessThanFirstEpoch(){
+  def shouldReturnFirstEpochIfRequestedEpochLessThanFirstEpoch(): Unit = {
     cache.assign(epoch = 5, startOffset = 11)
     cache.assign(epoch = 6, startOffset = 12)
     cache.assign(epoch = 7, startOffset = 13)
@@ -178,7 +179,7 @@ class LeaderEpochFileCacheTest {
   }
 
   @Test
-  def shouldReturnNextAvailableEpochIfThereIsNoExactEpochForTheOneRequested(){
+  def shouldReturnNextAvailableEpochIfThereIsNoExactEpochForTheOneRequested(): Unit = {
     //When
     cache.assign(epoch = 0, startOffset = 10)
     cache.assign(epoch = 2, startOffset = 13)
@@ -225,7 +226,7 @@ class LeaderEpochFileCacheTest {
   }
 
   @Test
-  def shouldPersistEpochsBetweenInstances(){
+  def shouldPersistEpochsBetweenInstances(): Unit = {
     val checkpointPath = TestUtils.tempFile().getAbsolutePath
     val checkpoint = new LeaderEpochCheckpointFile(new File(checkpointPath))
 

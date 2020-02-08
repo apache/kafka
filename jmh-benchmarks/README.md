@@ -1,7 +1,7 @@
-###JMH-Benchmark module
+### JMH-Benchmark module
 
 This module contains benchmarks written using [JMH](https://openjdk.java.net/projects/code-tools/jmh/) from OpenJDK.
-Writing correct micro-benchmarks is Java (or another JVM language) is difficult and there are many non-obvious pitfalls (many
+Writing correct micro-benchmarks in Java (or another JVM language) is difficult and there are many non-obvious pitfalls (many
 due to compiler optimizations). JMH is a framework for running and analyzing benchmarks (micro or macro) written in Java (or
 another JVM language).
 
@@ -15,7 +15,7 @@ uber-jar file containing the benchmarking code and required JMH classes.
 JMH is highly configurable and users are encouraged to look through the samples for suggestions
 on what options are available. A good tutorial for using JMH can be found [here](http://tutorials.jenkov.com/java-performance/jmh.html#return-value-from-benchmark-method)
 
-###Gradle Tasks / Running benchmarks in gradle
+### Gradle Tasks / Running benchmarks in gradle
 
 If no benchmark mode is specified, the default is used which is throughput. It is assumed that users run
 the gradle tasks with './gradlew' from the root of the Kafka project.

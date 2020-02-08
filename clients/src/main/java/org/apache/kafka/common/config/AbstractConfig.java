@@ -22,6 +22,7 @@ import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.apache.kafka.common.config.provider.ConfigProvider;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -52,27 +53,94 @@ public class AbstractConfig {
 
     private final ConfigDef definition;
 
+    public static final String CONFIG_PROVIDERS_CONFIG = "config.providers";
+
+    private static final String CONFIG_PROVIDERS_PARAM = ".param.";
+
+    /**
+     * Construct a configuration with a ConfigDef and the configuration properties, which can include properties
+     * for zero or more {@link ConfigProvider} that will be used to resolve variables in configuration property
+     * values.
+     *
+     * The originals is a name-value pair configuration properties and optional config provider configs. The
+     * value of the configuration can be a variable as defined below or the actual value. This constructor will
+     * first instantiate the ConfigProviders using the config provider configs, then it will find all the
+     * variables in the values of the originals configurations, attempt to resolve the variables using the named
+     * ConfigProviders, and then parse and validate the configurations.
+     *
+     * ConfigProvider configs can be passed either as configs in the originals map or in the separate
+     * configProviderProps map. If config providers properties are passed in the configProviderProps any config
+     * provider properties in originals map will be ignored. If ConfigProvider properties are not provided, the
+     * constructor will skip the variable substitution step and will simply validate and parse the supplied
+     * configuration.
+     *
+     * The "{@code config.providers}" configuration property and all configuration properties that begin with the
+     * "{@code config.providers.}" prefix are reserved. The "{@code config.providers}" configuration property
+     * specifies the names of the config providers, and properties that begin with the "{@code config.providers..}"
+     * prefix correspond to the properties for that named provider. For example, the "{@code config.providers..class}"
+     * property specifies the name of the {@link ConfigProvider} implementation class that should be used for
+     * the provider.
+     *
+     * The keys for ConfigProvider configs in both originals and configProviderProps will start with the above
+     * mentioned "{@code config.providers.}" prefix.
+     *
+     * Variables have the form "${providerName:[path:]key}", where "providerName" is the name of a ConfigProvider,
+     * "path" is an optional string, and "key" is a required string. This variable is resolved by passing the "key"
+     * and optional "path" to a ConfigProvider with the specified name, and the result from the ConfigProvider is
+     * then used in place of the variable. Variables that cannot be resolved by the AbstractConfig constructor will
+     * be left unchanged in the configuration.
+     *
+     *
+     * @param definition the definition of the configurations; may not be null
+     * @param originals the configuration properties plus any optional config provider properties;
+     * @param configProviderProps the map of properties of config providers which will be instantiated by
+     *        the constructor to resolve any variables in {@code originals}; may be null or empty
+     * @param doLog whether the configurations should be logged
+     */
     @SuppressWarnings("unchecked")
-    public AbstractConfig(ConfigDef definition, Map<?, ?> originals, boolean doLog) {
+    public AbstractConfig(ConfigDef definition, Map<?, ?> originals,  Map<String, ?> configProviderProps, boolean doLog) {
         /* check that all the keys are really strings */
         for (Map.Entry<?, ?> entry : originals.entrySet())
             if (!(entry.getKey() instanceof String))
                 throw new ConfigException(entry.getKey().toString(), entry.getValue(), "Key must be a string.");
-        this.originals = (Map<String, ?>) originals;
+
+        this.originals = resolveConfigVariables(configProviderProps, (Map<String, Object>) originals);
         this.values = definition.parse(this.originals);
+        this.used = Collections.synchronizedSet(new HashSet<>());
         Map<String, Object> configUpdates = postProcessParsedConfig(Collections.unmodifiableMap(this.values));
         for (Map.Entry<String, Object> update : configUpdates.entrySet()) {
             this.values.put(update.getKey(), update.getValue());
         }
         definition.parse(this.values);
-        this.used = Collections.synchronizedSet(new HashSet<>());
         this.definition = definition;
         if (doLog)
             logAll();
     }
 
+    /**
+     * Construct a configuration with a ConfigDef and the configuration properties,
+     * which can include properties for zero or more {@link ConfigProvider}
+     * that will be used to resolve variables in configuration property values.
+     *
+     * @param definition the definition of the configurations; may not be null
+     * @param originals the configuration properties plus any optional config provider properties; may not be null
+     */
     public AbstractConfig(ConfigDef definition, Map<?, ?> originals) {
-        this(definition, originals, true);
+        this(definition, originals, Collections.emptyMap(), true);
+    }
+
+    /**
+     * Construct a configuration with a ConfigDef and the configuration properties,
+     * which can include properties for zero or more {@link ConfigProvider}
+     * that will be used to resolve variables in configuration property values.
+     *
+     * @param definition the definition of the configurations; may not be null
+     * @param originals the configuration properties plus any optional config provider properties; may not be null
+     * @param doLog whether the configurations should be logged
+     */
+    public AbstractConfig(ConfigDef definition, Map<?, ?> originals, boolean doLog) {
+        this(definition, originals, Collections.emptyMap(), doLog);
+
     }
 
     /**
@@ -287,6 +355,29 @@ public class AbstractConfig {
             log.warn("The configuration '{}' was supplied but isn't a known config.", key);
     }
 
+    private <T> T getConfiguredInstance(Object klass, Class<T> t, Map<String, Object> configPairs) {
+        if (klass == null)
+            return null;
+
+        Object o;
+        if (klass instanceof String) {
+            try {
+                o = Utils.newInstance((String) klass, t);
+            } catch (ClassNotFoundException e) {
+                throw new KafkaException("Class " + klass + " cannot be found", e);
+            }
+        } else if (klass instanceof Class<?>) {
+            o = Utils.newInstance((Class<?>) klass);
+        } else
+            throw new KafkaException("Unexpected element of type " + klass.getClass().getName() + ", expected String or Class");
+        if (!t.isInstance(o))
+            throw new KafkaException(klass + " is not an instance of " + t.getName());
+        if (o instanceof Configurable)
+            ((Configurable) o).configure(configPairs);
+
+        return t.cast(o);
+    }
+
     /**
      * Get a configured instance of the give class specified by the given configuration key. If the object implements
      * Configurable configure it using the configuration.
@@ -297,14 +388,8 @@ public class AbstractConfig {
      */
     public <T> T getConfiguredInstance(String key, Class<T> t) {
         Class<?> c = getClass(key);
-        if (c == null)
-            return null;
-        Object o = Utils.newInstance(c);
-        if (!t.isInstance(o))
-            throw new KafkaException(c.getName() + " is not an instance of " + t.getName());
-        if (o instanceof Configurable)
-            ((Configurable) o).configure(originals());
-        return t.cast(o);
+
+        return getConfiguredInstance(c, t, originals());
     }
 
     /**
@@ -332,7 +417,6 @@ public class AbstractConfig {
         return getConfiguredInstances(getList(key), t, configOverrides);
     }
 
-
     /**
      * Get a list of configured instances of the given class specified by the given configuration key. The configuration
      * may specify either null or an empty string to indicate no configured instances. In both cases, this method
@@ -349,24 +433,112 @@ public class AbstractConfig {
         Map<String, Object> configPairs = originals();
         configPairs.putAll(configOverrides);
         for (Object klass : classNames) {
-            Object o;
-            if (klass instanceof String) {
-                try {
-                    o = Utils.newInstance((String) klass, t);
-                } catch (ClassNotFoundException e) {
-                    throw new KafkaException(klass + " ClassNotFoundException exception occurred", e);
-                }
-            } else if (klass instanceof Class<?>) {
-                o = Utils.newInstance((Class<?>) klass);
-            } else
-                throw new KafkaException("List contains element of type " + klass.getClass().getName() + ", expected String or Class");
-            if (!t.isInstance(o))
-                throw new KafkaException(klass + " is not an instance of " + t.getName());
-            if (o instanceof Configurable)
-                ((Configurable) o).configure(configPairs);
+            Object o = getConfiguredInstance(klass, t, configPairs);
             objects.add(t.cast(o));
         }
         return objects;
+    }
+
+    private Map<String, String> extractPotentialVariables(Map<?, ?>  configMap) {
+        // Variables are tuples of the form "${providerName:[path:]key}". From the configMap we extract the subset of configs with string
+        // values as potential variables.
+        Map<String, String> configMapAsString = new HashMap<>();
+        for (Map.Entry<?, ?> entry : configMap.entrySet()) {
+            if (entry.getValue() instanceof String)
+                configMapAsString.put((String) entry.getKey(), (String) entry.getValue());
+        }
+
+        return configMapAsString;
+    }
+
+    /**
+     * Instantiates given list of config providers and fetches the actual values of config variables from the config providers.
+     * returns a map of config key and resolved values.
+     * @param configProviderProps The map of config provider configs
+     * @param originals The map of raw configs.
+     * @return map of resolved config variable.
+     */
+    @SuppressWarnings("unchecked")
+    private  Map<String, ?> resolveConfigVariables(Map<String, ?> configProviderProps, Map<String, Object> originals) {
+        Map<String, String> providerConfigString;
+        Map<String, ?> configProperties;
+        Map<String, Object> resolvedOriginals = new HashMap<>();
+        // As variable configs are strings, parse the originals and obtain the potential variable configs.
+        Map<String, String> indirectVariables = extractPotentialVariables(originals);
+
+        resolvedOriginals.putAll(originals);
+        if (configProviderProps == null || configProviderProps.isEmpty()) {
+            providerConfigString = indirectVariables;
+            configProperties = originals;
+        } else {
+            providerConfigString = extractPotentialVariables(configProviderProps);
+            configProperties = configProviderProps;
+        }
+        Map<String, ConfigProvider> providers = instantiateConfigProviders(providerConfigString, configProperties);
+
+        if (!providers.isEmpty()) {
+            ConfigTransformer configTransformer = new ConfigTransformer(providers);
+            ConfigTransformerResult result = configTransformer.transform(indirectVariables);
+            if (!result.data().isEmpty()) {
+                resolvedOriginals.putAll(result.data());
+            }
+        }
+
+        return new ResolvingMap<>(resolvedOriginals, originals);
+    }
+
+    private Map<String, Object> configProviderProperties(String configProviderPrefix, Map<String, ?> providerConfigProperties) {
+        Map<String, Object> result = new HashMap<>();
+        for (Map.Entry<String, ?> entry : providerConfigProperties.entrySet()) {
+            String key = entry.getKey();
+            if (key.startsWith(configProviderPrefix) && key.length() > configProviderPrefix.length()) {
+                result.put(key.substring(configProviderPrefix.length()), entry.getValue());
+            }
+        }
+        return result;
+    }
+
+    /**
+     * Instantiates and configures the ConfigProviders. The config providers configs are defined as follows:
+     * config.providers : A comma-separated list of names for providers.
+     * config.providers.{name}.class : The Java class name for a provider.
+     * config.providers.{name}.param.{param-name} : A parameter to be passed to the above Java class on initialization.
+     * returns a map of config provider name and its instance.
+     * @param indirectConfigs The map of potential variable configs
+     * @param providerConfigProperties The map of config provider configs
+     * @return map map of config provider name and its instance.
+     */
+    private Map<String, ConfigProvider> instantiateConfigProviders(Map<String, String> indirectConfigs, Map<String, ?> providerConfigProperties) {
+        final String configProviders = indirectConfigs.get(CONFIG_PROVIDERS_CONFIG);
+
+        if (configProviders == null || configProviders.isEmpty()) {
+            return Collections.emptyMap();
+        }
+
+        Map<String, String> providerMap = new HashMap<>();
+
+        for (String provider: configProviders.split(",")) {
+            String providerClass = CONFIG_PROVIDERS_CONFIG + "." + provider + ".class";
+            if (indirectConfigs.containsKey(providerClass))
+                providerMap.put(provider, indirectConfigs.get(providerClass));
+
+        }
+        // Instantiate Config Providers
+        Map<String, ConfigProvider> configProviderInstances = new HashMap<>();
+        for (Map.Entry<String, String> entry : providerMap.entrySet()) {
+            try {
+                String prefix = CONFIG_PROVIDERS_CONFIG + "." + entry.getKey() + CONFIG_PROVIDERS_PARAM;
+                Map<String, ?> configProperties = configProviderProperties(prefix, providerConfigProperties);
+                ConfigProvider provider = Utils.newInstance(entry.getValue(), ConfigProvider.class);
+                provider.configure(configProperties);
+                configProviderInstances.put(entry.getKey(), provider);
+            } catch (ClassNotFoundException e) {
+                log.error("ClassNotFoundException exception occurred: " + entry.getValue());
+                throw new ConfigException("Invalid config:" + entry.getValue() + " ClassNotFoundException exception occurred", e);
+            }
+        }
+
+        return configProviderInstances;
     }
 
     @Override
@@ -426,6 +598,33 @@ public class AbstractConfig {
                 if (withIgnoreFallback)
                     ignore(stringKey);
             }
+            return super.get(key);
+        }
+    }
+
+    /**
+     * ResolvingMap keeps a track of the original map instance and the resolved configs.
+     * The originals are tracked in a separate nested map and may be a `RecordingMap`; thus
+     * any access to a value for a key needs to be recorded on the originals map.
+     * The resolved configs are kept in the inherited map and are therefore mutable, though any
+     * mutations are not applied to the originals.
+     */
+    private static class ResolvingMap<V> extends HashMap<String, V> {
+
+        private final Map<String, ?> originals;
+
+        ResolvingMap(Map<String, ? extends V> resolved, Map<String, ?> originals) {
+            super(resolved);
+            this.originals = Collections.unmodifiableMap(originals);
+        }
+
+        @Override
+        public V get(Object key) {
+            if (key instanceof String && originals.containsKey(key)) {
+                // Intentionally ignore the result; call just to mark the original entry as used
+                originals.get(key);
+            }
+            // But always use the resolved entry
             return super.get(key);
         }
     }

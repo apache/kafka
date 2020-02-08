@@ -49,7 +49,7 @@
         <li>Has <b>no external dependencies on systems other than Apache Kafka itself</b> as the internal messaging layer; notably, it uses Kafka's partitioning model to horizontally scale processing while maintaining strong ordering guarantees.</li>
         <li>Supports <b>fault-tolerant local state</b>, which enables very fast and efficient stateful operations like windowed joins and aggregations.</li>
         <li>Supports <b>exactly-once</b> processing semantics to guarantee that each record will be processed once and only once even when there is a failure on either Streams clients or Kafka brokers in the middle of processing.</li>
-        <li>Employs <b>one-record-at-a-time processing</b> to achieve millisecond processing latency, and supports <b>event-time based windowing operations</b> with late arrival of records.</li>
+        <li>Employs <b>one-record-at-a-time processing</b> to achieve millisecond processing latency, and supports <b>event-time based windowing operations</b> with out-of-order arrival of records.</li>
         <li>Offers necessary stream processing primitives, along with a <b>high-level Streams DSL</b> and a <b>low-level Processor API</b>.</li>
 
     </ul>
@@ -124,7 +124,7 @@
     <ul>
         <li> When new output records are generated via processing some input record, for example, <code>context.forward()</code> triggered in the <code>process()</code> function call, output record timestamps are inherited from input record timestamps directly.</li>
         <li> When new output records are generated via periodic functions such as <code>Punctuator#punctuate()</code>, the output record timestamp is defined as the current internal time (obtained through <code>context.timestamp()</code>) of the stream task.</li>
-        <li> For aggregations, the timestamp of a resulting aggregate update record will be that of the latest arrived input record that triggered the update.</li>
+        <li> For aggregations, the timestamp of a result update record will be the maximum timestamp of all input records contributing to the result.</li>
     </ul>
 
     <p>
@@ -137,7 +137,7 @@
     </p>
 
     <p>
-        In the <code>Kafka Streams DSL</code>, an input stream of an <code>aggregation</code> can be a KStream or a KTable, but the output stream will always be a KTable. This allows Kafka Streams to update an aggregate value upon the late arrival of further records after the value was produced and emitted. When such late arrival happens, the aggregating KStream or KTable emits a new aggregate value. Because the output is a KTable, the new value is considered to overwrite the old value with the same key in subsequent processing steps.
+        In the <code>Kafka Streams DSL</code>, an input stream of an <code>aggregation</code> can be a KStream or a KTable, but the output stream will always be a KTable. This allows Kafka Streams to update an aggregate value upon the out-of-order arrival of further records after the value was produced and emitted. When such out-of-order arrival happens, the aggregating KStream or KTable emits a new aggregate value. Because the output is a KTable, the new value is considered to overwrite the old value with the same key in subsequent processing steps.
     </p>
 
     <h3> <a id="streams_concepts_windowing" href="#streams_concepts_windowing">Windowing</a></h3>
@@ -145,10 +145,10 @@
         Windowing lets you control how to <em>group records that have the same key</em> for stateful operations such as <code>aggregations</code> or <code>joins</code> into so-called <em>windows</em>. Windows are tracked per record key.
     </p>
     <p>
-        <code>Windowing operations</code> are available in the <code>Kafka Streams DSL</code>. When working with windows, you can specify a <strong>retention period</strong> for the window. This retention period controls how long Kafka Streams will wait for <strong>out-of-order</strong> or <strong>late-arriving</strong> data records for a given window. If a record arrives after the retention period of a window has passed, the record is discarded and will not be processed in that window.
+        <code>Windowing operations</code> are available in the <code>Kafka Streams DSL</code>. When working with windows, you can specify a <strong>grace period</strong> for the window. This grace period controls how long Kafka Streams will wait for <strong>out-of-order</strong> data records for a given window. If a record arrives after the grace period of a window has passed, the record is discarded and will not be processed in that window. Specifically, a record is discarded if its timestamp dictates it belongs to a window, but the current stream time is greater than the end of the window plus the grace period.
     </p>
     <p>
-        Late-arriving records are always possible in the real world and should be properly accounted for in your applications. It depends on the effective <code>time semantics </code> how late records are handled. In the case of processing-time, the semantics are &quot;when the record is being processed&quot;, which means that the notion of late records is not applicable as, by definition, no record can be late. Hence, late-arriving records can only be considered as such (i.e. as arriving &quot;late&quot;) for event-time or ingestion-time semantics. In both cases, Kafka Streams is able to properly handle late-arriving records.
+        Out-of-order records are always possible in the real world and should be properly accounted for in your applications. It depends on the effective <code>time semantics </code> how out-of-order records are handled. In the case of processing-time, the semantics are &quot;when the record is being processed&quot;, which means that the notion of out-of-order records is not applicable as, by definition, no record can be out-of-order. Hence, out-of-order records can only be considered as such for event-time. In both cases, Kafka Streams is able to properly handle out-of-order records.
     </p>
 
     <h3><a id="streams_concepts_duality" href="#streams-concepts-duality">Duality of Streams and Tables</a></h3>

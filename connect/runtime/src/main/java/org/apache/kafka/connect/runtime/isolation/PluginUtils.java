@@ -123,14 +123,21 @@ public class PluginUtils {
             + "|org\\.slf4j"
             + ")\\..*$");
 
+    // If the base interface or class that will be used to identify Connect plugins resides within
+    // the same java package as the plugins that need to be loaded in isolation (and thus are
+    // added to the WHITELIST), then this base interface or class needs to be excluded in the
+    // regular expression pattern
     private static final Pattern WHITELIST = Pattern.compile("^org\\.apache\\.kafka\\.(?:connect\\.(?:"
             + "transforms\\.(?!Transformation$).*"
             + "|json\\..*"
             + "|file\\..*"
+            + "|mirror\\..*"
+            + "|mirror-client\\..*"
             + "|converters\\..*"
             + "|storage\\.StringConverter"
             + "|storage\\.SimpleHeaderConverter"
             + "|rest\\.basic\\.auth\\.extension\\.BasicAuthSecurityRestExtension"
+            + "|connector\\.policy\\.(?!ConnectorClientConfigOverridePolicy$).*"
             + ")"
             + "|common\\.config\\.provider\\.(?!ConfigProvider$).*"
             + ")$");

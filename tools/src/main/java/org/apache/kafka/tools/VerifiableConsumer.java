@@ -39,6 +39,7 @@ import org.apache.kafka.clients.consumer.OffsetCommitCallback;
 import org.apache.kafka.clients.consumer.RangeAssignor;
 import org.apache.kafka.clients.consumer.RoundRobinAssignor;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.FencedInstanceIdException;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.utils.Exit;
@@ -213,6 +214,8 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
         } catch (WakeupException e) {
             // we only call wakeup() once to close the consumer, so this recursion should be safe
             commitSync(offsets);
+            throw e;
+        } catch (FencedInstanceIdException e) {
             throw e;
         } catch (Exception e) {
             onComplete(offsets, e);
@@ -526,7 +529,7 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
 
         parser.addArgument("--group-instance-id")
                 .action(store())
-                .required(true)
+                .required(false)
                 .type(String.class)
                 .metavar("GROUP_INSTANCE_ID")
                 .dest("groupInstanceId")
@@ -610,7 +613,7 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
         consumerProps.put(ConsumerConfig.GROUP_ID_CONFIG, res.getString("groupId"));
 
         String groupInstanceId = res.getString("groupInstanceId");
-        if (!groupInstanceId.equals("None")) {
+        if (groupInstanceId != null) {
             consumerProps.put(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG, groupInstanceId);
         }
         consumerProps.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, res.getString("brokerList"));
@@ -641,7 +644,7 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
 
         try {
             final VerifiableConsumer consumer = createFromArgs(parser, args);
-            Runtime.getRuntime().addShutdownHook(new Thread(() -> consumer.close()));
+            Exit.addShutdownHook("verifiable-consumer-shutdown-hook", () -> consumer.close());
 
             consumer.run();
         } catch (ArgumentParserException e) {

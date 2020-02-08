@@ -23,48 +23,46 @@ import java.util.concurrent.TimeUnit;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.CompoundStat;
 import org.apache.kafka.common.metrics.MetricConfig;
-import org.apache.kafka.common.metrics.stats.Rate.SampledTotal;
 
 
 /**
  * A compound stat that includes a rate metric and a cumulative total metric.
  */
 public class Meter implements CompoundStat {
-
     private final MetricName rateMetricName;
     private final MetricName totalMetricName;
     private final Rate rate;
-    private final Total total;
+    private final CumulativeSum total;
 
     /**
-     * Construct a Meter with seconds as time unit and {@link SampledTotal} stats for Rate
+     * Construct a Meter with seconds as time unit
      */
     public Meter(MetricName rateMetricName, MetricName totalMetricName) {
-        this(TimeUnit.SECONDS, new SampledTotal(), rateMetricName, totalMetricName);
+        this(TimeUnit.SECONDS, new WindowedSum(), rateMetricName, totalMetricName);
     }
 
     /**
-     * Construct a Meter with provided time unit and {@link SampledTotal} stats for Rate
+     * Construct a Meter with provided time unit
      */
     public Meter(TimeUnit unit, MetricName rateMetricName, MetricName totalMetricName) {
-        this(unit, new SampledTotal(), rateMetricName, totalMetricName);
+        this(unit, new WindowedSum(), rateMetricName, totalMetricName);
     }
 
     /**
-     * Construct a Meter with seconds as time unit and provided {@link SampledStat} stats for Rate
+     * Construct a Meter with seconds as time unit
      */
     public Meter(SampledStat rateStat, MetricName rateMetricName, MetricName totalMetricName) {
         this(TimeUnit.SECONDS, rateStat, rateMetricName, totalMetricName);
     }
 
     /**
-     * Construct a Meter with provided time unit and provided {@link SampledStat} stats for Rate
+     * Construct a Meter with provided time unit
      */
     public Meter(TimeUnit unit, SampledStat rateStat, MetricName rateMetricName, MetricName totalMetricName) {
-        if (!(rateStat instanceof SampledTotal) && !(rateStat instanceof Count)) {
-            throw new IllegalArgumentException("Meter is supported only for SampledTotal and Count");
+        if (!(rateStat instanceof WindowedSum)) {
+            throw new IllegalArgumentException("Meter is supported only for WindowedCount or WindowedSum.");
         }
-        this.total = new Total();
+        this.total = new CumulativeSum();
         this.rate = new Rate(unit, rateStat);
         this.rateMetricName = rateMetricName;
         this.totalMetricName = totalMetricName;
@@ -81,7 +79,7 @@ public class Meter implements CompoundStat {
     public void record(MetricConfig config, double value, long timeMs) {
         rate.record(config, value, timeMs);
         // Total metrics with Count stat should record 1.0 (as recorded in the count)
-        double totalValue = (rate.stat instanceof Count) ? 1.0 : value;
+        double totalValue = (rate.stat instanceof WindowedCount) ? 1.0 : value;
         total.record(config, totalValue, timeMs);
     }
 }

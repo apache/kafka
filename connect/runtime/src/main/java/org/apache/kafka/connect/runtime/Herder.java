@@ -17,10 +17,13 @@
 package org.apache.kafka.connect.runtime;
 
 import org.apache.kafka.connect.runtime.isolation.Plugins;
+import org.apache.kafka.connect.runtime.rest.InternalRequestSignature;
+import org.apache.kafka.connect.runtime.rest.entities.ActiveTopicsInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigInfos;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
 import org.apache.kafka.connect.runtime.rest.entities.TaskInfo;
+import org.apache.kafka.connect.storage.StatusBackingStore;
 import org.apache.kafka.connect.util.Callback;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 
@@ -120,14 +123,50 @@ public interface Herder {
      * @param connName connector to update
      * @param configs list of configurations
      * @param callback callback to invoke upon completion
+     * @param requestSignature the signature of the request made for this task (re-)configuration;
+     *                         may be null if no signature was provided
      */
-    void putTaskConfigs(String connName, List<Map<String, String>> configs, Callback<Void> callback);
+    void putTaskConfigs(String connName, List<Map<String, String>> configs, Callback<Void> callback, InternalRequestSignature requestSignature);
+
+    /**
+     * Get a list of connectors currently running in this cluster.
+     * @returns A list of connector names
+     */
+    Collection<String> connectors();
+
+    /**
+     * Get the definition and status of a connector.
+     * @param connName name of the connector
+     */
+    ConnectorInfo connectorInfo(String connName);
 
     /**
      * Lookup the current status of a connector.
      * @param connName name of the connector
      */
     ConnectorStateInfo connectorStatus(String connName);
+
+    /**
+     * Lookup the set of topics currently used by a connector.
+     *
+     * @param connName name of the connector
+     * @return the set of active topics
+     */
+    ActiveTopicsInfo connectorActiveTopics(String connName);
+
+    /**
+     * Request to asynchronously reset the active topics for the named connector.
+     *
+     * @param connName name of the connector
+     */
+    void resetConnectorActiveTopics(String connName);
+
+    /**
+     * Return a reference to the status backing store used by this herder.
+     *
+     * @return the status backing store used by this herder
+     */
+    StatusBackingStore statusBackingStore();
 
     /**
      * Lookup the status of the a task.
@@ -184,7 +223,6 @@ public interface Herder {
      * @return a reference to the plugin factory.
      */
     Plugins plugins();
-
 
     /**
      * Get the cluster ID of the Kafka cluster backing this Connect cluster.

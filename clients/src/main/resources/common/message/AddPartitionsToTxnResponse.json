@@ -19,12 +19,13 @@
   "name": "AddPartitionsToTxnResponse",
   // Starting in version 1, on quota violation brokers send out responses before throttling.
   "validVersions": "0-1",
+  "flexibleVersions": "none",
   "fields": [
     { "name": "ThrottleTimeMs", "type": "int32", "versions": "0+",
       "about": "Duration in milliseconds for which the request was throttled due to a quota violation, or zero if the request did not violate any quota." },
     { "name": "Results", "type": "[]AddPartitionsToTxnTopicResult", "versions": "0+",
       "about": "The results for each topic.", "fields": [
-      { "name": "Name", "type": "string", "versions": "0+", "mapKey": true,
+      { "name": "Name", "type": "string", "versions": "0+", "mapKey": true, "entityType": "topicName",
         "about": "The topic name." },
       { "name": "Results", "type": "[]AddPartitionsToTxnPartitionResult", "versions": "0+", 
         "about": "The results for each partition", "fields": [

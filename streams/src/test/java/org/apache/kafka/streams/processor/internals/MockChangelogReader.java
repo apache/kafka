@@ -25,29 +25,55 @@ import java.util.Map;
 import java.util.Set;
 
 public class MockChangelogReader implements ChangelogReader {
-    private final Set<TopicPartition> registered = new HashSet<>();
+    private final Set<TopicPartition> restoringPartitions = new HashSet<>();
+    private Map<TopicPartition, Long> restoredOffsets = Collections.emptyMap();
 
-    @Override
-    public void register(final StateRestorer restorer) {
-        registered.add(restorer.partition());
+    public boolean isPartitionRegistered(final TopicPartition partition) {
+        return restoringPartitions.contains(partition);
     }
 
     @Override
-    public Collection<TopicPartition> restore(final RestoringTasks active) {
-        return registered;
+    public void register(final TopicPartition partition, final ProcessorStateManager stateManager) {
+        restoringPartitions.add(partition);
     }
 
     @Override
-    public Map<TopicPartition, Long> restoredOffsets() {
-        return Collections.emptyMap();
+    public void restore() {
+        // do nothing
     }
 
     @Override
-    public void reset() {
-        registered.clear();
+    public void transitToRestoreActive() {
+        // do nothing
     }
 
-    public boolean wasRegistered(final TopicPartition partition) {
-        return registered.contains(partition);
+    @Override
+    public void transitToUpdateStandby() {
+        // do nothing
+    }
+
+    @Override
+    public Set<TopicPartition> completedChangelogs() {
+        // assuming all restoring partitions are completed
+        return restoringPartitions;
+    }
+
+    @Override
+    public void clear() {
+        restoringPartitions.clear();
+    }
+
+    @Override
+    public void remove(final Collection<TopicPartition> partitions) {
+        restoringPartitions.removeAll(partitions);
+
+        for (final TopicPartition partition : partitions) {
+            restoredOffsets.remove(partition);
+        }
+    }
+
+    @Override
+    public boolean isEmpty() {
+        return restoredOffsets.isEmpty() && restoringPartitions.isEmpty();
     }
 }

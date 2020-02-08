@@ -22,22 +22,29 @@ import java.nio.ByteBuffer
 import java.util.{Base64, Properties}
 
 import kafka.network.RequestChannel.Session
-import kafka.security.auth.Acl.WildCardHost
-import kafka.security.auth._
+import kafka.security.authorizer.{AclAuthorizer, AuthorizerUtils}
+import kafka.security.authorizer.AclEntry.WildcardHost
 import kafka.server.{CreateTokenResult, Defaults, DelegationTokenManager, KafkaConfig}
 import kafka.utils.TestUtils
 import kafka.zk.{KafkaZkClient, ZooKeeperTestHarness}
+import org.apache.kafka.common.acl.{AccessControlEntry, AclBinding, AclOperation}
+import org.apache.kafka.common.acl.AclOperation._
+import org.apache.kafka.common.acl.AclPermissionType.ALLOW
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.resource.PatternType.LITERAL
+import org.apache.kafka.common.resource.ResourcePattern
+import org.apache.kafka.common.resource.ResourceType.DELEGATION_TOKEN
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.security.scram.internals.ScramMechanism
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache
 import org.apache.kafka.common.security.token.delegation.{DelegationToken, TokenInformation}
 import org.apache.kafka.common.utils.{MockTime, SecurityUtils, Time}
+import org.apache.kafka.server.authorizer._
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
 
 import scala.collection.JavaConverters._
+import scala.compat.java8.OptionConverters._
 import scala.collection.mutable.Buffer
 
 class DelegationTokenManagerTest extends ZooKeeperTestHarness  {
@@ -58,7 +65,7 @@ class DelegationTokenManagerTest extends ZooKeeperTestHarness  {
   var expiryTimeStamp: Long = 0
 
   @Before
-  override def setUp() {
+  override def setUp(): Unit = {
     super.setUp()
     props = TestUtils.createBrokerConfig(0, zkConnect, enableToken = true)
     props.put(KafkaConfig.SaslEnabledMechanismsProp, ScramMechanism.mechanismNames().asScala.mkString(","))
@@ -228,8 +235,8 @@ class DelegationTokenManagerTest extends ZooKeeperTestHarness  {
     val renewer3 = SecurityUtils.parseKafkaPrincipal("User:renewer3")
     val renewer4 = SecurityUtils.parseKafkaPrincipal("User:renewer4")
 
-    val simpleAclAuthorizer = new SimpleAclAuthorizer
-    simpleAclAuthorizer.configure(config.originals)
+    val aclAuthorizer = new AclAuthorizer
+    aclAuthorizer.configure(config.originals)
 
     var hostSession = new Session(owner1, InetAddress.getByName("192.168.1.1"))
 
@@ -250,61 +257,71 @@ class DelegationTokenManagerTest extends ZooKeeperTestHarness  {
     assert(tokenManager.getAllTokenInformation().size == 4 )
 
     //get tokens non-exiting owner
-    var  tokens = getTokens(tokenManager, simpleAclAuthorizer, hostSession, owner1, List(SecurityUtils.parseKafkaPrincipal("User:unknown")))
+    var  tokens = getTokens(tokenManager, aclAuthorizer, hostSession, owner1, List(SecurityUtils.parseKafkaPrincipal("User:unknown")))
     assert(tokens.size == 0)
 
     //get all tokens for  empty owner list
-    tokens = getTokens(tokenManager, simpleAclAuthorizer, hostSession, owner1, List())
+    tokens = getTokens(tokenManager, aclAuthorizer, hostSession, owner1, List())
     assert(tokens.size == 0)
 
     //get all tokens for owner1
-    tokens = getTokens(tokenManager, simpleAclAuthorizer, hostSession, owner1, List(owner1))
+    tokens = getTokens(tokenManager, aclAuthorizer, hostSession, owner1, List(owner1))
     assert(tokens.size == 2)
 
     //get all tokens for owner1
-    tokens = getTokens(tokenManager, simpleAclAuthorizer, hostSession, owner1, null)
+    tokens = getTokens(tokenManager, aclAuthorizer, hostSession, owner1, null)
     assert(tokens.size == 2)
 
     //get all tokens for unknown owner
-    tokens = getTokens(tokenManager, simpleAclAuthorizer, hostSession, SecurityUtils.parseKafkaPrincipal("User:unknown"), null)
+    tokens = getTokens(tokenManager, aclAuthorizer, hostSession, SecurityUtils.parseKafkaPrincipal("User:unknown"), null)
     assert(tokens.size == 0)
 
     //get all tokens for multiple owners (owner1, renewer4) and without permission for renewer4
-    tokens = getTokens(tokenManager, simpleAclAuthorizer, hostSession, owner1, List(owner1, renewer4))
+    tokens = getTokens(tokenManager, aclAuthorizer, hostSession, owner1, List(owner1, renewer4))
     assert(tokens.size == 2)
 
+    def createAcl(aclBinding: AclBinding): Unit = {
+      val result = aclAuthorizer.createAcls(null, List(aclBinding).asJava).get(0).toCompletableFuture.get
+      result.exception.asScala.foreach { e => throw e }
+    }
+
     //get all tokens for multiple owners (owner1, renewer4) and with permission
-    var acl = new Acl(owner1, Allow, WildCardHost, Describe)
-    simpleAclAuthorizer.addAcls(Set(acl), Resource(kafka.security.auth.DelegationToken, tokenId3, LITERAL))
-    tokens = getTokens(tokenManager, simpleAclAuthorizer, hostSession, owner1, List(owner1, renewer4))
+    createAcl(new AclBinding(new ResourcePattern(DELEGATION_TOKEN, tokenId3, LITERAL),
+      new AccessControlEntry(owner1.toString, WildcardHost, DESCRIBE, ALLOW)))
+    tokens = getTokens(tokenManager, aclAuthorizer, hostSession, owner1, List(owner1, renewer4))
     assert(tokens.size == 3)
 
     //get all tokens for renewer4 which is a renewer principal for some tokens
-    tokens = getTokens(tokenManager, simpleAclAuthorizer, hostSession,  renewer4, List(renewer4))
+    tokens = getTokens(tokenManager, aclAuthorizer, hostSession,  renewer4, List(renewer4))
     assert(tokens.size == 2)
 
     //get all tokens for multiple owners (renewer2, renewer3) which are token renewers principals and without permissions for renewer3
-    tokens = getTokens(tokenManager, simpleAclAuthorizer, hostSession,  renewer2, List(renewer2, renewer3))
+    tokens = getTokens(tokenManager, aclAuthorizer, hostSession,  renewer2, List(renewer2, renewer3))
     assert(tokens.size == 1)
 
     //get all tokens for multiple owners (renewer2, renewer3) which are token renewers principals and with permissions
-    hostSession = new Session(renewer2, InetAddress.getByName("192.168.1.1"))
-    acl = new Acl(renewer2, Allow, WildCardHost, Describe)
-    simpleAclAuthorizer.addAcls(Set(acl), Resource(kafka.security.auth.DelegationToken, tokenId2, LITERAL))
-    tokens = getTokens(tokenManager, simpleAclAuthorizer, hostSession,  renewer2, List(renewer2, renewer3))
+    hostSession = Session(renewer2, InetAddress.getByName("192.168.1.1"))
+    createAcl(new AclBinding(new ResourcePattern(DELEGATION_TOKEN, tokenId2, LITERAL),
+      new AccessControlEntry(renewer2.toString, WildcardHost, DESCRIBE, ALLOW)))
+    tokens = getTokens(tokenManager, aclAuthorizer, hostSession,  renewer2, List(renewer2, renewer3))
     assert(tokens.size == 2)
 
-    simpleAclAuthorizer.close()
+    aclAuthorizer.close()
   }
 
-  private def getTokens(tokenManager: DelegationTokenManager, simpleAclAuthorizer: SimpleAclAuthorizer, hostSession: Session,
+  private def getTokens(tokenManager: DelegationTokenManager, aclAuthorizer: AclAuthorizer, hostSession: Session,
                         requestPrincipal: KafkaPrincipal, requestedOwners: List[KafkaPrincipal]): List[DelegationToken] = {
 
     if (requestedOwners != null && requestedOwners.isEmpty) {
       List()
     }
     else {
-      def authorizeToken(tokenId: String) = simpleAclAuthorizer.authorize(hostSession, Describe, Resource(kafka.security.auth.DelegationToken, tokenId, LITERAL))
+      def authorizeToken(tokenId: String) = {
+        val requestContext = AuthorizerUtils.sessionToRequestContext(hostSession)
+        val action = new Action(AclOperation.DESCRIBE,
+          new ResourcePattern(DELEGATION_TOKEN, tokenId, LITERAL), 1, true, true)
+        aclAuthorizer.authorize(requestContext, List(action).asJava).asScala.head == AuthorizationResult.ALLOWED
+      }
       def eligible(token: TokenInformation) = DelegationTokenManager.filterToken(requestPrincipal, Option(requestedOwners), token, authorizeToken)
       tokenManager.getTokens(eligible)
     }

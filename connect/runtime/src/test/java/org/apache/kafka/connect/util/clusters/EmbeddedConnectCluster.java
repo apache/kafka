@@ -333,7 +333,17 @@ public class EmbeddedConnectCluster {
         }
     }
 
-    private String endpointForResource(String resource) throws IOException {
+    public String adminEndpoint(String resource) throws IOException {
+        String url = connectCluster.stream()
+                .map(WorkerHandle::adminUrl)
+                .filter(Objects::nonNull)
+                .findFirst()
+                .orElseThrow(() -> new IOException("Admin endpoint is disabled."))
+                .toString();
+        return url + resource;
+    }
+
+    public String endpointForResource(String resource) throws IOException {
         String url = connectCluster.stream()
                 .map(WorkerHandle::url)
                 .filter(Objects::nonNull)
@@ -362,13 +372,36 @@ public class EmbeddedConnectCluster {
         try (OutputStreamWriter out = new OutputStreamWriter(httpCon.getOutputStream())) {
             out.write(body);
         }
-        try (InputStream is = httpCon.getInputStream()) {
-            int c;
-            StringBuilder response = new StringBuilder();
-            while ((c = is.read()) != -1) {
-                response.append((char) c);
+        if (httpCon.getResponseCode() < HttpURLConnection.HTTP_BAD_REQUEST) {
+            try (InputStream is = httpCon.getInputStream()) {
+                log.info("PUT response for URL={} is {}", url, responseToString(is));
             }
-            log.info("Put response for URL={} is {}", url, response);
+        } else {
+            try (InputStream is = httpCon.getErrorStream()) {
+                log.info("PUT error response for URL={} is {}", url, responseToString(is));
+            }
+        }
+        return httpCon.getResponseCode();
+    }
+
+    public int executePost(String url, String body, Map<String, String> headers) throws IOException {
+        log.debug("Executing POST request to URL={}. Payload={}", url, body);
+        HttpURLConnection httpCon = (HttpURLConnection) new URL(url).openConnection();
+        httpCon.setDoOutput(true);
+        httpCon.setRequestProperty("Content-Type", "application/json");
+        headers.forEach(httpCon::setRequestProperty);
+        httpCon.setRequestMethod("POST");
+        try (OutputStreamWriter out = new OutputStreamWriter(httpCon.getOutputStream())) {
+            out.write(body);
+        }
+        if (httpCon.getResponseCode() < HttpURLConnection.HTTP_BAD_REQUEST) {
+            try (InputStream is = httpCon.getInputStream()) {
+                log.info("POST response for URL={} is {}", url, responseToString(is));
+            }
+        } else {
+            try (InputStream is = httpCon.getErrorStream()) {
+                log.info("POST error response for URL={} is {}", url, responseToString(is));
+            }
         }
         return httpCon.getResponseCode();
     }
@@ -392,7 +425,7 @@ public class EmbeddedConnectCluster {
             while ((c = is.read()) != -1) {
                 response.append((char) c);
             }
-            log.debug("Get response for URL={} is {}", url, response);
+            log.debug("GET response for URL={} is {}", url, response);
             return response.toString();
         } catch (IOException e) {
             Response.Status status = Response.Status.fromStatusCode(httpCon.getResponseCode());
@@ -413,13 +446,22 @@ public class EmbeddedConnectCluster {
         return httpCon.getResponseCode();
     }
 
+    private String responseToString(InputStream stream) throws IOException {
+        int c;
+        StringBuilder response = new StringBuilder();
+        while ((c = stream.read()) != -1) {
+            response.append((char) c);
+        }
+        return response.toString();
+    }
+
     public static class Builder {
         private String name = UUID.randomUUID().toString();
         private Map<String, String> workerProps = new HashMap<>();
         private int numWorkers = DEFAULT_NUM_WORKERS;
         private int numBrokers = DEFAULT_NUM_BROKERS;
         private Properties brokerProps = DEFAULT_BROKER_CONFIG;
-        private boolean maskExitProcedures = false;
+        private boolean maskExitProcedures = true;
 
         public Builder name(String name) {
             this.name = name;

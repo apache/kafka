@@ -44,11 +44,7 @@ object ConsoleProducer {
 
         val producer = new KafkaProducer[Array[Byte], Array[Byte]](producerProps(config))
 
-        Runtime.getRuntime.addShutdownHook(new Thread() {
-          override def run() {
-            producer.close()
-          }
-        })
+    Exit.addShutdownHook("producer-shutdown-hook", producer.close)
 
         var record: ProducerRecord[Array[Byte], Array[Byte]] = null
         do {
@@ -201,7 +197,10 @@ object ConsoleProducer {
       .ofType(classOf[java.lang.Integer])
       .defaultsTo(1024*100)
     val propertyOpt = parser.accepts("property", "A mechanism to pass user-defined properties in the form key=value to the message reader. " +
-      "This allows custom configuration for a user-defined message reader.")
+      "This allows custom configuration for a user-defined message reader. Default properties include:\n" +
+      "\tparse.key=true|false\n" +
+      "\tkey.separator=<key.separator>\n" +
+      "\tignore.error=true|false")
       .withRequiredArg
       .describedAs("prop")
       .ofType(classOf[String])
@@ -252,7 +251,7 @@ object ConsoleProducer {
     var ignoreError = false
     var lineNumber = 0
 
-    override def init(inputStream: InputStream, props: Properties) {
+    override def init(inputStream: InputStream, props: Properties): Unit = {
       topic = props.getProperty("topic")
       if (props.containsKey("parse.key"))
         parseKey = props.getProperty("parse.key").trim.equalsIgnoreCase("true")

@@ -26,27 +26,35 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.TaskId;
-import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
+import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
+import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.test.KeyValueIteratorStub;
-import org.easymock.EasyMockRunner;
+import org.easymock.EasyMockRule;
 import org.easymock.Mock;
 import org.easymock.MockType;
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
+import org.junit.runners.Parameterized;
+import org.junit.runners.Parameterized.Parameter;
+import org.junit.runners.Parameterized.Parameters;
 
+import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.ROLLUP_VALUE;
 import static org.easymock.EasyMock.anyObject;
 import static org.easymock.EasyMock.aryEq;
 import static org.easymock.EasyMock.eq;
@@ -54,26 +62,31 @@ import static org.easymock.EasyMock.expect;
 import static org.easymock.EasyMock.expectLastCall;
 import static org.easymock.EasyMock.mock;
 import static org.easymock.EasyMock.replay;
-import static org.easymock.EasyMock.reset;
 import static org.easymock.EasyMock.verify;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
-@RunWith(EasyMockRunner.class)
+@RunWith(Parameterized.class)
 public class MeteredTimestampedKeyValueStoreTest {
 
+    @Rule
+    public EasyMockRule rule = new EasyMockRule(this);
+
+    private static final String STORE_TYPE = "scope";
+    private static final String STORE_LEVEL_GROUP_FROM_0100_TO_24 = "stream-" + STORE_TYPE + "-state-metrics";
+    private static final String STORE_LEVEL_GROUP = "stream-state-metrics";
+    private static final String THREAD_ID_TAG_KEY_FROM_0100_TO_24 = "client-id";
+    private static final String THREAD_ID_TAG_KEY = "thread-id";
+
+    private final String threadId = Thread.currentThread().getName();
     private final TaskId taskId = new TaskId(0, 0);
-    private final Map<String, String> tags = mkMap(
-        mkEntry("client-id", "test"),
-        mkEntry("task-id", taskId.toString()),
-        mkEntry("scope-id", "metered")
-    );
     @Mock(type = MockType.NICE)
     private KeyValueStore<Bytes, byte[]> inner;
     @Mock(type = MockType.NICE)
-    private ProcessorContext context;
+    private InternalProcessorContext context;
 
     private MeteredTimestampedKeyValueStore<String, String> metered;
     private final String key = "key";
@@ -83,6 +96,20 @@ public class MeteredTimestampedKeyValueStoreTest {
     private final byte[] valueAndTimestampBytes = "\0\0\0\0\0\0\0avalue".getBytes();
     private final KeyValue<Bytes, byte[]> byteKeyValueTimestampPair = KeyValue.pair(keyBytes, valueAndTimestampBytes);
     private final Metrics metrics = new Metrics();
+    private String storeLevelGroup;
+    private String threadIdTagKey;
+    private Map<String, String> tags;
+
+    @Parameters(name = "{0}")
+    public static Collection<Object[]> data() {
+        return Arrays.asList(new Object[][] {
+            {StreamsConfig.METRICS_LATEST},
+            {StreamsConfig.METRICS_0100_TO_24}
+        });
+    }
+
+    @Parameter
+    public String builtInMetricsVersion;
 
     @Before
     public void before() {
@@ -94,10 +121,20 @@ public class MeteredTimestampedKeyValueStoreTest {
             new ValueAndTimestampSerde<>(Serdes.String())
         );
         metrics.config().recordLevel(Sensor.RecordingLevel.DEBUG);
-        expect(context.metrics()).andReturn(new MockStreamsMetrics(metrics));
-        expect(context.taskId()).andReturn(taskId);
-        expect(context.appConfigs()).andReturn(new HashMap<>());
+        expect(context.metrics())
+            .andReturn(new StreamsMetricsImpl(metrics, "test", builtInMetricsVersion)).anyTimes();
+        expect(context.taskId()).andReturn(taskId).anyTimes();
         expect(inner.name()).andReturn("metered").anyTimes();
+        storeLevelGroup =
+            StreamsConfig.METRICS_0100_TO_24.equals(builtInMetricsVersion) ? STORE_LEVEL_GROUP_FROM_0100_TO_24 : STORE_LEVEL_GROUP;
+        threadIdTagKey =
+            StreamsConfig.METRICS_0100_TO_24.equals(builtInMetricsVersion) ? THREAD_ID_TAG_KEY_FROM_0100_TO_24 : THREAD_ID_TAG_KEY;
+        tags = mkMap(
+            mkEntry(threadIdTagKey, threadId),
+            mkEntry("task-id", taskId.toString()),
+            mkEntry(STORE_TYPE + "-state-id", "metered")
+        );
+
     }
 
     private void init() {
@@ -105,62 +142,31 @@ public class MeteredTimestampedKeyValueStoreTest {
         metered.init(context, metered);
     }
 
-    @SuppressWarnings("unchecked")
-    @Test
-    public void shouldGetSerdesFromConfigWithoutUserSerdes() {
-        metered = new MeteredTimestampedKeyValueStore<>(
-            inner,
-            "scope",
-            new MockTime(),
-            null,
-            null
-        );
-        final Serde mockSerde = mock(Serde.class);
-        replay(mockSerde);
-        expect(context.keySerde()).andReturn(mockSerde);
-        expect(context.valueSerde()).andReturn(mockSerde);
-
-        init();
-        verify(context, mockSerde);
-    }
-
-    @Test
-    public void shouldConfigureUserSerdes() {
-        final Serde<String> mockKeySerde = mock(Serde.class);
-        mockKeySerde.configure(anyObject(), eq(true));
-        expectLastCall();
-
-        final Serde<ValueAndTimestamp<String>> mockValueSerde = mock(Serde.class);
-        mockValueSerde.configure(anyObject(), eq(false));
-        expectLastCall();
-
-        replay(mockKeySerde, mockValueSerde);
-
-        metered = new MeteredTimestampedKeyValueStore<>(
-            inner,
-            "scope",
-            new MockTime(),
-            mockKeySerde,
-            mockValueSerde
-        );
-
-        reset(context);
-        expect(context.metrics()).andReturn(new MockStreamsMetrics(metrics)).anyTimes();
-        expect(context.taskId()).andReturn(taskId).anyTimes();
-
-        init();
-        verify(context, mockKeySerde, mockValueSerde);
-    }
-
     @Test
     public void testMetrics() {
         init();
         final JmxReporter reporter = new JmxReporter("kafka.streams");
         metrics.addReporter(reporter);
-        assertTrue(reporter.containsMbean(String.format("kafka.streams:type=stream-%s-metrics,client-id=%s,task-id=%s,%s-id=%s",
-                "scope", "test", taskId.toString(), "scope", "metered")));
-        assertTrue(reporter.containsMbean(String.format("kafka.streams:type=stream-%s-metrics,client-id=%s,task-id=%s,%s-id=%s",
-                "scope", "test", taskId.toString(), "scope", "all")));
+        assertTrue(reporter.containsMbean(String.format(
+            "kafka.streams:type=%s,%s=%s,task-id=%s,%s-state-id=%s",
+            storeLevelGroup,
+            threadIdTagKey,
+            threadId,
+            taskId.toString(),
+            STORE_TYPE,
+            "metered"
+        )));
+        if (StreamsConfig.METRICS_0100_TO_24.equals(builtInMetricsVersion)) {
+            assertTrue(reporter.containsMbean(String.format(
+                "kafka.streams:type=%s,%s=%s,task-id=%s,%s-state-id=%s",
+                storeLevelGroup,
+                threadIdTagKey,
+                threadId,
+                taskId.toString(),
+                STORE_TYPE,
+                ROLLUP_VALUE
+            )));
+        }
     }
     @Test
     public void shouldWriteBytesToInnerStoreAndRecordPutMetric() {
@@ -200,7 +206,7 @@ public class MeteredTimestampedKeyValueStoreTest {
     }
 
     private KafkaMetric metric(final String name) {
-        return this.metrics.metric(new MetricName(name, "stream-scope-metrics", "", this.tags));
+        return this.metrics.metric(new MetricName(name, storeLevelGroup, "", tags));
     }
 
     @SuppressWarnings("unchecked")
@@ -256,7 +262,7 @@ public class MeteredTimestampedKeyValueStoreTest {
         assertFalse(iterator.hasNext());
         iterator.close();
 
-        final KafkaMetric metric = metric(new MetricName("all-rate", "stream-scope-metrics", "", tags));
+        final KafkaMetric metric = metric(new MetricName("all-rate", storeLevelGroup, "", tags));
         assertTrue((Double) metric.metricValue() > 0);
         verify(inner);
     }
@@ -286,7 +292,7 @@ public class MeteredTimestampedKeyValueStoreTest {
 
         metered = new MeteredTimestampedKeyValueStore<>(
             cachedKeyValueStore,
-            "scope",
+            STORE_TYPE,
             new MockTime(),
             Serdes.String(),
             new ValueAndTimestampSerde<>(Serdes.String()));
@@ -304,4 +310,53 @@ public class MeteredTimestampedKeyValueStoreTest {
         return this.metrics.metric(metricName);
     }
 
+    @Test
+    @SuppressWarnings("unchecked")
+    public void shouldNotThrowExceptionIfSerdesCorrectlySetFromProcessorContext() {
+        expect(context.keySerde()).andStubReturn((Serde) Serdes.String());
+        expect(context.valueSerde()).andStubReturn((Serde) Serdes.Long());
+        final MeteredTimestampedKeyValueStore<String, Long> store = new MeteredTimestampedKeyValueStore<>(
+            inner,
+            STORE_TYPE,
+            new MockTime(),
+            null,
+            null
+        );
+        replay(inner, context);
+        store.init(context, inner);
+
+        try {
+            store.put("key", ValueAndTimestamp.make(42L, 60000));
+        } catch (final StreamsException exception) {
+            if (exception.getCause() instanceof ClassCastException) {
+                fail("Serdes are not correctly set from processor context.");
+            }
+            throw exception;
+        }
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    public void shouldNotThrowExceptionIfSerdesCorrectlySetFromConstructorParameters() {
+        expect(context.keySerde()).andStubReturn((Serde) Serdes.String());
+        expect(context.valueSerde()).andStubReturn((Serde) Serdes.Long());
+        final MeteredTimestampedKeyValueStore<String, Long> store = new MeteredTimestampedKeyValueStore<>(
+            inner,
+            STORE_TYPE,
+            new MockTime(),
+            Serdes.String(),
+            new ValueAndTimestampSerde<>(Serdes.Long())
+        );
+        replay(inner, context);
+        store.init(context, inner);
+
+        try {
+            store.put("key", ValueAndTimestamp.make(42L, 60000));
+        } catch (final StreamsException exception) {
+            if (exception.getCause() instanceof ClassCastException) {
+                fail("Serdes are not correctly set from constructor parameters.");
+            }
+            throw exception;
+        }
+    }
 }

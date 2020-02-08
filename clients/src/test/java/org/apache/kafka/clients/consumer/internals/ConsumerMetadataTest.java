@@ -92,13 +92,21 @@ public class ConsumerMetadataTest {
                 new TopicPartition("bar", 0),
                 new TopicPartition("__consumer_offsets", 0)));
         testBasicSubscription(Utils.mkSet("foo", "bar"), Utils.mkSet("__consumer_offsets"));
+
+        subscription.assignFromUser(Utils.mkSet(
+                new TopicPartition("baz", 0),
+                new TopicPartition("__consumer_offsets", 0)));
+        testBasicSubscription(Utils.mkSet("baz"), Utils.mkSet("__consumer_offsets"));
     }
 
     @Test
     public void testNormalSubscription() {
         subscription.subscribe(Utils.mkSet("foo", "bar", "__consumer_offsets"), new NoOpConsumerRebalanceListener());
-        subscription.groupSubscribe(Utils.mkSet("baz"));
+        subscription.groupSubscribe(Utils.mkSet("baz", "foo", "bar", "__consumer_offsets"));
         testBasicSubscription(Utils.mkSet("foo", "bar", "baz"), Utils.mkSet("__consumer_offsets"));
+
+        subscription.resetGroupSubscription();
+        testBasicSubscription(Utils.mkSet("foo", "bar"), Utils.mkSet("__consumer_offsets"));
     }
 
     @Test
@@ -152,15 +160,16 @@ public class ConsumerMetadataTest {
 
     private MetadataResponse.TopicMetadata topicMetadata(String topic, boolean isInternal) {
         MetadataResponse.PartitionMetadata partitionMetadata = new MetadataResponse.PartitionMetadata(Errors.NONE,
-                0, node, Optional.of(5), singletonList(node), singletonList(node), singletonList(node));
+                new TopicPartition(topic, 0), Optional.of(node.id()), Optional.of(5),
+                singletonList(node.id()), singletonList(node.id()), singletonList(node.id()));
         return new MetadataResponse.TopicMetadata(Errors.NONE, topic, isInternal, singletonList(partitionMetadata));
     }
 
     private ConsumerMetadata newConsumerMetadata(boolean includeInternalTopics) {
         long refreshBackoffMs = 50;
         long expireMs = 50000;
-        return new ConsumerMetadata(refreshBackoffMs, expireMs, includeInternalTopics, subscription, new LogContext(),
-                new ClusterResourceListeners());
+        return new ConsumerMetadata(refreshBackoffMs, expireMs, includeInternalTopics, false,
+                subscription, new LogContext(), new ClusterResourceListeners());
     }
 
 }

@@ -36,6 +36,7 @@ public class WindowStoreFacade<K, V> extends ReadOnlyWindowStoreFacade<K, V> imp
         inner.init(context, root);
     }
 
+    @Deprecated
     @Override
     public void put(final K key,
                     final V value) {

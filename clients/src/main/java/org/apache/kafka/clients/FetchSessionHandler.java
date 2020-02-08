@@ -185,7 +185,18 @@ public class FetchSessionHandler {
          * Another reason is because we make use of the list ordering to optimize the preparation of
          * incremental fetch requests (see below).
          */
-        private LinkedHashMap<TopicPartition, PartitionData> next = new LinkedHashMap<>();
+        private LinkedHashMap<TopicPartition, PartitionData> next;
+        private final boolean copySessionPartitions;
+
+        Builder() {
+            this.next = new LinkedHashMap<>();
+            this.copySessionPartitions = true;
+        }
+
+        Builder(int initialSize, boolean copySessionPartitions) {
+            this.next = new LinkedHashMap<>(initialSize);
+            this.copySessionPartitions = copySessionPartitions;
+        }
 
         /**
          * Mark that we want data from this partition in the upcoming fetch.
@@ -196,8 +207,10 @@ public class FetchSessionHandler {
 
         public FetchRequestData build() {
             if (nextMetadata.isFull()) {
-                log.debug("Built full fetch {} for node {} with {}.",
-                    nextMetadata, node, partitionsToLogString(next.keySet()));
+                if (log.isDebugEnabled()) {
+                    log.debug("Built full fetch {} for node {} with {}.",
+                              nextMetadata, node, partitionsToLogString(next.keySet()));
+                }
                 sessionPartitions = next;
                 next = null;
                 Map<TopicPartition, PartitionData> toSend =
@@ -213,15 +226,10 @@ public class FetchSessionHandler {
                 Entry<TopicPartition, PartitionData> entry = iter.next();
                 TopicPartition topicPartition = entry.getKey();
                 PartitionData prevData = entry.getValue();
-                PartitionData nextData = next.get(topicPartition);
+                PartitionData nextData = next.remove(topicPartition);
                 if (nextData != null) {
-                    if (prevData.equals(nextData)) {
-                        // Omit this partition from the FetchRequest, because it hasn't changed
-                        // since the previous request.
-                        next.remove(topicPartition);
-                    } else {
-                        // Move the altered partition to the end of 'next'
-                        next.remove(topicPartition);
+                    if (!prevData.equals(nextData)) {
+                        // Re-add the altered partition to the end of 'next'
                         next.put(topicPartition, nextData);
                         entry.setValue(nextData);
                         altered.add(topicPartition);
@@ -247,14 +255,16 @@ public class FetchSessionHandler {
                 sessionPartitions.put(topicPartition, nextData);
                 added.add(topicPartition);
             }
-            log.debug("Built incremental fetch {} for node {}. Added {}, altered {}, removed {} " +
-                    "out of {}", nextMetadata, node, partitionsToLogString(added),
-                    partitionsToLogString(altered), partitionsToLogString(removed),
-                    partitionsToLogString(sessionPartitions.keySet()));
-            Map<TopicPartition, PartitionData> toSend =
-                Collections.unmodifiableMap(new LinkedHashMap<>(next));
-            Map<TopicPartition, PartitionData> curSessionPartitions =
-                Collections.unmodifiableMap(new LinkedHashMap<>(sessionPartitions));
+            if (log.isDebugEnabled()) {
+                log.debug("Built incremental fetch {} for node {}. Added {}, altered {}, removed {} " +
+                          "out of {}", nextMetadata, node, partitionsToLogString(added),
+                          partitionsToLogString(altered), partitionsToLogString(removed),
+                          partitionsToLogString(sessionPartitions.keySet()));
+            }
+            Map<TopicPartition, PartitionData> toSend = Collections.unmodifiableMap(next);
+            Map<TopicPartition, PartitionData> curSessionPartitions = copySessionPartitions
+                    ? Collections.unmodifiableMap(new LinkedHashMap<>(sessionPartitions))
+                    : Collections.unmodifiableMap(sessionPartitions);
             next = null;
             return new FetchRequestData(toSend, Collections.unmodifiableList(removed),
                 curSessionPartitions, nextMetadata);
@@ -263,6 +273,18 @@ public class FetchSessionHandler {
 
     public Builder newBuilder() {
         return new Builder();
+    }
+
+
+    /** A builder that allows for presizing the PartitionData hashmap, and avoiding making a
+     *  secondary copy of the sessionPartitions, in cases where this is not necessarily.
+     *  This builder is primarily for use by the Replica Fetcher
+     * @param size the initial size of the PartitionData hashmap
+     * @param copySessionPartitions boolean denoting whether the builder should make a deep copy of
+     *                              session partitions
+     */
+    public Builder newBuilder(int size, boolean copySessionPartitions) {
+        return new Builder(size, copySessionPartitions);
     }
 
     private String partitionsToLogString(Collection<TopicPartition> partitions) {
@@ -296,11 +318,11 @@ public class FetchSessionHandler {
      * @param response  The response.
      * @return          True if the full fetch response partitions are valid.
      */
-    private String verifyFullFetchResponsePartitions(FetchResponse<?> response) {
+    String verifyFullFetchResponsePartitions(FetchResponse<?> response) {
         StringBuilder bld = new StringBuilder();
-        Set<TopicPartition> omitted =
-            findMissing(response.responseData().keySet(), sessionPartitions.keySet());
         Set<TopicPartition> extra =
+            findMissing(response.responseData().keySet(), sessionPartitions.keySet());
+        Set<TopicPartition> omitted =
             findMissing(sessionPartitions.keySet(), response.responseData().keySet());
         if (!omitted.isEmpty()) {
             bld.append("omitted=(").append(Utils.join(omitted, ", ")).append(", ");
@@ -309,7 +331,7 @@ public class FetchSessionHandler {
             bld.append("extra=(").append(Utils.join(extra, ", ")).append(", ");
         }
         if ((!omitted.isEmpty()) || (!extra.isEmpty())) {
-            bld.append("response=(").append(Utils.join(response.responseData().keySet(), ", "));
+            bld.append("response=(").append(Utils.join(response.responseData().keySet(), ", ")).append(")");
             return bld.toString();
         }
         return null;
@@ -321,7 +343,7 @@ public class FetchSessionHandler {
      * @param response  The response.
      * @return          True if the incremental fetch response partitions are valid.
      */
-    private String verifyIncrementalFetchResponsePartitions(FetchResponse<?> response) {
+    String verifyIncrementalFetchResponsePartitions(FetchResponse<?> response) {
         Set<TopicPartition> extra =
             findMissing(response.responseData().keySet(), sessionPartitions.keySet());
         if (!extra.isEmpty()) {
@@ -386,21 +408,37 @@ public class FetchSessionHandler {
                 nextMetadata = nextMetadata.nextCloseExisting();
             }
             return false;
-        } else if (nextMetadata.isFull()) {
+        }
+        if (nextMetadata.isFull()) {
+            if (response.responseData().isEmpty() && response.throttleTimeMs() > 0) {
+                // Normally, an empty full fetch response would be invalid.  However, KIP-219
+                // specifies that if the broker wants to throttle the client, it will respond
+                // to a full fetch request with an empty response and a throttleTimeMs
+                // value set.  We don't want to log this with a warning, since it's not an error.
+                // However, the empty full fetch response can't be processed, so it's still appropriate
+                // to return false here.
+                if (log.isDebugEnabled()) {
+                    log.debug("Node {} sent a empty full fetch response to indicate that this " +
+                        "client should be throttled for {} ms.", node, response.throttleTimeMs());
+                }
+                nextMetadata = FetchMetadata.INITIAL;
+                return false;
+            }
             String problem = verifyFullFetchResponsePartitions(response);
             if (problem != null) {
                 log.info("Node {} sent an invalid full fetch response with {}", node, problem);
                 nextMetadata = FetchMetadata.INITIAL;
                 return false;
             } else if (response.sessionId() == INVALID_SESSION_ID) {
-                log.debug("Node {} sent a full fetch response{}",
-                    node, responseDataToLogString(response));
+                if (log.isDebugEnabled())
+                    log.debug("Node {} sent a full fetch response{}", node, responseDataToLogString(response));
                 nextMetadata = FetchMetadata.INITIAL;
                 return true;
             } else {
                 // The server created a new incremental fetch session.
-                log.debug("Node {} sent a full fetch response that created a new incremental " +
-                    "fetch session {}{}", node, response.sessionId(), responseDataToLogString(response));
+                if (log.isDebugEnabled())
+                    log.debug("Node {} sent a full fetch response that created a new incremental " +
+                            "fetch session {}{}", node, response.sessionId(), responseDataToLogString(response));
                 nextMetadata = FetchMetadata.newIncremental(response.sessionId());
                 return true;
             }
@@ -412,14 +450,19 @@ public class FetchSessionHandler {
                 return false;
             } else if (response.sessionId() == INVALID_SESSION_ID) {
                 // The incremental fetch session was closed by the server.
-                log.debug("Node {} sent an incremental fetch response closing session {}{}",
-                    node, nextMetadata.sessionId(), responseDataToLogString(response));
+                if (log.isDebugEnabled())
+                    log.debug("Node {} sent an incremental fetch response closing session {}{}",
+                            node, nextMetadata.sessionId(), responseDataToLogString(response));
                 nextMetadata = FetchMetadata.INITIAL;
                 return true;
             } else {
                 // The incremental fetch session was continued by the server.
-                log.debug("Node {} sent an incremental fetch response for session {}{}",
-                    node, response.sessionId(), responseDataToLogString(response));
+                // We don't have to do anything special here to support KIP-219, since an empty incremental
+                // fetch request is perfectly valid.
+                if (log.isDebugEnabled())
+                    log.debug("Node {} sent an incremental fetch response with throttleTimeMs = {} " +
+                        "for session {}{}", response.throttleTimeMs(), node, response.sessionId(),
+                        responseDataToLogString(response));
                 nextMetadata = nextMetadata.nextIncremental();
                 return true;
             }
@@ -435,7 +478,7 @@ public class FetchSessionHandler {
      * @param t     The exception.
      */
     public void handleError(Throwable t) {
-        log.info("Error sending fetch request {} to node {}: {}.", nextMetadata, node, t.toString());
+        log.info("Error sending fetch request {} to node {}: {}.", nextMetadata, node, t);
         nextMetadata = nextMetadata.nextCloseExisting();
     }
 }

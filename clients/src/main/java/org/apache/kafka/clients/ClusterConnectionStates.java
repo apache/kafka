@@ -72,11 +72,9 @@ final class ClusterConnectionStates {
      */
     public boolean isBlackedOut(String id, long now) {
         NodeConnectionState state = nodeState.get(id);
-        if (state == null)
-            return false;
-        else
-            return state.state.isDisconnected() &&
-                   now - state.lastConnectAttemptMs < state.reconnectBackoffMs;
+        return state != null
+                && state.state.isDisconnected()
+                && now - state.lastConnectAttemptMs < state.reconnectBackoffMs;
     }
 
     /**
@@ -89,8 +87,8 @@ final class ClusterConnectionStates {
     public long connectionDelay(String id, long now) {
         NodeConnectionState state = nodeState.get(id);
         if (state == null) return 0;
-        long timeWaited = now - state.lastConnectAttemptMs;
         if (state.state.isDisconnected()) {
+            long timeWaited = now - state.lastConnectAttemptMs;
             return Math.max(state.reconnectBackoffMs - timeWaited, 0);
         } else {
             // When connecting or connected, we should be able to delay indefinitely since other events (connection or
@@ -106,6 +104,17 @@ final class ClusterConnectionStates {
     public boolean isConnecting(String id) {
         NodeConnectionState state = nodeState.get(id);
         return state != null && state.state == ConnectionState.CONNECTING;
+    }
+
+    /**
+     * Check whether a connection is either being established or awaiting API version information.
+     * @param id The id of the node to check
+     * @return true if the node is either connecting or has connected and is awaiting API versions, false otherwise
+     */
+    public boolean isPreparingConnection(String id) {
+        NodeConnectionState state = nodeState.get(id);
+        return state != null &&
+                (state.state == ConnectionState.CONNECTING || state.state == ConnectionState.CHECKING_API_VERSIONS);
     }
 
     /**

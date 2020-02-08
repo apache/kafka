@@ -17,16 +17,17 @@
 
 package kafka.admin
 
-import kafka.network.SocketServer
-import org.junit.Assert._
-import kafka.utils.TestUtils._
-import kafka.utils.TestUtils
+import java.util.Optional
+
+import kafka.controller.ReplicaAssignment
 import kafka.server.BaseRequestTest
+import kafka.utils.TestUtils
+import kafka.utils.TestUtils._
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.InvalidReplicaAssignmentException
-import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.requests.MetadataResponse.TopicMetadata
 import org.apache.kafka.common.requests.{MetadataRequest, MetadataResponse}
+import org.junit.Assert._
 import org.junit.{Before, Test}
 
 import scala.collection.JavaConverters._
@@ -38,24 +39,24 @@ class AddPartitionsTest extends BaseRequestTest {
   val partitionId = 0
 
   val topic1 = "new-topic1"
-  val topic1Assignment = Map(0->Seq(0,1))
+  val topic1Assignment = Map(0 -> ReplicaAssignment(Seq(0,1), List(), List()))
   val topic2 = "new-topic2"
-  val topic2Assignment = Map(0->Seq(1,2))
+  val topic2Assignment = Map(0 -> ReplicaAssignment(Seq(1,2), List(), List()))
   val topic3 = "new-topic3"
-  val topic3Assignment = Map(0->Seq(2,3,0,1))
+  val topic3Assignment = Map(0 -> ReplicaAssignment(Seq(2,3,0,1), List(), List()))
   val topic4 = "new-topic4"
-  val topic4Assignment = Map(0->Seq(0,3))
+  val topic4Assignment = Map(0 -> ReplicaAssignment(Seq(0,3), List(), List()))
   val topic5 = "new-topic5"
-  val topic5Assignment = Map(1->Seq(0,1))
+  val topic5Assignment = Map(1 -> ReplicaAssignment(Seq(0,1), List(), List()))
 
   @Before
-  override def setUp() {
+  override def setUp(): Unit = {
     super.setUp()
 
-    createTopic(topic1, partitionReplicaAssignment = topic1Assignment)
-    createTopic(topic2, partitionReplicaAssignment = topic2Assignment)
-    createTopic(topic3, partitionReplicaAssignment = topic3Assignment)
-    createTopic(topic4, partitionReplicaAssignment = topic4Assignment)
+    createTopic(topic1, partitionReplicaAssignment = topic1Assignment.mapValues(_.replicas).toMap)
+    createTopic(topic2, partitionReplicaAssignment = topic2Assignment.mapValues(_.replicas).toMap)
+    createTopic(topic3, partitionReplicaAssignment = topic3Assignment.mapValues(_.replicas).toMap)
+    createTopic(topic4, partitionReplicaAssignment = topic4Assignment.mapValues(_.replicas).toMap)
   }
 
   @Test
@@ -95,15 +96,21 @@ class AddPartitionsTest extends BaseRequestTest {
     // read metadata from a broker and verify the new topic partitions exist
     TestUtils.waitUntilMetadataIsPropagated(servers, topic1, 1)
     TestUtils.waitUntilMetadataIsPropagated(servers, topic1, 2)
-    val response = sendMetadataRequest(new MetadataRequest.Builder(Seq(topic1).asJava, false).build)
+    val response = connectAndReceive[MetadataResponse](
+      new MetadataRequest.Builder(Seq(topic1).asJava, false).build)
     assertEquals(1, response.topicMetadata.size)
     val partitions = response.topicMetadata.asScala.head.partitionMetadata.asScala.sortBy(_.partition)
     assertEquals(partitions.size, 3)
     assertEquals(1, partitions(1).partition)
     assertEquals(2, partitions(2).partition)
-    val replicas = partitions(1).replicas
-    assertEquals(replicas.size, 2)
-    assertTrue(replicas.contains(partitions(1).leader))
+
+    for (partition <- partitions) {
+      val replicas = partition.replicaIds
+      assertEquals(2, replicas.size)
+      assertTrue(partition.leaderId.isPresent)
+      val leaderId = partition.leaderId.get
+      assertTrue(replicas.contains(leaderId))
+    }
   }
 
   @Test
@@ -122,7 +129,8 @@ class AddPartitionsTest extends BaseRequestTest {
     // read metadata from a broker and verify the new topic partitions exist
     TestUtils.waitUntilMetadataIsPropagated(servers, topic2, 1)
     TestUtils.waitUntilMetadataIsPropagated(servers, topic2, 2)
-    val response = sendMetadataRequest(new MetadataRequest.Builder(Seq(topic2).asJava, false).build)
+    val response = connectAndReceive[MetadataResponse](
+      new MetadataRequest.Builder(Seq(topic2).asJava, false).build)
     assertEquals(1, response.topicMetadata.size)
     val topicMetadata = response.topicMetadata.asScala.head
     val partitionMetadata = topicMetadata.partitionMetadata.asScala.sortBy(_.partition)
@@ -130,10 +138,9 @@ class AddPartitionsTest extends BaseRequestTest {
     assertEquals(0, partitionMetadata(0).partition)
     assertEquals(1, partitionMetadata(1).partition)
     assertEquals(2, partitionMetadata(2).partition)
-    val replicas = partitionMetadata(1).replicas
+    val replicas = partitionMetadata(1).replicaIds
     assertEquals(2, replicas.size)
-    assertTrue(replicas.asScala.head.id == 0 || replicas.asScala.head.id == 1)
-    assertTrue(replicas.asScala(1).id == 0 || replicas.asScala(1).id == 1)
+    assertEquals(Set(0, 1), replicas.asScala.toSet)
   }
 
   @Test
@@ -148,7 +155,8 @@ class AddPartitionsTest extends BaseRequestTest {
     TestUtils.waitUntilMetadataIsPropagated(servers, topic3, 5)
     TestUtils.waitUntilMetadataIsPropagated(servers, topic3, 6)
 
-    val response = sendMetadataRequest(new MetadataRequest.Builder(Seq(topic3).asJava, false).build)
+    val response = connectAndReceive[MetadataResponse](
+      new MetadataRequest.Builder(Seq(topic3).asJava, false).build)
     assertEquals(1, response.topicMetadata.size)
     val topicMetadata = response.topicMetadata.asScala.head
     validateLeaderAndReplicas(topicMetadata, 0, 2, Set(2, 3, 0, 1))
@@ -168,7 +176,8 @@ class AddPartitionsTest extends BaseRequestTest {
     TestUtils.waitUntilMetadataIsPropagated(servers, topic2, 1)
     TestUtils.waitUntilMetadataIsPropagated(servers, topic2, 2)
 
-    val response = sendMetadataRequest(new MetadataRequest.Builder(Seq(topic2).asJava, false).build)
+    val response = connectAndReceive[MetadataResponse](
+      new MetadataRequest.Builder(Seq(topic2).asJava, false).build)
     assertEquals(1, response.topicMetadata.size)
     val topicMetadata = response.topicMetadata.asScala.head
     validateLeaderAndReplicas(topicMetadata, 0, 1, Set(1, 2))
@@ -182,13 +191,8 @@ class AddPartitionsTest extends BaseRequestTest {
     assertTrue(s"Partition $partitionId should exist", partitionOpt.isDefined)
     val partition = partitionOpt.get
 
-    assertNotNull("Partition leader should exist", partition.leader)
-    assertEquals("Partition leader id should match", expectedLeaderId, partition.leaderId)
-    assertEquals("Replica set should match", expectedReplicas, partition.replicas.asScala.map(_.id).toSet)
+    assertEquals("Partition leader id should match", Optional.of(expectedLeaderId), partition.leaderId)
+    assertEquals("Replica set should match", expectedReplicas, partition.replicaIds.asScala.toSet)
   }
 
-  private def sendMetadataRequest(request: MetadataRequest, destination: Option[SocketServer] = None): MetadataResponse = {
-    val response = connectAndSend(request, ApiKeys.METADATA, destination = destination.getOrElse(anySocketServer))
-    MetadataResponse.parse(response, request.version)
-  }
 }

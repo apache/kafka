@@ -19,7 +19,6 @@ package org.apache.kafka.clients.consumer.internals;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
-import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.EpochEndOffset;
@@ -53,7 +52,7 @@ public class OffsetsForLeaderEpochClient extends AsyncClient<
             fetchEpoch -> partitionData.put(topicPartition,
                 new OffsetsForLeaderEpochRequest.PartitionData(fetchPosition.currentLeader.epoch, fetchEpoch))));
 
-        return new OffsetsForLeaderEpochRequest.Builder(ApiKeys.OFFSET_FOR_LEADER_EPOCH.latestVersion(), partitionData);
+        return OffsetsForLeaderEpochRequest.Builder.forConsumer(partitionData);
     }
 
     @Override
@@ -73,32 +72,41 @@ public class OffsetsForLeaderEpochClient extends AsyncClient<
                 partitionsToRetry.add(topicPartition);
                 continue;
             }
+
             Errors error = epochEndOffset.error();
-            if (error == Errors.NONE) {
-                logger().debug("Handling OffsetsForLeaderEpoch response for {}. Got offset {} for epoch {}",
-                        topicPartition, epochEndOffset.endOffset(), epochEndOffset.leaderEpoch());
-                endOffsets.put(topicPartition, epochEndOffset);
-            } else if (error == Errors.NOT_LEADER_FOR_PARTITION ||
-                    error == Errors.REPLICA_NOT_AVAILABLE ||
-                    error == Errors.KAFKA_STORAGE_ERROR ||
-                    error == Errors.OFFSET_NOT_AVAILABLE ||
-                    error == Errors.LEADER_NOT_AVAILABLE) {
-                logger().debug("Attempt to fetch offsets for partition {} failed due to {}, retrying.",
-                        topicPartition, error);
-                partitionsToRetry.add(topicPartition);
-            } else if (error == Errors.FENCED_LEADER_EPOCH ||
-                    error == Errors.UNKNOWN_LEADER_EPOCH) {
-                logger().debug("Attempt to fetch offsets for partition {} failed due to {}, retrying.",
-                        topicPartition, error);
-                partitionsToRetry.add(topicPartition);
-            } else if (error == Errors.UNKNOWN_TOPIC_OR_PARTITION) {
-                logger().warn("Received unknown topic or partition error in ListOffset request for partition {}", topicPartition);
-                partitionsToRetry.add(topicPartition);
-            } else if (error == Errors.TOPIC_AUTHORIZATION_FAILED) {
-                unauthorizedTopics.add(topicPartition.topic());
-            } else {
-                logger().warn("Attempt to fetch offsets for partition {} failed due to: {}, retrying.", topicPartition, error.message());
-                partitionsToRetry.add(topicPartition);
+            switch (error) {
+                case NONE:
+                    logger().debug("Handling OffsetsForLeaderEpoch response for {}. Got offset {} for epoch {}",
+                            topicPartition, epochEndOffset.endOffset(), epochEndOffset.leaderEpoch());
+                    endOffsets.put(topicPartition, epochEndOffset);
+                    break;
+                case NOT_LEADER_FOR_PARTITION:
+                case REPLICA_NOT_AVAILABLE:
+                case KAFKA_STORAGE_ERROR:
+                case OFFSET_NOT_AVAILABLE:
+                case LEADER_NOT_AVAILABLE:
+                    logger().debug("Attempt to fetch offsets for partition {} failed due to {}, retrying.",
+                            topicPartition, error);
+                    partitionsToRetry.add(topicPartition);
+                    break;
+                case FENCED_LEADER_EPOCH:
+                case UNKNOWN_LEADER_EPOCH:
+                    logger().debug("Attempt to fetch offsets for partition {} failed due to {}, retrying.",
+                            topicPartition, error);
+                    partitionsToRetry.add(topicPartition);
+                    break;
+                case UNKNOWN_TOPIC_OR_PARTITION:
+                    logger().warn("Received unknown topic or partition error in ListOffset request for partition {}",
+                            topicPartition);
+                    partitionsToRetry.add(topicPartition);
+                    break;
+                case TOPIC_AUTHORIZATION_FAILED:
+                    unauthorizedTopics.add(topicPartition.topic());
+                    break;
+                default:
+                    logger().warn("Attempt to fetch offsets for partition {} failed due to: {}, retrying.",
+                            topicPartition, error.message());
+                    partitionsToRetry.add(topicPartition);
             }
         }
 

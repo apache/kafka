@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.config;
 
+import org.apache.kafka.common.config.ConfigDef.CaseInsensitiveValidString;
 import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Range;
 import org.apache.kafka.common.config.ConfigDef.Type;
@@ -157,7 +158,9 @@ public class ConfigDefTest {
     public void testValidators() {
         testValidators(Type.INT, Range.between(0, 10), 5, new Object[]{1, 5, 9}, new Object[]{-1, 11, null});
         testValidators(Type.STRING, ValidString.in("good", "values", "default"), "default",
-                new Object[]{"good", "values", "default"}, new Object[]{"bad", "inputs", null});
+                new Object[]{"good", "values", "default"}, new Object[]{"bad", "inputs", "DEFAULT", null});
+        testValidators(Type.STRING, CaseInsensitiveValidString.in("good", "values", "default"), "default",
+            new Object[]{"gOOd", "VALUES", "default"}, new Object[]{"Bad", "iNPUts", null});
         testValidators(Type.LIST, ConfigDef.ValidList.in("1", "2", "3"), "1", new Object[]{"1", "2", "3"}, new Object[]{"4", "5", "6"});
         testValidators(Type.STRING, new ConfigDef.NonNullValidator(), "a", new Object[]{"abb"}, new Object[] {null});
         testValidators(Type.STRING, ConfigDef.CompositeValidator.of(new ConfigDef.NonNullValidator(), ValidString.in("a", "b")), "a", new Object[]{"a", "b"}, new Object[] {null, -1, "c"});
@@ -637,6 +640,29 @@ public class ConfigDefTest {
         assertEquals("org.apache.kafka.common.config.ConfigDefTest$NestedClass", actual);
         // Additionally validate that we can look up this class by this name
         assertEquals(NestedClass.class, Class.forName(actual));
+    }
+
+    @Test
+    public void testClassWithAlias() {
+        final String alias = "PluginAlias";
+        ClassLoader originalClassLoader = Thread.currentThread().getContextClassLoader();
+        try {
+            // Could try to use the Plugins class from Connect here, but this should simulate enough
+            // of the aliasing logic to suffice for this test.
+            Thread.currentThread().setContextClassLoader(new ClassLoader(originalClassLoader) {
+                @Override
+                public Class<?> loadClass(String name, boolean resolve) throws ClassNotFoundException {
+                    if (alias.equals(name)) {
+                        return NestedClass.class;
+                    } else {
+                        return super.loadClass(name, resolve);
+                    }
+                }
+            });
+            ConfigDef.parseType("Test config", alias, Type.CLASS);
+        } finally {
+            Thread.currentThread().setContextClassLoader(originalClassLoader);
+        }
     }
 
     private class NestedClass {

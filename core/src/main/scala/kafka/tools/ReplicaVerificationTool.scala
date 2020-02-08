@@ -30,7 +30,7 @@ import kafka.api._
 import kafka.utils.Whitelist
 import kafka.utils._
 import org.apache.kafka.clients._
-import org.apache.kafka.clients.admin.{ListTopicsOptions, TopicDescription}
+import org.apache.kafka.clients.admin.{Admin, ListTopicsOptions, TopicDescription}
 import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.{NetworkReceive, Selectable, Selector}
@@ -43,6 +43,7 @@ import org.apache.kafka.common.utils.{LogContext, Time}
 import org.apache.kafka.common.{Node, TopicPartition}
 
 import scala.collection.JavaConverters._
+import scala.collection.Seq
 
 /**
  * For verifying the consistency among replicas.
@@ -105,11 +106,18 @@ object ReplicaVerificationTool extends Logging {
                          .describedAs("ms")
                          .ofType(classOf[java.lang.Long])
                          .defaultsTo(30 * 1000L)
-
-    if (args.length == 0)
-      CommandLineUtils.printUsageAndDie(parser, "Validate that all replicas for a set of topics have the same data.")
+    val helpOpt = parser.accepts("help", "Print usage information.").forHelp()
+    val versionOpt = parser.accepts("version", "Print version information and exit.").forHelp()
 
     val options = parser.parse(args: _*)
+
+    if (args.length == 0 || options.has(helpOpt)) {
+      CommandLineUtils.printUsageAndDie(parser, "Validate that all replicas for a set of topics have the same data.")
+    }
+
+    if (options.has(versionOpt)) {
+      CommandLineUtils.printVersionAndDie()
+    }
     CommandLineUtils.checkRequiredArgs(parser, options, brokerListOpt)
 
     val regex = options.valueOf(topicWhiteListOpt)
@@ -177,7 +185,7 @@ object ReplicaVerificationTool extends Logging {
     // create all replica fetcher threads
     val verificationBrokerId = brokerToTopicPartitions.head._1
     val counter = new AtomicInteger(0)
-    val fetcherThreads: Iterable[ReplicaFetcher] = brokerToTopicPartitions.map { case (brokerId, topicPartitions) =>
+    val fetcherThreads = brokerToTopicPartitions.map { case (brokerId, topicPartitions) =>
       new ReplicaFetcher(name = s"ReplicaFetcher-$brokerId",
         sourceBroker = brokerInfo(brokerId),
         topicPartitions = topicPartitions,
@@ -192,30 +200,28 @@ object ReplicaVerificationTool extends Logging {
         fetcherId = counter.incrementAndGet())
     }
 
-    Runtime.getRuntime.addShutdownHook(new Thread() {
-      override def run() {
+    Exit.addShutdownHook("ReplicaVerificationToolShutdownHook", {
         info("Stopping all fetchers")
         fetcherThreads.foreach(_.shutdown())
-      }
     })
     fetcherThreads.foreach(_.start())
     println(s"${ReplicaVerificationTool.getCurrentTimeString()}: verification process is started.")
 
   }
 
-  private def listTopicsMetadata(adminClient: admin.AdminClient): Seq[TopicDescription] = {
+  private def listTopicsMetadata(adminClient: Admin): Seq[TopicDescription] = {
     val topics = adminClient.listTopics(new ListTopicsOptions().listInternal(true)).names.get
     adminClient.describeTopics(topics).all.get.values.asScala.toBuffer
   }
 
-  private def brokerDetails(adminClient: admin.AdminClient): Map[Int, Node] = {
+  private def brokerDetails(adminClient: Admin): Map[Int, Node] = {
     adminClient.describeCluster.nodes.get.asScala.map(n => (n.id, n)).toMap
   }
 
-  private def createAdminClient(brokerUrl: String): admin.AdminClient = {
+  private def createAdminClient(brokerUrl: String): Admin = {
     val props = new Properties()
     props.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, brokerUrl)
-    admin.AdminClient.create(props)
+    Admin.create(props)
   }
 
   private def initialOffsets(topicPartitions: Seq[TopicPartition], consumerConfig: Properties,
@@ -264,31 +270,31 @@ private class ReplicaBuffer(expectedReplicasPerTopicPartition: Map[TopicPartitio
   private var maxLagTopicAndPartition: TopicPartition = null
   initialize()
 
-  def createNewFetcherBarrier() {
+  def createNewFetcherBarrier(): Unit = {
     fetcherBarrier.set(new CountDownLatch(expectedNumFetchers))
   }
 
   def getFetcherBarrier() = fetcherBarrier.get
 
-  def createNewVerificationBarrier() {
+  def createNewVerificationBarrier(): Unit = {
     verificationBarrier.set(new CountDownLatch(1))
   }
 
   def getVerificationBarrier() = verificationBarrier.get
 
-  private def initialize() {
+  private def initialize(): Unit = {
     for (topicPartition <- expectedReplicasPerTopicPartition.keySet)
       recordsCache.put(topicPartition, new Pool[Int, FetchResponse.PartitionData[MemoryRecords]])
     setInitialOffsets()
   }
 
 
-  private def setInitialOffsets() {
+  private def setInitialOffsets(): Unit = {
     for ((tp, offset) <- initialOffsets)
       fetchOffsetMap.put(tp, offset)
   }
 
-  def addFetchedData(topicAndPartition: TopicPartition, replicaId: Int, partitionData: FetchResponse.PartitionData[MemoryRecords]) {
+  def addFetchedData(topicAndPartition: TopicPartition, replicaId: Int, partitionData: FetchResponse.PartitionData[MemoryRecords]): Unit = {
     recordsCache.get(topicAndPartition).put(replicaId, partitionData)
   }
 
@@ -296,7 +302,7 @@ private class ReplicaBuffer(expectedReplicasPerTopicPartition: Map[TopicPartitio
     fetchOffsetMap.get(topicAndPartition)
   }
 
-  def verifyCheckSum(println: String => Unit) {
+  def verifyCheckSum(println: String => Unit): Unit = {
     debug("Begin verification")
     maxLag = -1L
     for ((topicPartition, fetchResponsePerReplica) <- recordsCache) {
@@ -382,7 +388,7 @@ private class ReplicaFetcher(name: String, sourceBroker: Node, topicPartitions: 
   private val fetchEndpoint = new ReplicaFetcherBlockingSend(sourceBroker, new ConsumerConfig(consumerConfig), new Metrics(), Time.SYSTEM, fetcherId,
     s"broker-${Request.DebuggingConsumerId}-fetcher-$fetcherId")
 
-  override def doWork() {
+  override def doWork(): Unit = {
 
     val fetcherBarrier = replicaBuffer.getFetcherBarrier()
     val verificationBarrier = replicaBuffer.getVerificationBarrier()
@@ -450,7 +456,8 @@ private class ReplicaFetcherBlockingSend(sourceNode: Node,
   private val socketTimeout: Int = consumerConfig.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG)
 
   private val networkClient = {
-    val channelBuilder = org.apache.kafka.clients.ClientUtils.createChannelBuilder(consumerConfig, time)
+    val logContext = new LogContext()
+    val channelBuilder = org.apache.kafka.clients.ClientUtils.createChannelBuilder(consumerConfig, time, logContext)
     val selector = new Selector(
       NetworkReceive.UNLIMITED,
       consumerConfig.getLong(ConsumerConfig.CONNECTIONS_MAX_IDLE_MS_CONFIG),
@@ -460,7 +467,7 @@ private class ReplicaFetcherBlockingSend(sourceNode: Node,
       Map("broker-id" -> sourceNode.id.toString, "fetcher-id" -> fetcherId.toString).asJava,
       false,
       channelBuilder,
-      new LogContext
+      logContext
     )
     new NetworkClient(
       selector,
@@ -476,7 +483,7 @@ private class ReplicaFetcherBlockingSend(sourceNode: Node,
       time,
       false,
       new ApiVersions,
-      new LogContext
+      logContext
     )
   }
 

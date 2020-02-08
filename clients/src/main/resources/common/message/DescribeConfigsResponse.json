@@ -20,6 +20,7 @@
   // Version 1 adds ConfigSource and the synonyms.
   // Starting in version 2, on quota violation, brokers send out responses before throttling.
   "validVersions": "0-2",
+  "flexibleVersions": "none",
   "fields": [
     { "name": "ThrottleTimeMs", "type": "int32", "versions": "0+",
       "about": "The duration in milliseconds for which the request was throttled due to a quota violation, or zero if the request did not violate any quota." },
@@ -43,7 +44,7 @@
           "about": "True if the configuration is read-only." },
         { "name": "IsDefault", "type": "bool", "versions": "0",
           "about": "True if the configuration is not set." },
-        // Note: the v0 default for this field that shouldd be exposed to callers is
+        // Note: the v0 default for this field that should be exposed to callers is
         // context-dependent. For example, if the resource is a broker, this should default to 4.
         // -1 is just a placeholder value.
         { "name": "ConfigSource", "type": "int8", "versions": "1+", "default": "-1", "ignorable": true,

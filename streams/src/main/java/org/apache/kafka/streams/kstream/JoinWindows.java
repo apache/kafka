@@ -61,11 +61,11 @@ import static org.apache.kafka.streams.kstream.internals.WindowingDefaults.DEFAU
  * @see UnlimitedWindows
  * @see SessionWindows
  * @see KStream#join(KStream, ValueJoiner, JoinWindows)
- * @see KStream#join(KStream, ValueJoiner, JoinWindows, Joined)
+ * @see KStream#join(KStream, ValueJoiner, JoinWindows, StreamJoined)
  * @see KStream#leftJoin(KStream, ValueJoiner, JoinWindows)
- * @see KStream#leftJoin(KStream, ValueJoiner, JoinWindows, Joined)
+ * @see KStream#leftJoin(KStream, ValueJoiner, JoinWindows, StreamJoined)
  * @see KStream#outerJoin(KStream, ValueJoiner, JoinWindows)
- * @see KStream#outerJoin(KStream, ValueJoiner, JoinWindows, Joined)
+ * @see KStream#outerJoin(KStream, ValueJoiner, JoinWindows, StreamJoined)
  * @see TimestampExtractor
  */
 public final class JoinWindows extends Windows<Window> {
@@ -215,12 +215,12 @@ public final class JoinWindows extends Windows<Window> {
     }
 
     /**
-     * Reject late events that arrive more than {@code afterWindowEnd}
+     * Reject out-of-order events that are delayed more than {@code afterWindowEnd}
      * after the end of its window.
+     * <p>
+     * Delay is defined as (stream_time - record_timestamp).
      *
-     * Lateness is defined as (stream_time - record_timestamp).
-     *
-     * @param afterWindowEnd The grace period to admit late-arriving events to a window.
+     * @param afterWindowEnd The grace period to admit out-of-order events to a window.
      * @return this updated builder
      * @throws IllegalArgumentException if the {@code afterWindowEnd} is negative of can't be represented as {@code long milliseconds}
      */
@@ -246,7 +246,7 @@ public final class JoinWindows extends Windows<Window> {
      * @param durationMs the window retention time in milliseconds
      * @return itself
      * @throws IllegalArgumentException if {@code durationMs} is smaller than the window size
-     * @deprecated since 2.1. Use {@link Materialized#withRetention(Duration)} instead.
+     * @deprecated since 2.1. Use {@link JoinWindows#grace(Duration)} instead.
      */
     @Override
     @Deprecated
@@ -263,7 +263,8 @@ public final class JoinWindows extends Windows<Window> {
      * For {@link TimeWindows} the maintain duration is at least as small as the window size.
      *
      * @return the window maintain duration
-     * @deprecated since 2.1. This function should not be used anymore as retention period can be specified via {@link Materialized#withRetention(Duration)}.
+     * @deprecated since 2.1. This function should not be used anymore, since {@link JoinWindows#until(long)}
+     *             is deprecated in favor of {@link JoinWindows#grace(Duration)}.
      */
     @Override
     @Deprecated
