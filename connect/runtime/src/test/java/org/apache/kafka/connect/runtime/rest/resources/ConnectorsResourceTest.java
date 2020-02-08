@@ -823,7 +823,7 @@ public class ConnectorsResourceTest {
         PowerMock.replayAll();
 
         Exception e = assertThrows(ConnectRestException.class,
-                () -> connectorsResource.getConnectorActiveTopics(CONNECTOR_NAME));
+            () -> connectorsResource.getConnectorActiveTopics(CONNECTOR_NAME));
         assertEquals("Topic tracking is disabled.", e.getMessage());
         PowerMock.verifyAll();
     }
@@ -837,10 +837,10 @@ public class ConnectorsResourceTest {
         PowerMock.replayAll();
 
         Exception e1 = assertThrows(ConnectRestException.class,
-                () -> connectorsResource.resetConnectorActiveTopics(CONNECTOR_NAME, headers));
+            () -> connectorsResource.resetConnectorActiveTopics(CONNECTOR_NAME, headers));
         assertEquals("Topic tracking is disabled.", e1.getMessage());
         Exception e2 = assertThrows(ConnectRestException.class,
-                () -> connectorsResource.resetConnectorActiveTopics(CONNECTOR_NAME, headers));
+            () -> connectorsResource.resetConnectorActiveTopics(CONNECTOR_NAME, headers));
         assertEquals("Topic tracking reset is disabled.", e2.getMessage());
         PowerMock.verifyAll();
     }

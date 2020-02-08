@@ -85,8 +85,8 @@ import java.util.concurrent.ConcurrentMap;
 public class KafkaStatusBackingStore implements StatusBackingStore {
     private static final Logger log = LoggerFactory.getLogger(KafkaStatusBackingStore.class);
 
-    private static final String TASK_STATUS_PREFIX = "status-task-";
-    private static final String CONNECTOR_STATUS_PREFIX = "status-connector-";
+    protected static final String TASK_STATUS_PREFIX = "status-task-";
+    protected static final String CONNECTOR_STATUS_PREFIX = "status-connector-";
     protected static final String TOPIC_STATUS_PREFIX = "status-topic-";
     protected static final String TOPIC_STATUS_SEPARATOR = ":connector-";
 
@@ -122,9 +122,9 @@ public class KafkaStatusBackingStore implements StatusBackingStore {
 
     private final Time time;
     private final Converter converter;
-    private final Table<String, Integer, CacheEntry<TaskStatus>> tasks;
-    private final Map<String, CacheEntry<ConnectorStatus>> connectors;
     //visible for testing
+    protected final Table<String, Integer, CacheEntry<TaskStatus>> tasks;
+    protected final Map<String, CacheEntry<ConnectorStatus>> connectors;
     protected final ConcurrentMap<String, ConcurrentMap<String, TopicStatus>> topics;
 
     private String statusTopic;
