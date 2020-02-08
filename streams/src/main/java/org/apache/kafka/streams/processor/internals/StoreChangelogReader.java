@@ -416,7 +416,7 @@ public class StoreChangelogReader implements ChangelogReader {
             } catch (final InvalidOffsetException e) {
                 log.warn("Encountered {} fetching records from restore consumer for partitions {}, it is likely that " +
                     "the consumer's position has fallen out of the topic partition offset range because the topic was " +
-                    "truncated or compacted on the broker, marking the corresponding tasks as corrupted and re-initializing"
+                    "truncated or compacted on the broker, marking the corresponding tasks as corrupted and re-initializing" +
                     "it later.", e.getClass().getName(), e.partitions());
 
                 final Set<TaskId> taskIds = new HashSet<>();
