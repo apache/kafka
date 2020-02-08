@@ -66,14 +66,14 @@ class ZkAuthorizationTest extends ZooKeeperTestHarness with Logging {
    */
   @Test
   def testIsZkSecurityEnabled(): Unit = {
-    assertTrue(JaasUtils.isZkSecurityEnabled())
+    assertTrue(JaasUtils.isZkSaslEnabled())
     Configuration.setConfiguration(null)
     System.clearProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM)
-    assertFalse(JaasUtils.isZkSecurityEnabled())
+    assertFalse(JaasUtils.isZkSaslEnabled())
     try {
       Configuration.setConfiguration(null)
       System.setProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM, "no-such-file-exists.conf")
-      JaasUtils.isZkSecurityEnabled()
+      JaasUtils.isZkSaslEnabled()
       fail("Should have thrown an exception")
     } catch {
       case _: KafkaException => // Expected
