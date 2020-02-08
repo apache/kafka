@@ -338,7 +338,7 @@ object TopicCommand extends Logging {
 
   object ZookeeperTopicService {
     def apply(zkConnect: Option[String]): ZookeeperTopicService =
-      new ZookeeperTopicService(KafkaZkClient(zkConnect.get, JaasUtils.isZkSecurityEnabled, 30000, 30000,
+      new ZookeeperTopicService(KafkaZkClient(zkConnect.get, JaasUtils.isZkSaslEnabled, 30000, 30000,
         Int.MaxValue, Time.SYSTEM))
   }
 
