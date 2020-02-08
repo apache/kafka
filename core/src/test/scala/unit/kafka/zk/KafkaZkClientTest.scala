@@ -23,7 +23,7 @@ import java.util.concurrent.{CountDownLatch, TimeUnit}
 import kafka.api.{ApiVersion, LeaderAndIsr}
 import kafka.cluster.{Broker, EndPoint}
 import kafka.log.LogConfig
-import kafka.server.ConfigType
+import kafka.server.{ConfigType, KafkaConfig}
 import kafka.utils.CoreUtils
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.network.ListenerName
@@ -50,6 +50,7 @@ import org.apache.kafka.common.resource.ResourcePattern
 import org.apache.kafka.common.resource.ResourceType.{GROUP, TOPIC}
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.zookeeper.ZooDefs
+import org.apache.zookeeper.client.ZKClientConfig
 import org.apache.zookeeper.data.Stat
 
 class KafkaZkClientTest extends ZooKeeperTestHarness {
@@ -71,9 +72,9 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
   override def setUp(): Unit = {
     super.setUp()
     zkClient.createControllerEpochRaw(1)
-    otherZkClient = KafkaZkClient(zkConnect, zkAclsEnabled.getOrElse(JaasUtils.isZkSecurityEnabled), zkSessionTimeout,
+    otherZkClient = KafkaZkClient(zkConnect, zkAclsEnabled.getOrElse(JaasUtils.isZkSaslEnabled), zkSessionTimeout,
       zkConnectionTimeout, zkMaxInFlightRequests, Time.SYSTEM)
-    expiredSessionZkClient = ExpiredKafkaZkClient(zkConnect, zkAclsEnabled.getOrElse(JaasUtils.isZkSecurityEnabled),
+    expiredSessionZkClient = ExpiredKafkaZkClient(zkConnect, zkAclsEnabled.getOrElse(JaasUtils.isZkSaslEnabled),
       zkSessionTimeout, zkConnectionTimeout, zkMaxInFlightRequests, Time.SYSTEM)
   }
 
@@ -88,6 +89,31 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
   }
 
   private val topicPartition = new TopicPartition("topic", 0)
+
+  @Test
+  def testConnectionViaNettyClient(): Unit = {
+    // Confirm that we can explicitly set client connection configuration, which is necessary for TLS.
+    // TLS connectivity itself is tested in system tests rather than here to avoid having to add TLS support
+    // to kafka.zk.EmbeddedZoopeeper
+    val clientConfig = new ZKClientConfig()
+    val propKey = KafkaConfig.ZkClientCnxnSocketProp
+    val propVal = "org.apache.zookeeper.ClientCnxnSocketNetty"
+    KafkaConfig.setZooKeeperClientProperty(clientConfig, propKey, propVal)
+    val client = KafkaZkClient(zkConnect, zkAclsEnabled.getOrElse(JaasUtils.isZkSaslEnabled), zkSessionTimeout,
+      zkConnectionTimeout, zkMaxInFlightRequests, Time.SYSTEM, zkClientConfig = Some(clientConfig))
+    try {
+      assertEquals(Some(propVal), KafkaConfig.getZooKeeperClientProperty(client.currentZooKeeper.getClientConfig, propKey))
+      // For a sanity check, make sure a bad client connection socket class name generates an exception
+      val badClientConfig = new ZKClientConfig()
+      KafkaConfig.setZooKeeperClientProperty(badClientConfig, propKey, propVal + "BadClassName")
+      intercept[Exception] {
+        KafkaZkClient(zkConnect, zkAclsEnabled.getOrElse(JaasUtils.isZkSaslEnabled), zkSessionTimeout,
+          zkConnectionTimeout, zkMaxInFlightRequests, Time.SYSTEM, zkClientConfig = Some(badClientConfig))
+      }
+    } finally {
+      client.close()
+    }
+  }
 
   @Test
   def testSetAndGetConsumerOffset(): Unit = {
