@@ -38,10 +38,9 @@ class MetricsTest extends KafkaServerTestHarness with Logging {
   val numNodes = 2
   val numParts = 2
 
-  private val jmxConfigPrefix = "kafka."
   val overridingProps = new Properties
   overridingProps.put(KafkaConfig.NumPartitionsProp, numParts.toString)
-  overridingProps.put(jmxConfigPrefix + JmxReporter.BLACKLIST_CONFIG, "kafka.server:type=KafkaServer,name=ClusterId")
+  overridingProps.put(JmxReporter.BLACKLIST_CONFIG, "kafka.server:type=KafkaServer,name=ClusterId")
 
   def generateConfigs =
     TestUtils.createBrokerConfigs(numNodes, zkConnect).map(KafkaConfig.fromProps(_, overridingProps))
@@ -91,7 +90,7 @@ class MetricsTest extends KafkaServerTestHarness with Logging {
   def testUpdateJMXFilter(): Unit = {
     // verify previously exposed metrics are removed and existing matching metrics are added
     servers.foreach(server => server.kafkaYammerMetrics.reconfigure(
-      Map(jmxConfigPrefix + JmxReporter.BLACKLIST_CONFIG -> "kafka.controller:type=KafkaController,name=ActiveControllerCount").asJava
+      Map(JmxReporter.BLACKLIST_CONFIG -> "kafka.controller:type=KafkaController,name=ActiveControllerCount").asJava
     ))
     assertFalse(ManagementFactory.getPlatformMBeanServer
                  .isRegistered(new ObjectName("kafka.controller:type=KafkaController,name=ActiveControllerCount")))

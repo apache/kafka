@@ -54,6 +54,9 @@ public class JmxReporter implements MetricsReporter, Reconfigurable {
     public static final String BLACKLIST_CONFIG = METRICS_CONFIG_PREFIX + "blacklist";
     public static final String WHITELIST_CONFIG = METRICS_CONFIG_PREFIX + "whitelist";
 
+    public static final Set<String> RECONFIGURABLE_CONFIGS = Utils.mkSet(WHITELIST_CONFIG,
+                                                                          BLACKLIST_CONFIG);
+
     public static final String DEFAULT_WHITELIST = ".*";
     public static final String DEFAULT_BLACKLIST = "";
 
@@ -61,7 +64,6 @@ public class JmxReporter implements MetricsReporter, Reconfigurable {
     private static final Object LOCK = new Object();
     private String prefix;
     private final Map<String, KafkaMbean> mbeans = new HashMap<>();
-    private final String configPrefix;
     private Predicate<String> mbeanPredicate = s -> true;
 
     public JmxReporter() {
@@ -72,12 +74,7 @@ public class JmxReporter implements MetricsReporter, Reconfigurable {
      * Create a JMX reporter that prefixes all metrics with the given string.
      */
     public JmxReporter(String prefix) {
-        this(prefix, "");
-    }
-
-    public JmxReporter(String prefix, String configPrefix) {
         this.prefix = prefix;
-        this.configPrefix = configPrefix;
     }
 
     @Override
@@ -87,19 +84,18 @@ public class JmxReporter implements MetricsReporter, Reconfigurable {
 
     @Override
     public Set<String> reconfigurableConfigs() {
-        return Utils.mkSet(configPrefix + JmxReporter.WHITELIST_CONFIG,
-                           configPrefix + JmxReporter.BLACKLIST_CONFIG);
+        return RECONFIGURABLE_CONFIGS;
     }
 
     @Override
     public void validateReconfiguration(Map<String, ?> configs) throws ConfigException {
-        compilePredicate(configPrefix, configs);
+        compilePredicate(configs);
     }
 
     @Override
     public void reconfigure(Map<String, ?> configs) {
         synchronized (LOCK) {
-            this.mbeanPredicate = JmxReporter.compilePredicate(configPrefix, configs);
+            this.mbeanPredicate = JmxReporter.compilePredicate(configs);
 
             mbeans.forEach((name, mbean) -> {
                 if (mbeanPredicate.test(name)) {
@@ -300,9 +296,9 @@ public class JmxReporter implements MetricsReporter, Reconfigurable {
 
     }
 
-    public static Predicate<String> compilePredicate(String configPrefix, Map<String, ?> configs) {
-        String whitelist = (String) configs.get(configPrefix + WHITELIST_CONFIG);
-        String blacklist = (String) configs.get(configPrefix + BLACKLIST_CONFIG);
+    public static Predicate<String> compilePredicate(Map<String, ?> configs) {
+        String whitelist = (String) configs.get(WHITELIST_CONFIG);
+        String blacklist = (String) configs.get(BLACKLIST_CONFIG);
 
         if (whitelist == null) {
             whitelist = DEFAULT_WHITELIST;
@@ -319,7 +315,7 @@ public class JmxReporter implements MetricsReporter, Reconfigurable {
             return s -> whitelistPattern.matcher(s).matches()
                         && !blacklistPattern.matcher(s).matches();
         } catch (PatternSyntaxException e) {
-            throw new ConfigException("JMX filter for configuration" + configPrefix + METRICS_CONFIG_PREFIX
+            throw new ConfigException("JMX filter for configuration" + METRICS_CONFIG_PREFIX
                                       + ".(whitelist/blacklist) is not a valid regular expression");
         }
     }

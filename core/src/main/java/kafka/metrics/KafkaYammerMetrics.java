@@ -36,7 +36,6 @@ import java.util.function.Predicate;
 public class KafkaYammerMetrics implements Reconfigurable {
 
     public static final KafkaYammerMetrics INSTANCE = new KafkaYammerMetrics();
-    public static final String CONFIG_PREFIX = "kafka.";
 
     /**
      * convenience method to replace {@link com.yammer.metrics.Metrics#defaultRegistry()}
@@ -61,18 +60,17 @@ public class KafkaYammerMetrics implements Reconfigurable {
 
     @Override
     public Set<String> reconfigurableConfigs() {
-        return Utils.mkSet(CONFIG_PREFIX + JmxReporter.WHITELIST_CONFIG,
-                           CONFIG_PREFIX + JmxReporter.BLACKLIST_CONFIG);
+        return JmxReporter.RECONFIGURABLE_CONFIGS;
     }
 
     @Override
     public void validateReconfiguration(Map<String, ?> configs) throws ConfigException {
-        JmxReporter.compilePredicate(CONFIG_PREFIX, configs);
+        JmxReporter.compilePredicate(configs);
     }
 
     @Override
     public void reconfigure(Map<String, ?> configs) {
-        Predicate<String> mBeanPredicate = JmxReporter.compilePredicate(CONFIG_PREFIX, configs);
+        Predicate<String> mBeanPredicate = JmxReporter.compilePredicate(configs);
         jmxReporter.updatePredicate(metricName -> mBeanPredicate.test(metricName.getMBeanName()));
     }
 }

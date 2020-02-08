@@ -240,7 +240,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
         kafkaYammerMetrics = KafkaYammerMetrics.INSTANCE
         kafkaYammerMetrics.configure(config.originals)
 
-        val jmxReporter = new JmxReporter(jmxPrefix, "kafka.")
+        val jmxReporter = new JmxReporter(jmxPrefix)
         jmxReporter.configure(config.originals)
 
         val reporters = new util.ArrayList[MetricsReporter]
