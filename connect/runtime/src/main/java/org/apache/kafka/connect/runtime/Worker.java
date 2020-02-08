@@ -50,7 +50,6 @@ import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTask;
 import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.kafka.connect.source.SourceTask;
-import org.apache.kafka.connect.storage.CloseableOffsetStorageReader;
 import org.apache.kafka.connect.storage.Converter;
 import org.apache.kafka.connect.storage.HeaderConverter;
 import org.apache.kafka.connect.storage.OffsetBackingStore;
@@ -507,38 +506,72 @@ public class Worker {
                 connConfig.errorMaxDelayInMillis(), connConfig.errorToleranceType(), Time.SYSTEM);
         retryWithToleranceOperator.metrics(errorHandlingMetrics);
 
+        // used to collect intermediate objects
+        class ClosableObjects implements AutoCloseable {
+            private final List<AutoCloseable> closableObjects = new ArrayList<>();
+
+            public <T> T add(T object) {
+                if (object instanceof AutoCloseable) closableObjects.add((AutoCloseable) object);
+                return object;
+            }
+
+            @Override
+            public void close() {
+                closableObjects.forEach(o -> Utils.closeQuietly(o, o.getClass().getName()));
+            }
+        }
+        ClosableObjects closableObjects = new ClosableObjects();
         // Decide which type of worker task we need based on the type of task.
-        if (task instanceof SourceTask) {
-            retryWithToleranceOperator.reporters(sourceTaskReporters(id, connConfig, errorHandlingMetrics));
-            TransformationChain<SourceRecord> transformationChain = new TransformationChain<>(connConfig.<SourceRecord>transformations(), retryWithToleranceOperator);
-            log.info("Initializing: {}", transformationChain);
-            CloseableOffsetStorageReader offsetReader = new OffsetStorageReaderImpl(offsetBackingStore, id.connector(),
-                    internalKeyConverter, internalValueConverter);
-            OffsetStorageWriter offsetWriter = new OffsetStorageWriter(offsetBackingStore, id.connector(),
-                    internalKeyConverter, internalValueConverter);
-            Map<String, Object> producerProps = producerConfigs(id, "connector-producer-" + id, config, connConfig, connectorClass,
-                                                                connectorClientConfigOverridePolicy);
-            KafkaProducer<byte[], byte[]> producer = new KafkaProducer<>(producerProps);
-
-            // Note we pass the configState as it performs dynamic transformations under the covers
-            return new WorkerSourceTask(id, (SourceTask) task, statusListener, initialState, keyConverter, valueConverter,
-                    headerConverter, transformationChain, producer, offsetReader, offsetWriter, config, configState, metrics, loader,
-                    time, retryWithToleranceOperator, herder.statusBackingStore());
-        } else if (task instanceof SinkTask) {
-            TransformationChain<SinkRecord> transformationChain = new TransformationChain<>(connConfig.<SinkRecord>transformations(), retryWithToleranceOperator);
-            log.info("Initializing: {}", transformationChain);
-            SinkConnectorConfig sinkConfig = new SinkConnectorConfig(plugins, connConfig.originalsStrings());
-            retryWithToleranceOperator.reporters(sinkTaskReporters(id, sinkConfig, errorHandlingMetrics, connectorClass));
-
-            Map<String, Object> consumerProps = consumerConfigs(id, config, connConfig, connectorClass, connectorClientConfigOverridePolicy);
-            KafkaConsumer<byte[], byte[]> consumer = new KafkaConsumer<>(consumerProps);
-
-            return new WorkerSinkTask(id, (SinkTask) task, statusListener, initialState, config, configState, metrics, keyConverter,
-                                      valueConverter, headerConverter, transformationChain, consumer, loader, time,
-                                      retryWithToleranceOperator, herder.statusBackingStore());
-        } else {
-            log.error("Tasks must be a subclass of either SourceTask or SinkTask", task);
-            throw new ConnectException("Tasks must be a subclass of either SourceTask or SinkTask");
+        try {
+            if (task instanceof SourceTask) {
+                retryWithToleranceOperator.reporters(sourceTaskReporters(id, new SourceConnectorConfig(plugins, connConfig.originalsStrings()), errorHandlingMetrics));
+                // Note we pass the configState as it performs dynamic transformations under the covers
+                return new WorkerSourceTask(
+                  id,
+                  (SourceTask) task,
+                  statusListener,
+                  initialState,
+                  keyConverter,
+                  valueConverter,
+                  headerConverter,
+                  closableObjects.add(new TransformationChain<>(connConfig.<SourceRecord>transformations(), retryWithToleranceOperator)),
+                  closableObjects.add(new KafkaProducer<>(producerConfigs(id, "connector-producer-" + id, config, connConfig, connectorClass,
+                    connectorClientConfigOverridePolicy))),
+                  closableObjects.add(new OffsetStorageReaderImpl(offsetBackingStore, id.connector(), internalKeyConverter, internalValueConverter)),
+                  closableObjects.add(new OffsetStorageWriter(offsetBackingStore, id.connector(), internalKeyConverter, internalValueConverter)),
+                  config,
+                  configState,
+                  metrics,
+                  loader,
+                  time,
+                  retryWithToleranceOperator,
+                  herder.statusBackingStore());
+            } else if (task instanceof SinkTask) {
+                retryWithToleranceOperator.reporters(sinkTaskReporters(id, new SinkConnectorConfig(plugins, connConfig.originalsStrings()), errorHandlingMetrics, connectorClass));
+                return new WorkerSinkTask(
+                  id,
+                  (SinkTask) task,
+                  statusListener,
+                  initialState,
+                  config,
+                  configState,
+                  metrics,
+                  keyConverter,
+                  valueConverter,
+                  headerConverter,
+                  closableObjects.add(new TransformationChain<>(connConfig.<SinkRecord>transformations(), retryWithToleranceOperator)),
+                  closableObjects.add(new KafkaConsumer<>(consumerConfigs(id, config, connConfig, connectorClass, connectorClientConfigOverridePolicy))),
+                  loader,
+                  time,
+                  retryWithToleranceOperator,
+                  herder.statusBackingStore());
+            } else {
+                log.error("Tasks must be a subclass of either SourceTask or SinkTask", task);
+                throw new ConnectException("Tasks must be a subclass of either SourceTask or SinkTask");
+            }
+        } catch (Throwable e) {
+            Utils.closeQuietly(closableObjects, "intermediate objects used to build task");
+            throw e;
         }
     }
 

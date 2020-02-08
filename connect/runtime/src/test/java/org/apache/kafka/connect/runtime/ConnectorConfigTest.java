@@ -20,9 +20,11 @@ import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.connect.connector.ConnectRecord;
 import org.apache.kafka.connect.connector.Connector;
+import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.runtime.isolation.PluginDesc;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.transforms.Transformation;
+import org.junit.Assert;
 import org.junit.Test;
 
 import java.util.Collections;
@@ -30,6 +32,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -63,6 +66,7 @@ public class ConnectorConfigTest<R extends ConnectRecord<R>> {
 
         @Override
         public void close() {
+            COUNT_OF_CLOSE.incrementAndGet();
             magicNumber = 0;
         }
 
@@ -175,6 +179,49 @@ public class ConnectorConfigTest<R extends ConnectRecord<R>> {
         assertEquals(2, transformations.size());
         assertEquals(42, ((SimpleTransformation) transformations.get(0)).magicNumber);
         assertEquals(84, ((SimpleTransformation) transformations.get(1)).magicNumber);
+    }
+
+    @Test
+    public void transformsShouldBeClosed() {
+        Map<String, String> props = new HashMap<>();
+        props.put("name", "test");
+        props.put("connector.class", TestConnector.class.getName());
+        props.put("transforms", "a, b");
+        props.put("transforms.a.type", SimpleTransformation.class.getName());
+        props.put("transforms.a.magic.number", "42");
+        props.put("transforms.b.type", FailedTransformation.class.getName());
+        final ConnectorConfig config = new ConnectorConfig(MOCK_PLUGINS, props);
+        int countBefore = COUNT_OF_CLOSE.get();
+        try {
+            config.transformations();
+            throw new AssertionError("FailedTransformation should fail in configuring");
+        } catch (ConnectException e) {
+            Assert.assertEquals(1, COUNT_OF_CLOSE.get() - countBefore);
+        }
+    }
+
+    private static final AtomicInteger COUNT_OF_CLOSE = new AtomicInteger(0);
+
+    public static class FailedTransformation<R extends ConnectRecord<R>> implements Transformation<R>  {
+
+        @Override
+        public R apply(R record) {
+            return record;
+        }
+
+        @Override
+        public ConfigDef config() {
+            return new ConfigDef();
+        }
+
+        @Override
+        public void close() {
+        }
+
+        @Override
+        public void configure(Map<String, ?> configs) {
+            throw new RuntimeException("YOU SHOULD NOT PASS");
+        }
     }
 
 }
