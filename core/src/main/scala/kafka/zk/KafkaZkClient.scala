@@ -36,6 +36,7 @@ import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.apache.zookeeper.KeeperException.{Code, NodeExistsException}
 import org.apache.zookeeper.OpResult.{CreateResult, ErrorResult, SetDataResult}
+import org.apache.zookeeper.client.ZKClientConfig
 import org.apache.zookeeper.data.{ACL, Stat}
 import org.apache.zookeeper.{CreateMode, KeeperException, ZooKeeper}
 
@@ -1856,9 +1857,10 @@ object KafkaZkClient {
             time: Time,
             metricGroup: String = "kafka.server",
             metricType: String = "SessionExpireListener",
-            name: Option[String] = None) = {
+            name: Option[String] = None,
+            zkClientConfig: Option[ZKClientConfig] = None) = {
     val zooKeeperClient = new ZooKeeperClient(connectString, sessionTimeoutMs, connectionTimeoutMs, maxInFlightRequests,
-      time, metricGroup, metricType, name)
+      time, metricGroup, metricType, name, zkClientConfig)
     new KafkaZkClient(zooKeeperClient, isSecure, time)
   }
 

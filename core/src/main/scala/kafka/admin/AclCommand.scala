@@ -186,14 +186,26 @@ object AclCommand extends Logging {
   class AuthorizerService(val authorizerClassName: String, val opts: AclCommandOptions) extends AclCommandService with Logging {
 
     private def withAuthorizer()(f: Authorizer => Unit): Unit = {
-      val defaultProps = Map(KafkaConfig.ZkEnableSecureAclsProp -> JaasUtils.isZkSecurityEnabled)
-      val authorizerProperties =
+      // It is possible that zookeeper.set.acl could be true without SASL if mutual certificate authentication is configured.
+      // We will default the value of zookeeper.set.acl to true or false based on whether SASL is configured,
+      // but if SASL is not configured and zookeeper.set.acl is supposed to be true due to mutual certificate authentication
+      // then it will be up to the user to explicitly specify zookeeper.set.acl=true in the authorizer-properties.
+      val defaultProps = Map(KafkaConfig.ZkEnableSecureAclsProp -> JaasUtils.isZkSaslEnabled)
+      val authorizerPropertiesWithoutTls =
         if (opts.options.has(opts.authorizerPropertiesOpt)) {
           val authorizerProperties = opts.options.valuesOf(opts.authorizerPropertiesOpt).asScala
           defaultProps ++ CommandLineUtils.parseKeyValueArgs(authorizerProperties, acceptMissingValue = false).asScala
         } else {
           defaultProps
         }
+      val authorizerProperties =
+        if (opts.options.has(opts.zkTlsConfigFile)) {
+          // load in TLS configs both with and without the "authorizer." prefix
+          val validKeys = (KafkaConfig.ZkSslConfigToSystemPropertyMap.keys.toList ++ KafkaConfig.ZkSslConfigToSystemPropertyMap.keys.map("authorizer." + _).toList).asJava
+          authorizerPropertiesWithoutTls ++ Utils.loadProps(opts.options.valueOf(opts.zkTlsConfigFile), validKeys).asInstanceOf[java.util.Map[String, Any]].asScala
+        }
+        else
+          authorizerPropertiesWithoutTls
 
       val authZ = AuthorizerUtils.createAuthorizer(authorizerClassName)
       try {
@@ -584,6 +596,13 @@ object AclCommand extends Logging {
       "This will generate ACLs that allows READ,DESCRIBE on topic and READ on group.")
 
     val forceOpt = parser.accepts("force", "Assume Yes to all queries and do not prompt.")
+
+    val zkTlsConfigFile = parser.accepts("zk-tls-config-file",
+      "Identifies the file where ZooKeeper client TLS connectivity properties for the authorizer are defined.  Any properties other than the following (with or without an \"authorizer.\" prefix) are ignored: " +
+        KafkaConfig.ZkSslConfigToSystemPropertyMap.keys.toList.sorted.mkString(", ") +
+        ". Note that if SASL is not configured and zookeeper.set.acl is supposed to be true due to mutual certificate authentication being used" +
+        " then it is necessary to explicitly specify --authorizer-properties zookeeper.set.acl=true")
+      .withRequiredArg().describedAs("Authorizer ZooKeeper TLS configuration").ofType(classOf[String])
 
     options = parser.parse(args: _*)
 

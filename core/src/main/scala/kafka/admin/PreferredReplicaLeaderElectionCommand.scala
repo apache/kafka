@@ -65,7 +65,7 @@ object PreferredReplicaLeaderElectionCommand extends Logging {
       println(s"Warning: --zookeeper is deprecated and will be removed in a future version of Kafka.")
       println(s"Use --bootstrap-server instead to specify a broker to connect to.")
       new ZkCommand(commandOpts.options.valueOf(commandOpts.zkConnectOpt),
-              JaasUtils.isZkSecurityEnabled,
+              JaasUtils.isZkSaslEnabled,
               timeout)
     } else {
         val adminProps = if (commandOpts.options.has(commandOpts.adminClientConfigOpt))

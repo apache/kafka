@@ -13,6 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import logging
 import os
 import subprocess
 from tempfile import mkdtemp
@@ -24,7 +25,8 @@ import itertools
 
 
 class SslStores(object):
-    def __init__(self, local_scratch_dir):
+    def __init__(self, local_scratch_dir, logger=None):
+        self.logger = logger
         self.ca_crt_path = os.path.join(local_scratch_dir, "test.ca.crt")
         self.ca_jks_path = os.path.join(local_scratch_dir, "test.ca.jks")
         self.ca_passwd = "test-ca-passwd"
@@ -32,7 +34,8 @@ class SslStores(object):
         self.truststore_path = os.path.join(local_scratch_dir, "test.truststore.jks")
         self.truststore_passwd = "test-ts-passwd"
         self.keystore_passwd = "test-ks-passwd"
-        self.key_passwd = "test-key-passwd"
+        # Zookeeper TLS (as of v3.5.6) does not support a key password different than the keystore password
+        self.key_passwd = self.keystore_passwd
         # Allow upto one hour of clock skew between host and VMs
         self.startdate = "-1H"
 
@@ -72,6 +75,17 @@ class SslStores(object):
         self.runcmd("keytool -importcert -keystore %s -storepass %s -storetype JKS -alias ca -file %s -noprompt" % (ks_path, self.keystore_passwd, self.ca_crt_path))
         self.runcmd("keytool -importcert -keystore %s -storepass %s -storetype JKS -keypass %s -alias kafka -file %s -noprompt" % (ks_path, self.keystore_passwd, self.key_passwd, crt_path))
         node.account.copy_to(ks_path, SecurityConfig.KEYSTORE_PATH)
+
+        # also generate ZooKeeper client TLS config file for mutual authentication use case
+        str = """zookeeper.clientCnxnSocket=org.apache.zookeeper.ClientCnxnSocketNetty
+zookeeper.ssl.client.enable=true
+zookeeper.ssl.truststore.location=%s
+zookeeper.ssl.truststore.password=%s
+zookeeper.ssl.keystore.location=%s
+zookeeper.ssl.keystore.password=%s
+""" % (SecurityConfig.TRUSTSTORE_PATH, self.truststore_passwd, SecurityConfig.KEYSTORE_PATH, self.keystore_passwd)
+        node.account.create_file(SecurityConfig.ZK_CLIENT_MUTUAL_AUTH_CONFIG_PATH, str)
+
         rmtree(ks_dir)
 
     def hostname(self, node):
@@ -80,6 +94,8 @@ class SslStores(object):
         return node.account.hostname
 
     def runcmd(self, cmd):
+        if self.logger:
+            self.logger.log(logging.DEBUG, cmd)
         proc = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
         stdout, stderr = proc.communicate()
 
@@ -104,6 +120,7 @@ class SecurityConfig(TemplateRenderer):
     CONFIG_DIR = "/mnt/security"
     KEYSTORE_PATH = "/mnt/security/test.keystore.jks"
     TRUSTSTORE_PATH = "/mnt/security/test.truststore.jks"
+    ZK_CLIENT_MUTUAL_AUTH_CONFIG_PATH = "/mnt/security/zk_client_mutual_auth_config.properties"
     JAAS_CONF_PATH = "/mnt/security/jaas.conf"
     KRB5CONF_PATH = "/mnt/security/krb5.conf"
     KEYTAB_PATH = "/mnt/security/keytab"
@@ -113,7 +130,7 @@ class SecurityConfig(TemplateRenderer):
 
     def __init__(self, context, security_protocol=None, interbroker_security_protocol=None,
                  client_sasl_mechanism=SASL_MECHANISM_GSSAPI, interbroker_sasl_mechanism=SASL_MECHANISM_GSSAPI,
-                 zk_sasl=False, template_props="", static_jaas_conf=True, jaas_override_variables=None,
+                 zk_sasl=False, zk_tls=False, template_props="", static_jaas_conf=True, jaas_override_variables=None,
                  listener_security_config=ListenerSecurityConfig()):
         """
         Initialize the security properties for the node and copy
@@ -128,7 +145,7 @@ class SecurityConfig(TemplateRenderer):
             # This generates keystore/trustore files in a local scratch directory which gets
             # automatically destroyed after the test is run
             # Creating within the scratch directory allows us to run tests in parallel without fear of collision
-            SecurityConfig.ssl_stores = SslStores(context.local_scratch_dir)
+            SecurityConfig.ssl_stores = SslStores(context.local_scratch_dir, context.logger)
             SecurityConfig.ssl_stores.generate_ca()
             SecurityConfig.ssl_stores.generate_truststore()
 
@@ -143,8 +160,9 @@ class SecurityConfig(TemplateRenderer):
             interbroker_security_protocol = security_protocol
         self.interbroker_security_protocol = interbroker_security_protocol
         self.has_sasl = self.is_sasl(security_protocol) or self.is_sasl(interbroker_security_protocol) or zk_sasl
-        self.has_ssl = self.is_ssl(security_protocol) or self.is_ssl(interbroker_security_protocol)
+        self.has_ssl = self.is_ssl(security_protocol) or self.is_ssl(interbroker_security_protocol) or zk_tls
         self.zk_sasl = zk_sasl
+        self.zk_tls = zk_tls
         self.static_jaas_conf = static_jaas_conf
         self.listener_security_config = listener_security_config
         self.properties = {
