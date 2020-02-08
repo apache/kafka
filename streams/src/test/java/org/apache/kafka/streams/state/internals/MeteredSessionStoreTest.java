@@ -140,17 +140,8 @@ public class MeteredSessionStoreTest {
     public void testMetrics() {
         init();
         final JmxReporter reporter = new JmxReporter("kafka.streams");
-        metrics.addReporter(reporter);
-        assertTrue(reporter.containsMbean(String.format(
-            "kafka.streams:type=%s,%s=%s,task-id=%s,%s-state-id=%s",
-            storeLevelGroup,
-            threadIdTagKey,
-            threadId,
-            taskId.toString(),
-            STORE_TYPE,
-            "metered"
-        )));
-        if (StreamsConfig.METRICS_0100_TO_24.equals(builtInMetricsVersion)) {
+        try {
+            metrics.addReporter(reporter);
             assertTrue(reporter.containsMbean(String.format(
                 "kafka.streams:type=%s,%s=%s,task-id=%s,%s-state-id=%s",
                 storeLevelGroup,
@@ -158,8 +149,21 @@ public class MeteredSessionStoreTest {
                 threadId,
                 taskId.toString(),
                 STORE_TYPE,
-                ROLLUP_VALUE
+                "metered"
             )));
+            if (StreamsConfig.METRICS_0100_TO_24.equals(builtInMetricsVersion)) {
+                assertTrue(reporter.containsMbean(String.format(
+                    "kafka.streams:type=%s,%s=%s,task-id=%s,%s-state-id=%s",
+                    storeLevelGroup,
+                    threadIdTagKey,
+                    threadId,
+                    taskId.toString(),
+                    STORE_TYPE,
+                    ROLLUP_VALUE
+                )));
+            }
+        } finally {
+            reporter.close();
         }
     }
 
