@@ -35,6 +35,7 @@ import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
 import org.junit.Before;
 import org.junit.ClassRule;
+import org.junit.Ignore;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 import org.slf4j.Logger;
@@ -57,7 +58,11 @@ import java.util.concurrent.ExecutionException;
  * especially whether it could build the repartition topic counts (step zero) with a complex topology.
  * The traversal path 0 -> 1 -> 2 -> 3 hits the case where sub-topology 2 will be initialized while its
  * parent 3 hasn't been initialized yet.
+ *
+ * Note: until we fully migrate to JDK 11 and Scala 2.13, this test is considered as flaky which should not
+ * be included in the normal run.
  */
+@Ignore
 @Category({IntegrationTest.class})
 public class BranchedMultiLevelRepartitionConnectedTopologyTest {
 

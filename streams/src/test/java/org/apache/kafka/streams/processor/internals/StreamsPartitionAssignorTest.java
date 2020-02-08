@@ -1726,6 +1726,30 @@ public class StreamsPartitionAssignorTest {
         shouldThrowIfPreVersionProbingSubscriptionAndFutureSubscriptionIsMixed(2);
     }
 
+    @Test
+    public void shouldNotFailOnBranchedMultiLevelRepartitionConnectedTopology() {
+        // This test is converted from integration test BranchedMultiLevelRepartitionConnectedTopologyTest
+
+        final String applicationId = "test";
+        builder.setApplicationId(applicationId);
+        builder.addInternalTopic("topicX");
+        builder.addSource(null, "source1", null, null, null, "topic1");
+        builder.addProcessor("processor1", new MockProcessorSupplier(), "source1");
+        builder.addSink("sink1", "topicX", null, null, null, "processor1");
+        builder.addSource(null, "source2", null, null, null, "topicX");
+        builder.addInternalTopic("topicZ");
+        builder.addProcessor("processor2", new MockProcessorSupplier(), "source2");
+        builder.addSink("sink2", "topicZ", null, null, null, "processor2");
+        builder.addSource(null, "source3", null, null, null, "topicZ");
+        builder.topicGroups();
+        final List<String> topics = asList("topic1", "test-topicX", "test-topicZ");
+        final Set<TaskId> allTasks = mkSet(task0_0, task0_1, task0_2);
+
+        final UUID uuid1 = UUID.randomUUID();
+        createMockTaskManager(emptyTasks, emptyTasks, uuid1, builder);
+        EasyMock.replay(taskManager);
+    }
+
     private static ByteBuffer encodeFutureSubscription() {
         final ByteBuffer buf = ByteBuffer.allocate(4 /* used version */ + 4 /* supported version */);
         buf.putInt(LATEST_SUPPORTED_VERSION + 1);
