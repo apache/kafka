@@ -19,13 +19,17 @@ package org.apache.kafka.streams.integration;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.TestOutputTopic;
 import org.apache.kafka.streams.TopologyTestDriver;
+import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
+import org.apache.kafka.streams.kstream.Produced;
+import org.apache.kafka.streams.state.KeyValueStore;
 import org.junit.Test;
 
 import java.util.Collections;
@@ -56,7 +60,106 @@ public class KTableKTableForeignKeyJoinDefaultSerdeTest {
 
         finalJoinResult.toStream().to("output");
 
+        validateTopologyCanProcessData(builder);
+    }
 
+    @Test
+    public void shouldWorkWithDefaultAndConsumedSerdes() {
+        final StreamsBuilder builder = new StreamsBuilder();
+        final KTable<String, String> aTable = builder.table("A", Consumed.with(Serdes.String(), Serdes.String()));
+        final KTable<String, String> bTable = builder.table("B");
+
+        final KTable<String, String> fkJoinResult = aTable.join(
+            bTable,
+            value -> value.split("-")[0],
+            (aVal, bVal) -> "(" + aVal + "," + bVal + ")",
+            Materialized.as("asdf")
+        );
+
+        final KTable<String, String> finalJoinResult = aTable.join(
+            fkJoinResult,
+            (aVal, fkJoinVal) -> "(" + aVal + "," + fkJoinVal + ")"
+        );
+
+        finalJoinResult.toStream().to("output");
+
+        validateTopologyCanProcessData(builder);
+    }
+
+    @Test
+    public void shouldWorkWithDefaultAndJoinResultSerdes() {
+        final StreamsBuilder builder = new StreamsBuilder();
+        final KTable<String, String> aTable = builder.table("A");
+        final KTable<String, String> bTable = builder.table("B");
+
+        final KTable<String, String> fkJoinResult = aTable.join(
+            bTable,
+            value -> value.split("-")[0],
+            (aVal, bVal) -> "(" + aVal + "," + bVal + ")",
+            Materialized
+                .<String, String, KeyValueStore<Bytes, byte[]>>as("asdf")
+                .withKeySerde(Serdes.String())
+                .withValueSerde(Serdes.String())
+        );
+
+        final KTable<String, String> finalJoinResult = aTable.join(
+            fkJoinResult,
+            (aVal, fkJoinVal) -> "(" + aVal + "," + fkJoinVal + ")"
+        );
+
+        finalJoinResult.toStream().to("output");
+
+        validateTopologyCanProcessData(builder);
+    }
+
+    @Test
+    public void shouldWorkWithDefaultAndEquiJoinResultSerdes() {
+        final StreamsBuilder builder = new StreamsBuilder();
+        final KTable<String, String> aTable = builder.table("A");
+        final KTable<String, String> bTable = builder.table("B");
+
+        final KTable<String, String> fkJoinResult = aTable.join(
+            bTable,
+            value -> value.split("-")[0],
+            (aVal, bVal) -> "(" + aVal + "," + bVal + ")",
+            Materialized.as("asdf")
+        );
+
+        final KTable<String, String> finalJoinResult = aTable.join(
+            fkJoinResult,
+            (aVal, fkJoinVal) -> "(" + aVal + "," + fkJoinVal + ")",
+            Materialized.with(Serdes.String(), Serdes.String())
+        );
+
+        finalJoinResult.toStream().to("output");
+
+        validateTopologyCanProcessData(builder);
+    }
+
+    @Test
+    public void shouldWorkWithDefaultAndProducedSerdes() {
+        final StreamsBuilder builder = new StreamsBuilder();
+        final KTable<String, String> aTable = builder.table("A");
+        final KTable<String, String> bTable = builder.table("B");
+
+        final KTable<String, String> fkJoinResult = aTable.join(
+            bTable,
+            value -> value.split("-")[0],
+            (aVal, bVal) -> "(" + aVal + "," + bVal + ")",
+            Materialized.as("asdf")
+        );
+
+        final KTable<String, String> finalJoinResult = aTable.join(
+            fkJoinResult,
+            (aVal, fkJoinVal) -> "(" + aVal + "," + fkJoinVal + ")"
+        );
+
+        finalJoinResult.toStream().to("output", Produced.with(Serdes.String(), Serdes.String()));
+
+        validateTopologyCanProcessData(builder);
+    }
+
+    private static void validateTopologyCanProcessData(final StreamsBuilder builder) {
         final Properties config = new Properties();
         config.setProperty(StreamsConfig.APPLICATION_ID_CONFIG, "dummy");
         config.setProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy");
