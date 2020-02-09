@@ -879,10 +879,22 @@ public interface KStream<K, V> {
     /**
      * Convert this stream to a {@link KTable}.
      * <p>
-     * an internal repartitioning topic may need to be created in Kafka if a key changed
+     * If a key changing operator was used before this operation (e.g., {@link #selectKey(KeyValueMapper)},
+     * {@link #map(KeyValueMapper)}, {@link #flatMap(KeyValueMapper)}, or
+     * {@link #transform(TransformerSupplier, String...)}), and no data redistribution happened afterwards (e.g., via
+     * {@link #through(String)}) an internal repartitioning topic will be created in Kafka.
      * This topic will be named "${applicationId}-&lt;name&gt;-repartition", where "applicationId" is user-specified in
      * {@link StreamsConfig} via parameter {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG},
      * "&lt;name&gt;" is an internally generated name, and "-repartition" is a fixed suffix.
+     * <p>
+     * You can retrieve all generated internal topic names via {@link Topology#describe()}.
+     * <p>
+     * For this case, all data of this stream will be redistributed through the repartitioning topic by writing all
+     * records to it, and rereading all records from it, such that the resulting {@link KTable} is partitioned
+     * correctly on its key.
+     * Note that you cannot enable {@link StreamsConfig#TOPOLOGY_OPTIMIZATION} config for this case, because
+     * repartition topics are considered transient and don't allow to recover the result {@link KTable} in cause of
+     * a failure; hence, a dedicated changelog topic is required to guarantee fault-tolerance.
      * <p>
      * Note that this is a logical operation and only changes the "interpretation" of the stream, i.e., each record of
      * it was a "fact/event" and is re-interpreted as update now (cf. {@link KStream} vs {@code KTable}).
@@ -894,10 +906,22 @@ public interface KStream<K, V> {
     /**
      * Convert this stream to a {@link KTable}.
      * <p>
-     * an internal repartitioning topic may need to be created in Kafka if a key changed
+     * If a key changing operator was used before this operation (e.g., {@link #selectKey(KeyValueMapper)},
+     * {@link #map(KeyValueMapper)}, {@link #flatMap(KeyValueMapper)}, or
+     * {@link #transform(TransformerSupplier, String...)}), and no data redistribution happened afterwards (e.g., via
+     * {@link #through(String)}) an internal repartitioning topic will be created in Kafka.
      * This topic will be named "${applicationId}-&lt;name&gt;-repartition", where "applicationId" is user-specified in
      * {@link StreamsConfig} via parameter {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG},
      * "&lt;name&gt;" is an internally generated name, and "-repartition" is a fixed suffix.
+     * <p>
+     * You can retrieve all generated internal topic names via {@link Topology#describe()}.
+     * <p>
+     * For this case, all data of this stream will be redistributed through the repartitioning topic by writing all
+     * records to it, and rereading all records from it, such that the resulting {@link KTable} is partitioned
+     * correctly on its key.
+     * Note that you cannot enable {@link StreamsConfig#TOPOLOGY_OPTIMIZATION} config for this case, because
+     * repartition topics are considered transient and don't allow to recover the result {@link KTable} in cause of
+     * a failure; hence, a dedicated changelog topic is required to guarantee fault-tolerance.
      * <p>
      * Note that this is a logical operation and only changes the "interpretation" of the stream, i.e., each record of
      * it was a "fact/event" and is re-interpreted as update now (cf. {@link KStream} vs {@code KTable}).
@@ -910,10 +934,22 @@ public interface KStream<K, V> {
     /**
      * Convert this stream to a {@link KTable}.
      * <p>
-     * an internal repartitioning topic may need to be created in Kafka if a key changed
+     * If a key changing operator was used before this operation (e.g., {@link #selectKey(KeyValueMapper)},
+     * {@link #map(KeyValueMapper)}, {@link #flatMap(KeyValueMapper)}, or
+     * {@link #transform(TransformerSupplier, String...)}), and no data redistribution happened afterwards (e.g., via
+     * {@link #through(String)}) an internal repartitioning topic will be created in Kafka.
      * This topic will be named "${applicationId}-&lt;name&gt;-repartition", where "applicationId" is user-specified in
      * {@link StreamsConfig} via parameter {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG},
      * "&lt;name&gt;" is an internally generated name, and "-repartition" is a fixed suffix.
+     * <p>
+     * You can retrieve all generated internal topic names via {@link Topology#describe()}.
+     * <p>
+     * For this case, all data of this stream will be redistributed through the repartitioning topic by writing all
+     * records to it, and rereading all records from it, such that the resulting {@link KTable} is partitioned
+     * correctly on its key.
+     * Note that you cannot enable {@link StreamsConfig#TOPOLOGY_OPTIMIZATION} config for this case, because
+     * repartition topics are considered transient and don't allow to recover the result {@link KTable} in cause of
+     * a failure; hence, a dedicated changelog topic is required to guarantee fault-tolerance.
      * <p>
      * Note that this is a logical operation and only changes the "interpretation" of the stream, i.e., each record of
      * it was a "fact/event" and is re-interpreted as update now (cf. {@link KStream} vs {@code KTable}).
@@ -927,10 +963,22 @@ public interface KStream<K, V> {
     /**
      * Convert this stream to a {@link KTable}.
      * <p>
-     * an internal repartitioning topic may need to be created in Kafka if a key changed
+     * If a key changing operator was used before this operation (e.g., {@link #selectKey(KeyValueMapper)},
+     * {@link #map(KeyValueMapper)}, {@link #flatMap(KeyValueMapper)}, or
+     * {@link #transform(TransformerSupplier, String...)}), and no data redistribution happened afterwards (e.g., via
+     * {@link #through(String)}) an internal repartitioning topic will be created in Kafka.
      * This topic will be named "${applicationId}-&lt;name&gt;-repartition", where "applicationId" is user-specified in
      * {@link StreamsConfig} via parameter {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG},
      * "&lt;name&gt;" is an internally generated name, and "-repartition" is a fixed suffix.
+     * <p>
+     * You can retrieve all generated internal topic names via {@link Topology#describe()}.
+     * <p>
+     * For this case, all data of this stream will be redistributed through the repartitioning topic by writing all
+     * records to it, and rereading all records from it, such that the resulting {@link KTable} is partitioned
+     * correctly on its key.
+     * Note that you cannot enable {@link StreamsConfig#TOPOLOGY_OPTIMIZATION} config for this case, because
+     * repartition topics are considered transient and don't allow to recover the result {@link KTable} in cause of
+     * a failure; hence, a dedicated changelog topic is required to guarantee fault-tolerance.
      * <p>
      * Note that this is a logical operation and only changes the "interpretation" of the stream, i.e., each record of
      * it was a "fact/event" and is re-interpreted as update now (cf. {@link KStream} vs {@code KTable}).
