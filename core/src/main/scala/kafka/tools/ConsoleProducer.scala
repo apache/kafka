@@ -133,7 +133,7 @@ object ConsoleProducer {
       .withRequiredArg
       .describedAs("broker-list")
       .ofType(classOf[String])
-    val bootstrapServerOpt = parser.accepts("bootstrap-server", "REQUIRED unless --broker-list(deprecated) is specified. The server(s) to connect to.")
+    val bootstrapServerOpt = parser.accepts("bootstrap-server", "REQUIRED unless --broker-list(deprecated) is specified. The server(s) to connect to. The broker list string in the form HOST1:PORT1,HOST2:PORT2.")
       .requiredUnless("broker-list")
       .withRequiredArg
       .describedAs("server to connect to")
