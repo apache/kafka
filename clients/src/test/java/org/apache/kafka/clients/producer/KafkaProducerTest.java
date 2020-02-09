@@ -103,19 +103,21 @@ public class KafkaProducerTest {
     private String topic = "topic";
     private Node host1 = new Node(0, "host1", 1000);
     private Collection<Node> nodes = Collections.singletonList(host1);
-    private final Cluster emptyCluster = new Cluster(null, nodes,
+    private final Cluster emptyCluster = new Cluster(
+            null,
+            nodes,
             Collections.emptySet(),
             Collections.emptySet(),
             Collections.emptySet());
     private final Cluster onePartitionCluster = new Cluster(
             "dummy",
-            Collections.singletonList(host1),
+            nodes,
             Collections.singletonList(new PartitionInfo(topic, 0, null, null, null)),
             Collections.emptySet(),
             Collections.emptySet());
     private final Cluster threePartitionCluster = new Cluster(
             "dummy",
-            Collections.singletonList(host1),
+            nodes,
             Arrays.asList(
                     new PartitionInfo(topic, 0, null, null, null),
                     new PartitionInfo(topic, 1, null, null, null),

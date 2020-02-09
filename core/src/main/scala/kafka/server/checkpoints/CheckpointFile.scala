@@ -39,7 +39,7 @@ class CheckpointReadBuffer[T](location: String,
                               formatter: CheckpointFileFormatter[T]) extends Logging {
   def read(): Seq[T] = {
     def malformedLineException(line: String) =
-      new IOException(s"Malformed line in checkpoint file ($location): $line'")
+      new IOException(s"Malformed line in checkpoint file ($location): '$line'")
 
     var line: String = null
     try {
