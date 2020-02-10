@@ -82,6 +82,7 @@ public class EmbeddedConnectCluster {
     private final boolean maskExitProcedures;
     private final String workerNamePrefix;
     private final AtomicInteger nextWorkerId = new AtomicInteger(0);
+    private final EmbeddedConnectClusterAssertions assertions;
 
     private EmbeddedConnectCluster(String name, Map<String, String> workerProps, int numWorkers,
                                    int numBrokers, Properties brokerProps,
@@ -95,6 +96,7 @@ public class EmbeddedConnectCluster {
         this.maskExitProcedures = maskExitProcedures;
         // leaving non-configurable for now
         this.workerNamePrefix = DEFAULT_WORKER_NAME_PREFIX;
+        this.assertions = new EmbeddedConnectClusterAssertions(this);
     }
 
     /**
@@ -611,6 +613,15 @@ public class EmbeddedConnectCluster {
             return new EmbeddedConnectCluster(name, workerProps, numWorkers, numBrokers,
                     brokerProps, maskExitProcedures);
         }
+    }
+
+    /**
+     * Return the available assertions for this Connect cluster
+     *
+     * @return the assertions object
+     */
+    public EmbeddedConnectClusterAssertions assertions() {
+        return assertions;
     }
 
 }
