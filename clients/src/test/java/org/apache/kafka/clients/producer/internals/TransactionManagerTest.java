@@ -3158,6 +3158,16 @@ public class TransactionManagerTest {
         verifyCommitOrAbortTransactionRetriable(TransactionResult.ABORT, TransactionResult.COMMIT);
     }
 
+    @Test
+    public void testCanBumpEpochDuringCoordinatorDisconnect() throws InterruptedException {
+        doInitTransactions(0, (short) 0);
+        runUntil(() -> transactionManager.coordinator(CoordinatorType.TRANSACTION) != null);
+        assertTrue(transactionManager.canBumpEpoch());
+
+        apiVersions.remove(transactionManager.coordinator(CoordinatorType.TRANSACTION).idString());
+        assertTrue(transactionManager.canBumpEpoch());
+    }
+
     private FutureRecordMetadata appendToAccumulator(TopicPartition tp) throws InterruptedException {
         final long nowMs = time.milliseconds();
         return accumulator.append(tp, nowMs, "key".getBytes(), "value".getBytes(), Record.EMPTY_HEADERS,

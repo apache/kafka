@@ -989,7 +989,7 @@ public class TransactionManager {
         NodeApiVersions nodeApiVersions = transactionCoordinator != null ?
                 apiVersions.get(transactionCoordinator.idString()) :
                 null;
-        this.coordinatorSupportsBumpingEpoch =  nodeApiVersions != null &&
+        this.coordinatorSupportsBumpingEpoch = nodeApiVersions != null &&
                 nodeApiVersions.apiVersion(ApiKeys.INIT_PRODUCER_ID).maxVersion >= 3;
     }
 
@@ -1122,15 +1122,13 @@ public class TransactionManager {
         return pendingResult;
     }
 
-    private boolean canBumpEpoch() {
+    // package-private for testing
+    boolean canBumpEpoch() {
         if (!isTransactional()) {
             return true;
         }
 
-        NodeApiVersions nodeApiVersions = transactionCoordinator != null ?
-                apiVersions.get(transactionCoordinator.idString()) :
-                null;
-        return nodeApiVersions != null && nodeApiVersions.apiVersion(ApiKeys.INIT_PRODUCER_ID).maxVersion >= 3;
+        return coordinatorSupportsBumpingEpoch;
     }
 
     private void completeTransaction() {

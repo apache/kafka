@@ -662,8 +662,6 @@ class TransactionsTest extends KafkaServerTestHarness {
       producerStateEntry =
         servers(partitionLeader).logManager.getLog(new TopicPartition(testTopic, 0)).get.producerStateManager.activeProducers(producerId)
       assertTrue(producerStateEntry.producerEpoch > initialProducerEpoch)
-    } catch {
-      case t: Throwable => fail(t)
     } finally {
       producer.close(Duration.ZERO)
     }

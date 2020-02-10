@@ -516,6 +516,8 @@ public class Sender implements Runnable {
         if (node != null && NetworkClientUtils.awaitReady(client, node, time, requestTimeoutMs)) {
             if (coordinatorType == FindCoordinatorRequest.CoordinatorType.TRANSACTION) {
                 // Indicate to the transaction manager that the coordinator is ready, allowing it to check ApiVersions
+                // This allows us to bump transactional epochs even if the coordinator is temporarily unavailable at
+                // the time when the aborting error is handled
                 transactionManager.handleCoordinatorReady();
             }
             return node;
