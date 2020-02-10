@@ -19,6 +19,8 @@ package org.apache.kafka.streams.processor.internals;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.metrics.SensorAccessor;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
@@ -30,11 +32,13 @@ import org.junit.Test;
 import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.contains;
 import static org.junit.Assert.assertTrue;
 
 public class SourceNodeTest {
@@ -112,6 +116,15 @@ public class SourceNodeTest {
             final String parentGroupName = "stream-task-metrics";
             assertTrue(StreamsTestUtils.containsMetric(metrics, "process-rate", parentGroupName, metricTags));
             assertTrue(StreamsTestUtils.containsMetric(metrics, "process-total", parentGroupName, metricTags));
+
+            final String sensorNamePrefix = "internal." + threadId + ".task." + context.taskId().toString();
+            final Sensor processSensor =
+                metrics.getSensor(sensorNamePrefix + ".node." + context.currentNode().name() + ".s.process");
+            final SensorAccessor sensorAccessor = new SensorAccessor(processSensor);
+            assertThat(
+                sensorAccessor.parents().stream().map(Sensor::name).collect(Collectors.toList()),
+                contains(sensorNamePrefix + ".s.process")
+            );
         }
     }
 }

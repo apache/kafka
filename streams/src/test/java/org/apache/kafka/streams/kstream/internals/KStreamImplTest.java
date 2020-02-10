@@ -24,7 +24,6 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.KeyValueTimestamp;
 import org.apache.kafka.streams.StreamsBuilder;
-import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.TestOutputTopic;
 import org.apache.kafka.streams.Topology;
@@ -65,7 +64,6 @@ import org.apache.kafka.test.MockProcessor;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.MockValueJoiner;
 import org.apache.kafka.test.StreamsTestUtils;
-import org.apache.kafka.test.TestUtils;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -73,13 +71,11 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
-import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 import java.util.regex.Matcher;
@@ -90,7 +86,6 @@ import static java.util.Arrays.asList;
 import static java.util.Collections.emptyMap;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
-import static org.apache.kafka.common.utils.Utils.mkProperties;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -690,6 +685,38 @@ public class KStreamImplTest {
             NullPointerException.class,
             () -> testStream.groupByKey((Grouped<String, String>) null));
         assertThat(exception.getMessage(), equalTo("grouped can't be null"));
+    }
+
+    @Test
+    public void shouldNotAllowNullNamedOnToTable() {
+        final NullPointerException exception = assertThrows(
+            NullPointerException.class,
+            () -> testStream.toTable((Named) null));
+        assertThat(exception.getMessage(), equalTo("named can't be null"));
+    }
+
+    @Test
+    public void shouldNotAllowNullMaterializedOnToTable() {
+        final NullPointerException exception = assertThrows(
+            NullPointerException.class,
+            () -> testStream.toTable((Materialized<String, String, KeyValueStore<Bytes, byte[]>>) null));
+        assertThat(exception.getMessage(), equalTo("materialized can't be null"));
+    }
+
+    @Test
+    public void shouldNotAllowNullNamedOnToTableWithMaterialized() {
+        final NullPointerException exception = assertThrows(
+            NullPointerException.class,
+            () -> testStream.toTable(null, Materialized.with(null, null)));
+        assertThat(exception.getMessage(), equalTo("named can't be null"));
+    }
+
+    @Test
+    public void shouldNotAllowNullMaterializedOnToTableWithNamed() {
+        final NullPointerException exception = assertThrows(
+            NullPointerException.class,
+            () -> testStream.toTable(Named.as("name"), null));
+        assertThat(exception.getMessage(), equalTo("materialized can't be null"));
     }
 
     @Test
@@ -1550,8 +1577,6 @@ public class KStreamImplTest {
             .groupByKey()
             .count();
 
-        final String topologyDescription = builder.build().describe().toString();
-
         final Pattern repartitionTopicPattern = Pattern.compile("Sink: .*-repartition");
         final String topology = builder.build().describe().toString();
         final Matcher matcher = repartitionTopicPattern.matcher(topology);
@@ -1559,7 +1584,6 @@ public class KStreamImplTest {
         final String match = matcher.group();
         assertThat(match, notNullValue());
         assertTrue(match.endsWith("repartition"));
-
     }
 
     @Test
@@ -2373,13 +2397,13 @@ public class KStreamImplTest {
             equalTo("Topologies:\n" +
                 "   Sub-topology: 0\n" +
                 "    Source: KSTREAM-SOURCE-0000000000 (topics: [input])\n" +
-                "      --> KSTREAM-TOTABLE-0000000002\n" +
-                "    Processor: KSTREAM-TOTABLE-0000000002 (stores: [])\n" +
+                "      --> KSTREAM-TOTABLE-0000000001\n" +
+                "    Processor: KSTREAM-TOTABLE-0000000001 (stores: [])\n" +
                 "      --> KTABLE-TOSTREAM-0000000003\n" +
                 "      <-- KSTREAM-SOURCE-0000000000\n" +
                 "    Processor: KTABLE-TOSTREAM-0000000003 (stores: [])\n" +
                 "      --> KSTREAM-SINK-0000000004\n" +
-                "      <-- KSTREAM-TOTABLE-0000000002\n" +
+                "      <-- KSTREAM-TOTABLE-0000000001\n" +
                 "    Sink: KSTREAM-SINK-0000000004 (topic: output)\n" +
                 "      <-- KTABLE-TOSTREAM-0000000003\n\n")
         );
@@ -2420,8 +2444,9 @@ public class KStreamImplTest {
         builder.stream(input, consumed)
             .toTable(Materialized.as(Stores.inMemoryKeyValueStore(storeName)));
 
-        final String topologyDescription = builder.build().describe().toString();
+        final Topology topology = builder.build();
 
+        final String topologyDescription = topology.describe().toString();
         assertThat(
             topologyDescription,
             equalTo("Topologies:\n" +
@@ -2433,13 +2458,15 @@ public class KStreamImplTest {
                 "      <-- KSTREAM-SOURCE-0000000000\n\n")
         );
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriver(topology, props)) {
             final TestInputTopic<String, String> inputTopic =
                 driver.createInputTopic(input, Serdes.String().serializer(), Serdes.String().serializer());
             final KeyValueStore<String, String> store = driver.getKeyValueStore(storeName);
 
             inputTopic.pipeInput("A", "01");
-            final Map<String, String> expectedStore = mkMap(mkEntry("A", "01"));
+            inputTopic.pipeInput("B", "02");
+            inputTopic.pipeInput("A", "03");
+            final Map<String, String> expectedStore = mkMap(mkEntry("A", "03"), mkEntry("B", "02"));
 
             assertThat(asMap(store), is(expectedStore));
         }
@@ -2455,14 +2482,13 @@ public class KStreamImplTest {
         final String output = "output";
 
         builder.stream(input, consumed)
-            .map((key, value) -> new KeyValue<>(key + "-", value))
-            .toTable()
+            .map((key, value) -> new KeyValue<>(key.charAt(0) - 'A', value))
+            .toTable(Materialized.with(Serdes.Integer(), null))
             .toStream().to(output);
 
         final Topology topology = builder.build();
 
         final String topologyDescription = topology.describe().toString();
-
         assertThat(
             topologyDescription,
             equalTo("Topologies:\n" +
@@ -2475,18 +2501,18 @@ public class KStreamImplTest {
                 "    Processor: KSTREAM-FILTER-0000000005 (stores: [])\n" +
                 "      --> KSTREAM-SINK-0000000004\n" +
                 "      <-- KSTREAM-MAP-0000000001\n" +
-                "    Sink: KSTREAM-SINK-0000000004 (topic: KSTREAM-TOTABLE-0000000003-repartition)\n" +
+                "    Sink: KSTREAM-SINK-0000000004 (topic: KSTREAM-TOTABLE-0000000002-repartition)\n" +
                 "      <-- KSTREAM-FILTER-0000000005\n" +
                 "\n" +
                 "  Sub-topology: 1\n" +
-                "    Source: KSTREAM-SOURCE-0000000006 (topics: [KSTREAM-TOTABLE-0000000003-repartition])\n" +
-                "      --> KSTREAM-TOTABLE-0000000003\n" +
-                "    Processor: KSTREAM-TOTABLE-0000000003 (stores: [])\n" +
+                "    Source: KSTREAM-SOURCE-0000000006 (topics: [KSTREAM-TOTABLE-0000000002-repartition])\n" +
+                "      --> KSTREAM-TOTABLE-0000000002\n" +
+                "    Processor: KSTREAM-TOTABLE-0000000002 (stores: [])\n" +
                 "      --> KTABLE-TOSTREAM-0000000007\n" +
                 "      <-- KSTREAM-SOURCE-0000000006\n" +
                 "    Processor: KTABLE-TOSTREAM-0000000007 (stores: [])\n" +
                 "      --> KSTREAM-SINK-0000000008\n" +
-                "      <-- KSTREAM-TOTABLE-0000000003\n" +
+                "      <-- KSTREAM-TOTABLE-0000000002\n" +
                 "    Sink: KSTREAM-SINK-0000000008 (topic: output)\n" +
                 "      <-- KTABLE-TOSTREAM-0000000007\n\n")
         );
@@ -2494,8 +2520,8 @@ public class KStreamImplTest {
         try (final TopologyTestDriver driver = new TopologyTestDriver(topology, props)) {
             final TestInputTopic<String, String> inputTopic =
                 driver.createInputTopic(input, Serdes.String().serializer(), Serdes.String().serializer());
-            final TestOutputTopic<String, String> outputTopic =
-                driver.createOutputTopic(output, Serdes.String().deserializer(), Serdes.String().deserializer());
+            final TestOutputTopic<Integer, String> outputTopic =
+                driver.createOutputTopic(output, Serdes.Integer().deserializer(), Serdes.String().deserializer());
 
             inputTopic.pipeInput("A", "01", 5L);
             inputTopic.pipeInput("B", "02", 100L);
@@ -2504,18 +2530,17 @@ public class KStreamImplTest {
             inputTopic.pipeInput("A", "05", 10L);
             inputTopic.pipeInput("A", "06", 8L);
 
-            final List<TestRecord<String, String>> outputExpectRecords = new ArrayList<>();
-            outputExpectRecords.add(new TestRecord<>("A-", "01", Instant.ofEpochMilli(5L)));
-            outputExpectRecords.add(new TestRecord<>("B-", "02", Instant.ofEpochMilli(100L)));
-            outputExpectRecords.add(new TestRecord<>("C-", "03", Instant.ofEpochMilli(0L)));
-            outputExpectRecords.add(new TestRecord<>("D-", "04", Instant.ofEpochMilli(0L)));
-            outputExpectRecords.add(new TestRecord<>("A-", "05", Instant.ofEpochMilli(10L)));
-            outputExpectRecords.add(new TestRecord<>("A-", "06", Instant.ofEpochMilli(8L)));
+            final List<TestRecord<Integer, String>> outputExpectRecords = new ArrayList<>();
+            outputExpectRecords.add(new TestRecord<>(0, "01", Instant.ofEpochMilli(5L)));
+            outputExpectRecords.add(new TestRecord<>(1, "02", Instant.ofEpochMilli(100L)));
+            outputExpectRecords.add(new TestRecord<>(2, "03", Instant.ofEpochMilli(0L)));
+            outputExpectRecords.add(new TestRecord<>(3, "04", Instant.ofEpochMilli(0L)));
+            outputExpectRecords.add(new TestRecord<>(0, "05", Instant.ofEpochMilli(10L)));
+            outputExpectRecords.add(new TestRecord<>(0, "06", Instant.ofEpochMilli(8L)));
 
             assertEquals(outputTopic.readRecordsToList(), outputExpectRecords);
         }
     }
-
 
     @Test
     public void shouldSupportForeignKeyTableTableJoinWithKTableFromKStream() {
@@ -2545,11 +2570,11 @@ public class KStreamImplTest {
                 "    Source: KTABLE-SOURCE-0000000016 (topics: [KTABLE-FK-JOIN-SUBSCRIPTION-RESPONSE-0000000014-topic])\n" +
                 "      --> KTABLE-FK-JOIN-SUBSCRIPTION-RESPONSE-RESOLVER-PROCESSOR-0000000017\n" +
                 "    Source: KSTREAM-SOURCE-0000000000 (topics: [input1])\n" +
-                "      --> KSTREAM-TOTABLE-0000000002\n" +
-                "    Processor: KTABLE-FK-JOIN-SUBSCRIPTION-RESPONSE-RESOLVER-PROCESSOR-0000000017 (stores: [KSTREAM-TOTABLE-STATE-STORE-0000000001])\n" +
+                "      --> KSTREAM-TOTABLE-0000000001\n" +
+                "    Processor: KTABLE-FK-JOIN-SUBSCRIPTION-RESPONSE-RESOLVER-PROCESSOR-0000000017 (stores: [KSTREAM-TOTABLE-STATE-STORE-0000000002])\n" +
                 "      --> KTABLE-FK-JOIN-OUTPUT-0000000018\n" +
                 "      <-- KTABLE-SOURCE-0000000016\n" +
-                "    Processor: KSTREAM-TOTABLE-0000000002 (stores: [KSTREAM-TOTABLE-STATE-STORE-0000000001])\n" +
+                "    Processor: KSTREAM-TOTABLE-0000000001 (stores: [KSTREAM-TOTABLE-STATE-STORE-0000000002])\n" +
                 "      --> KTABLE-FK-JOIN-SUBSCRIPTION-REGISTRATION-0000000007\n" +
                 "      <-- KSTREAM-SOURCE-0000000000\n" +
                 "    Processor: KTABLE-FK-JOIN-OUTPUT-0000000018 (stores: [])\n" +
@@ -2557,7 +2582,7 @@ public class KStreamImplTest {
                 "      <-- KTABLE-FK-JOIN-SUBSCRIPTION-RESPONSE-RESOLVER-PROCESSOR-0000000017\n" +
                 "    Processor: KTABLE-FK-JOIN-SUBSCRIPTION-REGISTRATION-0000000007 (stores: [])\n" +
                 "      --> KTABLE-SINK-0000000008\n" +
-                "      <-- KSTREAM-TOTABLE-0000000002\n" +
+                "      <-- KSTREAM-TOTABLE-0000000001\n" +
                 "    Processor: KTABLE-TOSTREAM-0000000020 (stores: [])\n" +
                 "      --> KSTREAM-SINK-0000000021\n" +
                 "      <-- KTABLE-FK-JOIN-OUTPUT-0000000018\n" +
@@ -2568,21 +2593,21 @@ public class KStreamImplTest {
                 "\n" +
                 "  Sub-topology: 1\n" +
                 "    Source: KSTREAM-SOURCE-0000000003 (topics: [input2])\n" +
-                "      --> KSTREAM-TOTABLE-0000000005\n" +
+                "      --> KSTREAM-TOTABLE-0000000004\n" +
                 "    Source: KTABLE-SOURCE-0000000009 (topics: [KTABLE-FK-JOIN-SUBSCRIPTION-REGISTRATION-0000000006-topic])\n" +
                 "      --> KTABLE-FK-JOIN-SUBSCRIPTION-PROCESSOR-0000000011\n" +
-                "    Processor: KSTREAM-TOTABLE-0000000005 (stores: [KSTREAM-TOTABLE-STATE-STORE-0000000004])\n" +
+                "    Processor: KSTREAM-TOTABLE-0000000004 (stores: [KSTREAM-TOTABLE-STATE-STORE-0000000005])\n" +
                 "      --> KTABLE-FK-JOIN-SUBSCRIPTION-PROCESSOR-0000000013\n" +
                 "      <-- KSTREAM-SOURCE-0000000003\n" +
                 "    Processor: KTABLE-FK-JOIN-SUBSCRIPTION-PROCESSOR-0000000011 (stores: [KTABLE-FK-JOIN-SUBSCRIPTION-STATE-STORE-0000000010])\n" +
                 "      --> KTABLE-FK-JOIN-SUBSCRIPTION-PROCESSOR-0000000012\n" +
                 "      <-- KTABLE-SOURCE-0000000009\n" +
-                "    Processor: KTABLE-FK-JOIN-SUBSCRIPTION-PROCESSOR-0000000012 (stores: [KSTREAM-TOTABLE-STATE-STORE-0000000004])\n" +
+                "    Processor: KTABLE-FK-JOIN-SUBSCRIPTION-PROCESSOR-0000000012 (stores: [KSTREAM-TOTABLE-STATE-STORE-0000000005])\n" +
                 "      --> KTABLE-SINK-0000000015\n" +
                 "      <-- KTABLE-FK-JOIN-SUBSCRIPTION-PROCESSOR-0000000011\n" +
                 "    Processor: KTABLE-FK-JOIN-SUBSCRIPTION-PROCESSOR-0000000013 (stores: [KTABLE-FK-JOIN-SUBSCRIPTION-STATE-STORE-0000000010])\n" +
                 "      --> KTABLE-SINK-0000000015\n" +
-                "      <-- KSTREAM-TOTABLE-0000000005\n" +
+                "      <-- KSTREAM-TOTABLE-0000000004\n" +
                 "    Sink: KTABLE-SINK-0000000015 (topic: KTABLE-FK-JOIN-SUBSCRIPTION-RESPONSE-0000000014-topic)\n" +
                 "      <-- KTABLE-FK-JOIN-SUBSCRIPTION-PROCESSOR-0000000012, KTABLE-FK-JOIN-SUBSCRIPTION-PROCESSOR-0000000013\n\n")
         );
@@ -2644,28 +2669,28 @@ public class KStreamImplTest {
         table1.join(table2, MockValueJoiner.TOSTRING_JOINER).toStream().to(outputTopic);
 
         final Topology topology = builder.build(props);
-        final String topologyDescription = topology.describe().toString();
 
+        final String topologyDescription = topology.describe().toString();
         assertThat(
             topologyDescription,
             equalTo("Topologies:\n" +
                 "   Sub-topology: 0\n" +
                 "    Source: KSTREAM-SOURCE-0000000000 (topics: [left])\n" +
-                "      --> KSTREAM-TOTABLE-0000000002\n" +
+                "      --> KSTREAM-TOTABLE-0000000001\n" +
                 "    Source: KSTREAM-SOURCE-0000000003 (topics: [right])\n" +
-                "      --> KSTREAM-TOTABLE-0000000005\n" +
-                "    Processor: KSTREAM-TOTABLE-0000000002 (stores: [KSTREAM-TOTABLE-STATE-STORE-0000000001])\n" +
+                "      --> KSTREAM-TOTABLE-0000000004\n" +
+                "    Processor: KSTREAM-TOTABLE-0000000001 (stores: [KSTREAM-TOTABLE-STATE-STORE-0000000002])\n" +
                 "      --> KTABLE-JOINTHIS-0000000007\n" +
                 "      <-- KSTREAM-SOURCE-0000000000\n" +
-                "    Processor: KSTREAM-TOTABLE-0000000005 (stores: [KSTREAM-TOTABLE-STATE-STORE-0000000004])\n" +
+                "    Processor: KSTREAM-TOTABLE-0000000004 (stores: [KSTREAM-TOTABLE-STATE-STORE-0000000005])\n" +
                 "      --> KTABLE-JOINOTHER-0000000008\n" +
                 "      <-- KSTREAM-SOURCE-0000000003\n" +
-                "    Processor: KTABLE-JOINOTHER-0000000008 (stores: [KSTREAM-TOTABLE-STATE-STORE-0000000001])\n" +
+                "    Processor: KTABLE-JOINOTHER-0000000008 (stores: [KSTREAM-TOTABLE-STATE-STORE-0000000002])\n" +
                 "      --> KTABLE-MERGE-0000000006\n" +
-                "      <-- KSTREAM-TOTABLE-0000000005\n" +
-                "    Processor: KTABLE-JOINTHIS-0000000007 (stores: [KSTREAM-TOTABLE-STATE-STORE-0000000004])\n" +
+                "      <-- KSTREAM-TOTABLE-0000000004\n" +
+                "    Processor: KTABLE-JOINTHIS-0000000007 (stores: [KSTREAM-TOTABLE-STATE-STORE-0000000005])\n" +
                 "      --> KTABLE-MERGE-0000000006\n" +
-                "      <-- KSTREAM-TOTABLE-0000000002\n" +
+                "      <-- KSTREAM-TOTABLE-0000000001\n" +
                 "    Processor: KTABLE-MERGE-0000000006 (stores: [])\n" +
                 "      --> KTABLE-TOSTREAM-0000000009\n" +
                 "      <-- KTABLE-JOINTHIS-0000000007, KTABLE-JOINOTHER-0000000008\n" +
@@ -2674,11 +2699,6 @@ public class KStreamImplTest {
                 "      <-- KTABLE-MERGE-0000000006\n" +
                 "    Sink: KSTREAM-SINK-0000000010 (topic: output)\n" +
                 "      <-- KTABLE-TOSTREAM-0000000009\n\n"));
-
-        final Collection<Set<String>> copartitionGroups =
-            TopologyWrapper.getInternalTopologyBuilder(topology).copartitionGroups();
-
-        assertEquals(1, copartitionGroups.size());
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(topology, props)) {
             final TestInputTopic<String, String> left = driver.createInputTopic(leftTopic, new StringSerializer(), new StringSerializer());
@@ -2719,17 +2739,17 @@ public class KStreamImplTest {
                     mkEntry("lhs1", "lhsValue4+rhsValue1")
                 ))
             );
-
         }
     }
 
     @Test
     public void shouldSupportStreamTableJoinWithKStreamToKTable() {
+        final StreamsBuilder builder = new StreamsBuilder();
+        final Consumed<String, String> consumed = Consumed.with(Serdes.String(), Serdes.String());
+
         final String streamTopic = "streamTopic";
         final String tableTopic = "tableTopic";
         final String outputTopic = "output";
-        final StreamsBuilder builder = new StreamsBuilder();
-        final Consumed<String, String> consumed = Consumed.with(Serdes.String(), Serdes.String());
 
         final KStream<String, String> stream = builder.stream(streamTopic, consumed);
         final KTable<String, String> table =  builder.stream(tableTopic, consumed).toTable();
@@ -2737,29 +2757,24 @@ public class KStreamImplTest {
         stream.join(table, MockValueJoiner.TOSTRING_JOINER).to(outputTopic);
 
         final Topology topology = builder.build(props);
-        final String topologyDescription = topology.describe().toString();
 
+        final String topologyDescription = topology.describe().toString();
         assertThat(
             topologyDescription,
             equalTo("Topologies:\n" +
                 "   Sub-topology: 0\n" +
                 "    Source: KSTREAM-SOURCE-0000000000 (topics: [streamTopic])\n" +
                 "      --> KSTREAM-JOIN-0000000004\n" +
-                "    Processor: KSTREAM-JOIN-0000000004 (stores: [KSTREAM-TOTABLE-STATE-STORE-0000000002])\n" +
+                "    Processor: KSTREAM-JOIN-0000000004 (stores: [KSTREAM-TOTABLE-STATE-STORE-0000000003])\n" +
                 "      --> KSTREAM-SINK-0000000005\n" +
                 "      <-- KSTREAM-SOURCE-0000000000\n" +
                 "    Source: KSTREAM-SOURCE-0000000001 (topics: [tableTopic])\n" +
-                "      --> KSTREAM-TOTABLE-0000000003\n" +
+                "      --> KSTREAM-TOTABLE-0000000002\n" +
                 "    Sink: KSTREAM-SINK-0000000005 (topic: output)\n" +
                 "      <-- KSTREAM-JOIN-0000000004\n" +
-                "    Processor: KSTREAM-TOTABLE-0000000003 (stores: [KSTREAM-TOTABLE-STATE-STORE-0000000002])\n" +
+                "    Processor: KSTREAM-TOTABLE-0000000002 (stores: [KSTREAM-TOTABLE-STATE-STORE-0000000003])\n" +
                 "      --> none\n" +
                 "      <-- KSTREAM-SOURCE-0000000001\n\n"));
-
-        final Collection<Set<String>> copartitionGroups =
-            TopologyWrapper.getInternalTopologyBuilder(topology).copartitionGroups();
-
-        assertEquals(1, copartitionGroups.size());
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(topology, props)) {
             final TestInputTopic<String, String> left = driver.createInputTopic(streamTopic, new StringSerializer(), new StringSerializer());
@@ -2800,7 +2815,6 @@ public class KStreamImplTest {
                     mkEntry("lhs1", "lhsValue4+rhsValue1")
                 ))
             );
-
         }
     }
 
@@ -2808,6 +2822,7 @@ public class KStreamImplTest {
     public void shouldSupportGroupByCountWithKStreamToKTable() {
         final Consumed<String, String> consumed = Consumed.with(Serdes.String(), Serdes.String());
         final StreamsBuilder builder = new StreamsBuilder();
+
         final String input = "input";
         final String output = "output";
 
@@ -2820,20 +2835,20 @@ public class KStreamImplTest {
             .to(output);
 
         final Topology topology = builder.build(props);
-        final String topologyDescription = topology.describe().toString();
 
+        final String topologyDescription = topology.describe().toString();
         assertThat(
             topologyDescription,
             equalTo("Topologies:\n" +
                 "   Sub-topology: 0\n" +
                 "    Source: KSTREAM-SOURCE-0000000000 (topics: [input])\n" +
-                "      --> KSTREAM-TOTABLE-0000000002\n" +
-                "    Processor: KSTREAM-TOTABLE-0000000002 (stores: [KSTREAM-TOTABLE-STATE-STORE-0000000001])\n" +
+                "      --> KSTREAM-TOTABLE-0000000001\n" +
+                "    Processor: KSTREAM-TOTABLE-0000000001 (stores: [KSTREAM-TOTABLE-STATE-STORE-0000000002])\n" +
                 "      --> KTABLE-SELECT-0000000003\n" +
                 "      <-- KSTREAM-SOURCE-0000000000\n" +
                 "    Processor: KTABLE-SELECT-0000000003 (stores: [])\n" +
                 "      --> KSTREAM-SINK-0000000005\n" +
-                "      <-- KSTREAM-TOTABLE-0000000002\n" +
+                "      <-- KSTREAM-TOTABLE-0000000001\n" +
                 "    Sink: KSTREAM-SINK-0000000005 (topic: KTABLE-AGGREGATE-STATE-STORE-0000000004-repartition)\n" +
                 "      <-- KTABLE-SELECT-0000000003\n" +
                 "\n" +
@@ -2855,7 +2870,6 @@ public class KStreamImplTest {
                 driver.createInputTopic(input, new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             final TestOutputTopic<String, Long> outputTopic =
                 driver.createOutputTopic(output, Serdes.String().deserializer(), Serdes.Long().deserializer());
-
 
             inputTopic.pipeInput("A", "green", 10L);
             inputTopic.pipeInput("B", "green", 9L);
@@ -2879,6 +2893,7 @@ public class KStreamImplTest {
     public void shouldSupportTriggerMaterializedWithKTableFromKStream() {
         final Consumed<String, String> consumed = Consumed.with(Serdes.String(), Serdes.String());
         final StreamsBuilder builder = new StreamsBuilder();
+
         final String input = "input";
         final String output = "output";
         final String storeName = "store";
@@ -2886,28 +2901,28 @@ public class KStreamImplTest {
         builder.stream(input, consumed)
             .toTable()
             .mapValues(
-                value -> String.valueOf(value.charAt(0) - (int) 'a'),
-                Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as(storeName)
+                value -> value.charAt(0) - (int) 'a',
+                Materialized.<String, Integer, KeyValueStore<Bytes, byte[]>>as(storeName)
                     .withKeySerde(Serdes.String())
-                    .withValueSerde(Serdes.String()))
+                    .withValueSerde(Serdes.Integer()))
             .toStream()
             .to(output);
 
         final Topology topology = builder.build(props);
-        final String topologyDescription = topology.describe().toString();
 
+        final String topologyDescription = topology.describe().toString();
         assertThat(
             topologyDescription,
             equalTo("Topologies:\n" +
                 "   Sub-topology: 0\n" +
                 "    Source: KSTREAM-SOURCE-0000000000 (topics: [input])\n" +
-                "      --> KSTREAM-TOTABLE-0000000002\n" +
-                "    Processor: KSTREAM-TOTABLE-0000000002 (stores: [])\n" +
+                "      --> KSTREAM-TOTABLE-0000000001\n" +
+                "    Processor: KSTREAM-TOTABLE-0000000001 (stores: [])\n" +
                 "      --> KTABLE-MAPVALUES-0000000003\n" +
                 "      <-- KSTREAM-SOURCE-0000000000\n" +
                 "    Processor: KTABLE-MAPVALUES-0000000003 (stores: [store])\n" +
                 "      --> KTABLE-TOSTREAM-0000000004\n" +
-                "      <-- KSTREAM-TOTABLE-0000000002\n" +
+                "      <-- KSTREAM-TOTABLE-0000000001\n" +
                 "    Processor: KTABLE-TOSTREAM-0000000004 (stores: [])\n" +
                 "      --> KSTREAM-SINK-0000000005\n" +
                 "      <-- KTABLE-MAPVALUES-0000000003\n" +
@@ -2915,19 +2930,12 @@ public class KStreamImplTest {
                 "      <-- KTABLE-TOSTREAM-0000000004\n\n"));
 
         try (
-            final TopologyTestDriver driver = new TopologyTestDriver(
-                topology,
-                mkProperties(mkMap(
-                    mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy"),
-                    mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, "test"),
-                    mkEntry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory("kafka-test").getAbsolutePath())
-                )),
-                Instant.ofEpochMilli(0L))) {
+            final TopologyTestDriver driver = new TopologyTestDriver(topology, props)) {
             final TestInputTopic<String, String> inputTopic =
                 driver.createInputTopic(input, new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
-            final TestOutputTopic<String, String> outputTopic =
-                driver.createOutputTopic(output, Serdes.String().deserializer(), Serdes.String().deserializer());
-            final KeyValueStore<String, String> store = driver.getKeyValueStore(storeName);
+            final TestOutputTopic<String, Integer> outputTopic =
+                driver.createOutputTopic(output, Serdes.String().deserializer(), Serdes.Integer().deserializer());
+            final KeyValueStore<String, Integer> store = driver.getKeyValueStore(storeName);
 
             inputTopic.pipeInput("A", "green", 10L);
             inputTopic.pipeInput("B", "green", 9L);
@@ -2935,28 +2943,28 @@ public class KStreamImplTest {
             inputTopic.pipeInput("C", "yellow", 15L);
             inputTopic.pipeInput("D", "green", 11L);
 
-            final Map<String, String> expectedStore = new HashMap<>();
-            expectedStore.putIfAbsent("A", "1");
-            expectedStore.putIfAbsent("B", "6");
-            expectedStore.putIfAbsent("C", "24");
-            expectedStore.putIfAbsent("D", "6");
+            final Map<String, Integer> expectedStore = new HashMap<>();
+            expectedStore.putIfAbsent("A", 1);
+            expectedStore.putIfAbsent("B", 6);
+            expectedStore.putIfAbsent("C", 24);
+            expectedStore.putIfAbsent("D", 6);
 
             assertEquals(expectedStore, asMap(store));
 
             assertEquals(
                 asList(
-                    new TestRecord<>("A", "6", Instant.ofEpochMilli(10)),
-                    new TestRecord<>("B", "6", Instant.ofEpochMilli(9)),
-                    new TestRecord<>("A", "1", Instant.ofEpochMilli(12)),
-                    new TestRecord<>("C", "24", Instant.ofEpochMilli(15)),
-                    new TestRecord<>("D", "6", Instant.ofEpochMilli(11))),
+                    new TestRecord<>("A", 6, Instant.ofEpochMilli(10)),
+                    new TestRecord<>("B", 6, Instant.ofEpochMilli(9)),
+                    new TestRecord<>("A", 1, Instant.ofEpochMilli(12)),
+                    new TestRecord<>("C", 24, Instant.ofEpochMilli(15)),
+                    new TestRecord<>("D", 6, Instant.ofEpochMilli(11))),
                 outputTopic.readRecordsToList());
 
         }
     }
 
-    private static Map<String, String> asMap(final KeyValueStore<String, String> store) {
-        final HashMap<String, String> result = new HashMap<>();
+    private static <K, V> Map<K, V> asMap(final KeyValueStore<K, V> store) {
+        final HashMap<K, V> result = new HashMap<>();
         store.all().forEachRemaining(kv -> result.put(kv.key, kv.value));
         return result;
     }
