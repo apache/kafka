@@ -120,12 +120,17 @@ public class TaskManager {
         rebalanceInProgress = false;
     }
 
-    void handleCorruption(final Set<TaskId> taskIds) {
-        for (final TaskId taskId : taskIds) {
+    void handleCorruption(final Map<TaskId, Set<TopicPartition>> taskWithChangelogs) {
+        for (final Map.Entry<TaskId, Set<TopicPartition>> entry : taskWithChangelogs.entrySet()) {
+            final TaskId taskId = entry.getKey();
             final Task task = tasks.get(taskId);
 
             // this call is idempotent so even if the task is only CREATED we can still call it
             changelogReader.remove(task.changelogPartitions());
+
+            // mark corrupted partitions to not be checkpointed, and then close the task as dirty
+            final Set<TopicPartition> corruptedPartitions = entry.getValue();
+            task.markChangelogAsCorrupted(corruptedPartitions);
 
             task.closeDirty();
 

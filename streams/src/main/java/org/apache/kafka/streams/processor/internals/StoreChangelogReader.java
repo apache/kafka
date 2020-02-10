@@ -419,11 +419,12 @@ public class StoreChangelogReader implements ChangelogReader {
                     "truncated or compacted on the broker, marking the corresponding tasks as corrupted and re-initializing" +
                     "it later.", e.getClass().getName(), e.partitions());
 
-                final Set<TaskId> taskIds = new HashSet<>();
+                final Map<TaskId, Set<TopicPartition>> taskWithCorruptedChangelogs = new HashMap<>();
                 for (final TopicPartition partition : e.partitions()) {
-                    taskIds.add(changelogs.get(partition).stateManager.taskId());
+                    final TaskId taskId = changelogs.get(partition).stateManager.taskId();
+                    taskWithCorruptedChangelogs.computeIfAbsent(taskId, k -> new HashSet<>()).add(partition);
                 }
-                throw new TaskCorruptedException(taskIds);
+                throw new TaskCorruptedException(taskWithCorruptedChangelogs);
             } catch (final KafkaException e) {
                 throw new StreamsException("Restore consumer get unexpected error polling records.", e);
             }

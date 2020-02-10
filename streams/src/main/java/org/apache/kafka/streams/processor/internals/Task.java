@@ -174,6 +174,8 @@ public interface Task {
      */
     Map<TopicPartition, Long> changelogOffsets();
 
+    void markChangelogAsCorrupted(final Set<TopicPartition> partitions);
+
     default Map<TopicPartition, Long> purgableOffsets() {
         return Collections.emptyMap();
     }

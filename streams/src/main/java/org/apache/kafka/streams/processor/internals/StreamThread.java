@@ -759,9 +759,9 @@ public class StreamThread extends Thread {
                 }
             } catch (final TaskCorruptedException e) {
                 log.warn("Detected the states of tasks {} are corrupted. " +
-                    "Will close the task as dirty and re-create and bootstrap from scratch.", e.corruptedTaskIds());
+                    "Will close the task as dirty and re-create and bootstrap from scratch.", e.corruptedTaskWithChangelogs());
 
-                taskManager.handleCorruption(e.corruptedTaskIds());
+                taskManager.handleCorruption(e.corruptedTaskWithChangelogs());
             } catch (final TaskMigratedException e) {
                 log.warn("Detected that the thread is being fenced. " +
                     "This implies that this thread missed a rebalance and dropped out of the consumer group. " +

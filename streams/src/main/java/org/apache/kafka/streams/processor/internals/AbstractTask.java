@@ -20,6 +20,8 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 
+import java.util.Collection;
+import java.util.Collections;
 import java.util.Set;
 
 import static org.apache.kafka.streams.processor.internals.Task.State.CLOSED;
@@ -54,6 +56,17 @@ public abstract class AbstractTask implements Task {
     @Override
     public Set<TopicPartition> inputPartitions() {
         return partitions;
+    }
+
+    @Override
+    public Collection<TopicPartition> changelogPartitions() {
+        return stateMgr.changelogPartitions();
+    }
+
+    @Override
+    public void markChangelogAsCorrupted(final Set<TopicPartition> partitions) {
+        stateMgr.markChangelogAsCorrupted(partitions);
+        stateMgr.checkpoint(Collections.emptyMap());
     }
 
     @Override

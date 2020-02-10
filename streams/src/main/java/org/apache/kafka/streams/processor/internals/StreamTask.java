@@ -436,6 +436,15 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         transitionTo(State.CLOSED);
     }
 
+    @Override
+    public void markChangelogAsCorrupted(final Set<TopicPartition> partitions) {
+        stateMgr.markChangelogAsCorrupted(partitions);
+
+        // only write a new checkpoint (excluding the corrupted partitions) if eos is disabled
+        if (eosDisabled)
+            stateMgr.checkpoint(Collections.emptyMap());
+    }
+
     /**
      * An active task is processable if its buffer contains data for all of its input
      * source topic partitions, or if it is enforced to be processable
@@ -885,11 +894,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     @Override
     public boolean commitNeeded() {
         return commitNeeded;
-    }
-
-    @Override
-    public Collection<TopicPartition> changelogPartitions() {
-        return stateMgr.changelogPartitions();
     }
 
     @Override
