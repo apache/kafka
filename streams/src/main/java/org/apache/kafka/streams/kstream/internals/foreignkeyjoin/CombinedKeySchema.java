@@ -36,10 +36,10 @@ public class CombinedKeySchema<KO, K> {
 
     public CombinedKeySchema(final String serdeTopic, final Serde<KO> foreignKeySerde, final Serde<K> primaryKeySerde) {
         this.serdeTopic = serdeTopic;
-        primaryKeySerializer = primaryKeySerde.serializer();
-        primaryKeyDeserializer = primaryKeySerde.deserializer();
-        foreignKeyDeserializer = foreignKeySerde.deserializer();
-        foreignKeySerializer = foreignKeySerde.serializer();
+        primaryKeySerializer = primaryKeySerde == null ? null : primaryKeySerde.serializer();
+        primaryKeyDeserializer = primaryKeySerde == null ? null : primaryKeySerde.deserializer();
+        foreignKeyDeserializer = foreignKeySerde == null ? null : foreignKeySerde.deserializer();
+        foreignKeySerializer = foreignKeySerde == null ? null : foreignKeySerde.serializer();
     }
 
     @SuppressWarnings("unchecked")

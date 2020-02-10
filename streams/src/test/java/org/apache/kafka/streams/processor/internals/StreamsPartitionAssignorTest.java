@@ -1755,7 +1755,6 @@ public class StreamsPartitionAssignorTest {
         createMockTaskManager(emptyTasks, emptyTasks, uuid1, builder);
         EasyMock.replay(taskManager);
 
-        streamsMetadataState = EasyMock.createNiceMock(StreamsMetadataState.class);
         configurePartitionAssignor(emptyMap());
         final MockInternalTopicManager internalTopicManager =
             new MockInternalTopicManager(streamsConfig, mockClientSupplier.restoreConsumer);
