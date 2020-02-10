@@ -62,7 +62,7 @@ import java.util.concurrent.ExecutionException;
  * Note: until we fully migrate to JDK 11 and Scala 2.13, this test is considered as flaky which should not
  * be included in the normal run.
  */
-//@Ignore
+@Ignore
 @Category({IntegrationTest.class})
 public class BranchedMultiLevelRepartitionConnectedTopologyTest {
 
