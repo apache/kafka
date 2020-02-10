@@ -53,11 +53,6 @@ public class MockChangelogReader implements ChangelogReader {
     }
 
     @Override
-    public void updateLimitOffsets() {
-        // do nothing
-    }
-
-    @Override
     public Set<TopicPartition> completedChangelogs() {
         // assuming all restoring partitions are completed
         return restoringPartitions;

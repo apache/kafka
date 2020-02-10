@@ -25,6 +25,7 @@ import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.StateStore;
@@ -46,6 +47,7 @@ import org.junit.runners.Parameterized;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Map;
+import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
@@ -102,6 +104,7 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
     private final TopicPartition tp1 = new TopicPartition("one", 0);
     private final TopicPartition tp2 = new TopicPartition("two", 0);
     private final StreamsConfig config = new StreamsConfig(StreamsTestUtils.getStreamsConfig("test-reader"));
+    private final MockTime time = new MockTime();
     private final MockStateRestoreListener callback = new MockStateRestoreListener();
     private final KafkaException kaboom = new KafkaException("KABOOM!");
     private final MockStateRestoreListener exceptionCallback = new MockStateRestoreListener() {
@@ -127,7 +130,7 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
     };
 
     private final MockConsumer<byte[], byte[]> consumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST);
-    private final StoreChangelogReader changelogReader = new StoreChangelogReader(config, logContext, consumer, callback);
+    private final StoreChangelogReader changelogReader = new StoreChangelogReader(time, config, logContext, consumer, callback);
 
     @Before
     public void setUp() {
@@ -156,7 +159,6 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
 
         assertEquals(StoreChangelogReader.ChangelogState.REGISTERED, changelogReader.changelogMetadata(tp).state());
         assertNull(changelogReader.changelogMetadata(tp).endOffset());
-        assertNull(changelogReader.changelogMetadata(tp).limitOffset());
         assertEquals(0L, changelogReader.changelogMetadata(tp).totalRestored());
 
         assertThrows(IllegalStateException.class, () -> changelogReader.register(tp, stateManager));
@@ -182,7 +184,7 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
             }
         };
 
-        final StoreChangelogReader changelogReader = new StoreChangelogReader(config, logContext, consumer, callback);
+        final StoreChangelogReader changelogReader = new StoreChangelogReader(time, config, logContext, consumer, callback);
 
         changelogReader.register(tp, stateManager);
         changelogReader.restore();
@@ -192,7 +194,6 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
         assertEquals(type == ACTIVE ? 10L : null, changelogReader.changelogMetadata(tp).endOffset());
         assertEquals(0L, changelogReader.changelogMetadata(tp).totalRestored());
         assertEquals(type == ACTIVE ? Collections.singleton(tp) : Collections.emptySet(), changelogReader.completedChangelogs());
-        assertNull(changelogReader.changelogMetadata(tp).limitOffset());
         assertEquals(10L, consumer.position(tp));
         assertEquals(Collections.singleton(tp), consumer.paused());
 
@@ -216,7 +217,7 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
             }
         };
 
-        final StoreChangelogReader changelogReader = new StoreChangelogReader(config, logContext, consumer, callback);
+        final StoreChangelogReader changelogReader = new StoreChangelogReader(time, config, logContext, consumer, callback);
 
         changelogReader.register(tp, stateManager);
 
@@ -229,7 +230,6 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
         assertEquals(StoreChangelogReader.ChangelogState.RESTORING, changelogReader.changelogMetadata(tp).state());
         assertEquals(0L, changelogReader.changelogMetadata(tp).totalRestored());
         assertTrue(changelogReader.completedChangelogs().isEmpty());
-        assertNull(changelogReader.changelogMetadata(tp).limitOffset());
         assertEquals(6L, consumer.position(tp));
         assertEquals(Collections.emptySet(), consumer.paused());
 
@@ -288,7 +288,7 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
         };
         consumer.updateBeginningOffsets(Collections.singletonMap(tp, 5L));
 
-        final StoreChangelogReader changelogReader = new StoreChangelogReader(config, logContext, consumer, callback);
+        final StoreChangelogReader changelogReader = new StoreChangelogReader(time, config, logContext, consumer, callback);
 
         changelogReader.register(tp, stateManager);
 
@@ -300,7 +300,6 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
 
         assertEquals(StoreChangelogReader.ChangelogState.RESTORING, changelogReader.changelogMetadata(tp).state());
         assertEquals(0L, changelogReader.changelogMetadata(tp).totalRestored());
-        assertNull(changelogReader.changelogMetadata(tp).limitOffset());
         assertEquals(5L, consumer.position(tp));
         assertEquals(Collections.emptySet(), consumer.paused());
 
@@ -363,7 +362,7 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
             }
         };
 
-        final StoreChangelogReader changelogReader = new StoreChangelogReader(config, logContext, consumer, callback);
+        final StoreChangelogReader changelogReader = new StoreChangelogReader(time, config, logContext, consumer, callback);
 
         changelogReader.register(tp, activeStateManager);
         changelogReader.restore();
@@ -372,7 +371,6 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
         assertEquals(0L, (long) changelogReader.changelogMetadata(tp).endOffset());
         assertEquals(0L, changelogReader.changelogMetadata(tp).totalRestored());
         assertEquals(Collections.singleton(tp), changelogReader.completedChangelogs());
-        assertNull(changelogReader.changelogMetadata(tp).limitOffset());
         assertEquals(6L, consumer.position(tp));
         assertEquals(Collections.singleton(tp), consumer.paused());
         assertEquals(tp, callback.restoreTopicPartition);
@@ -403,7 +401,7 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
             }
         };
 
-        final StoreChangelogReader changelogReader = new StoreChangelogReader(config, logContext, consumer, callback);
+        final StoreChangelogReader changelogReader = new StoreChangelogReader(time, config, logContext, consumer, callback);
 
         changelogReader.register(tp, activeStateManager);
         changelogReader.restore();
@@ -411,14 +409,12 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
         assertEquals(StoreChangelogReader.ChangelogState.RESTORING, changelogReader.changelogMetadata(tp).state());
         assertTrue(changelogReader.completedChangelogs().isEmpty());
         assertEquals(10L, (long) changelogReader.changelogMetadata(tp).endOffset());
-        assertNull(changelogReader.changelogMetadata(tp).limitOffset());
 
         clearException.set(true);
         changelogReader.restore();
 
         assertEquals(StoreChangelogReader.ChangelogState.COMPLETED, changelogReader.changelogMetadata(tp).state());
         assertEquals(10L, (long) changelogReader.changelogMetadata(tp).endOffset());
-        assertNull(changelogReader.changelogMetadata(tp).limitOffset());
         assertEquals(Collections.singleton(tp), changelogReader.completedChangelogs());
         assertEquals(10L, consumer.position(tp));
     }
@@ -440,7 +436,7 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
             }
         };
 
-        final StoreChangelogReader changelogReader = new StoreChangelogReader(config, logContext, consumer, callback);
+        final StoreChangelogReader changelogReader = new StoreChangelogReader(time, config, logContext, consumer, callback);
 
         changelogReader.register(tp, activeStateManager);
 
@@ -471,21 +467,19 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
             }
         };
 
-        final StoreChangelogReader changelogReader = new StoreChangelogReader(config, logContext, consumer, callback);
+        final StoreChangelogReader changelogReader = new StoreChangelogReader(time, config, logContext, consumer, callback);
 
         changelogReader.register(tp, activeStateManager);
         changelogReader.restore();
 
         assertEquals(StoreChangelogReader.ChangelogState.REGISTERED, changelogReader.changelogMetadata(tp).state());
         assertNull(changelogReader.changelogMetadata(tp).endOffset());
-        assertNull(changelogReader.changelogMetadata(tp).limitOffset());
         assertTrue(functionCalled.get());
 
         changelogReader.restore();
 
         assertEquals(StoreChangelogReader.ChangelogState.RESTORING, changelogReader.changelogMetadata(tp).state());
         assertEquals(10L, (long) changelogReader.changelogMetadata(tp).endOffset());
-        assertNull(changelogReader.changelogMetadata(tp).limitOffset());
         assertEquals(6L, consumer.position(tp));
     }
 
@@ -501,7 +495,7 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
             }
         };
 
-        final StoreChangelogReader changelogReader = new StoreChangelogReader(config, logContext, consumer, callback);
+        final StoreChangelogReader changelogReader = new StoreChangelogReader(time, config, logContext, consumer, callback);
 
         changelogReader.register(tp, activeStateManager);
 
@@ -533,7 +527,7 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
             }
         };
 
-        final StoreChangelogReader changelogReader = new StoreChangelogReader(config, logContext, consumer, callback);
+        final StoreChangelogReader changelogReader = new StoreChangelogReader(time, config, logContext, consumer, callback);
         changelogReader.setMainConsumer(consumer);
 
         changelogReader.register(tp, stateManager);
@@ -541,15 +535,17 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
 
         assertEquals(type == ACTIVE ? StoreChangelogReader.ChangelogState.REGISTERED : StoreChangelogReader.ChangelogState.RESTORING,
                      changelogReader.changelogMetadata(tp).state());
-        assertNull(changelogReader.changelogMetadata(tp).endOffset());
-        assertEquals(type == ACTIVE ? null : 0L, changelogReader.changelogMetadata(tp).limitOffset());
+        if (type == ACTIVE) {
+            assertNull(changelogReader.changelogMetadata(tp).endOffset());
+        } else {
+            assertEquals(0L, (long) changelogReader.changelogMetadata(tp).endOffset());
+        }
         assertTrue(functionCalled.get());
 
         changelogReader.restore();
 
         assertEquals(StoreChangelogReader.ChangelogState.RESTORING, changelogReader.changelogMetadata(tp).state());
-        assertEquals(type == ACTIVE ? 10L : null, changelogReader.changelogMetadata(tp).endOffset());
-        assertEquals(type == ACTIVE ? null : 0L, changelogReader.changelogMetadata(tp).limitOffset());
+        assertEquals(type == ACTIVE ? 10L : 0L, (long) changelogReader.changelogMetadata(tp).endOffset());
         assertEquals(6L, consumer.position(tp));
     }
 
@@ -570,7 +566,7 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
                 throw kaboom;
             }
         };
-        final StoreChangelogReader changelogReader = new StoreChangelogReader(config, logContext, consumer, callback);
+        final StoreChangelogReader changelogReader = new StoreChangelogReader(time, config, logContext, consumer, callback);
         changelogReader.setMainConsumer(consumer);
 
         changelogReader.register(tp, stateManager);
@@ -589,7 +585,7 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
                 throw kaboom;
             }
         };
-        final StoreChangelogReader changelogReader = new StoreChangelogReader(config, logContext, consumer, callback);
+        final StoreChangelogReader changelogReader = new StoreChangelogReader(time, config, logContext, consumer, callback);
 
         final StreamsException thrown = assertThrows(StreamsException.class, changelogReader::clear);
         assertEquals(kaboom, thrown.getCause());
@@ -607,7 +603,6 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
         assertNull(callback.storeNameCalledStates.get(RESTORE_START));
         assertEquals(StoreChangelogReader.ChangelogState.RESTORING, changelogReader.changelogMetadata(tp).state());
         assertNull(changelogReader.changelogMetadata(tp).endOffset());
-        assertNull(changelogReader.changelogMetadata(tp).limitOffset());
         assertEquals(0L, changelogReader.changelogMetadata(tp).totalRestored());
 
         consumer.addRecord(new ConsumerRecord<>(topicName, 0, 6L, "key".getBytes(), "value".getBytes()));
@@ -645,7 +640,11 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
             }
         };
 
-        final StoreChangelogReader changelogReader = new StoreChangelogReader(config, logContext, consumer, callback);
+        final long now = time.milliseconds();
+        final Properties properties = new Properties();
+        properties.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100L);
+        final StreamsConfig config = new StreamsConfig(StreamsTestUtils.getStreamsConfig("test-reader", properties));
+        final StoreChangelogReader changelogReader = new StoreChangelogReader(time, config, logContext, consumer, callback);
         changelogReader.setMainConsumer(consumer);
         changelogReader.transitToUpdateStandby();
 
@@ -656,8 +655,7 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
         assertNull(callback.restoreTopicPartition);
         assertNull(callback.storeNameCalledStates.get(RESTORE_START));
         assertEquals(StoreChangelogReader.ChangelogState.RESTORING, changelogReader.changelogMetadata(tp).state());
-        assertNull(changelogReader.changelogMetadata(tp).endOffset());
-        assertEquals(7L, (long) changelogReader.changelogMetadata(tp).limitOffset());
+        assertEquals(7L, (long) changelogReader.changelogMetadata(tp).endOffset());
         assertEquals(0L, changelogReader.changelogMetadata(tp).totalRestored());
 
         consumer.addRecord(new ConsumerRecord<>(topicName, 0, 5L, "key".getBytes(), "value".getBytes()));
@@ -671,8 +669,7 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
 
         changelogReader.restore();
         assertEquals(StoreChangelogReader.ChangelogState.RESTORING, changelogReader.changelogMetadata(tp).state());
-        assertNull(changelogReader.changelogMetadata(tp).endOffset());
-        assertEquals(7L, (long) changelogReader.changelogMetadata(tp).limitOffset());
+        assertEquals(7L, (long) changelogReader.changelogMetadata(tp).endOffset());
         assertEquals(2L, changelogReader.changelogMetadata(tp).totalRestored());
         assertEquals(4, changelogReader.changelogMetadata(tp).bufferedRecords().size());
         assertEquals(0, changelogReader.changelogMetadata(tp).bufferedLimitIndex());
@@ -680,27 +677,47 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
         assertNull(callback.storeNameCalledStates.get(RESTORE_BATCH));
 
         offset.set(10L);
-        changelogReader.updateLimitOffsets();
-        assertEquals(10L, (long) changelogReader.changelogMetadata(tp).limitOffset());
+        time.setCurrentTimeMs(now + 100L);
+        // should not try to read committed offsets if interval has not reached
+        changelogReader.restore();
+        assertEquals(7L, (long) changelogReader.changelogMetadata(tp).endOffset());
+        assertEquals(2L, changelogReader.changelogMetadata(tp).totalRestored());
+        assertEquals(4, changelogReader.changelogMetadata(tp).bufferedRecords().size());
+        assertEquals(0, changelogReader.changelogMetadata(tp).bufferedLimitIndex());
+
+        time.setCurrentTimeMs(now + 101L);
+        // the first restore would only update the limit, same below
+        changelogReader.restore();
+        assertEquals(10L, (long) changelogReader.changelogMetadata(tp).endOffset());
         assertEquals(2L, changelogReader.changelogMetadata(tp).totalRestored());
         assertEquals(4, changelogReader.changelogMetadata(tp).bufferedRecords().size());
         assertEquals(2, changelogReader.changelogMetadata(tp).bufferedLimitIndex());
 
         changelogReader.restore();
-        assertEquals(10L, (long) changelogReader.changelogMetadata(tp).limitOffset());
+        assertEquals(10L, (long) changelogReader.changelogMetadata(tp).endOffset());
         assertEquals(4L, changelogReader.changelogMetadata(tp).totalRestored());
         assertEquals(2, changelogReader.changelogMetadata(tp).bufferedRecords().size());
         assertEquals(0, changelogReader.changelogMetadata(tp).bufferedLimitIndex());
 
         offset.set(15L);
-        changelogReader.updateLimitOffsets();
-        assertEquals(15L, (long) changelogReader.changelogMetadata(tp).limitOffset());
+
+        // after we've updated once, the timer should be reset and we should not try again until next interval elapsed
+        time.setCurrentTimeMs(now + 201L);
+        changelogReader.restore();
+        assertEquals(10L, (long) changelogReader.changelogMetadata(tp).endOffset());
+        assertEquals(4L, changelogReader.changelogMetadata(tp).totalRestored());
+        assertEquals(2, changelogReader.changelogMetadata(tp).bufferedRecords().size());
+        assertEquals(0, changelogReader.changelogMetadata(tp).bufferedLimitIndex());
+
+        time.setCurrentTimeMs(now + 202L);
+        changelogReader.restore();
+        assertEquals(15L, (long) changelogReader.changelogMetadata(tp).endOffset());
         assertEquals(4L, changelogReader.changelogMetadata(tp).totalRestored());
         assertEquals(2, changelogReader.changelogMetadata(tp).bufferedRecords().size());
         assertEquals(2, changelogReader.changelogMetadata(tp).bufferedLimitIndex());
 
         changelogReader.restore();
-        assertEquals(15L, (long) changelogReader.changelogMetadata(tp).limitOffset());
+        assertEquals(15L, (long) changelogReader.changelogMetadata(tp).endOffset());
         assertEquals(6L, changelogReader.changelogMetadata(tp).totalRestored());
         assertEquals(0, changelogReader.changelogMetadata(tp).bufferedRecords().size());
         assertEquals(0, changelogReader.changelogMetadata(tp).bufferedLimitIndex());
@@ -711,7 +728,7 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
         consumer.addRecord(new ConsumerRecord<>(topicName, 0, 15L, "key".getBytes(), "value".getBytes()));
 
         changelogReader.restore();
-        assertEquals(15L, (long) changelogReader.changelogMetadata(tp).limitOffset());
+        assertEquals(15L, (long) changelogReader.changelogMetadata(tp).endOffset());
         assertEquals(9L, changelogReader.changelogMetadata(tp).totalRestored());
         assertEquals(1, changelogReader.changelogMetadata(tp).bufferedRecords().size());
         assertEquals(0, changelogReader.changelogMetadata(tp).bufferedLimitIndex());
@@ -776,7 +793,7 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
                 return partitions.stream().collect(Collectors.toMap(Function.identity(), partition -> 10L));
             }
         };
-        final StoreChangelogReader changelogReader = new StoreChangelogReader(config, logContext, consumer, callback);
+        final StoreChangelogReader changelogReader = new StoreChangelogReader(time, config, logContext, consumer, callback);
         assertEquals(ACTIVE_RESTORING, changelogReader.state());
 
         changelogReader.register(tp, activeStateManager);
@@ -843,7 +860,7 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
                 return partitions.stream().collect(Collectors.toMap(Function.identity(), partition -> 10L));
             }
         };
-        final StoreChangelogReader changelogReader = new StoreChangelogReader(config, logContext, consumer, exceptionCallback);
+        final StoreChangelogReader changelogReader = new StoreChangelogReader(time, config, logContext, consumer, exceptionCallback);
 
         changelogReader.register(tp, activeStateManager);
 
