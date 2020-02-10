@@ -309,7 +309,7 @@ object ConfigCommand extends Config {
 
     entityTypeHead match {
       case ConfigType.Topic =>
-        val oldConfig = getGeneralConfig(adminClient, entityTypeHead, entityNameHead, includeSynonyms = false, describeAll = false)
+        val oldConfig = getResourceConfig(adminClient, entityTypeHead, entityNameHead, includeSynonyms = false, describeAll = false)
           .map { entry => (entry.name, entry) }.toMap
 
         // fail the command if any of the configs to be deleted does not exist
@@ -325,7 +325,7 @@ object ConfigCommand extends Config {
         adminClient.incrementalAlterConfigs(Map(configResource -> alterEntries).asJava, alterOptions).all().get(60, TimeUnit.SECONDS)
 
       case ConfigType.Broker =>
-        val oldConfig = getGeneralConfig(adminClient, entityTypeHead, entityNameHead, includeSynonyms = false, describeAll = false)
+        val oldConfig = getResourceConfig(adminClient, entityTypeHead, entityNameHead, includeSynonyms = false, describeAll = false)
           .map { entry => (entry.name, entry) }.toMap
 
         // fail the command if any of the configs to be deleted does not exist
@@ -344,7 +344,7 @@ object ConfigCommand extends Config {
         adminClient.alterConfigs(Map(configResource -> newConfig).asJava, alterOptions).all().get(60, TimeUnit.SECONDS)
 
       case BrokerLoggerConfigType =>
-        val validLoggers = getGeneralConfig(adminClient, entityTypeHead, entityNameHead, includeSynonyms = true, describeAll = false).map(_.name)
+        val validLoggers = getResourceConfig(adminClient, entityTypeHead, entityNameHead, includeSynonyms = true, describeAll = false).map(_.name)
         // fail the command if any of the configured broker loggers do not exist
         val invalidBrokerLoggers = configsToBeDeleted.filterNot(validLoggers.contains) ++ configsToBeAdded.keys.filterNot(validLoggers.contains)
         if (invalidBrokerLoggers.nonEmpty)
@@ -407,13 +407,13 @@ object ConfigCommand extends Config {
 
     entityTypes.head match {
       case ConfigType.Topic | ConfigType.Broker | BrokerLoggerConfigType =>
-        describeGeneralConfig(adminClient, entityTypes.head, entityNames.headOption, describeAll)
+        describeResourceConfig(adminClient, entityTypes.head, entityNames.headOption, describeAll)
       case ConfigType.User | ConfigType.Client =>
         describeClientQuotasConfig(adminClient, entityTypes, entityNames)
     }
   }
 
-  private def describeGeneralConfig(adminClient: Admin, entityType: String, entityName: Option[String], describeAll: Boolean): Unit = {
+  private def describeResourceConfig(adminClient: Admin, entityType: String, entityName: Option[String], describeAll: Boolean): Unit = {
     val entities = entityName
       .map(name => List(name))
       .getOrElse(entityType match {
@@ -431,14 +431,14 @@ object ConfigCommand extends Config {
           val configSourceStr = if (describeAll) "All" else "Dynamic"
           println(s"$configSourceStr configs for ${entityType.dropRight(1)} $entity are:")
       }
-      getGeneralConfig(adminClient, entityType, entity, includeSynonyms = true, describeAll).foreach { entry =>
+      getResourceConfig(adminClient, entityType, entity, includeSynonyms = true, describeAll).foreach { entry =>
         val synonyms = entry.synonyms.asScala.map(synonym => s"${synonym.source}:${synonym.name}=${synonym.value}").mkString(", ")
         println(s"  ${entry.name}=${entry.value} sensitive=${entry.isSensitive} synonyms={$synonyms}")
       }
     }
   }
 
-  private def getGeneralConfig(adminClient: Admin, entityType: String, entityName: String, includeSynonyms: Boolean, describeAll: Boolean) = {
+  private def getResourceConfig(adminClient: Admin, entityType: String, entityName: String, includeSynonyms: Boolean, describeAll: Boolean) = {
     def validateBrokerId(): Unit = try entityName.toInt catch {
       case _: NumberFormatException =>
         throw new IllegalArgumentException(s"The entity name for $entityType must be a valid integer broker id, found: $entityName")
