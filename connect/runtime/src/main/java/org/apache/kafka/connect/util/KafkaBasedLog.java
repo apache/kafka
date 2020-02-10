@@ -85,7 +85,7 @@ public class KafkaBasedLog<K, V> {
     private boolean stopRequested;
     private Queue<Callback<Void>> readLogEndOffsetCallbacks;
     private Runnable initializer;
-    private long topicMetadataTimeoutMs = CREATE_TOPIC_TIMEOUT_MS;
+    private final long topicMetadataTimeoutMs;
 
     /**
      * Create a new KafkaBasedLog object. This does not start reading the log and writing is not permitted until
@@ -110,6 +110,17 @@ public class KafkaBasedLog<K, V> {
                          Callback<ConsumerRecord<K, V>> consumedCallback,
                          Time time,
                          Runnable initializer) {
+        this(topic, producerConfigs, consumerConfigs, consumedCallback, time, initializer, CREATE_TOPIC_TIMEOUT_MS);
+    }
+
+    // package-level constructor for testing only
+    KafkaBasedLog(String topic,
+                  Map<String, Object> producerConfigs,
+                  Map<String, Object> consumerConfigs,
+                  Callback<ConsumerRecord<K, V>> consumedCallback,
+                  Time time,
+                  Runnable initializer,
+                  long topicMetadataTimeoutMs) {
         this.topic = topic;
         this.producerConfigs = producerConfigs;
         this.consumerConfigs = consumerConfigs;
@@ -117,7 +128,12 @@ public class KafkaBasedLog<K, V> {
         this.stopRequested = false;
         this.readLogEndOffsetCallbacks = new ArrayDeque<>();
         this.time = time;
-        this.initializer = initializer != null ? initializer : () -> { };
+        this.initializer = initializer != null ? initializer : new Runnable() {
+            @Override
+            public void run() {
+            }
+        };
+        this.topicMetadataTimeoutMs = topicMetadataTimeoutMs;
     }
 
     public void start() {
@@ -234,11 +250,6 @@ public class KafkaBasedLog<K, V> {
 
     public void send(K key, V value, org.apache.kafka.clients.producer.Callback callback) {
         producer.send(new ProducerRecord<>(topic, key, value), callback);
-    }
-
-    // package level visibility for testing only
-    void setTopicMetadataTimeoutMs(long timeoutMs) {
-        this.topicMetadataTimeoutMs = timeoutMs;
     }
     
     private Producer<K, V> createProducer() {

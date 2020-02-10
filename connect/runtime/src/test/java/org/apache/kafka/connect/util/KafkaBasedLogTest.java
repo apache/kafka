@@ -149,9 +149,8 @@ public class KafkaBasedLogTest {
     @Test(expected = ConnectException.class)
     public void testStartFailedWhenSomePartitionOffline() throws Exception {
         KafkaBasedLog store = PowerMock.createPartialMock(KafkaBasedLog.class, new String[]{"createConsumer", "createProducer"},
-                TOPIC, PRODUCER_PROPS, CONSUMER_PROPS, consumedCallback, Time.SYSTEM, initializer);
+                TOPIC, PRODUCER_PROPS, CONSUMER_PROPS, consumedCallback, Time.SYSTEM, initializer, 1000L);
 
-        store.setTopicMetadataTimeoutMs(1000L);
         PartitionInfo tpWithNoLeader = new PartitionInfo(TOPIC, 2, null, new Node[]{REPLICA}, new Node[0], new Node[]{REPLICA});
         consumer.updatePartitions(TOPIC, Arrays.asList(TPINFO0, TPINFO1, tpWithNoLeader));
         try {
