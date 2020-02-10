@@ -1460,7 +1460,7 @@ public class ConfigDef {
             b.append("<li>\n");
             b.append(String.format("<h4>" +
                     "<a id=\"%1$s\" href=\"#%1$s\">%1$s</a>" +
-                    "</h4>\n", key.name));
+                    "</h4>%n", key.name));
             b.append("<p>");
             b.append(key.documentation.replaceAll("\n", "<br>"));
             b.append("</p>\n");
@@ -1475,7 +1475,7 @@ public class ConfigDef {
                 String updateMode = dynamicUpdateModes.get(key.name);
                 if (updateMode == null)
                     updateMode = "read-only";
-                addConfigDetail(b, "Update Mode:", updateMode);
+                addConfigDetail(b, "Update Mode", updateMode);
             }
             b.append("</tbody></table>\n");
             b.append("</li>\n");
