@@ -22,15 +22,19 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.requests.MetadataResponse;
+import org.apache.kafka.common.requests.MetadataResponse.PartitionMetadata;
 
 import java.net.InetSocketAddress;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.BiPredicate;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
 /**
@@ -44,13 +48,13 @@ public class MetadataCache {
     private final Set<String> invalidTopics;
     private final Set<String> internalTopics;
     private final Node controller;
-    private final Map<TopicPartition, MetadataResponse.PartitionMetadata> metadataByPartition;
+    private final Map<TopicPartition, PartitionMetadata> metadataByPartition;
 
     private Cluster clusterInstance;
 
     MetadataCache(String clusterId,
                   Map<Integer, Node> nodes,
-                  Collection<MetadataResponse.PartitionMetadata> partitions,
+                  Collection<PartitionMetadata> partitions,
                   Set<String> unauthorizedTopics,
                   Set<String> invalidTopics,
                   Set<String> internalTopics,
@@ -60,7 +64,7 @@ public class MetadataCache {
 
     private MetadataCache(String clusterId,
                           Map<Integer, Node> nodes,
-                          Collection<MetadataResponse.PartitionMetadata> partitions,
+                          Collection<PartitionMetadata> partitions,
                           Set<String> unauthorizedTopics,
                           Set<String> invalidTopics,
                           Set<String> internalTopics,
@@ -74,7 +78,7 @@ public class MetadataCache {
         this.controller = controller;
 
         this.metadataByPartition = new HashMap<>(partitions.size());
-        for (MetadataResponse.PartitionMetadata p : partitions) {
+        for (PartitionMetadata p : partitions) {
             this.metadataByPartition.put(p.topicPartition, p);
         }
 
@@ -85,7 +89,7 @@ public class MetadataCache {
         }
     }
 
-    Optional<MetadataResponse.PartitionMetadata> partitionMetadata(TopicPartition topicPartition) {
+    Optional<PartitionMetadata> partitionMetadata(TopicPartition topicPartition) {
         return Optional.ofNullable(metadataByPartition.get(topicPartition));
     }
 
@@ -103,6 +107,68 @@ public class MetadataCache {
 
     ClusterResource clusterResource() {
         return new ClusterResource(clusterId);
+    }
+
+    /**
+     * Merges the metadata cache's contents with the provided metadata, returning a new metadata cache. The provided
+     * metadata is presumed to be more recent than the cache's metadata, and therefore all overlapping metadata will
+     * be overridden.
+     *
+     * @param newClusterId the new cluster Id
+     * @param newNodes the new set of nodes
+     * @param addPartitions partitions to add
+     * @param addUnauthorizedTopics unauthorized topics to add
+     * @param addInternalTopics internal topics to add
+     * @param newController the new controller node
+     * @param retainTopic returns whether a topic's metadata should be retained
+     * @return the merged metadata cache
+     */
+    MetadataCache mergeWith(String newClusterId,
+                            Map<Integer, Node> newNodes,
+                            Collection<PartitionMetadata> addPartitions,
+                            Set<String> addUnauthorizedTopics,
+                            Set<String> addInvalidTopics,
+                            Set<String> addInternalTopics,
+                            Node newController,
+                            BiPredicate<String, Boolean> retainTopic) {
+
+        Predicate<String> shouldRetainTopic = topic -> retainTopic.test(topic, internalTopics.contains(topic));
+
+        Map<TopicPartition, PartitionMetadata> newMetadataByPartition = new HashMap<>(addPartitions.size());
+        for (PartitionMetadata partition : addPartitions) {
+            newMetadataByPartition.put(partition.topicPartition, partition);
+        }
+        for (Map.Entry<TopicPartition, PartitionMetadata> entry : metadataByPartition.entrySet()) {
+            if (shouldRetainTopic.test(entry.getKey().topic())) {
+                newMetadataByPartition.putIfAbsent(entry.getKey(), entry.getValue());
+            }
+        }
+
+        Set<String> newUnauthorizedTopics = fillSet(addUnauthorizedTopics, unauthorizedTopics, shouldRetainTopic);
+        Set<String> newInvalidTopics = fillSet(addInvalidTopics, invalidTopics, shouldRetainTopic);
+        Set<String> newInternalTopics = fillSet(addInternalTopics, internalTopics, shouldRetainTopic);
+
+        return new MetadataCache(newClusterId, newNodes, newMetadataByPartition.values(), newUnauthorizedTopics,
+                newInvalidTopics, newInternalTopics, newController);
+    }
+
+    /**
+     * Copies {@code baseSet} and adds all non-existent elements in {@code fillSet} such that {@code predicate} is true.
+     * In other words, all elements of {@code baseSet} will be contained in the result, with additional non-overlapping
+     * elements in {@code fillSet} where the predicate is true.
+     *
+     * @param baseSet the base elements for the resulting set
+     * @param fillSet elements to be filled into the resulting set
+     * @param predicate tested against the fill set to determine whether elements should be added to the base set
+     */
+    private static <T> Set<T> fillSet(Set<T> baseSet, Set<T> fillSet, Predicate<T> predicate) {
+        Set<T> result = new HashSet<>(baseSet);
+        for (T element : fillSet) {
+            if (predicate.test(element)) {
+                result.add(element);
+            }
+        }
+        return result;
     }
 
     private void computeClusterView() {
