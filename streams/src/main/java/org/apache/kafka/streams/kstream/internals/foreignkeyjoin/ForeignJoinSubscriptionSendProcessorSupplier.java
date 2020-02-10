@@ -44,9 +44,9 @@ public class ForeignJoinSubscriptionSendProcessorSupplier<K, KO, V> implements P
 
     private final Function<V, KO> foreignKeyExtractor;
     private final String repartitionTopicName;
-    private final Serializer<V> valueSerializer;
     private final boolean leftJoin;
     private Serializer<KO> foreignKeySerializer;
+    private Serializer<V> valueSerializer;
 
     public ForeignJoinSubscriptionSendProcessorSupplier(final Function<V, KO> foreignKeyExtractor,
                                                         final Serde<KO> foreignKeySerde,
@@ -76,6 +76,9 @@ public class ForeignJoinSubscriptionSendProcessorSupplier<K, KO, V> implements P
             // get default key serde if it wasn't supplied directly at construction
             if (foreignKeySerializer == null) {
                 foreignKeySerializer = (Serializer<KO>) context.keySerde().serializer();
+            }
+            if (valueSerializer == null) {
+                valueSerializer = (Serializer<V>) context.valueSerde().serializer();
             }
             droppedRecordsSensor = TaskMetrics.droppedRecordsSensorOrSkippedRecordsSensor(
                 Thread.currentThread().getName(),

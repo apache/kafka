@@ -970,7 +970,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
                     foreignKeyExtractor,
                     foreignKeySerde,
                     subscriptionTopicName,
-                    valSerde.serializer(),
+                    valSerde == null ? null : valSerde.serializer(),
                     leftJoin
                 ),
                 renamed.suffixWithOrElseGet("-subscription-registration-processor", builder, SUBSCRIPTION_REGISTRATION)
@@ -1073,7 +1073,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         final KTableValueGetterSupplier<K, V> primaryKeyValueGetter = valueGetterSupplier();
         final SubscriptionResolverJoinProcessorSupplier<K, V, VO, VR> resolverProcessorSupplier = new SubscriptionResolverJoinProcessorSupplier<>(
             primaryKeyValueGetter,
-            valueSerde().serializer(),
+            valSerde == null ? null : valSerde.serializer(),
             joiner,
             leftJoin
         );
