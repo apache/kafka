@@ -1037,7 +1037,7 @@ public class KafkaAdminClient extends AdminClient {
                 }
                 ClientRequest clientRequest = client.newClientRequest(node.idString(), requestBuilder, now,
                         true, requestTimeoutMs, null);
-                log.trace("Sending {} to {}. correlationId={}", requestBuilder, node, clientRequest.correlationId());
+                log.debug("Sending {} to {}. correlationId={}", requestBuilder, node, clientRequest.correlationId());
                 client.send(clientRequest, now);
                 getOrCreateListValue(callsInFlight, node.idString()).add(call);
                 correlationIdToCalls.put(clientRequest.correlationId(), call);
