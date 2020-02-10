@@ -232,7 +232,7 @@ class TopicDeletionManager(config: KafkaConfig,
   private def retryDeletionForIneligibleReplicas(topics: Set[String]): Unit = {
     // reset replica states from ReplicaDeletionIneligible to OfflineReplica
     val failedReplicas = topics.flatMap(controllerContext.replicasInState(_, ReplicaDeletionIneligible))
-    info(s"Retrying deletion of topic $topics since replicas ${failedReplicas.mkString(",")} were not successfully deleted")
+    info(s"Retrying deletion of topics ${topics.mkString(",")} since replicas ${failedReplicas.mkString(",")} were not successfully deleted")
     replicaStateMachine.handleStateChanges(failedReplicas.toSeq, OfflineReplica)
   }
 
