@@ -40,6 +40,7 @@ import java.util.List;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 
 public class PartitionGroupTest {
@@ -47,8 +48,8 @@ public class PartitionGroupTest {
     private final Serializer<Integer> intSerializer = new IntegerSerializer();
     private final Deserializer<Integer> intDeserializer = new IntegerDeserializer();
     private final TimestampExtractor timestampExtractor = new MockTimestampExtractor();
-    private final TopicPartition randomPartition = new TopicPartition("random-partition", 0);
-    private final String errMessage = "Partition " + randomPartition + " not found.";
+    private final TopicPartition unknownPartition = new TopicPartition("unknown-partition", 0);
+    private final String errMessage = "Partition " + unknownPartition + " not found.";
     private final String[] topics = {"topic"};
     private final TopicPartition partition1 = new TopicPartition(topics[0], 1);
     private final TopicPartition partition2 = new TopicPartition(topics[0], 2);
@@ -88,6 +89,14 @@ public class PartitionGroupTest {
 
     @Test
     public void testTimeTracking() {
+        testFirstBatch();
+        testSecondBatch();
+    }
+
+    private void testFirstBatch() {
+        StampedRecord record;
+        final PartitionGroup.RecordInfo info = new PartitionGroup.RecordInfo();
+
         assertEquals(0, group.numBuffered());
         // add three 3 records with timestamp 1, 3, 5 to partition-1
         final List<ConsumerRecord<byte[], byte[]>> list1 = Arrays.asList(
@@ -109,11 +118,12 @@ public class PartitionGroupTest {
         // st: -1 since no records was being processed yet
 
         verifyBuffered(6, 3, 3);
+        assertEquals(1L, group.partitionTimestamp(partition1));
+        assertEquals(2L, group.partitionTimestamp(partition2));
+        assertEquals(1L, group.headRecordOffset(partition1).longValue());
+        assertEquals(2L, group.headRecordOffset(partition2).longValue());
         assertEquals(-1L, group.streamTime());
         assertEquals(0.0, metrics.metric(lastLatenessValue).metricValue());
-
-        StampedRecord record;
-        final PartitionGroup.RecordInfo info = new PartitionGroup.RecordInfo();
 
         // get one record, now the time should be advanced
         record = group.nextRecord(info);
@@ -123,6 +133,8 @@ public class PartitionGroupTest {
         assertEquals(partition1, info.partition());
         assertEquals(3L, group.partitionTimestamp(partition1));
         assertEquals(2L, group.partitionTimestamp(partition2));
+        assertEquals(3L, group.headRecordOffset(partition1).longValue());
+        assertEquals(2L, group.headRecordOffset(partition2).longValue());
         assertEquals(1L, group.streamTime());
         verifyTimes(record, 1L, 1L);
         verifyBuffered(5, 2, 3);
@@ -136,10 +148,17 @@ public class PartitionGroupTest {
         assertEquals(partition2, info.partition());
         assertEquals(3L, group.partitionTimestamp(partition1));
         assertEquals(4L, group.partitionTimestamp(partition2));
+        assertEquals(3L, group.headRecordOffset(partition1).longValue());
+        assertEquals(4L, group.headRecordOffset(partition2).longValue());
         assertEquals(2L, group.streamTime());
         verifyTimes(record, 2L, 2L);
         verifyBuffered(4, 2, 2);
         assertEquals(0.0, metrics.metric(lastLatenessValue).metricValue());
+    }
+
+    private void testSecondBatch() {
+        StampedRecord record;
+        final PartitionGroup.RecordInfo info = new PartitionGroup.RecordInfo();
 
         // add 2 more records with timestamp 2, 4 to partition-1
         final List<ConsumerRecord<byte[], byte[]>> list3 = Arrays.asList(
@@ -153,6 +172,8 @@ public class PartitionGroupTest {
         verifyBuffered(6, 4, 2);
         assertEquals(3L, group.partitionTimestamp(partition1));
         assertEquals(4L, group.partitionTimestamp(partition2));
+        assertEquals(3L, group.headRecordOffset(partition1).longValue());
+        assertEquals(4L, group.headRecordOffset(partition2).longValue());
         assertEquals(2L, group.streamTime());
         assertEquals(0.0, metrics.metric(lastLatenessValue).metricValue());
 
@@ -164,6 +185,8 @@ public class PartitionGroupTest {
         assertEquals(partition1, info.partition());
         assertEquals(5L, group.partitionTimestamp(partition1));
         assertEquals(4L, group.partitionTimestamp(partition2));
+        assertEquals(5L, group.headRecordOffset(partition1).longValue());
+        assertEquals(4L, group.headRecordOffset(partition2).longValue());
         assertEquals(3L, group.streamTime());
         verifyTimes(record, 3L, 3L);
         verifyBuffered(5, 3, 2);
@@ -177,6 +200,8 @@ public class PartitionGroupTest {
         assertEquals(partition2, info.partition());
         assertEquals(5L, group.partitionTimestamp(partition1));
         assertEquals(6L, group.partitionTimestamp(partition2));
+        assertEquals(5L, group.headRecordOffset(partition1).longValue());
+        assertEquals(6L, group.headRecordOffset(partition2).longValue());
         assertEquals(4L, group.streamTime());
         verifyTimes(record, 4L, 4L);
         verifyBuffered(4, 3, 1);
@@ -190,6 +215,8 @@ public class PartitionGroupTest {
         assertEquals(partition1, info.partition());
         assertEquals(5L, group.partitionTimestamp(partition1));
         assertEquals(6L, group.partitionTimestamp(partition2));
+        assertEquals(2L, group.headRecordOffset(partition1).longValue());
+        assertEquals(6L, group.headRecordOffset(partition2).longValue());
         assertEquals(5L, group.streamTime());
         verifyTimes(record, 5L, 5L);
         verifyBuffered(3, 2, 1);
@@ -203,6 +230,8 @@ public class PartitionGroupTest {
         assertEquals(partition1, info.partition());
         assertEquals(5L, group.partitionTimestamp(partition1));
         assertEquals(6L, group.partitionTimestamp(partition2));
+        assertEquals(4L, group.headRecordOffset(partition1).longValue());
+        assertEquals(6L, group.headRecordOffset(partition2).longValue());
         assertEquals(5L, group.streamTime());
         verifyTimes(record, 2L, 5L);
         verifyBuffered(2, 1, 1);
@@ -216,6 +245,8 @@ public class PartitionGroupTest {
         assertEquals(partition1, info.partition());
         assertEquals(5L, group.partitionTimestamp(partition1));
         assertEquals(6L, group.partitionTimestamp(partition2));
+        assertNull(group.headRecordOffset(partition1));
+        assertEquals(6L, group.headRecordOffset(partition2).longValue());
         assertEquals(5L, group.streamTime());
         verifyTimes(record, 4L, 5L);
         verifyBuffered(1, 0, 1);
@@ -229,6 +260,8 @@ public class PartitionGroupTest {
         assertEquals(partition2, info.partition());
         assertEquals(5L, group.partitionTimestamp(partition1));
         assertEquals(6L, group.partitionTimestamp(partition2));
+        assertNull(group.headRecordOffset(partition1));
+        assertNull(group.headRecordOffset(partition2));
         assertEquals(6L, group.streamTime());
         verifyTimes(record, 6L, 6L);
         verifyBuffered(0, 0, 0);
@@ -307,14 +340,14 @@ public class PartitionGroupTest {
     @Test
     public void shouldThrowNullpointerUponSetPartitionTimestampFailure() {
         assertThrows(errMessage, NullPointerException.class, () -> {
-            group.setPartitionTime(randomPartition, 0L);
+            group.setPartitionTime(unknownPartition, 0L);
         });
     }
 
     @Test
     public void shouldThrowNullpointerUponGetPartitionTimestampFailure() {
         assertThrows(errMessage, NullPointerException.class, () -> {
-            group.partitionTimestamp(randomPartition);
+            group.partitionTimestamp(unknownPartition);
         });
     }
 }

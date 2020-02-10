@@ -498,7 +498,33 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         final Map<TopicPartition, OffsetAndMetadata> consumedOffsetsAndMetadata = new HashMap<>(consumedOffsets.size());
         for (final Map.Entry<TopicPartition, Long> entry : consumedOffsets.entrySet()) {
             final TopicPartition partition = entry.getKey();
-            final long offset = entry.getValue() + 1;
+            Long offset = partitionGroup.headRecordOffset(partition);
+            if (offset == null) {
+                try {
+                    offset = consumer.position(partition);
+                    // because the SmokeTestDriverIntegrationTest does NOT use EOS,
+                    // consumer.position should always be the same as `offset + 1` here,
+                    // because our internal queue is empty -- otherwise,
+                    // `partitionGroup.headRecordOffset` would not have returned a `null` offset
+                    if (offset != entry.getValue() + 1L) {
+                        log.debug("consumer.position() for partition {} is expected to be {} but is {}", partition, entry.getValue() + 1, offset);
+                        System.err.println(String.format(
+                            "consumer.position() for partition %s is expected to be %d but is %d",
+                            partition,
+                            entry.getValue() + 1,
+                            offset));
+                    }
+                } catch (final TimeoutException error) {
+                    // the `consumer.position()` call should never block, because we know that we did process data
+                    // for the requested partition and thus the consumer should have a valid local position
+                    // that it can return immediately
+
+                    // hence, a `TimeoutException` indicates a bug and thus we rethrow it as fatal `IllegalStateException`
+                    throw new IllegalStateException(error);
+                } catch (final KafkaException fatal) {
+                    throw new StreamsException(fatal);
+                }
+            }
             final long partitionTime = partitionTimes.get(partition);
             consumedOffsetsAndMetadata.put(partition, new OffsetAndMetadata(offset, encodeTimestamp(partitionTime)));
         }

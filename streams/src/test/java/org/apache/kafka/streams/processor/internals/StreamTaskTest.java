@@ -62,10 +62,10 @@ import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
 import org.apache.kafka.test.MockKeyValueStore;
 import org.apache.kafka.test.MockProcessorNode;
+import org.apache.kafka.test.MockRecordCollector;
 import org.apache.kafka.test.MockSourceNode;
 import org.apache.kafka.test.MockStateRestoreListener;
 import org.apache.kafka.test.MockTimestampExtractor;
-import org.apache.kafka.test.MockRecordCollector;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Before;
@@ -75,6 +75,7 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.time.Duration;
+import java.util.Arrays;
 import java.util.Base64;
 import java.util.Collections;
 import java.util.HashMap;
@@ -217,6 +218,7 @@ public class StreamTaskTest {
     @Before
     public void setup() {
         consumer.assign(asList(partition1, partition2));
+        consumer.updateBeginningOffsets(mkMap(mkEntry(partition1, 0L), mkEntry(partition2, 0L)));
         stateDirectory = new StateDirectory(createConfig(false), new MockTime(), true);
     }
 
@@ -773,6 +775,47 @@ public class StreamTaskTest {
 
         task.commit();
         assertFalse(task.commitNeeded());
+    }
+
+    @Test
+    public void shouldCommitNextOffsetFromQueueIfAvailable() {
+        task = createStatelessTask(createConfig(false), StreamsConfig.METRICS_LATEST);
+        task.initializeStateStores();
+        task.initializeTopology();
+
+        task.addRecords(partition1, Arrays.asList(getConsumerRecord(partition1, 0), getConsumerRecord(partition1, 5)));
+        task.process();
+        task.commit();
+
+        final Map<TopicPartition, Long> committedOffsets = getCommittetOffsets(consumer.committed(partitions));
+        assertThat(committedOffsets, equalTo(mkMap(mkEntry(partition1, 5L))));
+    }
+
+    @Test
+    public void shouldCommitConsumerPositionIfRecordQueueIsEmpty() {
+        task = createStatelessTask(createConfig(false), StreamsConfig.METRICS_LATEST);
+        task.initializeStateStores();
+        task.initializeTopology();
+
+        consumer.addRecord(getConsumerRecord(partition1, 0));
+        consumer.addRecord(getConsumerRecord(partition1, 1));
+        consumer.addRecord(getConsumerRecord(partition1, 2));
+        consumer.poll(Duration.ZERO);
+
+        task.addRecords(partition1, singletonList(getConsumerRecord(partition1, 0)));
+        task.process();
+        task.commit();
+
+        final Map<TopicPartition, Long> committedOffsets = getCommittetOffsets(consumer.committed(partitions));
+        assertThat(committedOffsets, equalTo(mkMap(mkEntry(partition1, 3L))));
+    }
+
+    private Map<TopicPartition, Long> getCommittetOffsets(final Map<TopicPartition, OffsetAndMetadata> committedOffsetsAndMetadata) {
+        final Map<TopicPartition, Long> committedOffsets = new HashMap<>();
+        for (final Map.Entry<TopicPartition, OffsetAndMetadata> e : committedOffsetsAndMetadata.entrySet()) {
+            committedOffsets.put(e.getKey(), e.getValue().offset());
+        }
+        return committedOffsets;
     }
 
     @Test
@@ -1855,6 +1898,7 @@ public class StreamTaskTest {
             Collections.singleton(repartition.topic())
         );
         consumer.assign(asList(partition1, repartition));
+        consumer.updateBeginningOffsets(mkMap(mkEntry(repartition, 0L)));
 
         task = new StreamTask(
             taskId00,

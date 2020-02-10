@@ -43,7 +43,6 @@ import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.internals.KeyValueStoreFacade;
 import org.apache.kafka.streams.internals.QuietStreamsConfig;
 import org.apache.kafka.streams.internals.WindowStoreFacade;
-import org.apache.kafka.streams.processor.internals.metrics.TaskMetrics;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
@@ -63,6 +62,7 @@ import org.apache.kafka.streams.processor.internals.StateDirectory;
 import org.apache.kafka.streams.processor.internals.StoreChangelogReader;
 import org.apache.kafka.streams.processor.internals.StreamTask;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
+import org.apache.kafka.streams.processor.internals.metrics.TaskMetrics;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 import org.apache.kafka.streams.state.ReadOnlySessionStore;
@@ -333,22 +333,28 @@ public class TopologyTestDriver implements Closeable {
             offsetsByTopicPartition.put(tp, new AtomicLong());
         }
         consumer.assign(partitionsByTopic.values());
+        final Map<TopicPartition, Long> startOffsets = new HashMap<>();
+        for (final TopicPartition topicPartition : partitionsByTopic.values()) {
+            startOffsets.put(topicPartition, 0L);
+        }
+        consumer.updateBeginningOffsets(startOffsets);
 
         if (globalTopology != null) {
+            final MockConsumer<byte[], byte[]> globalConsumer = new MockConsumer<>(OffsetResetStrategy.NONE);
             for (final String topicName : globalTopology.sourceTopics()) {
                 final TopicPartition partition = new TopicPartition(topicName, 0);
                 globalPartitionsByTopic.put(topicName, partition);
                 offsetsByTopicPartition.put(partition, new AtomicLong());
-                consumer.updatePartitions(topicName, Collections.singletonList(
+                globalConsumer.updatePartitions(topicName, Collections.singletonList(
                     new PartitionInfo(topicName, 0, null, null, null)));
-                consumer.updateBeginningOffsets(Collections.singletonMap(partition, 0L));
-                consumer.updateEndOffsets(Collections.singletonMap(partition, 0L));
+                globalConsumer.updateBeginningOffsets(Collections.singletonMap(partition, 0L));
+                globalConsumer.updateEndOffsets(Collections.singletonMap(partition, 0L));
             }
 
             globalStateManager = new GlobalStateManagerImpl(
                 new LogContext("mock "),
                 globalTopology,
-                consumer,
+                globalConsumer,
                 stateDirectory,
                 stateRestoreListener,
                 streamsConfig);

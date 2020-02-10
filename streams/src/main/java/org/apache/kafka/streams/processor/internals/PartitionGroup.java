@@ -183,6 +183,16 @@ public class PartitionGroup {
         return streamTime;
     }
 
+    Long headRecordOffset(final TopicPartition partition) {
+        final RecordQueue recordQueue = partitionQueues.get(partition);
+
+        if (recordQueue == null) {
+            throw new IllegalStateException("Partition " + partition + " not found.");
+        }
+
+        return recordQueue.headRecordOffset();
+    }
+
     /**
      * @throws IllegalStateException if the record's partition does not belong to this partition group
      */
