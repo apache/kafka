@@ -24,7 +24,7 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.streams.StoreQueryParams;
+import org.apache.kafka.streams.StoreQueryParameters;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.TopologyWrapper;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
@@ -163,7 +163,7 @@ public class StreamThreadStateStoreProviderTest {
     public void shouldFindKeyValueStores() {
         mockThread(true);
         final List<ReadOnlyKeyValueStore<String, String>> kvStores =
-            provider.stores(StoreQueryParams.fromNameAndType("kv-store", QueryableStoreTypes.keyValueStore()));
+            provider.stores(StoreQueryParameters.fromNameAndType("kv-store", QueryableStoreTypes.keyValueStore()));
         assertEquals(2, kvStores.size());
         for (final ReadOnlyKeyValueStore<String, String> store: kvStores) {
             assertThat(store, instanceOf(ReadOnlyKeyValueStore.class));
@@ -175,7 +175,7 @@ public class StreamThreadStateStoreProviderTest {
     public void shouldFindTimestampedKeyValueStores() {
         mockThread(true);
         final List<ReadOnlyKeyValueStore<String, ValueAndTimestamp<String>>> tkvStores =
-            provider.stores(StoreQueryParams.fromNameAndType("timestamped-kv-store", QueryableStoreTypes.timestampedKeyValueStore()));
+            provider.stores(StoreQueryParameters.fromNameAndType("timestamped-kv-store", QueryableStoreTypes.timestampedKeyValueStore()));
         assertEquals(2, tkvStores.size());
         for (final ReadOnlyKeyValueStore<String, ValueAndTimestamp<String>> store: tkvStores) {
             assertThat(store, instanceOf(ReadOnlyKeyValueStore.class));
@@ -187,7 +187,7 @@ public class StreamThreadStateStoreProviderTest {
     public void shouldNotFindKeyValueStoresAsTimestampedStore() {
         mockThread(true);
         final List<ReadOnlyKeyValueStore<String, ValueAndTimestamp<String>>> tkvStores =
-                provider.stores(StoreQueryParams.fromNameAndType("kv-store", QueryableStoreTypes.timestampedKeyValueStore()));
+                provider.stores(StoreQueryParameters.fromNameAndType("kv-store", QueryableStoreTypes.timestampedKeyValueStore()));
         assertEquals(0, tkvStores.size());
     }
 
@@ -195,7 +195,7 @@ public class StreamThreadStateStoreProviderTest {
     public void shouldFindTimestampedKeyValueStoresAsKeyValueStores() {
         mockThread(true);
         final List<ReadOnlyKeyValueStore<String, ValueAndTimestamp<String>>> tkvStores =
-                provider.stores(StoreQueryParams.fromNameAndType("timestamped-kv-store", QueryableStoreTypes.keyValueStore()));
+                provider.stores(StoreQueryParameters.fromNameAndType("timestamped-kv-store", QueryableStoreTypes.keyValueStore()));
         assertEquals(2, tkvStores.size());
         for (final ReadOnlyKeyValueStore<String, ValueAndTimestamp<String>> store: tkvStores) {
             assertThat(store, instanceOf(ReadOnlyKeyValueStore.class));
@@ -207,7 +207,7 @@ public class StreamThreadStateStoreProviderTest {
     public void shouldFindWindowStores() {
         mockThread(true);
         final List<ReadOnlyWindowStore<String, String>> windowStores =
-            provider.stores(StoreQueryParams.fromNameAndType("window-store", QueryableStoreTypes.windowStore()));
+            provider.stores(StoreQueryParameters.fromNameAndType("window-store", QueryableStoreTypes.windowStore()));
         assertEquals(2, windowStores.size());
         for (final ReadOnlyWindowStore<String, String> store: windowStores) {
             assertThat(store, instanceOf(ReadOnlyWindowStore.class));
@@ -219,7 +219,7 @@ public class StreamThreadStateStoreProviderTest {
     public void shouldFindTimestampedWindowStores() {
         mockThread(true);
         final List<ReadOnlyWindowStore<String, ValueAndTimestamp<String>>> windowStores =
-            provider.stores(StoreQueryParams.fromNameAndType("timestamped-window-store", QueryableStoreTypes.timestampedWindowStore()));
+            provider.stores(StoreQueryParameters.fromNameAndType("timestamped-window-store", QueryableStoreTypes.timestampedWindowStore()));
         assertEquals(2, windowStores.size());
         for (final ReadOnlyWindowStore<String, ValueAndTimestamp<String>> store: windowStores) {
             assertThat(store, instanceOf(ReadOnlyWindowStore.class));
@@ -231,7 +231,7 @@ public class StreamThreadStateStoreProviderTest {
     public void shouldNotFindWindowStoresAsTimestampedStore() {
         mockThread(true);
         final List<ReadOnlyWindowStore<String, ValueAndTimestamp<String>>> windowStores =
-            provider.stores(StoreQueryParams.fromNameAndType("window-store", QueryableStoreTypes.timestampedWindowStore()));
+            provider.stores(StoreQueryParameters.fromNameAndType("window-store", QueryableStoreTypes.timestampedWindowStore()));
         assertEquals(0, windowStores.size());
     }
 
@@ -239,7 +239,7 @@ public class StreamThreadStateStoreProviderTest {
     public void shouldFindTimestampedWindowStoresAsWindowStore() {
         mockThread(true);
         final List<ReadOnlyWindowStore<String, ValueAndTimestamp<String>>> windowStores =
-            provider.stores(StoreQueryParams.fromNameAndType("timestamped-window-store", QueryableStoreTypes.windowStore()));
+            provider.stores(StoreQueryParameters.fromNameAndType("timestamped-window-store", QueryableStoreTypes.windowStore()));
         assertEquals(2, windowStores.size());
         for (final ReadOnlyWindowStore<String, ValueAndTimestamp<String>> store: windowStores) {
             assertThat(store, instanceOf(ReadOnlyWindowStore.class));
@@ -251,28 +251,28 @@ public class StreamThreadStateStoreProviderTest {
     public void shouldThrowInvalidStoreExceptionIfKVStoreClosed() {
         mockThread(true);
         taskOne.getStore("kv-store").close();
-        provider.stores(StoreQueryParams.fromNameAndType("kv-store", QueryableStoreTypes.keyValueStore()));
+        provider.stores(StoreQueryParameters.fromNameAndType("kv-store", QueryableStoreTypes.keyValueStore()));
     }
 
     @Test(expected = InvalidStateStoreException.class)
     public void shouldThrowInvalidStoreExceptionIfTsKVStoreClosed() {
         mockThread(true);
         taskOne.getStore("timestamped-kv-store").close();
-        provider.stores(StoreQueryParams.fromNameAndType("timestamped-kv-store", QueryableStoreTypes.timestampedKeyValueStore()));
+        provider.stores(StoreQueryParameters.fromNameAndType("timestamped-kv-store", QueryableStoreTypes.timestampedKeyValueStore()));
     }
 
     @Test(expected = InvalidStateStoreException.class)
     public void shouldThrowInvalidStoreExceptionIfWindowStoreClosed() {
         mockThread(true);
         taskOne.getStore("window-store").close();
-        provider.stores(StoreQueryParams.fromNameAndType("window-store", QueryableStoreTypes.windowStore()));
+        provider.stores(StoreQueryParameters.fromNameAndType("window-store", QueryableStoreTypes.windowStore()));
     }
 
     @Test(expected = InvalidStateStoreException.class)
     public void shouldThrowInvalidStoreExceptionIfTsWindowStoreClosed() {
         mockThread(true);
         taskOne.getStore("timestamped-window-store").close();
-        provider.stores(StoreQueryParams.fromNameAndType("timestamped-window-store", QueryableStoreTypes.timestampedWindowStore()));
+        provider.stores(StoreQueryParameters.fromNameAndType("timestamped-window-store", QueryableStoreTypes.timestampedWindowStore()));
     }
 
     @Test
@@ -280,7 +280,7 @@ public class StreamThreadStateStoreProviderTest {
         mockThread(true);
         assertEquals(
             Collections.emptyList(),
-            provider.stores(StoreQueryParams.fromNameAndType("not-a-store", QueryableStoreTypes.keyValueStore())));
+            provider.stores(StoreQueryParameters.fromNameAndType("not-a-store", QueryableStoreTypes.keyValueStore())));
     }
 
     @Test
@@ -288,14 +288,14 @@ public class StreamThreadStateStoreProviderTest {
         mockThread(true);
         assertEquals(
             Collections.emptyList(),
-            provider.stores(StoreQueryParams.fromNameAndType("window-store", QueryableStoreTypes.keyValueStore()))
+            provider.stores(StoreQueryParameters.fromNameAndType("window-store", QueryableStoreTypes.keyValueStore()))
         );
     }
 
     @Test(expected = InvalidStateStoreException.class)
     public void shouldThrowInvalidStoreExceptionIfNotAllStoresAvailable() {
         mockThread(false);
-        provider.stores(StoreQueryParams.fromNameAndType("kv-store", QueryableStoreTypes.keyValueStore()));
+        provider.stores(StoreQueryParameters.fromNameAndType("kv-store", QueryableStoreTypes.keyValueStore()));
     }
 
     private StreamTask createStreamsTask(final StreamsConfig streamsConfig,

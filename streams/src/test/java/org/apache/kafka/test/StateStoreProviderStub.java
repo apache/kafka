@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.test;
 
-import org.apache.kafka.streams.StoreQueryParams;
+import org.apache.kafka.streams.StoreQueryParameters;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.QueryableStoreType;
@@ -39,9 +39,9 @@ public class StateStoreProviderStub extends StreamThreadStateStoreProvider {
 
     @SuppressWarnings("unchecked")
     @Override
-    public <T> List<T> stores(final StoreQueryParams storeQueryParams) {
-        final String storeName = storeQueryParams.storeName();
-        final QueryableStoreType<T> queryableStoreType = storeQueryParams.queryableStoreType();
+    public <T> List<T> stores(final StoreQueryParameters storeQueryParameters) {
+        final String storeName = storeQueryParameters.storeName();
+        final QueryableStoreType<T> queryableStoreType = storeQueryParameters.queryableStoreType();
         if (throwException) {
             throw new InvalidStateStoreException("store is unavailable");
         }

@@ -17,7 +17,7 @@
 package org.apache.kafka.streams.state.internals;
 
 
-import org.apache.kafka.streams.StoreQueryParams;
+import org.apache.kafka.streams.StoreQueryParameters;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.NoOpWindowStore;
@@ -54,38 +54,38 @@ public class QueryableStoreProviderTest {
 
     @Test(expected = InvalidStateStoreException.class)
     public void shouldThrowExceptionIfKVStoreDoesntExist() {
-        storeProvider.getStore(StoreQueryParams.fromNameAndType("not-a-store", QueryableStoreTypes.keyValueStore()));
+        storeProvider.getStore(StoreQueryParameters.fromNameAndType("not-a-store", QueryableStoreTypes.keyValueStore()));
     }
 
     @Test(expected = InvalidStateStoreException.class)
     public void shouldThrowExceptionIfWindowStoreDoesntExist() {
-        storeProvider.getStore(StoreQueryParams.fromNameAndType("not-a-store", QueryableStoreTypes.windowStore()));
+        storeProvider.getStore(StoreQueryParameters.fromNameAndType("not-a-store", QueryableStoreTypes.windowStore()));
     }
 
     @Test
     public void shouldReturnKVStoreWhenItExists() {
-        assertNotNull(storeProvider.getStore(StoreQueryParams.fromNameAndType(keyValueStore, QueryableStoreTypes.keyValueStore())));
+        assertNotNull(storeProvider.getStore(StoreQueryParameters.fromNameAndType(keyValueStore, QueryableStoreTypes.keyValueStore())));
     }
 
     @Test
     public void shouldReturnWindowStoreWhenItExists() {
-        assertNotNull(storeProvider.getStore(StoreQueryParams.fromNameAndType(windowStore, QueryableStoreTypes.windowStore())));
+        assertNotNull(storeProvider.getStore(StoreQueryParameters.fromNameAndType(windowStore, QueryableStoreTypes.windowStore())));
     }
 
     @Test(expected = InvalidStateStoreException.class)
     public void shouldThrowExceptionWhenLookingForWindowStoreWithDifferentType() {
-        storeProvider.getStore(StoreQueryParams.fromNameAndType(windowStore, QueryableStoreTypes.keyValueStore()));
+        storeProvider.getStore(StoreQueryParameters.fromNameAndType(windowStore, QueryableStoreTypes.keyValueStore()));
     }
 
     @Test(expected = InvalidStateStoreException.class)
     public void shouldThrowExceptionWhenLookingForKVStoreWithDifferentType() {
-        storeProvider.getStore(StoreQueryParams.fromNameAndType(keyValueStore, QueryableStoreTypes.windowStore()));
+        storeProvider.getStore(StoreQueryParameters.fromNameAndType(keyValueStore, QueryableStoreTypes.windowStore()));
     }
 
     @Test
     public void shouldFindGlobalStores() {
         globalStateStores.put("global", new NoOpReadOnlyStore<>());
-        assertNotNull(storeProvider.getStore(StoreQueryParams.fromNameAndType("global", QueryableStoreTypes.keyValueStore())));
+        assertNotNull(storeProvider.getStore(StoreQueryParameters.fromNameAndType("global", QueryableStoreTypes.keyValueStore())));
     }
 
 
