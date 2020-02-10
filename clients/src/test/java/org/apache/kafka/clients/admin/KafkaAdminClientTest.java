@@ -88,6 +88,10 @@ import org.apache.kafka.common.message.OffsetDeleteResponseData.OffsetDeleteResp
 import org.apache.kafka.common.message.OffsetDeleteResponseData.OffsetDeleteResponseTopic;
 import org.apache.kafka.common.message.OffsetDeleteResponseData.OffsetDeleteResponseTopicCollection;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.quota.QuotaAlteration;
+import org.apache.kafka.common.quota.QuotaEntity;
+import org.apache.kafka.common.quota.QuotaFilter;
+import org.apache.kafka.common.requests.AlterClientQuotasResponse;
 import org.apache.kafka.common.requests.AlterPartitionReassignmentsResponse;
 import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.common.requests.CreateAclsResponse;
@@ -100,6 +104,7 @@ import org.apache.kafka.common.requests.DeleteRecordsResponse;
 import org.apache.kafka.common.requests.DeleteTopicsRequest;
 import org.apache.kafka.common.requests.DeleteTopicsResponse;
 import org.apache.kafka.common.requests.DescribeAclsResponse;
+import org.apache.kafka.common.requests.DescribeClientQuotasResponse;
 import org.apache.kafka.common.requests.DescribeConfigsResponse;
 import org.apache.kafka.common.requests.DescribeGroupsResponse;
 import org.apache.kafka.common.requests.ElectLeadersResponse;
@@ -637,6 +642,7 @@ public class KafkaAdminClientTest {
             env.kafkaClient().createPendingAuthenticationError(cluster.nodes().get(0),
                     TimeUnit.DAYS.toMillis(1));
             callAdminClientApisAndExpectAnAuthenticationError(env);
+            callClientQuotasApisAndExpectAnAuthenticationError(env);
         }
     }
 
@@ -688,6 +694,26 @@ public class KafkaAdminClientTest {
 
         try {
             env.adminClient().describeConfigs(Collections.singleton(new ConfigResource(ConfigResource.Type.BROKER, "0"))).all().get();
+            fail("Expected an authentication error.");
+        } catch (ExecutionException e) {
+            assertTrue("Expected an authentication error, but got " + Utils.stackTrace(e),
+                e.getCause() instanceof AuthenticationException);
+        }
+    }
+
+    private void callClientQuotasApisAndExpectAnAuthenticationError(AdminClientUnitTestEnv env) throws InterruptedException {
+        try {
+            env.adminClient().describeClientQuotas(Collections.emptyList()).entities().get();
+            fail("Expected an authentication error.");
+        } catch (ExecutionException e) {
+            assertTrue("Expected an authentication error, but got " + Utils.stackTrace(e),
+                e.getCause() instanceof AuthenticationException);
+        }
+
+        try {
+            QuotaEntity entity = new QuotaEntity(Collections.singletonMap(QuotaEntity.USER, "user"));
+            QuotaAlteration alteration = new QuotaAlteration(entity, asList(new QuotaAlteration.Op("consumer_byte_rate", 1000.0)));
+            env.adminClient().alterClientQuotas(asList(alteration)).all().get();
             fail("Expected an authentication error.");
         } catch (ExecutionException e) {
             assertTrue("Expected an authentication error, but got " + Utils.stackTrace(e),
@@ -2791,6 +2817,75 @@ public class KafkaAdminClientTest {
             // Now sleep the remaining time for the request timeout to expire
             time.sleep(60000);
             TestUtils.assertFutureThrows(result.future, TimeoutException.class);
+        }
+    }
+
+    private QuotaEntity newQuotaEntity(String... args) {
+        assertTrue(args.length % 2 == 0);
+
+        Map<String, String> entityMap = new HashMap<>(args.length / 2);
+        for (int index = 0; index < args.length; index += 2) {
+            entityMap.put(args[index], args[index + 1]);
+        }
+        return new QuotaEntity(entityMap);
+    }
+
+    @Test
+    public void testDescribeClientQuotas() throws Exception {
+        try (AdminClientUnitTestEnv env = mockClientEnv()) {
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+
+            final String customKey = "custom";
+            final String customValue = "custom-value";
+
+            Map<QuotaEntity, Map<String, Double>> responseData = new HashMap<>();
+            QuotaEntity entity1 = newQuotaEntity(QuotaEntity.USER, "user-1", customKey, customValue);
+            QuotaEntity entity2 = newQuotaEntity(QuotaEntity.USER, "user-2", customKey, customValue);
+            responseData.put(entity1, Collections.singletonMap("consumer_byte_rate", 10000.0));
+            responseData.put(entity2, Collections.singletonMap("producer_byte_rate", 20000.0));
+
+            env.kafkaClient().prepareResponse(new DescribeClientQuotasResponse(responseData, 0));
+
+            Collection<QuotaFilter> filters = asList(QuotaFilter.matchExact(customKey, customValue));
+
+            DescribeClientQuotasResult result = env.adminClient().describeClientQuotas(filters);
+            Map<QuotaEntity, Map<String, Double>> resultData = result.entities().get();
+            assertEquals(resultData.size(), 2);
+            assertTrue(resultData.containsKey(entity1));
+            Map<String, Double> config1 = resultData.get(entity1);
+            assertEquals(config1.size(), 1);
+            assertEquals(config1.get("consumer_byte_rate"), 10000.0, 1e-6);
+            assertTrue(resultData.containsKey(entity2));
+            Map<String, Double> config2 = resultData.get(entity2);
+            assertEquals(config2.size(), 1);
+            assertEquals(config2.get("producer_byte_rate"), 20000.0, 1e-6);
+        }
+    }
+
+    public void testAlterClientQuotas() throws Exception {
+        try (AdminClientUnitTestEnv env = mockClientEnv()) {
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+
+            QuotaEntity goodEntity = newQuotaEntity(QuotaEntity.USER, "user-1");
+            QuotaEntity unauthorizedEntity = newQuotaEntity(QuotaEntity.USER, "user-0");
+            QuotaEntity invalidEntity = newQuotaEntity("", "user-0");
+
+            Map<QuotaEntity, ApiError> responseData = new HashMap<>(2);
+            responseData.put(goodEntity, new ApiError(Errors.CLUSTER_AUTHORIZATION_FAILED, "Authorization failed"));
+            responseData.put(unauthorizedEntity, new ApiError(Errors.CLUSTER_AUTHORIZATION_FAILED, "Authorization failed"));
+            responseData.put(invalidEntity, new ApiError(Errors.INVALID_REQUEST, "Invalid quota entity"));
+
+            env.kafkaClient().prepareResponse(new AlterClientQuotasResponse(responseData, 0));
+
+            List<QuotaAlteration> entries = new ArrayList<>(3);
+            entries.add(new QuotaAlteration(goodEntity, Collections.singleton(new QuotaAlteration.Op("consumer_byte_rate", 10000.0))));
+            entries.add(new QuotaAlteration(unauthorizedEntity, Collections.singleton(new QuotaAlteration.Op("producer_byte_rate", 10000.0))));
+            entries.add(new QuotaAlteration(invalidEntity, Collections.singleton(new QuotaAlteration.Op("producer_byte_rate", 100.0))));
+
+            AlterClientQuotasResult result = env.adminClient().alterClientQuotas(entries);
+            result.values().get(goodEntity);
+            TestUtils.assertFutureError(result.values().get(unauthorizedEntity), ClusterAuthorizationException.class);
+            TestUtils.assertFutureError(result.values().get(invalidEntity), InvalidRequestException.class);
         }
     }
 

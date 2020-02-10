@@ -36,12 +36,14 @@ import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopic
 import org.apache.kafka.common.message.CreateTopicsResponseData.{CreatableTopicConfigs, CreatableTopicResult}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.ListenerName
+import org.apache.kafka.server.policy.{AlterConfigPolicy, CreateTopicPolicy}
+import org.apache.kafka.server.policy.CreateTopicPolicy.RequestMetadata
 import org.apache.kafka.common.protocol.Errors
+import org.apache.kafka.common.quota.{QuotaAlteration, QuotaEntity, QuotaFilter}
 import org.apache.kafka.common.requests.CreateTopicsRequest._
 import org.apache.kafka.common.requests.DescribeConfigsResponse.ConfigSource
 import org.apache.kafka.common.requests.{AlterConfigsRequest, ApiError, DescribeConfigsResponse}
-import org.apache.kafka.server.policy.{AlterConfigPolicy, CreateTopicPolicy}
-import org.apache.kafka.server.policy.CreateTopicPolicy.RequestMetadata
+import org.apache.kafka.common.utils.Sanitizer
 
 import scala.collection.{Map, mutable, _}
 import scala.collection.JavaConverters._
@@ -699,5 +701,177 @@ class AdminManager(val config: KafkaConfig,
     val source = if (allSynonyms.isEmpty) ConfigSource.DEFAULT_CONFIG else allSynonyms.head.source
     val readOnly = !DynamicBrokerConfig.AllDynamicConfigs.contains(name)
     new DescribeConfigsResponse.ConfigEntry(name, valueAsString, source, isSensitive, readOnly, synonyms.asJava)
+  }
+
+  private def entityToSanitizedUserClientId(entity: QuotaEntity): (Option[String], Option[String]) = {
+    if (entity.entries.isEmpty)
+      throw new InvalidRequestException("Invalid empty quota entity")
+
+    var user: Option[String] = None
+    var clientId: Option[String] = None
+    entity.entries().asScala.foreach { case (entityType, entityName) =>
+      val sanitizedEntityName = Some(Sanitizer.sanitize(entityName))
+      entityType match {
+        case QuotaEntity.USER => user = sanitizedEntityName
+        case QuotaEntity.CLIENT_ID => clientId = sanitizedEntityName
+        case _ => throw new InvalidRequestException(s"Unhandled quota entity type: ${entityType}")
+      }
+      if (entityName == "")
+        throw new InvalidRequestException(s"Empty ${entityType} not supported")
+    }
+    (user, clientId)
+  }
+
+  private def userClientIdToEntity(user: Option[String], clientId: Option[String]): QuotaEntity = {
+    new QuotaEntity((user.map(u => QuotaEntity.USER -> u) ++ clientId.map(c => QuotaEntity.CLIENT_ID -> c)).toMap.asJava)
+  }
+
+  def describeClientQuotas(filters: Seq[QuotaFilter], includeUnspecifiedTypes: Boolean): Map[QuotaEntity, Map[String, Double]] = {
+    var userFilter: Option[QuotaFilter] = None
+    var clientIdFilter: Option[QuotaFilter] = None
+    var otherFilter: Boolean = false
+    filters.foreach { filter =>
+      filter.entityType() match {
+        case QuotaEntity.USER =>
+          if (userFilter.isDefined)
+            throw new InvalidRequestException(s"Duplicate user filter entity type");
+          userFilter = Some(filter)
+        case QuotaEntity.CLIENT_ID =>
+          if (clientIdFilter.isDefined)
+            throw new InvalidRequestException(s"Duplicate client filter entity type");
+          clientIdFilter = Some(filter)
+        case "" =>
+          throw new InvalidRequestException(s"Unexpected empty filter entity type")
+        case _ =>
+          // Supplying other entity types is not yet supported.
+          otherFilter = true
+      }
+    }
+    if (otherFilter)
+      Map.empty
+    else
+      handleDescribeClientQuotas(userFilter, clientIdFilter, includeUnspecifiedTypes)
+  }
+
+  def handleDescribeClientQuotas(userFilter: Option[QuotaFilter], clientIdFilter: Option[QuotaFilter], includeUnspecifiedTypes: Boolean) = {
+    def wantExact(filter: Option[QuotaFilter]): Boolean = filter.map(_.isMatchExact).getOrElse(false)
+    def wantExcluded(filter: Option[QuotaFilter]): Boolean = filter.map(_ => false).getOrElse(!includeUnspecifiedTypes)
+    def sanitized(filter: Option[QuotaFilter]): String = filter.map(f => Sanitizer.sanitize(f.`match`)).getOrElse("")
+
+    val sanitizedUser = sanitized(userFilter)
+    val exactUser = wantExact(userFilter)
+    val excludeUser = wantExcluded(userFilter)
+
+    val sanitizedClientId = sanitized(clientIdFilter)
+    val exactClientId = wantExact(clientIdFilter)
+    val excludeClientId = wantExcluded(clientIdFilter)
+
+    val userEntries = if (exactUser && excludeClientId)
+      Map(((Some(userFilter.get.`match`), None) -> adminZkClient.fetchEntityConfig(ConfigType.User, sanitizedUser)))
+    else if (!excludeUser && !exactClientId)
+      adminZkClient.fetchAllEntityConfigs(ConfigType.User).map { case (name, props) =>
+        ((Some(Sanitizer.desanitize(name)), None) -> props)
+      }
+    else
+      Map.empty
+
+    val clientIdEntries = if (excludeUser && exactClientId)
+      Map(((None, Some(clientIdFilter.get.`match`)) -> adminZkClient.fetchEntityConfig(ConfigType.Client, sanitizedClientId)))
+    else if (!exactUser && !excludeClientId)
+      adminZkClient.fetchAllEntityConfigs(ConfigType.Client).map { case (name, props) =>
+        ((None, Some(Sanitizer.desanitize(name))) -> props)
+      }
+    else
+      Map.empty
+
+    val bothEntries = if (exactUser && exactClientId)
+      Map(((Some(userFilter.get.`match`), Some(clientIdFilter.get.`match`)) ->
+        adminZkClient.fetchEntityConfig(ConfigType.User, s"${sanitizedUser}/clients/${sanitizedClientId}")))
+    else if (!excludeUser && !excludeClientId)
+      adminZkClient.fetchAllChildEntityConfigs(ConfigType.User, ConfigType.Client).map { case (name, props) =>
+        val components = name.split("/")
+        if (components.size != 3 || components(1) != "clients")
+          throw new IllegalArgumentException(s"Unexpected config path: ${name}")
+        ((Some(Sanitizer.desanitize(components(0))), Some(Sanitizer.desanitize(components(2)))) -> props)
+      }
+    else
+      Map.empty
+
+    def matches(nameFilter: Option[QuotaFilter], name: Option[String]): Boolean = nameFilter match {
+      case Some(filter) =>
+        if (filter.isMatchExact())
+          name.map(_ == filter.`match`).getOrElse(false)
+        else if (filter.isMatchSpecified())
+          name.isDefined
+        else
+          throw new IllegalStateException(s"Unexected quota filter type")
+      case None =>
+        includeUnspecifiedTypes || !name.isDefined
+    }
+
+    def fromProps(props: Properties): Map[String, Double] = {
+      props.asScala.map { case (key, value) =>
+        val doubleValue = try value.toDouble catch {
+          case _: NumberFormatException =>
+            throw new IllegalStateException(s"Unexpected quota configuration value: ${key} -> ${value}")
+        }
+        (key -> doubleValue)
+      }
+    }
+
+    (userEntries ++ clientIdEntries ++ bothEntries).map { case ((u, c), p) =>
+      if (!p.isEmpty && matches(userFilter, u) && matches(clientIdFilter, c))
+        Some((userClientIdToEntity(u, c) -> fromProps(p)))
+      else
+        None
+    }.flatten.toMap
+  }
+
+  def alterClientQuotas(entries: Seq[QuotaAlteration], validateOnly: Boolean): Map[QuotaEntity, ApiError] = {
+    def alterEntityQuotas(entity: QuotaEntity, ops: Iterable[QuotaAlteration.Op]): Unit = {
+      val (path, configType, configKeys) = entityToSanitizedUserClientId(entity) match {
+        case (Some(user), Some(clientId)) => (user + "/clients/" + clientId, ConfigType.User, DynamicConfig.User.configKeys)
+        case (Some(user), None) => (user, ConfigType.User, DynamicConfig.User.configKeys)
+        case (None, Some(clientId)) => (clientId, ConfigType.Client, DynamicConfig.Client.configKeys)
+        case _ => throw new InvalidRequestException("Invalid empty quota entity")
+      }
+
+      val props = adminZkClient.fetchEntityConfig(configType, path)
+      ops.foreach { op =>
+        op.value match {
+          case null =>
+            props.remove(op.key)
+          case value => configKeys.get(op.key) match {
+            case null =>
+              throw new InvalidRequestException(s"Invalid configuration key ${op.key}")
+            case key => key.`type` match {
+              case ConfigDef.Type.DOUBLE =>
+                props.setProperty(op.key, value.toString)
+              case ConfigDef.Type.LONG =>
+                val epsilon = 1e-6
+                val longValue = (value + epsilon).toLong
+                if ((longValue.toDouble - value).abs > epsilon)
+                  throw new InvalidRequestException(s"Configuration ${op.key} must be a Long value")
+                props.setProperty(op.key, longValue.toString)
+              case _ =>
+                throw new IllegalStateException(s"Unexpected config type ${key.`type`}")
+            }
+          }
+        }
+      }
+      if (!validateOnly)
+        adminZkClient.changeConfigs(configType, path, props)
+    }
+    entries.map { entry =>
+      val apiError = try {
+        alterEntityQuotas(entry.entity, entry.ops.asScala)
+        ApiError.NONE
+      } catch {
+        case e: Throwable =>
+          info(s"Error encountered while updating client quotas", e)
+          ApiError.fromThrowable(e)
+      }
+      (entry.entity -> apiError)
+    }.toMap
   }
 }

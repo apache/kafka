@@ -33,6 +33,8 @@ import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicExistsException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
+import org.apache.kafka.common.quota.QuotaAlteration;
+import org.apache.kafka.common.quota.QuotaFilter;
 
 import java.time.Duration;
 import java.util.ArrayList;
@@ -456,6 +458,16 @@ public class MockAdminClient extends AdminClient {
     @Override
     public ListOffsetsResult listOffsets(Map<TopicPartition, OffsetSpec> topicPartitionOffsets, ListOffsetsOptions options) {
         throw new UnsupportedOperationException("Not implement yet");
+    }
+
+    @Override
+    public DescribeClientQuotasResult describeClientQuotas(Collection<QuotaFilter> filters, DescribeClientQuotasOptions options) {
+        throw new UnsupportedOperationException("Not implemented yet");
+    }
+
+    @Override
+    public AlterClientQuotasResult alterClientQuotas(Collection<QuotaAlteration> entries, AlterClientQuotasOptions options) {
+        throw new UnsupportedOperationException("Not implemented yet");
     }
 
     @Override
