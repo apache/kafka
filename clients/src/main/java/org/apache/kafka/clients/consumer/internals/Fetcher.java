@@ -1239,7 +1239,6 @@ public class Fetcher<K, V> implements Closeable {
                     });
                 }
 
-
                 nextCompletedFetch.initialized = true;
             } else if (error == Errors.NOT_LEADER_FOR_PARTITION ||
                        error == Errors.REPLICA_NOT_AVAILABLE ||

@@ -2385,7 +2385,7 @@ public class FetcherTest {
         buildFetcher();
 
         // Empty map
-        assertTrue(fetcher.offsetsForTimes(new HashMap<TopicPartition, Long>(), time.timer(100L)).isEmpty());
+        assertTrue(fetcher.offsetsForTimes(new HashMap<>(), time.timer(100L)).isEmpty());
         // Unknown Offset
         testGetOffsetsForTimesWithUnknownOffset();
         // Error code none with unknown offset
@@ -2419,6 +2419,28 @@ public class FetcherTest {
         assertFalse(subscriptions.isFetchable(tp0));
         assertFalse(subscriptions.hasValidPosition(tp0));
         assertEquals(0L, metadata.timeToNextUpdate(time.milliseconds()));
+    }
+
+    @Test
+    public void testGetOffsetByTimeFencedLeaderEpochCouldTriggerMetadataUpdate() {
+        buildFetcher();
+        subscriptions.assignFromUser(singleton(tp0));
+        client.updateMetadata(initialUpdateResponse);
+        assertEquals(1, metadata.fetch().nodes().size());
+
+        Map<String, Integer> partitionNumByTopic = new HashMap<>();
+        partitionNumByTopic.put(topicName, 1);
+        final int updatedNodeSize = 3;
+        MetadataResponse updatedMetadata = TestUtils.metadataUpdateWith(updatedNodeSize, partitionNumByTopic);
+        client.prepareMetadataUpdate(updatedMetadata);
+        client.prepareResponse(listOffsetResponse(Errors.FENCED_LEADER_EPOCH, ListOffsetRequest.LATEST_TIMESTAMP, -1L));
+        final long timestamp = 1L;
+        client.prepareResponse(listOffsetResponse(Errors.NONE, timestamp, 5L));
+        Map<TopicPartition, OffsetAndTimestamp> offsetAndTimestampMap =
+            fetcher.offsetsForTimes(Collections.singletonMap(tp0, timestamp), time.timer(Integer.MAX_VALUE));
+
+        assertEquals(Collections.singletonMap(tp0, new OffsetAndTimestamp(5L, timestamp)), offsetAndTimestampMap);
+        assertEquals(updatedNodeSize, metadata.fetch().nodes().size());
     }
 
     @Test
@@ -3843,12 +3865,9 @@ public class FetcherTest {
 
     private MockClient.RequestMatcher listOffsetRequestMatcher(final long timestamp) {
         // matches any list offset request with the provided timestamp
-        return new MockClient.RequestMatcher() {
-            @Override
-            public boolean matches(AbstractRequest body) {
-                ListOffsetRequest req = (ListOffsetRequest) body;
-                return timestamp == req.partitionTimestamps().get(tp0).timestamp;
-            }
+        return body -> {
+            ListOffsetRequest req = (ListOffsetRequest) body;
+            return timestamp == req.partitionTimestamps().get(tp0).timestamp;
         };
     }
 
