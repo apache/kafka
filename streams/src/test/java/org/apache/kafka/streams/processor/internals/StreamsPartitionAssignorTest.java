@@ -1596,9 +1596,8 @@ public class StreamsPartitionAssignorTest {
         shouldThrowIfPreVersionProbingSubscriptionAndFutureSubscriptionIsMixed(2);
     }
 
-    private ByteBuffer encodeFutureSubscription() {
-        final ByteBuffer buf = ByteBuffer.allocate(4 /* used version */
-                                                   + 4 /* supported version */);
+    private static ByteBuffer encodeFutureSubscription() {
+        final ByteBuffer buf = ByteBuffer.allocate(4 /* used version */ + 4 /* supported version */);
         buf.putInt(LATEST_SUPPORTED_VERSION + 1);
         buf.putInt(LATEST_SUPPORTED_VERSION + 1);
         return buf;
