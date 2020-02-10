@@ -603,6 +603,72 @@ class TransactionsTest extends KafkaServerTestHarness {
     }
   }
 
+  @Test
+  def testBumpTransactionalEpoch(): Unit = {
+    val producer = createTransactionalProducer("transactionalProducer", deliveryTimeoutMs = 1000)
+    val consumer = transactionalConsumers.head
+    try {
+      // Create a topic with RF=1 so that a single broker failure will render it unavailable
+      val testTopic = "test-topic"
+      createTopic(testTopic, numPartitions, 1, new Properties)
+      val partitionLeader = TestUtils.waitUntilLeaderIsKnown(servers, new TopicPartition(testTopic, 0))
+
+      producer.initTransactions()
+
+      producer.beginTransaction()
+      producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(testTopic, 0, "4", "4", willBeCommitted = true))
+      producer.commitTransaction()
+
+      var producerStateEntry =
+        servers(partitionLeader).logManager.getLog(new TopicPartition(testTopic, 0)).get.producerStateManager.activeProducers.head._2
+      val producerId = producerStateEntry.producerId
+      val initialProducerEpoch = producerStateEntry.producerEpoch
+
+      producer.beginTransaction()
+      producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic1, null, "2", "2", willBeCommitted = false))
+      producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(testTopic, 0, "4", "4", willBeCommitted = false))
+
+      killBroker(partitionLeader) // kill the partition leader to prevent the batch from being submitted
+      val failedFuture = producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(testTopic, 0, "3", "3", willBeCommitted = false))
+      Thread.sleep(2000) // Wait for the record to time out
+      restartDeadBrokers()
+
+      try {
+        failedFuture.get
+        fail("Should have received TimeoutException")
+      } catch {
+        case e: ExecutionException =>
+          assertTrue(e.getCause.isInstanceOf[TimeoutException])
+          producer.abortTransaction()
+      }
+
+      producer.beginTransaction()
+      producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic2, null, "2", "2", willBeCommitted = true))
+      producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic1, null, "4", "4", willBeCommitted = true))
+      producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(testTopic, 0, "1", "1", willBeCommitted = true))
+      producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(testTopic, 0, "3", "3", willBeCommitted = true))
+      producer.commitTransaction()
+
+      consumer.subscribe(List(topic1, topic2, testTopic).asJava)
+
+      val records = consumeRecords(consumer, 5)
+      records.foreach { record =>
+        TestUtils.assertCommittedAndGetValue(record)
+      }
+
+      // Producers can safely abort and continue after the last record of a transaction timing out, so it's possible to
+      // get here without having bumped the epoch. If bumping the epoch is possible, the producer will attempt to, so
+      // check there that the epoch has actually increased
+      producerStateEntry =
+        servers(partitionLeader).logManager.getLog(new TopicPartition(testTopic, 0)).get.producerStateManager.activeProducers(producerId)
+      assertTrue(producerStateEntry.producerEpoch > initialProducerEpoch)
+    } catch {
+      case t: Throwable => fail(t)
+    } finally {
+      producer.close(Duration.ZERO)
+    }
+  }
+
   private def sendTransactionalMessagesWithValueRange(producer: KafkaProducer[Array[Byte], Array[Byte]], topic: String,
                                                       start: Int, end: Int, willBeCommitted: Boolean): Unit = {
     for (i <- start until end) {
