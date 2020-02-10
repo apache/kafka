@@ -233,12 +233,6 @@ class ControllerContext {
     }.toSet
   }
 
-  def liveReplicasForTopic(topic: String): Set[PartitionAndReplica] = {
-    replicasForTopic(topic).filter { partitionAndReplica =>
-      isReplicaOnline(partitionAndReplica.replica, partitionAndReplica.topicPartition)
-    }
-  }
-
   /**
     * Get all online and offline replicas.
     *

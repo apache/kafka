@@ -260,18 +260,9 @@ class TopicDeletionManager(config: KafkaConfig,
    */
   private def onTopicDeletion(topics: Set[String]): Unit = {
     info(s"Topic deletion callback for ${topics.mkString(",")}")
-    val partitions = mutable.Set.empty[TopicPartition]
-    val mapBuilder = Map.newBuilder[String, Set[TopicPartition]]
-    topics.foreach { topic =>
-      val topicPartitions = controllerContext.partitionsForTopic(topic)
-      mapBuilder += topic -> topicPartitions
-      partitions ++= topicPartitions
-    }
-    val partitionsByTopic = mapBuilder.result
-
     val unseenTopicsForDeletion = topics -- controllerContext.topicsWithDeletionStarted
     if (unseenTopicsForDeletion.nonEmpty) {
-      val unseenPartitionsForDeletion = unseenTopicsForDeletion.flatMap(partitionsByTopic)
+      val unseenPartitionsForDeletion = unseenTopicsForDeletion.flatMap(controllerContext.partitionsForTopic)
       partitionStateMachine.handleStateChanges(unseenPartitionsForDeletion.toSeq, OfflinePartition)
       partitionStateMachine.handleStateChanges(unseenPartitionsForDeletion.toSeq, NonExistentPartition)
       // adding of unseenTopicsForDeletion to topics with deletion started must be done after the partition
@@ -280,9 +271,9 @@ class TopicDeletionManager(config: KafkaConfig,
     }
 
     // send update metadata so that brokers stop serving data for topics to be deleted
-    client.sendMetadataUpdate(partitions)
+    client.sendMetadataUpdate(topics.flatMap(controllerContext.partitionsForTopic))
 
-    onPartitionDeletion(partitionsByTopic)
+    onPartitionDeletion(topics)
   }
 
   /**
@@ -296,29 +287,30 @@ class TopicDeletionManager(config: KafkaConfig,
    * 3. Move all replicas to ReplicaDeletionStarted state. This will send StopReplicaRequest with deletePartition=true. And
    *    will delete all persistent data from all replicas of the respective partitions
    */
-  private def onPartitionDeletion(partitionsToBeDeleted: Map[String, Set[TopicPartition]]): Unit = {
-    val allDeadReplicasForTopic = mutable.ListBuffer.empty[PartitionAndReplica]
+  private def onPartitionDeletion(topicsToBeDeleted: Set[String]): Unit = {
+    val allDeadReplicas = mutable.ListBuffer.empty[PartitionAndReplica]
     val allReplicasForDeletionRetry = mutable.ListBuffer.empty[PartitionAndReplica]
     val allTopicsIneligibleForDeletion = mutable.Set.empty[String]
 
-    partitionsToBeDeleted.foreach { case (topic, partitions) =>
-      val replicasForTopicToBeDeleted = controllerContext.replicasForPartition(partitions)
-      val aliveReplicasForTopic = controllerContext.liveReplicasForTopic(topic)
-      val deadReplicasForTopic = replicasForTopicToBeDeleted -- aliveReplicasForTopic
-      val successfullyDeletedReplicas = controllerContext.replicasInState(topic, ReplicaDeletionSuccessful)
-      val replicasForDeletionRetry = aliveReplicasForTopic -- successfullyDeletedReplicas
+    topicsToBeDeleted.foreach { topic =>
+      val (aliveReplicas, deadReplicas) = controllerContext.replicasForTopic(topic).partition { r =>
+        controllerContext.isReplicaOnline(r.replica, r.topicPartition)
+      }
 
-      allDeadReplicasForTopic ++= deadReplicasForTopic
+      val successfullyDeletedReplicas = controllerContext.replicasInState(topic, ReplicaDeletionSuccessful)
+      val replicasForDeletionRetry = aliveReplicas -- successfullyDeletedReplicas
+
+      allDeadReplicas ++= deadReplicas
       allReplicasForDeletionRetry ++= replicasForDeletionRetry
 
-      if (deadReplicasForTopic.nonEmpty) {
-        debug(s"Dead Replicas (${deadReplicasForTopic.mkString(",")}) found for topic $topic")
+      if (deadReplicas.nonEmpty) {
+        debug(s"Dead Replicas (${deadReplicas.mkString(",")}) found for topic $topic")
         allTopicsIneligibleForDeletion += topic
       }
     }
 
     // move dead replicas directly to failed state
-    replicaStateMachine.handleStateChanges(allDeadReplicasForTopic, ReplicaDeletionIneligible)
+    replicaStateMachine.handleStateChanges(allDeadReplicas, ReplicaDeletionIneligible)
     // send stop replica to all followers that are not in the OfflineReplica state so they stop sending fetch requests to the leader
     replicaStateMachine.handleStateChanges(allReplicasForDeletionRetry, OfflineReplica)
     debug(s"Deletion started for replicas ${allReplicasForDeletionRetry.mkString(",")}")
@@ -330,7 +322,6 @@ class TopicDeletionManager(config: KafkaConfig,
   }
 
   private def resumeDeletions(): Unit = {
-    println("resumeDeletions")
     val topicsQueuedForDeletion = Set.empty[String] ++ controllerContext.topicsToBeDeleted
     val topicsEligibleForRetry = mutable.Set.empty[String]
     val topicsEligibleForDeletion = mutable.Set.empty[String]

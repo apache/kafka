@@ -61,29 +61,6 @@ class ControllerContextTest {
   }
 
   @Test
-  def testLiveReplicasForTopic(): Unit = {
-    assertEquals(Set(
-      PartitionAndReplica(tp1, 1),
-      PartitionAndReplica(tp1, 2),
-      PartitionAndReplica(tp1, 3),
-      PartitionAndReplica(tp2, 1),
-      PartitionAndReplica(tp2, 2),
-      PartitionAndReplica(tp2, 3)
-    ), context.liveReplicasForTopic(tp1.topic()))
-  }
-
-  @Test
-  def testLiveReplicasForTopicWithOfflineBroker(): Unit = {
-    context.removeLiveBrokers(Set(3))
-    assertEquals(Set(
-      PartitionAndReplica(tp1, 1),
-      PartitionAndReplica(tp1, 2),
-      PartitionAndReplica(tp2, 1),
-      PartitionAndReplica(tp2, 2)
-    ), context.liveReplicasForTopic(tp1.topic()))
-  }
-
-  @Test
   def testUpdatePartitionFullReplicaAssignmentUpdatesReplicaAssignment(): Unit = {
     val initialReplicas = Seq(4)
     context.updatePartitionFullReplicaAssignment(tp1, ReplicaAssignment(initialReplicas))
