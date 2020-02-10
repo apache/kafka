@@ -1026,6 +1026,7 @@ public class Fetcher<K, V> implements Closeable {
                        error == Errors.UNKNOWN_LEADER_EPOCH) {
                 log.debug("Attempt to fetch offsets for partition {} failed due to {}, retrying.",
                         topicPartition, error);
+                metadata.requestUpdate();
                 partitionsToRetry.add(topicPartition);
             } else if (error == Errors.UNKNOWN_TOPIC_OR_PARTITION) {
                 log.warn("Received unknown topic or partition error in ListOffset request for partition {}", topicPartition);
