@@ -296,14 +296,14 @@ public class InternalTopicManagerTest {
 
     private class MockCreateTopicsResult extends CreateTopicsResult {
 
-        MockCreateTopicsResult(Map<String, KafkaFuture<TopicMetadataAndConfig>> futures) {
+        MockCreateTopicsResult(final Map<String, KafkaFuture<TopicMetadataAndConfig>> futures) {
             super(futures);
         }
     }
 
     private class MockDescribeTopicsResult extends DescribeTopicsResult {
 
-        MockDescribeTopicsResult(Map<String, KafkaFuture<TopicDescription>> futures) {
+        MockDescribeTopicsResult(final Map<String, KafkaFuture<TopicDescription>> futures) {
             super(futures);
         }
     }
