@@ -1728,7 +1728,17 @@ public class StreamsPartitionAssignorTest {
 
     @Test
     public void shouldNotFailOnBranchedMultiLevelRepartitionConnectedTopology() {
-        // This test is converted from integration test BranchedMultiLevelRepartitionConnectedTopologyTest
+        // Test out a topology with 3 level of sub-topology as:
+        //            0
+        //          /   \
+        //         1    3
+        //          \  /
+        //           2
+        //  where each pair of the sub topology is connected by repartition topic.
+        //  The purpose of this test is to verify the robustness of the stream partition assignor algorithm,
+        //  especially whether it could build the repartition topic counts (step zero) with a complex topology.
+        //  The traversal path 0 -> 1 -> 2 -> 3 hits the case where sub-topology 2 will be initialized while its
+        //  parent 3 hasn't been initialized yet.
         final String applicationId = "test";
         builder.setApplicationId(applicationId);
         builder.addSource(null, "KSTREAM-SOURCE-0000000000",  null, null, null, "input-stream");
