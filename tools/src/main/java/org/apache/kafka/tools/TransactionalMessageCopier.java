@@ -239,15 +239,12 @@ public class TransactionalMessageCopier {
         });
     }
 
-    private static long messagesRemaining(KafkaConsumer<String, String> consumer, TopicPartition partition, AtomicBoolean messageCountNeeded) {
+    private static long messagesRemaining(KafkaConsumer<String, String> consumer, TopicPartition partition) {
         long currentPosition = consumer.position(partition);
-        Map<TopicPartition, Long> endOffsets = consumer.endOffsets(singleton(partition), Duration.ofMillis(200));
+        Map<TopicPartition, Long> endOffsets = consumer.endOffsets(singleton(partition));
         log.info("Partition {} current position: {}, endOffsets: {}", partition, currentPosition, endOffsets);
         if (endOffsets.containsKey(partition)) {
             return endOffsets.get(partition) - currentPosition;
-        }
-        if (messageCountNeeded != null) {
-            messageCountNeeded.set(true);
         }
         return 0;
     }
@@ -302,9 +299,6 @@ public class TransactionalMessageCopier {
         String topicName = parsedArgs.getString("inputTopic");
         final AtomicLong numMessagesProcessedSinceLastRebalance = new AtomicLong(0);
         final AtomicLong totalMessageProcessed = new AtomicLong(0);
-        // We sometimes would fail to fetch offsets within rebalance due to fenced leader epoch. Having a
-        // flag here helps reminding of the remaining message reset.
-        final AtomicBoolean messageCountNeeded = new AtomicBoolean(false);
         if (groupMode) {
             consumer.subscribe(Collections.singleton(topicName), new ConsumerRebalanceListener() {
                 @Override
@@ -314,9 +308,10 @@ public class TransactionalMessageCopier {
                 @Override
                 public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
                     remainingMessages.set(partitions.stream()
-                        .mapToLong(partition -> messagesRemaining(consumer, partition, messageCountNeeded)).sum());
+                        .mapToLong(partition -> messagesRemaining(consumer, partition)).sum());
                     log.info("Remaining messages set to {} on rebalance complete", remainingMessages);
                     numMessagesProcessedSinceLastRebalance.set(0);
+                    // We use message cap for remaining here as the remainingMessages are not set yet.
                     System.out.println(statusAsJson(totalMessageProcessed.get(),
                         numMessagesProcessedSinceLastRebalance.get(), remainingMessages.get(), transactionalId, "RebalanceComplete"));
                 }
@@ -324,7 +319,7 @@ public class TransactionalMessageCopier {
         } else {
             TopicPartition inputPartition = new TopicPartition(topicName, parsedArgs.getInt("inputPartition"));
             consumer.assign(singleton(inputPartition));
-            remainingMessages.set(Math.min(messagesRemaining(consumer, inputPartition, messageCountNeeded), remainingMessages.get()));
+            remainingMessages.set(Math.min(messagesRemaining(consumer, inputPartition), remainingMessages.get()));
         }
 
         final boolean enableRandomAborts = parsedArgs.getBoolean("enableRandomAborts");
@@ -390,13 +385,6 @@ public class TransactionalMessageCopier {
                     } catch (KafkaException e) {
                         producer.abortTransaction();
                         resetToLastCommittedPositions(consumer);
-                    }
-
-                    // We haven't cleared out the remaining message count, need another reset.
-                    if (messageCountNeeded.get()) {
-                        messageCountNeeded.set(false);
-                        remainingMessages.set(consumer.assignment().stream()
-                            .mapToLong(partition -> messagesRemaining(consumer, partition, messageCountNeeded)).sum());
                     }
                 }
             }
