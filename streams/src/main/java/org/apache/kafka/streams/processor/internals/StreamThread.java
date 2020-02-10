@@ -1153,6 +1153,10 @@ public class StreamThread extends Thread {
             standbyTasksMetadata);
     }
 
+    public Map<TaskId, Task> activeTaskMap() {
+        return taskManager.activeTaskMap();
+    }
+
     public List<Task> activeTasks() {
         return taskManager.activeTaskIterable();
     }

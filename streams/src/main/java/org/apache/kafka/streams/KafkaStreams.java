@@ -1160,27 +1160,25 @@ public class KafkaStreams implements AutoCloseable {
 
 
     /**
-     * @deprecated since 2.5 release; use {@link #store(StoreQueryParams)}  instead
+     * @deprecated since 2.5 release; use {@link #store(StoreQueryParameters)}  instead
      */
     @Deprecated
     public <T> T store(final String storeName, final QueryableStoreType<T> queryableStoreType) {
-        return store(StoreQueryParams.fromNameAndType(storeName, queryableStoreType));
+        return store(StoreQueryParameters.fromNameAndType(storeName, queryableStoreType));
     }
 
     /**
-     * Get a facade wrapping the local {@link StateStore} instances with the provided {@link StoreQueryParams}.
-     * StoreQueryParams need required parameters to be set, which are {@code storeName} and if
-     * type is accepted by the provided {@link QueryableStoreType#accepts(StateStore) queryableStoreType}.
+     * Get a facade wrapping the local {@link StateStore} instances with the provided {@link StoreQueryParameters}.
      * The returned object can be used to query the {@link StateStore} instances.
      *
-     * @param storeQueryParams   to set the optional parameters to fetch type of stores user wants to fetch when a key is queried
+     * @param storeQueryParameters   the parameters used to fetch a queryable store
      * @return A facade wrapping the local {@link StateStore} instances
      * @throws InvalidStateStoreException if Kafka Streams is (re-)initializing or a store with {@code storeName} and
      * {@code queryableStoreType} doesn't exist
      */
-    public <T> T store(final StoreQueryParams<T> storeQueryParams) {
+    public <T> T store(final StoreQueryParameters<T> storeQueryParameters) {
         validateIsRunningOrRebalancing();
-        return queryableStoreProvider.getStore(storeQueryParams);
+        return queryableStoreProvider.getStore(storeQueryParameters);
     }
 
     /**

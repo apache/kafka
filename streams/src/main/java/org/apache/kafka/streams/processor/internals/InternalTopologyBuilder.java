@@ -1144,6 +1144,10 @@ public class InternalTopologyBuilder {
         return results;
     }
 
+    public Collection<String> sourceTopicsForStore(final String storeName) {
+        return maybeDecorateInternalSourceTopics(stateStoreNameToSourceTopics.get(storeName));
+    }
+
     public synchronized Collection<Set<String>> copartitionGroups() {
         // compute transitive closures of copartitionGroups to relieve registering code to know all members
         // of a copartitionGroup at the same time

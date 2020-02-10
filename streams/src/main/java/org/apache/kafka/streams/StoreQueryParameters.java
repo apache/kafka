@@ -21,60 +21,51 @@ import org.apache.kafka.streams.state.QueryableStoreType;
 import java.util.Objects;
 
 /**
- * Represents all the query options that a user can provide to state what kind of stores it is expecting.
- * The options would be whether a user would want to enable/disable stale stores
- * or whether it knows the list of partitions that it specifically wants to fetch.
- * If this information is not provided the default behavior is to fetch the stores for all the partitions
- * available on that instance for that particular store name.
- * It contains a partition, which for a point queries can be populated from the {@link KeyQueryMetadata}.
+ * {@code StoreQueryParameters} allows you to pass a variety of parameters when fetching a store for interactive query.
  */
-public class StoreQueryParams<T> {
+public class StoreQueryParameters<T> {
 
     private Integer partition;
     private boolean staleStores;
     private final String storeName;
     private final QueryableStoreType<T> queryableStoreType;
 
-    private StoreQueryParams(final String storeName, final QueryableStoreType<T>  queryableStoreType) {
+    private StoreQueryParameters(final String storeName, final QueryableStoreType<T>  queryableStoreType, final Integer partition, final boolean staleStores) {
         this.storeName = storeName;
         this.queryableStoreType = queryableStoreType;
+        this.partition = partition;
+        this.staleStores = staleStores;
     }
 
-    public static <T> StoreQueryParams<T> fromNameAndType(final String storeName,
+    public static <T> StoreQueryParameters<T> fromNameAndType(final String storeName,
                                                           final QueryableStoreType<T>  queryableStoreType) {
-        return new StoreQueryParams<T>(storeName, queryableStoreType);
+        return new StoreQueryParameters<T>(storeName, queryableStoreType, null, false);
     }
 
     /**
      * Set a specific partition that should be queried exclusively.
      *
-     * @param partition   The specific integer partition to be fetched from the stores list by using {@link StoreQueryParams}.
+     * @param partition   The specific integer partition to be fetched from the stores list by using {@link StoreQueryParameters}.
      *
-     * @return String storeName
+     * @return StoreQueryParameters a new {@code StoreQueryParameters} instance configured with the specified partition
      */
-    public StoreQueryParams<T> withPartition(final Integer partition) {
-        final StoreQueryParams<T> storeQueryParams = StoreQueryParams.fromNameAndType(this.storeName(), this.queryableStoreType());
-        storeQueryParams.partition = partition;
-        storeQueryParams.staleStores = this.staleStores;
-        return storeQueryParams;
+    public StoreQueryParameters<T> withPartition(final Integer partition) {
+        return new StoreQueryParameters<T>(storeName, queryableStoreType, partition, staleStores);
     }
 
     /**
      * Enable querying of stale state stores, i.e., allow to query active tasks during restore as well as standby tasks.
      *
-     * @return String storeName
+     * @return StoreQueryParameters a new {@code StoreQueryParameters} instance configured with serving from stale stores enabled
      */
-    public StoreQueryParams<T> enableStaleStores() {
-        final StoreQueryParams<T> storeQueryParams = StoreQueryParams.fromNameAndType(this.storeName(), this.queryableStoreType());
-        storeQueryParams.partition = this.partition;
-        storeQueryParams.staleStores = true;
-        return storeQueryParams;
+    public StoreQueryParameters<T> enableStaleStores() {
+        return new StoreQueryParameters<T>(storeName, queryableStoreType, partition, true);
     }
 
     /**
-     * Get the store name for which key is queried by the user.
+     * Get the name of the state store that should be queried.
      *
-     * @return String storeName
+     * @return String state store name
      */
     public String storeName() {
         return storeName;
@@ -83,16 +74,16 @@ public class StoreQueryParams<T> {
     /**
      * Get the queryable store type for which key is queried by the user.
      *
-     * @return QueryableStoreType queryableStoreType
+     * @return QueryableStoreType type of queryable store
      */
     public QueryableStoreType<T> queryableStoreType() {
         return queryableStoreType;
     }
 
     /**
-     * Get the partition to be used to fetch list of stores.
+     * Get the store partition that will be queried.
      * If the method returns {@code null}, it would mean that no specific partition has been requested,
-     * so all the local partitions for the store will be returned.
+     * so all the local partitions for the store will be queried.
      *
      * @return Integer partition
      */
@@ -111,19 +102,19 @@ public class StoreQueryParams<T> {
 
     @Override
     public boolean equals(final Object obj) {
-        if (!(obj instanceof StoreQueryParams)) {
+        if (!(obj instanceof StoreQueryParameters)) {
             return false;
         }
-        final StoreQueryParams storeQueryParams = (StoreQueryParams) obj;
-        return Objects.equals(storeQueryParams.partition, partition)
-                && Objects.equals(storeQueryParams.staleStores, staleStores)
-                && Objects.equals(storeQueryParams.storeName, storeName)
-                && Objects.equals(storeQueryParams.queryableStoreType, queryableStoreType);
+        final StoreQueryParameters storeQueryParameters = (StoreQueryParameters) obj;
+        return Objects.equals(storeQueryParameters.partition, partition)
+                && Objects.equals(storeQueryParameters.staleStores, staleStores)
+                && Objects.equals(storeQueryParameters.storeName, storeName)
+                && Objects.equals(storeQueryParameters.queryableStoreType, queryableStoreType);
     }
 
     @Override
     public String toString() {
-        return "StoreQueryParams {" +
+        return "StoreQueryParameters {" +
                 "partition=" + partition +
                 ", staleStores=" + staleStores +
                 ", storeName=" + storeName +
