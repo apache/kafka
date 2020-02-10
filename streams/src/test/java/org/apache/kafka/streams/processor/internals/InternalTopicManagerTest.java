@@ -24,6 +24,7 @@ import org.apache.kafka.clients.admin.MockAdminClient;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartitionInfo;
 import org.apache.kafka.common.config.ConfigResource;
@@ -161,16 +162,16 @@ public class InternalTopicManagerTest {
         // let the first describe succeed on topic, and fail on topic2, and then let creation throws topics-existed;
         // it should retry with just topic2 and then let it succeed
         EasyMock.expect(admin.describeTopics(Utils.mkSet(topic, topic2)))
-            .andReturn(new DescribeTopicsResult(Utils.mkMap(
+            .andReturn(new MockDescribeTopicsResult(Utils.mkMap(
                 Utils.mkEntry(topic, topicDescriptionSuccessFuture),
                 Utils.mkEntry(topic2, topicDescriptionFailFuture)
             ))).once();
         EasyMock.expect(admin.createTopics(Collections.singleton(new NewTopic(topic2, Optional.of(1), Optional.of((short) 1))
             .configs(Utils.mkMap(Utils.mkEntry(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_COMPACT),
                                  Utils.mkEntry(TopicConfig.MESSAGE_TIMESTAMP_TYPE_CONFIG, "CreateTime"))))))
-            .andReturn(new CreateTopicsResult(Collections.singletonMap(topic2, topicCreationFuture))).once();
+            .andReturn(new MockCreateTopicsResult(Collections.singletonMap(topic2, topicCreationFuture))).once();
         EasyMock.expect(admin.describeTopics(Collections.singleton(topic2)))
-            .andReturn(new DescribeTopicsResult(Collections.singletonMap(topic2, topicDescriptionSuccessFuture)));
+            .andReturn(new MockDescribeTopicsResult(Collections.singletonMap(topic2, topicDescriptionSuccessFuture)));
 
         EasyMock.replay(admin);
 
@@ -293,4 +294,17 @@ public class InternalTopicManagerTest {
         }
     }
 
+    private class MockCreateTopicsResult extends CreateTopicsResult {
+
+        MockCreateTopicsResult(Map<String, KafkaFuture<TopicMetadataAndConfig>> futures) {
+            super(futures);
+        }
+    }
+
+    private class MockDescribeTopicsResult extends DescribeTopicsResult {
+
+        MockDescribeTopicsResult(Map<String, KafkaFuture<TopicDescription>> futures) {
+            super(futures);
+        }
+    }
 }

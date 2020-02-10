@@ -35,7 +35,7 @@ public class CreateTopicsResult {
 
     private final Map<String, KafkaFuture<TopicMetadataAndConfig>> futures;
 
-    public CreateTopicsResult(Map<String, KafkaFuture<TopicMetadataAndConfig>> futures) {
+    protected CreateTopicsResult(Map<String, KafkaFuture<TopicMetadataAndConfig>> futures) {
         this.futures = futures;
     }
 

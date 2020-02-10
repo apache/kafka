@@ -34,7 +34,7 @@ import java.util.concurrent.ExecutionException;
 public class DescribeTopicsResult {
     private final Map<String, KafkaFuture<TopicDescription>> futures;
 
-    public DescribeTopicsResult(Map<String, KafkaFuture<TopicDescription>> futures) {
+    protected DescribeTopicsResult(Map<String, KafkaFuture<TopicDescription>> futures) {
         this.futures = futures;
     }
 
