@@ -711,6 +711,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                         } else {
                             log.trace("Removing connector config {} {}", connName, configState.connectors());
                             configBackingStore.removeConnectorConfig(connName);
+                            resetConnectorActiveTopics(connName);
                             callback.onCompletion(null, new Created<ConnectorInfo>(false, null));
                         }
                         return null;

@@ -21,6 +21,7 @@ import org.apache.kafka.common.config.Config;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigValue;
 import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.connector.ConnectorContext;
 import org.apache.kafka.connect.connector.policy.ConnectorClientConfigOverridePolicy;
@@ -34,6 +35,7 @@ import org.apache.kafka.connect.runtime.MockConnectMetrics;
 import org.apache.kafka.connect.runtime.SinkConnectorConfig;
 import org.apache.kafka.connect.runtime.TargetState;
 import org.apache.kafka.connect.runtime.TaskConfig;
+import org.apache.kafka.connect.runtime.TopicStatus;
 import org.apache.kafka.connect.runtime.Worker;
 import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.runtime.WorkerConfigTransformer;
@@ -74,6 +76,7 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
@@ -118,21 +121,24 @@ public class DistributedHerderTest {
     private static final ConnectorTaskId TASK2 = new ConnectorTaskId(CONN1, 2);
     private static final Integer MAX_TASKS = 3;
     private static final Map<String, String> CONN1_CONFIG = new HashMap<>();
+    private static final String FOO_TOPIC = "foo";
+    private static final String BAR_TOPIC = "bar";
+    private static final String BAZ_TOPIC = "baz";
     static {
         CONN1_CONFIG.put(ConnectorConfig.NAME_CONFIG, CONN1);
         CONN1_CONFIG.put(ConnectorConfig.TASKS_MAX_CONFIG, MAX_TASKS.toString());
-        CONN1_CONFIG.put(SinkConnectorConfig.TOPICS_CONFIG, "foo,bar");
+        CONN1_CONFIG.put(SinkConnectorConfig.TOPICS_CONFIG, Utils.join(Arrays.asList(FOO_TOPIC, BAR_TOPIC), ","));
         CONN1_CONFIG.put(ConnectorConfig.CONNECTOR_CLASS_CONFIG, BogusSourceConnector.class.getName());
     }
     private static final Map<String, String> CONN1_CONFIG_UPDATED = new HashMap<>(CONN1_CONFIG);
     static {
-        CONN1_CONFIG_UPDATED.put(SinkConnectorConfig.TOPICS_CONFIG, "foo,bar,baz");
+        CONN1_CONFIG_UPDATED.put(SinkConnectorConfig.TOPICS_CONFIG, Utils.join(Arrays.asList(FOO_TOPIC, BAR_TOPIC, BAZ_TOPIC), ","));
     }
     private static final Map<String, String> CONN2_CONFIG = new HashMap<>();
     static {
         CONN2_CONFIG.put(ConnectorConfig.NAME_CONFIG, CONN2);
         CONN2_CONFIG.put(ConnectorConfig.TASKS_MAX_CONFIG, MAX_TASKS.toString());
-        CONN2_CONFIG.put(SinkConnectorConfig.TOPICS_CONFIG, "foo,bar");
+        CONN2_CONFIG.put(SinkConnectorConfig.TOPICS_CONFIG, Utils.join(Arrays.asList(FOO_TOPIC, BAR_TOPIC), ","));
         CONN2_CONFIG.put(ConnectorConfig.CONNECTOR_CLASS_CONFIG, BogusSourceConnector.class.getName());
     }
     private static final Map<String, String> TASK_CONFIG = new HashMap<>();
@@ -766,6 +772,13 @@ public class DistributedHerderTest {
         member.wakeup();
         PowerMock.expectLastCall();
         configBackingStore.removeConnectorConfig(CONN1);
+        PowerMock.expectLastCall();
+        TopicStatus fooStatus = new TopicStatus(FOO_TOPIC, CONN1, 0, time.milliseconds());
+        TopicStatus barStatus = new TopicStatus(BAR_TOPIC, CONN1, 0, time.milliseconds());
+        EasyMock.expect(statusBackingStore.getAllTopics(EasyMock.eq(CONN1))).andReturn(new HashSet<>(Arrays.asList(fooStatus, barStatus)));
+        statusBackingStore.deleteTopic(EasyMock.eq(CONN1), EasyMock.eq(FOO_TOPIC));
+        PowerMock.expectLastCall();
+        statusBackingStore.deleteTopic(EasyMock.eq(CONN1), EasyMock.eq(BAR_TOPIC));
         PowerMock.expectLastCall();
         putConnectorCallback.onCompletion(null, new Herder.Created<ConnectorInfo>(false, null));
         PowerMock.expectLastCall();
