@@ -268,8 +268,8 @@ class ZooKeeperClient(connectString: String,
   // If this method is changed, the documentation for registerZNodeChangeHandler and/or registerZNodeChildChangeHandler
   // may need to be updated.
   private def shouldWatch(request: AsyncRequest): Boolean = request match {
-    case _: GetChildrenRequest => request.registerWatch && zNodeChildChangeHandlers.contains(request.path)
-    case _: ExistsRequest | _: GetDataRequest => request.registerWatch && zNodeChangeHandlers.contains(request.path)
+    case GetChildrenRequest(_, registerWatch, _) => registerWatch && zNodeChildChangeHandlers.contains(request.path)
+    case _: ExistsRequest | _: GetDataRequest => zNodeChangeHandlers.contains(request.path)
     case _ => throw new IllegalArgumentException(s"Request $request is not watchable")
   }
 
@@ -497,50 +497,35 @@ sealed trait AsyncRequest {
   type Response <: AsyncResponse
   def path: String
   def ctx: Option[Any]
-  def registerWatch: Boolean
 }
 
 case class CreateRequest(path: String, data: Array[Byte], acl: Seq[ACL], createMode: CreateMode,
                          ctx: Option[Any] = None) extends AsyncRequest {
   type Response = CreateResponse
-
-  override def registerWatch: Boolean = true
 }
 
 case class DeleteRequest(path: String, version: Int, ctx: Option[Any] = None) extends AsyncRequest {
   type Response = DeleteResponse
-
-  override def registerWatch: Boolean = true
 }
 
 case class ExistsRequest(path: String, ctx: Option[Any] = None) extends AsyncRequest {
   type Response = ExistsResponse
-
-  override def registerWatch: Boolean = true
 }
 
 case class GetDataRequest(path: String, ctx: Option[Any] = None) extends AsyncRequest {
   type Response = GetDataResponse
-
-  override def registerWatch: Boolean = true
 }
 
 case class SetDataRequest(path: String, data: Array[Byte], version: Int, ctx: Option[Any] = None) extends AsyncRequest {
   type Response = SetDataResponse
-
-  override def registerWatch: Boolean = true
 }
 
 case class GetAclRequest(path: String, ctx: Option[Any] = None) extends AsyncRequest {
   type Response = GetAclResponse
-
-  override def registerWatch: Boolean = true
 }
 
 case class SetAclRequest(path: String, acl: Seq[ACL], version: Int, ctx: Option[Any] = None) extends AsyncRequest {
   type Response = SetAclResponse
-
-  override def registerWatch: Boolean = true
 }
 
 case class GetChildrenRequest(path: String, registerWatch: Boolean = true, ctx: Option[Any] = None) extends AsyncRequest {
@@ -551,7 +536,6 @@ case class MultiRequest(zkOps: Seq[ZkOp], ctx: Option[Any] = None) extends Async
   type Response = MultiResponse
 
   override def path: String = null
-  override def registerWatch: Boolean = true
 }
 
 
