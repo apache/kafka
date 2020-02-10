@@ -632,9 +632,13 @@ public class TransactionManager {
         }
     }
 
-    private void maybeUpdateLastAckedSequence(TopicPartition topicPartition, int sequence) {
-        if (sequence > lastAckedSequence(topicPartition).orElse(NO_LAST_ACKED_SEQUENCE_NUMBER))
+    private int maybeUpdateLastAckedSequence(TopicPartition topicPartition, int sequence) {
+        if (sequence > lastAckedSequence(topicPartition).orElse(NO_LAST_ACKED_SEQUENCE_NUMBER)) {
             topicPartitionBookkeeper.getPartition(topicPartition).lastAckedSequence = sequence;
+            return sequence;
+        }
+
+        return NO_LAST_ACKED_SEQUENCE_NUMBER;
     }
 
     synchronized OptionalInt lastAckedSequence(TopicPartition topicPartition) {
@@ -664,11 +668,11 @@ public class TransactionManager {
     }
 
     public synchronized void handleCompletedBatch(ProducerBatch batch, ProduceResponse.PartitionResponse response) {
-        maybeUpdateLastAckedSequence(batch.topicPartition, batch.baseSequence() + batch.recordCount - 1);
+        int lastAckedSequence = maybeUpdateLastAckedSequence(batch.topicPartition, batch.lastSequence());
         log.debug("ProducerId: {}; Set last ack'd sequence number for topic-partition {} to {}",
                 batch.producerId(),
                 batch.topicPartition,
-                lastAckedSequence(batch.topicPartition).orElse(-1));
+                lastAckedSequence);
 
         updateLastAckedOffset(response, batch);
         removeInFlightBatch(batch);
@@ -777,7 +781,7 @@ public class TransactionManager {
     }
 
     synchronized void markSequenceUnresolved(ProducerBatch batch) {
-        int nextSequence = batch.baseSequence() + batch.recordCount;
+        int nextSequence = batch.lastSequence() + 1;
         log.debug("Marking partition {} unresolved with next sequence number {}", batch.topicPartition, nextSequence);
         partitionsWithUnresolvedSequences.put(batch.topicPartition, nextSequence);
     }

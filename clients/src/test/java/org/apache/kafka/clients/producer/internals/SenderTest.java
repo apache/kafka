@@ -1162,8 +1162,6 @@ public class SenderTest {
         sender.runOnce(); // now expire the first batch.
         assertFutureFailure(request1, TimeoutException.class);
         assertTrue(txnManager.hasUnresolvedSequence(tp0));
-        // let's enqueue another batch, which should not be dequeued until the unresolved state is clear.
-        appendToAccumulator(tp0);
 
         // Loop once and confirm that the transaction manager does not enter a fatal error state
         sender.runOnce();

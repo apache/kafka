@@ -456,6 +456,10 @@ public final class ProducerBatch {
         return recordsBuilder.baseSequence();
     }
 
+    public int lastSequence() {
+        return recordsBuilder.baseSequence() + recordsBuilder.numRecords() - 1;
+    }
+
     public boolean hasSequence() {
         return baseSequence() != RecordBatch.NO_SEQUENCE;
     }

@@ -2793,7 +2793,7 @@ public class TransactionManagerTest {
     }
 
     @Test
-    public void testBumpTransactionalEpochOnError() throws InterruptedException {
+    public void testBumpTransactionalEpochOnAbortableError() throws InterruptedException {
         final long pid = 13131L;
         final short initialEpoch = 1;
         final short bumpedEpoch = initialEpoch + 1;
@@ -3159,7 +3159,7 @@ public class TransactionManagerTest {
     }
 
     @Test
-    public void testCanBumpEpochDuringCoordinatorDisconnect() throws InterruptedException {
+    public void testCanBumpEpochDuringCoordinatorDisconnect() {
         doInitTransactions(0, (short) 0);
         runUntil(() -> transactionManager.coordinator(CoordinatorType.TRANSACTION) != null);
         assertTrue(transactionManager.canBumpEpoch());
