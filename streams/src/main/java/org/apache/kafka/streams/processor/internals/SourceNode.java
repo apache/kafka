@@ -66,6 +66,11 @@ public class SourceNode<K, V> extends ProcessorNode<K, V> {
     @SuppressWarnings("unchecked")
     @Override
     public void init(final InternalProcessorContext context) {
+        // It is important to first create the sensor before calling init on the
+        // parent object. Otherwise due to backwards compatibility an empty sensor
+        // without parent is created with the same name.
+        // Once the backwards compatibility is not needed anymore it might be possible to
+        // change this.
         processAtSourceSensor = ProcessorNodeMetrics.processorAtSourceSensorOrForwardSensor(
             Thread.currentThread().getName(),
             context.taskId().toString(),
