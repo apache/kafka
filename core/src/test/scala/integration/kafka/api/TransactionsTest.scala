@@ -659,12 +659,4 @@ class TransactionsTest extends KafkaServerTestHarness {
     transactionalProducers += producer
     producer
   }
-
-  /* private def createAdminClient(): Admin = {
-    val config = new util.HashMap[String, Object]
-    config.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG,
-      TestUtils.getBrokerListStrFromServers(servers))
-    val adminClient = Admin.create(config)
-    adminClient
-  } */
 }

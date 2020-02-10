@@ -985,6 +985,14 @@ public class TransactionManager {
         return isTransactional() && currentState == State.READY;
     }
 
+    void handleCoordinatorReady() {
+        NodeApiVersions nodeApiVersions = transactionCoordinator != null ?
+                apiVersions.get(transactionCoordinator.idString()) :
+                null;
+        this.coordinatorSupportsBumpingEpoch =  nodeApiVersions != null &&
+                nodeApiVersions.apiVersion(ApiKeys.INIT_PRODUCER_ID).maxVersion >= 3;
+    }
+
     private void transitionTo(State target) {
         transitionTo(target, null);
     }
@@ -1119,7 +1127,9 @@ public class TransactionManager {
             return true;
         }
 
-        NodeApiVersions nodeApiVersions = apiVersions.get(transactionCoordinator.idString());
+        NodeApiVersions nodeApiVersions = transactionCoordinator != null ?
+                apiVersions.get(transactionCoordinator.idString()) :
+                null;
         return nodeApiVersions != null && nodeApiVersions.apiVersion(ApiKeys.INIT_PRODUCER_ID).maxVersion >= 3;
     }
 

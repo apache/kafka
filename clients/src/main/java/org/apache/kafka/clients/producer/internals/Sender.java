@@ -514,6 +514,10 @@ public class Sender implements Runnable {
                 client.leastLoadedNode(time.milliseconds());
 
         if (node != null && NetworkClientUtils.awaitReady(client, node, time, requestTimeoutMs)) {
+            if (coordinatorType == FindCoordinatorRequest.CoordinatorType.TRANSACTION) {
+                // Indicate to the transaction manager that the coordinator is ready, allowing it to check ApiVersions
+                transactionManager.handleCoordinatorReady();
+            }
             return node;
         }
         return null;
