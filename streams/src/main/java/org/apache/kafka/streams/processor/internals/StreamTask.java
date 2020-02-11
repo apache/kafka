@@ -496,9 +496,24 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         }
 
         final Map<TopicPartition, OffsetAndMetadata> consumedOffsetsAndMetadata = new HashMap<>(consumedOffsets.size());
+
         for (final Map.Entry<TopicPartition, Long> entry : consumedOffsets.entrySet()) {
             final TopicPartition partition = entry.getKey();
-            final long offset = entry.getValue() + 1;
+            Long offset = partitionGroup.headRecordOffset(partition);
+            if (offset == null) {
+                try {
+                    offset = consumer.position(partition);
+                } catch (final TimeoutException error) {
+                    // the `consumer.position()` call should never block, because we know that we did process data
+                    // for the requested partition and thus the consumer should have a valid local position
+                    // that it can return immediately
+
+                    // hence, a `TimeoutException` indicates a bug and thus we rethrow it as fatal `IllegalStateException`
+                    throw new IllegalStateException(error);
+                } catch (final KafkaException fatal) {
+                    throw new StreamsException(fatal);
+                }
+            }
             final long partitionTime = partitionTimes.get(partition);
             consumedOffsetsAndMetadata.put(partition, new OffsetAndMetadata(offset, encodeTimestamp(partitionTime)));
         }
@@ -621,6 +636,8 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
             try {
                 commit(false, partitionTimes);
             } finally {
+                partitionGroup.clear();
+
                 if (eosEnabled) {
                     stateMgr.checkpoint(activeTaskCheckpointableOffsets());
 
@@ -676,8 +693,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
 
     private void closeTopology() {
         log.trace("Closing processor topology");
-
-        partitionGroup.clear();
 
         // close the processors
         // make sure close() is called for each node even when there is a RuntimeException

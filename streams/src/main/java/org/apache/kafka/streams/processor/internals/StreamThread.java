@@ -754,6 +754,13 @@ public class StreamThread extends Thread {
             throw new StreamsException(logPrefix + "Unexpected state " + state + " during normal iteration");
         }
 
+        final long pollLatency = advanceNowAndComputeLatency();
+
+        if (records != null && !records.isEmpty()) {
+            pollSensor.record(pollLatency, now);
+            addRecordsToTasks(records);
+        }
+
         // Shutdown hook could potentially be triggered and transit the thread state to PENDING_SHUTDOWN during #pollRequests().
         // The task manager internal states could be uninitialized if the state transition happens during #onPartitionsAssigned().
         // Should only proceed when the thread is still running after #pollRequests(), because no external state mutation
@@ -761,13 +768,6 @@ public class StreamThread extends Thread {
         if (!isRunning()) {
             log.debug("State already transits to {}, skipping the run once call after poll request", state);
             return;
-        }
-
-        final long pollLatency = advanceNowAndComputeLatency();
-
-        if (records != null && !records.isEmpty()) {
-            pollSensor.record(pollLatency, now);
-            addRecordsToTasks(records);
         }
 
         // only try to initialize the assigned tasks
@@ -917,6 +917,14 @@ public class StreamThread extends Thread {
             final StreamTask task = taskManager.activeTask(partition);
 
             if (task == null) {
+                if (!isRunning()) {
+                    // if we are in PENDING_SHUTDOWN and don't find the task it implies that it was a newly assigned
+                    // task that we just skipped to create;
+                    // hence, we just skip adding the corresponding records
+                    log.info("State already transits to {}, skipping the add records to non-existing task for partition {}", state, partition);
+                    continue;
+                }
+
                 log.error(
                     "Unable to locate active task for received-record partition {}. Current tasks: {}",
                     partition,

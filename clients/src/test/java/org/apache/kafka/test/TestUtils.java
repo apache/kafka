@@ -282,7 +282,6 @@ public class TestUtils {
         final Properties properties = new Properties();
         properties.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
         properties.put(ProducerConfig.ACKS_CONFIG, "all");
-        properties.put(ProducerConfig.RETRIES_CONFIG, 0);
         properties.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, keySerializer);
         properties.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, valueSerializer);
         properties.putAll(additional);
