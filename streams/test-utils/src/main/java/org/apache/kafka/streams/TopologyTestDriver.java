@@ -1072,7 +1072,7 @@ public class TopologyTestDriver implements Closeable {
             }
         }
         completeAllProcessableWork();
-        if (task.hasRecordsQueued()) {
+        if (task != null && task.hasRecordsQueued()) {
             log.warn("Due to the {} configuration, there were some records that can't be processed even" +
                          " though TopologyTestDriver is shutting down.",
                      StreamsConfig.MAX_TASK_IDLE_MS_CONFIG);
