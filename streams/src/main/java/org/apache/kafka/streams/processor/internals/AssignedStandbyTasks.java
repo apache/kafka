@@ -71,7 +71,8 @@ class AssignedStandbyTasks extends AssignedTasks<StandbyTask> {
             } else if (created.containsKey(taskId)) {
                 task = created.get(taskId);
             } else {
-                log.error("Could not find the standby task {} while closing it", taskId);
+                log.debug("Could not find the standby task {} while closing it, most likely it was not created " +
+                    "because it has no state stores in its subtopology.", taskId);
                 continue;
             }
 
