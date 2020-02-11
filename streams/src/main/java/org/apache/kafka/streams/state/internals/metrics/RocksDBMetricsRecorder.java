@@ -70,8 +70,19 @@ public class RocksDBMetricsRecorder {
         return taskId;
     }
 
+    /**
+     * The initialisation of the metrics recorder is idempotent.
+     */
     public void init(final StreamsMetricsImpl streamsMetrics,
                      final TaskId taskId) {
+        if (this.taskId != null && !this.taskId.equals(taskId)) {
+            throw new IllegalStateException("Metrics recorder is re-initialised with different task: previous task is " +
+                this.taskId + " whereas current task is " + taskId + ". This is a bug in Kafka Streams.");
+        }
+        if (this.streamsMetrics != null && this.streamsMetrics != streamsMetrics) {
+            throw new IllegalStateException("Metrics recorder is re-initialised with different Streams metrics. "
+                + "This is a bug in Kafka Streams.");
+        }
         initSensors(streamsMetrics, taskId);
         this.taskId = taskId;
         this.streamsMetrics = streamsMetrics;

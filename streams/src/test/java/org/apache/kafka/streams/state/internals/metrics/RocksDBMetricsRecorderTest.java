@@ -16,7 +16,9 @@
  */
 package org.apache.kafka.streams.state.internals.metrics;
 
+import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.internals.metrics.RocksDBMetrics.RocksDBMetricContext;
@@ -72,6 +74,7 @@ public class RocksDBMetricsRecorderTest {
     private final StreamsMetricsImpl streamsMetrics = niceMock(StreamsMetricsImpl.class);
     private final RocksDBMetricsRecordingTrigger recordingTrigger = mock(RocksDBMetricsRecordingTrigger.class);
     private final TaskId taskId1 = new TaskId(0, 0);
+    private final TaskId taskId2 = new TaskId(0, 1);
 
     private final RocksDBMetricsRecorder recorder = new RocksDBMetricsRecorder(METRICS_SCOPE, THREAD_ID, STORE_NAME);
 
@@ -91,6 +94,31 @@ public class RocksDBMetricsRecorderTest {
 
         verify(RocksDBMetrics.class);
         assertThat(recorder.taskId(), is(taskId1));
+    }
+
+    @Test
+    public void shouldThrowIfMetricRecorderIsReInitialisedWithDifferentTask() {
+        setUpMetricsStubMock();
+        recorder.init(streamsMetrics, taskId1);
+
+        assertThrows(
+            IllegalStateException.class,
+            () -> recorder.init(streamsMetrics, taskId2)
+        );
+    }
+
+    @Test
+    public void shouldThrowIfMetricRecorderIsReInitialisedWithDifferentStreamsMetrics() {
+        setUpMetricsStubMock();
+        recorder.init(streamsMetrics, taskId1);
+
+        assertThrows(
+            IllegalStateException.class,
+            () -> recorder.init(
+                new StreamsMetricsImpl(new Metrics(), "test-client", StreamsConfig.METRICS_LATEST),
+                taskId1
+            )
+        );
     }
 
     @Test
