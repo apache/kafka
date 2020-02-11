@@ -19,14 +19,9 @@ package org.apache.kafka.tools;
 import static net.sourceforge.argparse4j.impl.Arguments.store;
 import static net.sourceforge.argparse4j.impl.Arguments.storeTrue;
 
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.util.ArrayList;
+import java.io.IOException;
 import java.util.List;
 import java.util.Properties;
-import java.util.Random;
 import java.util.Arrays;
 
 import net.sourceforge.argparse4j.inf.MutuallyExclusiveGroup;
@@ -40,112 +35,99 @@ import net.sourceforge.argparse4j.ArgumentParsers;
 import net.sourceforge.argparse4j.inf.ArgumentParser;
 import net.sourceforge.argparse4j.inf.ArgumentParserException;
 import net.sourceforge.argparse4j.inf.Namespace;
+import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Utils;
 
-public class ProducerPerformance {
+public class KafkaClientPerformance {
 
     public static void main(String[] args) throws Exception {
         ArgumentParser parser = argParser();
-
+        ClientTestHandler<byte[], byte[]> clientTestHandler = null;
         try {
             Namespace res = parser.parseArgs(args);
 
             /* parse args */
-            String topicName = res.getString("topic");
             long numRecords = res.getLong("numRecords");
-            Integer recordSize = res.getInt("recordSize");
             int throughput = res.getInt("throughput");
             List<String> producerProps = res.getList("producerConfig");
             String producerConfig = res.getString("producerConfigFile");
-            String payloadFilePath = res.getString("payloadFile");
             String transactionalId = res.getString("transactionalId");
+            String consumerGroupId = res.getString("consumerGroupId");
             boolean shouldPrintMetrics = res.getBoolean("printMetrics");
             long transactionDurationMs = res.getLong("transactionDurationMs");
+            long flushDurationMs = res.getLong("flushDurationMs");
+            long discountStartRecords = res.getLong("discountStartRecords");
+            boolean flushEnabled = 0 < flushDurationMs;
             boolean transactionsEnabled =  0 < transactionDurationMs;
-
-            // since default value gets printed with the help text, we are escaping \n there and replacing it with correct value here.
-            String payloadDelimiter = res.getString("payloadDelimiter").equals("\\n") ? "\n" : res.getString("payloadDelimiter");
 
             if (producerProps == null && producerConfig == null) {
                 throw new ArgumentParserException("Either --producer-props or --producer.config must be specified.", parser);
             }
 
-            List<byte[]> payloadByteList = new ArrayList<>();
-            if (payloadFilePath != null) {
-                Path path = Paths.get(payloadFilePath);
-                System.out.println("Reading payloads from: " + path.toAbsolutePath());
-                if (Files.notExists(path) || Files.size(path) == 0)  {
-                    throw new  IllegalArgumentException("File does not exist or empty file provided.");
-                }
+            Properties props = generateProps(producerProps, producerConfig);
+            props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class.getName());
+            props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class.getName());
 
-                String[] payloadList = new String(Files.readAllBytes(path), "UTF-8").split(payloadDelimiter);
-
-                System.out.println("Number of messages read: " + payloadList.length);
-
-                for (String payload : payloadList) {
-                    payloadByteList.add(payload.getBytes(StandardCharsets.UTF_8));
-                }
-            }
-
-            Properties props = new Properties();
-            if (producerConfig != null) {
-                props.putAll(Utils.loadProps(producerConfig));
-            }
-            if (producerProps != null)
-                for (String prop : producerProps) {
-                    String[] pieces = prop.split("=");
-                    if (pieces.length != 2)
-                        throw new IllegalArgumentException("Invalid property: " + prop);
-                    props.put(pieces[0], pieces[1]);
-                }
-
-            props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer");
-            props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer");
             if (transactionsEnabled)
                 props.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, transactionalId);
 
             KafkaProducer<byte[], byte[]> producer = new KafkaProducer<>(props);
 
+            /* initialize test suite */
+            String testSuiteName = res.getString("testSuiteName");
+            String outputTopic = res.getString("outputTopic");
+            switch (testSuiteName) {
+                case "ProducerPerformance":
+                    clientTestHandler = new RandomPayloadTestHandler(res, producer, outputTopic);
+                    break;
+                case "EosPerformance":
+                    clientTestHandler = new ConsumerTestHandler<>(res, consumerGroupId, producer, outputTopic);
+                    break;
+                default:
+                    throw new IllegalArgumentException("Unknown test suite name: " + testSuiteName);
+            }
+
             if (transactionsEnabled)
                 producer.initTransactions();
 
-            /* setup perf test */
-            byte[] payload = null;
-            Random random = new Random(0);
-            if (recordSize != null) {
-                payload = new byte[recordSize];
-                for (int i = 0; i < payload.length; ++i)
-                    payload[i] = (byte) (random.nextInt(26) + 65);
-            }
             ProducerRecord<byte[], byte[]> record;
-            Stats stats = new Stats(numRecords, 5000);
+            Stats stats = new Stats(numRecords, 5000, discountStartRecords);
             long startMs = System.currentTimeMillis();
 
             ThroughputThrottler throttler = new ThroughputThrottler(throughput, startMs);
 
             int currentTransactionSize = 0;
             long transactionStartTime = 0;
-            for (long i = 0; i < numRecords; i++) {
+            long lastFlushTime = 0;
+            // First iterations will be discarded for correctness.
+            for (long i = 0; i < numRecords + discountStartRecords; i++) {
                 if (transactionsEnabled && currentTransactionSize == 0) {
                     producer.beginTransaction();
                     transactionStartTime = System.currentTimeMillis();
                 }
 
-
-                if (payloadFilePath != null) {
-                    payload = payloadByteList.get(random.nextInt(payloadByteList.size()));
+                record = clientTestHandler.getRecord();
+                if (record == null) {
+                    System.out.println("Skipping null record");
+                    // Reset this cycle as we are skipping over null record.
+                    i -= 1;
+                    continue;
                 }
-                record = new ProducerRecord<>(topicName, payload);
 
                 long sendStartMs = System.currentTimeMillis();
-                Callback cb = stats.nextCompletion(sendStartMs, payload.length, stats);
+                Callback cb = stats.nextCompletion(sendStartMs, record.value().length, stats);
                 producer.send(record, cb);
 
                 currentTransactionSize++;
                 if (transactionsEnabled && transactionDurationMs <= (sendStartMs - transactionStartTime)) {
-                    producer.commitTransaction();
+                    clientTestHandler.commitTransaction();
                     currentTransactionSize = 0;
+                }
+
+                if (flushEnabled && flushDurationMs <= (sendStartMs - lastFlushTime)) {
+                    clientTestHandler.flush();
+                    lastFlushTime = System.currentTimeMillis();
                 }
 
                 if (throttler.shouldThrottle(i, sendStartMs)) {
@@ -155,6 +137,10 @@ public class ProducerPerformance {
 
             if (transactionsEnabled && currentTransactionSize != 0)
                 producer.commitTransaction();
+
+            if (flushEnabled) {
+                producer.flush();
+            }
 
             if (!shouldPrintMetrics) {
                 producer.close();
@@ -182,27 +168,47 @@ public class ProducerPerformance {
                 parser.handleError(e);
                 Exit.exit(1);
             }
+        } finally {
+            if (clientTestHandler != null) {
+                clientTestHandler.close();
+            }
         }
-
     }
 
     /** Get the command-line argument parser. */
     private static ArgumentParser argParser() {
         ArgumentParser parser = ArgumentParsers
-                .newArgumentParser("producer-performance")
+                .newArgumentParser("kafka-client-performance")
                 .defaultHelp(true)
-                .description("This tool is used to verify the producer performance.");
+                .description("This tool is used to verify the Kafka client performance.");
 
         MutuallyExclusiveGroup payloadOptions = parser
                 .addMutuallyExclusiveGroup()
                 .required(true)
                 .description("either --record-size or --payload-file must be specified but not both.");
 
-        parser.addArgument("--topic")
+        parser.addArgument("--test-suite-name")
+                .action(store())
+                .required(true)
+                .type(Long.class)
+                .metavar("TEST-SUITE-NAME")
+                .dest("testSuiteName")
+                .help("the name of this test suite");
+
+        parser.addArgument("--input-topic")
                 .action(store())
                 .required(true)
                 .type(String.class)
-                .metavar("TOPIC")
+                .metavar("INPUT-TOPIC")
+                .dest("inputTopic")
+                .help("consume messages from this topic");
+
+        parser.addArgument("--output-topic")
+                .action(store())
+                .required(true)
+                .type(String.class)
+                .metavar("OUTPUT-TOPIC")
+                .dest("outputTopic")
                 .help("produce messages to this topic");
 
         parser.addArgument("--num-records")
@@ -249,13 +255,22 @@ public class ProducerPerformance {
                 .metavar("THROUGHPUT")
                 .help("throttle maximum message throughput to *approximately* THROUGHPUT messages/sec. Set this to -1 to disable throttling.");
 
+        parser.addArgument("--poll-timeout")
+                .action(store())
+                .required(false)
+                .type(Long.class)
+                .metavar("POLL-TIMEOUT")
+                .dest("pollTimeout")
+                .setDefault(100L)
+                .help("consumer poll timeout");
+
         parser.addArgument("--producer-props")
-                 .nargs("+")
-                 .required(false)
-                 .metavar("PROP-NAME=PROP-VALUE")
-                 .type(String.class)
-                 .dest("producerConfig")
-                 .help("kafka producer related configuration properties like bootstrap.servers,client.id etc. " +
+                .nargs("+")
+                .required(false)
+                .metavar("PROP-NAME=PROP-VALUE")
+                .type(String.class)
+                .dest("producerConfig")
+                .help("kafka producer related configuration properties like bootstrap.servers,client.id etc. " +
                          "These configs take precedence over those passed via --producer.config.");
 
         parser.addArgument("--producer.config")
@@ -266,6 +281,23 @@ public class ProducerPerformance {
                 .dest("producerConfigFile")
                 .help("producer config properties file.");
 
+        parser.addArgument("--consumer-config")
+                .action(store())
+                .required(false)
+                .type(String.class)
+                .metavar("CONFIG-FILE")
+                .dest("consumerConfigFile")
+                .help("consumer config properties file.");
+
+        parser.addArgument("--consumer-props")
+                .nargs("+")
+                .required(false)
+                .metavar("PROP-NAME=PROP-VALUE")
+                .type(String.class)
+                .dest("consumerConfig")
+                .help("kafka consumer related configuration properties like bootstrap.servers,client.id etc. " +
+                      "These configs take precedence over those passed via --consumer-config.");
+
         parser.addArgument("--print-metrics")
                 .action(storeTrue())
                 .type(Boolean.class)
@@ -274,28 +306,73 @@ public class ProducerPerformance {
                 .help("print out metrics at the end of the test.");
 
         parser.addArgument("--transactional-id")
-               .action(store())
-               .required(false)
-               .type(String.class)
-               .metavar("TRANSACTIONAL-ID")
-               .dest("transactionalId")
-               .setDefault("performance-producer-default-transactional-id")
-               .help("The transactionalId to use if transaction-duration-ms is > 0. Useful when testing the performance of concurrent transactions.");
+                .action(store())
+                .required(false)
+                .type(String.class)
+                .metavar("TRANSACTIONAL-ID")
+                .dest("transactionalId")
+                .setDefault("performance-producer-default-transactional-id")
+                .help("The transactionalId to use if transaction-duration-ms is > 0. Useful when testing the performance of concurrent transactions.");
 
         parser.addArgument("--transaction-duration-ms")
-               .action(store())
-               .required(false)
-               .type(Long.class)
-               .metavar("TRANSACTION-DURATION")
-               .dest("transactionDurationMs")
-               .setDefault(0L)
-               .help("The max age of each transaction. The commitTransaction will be called after this time has elapsed. Transactions are only enabled if this value is positive.");
+                .action(store())
+                .required(false)
+                .type(Long.class)
+                .metavar("TRANSACTION-DURATION")
+                .dest("transactionDurationMs")
+                .setDefault(0L)
+                .help("The max age of each transaction. The commitTransaction will be called after this time has elapsed. Transactions are only enabled if this value is positive.");
+
+        parser.addArgument("--consumer-group-id")
+                .action(store())
+                .required(false)
+                .type(String.class)
+                .metavar("CONSUMER-GROUP-ID")
+                .dest("consumerGroupId")
+                .setDefault("performance-consumer-default-group-id")
+                .help("The consumerGroupId to use if we use consumer as the data source.");
+
+        parser.addArgument("--flush-duration-ms")
+                .action(store())
+                .required(false)
+                .type(Long.class)
+                .metavar("FLUSH-DURATION")
+                .dest("flushDurationMs")
+                .setDefault(0L)
+                .help("When configured, the amount of time to elapse before making a producer.flush() call. Explicit flush is only enabled if this value is positive.");
+
+        parser.addArgument("--discount-start-records")
+                .action(store())
+                .required(false)
+                .type(Long.class)
+                .metavar("DISCOUNT-RECORDS")
+                .dest("discountStartRecords")
+                .setDefault(100L)
+                .help("Drop the first few records to avoid start-up jitters affecting the throughput result");
 
 
         return parser;
     }
 
-    private static class Stats {
+    static Properties generateProps(List<String> overrideProps, String configFile) throws IOException {
+        Properties props = new Properties();
+        if (configFile != null) {
+            props.putAll(Utils.loadProps(configFile));
+        }
+
+        if (overrideProps != null) {
+            for (String prop : overrideProps) {
+                String[] pieces = prop.split("=");
+                if (pieces.length != 2)
+                    throw new IllegalArgumentException("Invalid property: " + prop);
+                props.put(pieces[0], pieces[1]);
+            }
+        }
+        return props;
+    }
+
+
+    static class Stats {
         private long start;
         private long windowStart;
         private int[] latencies;
@@ -303,6 +380,8 @@ public class ProducerPerformance {
         private int iteration;
         private int index;
         private long count;
+        // Records discounted for final result
+        private long discount;
         private long bytes;
         private int maxLatency;
         private long totalLatency;
@@ -312,9 +391,7 @@ public class ProducerPerformance {
         private long windowBytes;
         private long reportingInterval;
 
-        public Stats(long numRecords, int reportingInterval) {
-            this.start = System.currentTimeMillis();
-            this.windowStart = System.currentTimeMillis();
+        public Stats(long numRecords, int reportingInterval, long discount) {
             this.iteration = 0;
             this.sampling = (int) (numRecords / Math.min(numRecords, 500000));
             this.latencies = new int[(int) (numRecords / this.sampling) + 1];
@@ -327,9 +404,25 @@ public class ProducerPerformance {
             this.windowBytes = 0;
             this.totalLatency = 0;
             this.reportingInterval = reportingInterval;
+            if (discount < 0L) {
+                throw new IllegalArgumentException("Record discount must be greater or equal to 0");
+            }
+            this.discount = discount;
         }
 
         public void record(int iter, int latency, int bytes, long time) {
+            // Discount records will not be included in the final result
+            if (discount > 0) {
+                discount--;
+                return;
+            } else if (discount == 0) {
+                // When all the discount records are disgarded, offically starts the window recording
+                this.start = System.currentTimeMillis();
+                this.windowStart = System.currentTimeMillis();
+                this.iteration = 0;
+                discount--;
+            }
+
             this.count++;
             this.bytes += bytes;
             this.totalLatency += latency;
@@ -356,9 +449,9 @@ public class ProducerPerformance {
         }
 
         public void printWindow() {
-            long ellapsed = System.currentTimeMillis() - windowStart;
-            double recsPerSec = 1000.0 * windowCount / (double) ellapsed;
-            double mbPerSec = 1000.0 * this.windowBytes / (double) ellapsed / (1024.0 * 1024.0);
+            long elapsed = System.currentTimeMillis() - windowStart;
+            double recsPerSec = 1000.0 * windowCount / (double) elapsed;
+            double mbPerSec = 1000.0 * this.windowBytes / (double) elapsed / (1024.0 * 1024.0);
             System.out.printf("%d records sent, %.1f records/sec (%.2f MB/sec), %.1f ms avg latency, %.1f ms max latency.%n",
                               windowCount,
                               recsPerSec,
