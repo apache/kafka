@@ -802,6 +802,13 @@ public class StreamThread extends Thread {
             throw new StreamsException(logPrefix + "Unexpected state " + state + " during normal iteration");
         }
 
+        final long pollLatency = advanceNowAndComputeLatency();
+
+        if (records != null && !records.isEmpty()) {
+            pollSensor.record(pollLatency, now);
+            addRecordsToTasks(records);
+        }
+
         // Shutdown hook could potentially be triggered and transit the thread state to PENDING_SHUTDOWN during #pollRequests().
         // The task manager internal states could be uninitialized if the state transition happens during #onPartitionsAssigned().
         // Should only proceed when the thread is still running after #pollRequests(), because no external state mutation
@@ -809,13 +816,6 @@ public class StreamThread extends Thread {
         if (!isRunning()) {
             log.debug("State already transits to {}, skipping the run once call after poll request", state);
             return;
-        }
-
-        final long pollLatency = advanceNowAndComputeLatency();
-
-        if (records != null && !records.isEmpty()) {
-            pollSensor.record(pollLatency, now);
-            addRecordsToTasks(records);
         }
 
         // we can always let changelog reader to try restoring in order to initialize the changelogs;
