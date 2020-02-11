@@ -227,12 +227,12 @@ class TopicDeletionManager(config: KafkaConfig,
   /**
    * If the topic is queued for deletion but deletion is not currently under progress, then deletion is retried for that topic
    * To ensure a successful retry, reset states for respective replicas from ReplicaDeletionIneligible to OfflineReplica state
-   *@param topics Topics for which deletion should be retried
+   * @param topics Topics for which deletion should be retried
    */
   private def retryDeletionForIneligibleReplicas(topics: Set[String]): Unit = {
     // reset replica states from ReplicaDeletionIneligible to OfflineReplica
     val failedReplicas = topics.flatMap(controllerContext.replicasInState(_, ReplicaDeletionIneligible))
-    info(s"Retrying deletion of topics ${topics.mkString(",")} since replicas ${failedReplicas.mkString(",")} were not successfully deleted")
+    debug(s"Retrying deletion of topics ${topics.mkString(",")} since replicas ${failedReplicas.mkString(",")} were not successfully deleted")
     replicaStateMachine.handleStateChanges(failedReplicas.toSeq, OfflineReplica)
   }
 
@@ -257,7 +257,6 @@ class TopicDeletionManager(config: KafkaConfig,
    * removed from their caches.
    */
   private def onTopicDeletion(topics: Set[String]): Unit = {
-    info(s"Topic deletion callback for ${topics.mkString(",")}")
     val unseenTopicsForDeletion = topics -- controllerContext.topicsWithDeletionStarted
     if (unseenTopicsForDeletion.nonEmpty) {
       val unseenPartitionsForDeletion = unseenTopicsForDeletion.flatMap(controllerContext.partitionsForTopic)
@@ -311,7 +310,6 @@ class TopicDeletionManager(config: KafkaConfig,
     replicaStateMachine.handleStateChanges(allDeadReplicas, ReplicaDeletionIneligible)
     // send stop replica to all followers that are not in the OfflineReplica state so they stop sending fetch requests to the leader
     replicaStateMachine.handleStateChanges(allReplicasForDeletionRetry, OfflineReplica)
-    debug(s"Deletion started for replicas ${allReplicasForDeletionRetry.mkString(",")}")
     replicaStateMachine.handleStateChanges(allReplicasForDeletionRetry, ReplicaDeletionStarted)
 
     if (allTopicsIneligibleForDeletion.nonEmpty) {
