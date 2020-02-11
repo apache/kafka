@@ -97,7 +97,7 @@ public class EmbeddedKafkaCluster extends ExternalResource {
     }
 
     @Override
-    protected void before() throws IOException {
+    protected void before() {
         start();
     }
 
@@ -106,11 +106,17 @@ public class EmbeddedKafkaCluster extends ExternalResource {
         stop();
     }
 
-    public void startOnlyKafkaOnSamePorts() throws IOException {
+    /**
+     * Starts the Kafka cluster alone using the ports that were assigned during initialization of
+     * the harness.
+     *
+     * @throws ConnectException if a directory to store the data cannot be created
+     */
+    public void startOnlyKafkaOnSamePorts() {
         start(currentBrokerPorts, currentBrokerLogDirs);
     }
 
-    private void start() throws IOException {
+    private void start() {
         // pick a random port
         zookeeper = new EmbeddedZookeeper();
         Arrays.fill(currentBrokerPorts, 0);
@@ -118,7 +124,7 @@ public class EmbeddedKafkaCluster extends ExternalResource {
         start(currentBrokerPorts, currentBrokerLogDirs);
     }
 
-    private void start(int[] brokerPorts, String[] logDirs) throws IOException {
+    private void start(int[] brokerPorts, String[] logDirs) {
         brokerConfig.put(KafkaConfig$.MODULE$.ZkConnectProp(), zKConnectString());
 
         putIfAbsent(brokerConfig, KafkaConfig$.MODULE$.HostNameProp(), "localhost");
@@ -205,10 +211,15 @@ public class EmbeddedKafkaCluster extends ExternalResource {
         }
     }
 
-    private String createLogDir() throws IOException {
+    private String createLogDir() {
         TemporaryFolder tmpFolder = new TemporaryFolder();
-        tmpFolder.create();
-        return tmpFolder.newFolder().getAbsolutePath();
+        try {
+            tmpFolder.create();
+            return tmpFolder.newFolder().getAbsolutePath();
+        } catch (IOException e) {
+            log.error("Unable to create temporary log directory", e);
+            throw new ConnectException("Unable to create temporary log directory", e);
+        }
     }
 
     public String bootstrapServers() {
