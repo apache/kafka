@@ -289,11 +289,14 @@ public class TopologyTestDriver implements Closeable {
         final StreamsConfig streamsConfig = new QuietStreamsConfig(config);
         final Long taskIdleTime = streamsConfig.getLong(StreamsConfig.MAX_TASK_IDLE_MS_CONFIG);
         if (taskIdleTime > 0) {
-            log.info("Detected {} config in use with TopologyTestDriver (set to {}ms). This means you might need to" +
-                         " use TopologyTestDriver#advanceWallClockTime or enqueue records on all partitions to allow" +
-                         " Steams to make progress. Such occurrences will be logged.",
+            log.info("Detected {} config in use with TopologyTestDriver (set to {}ms)." +
+                         " This means you might need to use TopologyTestDriver#advanceWallClockTime()" +
+                         " or enqueue records on all partitions to allow Steams to make progress." +
+                         " TopologyTestDriver will log a message each time it cannot process enqueued" +
+                         " records due to {}.",
                      StreamsConfig.MAX_TASK_IDLE_MS_CONFIG,
-                     taskIdleTime);
+                     taskIdleTime,
+                     StreamsConfig.MAX_TASK_IDLE_MS_CONFIG);
         }
         mockWallClockTime = new MockTime(initialWallClockTimeMs);
 
@@ -525,8 +528,9 @@ public class TopologyTestDriver implements Closeable {
                 captureOutputsAndReEnqueueInternalResults();
             }
             if (task.hasRecordsQueued()) {
-                log.info("Due to the {} configuration, there are currently some records that can't be processed." +
-                             " Advancing wall-clock time or enqueuing records on the empty partitions will allow" +
+                log.info("Due to the {} configuration, there are currently some records" +
+                             " that cannot be processed. Advancing wall-clock time or" +
+                             " enqueuing records on the empty topics will allow" +
                              " Streams to process more.",
                          StreamsConfig.MAX_TASK_IDLE_MS_CONFIG);
             }
@@ -1073,8 +1077,8 @@ public class TopologyTestDriver implements Closeable {
         }
         completeAllProcessableWork();
         if (task != null && task.hasRecordsQueued()) {
-            log.warn("Due to the {} configuration, there were some records that can't be processed even" +
-                         " though TopologyTestDriver is shutting down.",
+            log.warn("Found some records that cannot be processed due to the" +
+                         " {} configuration during TopologyTestDriver#close().",
                      StreamsConfig.MAX_TASK_IDLE_MS_CONFIG);
         }
         if (!eosEnabled) {
