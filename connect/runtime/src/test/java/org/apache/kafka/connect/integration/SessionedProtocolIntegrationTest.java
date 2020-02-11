@@ -110,7 +110,7 @@ public class SessionedProtocolIntegrationTest {
         );
         assertEquals(
             BAD_REQUEST.getStatusCode(),
-            connect.executePost(connectorTasksEndpoint, "[]", emptyHeaders)
+            connect.requestPost(connectorTasksEndpoint, "[]", emptyHeaders).getStatus()
         );
 
         // Try again, but with an invalid signature
@@ -121,7 +121,7 @@ public class SessionedProtocolIntegrationTest {
         );
         assertEquals(
             FORBIDDEN.getStatusCode(),
-            connect.executePost(connectorTasksEndpoint, "[]", invalidSignatureHeaders)
+            connect.requestPost(connectorTasksEndpoint, "[]", invalidSignatureHeaders).getStatus()
         );
 
         // Create the connector now
@@ -151,7 +151,7 @@ public class SessionedProtocolIntegrationTest {
         );
         assertEquals(
             BAD_REQUEST.getStatusCode(),
-            connect.executePost(connectorTasksEndpoint, "[]", emptyHeaders)
+            connect.requestPost(connectorTasksEndpoint, "[]", emptyHeaders).getStatus()
         );
 
         // Try again, but with an invalid signature
@@ -162,7 +162,7 @@ public class SessionedProtocolIntegrationTest {
         );
         assertEquals(
             FORBIDDEN.getStatusCode(),
-            connect.executePost(connectorTasksEndpoint, "[]", invalidSignatureHeaders)
+            connect.requestPost(connectorTasksEndpoint, "[]", invalidSignatureHeaders).getStatus()
         );
     }
 }
