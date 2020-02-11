@@ -104,7 +104,14 @@ object ControllerState {
     def value = 15
   }
 
+  case object UpdateMetadataResponseReceived extends ControllerState {
+    def value = 16
+
+    override protected def hasRateAndTimeMetric: Boolean = false
+  }
+
   val values: Seq[ControllerState] = Seq(Idle, ControllerChange, BrokerChange, TopicChange, TopicDeletion,
-    AlterPartitionReassignment, AutoLeaderBalance, ManualLeaderBalance, ControlledShutdown, IsrChange, LeaderAndIsrResponseReceived,
-    LogDirChange, ControllerShutdown, UncleanLeaderElectionEnable, TopicUncleanLeaderElectionEnable, ListPartitionReassignment)
+    AlterPartitionReassignment, AutoLeaderBalance, ManualLeaderBalance, ControlledShutdown, IsrChange,
+    LeaderAndIsrResponseReceived, LogDirChange, ControllerShutdown, UncleanLeaderElectionEnable,
+    TopicUncleanLeaderElectionEnable, ListPartitionReassignment, UpdateMetadataResponseReceived)
 }

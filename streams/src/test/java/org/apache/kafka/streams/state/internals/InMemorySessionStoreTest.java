@@ -18,6 +18,7 @@ package org.apache.kafka.streams.state.internals;
 
 import static java.time.Duration.ofMillis;
 
+import static org.apache.kafka.test.StreamsTestUtils.valuesToSet;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 

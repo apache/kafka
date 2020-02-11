@@ -25,9 +25,8 @@ import java.util.regex.Pattern
 import org.apache.kafka.streams.kstream.GlobalKTable
 import org.apache.kafka.streams.processor.{ProcessorSupplier, StateStore}
 import org.apache.kafka.streams.state.StoreBuilder
-import org.apache.kafka.streams.{Topology, StreamsBuilder => StreamsBuilderJ}
-import org.apache.kafka.streams.scala.kstream._
-import ImplicitConversions._
+import org.apache.kafka.streams.{StreamsBuilder => StreamsBuilderJ, Topology}
+import org.apache.kafka.streams.scala.kstream.{Consumed, KStream, KTable, Materialized}
 
 import scala.collection.JavaConverters._
 
@@ -62,7 +61,7 @@ class StreamsBuilder(inner: StreamsBuilderJ = new StreamsBuilderJ) {
    * @return a [[kstream.KStream]] for the specified topic
    */
   def stream[K, V](topic: String)(implicit consumed: Consumed[K, V]): KStream[K, V] =
-    inner.stream[K, V](topic, consumed)
+    new KStream(inner.stream[K, V](topic, consumed))
 
   /**
    * Create a [[kstream.KStream]] from the specified topics.
@@ -73,7 +72,7 @@ class StreamsBuilder(inner: StreamsBuilderJ = new StreamsBuilderJ) {
    * @see `org.apache.kafka.streams.StreamsBuilder#stream`
    */
   def stream[K, V](topics: Set[String])(implicit consumed: Consumed[K, V]): KStream[K, V] =
-    inner.stream[K, V](topics.asJava, consumed)
+    new KStream(inner.stream[K, V](topics.asJava, consumed))
 
   /**
    * Create a [[kstream.KStream]] from the specified topic pattern.
@@ -84,7 +83,7 @@ class StreamsBuilder(inner: StreamsBuilderJ = new StreamsBuilderJ) {
    * @see `org.apache.kafka.streams.StreamsBuilder#stream`
    */
   def stream[K, V](topicPattern: Pattern)(implicit consumed: Consumed[K, V]): KStream[K, V] =
-    inner.stream[K, V](topicPattern, consumed)
+    new KStream(inner.stream[K, V](topicPattern, consumed))
 
   /**
    * Create a [[kstream.KTable]] from the specified topic.
@@ -113,7 +112,7 @@ class StreamsBuilder(inner: StreamsBuilderJ = new StreamsBuilderJ) {
    * @see `org.apache.kafka.streams.StreamsBuilder#table`
    */
   def table[K, V](topic: String)(implicit consumed: Consumed[K, V]): KTable[K, V] =
-    inner.table[K, V](topic, consumed)
+    new KTable(inner.table[K, V](topic, consumed))
 
   /**
    * Create a [[kstream.KTable]] from the specified topic.
@@ -127,7 +126,7 @@ class StreamsBuilder(inner: StreamsBuilderJ = new StreamsBuilderJ) {
   def table[K, V](topic: String, materialized: Materialized[K, V, ByteArrayKeyValueStore])(
     implicit consumed: Consumed[K, V]
   ): KTable[K, V] =
-    inner.table[K, V](topic, consumed, materialized)
+    new KTable(inner.table[K, V](topic, consumed, materialized))
 
   /**
    * Create a `GlobalKTable` from the specified topic. The serializers from the implicit `Consumed`

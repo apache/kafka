@@ -93,7 +93,7 @@ public class ResetPartitionTimeIntegrationTest {
     }
 
     @Test
-    public void shouldPreservePartitionTimeOnKafkaStreamRestart() throws Exception {
+    public void shouldPreservePartitionTimeOnKafkaStreamRestart() {
         final String appId = "appId";
         final String input = "input";
         final String outputRaw = "output-raw";

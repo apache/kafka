@@ -27,6 +27,7 @@ import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.StoreQueryParameters;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
@@ -138,7 +139,7 @@ public class GlobalKTableEOSIntegrationTest {
         produceGlobalTableValues();
 
         final ReadOnlyKeyValueStore<Long, String> replicatedStore =
-            kafkaStreams.store(globalStore, QueryableStoreTypes.keyValueStore());
+            kafkaStreams.store(StoreQueryParameters.fromNameAndType(globalStore, QueryableStoreTypes.keyValueStore()));
 
         TestUtils.waitForCondition(
             () -> "J".equals(replicatedStore.get(5L)),
@@ -182,7 +183,7 @@ public class GlobalKTableEOSIntegrationTest {
         produceGlobalTableValues();
 
         final ReadOnlyKeyValueStore<Long, String> replicatedStore =
-            kafkaStreams.store(globalStore, QueryableStoreTypes.keyValueStore());
+            kafkaStreams.store(StoreQueryParameters.fromNameAndType(globalStore, QueryableStoreTypes.keyValueStore()));
 
         TestUtils.waitForCondition(
             () -> "J".equals(replicatedStore.get(5L)),
@@ -219,7 +220,7 @@ public class GlobalKTableEOSIntegrationTest {
             () -> {
                 final ReadOnlyKeyValueStore<Long, String> store;
                 try {
-                    store = kafkaStreams.store(globalStore, QueryableStoreTypes.keyValueStore());
+                    store = kafkaStreams.store(StoreQueryParameters.fromNameAndType(globalStore, QueryableStoreTypes.keyValueStore()));
                 } catch (final InvalidStateStoreException ex) {
                     return false;
                 }
@@ -253,7 +254,7 @@ public class GlobalKTableEOSIntegrationTest {
             () -> {
                 final ReadOnlyKeyValueStore<Long, String> store;
                 try {
-                    store = kafkaStreams.store(globalStore, QueryableStoreTypes.keyValueStore());
+                    store = kafkaStreams.store(StoreQueryParameters.fromNameAndType(globalStore, QueryableStoreTypes.keyValueStore()));
                 } catch (final InvalidStateStoreException ex) {
                     return false;
                 }

@@ -269,17 +269,7 @@ public class ListOffsetRequest extends AbstractRequest {
             responseData.put(partition, partitionError);
         }
 
-        switch (version()) {
-            case 0:
-            case 1:
-            case 2:
-            case 3:
-            case 4:
-                return new ListOffsetResponse(throttleTimeMs, responseData);
-            default:
-                throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
-                        versionId, this.getClass().getSimpleName(), ApiKeys.LIST_OFFSETS.latestVersion()));
-        }
+        return new ListOffsetResponse(throttleTimeMs, responseData);
     }
 
     public int replicaId() {

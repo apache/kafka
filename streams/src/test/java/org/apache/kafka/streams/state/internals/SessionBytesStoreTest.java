@@ -19,6 +19,8 @@ package org.apache.kafka.streams.state.internals;
 import static java.util.Arrays.asList;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
+import static org.apache.kafka.test.StreamsTestUtils.toSet;
+import static org.apache.kafka.test.StreamsTestUtils.valuesToSet;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.hasItem;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -32,92 +34,58 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
-import org.apache.kafka.clients.producer.MockProducer;
-import org.apache.kafka.clients.producer.Producer;
+import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
-import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
-import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.errors.DefaultProductionExceptionHandler;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.SessionWindow;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
-import org.apache.kafka.streams.processor.internals.RecordCollector;
-import org.apache.kafka.streams.processor.internals.RecordCollectorImpl;
 import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.test.InternalMockProcessorContext;
+import org.apache.kafka.test.MockRecordCollector;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
+
 public abstract class SessionBytesStoreTest {
 
-    protected static final long SEGMENT_INTERVAL = 60_000L;
-    protected static final long RETENTION_PERIOD = 10_000L;
+    static final long SEGMENT_INTERVAL = 60_000L;
+    static final long RETENTION_PERIOD = 10_000L;
 
-    protected SessionStore<String, Long> sessionStore;
-    protected InternalMockProcessorContext context;
+    SessionStore<String, Long> sessionStore;
 
-    private final List<KeyValue<byte[], byte[]>> changeLog = new ArrayList<>();
+    private MockRecordCollector recordCollector;
 
-    private final Producer<byte[], byte[]> producer = new MockProducer<>(true,
-        Serdes.ByteArray().serializer(),
-        Serdes.ByteArray().serializer());
+    private InternalMockProcessorContext context;
 
     abstract <K, V> SessionStore<K, V> buildSessionStore(final long retentionPeriod,
-                                                          final Serde<K> keySerde,
-                                                          final Serde<V> valueSerde);
+                                                         final Serde<K> keySerde,
+                                                         final Serde<V> valueSerde);
 
     abstract String getMetricsScope();
 
     abstract void setClassLoggerToDebug();
 
-    private RecordCollectorImpl createRecordCollector(final String name) {
-        return new RecordCollectorImpl(name,
-            new LogContext(name),
-            new DefaultProductionExceptionHandler(),
-            new Metrics().sensor("dropped-records")
-        ) {
-            @Override
-            public <K1, V1> void send(final String topic,
-                final K1 key,
-                final V1 value,
-                final Headers headers,
-                final Integer partition,
-                final Long timestamp,
-                final Serializer<K1> keySerializer,
-                final Serializer<V1> valueSerializer) {
-                changeLog.add(new KeyValue<>(
-                    keySerializer.serialize(topic, headers, key),
-                    valueSerializer.serialize(topic, headers, value))
-                );
-            }
-        };
-    }
-
     @Before
     public void setUp() {
         sessionStore = buildSessionStore(RETENTION_PERIOD, Serdes.String(), Serdes.Long());
-
-        final RecordCollector recordCollector = createRecordCollector(sessionStore.name());
-        recordCollector.init(producer);
-
+        recordCollector = new MockRecordCollector();
         context = new InternalMockProcessorContext(
             TestUtils.tempDirectory(),
             Serdes.String(),
@@ -127,6 +95,7 @@ public abstract class SessionBytesStoreTest {
                 new LogContext("testCache"),
                 0,
                 new MockStreamsMetrics(new Metrics())));
+        context.setTime(1L);
 
         sessionStore.init(context, sessionStore);
     }
@@ -393,6 +362,12 @@ public abstract class SessionBytesStoreTest {
             assertEquals(Collections.emptySet(), toSet(values));
         }
 
+
+        final List<KeyValue<byte[], byte[]>> changeLog = new ArrayList<>();
+        for (final ProducerRecord<Object, Object> record : recordCollector.collected()) {
+            changeLog.add(new KeyValue<>(((Bytes) record.key()).get(), (byte[]) record.value()));
+        }
+
         context.restore(sessionStore.name(), changeLog);
 
         try (final KeyValueIterator<Windowed<String>, Long> values = sessionStore.fetch("a")) {
@@ -446,13 +421,12 @@ public abstract class SessionBytesStoreTest {
         final Properties streamsConfig = StreamsTestUtils.getStreamsConfig();
         streamsConfig.setProperty(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, builtInMetricsVersion);
         final SessionStore<String, Long> sessionStore = buildSessionStore(RETENTION_PERIOD, Serdes.String(), Serdes.Long());
-        final RecordCollector recordCollector = createRecordCollector(sessionStore.name());
-        recordCollector.init(producer);
         final InternalMockProcessorContext context = new InternalMockProcessorContext(
             TestUtils.tempDirectory(),
             new StreamsConfig(streamsConfig),
             recordCollector
         );
+        context.setTime(1L);
         sessionStore.init(context, sessionStore);
 
         // Advance stream time by inserting record with large enough timestamp that records with timestamp 0 are expired
@@ -583,23 +557,4 @@ public abstract class SessionBytesStoreTest {
                 + "This may be due to serdes that don't preserve ordering when lexicographically comparing the serialized bytes. "
                 + "Note that the built-in numerical serdes do not follow this for negative numbers"));
     }
-
-    protected static <K, V> Set<V> valuesToSet(final Iterator<KeyValue<K, V>> iterator) {
-        final Set<V> results = new HashSet<>();
-
-        while (iterator.hasNext()) {
-            results.add(iterator.next().value);
-        }
-        return results;
-    }
-
-    protected static <K, V> Set<KeyValue<K, V>> toSet(final Iterator<KeyValue<K, V>> iterator) {
-        final Set<KeyValue<K, V>> results = new HashSet<>();
-
-        while (iterator.hasNext()) {
-            results.add(iterator.next());
-        }
-        return results;
-    }
-
 }

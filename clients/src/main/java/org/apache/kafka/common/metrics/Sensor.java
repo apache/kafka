@@ -289,6 +289,15 @@ public final class Sensor {
     }
 
     /**
+     * Return if metrics were registered with this sensor.
+     *
+     * @return true if metrics were registered, false otherwise
+     */
+    public synchronized boolean hasMetrics() {
+        return !metrics.isEmpty();
+    }
+
+    /**
      * Return true if the Sensor is eligible for removal due to inactivity.
      *        false otherwise
      */

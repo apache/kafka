@@ -23,12 +23,12 @@ import kafka.cluster.{Broker, EndPoint}
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.message.{LeaderAndIsrResponseData, StopReplicaResponseData}
+import org.apache.kafka.common.message.{LeaderAndIsrResponseData, StopReplicaResponseData, UpdateMetadataResponseData}
 import org.apache.kafka.common.message.LeaderAndIsrResponseData.LeaderAndIsrPartitionError
 import org.apache.kafka.common.message.StopReplicaResponseData.StopReplicaPartitionError
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
-import org.apache.kafka.common.requests.{AbstractControlRequest, AbstractResponse, LeaderAndIsrRequest, LeaderAndIsrResponse, StopReplicaRequest, StopReplicaResponse, UpdateMetadataRequest}
+import org.apache.kafka.common.requests.{AbstractControlRequest, AbstractResponse, LeaderAndIsrRequest, LeaderAndIsrResponse, StopReplicaRequest, StopReplicaResponse, UpdateMetadataRequest, UpdateMetadataResponse}
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.junit.Assert._
 import org.junit.Test
@@ -83,8 +83,7 @@ class ControllerChannelManagerTest {
     applyLeaderAndIsrResponseCallbacks(Errors.NONE, batch.sentRequests(2).toList)
     assertEquals(1, batch.sentEvents.size)
 
-    val LeaderAndIsrResponseReceived(response, brokerId) = batch.sentEvents.head
-    val leaderAndIsrResponse = response.asInstanceOf[LeaderAndIsrResponse]
+    val LeaderAndIsrResponseReceived(leaderAndIsrResponse, brokerId) = batch.sentEvents.head
     assertEquals(2, brokerId)
     assertEquals(partitions.keySet,
       leaderAndIsrResponse.partitions.asScala.map(p => new TopicPartition(p.topicName, p.partitionIndex)).toSet)
@@ -223,6 +222,13 @@ class ControllerChannelManagerTest {
     assertEquals(controllerEpoch, updateMetadataRequest.controllerEpoch)
     assertEquals(3, updateMetadataRequest.liveBrokers.size)
     assertEquals(Set(1, 2, 3), updateMetadataRequest.liveBrokers.asScala.map(_.id).toSet)
+
+    applyUpdateMetadataResponseCallbacks(Errors.STALE_BROKER_EPOCH, batch.sentRequests(2).toList)
+    assertEquals(1, batch.sentEvents.size)
+
+    val UpdateMetadataResponseReceived(updateMetadataResponse, brokerId) = batch.sentEvents.head
+    assertEquals(2, brokerId)
+    assertEquals(Errors.STALE_BROKER_EPOCH, updateMetadataResponse.error)
   }
 
   @Test
@@ -664,6 +670,13 @@ class ControllerChannelManagerTest {
     }
   }
 
+  private def applyUpdateMetadataResponseCallbacks(error: Errors, sentRequests: List[SentRequest]): Unit = {
+    sentRequests.filter(_.request.apiKey == ApiKeys.UPDATE_METADATA).filter(_.responseCallback != null).foreach { sentRequest =>
+      val response = new UpdateMetadataResponse(new UpdateMetadataResponseData().setErrorCode(error.code))
+      sentRequest.responseCallback(response)
+    }
+  }
+
   private def createConfig(interBrokerVersion: ApiVersion): KafkaConfig = {
     val props = new Properties()
     props.put(KafkaConfig.BrokerIdProp, controllerId.toString)
@@ -696,7 +709,7 @@ class ControllerChannelManagerTest {
         val replica = brokers((i + leaderIndex) % brokers.size)
         replica
       }
-      context.updatePartitionReplicaAssignment(partition, replicas)
+      context.updatePartitionFullReplicaAssignment(partition, ReplicaAssignment(replicas))
       leaderIndex += 1
     }
     context

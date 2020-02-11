@@ -74,7 +74,7 @@ public interface Admin extends AutoCloseable {
     /**
      * Close the Admin and release all associated resources.
      * <p>
-     * See {@link Admin#close(long, TimeUnit)}
+     * See {@link #close(long, TimeUnit)}
      */
     @Override
     default void close() {
@@ -86,8 +86,8 @@ public interface Admin extends AutoCloseable {
      * <p>
      * The close operation has a grace period during which current operations will be allowed to
      * complete, specified by the given duration and time unit.
-     * New operations will not be accepted during the grace period.  Once the grace period is over,
-     * all operations that have not yet been completed will be aborted with a TimeoutException.
+     * New operations will not be accepted during the grace period. Once the grace period is over,
+     * all operations that have not yet been completed will be aborted with a {@link org.apache.kafka.common.errors.TimeoutException}.
      *
      * @param duration The duration to use for the wait time.
      * @param unit     The time unit to use for the wait time.
@@ -103,8 +103,8 @@ public interface Admin extends AutoCloseable {
      * <p>
      * The close operation has a grace period during which current operations will be allowed to
      * complete, specified by the given duration.
-     * New operations will not be accepted during the grace period.  Once the grace period is over,
-     * all operations that have not yet been completed will be aborted with a TimeoutException.
+     * New operations will not be accepted during the grace period. Once the grace period is over,
+     * all operations that have not yet been completed will be aborted with a {@link org.apache.kafka.common.errors.TimeoutException}.
      *
      * @param timeout The time to use for the wait time.
      */
@@ -113,7 +113,7 @@ public interface Admin extends AutoCloseable {
     /**
      * Create a batch of new topics with the default options.
      * <p>
-     * This is a convenience method for #{@link #createTopics(Collection, CreateTopicsOptions)} with default options.
+     * This is a convenience method for {@link #createTopics(Collection, CreateTopicsOptions)} with default options.
      * See the overload for more details.
      * <p>
      * This operation is supported by brokers with version 0.10.1.0 or higher.
@@ -130,9 +130,9 @@ public interface Admin extends AutoCloseable {
      * <p>
      * This operation is not transactional so it may succeed for some topics while fail for others.
      * <p>
-     * It may take several seconds after {@code CreateTopicsResult} returns
+     * It may take several seconds after {@link CreateTopicsResult} returns
      * success for all the brokers to become aware that the topics have been created.
-     * During this time, {@link Admin#listTopics()} and {@link Admin#describeTopics(Collection)}
+     * During this time, {@link #listTopics()} and {@link #describeTopics(Collection)}
      * may not return information about the new topics.
      * <p>
      * This operation is supported by brokers with version 0.10.1.0 or higher. The validateOnly option is supported
@@ -145,7 +145,7 @@ public interface Admin extends AutoCloseable {
     CreateTopicsResult createTopics(Collection<NewTopic> newTopics, CreateTopicsOptions options);
 
     /**
-     * This is a convenience method for #{@link Admin#deleteTopics(Collection, DeleteTopicsOptions)}
+     * This is a convenience method for {@link #deleteTopics(Collection, DeleteTopicsOptions)}
      * with default options. See the overload for more details.
      * <p>
      * This operation is supported by brokers with version 0.10.1.0 or higher.
@@ -162,13 +162,13 @@ public interface Admin extends AutoCloseable {
      * <p>
      * This operation is not transactional so it may succeed for some topics while fail for others.
      * <p>
-     * It may take several seconds after the {@code DeleteTopicsResult} returns
+     * It may take several seconds after the {@link DeleteTopicsResult} returns
      * success for all the brokers to become aware that the topics are gone.
-     * During this time, Admin#listTopics and Admin#describeTopics
+     * During this time, {@link #listTopics()} and {@link #describeTopics(Collection)}
      * may continue to return information about the deleted topics.
      * <p>
      * If delete.topic.enable is false on the brokers, deleteTopics will mark
-     * the topics for deletion, but not actually delete them.  The futures will
+     * the topics for deletion, but not actually delete them. The futures will
      * return successfully in this case.
      * <p>
      * This operation is supported by brokers with version 0.10.1.0 or higher.
@@ -182,7 +182,7 @@ public interface Admin extends AutoCloseable {
     /**
      * List the topics available in the cluster with the default options.
      * <p>
-     * This is a convenience method for #{@link Admin#listTopics(ListTopicsOptions)} with default options.
+     * This is a convenience method for {@link #listTopics(ListTopicsOptions)} with default options.
      * See the overload for more details.
      *
      * @return The ListTopicsResult.
@@ -202,7 +202,7 @@ public interface Admin extends AutoCloseable {
     /**
      * Describe some topics in the cluster, with the default options.
      * <p>
-     * This is a convenience method for #{@link Admin#describeTopics(Collection, DescribeTopicsOptions)} with
+     * This is a convenience method for {@link #describeTopics(Collection, DescribeTopicsOptions)} with
      * default options. See the overload for more details.
      *
      * @param topicNames The names of the topics to describe.
@@ -224,7 +224,7 @@ public interface Admin extends AutoCloseable {
     /**
      * Get information about the nodes in the cluster, using the default options.
      * <p>
-     * This is a convenience method for #{@link Admin#describeCluster(DescribeClusterOptions)} with default options.
+     * This is a convenience method for {@link #describeCluster(DescribeClusterOptions)} with default options.
      * See the overload for more details.
      *
      * @return The DescribeClusterResult.
@@ -242,7 +242,7 @@ public interface Admin extends AutoCloseable {
     DescribeClusterResult describeCluster(DescribeClusterOptions options);
 
     /**
-     * This is a convenience method for #{@link Admin#describeAcls(AclBindingFilter, DescribeAclsOptions)} with
+     * This is a convenience method for {@link #describeAcls(AclBindingFilter, DescribeAclsOptions)} with
      * default options. See the overload for more details.
      * <p>
      * This operation is supported by brokers with version 0.11.0.0 or higher.
@@ -257,8 +257,8 @@ public interface Admin extends AutoCloseable {
     /**
      * Lists access control lists (ACLs) according to the supplied filter.
      * <p>
-     * Note: it may take some time for changes made by createAcls or deleteAcls to be reflected
-     * in the output of describeAcls.
+     * Note: it may take some time for changes made by {@code createAcls} or {@code deleteAcls} to be reflected
+     * in the output of {@code describeAcls}.
      * <p>
      * This operation is supported by brokers with version 0.11.0.0 or higher.
      *
@@ -269,7 +269,7 @@ public interface Admin extends AutoCloseable {
     DescribeAclsResult describeAcls(AclBindingFilter filter, DescribeAclsOptions options);
 
     /**
-     * This is a convenience method for #{@link Admin#createAcls(Collection, CreateAclsOptions)} with
+     * This is a convenience method for {@link #createAcls(Collection, CreateAclsOptions)} with
      * default options. See the overload for more details.
      * <p>
      * This operation is supported by brokers with version 0.11.0.0 or higher.
@@ -298,7 +298,7 @@ public interface Admin extends AutoCloseable {
     CreateAclsResult createAcls(Collection<AclBinding> acls, CreateAclsOptions options);
 
     /**
-     * This is a convenience method for #{@link Admin#deleteAcls(Collection, DeleteAclsOptions)} with default options.
+     * This is a convenience method for {@link #deleteAcls(Collection, DeleteAclsOptions)} with default options.
      * See the overload for more details.
      * <p>
      * This operation is supported by brokers with version 0.11.0.0 or higher.
@@ -327,7 +327,7 @@ public interface Admin extends AutoCloseable {
     /**
      * Get the configuration for the specified resources with the default options.
      * <p>
-     * This is a convenience method for #{@link Admin#describeConfigs(Collection, DescribeConfigsOptions)} with default options.
+     * This is a convenience method for {@link #describeConfigs(Collection, DescribeConfigsOptions)} with default options.
      * See the overload for more details.
      * <p>
      * This operation is supported by brokers with version 0.11.0.0 or higher.
@@ -361,7 +361,7 @@ public interface Admin extends AutoCloseable {
     /**
      * Update the configuration for the specified resources with the default options.
      * <p>
-     * This is a convenience method for #{@link Admin#alterConfigs(Map, AlterConfigsOptions)} with default options.
+     * This is a convenience method for {@link #alterConfigs(Map, AlterConfigsOptions)} with default options.
      * See the overload for more details.
      * <p>
      * This operation is supported by brokers with version 0.11.0.0 or higher.
@@ -396,13 +396,13 @@ public interface Admin extends AutoCloseable {
     /**
      * Incrementally updates the configuration for the specified resources with default options.
      * <p>
-     * This is a convenience method for #{@link Admin#incrementalAlterConfigs(Map, AlterConfigsOptions)} with default options.
-     * See the overload for more details.*
+     * This is a convenience method for {@link #incrementalAlterConfigs(Map, AlterConfigsOptions)} with default options.
+     * See the overload for more details.
      * <p>
      * This operation is supported by brokers with version 2.3.0 or higher.
      *
      * @param configs The resources with their configs
-     * @return The IncrementalAlterConfigsResult
+     * @return The AlterConfigsResult
      */
     default AlterConfigsResult incrementalAlterConfigs(Map<ConfigResource, Collection<AlterConfigOp>> configs) {
         return incrementalAlterConfigs(configs, new AlterConfigsOptions());
@@ -414,9 +414,9 @@ public interface Admin extends AutoCloseable {
      * <p>
      * Updates are not transactional so they may succeed for some resources while fail for others. The configs for
      * a particular resource are updated atomically.
-     *
-     * <p>The following exceptions can be anticipated when calling {@code get()} on the futures obtained from
-     * the returned {@code IncrementalAlterConfigsResult}:</p>
+     * <p>
+     * The following exceptions can be anticipated when calling {@code get()} on the futures obtained from
+     * the returned {@link AlterConfigsResult}:
      * <ul>
      * <li>{@link org.apache.kafka.common.errors.ClusterAuthorizationException}
      * if the authenticated user didn't have alter access to the cluster.</li>
@@ -424,13 +424,13 @@ public interface Admin extends AutoCloseable {
      * if the authenticated user didn't have alter access to the Topic.</li>
      * <li>{@link org.apache.kafka.common.errors.InvalidRequestException}
      * if the request details are invalid. e.g., a configuration key was specified more than once for a resource</li>
-     * </ul>*
+     * </ul>
      * <p>
      * This operation is supported by brokers with version 2.3.0 or higher.
      *
      * @param configs The resources with their configs
      * @param options The options to use when altering configs
-     * @return The IncrementalAlterConfigsResult
+     * @return The AlterConfigsResult
      */
     AlterConfigsResult incrementalAlterConfigs(Map<ConfigResource,
         Collection<AlterConfigOp>> configs, AlterConfigsOptions options);
@@ -443,7 +443,7 @@ public interface Admin extends AutoCloseable {
      * <p>
      * This operation is not transactional so it may succeed for some replicas while fail for others.
      * <p>
-     * This is a convenience method for #{@link Admin#alterReplicaLogDirs(Map, AlterReplicaLogDirsOptions)} with default options.
+     * This is a convenience method for {@link #alterReplicaLogDirs(Map, AlterReplicaLogDirsOptions)} with default options.
      * See the overload for more details.
      * <p>
      * This operation is supported by brokers with version 1.1.0 or higher.
@@ -477,7 +477,7 @@ public interface Admin extends AutoCloseable {
     /**
      * Query the information of all log directories on the given set of brokers
      * <p>
-     * This is a convenience method for #{@link Admin#describeLogDirs(Collection, DescribeLogDirsOptions)} with default options.
+     * This is a convenience method for {@link #describeLogDirs(Collection, DescribeLogDirsOptions)} with default options.
      * See the overload for more details.
      * <p>
      * This operation is supported by brokers with version 1.0.0 or higher.
@@ -503,7 +503,7 @@ public interface Admin extends AutoCloseable {
     /**
      * Query the replica log directory information for the specified replicas.
      * <p>
-     * This is a convenience method for #{@link Admin#describeReplicaLogDirs(Collection, DescribeReplicaLogDirsOptions)}
+     * This is a convenience method for {@link #describeReplicaLogDirs(Collection, DescribeReplicaLogDirsOptions)}
      * with default options. See the overload for more details.
      * <p>
      * This operation is supported by brokers with version 1.0.0 or higher.
@@ -527,12 +527,12 @@ public interface Admin extends AutoCloseable {
     DescribeReplicaLogDirsResult describeReplicaLogDirs(Collection<TopicPartitionReplica> replicas, DescribeReplicaLogDirsOptions options);
 
     /**
-     * <p>Increase the number of partitions of the topics given as the keys of {@code newPartitions}
+     * Increase the number of partitions of the topics given as the keys of {@code newPartitions}
      * according to the corresponding values. <strong>If partitions are increased for a topic that has a key,
-     * the partition logic or ordering of the messages will be affected.</strong></p>
-     *
-     * <p>This is a convenience method for {@link #createPartitions(Map, CreatePartitionsOptions)} with default options.
-     * See the overload for more details.</p>
+     * the partition logic or ordering of the messages will be affected.</strong>
+     * <p>
+     * This is a convenience method for {@link #createPartitions(Map, CreatePartitionsOptions)} with default options.
+     * See the overload for more details.
      *
      * @param newPartitions The topics which should have new partitions created, and corresponding parameters
      *                      for the created partitions.
@@ -543,21 +543,21 @@ public interface Admin extends AutoCloseable {
     }
 
     /**
-     * <p>Increase the number of partitions of the topics given as the keys of {@code newPartitions}
+     * Increase the number of partitions of the topics given as the keys of {@code newPartitions}
      * according to the corresponding values. <strong>If partitions are increased for a topic that has a key,
-     * the partition logic or ordering of the messages will be affected.</strong></p>
-     *
-     * <p>This operation is not transactional so it may succeed for some topics while fail for others.</p>
-     *
-     * <p>It may take several seconds after this method returns
+     * the partition logic or ordering of the messages will be affected.</strong>
+     * <p>
+     * This operation is not transactional so it may succeed for some topics while fail for others.
+     * <p>
+     * It may take several seconds after this method returns
      * success for all the brokers to become aware that the partitions have been created.
-     * During this time, {@link Admin#describeTopics(Collection)}
-     * may not return information about the new partitions.</p>
-     *
-     * <p>This operation is supported by brokers with version 1.0.0 or higher.</p>
-     *
-     * <p>The following exceptions can be anticipated when calling {@code get()} on the futures obtained from the
-     * {@link CreatePartitionsResult#values() values()} method of the returned {@code CreatePartitionsResult}</p>
+     * During this time, {@link #describeTopics(Collection)}
+     * may not return information about the new partitions.
+     * <p>
+     * This operation is supported by brokers with version 1.0.0 or higher.
+     * <p>
+     * The following exceptions can be anticipated when calling {@code get()} on the futures obtained from the
+     * {@link CreatePartitionsResult#values() values()} method of the returned {@link CreatePartitionsResult}
      * <ul>
      * <li>{@link org.apache.kafka.common.errors.AuthorizationException}
      * if the authenticated user is not authorized to alter the topic</li>
@@ -576,7 +576,7 @@ public interface Admin extends AutoCloseable {
      *
      * @param newPartitions The topics which should have new partitions created, and corresponding parameters
      *                      for the created partitions.
-     * @param options       The options to use when creating the new paritions.
+     * @param options       The options to use when creating the new partitions.
      * @return The CreatePartitionsResult.
      */
     CreatePartitionsResult createPartitions(Map<String, NewPartitions> newPartitions,
@@ -610,10 +610,10 @@ public interface Admin extends AutoCloseable {
                                       DeleteRecordsOptions options);
 
     /**
-     * <p>Create a Delegation Token.</p>
-     *
-     * <p>This is a convenience method for {@link #createDelegationToken(CreateDelegationTokenOptions)} with default options.
-     * See the overload for more details.</p>
+     * Create a Delegation Token.
+     * <p>
+     * This is a convenience method for {@link #createDelegationToken(CreateDelegationTokenOptions)} with default options.
+     * See the overload for more details.
      *
      * @return The CreateDelegationTokenResult.
      */
@@ -623,12 +623,12 @@ public interface Admin extends AutoCloseable {
 
 
     /**
-     * <p>Create a Delegation Token.</p>
-     *
-     * <p>This operation is supported by brokers with version 1.1.0 or higher.</p>
-     *
-     * <p>The following exceptions can be anticipated when calling {@code get()} on the futures obtained from the
-     * {@link CreateDelegationTokenResult#delegationToken() delegationToken()} method of the returned {@code CreateDelegationTokenResult}</p>
+     * Create a Delegation Token.
+     * <p>
+     * This operation is supported by brokers with version 1.1.0 or higher.
+     * <p>
+     * The following exceptions can be anticipated when calling {@code get()} on the futures obtained from the
+     * {@link CreateDelegationTokenResult#delegationToken() delegationToken()} method of the returned {@link CreateDelegationTokenResult}
      * <ul>
      * <li>{@link org.apache.kafka.common.errors.UnsupportedByAuthenticationException}
      * If the request sent on PLAINTEXT/1-way SSL channels or delegation token authenticated channels.</li>
@@ -647,10 +647,10 @@ public interface Admin extends AutoCloseable {
 
 
     /**
-     * <p>Renew a Delegation Token.</p>
-     *
-     * <p>This is a convenience method for {@link #renewDelegationToken(byte[], RenewDelegationTokenOptions)} with default options.
-     * See the overload for more details.</p>
+     * Renew a Delegation Token.
+     * <p>
+     * This is a convenience method for {@link #renewDelegationToken(byte[], RenewDelegationTokenOptions)} with default options.
+     * See the overload for more details.
      *
      * @param hmac HMAC of the Delegation token
      * @return The RenewDelegationTokenResult.
@@ -660,12 +660,12 @@ public interface Admin extends AutoCloseable {
     }
 
     /**
-     * <p> Renew a Delegation Token.</p>
-     *
-     * <p>This operation is supported by brokers with version 1.1.0 or higher.</p>
-     *
-     * <p>The following exceptions can be anticipated when calling {@code get()} on the futures obtained from the
-     * {@link RenewDelegationTokenResult#expiryTimestamp() expiryTimestamp()} method of the returned {@code RenewDelegationTokenResult}</p>
+     * Renew a Delegation Token.
+     * <p>
+     * This operation is supported by brokers with version 1.1.0 or higher.
+     * <p>
+     * The following exceptions can be anticipated when calling {@code get()} on the futures obtained from the
+     * {@link RenewDelegationTokenResult#expiryTimestamp() expiryTimestamp()} method of the returned {@link RenewDelegationTokenResult}
      * <ul>
      * <li>{@link org.apache.kafka.common.errors.UnsupportedByAuthenticationException}
      * If the request sent on PLAINTEXT/1-way SSL channels or delegation token authenticated channels.</li>
@@ -688,10 +688,10 @@ public interface Admin extends AutoCloseable {
     RenewDelegationTokenResult renewDelegationToken(byte[] hmac, RenewDelegationTokenOptions options);
 
     /**
-     * <p>Expire a Delegation Token.</p>
-     *
-     * <p>This is a convenience method for {@link #expireDelegationToken(byte[], ExpireDelegationTokenOptions)} with default options.
-     * This will expire the token immediately. See the overload for more details.</p>
+     * Expire a Delegation Token.
+     * <p>
+     * This is a convenience method for {@link #expireDelegationToken(byte[], ExpireDelegationTokenOptions)} with default options.
+     * This will expire the token immediately. See the overload for more details.
      *
      * @param hmac HMAC of the Delegation token
      * @return The ExpireDelegationTokenResult.
@@ -701,12 +701,12 @@ public interface Admin extends AutoCloseable {
     }
 
     /**
-     * <p>Expire a Delegation Token.</p>
-     *
-     * <p>This operation is supported by brokers with version 1.1.0 or higher.</p>
-     *
-     * <p>The following exceptions can be anticipated when calling {@code get()} on the futures obtained from the
-     * {@link ExpireDelegationTokenResult#expiryTimestamp() expiryTimestamp()} method of the returned {@code ExpireDelegationTokenResult}</p>
+     * Expire a Delegation Token.
+     * <p>
+     * This operation is supported by brokers with version 1.1.0 or higher.
+     * <p>
+     * The following exceptions can be anticipated when calling {@code get()} on the futures obtained from the
+     * {@link ExpireDelegationTokenResult#expiryTimestamp() expiryTimestamp()} method of the returned {@link ExpireDelegationTokenResult}
      * <ul>
      * <li>{@link org.apache.kafka.common.errors.UnsupportedByAuthenticationException}
      * If the request sent on PLAINTEXT/1-way SSL channels or delegation token authenticated channels.</li>
@@ -729,10 +729,10 @@ public interface Admin extends AutoCloseable {
     ExpireDelegationTokenResult expireDelegationToken(byte[] hmac, ExpireDelegationTokenOptions options);
 
     /**
-     * <p>Describe the Delegation Tokens.</p>
-     *
-     * <p>This is a convenience method for {@link #describeDelegationToken(DescribeDelegationTokenOptions)} with default options.
-     * This will return all the user owned tokens and tokens where user have Describe permission. See the overload for more details.</p>
+     * Describe the Delegation Tokens.
+     * <p>
+     * This is a convenience method for {@link #describeDelegationToken(DescribeDelegationTokenOptions)} with default options.
+     * This will return all the user owned tokens and tokens where user have Describe permission. See the overload for more details.
      *
      * @return The DescribeDelegationTokenResult.
      */
@@ -741,12 +741,12 @@ public interface Admin extends AutoCloseable {
     }
 
     /**
-     * <p>Describe the Delegation Tokens.</p>
-     *
-     * <p>This operation is supported by brokers with version 1.1.0 or higher.</p>
-     *
-     * <p>The following exceptions can be anticipated when calling {@code get()} on the futures obtained from the
-     * {@link DescribeDelegationTokenResult#delegationTokens() delegationTokens()} method of the returned {@code DescribeDelegationTokenResult}</p>
+     * Describe the Delegation Tokens.
+     * <p>
+     * This operation is supported by brokers with version 1.1.0 or higher.
+     * <p>
+     * The following exceptions can be anticipated when calling {@code get()} on the futures obtained from the
+     * {@link DescribeDelegationTokenResult#delegationTokens() delegationTokens()} method of the returned {@link DescribeDelegationTokenResult}
      * <ul>
      * <li>{@link org.apache.kafka.common.errors.UnsupportedByAuthenticationException}
      * If the request sent on PLAINTEXT/1-way SSL channels or delegation token authenticated channels.</li>
@@ -774,9 +774,8 @@ public interface Admin extends AutoCloseable {
     /**
      * Describe some group IDs in the cluster, with the default options.
      * <p>
-     * This is a convenience method for
-     * #{@link Admin#describeConsumerGroups(Collection, DescribeConsumerGroupsOptions)} with
-     * default options. See the overload for more details.
+     * This is a convenience method for {@link #describeConsumerGroups(Collection, DescribeConsumerGroupsOptions)}
+     * with default options. See the overload for more details.
      *
      * @param groupIds The IDs of the groups to describe.
      * @return The DescribeConsumerGroupResult.
@@ -796,7 +795,7 @@ public interface Admin extends AutoCloseable {
     /**
      * List the consumer groups available in the cluster with the default options.
      * <p>
-     * This is a convenience method for #{@link Admin#listConsumerGroups(ListConsumerGroupsOptions)} with default options.
+     * This is a convenience method for {@link #listConsumerGroups(ListConsumerGroupsOptions)} with default options.
      * See the overload for more details.
      *
      * @return The ListGroupsResult.
@@ -816,7 +815,7 @@ public interface Admin extends AutoCloseable {
     /**
      * List the consumer group offsets available in the cluster with the default options.
      * <p>
-     * This is a convenience method for #{@link Admin#listConsumerGroupOffsets(String, ListConsumerGroupOffsetsOptions)} with default options.
+     * This is a convenience method for {@link #listConsumerGroupOffsets(String, ListConsumerGroupOffsetsOptions)} with default options.
      *
      * @return The ListGroupOffsetsResult.
      */
@@ -919,21 +918,21 @@ public interface Admin extends AutoCloseable {
     }
 
     /**
-     * Elect a replica as leader for the given {@code partitions}, or for all partitions if the argumentl
+     * Elect a replica as leader for the given {@code partitions}, or for all partitions if the argument
      * to {@code partitions} is null.
      * <p>
      * This operation is not transactional so it may succeed for some partitions while fail for others.
      * <p>
      * It may take several seconds after this method returns success for all the brokers in the cluster
      * to become aware that the partitions have new leaders. During this time,
-     * {@link Admin#describeTopics(Collection)} may not return information about the partitions'
+     * {@link #describeTopics(Collection)} may not return information about the partitions'
      * new leaders.
      * <p>
-     * This operation is supported by brokers with version 2.2.0 or later if preferred eleciton is use;
+     * This operation is supported by brokers with version 2.2.0 or later if preferred election is use;
      * otherwise the brokers most be 2.4.0 or higher.
-     *
-     * <p>The following exceptions can be anticipated when calling {@code get()} on the future obtained
-     * from the returned {@code ElectLeadersResult}:</p>
+     * <p>
+     * The following exceptions can be anticipated when calling {@code get()} on the future obtained
+     * from the returned {@link ElectLeadersResult}:
      * <ul>
      * <li>{@link org.apache.kafka.common.errors.ClusterAuthorizationException}
      * if the authenticated user didn't have alter access to the cluster.</li>
@@ -991,7 +990,7 @@ public interface Admin extends AutoCloseable {
      *   If there was an attempt to cancel a reassignment for a partition which was not being reassigned.</li>
      * </ul>
      *
-     * @param reassignments   The reassignments to add, modify, or remove.
+     * @param reassignments   The reassignments to add, modify, or remove. See {@link NewPartitionReassignment}.
      * @param options         The options to use.
      * @return                The result.
      */

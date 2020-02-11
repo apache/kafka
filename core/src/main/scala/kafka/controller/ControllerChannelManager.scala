@@ -58,12 +58,9 @@ class ControllerChannelManager(controllerContext: ControllerContext,
   private val brokerLock = new Object
   this.logIdent = "[Channel manager on controller " + config.brokerId + "]: "
 
-  newGauge(
-    "TotalQueueSize",
-    new Gauge[Int] {
-      def value: Int = brokerLock synchronized {
-        brokerStateInfo.values.iterator.map(_.messageQueue.size).sum
-      }
+  newGauge("TotalQueueSize",
+    () => brokerLock synchronized {
+      brokerStateInfo.values.iterator.map(_.messageQueue.size).sum
     }
   )
 
@@ -125,7 +122,8 @@ class ControllerChannelManager(controllerContext: ControllerContext,
         controllerToBrokerListenerName,
         config.saslMechanismInterBrokerProtocol,
         time,
-        config.saslInterBrokerHandshakeRequestEnable
+        config.saslInterBrokerHandshakeRequestEnable,
+        logContext
       )
       val reconfigurableChannelBuilder = channelBuilder match {
         case reconfigurable: Reconfigurable =>
@@ -175,13 +173,7 @@ class ControllerChannelManager(controllerContext: ControllerContext,
       brokerNode, config, time, requestRateAndQueueTimeMetrics, stateChangeLogger, threadName)
     requestThread.setDaemon(false)
 
-    val queueSizeGauge = newGauge(
-      QueueSizeMetricName,
-      new Gauge[Int] {
-        def value: Int = messageQueue.size
-      },
-      brokerMetricTags(broker.id)
-    )
+    val queueSizeGauge = newGauge(QueueSizeMetricName, () => messageQueue.size, brokerMetricTags(broker.id))
 
     brokerStateInfo.put(broker.id, ControllerBrokerStateInfo(networkClient, brokerNode, messageQueue,
       requestThread, queueSizeGauge, requestRateAndQueueTimeMetrics, reconfigurableChannelBuilder))
@@ -468,9 +460,13 @@ abstract class AbstractControllerBrokerRequestBatch(config: KafkaConfig,
           _.node(config.interBrokerListenerName)
         }
         val brokerEpoch = controllerContext.liveBrokerIdAndEpochs(broker)
-        val leaderAndIsrRequestBuilder = new LeaderAndIsrRequest.Builder(leaderAndIsrRequestVersion, controllerId, controllerEpoch,
-          brokerEpoch, leaderAndIsrPartitionStates.values.toBuffer.asJava, leaders.asJava)
-        sendRequest(broker, leaderAndIsrRequestBuilder, (r: AbstractResponse) => sendEvent(LeaderAndIsrResponseReceived(r, broker)))
+        val leaderAndIsrRequestBuilder = new LeaderAndIsrRequest.Builder(leaderAndIsrRequestVersion, controllerId,
+          controllerEpoch, brokerEpoch, leaderAndIsrPartitionStates.values.toBuffer.asJava, leaders.asJava)
+        sendRequest(broker, leaderAndIsrRequestBuilder, (r: AbstractResponse) => {
+          val leaderAndIsrResponse = r.asInstanceOf[LeaderAndIsrResponse]
+          sendEvent(LeaderAndIsrResponseReceived(leaderAndIsrResponse, broker))
+        })
+
 
     }
     leaderAndIsrRequestMap.clear()
@@ -520,9 +516,13 @@ abstract class AbstractControllerBrokerRequestBatch(config: KafkaConfig,
 
     updateMetadataRequestBrokerSet.intersect(controllerContext.liveOrShuttingDownBrokerIds).foreach { broker =>
       val brokerEpoch = controllerContext.liveBrokerIdAndEpochs(broker)
-      val updateMetadataRequest = new UpdateMetadataRequest.Builder(updateMetadataRequestVersion, controllerId, controllerEpoch,
-        brokerEpoch, partitionStates.asJava, liveBrokers.asJava)
-      sendRequest(broker, updateMetadataRequest)
+      val updateMetadataRequestBuilder = new UpdateMetadataRequest.Builder(updateMetadataRequestVersion,
+        controllerId, controllerEpoch, brokerEpoch, partitionStates.asJava, liveBrokers.asJava)
+      sendRequest(broker, updateMetadataRequestBuilder, (r: AbstractResponse) => {
+        val updateMetadataResponse = r.asInstanceOf[UpdateMetadataResponse]
+        sendEvent(UpdateMetadataResponseReceived(updateMetadataResponse, broker))
+      })
+
     }
     updateMetadataRequestBrokerSet.clear()
     updateMetadataRequestPartitionInfoMap.clear()

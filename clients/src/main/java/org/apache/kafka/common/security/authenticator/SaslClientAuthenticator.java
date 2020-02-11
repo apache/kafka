@@ -28,9 +28,9 @@ import org.apache.kafka.common.message.RequestHeaderData;
 import org.apache.kafka.common.message.SaslAuthenticateRequestData;
 import org.apache.kafka.common.message.SaslHandshakeRequestData;
 import org.apache.kafka.common.network.Authenticator;
+import org.apache.kafka.common.network.NetworkReceive;
 import org.apache.kafka.common.network.NetworkSend;
 import org.apache.kafka.common.network.ReauthenticationContext;
-import org.apache.kafka.common.network.NetworkReceive;
 import org.apache.kafka.common.network.Send;
 import org.apache.kafka.common.network.TransportLayer;
 import org.apache.kafka.common.protocol.ApiKeys;
@@ -47,10 +47,10 @@ import org.apache.kafka.common.requests.SaslHandshakeResponse;
 import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.security.kerberos.KerberosError;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import javax.security.auth.Subject;
 import javax.security.sasl.Sasl;
@@ -64,11 +64,11 @@ import java.security.PrivilegedActionException;
 import java.security.PrivilegedExceptionAction;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Random;
 import java.util.Set;
 
@@ -82,7 +82,7 @@ public class SaslClientAuthenticator implements Authenticator {
      * {@link #REAUTH_PROCESS_ORIG_APIVERSIONS_RESPONSE} and then flows to
      * {@link #REAUTH_SEND_HANDSHAKE_REQUEST} followed by
      * {@link #REAUTH_RECEIVE_HANDSHAKE_OR_OTHER_RESPONSE} and then
-     * {@value #REAUTH_INITIAL}; after that the flow joins the authentication flow
+     * {@link #REAUTH_INITIAL}; after that the flow joins the authentication flow
      * at the {@link #INTERMEDIATE} state and ends at either {@link #COMPLETE} or
      * {@link #FAILED}.
      */
@@ -102,7 +102,6 @@ public class SaslClientAuthenticator implements Authenticator {
         REAUTH_INITIAL,                             // Initial re-authentication state starting SASL token exchange for configured mechanism, send first token
     }
 
-    private static final Logger LOG = LoggerFactory.getLogger(SaslClientAuthenticator.class);
     private static final short DISABLE_KAFKA_SASL_AUTHENTICATE_HEADER = -1;
     private static final Random RNG = new Random();
 
@@ -117,6 +116,7 @@ public class SaslClientAuthenticator implements Authenticator {
     private final String clientPrincipalName;
     private final AuthenticateCallbackHandler callbackHandler;
     private final Time time;
+    private final Logger log;
     private final ReauthInfo reauthInfo;
 
     // buffers used in `authenticate`
@@ -143,7 +143,8 @@ public class SaslClientAuthenticator implements Authenticator {
                                    String mechanism,
                                    boolean handshakeRequestEnable,
                                    TransportLayer transportLayer,
-                                   Time time) {
+                                   Time time,
+                                   LogContext logContext) {
         this.node = node;
         this.subject = subject;
         this.callbackHandler = callbackHandler;
@@ -155,6 +156,7 @@ public class SaslClientAuthenticator implements Authenticator {
         this.configs = configs;
         this.saslAuthenticateVersion = DISABLE_KAFKA_SASL_AUTHENTICATE_HEADER;
         this.time = time;
+        this.log = logContext.logger(getClass());
         this.reauthInfo = new ReauthInfo();
 
         try {
@@ -178,7 +180,7 @@ public class SaslClientAuthenticator implements Authenticator {
         try {
             return Subject.doAs(subject, (PrivilegedExceptionAction<SaslClient>) () -> {
                 String[] mechs = {mechanism};
-                LOG.debug("Creating SaslClient: client={};service={};serviceHostname={};mechs={}",
+                log.debug("Creating SaslClient: client={};service={};serviceHostname={};mechs={}",
                     clientPrincipalName, servicePrincipal, host, Arrays.toString(mechs));
                 return Sasl.createSaslClient(mechs, clientPrincipalName, servicePrincipal, host, configs, callbackHandler);
             });
@@ -309,8 +311,8 @@ public class SaslClientAuthenticator implements Authenticator {
     }
 
     @Override
-    public List<NetworkReceive> getAndClearResponsesReceivedDuringReauthentication() {
-        return reauthInfo.getAndClearResponsesReceivedDuringReauthentication();
+    public Optional<NetworkReceive> pollResponseReceivedDuringReauthentication() {
+        return reauthInfo.pollResponseReceivedDuringReauthentication();
     }
 
     @Override
@@ -356,7 +358,7 @@ public class SaslClientAuthenticator implements Authenticator {
         else {
             this.pendingSaslState = null;
             this.saslState = saslState;
-            LOG.debug("Set SASL client state to {}", saslState);
+            log.debug("Set SASL client state to {}", saslState);
             if (saslState == SaslState.COMPLETE) {
                 reauthInfo.setAuthenticationEndAndSessionReauthenticationTimes(time.nanoseconds());
                 if (!reauthInfo.reauthenticating())
@@ -529,7 +531,7 @@ public class SaslClientAuthenticator implements Authenticator {
                 reauthInfo.pendingAuthenticatedReceives.add(receive);
                 return null;
             }
-            LOG.debug("Invalid SASL mechanism response, server may be expecting only GSSAPI tokens");
+            log.debug("Invalid SASL mechanism response, server may be expecting only GSSAPI tokens");
             setSaslState(SaslState.FAILED);
             throw new IllegalSaslStateException("Invalid SASL mechanism response, server may be expecting a different protocol", e);
         }
@@ -560,7 +562,7 @@ public class SaslClientAuthenticator implements Authenticator {
      *     During Kerberos re-login, principal is reset on Subject. An exception is
      *     thrown so that the connection is retried after any configured backoff.
      */
-    static final String firstPrincipal(Subject subject) {
+    public static String firstPrincipal(Subject subject) {
         Set<Principal> principals = subject.getPrincipals();
         synchronized (principals) {
             Iterator<Principal> iterator = principals.iterator();
@@ -574,7 +576,7 @@ public class SaslClientAuthenticator implements Authenticator {
     /**
      * Information related to re-authentication
      */
-    private static class ReauthInfo {
+    private class ReauthInfo {
         public ApiVersionsResponse apiVersionsResponseFromOriginalAuthentication;
         public long reauthenticationBeginNanos;
         public List<NetworkReceive> pendingAuthenticatedReceives = new ArrayList<>();
@@ -584,7 +586,7 @@ public class SaslClientAuthenticator implements Authenticator {
         public Long clientSessionReauthenticationTimeNanos;
 
         public void reauthenticating(ApiVersionsResponse apiVersionsResponseFromOriginalAuthentication,
-                long reauthenticationBeginNanos) {
+                                     long reauthenticationBeginNanos) {
             this.apiVersionsResponseFromOriginalAuthentication = Objects
                     .requireNonNull(apiVersionsResponseFromOriginalAuthentication);
             this.reauthenticationBeginNanos = reauthenticationBeginNanos;
@@ -600,23 +602,21 @@ public class SaslClientAuthenticator implements Authenticator {
         }
 
         /**
-         * Return the (always non-null but possibly empty) NetworkReceive responses that
-         * arrived during re-authentication that are unrelated to re-authentication, if
-         * any. These correspond to requests sent prior to the beginning of
-         * re-authentication; the requests were made when the channel was successfully
-         * authenticated, and the responses arrived during the re-authentication
+         * Return the (always non-null but possibly empty) NetworkReceive response that
+         * arrived during re-authentication that is unrelated to re-authentication, if
+         * any. This corresponds to a request sent prior to the beginning of
+         * re-authentication; the request was made when the channel was successfully
+         * authenticated, and the response arrived during the re-authentication
          * process.
          * 
-         * @return the (always non-null but possibly empty) NetworkReceive responses
-         *         that arrived during re-authentication that are unrelated to
+         * @return the (always non-null but possibly empty) NetworkReceive response
+         *         that arrived during re-authentication that is unrelated to
          *         re-authentication, if any
          */
-        public List<NetworkReceive> getAndClearResponsesReceivedDuringReauthentication() {
+        public Optional<NetworkReceive> pollResponseReceivedDuringReauthentication() {
             if (pendingAuthenticatedReceives.isEmpty())
-                return Collections.emptyList();
-            List<NetworkReceive> retval = pendingAuthenticatedReceives;
-            pendingAuthenticatedReceives = new ArrayList<>();
-            return retval;
+                return Optional.empty();
+            return Optional.of(pendingAuthenticatedReceives.remove(0));
         }
 
         public void setAuthenticationEndAndSessionReauthenticationTimes(long nowNanos) {
@@ -630,11 +630,11 @@ public class SaslClientAuthenticator implements Authenticator {
                         * pctWindowJitterToAvoidReauthenticationStormAcrossManyChannelsSimultaneously;
                 sessionLifetimeMsToUse = (long) (positiveSessionLifetimeMs.longValue() * pctToUse);
                 clientSessionReauthenticationTimeNanos = authenticationEndNanos + 1000 * 1000 * sessionLifetimeMsToUse;
-                LOG.debug(
+                log.debug(
                         "Finished {} with session expiration in {} ms and session re-authentication on or after {} ms",
                         authenticationOrReauthenticationText(), positiveSessionLifetimeMs, sessionLifetimeMsToUse);
             } else
-                LOG.debug("Finished {} with no session expiration and no session re-authentication",
+                log.debug("Finished {} with no session expiration and no session re-authentication",
                         authenticationOrReauthenticationText());
         }
 

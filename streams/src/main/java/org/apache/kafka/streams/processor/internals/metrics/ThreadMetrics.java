@@ -108,17 +108,14 @@ public class ThreadMetrics {
 
     public static Sensor skipRecordSensor(final String threadId,
                                           final StreamsMetricsImpl streamsMetrics) {
-        if (streamsMetrics.version() == Version.FROM_0100_TO_24) {
-            return invocationRateAndCountSensor(
-                threadId,
-                SKIP_RECORD,
-                SKIP_RECORD_RATE_DESCRIPTION,
-                SKIP_RECORD_TOTAL_DESCRIPTION,
-                RecordingLevel.INFO,
-                streamsMetrics
-            );
-        }
-        return emptySensor(threadId, SKIP_RECORD, RecordingLevel.INFO, streamsMetrics);
+        return invocationRateAndCountSensor(
+            threadId,
+            SKIP_RECORD,
+            SKIP_RECORD_RATE_DESCRIPTION,
+            SKIP_RECORD_TOTAL_DESCRIPTION,
+            RecordingLevel.INFO,
+            streamsMetrics
+        );
     }
 
     public static Sensor commitSensor(final String threadId,
@@ -178,30 +175,27 @@ public class ThreadMetrics {
     }
 
     public static Sensor commitOverTasksSensor(final String threadId,
-                                                         final StreamsMetricsImpl streamsMetrics) {
-        if (streamsMetrics.version() == Version.FROM_0100_TO_24) {
-            final Sensor commitOverTasksSensor =
-                streamsMetrics.threadLevelSensor(threadId, COMMIT, Sensor.RecordingLevel.DEBUG);
-            final Map<String, String> tagMap = streamsMetrics.taskLevelTagMap(threadId, ROLLUP_VALUE);
-            addAvgAndMaxToSensor(
-                commitOverTasksSensor,
-                TASK_LEVEL_GROUP,
-                tagMap,
-                COMMIT_LATENCY,
-                COMMIT_OVER_TASKS_AVG_LATENCY_DESCRIPTION,
-                COMMIT_OVER_TASKS_MAX_LATENCY_DESCRIPTION
-            );
-            addInvocationRateAndCountToSensor(
-                commitOverTasksSensor,
-                TASK_LEVEL_GROUP,
-                tagMap,
-                COMMIT,
-                COMMIT_OVER_TASKS_RATE_DESCRIPTION,
-                COMMIT_OVER_TASKS_TOTAL_DESCRIPTION
-            );
-            return commitOverTasksSensor;
-        }
-        return emptySensor(threadId, COMMIT, RecordingLevel.DEBUG, streamsMetrics);
+                                               final StreamsMetricsImpl streamsMetrics) {
+        final Sensor commitOverTasksSensor =
+            streamsMetrics.threadLevelSensor(threadId, COMMIT, Sensor.RecordingLevel.DEBUG);
+        final Map<String, String> tagMap = streamsMetrics.taskLevelTagMap(threadId, ROLLUP_VALUE);
+        addAvgAndMaxToSensor(
+            commitOverTasksSensor,
+            TASK_LEVEL_GROUP,
+            tagMap,
+            COMMIT_LATENCY,
+            COMMIT_OVER_TASKS_AVG_LATENCY_DESCRIPTION,
+            COMMIT_OVER_TASKS_MAX_LATENCY_DESCRIPTION
+        );
+        addInvocationRateAndCountToSensor(
+            commitOverTasksSensor,
+            TASK_LEVEL_GROUP,
+            tagMap,
+            COMMIT,
+            COMMIT_OVER_TASKS_RATE_DESCRIPTION,
+            COMMIT_OVER_TASKS_TOTAL_DESCRIPTION
+        );
+        return commitOverTasksSensor;
     }
 
     private static Sensor invocationRateAndCountSensor(final String threadId,
@@ -250,14 +244,6 @@ public class ThreadMetrics {
             descriptionOfCount
         );
         return sensor;
-    }
-
-    private static Sensor emptySensor(final String threadId,
-                                      final String metricName,
-                                      final RecordingLevel recordingLevel,
-                                      final StreamsMetricsImpl streamsMetrics,
-                                      final Sensor... parentSensors) {
-        return streamsMetrics.threadLevelSensor(threadId, metricName, recordingLevel, parentSensors);
     }
 
     private static String threadLevelGroup(final StreamsMetricsImpl streamsMetrics) {

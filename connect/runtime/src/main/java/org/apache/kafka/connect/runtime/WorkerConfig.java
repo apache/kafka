@@ -234,6 +234,16 @@ public class WorkerConfig extends AbstractConfig {
     public static final String METRICS_RECORDING_LEVEL_CONFIG = CommonClientConfigs.METRICS_RECORDING_LEVEL_CONFIG;
     public static final String METRIC_REPORTER_CLASSES_CONFIG = CommonClientConfigs.METRIC_REPORTER_CLASSES_CONFIG;
 
+    public static final String TOPIC_TRACKING_ENABLE_CONFIG = "topic.tracking.enable";
+    protected static final String TOPIC_TRACKING_ENABLE_DOC = "Enable tracking the set of active "
+            + "topics per connector during runtime.";
+    protected static final boolean TOPIC_TRACKING_ENABLE_DEFAULT = true;
+
+    public static final String TOPIC_TRACKING_ALLOW_RESET_CONFIG = "topic.tracking.allow.reset";
+    protected static final String TOPIC_TRACKING_ALLOW_RESET_DOC = "If set to true, it allows "
+            + "user requests to reset the set of active topics per connector.";
+    protected static final boolean TOPIC_TRACKING_ALLOW_RESET_DEFAULT = true;
+
     /**
      * Get a basic ConfigDef for a WorkerConfig. This includes all the common settings. Subclasses can use this to
      * bootstrap their own ConfigDef.
@@ -310,7 +320,11 @@ public class WorkerConfig extends AbstractConfig {
                 .define(ADMIN_LISTENERS_CONFIG, Type.LIST, null,
                         new AdminListenersValidator(), Importance.LOW, ADMIN_LISTENERS_DOC)
                 .define(CONNECTOR_CLIENT_POLICY_CLASS_CONFIG, Type.STRING, CONNECTOR_CLIENT_POLICY_CLASS_DEFAULT,
-                        Importance.MEDIUM, CONNECTOR_CLIENT_POLICY_CLASS_DOC);
+                        Importance.MEDIUM, CONNECTOR_CLIENT_POLICY_CLASS_DOC)
+                .define(TOPIC_TRACKING_ENABLE_CONFIG, Type.BOOLEAN, TOPIC_TRACKING_ENABLE_DEFAULT,
+                        Importance.LOW, TOPIC_TRACKING_ENABLE_DOC)
+                .define(TOPIC_TRACKING_ALLOW_RESET_CONFIG, Type.BOOLEAN, TOPIC_TRACKING_ALLOW_RESET_DEFAULT,
+                        Importance.LOW, TOPIC_TRACKING_ALLOW_RESET_DOC);
     }
 
     private void logInternalConverterDeprecationWarnings(Map<String, String> props) {

@@ -21,9 +21,23 @@
 
 <h5><a id="upgrade_250_notable" href="#upgrade_250_notable">Notable changes in 2.5.0</a></h5>
 <ul>
+    <li>When <code>RebalanceProtocol#COOPERATIVE</code> is used, <code>Consumer#poll</code> can still return data
+        while it is in the middle of a rebalance for those partitions still owned by the consumer; in addition
+        <code>Consumer#commitSync</code> now may throw a non-fatal <code>RebalanceInProgressException</code> to notify
+        users of such an event, in order to distinguish from the fatal <code>CommitFailedException</code> and allow
+        users to complete the ongoing rebalance and then reattempt committing offsets for those still-owned partitions.</li>
     <li>For improved resiliency in typical network environments, the default value of
         <code>zookeeper.session.timeout.ms</code> has been increased from 6s to 18s and
         <code>replica.lag.time.max.ms</code> from 10s to 30s.</li>
+    <li>New DSL operator <code>cogroup()</code> has been added for aggregating multiple streams together at once.</li>
+    <li>Scala 2.11 is no longer supported. See
+        <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-531%3A+Drop+support+for+Scala+2.11+in+Kafka+2.5">KIP-531</a>
+        for details.</li>
+    <li>All Scala classes from the package <code>kafka.security.auth</code> have been deprecated. See
+        <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-504+-+Add+new+Java+Authorizer+Interface">KIP-504</a>
+        for details of the new Java authorizer API added in 2.4.0.  Note that <code>kafka.security.auth.Authorizer</code>
+        and <code>kafka.security.auth.SimpleAclAuthorizer</code> were deprecated in 2.4.0.
+    </li>
 </ul>
 
 <h4><a id="upgrade_2_4_0" href="#upgrade_2_4_0">Upgrading from 0.8.x, 0.9.x, 0.10.0.x, 0.10.1.x, 0.10.2.x, 0.11.0.x, 1.0.x, 1.1.x, 2.0.x or 2.1.x or 2.2.x or 2.3.x to 2.4.0</a></h4>
@@ -68,11 +82,32 @@
     </li>
 </ol>
 
+<p><b>Additional Upgrade Notes:</b></p>
+
+<ol>
+    <li>ZooKeeper has been upgraded to 3.5.6. ZooKeeper upgrade from 3.4.X to 3.5.6 can fail if there are no snapshot files in 3.4 data directory.
+        This usually happens in test upgrades where ZooKeeper 3.5.6 is trying to load an existing 3.4 data dir in which no snapshot file has been created.
+        For more details about the issue please refer to <a href="https://issues.apache.org/jira/browse/ZOOKEEPER-3056">ZOOKEEPER-3056</a>.
+        A fix is given in <a href="https://issues.apache.org/jira/browse/ZOOKEEPER-3056">ZOOKEEPER-3056</a>, which is to set <code>snapshot.trust.empty=true</code>
+        config in <code>zookeeper.properties</code> before the upgrade. But we have observed data loss in standalone cluster upgrades when using
+        <code>snapshot.trust.empty=true</code> config. For more details about the issue please refer to <a href="https://issues.apache.org/jira/browse/ZOOKEEPER-3644">ZOOKEEPER-3644</a>.
+        So we recommend the safe workaround of copying empty <a href="https://issues.apache.org/jira/secure/attachment/12928686/snapshot.0">snapshot</a> file to the 3.4 data directory,
+        if there are no snapshot files in 3.4 data directory. For more details about the workaround please refer to <a href="https://cwiki.apache.org/confluence/display/ZOOKEEPER/Upgrade+FAQ">ZooKeeper Upgrade FAQ</a>.
+    </li>
+    <li>
+        An embedded Jetty based <a href="http://zookeeper.apache.org/doc/r3.5.6/zookeeperAdmin.html#sc_adminserver">AdminServer</a> added in ZooKeeper 3.5.
+        AdminServer is enabled by default in ZooKeeper and is started on port 8080.
+        AdminServer is disabled by default in the ZooKeeper config (<code>zookeeper.properties</code>) provided by the Apache Kafka distribution.
+        Make sure to update your local <code>zookeeper.properties</code> file with <code>admin.enableServer=false</code> if you wish to disable the AdminServer.
+        Please refer <a href="http://zookeeper.apache.org/doc/r3.5.6/zookeeperAdmin.html#sc_adminserver">AdminServer config</a> to configure the AdminServer.
+    </li>
+</ol>
+
 <h5><a id="upgrade_240_notable" href="#upgrade_240_notable">Notable changes in 2.4.0</a></h5>
 <ul>
     <li>A new Admin API has been added for partition reassignments. Due to changing the way Kafka propagates reassignment information,
         it is possible to lose reassignment state in failure edge cases while upgrading to the new version. It is not recommended to start reassignments while upgrading.</li>
-    <li>ZooKeeper has been upgraded from 3.4.14 to 3.5.5. TLS and dynamic reconfiguration are supported by the new version.</li>
+    <li>ZooKeeper has been upgraded from 3.4.14 to 3.5.6. TLS and dynamic reconfiguration are supported by the new version.</li>
     <li>The <code>bin/kafka-preferred-replica-election.sh</code> command line tool has been deprecated. It has been replaced by <code>bin/kafka-leader-election.sh</code>.</li>
     <li>The methods <code>electPreferredLeaders</code> in the Java <code>AdminClient</code> class have been deprecated in favor of the methods <code>electLeaders</code>.</li>
     <li>Scala code leveraging the <code>NewTopic(String, int, short)</code> constructor with literal values will need to explicitly call <code>toShort</code> on the second literal.</li>
@@ -125,6 +160,13 @@
         will also never be called when the set of revoked partitions is empty. The callback will generally be invoked only at the end of a rebalance, and only on the set of partitions that are being moved to another consumer. The
         <code>onPartitionsAssigned</code> callback will however always be called, even with an empty set of partitions, as a way to notify users of a rebalance event (this is true for both cooperative and eager). For details on
         the new callback semantics, see the <a href="https://kafka.apache.org/24/javadoc/index.html?org/apache/kafka/clients/consumer/ConsumerRebalanceListener.html">ConsumerRebalanceListener javadocs</a>.
+    </li>
+    <li>The Scala trait <code>kafka.security.auth.Authorizer</code> has been deprecated and replaced with a new Java API
+        <code>org.apache.kafka.server.authorizer.Authorizer</code>. The authorizer implementation class
+        <code>kafka.security.auth.SimpleAclAuthorizer</code> has also been deprecated and replaced with a new
+        implementation <code>kafka.security.authorizer.AclAuthorizer</code>. <code>AclAuthorizer</code> uses features
+        supported by the new API to improve authorization logging and is compatible with <code>SimpleAclAuthorizer</code>.
+        For more details, see <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-504+-+Add+new+Java+Authorizer+Interface">KIP-504</a>.
     </li>
 </ul>
 

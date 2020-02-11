@@ -22,7 +22,7 @@
     </p>
     <h3><a id="messages" href="#messages">5.2 Messages</a></h3>
     <p>
-    Messages consist of a variable-length header, a variable length opaque key byte array and a variable length opaque value byte array. The format of the header is described in the following section.
+    Messages consist of a variable-length header, a variable-length opaque key byte array and a variable-length opaque value byte array. The format of the header is described in the following section.
     Leaving the key and value opaque is the right decision: there is a great deal of progress being made on serialization libraries right now, and any particular choice is unlikely to be right for all uses. Needless to say a particular application using Kafka would likely mandate a particular serialization type as part of its usage. The <code>RecordBatch</code> interface is simply an iterator over messages with specialized methods for bulk reading and writing to an NIO <code>Channel</code>.</p>
 
     <h3><a id="messageformat" href="#messageformat">5.3 Message Format</a></h3>
@@ -130,7 +130,7 @@
     MessageSet (Version: 1) => [offset message_size message]
         offset => INT64
         message_size => INT32
-        message => crc magic_byte attributes key value
+        message => crc magic_byte attributes timestamp key value
             crc => INT32
             magic_byte => INT8
             attributes => INT8
@@ -143,7 +143,7 @@
                     0: create time
                     1: log append time
                 bit 4~7: unused
-            timestamp =>INT64
+            timestamp => INT64
             key => BYTES
             value => BYTES
     </pre></p>
@@ -219,7 +219,15 @@
     </pre>
     <h4><a id="impl_deletes" href="#impl_deletes">Deletes</a></h4>
     <p>
-    Data is deleted one log segment at a time. The log manager allows pluggable delete policies to choose which files are eligible for deletion. The current policy deletes any log with a modification time of more than <i>N</i> days ago, though a policy which retained the last <i>N</i> GB could also be useful. To avoid locking reads while still allowing deletes that modify the segment list we use a copy-on-write style segment list implementation that provides consistent views to allow a binary search to proceed on an immutable static snapshot view of the log segments while deletes are progressing.
+    Data is deleted one log segment at a time. The log manager applies two metrics to identify segments which are
+        eligible for deletion: time and size. For time-based policies, the record timestamps are considered, with the
+        largest timestamp in a segment file (order of records is not relevant) defining the retention time for the
+        entire segment. Size-based retention is disabled by default. When enabled the log manager keeps deleting the
+        oldest segment file until the overall size of the partition is within the configured limit again. If both
+        policies are enabled at the same time, a segment that is eligible for deletion due to either policy will be
+        deleted. To avoid locking reads while still allowing deletes that modify the segment list we use a copy-on-write
+        style segment list implementation that provides consistent views to allow a binary search to proceed on an
+        immutable static snapshot view of the log segments while deletes are progressing.
     </p>
     <h4><a id="impl_guarantees" href="#impl_guarantees">Guarantees</a></h4>
     <p>

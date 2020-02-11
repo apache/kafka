@@ -27,8 +27,7 @@ import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
  * @param <V1>  this value type
  * @param <V2>  other value type
  */
-public class StreamJoined<K, V1, V2>
-    implements NamedOperation<StreamJoined<K, V1, V2>> {
+public class StreamJoined<K, V1, V2> implements NamedOperation<StreamJoined<K, V1, V2>> {
 
     protected final Serde<K> keySerde;
     protected final Serde<V1> valueSerde;

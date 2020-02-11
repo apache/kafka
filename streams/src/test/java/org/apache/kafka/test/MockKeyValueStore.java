@@ -98,9 +98,7 @@ public class MockKeyValueStore implements KeyValueStore {
     };
 
     @Override
-    public void put(final Object key, final Object value) {
-
-    }
+    public void put(final Object key, final Object value) {}
 
     @Override
     public Object putIfAbsent(final Object key, final Object value) {

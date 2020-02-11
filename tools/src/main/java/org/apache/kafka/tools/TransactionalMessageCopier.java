@@ -33,6 +33,7 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.OutOfOrderSequenceException;
 import org.apache.kafka.common.errors.ProducerFencedException;
+import org.apache.kafka.common.utils.Exit;
 
 import java.io.IOException;
 import java.time.Duration;
@@ -196,7 +197,8 @@ public class TransactionalMessageCopier {
 
     private static void resetToLastCommittedPositions(KafkaConsumer<String, String> consumer) {
         final Map<TopicPartition, OffsetAndMetadata> committed = consumer.committed(consumer.assignment());
-        committed.forEach((tp, offsetAndMetadata) -> {
+        consumer.assignment().forEach(tp -> {
+            OffsetAndMetadata offsetAndMetadata = committed.get(tp);
             if (offsetAndMetadata != null)
                 consumer.seek(tp, offsetAndMetadata.offset());
             else
@@ -263,7 +265,7 @@ public class TransactionalMessageCopier {
         final AtomicBoolean isShuttingDown = new AtomicBoolean(false);
         final AtomicLong remainingMessages = new AtomicLong(maxMessages);
         final AtomicLong numMessagesProcessed = new AtomicLong(0);
-        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+        Exit.addShutdownHook("transactional-message-copier-shutdown-hook", () -> {
             isShuttingDown.set(true);
             // Flush any remaining messages
             producer.close();
@@ -271,7 +273,7 @@ public class TransactionalMessageCopier {
                 consumer.close();
             }
             System.out.println(shutDownString(numMessagesProcessed.get(), remainingMessages.get(), transactionalId));
-        }));
+        });
 
         try {
             Random random = new Random();

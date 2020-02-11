@@ -20,11 +20,12 @@ import collection.JavaConverters._
 import collection._
 import java.util.Properties
 import java.util.concurrent.ExecutionException
+
 import joptsimple.OptionSpecBuilder
 import kafka.common.AdminCommandFailedException
 import kafka.utils._
 import kafka.zk.KafkaZkClient
-import org.apache.kafka.clients.admin.AdminClientConfig
+import org.apache.kafka.clients.admin.{Admin, AdminClientConfig}
 import org.apache.kafka.common.ElectionType
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.ClusterAuthorizationException
@@ -64,7 +65,7 @@ object PreferredReplicaLeaderElectionCommand extends Logging {
       println(s"Warning: --zookeeper is deprecated and will be removed in a future version of Kafka.")
       println(s"Use --bootstrap-server instead to specify a broker to connect to.")
       new ZkCommand(commandOpts.options.valueOf(commandOpts.zkConnectOpt),
-              JaasUtils.isZkSecurityEnabled,
+              JaasUtils.isZkSaslEnabled,
               timeout)
     } else {
         val adminProps = if (commandOpts.options.has(commandOpts.adminClientConfigOpt))
@@ -73,6 +74,7 @@ object PreferredReplicaLeaderElectionCommand extends Logging {
           new Properties()
         adminProps.setProperty(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, commandOpts.options.valueOf(commandOpts.bootstrapServerOpt))
         adminProps.setProperty(AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG, timeout.toString)
+        adminProps.setProperty(AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG, (timeout * 2).toString)
         new AdminClientCommand(adminProps)
     }
 
@@ -209,7 +211,7 @@ object PreferredReplicaLeaderElectionCommand extends Logging {
   class AdminClientCommand(adminClientProps: Properties)
     extends Command with Logging {
 
-    val adminClient = org.apache.kafka.clients.admin.AdminClient.create(adminClientProps)
+    val adminClient = Admin.create(adminClientProps)
 
     override def electPreferredLeaders(partitionsFromUser: Option[Set[TopicPartition]]): Unit = {
       val partitions = partitionsFromUser match {

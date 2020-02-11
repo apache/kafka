@@ -21,7 +21,6 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 
 /**
  * A new partition reassignment, which can be applied via {@link AdminClient#alterPartitionReassignments(Map, AlterPartitionReassignmentsOptions)}.
@@ -32,13 +31,9 @@ public class NewPartitionReassignment {
     /**
      * @throws IllegalArgumentException if no replicas are supplied
      */
-    public static Optional<NewPartitionReassignment> of(List<Integer> replicas) {
-        if (replicas == null || replicas.size() == 0)
+    public NewPartitionReassignment(List<Integer> targetReplicas) {
+        if (targetReplicas == null || targetReplicas.size() == 0)
             throw new IllegalArgumentException("Cannot create a new partition reassignment without any replicas");
-        return Optional.of(new NewPartitionReassignment(replicas));
-    }
-
-    private NewPartitionReassignment(List<Integer> targetReplicas) {
         this.targetReplicas = Collections.unmodifiableList(new ArrayList<>(targetReplicas));
     }
 

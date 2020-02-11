@@ -250,7 +250,7 @@ public class MeteredKeyValueStore<K, V>
             try {
                 iter.close();
             } finally {
-                streamsMetrics.recordLatency(sensor, startNs, time.nanoseconds());
+                sensor.record(time.nanoseconds() - startNs);
             }
         }
 

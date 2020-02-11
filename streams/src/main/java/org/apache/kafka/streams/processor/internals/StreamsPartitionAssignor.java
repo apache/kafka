@@ -52,8 +52,8 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.TreeMap;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
@@ -64,11 +64,6 @@ import static org.apache.kafka.common.utils.Utils.getPort;
 import static org.apache.kafka.streams.processor.internals.assignment.StreamsAssignmentProtocolVersions.EARLIEST_PROBEABLE_VERSION;
 import static org.apache.kafka.streams.processor.internals.assignment.StreamsAssignmentProtocolVersions.LATEST_SUPPORTED_VERSION;
 import static org.apache.kafka.streams.processor.internals.assignment.StreamsAssignmentProtocolVersions.UNKNOWN;
-import static org.apache.kafka.streams.processor.internals.assignment.StreamsAssignmentProtocolVersions.VERSION_FIVE;
-import static org.apache.kafka.streams.processor.internals.assignment.StreamsAssignmentProtocolVersions.VERSION_FOUR;
-import static org.apache.kafka.streams.processor.internals.assignment.StreamsAssignmentProtocolVersions.VERSION_THREE;
-import static org.apache.kafka.streams.processor.internals.assignment.StreamsAssignmentProtocolVersions.VERSION_TWO;
-import static org.apache.kafka.streams.processor.internals.assignment.StreamsAssignmentProtocolVersions.VERSION_ONE;
 
 public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Configurable {
 
@@ -166,6 +161,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
     private int numStandbyReplicas;
 
     private TaskManager taskManager;
+    private StreamsMetadataState streamsMetadataState;
     @SuppressWarnings("deprecation")
     private org.apache.kafka.streams.processor.PartitionGrouper partitionGrouper;
     private AtomicInteger assignmentErrorCode;
@@ -175,14 +171,6 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
     private InternalTopicManager internalTopicManager;
     private CopartitionedTopicsEnforcer copartitionedTopicsEnforcer;
     private RebalanceProtocol rebalanceProtocol;
-
-    protected String userEndPoint() {
-        return userEndPoint;
-    }
-
-    protected TaskManager taskManger() {
-        return taskManager;
-    }
 
     /**
      * We need to have the PartitionAssignor and its StreamThread to be mutually accessible since the former needs
@@ -200,6 +188,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         usedSubscriptionMetadataVersion = assignorConfiguration
             .configuredMetadataVersion(usedSubscriptionMetadataVersion);
         taskManager = assignorConfiguration.getTaskManager();
+        streamsMetadataState = assignorConfiguration.getStreamsMetadataState();
         assignmentErrorCode = assignorConfiguration.getAssignmentErrorCode(configs);
         numStandbyReplicas = assignorConfiguration.getNumStandbyReplicas();
         partitionGrouper = assignorConfiguration.getPartitionGrouper();
@@ -230,13 +219,14 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         // 1. Client UUID (a unique id assigned to an instance of KafkaStreams)
         // 2. Task ids of previously running tasks
         // 3. Task ids of valid local states on the client's state directory.
-        final Set<TaskId> standbyTasks = taskManager.cachedTasksIds();
+        final Set<TaskId> standbyTasks = taskManager.tasksOnLocalStorage();
         final Set<TaskId> activeTasks = prepareForSubscription(taskManager,
             topics,
             standbyTasks,
             rebalanceProtocol);
         return new SubscriptionInfo(
             usedSubscriptionMetadataVersion,
+            LATEST_SUPPORTED_VERSION,
             taskManager.processId(),
             activeTasks,
             standbyTasks,
@@ -245,9 +235,9 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
     }
 
     protected static Set<TaskId> prepareForSubscription(final TaskManager taskManager,
-        final Set<String> topics,
-        final Set<TaskId> standbyTasks,
-        final RebalanceProtocol rebalanceProtocol) {
+                                                        final Set<String> topics,
+                                                        final Set<TaskId> standbyTasks,
+                                                        final RebalanceProtocol rebalanceProtocol) {
         // Any tasks that are not yet running are counted as standby tasks for assignment purposes,
         // along with any old tasks for which we still found state on disk
         final Set<TaskId> activeTasks;
@@ -255,7 +245,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         switch (rebalanceProtocol) {
             case EAGER:
                 // In eager, onPartitionsRevoked is called first and we must get the previously saved running task ids
-                activeTasks = taskManager.previousRunningTaskIds();
+                activeTasks = taskManager.activeTaskIds();
                 standbyTasks.removeAll(activeTasks);
                 break;
             case COOPERATIVE:
@@ -267,8 +257,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                 throw new IllegalStateException("Streams partition assignor's rebalance protocol is unknown");
         }
 
-        taskManager.updateSubscriptionsFromMetadata(topics);
-        taskManager.setRebalanceInProgress(true);
+        taskManager.handleRebalanceStart(topics);
 
         return activeTasks;
     }
@@ -285,6 +274,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                     Collections.emptyList(),
                     new AssignmentInfo(LATEST_SUPPORTED_VERSION,
                         Collections.emptyList(),
+                        Collections.emptyMap(),
                         Collections.emptyMap(),
                         Collections.emptyMap(),
                         errorCode).encode()
@@ -358,9 +348,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             // add the consumer and any info its its subscription to the client
             clientMetadata.addConsumer(consumerId, subscription.ownedPartitions());
             allOwnedPartitions.addAll(subscription.ownedPartitions());
-            if (info.prevTasks() != null && info.standbyTasks() != null) {
-                clientMetadata.addPreviousTasks(info);
-            }
+            clientMetadata.addPreviousTasks(info);
         }
 
         final boolean versionProbing;
@@ -400,7 +388,8 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         // parse the topology to determine the repartition source topics,
         // making sure they are created with the number of partitions as
         // the maximum of the depending sub-topologies source topics' number of partitions
-        final Map<Integer, InternalTopologyBuilder.TopicsInfo> topicGroups = taskManager.builder().topicGroups();
+        final Map<Integer, InternalTopologyBuilder.TopicsInfo> topicGroups =
+            taskManager.builder().topicGroups();
 
         final Map<String, InternalTopicConfig> repartitionTopicMetadata = new HashMap<>();
         for (final InternalTopologyBuilder.TopicsInfo topicsInfo : topicGroups.values()) {
@@ -439,7 +428,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                                 // if this topic is one of the sink topics of this topology,
                                 // use the maximum of all its source topic partitions as the number of partitions
                                 for (final String sourceTopicName : otherTopicsInfo.sourceTopics) {
-                                    int numPartitionsCandidate = 0;
+                                    Integer numPartitionsCandidate = null;
                                     // It is possible the sourceTopic is another internal topic, i.e,
                                     // map().join().join(map())
                                     if (repartitionTopicMetadata.containsKey(sourceTopicName)) {
@@ -459,13 +448,16 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                                         numPartitionsCandidate = count;
                                     }
 
-                                    if (numPartitions == null || numPartitionsCandidate > numPartitions) {
-                                        numPartitions = numPartitionsCandidate;
+                                    if (numPartitionsCandidate != null) {
+                                        if (numPartitions == null || numPartitionsCandidate > numPartitions) {
+                                            numPartitions = numPartitionsCandidate;
+                                        }
                                     }
                                 }
                             }
                         }
-                        // if we still have not find the right number of partitions,
+
+                        // if we still have not found the right number of partitions,
                         // another iteration is needed
                         if (numPartitions == null) {
                             numPartitionsNeeded = true;
@@ -502,7 +494,6 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         }
 
         final Cluster fullMetadata = metadata.withPartitions(allRepartitionTopicPartitions);
-        taskManager.setClusterMetadata(fullMetadata);
 
         log.debug("Created repartition topics {} from the parsed topology.", allRepartitionTopicPartitions.values());
 
@@ -623,7 +614,8 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         // ---------------- Step Three ---------------- //
 
         // construct the global partition assignment per host map
-        final Map<HostInfo, Set<TopicPartition>> partitionsByHostState = new HashMap<>();
+        final Map<HostInfo, Set<TopicPartition>> partitionsByHost = new HashMap<>();
+        final Map<HostInfo, Set<TopicPartition>> standbyPartitionsByHost = new HashMap<>();
         if (minReceivedMetadataVersion >= 2) {
             for (final Map.Entry<UUID, ClientMetadata> entry : clientMetadataMap.entrySet()) {
                 final HostInfo hostInfo = entry.getValue().hostInfo;
@@ -631,24 +623,31 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                 // if application server is configured, also include host state map
                 if (hostInfo != null) {
                     final Set<TopicPartition> topicPartitions = new HashSet<>();
+                    final Set<TopicPartition> standbyPartitions = new HashSet<>();
                     final ClientState state = entry.getValue().state;
 
                     for (final TaskId id : state.activeTasks()) {
                         topicPartitions.addAll(partitionsForTask.get(id));
                     }
 
-                    partitionsByHostState.put(hostInfo, topicPartitions);
+                    for (final TaskId id : state.standbyTasks()) {
+                        standbyPartitions.addAll(partitionsForTask.get(id));
+                    }
+
+                    partitionsByHost.put(hostInfo, topicPartitions);
+                    standbyPartitionsByHost.put(hostInfo, standbyPartitions);
                 }
             }
         }
-        taskManager.setPartitionsByHostState(partitionsByHostState);
+        streamsMetadataState.onChange(partitionsByHost, standbyPartitionsByHost, fullMetadata);
 
         final Map<String, Assignment> assignment;
         if (versionProbing) {
             assignment = versionProbingAssignment(
                 clientMetadataMap,
                 partitionsForTask,
-                partitionsByHostState,
+                partitionsByHost,
+                standbyPartitionsByHost,
                 allOwnedPartitions,
                 minReceivedMetadataVersion,
                 minSupportedMetadataVersion
@@ -657,7 +656,8 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             assignment = computeNewAssignment(
                 clientMetadataMap,
                 partitionsForTask,
-                partitionsByHostState,
+                partitionsByHost,
+                standbyPartitionsByHost,
                 allOwnedPartitions,
                 minReceivedMetadataVersion,
                 minSupportedMetadataVersion
@@ -670,6 +670,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
     private Map<String, Assignment> computeNewAssignment(final Map<UUID, ClientMetadata> clientsMetadata,
                                                          final Map<TaskId, Set<TopicPartition>> partitionsForTask,
                                                          final Map<HostInfo, Set<TopicPartition>> partitionsByHostState,
+                                                         final Map<HostInfo, Set<TopicPartition>> standbyPartitionsByHost,
                                                          final Set<TopicPartition> allOwnedPartitions,
                                                          final int minUserMetadataVersion,
                                                          final int minSupportedMetadataVersion) {
@@ -703,6 +704,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                 clientMetadata,
                 partitionsForTask,
                 partitionsByHostState,
+                standbyPartitionsByHost,
                 allOwnedPartitions,
                 activeTaskAssignments,
                 interleavedStandby,
@@ -715,7 +717,8 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
 
     private Map<String, Assignment> versionProbingAssignment(final Map<UUID, ClientMetadata> clientsMetadata,
                                                              final Map<TaskId, Set<TopicPartition>> partitionsForTask,
-                                                             final Map<HostInfo, Set<TopicPartition>> partitionsByHostState,
+                                                             final Map<HostInfo, Set<TopicPartition>> partitionsByHost,
+                                                             final Map<HostInfo, Set<TopicPartition>> standbyPartitionsByHost,
                                                              final Set<TopicPartition> allOwnedPartitions,
                                                              final int minUserMetadataVersion,
                                                              final int minSupportedMetadataVersion) {
@@ -737,7 +740,8 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                 assignment,
                 clientMetadata,
                 partitionsForTask,
-                partitionsByHostState,
+                partitionsByHost,
+                standbyPartitionsByHost,
                 allOwnedPartitions,
                 interleavedActive,
                 interleavedStandby,
@@ -752,6 +756,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                                       final ClientMetadata clientMetadata,
                                       final Map<TaskId, Set<TopicPartition>> partitionsForTask,
                                       final Map<HostInfo, Set<TopicPartition>> partitionsByHostState,
+                                      final Map<HostInfo, Set<TopicPartition>> standbyPartitionsByHost,
                                       final Set<TopicPartition> allOwnedPartitions,
                                       final Map<String, List<TaskId>> activeTaskAssignments,
                                       final Map<String, List<TaskId>> standbyTaskAssignments,
@@ -788,6 +793,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                         assignedActiveList,
                         standbyTaskMap,
                         partitionsByHostState,
+                        standbyPartitionsByHost,
                         AssignorError.NONE.code()
                     ).encode()
                 )
@@ -955,9 +961,9 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
      * @return set of consumer(s) that previously owned the partitions in this task
      *         empty set signals that it is a new task, or its previous owner is no longer in the group
      */
-    Set<String> previousConsumersOfTaskPartitions(final Set<TopicPartition> taskPartitions,
-                                                  final Map<TopicPartition, String> clientOwnedPartitions,
-                                                  final Set<TopicPartition> allOwnedPartitions) {
+    private Set<String> previousConsumersOfTaskPartitions(final Set<TopicPartition> taskPartitions,
+                                                          final Map<TopicPartition, String> clientOwnedPartitions,
+                                                          final Set<TopicPartition> allOwnedPartitions) {
         // this "foreignConsumer" indicates a partition was owned by someone from another client -- we don't really care who
         final String foreignConsumer = "";
         final Set<String> previousConsumers = new HashSet<>();
@@ -1109,28 +1115,42 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         // Check if this was a version probing rebalance and check the error code to trigger another rebalance if so
         if (maybeUpdateSubscriptionVersion(receivedAssignmentMetadataVersion, latestCommonlySupportedVersion)) {
             setAssignmentErrorCode(AssignorError.VERSION_PROBING.code());
-            return;
         }
 
         // version 1 field
-        final Map<TaskId, Set<TopicPartition>> activeTasks = new HashMap<>();
+        final Map<TaskId, Set<TopicPartition>> activeTasks;
         // version 2 fields
-        final Map<TopicPartition, PartitionInfo> topicToPartitionInfo = new HashMap<>();
+        final Map<TopicPartition, PartitionInfo> topicToPartitionInfo;
         final Map<HostInfo, Set<TopicPartition>> partitionsByHost;
-
-        final Map<TopicPartition, TaskId> partitionsToTaskId = new HashMap<>();
+        final Map<HostInfo, Set<TopicPartition>> standbyPartitionsByHost;
 
         switch (receivedAssignmentMetadataVersion) {
-            case VERSION_ONE:
-                processVersionOneAssignment(logPrefix, info, partitions, activeTasks, partitionsToTaskId);
+            case 1:
+                validateActiveTaskEncoding(partitions, info, logPrefix);
+
+                activeTasks = getActiveTasks(partitions, info);
                 partitionsByHost = Collections.emptyMap();
+                standbyPartitionsByHost = Collections.emptyMap();
+                topicToPartitionInfo = Collections.emptyMap();
                 break;
-            case VERSION_TWO:
-            case VERSION_THREE:
-            case VERSION_FOUR:
-            case VERSION_FIVE:
-                processVersionTwoAssignment(logPrefix, info, partitions, activeTasks, topicToPartitionInfo, partitionsToTaskId);
+            case 2:
+            case 3:
+            case 4:
+            case 5:
+                validateActiveTaskEncoding(partitions, info, logPrefix);
+
+                activeTasks = getActiveTasks(partitions, info);
                 partitionsByHost = info.partitionsByHost();
+                standbyPartitionsByHost = Collections.emptyMap();
+                topicToPartitionInfo = getTopicPartitionInfo(partitionsByHost);
+                break;
+            case 6:
+                validateActiveTaskEncoding(partitions, info, logPrefix);
+
+                activeTasks = getActiveTasks(partitions, info);
+                partitionsByHost = info.partitionsByHost();
+                standbyPartitionsByHost = info.standbyPartitionByHost();
+                topicToPartitionInfo = getTopicPartitionInfo(partitionsByHost);
                 break;
             default:
                 throw new IllegalStateException(
@@ -1139,50 +1159,27 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                 );
         }
 
-        taskManager.setClusterMetadata(Cluster.empty().withPartitions(topicToPartitionInfo));
-        taskManager.setPartitionsByHostState(partitionsByHost);
-        taskManager.setPartitionsToTaskId(partitionsToTaskId);
-        taskManager.setAssignmentMetadata(activeTasks, info.standbyTasks());
-        taskManager.updateSubscriptionsFromAssignment(partitions);
-        taskManager.setRebalanceInProgress(false);
+        final Cluster fakeCluster = Cluster.empty().withPartitions(topicToPartitionInfo);
+        streamsMetadataState.onChange(partitionsByHost, standbyPartitionsByHost, fakeCluster);
+
+        // we do not capture any exceptions but just let the exception thrown from consumer.poll directly
+        // since when stream thread captures it, either we close all tasks as dirty or we close thread
+        taskManager.handleAssignment(activeTasks, info.standbyTasks());
     }
 
-    private static void processVersionOneAssignment(final String logPrefix,
-                                                    final AssignmentInfo info,
-                                                    final List<TopicPartition> partitions,
-                                                    final Map<TaskId, Set<TopicPartition>> activeTasks,
-                                                    final Map<TopicPartition, TaskId> partitionsToTaskId) {
-        // the number of assigned partitions should be the same as number of active tasks, which
-        // could be duplicated if one task has more than one assigned partitions
-        if (partitions.size() != info.activeTasks().size()) {
-            throw new TaskAssignmentException(
-                String.format(
-                    "%sNumber of assigned partitions %d is not equal to "
-                        + "the number of active taskIds %d, assignmentInfo=%s",
-                    logPrefix, partitions.size(),
-                    info.activeTasks().size(), info.toString()
-                )
-            );
-        }
-
+    // protected for upgrade test
+    protected static Map<TaskId, Set<TopicPartition>> getActiveTasks(final List<TopicPartition> partitions, final AssignmentInfo info) {
+        final Map<TaskId, Set<TopicPartition>> activeTasks = new HashMap<>();
         for (int i = 0; i < partitions.size(); i++) {
             final TopicPartition partition = partitions.get(i);
             final TaskId id = info.activeTasks().get(i);
-            activeTasks.computeIfAbsent(id, k -> new HashSet<>()).add(partition);
-            partitionsToTaskId.put(partition, id);
+            activeTasks.computeIfAbsent(id, k1 -> new HashSet<>()).add(partition);
         }
+        return activeTasks;
     }
 
-    public static void processVersionTwoAssignment(final String logPrefix,
-                                                   final AssignmentInfo info,
-                                                   final List<TopicPartition> partitions,
-                                                   final Map<TaskId, Set<TopicPartition>> activeTasks,
-                                                   final Map<TopicPartition, PartitionInfo> topicToPartitionInfo,
-                                                   final Map<TopicPartition, TaskId> partitionsToTaskId) {
-        processVersionOneAssignment(logPrefix, info, partitions, activeTasks, partitionsToTaskId);
-
-        // process partitions by host
-        final Map<HostInfo, Set<TopicPartition>> partitionsByHost = info.partitionsByHost();
+    private static Map<TopicPartition, PartitionInfo> getTopicPartitionInfo(final Map<HostInfo, Set<TopicPartition>> partitionsByHost) {
+        final Map<TopicPartition, PartitionInfo> topicToPartitionInfo = new HashMap<>();
         for (final Set<TopicPartition> value : partitionsByHost.values()) {
             for (final TopicPartition topicPartition : value) {
                 topicToPartitionInfo.put(
@@ -1196,6 +1193,22 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                     )
                 );
             }
+        }
+        return topicToPartitionInfo;
+    }
+
+    private static void validateActiveTaskEncoding(final List<TopicPartition> partitions, final AssignmentInfo info, final String logPrefix) {
+        // the number of assigned partitions should be the same as number of active tasks, which
+        // could be duplicated if one task has more than one assigned partitions
+        if (partitions.size() != info.activeTasks().size()) {
+            throw new TaskAssignmentException(
+                String.format(
+                    "%sNumber of assigned partitions %d is not equal to "
+                        + "the number of active taskIds %d, assignmentInfo=%s",
+                    logPrefix, partitions.size(),
+                    info.activeTasks().size(), info.toString()
+                )
+            );
         }
     }
 
@@ -1239,7 +1252,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
     }
 
     private int updateMinReceivedVersion(final int usedVersion, final int minReceivedMetadataVersion) {
-        return usedVersion < minReceivedMetadataVersion ? usedVersion : minReceivedMetadataVersion;
+        return Math.min(usedVersion, minReceivedMetadataVersion);
     }
 
     private int updateMinSupportedVersion(final int supportedVersion, final int minSupportedMetadataVersion) {
@@ -1267,4 +1280,11 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         this.internalTopicManager = internalTopicManager;
     }
 
+    protected String userEndPoint() {
+        return userEndPoint;
+    }
+
+    protected TaskManager taskManger() {
+        return taskManager;
+    }
 }

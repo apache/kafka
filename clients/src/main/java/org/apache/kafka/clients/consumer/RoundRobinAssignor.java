@@ -75,7 +75,7 @@ import java.util.TreeSet;
  * </ul>
  *
  * After one rolling bounce, group coordinator will attempt to assign new <code>member.id</code> towards consumers,
- * for example <code>C0</code> -> <code>C5</code> <code>C1</code> -> <code>C3</code>, <code>C2</code> -> <code>C4</code>.
+ * for example <code>C0</code> -&gt; <code>C5</code> <code>C1</code> -&gt; <code>C3</code>, <code>C2</code> -&gt; <code>C4</code>.
  *
  * <p>The assignment could be completely shuffled to:
  * <ul>

@@ -24,14 +24,14 @@ import java.util.Properties
 import java.util.concurrent._
 
 import kafka.server.{BaseRequestTest, KafkaConfig}
-import kafka.utils.{CoreUtils, TestUtils}
-import org.apache.kafka.clients.admin.{Admin, AdminClient, AdminClientConfig}
-import org.apache.kafka.common.{KafkaException, TopicPartition}
+import kafka.utils.TestUtils
+import org.apache.kafka.clients.admin.{Admin, AdminClientConfig}
 import org.apache.kafka.common.network.ListenerName
-import org.apache.kafka.common.protocol.{ApiKeys, Errors}
+import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.{CompressionType, MemoryRecords, SimpleRecord}
 import org.apache.kafka.common.requests.{ProduceRequest, ProduceResponse}
 import org.apache.kafka.common.security.auth.SecurityProtocol
+import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
 import org.scalatest.Assertions.intercept
@@ -72,7 +72,7 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
     def connectAndVerify(): Unit = {
       val socket = connect()
       try {
-        sendAndReceive(produceRequest, ApiKeys.PRODUCE, socket)
+        sendAndReceive[ProduceResponse](produceRequest, socket)
       } finally {
         socket.close()
       }
@@ -82,14 +82,14 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
     props.put(KafkaConfig.MaxConnectionsPerIpProp, maxConnectionsPerIP.toString)
     reconfigureServers(props, perBrokerConfig = false, (KafkaConfig.MaxConnectionsPerIpProp, maxConnectionsPerIP.toString))
 
-    verifyMaxConnections(maxConnectionsPerIP, () => connectAndVerify)
+    verifyMaxConnections(maxConnectionsPerIP, connectAndVerify)
 
     // Increase MaxConnectionsPerIpOverrides for localhost to 7
     val maxConnectionsPerIPOverride = 7
     props.put(KafkaConfig.MaxConnectionsPerIpOverridesProp, s"localhost:$maxConnectionsPerIPOverride")
     reconfigureServers(props, perBrokerConfig = false, (KafkaConfig.MaxConnectionsPerIpOverridesProp, s"localhost:$maxConnectionsPerIPOverride"))
 
-    verifyMaxConnections(maxConnectionsPerIPOverride, () => connectAndVerify)
+    verifyMaxConnections(maxConnectionsPerIPOverride, connectAndVerify)
   }
 
   @Test
@@ -100,8 +100,7 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
       val socket = connect("PLAINTEXT")
       socket.setSoTimeout(1000)
       try {
-        val response = sendAndReceive(produceRequest, ApiKeys.PRODUCE, socket)
-        assertEquals(0, response.remaining)
+        sendAndReceive[ProduceResponse](produceRequest, socket)
       } finally {
         socket.close()
       }
@@ -111,7 +110,7 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
     val props = new Properties
     props.put(KafkaConfig.MaxConnectionsProp, "5")
     reconfigureServers(props, perBrokerConfig = false, (KafkaConfig.MaxConnectionsProp, "5"))
-    verifyMaxConnections(5, () => connectAndVerify)
+    verifyMaxConnections(5, connectAndVerify)
 
     // Create another listener and verify listener connection limit of 5 for each listener
     val newListeners = "PLAINTEXT://localhost:0,INTERNAL://localhost:0"
@@ -134,12 +133,12 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
     val listenerProp = s"${listener.configPrefix}${KafkaConfig.MaxConnectionsProp}"
     props.put(listenerProp, maxConnectionsPlaintext.toString)
     reconfigureServers(props, perBrokerConfig = true, (listenerProp, maxConnectionsPlaintext.toString))
-    verifyMaxConnections(maxConnectionsPlaintext, () => connectAndVerify)
+    verifyMaxConnections(maxConnectionsPlaintext, connectAndVerify)
 
     // Verify that connection blocked on the limit connects successfully when an existing connection is closed
     val plaintextConnections = (connectionCount until maxConnectionsPlaintext).map(_ => connect("PLAINTEXT"))
     executor = Executors.newSingleThreadExecutor
-    val future = executor.submit(CoreUtils.runnable { createAndVerifyConnection() })
+    val future = executor.submit((() => createAndVerifyConnection()): Runnable)
     Thread.sleep(100)
     assertFalse(future.isDone)
     plaintextConnections.head.close()
@@ -156,7 +155,9 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
     plaintextConns ++= (0 until 2).map(_ => connect("PLAINTEXT"))
     TestUtils.waitUntilTrue(() => connectionCount <= 10, "Internal connections not closed")
     plaintextConns.foreach(verifyConnection)
-    intercept[IOException](internalConns.foreach { socket => sendAndReceive(produceRequest, ApiKeys.PRODUCE, socket) })
+    intercept[IOException](internalConns.foreach { socket =>
+      sendAndReceive[ProduceResponse](produceRequest, socket)
+    })
     plaintextConns.foreach(_.close())
     internalConns.foreach(_.close())
     TestUtils.waitUntilTrue(() => initialConnectionCount == connectionCount, "Connections not closed")
@@ -186,7 +187,7 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
     val config = new Properties()
     config.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers)
     config.put(AdminClientConfig.METADATA_MAX_AGE_CONFIG, "10")
-    val adminClient = AdminClient.create(config)
+    val adminClient = Admin.create(config)
     adminClient
   }
 
@@ -220,9 +221,7 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
   }
 
   private def verifyConnection(socket: Socket): Unit = {
-    val request = produceRequest
-    val response = sendAndReceive(request, ApiKeys.PRODUCE, socket)
-    val produceResponse = ProduceResponse.parse(response, request.version)
+    val produceResponse = sendAndReceive[ProduceResponse](produceRequest, socket)
     assertEquals(1, produceResponse.responses.size)
     val (_, partitionResponse) = produceResponse.responses.asScala.head
     assertEquals(Errors.NONE, partitionResponse.error)

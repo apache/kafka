@@ -36,7 +36,8 @@ buildscript {
     classpath "com.github.jengelman.gradle.plugins:shadow:$versions.shadowPlugin"
     classpath "org.owasp:dependency-check-gradle:$versions.owaspDepCheckPlugin"
     classpath "com.diffplug.spotless:spotless-plugin-gradle:$versions.spotlessPlugin"
-    classpath "gradle.plugin.com.github.spotbugs:spotbugs-gradle-plugin:$versions.spotbugsPlugin"
+    classpath "com.github.spotbugs:spotbugs-gradle-plugin:$versions.spotbugsPlugin"
+    classpath "org.gradle:test-retry-gradle-plugin:$versions.testRetryPlugin"
   }
 }
 
@@ -54,7 +55,7 @@ allprojects {
   repositories {
     mavenCentral()
   }
-  
+
   apply plugin: 'idea'
   apply plugin: 'org.owasp.dependencycheck'
   apply plugin: 'com.github.ben-manes.versions'
@@ -97,6 +98,9 @@ ext {
 
   userMaxForks = project.hasProperty('maxParallelForks') ? maxParallelForks.toInteger() : null
 
+  userMaxTestRetries = project.hasProperty('maxTestRetries') ? maxTestRetries.toInteger() : 0
+  userMaxTestRetryFailures = project.hasProperty('maxTestRetryFailures') ? maxTestRetryFailures.toInteger() : 0
+
   skipSigning = project.hasProperty('skipSigning') && skipSigning.toBoolean()
   shouldSign = !skipSigning && !version.endsWith("SNAPSHOT") && project.gradle.startParameter.taskNames.any { it.contains("upload") }
 
@@ -130,19 +134,29 @@ if (file('.git').exists()) {
         'PULL_REQUEST_TEMPLATE.md',
         'gradlew',
         'gradlew.bat',
+        'gradle/wrapper/gradle-wrapper.properties',
         'TROGDOR.md',
         '**/README.md',
         '**/id_rsa',
         '**/id_rsa.pub',
         'checkstyle/suppressions.xml',
         'streams/quickstart/java/src/test/resources/projects/basic/goal.txt',
-        'streams/streams-scala/logs/*'
+        'streams/streams-scala/logs/*',
+        '**/generated/**'
     ])
   }
 }
 
 
 subprojects {
+
+  // enable running :dependencies task recursively on all subprojects
+  // eg: ./gradlew allDeps
+  task allDeps(type: DependencyReportTask) {}
+  // enable running :dependencyInsight task recursively on all subprojects
+  // eg: ./gradlew allDepInsight --configuration runtime --dependency com.fasterxml.jackson.core:jackson-databind
+  task allDepInsight(type: DependencyInsightReportTask) doLast {}
+
   apply plugin: 'java'
   // apply the eclipse plugin only to subprojects that hold code. 'connect' is just a folder.
   if (!project.name.equals('connect')) {
@@ -153,6 +167,7 @@ subprojects {
   apply plugin: 'signing'
   apply plugin: 'checkstyle'
   apply plugin: "com.github.spotbugs"
+  apply plugin: 'org.gradle.test-retry'
 
   sourceCompatibility = minJavaVersion
   targetCompatibility = minJavaVersion
@@ -279,6 +294,11 @@ subprojects {
       exceptionFormat = testExceptionFormat
     }
     logTestStdout.rehydrate(delegate, owner, this)()
+
+    retry {
+      maxRetries = userMaxTestRetries
+      maxFailures = userMaxTestRetryFailures
+    }
   }
 
   task integrationTest(type: Test, dependsOn: compileJava) {
@@ -401,6 +421,7 @@ subprojects {
       "-language:postfixOps",
       "-language:implicitConversions",
       "-language:existentials",
+      "-Xlint:constant",
       "-Xlint:delayedinit-select",
       "-Xlint:doc-detached",
       "-Xlint:missing-interpolator",
@@ -411,35 +432,29 @@ subprojects {
       "-Xlint:poly-implicit-overload",
       "-Xlint:private-shadow",
       "-Xlint:stars-align",
-      "-Xlint:type-parameter-shadow"
+      "-Xlint:type-parameter-shadow",
+      "-Xlint:unused"
     ]
 
-    if (versions.baseScala != '2.11') {
-      scalaCompileOptions.additionalParameters += [
-        "-Xlint:constant",
-        "-Xlint:unused"
-      ]
+    // Inline more aggressively when compiling the `core` jar since it's not meant to be used as a library.
+    // More specifically, inline classes from the Scala library so that we can inline methods like `Option.exists`
+    // and avoid lambda allocations. This is only safe if the Scala library version is the same at compile time
+    // and runtime. We cannot guarantee this for libraries like kafka streams, so only inline classes from the
+    // Kafka project in that case.
+    List<String> inlineFrom
+    if (project.name.equals('core'))
+      inlineFrom = ["-opt-inline-from:scala.**", "-opt-inline-from:kafka.**", "-opt-inline-from:org.apache.kafka.**"]
+    else
+      inlineFrom = ["-opt-inline-from:org.apache.kafka.**"]
 
-      // Inline more aggressively when compiling the `core` jar since it's not meant to be used as a library.
-      // More specifically, inline classes from the Scala library so that we can inline methods like `Option.exists`
-      // and avoid lambda allocations. This is only safe if the Scala library version is the same at compile time
-      // and runtime. We cannot guarantee this for libraries like kafka streams, so only inline classes from the
-      // Kafka project in that case.
-      List<String> inlineFrom
-      if (project.name.equals('core'))
-        inlineFrom = ["-opt-inline-from:scala.**", "-opt-inline-from:kafka.**", "-opt-inline-from:org.apache.kafka.**"]
-      else
-        inlineFrom = ["-opt-inline-from:org.apache.kafka.**"]
-
-      // Somewhat confusingly, `-opt:l:inline` enables all optimizations. `inlineFrom` configures what can be inlined.
-      // See https://www.lightbend.com/blog/scala-inliner-optimizer for more information about the optimizer.
-      scalaCompileOptions.additionalParameters += ["-opt:l:inline"]
-      scalaCompileOptions.additionalParameters += inlineFrom
-    }
+    // Somewhat confusingly, `-opt:l:inline` enables all optimizations. `inlineFrom` configures what can be inlined.
+    // See https://www.lightbend.com/blog/scala-inliner-optimizer for more information about the optimizer.
+    scalaCompileOptions.additionalParameters += ["-opt:l:inline"]
+    scalaCompileOptions.additionalParameters += inlineFrom
     
-  // these options are valid for Scala versions < 2.13 only
-  // Scala 2.13 removes them, see https://github.com/scala/scala/pull/6502 and https://github.com/scala/scala/pull/5969
-    if (versions.baseScala in ['2.11','2.12']) {
+    // these options are valid for Scala versions < 2.13 only
+    // Scala 2.13 removes them, see https://github.com/scala/scala/pull/6502 and https://github.com/scala/scala/pull/5969
+    if (versions.baseScala == '2.12') {
       scalaCompileOptions.additionalParameters += [
         "-Xlint:by-name-right-associative",
         "-Xlint:unsound-match"
@@ -511,6 +526,25 @@ subprojects {
   def coverageGen = it.path == ':core' ? 'reportScoverage' : 'jacocoTestReport'
   task reportCoverage(dependsOn: [coverageGen])
 
+  task determineCommitId {
+    def takeFromHash = 16
+    if (commitId) {
+      commitId = commitId.take(takeFromHash)
+    } else if (file("$rootDir/.git/HEAD").exists()) {
+      def headRef = file("$rootDir/.git/HEAD").text
+      if (headRef.contains('ref: ')) {
+        headRef = headRef.replaceAll('ref: ', '').trim()
+        if (file("$rootDir/.git/$headRef").exists()) {
+          commitId = file("$rootDir/.git/$headRef").text.trim().take(takeFromHash)
+        }
+      } else {
+        commitId = headRef.trim().take(takeFromHash)
+      }
+    } else {
+      commitId = "unknown"
+    }
+  }
+
 }
 
 gradle.taskGraph.whenReady { taskGraph ->
@@ -535,8 +569,8 @@ def fineTuneEclipseClasspathFile(eclipse, project) {
       if (project.name.equals('core')) {
         cp.entries.findAll { it.kind == "src" && it.path.equals("src/test/scala") }*.excludes = ["integration/", "other/", "unit/"]
       }
-      /* 
-       * Set all eclipse build output to go to 'build_eclipse' directory. This is to ensure that gradle and eclipse use different 
+      /*
+       * Set all eclipse build output to go to 'build_eclipse' directory. This is to ensure that gradle and eclipse use different
        * build output directories, and also avoid using the eclpise default of 'bin' which clashes with some of our script directories.
        * https://discuss.gradle.org/t/eclipse-generated-files-should-be-put-in-the-same-place-as-the-gradle-generated-files/6986/2
        */
@@ -563,10 +597,10 @@ task jacocoRootReport(type: org.gradle.testing.jacoco.tasks.JacocoReport) {
   description = 'Generates an aggregate report from all subprojects'
   dependsOn(javaProjects.test)
 
-  additionalSourceDirs = files(javaProjects.sourceSets.main.allSource.srcDirs)
-  sourceDirectories = files(javaProjects.sourceSets.main.allSource.srcDirs)
-  classDirectories =  files(javaProjects.sourceSets.main.output)
-  executionData = files(javaProjects.jacocoTestReport.executionData)
+  additionalSourceDirs.from = javaProjects.sourceSets.main.allSource.srcDirs
+  sourceDirectories.from = javaProjects.sourceSets.main.allSource.srcDirs
+  classDirectories.from = javaProjects.sourceSets.main.output
+  executionData.from = javaProjects.jacocoTestReport.executionData
 
   reports {
     html.enabled = true
@@ -725,19 +759,14 @@ project(':core') {
     testCompile libs.scalatest
     testCompile libs.slf4jlog4j
     testCompile libs.jfreechart
-
-    scoverage libs.scoveragePlugin
-    scoverage libs.scoverageRuntime
   }
-  
+
   scoverage {
+    scoverageVersion = "$versions.scoverage"
     reportDir = file("${rootProject.buildDir}/scoverage")
     highlighting = false
-  }
-  checkScoverage {
     minimumRate = 0.0
   }
-  checkScoverage.shouldRunAfter('test')
 
   configurations {
     // manually excludes some unnecessary dependencies
@@ -986,25 +1015,6 @@ project(':clients') {
     testCompile libs.jacksonJaxrsJsonProvider
   }
 
-  task determineCommitId {
-    def takeFromHash = 16
-    if (commitId) {
-      commitId = commitId.take(takeFromHash)
-    } else if (file("$rootDir/.git/HEAD").exists()) {
-      def headRef = file("$rootDir/.git/HEAD").text
-      if (headRef.contains('ref: ')) {
-        headRef = headRef.replaceAll('ref: ', '').trim()
-        if (file("$rootDir/.git/$headRef").exists()) {
-          commitId = file("$rootDir/.git/$headRef").text.trim().take(takeFromHash)
-        }
-      } else {
-        commitId = headRef.trim().take(takeFromHash)
-      }
-    } else {
-      commitId = "unknown"
-    }
-  }
-
   task createVersionFile(dependsOn: determineCommitId) {
     ext.receiptFile = file("$buildDir/kafka/$buildVersionFileName")
     outputs.file receiptFile
@@ -1177,6 +1187,31 @@ project(':streams') {
     testRuntime libs.slf4jlog4j
   }
 
+  task processMessages(type:JavaExec) {
+    main = "org.apache.kafka.message.MessageGenerator"
+    classpath = project(':generator').sourceSets.main.runtimeClasspath
+    args = [ "org.apache.kafka.streams.internals.generated",
+             "src/generated/java/org/apache/kafka/streams/internals/generated",
+             "src/main/resources/common/message" ]
+    inputs.dir("src/main/resources/common/message")
+    outputs.dir("src/generated/java/org/apache/kafka/streams/internals/generated")
+  }
+
+  sourceSets {
+    main {
+      java {
+        srcDirs = ["src/generated/java", "src/main/java"]
+      }
+    }
+    test {
+      java {
+        srcDirs = ["src/generated/java", "src/test/java"]
+      }
+    }
+  }
+
+  compileJava.dependsOn 'processMessages'
+
   javadoc {
     include "**/org/apache/kafka/streams/**"
     exclude "**/internals/**"
@@ -1186,31 +1221,13 @@ project(':streams') {
     from (configurations.testRuntime) {
       include('slf4j-log4j12*')
       include('log4j*jar')
+      include('*hamcrest*')
     }
     from (configurations.runtime) {
       exclude('kafka-clients*')
     }
     into "$buildDir/dependant-libs-${versions.scala}"
     duplicatesStrategy 'exclude'
-  }
-
-  task determineCommitId {
-    def takeFromHash = 16
-    if (commitId) {
-      commitId = commitId.take(takeFromHash)
-    } else if (file("$rootDir/.git/HEAD").exists()) {
-      def headRef = file("$rootDir/.git/HEAD").text
-      if (headRef.contains('ref: ')) {
-        headRef = headRef.replaceAll('ref: ', '').trim()
-        if (file("$rootDir/.git/$headRef").exists()) {
-          commitId = file("$rootDir/.git/$headRef").text.trim().take(takeFromHash)
-        }
-      } else {
-        commitId = headRef.trim().take(takeFromHash)
-      }
-    } else {
-      commitId = "unknown"
-    }
   }
 
   task createStreamsVersionFile(dependsOn: determineCommitId) {
@@ -1475,6 +1492,18 @@ project(':streams:upgrade-system-tests-23') {
 
   dependencies {
     testCompile libs.kafkaStreams_23
+  }
+
+  systemTestLibs {
+    dependsOn testJar
+  }
+}
+
+project(':streams:upgrade-system-tests-24') {
+  archivesBaseName = "kafka-streams-upgrade-system-tests-24"
+
+  dependencies {
+    testCompile libs.kafkaStreams_24
   }
 
   systemTestLibs {
@@ -1853,6 +1882,7 @@ project(':connect:mirror') {
     compile libs.slf4jApi
 
     testCompile libs.junit
+    testCompile libs.mockitoCore
     testCompile project(':clients').sourceSets.test.output
     testCompile project(':connect:runtime').sourceSets.test.output
     testCompile project(':core')

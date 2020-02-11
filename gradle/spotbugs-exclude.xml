@@ -215,8 +215,17 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
 
     <Match>
         <!-- Suppress warnings about generated schema arrays. -->
-        <Package name="org.apache.kafka.common.message"/>
+        <Or>
+            <Package name="org.apache.kafka.common.message"/>
+            <Package name="org.apache.kafka.streams.internals.generated"/>
+        </Or>
         <Bug pattern="MS_MUTABLE_ARRAY"/>
+    </Match>
+
+    <Match>
+        <!-- The code generator generates useless condition. Disable the check temporarily. -->
+        <Class name="org.apache.kafka.common.message.JoinGroupResponseData"/>
+        <Bug pattern="UC_USELESS_CONDITION"/>
     </Match>
 
     <Match>

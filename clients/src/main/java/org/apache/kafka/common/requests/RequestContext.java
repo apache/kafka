@@ -18,6 +18,7 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.message.ApiVersionsRequestData;
+import org.apache.kafka.common.network.ClientInformation;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.network.Send;
 import org.apache.kafka.common.protocol.ApiKeys;
@@ -38,19 +39,22 @@ public class RequestContext implements AuthorizableRequestContext {
     public final KafkaPrincipal principal;
     public final ListenerName listenerName;
     public final SecurityProtocol securityProtocol;
+    public final ClientInformation clientInformation;
 
     public RequestContext(RequestHeader header,
                           String connectionId,
                           InetAddress clientAddress,
                           KafkaPrincipal principal,
                           ListenerName listenerName,
-                          SecurityProtocol securityProtocol) {
+                          SecurityProtocol securityProtocol,
+                          ClientInformation clientInformation) {
         this.header = header;
         this.connectionId = connectionId;
         this.clientAddress = clientAddress;
         this.principal = principal;
         this.listenerName = listenerName;
         this.securityProtocol = securityProtocol;
+        this.clientInformation = clientInformation;
     }
 
     public RequestAndSize parseRequest(ByteBuffer buffer) {

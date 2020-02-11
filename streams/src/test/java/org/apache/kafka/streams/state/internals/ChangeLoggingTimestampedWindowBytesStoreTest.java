@@ -17,14 +17,11 @@
 
 package org.apache.kafka.streams.state.internals;
 
-import org.apache.kafka.common.header.Headers;
-import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.ProcessorContextImpl;
-import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.WindowStore;
-import org.apache.kafka.test.NoOpRecordCollector;
+import org.apache.kafka.test.MockRecordCollector;
 import org.easymock.EasyMock;
 import org.easymock.EasyMockRunner;
 import org.easymock.Mock;
@@ -33,31 +30,16 @@ import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
-import java.util.HashMap;
-import java.util.Map;
-
 import static java.time.Instant.ofEpochMilli;
-import static org.junit.Assert.assertArrayEquals;
-import static org.junit.Assert.assertEquals;
+import static org.hamcrest.CoreMatchers.equalTo;
+import static org.hamcrest.MatcherAssert.assertThat;
+
 
 @RunWith(EasyMockRunner.class)
 public class ChangeLoggingTimestampedWindowBytesStoreTest {
 
     private final TaskId taskId = new TaskId(0, 0);
-    private final Map<Object, ValueAndTimestamp<Object>> sent = new HashMap<>();
-    private final NoOpRecordCollector collector = new NoOpRecordCollector() {
-        @Override
-        public <K, V> void send(final String topic,
-                                final K key,
-                                final V value,
-                                final Headers headers,
-                                final Integer partition,
-                                final Long timestamp,
-                                final Serializer<K> keySerializer,
-                                final Serializer<V> valueSerializer) {
-            sent.put(key, ValueAndTimestamp.make(value, timestamp));
-        }
-    };
+    private final MockRecordCollector collector = new MockRecordCollector();
 
     private final byte[] value = {0};
     private final byte[] valueAndTimestamp = {0, 0, 0, 0, 0, 0, 0, 42, 0};
@@ -95,12 +77,12 @@ public class ChangeLoggingTimestampedWindowBytesStoreTest {
 
         store.put(bytesKey, valueAndTimestamp);
 
-        assertArrayEquals(
-            value,
-            (byte[]) sent.get(WindowKeySchema.toStoreKeyBinary(bytesKey, 0, 0)).value());
-        assertEquals(
-            42L,
-            sent.get(WindowKeySchema.toStoreKeyBinary(bytesKey, 0, 0)).timestamp());
+        final Bytes key = WindowKeySchema.toStoreKeyBinary(bytesKey, 0, 0);
+        assertThat(collector.collected().size(), equalTo(1));
+        assertThat(collector.collected().get(0).key(), equalTo(key));
+        assertThat(collector.collected().get(0).value(), equalTo(value));
+        assertThat(collector.collected().get(0).timestamp(), equalTo(42L));
+
         EasyMock.verify(inner);
     }
 
@@ -139,18 +121,15 @@ public class ChangeLoggingTimestampedWindowBytesStoreTest {
         store.put(bytesKey, valueAndTimestamp);
         store.put(bytesKey, valueAndTimestamp);
 
-        assertArrayEquals(
-            value,
-            (byte[]) sent.get(WindowKeySchema.toStoreKeyBinary(bytesKey, 0, 1)).value());
-        assertEquals(
-            42L,
-            sent.get(WindowKeySchema.toStoreKeyBinary(bytesKey, 0, 1)).timestamp());
-        assertArrayEquals(
-            value,
-            (byte[]) sent.get(WindowKeySchema.toStoreKeyBinary(bytesKey, 0, 2)).value());
-        assertEquals(
-            42L,
-            sent.get(WindowKeySchema.toStoreKeyBinary(bytesKey, 0, 2)).timestamp());
+        final Bytes key1 = WindowKeySchema.toStoreKeyBinary(bytesKey, 0, 1);
+        final Bytes key2 = WindowKeySchema.toStoreKeyBinary(bytesKey, 0, 2);
+        assertThat(collector.collected().size(), equalTo(2));
+        assertThat(collector.collected().get(0).key(), equalTo(key1));
+        assertThat(collector.collected().get(0).value(), equalTo(value));
+        assertThat(collector.collected().get(0).timestamp(), equalTo(42L));
+        assertThat(collector.collected().get(1).key(), equalTo(key2));
+        assertThat(collector.collected().get(1).value(), equalTo(value));
+        assertThat(collector.collected().get(1).timestamp(), equalTo(42L));
 
         EasyMock.verify(inner);
     }

@@ -47,7 +47,6 @@ public class StateStoreMetrics {
     private static final String CURRENT_SUFFIX = "-current";
     private static final String BUFFERED_RECORDS = "buffered records";
 
-
     private static final String PUT = "put";
     private static final String PUT_DESCRIPTION = "calls to put";
     private static final String PUT_TOTAL_DESCRIPTION = TOTAL_DESCRIPTION + PUT_DESCRIPTION;

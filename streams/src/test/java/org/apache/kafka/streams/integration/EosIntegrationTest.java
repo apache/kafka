@@ -26,6 +26,7 @@ import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.StoreQueryParameters;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
@@ -40,6 +41,7 @@ import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.test.IntegrationTest;
+
 import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
 import org.junit.Before;
@@ -67,6 +69,7 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
+
 
 @Category({IntegrationTest.class})
 public class EosIntegrationTest {
@@ -203,8 +206,7 @@ public class EosIntegrationTest {
         }
     }
 
-    private void checkResultPerKey(final List<KeyValue<Long, Long>> result,
-                                   final List<KeyValue<Long, Long>> expectedResult) {
+    private void checkResultPerKey(final List<KeyValue<Long, Long>> result, final List<KeyValue<Long, Long>> expectedResult) {
         final Set<Long> allKeys = new HashSet<>();
         addAllKeys(allKeys, result);
         addAllKeys(allKeys, expectedResult);
@@ -215,15 +217,13 @@ public class EosIntegrationTest {
 
     }
 
-    private void addAllKeys(final Set<Long> allKeys,
-                            final List<KeyValue<Long, Long>> records) {
+    private void addAllKeys(final Set<Long> allKeys, final List<KeyValue<Long, Long>> records) {
         for (final KeyValue<Long, Long> record : records) {
             allKeys.add(record.key);
         }
     }
 
-    private List<KeyValue<Long, Long>> getAllRecordPerKey(final Long key,
-                                                          final List<KeyValue<Long, Long>> records) {
+    private List<KeyValue<Long, Long>> getAllRecordPerKey(final Long key, final List<KeyValue<Long, Long>> records) {
         final List<KeyValue<Long, Long>> recordsPerKey = new ArrayList<>(records.size());
 
         for (final KeyValue<Long, Long> record : records) {
@@ -560,7 +560,7 @@ public class EosIntegrationTest {
         gcInjected = new AtomicBoolean(false);
         final StreamsBuilder builder = new StreamsBuilder();
 
-        String[] storeNames = null;
+        String[] storeNames = new String[0];
         if (withState) {
             storeNames = new String[] {storeName};
             final StoreBuilder<KeyValueStore<Long, Long>> storeBuilder = Stores
@@ -589,8 +589,7 @@ public class EosIntegrationTest {
                     }
 
                     @Override
-                    public KeyValue<Long, Long> transform(final Long key,
-                                                          final Long value) {
+                    public KeyValue<Long, Long> transform(final Long key, final Long value) {
                         if (gcInjected.compareAndSet(true, false)) {
                             while (doGC) {
                                 try {
@@ -750,7 +749,7 @@ public class EosIntegrationTest {
         final long maxWaitingTime = System.currentTimeMillis() + 300000L;
         while (System.currentTimeMillis() < maxWaitingTime) {
             try {
-                store = streams.store(storeName, QueryableStoreTypes.keyValueStore());
+                store = streams.store(StoreQueryParameters.fromNameAndType(storeName, QueryableStoreTypes.keyValueStore()));
                 break;
             } catch (final InvalidStateStoreException okJustRetry) {
                 try {
@@ -768,5 +767,4 @@ public class EosIntegrationTest {
 
         assertTrue(expectedStoreContent.isEmpty());
     }
-
 }

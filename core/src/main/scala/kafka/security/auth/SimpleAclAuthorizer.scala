@@ -20,7 +20,7 @@ import java.util
 
 import kafka.network.RequestChannel.Session
 import kafka.security.auth.SimpleAclAuthorizer.BaseAuthorizer
-import kafka.security.authorizer.{AclAuthorizer, AuthorizerUtils}
+import kafka.security.authorizer.{AclAuthorizer, AuthorizerUtils, AuthorizerWrapper}
 import kafka.utils._
 import kafka.zk.ZkVersion
 import org.apache.kafka.common.acl.{AccessControlEntryFilter, AclBinding, AclBindingFilter, AclOperation, AclPermissionType}
@@ -57,7 +57,7 @@ object SimpleAclAuthorizer {
       val principal = requestContext.principal
       val host = requestContext.clientAddress.getHostAddress
       val operation = Operation.fromJava(action.operation)
-      val resource = AuthorizerUtils.convertToResource(action.resourcePattern)
+      val resource = AuthorizerWrapper.convertToResource(action.resourcePattern)
       def logMessage: String = {
         val authResult = if (authorized) "Allowed" else "Denied"
         s"Principal = $principal is $authResult Operation = $operation from host = $host on resource = $resource"
@@ -99,14 +99,14 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
   override def addAcls(acls: Set[Acl], resource: Resource): Unit = {
     aclAuthorizer.maxUpdateRetries = maxUpdateRetries
     if (acls != null && acls.nonEmpty) {
-      val bindings = acls.map { acl => AuthorizerUtils.convertToAclBinding(resource, acl) }
+      val bindings = acls.map { acl => AuthorizerWrapper.convertToAclBinding(resource, acl) }
       createAcls(bindings)
     }
   }
 
   override def removeAcls(aclsTobeRemoved: Set[Acl], resource: Resource): Boolean = {
     val filters = aclsTobeRemoved.map { acl =>
-      new AclBindingFilter(resource.toPattern.toFilter, AuthorizerUtils.convertToAccessControlEntry(acl).toFilter)
+      new AclBindingFilter(resource.toPattern.toFilter, AuthorizerWrapper.convertToAccessControlEntry(acl).toFilter)
     }
     deleteAcls(filters)
   }
@@ -158,8 +158,8 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
   private def acls(filter: AclBindingFilter): Map[Resource, Set[Acl]] = {
     val result = mutable.Map[Resource, mutable.Set[Acl]]()
     aclAuthorizer.acls(filter).asScala.foreach { binding =>
-      val resource = AuthorizerUtils.convertToResource(binding.pattern)
-      val acl = AuthorizerUtils.convertToAcl(binding.entry)
+      val resource = AuthorizerWrapper.convertToResource(binding.pattern)
+      val acl = AuthorizerWrapper.convertToAcl(binding.entry)
       result.getOrElseUpdate(resource, mutable.Set()).add(acl)
     }
     result.mapValues(_.toSet).toMap

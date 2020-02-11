@@ -17,6 +17,7 @@
 package org.apache.kafka.common.network;
 
 import org.apache.kafka.common.errors.AuthenticationException;
+import org.apache.kafka.common.errors.SslAuthenticationException;
 import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.utils.Utils;
@@ -27,8 +28,8 @@ import java.net.Socket;
 import java.net.SocketAddress;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.SocketChannel;
-import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.function.Supplier;
 
 /**
@@ -121,6 +122,7 @@ public class KafkaChannel implements AutoCloseable {
     private long networkThreadTimeNanos;
     private final int maxReceiveSize;
     private final MemoryPool memoryPool;
+    private final ChannelMetadataRegistry metadataRegistry;
     private NetworkReceive receive;
     private Send send;
     // Track connection and mute state of channels to enable outstanding requests on channels to be
@@ -133,7 +135,8 @@ public class KafkaChannel implements AutoCloseable {
     private boolean midWrite;
     private long lastReauthenticationStartNanos;
 
-    public KafkaChannel(String id, TransportLayer transportLayer, Supplier<Authenticator> authenticatorCreator, int maxReceiveSize, MemoryPool memoryPool) {
+    public KafkaChannel(String id, TransportLayer transportLayer, Supplier<Authenticator> authenticatorCreator,
+                        int maxReceiveSize, MemoryPool memoryPool, ChannelMetadataRegistry metadataRegistry) {
         this.id = id;
         this.transportLayer = transportLayer;
         this.authenticatorCreator = authenticatorCreator;
@@ -141,6 +144,7 @@ public class KafkaChannel implements AutoCloseable {
         this.networkThreadTimeNanos = 0L;
         this.maxReceiveSize = maxReceiveSize;
         this.memoryPool = memoryPool;
+        this.metadataRegistry = metadataRegistry;
         this.disconnected = false;
         this.muteState = ChannelMuteState.NOT_MUTED;
         this.state = ChannelState.NOT_CONNECTED;
@@ -148,7 +152,7 @@ public class KafkaChannel implements AutoCloseable {
 
     public void close() throws IOException {
         this.disconnected = true;
-        Utils.closeAll(transportLayer, authenticator, receive);
+        Utils.closeAll(transportLayer, authenticator, receive, metadataRegistry);
     }
 
     /**
@@ -440,7 +444,15 @@ public class KafkaChannel implements AutoCloseable {
     }
 
     private long receive(NetworkReceive receive) throws IOException {
-        return receive.readFrom(transportLayer);
+        try {
+            return receive.readFrom(transportLayer);
+        } catch (SslAuthenticationException e) {
+            // With TLSv1.3, post-handshake messages may throw SSLExceptions, which are
+            // handled as authentication failures
+            String remoteDesc = remoteAddress != null ? remoteAddress.toString() : null;
+            state = new ChannelState(ChannelState.State.AUTHENTICATION_FAILED, e, remoteDesc);
+            throw e;
+        }
     }
 
     /**
@@ -580,8 +592,8 @@ public class KafkaChannel implements AutoCloseable {
          * We've delayed getting the time as long as possible in case we don't need it,
          * but at this point we need it -- so get it now.
          */
-        long nowNanos = nowNanosSupplier.get().longValue();
-        if (nowNanos < authenticator.clientSessionReauthenticationTimeNanos().longValue())
+        long nowNanos = nowNanosSupplier.get();
+        if (nowNanos < authenticator.clientSessionReauthenticationTimeNanos())
             return false;
         swapAuthenticatorsAndBeginReauthentication(new ReauthenticationContext(authenticator, receive, nowNanos));
         receive = null;
@@ -614,23 +626,23 @@ public class KafkaChannel implements AutoCloseable {
      */
     public boolean serverAuthenticationSessionExpired(long nowNanos) {
         Long serverSessionExpirationTimeNanos = authenticator.serverSessionExpirationTimeNanos();
-        return serverSessionExpirationTimeNanos != null && nowNanos - serverSessionExpirationTimeNanos.longValue() > 0;
+        return serverSessionExpirationTimeNanos != null && nowNanos - serverSessionExpirationTimeNanos > 0;
     }
     
     /**
      * Return the (always non-null but possibly empty) client-side
-     * {@link NetworkReceive} responses that arrived during re-authentication that
-     * are unrelated to re-authentication, if any. These correspond to requests sent
-     * prior to the beginning of re-authentication; the requests were made when the
-     * channel was successfully authenticated, and the responses arrived during the
+     * {@link NetworkReceive} response that arrived during re-authentication but
+     * is unrelated to re-authentication. This corresponds to a request sent
+     * prior to the beginning of re-authentication; the request was made when the
+     * channel was successfully authenticated, and the response arrived during the
      * re-authentication process.
      * 
-     * @return the (always non-null but possibly empty) client-side
-     *         {@link NetworkReceive} responses that arrived during
-     *         re-authentication that are unrelated to re-authentication, if any
+     * @return client-side {@link NetworkReceive} response that arrived during
+     *         re-authentication that is unrelated to re-authentication. This may
+     *         be empty.
      */
-    public List<NetworkReceive> getAndClearResponsesReceivedDuringReauthentication() {
-        return authenticator.getAndClearResponsesReceivedDuringReauthentication();
+    public Optional<NetworkReceive> pollResponseReceivedDuringReauthentication() {
+        return authenticator.pollResponseReceivedDuringReauthentication();
     }
     
     /**
@@ -650,5 +662,9 @@ public class KafkaChannel implements AutoCloseable {
         // replace with a new one and begin the process of re-authenticating
         authenticator = authenticatorCreator.get();
         authenticator.reauthenticate(reauthenticationContext);
+    }
+
+    public ChannelMetadataRegistry channelMetadataRegistry() {
+        return metadataRegistry;
     }
 }

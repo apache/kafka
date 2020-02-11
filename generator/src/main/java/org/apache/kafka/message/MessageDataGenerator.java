@@ -80,7 +80,7 @@ public final class MessageDataGenerator {
         generateFieldDeclarations(struct, isSetElement);
         buffer.printf("%n");
         schemaGenerator.writeSchema(className, buffer);
-        generateClassConstructors(className, struct);
+        generateClassConstructors(className, struct, isSetElement);
         buffer.printf("%n");
         if (isTopLevel) {
             generateShortAccessor("apiKey", topLevelMessageSpec.get().apiKey().orElse((short) -1));
@@ -221,7 +221,7 @@ public final class MessageDataGenerator {
         buffer.incrementIndent();
         generateKeyElement(className, struct);
         headerGenerator.addImport(MessageGenerator.IMPLICIT_LINKED_HASH_MULTI_COLLECTION_CLASS);
-        buffer.printf("return find(key);%n");
+        buffer.printf("return find(_key);%n");
         buffer.decrementIndent();
         buffer.printf("}%n");
         buffer.printf("%n");
@@ -234,17 +234,17 @@ public final class MessageDataGenerator {
         buffer.incrementIndent();
         generateKeyElement(className, struct);
         headerGenerator.addImport(MessageGenerator.IMPLICIT_LINKED_HASH_MULTI_COLLECTION_CLASS);
-        buffer.printf("return findAll(key);%n");
+        buffer.printf("return findAll(_key);%n");
         buffer.decrementIndent();
         buffer.printf("}%n");
         buffer.printf("%n");
     }
 
     private void generateKeyElement(String className, StructSpec struct) {
-        buffer.printf("%s key = new %s();%n", className, className);
+        buffer.printf("%s _key = new %s();%n", className, className);
         for (FieldSpec field : struct.fields()) {
             if (field.mapKey()) {
-                buffer.printf("key.set%s(%s);%n",
+                buffer.printf("_key.set%s(%s);%n",
                     field.capitalizedCamelCaseName(),
                     field.camelCaseName());
             }
@@ -345,6 +345,8 @@ public final class MessageDataGenerator {
         } else if (field.type() instanceof FieldType.UUIDFieldType) {
             headerGenerator.addImport(MessageGenerator.UUID_CLASS);
             return "UUID";
+        } else if (field.type() instanceof FieldType.Float64FieldType) {
+            return "double";
         } else if (field.type().isString()) {
             return "String";
         } else if (field.type().isBytes()) {
@@ -385,11 +387,16 @@ public final class MessageDataGenerator {
         }
     }
 
-    private void generateClassConstructors(String className, StructSpec struct) {
+    private void generateClassConstructors(String className, StructSpec struct, boolean isSetElement) {
         headerGenerator.addImport(MessageGenerator.READABLE_CLASS);
         buffer.printf("public %s(Readable _readable, short _version) {%n", className);
         buffer.incrementIndent();
         buffer.printf("read(_readable, _version);%n");
+        if (isSetElement) {
+            headerGenerator.addImport(MessageGenerator.IMPLICIT_LINKED_HASH_COLLECTION_CLASS);
+            buffer.printf("this.prev = ImplicitLinkedHashCollection.INVALID_INDEX;%n");
+            buffer.printf("this.next = ImplicitLinkedHashCollection.INVALID_INDEX;%n");
+        }
         buffer.decrementIndent();
         buffer.printf("}%n");
         buffer.printf("%n");
@@ -397,6 +404,11 @@ public final class MessageDataGenerator {
         buffer.printf("public %s(Struct struct, short _version) {%n", className);
         buffer.incrementIndent();
         buffer.printf("fromStruct(struct, _version);%n");
+        if (isSetElement) {
+            headerGenerator.addImport(MessageGenerator.IMPLICIT_LINKED_HASH_COLLECTION_CLASS);
+            buffer.printf("this.prev = ImplicitLinkedHashCollection.INVALID_INDEX;%n");
+            buffer.printf("this.next = ImplicitLinkedHashCollection.INVALID_INDEX;%n");
+        }
         buffer.decrementIndent();
         buffer.printf("}%n");
         buffer.printf("%n");
@@ -405,6 +417,11 @@ public final class MessageDataGenerator {
         for (FieldSpec field : struct.fields()) {
             buffer.printf("this.%s = %s;%n",
                 field.camelCaseName(), fieldDefault(field));
+        }
+        if (isSetElement) {
+            headerGenerator.addImport(MessageGenerator.IMPLICIT_LINKED_HASH_COLLECTION_CLASS);
+            buffer.printf("this.prev = ImplicitLinkedHashCollection.INVALID_INDEX;%n");
+            buffer.printf("this.next = ImplicitLinkedHashCollection.INVALID_INDEX;%n");
         }
         buffer.decrementIndent();
         buffer.printf("}%n");
@@ -558,6 +575,8 @@ public final class MessageDataGenerator {
             return "_readable.readLong()";
         } else if (type instanceof FieldType.UUIDFieldType) {
             return "_readable.readUUID()";
+        } else if (type instanceof FieldType.Float64FieldType) {
+            return "_readable.readDouble()";
         } else if (type.isStruct()) {
             return String.format("new %s(_readable, _version)", type.toString());
         } else {
@@ -806,6 +825,8 @@ public final class MessageDataGenerator {
         } else if (type instanceof FieldType.UUIDFieldType) {
             headerGenerator.addImport(MessageGenerator.UUID_CLASS);
             return "UUID";
+        } else if (type instanceof FieldType.Float64FieldType) {
+            return "Double";
         } else if (type.isString()) {
             return "String";
         } else if (type.isStruct()) {
@@ -828,6 +849,8 @@ public final class MessageDataGenerator {
             return String.format("struct.getLong(\"%s\")", name);
         } else if (type instanceof FieldType.UUIDFieldType) {
             return String.format("struct.getUUID(\"%s\")", name);
+        } else if (type instanceof FieldType.Float64FieldType) {
+            return String.format("struct.getDouble(\"%s\")", name);
         } else if (type.isString()) {
             return String.format("struct.getString(\"%s\")", name);
         } else if (type.isBytes()) {
@@ -840,6 +863,21 @@ public final class MessageDataGenerator {
             return String.format("new %s(struct, _version)", type.toString());
         } else {
             throw new RuntimeException("Unsupported field type " + type);
+        }
+    }
+
+    private void maybeGenerateNonIgnorableFieldCheck(FieldSpec field, VersionConditional cond) {
+        if (!field.ignorable()) {
+            cond.ifNotMember(__ -> {
+                generateNonDefaultValueCheck(field, field.nullableVersions());
+                buffer.incrementIndent();
+                headerGenerator.addImport(MessageGenerator.UNSUPPORTED_VERSION_EXCEPTION_CLASS);
+                buffer.printf("throw new UnsupportedVersionException(" +
+                                "\"Attempted to write a non-default %s at version \" + _version);%n",
+                        field.camelCaseName());
+                buffer.decrementIndent();
+                buffer.printf("}%n");
+            });
         }
     }
 
@@ -896,7 +934,7 @@ public final class MessageDataGenerator {
                             }
                         }).
                         ifMember(__ -> {
-                            generateNonDefaultValueCheck(field);
+                            generateNonDefaultValueCheck(field, field.nullableVersions());
                             buffer.incrementIndent();
                             buffer.printf("_numTaggedFields++;%n");
                             buffer.decrementIndent();
@@ -908,18 +946,8 @@ public final class MessageDataGenerator {
                         }).
                         generate(buffer);
                 });
-            if (!field.ignorable()) {
-                cond.ifNotMember(__ -> {
-                    generateNonDefaultValueCheck(field);
-                    buffer.incrementIndent();
-                    headerGenerator.addImport(MessageGenerator.UNSUPPORTED_VERSION_EXCEPTION_CLASS);
-                    buffer.printf("throw new UnsupportedVersionException(" +
-                            "\"Attempted to write a non-default %s at version \" + _version);%n",
-                        field.camelCaseName());
-                    buffer.decrementIndent();
-                    buffer.printf("}%n");
-                });
-            }
+
+            maybeGenerateNonIgnorableFieldCheck(field, cond);
             cond.generate(buffer);
         }
         headerGenerator.addImport(MessageGenerator.RAW_TAGGED_FIELD_WRITER_CLASS);
@@ -940,47 +968,62 @@ public final class MessageDataGenerator {
                         forVersions(field.versions(), field.taggedVersions().intersect(field.versions())).
                         allowMembershipCheckAlwaysFalse(false).
                         ifMember(presentAndTaggedVersions -> {
-                            generateNonDefaultValueCheck(field);
-                            buffer.incrementIndent();
-                            buffer.printf("_writable.writeUnsignedVarint(%d);%n", field.tag().get());
-                            if (field.type().isString()) {
-                                IsNullConditional.forName(field.camelCaseName()).
-                                    nullableVersions(field.nullableVersions()).
-                                    possibleVersions(presentAndTaggedVersions).
-                                    ifNull(() -> {
-                                        buffer.printf("_writable.writeUnsignedVarint(0);%n");
-                                    }).
-                                    ifNotNull(() -> {
+                            IsNullConditional cond = IsNullConditional.forName(field.camelCaseName()).
+                                nullableVersions(field.nullableVersions()).
+                                possibleVersions(presentAndTaggedVersions).
+                                alwaysEmitBlockScope(true).
+                                ifNotNull(() -> {
+                                    if (!field.defaultString().equals("null")) {
+                                        generateNonDefaultValueCheck(field, Versions.NONE);
+                                        buffer.incrementIndent();
+                                    }
+                                    buffer.printf("_writable.writeUnsignedVarint(%d);%n", field.tag().get());
+                                    if (field.type().isString()) {
                                         buffer.printf("byte[] _stringBytes = _cache.getSerializedValue(this.%s);%n",
                                             field.camelCaseName());
-                                        buffer.printf("_writable.writeUnsignedVarint(_stringBytes.length);%n");
+                                        headerGenerator.addImport(MessageGenerator.BYTE_UTILS_CLASS);
+                                        buffer.printf("_writable.writeUnsignedVarint(_stringBytes.length + " +
+                                            "ByteUtils.sizeOfUnsignedVarint(_stringBytes.length + 1));%n");
+                                        buffer.printf("_writable.writeUnsignedVarint(_stringBytes.length + 1);%n");
                                         buffer.printf("_writable.writeByteArray(_stringBytes);%n");
-                                    }).
-                                    generate(buffer);
-                            } else if (field.type().isVariableLength()) {
-                                if (field.type().isArray()) {
-                                    buffer.printf("_writable.writeUnsignedVarint(_cache.getArraySizeInBytes(this.%s) + 1);%n",
-                                        field.camelCaseName());
-                                } else if (field.type().isBytes()) {
-                                    buffer.printf("_writable.writeUnsignedVarint(this.%s.length + 1);%n",
-                                        field.camelCaseName());
-                                } else {
-                                    throw new RuntimeException("Unable to handle type " + field.type());
-                                }
-                                generateVariableLengthWriter(fieldFlexibleVersions(field),
-                                    field.camelCaseName(),
-                                    field.type(),
-                                    presentAndTaggedVersions,
-                                    field.nullableVersions(),
-                                    field.zeroCopy());
-                            } else {
-                                buffer.printf("_writable.writeUnsignedVarint(%d);%n",
-                                    field.type().fixedLength().get());
-                                buffer.printf("%s;%n",
-                                    primitiveWriteExpression(field.type(), field.camelCaseName()));
+                                    } else if (field.type().isBytes()) {
+                                        headerGenerator.addImport(MessageGenerator.BYTE_UTILS_CLASS);
+                                        buffer.printf("_writable.writeUnsignedVarint(this.%s.length + " +
+                                                "ByteUtils.sizeOfUnsignedVarint(this.%s.length + 1));%n",
+                                            field.camelCaseName(), field.camelCaseName());
+                                        buffer.printf("_writable.writeUnsignedVarint(this.%s.length + 1);%n",
+                                            field.camelCaseName());
+                                        buffer.printf("_writable.writeByteArray(this.%s);%n",
+                                            field.camelCaseName());
+                                    } else if (field.type().isArray()) {
+                                        headerGenerator.addImport(MessageGenerator.BYTE_UTILS_CLASS);
+                                        buffer.printf("_writable.writeUnsignedVarint(_cache.getArraySizeInBytes(this.%s));%n",
+                                            field.camelCaseName());
+                                        generateVariableLengthWriter(fieldFlexibleVersions(field),
+                                            field.camelCaseName(),
+                                            field.type(),
+                                            presentAndTaggedVersions,
+                                            Versions.NONE,
+                                            field.zeroCopy());
+                                    } else {
+                                        buffer.printf("_writable.writeUnsignedVarint(%d);%n",
+                                            field.type().fixedLength().get());
+                                        buffer.printf("%s;%n",
+                                            primitiveWriteExpression(field.type(), field.camelCaseName()));
+                                    }
+                                    if (!field.defaultString().equals("null")) {
+                                        buffer.decrementIndent();
+                                        buffer.printf("}%n");
+                                    }
+                                });
+                            if (!field.defaultString().equals("null")) {
+                                cond.ifNull(() -> {
+                                    buffer.printf("_writable.writeUnsignedVarint(%d);%n", field.tag().get());
+                                    buffer.printf("_writable.writeUnsignedVarint(1);%n");
+                                    buffer.printf("_writable.writeUnsignedVarint(0);%n");
+                                });
                             }
-                            buffer.decrementIndent();
-                            buffer.printf("}%n");
+                            cond.generate(buffer);
                         }).
                         generate(buffer);
                     prevTag = field.tag().get();
@@ -1017,6 +1060,8 @@ public final class MessageDataGenerator {
             return String.format("_writable.writeLong(%s)", name);
         } else if (type instanceof FieldType.UUIDFieldType) {
             return String.format("_writable.writeUUID(%s)", name);
+        } else if (type instanceof FieldType.Float64FieldType) {
+            return String.format("_writable.writeDouble(%s)", name);
         } else if (type instanceof FieldType.StructType) {
             return String.format("%s.write(_writable, _cache, _version)", name);
         } else {
@@ -1128,28 +1173,45 @@ public final class MessageDataGenerator {
             generate(buffer);
     }
 
-    private void generateNonDefaultValueCheck(FieldSpec field) {
+    private void generateNonDefaultValueCheck(FieldSpec field, Versions nullableVersions) {
         if (field.type().isArray()) {
             if (fieldDefault(field).equals("null")) {
-                buffer.printf("if (%s != null) {%n", field.camelCaseName());
+                buffer.printf("if (%s != null) {%n",
+                    field.camelCaseName());
+            } else if (nullableVersions.empty()) {
+                buffer.printf("if (!%s.isEmpty()) {%n",
+                    field.camelCaseName());
             } else {
-                buffer.printf("if (!%s.isEmpty()) {%n", field.camelCaseName());
+                buffer.printf("if (%s == null || !%s.isEmpty()) {%n",
+                    field.camelCaseName(), field.camelCaseName());
             }
         } else if (field.type().isBytes()) {
             if (fieldDefault(field).equals("null")) {
                 buffer.printf("if (%s != null) {%n", field.camelCaseName());
-            } else {
+            } else if (nullableVersions.empty()) {
                 if (field.zeroCopy()) {
-                    buffer.printf("if (%s.remaining() != 0) {%n", field.camelCaseName());
+                    buffer.printf("if (%s.hasRemaining()) {%n", field.camelCaseName());
                 } else {
                     buffer.printf("if (%s.length != 0) {%n", field.camelCaseName());
+                }
+            } else {
+                if (field.zeroCopy()) {
+                    buffer.printf("if (%s == null || %s.remaining() > 0) {%n",
+                        field.camelCaseName(), field.camelCaseName());
+                } else {
+                    buffer.printf("if (%s == null || %s.length != 0) {%n",
+                        field.camelCaseName(), field.camelCaseName());
                 }
             }
         } else if (field.type().isString()) {
             if (fieldDefault(field).equals("null")) {
                 buffer.printf("if (%s != null) {%n", field.camelCaseName());
+            } else if (nullableVersions.empty()) {
+                buffer.printf("if (!%s.equals(%s)) {%n",
+                    field.camelCaseName(), fieldDefault(field));
             } else {
-                buffer.printf("if (!%s.equals(%s)) {%n", field.camelCaseName(), fieldDefault(field));
+                buffer.printf("if (%s == null || !%s.equals(%s)) {%n",
+                    field.camelCaseName(), field.camelCaseName(), fieldDefault(field));
             }
         } else if (field.type() instanceof FieldType.BoolFieldType) {
             buffer.printf("if (%s%s) {%n",
@@ -1184,7 +1246,7 @@ public final class MessageDataGenerator {
             generate(buffer);
         buffer.printf("Struct struct = new Struct(SCHEMAS[_version]);%n");
         for (FieldSpec field : struct.fields()) {
-            VersionConditional.forVersions(field.versions(), curVersions).
+            VersionConditional cond = VersionConditional.forVersions(field.versions(), curVersions).
                 alwaysEmitBlockScope(field.type().isArray()).
                 ifMember(presentVersions -> {
                     VersionConditional.forVersions(field.taggedVersions(), presentVersions).
@@ -1192,15 +1254,17 @@ public final class MessageDataGenerator {
                             generateFieldToStruct(field, presentAndUntaggedVersions);
                         }).
                         ifMember(presentAndTaggedVersions -> {
-                            generateNonDefaultValueCheck(field);
+                            generateNonDefaultValueCheck(field, field.nullableVersions());
                             buffer.incrementIndent();
                             generateTaggedFieldToMap(field, presentAndTaggedVersions);
                             buffer.decrementIndent();
                             buffer.printf("}%n");
                         }).
                         generate(buffer);
-                }).
-                generate(buffer);
+                });
+
+            maybeGenerateNonIgnorableFieldCheck(field, cond);
+            cond.generate(buffer);
         }
         VersionConditional.forVersions(messageFlexibleVersions, curVersions).
             ifMember(__ -> {
@@ -1224,6 +1288,7 @@ public final class MessageDataGenerator {
                 (field.type() instanceof FieldType.Int32FieldType) ||
                 (field.type() instanceof FieldType.Int64FieldType) ||
                 (field.type() instanceof FieldType.UUIDFieldType) ||
+                (field.type() instanceof FieldType.Float64FieldType) ||
                 (field.type() instanceof FieldType.StringFieldType)) {
             buffer.printf("struct.set(\"%s\", this.%s);%n",
                 field.snakeCaseName(), field.camelCaseName());
@@ -1263,6 +1328,7 @@ public final class MessageDataGenerator {
             (field.type() instanceof FieldType.Int32FieldType) ||
             (field.type() instanceof FieldType.Int64FieldType) ||
             (field.type() instanceof FieldType.UUIDFieldType) ||
+            (field.type() instanceof FieldType.Float64FieldType) ||
             (field.type() instanceof FieldType.StringFieldType)) {
             buffer.printf("_taggedFields.put(%d, %s);%n",
                 field.tag().get(), field.camelCaseName());
@@ -1273,7 +1339,7 @@ public final class MessageDataGenerator {
                     field.tag().get(), field.camelCaseName());
             } else {
                 buffer.printf("_taggedFields.put(%d, (%s == null) ? null : ByteBuffer.wrap(%s));%n",
-                    field.tag().get(), field.camelCaseName());
+                    field.tag().get(), field.camelCaseName(), field.camelCaseName());
             }
         } else if (field.type().isArray()) {
             IsNullConditional.forField(field).
@@ -1330,14 +1396,7 @@ public final class MessageDataGenerator {
                 ifMember(presentVersions -> {
                     VersionConditional.forVersions(field.taggedVersions(), presentVersions).
                         ifMember(presentAndTaggedVersions -> {
-                            generateNonDefaultValueCheck(field);
-                            buffer.incrementIndent();
-                            buffer.printf("_numTaggedFields++;%n");
-                            buffer.printf("_size += %d;%n",
-                                MessageGenerator.sizeOfUnsignedVarint(field.tag().get()));
                             generateFieldSize(field, presentAndTaggedVersions, true);
-                            buffer.decrementIndent();
-                            buffer.printf("}%n");
                         }).
                         ifNotMember(presentAndUntaggedVersions -> {
                             generateFieldSize(field, presentAndUntaggedVersions, false);
@@ -1415,41 +1474,77 @@ public final class MessageDataGenerator {
                                    Versions possibleVersions,
                                    boolean tagged) {
         if (field.type().fixedLength().isPresent()) {
-            if (tagged) {
-                // Account for the tagged field prefix.
-                buffer.printf("_size += %d;%n",
-                    MessageGenerator.sizeOfUnsignedVarint(field.type().fixedLength().get()));
-            }
-            buffer.printf("_size += %d;%n", field.type().fixedLength().get());
-            return;
+            generateFixedLengthFieldSize(field, tagged);
+        } else {
+            generateVariableLengthFieldSize(field, possibleVersions, tagged);
         }
+    }
+
+    private void generateFixedLengthFieldSize(FieldSpec field,
+                                              boolean tagged) {
+        if (tagged) {
+            // Check to see that the field is not set to the default value.
+            // If it is, then we don't need to serialize it.
+            generateNonDefaultValueCheck(field, field.nullableVersions());
+            buffer.incrementIndent();
+            buffer.printf("_numTaggedFields++;%n");
+            buffer.printf("_size += %d;%n",
+                MessageGenerator.sizeOfUnsignedVarint(field.tag().get()));
+            // Account for the tagged field prefix length.
+            buffer.printf("_size += %d;%n",
+                MessageGenerator.sizeOfUnsignedVarint(field.type().fixedLength().get()));
+            buffer.printf("_size += %d;%n", field.type().fixedLength().get());
+            buffer.decrementIndent();
+            buffer.printf("}%n");
+        } else {
+            buffer.printf("_size += %d;%n", field.type().fixedLength().get());
+        }
+    }
+
+    private void generateVariableLengthFieldSize(FieldSpec field,
+                                                 Versions possibleVersions,
+                                                 boolean tagged) {
         IsNullConditional.forField(field).
             alwaysEmitBlockScope(true).
             possibleVersions(possibleVersions).
+            nullableVersions(field.nullableVersions()).
             ifNull(() -> {
-                VersionConditional.forVersions(fieldFlexibleVersions(field), possibleVersions).
-                    ifMember(__ -> {
-                        if (tagged) {
-                            // Account for the tagged field prefix.
-                            buffer.printf("_size += %d;%n", MessageGenerator.sizeOfUnsignedVarint(
-                                MessageGenerator.sizeOfUnsignedVarint(0)));
-                        }
-                        buffer.printf("_size += %d;%n", MessageGenerator.sizeOfUnsignedVarint(0));
-                    }).
-                    ifNotMember(__ -> {
-                        if (tagged) {
-                            throw new RuntimeException("Tagged field " + field.name() +
-                                " should not be present in non-flexible versions.");
-                        }
-                        if (field.type().isString()) {
-                            buffer.printf("_size += 2;%n");
-                        } else {
-                            buffer.printf("_size += 4;%n");
-                        }
-                    }).
-                    generate(buffer);
+                if (!tagged || !field.defaultString().equals("null")) {
+                    VersionConditional.forVersions(fieldFlexibleVersions(field), possibleVersions).
+                        ifMember(__ -> {
+                            if (tagged) {
+                                buffer.printf("_numTaggedFields++;%n");
+                                buffer.printf("_size += %d;%n",
+                                    MessageGenerator.sizeOfUnsignedVarint(field.tag().get()));
+                                buffer.printf("_size += %d;%n", MessageGenerator.sizeOfUnsignedVarint(
+                                    MessageGenerator.sizeOfUnsignedVarint(0)));
+                            }
+                            buffer.printf("_size += %d;%n", MessageGenerator.sizeOfUnsignedVarint(0));
+                        }).
+                        ifNotMember(__ -> {
+                            if (tagged) {
+                                throw new RuntimeException("Tagged field " + field.name() +
+                                    " should not be present in non-flexible versions.");
+                            }
+                            if (field.type().isString()) {
+                                buffer.printf("_size += 2;%n");
+                            } else {
+                                buffer.printf("_size += 4;%n");
+                            }
+                        }).
+                        generate(buffer);
+                }
             }).
             ifNotNull(() -> {
+                if (tagged) {
+                    if (!field.defaultString().equals("null")) {
+                        generateNonDefaultValueCheck(field, Versions.NONE);
+                        buffer.incrementIndent();
+                    }
+                    buffer.printf("_numTaggedFields++;%n");
+                    buffer.printf("_size += %d;%n",
+                        MessageGenerator.sizeOfUnsignedVarint(field.tag().get()));
+                }
                 if (field.type().isString()) {
                     generateStringToBytes(field.camelCaseName());
                     VersionConditional.forVersions(fieldFlexibleVersions(field), possibleVersions).
@@ -1542,6 +1637,10 @@ public final class MessageDataGenerator {
                     }
                 } else {
                     throw new RuntimeException("unhandled type " + field.type());
+                }
+                if (tagged && !field.defaultString().equals("null")) {
+                    buffer.decrementIndent();
+                    buffer.printf("}%n");
                 }
             }).
             generate(buffer);
@@ -1639,6 +1738,9 @@ public final class MessageDataGenerator {
         } else if (field.type() instanceof FieldType.UUIDFieldType) {
             buffer.printf("hashCode = 31 * hashCode + %s.hashCode();%n",
                 field.camelCaseName());
+        } else if (field.type() instanceof FieldType.Float64FieldType) {
+            buffer.printf("hashCode = 31 * hashCode + Double.hashCode(%s);%n",
+                field.camelCaseName(), field.camelCaseName());
         } else if (field.type().isBytes()) {
             if (field.zeroCopy()) {
                 headerGenerator.addImport(MessageGenerator.OBJECTS_CLASS);
@@ -1683,7 +1785,8 @@ public final class MessageDataGenerator {
         } else if ((field.type() instanceof FieldType.Int8FieldType) ||
                 (field.type() instanceof FieldType.Int16FieldType) ||
                 (field.type() instanceof FieldType.Int32FieldType) ||
-                (field.type() instanceof FieldType.Int64FieldType)) {
+                (field.type() instanceof FieldType.Int64FieldType) ||
+                (field.type() instanceof FieldType.Float64FieldType)) {
             buffer.printf("+ \"%s%s=\" + %s%n",
                 prefix, field.camelCaseName(), field.camelCaseName());
         } else if (field.type().isString()) {
@@ -1730,53 +1833,66 @@ public final class MessageDataGenerator {
                 throw new RuntimeException("Invalid default for boolean field " +
                     field.name() + ": " + field.defaultString());
             }
-        } else if (field.type() instanceof FieldType.Int8FieldType) {
-            if (field.defaultString().isEmpty()) {
-                return "(byte) 0";
-            } else {
-                try {
-                    Byte.decode(field.defaultString());
-                } catch (NumberFormatException e) {
-                    throw new RuntimeException("Invalid default for int8 field " +
-                        field.name() + ": " + field.defaultString(), e);
-                }
-                return "(byte) " + field.defaultString();
+        } else if ((field.type() instanceof FieldType.Int8FieldType) ||
+                   (field.type() instanceof FieldType.Int16FieldType) ||
+                   (field.type() instanceof FieldType.Int32FieldType) ||
+                   (field.type() instanceof FieldType.Int64FieldType)) {
+            int base = 10;
+            String defaultString = field.defaultString();
+            if (defaultString.startsWith("0x")) {
+                base = 16;
+                defaultString = defaultString.substring(2);
             }
-        } else if (field.type() instanceof FieldType.Int16FieldType) {
-            if (field.defaultString().isEmpty()) {
-                return "(short) 0";
-            } else {
-                try {
-                    Short.decode(field.defaultString());
-                } catch (NumberFormatException e) {
-                    throw new RuntimeException("Invalid default for int16 field " +
-                        field.name() + ": " + field.defaultString(), e);
+            if (field.type() instanceof FieldType.Int8FieldType) {
+                if (defaultString.isEmpty()) {
+                    return "(byte) 0";
+                } else {
+                    try {
+                        Byte.valueOf(defaultString, base);
+                    } catch (NumberFormatException e) {
+                        throw new RuntimeException("Invalid default for int8 field " +
+                            field.name() + ": " + defaultString, e);
+                    }
+                    return "(byte) " + field.defaultString();
                 }
-                return "(short) " + field.defaultString();
-            }
-        } else if (field.type() instanceof FieldType.Int32FieldType) {
-            if (field.defaultString().isEmpty()) {
-                return "0";
-            } else {
-                try {
-                    Integer.decode(field.defaultString());
-                } catch (NumberFormatException e) {
-                    throw new RuntimeException("Invalid default for int32 field " +
-                        field.name() + ": " + field.defaultString(), e);
+            } else if (field.type() instanceof FieldType.Int16FieldType) {
+                if (defaultString.isEmpty()) {
+                    return "(short) 0";
+                } else {
+                    try {
+                        Short.valueOf(defaultString, base);
+                    } catch (NumberFormatException e) {
+                        throw new RuntimeException("Invalid default for int16 field " +
+                            field.name() + ": " + field.defaultString(), e);
+                    }
+                    return "(short) " + field.defaultString();
                 }
-                return field.defaultString();
-            }
-        } else if (field.type() instanceof FieldType.Int64FieldType) {
-            if (field.defaultString().isEmpty()) {
-                return "0L";
-            } else {
-                try {
-                    Integer.decode(field.defaultString());
-                } catch (NumberFormatException e) {
-                    throw new RuntimeException("Invalid default for int64 field " +
-                        field.name() + ": " + field.defaultString(), e);
+            } else if (field.type() instanceof FieldType.Int32FieldType) {
+                if (defaultString.isEmpty()) {
+                    return "0";
+                } else {
+                    try {
+                        Integer.valueOf(defaultString, base);
+                    } catch (NumberFormatException e) {
+                        throw new RuntimeException("Invalid default for int32 field " +
+                            field.name() + ": " + field.defaultString(), e);
+                    }
+                    return field.defaultString();
                 }
-                return field.defaultString() + "L";
+            } else if (field.type() instanceof FieldType.Int64FieldType) {
+                if (defaultString.isEmpty()) {
+                    return "0L";
+                } else {
+                    try {
+                        Long.valueOf(defaultString, base);
+                    } catch (NumberFormatException e) {
+                        throw new RuntimeException("Invalid default for int64 field " +
+                            field.name() + ": " + field.defaultString(), e);
+                    }
+                    return field.defaultString() + "L";
+                }
+            } else {
+                throw new RuntimeException("Unsupported field type " + field.type());
             }
         } else if (field.type() instanceof FieldType.UUIDFieldType) {
             headerGenerator.addImport(MessageGenerator.UUID_CLASS);
@@ -1792,6 +1908,18 @@ public final class MessageDataGenerator {
                 }
                 headerGenerator.addImport(MessageGenerator.UUID_CLASS);
                 return "UUID.fromString(\"" + field.defaultString() + "\")";
+            }
+        } else if (field.type() instanceof FieldType.Float64FieldType) {
+            if (field.defaultString().isEmpty()) {
+                return "0.0";
+            } else {
+                try {
+                    Double.parseDouble(field.defaultString());
+                } catch (NumberFormatException e) {
+                    throw new RuntimeException("Invalid default for float64 field " +
+                        field.name() + ": " + field.defaultString(), e);
+                }
+                return "Double.parseDouble(\"" + field.defaultString() + "\")";
             }
         } else if (field.type() instanceof FieldType.StringFieldType) {
             if (field.defaultString().equals("null")) {

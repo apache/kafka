@@ -19,9 +19,9 @@ package kafka.server
 import java.util.Optional
 
 import kafka.utils.TestUtils
-import org.apache.kafka.common.{IsolationLevel, TopicPartition}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.{ListOffsetRequest, ListOffsetResponse}
+import org.apache.kafka.common.{IsolationLevel, TopicPartition}
 import org.junit.Assert._
 import org.junit.Test
 
@@ -164,9 +164,7 @@ class ListOffsetsRequestTest extends BaseRequestTest {
   }
 
   private def sendRequest(leaderId: Int, request: ListOffsetRequest): ListOffsetResponse = {
-    val socketServer = brokerSocketServer(leaderId)
-    val response = connectAndSend(request, ApiKeys.LIST_OFFSETS, destination = socketServer)
-    ListOffsetResponse.parse(response, request.version)
+    connectAndReceive[ListOffsetResponse](request, destination = brokerSocketServer(leaderId))
   }
 
 }

@@ -141,7 +141,8 @@ class SimpleFetchTest {
       followerFetchOffsetMetadata = leo,
       followerStartOffset = 0L,
       followerFetchTimeMs= time.milliseconds,
-      leaderEndOffset = leo.messageOffset)
+      leaderEndOffset = leo.messageOffset,
+      partition.localLogOrException.highWatermark)
   }
 
   @After
