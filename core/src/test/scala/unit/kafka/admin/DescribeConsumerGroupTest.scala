@@ -22,6 +22,7 @@ import joptsimple.OptionException
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.consumer.{ConsumerConfig, RoundRobinAssignor}
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.errors.TimeoutException
 import org.junit.Assert._
 import org.junit.Test
 
@@ -581,7 +582,7 @@ class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
       TestUtils.grabConsoleOutputAndError(service.describeGroups())
       fail(s"The consumer group command should have failed due to low initialization timeout (describe type: ${describeType.mkString(" ")})")
     } catch {
-      case e: ExecutionException => assertEquals("TimeoutException", e.getCause.getClass.getSimpleName)
+      case e: ExecutionException => assertEquals(classOf[TimeoutException], e.getCause.getClass)
     }
   }
 
@@ -601,7 +602,7 @@ class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
       service.collectGroupOffsets(group)
       fail("The consumer group command should fail due to low initialization timeout")
     } catch {
-      case e : ExecutionException => assertEquals("TimeoutException", e.getCause.getClass.getSimpleName)
+      case e: ExecutionException => assertEquals(classOf[TimeoutException], e.getCause.getClass)
     }
   }
 
@@ -621,12 +622,12 @@ class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
       service.collectGroupMembers(group, false)
       fail("The consumer group command should fail due to low initialization timeout")
     } catch {
-      case e: ExecutionException => assertEquals("TimeoutException", e.getCause.getClass.getSimpleName)
+      case e: ExecutionException => assertEquals(classOf[TimeoutException], e.getCause.getClass)
         try {
           service.collectGroupMembers(group, true)
           fail("The consumer group command should fail due to low initialization timeout (verbose)")
         } catch {
-          case e: ExecutionException => assertEquals("TimeoutException", e.getCause.getClass.getSimpleName)
+          case e: ExecutionException => assertEquals(classOf[TimeoutException], e.getCause.getClass)
         }
     }
   }
@@ -647,7 +648,7 @@ class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
       service.collectGroupState(group)
       fail("The consumer group command should fail due to low initialization timeout")
     } catch {
-      case e: ExecutionException => assertEquals("TimeoutException", e.getCause.getClass.getSimpleName)
+      case e: ExecutionException => assertEquals(classOf[TimeoutException], e.getCause.getClass)
     }
   }
 
