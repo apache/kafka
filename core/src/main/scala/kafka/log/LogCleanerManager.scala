@@ -179,7 +179,11 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
         case (topicPartition, log) => // create a LogToClean instance for each
           try {
             val lastCleanOffset = lastClean.get(topicPartition)
+            val logStartOffset = log.logStartOffset
             val (firstDirtyOffset, firstUncleanableDirtyOffset) = cleanableOffsets(log, lastCleanOffset, now)
+            // update checkpoint for logs with invalid checkpointed offsets
+            if (lastCleanOffset.getOrElse(logStartOffset) < logStartOffset && !isCompactAndDelete(log))
+              updateCheckpoints(log.dir.getParentFile(), Option(topicPartition, log.logStartOffset))
             val compactionDelayMs = maxCompactionDelay(log, firstDirtyOffset, now)
             preCleanStats.updateMaxCompactionDelay(compactionDelayMs)
 
