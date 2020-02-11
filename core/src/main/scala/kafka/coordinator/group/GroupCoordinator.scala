@@ -1036,7 +1036,6 @@ class GroupCoordinator(val brokerId: Int,
     if (group.is(CompletingRebalance))
       resetAndPropagateAssignmentError(group, Errors.REBALANCE_IN_PROGRESS)
 
-    val startEmpty = group.is(Empty)
     val delayedRebalance = if (group.is(Empty))
       new InitialDelayedJoin(this,
         joinPurgatory,
@@ -1050,16 +1049,7 @@ class GroupCoordinator(val brokerId: Int,
     group.transitionTo(PreparingRebalance)
 
     info(s"Preparing to rebalance group ${group.groupId} in state ${group.currentState} with old generation " +
-      s"${group.generationId} (${Topic.GROUP_METADATA_TOPIC_NAME}-${partitionFor(group.groupId)}) (reason: $reason), " +
-      s"the remaining instances are ${group.allMembers}")
-
-    group.members.foreach(member => {
-      info(s"member ${member._2.memberId} is awaiting join ${member._2.isAwaitingJoin} or " +
-        s"awaiting sync ${member._2.isAwaitingSync}" )
-    })
-
-    info(s"The join complete condition checking: all members joined ${group.hasAllMembersJoined}, " +
-      s"members waiting join count: ${group.numMembersAwaitingJoin}, pending members: ${group.pendingMembers} ")
+      s"${group.generationId} (${Topic.GROUP_METADATA_TOPIC_NAME}-${partitionFor(group.groupId)}) (reason: $reason)")
 
     val groupKey = GroupKey(group.groupId)
     joinPurgatory.tryCompleteElseWatch(delayedRebalance, Seq(groupKey))
@@ -1093,8 +1083,7 @@ class GroupCoordinator(val brokerId: Int,
     group.inLock {
       if (group.hasAllMembersJoined)
         forceComplete()
-      else
-        false
+      else false
     }
   }
 
@@ -1175,7 +1164,6 @@ class GroupCoordinator(val brokerId: Int,
           forceComplete()
         } else false
       } else {
-        info(s"try complete heartbeat for $memberId")
         if (shouldCompleteNonPendingHeartbeat(group, memberId, heartbeatDeadline)) {
           forceComplete()
         } else false
@@ -1204,7 +1192,6 @@ class GroupCoordinator(val brokerId: Int,
         debug(s"Member $memberId has already been removed from the group.")
       } else {
         val member = group.get(memberId)
-        info(s"on expire heartbeat for $member")
         if (!member.shouldKeepAlive(heartbeatDeadline)) {
           info(s"Member ${member.memberId} in group ${group.groupId} has failed, removing it from the group")
           removeMemberAndUpdateGroup(group, member, s"removing member ${member.memberId} on heartbeat expiration")

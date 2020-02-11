@@ -19,7 +19,7 @@ package kafka.coordinator.group
 
 import java.util
 
-import kafka.utils.{Logging, nonthreadsafe}
+import kafka.utils.nonthreadsafe
 
 case class MemberSummary(memberId: String,
                          groupInstanceId: Option[String],
@@ -61,7 +61,7 @@ private[group] class MemberMetadata(var memberId: String,
                                     val rebalanceTimeoutMs: Int,
                                     val sessionTimeoutMs: Int,
                                     val protocolType: String,
-                                    var supportedProtocols: List[(String, Array[Byte])]) extends Logging {
+                                    var supportedProtocols: List[(String, Array[Byte])]) {
 
   var assignment: Array[Byte] = Array.empty[Byte]
   var awaitingJoinCallback: JoinGroupResult => Unit = null
@@ -88,16 +88,12 @@ private[group] class MemberMetadata(var memberId: String,
   def shouldKeepAlive(deadlineMs: Long): Boolean = {
     if (isNew) {
       // New members are expired after the static join timeout
-      val newMemberExpired = latestHeartbeat + GroupCoordinator.NewMemberJoinTimeoutMs > deadlineMs
-      info(s"$memberId is checking for new member completeness, result is $newMemberExpired")
-      newMemberExpired
+      latestHeartbeat + GroupCoordinator.NewMemberJoinTimeoutMs > deadlineMs
     } else if (isAwaitingJoin || isAwaitingSync) {
       // Don't remove members as long as they have a request in purgatory
-      info(s"$memberId has awaiting join $isAwaitingJoin and awaiting sync $isAwaitingSync")
       true
     } else {
       // Otherwise check for session expiration
-      info(s"$memberId is checking for session expiration ${latestHeartbeat + sessionTimeoutMs > deadlineMs}")
       latestHeartbeat + sessionTimeoutMs > deadlineMs
     }
   }

@@ -35,8 +35,6 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.OutOfOrderSequenceException;
 import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.utils.Exit;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.text.DateFormat;
 import java.text.SimpleDateFormat;
@@ -61,7 +59,6 @@ import static net.sourceforge.argparse4j.impl.Arguments.storeTrue;
  */
 public class TransactionalMessageCopier {
 
-    private static final Logger log = LoggerFactory.getLogger(TransactionalMessageCopier.class);
     private static final DateFormat FORMAT = new SimpleDateFormat("yyyy/MM/dd HH:mm:ss:SSS");
 
     /** Get the command-line argument parser. */
@@ -242,7 +239,6 @@ public class TransactionalMessageCopier {
     private static long messagesRemaining(KafkaConsumer<String, String> consumer, TopicPartition partition) {
         long currentPosition = consumer.position(partition);
         Map<TopicPartition, Long> endOffsets = consumer.endOffsets(singleton(partition));
-        log.info("Partition {} current position: {}, endOffsets: {}", partition, currentPosition, endOffsets);
         if (endOffsets.containsKey(partition)) {
             return endOffsets.get(partition) - currentPosition;
         }
@@ -283,7 +279,6 @@ public class TransactionalMessageCopier {
 
     public static void main(String[] args) {
         Namespace parsedArgs = argParser().parseArgsOrFail(args);
-        Integer numMessagesPerTransaction = parsedArgs.getInt("messagesPerTransaction");
         final String transactionalId = parsedArgs.getString("transactionalId");
         final String outputTopic = parsedArgs.getString("outputTopic");
 
@@ -309,7 +304,6 @@ public class TransactionalMessageCopier {
                 public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
                     remainingMessages.set(partitions.stream()
                         .mapToLong(partition -> messagesRemaining(consumer, partition)).sum());
-                    log.info("Remaining messages set to {} on rebalance complete", remainingMessages);
                     numMessagesProcessedSinceLastRebalance.set(0);
                     // We use message cap for remaining here as the remainingMessages are not set yet.
                     System.out.println(statusAsJson(totalMessageProcessed.get(),
@@ -352,18 +346,12 @@ public class TransactionalMessageCopier {
                 if (records.count() > 0) {
                     try {
                         producer.beginTransaction();
-                        Map<Integer, Integer> partitionCount = new HashMap<>();
 
                         for (ConsumerRecord<String, String> record : records) {
                             producer.send(producerRecordFromConsumerRecord(outputTopic, record));
-                            partitionCount.put(record.partition(), partitionCount.getOrDefault(record.partition(), 0) + 1);
                         }
-                        long messagesSentWithinCurrentTxn = records.count();
 
-                        log.info("Messages sent in current transaction: {}", messagesSentWithinCurrentTxn);
-                        for (Map.Entry<Integer, Integer> entry : partitionCount.entrySet()) {
-                            log.info("Partition {} has contributed {} records", entry.getKey(), entry.getValue());
-                        }
+                        long messagesSentWithinCurrentTxn = records.count();
 
                         if (useGroupMetadata) {
                             producer.sendOffsetsToTransaction(consumerPositions(consumer), consumer.groupMetadata());

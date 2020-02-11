@@ -31,7 +31,7 @@ class TransactionsTest(Test):
     a destination topic and killing the copy process as well as the broker
     randomly through the process. In the end we verify that the final output
     topic contains exactly one committed copy of each message in the input
-    topic
+    topic.
     """
     def __init__(self, test_context):
         """:type test_context: ducktape.tests.test.TestContext"""

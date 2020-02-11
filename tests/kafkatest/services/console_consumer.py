@@ -106,7 +106,6 @@ class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService)
         self.from_beginning = from_beginning
         self.message_validator = message_validator
         self.messages_consumed = {idx: [] for idx in range(1, num_nodes + 1)}
-        self.messages_consumed_by_partition = {idx: [] for idx in range(1, num_nodes + 1)}
         self.clean_shutdown_nodes = set()
         self.client_id = client_id
         self.print_key = print_key

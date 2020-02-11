@@ -203,11 +203,11 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
   var generationId = 0
   private var leaderId: Option[String] = None
 
-  val members = new mutable.HashMap[String, MemberMetadata]
+  private val members = new mutable.HashMap[String, MemberMetadata]
   // Static membership mapping [key: group.instance.id, value: member.id]
   private val staticMembers = new mutable.HashMap[String, String]
-  val pendingMembers = new mutable.HashSet[String]
-  var numMembersAwaitingJoin = 0
+  private val pendingMembers = new mutable.HashSet[String]
+  private var numMembersAwaitingJoin = 0
   private val supportedProtocols = new mutable.HashMap[String, Integer]().withDefaultValue(0)
   private val offsets = new mutable.HashMap[TopicPartition, CommitRecordMetadataAndOffset]
   private val pendingOffsetCommits = new mutable.HashMap[TopicPartition, OffsetAndMetadata]
@@ -353,9 +353,7 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
 
   def notYetRejoinedMembers = members.values.filter(!_.isAwaitingJoin).toList
 
-  def hasAllMembersJoined = {
-    members.size == numMembersAwaitingJoin && pendingMembers.isEmpty
-  }
+  def hasAllMembersJoined = members.size == numMembersAwaitingJoin && pendingMembers.isEmpty
 
   def allMembers = members.keySet
 

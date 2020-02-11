@@ -27,14 +27,13 @@ from ducktape.utils.util import wait_until
 
 
 class GroupModeTransactionsTest(Test):
-    """This test essentially does the same effort as TransactionsTest by transactionally copying data from a source topic to
-    a destination topic and killing the copy process as well as the broker randomly through the process.
-    The major difference is that we choose to work as a collaborated group with same topic subscription
-    instead of individual consumers.
+    """Essentially testing the same functionality as TransactionsTest by transactionally copying data
+    from a source topic to a destination topic and killing the copy process as well as the broker
+    randomly through the process. The major difference is that we choose to work as a collaborated
+    group with same topic subscription instead of individual copiers.
 
-    In the end we verify that the final output
-    topic contains exactly one committed copy of each message in the input
-    topic
+    In the end we verify that the final output topic contains exactly one committed copy of
+    each message from the original producer.
     """
     def __init__(self, test_context):
         """:type test_context: ducktape.tests.test.TestContext"""
