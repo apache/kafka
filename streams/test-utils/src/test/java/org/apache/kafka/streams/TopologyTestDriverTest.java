@@ -149,7 +149,7 @@ public class TopologyTestDriverTest {
         private final String topic;
         private final Headers headers;
 
-        Record(final ConsumerRecord consumerRecord,
+        Record(final ConsumerRecord<byte[], byte[]> consumerRecord,
                final long newOffset) {
             key = consumerRecord.key();
             value = consumerRecord.value();
@@ -160,7 +160,7 @@ public class TopologyTestDriverTest {
         }
 
         Record(final String newTopic,
-               final TestRecord consumerRecord,
+               final TestRecord<byte[], byte[]> consumerRecord,
                final long newOffset) {
             key = consumerRecord.key();
             value = consumerRecord.value();
@@ -235,7 +235,7 @@ public class TopologyTestDriverTest {
         }
     }
 
-    private final static class MockProcessor implements Processor {
+    private final static class MockProcessor implements Processor<Object, Object> {
         private final Collection<Punctuation> punctuations;
         private ProcessorContext context;
 
@@ -270,7 +270,7 @@ public class TopologyTestDriverTest {
 
     private final List<MockProcessor> mockProcessors = new ArrayList<>();
 
-    private final class MockProcessorSupplier implements ProcessorSupplier {
+    private final class MockProcessorSupplier implements ProcessorSupplier<Object, Object> {
         private final Collection<Punctuation> punctuations;
 
         private MockProcessorSupplier() {
@@ -282,7 +282,7 @@ public class TopologyTestDriverTest {
         }
 
         @Override
-        public Processor get() {
+        public Processor<Object, Object> get() {
             final MockProcessor mockProcessor = new MockProcessor(punctuations);
             mockProcessors.add(mockProcessor);
             return mockProcessor;
@@ -456,7 +456,7 @@ public class TopologyTestDriverTest {
         testDriver = new TopologyTestDriver(setupSourceSinkTopology(), config);
 
         pipeRecord(SOURCE_TOPIC_1, testRecord1);
-        final ProducerRecord outputRecord = testDriver.readRecord(SINK_TOPIC_1);
+        final ProducerRecord<byte[], byte[]> outputRecord = testDriver.readRecord(SINK_TOPIC_1);
 
         assertEquals(key1, outputRecord.key());
         assertEquals(value1, outputRecord.value());
@@ -709,7 +709,7 @@ public class TopologyTestDriverTest {
 
         pipeRecord(SOURCE_TOPIC_1, testRecord1);
 
-        ProducerRecord outputRecord = testDriver.readRecord(SINK_TOPIC_1);
+        ProducerRecord<byte[], byte[]> outputRecord = testDriver.readRecord(SINK_TOPIC_1);
         assertEquals(key1, outputRecord.key());
         assertEquals(value1, outputRecord.value());
         assertEquals(SINK_TOPIC_1, outputRecord.topic());
@@ -1341,9 +1341,9 @@ public class TopologyTestDriverTest {
         topology.addSource("sourceProcessor", "input-topic");
         topology.addProcessor(
             "storeProcessor",
-            new ProcessorSupplier() {
+            new ProcessorSupplier<String, Long>() {
                 @Override
-                public Processor get() {
+                public Processor<String, Long> get() {
                     return new Processor<String, Long>() {
                         private KeyValueStore<String, Long> store;
 
@@ -1476,7 +1476,7 @@ public class TopologyTestDriverTest {
         testDriver = new TopologyTestDriver(topology, config);
         pipeRecord(SOURCE_TOPIC_1, testRecord1);
 
-        final ProducerRecord outputRecord = testDriver.readRecord(SINK_TOPIC_1);
+        final ProducerRecord<byte[], byte[]> outputRecord = testDriver.readRecord(SINK_TOPIC_1);
         assertEquals(key1, outputRecord.key());
         assertEquals(value1, outputRecord.value());
         assertEquals(SINK_TOPIC_1, outputRecord.topic());
