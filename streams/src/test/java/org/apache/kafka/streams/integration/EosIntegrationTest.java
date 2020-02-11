@@ -146,10 +146,14 @@ public class EosIntegrationTest {
             final TopicPartition topicPartition = new TopicPartition(SINGLE_PARTITION_INPUT_TOPIC, 0);
             final Collection<TopicPartition> topicPartitions = Collections.singleton(topicPartition);
 
-            consumer.assign(Collections.singleton(topicPartition));
+            final long committedOffset = adminClient.listConsumerGroupOffsets(applicationId).partitionsToOffsetAndMetadata().get().get(topicPartition).offset();
 
-            assertThat(consumer.position(topicPartition),
-                equalTo(consumer.endOffsets(topicPartitions).get(topicPartition)));
+            consumer.assign(topicPartitions);
+            final long consumerPosition = consumer.position(topicPartition);
+            final long endOffset = consumer.endOffsets(topicPartitions).get(topicPartition);
+
+            assertThat(committedOffset, equalTo(consumerPosition));
+            assertThat(committedOffset, equalTo(endOffset));
         }
     }
 

@@ -636,6 +636,8 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
             try {
                 commit(false, partitionTimes);
             } finally {
+                partitionGroup.clear();
+
                 if (eosEnabled) {
                     stateMgr.checkpoint(activeTaskCheckpointableOffsets());
 
@@ -691,8 +693,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
 
     private void closeTopology() {
         log.trace("Closing processor topology");
-
-        partitionGroup.clear();
 
         // close the processors
         // make sure close() is called for each node even when there is a RuntimeException
