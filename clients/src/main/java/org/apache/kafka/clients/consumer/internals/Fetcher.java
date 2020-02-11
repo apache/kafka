@@ -549,13 +549,8 @@ public class Fetcher<K, V> implements Closeable {
             if (remainingToSearch.isEmpty()) {
                 return result;
             } else {
-                metadata.requestUpdate();
-            }
-
-            if (metadata.updateRequested())
                 client.awaitMetadataUpdate(timer);
-            else
-                timer.sleep(retryBackoffMs);
+            }
         } while (timer.notExpired());
 
         throw new TimeoutException("Failed to get offsets by times in " + timer.elapsedMs() + "ms");
