@@ -66,7 +66,6 @@ import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.Records;
 import org.apache.kafka.common.record.SimpleRecord;
 import org.apache.kafka.common.record.TimestampType;
-import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.ApiVersionsResponse;
 import org.apache.kafka.common.requests.EpochEndOffset;
 import org.apache.kafka.common.requests.FetchRequest;
@@ -2415,25 +2414,31 @@ public class FetcherTest {
     }
 
     @Test
-    public void testGetOffsetByTimeFencedLeaderEpochCouldTriggerMetadataUpdate() {
+    public void testGetOffsetByTimeWithPartitionsRetryCouldTriggerMetadataUpdate() {
         buildFetcher();
-        subscriptions.assignFromUser(singleton(tp0));
-        client.updateMetadata(initialUpdateResponse);
-        assertEquals(1, metadata.fetch().nodes().size());
+        List<Errors> retriableErrors = Arrays.asList(Errors.NOT_LEADER_FOR_PARTITION,
+            Errors.REPLICA_NOT_AVAILABLE, Errors.KAFKA_STORAGE_ERROR, Errors.OFFSET_NOT_AVAILABLE,
+            Errors.LEADER_NOT_AVAILABLE, Errors.FENCED_LEADER_EPOCH, Errors.UNKNOWN_LEADER_EPOCH);
 
-        Map<String, Integer> partitionNumByTopic = new HashMap<>();
-        partitionNumByTopic.put(topicName, 1);
-        final int updatedNodeSize = 3;
-        MetadataResponse updatedMetadata = TestUtils.metadataUpdateWith(updatedNodeSize, partitionNumByTopic);
-        client.prepareMetadataUpdate(updatedMetadata);
-        client.prepareResponse(listOffsetResponse(Errors.FENCED_LEADER_EPOCH, ListOffsetRequest.LATEST_TIMESTAMP, -1L));
-        final long timestamp = 1L;
-        client.prepareResponse(listOffsetResponse(Errors.NONE, timestamp, 5L));
-        Map<TopicPartition, OffsetAndTimestamp> offsetAndTimestampMap =
-            fetcher.offsetsForTimes(Collections.singletonMap(tp0, timestamp), time.timer(Integer.MAX_VALUE));
+        for (Errors retriableError : retriableErrors) {
+            subscriptions.assignFromUser(singleton(tp0));
+            client.updateMetadata(initialUpdateResponse);
+            assertEquals(1, metadata.fetch().nodes().size());
 
-        assertEquals(Collections.singletonMap(tp0, new OffsetAndTimestamp(5L, timestamp)), offsetAndTimestampMap);
-        assertEquals(updatedNodeSize, metadata.fetch().nodes().size());
+            Map<String, Integer> partitionNumByTopic = new HashMap<>();
+            partitionNumByTopic.put(topicName, 1);
+            final int updatedNodeSize = 3;
+            MetadataResponse updatedMetadata = TestUtils.metadataUpdateWith(updatedNodeSize, partitionNumByTopic);
+            client.prepareMetadataUpdate(updatedMetadata);
+            client.prepareResponse(listOffsetResponse(retriableError, ListOffsetRequest.LATEST_TIMESTAMP, -1L));
+            final long timestamp = 1L;
+            client.prepareResponse(listOffsetResponse(Errors.NONE, timestamp, 5L));
+            Map<TopicPartition, OffsetAndTimestamp> offsetAndTimestampMap =
+                fetcher.offsetsForTimes(Collections.singletonMap(tp0, timestamp), time.timer(Integer.MAX_VALUE));
+
+            assertEquals(Collections.singletonMap(tp0, new OffsetAndTimestamp(5L, timestamp)), offsetAndTimestampMap);
+            assertEquals(updatedNodeSize, metadata.fetch().nodes().size());
+        }
     }
 
     @Test
