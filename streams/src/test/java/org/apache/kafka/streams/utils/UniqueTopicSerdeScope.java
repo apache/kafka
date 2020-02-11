@@ -104,7 +104,6 @@ public class UniqueTopicSerdeScope {
                 if (topicTypeRegistry.containsKey(key)) {
                     assertThat(String.format("key[%s] data[%s][%s]", key, data, data.getClass()), topicTypeRegistry.get(key), equalTo(data.getClass()));
                 } else {
-                    System.out.printf("storing key[%s] data[%s][%s]%n", key, data, data.getClass());
                     topicTypeRegistry.put(key, data.getClass());
                 }
             }
