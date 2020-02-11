@@ -2277,7 +2277,7 @@ public class KafkaAdminClientTest {
         }
     }
 
-    /*@Test
+    @Test
     public void testListOffsets() throws Exception {
         // Happy path
 
@@ -2335,7 +2335,7 @@ public class KafkaAdminClientTest {
                 fail("should have thrown IllegalArgumentException");
             } catch (IllegalArgumentException expected) { }
         }
-    } */
+    }
 
     @Test
     public void testListOffsetsRetriableErrors() throws Exception {

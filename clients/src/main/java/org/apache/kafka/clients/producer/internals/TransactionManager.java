@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.producer.internals;
 
+import org.apache.kafka.clients.ApiVersion;
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.NodeApiVersions;
@@ -265,7 +266,7 @@ public class TransactionManager {
 
     // We use the priority to determine the order in which requests need to be sent out. For instance, if we have
     // a pending FindCoordinator request, that must always go first. Next, If we need a producer id, that must go second.
-    // The endTxn request must always go last, unless we are bumping the epoch (a special case of InitProducerId)as
+    // The endTxn request must always go last, unless we are bumping the epoch (a special case of InitProducerId) as
     // part of ending the transaction.
     private enum Priority {
         FIND_COORDINATOR(0),
@@ -359,7 +360,7 @@ public class TransactionManager {
             enqueueRequest(addPartitionsToTransactionHandler());
 
         // If the error is an INVALID_PRODUCER_ID_MAPPING error, the server will not accept an EndTxnRequest, so skip
-        // directly to InitProducerId. Otherwise, we must first abort the transactions, because the producer will be
+        // directly to InitProducerId. Otherwise, we must first abort the transaction, because the producer will be
         // fenced if we directly call InitProducerId.
         if (!(lastError instanceof InvalidPidMappingException)) {
             EndTxnRequest.Builder builder = new EndTxnRequest.Builder(
@@ -377,7 +378,6 @@ public class TransactionManager {
         }
 
         return initializeTransactions(this.producerIdAndEpoch);
-        // }
     }
 
     public synchronized TransactionalRequestResult sendOffsetsToTransaction(final Map<TopicPartition, OffsetAndMetadata> offsets,
@@ -518,7 +518,7 @@ public class TransactionManager {
      * InitProducerId request. This method is only called when the producer epoch is exhausted; we will bump the epoch
      * instead.
      */
-    private synchronized void resetIdempotentProducerId() {
+    private void resetIdempotentProducerId() {
         if (isTransactional())
             throw new IllegalStateException("Cannot reset producer state for a transactional producer. " +
                     "You must either abort the ongoing transaction or reinitialize the transactional producer instead");
@@ -527,12 +527,12 @@ public class TransactionManager {
         transitionTo(State.UNINITIALIZED);
     }
 
-    private synchronized void resetSequenceForPartition(TopicPartition topicPartition) {
+    private void resetSequenceForPartition(TopicPartition topicPartition) {
         topicPartitionBookkeeper.topicPartitions.remove(topicPartition);
         this.partitionsWithUnresolvedSequences.remove(topicPartition);
     }
 
-    private synchronized void resetSequenceNumbers() {
+    private void resetSequenceNumbers() {
         topicPartitionBookkeeper.reset();
         this.partitionsWithUnresolvedSequences.clear();
     }
@@ -638,7 +638,7 @@ public class TransactionManager {
             return sequence;
         }
 
-        return NO_LAST_ACKED_SEQUENCE_NUMBER;
+        return lastAckedSequence(topicPartition).orElse(NO_LAST_ACKED_SEQUENCE_NUMBER);
     }
 
     synchronized OptionalInt lastAckedSequence(TopicPartition topicPartition) {
@@ -679,7 +679,7 @@ public class TransactionManager {
 
         if (!hasProducerIdAndEpoch(batch) && !hasInflightBatches(batch.topicPartition)) {
             // If the batch was on a different ID and/or epoch (due to an epoch bump) and all its in-flight batches
-            // have completed, reset the partition sequence so that the next batch (wit the new epoch) starts from 0
+            // have completed, reset the partition sequence so that the next batch (with the new epoch) starts from 0
             topicPartitionBookkeeper.startSequencesAtBeginning(batch.topicPartition, this.producerIdAndEpoch);
         }
     }
@@ -712,15 +712,15 @@ public class TransactionManager {
             log.error("The broker returned {} for topic-partition {} with producerId {}, epoch {}, and sequence number {}",
                     exception, batch.topicPartition, batch.producerId(), batch.producerEpoch(), batch.baseSequence());
 
-            // Reset the producerId since we have hit an irrecoverable exception and cannot make any guarantees
-            // about the previously committed message. Note that this will discard the producer id and sequence
-            // numbers for all existing partitions.
+            // If we fail with an OutOfOrderSequenceException, we have a gap in the log. Bump the epoch for this
+            // partition, which will reset the sequence number to 0 and allow us to continue
             requestEpochBumpForPartition(batch.topicPartition);
         } else if (exception instanceof UnknownProducerIdException) {
-            // If we get an UnknownProducerId for a partition, then the broker has no state for that producer. It
-            // will therefore accept a write with sequence number 0. We reset the sequence number for the partition
-            // here so that the producer can continue after aborting the transaction. Note that if the broker supports
-            // bumping the epoch, we will later reset all sequence numbers after calling InitProducerId
+            // If we get an UnknownProducerId for a partition, then the broker has no state for that producer. It will
+            // therefore accept a write with sequence number 0. We reset the sequence number for the partition here so
+            // that the producer can continue after aborting the transaction. All inflight-requests to this partition
+            // will also fail with an UnknownProducerId error, so the sequence will remain at 0. Note that if the
+            // broker supports bumping the epoch, we will later reset all sequence numbers after calling InitProducerId
             resetSequenceForPartition(batch.topicPartition);
         } else {
             removeInFlightBatch(batch);
@@ -782,8 +782,10 @@ public class TransactionManager {
 
     synchronized void markSequenceUnresolved(ProducerBatch batch) {
         int nextSequence = batch.lastSequence() + 1;
-        log.debug("Marking partition {} unresolved with next sequence number {}", batch.topicPartition, nextSequence);
-        partitionsWithUnresolvedSequences.put(batch.topicPartition, nextSequence);
+        partitionsWithUnresolvedSequences.computeIfPresent(batch.topicPartition,
+                (k, v) -> Math.max(v, nextSequence));
+        log.debug("Marking partition {} unresolved with next sequence number {}", batch.topicPartition,
+                partitionsWithUnresolvedSequences.get(batch.topicPartition));
     }
 
     // Attempts to resolve unresolved sequences. If all in-flight requests are complete and some partitions are still
@@ -993,8 +995,11 @@ public class TransactionManager {
         NodeApiVersions nodeApiVersions = transactionCoordinator != null ?
                 apiVersions.get(transactionCoordinator.idString()) :
                 null;
-        this.coordinatorSupportsBumpingEpoch = nodeApiVersions != null &&
-                nodeApiVersions.apiVersion(ApiKeys.INIT_PRODUCER_ID).maxVersion >= 3;
+        ApiVersion initProducerIdVersion = nodeApiVersions != null ?
+                nodeApiVersions.apiVersion(ApiKeys.INIT_PRODUCER_ID) :
+                null;
+        this.coordinatorSupportsBumpingEpoch = initProducerIdVersion != null &&
+                initProducerIdVersion.maxVersion >= 3;
     }
 
     private void transitionTo(State target) {
