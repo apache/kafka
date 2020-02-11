@@ -334,6 +334,7 @@ public class ConnectorConfig extends AbstractConfig {
         if (Modifier.isAbstract(transformationCls.getModifiers())) {
             String[] childClasses = Stream.of(transformationCls.getClasses())
                 .filter(transformationCls::isAssignableFrom)
+                .filter(c -> !Modifier.isAbstract(c.getModifiers()))
                 .filter(c -> Modifier.isPublic(c.getModifiers()))
                 .map(Class::getName)
                 .toArray(String[]::new);
