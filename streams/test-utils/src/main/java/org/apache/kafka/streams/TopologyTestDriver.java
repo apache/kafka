@@ -287,6 +287,14 @@ public class TopologyTestDriver implements Closeable {
                                final Properties config,
                                final long initialWallClockTimeMs) {
         final StreamsConfig streamsConfig = new QuietStreamsConfig(config);
+        final Long taskIdleTime = streamsConfig.getLong(StreamsConfig.MAX_TASK_IDLE_MS_CONFIG);
+        if (taskIdleTime > 0) {
+            log.info("Detected {} config in use with TopologyTestDriver (set to {}ms). This means you might need to" +
+                         " use TopologyTestDriver#advanceWallClockTime or enqueue records on all partitions to allow" +
+                         " Steams to make progress. Such occurrences will be logged.",
+                     StreamsConfig.MAX_TASK_IDLE_MS_CONFIG,
+                     taskIdleTime);
+        }
         mockWallClockTime = new MockTime(initialWallClockTimeMs);
 
         internalTopologyBuilder = builder;
@@ -516,6 +524,12 @@ public class TopologyTestDriver implements Closeable {
                 task.commit();
                 captureOutputsAndReEnqueueInternalResults();
             }
+            if (task.hasRecordsQueued()) {
+                log.info("Due to the {} configuration, there are currently some records that can't be processed." +
+                             " Advancing wall-clock time or enqueuing records on the empty partitions will allow" +
+                             " Streams to process more.",
+                         StreamsConfig.MAX_TASK_IDLE_MS_CONFIG);
+            }
         }
     }
 
@@ -543,8 +557,8 @@ public class TopologyTestDriver implements Closeable {
         for (final String sourceTopicName : internalTopologyBuilder.sourceTopicNames()) {
             if (!sourceTopicName.equals(inputRecordTopic) && Pattern.compile(sourceTopicName).matcher(inputRecordTopic).matches()) {
                 throw new TopologyException("Topology add source of type String for topic: " + sourceTopicName +
-                        " cannot contain regex pattern for input record topic: " + inputRecordTopic +
-                        " and hence cannot process the message.");
+                                                " cannot contain regex pattern for input record topic: " + inputRecordTopic +
+                                                " and hence cannot process the message.");
             }
         }
     }
@@ -895,23 +909,23 @@ public class TopologyTestDriver implements Closeable {
     private void throwIfBuiltInStore(final StateStore stateStore) {
         if (stateStore instanceof TimestampedKeyValueStore) {
             throw new IllegalArgumentException("Store " + stateStore.name()
-                + " is a timestamped key-value store and should be accessed via `getTimestampedKeyValueStore()`");
+                                                   + " is a timestamped key-value store and should be accessed via `getTimestampedKeyValueStore()`");
         }
         if (stateStore instanceof ReadOnlyKeyValueStore) {
             throw new IllegalArgumentException("Store " + stateStore.name()
-                + " is a key-value store and should be accessed via `getKeyValueStore()`");
+                                                   + " is a key-value store and should be accessed via `getKeyValueStore()`");
         }
         if (stateStore instanceof TimestampedWindowStore) {
             throw new IllegalArgumentException("Store " + stateStore.name()
-                + " is a timestamped window store and should be accessed via `getTimestampedWindowStore()`");
+                                                   + " is a timestamped window store and should be accessed via `getTimestampedWindowStore()`");
         }
         if (stateStore instanceof ReadOnlyWindowStore) {
             throw new IllegalArgumentException("Store " + stateStore.name()
-                + " is a window store and should be accessed via `getWindowStore()`");
+                                                   + " is a window store and should be accessed via `getWindowStore()`");
         }
         if (stateStore instanceof ReadOnlySessionStore) {
             throw new IllegalArgumentException("Store " + stateStore.name()
-                + " is a session store and should be accessed via `getSessionStore()`");
+                                                   + " is a session store and should be accessed via `getSessionStore()`");
         }
     }
 
@@ -1058,6 +1072,11 @@ public class TopologyTestDriver implements Closeable {
             }
         }
         completeAllProcessableWork();
+        if (task.hasRecordsQueued()) {
+            log.warn("Due to the {} configuration, there were some records that can't be processed even" +
+                         " though TopologyTestDriver is shutting down.",
+                     StreamsConfig.MAX_TASK_IDLE_MS_CONFIG);
+        }
         if (!eosEnabled) {
             producer.close();
         }
