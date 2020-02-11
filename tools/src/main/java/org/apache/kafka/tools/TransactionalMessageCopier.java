@@ -256,7 +256,7 @@ public class TransactionalMessageCopier {
         return json;
     }
 
-    private static String statusAsJson(long totalProcessed, long consumedSinceLastRebalanced, long remaining, String transactionalId, String stage) {
+    private static synchronized String statusAsJson(long totalProcessed, long consumedSinceLastRebalanced, long remaining, String transactionalId, String stage) {
         Map<String, Object> statusData = new HashMap<>();
         statusData.put("progress", transactionalId);
         statusData.put("totalProcessed", totalProcessed);
@@ -267,7 +267,7 @@ public class TransactionalMessageCopier {
         return toJsonString(statusData);
     }
 
-    private static String shutDownString(long totalProcessed, long consumedSinceLastRebalanced, long remaining, String transactionalId) {
+    private static synchronized String shutDownString(long totalProcessed, long consumedSinceLastRebalanced, long remaining, String transactionalId) {
         Map<String, Object> shutdownData = new HashMap<>();
         shutdownData.put("shutdown_complete", transactionalId);
         shutdownData.put("totalProcessed", totalProcessed);
