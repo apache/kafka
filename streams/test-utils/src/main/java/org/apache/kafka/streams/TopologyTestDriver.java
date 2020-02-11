@@ -213,9 +213,9 @@ public class TopologyTestDriver implements Closeable {
     private final MockProducer<byte[], byte[]> producer;
 
     private final Set<String> internalTopics = new HashSet<>();
-    private final Map<String, TopicPartition> partitionsByTopic = new HashMap<>();
-    private final Map<String, TopicPartition> globalPartitionsByTopic = new HashMap<>();
-    private final Map<TopicPartition, AtomicLong> offsetsByTopicPartition = new HashMap<>();
+    private final Map<String, TopicPartition> partitionsByInputTopic = new HashMap<>();
+    private final Map<String, TopicPartition> globalPartitionsByInputTopic = new HashMap<>();
+    private final Map<TopicPartition, AtomicLong> offsetsByTopicOrPatternPartition = new HashMap<>();
 
     private final Map<String, Queue<ProducerRecord<byte[], byte[]>>> outputRecordsByTopic = new HashMap<>();
     private final boolean eosEnabled;
@@ -334,16 +334,16 @@ public class TopologyTestDriver implements Closeable {
 
         for (final String topic : processorTopology.sourceTopics()) {
             final TopicPartition tp = new TopicPartition(topic, PARTITION_ID);
-            partitionsByTopic.put(topic, tp);
-            offsetsByTopicPartition.put(tp, new AtomicLong());
+            partitionsByInputTopic.put(topic, tp);
+            offsetsByTopicOrPatternPartition.put(tp, new AtomicLong());
         }
-        consumer.assign(partitionsByTopic.values());
+        consumer.assign(partitionsByInputTopic.values());
 
         if (globalTopology != null) {
             for (final String topicName : globalTopology.sourceTopics()) {
                 final TopicPartition partition = new TopicPartition(topicName, 0);
-                globalPartitionsByTopic.put(topicName, partition);
-                offsetsByTopicPartition.put(partition, new AtomicLong());
+                globalPartitionsByInputTopic.put(topicName, partition);
+                offsetsByTopicOrPatternPartition.put(partition, new AtomicLong());
                 consumer.updatePartitions(topicName, Collections.singletonList(
                     new PartitionInfo(topicName, 0, null, null, null)));
                 consumer.updateBeginningOffsets(Collections.singletonMap(partition, 0L));
@@ -381,11 +381,11 @@ public class TopologyTestDriver implements Closeable {
             globalStateTask = null;
         }
 
-        if (!partitionsByTopic.isEmpty()) {
+        if (!partitionsByInputTopic.isEmpty()) {
             final LogContext logContext = new LogContext("topology-test-driver ");
             final ProcessorStateManager stateManager = new ProcessorStateManager(
                 TASK_ID,
-                new HashSet<>(partitionsByTopic.values()),
+                new HashSet<>(partitionsByInputTopic.values()),
                 Task.TaskType.ACTIVE,
                 stateDirectory,
                 processorTopology.storeToChangelogTopic(),
@@ -405,7 +405,7 @@ public class TopologyTestDriver implements Closeable {
                 taskId -> producer);
             task = new StreamTask(
                 TASK_ID,
-                new HashSet<>(partitionsByTopic.values()),
+                new HashSet<>(partitionsByInputTopic.values()),
                 processorTopology,
                 consumer,
                 streamsConfig,
@@ -461,31 +461,33 @@ public class TopologyTestDriver implements Closeable {
                             final byte[] key,
                             final byte[] value,
                             final Headers headers) {
-        final TopicPartition topicPartition = getTopicPartition(topicName);
+        final TopicPartition inputTopicOrPatternPartition = getInputTopicOrPatternPartition(topicName);
+        final TopicPartition globalInputTopicPartition = globalPartitionsByInputTopic.get(topicName);
 
-        if (topicPartition == null) {
-            processGlobalRecord(topicName, timestamp, key, value, headers);
-        } else {
-            enqueueTaskRecord(topicName, topicPartition, timestamp, key, value, headers);
-            processAllProcessableRecords();
+        if (inputTopicOrPatternPartition == null && globalInputTopicPartition == null) {
+            throw new IllegalArgumentException("Unknown topic: " + topicName);
+        }
+
+        if (inputTopicOrPatternPartition != null) {
+            enqueueTaskRecord(topicName, inputTopicOrPatternPartition, timestamp, key, value, headers);
+            completeAllProcessableWork();
+        }
+
+        if (globalInputTopicPartition != null) {
+            processGlobalRecord(globalInputTopicPartition, timestamp, key, value, headers);
         }
     }
 
-    private void enqueueTaskRecord(final String topicName,
-                                   final TopicPartition topicPartition,
+    private void enqueueTaskRecord(final String inputTopic,
+                                   final TopicPartition topicOrPatternPartition,
                                    final long timestamp,
                                    final byte[] key,
                                    final byte[] value,
                                    final Headers headers) {
-        Objects.requireNonNull(topicName);
-        Objects.requireNonNull(topicPartition);
-        Objects.requireNonNull(headers);
-
-        final long offset = offsetsByTopicPartition.get(topicPartition).incrementAndGet() - 1;
-        task.addRecords(topicPartition, Collections.singleton(new ConsumerRecord<>(
-            topicName,
-            topicPartition.partition(),
-            offset,
+        task.addRecords(topicOrPatternPartition, Collections.singleton(new ConsumerRecord<>(
+            inputTopic,
+            topicOrPatternPartition.partition(),
+            offsetsByTopicOrPatternPartition.get(topicOrPatternPartition).incrementAndGet() - 1,
             timestamp,
             TimestampType.CREATE_TIME,
             (long) ConsumerRecord.NULL_CHECKSUM,
@@ -496,30 +498,36 @@ public class TopologyTestDriver implements Closeable {
             headers)));
     }
 
-    private void processAllProcessableRecords() {
+    private void completeAllProcessableWork() {
+        // for internally triggered processing (like wall-clock punctuations),
+        // we might have buffered some records to internal topics that need to
+        // be piped back in to kick-start the processing loop. This is idempotent
+        // and therefore harmless in the case where all we've done is enqueued an
+        // input record from the user.
+        captureOutputsAndReEnqueueInternalResults();
+
         // If the topology only has global tasks, then `task` would be null.
         // For this method, it just means there's nothing to do.
         if (task != null) {
-            while (task.hasRecordsQueued()) {
+            while (task.hasRecordsQueued() && task.isProcessable(mockWallClockTime.milliseconds())) {
                 // Process the record ...
                 task.process(mockWallClockTime.milliseconds());
                 task.maybePunctuateStreamTime();
                 task.commit();
-                captureOutputRecords();
+                captureOutputsAndReEnqueueInternalResults();
             }
         }
     }
 
-    private void processGlobalRecord(final String topicName, final long timestamp, final byte[] key, final byte[] value, final Headers headers) {
-        final TopicPartition globalTopicPartition = globalPartitionsByTopic.get(topicName);
-        if (globalTopicPartition == null) {
-            throw new IllegalArgumentException("Unknown topic: " + topicName);
-        }
-        final long offset = offsetsByTopicPartition.get(globalTopicPartition).incrementAndGet() - 1;
+    private void processGlobalRecord(final TopicPartition globalInputTopicPartition,
+                                     final long timestamp,
+                                     final byte[] key,
+                                     final byte[] value,
+                                     final Headers headers) {
         globalStateTask.update(new ConsumerRecord<>(
-            globalTopicPartition.topic(),
-            globalTopicPartition.partition(),
-            offset,
+            globalInputTopicPartition.topic(),
+            globalInputTopicPartition.partition(),
+            offsetsByTopicOrPatternPartition.get(globalInputTopicPartition).incrementAndGet() - 1,
             timestamp,
             TimestampType.CREATE_TIME,
             (long) ConsumerRecord.NULL_CHECKSUM,
@@ -531,7 +539,6 @@ public class TopologyTestDriver implements Closeable {
         globalStateTask.flushState();
     }
 
-
     private void validateSourceTopicNameRegexPattern(final String inputRecordTopic) {
         for (final String sourceTopicName : internalTopologyBuilder.sourceTopicNames()) {
             if (!sourceTopicName.equals(inputRecordTopic) && Pattern.compile(sourceTopicName).matcher(inputRecordTopic).matches()) {
@@ -542,14 +549,14 @@ public class TopologyTestDriver implements Closeable {
         }
     }
 
-    private TopicPartition getTopicPartition(final String topicName) {
+    private TopicPartition getInputTopicOrPatternPartition(final String topicName) {
         if (!internalTopologyBuilder.sourceTopicNames().isEmpty()) {
             validateSourceTopicNameRegexPattern(topicName);
         }
 
-        final TopicPartition topicPartition = partitionsByTopic.get(topicName);
+        final TopicPartition topicPartition = partitionsByInputTopic.get(topicName);
         if (topicPartition == null) {
-            for (final Map.Entry<String, TopicPartition> entry : partitionsByTopic.entrySet()) {
+            for (final Map.Entry<String, TopicPartition> entry : partitionsByInputTopic.entrySet()) {
                 if (Pattern.compile(entry.getKey()).matcher(topicName).matches()) {
                     return entry.getValue();
                 }
@@ -558,7 +565,7 @@ public class TopologyTestDriver implements Closeable {
         return topicPartition;
     }
 
-    private void captureOutputRecords() {
+    private void captureOutputsAndReEnqueueInternalResults() {
         // Capture all the records sent to the producer ...
         final List<ProducerRecord<byte[], byte[]>> output = producer.history();
         producer.clear();
@@ -571,15 +578,27 @@ public class TopologyTestDriver implements Closeable {
 
             // Forward back into the topology if the produced record is to an internal or a source topic ...
             final String outputTopicName = record.topic();
-            if (internalTopics.contains(outputTopicName)
-                || processorTopology.sourceTopics().contains(outputTopicName)) {
 
-                final TopicPartition topicPartition = getTopicPartition(record.topic());
-                final long timestamp = Objects.requireNonNull(record.timestamp());
-                enqueueTaskRecord(record.topic(), topicPartition, timestamp, record.key(), record.value(), record.headers());
-            } else if (globalPartitionsByTopic.containsKey(outputTopicName)) {
-                final long timestamp = Objects.requireNonNull(record.timestamp());
-                processGlobalRecord(record.topic(), timestamp, record.key(), record.value(), record.headers());
+            final TopicPartition inputTopicOrPatternPartition = getInputTopicOrPatternPartition(outputTopicName);
+            final TopicPartition globalInputTopicPartition = globalPartitionsByInputTopic.get(outputTopicName);
+
+            if (inputTopicOrPatternPartition != null) {
+                enqueueTaskRecord(
+                    outputTopicName,
+                    inputTopicOrPatternPartition,
+                    record.timestamp(),
+                    record.key(),
+                    record.value(),
+                    record.headers());
+            }
+
+            if (globalInputTopicPartition != null) {
+                processGlobalRecord(
+                    globalInputTopicPartition,
+                    record.timestamp(),
+                    record.key(),
+                    record.value(),
+                    record.headers());
             }
         }
     }
@@ -626,8 +645,7 @@ public class TopologyTestDriver implements Closeable {
             task.maybePunctuateSystemTime();
             task.commit();
         }
-        captureOutputRecords();
-        processAllProcessableRecords();
+        completeAllProcessableWork();
     }
 
     /**
@@ -1039,8 +1057,7 @@ public class TopologyTestDriver implements Closeable {
                 // ignore
             }
         }
-        captureOutputRecords();
-        processAllProcessableRecords();
+        completeAllProcessableWork();
         if (!eosEnabled) {
             producer.close();
         }

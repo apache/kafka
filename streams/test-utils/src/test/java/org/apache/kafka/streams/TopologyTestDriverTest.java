@@ -1558,12 +1558,6 @@ public class TopologyTestDriverTest {
             // given the topology above, we expect to see the output _first_ echo the input
             // and _then_ print it with "recurse-" prepended.
 
-            // Since this is a table operation, here's what we expect the final "table view" to look like:
-            in.pipeInput("A", "alpha");
-            final Map<String, String> table = out.readKeyValuesToMap();
-            assertThat(table, is(Collections.singletonMap("A", "recurse-alpha")));
-
-            // Also, just to make sure that nothing extra happened in the intermediate states:
             in.pipeInput("B", "beta");
             final List<KeyValue<String, String>> events = out.readKeyValuesToList();
             assertThat(
@@ -1648,6 +1642,56 @@ public class TopologyTestDriverTest {
                 is(Arrays.asList(
                     new KeyValue<>("A", "alpha"),
                     new KeyValue<>("A", "recurse-alpha")
+                ))
+            );
+        }
+    }
+
+    @Test
+    public void shouldRespectTaskIdling() {
+        final Properties properties = new Properties();
+        properties.setProperty(StreamsConfig.APPLICATION_ID_CONFIG, "dummy");
+        properties.setProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy");
+
+        // This is the key to this test. Wall-clock time doesn't advance automatically in TopologyTestDriver,
+        // so with an idle time specified, TTD can't just expect all enqueued records to be processable.
+        properties.setProperty(StreamsConfig.MAX_TASK_IDLE_MS_CONFIG, "1000");
+
+        final Topology topology = new Topology();
+        topology.addSource("source1", new StringDeserializer(), new StringDeserializer(), "input1");
+        topology.addSource("source2", new StringDeserializer(), new StringDeserializer(), "input2");
+        topology.addSink("sink", "output", new StringSerializer(), new StringSerializer(), "source1", "source2");
+
+        try (final TopologyTestDriver topologyTestDriver = new TopologyTestDriver(topology, properties)) {
+            final TestInputTopic<String, String> in1 = topologyTestDriver.createInputTopic("input1", new StringSerializer(), new StringSerializer());
+            final TestInputTopic<String, String> in2 = topologyTestDriver.createInputTopic("input2", new StringSerializer(), new StringSerializer());
+            final TestOutputTopic<String, String> out = topologyTestDriver.createOutputTopic("output", new StringDeserializer(), new StringDeserializer());
+
+            in1.pipeInput("A", "alpha");
+            topologyTestDriver.advanceWallClockTime(Duration.ofMillis(1));
+
+            // only one input has records, and it's only been one ms
+            assertThat(out.readKeyValuesToList(), is(Collections.emptyList()));
+
+            in2.pipeInput("B", "beta");
+
+            // because both topics have records, we can process (even though it's only been one ms)
+            // but after processing A (the earlier record), we now only have one input queued, so
+            // task idling takes effect again
+            assertThat(
+                out.readKeyValuesToList(),
+                is(Collections.singletonList(
+                    new KeyValue<>("A", "alpha")
+                ))
+            );
+
+            topologyTestDriver.advanceWallClockTime(Duration.ofSeconds(1));
+
+            // now that one second has elapsed, the idle time has expired, and we can process B
+            assertThat(
+                out.readKeyValuesToList(),
+                is(Collections.singletonList(
+                    new KeyValue<>("B", "beta")
                 ))
             );
         }

@@ -444,7 +444,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
      * An active task is processable if its buffer contains data for all of its input
      * source topic partitions, or if it is enforced to be processable
      */
-    private boolean isProcessable(final long wallClockTime) {
+    public boolean isProcessable(final long wallClockTime) {
         if (partitionGroup.allPartitionsBuffered()) {
             idleStartTime = RecordQueue.UNKNOWN;
             return true;
