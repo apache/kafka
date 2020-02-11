@@ -287,17 +287,7 @@ public class TopologyTestDriver implements Closeable {
                                final Properties config,
                                final long initialWallClockTimeMs) {
         final StreamsConfig streamsConfig = new QuietStreamsConfig(config);
-        final Long taskIdleTime = streamsConfig.getLong(StreamsConfig.MAX_TASK_IDLE_MS_CONFIG);
-        if (taskIdleTime > 0) {
-            log.info("Detected {} config in use with TopologyTestDriver (set to {}ms)." +
-                         " This means you might need to use TopologyTestDriver#advanceWallClockTime()" +
-                         " or enqueue records on all partitions to allow Steams to make progress." +
-                         " TopologyTestDriver will log a message each time it cannot process enqueued" +
-                         " records due to {}.",
-                     StreamsConfig.MAX_TASK_IDLE_MS_CONFIG,
-                     taskIdleTime,
-                     StreamsConfig.MAX_TASK_IDLE_MS_CONFIG);
-        }
+        logIfTaskIdleEnabled(streamsConfig);
         mockWallClockTime = new MockTime(initialWallClockTimeMs);
 
         internalTopologyBuilder = builder;
@@ -438,6 +428,20 @@ public class TopologyTestDriver implements Closeable {
             task = null;
         }
         eosEnabled = streamsConfig.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG).equals(StreamsConfig.EXACTLY_ONCE);
+    }
+
+    private static void logIfTaskIdleEnabled(final StreamsConfig streamsConfig) {
+        final Long taskIdleTime = streamsConfig.getLong(StreamsConfig.MAX_TASK_IDLE_MS_CONFIG);
+        if (taskIdleTime > 0) {
+            log.info("Detected {} config in use with TopologyTestDriver (set to {}ms)." +
+                         " This means you might need to use TopologyTestDriver#advanceWallClockTime()" +
+                         " or enqueue records on all partitions to allow Steams to make progress." +
+                         " TopologyTestDriver will log a message each time it cannot process enqueued" +
+                         " records due to {}.",
+                     StreamsConfig.MAX_TASK_IDLE_MS_CONFIG,
+                     taskIdleTime,
+                     StreamsConfig.MAX_TASK_IDLE_MS_CONFIG);
+        }
     }
 
     /**
