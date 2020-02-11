@@ -32,6 +32,7 @@ import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.Stores;
+import org.apache.kafka.streams.utils.UniqueTopicSerdeScope;
 import org.apache.kafka.test.TestUtils;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -506,17 +507,26 @@ public class KTableKTableForeignKeyJoinIntegrationTest {
     private static Topology getTopology(final Properties streamsConfig,
                                         final String queryableStoreName,
                                         final boolean leftJoin) {
+        final UniqueTopicSerdeScope serdeScope = new UniqueTopicSerdeScope();
         final StreamsBuilder builder = new StreamsBuilder();
 
-        final KTable<String, String> left = builder.table(LEFT_TABLE, Consumed.with(Serdes.String(), Serdes.String()));
-        final KTable<String, String> right = builder.table(RIGHT_TABLE, Consumed.with(Serdes.String(), Serdes.String()));
+        final KTable<String, String> left = builder.table(
+            LEFT_TABLE,
+            Consumed.with(serdeScope.decorateSerde(Serdes.String(), streamsConfig, true),
+                          serdeScope.decorateSerde(Serdes.String(), streamsConfig, false))
+        );
+        final KTable<String, String> right = builder.table(
+            RIGHT_TABLE,
+            Consumed.with(serdeScope.decorateSerde(Serdes.String(), streamsConfig, true),
+                          serdeScope.decorateSerde(Serdes.String(), streamsConfig, false))
+        );
 
         final Function<String, String> extractor = value -> value.split("\\|")[1];
         final ValueJoiner<String, String, String> joiner = (value1, value2) -> "(" + value1 + "," + value2 + ")";
 
         final Materialized<String, String, KeyValueStore<Bytes, byte[]>> materialized =
             Materialized.<String, String>as(Stores.inMemoryKeyValueStore(queryableStoreName))
-                .withValueSerde(Serdes.String())
+                .withValueSerde(serdeScope.decorateSerde(Serdes.String(), streamsConfig, false))
                 // the cache suppresses some of the unnecessary tombstones we want to make assertions about
                 .withCachingDisabled();
 
