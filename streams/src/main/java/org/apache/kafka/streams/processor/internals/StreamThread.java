@@ -921,6 +921,7 @@ public class StreamThread extends Thread {
                     // if we are in PENDING_SHUTDOWN and don't find the task it implies that it was a newly assigned
                     // task that we just skipped to create;
                     // hence, we just skip adding the corresponding records
+                    log.info("State already transits to {}, skipping the add records to non-existing task for partition {}", state, partition);
                     continue;
                 }
 
