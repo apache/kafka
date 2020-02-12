@@ -186,10 +186,10 @@ public class SubscriptionState {
     }
 
     /**
-     * Add topics to the current group subscription. This is used by the group leader to ensure
+     * Set the current group subscription. This is used by the group leader to ensure
      * that it receives metadata updates for all topics that the group is interested in.
      *
-     * @param topics The topics to add to the group subscription
+     * @param topics All topics from the group subscription
      * @return true if the group subscription contains topics which are not part of the local subscription
      */
     synchronized boolean groupSubscribe(Collection<String> topics) {
