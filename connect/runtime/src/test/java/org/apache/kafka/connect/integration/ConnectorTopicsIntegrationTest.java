@@ -74,11 +74,11 @@ public class ConnectorTopicsIntegrationTest {
 
         // build a Connect cluster backed by Kafka and Zk
         connectBuilder = new EmbeddedConnectCluster.Builder()
-        .name("connect-cluster")
-        .numWorkers(NUM_WORKERS)
-        .workerProps(workerProps)
-        .brokerProps(brokerProps)
-        .maskExitProcedures(true); // true is the default, setting here as example
+                .name("connect-cluster")
+                .numWorkers(NUM_WORKERS)
+                .workerProps(workerProps)
+                .brokerProps(brokerProps)
+                .maskExitProcedures(true); // true is the default, setting here as example
     }
 
     @After

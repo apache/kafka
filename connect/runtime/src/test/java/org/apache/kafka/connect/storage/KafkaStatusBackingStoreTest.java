@@ -80,7 +80,7 @@ public class KafkaStatusBackingStoreTest extends EasyMockSupport {
     }
 
     @Test
-    public void configureStatusBackingStore() {
+    public void misconfigurationOfStatusBackingStore() {
         expect(workerConfig.getString(DistributedConfig.STATUS_STORAGE_TOPIC_CONFIG)).andReturn(null);
         expect(workerConfig.getString(DistributedConfig.STATUS_STORAGE_TOPIC_CONFIG)).andReturn("   ");
         replayAll();
