@@ -335,7 +335,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
      * An active task is processable if its buffer contains data for all of its input
      * source topic partitions, or if it is enforced to be processable
      */
-    boolean isProcessable(final long now) {
+    public boolean isProcessable(final long now) {
         if (partitionGroup.allPartitionsBuffered()) {
             idleStartTime = RecordQueue.UNKNOWN;
             return true;
@@ -980,5 +980,9 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
 
     public Map<TopicPartition, Long> restoredOffsets() {
         return stateMgr.changelogReader().restoredOffsets();
+    }
+
+    public boolean hasRecordsQueued() {
+        return numBuffered() > 0;
     }
 }
