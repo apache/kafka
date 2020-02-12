@@ -578,12 +578,13 @@ class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
     val cgcArgs = Array("--bootstrap-server", brokerList, "--describe", "--timeout", "1", "--group", group) ++ describeType
     val service = getConsumerGroupService(cgcArgs)
 
-    try {
-      TestUtils.grabConsoleOutputAndError(service.describeGroups())
-      fail(s"The consumer group command should have failed due to low initialization timeout (describe type: ${describeType.mkString(" ")})")
-    } catch {
-      case e: ExecutionException if e.getCause.isInstanceOf[DisconnectException] => // Ignore occasional node disconnection
-      case e: ExecutionException => assertEquals(classOf[TimeoutException], e.getCause.getClass)
+    retryOnDisconnectedException {
+      try {
+        TestUtils.grabConsoleOutputAndError(service.describeGroups())
+        fail(s"The consumer group command should have failed due to low initialization timeout (describe type: ${describeType.mkString(" ")})")
+      } catch {
+        case e: ExecutionException => assertEquals(classOf[TimeoutException], e.getCause.getClass)
+      }
     }
   }
 
@@ -599,12 +600,13 @@ class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
     val cgcArgs = Array("--bootstrap-server", brokerList, "--describe", "--group", group, "--timeout", "1")
     val service = getConsumerGroupService(cgcArgs)
 
-    try {
-      service.collectGroupOffsets(group)
-      fail("The consumer group command should fail due to low initialization timeout")
-    } catch {
-      case e: ExecutionException if e.getCause.isInstanceOf[DisconnectException] => // Ignore occasional node disconnection
-      case e: ExecutionException => assertEquals(classOf[TimeoutException], e.getCause.getClass)
+    retryOnDisconnectedException {
+      try {
+        service.collectGroupOffsets(group)
+        fail("The consumer group command should fail due to low initialization timeout")
+      } catch {
+        case e: ExecutionException => assertEquals(classOf[TimeoutException], e.getCause.getClass)
+      }
     }
   }
 
@@ -620,19 +622,21 @@ class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
     val cgcArgs = Array("--bootstrap-server", brokerList, "--describe", "--group", group, "--timeout", "1")
     val service = getConsumerGroupService(cgcArgs)
 
-    try {
-      service.collectGroupMembers(group, false)
-      fail("The consumer group command should fail due to low initialization timeout")
-    } catch {
-      case e: ExecutionException if e.getCause.isInstanceOf[DisconnectException] => // Ignore occasional node disconnection
-      case e: ExecutionException => assertEquals(classOf[TimeoutException], e.getCause.getClass)
-        try {
-          service.collectGroupMembers(group, true)
-          fail("The consumer group command should fail due to low initialization timeout (verbose)")
-        } catch {
-          case e: ExecutionException if e.getCause.isInstanceOf[DisconnectException] => // Ignore occasional node disconnection
-          case e: ExecutionException => assertEquals(classOf[TimeoutException], e.getCause.getClass)
-        }
+    retryOnDisconnectedException {
+      try {
+        service.collectGroupMembers(group, false)
+        fail("The consumer group command should fail due to low initialization timeout")
+      } catch {
+        case e: ExecutionException => assertEquals(classOf[TimeoutException], e.getCause.getClass)
+          retryOnDisconnectedException {
+            try {
+              service.collectGroupMembers(group, true)
+              fail("The consumer group command should fail due to low initialization timeout (verbose)")
+            } catch {
+              case e: ExecutionException => assertEquals(classOf[TimeoutException], e.getCause.getClass)
+            }
+          }
+      }
     }
   }
 
@@ -648,12 +652,13 @@ class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
     val cgcArgs = Array("--bootstrap-server", brokerList, "--describe", "--group", group, "--timeout", "1")
     val service = getConsumerGroupService(cgcArgs)
 
-    try {
-      service.collectGroupState(group)
-      fail("The consumer group command should fail due to low initialization timeout")
-    } catch {
-      case e: ExecutionException if e.getCause.isInstanceOf[DisconnectException] => // Ignore occasional node disconnection
-      case e: ExecutionException => assertEquals(classOf[TimeoutException], e.getCause.getClass)
+    retryOnDisconnectedException {
+      try {
+        service.collectGroupState(group)
+        fail("The consumer group command should fail due to low initialization timeout")
+      } catch {
+        case e: ExecutionException => assertEquals(classOf[TimeoutException], e.getCause.getClass)
+      }
     }
   }
 
@@ -686,6 +691,17 @@ class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
         assignments.get.filter(_.group == group).head.clientId.exists(_.trim != ConsumerGroupCommand.MISSING_COLUMN_VALUE) &&
         assignments.get.filter(_.group == group).head.host.exists(_.trim != ConsumerGroupCommand.MISSING_COLUMN_VALUE)
     }, s"Expected a 'Stable' group status, rows and valid values for consumer id / client id / host columns in describe results for non-offset-committing group $group.")
+  }
+
+  private def retryOnDisconnectedException[T](fn: => T): T = {
+    while (true) {
+      try {
+        return fn
+      } catch {
+        case e: ExecutionException if e.getCause.isInstanceOf[DisconnectException] => // retry
+      }
+    }
+    throw new IllegalStateException
   }
 
 }
