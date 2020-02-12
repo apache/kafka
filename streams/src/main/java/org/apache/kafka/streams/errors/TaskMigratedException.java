@@ -18,18 +18,15 @@ package org.apache.kafka.streams.errors;
 
 
 /**
- * Indicates that one or more tasks got migrated to another thread.
- *
- * 1) if the task field is specified, then that single task should be cleaned up and closed as "zombie" while the
- *    thread can continue as normal;
- * 2) if no tasks are specified (i.e. taskId == null), it means that the hosted thread has been fenced and all
- *    tasks are migrated, in which case the thread should rejoin the group
+ * Indicates that all tasks belongs to the thread have migrated to another thread. This exception can be thrown when
+ * the thread gets fenced (either by the consumer coordinator or by the transaction coordinator), which means it is
+ * no longer part of the group but a "zombie" already
  */
 public class TaskMigratedException extends StreamsException {
 
     private final static long serialVersionUID = 1L;
 
     public TaskMigratedException(final String message, final Throwable throwable) {
-        super(message + "; It means all tasks belonging to this thread have been migrated", throwable);
+        super(message + "; It means all tasks belonging to this thread should be migrated", throwable);
     }
 }

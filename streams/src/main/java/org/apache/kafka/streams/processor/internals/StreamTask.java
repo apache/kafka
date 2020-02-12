@@ -410,13 +410,17 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                     // whenever we have successfully committed state, it is safe to checkpoint
                     // the state as well no matter if EOS is enabled or not
                     stateMgr.checkpoint(checkpointableOffsets());
-                } else if (eosDisabled) {
-                    // if from unclean close, then only need to flush state to make sure that when later
-                    // closing the states, there's no records triggering any processing anymore; also swallow all caught exceptions
-                    // However, for a _clean_ shutdown, we try to commit and checkpoint. If there are any exceptions, they become
-                    // fatal for the "closeClean()" call, and the caller can try again with closeDirty() to complete the shutdown.
+                } else {
                     try {
+                        // if from unclean close, then only need to flush state to make sure that when later
+                        // closing the states, there's no records triggering any processing anymore; also swallow all caught exceptions.
+                        // However, for a _clean_ shutdown, we try to commit and checkpoint. If there are any exceptions, they become
+                        // fatal for the "closeClean()" call, and the caller can try again with closeDirty() to complete the shutdown.
                         stateMgr.flush();
+
+                        // just re-write the checkpoint file without updating the store offsets,
+                        // if there are any corrupted partitions then they will be excluded from the overwritten file
+                        stateMgr.checkpoint(Collections.emptyMap());
                     } catch (final RuntimeException error) {
                         log.debug("Ignoring flush error in unclean close.", error);
                     }
@@ -433,8 +437,9 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                 // if the latter throws and we re-close dirty which would close the state manager again.
                 StateManagerUtil.closeStateManager(log, logPrefix, clean, stateMgr, stateDirectory);
 
-                // if EOS is enabled, we wipe out the whole state store since they are invalid to use anymore
-                if (!eosDisabled) {
+                // if EOS is enabled, we wipe out the whole state store for unclean close
+                // since they are invalid to use anymore
+                if (!clean && !eosDisabled) {
                     StateManagerUtil.wipeStateStores(log, stateMgr);
                 }
 
@@ -450,20 +455,20 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         transitionTo(State.CLOSED);
     }
 
-    @Override
-    public void markChangelogAsCorrupted(final Set<TopicPartition> partitions) {
-        stateMgr.markChangelogAsCorrupted(partitions);
-
-        // only write a new checkpoint (excluding the corrupted partitions) if eos is disabled
-        if (eosDisabled)
-            stateMgr.checkpoint(Collections.emptyMap());
-    }
-
     /**
      * An active task is processable if its buffer contains data for all of its input
      * source topic partitions, or if it is enforced to be processable
      */
     public boolean isProcessable(final long wallClockTime) {
+        if (state() == State.CLOSED || state() == State.CLOSING) {
+            // a task is only closing / closed when 1) task manager is closing, 2) a rebalance is undergoing;
+            // in either case we can just log it and move on without notifying the thread since the consumer
+            // would soon be updated to not return any records for this task anymore.
+            log.info("Stream task {} is already in {} state, skip adding records to it.", id(), state());
+
+            return false;
+        }
+
         if (partitionGroup.allPartitionsBuffered()) {
             idleStartTime = RecordQueue.UNKNOWN;
             return true;
@@ -710,13 +715,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
      */
     @Override
     public void addRecords(final TopicPartition partition, final Iterable<ConsumerRecord<byte[], byte[]>> records) {
-        if (state() == State.CLOSED || state() == State.CLOSING) {
-            // a task is only closing / closed when 1) task manager is closing, 2) a rebalance is undergoing;
-            // in either case we can just log it and move on without notifying the thread since the consumer
-            // would soon be updated to not return any records for this task anymore.
-            log.info("Stream task {} is already in {} state, skip adding records to it.", id(), state());
-        }
-
         final int newQueueSize = partitionGroup.addRawRecords(partition, records);
 
         if (log.isTraceEnabled()) {

@@ -719,20 +719,11 @@ public class StreamThread extends Thread {
         try {
             runLoop();
             cleanRun = true;
-        } catch (final StreamsException e) {
-            // do not need to rethrow
-            log.error("Encountered the following Streams exception during processing, " +
-                "this indicates an unrecoverable error and the thread is going to shutdown: ", e);
-            throw e;
-        } catch (final KafkaException e) {
-            log.error("Encountered the following unexpected Kafka exception during processing, " +
-                "this indicates an internal error and thread is going to shutdown:", e);
-            throw e;
         } catch (final Exception e) {
             // we have caught all Kafka related exceptions, and other runtime exceptions
             // should be due to user application errors
-            log.error("Encountered the following unexpected exception during processing " +
-                "and the thread is going to shutdown:", e);
+            log.error("Encountered the following exception during processing " +
+                "and the thread is going to shutdown: ", e);
             throw e;
         } finally {
             completeShutdown(cleanRun);
