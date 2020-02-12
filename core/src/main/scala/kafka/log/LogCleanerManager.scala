@@ -486,6 +486,7 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
 
 /**
  * Helper class for the cleanable segment of a log and whether to update the checkpoint associated with the log
+ * firstDirtyOffset the lower (inclusive) and firstUncleanableDirtyOffset the upper(exclusive) offsets
  */
 private case class OffsetsToClean(firstDirtyOffset: Long,
                                   firstUncleanableDirtyOffset: Long,
@@ -587,7 +588,7 @@ private[log] object LogCleanerManager extends Logging {
       s"now=$now => firstDirtyOffset=$firstDirtyOffset firstUncleanableOffset=$firstUncleanableDirtyOffset " +
       s"activeSegment.baseOffset=${log.activeSegment.baseOffset}")
 
-    OffsetsToClean(firstDirtyOffset, firstUncleanableDirtyOffset, needsUpdateCheckpoint)
+    OffsetsToClean(firstDirtyOffset, Math.max(firstDirtyOffset, firstUncleanableDirtyOffset), needsUpdateCheckpoint)
   }
 
   /**
