@@ -151,6 +151,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     private final ExecutorService startAndStopExecutor;
     private final WorkerGroupMember member;
     private final AtomicBoolean stopping;
+    private final boolean isTopicTrackingEnabled;
 
     // Track enough information about the current membership state to be able to determine which requests via the API
     // and the from other nodes are safe to process
@@ -218,6 +219,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         this.keyRotationIntervalMs = config.getInt(DistributedConfig.INTER_WORKER_KEY_TTL_MS_CONFIG);
         this.keySignatureVerificationAlgorithms = config.getList(DistributedConfig.INTER_WORKER_VERIFICATION_ALGORITHMS_CONFIG);
         this.keyGenerator = config.getInternalRequestKeyGenerator();
+        this.isTopicTrackingEnabled = config.getBoolean(TOPIC_TRACKING_ENABLE_CONFIG);
 
         String clientIdConfig = config.getString(CommonClientConfigs.CLIENT_ID_CONFIG);
         String clientId = clientIdConfig.length() <= 0 ? "connect-" + CONNECT_CLIENT_ID_SEQUENCE.getAndIncrement() : clientIdConfig;
@@ -1621,7 +1623,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                 startAndStop(callables);
                 log.info("Finished stopping tasks in preparation for rebalance");
 
-                if (config.getBoolean(TOPIC_TRACKING_ENABLE_CONFIG)) {
+                if (isTopicTrackingEnabled) {
                     // Send tombstones to reset active topics for removed connectors only after
                     // connectors and tasks have been stopped, or these tombstones will be overwritten
                     resetActiveTopics(connectors, tasks);

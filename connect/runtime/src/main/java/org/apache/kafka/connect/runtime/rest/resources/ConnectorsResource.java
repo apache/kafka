@@ -87,10 +87,14 @@ public class ConnectorsResource {
     private final WorkerConfig config;
     @javax.ws.rs.core.Context
     private ServletContext context;
+    private final boolean isTopicTrackingDisabled;
+    private final boolean isTopicTrackingResetDisabled;
 
     public ConnectorsResource(Herder herder, WorkerConfig config) {
         this.herder = herder;
         this.config = config;
+        isTopicTrackingDisabled = !config.getBoolean(TOPIC_TRACKING_ENABLE_CONFIG);
+        isTopicTrackingResetDisabled = !config.getBoolean(TOPIC_TRACKING_ALLOW_RESET_CONFIG);
     }
 
     @GET
@@ -181,7 +185,7 @@ public class ConnectorsResource {
     @GET
     @Path("/{connector}/topics")
     public Response getConnectorActiveTopics(final @PathParam("connector") String connector) {
-        if (!config.getBoolean(TOPIC_TRACKING_ENABLE_CONFIG)) {
+        if (isTopicTrackingDisabled) {
             throw new ConnectRestException(Response.Status.FORBIDDEN.getStatusCode(),
                     "Topic tracking is disabled.");
         }
@@ -192,11 +196,11 @@ public class ConnectorsResource {
     @PUT
     @Path("/{connector}/topics/reset")
     public Response resetConnectorActiveTopics(final @PathParam("connector") String connector, final @Context HttpHeaders headers) {
-        if (!config.getBoolean(TOPIC_TRACKING_ENABLE_CONFIG)) {
+        if (isTopicTrackingDisabled) {
             throw new ConnectRestException(Response.Status.FORBIDDEN.getStatusCode(),
                     "Topic tracking is disabled.");
         }
-        if (!config.getBoolean(TOPIC_TRACKING_ALLOW_RESET_CONFIG)) {
+        if (isTopicTrackingResetDisabled) {
             throw new ConnectRestException(Response.Status.FORBIDDEN.getStatusCode(),
                     "Topic tracking reset is disabled.");
         }
