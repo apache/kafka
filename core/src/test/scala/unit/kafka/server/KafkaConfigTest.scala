@@ -611,6 +611,8 @@ class KafkaConfigTest {
         case KafkaConfig.AdvertisedPortProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number")
         case KafkaConfig.SocketSendBufferBytesProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number")
         case KafkaConfig.SocketReceiveBufferBytesProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number")
+        case KafkaConfig.SocketRequestCommonBytesProp =>
+        case KafkaConfig.SocketRequestBufferCacheSizeProp =>
         case KafkaConfig.MaxConnectionsPerIpOverridesProp =>
           assertPropertyInvalid(getBaseProperties(), name, "127.0.0.1:not_a_number")
         case KafkaConfig.ConnectionsMaxIdleMsProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number")

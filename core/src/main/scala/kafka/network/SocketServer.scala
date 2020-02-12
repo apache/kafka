@@ -38,7 +38,7 @@ import kafka.server.{BrokerReconfigurable, KafkaConfig}
 import kafka.utils._
 import org.apache.kafka.common.config.ConfigException
 import org.apache.kafka.common.{Endpoint, KafkaException, Reconfigurable}
-import org.apache.kafka.common.memory.{MemoryPool, SimpleMemoryPool}
+import org.apache.kafka.common.memory.{MemoryPool, RecyclingMemoryPool, SimpleMemoryPool}
 import org.apache.kafka.common.metrics._
 import org.apache.kafka.common.metrics.stats.Percentiles.BucketSizing
 import org.apache.kafka.common.metrics.stats.{CumulativeSum, Max, Meter, Percentile, Percentiles}
@@ -89,13 +89,13 @@ class SocketServer(val config: KafkaConfig,
   private val memoryPoolDepletedTimeMetricName = metrics.metricName("MemoryPoolDepletedTimeTotal", MetricsGroup)
   memoryPoolUsageSensor.add(new Meter(TimeUnit.MILLISECONDS, memoryPoolDepletedPercentMetricName, memoryPoolDepletedTimeMetricName))
   private val memoryPoolAllocationSensor = metrics.sensor("MemoryPoolAllocation")
-  private val memoryPoolMaxAllocateSizeMetricName = metrics.metricName("MemoryPoolMaxAllocateSize", "socket-server-metrics")
-  private val memoryPoolAllocateSizePercentilesMetricName = metrics.metricName("MemoryPoolAllocateSizePercentiles", "socket-server-metrics")
-  private val percentiles = (1 to 9).map( i => new Percentile(metrics.metricName("MemoryPoolAllocateSize%dPercentile".format(i * 10), "socket-server-metrics"), i * 10))
+  private val memoryPoolMaxAllocateSizeMetricName = metrics.metricName("MemoryPoolMaxAllocateSize", MetricsGroup)
   memoryPoolAllocationSensor.add(memoryPoolMaxAllocateSizeMetricName, new Max())
+  private val percentiles = (1 to 9).map( i => new Percentile(metrics.metricName("MemoryPoolAllocateSize%dPercentile".format(i * 10), MetricsGroup), i * 10))
   // At current stage, we do not know the max decrypted request size, temporarily set it to 10MB.
-  memoryPoolAllocationSensor.add(memoryPoolAllocateSizePercentilesMetricName, new Percentiles(400, 0.0, 10485760, BucketSizing.CONSTANT, percentiles:_*))
+  memoryPoolAllocationSensor.add(new Percentiles(400, 0.0, 10485760, BucketSizing.CONSTANT, percentiles:_*))
   private val memoryPool = if (config.queuedMaxBytes > 0) new SimpleMemoryPool(config.queuedMaxBytes, config.socketRequestMaxBytes, false, memoryPoolUsageSensor, memoryPoolAllocationSensor)
+                           else if (config.socketRequestCommonBytes > 0) new RecyclingMemoryPool(config.socketRequestCommonBytes, config.socketRequestBufferCacheSize, memoryPoolAllocationSensor)
                            else MemoryPool.NONE
   // data-plane
   private val dataPlaneProcessors = new ConcurrentHashMap[Int, Processor]()
