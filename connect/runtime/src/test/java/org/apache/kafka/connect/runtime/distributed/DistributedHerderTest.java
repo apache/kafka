@@ -367,7 +367,6 @@ public class DistributedHerderTest {
         member.requestRejoin();
         PowerMock.expectLastCall();
 
-        expectPostRebalanceCatchup(SNAPSHOT);
 
         // In the second rebalance the new member gets its assignment and this member has no
         // assignments or revocations
@@ -378,6 +377,7 @@ public class DistributedHerderTest {
 
         PowerMock.replayAll();
 
+        herder.configState = SNAPSHOT;
         time.sleep(1000L);
         assertStatistics(0, 0, 0, Double.POSITIVE_INFINITY);
         herder.tick();
@@ -773,26 +773,36 @@ public class DistributedHerderTest {
         PowerMock.expectLastCall();
         configBackingStore.removeConnectorConfig(CONN1);
         PowerMock.expectLastCall();
-        TopicStatus fooStatus = new TopicStatus(FOO_TOPIC, CONN1, 0, time.milliseconds());
-        TopicStatus barStatus = new TopicStatus(BAR_TOPIC, CONN1, 0, time.milliseconds());
-        EasyMock.expect(statusBackingStore.getAllTopics(EasyMock.eq(CONN1))).andReturn(new HashSet<>(Arrays.asList(fooStatus, barStatus)));
-        statusBackingStore.deleteTopic(EasyMock.eq(CONN1), EasyMock.eq(FOO_TOPIC));
-        PowerMock.expectLastCall();
-        statusBackingStore.deleteTopic(EasyMock.eq(CONN1), EasyMock.eq(BAR_TOPIC));
-        PowerMock.expectLastCall();
         putConnectorCallback.onCompletion(null, new Herder.Created<ConnectorInfo>(false, null));
         PowerMock.expectLastCall();
         member.poll(EasyMock.anyInt());
         PowerMock.expectLastCall();
-        // No immediate action besides this -- change will be picked up via the config log
 
+        // The change eventually is reflected to the config topic and the deleted connector and
+        // tasks are revoked
+        member.wakeup();
+        PowerMock.expectLastCall();
+        TopicStatus fooStatus = new TopicStatus(FOO_TOPIC, CONN1, 0, time.milliseconds());
+        TopicStatus barStatus = new TopicStatus(BAR_TOPIC, CONN1, 0, time.milliseconds());
+        EasyMock.expect(statusBackingStore.getAllTopics(EasyMock.eq(CONN1))).andReturn(new HashSet<>(Arrays.asList(fooStatus, barStatus))).times(2);
+        statusBackingStore.deleteTopic(EasyMock.eq(CONN1), EasyMock.eq(FOO_TOPIC));
+        PowerMock.expectLastCall().times(2);
+        statusBackingStore.deleteTopic(EasyMock.eq(CONN1), EasyMock.eq(BAR_TOPIC));
+        PowerMock.expectLastCall().times(2);
+        expectRebalance(Arrays.asList(CONN1), Arrays.asList(TASK1),
+                ConnectProtocol.Assignment.NO_ERROR, 2,
+                Collections.emptyList(), Collections.emptyList(), 0);
+        expectPostRebalanceCatchup(ClusterConfigState.EMPTY);
+        member.requestRejoin();
+        PowerMock.expectLastCall();
         PowerMock.replayAll();
 
         herder.deleteConnectorConfig(CONN1, putConnectorCallback);
         herder.tick();
-
-        time.sleep(1000L);
-        assertStatistics(3, 1, 100, 1000L);
+        configUpdateListener.onConnectorConfigRemove(CONN1); // read updated config that removes the connector
+        herder.configState = ClusterConfigState.EMPTY;
+        herder.tick();
+        assertStatistics("leaderUrl", true, 3, 1, 100, 100L);
 
         PowerMock.verifyAll();
     }

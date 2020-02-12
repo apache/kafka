@@ -140,7 +140,10 @@ public class MonitorableSourceConnector extends TestSourceConnector {
                                 Schema.STRING_SCHEMA,
                                 "value-" + taskId + "-" + seqno))
                         .collect(Collectors.toList());
+            } else {
+                log.info("Task stopped but still going: {}", stopped);
             }
+
             return null;
         }
 

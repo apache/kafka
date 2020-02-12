@@ -25,7 +25,6 @@ import org.junit.Before;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 
-import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
@@ -62,7 +61,7 @@ public class ConnectorTopicsIntegrationTest {
     Properties brokerProps = new Properties();
 
     @Before
-    public void setup() throws IOException {
+    public void setup() {
         // setup Connect worker properties
         workerProps.put(CONNECTOR_CLIENT_POLICY_CLASS_CONFIG, "All");
 
@@ -132,6 +131,9 @@ public class ConnectorTopicsIntegrationTest {
         connect.assertions().assertConnectorAndTasksAreStopped(BAR_CONNECTOR,
                 "Connector tasks did not stop in time.");
 
+        connect.assertions().assertConnectorActiveTopics(BAR_CONNECTOR, Collections.emptyList(),
+                "Active topic set is not empty for deleted connector: " + BAR_CONNECTOR);
+
         // Unfortunately there's currently no easy way to know when the consumer caught up with
         // the last records that the producer of the stopped connector managed to produce.
         // Repeated runs show that this amount of time is sufficient for the consumer to catch up.
@@ -141,7 +143,7 @@ public class ConnectorTopicsIntegrationTest {
         connect.resetConnectorTopics(SINK_CONNECTOR);
 
         connect.assertions().assertConnectorActiveTopics(SINK_CONNECTOR, Collections.singletonList(FOO_TOPIC),
-                "Active topic set is not: " + Collections.singletonList(FOO_TOPIC) + " for connector: " + FOO_CONNECTOR);
+                "Active topic set is not: " + Collections.singletonList(FOO_TOPIC) + " for connector: " + SINK_CONNECTOR);
     }
 
     private Map<String, String> defaultSourceConnectorProps(String topic) {

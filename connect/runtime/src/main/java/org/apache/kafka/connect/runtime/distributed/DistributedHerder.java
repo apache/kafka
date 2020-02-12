@@ -158,7 +158,8 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     private Set<ConnectorTaskId> tasksToRestart = new HashSet<>();
     private ExtendedAssignment assignment;
     private boolean canReadConfigs;
-    private ClusterConfigState configState;
+    // visible for testing
+    protected ClusterConfigState configState;
 
     // To handle most external requests, like creating or destroying a connector, we can use a generic request where
     // the caller specifies all the code that should be executed.
@@ -711,7 +712,6 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                         } else {
                             log.trace("Removing connector config {} {}", connName, configState.connectors());
                             configBackingStore.removeConnectorConfig(connName);
-                            resetConnectorActiveTopics(connName);
                             callback.onCompletion(null, new Created<ConnectorInfo>(false, null));
                         }
                         return null;
@@ -1620,6 +1620,10 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                 startAndStop(callables);
                 log.info("Finished stopping tasks in preparation for rebalance");
 
+                // Send tombstones to reset active topics for removed connectors only after
+                // connectors and tasks have been stopped, or these tombstones will be overwritten
+                resetActiveTopics(connectors, tasks);
+
                 // Ensure that all status updates have been pushed to the storage system before rebalancing.
                 // Otherwise, we may inadvertently overwrite the state with a stale value after the rebalance
                 // completes.
@@ -1628,6 +1632,17 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
             } else {
                 log.info("Wasn't able to resume work after last rebalance, can skip stopping connectors and tasks");
             }
+        }
+
+        private void resetActiveTopics(Collection<String> connectors, Collection<ConnectorTaskId> tasks) {
+            connectors.stream()
+                    .filter(connectorName -> !configState.contains(connectorName))
+                    .forEach(DistributedHerder.this::resetConnectorActiveTopics);
+            tasks.stream()
+                    .map(ConnectorTaskId::connector)
+                    .distinct()
+                    .filter(connectorName -> !configState.contains(connectorName))
+                    .forEach(DistributedHerder.this::resetConnectorActiveTopics);
         }
     }
 
