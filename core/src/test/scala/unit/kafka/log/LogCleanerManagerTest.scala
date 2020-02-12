@@ -56,7 +56,7 @@ class LogCleanerManagerTest extends Logging {
     }
 
     override def updateCheckpoints(dataDir: File, update: Option[(TopicPartition,Long)]): Unit = {
-      val (tp, offset) = update.get
+      val (tp, offset) = update.getOrElse(throw new IllegalArgumentException("update=None argument not yet handled"))
       cleanerCheckpoints.put(tp, offset)
     }
   }
