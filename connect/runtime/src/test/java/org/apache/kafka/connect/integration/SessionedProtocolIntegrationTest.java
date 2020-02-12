@@ -28,7 +28,6 @@ import org.junit.experimental.categories.Category;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
@@ -61,7 +60,7 @@ public class SessionedProtocolIntegrationTest {
     private ConnectorHandle connectorHandle;
 
     @Before
-    public void setup() throws IOException {
+    public void setup() {
         // setup Connect worker properties
         Map<String, String> workerProps = new HashMap<>();
         workerProps.put(CONNECT_PROTOCOL_CONFIG, ConnectProtocolCompatibility.SESSIONED.protocol());

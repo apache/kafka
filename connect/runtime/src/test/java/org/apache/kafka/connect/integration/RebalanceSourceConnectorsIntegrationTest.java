@@ -28,7 +28,6 @@ import org.junit.experimental.categories.Category;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
@@ -70,7 +69,7 @@ public class RebalanceSourceConnectorsIntegrationTest {
     private EmbeddedConnectCluster connect;
 
     @Before
-    public void setup() throws IOException {
+    public void setup() {
         // setup Connect worker properties
         Map<String, String> workerProps = new HashMap<>();
         workerProps.put(CONNECT_PROTOCOL_CONFIG, COMPATIBLE.toString());
