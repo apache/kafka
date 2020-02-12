@@ -27,7 +27,6 @@ import org.junit.experimental.categories.Category;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
@@ -60,7 +59,7 @@ public class ConnectWorkerIntegrationTest {
     Properties brokerProps = new Properties();
 
     @Before
-    public void setup() throws IOException {
+    public void setup() {
         // setup Connect worker properties
         workerProps.put(OFFSET_COMMIT_INTERVAL_MS_CONFIG, String.valueOf(OFFSET_COMMIT_INTERVAL_MS));
 

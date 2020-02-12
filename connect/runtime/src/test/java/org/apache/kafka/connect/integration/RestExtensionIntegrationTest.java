@@ -34,7 +34,6 @@ import org.junit.experimental.categories.Category;
 import javax.ws.rs.GET;
 import javax.ws.rs.Path;
 import javax.ws.rs.core.Response;
-import java.io.IOException;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
@@ -57,11 +56,12 @@ public class RestExtensionIntegrationTest {
 
     private static final long REST_EXTENSION_REGISTRATION_TIMEOUT_MS = TimeUnit.MINUTES.toMillis(1);
     private static final long CONNECTOR_HEALTH_AND_CONFIG_TIMEOUT_MS = TimeUnit.MINUTES.toMillis(1);
+    private static final int NUM_WORKERS = 1;
 
     private EmbeddedConnectCluster connect;
 
     @Test
-    public void testRestExtensionApi() throws IOException, InterruptedException {
+    public void testRestExtensionApi() throws InterruptedException {
         // setup Connect worker properties
         Map<String, String> workerProps = new HashMap<>();
         workerProps.put(REST_EXTENSION_CLASSES_CONFIG, IntegrationTestRestExtension.class.getName());
@@ -69,13 +69,16 @@ public class RestExtensionIntegrationTest {
         // build a Connect cluster backed by Kafka and Zk
         connect = new EmbeddedConnectCluster.Builder()
             .name("connect-cluster")
-            .numWorkers(1)
+            .numWorkers(NUM_WORKERS)
             .numBrokers(1)
             .workerProps(workerProps)
             .build();
 
         // start the clusters
         connect.start();
+
+        connect.assertions().assertAtLeastNumWorkersAreUp(NUM_WORKERS,
+                "Initial group of workers did not start in time.");
 
         WorkerHandle worker = connect.workers().stream()
             .findFirst()
@@ -99,6 +102,8 @@ public class RestExtensionIntegrationTest {
             connectorHandle.taskHandle(connectorHandle.name() + "-0");
             StartAndStopLatch connectorStartLatch = connectorHandle.expectedStarts(1);
             connect.configureConnector(connectorHandle.name(), connectorProps);
+            connect.assertions().assertConnectorAndAtLeastNumTasksAreRunning(connectorHandle.name(), 1,
+                    "Connector tasks did not start in time.");
             connectorStartLatch.await(CONNECTOR_HEALTH_AND_CONFIG_TIMEOUT_MS, TimeUnit.MILLISECONDS);
 
             String workerId = String.format("%s:%d", worker.url().getHost(), worker.url().getPort());
