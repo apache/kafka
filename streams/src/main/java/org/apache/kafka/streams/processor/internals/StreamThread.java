@@ -53,6 +53,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -60,6 +61,8 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
+
+import static org.apache.kafka.streams.StreamsConfig.EXACTLY_ONCE;
 
 public class StreamThread extends Thread {
 
@@ -248,11 +251,6 @@ public class StreamThread extends Thread {
         this.rebalanceException = rebalanceException;
     }
 
-    // public for testing purposes
-    public interface ProducerSupplier {
-        Producer<byte[], byte[]> get(final TaskId id);
-    }
-
     static abstract class AbstractTaskCreator<T extends Task> {
         final String applicationId;
         final InternalTopologyBuilder builder;
@@ -314,7 +312,7 @@ public class StreamThread extends Thread {
         private final ThreadCache cache;
         private final Producer<byte[], byte[]> threadProducer;
         private final KafkaClientSupplier clientSupplier;
-        private final ProducerSupplier producerSupplier;
+        final Map<TaskId, Producer<byte[], byte[]>> taskProducers;
         private final Sensor createTaskSensor;
 
         TaskCreator(final InternalTopologyBuilder builder,
@@ -325,6 +323,7 @@ public class StreamThread extends Thread {
                     final ThreadCache cache,
                     final Time time,
                     final KafkaClientSupplier clientSupplier,
+                    final Map<TaskId, Producer<byte[], byte[]>> taskProducers,
                     final String threadId,
                     final Logger log) {
             super(
@@ -336,25 +335,25 @@ public class StreamThread extends Thread {
                 time,
                 log);
 
-            final boolean eosEnabled = StreamsConfig.EXACTLY_ONCE.equals(config.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG));
+            final boolean eosEnabled = EXACTLY_ONCE.equals(config.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG));
             if (!eosEnabled) {
                 final Map<String, Object> producerConfigs = config.getProducerConfigs(getThreadProducerClientId(threadId));
                 log.info("Creating thread producer client");
-                threadProducer = clientSupplier.getProducer(producerConfigs);
+                this.threadProducer = clientSupplier.getProducer(producerConfigs);
             } else {
-                threadProducer = null;
+                this.threadProducer = null;
             }
-
+            this.taskProducers = taskProducers;
 
             this.cache = cache;
             this.threadId = threadId;
             this.clientSupplier = clientSupplier;
-            this.producerSupplier = new TaskProducerSupplier();
+
             this.createTaskSensor = ThreadMetrics.createTaskSensor(threadId, streamsMetrics);
         }
 
         @Override
-        StreamTask createTask(final Consumer<byte[], byte[]> consumer,
+        StreamTask createTask(final Consumer<byte[], byte[]> mainConsumer,
                               final TaskId taskId,
                               final Set<TopicPartition> partitions) {
             createTaskSensor.record();
@@ -374,19 +373,30 @@ public class StreamThread extends Thread {
                 storeChangelogReader,
                 logContext);
 
+            if (threadProducer == null) {
+                // create one producer per task for EOS
+                // TODO: after KIP-447 this would be removed
+                final Map<String, Object> producerConfigs = config.getProducerConfigs(getTaskProducerClientId(threadId, taskId));
+                producerConfigs.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, applicationId + "-" + taskId);
+                log.info("Creating producer client for task {}", taskId);
+                taskProducers.put(taskId, clientSupplier.getProducer(producerConfigs));
+            }
             final RecordCollector recordCollector = new RecordCollectorImpl(
-                taskId,
-                config,
                 logContext,
-                streamsMetrics,
-                consumer,
-                producerSupplier);
+                taskId,
+                mainConsumer,
+                threadProducer != null ?
+                    new StreamsProducer(logContext, threadProducer) :
+                    new StreamsProducer(logContext, taskProducers.get(taskId), applicationId, taskId),
+                config.defaultProductionExceptionHandler(),
+                EXACTLY_ONCE.equals(config.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG)),
+                streamsMetrics);
 
             return new StreamTask(
                 taskId,
                 partitions,
                 topology,
-                consumer,
+                mainConsumer,
                 config,
                 streamsMetrics,
                 stateDirectory,
@@ -394,23 +404,6 @@ public class StreamThread extends Thread {
                 time,
                 stateManager,
                 recordCollector);
-        }
-
-        private class TaskProducerSupplier implements ProducerSupplier {
-            @Override
-            public Producer<byte[], byte[]> get(final TaskId id) {
-                if (threadProducer == null) {
-                    // create one producer per task for EOS
-                    // TODO: after KIP-447 this would be removed
-                    final Map<String, Object> producerConfigs = config.getProducerConfigs(getTaskProducerClientId(threadId, id));
-                    producerConfigs.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, applicationId + "-" + id);
-                    log.info("Creating producer client for task {}", id);
-
-                    return clientSupplier.getProducer(producerConfigs);
-                } else {
-                    return threadProducer;
-                }
-            }
         }
 
         public void close() {
@@ -518,9 +511,10 @@ public class StreamThread extends Thread {
 
     // package-private for testing
     final ConsumerRebalanceListener rebalanceListener;
+    final Consumer<byte[], byte[]> mainConsumer;
     final Consumer<byte[], byte[]> restoreConsumer;
-    final Consumer<byte[], byte[]> consumer;
-    final Producer<byte[], byte[]> producer;
+    final Producer<byte[], byte[]> threadProducer;
+    final Map<TaskId, Producer<byte[], byte[]>> taskProducers;
     final InternalTopologyBuilder builder;
 
     public static StreamThread create(final InternalTopologyBuilder builder,
@@ -546,10 +540,19 @@ public class StreamThread extends Thread {
         final Map<String, Object> restoreConsumerConfigs = config.getRestoreConsumerConfigs(getRestoreConsumerClientId(threadId));
         final Consumer<byte[], byte[]> restoreConsumer = clientSupplier.getRestoreConsumer(restoreConsumerConfigs);
 
-        final StoreChangelogReader changelogReader = new StoreChangelogReader(time, config, logContext, restoreConsumer, userStateRestoreListener);
+        final StoreChangelogReader changelogReader = new StoreChangelogReader(
+            time,
+            config,
+            logContext,
+            restoreConsumer,
+            userStateRestoreListener);
 
         final ThreadCache cache = new ThreadCache(logContext, cacheSizeBytes, streamsMetrics);
 
+        final Map<TaskId, Producer<byte[], byte[]>> taskProducers = new HashMap<>();
+
+        // TODO: refactor `TaskCreator` into `TaskManager`;
+        //  this will allow to reduce the surface area of `taskProducers` that is passed to many classes atm
         final TaskCreator activeTaskCreator = new TaskCreator(
             builder,
             config,
@@ -559,6 +562,7 @@ public class StreamThread extends Thread {
             cache,
             time,
             clientSupplier,
+            taskProducers,
             threadId,
             log);
         final StandbyTaskCreator standbyTaskCreator = new StandbyTaskCreator(
@@ -577,6 +581,7 @@ public class StreamThread extends Thread {
             streamsMetrics,
             activeTaskCreator,
             standbyTaskCreator,
+            taskProducers,
             builder,
             adminClient
         );
@@ -595,17 +600,18 @@ public class StreamThread extends Thread {
             consumerConfigs.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "none");
         }
 
-        final Consumer<byte[], byte[]> consumer = clientSupplier.getConsumer(consumerConfigs);
-        changelogReader.setMainConsumer(consumer);
-        taskManager.setConsumer(consumer);
+        final Consumer<byte[], byte[]> mainConsumer = clientSupplier.getConsumer(consumerConfigs);
+        changelogReader.setMainConsumer(mainConsumer);
+        taskManager.setMainConsumer(mainConsumer);
 
         final StreamThread streamThread = new StreamThread(
             time,
             config,
             activeTaskCreator.threadProducer,
+            taskProducers,
             adminClient,
+            mainConsumer,
             restoreConsumer,
-            consumer,
             changelogReader,
             originalReset,
             taskManager,
@@ -620,10 +626,11 @@ public class StreamThread extends Thread {
 
     public StreamThread(final Time time,
                         final StreamsConfig config,
-                        final Producer<byte[], byte[]> producer,
+                        final Producer<byte[], byte[]> threadProducer,
+                        final Map<TaskId, Producer<byte[], byte[]>> taskProducers,
                         final Admin adminClient,
+                        final Consumer<byte[], byte[]> mainConsumer,
                         final Consumer<byte[], byte[]> restoreConsumer,
-                        final Consumer<byte[], byte[]> consumer,
                         final ChangelogReader changelogReader,
                         final String originalReset,
                         final TaskManager taskManager,
@@ -662,8 +669,9 @@ public class StreamThread extends Thread {
         this.rebalanceListener = new StreamsRebalanceListener(time, taskManager, this, this.log);
         this.taskManager = taskManager;
         this.restoreConsumer = restoreConsumer;
-        this.consumer = consumer;
-        this.producer = producer;
+        this.mainConsumer = mainConsumer;
+        this.threadProducer = threadProducer;
+        this.taskProducers = taskProducers;
         this.changelogReader = changelogReader;
         this.originalReset = originalReset;
         this.assignmentErrorCode = assignmentErrorCode;
@@ -767,15 +775,15 @@ public class StreamThread extends Thread {
     }
 
     private void enforceRebalance() {
-        consumer.unsubscribe();
+        mainConsumer.unsubscribe();
         subscribeConsumer();
     }
 
     private void subscribeConsumer() {
         if (builder.usesPatternSubscription()) {
-            consumer.subscribe(builder.sourceTopicPattern(), rebalanceListener);
+            mainConsumer.subscribe(builder.sourceTopicPattern(), rebalanceListener);
         } else {
-            consumer.subscribe(builder.sourceTopicCollection(), rebalanceListener);
+            mainConsumer.subscribe(builder.sourceTopicCollection(), rebalanceListener);
         }
     }
 
@@ -914,7 +922,7 @@ public class StreamThread extends Thread {
         lastPollMs = now;
 
         try {
-            records = consumer.poll(pollTime);
+            records = mainConsumer.poll(pollTime);
         } catch (final InvalidOffsetException e) {
             resetInvalidOffsets(e);
         }
@@ -951,17 +959,17 @@ public class StreamThread extends Thread {
 
                 if (originalReset.equals("earliest")) {
                     addToResetList(partition, seekToBeginning, "No custom setting defined for topic '{}' using original config '{}' for offset reset", "earliest", loggedTopics);
-                } else {
+                } else { // can only be "latest"
                     addToResetList(partition, seekToEnd, "No custom setting defined for topic '{}' using original config '{}' for offset reset", "latest", loggedTopics);
                 }
             }
         }
 
         if (!seekToBeginning.isEmpty()) {
-            consumer.seekToBeginning(seekToBeginning);
+            mainConsumer.seekToBeginning(seekToBeginning);
         }
         if (!seekToEnd.isEmpty()) {
-            consumer.seekToEnd(seekToEnd);
+            mainConsumer.seekToEnd(seekToEnd);
         }
     }
 
@@ -1099,7 +1107,7 @@ public class StreamThread extends Thread {
             log.error("Failed to close changelog reader due to the following error:", e);
         }
         try {
-            consumer.close();
+            mainConsumer.close();
         } catch (final Throwable e) {
             log.error("Failed to close consumer due to the following error:", e);
         }
@@ -1131,7 +1139,9 @@ public class StreamThread extends Thread {
             this.state().name(),
             getConsumerClientId(this.getName()),
             getRestoreConsumerClientId(this.getName()),
-            producer == null ? Collections.emptySet() : Collections.singleton(getThreadProducerClientId(this.getName())),
+            threadProducer == null ?
+                Collections.emptySet() :
+                Collections.singleton(getThreadProducerClientId(this.getName())),
             adminClientId,
             Collections.emptySet(),
             Collections.emptySet());
@@ -1158,7 +1168,9 @@ public class StreamThread extends Thread {
             this.state().name(),
             getConsumerClientId(this.getName()),
             getRestoreConsumerClientId(this.getName()),
-            producer == null ? producerClientIds : Collections.singleton(getThreadProducerClientId(this.getName())),
+            threadProducer == null ?
+                producerClientIds :
+                Collections.singleton(getThreadProducerClientId(this.getName())),
             adminClientId,
             activeTasksMetadata,
             standbyTasksMetadata);
@@ -1199,8 +1211,8 @@ public class StreamThread extends Thread {
 
     public Map<MetricName, Metric> producerMetrics() {
         final LinkedHashMap<MetricName, Metric> result = new LinkedHashMap<>();
-        if (producer != null) {
-            final Map<MetricName, ? extends Metric> producerMetrics = producer.metrics();
+        if (threadProducer != null) {
+            final Map<MetricName, ? extends Metric> producerMetrics = threadProducer.metrics();
             if (producerMetrics != null) {
                 result.putAll(producerMetrics);
             }
@@ -1209,7 +1221,7 @@ public class StreamThread extends Thread {
             // and the producer object passed in here will be null. We would then iterate through
             // all the active tasks and add their metrics to the output metrics map.
             for (final StreamTask task : taskManager.fixmeStreamTasks().values()) {
-                final Map<MetricName, ? extends Metric> taskProducerMetrics = ((RecordCollectorImpl) task.recordCollector()).producer().metrics();
+                final Map<MetricName, ? extends Metric> taskProducerMetrics = taskProducers.get(task.id).metrics();
                 result.putAll(taskProducerMetrics);
             }
         }
@@ -1217,7 +1229,7 @@ public class StreamThread extends Thread {
     }
 
     public Map<MetricName, Metric> consumerMetrics() {
-        final Map<MetricName, ? extends Metric> consumerMetrics = consumer.metrics();
+        final Map<MetricName, ? extends Metric> consumerMetrics = mainConsumer.metrics();
         final Map<MetricName, ? extends Metric> restoreConsumerMetrics = restoreConsumer.metrics();
         final LinkedHashMap<MetricName, Metric> result = new LinkedHashMap<>();
         result.putAll(consumerMetrics);
