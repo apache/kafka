@@ -16,17 +16,13 @@
  */
 package org.apache.kafka.connect.mirror;
 
-import org.apache.kafka.connect.runtime.AbstractStatus;
-import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
+import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.consumer.Consumer;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.connect.util.clusters.EmbeddedConnectCluster;
 import org.apache.kafka.connect.util.clusters.EmbeddedKafkaCluster;
 import org.apache.kafka.test.IntegrationTest;
-import org.apache.kafka.test.TestUtils;
-import org.apache.kafka.clients.consumer.Consumer;
-import org.apache.kafka.clients.consumer.OffsetAndMetadata;
-import org.apache.kafka.clients.admin.Admin;
-import org.apache.kafka.common.TopicPartition;
-
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -34,19 +30,18 @@ import org.junit.experimental.categories.Category;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.time.Duration;
 import java.util.Arrays;
-import java.io.IOException;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
-import java.util.Set;
-import java.util.Collections;
 import java.util.Properties;
-import java.time.Duration;
+import java.util.Set;
 
+import static org.apache.kafka.test.TestUtils.waitForCondition;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
-import static org.apache.kafka.test.TestUtils.waitForCondition;
 
 /**
  * Tests MM2 replication and failover/failback logic.
@@ -71,7 +66,7 @@ public class MirrorConnectorsIntegrationTest {
     private EmbeddedConnectCluster backup;
 
     @Before
-    public void setup() throws IOException, InterruptedException {
+    public void setup() throws InterruptedException {
         Properties brokerProps = new Properties();
         brokerProps.put("auto.create.topics.enable", "false");
 
@@ -116,7 +111,11 @@ public class MirrorConnectorsIntegrationTest {
                 .build();
 
         primary.start();
+        primary.assertions().assertAtLeastNumWorkersAreUp(3,
+                "Workers of primary-connect-cluster did not start in time.");
         backup.start();
+        primary.assertions().assertAtLeastNumWorkersAreUp(3,
+                "Workers of backup-connect-cluster did not start in time.");
 
         // create these topics before starting the connectors so we don't need to wait for discovery
         primary.kafka().createTopic("test-topic-1", NUM_PARTITIONS);
@@ -189,30 +188,13 @@ public class MirrorConnectorsIntegrationTest {
     private void waitUntilMirrorMakerIsRunning(EmbeddedConnectCluster connectCluster,
         Set<String> connNames) throws InterruptedException {
         for (String connector : connNames) {
-            TestUtils.waitForCondition(() -> areConnectorAndTasksRunning(connectCluster,
-                connector), "Timed out trying to verify connector " +
-                connector + " was up!");
-        }
-    }
-
-    private boolean areConnectorAndTasksRunning(EmbeddedConnectCluster connectCluster,
-        String connectorName) {
-        try {
-            ConnectorStateInfo info = connectCluster.connectorStatus(connectorName);
-            boolean result = info != null
-                && !info.tasks().isEmpty()
-                && info.connector().state().equals(AbstractStatus.State.RUNNING.toString())
-                && info.tasks().stream().allMatch(s -> s.state().equals(AbstractStatus.State.RUNNING.toString()));
-            log.debug("Found connector and tasks running: {}", result);
-            return result;
-        } catch (Exception e) {
-            log.error("Could not check connector state info.", e);
-            return false;
+            connectCluster.assertions().assertConnectorAndAtLeastNumTasksAreRunning(connector, 1,
+                    "Connector " + connector + " tasks did not start in time on cluster: " + connectCluster);
         }
     }
 
     @After
-    public void close() throws IOException {
+    public void close() {
         for (String x : primary.connectors()) {
             primary.deleteConnector(x);
         }

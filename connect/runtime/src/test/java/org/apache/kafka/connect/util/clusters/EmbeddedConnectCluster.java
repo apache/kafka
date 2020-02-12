@@ -284,7 +284,8 @@ public class EmbeddedConnectCluster {
         if (response.getStatus() < Response.Status.BAD_REQUEST.getStatusCode()) {
             return responseToString(response);
         }
-        throw new ConnectRestException(response.getStatus(), "Could not execute PUT request");
+        throw new ConnectRestException(response.getStatus(),
+                "Could not execute PUT request. Error response: " + responseToString(response));
     }
 
     /**
@@ -298,7 +299,8 @@ public class EmbeddedConnectCluster {
         String url = endpointForResource(String.format("connectors/%s", connName));
         Response response = requestDelete(url);
         if (response.getStatus() >= Response.Status.BAD_REQUEST.getStatusCode()) {
-            throw new ConnectRestException(response.getStatus(), "Could not execute DELETE request.");
+            throw new ConnectRestException(response.getStatus(),
+                    "Could not execute DELETE request. Error response: " + responseToString(response));
         }
     }
 
@@ -358,7 +360,7 @@ public class EmbeddedConnectCluster {
      *
      * @param resource the resource under the worker's admin endpoint
      * @return the admin endpoint URL
-     * @throws ConnectRestException if no admin REST endpoint is available
+     * @throws ConnectException if no admin REST endpoint is available
      */
     public String adminEndpoint(String resource) {
         String url = connectCluster.stream()
@@ -375,7 +377,7 @@ public class EmbeddedConnectCluster {
      *
      * @param resource the resource under the worker's admin endpoint
      * @return the admin endpoint URL
-     * @throws ConnectRestException if no REST endpoint is available
+     * @throws ConnectException if no REST endpoint is available
      */
     public String endpointForResource(String resource) {
         String url = connectCluster.stream()
