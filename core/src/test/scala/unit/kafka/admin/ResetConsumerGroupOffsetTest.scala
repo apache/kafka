@@ -413,8 +413,8 @@ class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
     val cgcArgs = buildArgsForGroups(Seq(group1, group2), "--all-topics", "--to-offset", "2", "--export")
     val consumerGroupCommand = getConsumerGroupService(cgcArgs)
 
-    produceConsumeAndShutdown(topic = topic1, group = group1, totalMessages = 100, numConsumers = 2)
-    produceConsumeAndShutdown(topic = topic2, group = group2, totalMessages = 100, numConsumers = 5)
+    produceConsumeAndShutdown(topic = topic1, group = group1, totalMessages = 100)
+    produceConsumeAndShutdown(topic = topic2, group = group2, totalMessages = 100)
 
     awaitConsumerGroupInactive(consumerGroupCommand, group1)
     awaitConsumerGroupInactive(consumerGroupCommand, group2)
