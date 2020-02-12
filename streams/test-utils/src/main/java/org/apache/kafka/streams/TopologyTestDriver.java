@@ -211,9 +211,9 @@ public class TopologyTestDriver implements Closeable {
     private final MockProducer<byte[], byte[]> producer;
 
     private final Set<String> internalTopics = new HashSet<>();
-    private final Map<String, TopicPartition> partitionsByTopic = new HashMap<>();
-    private final Map<String, TopicPartition> globalPartitionsByTopic = new HashMap<>();
-    private final Map<TopicPartition, AtomicLong> offsetsByTopicPartition = new HashMap<>();
+    private final Map<String, TopicPartition> partitionsByInputTopic = new HashMap<>();
+    private final Map<String, TopicPartition> globalPartitionsByInputTopic = new HashMap<>();
+    private final Map<TopicPartition, AtomicLong> offsetsByTopicOrPatternPartition = new HashMap<>();
 
     private final Map<String, Queue<ProducerRecord<byte[], byte[]>>> outputRecordsByTopic = new HashMap<>();
     private final boolean eosEnabled;
@@ -274,6 +274,7 @@ public class TopologyTestDriver implements Closeable {
                                final Properties config,
                                final long initialWallClockTimeMs) {
         final StreamsConfig streamsConfig = new QuietStreamsConfig(config);
+        logIfTaskIdleEnabled(streamsConfig);
         mockWallClockTime = new MockTime(initialWallClockTimeMs);
 
         internalTopologyBuilder = builder;
@@ -343,16 +344,16 @@ public class TopologyTestDriver implements Closeable {
 
         for (final String topic : processorTopology.sourceTopics()) {
             final TopicPartition tp = new TopicPartition(topic, PARTITION_ID);
-            partitionsByTopic.put(topic, tp);
-            offsetsByTopicPartition.put(tp, new AtomicLong());
+            partitionsByInputTopic.put(topic, tp);
+            offsetsByTopicOrPatternPartition.put(tp, new AtomicLong());
         }
-        consumer.assign(partitionsByTopic.values());
+        consumer.assign(partitionsByInputTopic.values());
 
         if (globalTopology != null) {
             for (final String topicName : globalTopology.sourceTopics()) {
                 final TopicPartition partition = new TopicPartition(topicName, 0);
-                globalPartitionsByTopic.put(topicName, partition);
-                offsetsByTopicPartition.put(partition, new AtomicLong());
+                globalPartitionsByInputTopic.put(topicName, partition);
+                offsetsByTopicOrPatternPartition.put(partition, new AtomicLong());
                 consumer.updatePartitions(topicName, Collections.singletonList(
                     new PartitionInfo(topicName, 0, null, null, null)));
                 consumer.updateBeginningOffsets(Collections.singletonMap(partition, 0L));
@@ -390,10 +391,10 @@ public class TopologyTestDriver implements Closeable {
             globalStateTask = null;
         }
 
-        if (!partitionsByTopic.isEmpty()) {
+        if (!partitionsByInputTopic.isEmpty()) {
             task = new StreamTask(
                 TASK_ID,
-                new HashSet<>(partitionsByTopic.values()),
+                new HashSet<>(partitionsByInputTopic.values()),
                 processorTopology,
                 consumer,
                 new StoreChangelogReader(
@@ -419,6 +420,20 @@ public class TopologyTestDriver implements Closeable {
             task = null;
         }
         eosEnabled = streamsConfig.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG).equals(StreamsConfig.EXACTLY_ONCE);
+    }
+
+    private static void logIfTaskIdleEnabled(final StreamsConfig streamsConfig) {
+        final Long taskIdleTime = streamsConfig.getLong(StreamsConfig.MAX_TASK_IDLE_MS_CONFIG);
+        if (taskIdleTime > 0) {
+            log.info("Detected {} config in use with TopologyTestDriver (set to {}ms)." +
+                         " This means you might need to use TopologyTestDriver#advanceWallClockTime()" +
+                         " or enqueue records on all partitions to allow Steams to make progress." +
+                         " TopologyTestDriver will log a message each time it cannot process enqueued" +
+                         " records due to {}.",
+                     StreamsConfig.MAX_TASK_IDLE_MS_CONFIG,
+                     taskIdleTime,
+                     StreamsConfig.MAX_TASK_IDLE_MS_CONFIG);
+        }
     }
 
     /**
@@ -448,77 +463,114 @@ public class TopologyTestDriver implements Closeable {
             consumerRecord.headers());
     }
 
-    private void pipeRecord(final ProducerRecord<byte[], byte[]> record) {
-        pipeRecord(record.topic(), record.timestamp(), record.key(), record.value(), record.headers());
-    }
-
     private void pipeRecord(final String topicName,
-                            final Long timestamp,
+                            final long timestamp,
                             final byte[] key,
                             final byte[] value,
                             final Headers headers) {
+        final TopicPartition inputTopicOrPatternPartition = getInputTopicOrPatternPartition(topicName);
+        final TopicPartition globalInputTopicPartition = globalPartitionsByInputTopic.get(topicName);
 
-        if (!internalTopologyBuilder.sourceTopicNames().isEmpty()) {
-            validateSourceTopicNameRegexPattern(topicName);
+        if (inputTopicOrPatternPartition == null && globalInputTopicPartition == null) {
+            throw new IllegalArgumentException("Unknown topic: " + topicName);
         }
-        final TopicPartition topicPartition = getTopicPartition(topicName);
-        if (topicPartition != null) {
-            final long offset = offsetsByTopicPartition.get(topicPartition).incrementAndGet() - 1;
-            task.addRecords(topicPartition, Collections.singleton(new ConsumerRecord<>(
-                    topicName,
-                    topicPartition.partition(),
-                    offset,
-                    timestamp,
-                    TimestampType.CREATE_TIME,
-                    (long) ConsumerRecord.NULL_CHECKSUM,
-                    key == null ? ConsumerRecord.NULL_SIZE : key.length,
-                    value == null ? ConsumerRecord.NULL_SIZE : value.length,
-                    key,
-                    value,
-                    headers)));
 
-            // Process the record ...
-            task.process();
-            task.maybePunctuateStreamTime();
-            task.commit();
-            captureOutputRecords();
-        } else {
-            final TopicPartition globalTopicPartition = globalPartitionsByTopic.get(topicName);
-            if (globalTopicPartition == null) {
-                throw new IllegalArgumentException("Unknown topic: " + topicName);
-            }
-            final long offset = offsetsByTopicPartition.get(globalTopicPartition).incrementAndGet() - 1;
-            globalStateTask.update(new ConsumerRecord<>(
-                    globalTopicPartition.topic(),
-                    globalTopicPartition.partition(),
-                    offset,
-                    timestamp,
-                    TimestampType.CREATE_TIME,
-                    (long) ConsumerRecord.NULL_CHECKSUM,
-                    key == null ? ConsumerRecord.NULL_SIZE : key.length,
-                    value == null ? ConsumerRecord.NULL_SIZE : value.length,
-                    key,
-                    value,
-                    headers));
-            globalStateTask.flushState();
+        if (inputTopicOrPatternPartition != null) {
+            enqueueTaskRecord(topicName, inputTopicOrPatternPartition, timestamp, key, value, headers);
+            completeAllProcessableWork();
+        }
+
+        if (globalInputTopicPartition != null) {
+            processGlobalRecord(globalInputTopicPartition, timestamp, key, value, headers);
         }
     }
 
+    private void enqueueTaskRecord(final String inputTopic,
+                                   final TopicPartition topicOrPatternPartition,
+                                   final long timestamp,
+                                   final byte[] key,
+                                   final byte[] value,
+                                   final Headers headers) {
+        task.addRecords(topicOrPatternPartition, Collections.singleton(new ConsumerRecord<>(
+            inputTopic,
+            topicOrPatternPartition.partition(),
+            offsetsByTopicOrPatternPartition.get(topicOrPatternPartition).incrementAndGet() - 1,
+            timestamp,
+            TimestampType.CREATE_TIME,
+            (long) ConsumerRecord.NULL_CHECKSUM,
+            key == null ? ConsumerRecord.NULL_SIZE : key.length,
+            value == null ? ConsumerRecord.NULL_SIZE : value.length,
+            key,
+            value,
+            headers)));
+    }
+
+    private void completeAllProcessableWork() {
+        // for internally triggered processing (like wall-clock punctuations),
+        // we might have buffered some records to internal topics that need to
+        // be piped back in to kick-start the processing loop. This is idempotent
+        // and therefore harmless in the case where all we've done is enqueued an
+        // input record from the user.
+        captureOutputsAndReEnqueueInternalResults();
+
+        // If the topology only has global tasks, then `task` would be null.
+        // For this method, it just means there's nothing to do.
+        if (task != null) {
+            while (task.hasRecordsQueued()) {
+                // Process the record ...
+                task.process();
+                task.maybePunctuateStreamTime();
+                task.commit();
+                captureOutputsAndReEnqueueInternalResults();
+            }
+            if (task.hasRecordsQueued()) {
+                log.info("Due to the {} configuration, there are currently some records" +
+                             " that cannot be processed. Advancing wall-clock time or" +
+                             " enqueuing records on the empty topics will allow" +
+                             " Streams to process more.",
+                         StreamsConfig.MAX_TASK_IDLE_MS_CONFIG);
+            }
+        }
+    }
+
+    private void processGlobalRecord(final TopicPartition globalInputTopicPartition,
+                                     final long timestamp,
+                                     final byte[] key,
+                                     final byte[] value,
+                                     final Headers headers) {
+        globalStateTask.update(new ConsumerRecord<>(
+            globalInputTopicPartition.topic(),
+            globalInputTopicPartition.partition(),
+            offsetsByTopicOrPatternPartition.get(globalInputTopicPartition).incrementAndGet() - 1,
+            timestamp,
+            TimestampType.CREATE_TIME,
+            (long) ConsumerRecord.NULL_CHECKSUM,
+            key == null ? ConsumerRecord.NULL_SIZE : key.length,
+            value == null ? ConsumerRecord.NULL_SIZE : value.length,
+            key,
+            value,
+            headers));
+        globalStateTask.flushState();
+    }
 
     private void validateSourceTopicNameRegexPattern(final String inputRecordTopic) {
         for (final String sourceTopicName : internalTopologyBuilder.sourceTopicNames()) {
             if (!sourceTopicName.equals(inputRecordTopic) && Pattern.compile(sourceTopicName).matcher(inputRecordTopic).matches()) {
                 throw new TopologyException("Topology add source of type String for topic: " + sourceTopicName +
-                        " cannot contain regex pattern for input record topic: " + inputRecordTopic +
-                        " and hence cannot process the message.");
+                                                " cannot contain regex pattern for input record topic: " + inputRecordTopic +
+                                                " and hence cannot process the message.");
             }
         }
     }
 
-    private TopicPartition getTopicPartition(final String topicName) {
-        final TopicPartition topicPartition = partitionsByTopic.get(topicName);
+    private TopicPartition getInputTopicOrPatternPartition(final String topicName) {
+        if (!internalTopologyBuilder.sourceTopicNames().isEmpty()) {
+            validateSourceTopicNameRegexPattern(topicName);
+        }
+
+        final TopicPartition topicPartition = partitionsByInputTopic.get(topicName);
         if (topicPartition == null) {
-            for (final Map.Entry<String, TopicPartition> entry : partitionsByTopic.entrySet()) {
+            for (final Map.Entry<String, TopicPartition> entry : partitionsByInputTopic.entrySet()) {
                 if (Pattern.compile(entry.getKey()).matcher(topicName).matches()) {
                     return entry.getValue();
                 }
@@ -527,7 +579,7 @@ public class TopologyTestDriver implements Closeable {
         return topicPartition;
     }
 
-    private void captureOutputRecords() {
+    private void captureOutputsAndReEnqueueInternalResults() {
         // Capture all the records sent to the producer ...
         final List<ProducerRecord<byte[], byte[]>> output = producer.history();
         producer.clear();
@@ -540,9 +592,27 @@ public class TopologyTestDriver implements Closeable {
 
             // Forward back into the topology if the produced record is to an internal or a source topic ...
             final String outputTopicName = record.topic();
-            if (internalTopics.contains(outputTopicName) || processorTopology.sourceTopics().contains(outputTopicName)
-                || globalPartitionsByTopic.containsKey(outputTopicName)) {
-                pipeRecord(record);
+
+            final TopicPartition inputTopicOrPatternPartition = getInputTopicOrPatternPartition(outputTopicName);
+            final TopicPartition globalInputTopicPartition = globalPartitionsByInputTopic.get(outputTopicName);
+
+            if (inputTopicOrPatternPartition != null) {
+                enqueueTaskRecord(
+                    outputTopicName,
+                    inputTopicOrPatternPartition,
+                    record.timestamp(),
+                    record.key(),
+                    record.value(),
+                    record.headers());
+            }
+
+            if (globalInputTopicPartition != null) {
+                processGlobalRecord(
+                    globalInputTopicPartition,
+                    record.timestamp(),
+                    record.key(),
+                    record.value(),
+                    record.headers());
             }
         }
     }
@@ -589,7 +659,7 @@ public class TopologyTestDriver implements Closeable {
             task.maybePunctuateSystemTime();
             task.commit();
         }
-        captureOutputRecords();
+        completeAllProcessableWork();
     }
 
     /**
@@ -839,23 +909,23 @@ public class TopologyTestDriver implements Closeable {
     private void throwIfBuiltInStore(final StateStore stateStore) {
         if (stateStore instanceof TimestampedKeyValueStore) {
             throw new IllegalArgumentException("Store " + stateStore.name()
-                + " is a timestamped key-value store and should be accessed via `getTimestampedKeyValueStore()`");
+                                                   + " is a timestamped key-value store and should be accessed via `getTimestampedKeyValueStore()`");
         }
         if (stateStore instanceof ReadOnlyKeyValueStore) {
             throw new IllegalArgumentException("Store " + stateStore.name()
-                + " is a key-value store and should be accessed via `getKeyValueStore()`");
+                                                   + " is a key-value store and should be accessed via `getKeyValueStore()`");
         }
         if (stateStore instanceof TimestampedWindowStore) {
             throw new IllegalArgumentException("Store " + stateStore.name()
-                + " is a timestamped window store and should be accessed via `getTimestampedWindowStore()`");
+                                                   + " is a timestamped window store and should be accessed via `getTimestampedWindowStore()`");
         }
         if (stateStore instanceof ReadOnlyWindowStore) {
             throw new IllegalArgumentException("Store " + stateStore.name()
-                + " is a window store and should be accessed via `getWindowStore()`");
+                                                   + " is a window store and should be accessed via `getWindowStore()`");
         }
         if (stateStore instanceof ReadOnlySessionStore) {
             throw new IllegalArgumentException("Store " + stateStore.name()
-                + " is a session store and should be accessed via `getSessionStore()`");
+                                                   + " is a session store and should be accessed via `getSessionStore()`");
         }
     }
 
@@ -1001,7 +1071,12 @@ public class TopologyTestDriver implements Closeable {
                 // ignore
             }
         }
-        captureOutputRecords();
+        completeAllProcessableWork();
+        if (task != null && task.hasRecordsQueued()) {
+            log.warn("Found some records that cannot be processed due to the" +
+                         " {} configuration during TopologyTestDriver#close().",
+                     StreamsConfig.MAX_TASK_IDLE_MS_CONFIG);
+        }
         if (!eosEnabled) {
             producer.close();
         }
