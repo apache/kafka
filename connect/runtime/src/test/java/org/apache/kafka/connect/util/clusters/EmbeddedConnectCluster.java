@@ -399,7 +399,7 @@ public class EmbeddedConnectCluster {
         Response response = requestPut(url, null);
         if (response.getStatus() >= Response.Status.BAD_REQUEST.getStatusCode()) {
             throw new ConnectRestException(response.getStatus(),
-                    "Resetting active topics for connector " + connectorName + "failed. "
+                    "Resetting active topics for connector " + connectorName + " failed. "
                     + "Error response: " + responseToString(response));
         }
     }
