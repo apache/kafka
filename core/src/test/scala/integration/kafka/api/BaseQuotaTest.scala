@@ -78,7 +78,7 @@ abstract class BaseQuotaTest extends IntegrationTestHarness {
 
   @Test
   def testThrottledProducerConsumer(): Unit = {
-    val numRecords = 1000
+    val numRecords = defaultProducerQuota
     val produced = quotaTestClients.produceUntilThrottled(numRecords)
     quotaTestClients.verifyProduceThrottle(expectThrottle = true)
 
