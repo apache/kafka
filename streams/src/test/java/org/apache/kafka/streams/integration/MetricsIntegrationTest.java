@@ -59,7 +59,7 @@ import java.util.stream.Collectors;
 
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.Assert.assertTrue;
+
 
 @SuppressWarnings("unchecked")
 @Category({IntegrationTest.class})
@@ -391,28 +391,6 @@ public class MetricsIntegrationTest {
         closeApplication();
 
         checkMetricsDeregistration();
-    }
-
-    @Test
-    public void shouldNotAddRocksDBMetricsIfRecordingLevelIsInfo() throws Exception {
-        builder.table(
-            STREAM_INPUT,
-            Materialized.as(Stores.persistentKeyValueStore(MY_STORE_PERSISTENT_KEY_VALUE)).withCachingEnabled()
-        ).toStream().to(STREAM_OUTPUT_1);
-        streamsConfiguration.put(StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG, Sensor.RecordingLevel.INFO.name);
-        kafkaStreams = new KafkaStreams(builder.build(), streamsConfiguration);
-        kafkaStreams.start();
-        TestUtils.waitForCondition(
-            () -> kafkaStreams.state() == State.RUNNING,
-            timeout,
-            () -> "Kafka Streams application did not reach state RUNNING in " + timeout + " ms");
-
-        final List<Metric> listMetricStore = new ArrayList<Metric>(kafkaStreams.metrics().values()).stream()
-            .filter(m -> m.metricName().group().equals("stream-state-metrics") && m.metricName().tags().containsKey("rocksdb-state-id"))
-            .collect(Collectors.toList());
-        assertTrue(listMetricStore.isEmpty());
-
-        closeApplication();
     }
 
     private void verifyStateMetric(final State state) {
