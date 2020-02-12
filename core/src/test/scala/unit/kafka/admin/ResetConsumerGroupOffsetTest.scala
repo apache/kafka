@@ -25,6 +25,8 @@ import org.apache.kafka.common.TopicPartition
 import org.junit.Assert._
 import org.junit.Test
 
+import scala.collection.Seq
+
 class TimeConversionTests {
 
   @Test
@@ -466,12 +468,22 @@ class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
     executor.shutdown()
   }
 
-  private def awaitConsumerProgress(topic: String = topic, group: String = group, count: Long): Unit = {
-    TestUtils.waitUntilTrue(() => {
-      val offsets = committedOffsets(topic = topic, group = group).values
-      count == offsets.sum
-    }, "Expected that consumer group has consumed all messages from topic/partition. " +
-      s"Expected offset: $count. Actual offset: ${committedOffsets(topic, group).values.sum}")
+  private def awaitConsumerProgress(topic: String = topic,
+                                    group: String = group,
+                                    count: Long): Unit = {
+    val consumer = createNoAutoCommitConsumer(group)
+    try {
+      TestUtils.waitUntilTrue(() => {
+        val committed = committedOffsets(topic, group)
+        val total = committed.values.sum
+        total == count
+      }, "Expected that consumer group has consumed all messages from topic/partition. " +
+        s"Expected offset: $count. Actual offset: ${committedOffsets(topic, group).values.sum}")
+
+    } finally {
+      consumer.close()
+    }
+
   }
 
   private def resetAndAssertOffsets(args: Array[String],
