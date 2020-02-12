@@ -1416,7 +1416,7 @@ public class SenderTest {
     }
 
     @Test
-    public void testBumpEpochOnUnknownProducerIdError() throws Exception {
+    public void testUnknownProducerHandlingWhenRetentionLimitReached() throws Exception {
         final long producerId = 343434L;
         TransactionManager transactionManager = createTransactionManager();
         setupWithTransactionState(transactionManager);
@@ -1452,15 +1452,13 @@ public class SenderTest {
         assertFalse(request2.isDone());
 
         sendIdempotentProducerResponse(1, tp0, Errors.UNKNOWN_PRODUCER_ID, -1L, 1010L);
-        sender.runOnce(); // receive response 0, should request epoch bump
-        sender.runOnce(); // bump epoch and resend request
+        sender.runOnce(); // receive response 0, should be retried since the logStartOffset > lastAckedOffset.
 
         // We should have reset the sequence number state of the partition because the state was lost on the broker.
         assertEquals(OptionalInt.empty(), transactionManager.lastAckedSequence(tp0));
         assertEquals(2, transactionManager.sequenceNumber(tp0).longValue());
         assertFalse(request2.isDone());
-        assertTrue(client.hasInFlightRequests());
-        assertEquals(1, transactionManager.producerIdAndEpoch().epoch);
+        assertFalse(client.hasInFlightRequests());
 
         sender.runOnce(); // should retry request 1
 
@@ -1473,6 +1471,64 @@ public class SenderTest {
         assertTrue(request2.isDone());
         assertEquals(1012L, request2.get().offset());
         assertEquals(OptionalLong.of(1012L), transactionManager.lastAckedOffset(tp0));
+    }
+
+    @Test
+    public void testUnknownProducerErrorShouldBeRetriedWhenLogStartOffsetIsUnknown() throws Exception {
+        final long producerId = 343434L;
+        TransactionManager transactionManager = createTransactionManager();
+        setupWithTransactionState(transactionManager);
+        prepareAndReceiveInitProducerId(producerId, Errors.NONE);
+        assertTrue(transactionManager.hasProducerId());
+
+        assertEquals(0, transactionManager.sequenceNumber(tp0).longValue());
+
+        // Send first ProduceRequest
+        Future<RecordMetadata> request1 = appendToAccumulator(tp0);
+        sender.runOnce();
+
+        assertEquals(1, client.inFlightRequestCount());
+        assertEquals(1, transactionManager.sequenceNumber(tp0).longValue());
+        assertEquals(OptionalInt.empty(), transactionManager.lastAckedSequence(tp0));
+
+        sendIdempotentProducerResponse(0, tp0, Errors.NONE, 1000L, 10L);
+
+        sender.runOnce();  // receive the response.
+
+        assertTrue(request1.isDone());
+        assertEquals(1000L, request1.get().offset());
+        assertEquals(OptionalInt.of(0), transactionManager.lastAckedSequence(tp0));
+        assertEquals(OptionalLong.of(1000L), transactionManager.lastAckedOffset(tp0));
+
+        // Send second ProduceRequest
+        Future<RecordMetadata> request2 = appendToAccumulator(tp0);
+        sender.runOnce();
+        assertEquals(2, transactionManager.sequenceNumber(tp0).longValue());
+        assertEquals(OptionalInt.of(0), transactionManager.lastAckedSequence(tp0));
+
+        assertFalse(request2.isDone());
+
+        sendIdempotentProducerResponse(1, tp0, Errors.UNKNOWN_PRODUCER_ID, -1L, -1L);
+        sender.runOnce(); // receive response 0, should be retried without resetting the sequence numbers since the log start offset is unknown.
+
+        // We should have reset the sequence number state of the partition because the state was lost on the broker.
+        assertEquals(OptionalInt.of(0), transactionManager.lastAckedSequence(tp0));
+        assertEquals(2, transactionManager.sequenceNumber(tp0).longValue());
+        assertFalse(request2.isDone());
+        assertFalse(client.hasInFlightRequests());
+
+        sender.runOnce(); // should retry request 1
+
+        // resend the request. Note that the expected sequence is 1, since we never got the logStartOffset in the previous
+        // response and hence we didn't reset the sequence numbers.
+        sendIdempotentProducerResponse(1, tp0, Errors.NONE, 1011L, 1010L);
+        sender.runOnce(); // receive response 1
+        assertEquals(OptionalInt.of(1), transactionManager.lastAckedSequence(tp0));
+        assertEquals(2, transactionManager.sequenceNumber(tp0).longValue());
+        assertFalse(client.hasInFlightRequests());
+        assertTrue(request2.isDone());
+        assertEquals(1011L, request2.get().offset());
+        assertEquals(OptionalLong.of(1011L), transactionManager.lastAckedOffset(tp0));
     }
 
     @Test
@@ -1520,28 +1576,29 @@ public class SenderTest {
         assertEquals(2, client.inFlightRequestCount());
 
         sendIdempotentProducerResponse(1, tp0, Errors.UNKNOWN_PRODUCER_ID, -1L, 1010L);
-        sender.runOnce(); // receive response 2 should trigger epoch bump and be retried
-        sender.runOnce(); // bump epoch
+        sender.runOnce(); // receive response 2, should reset the sequence numbers and be retried.
 
         // We should have reset the sequence number state of the partition because the state was lost on the broker.
         assertEquals(OptionalInt.empty(), transactionManager.lastAckedSequence(tp0));
         assertEquals(2, transactionManager.sequenceNumber(tp0).longValue());
         assertFalse(request2.isDone());
         assertFalse(request3.isDone());
-        assertEquals(1, transactionManager.producerIdAndEpoch().epoch);
+        assertEquals(1, client.inFlightRequestCount());
+
+        sender.runOnce(); // resend request 2.
 
         assertEquals(2, client.inFlightRequestCount());
 
         // receive the original response 3. note the expected sequence is still the originally assigned sequence.
         sendIdempotentProducerResponse(2, tp0, Errors.UNKNOWN_PRODUCER_ID, -1, 1010L);
-        sender.runOnce(); // receive response 3 and request epoch bump
+        sender.runOnce(); // receive response 3
 
         assertEquals(1, client.inFlightRequestCount());
         assertEquals(OptionalInt.empty(), transactionManager.lastAckedSequence(tp0));
         assertEquals(2, transactionManager.sequenceNumber(tp0).longValue());
 
         sendIdempotentProducerResponse(0, tp0, Errors.NONE, 1011L, 1010L);
-        sender.runOnce();  // receive response 2 and bump epoch, don't send request 3 since we can have at most 1 in flight when retrying
+        sender.runOnce();  // receive response 2, don't send request 3 since we can have at most 1 in flight when retrying
 
         assertTrue(request2.isDone());
         assertFalse(request3.isDone());
@@ -1551,7 +1608,6 @@ public class SenderTest {
         assertEquals(OptionalLong.of(1011L), transactionManager.lastAckedOffset(tp0));
 
         sender.runOnce();  // resend request 3.
-        assertEquals(2, transactionManager.producerIdAndEpoch().epoch);
         assertEquals(1, client.inFlightRequestCount());
 
         sendIdempotentProducerResponse(1, tp0, Errors.NONE, 1012L, 1010L);
@@ -1559,18 +1615,8 @@ public class SenderTest {
 
         assertFalse(client.hasInFlightRequests());
         assertTrue(request3.isDone());
-        assertEquals(OptionalInt.of(1), transactionManager.lastAckedSequence(tp0));
         assertEquals(1012L, request3.get().offset());
         assertEquals(OptionalLong.of(1012L), transactionManager.lastAckedOffset(tp0));
-
-        Future<RecordMetadata> request4 = appendToAccumulator(tp0);
-        sender.runOnce(); // Send a new request, the epoch should not change and the sequence number should increase
-        assertEquals(1, client.inFlightRequestCount());
-
-        sendIdempotentProducerResponse(2, tp0, Errors.NONE, 1012L, 1010L);
-        sender.runOnce();
-        assertEquals(2, transactionManager.producerIdAndEpoch().epoch);
-        assertEquals(OptionalInt.of(2), transactionManager.lastAckedSequence(tp0));
     }
 
     @Test

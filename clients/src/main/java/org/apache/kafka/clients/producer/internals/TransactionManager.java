@@ -99,7 +99,7 @@ public class TransactionManager {
 
         private final Map<TopicPartition, TopicPartitionEntry> topicPartitions = new HashMap<>();
 
-        public TopicPartitionEntry getPartition(TopicPartition topicPartition) {
+        private TopicPartitionEntry getPartition(TopicPartition topicPartition) {
             TopicPartitionEntry ent = topicPartitions.get(topicPartition);
             if (ent == null)
                 throw new IllegalStateException("Trying to get the sequence number for " + topicPartition +
@@ -107,19 +107,19 @@ public class TransactionManager {
             return ent;
         }
 
-        public void addPartition(TopicPartition topicPartition) {
+        private void addPartition(TopicPartition topicPartition) {
             this.topicPartitions.putIfAbsent(topicPartition, new TopicPartitionEntry());
         }
 
-        boolean contains(TopicPartition topicPartition) {
+        private boolean contains(TopicPartition topicPartition) {
             return topicPartitions.containsKey(topicPartition);
         }
 
-        public void reset() {
+        private void reset() {
             topicPartitions.clear();
         }
 
-        OptionalLong lastAckedOffset(TopicPartition topicPartition) {
+        private OptionalLong lastAckedOffset(TopicPartition topicPartition) {
             TopicPartitionEntry entry = topicPartitions.get(topicPartition);
             if (entry != null && entry.lastAckedOffset != ProduceResponse.INVALID_OFFSET)
                 return OptionalLong.of(entry.lastAckedOffset);
@@ -127,7 +127,7 @@ public class TransactionManager {
                 return OptionalLong.empty();
         }
 
-        OptionalInt lastAckedSequence(TopicPartition topicPartition) {
+        private OptionalInt lastAckedSequence(TopicPartition topicPartition) {
             TopicPartitionEntry entry = topicPartitions.get(topicPartition);
             if (entry != null && entry.lastAckedSequence != NO_LAST_ACKED_SEQUENCE_NUMBER)
                 return OptionalInt.of(entry.lastAckedSequence);
@@ -135,7 +135,7 @@ public class TransactionManager {
                 return OptionalInt.empty();
         }
 
-        void startSequencesAtBeginning(TopicPartition topicPartition, ProducerIdAndEpoch newProducerIdAndEpoch) {
+        private void startSequencesAtBeginning(TopicPartition topicPartition, ProducerIdAndEpoch newProducerIdAndEpoch) {
             final PrimitiveRef.IntRef sequence = PrimitiveRef.ofInt(0);
             TopicPartitionEntry topicPartitionEntry = getPartition(topicPartition);
             topicPartitionEntry.resetSequenceNumbers(inFlightBatch -> {
@@ -500,7 +500,7 @@ public class TransactionManager {
         return producerIdAndEpoch.producerId == producerId;
     }
 
-    boolean hasProducerIdAndEpoch(ProducerBatch batch) {
+    boolean matchesProducerIdAndEpoch(ProducerBatch batch) {
         ProducerIdAndEpoch idAndEpoch = this.producerIdAndEpoch;
         return idAndEpoch.producerId == batch.producerId() && idAndEpoch.epoch == batch.producerEpoch();
     }
@@ -633,12 +633,13 @@ public class TransactionManager {
     }
 
     private int maybeUpdateLastAckedSequence(TopicPartition topicPartition, int sequence) {
-        if (sequence > lastAckedSequence(topicPartition).orElse(NO_LAST_ACKED_SEQUENCE_NUMBER)) {
+        int lastAckedSequence = lastAckedSequence(topicPartition).orElse(NO_LAST_ACKED_SEQUENCE_NUMBER);
+        if (sequence > lastAckedSequence) {
             topicPartitionBookkeeper.getPartition(topicPartition).lastAckedSequence = sequence;
             return sequence;
         }
 
-        return lastAckedSequence(topicPartition).orElse(NO_LAST_ACKED_SEQUENCE_NUMBER);
+        return lastAckedSequence;
     }
 
     synchronized OptionalInt lastAckedSequence(TopicPartition topicPartition) {
@@ -677,7 +678,7 @@ public class TransactionManager {
         updateLastAckedOffset(response, batch);
         removeInFlightBatch(batch);
 
-        if (!hasProducerIdAndEpoch(batch) && !hasInflightBatches(batch.topicPartition)) {
+        if (!matchesProducerIdAndEpoch(batch) && !hasInflightBatches(batch.topicPartition)) {
             // If the batch was on a different ID and/or epoch (due to an epoch bump) and all its in-flight batches
             // have completed, reset the partition sequence so that the next batch (with the new epoch) starts from 0
             topicPartitionBookkeeper.startSequencesAtBeginning(batch.topicPartition, this.producerIdAndEpoch);
@@ -701,7 +702,7 @@ public class TransactionManager {
     synchronized void handleFailedBatch(ProducerBatch batch, RuntimeException exception, boolean adjustSequenceNumbers) {
         maybeTransitionToErrorState(exception);
 
-        if (!hasProducerIdAndEpoch(batch)) {
+        if (!matchesProducerIdAndEpoch(batch)) {
             log.debug("Ignoring failed batch {} with producer id {}, epoch {}, and sequence number {} " +
                             "since the producerId has been reset internally", batch, batch.producerId(),
                     batch.producerEpoch(), batch.baseSequence(), exception);
@@ -782,8 +783,8 @@ public class TransactionManager {
 
     synchronized void markSequenceUnresolved(ProducerBatch batch) {
         int nextSequence = batch.lastSequence() + 1;
-        partitionsWithUnresolvedSequences.computeIfPresent(batch.topicPartition,
-                (k, v) -> Math.max(v, nextSequence));
+        partitionsWithUnresolvedSequences.compute(batch.topicPartition,
+            (k, v) -> v == null ? nextSequence : Math.max(v, nextSequence));
         log.debug("Marking partition {} unresolved with next sequence number {}", batch.topicPartition,
                 partitionsWithUnresolvedSequences.get(batch.topicPartition));
     }
@@ -956,13 +957,44 @@ public class TransactionManager {
     synchronized boolean canRetry(ProduceResponse.PartitionResponse response, ProducerBatch batch) {
         Errors error = response.error;
 
-        // For an UNKNOWN_PRODUCER_ID, the idempotent producer will locally bump the epoch and reset the sequence
-        // numbers of in-flight batches from sequence 0, then retry the failed batch, which should now succeed.
-        // For the transactional producer, allow the batch to fail. When processing the failed batch, we will
-        // transition to an abortable error and set a flag indicating that we need to bump the epoch
-        if (error == Errors.UNKNOWN_PRODUCER_ID && !isTransactional()) {
-            requestEpochBumpForPartition(batch.topicPartition);
-            return true;
+        // An UNKNOWN_PRODUCER_ID means that we have lost the producer state on the broker. Depending on the log start
+        // offset, we may want to retry these, as described for each case below. If none of those apply, then for the
+        // idempotent producer, we will locally bump the epoch and reset the sequence numbers of in-flight batches from
+        // sequence 0, then retry the failed batch, which should now succeed. For the transactional producer, allow the
+        // batch to fail. When processing the failed batch, we will transition to an abortable error and set a flag
+        // indicating that we need to bump the epoch (if supported by the broker).
+        if (error == Errors.UNKNOWN_PRODUCER_ID) {
+            if (response.logStartOffset == -1) {
+                // We don't know the log start offset with this response. We should just retry the request until we get it.
+                // The UNKNOWN_PRODUCER_ID error code was added along with the new ProduceResponse which includes the
+                // logStartOffset. So the '-1' sentinel is not for backward compatibility. Instead, it is possible for
+                // a broker to not know the logStartOffset at when it is returning the response because the partition
+                // may have moved away from the broker from the time the error was initially raised to the time the
+                // response was being constructed. In these cases, we should just retry the request: we are guaranteed
+                // to eventually get a logStartOffset once things settle down.
+                return true;
+            }
+
+            if (batch.sequenceHasBeenReset()) {
+                // When the first inflight batch fails due to the truncation case, then the sequences of all the other
+                // in flight batches would have been restarted from the beginning. However, when those responses
+                // come back from the broker, they would also come with an UNKNOWN_PRODUCER_ID error. In this case, we should not
+                // reset the sequence numbers to the beginning.
+                return true;
+            } else if (lastAckedOffset(batch.topicPartition).orElse(NO_LAST_ACKED_SEQUENCE_NUMBER) < response.logStartOffset) {
+                // The head of the log has been removed, probably due to the retention time elapsing. In this case,
+                // we expect to lose the producer state. Reset the sequences of all inflight batches to be from the beginning
+                // and retry them.
+                topicPartitionBookkeeper.startSequencesAtBeginning(batch.topicPartition, this.producerIdAndEpoch);
+                return true;
+            }
+
+            if (!isTransactional()) {
+                // For the idempotent producer, always retry UNKNOWN_PRODUCER_ID errors. If the batch has the current
+                // producer ID and epoch, request a bump of the epoch. Otherwise just retry, as the
+                requestEpochBumpForPartition(batch.topicPartition);
+                return true;
+            }
         } else if (error == Errors.OUT_OF_ORDER_SEQUENCE_NUMBER) {
             if (!hasUnresolvedSequence(batch.topicPartition) &&
                     (batch.sequenceHasBeenReset() || !isNextSequence(batch.topicPartition, batch.baseSequence()))) {
