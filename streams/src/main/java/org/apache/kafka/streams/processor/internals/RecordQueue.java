@@ -156,6 +156,10 @@ public class RecordQueue {
         return headRecord == null ? UNKNOWN : headRecord.timestamp;
     }
 
+    public Long headRecordOffset() {
+        return headRecord == null ? null : headRecord.offset();
+    }
+
     /**
      * Clear the fifo queue of its elements
      */

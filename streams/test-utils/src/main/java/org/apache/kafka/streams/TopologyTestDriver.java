@@ -339,22 +339,28 @@ public class TopologyTestDriver implements Closeable {
             offsetsByTopicOrPatternPartition.put(tp, new AtomicLong());
         }
         consumer.assign(partitionsByInputTopic.values());
+        final Map<TopicPartition, Long> startOffsets = new HashMap<>();
+        for (final TopicPartition topicPartition : partitionsByInputTopic.values()) {
+            startOffsets.put(topicPartition, 0L);
+        }
+        consumer.updateBeginningOffsets(startOffsets);
 
         if (globalTopology != null) {
+            final MockConsumer<byte[], byte[]> globalConsumer = new MockConsumer<>(OffsetResetStrategy.NONE);
             for (final String topicName : globalTopology.sourceTopics()) {
                 final TopicPartition partition = new TopicPartition(topicName, 0);
                 globalPartitionsByInputTopic.put(topicName, partition);
                 offsetsByTopicOrPatternPartition.put(partition, new AtomicLong());
-                consumer.updatePartitions(topicName, Collections.singletonList(
+                globalConsumer.updatePartitions(topicName, Collections.singletonList(
                     new PartitionInfo(topicName, 0, null, null, null)));
-                consumer.updateBeginningOffsets(Collections.singletonMap(partition, 0L));
-                consumer.updateEndOffsets(Collections.singletonMap(partition, 0L));
+                globalConsumer.updateBeginningOffsets(Collections.singletonMap(partition, 0L));
+                globalConsumer.updateEndOffsets(Collections.singletonMap(partition, 0L));
             }
 
             globalStateManager = new GlobalStateManagerImpl(
                 new LogContext("mock "),
                 globalTopology,
-                consumer,
+                globalConsumer,
                 stateDirectory,
                 stateRestoreListener,
                 streamsConfig);
