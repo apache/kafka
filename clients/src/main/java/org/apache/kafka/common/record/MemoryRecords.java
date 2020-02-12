@@ -241,7 +241,7 @@ public class MemoryRecords extends AbstractRecords {
                                                          FilterResult filterResult,
                                                          RecordFilter filter,
                                                          byte batchMagic,
-                                                         boolean writeOriginalBatch,
+                                                         boolean recordsFiltered,
                                                          long maxOffset,
                                                          List<Record> retainedRecords) {
         boolean containsTombstonesOrMarker = false;
@@ -254,7 +254,7 @@ public class MemoryRecords extends AbstractRecords {
                     // Check for log corruption due to KAFKA-4298. If we find it, make sure that we overwrite
                     // the corrupted batch with correct data.
                     if (!record.hasMagic(batchMagic))
-                        writeOriginalBatch = false;
+                        recordsFiltered = false;
 
                     if (record.offset() > maxOffset)
                         maxOffset = record.offset();
@@ -265,10 +265,10 @@ public class MemoryRecords extends AbstractRecords {
                         containsTombstonesOrMarker = true;
                     }
                 } else {
-                    writeOriginalBatch = false;
+                    recordsFiltered = false;
                 }
             }
-            return new BatchIterationResult(writeOriginalBatch, containsTombstonesOrMarker, maxOffset);
+            return new BatchIterationResult(recordsFiltered, containsTombstonesOrMarker, maxOffset);
         }
     }
 
