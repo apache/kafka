@@ -208,9 +208,7 @@ class LogCleanerIntegrationTest extends AbstractLogCleanerIntegrationTest with K
 
     // We sleep a little bit, so that log cleaner has already gone through 
     // some iterations, ensures that delete horizons has been updated correctly
-    Thread.sleep(400L)
-    assertEquals(log.latestDeleteHorizon, T0 + tombstoneRetentionMs)
-
+    Thread.sleep(300L)
     time.sleep(tombstoneRetentionMs + 1)
 
     val latestOffset: Long = log.latestEpoch match {
@@ -231,10 +229,10 @@ class LogCleanerIntegrationTest extends AbstractLogCleanerIntegrationTest with K
     cleaner.awaitCleaned(new TopicPartition("log-partition", 0), 
                          latestOffset + 1, maxWaitMs = tombstoneRetentionMs)
 
+    assertEquals(log.latestDeleteHorizon, RecordBatch.NO_TIMESTAMP)
     for (segment <- log.logSegments; record <- segment.log.records.asScala) {
       fail ("The log should not contain record " + record + ", tombstone has expired its lifetime.")
     }
-    assertEquals(log.latestDeleteHorizon, -1L)
   }
 
   private def readFromLog(log: Log): Iterable[(Int, Int)] = {
