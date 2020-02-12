@@ -1119,9 +1119,8 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         );
 
         final StoreBuilder<TimestampedKeyValueStore<K, VR>> resultStore =
-            materializedInternal.queryableStoreName() == null
-                ? null
-                : new TimestampedKeyValueStoreMaterializer<>(materializedInternal).materialize();
+            new TimestampedKeyValueStoreMaterializer<>(materializedInternal).materialize();
+
         final TableProcessorNode<K, VR> resultNode = new TableProcessorNode<>(
             resultProcessorName,
             new ProcessorParameters<>(
