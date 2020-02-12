@@ -60,7 +60,7 @@ class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService)
     def __init__(self, context, num_nodes, kafka, topic, group_id="test-consumer-group", new_consumer=True,
                  message_validator=None, from_beginning=True, consumer_timeout_ms=None, version=DEV_BRANCH,
                  client_id="console-consumer", print_key=False, jmx_object_names=None, jmx_attributes=None,
-                 enable_systest_events=False, stop_timeout_sec=35, print_timestamp=False,
+                 enable_systest_events=False, stop_timeout_sec=35, print_timestamp=False, print_partition=False,
                  isolation_level="read_uncommitted", jaas_override_variables=None,
                  kafka_opts_override="", client_prop_file_override="", consumer_properties={}):
         """
@@ -76,12 +76,13 @@ class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService)
                                         successively consumed messages exceeds this timeout. Setting this and
                                         waiting for the consumer to stop is a pretty good way to consume all messages
                                         in a topic.
+            print_timestamp             if True, print each message's timestamp as well
             print_key                   if True, print each message's key as well
+            print_partition             if True, print each message's partition as well
             enable_systest_events       if True, console consumer will print additional lifecycle-related information
                                         only available in 0.10.0 and later.
             stop_timeout_sec            After stopping a node, wait up to stop_timeout_sec for the node to stop,
                                         and the corresponding background thread to finish successfully.
-            print_timestamp             if True, print each message's timestamp as well
             isolation_level             How to handle transactional messages.
             jaas_override_variables     A dict of variables to be used in the jaas.conf template file
             kafka_opts_override         Override parameters of the KAFKA_OPTS environment variable
@@ -108,6 +109,7 @@ class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService)
         self.clean_shutdown_nodes = set()
         self.client_id = client_id
         self.print_key = print_key
+        self.print_partition = print_partition
         self.log_level = "TRACE"
         self.stop_timeout_sec = stop_timeout_sec
 
@@ -191,11 +193,14 @@ class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService)
             if node.version > LATEST_0_8_2:
                 cmd += " --timeout-ms %s" % self.consumer_timeout_ms
 
+        if self.print_timestamp:
+            cmd += " --property print.timestamp=true"
+
         if self.print_key:
             cmd += " --property print.key=true"
 
-        if self.print_timestamp:
-            cmd += " --property print.timestamp=true"
+        if self.print_partition:
+            cmd += " --property print.partition=true"
 
         # LoggingMessageFormatter was introduced after 0.9
         if node.version > LATEST_0_9:
