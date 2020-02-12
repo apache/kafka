@@ -60,6 +60,8 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicReference;
 
+import static org.apache.kafka.connect.runtime.WorkerConfig.TOPIC_TRACKING_ENABLE_CONFIG;
+
 /**
  * WorkerTask that uses a SourceTask to ingest data into Kafka.
  */
@@ -356,7 +358,9 @@ class WorkerSourceTask extends WorkerTask {
                                             recordMetadata.topic(), recordMetadata.partition(),
                                             recordMetadata.offset());
                                     commitTaskRecord(preTransformRecord, recordMetadata);
-                                    recordActiveTopic(producerRecord.topic());
+                                    if (workerConfig.getBoolean(TOPIC_TRACKING_ENABLE_CONFIG)) {
+                                        recordActiveTopic(producerRecord.topic());
+                                    }
                                 }
                             }
                         });

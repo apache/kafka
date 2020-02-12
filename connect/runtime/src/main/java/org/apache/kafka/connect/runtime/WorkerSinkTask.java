@@ -61,6 +61,7 @@ import java.util.Map;
 import java.util.regex.Pattern;
 
 import static java.util.Collections.singleton;
+import static org.apache.kafka.connect.runtime.WorkerConfig.TOPIC_TRACKING_ENABLE_CONFIG;
 
 /**
  * WorkerTask that uses a SinkTask to export data from Kafka.
@@ -505,7 +506,9 @@ class WorkerSinkTask extends WorkerTask {
                 headers);
         log.trace("{} Applying transformations to record in topic '{}' partition {} at offset {} and timestamp {} with key {} and value {}",
                 this, msg.topic(), msg.partition(), msg.offset(), timestamp, keyAndSchema.value(), valueAndSchema.value());
-        recordActiveTopic(origRecord.topic());
+        if (workerConfig.getBoolean(TOPIC_TRACKING_ENABLE_CONFIG)) {
+            recordActiveTopic(origRecord.topic());
+        }
         return transformationChain.apply(origRecord);
     }
 

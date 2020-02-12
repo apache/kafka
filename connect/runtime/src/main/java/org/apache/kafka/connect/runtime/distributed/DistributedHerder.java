@@ -90,6 +90,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
+import static org.apache.kafka.connect.runtime.WorkerConfig.TOPIC_TRACKING_ENABLE_CONFIG;
 import static org.apache.kafka.connect.runtime.distributed.ConnectProtocol.CONNECT_PROTOCOL_V0;
 import static org.apache.kafka.connect.runtime.distributed.IncrementalCooperativeConnectProtocol.CONNECT_PROTOCOL_V2;
 
@@ -1620,9 +1621,11 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                 startAndStop(callables);
                 log.info("Finished stopping tasks in preparation for rebalance");
 
-                // Send tombstones to reset active topics for removed connectors only after
-                // connectors and tasks have been stopped, or these tombstones will be overwritten
-                resetActiveTopics(connectors, tasks);
+                if (config.getBoolean(TOPIC_TRACKING_ENABLE_CONFIG)) {
+                    // Send tombstones to reset active topics for removed connectors only after
+                    // connectors and tasks have been stopped, or these tombstones will be overwritten
+                    resetActiveTopics(connectors, tasks);
+                }
 
                 // Ensure that all status updates have been pushed to the storage system before rebalancing.
                 // Otherwise, we may inadvertently overwrite the state with a stale value after the rebalance
