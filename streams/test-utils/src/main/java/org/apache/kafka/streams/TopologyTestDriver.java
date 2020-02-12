@@ -340,7 +340,7 @@ public class TopologyTestDriver implements Closeable {
         }
         consumer.assign(partitionsByInputTopic.values());
         final Map<TopicPartition, Long> startOffsets = new HashMap<>();
-        for (final TopicPartition topicPartition : partitionsByTopic.values()) {
+        for (final TopicPartition topicPartition : partitionsByInputTopic.values()) {
             startOffsets.put(topicPartition, 0L);
         }
         consumer.updateBeginningOffsets(startOffsets);
