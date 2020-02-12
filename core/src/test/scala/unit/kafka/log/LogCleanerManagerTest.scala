@@ -428,8 +428,8 @@ class LogCleanerManagerTest extends Logging {
 
     val lastCleanOffset = Some(0L)
     val cleanableOffsets = LogCleanerManager.cleanableOffsets(log, lastCleanOffset, time.milliseconds)
-    assertEquals("The first cleanable offset starts at the beginning of the log.", 0L, cleanableOffsets._1)
-    assertEquals("The first uncleanable offset begins with the active segment.", log.activeSegment.baseOffset, cleanableOffsets._2)
+    assertEquals("The first cleanable offset starts at the beginning of the log.", 0L, cleanableOffsets.firstDirtyOffset)
+    assertEquals("The first uncleanable offset begins with the active segment.", log.activeSegment.baseOffset, cleanableOffsets.firstUncleanableDirtyOffset)
   }
 
   /**
@@ -458,8 +458,8 @@ class LogCleanerManagerTest extends Logging {
 
     val lastCleanOffset = Some(0L)
     val cleanableOffsets = LogCleanerManager.cleanableOffsets(log, lastCleanOffset, time.milliseconds)
-    assertEquals("The first cleanable offset starts at the beginning of the log.", 0L, cleanableOffsets._1)
-    assertEquals("The first uncleanable offset begins with the second block of log entries.", activeSegAtT0.baseOffset, cleanableOffsets._2)
+    assertEquals("The first cleanable offset starts at the beginning of the log.", 0L, cleanableOffsets.firstDirtyOffset)
+    assertEquals("The first uncleanable offset begins with the second block of log entries.", activeSegAtT0.baseOffset, cleanableOffsets.firstUncleanableDirtyOffset)
   }
 
   /**
@@ -483,8 +483,30 @@ class LogCleanerManagerTest extends Logging {
 
     val lastCleanOffset = Some(0L)
     val cleanableOffsets = LogCleanerManager.cleanableOffsets(log, lastCleanOffset, time.milliseconds)
-    assertEquals("The first cleanable offset starts at the beginning of the log.", 0L, cleanableOffsets._1)
-    assertEquals("The first uncleanable offset begins with active segment.", log.activeSegment.baseOffset, cleanableOffsets._2)
+    assertEquals("The first cleanable offset starts at the beginning of the log.", 0L, cleanableOffsets.firstDirtyOffset)
+    assertEquals("The first uncleanable offset begins with active segment.", log.activeSegment.baseOffset, cleanableOffsets.firstUncleanableDirtyOffset)
+  }
+
+  @Test
+  def testCleanableOffsetsNeedsCheckpointReset(): Unit = {
+    val tp = new TopicPartition("foo", 0)
+    val logs = setupIncreasinglyFilthyLogs(Seq(tp), startNumBatches = 20, batchIncrement = 5)
+    logs.get(tp).maybeIncrementLogStartOffset(10L)
+
+    var lastCleanOffset = Some(15L)
+    var cleanableOffsets = LogCleanerManager.cleanableOffsets(logs.get(tp), lastCleanOffset, time.milliseconds)
+    assertEquals(false, cleanableOffsets.needUpdateCheckpoint)
+
+    logs.get(tp).maybeIncrementLogStartOffset(20L)
+    cleanableOffsets = LogCleanerManager.cleanableOffsets(logs.get(tp), lastCleanOffset, time.milliseconds)
+    assertEquals(true, cleanableOffsets.needUpdateCheckpoint)
+
+    lastCleanOffset = Some(25L)
+    cleanableOffsets = LogCleanerManager.cleanableOffsets(logs.get(tp), lastCleanOffset, time.milliseconds)
+    assertEquals(true, cleanableOffsets.needUpdateCheckpoint)
+
+
+    cleanableOffsets = LogCleanerManager.cleanableOffsets(logs.get(tp), lastCleanOffset, time.milliseconds)
   }
 
   @Test
@@ -510,8 +532,8 @@ class LogCleanerManagerTest extends Logging {
     time.sleep(compactionLag + 1)
     // although the compaction lag has been exceeded, the undecided data should not be cleaned
     var cleanableOffsets = LogCleanerManager.cleanableOffsets(log, Some(0L), time.milliseconds())
-    assertEquals(0L, cleanableOffsets._1)
-    assertEquals(0L, cleanableOffsets._2)
+    assertEquals(0L, cleanableOffsets.firstDirtyOffset)
+    assertEquals(0L, cleanableOffsets.firstUncleanableDirtyOffset)
 
     log.appendAsLeader(MemoryRecords.withEndTransactionMarker(time.milliseconds(), producerId, producerEpoch,
       new EndTransactionMarker(ControlRecordType.ABORT, 15)), leaderEpoch = 0,
@@ -521,15 +543,15 @@ class LogCleanerManagerTest extends Logging {
 
     // the first segment should now become cleanable immediately
     cleanableOffsets = LogCleanerManager.cleanableOffsets(log, Some(0L), time.milliseconds())
-    assertEquals(0L, cleanableOffsets._1)
-    assertEquals(3L, cleanableOffsets._2)
+    assertEquals(0L, cleanableOffsets.firstDirtyOffset)
+    assertEquals(3L, cleanableOffsets.firstUncleanableDirtyOffset)
 
     time.sleep(compactionLag + 1)
 
     // the second segment becomes cleanable after the compaction lag
     cleanableOffsets = LogCleanerManager.cleanableOffsets(log, Some(0L), time.milliseconds())
-    assertEquals(0L, cleanableOffsets._1)
-    assertEquals(4L, cleanableOffsets._2)
+    assertEquals(0L, cleanableOffsets.firstDirtyOffset)
+    assertEquals(4L, cleanableOffsets.firstUncleanableDirtyOffset)
   }
 
   @Test

@@ -105,8 +105,8 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
             partitions.iterator.map { tp =>
               val log = logs.get(tp)
               val lastCleanOffset = lastClean.get(tp)
-              val (firstDirtyOffset, firstUncleanableDirtyOffset) = cleanableOffsets(log, lastCleanOffset, now)
-              val (_, uncleanableBytes) = calculateCleanableBytes(log, firstDirtyOffset, firstUncleanableDirtyOffset)
+              val offsetsToClean = cleanableOffsets(log, lastCleanOffset, now)
+              val (_, uncleanableBytes) = calculateCleanableBytes(log, offsetsToClean.firstDirtyOffset, offsetsToClean.firstUncleanableDirtyOffset)
               uncleanableBytes
             }.sum
           case None => 0
@@ -180,14 +180,14 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
           try {
             val lastCleanOffset = lastClean.get(topicPartition)
             val logStartOffset = log.logStartOffset
-            val (firstDirtyOffset, firstUncleanableDirtyOffset) = cleanableOffsets(log, lastCleanOffset, now)
+            val offsetsToClean = cleanableOffsets(log, lastCleanOffset, now)
             // update checkpoint for logs with invalid checkpointed offsets
-            if (lastCleanOffset.getOrElse(logStartOffset) < logStartOffset && !isCompactAndDelete(log))
-              updateCheckpoints(log.dir.getParentFile(), Option(topicPartition, log.logStartOffset))
-            val compactionDelayMs = maxCompactionDelay(log, firstDirtyOffset, now)
+            if (offsetsToClean.needUpdateCheckpoint)
+              updateCheckpoints(log.dir.getParentFile(), Option(topicPartition, logStartOffset))
+            val compactionDelayMs = maxCompactionDelay(log, offsetsToClean.firstDirtyOffset, now)
             preCleanStats.updateMaxCompactionDelay(compactionDelayMs)
 
-            LogToClean(topicPartition, log, firstDirtyOffset, firstUncleanableDirtyOffset, compactionDelayMs > 0)
+            LogToClean(topicPartition, log, offsetsToClean.firstDirtyOffset, offsetsToClean.firstUncleanableDirtyOffset, compactionDelayMs > 0)
           } catch {
             case e: Throwable => throw new LogCleaningException(log,
               s"Failed to calculate log cleaning stats for partition $topicPartition", e)
@@ -484,6 +484,14 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
   }
 }
 
+/**
+ * Helper class for the cleanable segment of a log and whether to update the checkpoint associated with the log
+ */
+private case class OffsetsToClean(firstDirtyOffset: Long,
+                                  firstUncleanableDirtyOffset: Long,
+                                  needUpdateCheckpoint: Boolean = false) {
+}
+
 private[log] object LogCleanerManager extends Logging {
 
   def isCompactAndDelete(log: Log): Boolean = {
@@ -519,29 +527,32 @@ private[log] object LogCleanerManager extends Logging {
     * @param log the log
     * @param lastCleanOffset the last checkpointed offset
     * @param now the current time in milliseconds of the cleaning operation
-    * @return the lower (inclusive) and upper (exclusive) offsets
+    * @return OffsetsToClean containing offsets for cleanable portion of log and whether the log checkpoint needs updating
     */
-  def cleanableOffsets(log: Log, lastCleanOffset: Option[Long], now: Long): (Long, Long) = {
+  def cleanableOffsets(log: Log, lastCleanOffset: Option[Long], now: Long): OffsetsToClean = {
     // If the log segments are abnormally truncated and hence the checkpointed offset is no longer valid;
     // reset to the log starting offset and log the error
-    val firstDirtyOffset = {
+    val (firstDirtyOffset, needsUpdateCheckpoint) = {
       val logStartOffset = log.logStartOffset
       val checkpointDirtyOffset = lastCleanOffset.getOrElse(logStartOffset)
 
       if (checkpointDirtyOffset < logStartOffset) {
         // Don't bother with the warning if compact and delete are enabled.
-        if (!isCompactAndDelete(log))
+        if (!isCompactAndDelete(log)) {
           warn(s"Resetting first dirty offset of ${log.name} to log start offset $logStartOffset " +
             s"since the checkpointed offset $checkpointDirtyOffset is invalid.")
-        logStartOffset
+          (logStartOffset, true)
+        } else {
+          (logStartOffset, false)
+        }
       } else if (checkpointDirtyOffset > log.logEndOffset) {
         // The dirty offset has gotten ahead of the log end offset. This could happen if there was data
         // corruption at the end of the log. We conservatively assume that the full log needs cleaning.
         warn(s"The last checkpoint dirty offset for partition ${log.name} is $checkpointDirtyOffset, " +
           s"which is larger than the log end offset ${log.logEndOffset}. Resetting to the log start offset $logStartOffset.")
-        logStartOffset
+        (logStartOffset, true)
       } else {
-        checkpointDirtyOffset
+        (checkpointDirtyOffset, false)
       }
     }
 
@@ -576,7 +587,7 @@ private[log] object LogCleanerManager extends Logging {
       s"now=$now => firstDirtyOffset=$firstDirtyOffset firstUncleanableOffset=$firstUncleanableDirtyOffset " +
       s"activeSegment.baseOffset=${log.activeSegment.baseOffset}")
 
-    (firstDirtyOffset, math.max(firstDirtyOffset, firstUncleanableDirtyOffset))
+    OffsetsToClean(firstDirtyOffset, firstUncleanableDirtyOffset, needsUpdateCheckpoint)
   }
 
   /**
