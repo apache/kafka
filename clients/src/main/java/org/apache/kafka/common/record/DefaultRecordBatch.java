@@ -464,46 +464,6 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
                     producerEpoch, baseSequence, isTransactional, isControlRecord, false, partitionLeaderEpoch, 0);
     }
 
-    public static void writeEmptyHeader(ByteBuffer buffer,
-                                        byte magic,
-                                        long producerId,
-                                        short producerEpoch,
-                                        int baseSequence,
-                                        long baseOffset,
-                                        long lastOffset,
-                                        int partitionLeaderEpoch,
-                                        TimestampType timestampType,
-                                        long timestamp,
-                                        boolean isTransactional,
-                                        boolean isControlRecord,
-                                        boolean isDeleteHorizonSet) {
-        int offsetDelta = (int) (lastOffset - baseOffset);
-        writeHeader(buffer, baseOffset, offsetDelta, DefaultRecordBatch.RECORD_BATCH_OVERHEAD, magic,
-                CompressionType.NONE, timestampType, RecordBatch.NO_TIMESTAMP, timestamp, producerId,
-                producerEpoch, baseSequence, isTransactional, isControlRecord, isDeleteHorizonSet, partitionLeaderEpoch, 0);
-    }
-
-    static void writeHeader(ByteBuffer buffer,
-                            long baseOffset,
-                            int lastOffsetDelta,
-                            int sizeInBytes,
-                            byte magic,
-                            CompressionType compressionType,
-                            TimestampType timestampType,
-                            long firstTimestamp,
-                            long maxTimestamp,
-                            long producerId,
-                            short epoch,
-                            int sequence,
-                            boolean isTransactional,
-                            boolean isControlBatch,
-                            int partitionLeaderEpoch,
-                            int numRecords) {
-        writeHeader(buffer, baseOffset, lastOffsetDelta, sizeInBytes, magic, compressionType,
-                    timestampType, firstTimestamp, maxTimestamp, producerId, epoch, sequence,
-                    isTransactional, isControlBatch, false, partitionLeaderEpoch, numRecords);
-    }
-
     static void writeHeader(ByteBuffer buffer,
                             long baseOffset,
                             int lastOffsetDelta,

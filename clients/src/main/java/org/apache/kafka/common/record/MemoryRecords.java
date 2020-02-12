@@ -195,12 +195,11 @@ public class MemoryRecords extends AbstractRecords {
                 // in which case, we need to reset the base timestamp and overwrite the timestamp deltas
                 // if the batch does not contain tombstones, then we don't need to overwrite batch
                 boolean canControlBatchBeRemoved = batch.isControlBatch() && deleteHorizonMs > RecordBatch.NO_TIMESTAMP;
-                if (writeOriginalBatch && (deleteHorizonMs == RecordBatch.NO_TIMESTAMP || deleteHorizonMs == batch.deleteHorizonMs()
-                     || (!containsTombstonesOrMarker && !canControlBatchBeRemoved))) {
+                if (writeOriginalBatch && (batch.deleteHorizonSet() || (!containsTombstonesOrMarker && !canControlBatchBeRemoved))) {
                     batch.writeTo(bufferOutputStream);
                     filterResult.updateRetainedBatchMetadata(batch, retainedRecords.size(), false);
                 } else {
-                    MemoryRecordsBuilder builder = buildRetainedRecordsInto(batch, retainedRecords, bufferOutputStream, deleteHorizonMs);
+                    final MemoryRecordsBuilder builder = buildRetainedRecordsInto(batch, retainedRecords, bufferOutputStream, deleteHorizonMs);
                     MemoryRecords records = builder.build();
                     int filteredBatchSize = records.sizeInBytes();
                     if (filteredBatchSize > batch.sizeInBytes() && filteredBatchSize > maxRecordBatchSize)
@@ -242,7 +241,7 @@ public class MemoryRecords extends AbstractRecords {
                                                          FilterResult filterResult,
                                                          RecordFilter filter,
                                                          byte batchMagic,
-                                                         boolean writeOriginalBatch,
+                                                         boolean recordsFiltered,
                                                          long maxOffset,
                                                          List<Record> retainedRecords) {
         boolean containsTombstonesOrMarker = false;
@@ -255,7 +254,7 @@ public class MemoryRecords extends AbstractRecords {
                     // Check for log corruption due to KAFKA-4298. If we find it, make sure that we overwrite
                     // the corrupted batch with correct data.
                     if (!record.hasMagic(batchMagic))
-                        writeOriginalBatch = false;
+                        recordsFiltered = false;
 
                     if (record.offset() > maxOffset)
                         maxOffset = record.offset();
@@ -266,10 +265,10 @@ public class MemoryRecords extends AbstractRecords {
                         containsTombstonesOrMarker = true;
                     }
                 } else {
-                    writeOriginalBatch = false;
+                    recordsFiltered = false;
                 }
             }
-            return new BatchIterationResult(writeOriginalBatch, containsTombstonesOrMarker, maxOffset);
+            return new BatchIterationResult(recordsFiltered, containsTombstonesOrMarker, maxOffset);
         }
     }
 
