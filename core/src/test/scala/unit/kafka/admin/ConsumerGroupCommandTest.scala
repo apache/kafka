@@ -65,18 +65,22 @@ class ConsumerGroupCommandTest extends KafkaServerTestHarness {
   }
 
   def committedOffsets(topic: String = topic, group: String = group): Map[TopicPartition, Long] = {
-    val props = new Properties
-    props.put("bootstrap.servers", brokerList)
-    props.put("group.id", group)
-    val consumer = new KafkaConsumer(props, new StringDeserializer, new StringDeserializer)
+    val consumer = createNoAutoCommitConsumer(group)
     try {
       val partitions: Set[TopicPartition] = consumer.partitionsFor(topic)
         .asScala.toSet.map {partitionInfo : PartitionInfo => new TopicPartition(partitionInfo.topic, partitionInfo.partition)}
-
       consumer.committed(partitions.asJava).asScala.filter(_._2 != null).mapValues(_.offset()).toMap
     } finally {
       consumer.close()
     }
+  }
+
+  def createNoAutoCommitConsumer(group: String): KafkaConsumer[String, String] = {
+    val props = new Properties
+    props.put("bootstrap.servers", brokerList)
+    props.put("group.id", group)
+    props.put("enable.auto.commit", "false")
+    new KafkaConsumer(props, new StringDeserializer, new StringDeserializer)
   }
 
   def getConsumerGroupService(args: Array[String]): ConsumerGroupService = {
