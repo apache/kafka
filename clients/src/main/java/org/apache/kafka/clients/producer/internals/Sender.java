@@ -452,7 +452,7 @@ public class Sender implements Runnable {
             long currentTimeMs = time.milliseconds();
             ClientRequest clientRequest = client.newClientRequest(
                 targetNode.idString(), requestBuilder, currentTimeMs, true, requestTimeoutMs, nextRequestHandler);
-            log.debug("Sending transactional request {} to node {}", requestBuilder, targetNode);
+            log.debug("Sending transactional request {} to node {} with correlation ID {}", requestBuilder, targetNode, clientRequest.correlationId());
             client.send(clientRequest, currentTimeMs);
             transactionManager.setInFlightCorrelationId(clientRequest.correlationId());
             client.poll(retryBackoffMs, time.milliseconds());
@@ -625,8 +625,8 @@ public class Sender implements Runnable {
                             "topic-partition may not exist or the user may not have Describe access to it",
                         batch.topicPartition);
                 } else {
-                    log.warn("Received invalid metadata error in produce request on partition {} due to {}. Going " +
-                            "to request metadata update now", batch.topicPartition, error.exception().toString());
+                    // log.warn("Received invalid metadata error in produce request on partition {} due to {}. Going " +
+                    //         "to request metadata update now", batch.topicPartition, error.exception().toString());
                 }
                 metadata.requestUpdate();
             }

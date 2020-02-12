@@ -3103,6 +3103,101 @@ public class TransactionManagerTest {
         assertTrue(transactionManager.canBumpEpoch());
     }
 
+    @Test
+    public void testFailedInflightBatchAfterEpochBump() throws InterruptedException {
+        final long producerId = 13131L;
+        final short epoch = 1;
+
+        // Use a custom Sender to allow multiple inflight requests
+        initializeTransactionManager(Optional.empty());
+        Sender sender = new Sender(logContext, this.client, this.metadata, this.accumulator, false,
+                MAX_REQUEST_SIZE, ACKS_ALL, MAX_RETRIES, new SenderMetricsRegistry(new Metrics(time)), this.time,
+                REQUEST_TIMEOUT, 50, transactionManager, apiVersions);
+        initializeIdempotentProducerId(producerId, epoch);
+
+        ProducerBatch tp0b1 = writeIdempotentBatchWithValue(transactionManager, tp0, "1");
+        ProducerBatch tp0b2 = writeIdempotentBatchWithValue(transactionManager, tp0, "2");
+        writeIdempotentBatchWithValue(transactionManager, tp0, "3");
+        ProducerBatch tp1b1 = writeIdempotentBatchWithValue(transactionManager, tp1, "4");
+        ProducerBatch tp1b2 = writeIdempotentBatchWithValue(transactionManager, tp1, "5");
+        assertEquals(3, transactionManager.sequenceNumber(tp0).intValue());
+        assertEquals(2, transactionManager.sequenceNumber(tp1).intValue());
+
+        // First batch of each partition succeeds
+        long b1AppendTime = time.milliseconds();
+        ProduceResponse.PartitionResponse t0b1Response = new ProduceResponse.PartitionResponse(
+                Errors.NONE, 500L, b1AppendTime, 0L);
+        tp0b1.done(500L, b1AppendTime, null);
+        transactionManager.handleCompletedBatch(tp0b1, t0b1Response);
+
+        ProduceResponse.PartitionResponse t1b1Response = new ProduceResponse.PartitionResponse(
+                Errors.NONE, 500L, b1AppendTime, 0L);
+        tp1b1.done(500L, b1AppendTime, null);
+        transactionManager.handleCompletedBatch(tp1b1, t1b1Response);
+
+        // We bump the epoch and set sequence numbers back to 0
+        ProduceResponse.PartitionResponse t0b2Response = new ProduceResponse.PartitionResponse(
+                Errors.UNKNOWN_PRODUCER_ID, -1, -1, 500L);
+        assertTrue(transactionManager.canRetry(t0b2Response, tp0b2));
+
+        // Run sender loop to trigger epoch bump
+        runUntil(() -> transactionManager.producerIdAndEpoch().epoch == 2);
+
+        // tp0 batches should have had sequence and epoch rewritten, but tp1 batches should not
+        assertEquals(tp0b2, transactionManager.nextBatchBySequence(tp0));
+        assertEquals(0, transactionManager.firstInFlightSequence(tp0));
+        assertEquals(0, tp0b2.baseSequence());
+        assertTrue(tp0b2.sequenceHasBeenReset());
+        assertEquals(2, tp0b2.producerEpoch());
+
+        assertEquals(tp1b2, transactionManager.nextBatchBySequence(tp1));
+        assertEquals(1, transactionManager.firstInFlightSequence(tp1));
+        assertEquals(1, tp1b2.baseSequence());
+        assertFalse(tp1b2.sequenceHasBeenReset());
+        assertEquals(1, tp1b2.producerEpoch());
+
+        // New tp1 batches should not be drained from the accumulator while tp1 has in-flight requests using the old epoch
+        appendToAccumulator(tp1);
+        sender.runOnce();
+        assertEquals(1, accumulator.batches().get(tp1).size());
+
+        // Partition failover occurs and tp1 returns a NOT_LEADER_FOR_PARTITION error
+        // Despite having the old epoch, the batch should retry
+        ProduceResponse.PartitionResponse t1b2Response = new ProduceResponse.PartitionResponse(
+                Errors.NOT_LEADER_FOR_PARTITION, -1, -1, 600L);
+        assertTrue(transactionManager.canRetry(t1b2Response, tp1b2));
+        accumulator.reenqueue(tp1b2, time.milliseconds());
+
+        // The batch with the old epoch should be successfully drained, leaving the new one in the queue
+        sender.runOnce();
+        assertEquals(1, accumulator.batches().get(tp1).size());
+        assertNotEquals(tp1b2, accumulator.batches().get(tp1).peek());
+        assertEquals(epoch, tp1b2.producerEpoch());
+
+        // After successfully retrying, there should be no in-flight batches for tp1 and the sequence should be 0
+        t1b2Response = new ProduceResponse.PartitionResponse(
+                Errors.NONE, 500L, b1AppendTime, 0L);
+        tp1b2.done(500L, b1AppendTime, null);
+        transactionManager.handleCompletedBatch(tp1b2, t1b2Response);
+
+        assertFalse(transactionManager.hasInflightBatches(tp1));
+        assertEquals(0, transactionManager.sequenceNumber(tp1).intValue());
+
+        // The last batch should now be drained and sent
+        runUntil(() -> transactionManager.hasInflightBatches(tp1));
+        assertTrue(accumulator.batches().get(tp1).isEmpty());
+        ProducerBatch tp1b3 = transactionManager.nextBatchBySequence(tp1);
+        assertEquals(epoch + 1, tp1b3.producerEpoch());
+
+        ProduceResponse.PartitionResponse t1b3Response = new ProduceResponse.PartitionResponse(
+                Errors.NONE, 500L, b1AppendTime, 0L);
+        tp1b3.done(500L, b1AppendTime, null);
+        transactionManager.handleCompletedBatch(tp1b3, t1b3Response);
+
+        assertFalse(transactionManager.hasInflightBatches(tp1));
+        assertEquals(1, transactionManager.sequenceNumber(tp1).intValue());
+    }
+
     private FutureRecordMetadata appendToAccumulator(TopicPartition tp) throws InterruptedException {
         final long nowMs = time.milliseconds();
         return accumulator.append(tp, nowMs, "key".getBytes(), "value".getBytes(), Record.EMPTY_HEADERS,

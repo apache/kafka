@@ -315,6 +315,8 @@ public class TransactionManager {
             // If this is an epoch bump, we will transition the state as part of handling the EndTxnRequest
             if (!isEpochBump) {
                 transitionTo(State.INITIALIZING);
+                log.info("Invoking InitProducerId for the first time in order to acquire a producer ID");
+            } else {
                 log.info("Invoking InitProducerId with current producer ID and epoch {} in order to bump the epoch", producerIdAndEpoch);
             }
             InitProducerIdRequestData requestData = new InitProducerIdRequestData()
@@ -701,6 +703,7 @@ public class TransactionManager {
 
     synchronized void handleFailedBatch(ProducerBatch batch, RuntimeException exception, boolean adjustSequenceNumbers) {
         maybeTransitionToErrorState(exception);
+        removeInFlightBatch(batch);
 
         if (!matchesProducerIdAndEpoch(batch)) {
             log.debug("Ignoring failed batch {} with producer id {}, epoch {}, and sequence number {} " +
@@ -724,7 +727,6 @@ public class TransactionManager {
             // broker supports bumping the epoch, we will later reset all sequence numbers after calling InitProducerId
             resetSequenceForPartition(batch.topicPartition);
         } else {
-            removeInFlightBatch(batch);
             if (adjustSequenceNumbers) {
                 if (!isTransactional()) {
                     requestEpochBumpForPartition(batch.topicPartition);
@@ -824,7 +826,7 @@ public class TransactionManager {
                         requestEpochBumpForPartition(topicPartition);
                     }
 
-                    this.partitionsWithUnresolvedSequences.remove(topicPartition);
+                    iter.remove();
                 }
             }
         }
