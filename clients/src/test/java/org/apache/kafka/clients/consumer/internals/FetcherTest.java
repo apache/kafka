@@ -2421,22 +2421,26 @@ public class FetcherTest {
             Errors.LEADER_NOT_AVAILABLE, Errors.FENCED_LEADER_EPOCH, Errors.UNKNOWN_LEADER_EPOCH);
 
         for (Errors retriableError : retriableErrors) {
-            subscriptions.assignFromUser(singleton(tp0));
+            subscriptions.assignFromUser(singleton(tp1));
             client.updateMetadata(initialUpdateResponse);
-            assertEquals(1, metadata.fetch().nodes().size());
 
-            Map<String, Integer> partitionNumByTopic = new HashMap<>();
-            partitionNumByTopic.put(topicName, 1);
+            Node originalLeader = metadata.fetch().leaderFor(tp1);
+
             final int updatedNodeSize = 3;
-            MetadataResponse updatedMetadata = TestUtils.metadataUpdateWith(updatedNodeSize, partitionNumByTopic);
-            client.prepareMetadataUpdate(updatedMetadata);
-            client.prepareResponse(listOffsetResponse(retriableError, ListOffsetRequest.LATEST_TIMESTAMP, -1L));
-            final long timestamp = 1L;
-            client.prepareResponse(listOffsetResponse(Errors.NONE, timestamp, 5L));
-            Map<TopicPartition, OffsetAndTimestamp> offsetAndTimestampMap =
-                fetcher.offsetsForTimes(Collections.singletonMap(tp0, timestamp), time.timer(Integer.MAX_VALUE));
+            MetadataResponse updatedMetadata = TestUtils.metadataUpdateWith("dummy", 3, Collections.emptyMap(), singletonMap(topicName, 4), tp -> 3);
 
-            assertEquals(Collections.singletonMap(tp0, new OffsetAndTimestamp(5L, timestamp)), offsetAndTimestampMap);
+            client.prepareMetadataUpdate(updatedMetadata);
+            client.prepareResponseFrom(listOffsetResponse(tp1, retriableError, ListOffsetRequest.LATEST_TIMESTAMP, -1L), originalLeader);
+
+            final long timestamp = 1L;
+            Node newLeader = new Node(1, "localhost", 1970);
+            assertNotEquals(originalLeader, newLeader);
+
+            client.prepareResponseFrom(listOffsetResponse(tp1, Errors.NONE, timestamp, 5L), newLeader);
+            Map<TopicPartition, OffsetAndTimestamp> offsetAndTimestampMap =
+                fetcher.offsetsForTimes(Collections.singletonMap(tp1, timestamp), time.timer(Integer.MAX_VALUE));
+
+            assertEquals(Collections.singletonMap(tp1, new OffsetAndTimestamp(5L, timestamp)), offsetAndTimestampMap);
             assertEquals(updatedNodeSize, metadata.fetch().nodes().size());
         }
     }
