@@ -1887,14 +1887,12 @@ public class InternalTopologyBuilder {
     private void updateSubscribedTopics(final Set<String> topics, final String logPrefix) {
         final Collection<String> existingTopics = subscriptionUpdates();
 
-        // This is wrong
         if  (!existingTopics.equals(topics)) {
-            topics.addAll(existingTopics);
 
             subscriptionUpdates.clear();
             subscriptionUpdates.addAll(topics);
 
-            log.info("{}found {} topics possibly matching subscription", logPrefix, topics.size());
+            log.debug("{}found {} topics possibly matching subscription", logPrefix, topics.size());
 
             setRegexMatchedTopicsToSourceNodes();
             setRegexMatchedTopicToStateStore();
