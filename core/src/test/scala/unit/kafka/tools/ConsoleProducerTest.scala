@@ -51,7 +51,7 @@ class ConsoleProducerTest {
     "--t", // not a valid argument
     "t3"
   )
-  val bootStrapserverOverride: Array[String] = Array(
+  val bootstrapServerOverride: Array[String] = Array(
     "--broker-list",
     "localhost:1001",
     "--bootstrap-server",
@@ -70,7 +70,7 @@ class ConsoleProducerTest {
 
   @Test
   def testValidConfigsBootstrapServer(): Unit = {
-    val config = new ConsoleProducer.ProducerConfig(brokerListValidArgs)
+    val config = new ConsoleProducer.ProducerConfig(bootstrapServerValidArgs)
     val producerConfig = new ProducerConfig(ConsoleProducer.producerProps(config))
     assertEquals(util.Arrays.asList("localhost:1003", "localhost:1004"),
       producerConfig.getList(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG))
@@ -96,8 +96,8 @@ class ConsoleProducerTest {
   }
 
   @Test
-  def TestBootStrapServerOverride(): Unit = {
-    val config = new ConsoleProducer.ProducerConfig(brokerListValidArgs)
+  def testBootstrapServerOverride(): Unit = {
+    val config = new ConsoleProducer.ProducerConfig(bootstrapServerOverride)
     val producerConfig = new ProducerConfig(ConsoleProducer.producerProps(config))
     assertEquals(util.Arrays.asList("localhost:1002"),
       producerConfig.getList(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG))
