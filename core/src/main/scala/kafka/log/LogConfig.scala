@@ -47,6 +47,9 @@ object Defaults {
   val DeleteRetentionMs = kafka.server.Defaults.LogCleanerDeleteRetentionMs
   val MinCompactionLagMs = kafka.server.Defaults.LogCleanerMinCompactionLagMs
   val MaxCompactionLagMs = kafka.server.Defaults.LogCleanerMaxCompactionLagMs
+  val CompactionStrategy = kafka.server.Defaults.LogCleanerCompactionStrategy
+  val CompactionStrategyTimestamp = kafka.server.Defaults.LogCleanerCompactionStrategyTimestamp
+  val CompactionStrategyHeader = kafka.server.Defaults.LogCleanerCompactionStrategyHeader
   val MinCleanableDirtyRatio = kafka.server.Defaults.LogCleanerMinCleanRatio
 
   @deprecated(message = "This is a misleading variable name as it actually refers to the 'delete' cleanup policy. Use " +
@@ -87,6 +90,8 @@ case class LogConfig(props: java.util.Map[_, _], overriddenConfigs: Set[String] 
   val deleteRetentionMs = getLong(LogConfig.DeleteRetentionMsProp)
   val compactionLagMs = getLong(LogConfig.MinCompactionLagMsProp)
   val maxCompactionLagMs = getLong(LogConfig.MaxCompactionLagMsProp)
+  val compactionStrategy = getString(LogConfig.CompactionStrategyProp).toLowerCase(Locale.ROOT)
+  val compactionStrategyHeaderKey = getString(LogConfig.CompactionStrategyHeaderKeyProp).toLowerCase(Locale.ROOT)
   val minCleanableRatio = getDouble(LogConfig.MinCleanableDirtyRatioProp)
   val compact = getList(LogConfig.CleanupPolicyProp).asScala.map(_.toLowerCase(Locale.ROOT)).contains(LogConfig.Compact)
   val delete = getList(LogConfig.CleanupPolicyProp).asScala.map(_.toLowerCase(Locale.ROOT)).contains(LogConfig.Delete)
@@ -129,6 +134,8 @@ object LogConfig {
   val DeleteRetentionMsProp = TopicConfig.DELETE_RETENTION_MS_CONFIG
   val MinCompactionLagMsProp = TopicConfig.MIN_COMPACTION_LAG_MS_CONFIG
   val MaxCompactionLagMsProp = TopicConfig.MAX_COMPACTION_LAG_MS_CONFIG
+  val CompactionStrategyProp = TopicConfig.COMPACTION_STRATEGY_CONFIG
+  val CompactionStrategyHeaderKeyProp = TopicConfig.COMPACTION_STRATEGY_HEADER_KEY_CONFIG
   val FileDeleteDelayMsProp = TopicConfig.FILE_DELETE_DELAY_MS_CONFIG
   val MinCleanableDirtyRatioProp = TopicConfig.MIN_CLEANABLE_DIRTY_RATIO_CONFIG
   val CleanupPolicyProp = TopicConfig.CLEANUP_POLICY_CONFIG
@@ -161,6 +168,8 @@ object LogConfig {
   val DeleteRetentionMsDoc = TopicConfig.DELETE_RETENTION_MS_DOC
   val MinCompactionLagMsDoc = TopicConfig.MIN_COMPACTION_LAG_MS_DOC
   val MaxCompactionLagMsDoc = TopicConfig.MAX_COMPACTION_LAG_MS_DOC
+  val CompactionStrategyDoc = TopicConfig.COMPACTION_STRATEGY_DOC
+  val CompactionStrategyHeaderKeyDoc = TopicConfig.COMPACTION_STRATEGY_HEADER_KEY_DOC
   val MinCleanableRatioDoc = TopicConfig.MIN_CLEANABLE_DIRTY_RATIO_DOC
   val CompactDoc = TopicConfig.CLEANUP_POLICY_DOC
   val UncleanLeaderElectionEnableDoc = TopicConfig.UNCLEAN_LEADER_ELECTION_ENABLE_DOC
@@ -265,7 +274,11 @@ object LogConfig {
         KafkaConfig.LogCleanerMinCompactionLagMsProp)
       .define(MaxCompactionLagMsProp, LONG, Defaults.MaxCompactionLagMs, atLeast(1), MEDIUM, MaxCompactionLagMsDoc,
         KafkaConfig.LogCleanerMaxCompactionLagMsProp)
-      .define(FileDeleteDelayMsProp, LONG, Defaults.FileDeleteDelayMs, atLeast(0), MEDIUM, FileDeleteDelayMsDoc,
+      .define(CompactionStrategyProp, STRING, Defaults.CompactionStrategy,
+        in(Defaults.CompactionStrategy, Defaults.CompactionStrategyTimestamp, Defaults.CompactionStrategyHeader), MEDIUM, CompactionStrategyDoc, KafkaConfig.LogCleanerCompactionStrategyProp)
+      .define(CompactionStrategyHeaderKeyProp, STRING, "", MEDIUM, CompactionStrategyHeaderKeyDoc,
+        KafkaConfig.LogCleanerCompactionStrategyHeaderKeyProp)
+     .define(FileDeleteDelayMsProp, LONG, Defaults.FileDeleteDelayMs, atLeast(0), MEDIUM, FileDeleteDelayMsDoc,
         KafkaConfig.LogDeleteDelayMsProp)
       .define(MinCleanableDirtyRatioProp, DOUBLE, Defaults.MinCleanableDirtyRatio, between(0, 1), MEDIUM,
         MinCleanableRatioDoc, KafkaConfig.LogCleanerMinCleanRatioProp)
@@ -328,6 +341,14 @@ object LogConfig {
     if (minCompactionLag > maxCompactionLag) {
       throw new InvalidConfigurationException(s"conflict topic config setting $MinCompactionLagMsProp " +
         s"($minCompactionLag) > $MaxCompactionLagMsProp ($maxCompactionLag)")
+    }
+
+    val compactStrategy =  props.get(CompactionStrategyProp).asInstanceOf[String]
+    if (Defaults.CompactionStrategyHeader.equalsIgnoreCase(compactStrategy)) {
+      val headerKey =  props.get(CompactionStrategyHeaderKeyProp).asInstanceOf[String]
+      if (headerKey.trim().isEmpty()) {
+        throw new InvalidConfigurationException(CompactionStrategyHeaderKeyProp + " must be specified.")
+      }
     }
   }
 

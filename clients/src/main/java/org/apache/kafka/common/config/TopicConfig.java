@@ -109,6 +109,15 @@ public class TopicConfig {
     public static final String MAX_COMPACTION_LAG_MS_DOC = "The maximum time a message will remain " +
         "ineligible for compaction in the log. Only applicable for logs that are being compacted.";
 
+    public static final String COMPACTION_STRATEGY_CONFIG = "compaction.strategy";
+    public static final String COMPACTION_STRATEGY_DOC = "The retention strategy to use when compacting the log. " + 
+        "Only applicable for logs that are being compacted. Setting the strategy to anything other than \"offset\" " + 
+        "will replace the offset when calculating which records to retain for the value (i.e. provided by the producer) matching " + 
+        "the given strategy name (case-insensitive). The valid strategies are \"offset\", \"timestamp\" and \"header\".";
+
+    public static final String COMPACTION_STRATEGY_HEADER_KEY_CONFIG = "compaction.strategy.header";
+    public static final String COMPACTION_STRATEGY_HEADER_KEY_DOC = "The header key for the compaction. Only applicable for compaction strategy header.";
+
     public static final String MIN_CLEANABLE_DIRTY_RATIO_CONFIG = "min.cleanable.dirty.ratio";
     public static final String MIN_CLEANABLE_DIRTY_RATIO_DOC = "This configuration controls how frequently " +
         "the log compactor will attempt to clean the log (assuming <a href=\"#compaction\">log " +
