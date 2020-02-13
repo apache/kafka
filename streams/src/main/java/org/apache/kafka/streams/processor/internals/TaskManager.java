@@ -104,7 +104,6 @@ public class TaskManager {
     }
 
     void handleRebalanceStart(final Set<String> subscribedTopics) {
-        log.info("handle rebalance start {}", subscribedTopics);
         builder.addSubscribedTopicsFromMetadata(subscribedTopics, logPrefix);
 
         rebalanceInProgress = true;
@@ -258,7 +257,7 @@ public class TaskManager {
         final Set<TopicPartition> remainingPartitions = new HashSet<>(revokedPartitions);
 
         for (final Task task : tasks.values()) {
-            for (TopicPartition topicPartition : task.inputPartitions()) {
+            for (final TopicPartition topicPartition : task.inputPartitions()) {
                 if (remainingPartitions.contains(topicPartition)) {
                     revokedTasks.add(task.id());
                     remainingPartitions.remove(topicPartition);
