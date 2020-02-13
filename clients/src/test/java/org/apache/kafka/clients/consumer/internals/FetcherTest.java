@@ -2419,30 +2419,80 @@ public class FetcherTest {
             Errors.REPLICA_NOT_AVAILABLE, Errors.KAFKA_STORAGE_ERROR, Errors.OFFSET_NOT_AVAILABLE,
             Errors.LEADER_NOT_AVAILABLE, Errors.FENCED_LEADER_EPOCH, Errors.UNKNOWN_LEADER_EPOCH);
 
+        final int newLeaderEpoch = 3;
+        MetadataResponse updatedMetadata = TestUtils.metadataUpdateWith("dummy", 3,
+            singletonMap(topicName, Errors.NONE), singletonMap(topicName, 4), tp -> newLeaderEpoch);
+        LogContext dummyContext = new LogContext();
+        ConsumerMetadata dummyMetadata = new ConsumerMetadata(0, Long.MAX_VALUE, false, false,
+            new SubscriptionState(dummyContext, OffsetResetStrategy.EARLIEST),
+            dummyContext, new ClusterResourceListeners());
+        dummyMetadata.updateWithCurrentRequestVersion(updatedMetadata, false, 0L);
+
+        Node newLeader = dummyMetadata.fetch().leaderFor(tp1);
+
         for (Errors retriableError : retriableErrors) {
             buildFetcher();
 
-            subscriptions.assignFromUser(singleton(tp1));
+            subscriptions.assignFromUser(Utils.mkSet(tp0, tp1));
             client.updateMetadata(initialUpdateResponse);
 
             Node originalLeader = metadata.fetch().leaderFor(tp1);
-
-            MetadataResponse updatedMetadata = TestUtils.metadataUpdateWith("dummy", 3, Collections.emptyMap(), singletonMap(topicName, 4), tp -> 3);
-
-            client.prepareResponseFrom(listOffsetResponse(tp1, retriableError, ListOffsetRequest.LATEST_TIMESTAMP, -1L), originalLeader);
-            client.prepareMetadataUpdate(updatedMetadata);
-            // If the metadata wasn't updated before retrying, the fetcher would consult the original leader and hit a fatal exception.
-            client.prepareResponseFrom(listOffsetResponse(tp1, Errors.TOPIC_AUTHORIZATION_FAILED, ListOffsetRequest.LATEST_TIMESTAMP, -1L), originalLeader);
-
-            final long timestamp = 1L;
-            Node newLeader = new Node(1, "localhost", 1970);
             assertNotEquals(originalLeader, newLeader);
 
-            client.prepareResponseFrom(listOffsetResponse(tp1, Errors.NONE, timestamp, 5L), newLeader);
-            Map<TopicPartition, OffsetAndTimestamp> offsetAndTimestampMap =
-                fetcher.offsetsForTimes(Collections.singletonMap(tp1, timestamp), time.timer(Integer.MAX_VALUE));
+            final long fetchTimestamp = 10L;
+            Map<TopicPartition, ListOffsetResponse.PartitionData> allPartitionData = new HashMap<>();
+            allPartitionData.put(tp0, new ListOffsetResponse.PartitionData(
+                Errors.NONE, fetchTimestamp, 4L, Optional.empty()));
+            allPartitionData.put(tp1, new ListOffsetResponse.PartitionData(
+                retriableError, ListOffsetRequest.LATEST_TIMESTAMP, -1L, Optional.empty()));
 
-            assertEquals(Collections.singletonMap(tp1, new OffsetAndTimestamp(5L, timestamp)), offsetAndTimestampMap);
+            client.prepareResponseFrom(body -> {
+                boolean isListOffsetRequest = body instanceof ListOffsetRequest;
+                if (isListOffsetRequest) {
+                    ListOffsetRequest request = (ListOffsetRequest) body;
+                    Map<TopicPartition, ListOffsetRequest.PartitionData> expectedTopicPartitions = new HashMap<>();
+                    expectedTopicPartitions.put(tp0, new ListOffsetRequest.PartitionData(
+                        fetchTimestamp, Optional.empty()));
+                    expectedTopicPartitions.put(tp1, new ListOffsetRequest.PartitionData(
+                        fetchTimestamp, Optional.empty()));
+
+                    return request.partitionTimestamps().equals(expectedTopicPartitions);
+                } else {
+                    return false;
+                }
+            }, new ListOffsetResponse(allPartitionData), originalLeader);
+
+            client.prepareMetadataUpdate(updatedMetadata);
+
+            // If the metadata wasn't updated before retrying, the fetcher would consult the original leader and hit a fatal exception.
+            Map<TopicPartition, ListOffsetResponse.PartitionData> paritionDataWithFatalError = new HashMap<>(allPartitionData);
+            paritionDataWithFatalError.put(tp1, new ListOffsetResponse.PartitionData(
+                Errors.TOPIC_AUTHORIZATION_FAILED, ListOffsetRequest.LATEST_TIMESTAMP, -1L, Optional.empty()));
+            client.prepareResponseFrom(new ListOffsetResponse(paritionDataWithFatalError), originalLeader);
+
+            // The request to new leader must only contain one partition tp1 with error.
+            client.prepareResponseFrom(body -> {
+                boolean isListOffsetRequest = body instanceof ListOffsetRequest;
+                if (isListOffsetRequest) {
+                    ListOffsetRequest request = (ListOffsetRequest) body;
+
+                    return request.partitionTimestamps().equals(
+                        Collections.singletonMap(tp1, new ListOffsetRequest.PartitionData(
+                            fetchTimestamp, Optional.of(newLeaderEpoch))));
+                } else {
+                    return false;
+                }
+            }, listOffsetResponse(tp1, Errors.NONE, fetchTimestamp, 5L), newLeader);
+
+            Map<TopicPartition, OffsetAndTimestamp> offsetAndTimestampMap =
+                fetcher.offsetsForTimes(
+                    Utils.mkMap(Utils.mkEntry(tp0, fetchTimestamp),
+                    Utils.mkEntry(tp1, fetchTimestamp)), time.timer(Integer.MAX_VALUE));
+
+            assertEquals(Utils.mkMap(
+                Utils.mkEntry(tp0, new OffsetAndTimestamp(4L, fetchTimestamp)),
+                Utils.mkEntry(tp1, new OffsetAndTimestamp(5L, fetchTimestamp))), offsetAndTimestampMap);
+
             // The fatal exception future should not be cleared.
             assertEquals(1, client.numAwaitingResponses());
 
@@ -2792,7 +2842,7 @@ public class FetcherTest {
         for (ConsumerRecord<byte[], byte[]> consumerRecord : fetchedConsumerRecords) {
             actuallyCommittedKeys.add(new String(consumerRecord.key(), StandardCharsets.UTF_8));
         }
-        assertTrue(actuallyCommittedKeys.equals(committedKeys));
+        assertEquals(actuallyCommittedKeys, committedKeys);
     }
 
     @Test
@@ -3367,12 +3417,11 @@ public class FetcherTest {
         return appendTransactionalRecords(buffer, pid, baseOffset, (int) baseOffset, records);
     }
 
-    private int commitTransaction(ByteBuffer buffer, long producerId, long baseOffset) {
+    private void commitTransaction(ByteBuffer buffer, long producerId, long baseOffset) {
         short producerEpoch = 0;
         int partitionLeaderEpoch = 0;
         MemoryRecords.writeEndTransactionalMarker(buffer, baseOffset, time.milliseconds(), partitionLeaderEpoch, producerId, producerEpoch,
                 new EndTransactionMarker(ControlRecordType.COMMIT, 0));
-        return 1;
     }
 
     private int abortTransaction(ByteBuffer buffer, long producerId, long baseOffset) {
@@ -3868,7 +3917,8 @@ public class FetcherTest {
         // matches any list offset request with the provided timestamp
         return body -> {
             ListOffsetRequest req = (ListOffsetRequest) body;
-            return timestamp == req.partitionTimestamps().get(tp0).timestamp;
+            return req.partitionTimestamps().equals(Collections.singletonMap(
+                tp0, new ListOffsetRequest.PartitionData(timestamp, Optional.empty())));
         };
     }
 
