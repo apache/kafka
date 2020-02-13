@@ -2415,22 +2415,24 @@ public class FetcherTest {
 
     @Test
     public void testGetOffsetByTimeWithPartitionsRetryCouldTriggerMetadataUpdate() {
-        buildFetcher();
         List<Errors> retriableErrors = Arrays.asList(Errors.NOT_LEADER_FOR_PARTITION,
             Errors.REPLICA_NOT_AVAILABLE, Errors.KAFKA_STORAGE_ERROR, Errors.OFFSET_NOT_AVAILABLE,
             Errors.LEADER_NOT_AVAILABLE, Errors.FENCED_LEADER_EPOCH, Errors.UNKNOWN_LEADER_EPOCH);
 
         for (Errors retriableError : retriableErrors) {
+            buildFetcher();
+
             subscriptions.assignFromUser(singleton(tp1));
             client.updateMetadata(initialUpdateResponse);
 
             Node originalLeader = metadata.fetch().leaderFor(tp1);
 
-            final int updatedNodeSize = 3;
             MetadataResponse updatedMetadata = TestUtils.metadataUpdateWith("dummy", 3, Collections.emptyMap(), singletonMap(topicName, 4), tp -> 3);
 
-            client.prepareMetadataUpdate(updatedMetadata);
             client.prepareResponseFrom(listOffsetResponse(tp1, retriableError, ListOffsetRequest.LATEST_TIMESTAMP, -1L), originalLeader);
+            client.prepareMetadataUpdate(updatedMetadata);
+            // If the metadata wasn't updated before retrying, the fetcher would consult the original leader and hit a fatal exception.
+            client.prepareResponseFrom(listOffsetResponse(tp1, Errors.TOPIC_AUTHORIZATION_FAILED, ListOffsetRequest.LATEST_TIMESTAMP, -1L), originalLeader);
 
             final long timestamp = 1L;
             Node newLeader = new Node(1, "localhost", 1970);
@@ -2441,7 +2443,10 @@ public class FetcherTest {
                 fetcher.offsetsForTimes(Collections.singletonMap(tp1, timestamp), time.timer(Integer.MAX_VALUE));
 
             assertEquals(Collections.singletonMap(tp1, new OffsetAndTimestamp(5L, timestamp)), offsetAndTimestampMap);
-            assertEquals(updatedNodeSize, metadata.fetch().nodes().size());
+            // The fatal exception future should not be cleared.
+            assertEquals(1, client.numAwaitingResponses());
+
+            fetcher.close();
         }
     }
 
