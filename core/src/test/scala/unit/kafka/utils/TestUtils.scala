@@ -58,7 +58,7 @@ import org.apache.kafka.common.record._
 import org.apache.kafka.common.resource.ResourcePattern
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.serialization.{ByteArrayDeserializer, ByteArraySerializer, Deserializer, IntegerSerializer, Serializer}
-import org.apache.kafka.common.utils.Time
+import org.apache.kafka.common.utils.{ByteUtils, Time}
 import org.apache.kafka.common.utils.Utils._
 import org.apache.kafka.common.{KafkaFuture, TopicPartition}
 import org.apache.kafka.server.authorizer.{Authorizer => JAuthorizer}
@@ -414,10 +414,11 @@ object TestUtils extends Logging {
    */
   def singletonRecords(value: Array[Byte],
                        key: Array[Byte] = null,
+                       headers: Array[Header] = Record.EMPTY_HEADERS,
                        codec: CompressionType = CompressionType.NONE,
                        timestamp: Long = RecordBatch.NO_TIMESTAMP,
                        magicValue: Byte = RecordBatch.CURRENT_MAGIC_VALUE): MemoryRecords = {
-    records(Seq(new SimpleRecord(timestamp, key, value)), magicValue = magicValue, codec = codec)
+    records(Seq(new SimpleRecord(timestamp, key, value, headers)), magicValue = magicValue, codec = codec)
   }
 
   def recordsWithValues(magicValue: Byte,
@@ -1756,4 +1757,10 @@ object TestUtils extends Logging {
       authorizer, resource)
   }
 
+  def longToByte(value: Long): Array[Byte] = {
+    val buffer = ByteBuffer.allocate(16)
+    ByteUtils.writeVarlong(value, buffer)
+    buffer.flip
+    buffer.array
+  }
 }
