@@ -153,6 +153,9 @@ public class ConnectorsResourceTest {
     public void setUp() throws NoSuchMethodException {
         PowerMock.mockStatic(RestClient.class,
                 RestClient.class.getMethod("httpRequest", String.class, String.class, HttpHeaders.class, Object.class, TypeReference.class, WorkerConfig.class));
+        EasyMock.expect(workerConfig.getBoolean(TOPIC_TRACKING_ENABLE_CONFIG)).andReturn(true);
+        EasyMock.expect(workerConfig.getBoolean(TOPIC_TRACKING_ALLOW_RESET_CONFIG)).andReturn(true);
+        PowerMock.replay(workerConfig);
         connectorsResource = new ConnectorsResource(herder, workerConfig);
         forward = EasyMock.mock(UriInfo.class);
         MultivaluedMap<String, String> queryParams = new MultivaluedHashMap<>();
@@ -819,7 +822,11 @@ public class ConnectorsResourceTest {
 
     @Test
     public void testConnectorActiveTopicsWithTopicTrackingDisabled() {
+        PowerMock.reset(workerConfig);
         EasyMock.expect(workerConfig.getBoolean(TOPIC_TRACKING_ENABLE_CONFIG)).andReturn(false);
+        EasyMock.expect(workerConfig.getBoolean(TOPIC_TRACKING_ALLOW_RESET_CONFIG)).andReturn(false);
+        PowerMock.replay(workerConfig);
+        connectorsResource = new ConnectorsResource(herder, workerConfig);
         PowerMock.replayAll();
 
         Exception e = assertThrows(ConnectRestException.class,
@@ -830,26 +837,45 @@ public class ConnectorsResourceTest {
 
     @Test
     public void testResetConnectorActiveTopicsWithTopicTrackingDisabled() {
+        PowerMock.reset(workerConfig);
         EasyMock.expect(workerConfig.getBoolean(TOPIC_TRACKING_ENABLE_CONFIG)).andReturn(false);
+        EasyMock.expect(workerConfig.getBoolean(TOPIC_TRACKING_ALLOW_RESET_CONFIG)).andReturn(true);
+        HttpHeaders headers = EasyMock.mock(HttpHeaders.class);
+        PowerMock.replay(workerConfig);
+        connectorsResource = new ConnectorsResource(herder, workerConfig);
+        PowerMock.replayAll();
+
+        Exception e = assertThrows(ConnectRestException.class,
+            () -> connectorsResource.resetConnectorActiveTopics(CONNECTOR_NAME, headers));
+        assertEquals("Topic tracking is disabled.", e.getMessage());
+        PowerMock.verifyAll();
+    }
+
+    @Test
+    public void testResetConnectorActiveTopicsWithTopicTrackingEnabled() {
+        PowerMock.reset(workerConfig);
         EasyMock.expect(workerConfig.getBoolean(TOPIC_TRACKING_ENABLE_CONFIG)).andReturn(true);
         EasyMock.expect(workerConfig.getBoolean(TOPIC_TRACKING_ALLOW_RESET_CONFIG)).andReturn(false);
         HttpHeaders headers = EasyMock.mock(HttpHeaders.class);
+        PowerMock.replay(workerConfig);
+        connectorsResource = new ConnectorsResource(herder, workerConfig);
         PowerMock.replayAll();
 
-        Exception e1 = assertThrows(ConnectRestException.class,
+        Exception e = assertThrows(ConnectRestException.class,
             () -> connectorsResource.resetConnectorActiveTopics(CONNECTOR_NAME, headers));
-        assertEquals("Topic tracking is disabled.", e1.getMessage());
-        Exception e2 = assertThrows(ConnectRestException.class,
-            () -> connectorsResource.resetConnectorActiveTopics(CONNECTOR_NAME, headers));
-        assertEquals("Topic tracking reset is disabled.", e2.getMessage());
+        assertEquals("Topic tracking reset is disabled.", e.getMessage());
         PowerMock.verifyAll();
     }
 
     @Test
     public void testConnectorActiveTopics() {
+        PowerMock.reset(workerConfig);
         EasyMock.expect(workerConfig.getBoolean(TOPIC_TRACKING_ENABLE_CONFIG)).andReturn(true);
+        EasyMock.expect(workerConfig.getBoolean(TOPIC_TRACKING_ALLOW_RESET_CONFIG)).andReturn(true);
         EasyMock.expect(herder.connectorActiveTopics(CONNECTOR_NAME))
                 .andReturn(new ActiveTopicsInfo(CONNECTOR_NAME, CONNECTOR_ACTIVE_TOPICS));
+        PowerMock.replay(workerConfig);
+        connectorsResource = new ConnectorsResource(herder, workerConfig);
         PowerMock.replayAll();
 
         Response response = connectorsResource.getConnectorActiveTopics(CONNECTOR_NAME);
@@ -863,11 +889,14 @@ public class ConnectorsResourceTest {
 
     @Test
     public void testResetConnectorActiveTopics() {
+        PowerMock.reset(workerConfig);
         EasyMock.expect(workerConfig.getBoolean(TOPIC_TRACKING_ENABLE_CONFIG)).andReturn(true);
         EasyMock.expect(workerConfig.getBoolean(TOPIC_TRACKING_ALLOW_RESET_CONFIG)).andReturn(true);
         HttpHeaders headers = EasyMock.mock(HttpHeaders.class);
         herder.resetConnectorActiveTopics(CONNECTOR_NAME);
         EasyMock.expectLastCall();
+        PowerMock.replay(workerConfig);
+        connectorsResource = new ConnectorsResource(herder, workerConfig);
         PowerMock.replayAll();
 
         Response response = connectorsResource.resetConnectorActiveTopics(CONNECTOR_NAME, headers);
