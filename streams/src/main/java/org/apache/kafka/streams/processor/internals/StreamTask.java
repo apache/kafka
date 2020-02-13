@@ -655,7 +655,11 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
             }
         } else {
             // In the case of unclean close we still need to make sure all the stores are flushed before closing any
-            super.flushState();
+            try {
+                stateMgr.flush();
+            } catch (final ProcessorStateException e) {
+                // ignore any exceptions while flushing (all stores would have had a chance to flush anyway)
+            }
 
             if (eosEnabled) {
                 maybeAbortTransactionAndCloseRecordCollector(isZombie);
