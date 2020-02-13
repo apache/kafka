@@ -76,25 +76,43 @@ class TopicDeletionManagerTest {
 
     val fooPartitions = controllerContext.partitionsForTopic("foo")
     val fooReplicas = controllerContext.replicasForPartition(fooPartitions).toSet
+    val barPartitions = controllerContext.partitionsForTopic("bar")
+    val barReplicas = controllerContext.replicasForPartition(barPartitions).toSet
+
+    // Clean up state changes before starting the deletion
+    replicaStateMachine.clear()
+    partitionStateMachine.clear()
 
     // Queue the topic for deletion
-    deletionManager.enqueueTopicsForDeletion(Set("foo"))
+    deletionManager.enqueueTopicsForDeletion(Set("foo", "bar"))
 
     assertEquals(fooPartitions, controllerContext.partitionsInState("foo", NonExistentPartition))
     assertEquals(fooReplicas, controllerContext.replicasInState("foo", ReplicaDeletionStarted))
-    verify(deletionClient).sendMetadataUpdate(fooPartitions)
-    assertEquals(Set("foo"), controllerContext.topicsToBeDeleted)
-    assertEquals(Set("foo"), controllerContext.topicsWithDeletionStarted)
+    assertEquals(barPartitions, controllerContext.partitionsInState("bar", NonExistentPartition))
+    assertEquals(barReplicas, controllerContext.replicasInState("bar", ReplicaDeletionStarted))
+    verify(deletionClient).sendMetadataUpdate(fooPartitions ++ barPartitions)
+    assertEquals(Set("foo", "bar"), controllerContext.topicsToBeDeleted)
+    assertEquals(Set("foo", "bar"), controllerContext.topicsWithDeletionStarted)
     assertEquals(Set(), controllerContext.topicsIneligibleForDeletion)
 
     // Complete the deletion
-    deletionManager.completeReplicaDeletion(fooReplicas)
+    deletionManager.completeReplicaDeletion(fooReplicas ++ barReplicas)
 
     assertEquals(Set.empty, controllerContext.partitionsForTopic("foo"))
     assertEquals(Set.empty[PartitionAndReplica], controllerContext.replicaStates.keySet.filter(_.topic == "foo"))
+    assertEquals(Set.empty, controllerContext.partitionsForTopic("bar"))
+    assertEquals(Set.empty[PartitionAndReplica], controllerContext.replicaStates.keySet.filter(_.topic == "bar"))
     assertEquals(Set(), controllerContext.topicsToBeDeleted)
     assertEquals(Set(), controllerContext.topicsWithDeletionStarted)
     assertEquals(Set(), controllerContext.topicsIneligibleForDeletion)
+
+    assertEquals(1, partitionStateMachine.stateChangesCalls(OfflinePartition))
+    assertEquals(1, partitionStateMachine.stateChangesCalls(NonExistentPartition))
+
+    assertEquals(1, replicaStateMachine.stateChangesCalls(ReplicaDeletionIneligible))
+    assertEquals(1, replicaStateMachine.stateChangesCalls(OfflineReplica))
+    assertEquals(1, replicaStateMachine.stateChangesCalls(ReplicaDeletionStarted))
+    assertEquals(1, replicaStateMachine.stateChangesCalls(ReplicaDeletionSuccessful))
   }
 
   @Test

@@ -31,9 +31,9 @@
       "about": "The error message, or null if there was no error." },
     { "name": "Resources", "type": "[]DescribeAclsResource", "versions": "0+",
       "about": "Each Resource that is referenced in an ACL.", "fields": [
-      { "name": "Type", "type": "int8", "versions": "0+",
+      { "name": "ResourceType", "type": "int8", "versions": "0+",
         "about": "The resource type." },
-      { "name": "Name", "type": "string", "versions": "0+",
+      { "name": "ResourceName", "type": "string", "versions": "0+",
         "about": "The resource name." },
       { "name": "PatternType", "type": "int8", "versions": "1+", "default": "3", "ignorable": false,
         "about": "The resource pattern type." },

@@ -43,20 +43,23 @@ public class ForeignJoinSubscriptionSendProcessorSupplier<K, KO, V> implements P
     private static final Logger LOG = LoggerFactory.getLogger(ForeignJoinSubscriptionSendProcessorSupplier.class);
 
     private final Function<V, KO> foreignKeyExtractor;
-    private final String repartitionTopicName;
-    private final Serializer<V> valueSerializer;
+    private final String foreignKeySerdeTopic;
+    private final String valueSerdeTopic;
     private final boolean leftJoin;
     private Serializer<KO> foreignKeySerializer;
+    private Serializer<V> valueSerializer;
 
     public ForeignJoinSubscriptionSendProcessorSupplier(final Function<V, KO> foreignKeyExtractor,
+                                                        final String foreignKeySerdeTopic,
+                                                        final String valueSerdeTopic,
                                                         final Serde<KO> foreignKeySerde,
-                                                        final String repartitionTopicName,
                                                         final Serializer<V> valueSerializer,
                                                         final boolean leftJoin) {
         this.foreignKeyExtractor = foreignKeyExtractor;
+        this.foreignKeySerdeTopic = foreignKeySerdeTopic;
+        this.valueSerdeTopic = valueSerdeTopic;
         this.valueSerializer = valueSerializer;
         this.leftJoin = leftJoin;
-        this.repartitionTopicName = repartitionTopicName;
         foreignKeySerializer = foreignKeySerde == null ? null : foreignKeySerde.serializer();
     }
 
@@ -77,6 +80,9 @@ public class ForeignJoinSubscriptionSendProcessorSupplier<K, KO, V> implements P
             if (foreignKeySerializer == null) {
                 foreignKeySerializer = (Serializer<KO>) context.keySerde().serializer();
             }
+            if (valueSerializer == null) {
+                valueSerializer = (Serializer<V>) context.valueSerde().serializer();
+            }
             droppedRecordsSensor = TaskMetrics.droppedRecordsSensorOrSkippedRecordsSensor(
                 Thread.currentThread().getName(),
                 context.taskId().toString(),
@@ -88,7 +94,7 @@ public class ForeignJoinSubscriptionSendProcessorSupplier<K, KO, V> implements P
         public void process(final K key, final Change<V> change) {
             final long[] currentHash = change.newValue == null ?
                 null :
-                Murmur3.hash128(valueSerializer.serialize(repartitionTopicName, change.newValue));
+                Murmur3.hash128(valueSerializer.serialize(valueSerdeTopic, change.newValue));
 
             if (change.oldValue != null) {
                 final KO oldForeignKey = foreignKeyExtractor.apply(change.oldValue);
@@ -111,8 +117,10 @@ public class ForeignJoinSubscriptionSendProcessorSupplier<K, KO, V> implements P
                         return;
                     }
 
-                    final byte[] serialOldForeignKey = foreignKeySerializer.serialize(repartitionTopicName, oldForeignKey);
-                    final byte[] serialNewForeignKey = foreignKeySerializer.serialize(repartitionTopicName, newForeignKey);
+                    final byte[] serialOldForeignKey =
+                        foreignKeySerializer.serialize(foreignKeySerdeTopic, oldForeignKey);
+                    final byte[] serialNewForeignKey =
+                        foreignKeySerializer.serialize(foreignKeySerdeTopic, newForeignKey);
                     if (!Arrays.equals(serialNewForeignKey, serialOldForeignKey)) {
                         //Different Foreign Key - delete the old key value and propagate the new one.
                         //Delete it from the oldKey's state store

@@ -62,8 +62,11 @@ import org.junit.runner.RunWith;
 import java.io.File;
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.time.Duration;
+import java.util.Arrays;
 import java.util.Base64;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -76,8 +79,10 @@ import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkProperties;
 import static org.apache.kafka.common.utils.Utils.mkSet;
+import static org.apache.kafka.streams.processor.internals.StreamTask.encodeTimestamp;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.THREAD_ID_TAG;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.THREAD_ID_TAG_0100_TO_24;
+import static org.easymock.EasyMock.verify;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -196,6 +201,7 @@ public class StreamTaskTest {
         EasyMock.expect(stateManager.taskId()).andReturn(taskId).anyTimes();
 
         consumer.assign(asList(partition1, partition2));
+        consumer.updateBeginningOffsets(mkMap(mkEntry(partition1, 0L), mkEntry(partition2, 0L)));
         stateDirectory = new StateDirectory(createConfig(false, "100"), new MockTime(), true);
     }
 
@@ -232,7 +238,7 @@ public class StreamTaskTest {
         task.initializeIfNeeded();
 
         // should fail if lock is called
-        EasyMock.verify(stateDirectory);
+        verify(stateDirectory);
     }
 
     @Test
@@ -241,7 +247,7 @@ public class StreamTaskTest {
         EasyMock.replay(stateDirectory);
 
         consumer.commitSync(partitions.stream()
-            .collect(Collectors.toMap(Function.identity(), tp -> new OffsetAndMetadata(0L, StreamTask.encodeTimestamp(10L)))));
+            .collect(Collectors.toMap(Function.identity(), tp -> new OffsetAndMetadata(0L, encodeTimestamp(10L)))));
 
         task = createStatelessTask(createConfig(false, "100"), StreamsConfig.METRICS_LATEST);
 
@@ -283,7 +289,7 @@ public class StreamTaskTest {
         assertTrue(source1.initialized);
         assertTrue(source2.initialized);
 
-        EasyMock.verify(stateDirectory);
+        verify(stateDirectory);
     }
 
     @Test
@@ -696,6 +702,51 @@ public class StreamTaskTest {
     }
 
     @Test
+    public void shouldCommitNextOffsetFromQueueIfAvailable() {
+        recordCollector.commit(EasyMock.eq(mkMap(mkEntry(partition1, new OffsetAndMetadata(5L, encodeTimestamp(5L))))));
+        EasyMock.expectLastCall();
+
+        task = createStatelessTask(createConfig(false, "0"), StreamsConfig.METRICS_LATEST);
+        task.initializeIfNeeded();
+        task.completeRestoration();
+
+        task.addRecords(partition1, Arrays.asList(getConsumerRecord(partition1, 0L), getConsumerRecord(partition1, 5L)));
+        task.process(0L);
+        task.commit();
+
+        verify(recordCollector);
+    }
+
+    @Test
+    public void shouldCommitConsumerPositionIfRecordQueueIsEmpty() {
+        recordCollector.commit(EasyMock.eq(mkMap(mkEntry(partition1, new OffsetAndMetadata(3L, encodeTimestamp(0L))))));
+        EasyMock.expectLastCall();
+
+        task = createStatelessTask(createConfig(false, "0"), StreamsConfig.METRICS_LATEST);
+        task.initializeIfNeeded();
+        task.completeRestoration();
+
+        consumer.addRecord(getConsumerRecord(partition1, 0L));
+        consumer.addRecord(getConsumerRecord(partition1, 1L));
+        consumer.addRecord(getConsumerRecord(partition1, 2L));
+        consumer.poll(Duration.ZERO);
+
+        task.addRecords(partition1, singletonList(getConsumerRecord(partition1, 0L)));
+        task.process(0L);
+        task.commit();
+
+        verify(recordCollector);
+    }
+
+    private Map<TopicPartition, Long> getCommittetOffsets(final Map<TopicPartition, OffsetAndMetadata> committedOffsetsAndMetadata) {
+        final Map<TopicPartition, Long> committedOffsets = new HashMap<>();
+        for (final Map.Entry<TopicPartition, OffsetAndMetadata> e : committedOffsetsAndMetadata.entrySet()) {
+            committedOffsets.put(e.getKey(), e.getValue().offset());
+        }
+        return committedOffsets;
+    }
+
+    @Test
     public void shouldRespectCommitRequested() {
         task = createStatelessTask(createConfig(false, "100"), StreamsConfig.METRICS_LATEST);
         task.initializeIfNeeded();
@@ -708,7 +759,7 @@ public class StreamTaskTest {
     @Test
     public void shouldEncodeAndDecodeMetadata() {
         task = createStatelessTask(createConfig(false, "100"), StreamsConfig.METRICS_LATEST);
-        assertEquals(DEFAULT_TIMESTAMP, task.decodeTimestamp(StreamTask.encodeTimestamp(DEFAULT_TIMESTAMP)));
+        assertEquals(DEFAULT_TIMESTAMP, task.decodeTimestamp(encodeTimestamp(DEFAULT_TIMESTAMP)));
     }
 
     @Test
@@ -984,7 +1035,7 @@ public class StreamTaskTest {
         assertTrue(source1.closed);
         assertTrue(source2.closed);
 
-        EasyMock.verify(stateManager);
+        verify(stateManager);
     }
 
     @Test
@@ -1038,7 +1089,7 @@ public class StreamTaskTest {
         task.completeRestoration();
         task.commit();
 
-        EasyMock.verify(recordCollector);
+        verify(recordCollector);
     }
 
     @Test
@@ -1125,7 +1176,7 @@ public class StreamTaskTest {
 
         task.closeDirty();
 
-        EasyMock.verify(stateManager);
+        verify(stateManager);
     }
 
     @Test
@@ -1138,6 +1189,7 @@ public class StreamTaskTest {
             Collections.singleton(repartition.topic())
         );
         consumer.assign(asList(partition1, repartition));
+        consumer.updateBeginningOffsets(mkMap(mkEntry(repartition, 0L)));
 
         EasyMock.expect(stateManager.changelogPartitions()).andReturn(Collections.emptySet());
         EasyMock.expect(recordCollector.offsets()).andReturn(Collections.emptyMap()).anyTimes();
@@ -1266,7 +1318,7 @@ public class StreamTaskTest {
         final double expectedCloseTaskMetric = 1.0;
         verifyCloseTaskMetric(expectedCloseTaskMetric, streamsMetrics, metricName);
 
-        EasyMock.verify(stateManager);
+        verify(stateManager);
     }
 
     @Test
@@ -1294,7 +1346,7 @@ public class StreamTaskTest {
         final double expectedCloseTaskMetric = 1.0;
         verifyCloseTaskMetric(expectedCloseTaskMetric, streamsMetrics, metricName);
 
-        EasyMock.verify(stateManager);
+        verify(stateManager);
     }
 
     @Test
@@ -1321,7 +1373,7 @@ public class StreamTaskTest {
         final double expectedCloseTaskMetric = 0.0;
         verifyCloseTaskMetric(expectedCloseTaskMetric, streamsMetrics, metricName);
 
-        EasyMock.verify(stateManager);
+        verify(stateManager);
         EasyMock.reset(stateManager);
         EasyMock.replay(stateManager);
     }
@@ -1352,7 +1404,7 @@ public class StreamTaskTest {
         final double expectedCloseTaskMetric = 0.0;
         verifyCloseTaskMetric(expectedCloseTaskMetric, streamsMetrics, metricName);
 
-        EasyMock.verify(stateManager);
+        verify(stateManager);
         EasyMock.reset(stateManager);
         EasyMock.replay(stateManager);
     }
@@ -1383,7 +1435,7 @@ public class StreamTaskTest {
         final double expectedCloseTaskMetric = 0.0;
         verifyCloseTaskMetric(expectedCloseTaskMetric, streamsMetrics, metricName);
 
-        EasyMock.verify(stateManager);
+        verify(stateManager);
         EasyMock.reset(stateManager);
         EasyMock.replay(stateManager);
     }

@@ -60,7 +60,7 @@ public class StreamToTableNode<K, V> extends StreamsGraphNode {
         final KTableSource<K, V> ktableSource = (KTableSource<K, V>) processorParameters.processorSupplier();
         topologyBuilder.addProcessor(processorName, processorParameters.processorSupplier(), parentNodeNames());
 
-        if (storeBuilder != null && ktableSource.queryableName() != null) {
+        if (storeBuilder != null && ktableSource.materialized()) {
             topologyBuilder.addStateStore(storeBuilder, processorName);
         }
     }
