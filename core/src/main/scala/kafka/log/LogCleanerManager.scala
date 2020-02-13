@@ -179,11 +179,10 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
         case (topicPartition, log) => // create a LogToClean instance for each
           try {
             val lastCleanOffset = lastClean.get(topicPartition)
-            val logStartOffset = log.logStartOffset
             val offsetsToClean = cleanableOffsets(log, lastCleanOffset, now)
             // update checkpoint for logs with invalid checkpointed offsets
             if (offsetsToClean.needUpdateCheckpoint)
-              updateCheckpoints(log.dir.getParentFile(), Option(topicPartition, logStartOffset))
+              updateCheckpoints(log.dir.getParentFile(), Option(topicPartition, offsetsToClean.firstDirtyOffset))
             val compactionDelayMs = maxCompactionDelay(log, offsetsToClean.firstDirtyOffset, now)
             preCleanStats.updateMaxCompactionDelay(compactionDelayMs)
 
@@ -485,8 +484,13 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
 }
 
 /**
- * Helper class for the cleanable segment of a log and whether to update the checkpoint associated with the log
- * firstDirtyOffset the lower (inclusive) and firstUncleanableDirtyOffset the upper(exclusive) offsets
+ * Helper class for the range of cleanable dirty offsets of a log and whether to update the checkpoint associated with
+ * the log
+ *
+ * @param firstDirtyOffset the lower (inclusive) offset to begin cleaning from
+ * @param firstUncleanableDirtyOffset the upper(exclusive) offset to clean to
+ * @param needUpdateCheckpoint whether to update the checkpoint associated with this log. if true, checkpoint should be
+ *                             reset to firstDirtyOffset
  */
 private case class OffsetsToClean(firstDirtyOffset: Long,
                                   firstUncleanableDirtyOffset: Long,
@@ -588,7 +592,7 @@ private[log] object LogCleanerManager extends Logging {
       s"now=$now => firstDirtyOffset=$firstDirtyOffset firstUncleanableOffset=$firstUncleanableDirtyOffset " +
       s"activeSegment.baseOffset=${log.activeSegment.baseOffset}")
 
-    OffsetsToClean(firstDirtyOffset, Math.max(firstDirtyOffset, firstUncleanableDirtyOffset), needsUpdateCheckpoint)
+    OffsetsToClean(firstDirtyOffset, math.max(firstDirtyOffset, firstUncleanableDirtyOffset), needsUpdateCheckpoint)
   }
 
   /**
