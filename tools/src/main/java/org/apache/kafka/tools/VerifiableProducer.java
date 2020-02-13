@@ -234,9 +234,9 @@ public class VerifiableProducer implements AutoCloseable {
 
         Properties producerProps = new Properties();
 
-        if(res.get("bootstrapServer") != null ) {
+        if (res.get("bootstrapServer") != null) {
             producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, res.getString("bootstrapServer"));
-        } else if(res.getString("brokerList") != null) {
+        } else if (res.getString("brokerList") != null) {
             producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, res.getString("brokerList"));
         } else {
             parser.printHelp();

@@ -629,9 +629,9 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
         }
 
 
-        if(res.get("bootstrapServer") != null ) {
+        if (res.get("bootstrapServer") != null) {
             brokerHostandPort = res.getString("bootstrapServer");
-        } else if(res.getString("brokerList") != null) {
+        } else if (res.getString("brokerList") != null) {
             brokerHostandPort = res.getString("brokerList");
         } else {
             parser.printHelp();

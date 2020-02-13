@@ -37,7 +37,7 @@ class ConsoleProducerTest {
     "--property",
     "key.separator=#"
   )
-  val bootStrapServerValidArgs: Array[String] = Array(
+  val bootstrapServerValidArgs: Array[String] = Array(
     "--bootstrap-server",
     "localhost:1003,localhost:1004",
     "--topic",
