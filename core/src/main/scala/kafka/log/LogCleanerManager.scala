@@ -181,7 +181,7 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
             val lastCleanOffset = lastClean.get(topicPartition)
             val offsetsToClean = cleanableOffsets(log, lastCleanOffset, now)
             // update checkpoint for logs with invalid checkpointed offsets
-            if (offsetsToClean.needUpdateCheckpoint)
+            if (offsetsToClean.forceUpdateCheckpoint)
               updateCheckpoints(log.dir.getParentFile(), Option(topicPartition, offsetsToClean.firstDirtyOffset))
             val compactionDelayMs = maxCompactionDelay(log, offsetsToClean.firstDirtyOffset, now)
             preCleanStats.updateMaxCompactionDelay(compactionDelayMs)
@@ -489,12 +489,12 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
  *
  * @param firstDirtyOffset the lower (inclusive) offset to begin cleaning from
  * @param firstUncleanableDirtyOffset the upper(exclusive) offset to clean to
- * @param needUpdateCheckpoint whether to update the checkpoint associated with this log. if true, checkpoint should be
+ * @param forceUpdateCheckpoint whether to update the checkpoint associated with this log. if true, checkpoint should be
  *                             reset to firstDirtyOffset
  */
 private case class OffsetsToClean(firstDirtyOffset: Long,
                                   firstUncleanableDirtyOffset: Long,
-                                  needUpdateCheckpoint: Boolean = false) {
+                                  forceUpdateCheckpoint: Boolean = false) {
 }
 
 private[log] object LogCleanerManager extends Logging {
@@ -543,13 +543,10 @@ private[log] object LogCleanerManager extends Logging {
 
       if (checkpointDirtyOffset < logStartOffset) {
         // Don't bother with the warning if compact and delete are enabled.
-        if (!isCompactAndDelete(log)) {
+        if (!isCompactAndDelete(log))
           warn(s"Resetting first dirty offset of ${log.name} to log start offset $logStartOffset " +
             s"since the checkpointed offset $checkpointDirtyOffset is invalid.")
-          (logStartOffset, true)
-        } else {
-          (logStartOffset, false)
-        }
+        (logStartOffset, true)
       } else if (checkpointDirtyOffset > log.logEndOffset) {
         // The dirty offset has gotten ahead of the log end offset. This could happen if there was data
         // corruption at the end of the log. We conservatively assume that the full log needs cleaning.

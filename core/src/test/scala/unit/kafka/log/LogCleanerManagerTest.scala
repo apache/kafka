@@ -495,18 +495,15 @@ class LogCleanerManagerTest extends Logging {
 
     var lastCleanOffset = Some(15L)
     var cleanableOffsets = LogCleanerManager.cleanableOffsets(logs.get(tp), lastCleanOffset, time.milliseconds)
-    assertEquals(false, cleanableOffsets.needUpdateCheckpoint)
+    assertEquals("Checkpoint offset should not be reset if valid", false, cleanableOffsets.forceUpdateCheckpoint)
 
     logs.get(tp).maybeIncrementLogStartOffset(20L)
     cleanableOffsets = LogCleanerManager.cleanableOffsets(logs.get(tp), lastCleanOffset, time.milliseconds)
-    assertEquals(true, cleanableOffsets.needUpdateCheckpoint)
+    assertEquals("Checkpoint offset needs to be reset if less than log start offset", true, cleanableOffsets.forceUpdateCheckpoint)
 
     lastCleanOffset = Some(25L)
     cleanableOffsets = LogCleanerManager.cleanableOffsets(logs.get(tp), lastCleanOffset, time.milliseconds)
-    assertEquals(true, cleanableOffsets.needUpdateCheckpoint)
-
-
-    cleanableOffsets = LogCleanerManager.cleanableOffsets(logs.get(tp), lastCleanOffset, time.milliseconds)
+    assertEquals("Checkpoint offset needs to be reset if greater than log end offset", true, cleanableOffsets.forceUpdateCheckpoint)
   }
 
   @Test
@@ -614,14 +611,14 @@ class LogCleanerManagerTest extends Logging {
     cleanerCheckpoints.put(tp, 15L)
 
     val filthiestLog = cleanerManager.grabFilthiestCompactedLog(time)
-    assertEquals(None, filthiestLog)
-    assertEquals(20L, cleanerCheckpoints.get(tp).get)
+    assertEquals("Log should not be selected for cleaning", None, filthiestLog)
+    assertEquals("Unselected log should have checkpoint offset updated", 20L, cleanerCheckpoints.get(tp).get)
   }
 
   /**
    * Logs with invalid checkpoint offsets should update their checkpoint offset even if they aren't selected
    * for immediate cleaning
-//   */
+   */
   @Test
   def testCheckpointUpdatedForInvalidOffsetNotSelected(): Unit = {
     val tp0 = new TopicPartition("foo", 0)
@@ -636,8 +633,8 @@ class LogCleanerManagerTest extends Logging {
     cleanerCheckpoints.put(tp1, 5L)
 
     val filthiestLog = cleanerManager.grabFilthiestCompactedLog(time).get
-    assertEquals(tp1, filthiestLog.topicPartition)
-    assertEquals(15L, cleanerCheckpoints.get(tp0).get)
+    assertEquals("Dirtier log should be selected", tp1, filthiestLog.topicPartition)
+    assertEquals("Unselected log should have checkpoint offset updated", 15L, cleanerCheckpoints.get(tp0).get)
   }
 
   private def createCleanerManager(log: Log): LogCleanerManager = {
