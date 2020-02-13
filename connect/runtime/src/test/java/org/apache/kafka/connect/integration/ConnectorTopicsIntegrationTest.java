@@ -16,8 +16,14 @@
  */
 package org.apache.kafka.connect.integration;
 
+import org.apache.kafka.clients.consumer.Consumer;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
 import org.apache.kafka.connect.runtime.rest.errors.ConnectRestException;
+import org.apache.kafka.connect.storage.KafkaStatusBackingStore;
 import org.apache.kafka.connect.storage.StringConverter;
 import org.apache.kafka.connect.util.clusters.EmbeddedConnectCluster;
 import org.apache.kafka.test.IntegrationTest;
@@ -26,11 +32,21 @@ import org.junit.Before;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 
+import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
 import java.util.Properties;
+import java.util.Set;
+import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
+import java.util.stream.StreamSupport;
 
 import static org.apache.kafka.connect.integration.MonitorableSourceConnector.TOPIC_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLASS_CONFIG;
@@ -39,6 +55,7 @@ import static org.apache.kafka.connect.runtime.ConnectorConfig.TASKS_MAX_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.VALUE_CONVERTER_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.WorkerConfig.CONNECTOR_CLIENT_POLICY_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.WorkerConfig.TOPIC_TRACKING_ALLOW_RESET_CONFIG;
+import static org.apache.kafka.connect.runtime.WorkerConfig.TOPIC_TRACKING_ENABLE_CONFIG;
 import static org.apache.kafka.connect.sink.SinkConnector.TOPICS_CONFIG;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
@@ -58,6 +75,7 @@ public class ConnectorTopicsIntegrationTest {
     private static final String BAR_CONNECTOR = "bar-source";
     private static final String SINK_CONNECTOR = "baz-sink";
     private static final int NUM_TOPIC_PARTITIONS = 3;
+    private static final long RECORD_TRANSFER_DURATION_MS = TimeUnit.SECONDS.toMillis(30);
 
     private EmbeddedConnectCluster.Builder connectBuilder;
     private EmbeddedConnectCluster connect;
@@ -151,7 +169,7 @@ public class ConnectorTopicsIntegrationTest {
     }
 
     @Test
-    public void testTopicResetIsDisabled() throws InterruptedException {
+    public void testTopicTrackingResetIsDisabled() throws InterruptedException {
         workerProps.put(TOPIC_TRACKING_ALLOW_RESET_CONFIG, "false");
         connect = connectBuilder.build();
         // start the clusters
@@ -204,6 +222,79 @@ public class ConnectorTopicsIntegrationTest {
 
         connect.assertions().assertConnectorActiveTopics(SINK_CONNECTOR, Collections.singletonList(FOO_TOPIC),
                 "Active topic set is not: " + Collections.singletonList(FOO_TOPIC) + " for connector: " + SINK_CONNECTOR);
+    }
+
+    @Test
+    public void testTopicTrackingIsDisabled() throws InterruptedException {
+        workerProps.put(TOPIC_TRACKING_ENABLE_CONFIG, "false");
+        connect = connectBuilder.build();
+        // start the clusters
+        connect.start();
+
+        // create test topic
+        connect.kafka().createTopic(FOO_TOPIC, NUM_TOPIC_PARTITIONS);
+        connect.kafka().createTopic(BAR_TOPIC, NUM_TOPIC_PARTITIONS);
+
+        connect.assertions().assertAtLeastNumWorkersAreUp(NUM_WORKERS, "Initial group of workers did not start in time.");
+
+        // start a source connector
+        connect.configureConnector(FOO_CONNECTOR, defaultSourceConnectorProps(FOO_TOPIC));
+        connect.assertions().assertConnectorAndAtLeastNumTasksAreRunning(FOO_CONNECTOR, NUM_TASKS,
+                "Connector tasks did not start in time.");
+
+        // resetting active topics for the sink connector won't work when the config is disabled
+        Exception e = assertThrows(ConnectRestException.class, () -> connect.resetConnectorTopics(SINK_CONNECTOR));
+        assertTrue(e.getMessage().contains("Topic tracking is disabled."));
+
+        e = assertThrows(ConnectRestException.class, () -> connect.connectorTopics(SINK_CONNECTOR));
+        assertTrue(e.getMessage().contains("Topic tracking is disabled."));
+
+        // Wait for tasks to produce a few records
+        Thread.sleep(5000);
+
+        assertNoTopicStatusInStatusTopic();
+    }
+
+    public void assertNoTopicStatusInStatusTopic() {
+        String statusTopic = workerProps.get(DistributedConfig.STATUS_STORAGE_TOPIC_CONFIG);
+        Consumer<byte[], byte[]> verifiableConsumer = connect.kafka().createConsumer(
+                Collections.singletonMap("group.id", "verifiable-consumer-group-0"));
+
+        List<TopicPartition> partitions =
+                Optional.ofNullable(verifiableConsumer.partitionsFor(statusTopic))
+                .orElseThrow(() -> new AssertionError("Unable to retrieve partitions info for status topic"))
+                .stream()
+                .map(info -> new TopicPartition(info.topic(), info.partition()))
+                .collect(Collectors.toList());
+        verifiableConsumer.assign(partitions);
+
+        // Based on the implementation of {@link org.apache.kafka.connect.util.KafkaBasedLog#readToLogEnd}
+        Set<TopicPartition> assignment = verifiableConsumer.assignment();
+        verifiableConsumer.seekToBeginning(assignment);
+        Map<TopicPartition, Long> endOffsets = verifiableConsumer.endOffsets(assignment);
+        while (!endOffsets.isEmpty()) {
+            Iterator<Map.Entry<TopicPartition, Long>> it = endOffsets.entrySet().iterator();
+            while (it.hasNext()) {
+                Map.Entry<TopicPartition, Long> entry = it.next();
+                if (verifiableConsumer.position(entry.getKey()) >= entry.getValue())
+                    it.remove();
+                else {
+                    try {
+                        StreamSupport.stream(verifiableConsumer.poll(Duration.ofMillis(Integer.MAX_VALUE)).spliterator(), false)
+                                .map(ConsumerRecord::key)
+                                .filter(Objects::nonNull)
+                                .filter(key -> new String(key, StandardCharsets.UTF_8).startsWith(KafkaStatusBackingStore.TOPIC_STATUS_PREFIX))
+                                .findFirst()
+                                .ifPresent(key -> {
+                                    throw new AssertionError("Found unexpected key: " + new String(key, StandardCharsets.UTF_8) + " in status topic");
+                                });
+                    } catch (KafkaException e) {
+                        throw new AssertionError("Error while reading to the end of status topic", e);
+                    }
+                    break;
+                }
+            }
+        }
     }
 
     private Map<String, String> defaultSourceConnectorProps(String topic) {
