@@ -39,7 +39,9 @@ public class KStreamAggregate<K, V, T> implements KStreamAggProcessorSupplier<K,
 
     private boolean sendOldValues = false;
 
-    KStreamAggregate(final String storeName, final Initializer<T> initializer, final Aggregator<? super K, ? super V, T> aggregator) {
+    KStreamAggregate(final String storeName,
+                     final Initializer<T> initializer,
+                     final Aggregator<? super K, ? super V, T> aggregator) {
         this.storeName = storeName;
         this.initializer = initializer;
         this.aggregator = aggregator;
@@ -67,7 +69,10 @@ public class KStreamAggregate<K, V, T> implements KStreamAggProcessorSupplier<K,
         public void init(final ProcessorContext context) {
             super.init(context);
             metrics = (StreamsMetricsImpl) context.metrics();
-            droppedRecordsSensor = droppedRecordsSensorOrSkippedRecordsSensor(Thread.currentThread().getName(), context.taskId().toString(), metrics);
+            droppedRecordsSensor = droppedRecordsSensorOrSkippedRecordsSensor(
+                Thread.currentThread().getName(),
+                context.taskId().toString(),
+                metrics);
             store = (TimestampedKeyValueStore<K, T>) context.getStateStore(storeName);
             tupleForwarder = new TimestampedTupleForwarder<>(
                 store,
