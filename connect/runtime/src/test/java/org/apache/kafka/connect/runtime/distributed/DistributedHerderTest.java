@@ -799,10 +799,15 @@ public class DistributedHerderTest {
 
         herder.deleteConnectorConfig(CONN1, putConnectorCallback);
         herder.tick();
+
+        time.sleep(1000L);
+        assertStatistics("leaderUrl", false, 3, 1, 100, 1000L);
+
         configUpdateListener.onConnectorConfigRemove(CONN1); // read updated config that removes the connector
         herder.configState = ClusterConfigState.EMPTY;
         herder.tick();
-        assertStatistics("leaderUrl", true, 3, 1, 100, 100L);
+        time.sleep(1000L);
+        assertStatistics("leaderUrl", true, 3, 1, 100, 2100L);
 
         PowerMock.verifyAll();
     }
