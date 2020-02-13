@@ -37,9 +37,9 @@ import kafka.security.auth.{Acl, Authorizer => LegacyAuthorizer, Resource}
 import kafka.server._
 import kafka.server.checkpoints.OffsetCheckpointFile
 import Implicits._
-import com.yammer.metrics.Metrics
 import com.yammer.metrics.core.Meter
 import kafka.controller.LeaderIsrAndControllerEpoch
+import kafka.metrics.KafkaYammerMetrics
 import kafka.zk._
 import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType
@@ -1626,7 +1626,7 @@ object TestUtils extends Logging {
   }
 
   def meterCount(metricName: String): Long = {
-    Metrics.defaultRegistry.allMetrics.asScala
+    KafkaYammerMetrics.defaultRegistry.allMetrics.asScala
       .filterKeys(_.getMBeanName.endsWith(metricName))
       .values
       .headOption
@@ -1636,8 +1636,8 @@ object TestUtils extends Logging {
   }
 
   def clearYammerMetrics(): Unit = {
-    for (metricName <- Metrics.defaultRegistry.allMetrics.keySet.asScala)
-      Metrics.defaultRegistry.removeMetric(metricName)
+    for (metricName <- KafkaYammerMetrics.defaultRegistry.allMetrics.keySet.asScala)
+      KafkaYammerMetrics.defaultRegistry.removeMetric(metricName)
   }
 
   def stringifyTopicPartitions(partitions: Set[TopicPartition]): String = {

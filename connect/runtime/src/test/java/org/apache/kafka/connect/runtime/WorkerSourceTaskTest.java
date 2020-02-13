@@ -85,8 +85,7 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 @PowerMockIgnore({"javax.management.*",
-                  "org.apache.log4j.*",
-                  "org.apache.kafka.connect.runtime.isolation.*"})
+                  "org.apache.log4j.*"})
 @RunWith(PowerMockRunner.class)
 public class WorkerSourceTaskTest extends ThreadedTest {
     private static final String TOPIC = "topic";

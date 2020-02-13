@@ -30,7 +30,7 @@ import kafka.controller.KafkaController
 import kafka.coordinator.group.GroupCoordinator
 import kafka.coordinator.transaction.TransactionCoordinator
 import kafka.log.{LogConfig, LogManager}
-import kafka.metrics.{KafkaMetricsGroup, KafkaMetricsReporter}
+import kafka.metrics.{KafkaMetricsGroup, KafkaMetricsReporter, KafkaYammerMetrics}
 import kafka.network.SocketServer
 import kafka.security.CredentialProvider
 import kafka.utils._
@@ -133,6 +133,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
 
   private var logContext: LogContext = null
 
+  var kafkaYammerMetrics: KafkaYammerMetrics = null
   var metrics: Metrics = null
 
   val brokerState: BrokerState = new BrokerState
@@ -186,7 +187,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
 
   newGauge("BrokerState", () => brokerState.currentState)
   newGauge("ClusterId", () => clusterId)
-  newGauge("yammer-metrics-count", () => com.yammer.metrics.Metrics.defaultRegistry.allMetrics.size)
+  newGauge("yammer-metrics-count", () =>  KafkaYammerMetrics.defaultRegistry.allMetrics.size)
 
   /**
    * Start up API for bringing up a single instance of the Kafka server.
@@ -236,8 +237,14 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
         kafkaScheduler.startup()
 
         /* create and configure metrics */
+        kafkaYammerMetrics = KafkaYammerMetrics.INSTANCE
+        kafkaYammerMetrics.configure(config.originals)
+
+        val jmxReporter = new JmxReporter(jmxPrefix)
+        jmxReporter.configure(config.originals)
+
         val reporters = new util.ArrayList[MetricsReporter]
-        reporters.add(new JmxReporter(jmxPrefix))
+        reporters.add(jmxReporter)
         val metricConfig = KafkaServer.metricConfig(config)
         metrics = new Metrics(metricConfig, reporters, time, true)
 
