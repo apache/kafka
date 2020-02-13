@@ -58,23 +58,56 @@ public class ListDeserializer<Inner> implements Deserializer<List<Inner>> {
         }
     }
 
-    @SuppressWarnings("unchecked")
     @Override
     public void configure(Map<String, ?> configs, boolean isKey) {
         if (listClass == null) {
-            String listTypePropertyName = isKey ? CommonClientConfigs.DEFAULT_LIST_KEY_SERDE_TYPE_CLASS : CommonClientConfigs.DEFAULT_LIST_VALUE_SERDE_TYPE_CLASS;
-            listClass = (Class<List<Inner>>) configs.get(listTypePropertyName);
-            if (listClass == null) {
-                throw new ConfigException("Not able to determine the list class because it was neither passed via the constructor nor set in the config");
-            }
+            configureListClass(configs, isKey);
         }
         if (inner == null) {
-            String innerDeserializerPropertyName = isKey ? CommonClientConfigs.DEFAULT_LIST_KEY_SERDE_INNER_CLASS : CommonClientConfigs.DEFAULT_LIST_VALUE_SERDE_INNER_CLASS;
-            Class<Deserializer<Inner>> innerDeserializerClass = (Class<Deserializer<Inner>>) configs.get(innerDeserializerPropertyName);
-            inner = Utils.newInstance(innerDeserializerClass);
-            inner.configure(configs, isKey);
+            configureInnerSerde(configs, isKey);
         }
     }
+
+    private void configureListClass(Map<String, ?> configs, boolean isKey) {
+        String listTypePropertyName = isKey ? CommonClientConfigs.DEFAULT_LIST_KEY_SERDE_TYPE_CLASS : CommonClientConfigs.DEFAULT_LIST_VALUE_SERDE_TYPE_CLASS;
+        final Object listClassOrName = configs.get(listTypePropertyName);
+        if (listClassOrName == null) {
+            throw new ConfigException("Not able to determine the list class because it was neither passed via the constructor nor set in the config.");
+        }
+        try {
+            if (listClassOrName instanceof String) {
+                listClass = Utils.loadClass((String) listClassOrName, Object.class);
+            } else if (listClassOrName instanceof Class) {
+                listClass = (Class<?>) listClassOrName;
+            } else {
+                throw new KafkaException("Could not determine the list class instance using \"" + listTypePropertyName + "\" property.");
+            }
+        } catch (final ClassNotFoundException e) {
+            throw new ConfigException(listTypePropertyName, listClassOrName, "Deserializer's list class \"" + listClassOrName + "\" could not be found.");
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private void configureInnerSerde(Map<String, ?> configs, boolean isKey) {
+        String innerSerdePropertyName = isKey ? CommonClientConfigs.DEFAULT_LIST_KEY_SERDE_INNER_CLASS : CommonClientConfigs.DEFAULT_LIST_VALUE_SERDE_INNER_CLASS;
+        final Object innerSerdeClassOrName = configs.get(innerSerdePropertyName);
+        if (innerSerdeClassOrName == null) {
+            throw new ConfigException("Not able to determine the inner serde class because it was neither passed via the constructor nor set in the config.");
+        }
+        try {
+            if (innerSerdeClassOrName instanceof String) {
+                inner = Utils.newInstance((String) innerSerdeClassOrName, Serde.class).deserializer();
+            } else if (innerSerdeClassOrName instanceof Class) {
+                inner = (Deserializer<Inner>) ((Serde) Utils.newInstance((Class) innerSerdeClassOrName)).deserializer();
+            } else {
+                throw new KafkaException("Could not determine the inner serde class instance using \"" + innerSerdePropertyName + "\" property.");
+            }
+            inner.configure(configs, isKey);
+        } catch (final ClassNotFoundException e) {
+            throw new ConfigException(innerSerdePropertyName, innerSerdeClassOrName, "Deserializer's inner serde class \"" + innerSerdeClassOrName + "\" could not be found.");
+        }
+    }
+
 
     @SuppressWarnings("unchecked")
     private List<Inner> getListInstance(int listSize) {
@@ -119,6 +152,11 @@ public class ListDeserializer<Inner> implements Deserializer<List<Inner>> {
         if (inner != null) {
             inner.close();
         }
+    }
+
+    // Only for testing
+    Deserializer<Inner> innerDeserializer() {
+        return inner;
     }
 
 }

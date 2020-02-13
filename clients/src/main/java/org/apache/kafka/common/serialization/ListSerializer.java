@@ -52,22 +52,22 @@ public class ListSerializer<Inner> implements Serializer<List<Inner>> {
     @Override
     public void configure(Map<String, ?> configs, boolean isKey) {
         if (inner == null) {
-            final String innerSerializerPropertyName = isKey ? CommonClientConfigs.DEFAULT_LIST_KEY_SERDE_INNER_CLASS : CommonClientConfigs.DEFAULT_LIST_VALUE_SERDE_INNER_CLASS;
-            final Object innerSerializerClassOrName = configs.get(innerSerializerPropertyName);
-            if (innerSerializerClassOrName == null) {
-                throw new ConfigException("Not able to determine the serializer class because it was neither passed via the constructor nor set in the config");
+            final String innerSerdePropertyName = isKey ? CommonClientConfigs.DEFAULT_LIST_KEY_SERDE_INNER_CLASS : CommonClientConfigs.DEFAULT_LIST_VALUE_SERDE_INNER_CLASS;
+            final Object innerSerdeClassOrName = configs.get(innerSerdePropertyName);
+            if (innerSerdeClassOrName == null) {
+                throw new ConfigException("Not able to determine the serializer class because it was neither passed via the constructor nor set in the config.");
             }
             try {
-                if (innerSerializerClassOrName instanceof String) {
-                    inner = Utils.newInstance((String) innerSerializerClassOrName, Serializer.class);
-                } else if (innerSerializerClassOrName instanceof Class) {
-                    inner = Utils.newInstance((Class<Serializer<Inner>>) innerSerializerClassOrName);
+                if (innerSerdeClassOrName instanceof String) {
+                    inner = Utils.newInstance((String) innerSerdeClassOrName, Serde.class).serializer();
+                } else if (innerSerdeClassOrName instanceof Class) {
+                    inner = (Serializer<Inner>) ((Serde) Utils.newInstance((Class) innerSerdeClassOrName)).serializer();
                 } else {
-                    throw new KafkaException("Could not create a serializer class instance using \"" + innerSerializerPropertyName + "\" property.");
+                    throw new KafkaException("Could not create a serializer class instance using \"" + innerSerdePropertyName + "\" property.");
                 }
                 inner.configure(configs, isKey);
             } catch (final ClassNotFoundException e) {
-                throw new ConfigException(innerSerializerPropertyName, innerSerializerClassOrName, "Serializer class " + innerSerializerClassOrName + " could not be found.");
+                throw new ConfigException(innerSerdePropertyName, innerSerdeClassOrName, "Serializer class " + innerSerdeClassOrName + " could not be found.");
             }
         }
     }
@@ -99,6 +99,11 @@ public class ListSerializer<Inner> implements Serializer<List<Inner>> {
         if (inner != null) {
             inner.close();
         }
+    }
+
+    // Only for testing
+    Serializer<Inner> innerSerializer() {
+        return inner;
     }
 
 }
