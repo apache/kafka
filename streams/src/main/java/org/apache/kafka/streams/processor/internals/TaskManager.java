@@ -257,9 +257,11 @@ public class TaskManager {
         final Set<TopicPartition> remainingPartitions = new HashSet<>(revokedPartitions);
 
         for (final Task task : tasks.values()) {
-            if (remainingPartitions.containsAll(task.inputPartitions())) {
-                revokedTasks.add(task.id());
-                remainingPartitions.removeAll(task.inputPartitions());
+            for (TopicPartition topicPartition : task.inputPartitions()) {
+                if (remainingPartitions.contains(topicPartition)) {
+                    revokedTasks.add(task.id());
+                    remainingPartitions.remove(topicPartition);
+                }
             }
         }
 

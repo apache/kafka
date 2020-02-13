@@ -58,7 +58,7 @@ public class StreamsRebalanceListener implements ConsumerRebalanceListener {
 
     @Override
     public void onPartitionsRevoked(final Collection<TopicPartition> partitions) {
-        log.debug("Current state {}: revoked partitions {} because of consumer rebalance.\n" +
+        log.info("Current state {}: revoked partitions {} because of consumer rebalance.\n" +
                       "\tcurrently assigned active tasks: {}\n" +
                       "\tcurrently assigned standby tasks: {}\n",
                   streamThread.state(),
