@@ -150,7 +150,7 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
 
   @Test
   def testTopicAssignmentMethods(): Unit = {
-    assertTrue(zkClient.getAllTopicsInCluster.isEmpty)
+    assertTrue(zkClient.getAllTopicsInCluster().isEmpty)
 
     // test with non-existing topic
     assertFalse(zkClient.topicExists(topic1))
@@ -194,7 +194,7 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
 
     zkClient.createTopicAssignment(topic2, secondAssignment)
 
-    assertEquals(Set(topic1, topic2), zkClient.getAllTopicsInCluster)
+    assertEquals(Set(topic1, topic2), zkClient.getAllTopicsInCluster())
   }
 
   @Test
@@ -949,12 +949,12 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
 
   @Test
   def testGetTopicsAndPartitions(): Unit = {
-    assertTrue(zkClient.getAllTopicsInCluster.isEmpty)
+    assertTrue(zkClient.getAllTopicsInCluster().isEmpty)
     assertTrue(zkClient.getAllPartitions.isEmpty)
 
     zkClient.createRecursive(TopicZNode.path(topic1))
     zkClient.createRecursive(TopicZNode.path(topic2))
-    assertEquals(Set(topic1, topic2), zkClient.getAllTopicsInCluster)
+    assertEquals(Set(topic1, topic2), zkClient.getAllTopicsInCluster())
 
     assertTrue(zkClient.getAllPartitions.isEmpty)
 
