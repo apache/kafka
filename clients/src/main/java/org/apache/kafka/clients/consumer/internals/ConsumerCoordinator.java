@@ -345,7 +345,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
         Assignment assignment = ConsumerProtocol.deserializeAssignment(assignmentBuffer);
 
-        Set<TopicPartition> assignedPartitions = new HashSet<>(assignment.partitions());
+        final Set<TopicPartition> assignedPartitions = new HashSet<>(assignment.partitions());
 
         if (!subscriptions.checkAssignmentMatchedSubscription(assignedPartitions)) {
             log.warn("We received an assignment {} that doesn't match our current subscription {}; it is likely " +
