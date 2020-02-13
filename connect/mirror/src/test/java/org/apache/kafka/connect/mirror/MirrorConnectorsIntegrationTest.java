@@ -154,6 +154,13 @@ public class MirrorConnectorsIntegrationTest {
         mm2Props.put("backup.bootstrap.servers", backup.kafka().bootstrapServers());
         mm2Config = new MirrorMakerConfig(mm2Props);
 
+        // we wait for the connector and tasks to come up for each connector, so that when we do the
+        // actual testing, we are certain that the tasks are up and running; this will prevent
+        // flaky tests where the connector and tasks didn't start up in time for the tests to be
+        // run
+        Set<String> connectorNames = new HashSet<>(Arrays.asList("MirrorSourceConnector",
+                "MirrorCheckpointConnector", "MirrorHeartbeatConnector"));
+
         backup.configureConnector("MirrorSourceConnector", mm2Config.connectorBaseConfig(new SourceAndTarget("primary", "backup"),
             MirrorSourceConnector.class));
 
@@ -162,6 +169,8 @@ public class MirrorConnectorsIntegrationTest {
 
         backup.configureConnector("MirrorHeartbeatConnector", mm2Config.connectorBaseConfig(new SourceAndTarget("primary", "backup"),
             MirrorHeartbeatConnector.class));
+
+        waitUntilMirrorMakerIsRunning(backup, connectorNames);
 
         primary.configureConnector("MirrorSourceConnector", mm2Config.connectorBaseConfig(new SourceAndTarget("backup", "primary"),
             MirrorSourceConnector.class));
@@ -199,7 +208,7 @@ public class MirrorConnectorsIntegrationTest {
     }
 
     @Test
-    public void testReplication() throws InterruptedException, TimeoutException {
+    public void testReplication() throws InterruptedException {
         MirrorClient primaryClient = new MirrorClient(mm2Config.clientConfig("primary"));
         MirrorClient backupClient = new MirrorClient(mm2Config.clientConfig("backup"));
 
