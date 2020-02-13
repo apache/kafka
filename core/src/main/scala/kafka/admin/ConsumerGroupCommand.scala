@@ -296,11 +296,12 @@ object ConsumerGroupCommand extends Logging {
         .map(state => (state.group, s"${state.coordinator.host}:${state.coordinator.port} (${state.coordinator.idString})",
           state.assignmentStrategy, state.state, state.numMembers)).toList
 
-      val maxCoordinatorColLen =  if (stateValues.nonEmpty) Math.max(25, stateValues.map(_._1.length).max) else 25
+      val maxCoordinatorColLen = if (stateValues.nonEmpty) Math.max(25, stateValues.map(_._1.length).max) else 25
       print(s"\n%${-maxCoordinatorColLen}s %-25s %-20s %-15s %s".format("GROUP", "COORDINATOR (ID)", "ASSIGNMENT-STRATEGY", "STATE", "#MEMBERS"))
 
-      stateValues.foreach({case (group,coordinator,  assignmentStrategy,state, numMembers ) =>
-        print(s"\n%${-maxCoordinatorColLen}s %-25s %-20s %-15s %s".format(group, coordinator, assignmentStrategy, state, numMembers))})
+      stateValues.foreach({ case (group, coordinator, assignmentStrategy, state, numMembers) =>
+        print(s"\n%${-maxCoordinatorColLen}s %-25s %-20s %-15s %s".format(group, coordinator, assignmentStrategy, state, numMembers)) })
+      println()
     }
 
     def describeGroups(): Unit = {
