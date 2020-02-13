@@ -209,11 +209,12 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
     @Override
     protected JoinGroupRequestData.JoinGroupRequestProtocolCollection metadata() {
-        log.debug("Joining group with current subscription: {}", subscriptions.subscription());
+        log.info("Joining group with current subscription: {}", subscriptions.subscription());
         this.joinedSubscription = subscriptions.subscription();
         JoinGroupRequestData.JoinGroupRequestProtocolCollection protocolSet = new JoinGroupRequestData.JoinGroupRequestProtocolCollection();
 
         List<String> topics = new ArrayList<>(joinedSubscription);
+        log.info("Getting subscription topics: {}", topics);
         for (ConsumerPartitionAssignor assignor : assignors) {
             Subscription subscription = new Subscription(topics,
                                                          assignor.subscriptionUserData(joinedSubscription),
@@ -346,6 +347,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         Assignment assignment = ConsumerProtocol.deserializeAssignment(assignmentBuffer);
 
         final Set<TopicPartition> assignedPartitions = new HashSet<>(assignment.partitions());
+        log.info("Assigned partitions on join complete: {}", assignedPartitions);
 
         if (!subscriptions.checkAssignmentMatchedSubscription(assignedPartitions)) {
             log.warn("We received an assignment {} that doesn't match our current subscription {}; it is likely " +

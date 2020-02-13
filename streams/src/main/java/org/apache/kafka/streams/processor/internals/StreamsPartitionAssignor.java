@@ -215,6 +215,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
 
     @Override
     public ByteBuffer subscriptionUserData(final Set<String> topics) {
+        log.info("Hit subscriptionUserData with topics {}", topics);
         // Adds the following information to subscription
         // 1. Client UUID (a unique id assigned to an instance of KafkaStreams)
         // 2. Task ids of previously running tasks
@@ -391,6 +392,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         final Map<Integer, InternalTopologyBuilder.TopicsInfo> topicGroups =
             taskManager.builder().topicGroups();
 
+        log.info("Get topic groups: {}", topicGroups);
         final Map<String, InternalTopicConfig> repartitionTopicMetadata = new HashMap<>();
         for (final InternalTopologyBuilder.TopicsInfo topicsInfo : topicGroups.values()) {
             for (final String topic : topicsInfo.sourceTopics) {

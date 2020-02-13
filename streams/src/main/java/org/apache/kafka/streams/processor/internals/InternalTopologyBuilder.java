@@ -995,6 +995,7 @@ public class InternalTopologyBuilder {
             for (final String node : entry.getValue()) {
                 // if the node is a source node, add to the source topics
                 final List<String> topics = nodeToSourceTopics.get(node);
+                log.info("Node to source topics for node {}: {}", node, topics);
                 if (topics != null) {
                     // if some of the topics are internal, add them to the internal topics
                     for (final String topic : topics) {
@@ -1062,7 +1063,7 @@ public class InternalTopologyBuilder {
                 nodeToSourceTopics.put(nodeName, sourceTopics);
                 sourceTopicNames.addAll(sourceTopics);
             }
-            log.debug("Updated nodeToSourceTopics: {}", nodeToSourceTopics);
+            log.info("Updated nodeToSourceTopics: {}", nodeToSourceTopics);
         }
     }
 
@@ -1886,13 +1887,14 @@ public class InternalTopologyBuilder {
     private void updateSubscribedTopics(final Set<String> topics, final String logPrefix) {
         final Collection<String> existingTopics = subscriptionUpdates();
 
+        // This is wrong
         if  (!existingTopics.equals(topics)) {
             topics.addAll(existingTopics);
 
             subscriptionUpdates.clear();
             subscriptionUpdates.addAll(topics);
 
-            log.debug("{}found {} topics possibly matching subscription", logPrefix, topics.size());
+            log.info("{}found {} topics possibly matching subscription", logPrefix, topics.size());
 
             setRegexMatchedTopicsToSourceNodes();
             setRegexMatchedTopicToStateStore();
