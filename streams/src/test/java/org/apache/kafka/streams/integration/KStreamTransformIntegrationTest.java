@@ -245,6 +245,43 @@ public class KStreamTransformIntegrationTest {
     }
 
     @Test
+    public void shouldNotFowardNullTransformValuesWithValueTransformerWithKey() {
+        stream
+                .transformValues(() -> new ValueTransformerWithKey<Integer, Integer, Integer>() {
+                    private KeyValueStore<Integer, Integer> state;
+
+                    @Override
+                    public void init(final ProcessorContext context) {
+                        state = (KeyValueStore<Integer, Integer>) context.getStateStore("myTransformState");
+                    }
+
+                    @Override
+                    public Integer transform(final Integer key, final Integer value) {
+                        if (key % 2 == 1) {
+                            return null;
+                        }
+
+                        state.putIfAbsent(key, 0);
+                        Integer storedValue = state.get(key);
+                        final Integer result = value + storedValue++;
+                        state.put(key, storedValue);
+                        return result;
+                    }
+
+                    @Override
+                    public void close() {
+                    }
+                }, "myTransformState")
+                .foreach(action);
+
+        final List<KeyValue<Integer, Integer>> expected = Arrays.asList(
+                KeyValue.pair(2, 2),
+                KeyValue.pair(2, 2),
+                KeyValue.pair(2, 5));
+        verifyResult(expected);
+    }
+
+    @Test
     public void shouldFlatTransformValuesWithKey() {
         stream
             .flatTransformValues(() -> new ValueTransformerWithKey<Integer, Integer, Iterable<Integer>>() {
