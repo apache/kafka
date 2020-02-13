@@ -39,6 +39,7 @@ public class EmbeddedConnectClusterAssertions {
     private static final Logger log = LoggerFactory.getLogger(EmbeddedConnectClusterAssertions.class);
     public static final long WORKER_SETUP_DURATION_MS = TimeUnit.SECONDS.toMillis(60);
     private static final long CONNECTOR_SETUP_DURATION_MS = TimeUnit.SECONDS.toMillis(30);
+    private static final long CONNECT_INTERNAL_TOPIC_UPDATES_DURATION_MS = TimeUnit.SECONDS.toMillis(60);
 
     private final EmbeddedConnectCluster connect;
 
@@ -257,7 +258,7 @@ public class EmbeddedConnectClusterAssertions {
         try {
             waitForCondition(
                 () -> checkConnectorActiveTopics(connectorName, topics).orElse(false),
-                CONNECTOR_SETUP_DURATION_MS,
+                CONNECT_INTERNAL_TOPIC_UPDATES_DURATION_MS,
                 "Connector active topics don't match the expected collection");
         } catch (AssertionError e) {
             throw new AssertionError(detailMessage, e);
