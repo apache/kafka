@@ -43,7 +43,6 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
-import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
 
@@ -66,15 +65,14 @@ import static org.junit.Assert.assertTrue;
 @Category(IntegrationTest.class)
 public class ConnectorTopicsIntegrationTest {
 
-    private static final int NUM_WORKERS = 3;
-    private static final int NUM_TASKS = 2;
+    private static final int NUM_WORKERS = 5;
+    private static final int NUM_TASKS = 1;
     private static final String FOO_TOPIC = "foo-topic";
     private static final String FOO_CONNECTOR = "foo-source";
     private static final String BAR_TOPIC = "bar-topic";
     private static final String BAR_CONNECTOR = "bar-source";
     private static final String SINK_CONNECTOR = "baz-sink";
     private static final int NUM_TOPIC_PARTITIONS = 3;
-    private static final long RECORD_TRANSFER_DURATION_MS = TimeUnit.SECONDS.toMillis(30);
 
     private EmbeddedConnectCluster.Builder connectBuilder;
     private EmbeddedConnectCluster connect;
