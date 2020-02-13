@@ -26,7 +26,7 @@ def job = {
     }
 
     if (config.publish && config.isDevJob) {
-      configFileProvider([configFile(fileId: 'Gradle Nexus Settings', variable: 'GRADLE_NEXUS_SETTINGS')]) {
+      configFileProvider([configFile(fileId: 'Gradle-Artifactory-Settings', variable: 'GRADLE_NEXUS_SETTINGS')]) {
           stage("Publish to nexus") {
               sh "./gradlew --init-script ${GRADLE_NEXUS_SETTINGS} --no-daemon uploadArchivesAll"
           }
