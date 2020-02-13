@@ -436,7 +436,7 @@ public class ProducerConfig extends AbstractConfig {
                                         Type.CLASS,
                                         null,
                                         Importance.MEDIUM,
-                                        LIST_KEY_SERIALIZER_INNER_CLASS_DOC);
+                                        LIST_KEY_SERIALIZER_INNER_CLASS_DOC)
                                 .defineInternal(AUTO_DOWNGRADE_TXN_COMMIT,
                                         Type.BOOLEAN,
                                         false,
