@@ -883,7 +883,9 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                 .tags(metricsTags);
         List<MetricsReporter> reporters = config.getConfiguredInstances(ConsumerConfig.METRIC_REPORTER_CLASSES_CONFIG,
                 MetricsReporter.class, Collections.singletonMap(ConsumerConfig.CLIENT_ID_CONFIG, clientId));
-        reporters.add(new JmxReporter(JMX_PREFIX));
+        JmxReporter jmxReporter = new JmxReporter(JMX_PREFIX);
+        jmxReporter.configure(config.originals());
+        reporters.add(jmxReporter);
         return new Metrics(metricConfig, reporters, time);
     }
 

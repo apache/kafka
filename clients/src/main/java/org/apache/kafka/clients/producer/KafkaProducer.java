@@ -351,7 +351,9 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             List<MetricsReporter> reporters = config.getConfiguredInstances(ProducerConfig.METRIC_REPORTER_CLASSES_CONFIG,
                     MetricsReporter.class,
                     Collections.singletonMap(ProducerConfig.CLIENT_ID_CONFIG, clientId));
-            reporters.add(new JmxReporter(JMX_PREFIX));
+            JmxReporter jmxReporter = new JmxReporter(JMX_PREFIX);
+            jmxReporter.configure(userProvidedConfigs);
+            reporters.add(jmxReporter);
             this.metrics = new Metrics(metricConfig, reporters, time);
             this.partitioner = config.getConfiguredInstance(ProducerConfig.PARTITIONER_CLASS_CONFIG, Partitioner.class);
             long retryBackoffMs = config.getLong(ProducerConfig.RETRY_BACKOFF_MS_CONFIG);
@@ -459,7 +461,6 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                 apiVersions,
                 throttleTimeSensor,
                 logContext);
-        int retries = configureRetries(producerConfig, log);
         short acks = configureAcks(producerConfig, log);
         return new Sender(logContext,
                 client,
@@ -468,7 +469,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                 maxInflightRequests == 1,
                 producerConfig.getInt(ProducerConfig.MAX_REQUEST_SIZE_CONFIG),
                 acks,
-                retries,
+                producerConfig.getInt(ProducerConfig.RETRIES_CONFIG),
                 metricsRegistry.senderMetrics,
                 time,
                 requestTimeoutMs,
@@ -525,15 +526,6 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                 log.info("Instantiated an idempotent producer.");
         }
         return transactionManager;
-    }
-
-    private static int configureRetries(ProducerConfig config, Logger log) {
-        boolean userConfiguredRetries = config.originals().containsKey(ProducerConfig.RETRIES_CONFIG);
-        if (config.idempotenceEnabled() && !userConfiguredRetries) {
-            log.info("Overriding the default retries config to the recommended value of {} since the idempotent " +
-                    "producer is enabled.", Integer.MAX_VALUE);
-        }
-        return config.getInt(ProducerConfig.RETRIES_CONFIG);
     }
 
     private static int configureInflightRequests(ProducerConfig config) {

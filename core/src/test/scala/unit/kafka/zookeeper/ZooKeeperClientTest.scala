@@ -22,9 +22,9 @@ import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger}
 import java.util.concurrent.{ArrayBlockingQueue, ConcurrentLinkedQueue, CountDownLatch, Executors, Semaphore, TimeUnit}
 
 import scala.collection.Seq
-import com.yammer.metrics.Metrics
 import com.yammer.metrics.core.{Gauge, Meter, MetricName}
 import kafka.server.KafkaConfig
+import kafka.metrics.KafkaYammerMetrics
 import kafka.zk.ZooKeeperTestHarness
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.utils.Time
@@ -642,7 +642,7 @@ class ZooKeeperClientTest extends ZooKeeperTestHarness {
   @Test
   def testZooKeeperStateChangeRateMetrics(): Unit = {
     def checkMeterCount(name: String, expected: Long): Unit = {
-      val meter = Metrics.defaultRegistry.allMetrics.asScala.collectFirst {
+      val meter = KafkaYammerMetrics.defaultRegistry.allMetrics.asScala.collectFirst {
         case (metricName, meter: Meter) if isExpectedMetricName(metricName, name) => meter
       }.getOrElse(sys.error(s"Unable to find meter with name $name"))
       assertEquals(s"Unexpected meter count for $name", expected, meter.count)
@@ -665,7 +665,7 @@ class ZooKeeperClientTest extends ZooKeeperTestHarness {
   @Test
   def testZooKeeperSessionStateMetric(): Unit = {
     def gaugeValue(name: String): Option[String] = {
-      Metrics.defaultRegistry.allMetrics.asScala.collectFirst {
+      KafkaYammerMetrics.defaultRegistry.allMetrics.asScala.collectFirst {
         case (metricName, gauge: Gauge[_]) if isExpectedMetricName(metricName, name) => gauge.value.asInstanceOf[String]
       }
     }
@@ -680,7 +680,7 @@ class ZooKeeperClientTest extends ZooKeeperTestHarness {
   }
 
   private def cleanMetricsRegistry(): Unit = {
-    val metrics = Metrics.defaultRegistry
+    val metrics = KafkaYammerMetrics.defaultRegistry
     metrics.allMetrics.keySet.asScala.foreach(metrics.removeMetric)
   }
 

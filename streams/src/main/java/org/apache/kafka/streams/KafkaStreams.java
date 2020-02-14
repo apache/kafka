@@ -681,7 +681,9 @@ public class KafkaStreams implements AutoCloseable {
         final List<MetricsReporter> reporters = config.getConfiguredInstances(StreamsConfig.METRIC_REPORTER_CLASSES_CONFIG,
                 MetricsReporter.class,
                 Collections.singletonMap(StreamsConfig.CLIENT_ID_CONFIG, clientId));
-        reporters.add(new JmxReporter(JMX_PREFIX));
+        final JmxReporter jmxReporter = new JmxReporter(JMX_PREFIX);
+        jmxReporter.configure(config.originals());
+        reporters.add(jmxReporter);
         metrics = new Metrics(metricConfig, reporters, time);
         streamsMetrics =
             new StreamsMetricsImpl(metrics, clientId, config.getString(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG));
