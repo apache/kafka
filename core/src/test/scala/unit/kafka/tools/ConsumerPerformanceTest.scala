@@ -54,7 +54,7 @@ class ConsumerPerformanceTest {
     val config = new ConsumerPerformance.ConsumerPerfConfig(args)
 
     //Then
-    assertEquals("localhost:9092", config.options.valueOf(config.brokerHostsAndPorts))
+    assertEquals("localhost:9092", config.brokerHostsAndPorts)
     assertEquals("test", config.topic)
     assertEquals(10, config.numMessages)
   }
@@ -72,7 +72,7 @@ class ConsumerPerformanceTest {
     val config = new ConsumerPerformance.ConsumerPerfConfig(args)
 
     //Then
-    assertEquals("localhost:9092", config.options.valueOf(config.brokerHostsAndPorts))
+    assertEquals("localhost:9092", config.brokerHostsAndPorts)
     assertEquals("test", config.topic)
     assertEquals(10, config.numMessages)
   }
