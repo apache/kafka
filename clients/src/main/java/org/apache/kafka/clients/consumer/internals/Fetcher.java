@@ -1275,7 +1275,7 @@ public class Fetcher<K, V> implements Closeable {
             } else if (error == Errors.CORRUPT_MESSAGE) {
                 throw new KafkaException("Encountered corrupt message when fetching offset "
                         + fetchOffset
-                        + " for topic-partition {}"
+                        + " for topic-partition "
                         + tp);
             } else {
                 throw new IllegalStateException("Unexpected error code " + error.code() + " while fetching from partition " + tp);
