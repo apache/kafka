@@ -224,14 +224,19 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             topics,
             standbyTasks,
             rebalanceProtocol);
+
+        final Map<TaskId, Integer> taskLags = new HashMap<>(activeTasks.stream()
+                                                  .collect(Collectors.toMap(t -> t, l -> -1)));
+        taskLags.putAll(standbyTasks.stream()
+                            .collect(Collectors.toMap(t -> t, l -> 0)));
+
         return new SubscriptionInfo(
             usedSubscriptionMetadataVersion,
             LATEST_SUPPORTED_VERSION,
             taskManager.processId(),
-            activeTasks,
-            standbyTasks,
-            userEndPoint)
-            .encode();
+            userEndPoint,
+            taskLags)
+                .encode();
     }
 
     protected static Set<TaskId> prepareForSubscription(final TaskManager taskManager,

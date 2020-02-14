@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.streams.processor.internals.assignment;
 
+import java.util.HashSet;
+import java.util.Map;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.ObjectSerializationCache;
 import org.apache.kafka.streams.errors.TaskAssignmentException;
@@ -41,6 +43,7 @@ public class SubscriptionInfo {
     private final SubscriptionInfoData data;
     private Set<TaskId> prevTasksCache = null;
     private Set<TaskId> standbyTasksCache = null;
+    private Map<TaskId, Integer> taskLagsCache = null;
 
     static {
         // Just statically check to make sure that the generated code always stays in sync with the overall protocol
@@ -69,12 +72,13 @@ public class SubscriptionInfo {
     public SubscriptionInfo(final int version,
                             final int latestSupportedVersion,
                             final UUID processId,
-                            final Set<TaskId> prevTasks,
-                            final Set<TaskId> standbyTasks,
-                            final String userEndPoint) {
+                            final String userEndPoint,
+                            final Map<TaskId, Integer> taskLags) {
         validateVersions(version, latestSupportedVersion);
         final SubscriptionInfoData data = new SubscriptionInfoData();
         data.setVersion(version);
+        data.setProcessId(processId);
+
         if (version >= 2) {
             data.setUserEndPoint(userEndPoint == null
                                      ? new byte[0]
@@ -83,7 +87,38 @@ public class SubscriptionInfo {
         if (version >= 3) {
             data.setLatestSupportedVersion(latestSupportedVersion);
         }
-        data.setProcessId(processId);
+        if (version >= 7) {
+            setTaskLagDataFromTaskLagMap(data, taskLags);
+        } else {
+            setPrevAndStandbySetsFromParsedTaskLagMap(data, taskLags);
+        }
+        this.data = data;
+    }
+
+    private static void setTaskLagDataFromTaskLagMap(final SubscriptionInfoData data,
+                                                     final Map<TaskId, Integer> taskLags) {
+        data.setTaskLags(taskLags.entrySet().stream().map(t -> {
+            final SubscriptionInfoData.TaskLagPair taskLagPair = new SubscriptionInfoData.TaskLagPair();
+            taskLagPair.setTopicGroupId(t.getKey().topicGroupId);
+            taskLagPair.setPartition(t.getKey().partition);
+            taskLagPair.setLag(t.getValue());
+            return taskLagPair;
+        }).collect(Collectors.toList()));
+    }
+
+    private static void setPrevAndStandbySetsFromParsedTaskLagMap(final SubscriptionInfoData data,
+                                                                  final Map<TaskId, Integer> taskLags) {
+        final Set<TaskId> prevTasks = new HashSet<>();
+        final Set<TaskId> standbyTasks = new HashSet<>();
+
+        for (Map.Entry<TaskId, Integer> taskLagEntry : taskLags.entrySet()) {
+            if (taskLagEntry.getValue() == -1) {
+                prevTasks.add(taskLagEntry.getKey());
+            } else {
+                standbyTasks.add(taskLagEntry.getKey());
+            }
+        }
+
         data.setPrevTasks(prevTasks.stream().map(t -> {
             final SubscriptionInfoData.TaskId taskId = new SubscriptionInfoData.TaskId();
             taskId.setTopicGroupId(t.topicGroupId);
@@ -96,8 +131,6 @@ public class SubscriptionInfo {
             taskId.setPartition(t.partition);
             return taskId;
         }).collect(Collectors.toList()));
-
-        this.data = data;
     }
 
     private SubscriptionInfo(final SubscriptionInfoData subscriptionInfoData) {
@@ -139,6 +172,19 @@ public class SubscriptionInfo {
             );
         }
         return standbyTasksCache;
+    }
+
+    public Map<TaskId, Integer> taskLags() {
+        if (taskLagsCache == null) {
+            taskLagsCache = Collections.unmodifiableMap(
+                data.taskLags()
+                    .stream()
+                    .collect(Collectors.toMap(t -> new TaskId(t.topicGroupId(), t.partition()),
+                                              l -> l.lag()))
+
+            );
+        }
+        return taskLagsCache;
     }
 
     public String userEndPoint() {
