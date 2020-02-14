@@ -2458,10 +2458,11 @@ public class FetcherTest {
 
             client.prepareMetadataUpdate(updatedMetadata);
 
-            // If the metadata wasn't updated before retrying, the fetcher would consult the original leader and hit a fatal exception.
+            // If the metadata wasn't updated before retrying, the fetcher would consult the original leader and hit a NOT_LEADER exception.
+            // We will count the answered future response in the end to verify if this is the case.
             Map<TopicPartition, ListOffsetResponse.PartitionData> paritionDataWithFatalError = new HashMap<>(allPartitionData);
             paritionDataWithFatalError.put(tp1, new ListOffsetResponse.PartitionData(
-                Errors.TOPIC_AUTHORIZATION_FAILED, ListOffsetRequest.LATEST_TIMESTAMP, -1L, Optional.empty()));
+                Errors.NOT_LEADER_FOR_PARTITION, ListOffsetRequest.LATEST_TIMESTAMP, -1L, Optional.empty()));
             client.prepareResponseFrom(new ListOffsetResponse(paritionDataWithFatalError), originalLeader);
 
             // The request to new leader must only contain one partition tp1 with error.
@@ -2487,7 +2488,8 @@ public class FetcherTest {
                 Utils.mkEntry(tp0, new OffsetAndTimestamp(4L, fetchTimestamp)),
                 Utils.mkEntry(tp1, new OffsetAndTimestamp(5L, fetchTimestamp))), offsetAndTimestampMap);
 
-            // The fatal exception future should not be cleared.
+            // The NOT_LEADER exception future should not be cleared as we already refreshed the metadata before
+            // first retry, thus never hitting.
             assertEquals(1, client.numAwaitingResponses());
 
             fetcher.close();
