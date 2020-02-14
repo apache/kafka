@@ -34,7 +34,6 @@ import kafka.server.{KafkaConfig, ThrottledChannel}
 import kafka.utils.Implicits._
 import kafka.utils.TestUtils
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.config.SslConfigs
 import org.apache.kafka.common.memory.MemoryPool
 import org.apache.kafka.common.message.SaslAuthenticateRequestData
 import org.apache.kafka.common.message.SaslHandshakeRequestData
@@ -171,7 +170,7 @@ class SocketServerTest {
   }
 
   private def sslClientSocket(port: Int): Socket = {
-    val sslContext = SSLContext.getInstance(SslConfigs.DEFAULT_SSL_PROTOCOL)
+    val sslContext = SSLContext.getInstance("TLSv1.2")
     sslContext.init(null, Array(TestUtils.trustAllCerts), new java.security.SecureRandom())
     val socketFactory = sslContext.getSocketFactory
     val socket = socketFactory.createSocket("localhost", port)
