@@ -17,12 +17,14 @@
 package org.apache.kafka.connect.util.clusters;
 
 import org.apache.kafka.connect.runtime.AbstractStatus;
+import org.apache.kafka.connect.runtime.rest.entities.ActiveTopicsInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
 import org.apache.kafka.connect.runtime.rest.errors.ConnectRestException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.ws.rs.core.Response;
+import java.util.Collection;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 import java.util.function.BiFunction;
@@ -37,6 +39,7 @@ public class EmbeddedConnectClusterAssertions {
     private static final Logger log = LoggerFactory.getLogger(EmbeddedConnectClusterAssertions.class);
     public static final long WORKER_SETUP_DURATION_MS = TimeUnit.SECONDS.toMillis(60);
     private static final long CONNECTOR_SETUP_DURATION_MS = TimeUnit.SECONDS.toMillis(30);
+    private static final long CONNECT_INTERNAL_TOPIC_UPDATES_DURATION_MS = TimeUnit.SECONDS.toMillis(60);
 
     private final EmbeddedConnectCluster connect;
 
@@ -243,4 +246,43 @@ public class EmbeddedConnectClusterAssertions {
         }
     }
 
+    /**
+     * Assert that a connector's set of active topics matches the given collection of topic names.
+     *
+     * @param connectorName the connector name
+     * @param topics a collection of topics to compare against
+     * @param detailMessage the assertion message
+     * @throws InterruptedException
+     */
+    public void assertConnectorActiveTopics(String connectorName, Collection<String> topics, String detailMessage) throws InterruptedException {
+        try {
+            waitForCondition(
+                () -> checkConnectorActiveTopics(connectorName, topics).orElse(false),
+                CONNECT_INTERNAL_TOPIC_UPDATES_DURATION_MS,
+                "Connector active topics don't match the expected collection");
+        } catch (AssertionError e) {
+            throw new AssertionError(detailMessage, e);
+        }
+    }
+
+    /**
+     * Check whether a connector's set of active topics matches the given collection of topic names.
+     *
+     * @param connectorName the connector name
+     * @param topics a collection of topics to compare against
+     * @return true if the connector's active topics matches the given collection; false otherwise
+     */
+    protected Optional<Boolean> checkConnectorActiveTopics(String connectorName, Collection<String> topics) {
+        try {
+            ActiveTopicsInfo info = connect.connectorTopics(connectorName);
+            boolean result = info != null
+                    && topics.size() == info.topics().size()
+                    && topics.containsAll(info.topics());
+            log.debug("Found connector {} using topics: {}", connectorName, info.topics());
+            return Optional.of(result);
+        } catch (Exception e) {
+            log.error("Could not check connector {} state info.", connectorName, e);
+            return Optional.empty();
+        }
+    }
 }
