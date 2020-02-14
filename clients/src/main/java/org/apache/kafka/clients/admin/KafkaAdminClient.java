@@ -17,6 +17,7 @@
 
 package org.apache.kafka.clients.admin;
 
+import javax.swing.text.html.Option;
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.ClientDnsLookup;
 import org.apache.kafka.clients.ClientRequest;
@@ -690,6 +691,13 @@ public class KafkaAdminClient extends AdminClient {
             this(false, callName, deadlineMs, nodeProvider);
         }
 
+        Call(String callName, long deadlineMs, NodeProvider nodeProvider,
+            Optional<Integer> numTries, Optional<Long> nextAllowedTryMs) {
+            this(false, callName, deadlineMs, nodeProvider);
+            this.tries = numTries.orElse(0);
+            this.nextAllowedTryMs = nextAllowedTryMs.orElse(0L);
+        }
+
         protected Node curNode() {
             return curNode;
         }
@@ -807,6 +815,14 @@ public class KafkaAdminClient extends AdminClient {
 
         public boolean isInternal() {
             return internal;
+        }
+
+        public int getTries() {
+            return tries;
+        }
+
+        public long getDeadlineMs() {
+            return nextAllowedTryMs;
         }
     }
 
@@ -2734,7 +2750,7 @@ public class KafkaAdminClient extends AdminClient {
             ConsumerGroupOperationContext<ConsumerGroupDescription, DescribeConsumerGroupsOptions> context =
                     new ConsumerGroupOperationContext<>(groupId, options, deadline, futures.get(groupId));
             Call findCoordinatorCall = getFindCoordinatorCall(context,
-                () -> getDescribeConsumerGroupsCall(context));
+                () -> getDescribeConsumerGroupsCall(context, Optional.empty(), Optional.empty()));
             runnable.call(findCoordinatorCall, startFindCoordinatorMs);
         }
 
@@ -2781,10 +2797,12 @@ public class KafkaAdminClient extends AdminClient {
     }
 
     private Call getDescribeConsumerGroupsCall(
-            ConsumerGroupOperationContext<ConsumerGroupDescription, DescribeConsumerGroupsOptions> context) {
+            ConsumerGroupOperationContext<ConsumerGroupDescription, DescribeConsumerGroupsOptions> context,
+            Optional<Integer> numTries, Optional<Long> nextAllowedTryMs) {
         return new Call("describeConsumerGroups",
                 context.deadline(),
-                new ConstantNodeIdProvider(context.node().get().id())) {
+                new ConstantNodeIdProvider(context.node().get().id()),
+                numTries, nextAllowedTryMs) {
             @Override
             DescribeGroupsRequest.Builder createRequest(int timeoutMs) {
                 return new DescribeGroupsRequest.Builder(
@@ -2816,7 +2834,9 @@ public class KafkaAdminClient extends AdminClient {
 
                 // If coordinator changed since we fetched it, retry
                 if (ConsumerGroupOperationContext.hasCoordinatorMoved(response)) {
-                    rescheduleFindCoordinatorTask(context, () -> getDescribeConsumerGroupsCall(context));
+                    Call call = getDescribeConsumerGroupsCall(context, Optional.of(this.getTries()),
+                        Optional.of(this.getDeadlineMs()));
+                    rescheduleFindCoordinatorTask(context, () -> call);
                     return;
                 }
 
@@ -3061,16 +3081,16 @@ public class KafkaAdminClient extends AdminClient {
                 new ConsumerGroupOperationContext<>(groupId, options, deadline, groupOffsetListingFuture);
 
         Call findCoordinatorCall = getFindCoordinatorCall(context,
-            () -> getListConsumerGroupOffsetsCall(context));
+            () -> getListConsumerGroupOffsetsCall(context, Optional.empty(), Optional.empty()));
         runnable.call(findCoordinatorCall, startFindCoordinatorMs);
 
         return new ListConsumerGroupOffsetsResult(groupOffsetListingFuture);
     }
 
     private Call getListConsumerGroupOffsetsCall(ConsumerGroupOperationContext<Map<TopicPartition, OffsetAndMetadata>,
-            ListConsumerGroupOffsetsOptions> context) {
+            ListConsumerGroupOffsetsOptions> context, Optional<Integer> numTries, Optional<Long> nextAllowedTryMs) {
         return new Call("listConsumerGroupOffsets", context.deadline(),
-                new ConstantNodeIdProvider(context.node().get().id())) {
+                new ConstantNodeIdProvider(context.node().get().id()), numTries, nextAllowedTryMs) {
             @Override
             OffsetFetchRequest.Builder createRequest(int timeoutMs) {
                 // Set the flag to false as for admin client request,
@@ -3085,7 +3105,9 @@ public class KafkaAdminClient extends AdminClient {
 
                 // If coordinator changed since we fetched it, retry
                 if (ConsumerGroupOperationContext.hasCoordinatorMoved(response)) {
-                    rescheduleFindCoordinatorTask(context, () -> getListConsumerGroupOffsetsCall(context));
+                    Call call = getListConsumerGroupOffsetsCall(context, Optional.of(this.getTries()),
+                        Optional.of(this.getDeadlineMs()));
+                    rescheduleFindCoordinatorTask(context, () -> call);
                     return;
                 }
 
@@ -3140,15 +3162,17 @@ public class KafkaAdminClient extends AdminClient {
             ConsumerGroupOperationContext<Void, DeleteConsumerGroupsOptions> context =
                     new ConsumerGroupOperationContext<>(groupId, options, deadline, future);
             Call findCoordinatorCall = getFindCoordinatorCall(context,
-                () -> getDeleteConsumerGroupsCall(context));
+                () -> getDeleteConsumerGroupsCall(context, Optional.empty(), Optional.empty()));
             runnable.call(findCoordinatorCall, startFindCoordinatorMs);
         }
 
         return new DeleteConsumerGroupsResult(new HashMap<>(futures));
     }
 
-    private Call getDeleteConsumerGroupsCall(ConsumerGroupOperationContext<Void, DeleteConsumerGroupsOptions> context) {
-        return new Call("deleteConsumerGroups", context.deadline(), new ConstantNodeIdProvider(context.node().get().id())) {
+    private Call getDeleteConsumerGroupsCall(ConsumerGroupOperationContext<Void, DeleteConsumerGroupsOptions> context,
+        Optional<Integer> numTries, Optional<Long> nextAllowedTryMs) {
+        return new Call("deleteConsumerGroups", context.deadline(), new ConstantNodeIdProvider(context.node().get().id()),
+            numTries, nextAllowedTryMs) {
 
             @Override
             DeleteGroupsRequest.Builder createRequest(int timeoutMs) {
@@ -3164,7 +3188,9 @@ public class KafkaAdminClient extends AdminClient {
 
                 // If coordinator changed since we fetched it, retry
                 if (ConsumerGroupOperationContext.hasCoordinatorMoved(response)) {
-                    rescheduleFindCoordinatorTask(context, () -> getDeleteConsumerGroupsCall(context));
+                    Call call = getDeleteConsumerGroupsCall(context, Optional.of(this.getTries()),
+                        Optional.of(this.getDeadlineMs()));
+                    rescheduleFindCoordinatorTask(context, () -> call);
                     return;
                 }
 
@@ -3201,7 +3227,8 @@ public class KafkaAdminClient extends AdminClient {
             new ConsumerGroupOperationContext<>(groupId, options, deadline, future);
 
         Call findCoordinatorCall = getFindCoordinatorCall(context,
-            () -> getDeleteConsumerGroupOffsetsCall(context, partitions));
+            () -> getDeleteConsumerGroupOffsetsCall(context, partitions, Optional.empty(),
+                Optional.empty()));
         runnable.call(findCoordinatorCall, startFindCoordinatorMs);
 
         return new DeleteConsumerGroupOffsetsResult(future, partitions);
@@ -3209,7 +3236,7 @@ public class KafkaAdminClient extends AdminClient {
 
     private Call getDeleteConsumerGroupOffsetsCall(
             ConsumerGroupOperationContext<Map<TopicPartition, Errors>, DeleteConsumerGroupOffsetsOptions> context,
-            Set<TopicPartition> partitions) {
+            Set<TopicPartition> partitions, Optional<Integer> numRetries, Optional<Long> nextRetryAllowedMs) {
         return new Call("deleteConsumerGroupOffsets", context.deadline(), new ConstantNodeIdProvider(context.node().get().id())) {
 
             @Override
@@ -3240,7 +3267,9 @@ public class KafkaAdminClient extends AdminClient {
 
                 // If coordinator changed since we fetched it, retry
                 if (ConsumerGroupOperationContext.hasCoordinatorMoved(response)) {
-                    rescheduleFindCoordinatorTask(context, () -> getDeleteConsumerGroupOffsetsCall(context, partitions));
+                    Call call = getDeleteConsumerGroupOffsetsCall(context, partitions,
+                        Optional.of(this.getTries()), Optional.of(this.getDeadlineMs()));
+                    rescheduleFindCoordinatorTask(context, () -> call);
                     return;
                 }
 
@@ -3564,16 +3593,17 @@ public class KafkaAdminClient extends AdminClient {
             new ConsumerGroupOperationContext<>(groupId, options, deadline, future);
 
         Call findCoordinatorCall = getFindCoordinatorCall(context,
-            () -> getRemoveMembersFromGroupCall(context));
+            () -> getRemoveMembersFromGroupCall(context, Optional.empty(), Optional.empty()));
         runnable.call(findCoordinatorCall, startFindCoordinatorMs);
 
         return new RemoveMembersFromConsumerGroupResult(future, options.members());
     }
 
-    private Call getRemoveMembersFromGroupCall(ConsumerGroupOperationContext<Map<MemberIdentity, Errors>, RemoveMembersFromConsumerGroupOptions> context) {
+    private Call getRemoveMembersFromGroupCall(ConsumerGroupOperationContext<Map<MemberIdentity, Errors>, RemoveMembersFromConsumerGroupOptions> context,
+        Optional<Integer> numRetries, Optional<Long> nextAllowedTryMs) {
         return new Call("leaveGroup",
                         context.deadline(),
-                        new ConstantNodeIdProvider(context.node().get().id())) {
+                        new ConstantNodeIdProvider(context.node().get().id()), numRetries, nextAllowedTryMs) {
             @Override
             LeaveGroupRequest.Builder createRequest(int timeoutMs) {
                 return new LeaveGroupRequest.Builder(context.groupId(),
@@ -3587,7 +3617,9 @@ public class KafkaAdminClient extends AdminClient {
 
                 // If coordinator changed since we fetched it, retry
                 if (ConsumerGroupOperationContext.hasCoordinatorMoved(response)) {
-                    rescheduleFindCoordinatorTask(context, () -> getRemoveMembersFromGroupCall(context));
+                    Call call = getRemoveMembersFromGroupCall(context, Optional.of(this.getTries()),
+                        Optional.of(this.getDeadlineMs()));
+                    rescheduleFindCoordinatorTask(context, () -> call);
                     return;
                 }
 
@@ -3626,7 +3658,8 @@ public class KafkaAdminClient extends AdminClient {
                 new ConsumerGroupOperationContext<>(groupId, options, deadline, future);
 
         Call findCoordinatorCall = getFindCoordinatorCall(context,
-            () -> KafkaAdminClient.this.getAlterConsumerGroupOffsetsCall(context, offsets));
+            () -> KafkaAdminClient.this.getAlterConsumerGroupOffsetsCall(context, offsets,
+                Optional.empty(), Optional.empty()));
         runnable.call(findCoordinatorCall, startFindCoordinatorMs);
 
         return new AlterConsumerGroupOffsetsResult(future);
@@ -3634,9 +3667,11 @@ public class KafkaAdminClient extends AdminClient {
 
     private Call getAlterConsumerGroupOffsetsCall(ConsumerGroupOperationContext<Map<TopicPartition, Errors>,
                                                   AlterConsumerGroupOffsetsOptions> context,
-                                                  Map<TopicPartition, OffsetAndMetadata> offsets) {
+                                                  Map<TopicPartition, OffsetAndMetadata> offsets,
+                                                  Optional<Integer> numRetries, Optional<Long> nextAllowedRetryMs) {
 
-        return new Call("commitOffsets", context.deadline(), new ConstantNodeIdProvider(context.node().get().id())) {
+        return new Call("commitOffsets", context.deadline(), new ConstantNodeIdProvider(context.node().get().id()),
+                        numRetries, nextAllowedRetryMs) {
 
             @Override
             OffsetCommitRequest.Builder createRequest(int timeoutMs) {
@@ -3676,8 +3711,9 @@ public class KafkaAdminClient extends AdminClient {
 
                 // If coordinator changed since we fetched it, retry
                 if (ConsumerGroupOperationContext.hasCoordinatorMoved(response)) {
-                    rescheduleFindCoordinatorTask(context,
-                        () -> getAlterConsumerGroupOffsetsCall(context, offsets));
+                    Call call = getAlterConsumerGroupOffsetsCall(context, offsets,
+                        Optional.of(this.getTries()), Optional.of(this.getDeadlineMs()));
+                    rescheduleFindCoordinatorTask(context, () -> call);
                     return;
                 }
 
@@ -3686,8 +3722,9 @@ public class KafkaAdminClient extends AdminClient {
                     for (OffsetCommitResponsePartition partition : topic.partitions()) {
                         Errors error = Errors.forCode(partition.errorCode());
                         if (ConsumerGroupOperationContext.shouldRefreshCoordinator(error)) {
-                            rescheduleFindCoordinatorTask(context,
-                                () -> getAlterConsumerGroupOffsetsCall(context, offsets));
+                            Call call = getAlterConsumerGroupOffsetsCall(context, offsets,
+                                Optional.of(this.getTries()), Optional.of(this.getDeadlineMs()));
+                            rescheduleFindCoordinatorTask(context, () -> call);
                             return;
                         }
                     }
@@ -3730,7 +3767,8 @@ public class KafkaAdminClient extends AdminClient {
                 new MetadataOperationContext<>(topics, options, deadline, futures);
 
         Call metadataCall = getMetadataCall(context, 
-            () -> KafkaAdminClient.this.getListOffsetsCalls(context, topicPartitionOffsets, futures));
+            () -> KafkaAdminClient.this.getListOffsetsCalls(context, topicPartitionOffsets, futures,
+                Optional.empty(), Optional.empty()));
         runnable.call(metadataCall, nowMetadata);
 
         return new ListOffsetsResult(new HashMap<>(futures));
@@ -3738,7 +3776,8 @@ public class KafkaAdminClient extends AdminClient {
 
     private List<Call> getListOffsetsCalls(MetadataOperationContext<ListOffsetsResultInfo, ListOffsetsOptions> context,
                                            Map<TopicPartition, OffsetSpec> topicPartitionOffsets,
-                                           Map<TopicPartition, KafkaFutureImpl<ListOffsetsResultInfo>> futures) {
+                                           Map<TopicPartition, KafkaFutureImpl<ListOffsetsResultInfo>> futures,
+                                           Optional<Integer> numRetries, Optional<Long> nextAllowedRetryMs) {
 
         MetadataResponse mr = context.response().orElseThrow(() -> new IllegalStateException("No Metadata response"));
         List<Call> calls = new ArrayList<>();
@@ -3773,7 +3812,8 @@ public class KafkaAdminClient extends AdminClient {
             final int brokerId = entry.getKey().id();
             final Map<TopicPartition, ListOffsetRequest.PartitionData> partitionsToQuery = entry.getValue();
 
-            calls.add(new Call("listOffsets on broker " + brokerId, context.deadline(), new ConstantNodeIdProvider(brokerId)) {
+            calls.add(new Call("listOffsets on broker " + brokerId, context.deadline(), new ConstantNodeIdProvider(brokerId),
+                numRetries, nextAllowedRetryMs) {
 
                 @Override
                 ListOffsetRequest.Builder createRequest(int timeoutMs) {
