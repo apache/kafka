@@ -3855,8 +3855,7 @@ public class FetcherTest {
 
         // Trigger the exception.
         assertThrows(KafkaException.class, () -> {
-            Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> partitionRecords =
-                    fetchedRecords();
+            fetchedRecords();
         });
     }
 
