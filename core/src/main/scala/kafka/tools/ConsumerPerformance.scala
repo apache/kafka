@@ -24,7 +24,6 @@ import java.util.concurrent.atomic.AtomicLong
 import java.util.{Properties, Random}
 
 import com.typesafe.scalalogging.LazyLogging
-import joptsimple.{OptionException, OptionParser, OptionSet}
 import kafka.utils.{CommandLineUtils, ToolsUtils}
 import org.apache.kafka.clients.consumer.{ConsumerRebalanceListener, KafkaConsumer}
 import org.apache.kafka.common.serialization.ByteArrayDeserializer
@@ -256,7 +255,7 @@ object ConsumerPerformance extends LazyLogging {
       .ofType(classOf[Long])
       .defaultsTo(10000)
 
-    options = tryParse(parser, args)
+    options = parser.parse(args: _*)
     CommandLineUtils.printHelpAndExitIfNeeded(this, "This tool helps in performance test for the full zookeeper consumer")
 
     CommandLineUtils.checkRequiredArgs(parser, options, topicOpt, numMessagesOpt)
@@ -272,7 +271,6 @@ object ConsumerPerformance extends LazyLogging {
 
     val brokerHostsAndPorts = options.valueOf(if (options.has(bootstrapServerOpt)) bootstrapServerOpt else brokerListOpt)
     props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerHostsAndPorts)
-
     props.put(ConsumerConfig.GROUP_ID_CONFIG, options.valueOf(groupIdOpt))
     props.put(ConsumerConfig.RECEIVE_BUFFER_CONFIG, options.valueOf(socketBufferSizeOpt).toString)
     props.put(ConsumerConfig.MAX_PARTITION_FETCH_BYTES_CONFIG, options.valueOf(fetchSizeOpt).toString)
@@ -291,14 +289,6 @@ object ConsumerPerformance extends LazyLogging {
     val dateFormat = new SimpleDateFormat(options.valueOf(dateFormatOpt))
     val hideHeader = options.has(hideHeaderOpt)
     val recordFetchTimeoutMs = options.valueOf(recordFetchTimeoutOpt).longValue()
-
-    def tryParse(parser: OptionParser, args: Array[String]): OptionSet = {
-      try
-        parser.parse(args: _*)
-      catch {
-        case e: OptionException =>
-          CommandLineUtils.printUsageAndDie(parser, e.getMessage)
-      }
-    }
   }
+
 }
