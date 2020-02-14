@@ -120,8 +120,8 @@ public class TransactionManagerTest {
     private final TopicPartition tp1 = new TopicPartition(topic, 1);
     private final LogContext logContext = new LogContext();
     private final MockTime time = new MockTime();
-    private final ProducerMetadata metadata = new ProducerMetadata(0, Long.MAX_VALUE, logContext,
-            new ClusterResourceListeners(), time);
+    private final ProducerMetadata metadata = new ProducerMetadata(0, Long.MAX_VALUE, Long.MAX_VALUE,
+            logContext, new ClusterResourceListeners(), time);
     private final MockClient client = new MockClient(time, metadata);
     private final ApiVersions apiVersions = new ApiVersions();
 
@@ -2678,7 +2678,7 @@ public class TransactionManagerTest {
         prepareAddPartitionsToTxnResponse(Errors.NONE, tp0, epoch, pid);
         prepareProduceResponse(Errors.NONE, pid, epoch);
         runUntil(() -> transactionManager.isPartitionAdded(tp0));  // Send AddPartitionsRequest
-        runUntil(responseFuture0::isDone);  // Send AddPartitionsRequest
+        runUntil(responseFuture0::isDone);
 
         Future<RecordMetadata> responseFuture1 = appendToAccumulator(tp0);
         prepareProduceResponse(Errors.NONE, pid, epoch);
@@ -2711,6 +2711,9 @@ public class TransactionManagerTest {
         final long pid = 13131L;
         final short epoch = 1;
 
+        // Set the InitProducerId version such that bumping the epoch number is not supported. This will test the case
+        // where the sequence number is reset on an UnknownProducerId error, allowing subsequent transactions to
+        // append to the log successfully
         apiVersions.update("0", new NodeApiVersions(Arrays.asList(
                 new ApiVersion(ApiKeys.INIT_PRODUCER_ID.id, (short) 0, (short) 1),
                 new ApiVersion(ApiKeys.PRODUCE.id, (short) 0, (short) 7))));

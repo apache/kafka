@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.PartitionInfo;
@@ -109,7 +110,7 @@ public class StreamsMetadataState {
             return allMetadata;
         }
 
-        final List<String> sourceTopics = builder.stateStoreNameToSourceTopics().get(storeName);
+        final Collection<String> sourceTopics = builder.sourceTopicsForStore(storeName);
         if (sourceTopics == null) {
             return Collections.emptyList();
         }
@@ -408,7 +409,7 @@ public class StreamsMetadataState {
     }
 
     private SourceTopicsInfo getSourceTopicsInfo(final String storeName) {
-        final List<String> sourceTopics = builder.stateStoreNameToSourceTopics().get(storeName);
+        final List<String> sourceTopics = builder.sourceTopicsForStore(storeName).stream().collect(Collectors.toList());
         if (sourceTopics == null || sourceTopics.isEmpty()) {
             return null;
         }

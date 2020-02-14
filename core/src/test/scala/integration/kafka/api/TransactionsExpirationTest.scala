@@ -25,11 +25,8 @@ import kafka.utils.TestUtils
 import kafka.utils.TestUtils.consumeRecords
 import org.apache.kafka.clients.consumer.KafkaConsumer
 import org.apache.kafka.clients.producer.KafkaProducer
-import org.apache.kafka.common.KafkaException
 import org.apache.kafka.common.errors.InvalidPidMappingException
-import org.junit.Assert._
 import org.junit.{After, Before, Test}
-import org.scalatest.Assertions.fail
 
 import scala.collection.JavaConverters._
 import scala.collection.Seq
@@ -84,17 +81,11 @@ class TransactionsExpirationTest extends KafkaServerTestHarness {
 
     // Start a new transaction and attempt to send, which will trigger an AddPartitionsToTxnRequest, which will fail due to the expired producer ID
     producer.beginTransaction()
-    producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic1, 3, "1", "1", willBeCommitted = false))
+    val failedFuture = producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic1, 3, "1", "1", willBeCommitted = false))
     Thread.sleep(500)
 
-    try {
-      producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic1, 2, "3", "3", willBeCommitted = false))
-      fail("Attempt to send record should have failed due to previous InvalidProducerIdMappingException")
-    } catch {
-      case e: KafkaException =>
-        assertTrue(e.getCause.isInstanceOf[InvalidPidMappingException])
-        producer.abortTransaction()
-    }
+    org.apache.kafka.test.TestUtils.assertFutureThrows(failedFuture, classOf[InvalidPidMappingException])
+    producer.abortTransaction()
 
     producer.beginTransaction()
     producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic2, null, "2", "2", willBeCommitted = true))

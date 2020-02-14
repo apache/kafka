@@ -1453,19 +1453,20 @@ public class ConfigDef {
         List<ConfigKey> configs = sortedConfigs();
         StringBuilder b = new StringBuilder();
         b.append("<ul class=\"config-list\">\n");
-
         for (ConfigKey key : configs) {
             if (key.internalConfig) {
                 continue;
             }
-            b.append("<li>");
-            b.append("<b>");
-            b.append(key.name);
-            b.append("</b>: ");
-            b.append(key.documentation);
-            b.append("<br/>");
-            // details
-            b.append("<ul class=\"horizontal-list\">");
+            b.append("<li>\n");
+            b.append(String.format("<h4>" +
+                    "<a id=\"%1$s\" href=\"#%1$s\">%1$s</a>" +
+                    "</h4>%n", key.name));
+            b.append("<p>");
+            b.append(key.documentation.replaceAll("\n", "<br>"));
+            b.append("</p>\n");
+
+            b.append("<table>" +
+                    "<tbody>\n");
             for (String detail : headers()) {
                 if (detail.equals("Name") || detail.equals("Description")) continue;
                 addConfigDetail(b, detail, getConfigValue(key, detail));
@@ -1476,7 +1477,7 @@ public class ConfigDef {
                     updateMode = "read-only";
                 addConfigDetail(b, "Update Mode", updateMode);
             }
-            b.append("</ul>");
+            b.append("</tbody></table>\n");
             b.append("</li>\n");
         }
         b.append("</ul>\n");
@@ -1484,7 +1485,10 @@ public class ConfigDef {
     }
 
     private static void addConfigDetail(StringBuilder builder, String name, String value) {
-        builder.append("<li><b>" + name + "</b>: " + value + "</li>");
+        builder.append("<tr>" +
+                "<th>" + name + ":</th>" +
+                "<td>" + value + "</td>" +
+                "</tr>\n");
     }
 
 }

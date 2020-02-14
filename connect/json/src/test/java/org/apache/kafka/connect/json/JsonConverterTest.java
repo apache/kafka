@@ -174,6 +174,15 @@ public class JsonConverterTest {
     }
 
     @Test
+    public void structWithOptionalFieldToConnect() {
+        byte[] structJson = "{ \"schema\": { \"type\": \"struct\", \"fields\": [{ \"field\":\"optional\", \"type\": \"string\", \"optional\": true }, {  \"field\": \"required\", \"type\": \"string\" }] }, \"payload\": { \"required\": \"required\" } }".getBytes();
+        Schema expectedSchema = SchemaBuilder.struct().field("optional", Schema.OPTIONAL_STRING_SCHEMA).field("required", Schema.STRING_SCHEMA).build();
+        Struct expected = new Struct(expectedSchema).put("required", "required");
+        SchemaAndValue converted = converter.toConnectData(TOPIC, structJson);
+        assertEquals(new SchemaAndValue(expectedSchema, expected), converted);
+    }
+
+    @Test
     public void nullToConnect() {
         // When schemas are enabled, trying to decode a tombstone should be an empty envelope
         // the behavior is the same as when the json is "{ "schema": null, "payload": null }"

@@ -289,8 +289,9 @@ public class StreamsBuilder {
 
         final MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>> materializedInternal =
             new MaterializedInternal<>(
-                    Materialized.with(consumedInternal.keySerde(), consumedInternal.valueSerde()),
-                    internalStreamsBuilder, topic + "-");
+                Materialized.with(consumedInternal.keySerde(), consumedInternal.valueSerde()),
+                internalStreamsBuilder,
+                topic + "-");
 
         return internalStreamsBuilder.table(topic, consumedInternal, materializedInternal);
     }

@@ -159,8 +159,9 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
                     partitionRecords.size(), minOffset, maxOffset));
 
             if (verbose) {
-                for (ConsumerRecord<String, String> record : partitionRecords)
+                for (ConsumerRecord<String, String> record : partitionRecords) {
                     printJson(new RecordData(record));
+                }
             }
 
             consumedMessages += partitionRecords.size();
@@ -595,10 +596,7 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
     public static VerifiableConsumer createFromArgs(ArgumentParser parser, String[] args) throws ArgumentParserException {
         Namespace res = parser.parseArgs(args);
 
-        String topic = res.getString("topic");
         boolean useAutoCommit = res.getBoolean("useAutoCommit");
-        int maxMessages = res.getInt("maxMessages");
-        boolean verbose = res.getBoolean("verbose");
         String configFile = res.getString("consumer.config");
 
         Properties consumerProps = new Properties();
@@ -624,6 +622,10 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
 
         StringDeserializer deserializer = new StringDeserializer();
         KafkaConsumer<String, String> consumer = new KafkaConsumer<>(consumerProps, deserializer, deserializer);
+
+        String topic = res.getString("topic");
+        int maxMessages = res.getInt("maxMessages");
+        boolean verbose = res.getBoolean("verbose");
 
         return new VerifiableConsumer(
                 consumer,

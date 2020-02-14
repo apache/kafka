@@ -605,7 +605,7 @@ class TransactionsTest extends KafkaServerTestHarness {
 
   @Test
   def testBumpTransactionalEpoch(): Unit = {
-    val producer = createTransactionalProducer("transactionalProducer", deliveryTimeoutMs = 1000)
+    val producer = createTransactionalProducer("transactionalProducer", deliveryTimeoutMs = 5000)
     val consumer = transactionalConsumers.head
     try {
       // Create a topic with RF=1 so that a single broker failure will render it unavailable
@@ -630,17 +630,11 @@ class TransactionsTest extends KafkaServerTestHarness {
 
       killBroker(partitionLeader) // kill the partition leader to prevent the batch from being submitted
       val failedFuture = producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(testTopic, 0, "3", "3", willBeCommitted = false))
-      Thread.sleep(2000) // Wait for the record to time out
+      Thread.sleep(6000) // Wait for the record to time out
       restartDeadBrokers()
 
-      try {
-        failedFuture.get
-        fail("Should have received TimeoutException")
-      } catch {
-        case e: ExecutionException =>
-          assertTrue(e.getCause.isInstanceOf[TimeoutException])
-          producer.abortTransaction()
-      }
+      org.apache.kafka.test.TestUtils.assertFutureThrows(failedFuture, classOf[TimeoutException])
+      producer.abortTransaction()
 
       producer.beginTransaction()
       producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic2, null, "2", "2", willBeCommitted = true))
