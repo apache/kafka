@@ -2422,22 +2422,16 @@ public class FetcherTest {
         final int newLeaderEpoch = 3;
         MetadataResponse updatedMetadata = TestUtils.metadataUpdateWith("dummy", 3,
             singletonMap(topicName, Errors.NONE), singletonMap(topicName, 4), tp -> newLeaderEpoch);
-        LogContext dummyContext = new LogContext();
-        ConsumerMetadata dummyMetadata = new ConsumerMetadata(0, Long.MAX_VALUE, false, false,
-            new SubscriptionState(dummyContext, OffsetResetStrategy.EARLIEST),
-            dummyContext, new ClusterResourceListeners());
-        dummyMetadata.updateWithCurrentRequestVersion(updatedMetadata, false, 0L);
 
-        Node newLeader = dummyMetadata.fetch().leaderFor(tp1);
+        Node originalLeader = initialUpdateResponse.cluster().leaderFor(tp1);
+        Node newLeader = updatedMetadata.cluster().leaderFor(tp1);
+        assertNotEquals(originalLeader, newLeader);
 
         for (Errors retriableError : retriableErrors) {
             buildFetcher();
 
             subscriptions.assignFromUser(Utils.mkSet(tp0, tp1));
             client.updateMetadata(initialUpdateResponse);
-
-            Node originalLeader = metadata.fetch().leaderFor(tp1);
-            assertNotEquals(originalLeader, newLeader);
 
             final long fetchTimestamp = 10L;
             Map<TopicPartition, ListOffsetResponse.PartitionData> allPartitionData = new HashMap<>();
