@@ -100,10 +100,6 @@ public class StoreChangelogReader implements ChangelogReader {
 
         private long totalRestored;
 
-        // only for active restoring tasks (for standby changelog it is null)
-        // NOTE we do not book keep the current offset since we leverage state manager as its source of truth
-
-
         // the end offset beyond which records should not be applied (yet) to restore the states
         //
         // for both active restoring tasks and standby updating tasks, it is defined as:
@@ -113,6 +109,8 @@ public class StoreChangelogReader implements ChangelogReader {
         // the log-end-offset only needs to be updated once and only need to be for active tasks since for standby
         // tasks it would never "complete" based on the end-offset;
         // the committed-offset needs to be updated periodically for those standby tasks
+        //
+        // NOTE we do not book keep the current offset since we leverage state manager as its source of truth
         private Long restoreEndOffset;
 
         // buffer records polled by the restore consumer;
