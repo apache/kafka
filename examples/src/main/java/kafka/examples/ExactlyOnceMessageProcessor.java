@@ -45,6 +45,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -91,7 +92,9 @@ public class ExactlyOnceMessageProcessor extends Thread {
         // A unique transactional.id must be provided in order to properly use EOS.
         producer = new Producer(outputTopic, true, transactionalId, true, -1, transactionTimeoutMs, null).get();
         // Consumer must be in read_committed mode, which means it won't be able to read uncommitted data.
-        consumer = new Consumer(inputTopic, consumerGroupId, READ_COMMITTED, -1, null).get();
+        // Consumer could optionally configure groupInstanceId to avoid unnecessary rebalances.
+        Optional<String> groupInstanceId = Optional.of("Txn-consumer-" + instanceIdx);
+        consumer = new Consumer(inputTopic, consumerGroupId, groupInstanceId, READ_COMMITTED, -1, null).get();
         this.latch = latch;
     }
 
@@ -138,8 +141,7 @@ public class ExactlyOnceMessageProcessor extends Thread {
                 messageProcessed += processMessages();
             } catch (ProducerFencedException | FencedInstanceIdException | AuthorizationException |
                          AuthenticationException | UnsupportedVersionException |
-                         UnsupportedForMessageFormatException | InvalidTopicException |
-                         InvalidOffsetException e) {
+                         UnsupportedForMessageFormatException | InvalidTopicException e) {
                 // Normally fenced exceptions are fatal, we catch them here just for demo purpose.
                 throw new KafkaException("Encountered fatal error during processing: " + e.getMessage());
             }
@@ -179,7 +181,7 @@ public class ExactlyOnceMessageProcessor extends Thread {
                 producer.commitTransaction();
                 return records.count();
             }
-        } catch (CommitFailedException | WakeupException | InterruptException | TimeoutException e) {
+        } catch (CommitFailedException | TimeoutException | InvalidOffsetException e) {
             // In case of a retriable exception, suggest aborting the ongoing transaction for correctness.
             producer.abortTransaction();
             // The consumer fetch position also needs to be reset.
