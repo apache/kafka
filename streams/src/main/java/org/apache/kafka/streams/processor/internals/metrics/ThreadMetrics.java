@@ -16,16 +16,11 @@
  */
 package org.apache.kafka.streams.processor.internals.metrics;
 
-import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.Sensor.RecordingLevel;
-import org.apache.kafka.common.metrics.stats.CumulativeCount;
-import org.apache.kafka.common.metrics.stats.Rate;
-import org.apache.kafka.common.metrics.stats.WindowedSum;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.Version;
 
 import java.util.Map;
-import java.util.concurrent.TimeUnit;
 
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.LATENCY_SUFFIX;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.RATE_DESCRIPTION;
@@ -37,6 +32,7 @@ import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetric
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.TOTAL_DESCRIPTION;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addAvgAndMaxToSensor;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addInvocationRateAndCountToSensor;
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addRateOfSumAndSumMetricsToSensor;
 
 public class ThreadMetrics {
     private ThreadMetrics() {}
@@ -177,23 +173,13 @@ public class ThreadMetrics {
                                                                RecordingLevel.INFO);
         final Map<String, String> tagMap = streamsMetrics.threadLevelTagMap(threadId);
         final String threadLevelGroup = threadLevelGroup(streamsMetrics);
-        sensor.add(
-            new MetricName(
-                PROCESS + RATE_SUFFIX,
-                threadLevelGroup,
-                PROCESS_RATE_DESCRIPTION,
-                tagMap
-            ),
-            new Rate(TimeUnit.SECONDS, new WindowedSum())
-        );
-        sensor.add(
-            new MetricName(
-                PROCESS + StreamsMetricsImpl.TOTAL_SUFFIX,
-                threadLevelGroup,
-                PROCESS_TOTAL_DESCRIPTION,
-                tagMap
-            ),
-            new CumulativeCount()
+        addRateOfSumAndSumMetricsToSensor(
+            sensor,
+            threadLevelGroup,
+            tagMap,
+            PROCESS,
+            PROCESS_RATE_DESCRIPTION,
+            PROCESS_TOTAL_DESCRIPTION
         );
         return sensor;
     }
