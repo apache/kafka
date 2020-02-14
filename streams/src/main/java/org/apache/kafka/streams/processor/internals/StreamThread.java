@@ -855,9 +855,15 @@ public class StreamThread extends Thread {
                 for (int i = 0; i < numIterations; i++) {
                     advanceNowAndComputeLatency();
                     processed = taskManager.process(now);
-                    processRateSensor.record(processed, now);
 
                     if (processed > 0) {
+                        // It makes no difference to the outcome of these metrics when we record "0",
+                        // so we can just avoid the method call when we didn't process anything.
+                        processRateSensor.record(processed, now);
+
+                        // This metric is scaled to represent the _average_ processing time of _each_
+                        // task. Note, it's hard to interpret this as defined, but we would need a KIP
+                        // to change it to simply report the overall time spent processing all tasks.
                         final long processLatency = advanceNowAndComputeLatency();
                         processLatencySensor.record(processLatency / (double) processed, now);
 
