@@ -30,9 +30,11 @@ import java.nio.channels.FileChannel;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.StandardOpenOption;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Map;
+import java.util.Properties;
 import java.util.Random;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -450,6 +452,27 @@ public class UtilsTest {
         assertEquals(fileChannelContent.length(), buffer.position());
         assertTrue(buffer.hasRemaining());
         verify(channelMock, atLeastOnce()).read(any(), anyLong());
+    }
+
+    @Test
+    public void testLoadProps() throws IOException {
+        File tempFile = TestUtils.tempFile();
+        try {
+            String testContent = "a=1\nb=2\n#a comment\n\nc=3\nd=";
+            Files.write(tempFile.toPath(), testContent.getBytes());
+            Properties props = Utils.loadProps(tempFile.getPath());
+            assertEquals(4, props.size());
+            assertEquals("1", props.get("a"));
+            assertEquals("2", props.get("b"));
+            assertEquals("3", props.get("c"));
+            assertEquals("", props.get("d"));
+            Properties restrictedProps = Utils.loadProps(tempFile.getPath(), Arrays.asList("b", "d", "e"));
+            assertEquals(2, restrictedProps.size());
+            assertEquals("2", restrictedProps.get("b"));
+            assertEquals("", restrictedProps.get("d"));
+        } finally {
+            Files.deleteIfExists(tempFile.toPath());
+        }
     }
 
     /**

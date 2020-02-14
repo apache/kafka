@@ -19,7 +19,7 @@ package org.apache.kafka.streams.processor.internals;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.Deserializer;
-import org.apache.kafka.streams.kstream.internals.ChangedDeserializer;
+import org.apache.kafka.streams.kstream.internals.WrappingNullableDeserializer;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 import org.apache.kafka.streams.processor.internals.metrics.ProcessorNodeMetrics;
@@ -66,14 +66,19 @@ public class SourceNode<K, V> extends ProcessorNode<K, V> {
     @SuppressWarnings("unchecked")
     @Override
     public void init(final InternalProcessorContext context) {
-        super.init(context);
-        this.context = context;
+        // It is important to first create the sensor before calling init on the
+        // parent object. Otherwise due to backwards compatibility an empty sensor
+        // without parent is created with the same name.
+        // Once the backwards compatibility is not needed anymore it might be possible to
+        // change this.
         processAtSourceSensor = ProcessorNodeMetrics.processorAtSourceSensorOrForwardSensor(
             Thread.currentThread().getName(),
             context.taskId().toString(),
             context.currentNode().name(),
             context.metrics()
         );
+        super.init(context);
+        this.context = context;
 
         // if deserializers are null, get the default ones from the context
         if (this.keyDeserializer == null) {
@@ -83,10 +88,10 @@ public class SourceNode<K, V> extends ProcessorNode<K, V> {
             this.valDeserializer = (Deserializer<V>) context.valueSerde().deserializer();
         }
 
-        // if value deserializers are for {@code Change} values, set the inner deserializer when necessary
-        if (this.valDeserializer instanceof ChangedDeserializer &&
-                ((ChangedDeserializer) this.valDeserializer).inner() == null) {
-            ((ChangedDeserializer) this.valDeserializer).setInner(context.valueSerde().deserializer());
+        // if value deserializers are internal wrapping deserializers that may need to be given the default
+        // then pass it the default one from the context
+        if (valDeserializer instanceof WrappingNullableDeserializer) {
+            ((WrappingNullableDeserializer) valDeserializer).setIfUnset(context.valueSerde().deserializer());
         }
     }
 

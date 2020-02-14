@@ -22,13 +22,13 @@ import java.nio.ByteBuffer
 import java.util.concurrent.locks.ReentrantLock
 import java.util.{Collections, Optional}
 
-import com.yammer.metrics.Metrics
 import com.yammer.metrics.core.Gauge
 import javax.management.ObjectName
 import kafka.api._
 import kafka.cluster.Partition
 import kafka.common.OffsetAndMetadata
 import kafka.log.{AppendOrigin, Log, LogAppendInfo}
+import kafka.metrics.KafkaYammerMetrics
 import kafka.server.{FetchDataInfo, FetchLogEnd, HostedPartition, KafkaConfig, LogOffsetMetadata, ReplicaManager}
 import kafka.utils.{KafkaScheduler, MockTime, TestUtils}
 import kafka.zk.KafkaZkClient
@@ -2327,7 +2327,7 @@ class GroupMetadataManagerTest {
   }
 
   private def getGauge(manager: GroupMetadataManager, name: String): Gauge[Int]  = {
-    Metrics.defaultRegistry().allMetrics().get(manager.metricName(name, Map.empty)).asInstanceOf[Gauge[Int]]
+    KafkaYammerMetrics.defaultRegistry().allMetrics().get(manager.metricName(name, Map.empty)).asInstanceOf[Gauge[Int]]
   }
 
   private def expectMetrics(manager: GroupMetadataManager,

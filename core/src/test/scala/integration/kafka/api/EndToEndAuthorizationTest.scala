@@ -17,13 +17,13 @@
 
 package kafka.api
 
-import com.yammer.metrics.Metrics
 import com.yammer.metrics.core.Gauge
 import java.io.File
 import java.util.Collections
 import java.util.concurrent.ExecutionException
 
 import kafka.admin.AclCommand
+import kafka.metrics.KafkaYammerMetrics
 import kafka.security.authorizer.AclAuthorizer
 import kafka.security.authorizer.AclEntry.WildcardHost
 import kafka.server._
@@ -232,7 +232,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
   }
 
   private def getGauge(metricName: String) = {
-    Metrics.defaultRegistry.allMetrics.asScala
+    KafkaYammerMetrics.defaultRegistry.allMetrics.asScala
            .filterKeys(k => k.getName == metricName)
            .headOption
            .getOrElse { fail( "Unable to find metric " + metricName ) }

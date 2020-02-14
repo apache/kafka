@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.integration;
 
+import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.health.ConnectClusterState;
 import org.apache.kafka.connect.health.ConnectorHealth;
 import org.apache.kafka.connect.health.ConnectorState;
@@ -23,7 +24,6 @@ import org.apache.kafka.connect.health.ConnectorType;
 import org.apache.kafka.connect.health.TaskState;
 import org.apache.kafka.connect.rest.ConnectRestExtension;
 import org.apache.kafka.connect.rest.ConnectRestExtensionContext;
-import org.apache.kafka.connect.runtime.rest.errors.ConnectRestException;
 import org.apache.kafka.connect.util.clusters.EmbeddedConnectCluster;
 import org.apache.kafka.connect.util.clusters.WorkerHandle;
 import org.apache.kafka.test.IntegrationTest;
@@ -33,12 +33,13 @@ import org.junit.experimental.categories.Category;
 
 import javax.ws.rs.GET;
 import javax.ws.rs.Path;
-import java.io.IOException;
+import javax.ws.rs.core.Response;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
+import static javax.ws.rs.core.Response.Status.BAD_REQUEST;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.NAME_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.TASKS_MAX_CONFIG;
@@ -55,11 +56,12 @@ public class RestExtensionIntegrationTest {
 
     private static final long REST_EXTENSION_REGISTRATION_TIMEOUT_MS = TimeUnit.MINUTES.toMillis(1);
     private static final long CONNECTOR_HEALTH_AND_CONFIG_TIMEOUT_MS = TimeUnit.MINUTES.toMillis(1);
+    private static final int NUM_WORKERS = 1;
 
     private EmbeddedConnectCluster connect;
 
     @Test
-    public void testRestExtensionApi() throws IOException, InterruptedException {
+    public void testRestExtensionApi() throws InterruptedException {
         // setup Connect worker properties
         Map<String, String> workerProps = new HashMap<>();
         workerProps.put(REST_EXTENSION_CLASSES_CONFIG, IntegrationTestRestExtension.class.getName());
@@ -67,13 +69,16 @@ public class RestExtensionIntegrationTest {
         // build a Connect cluster backed by Kafka and Zk
         connect = new EmbeddedConnectCluster.Builder()
             .name("connect-cluster")
-            .numWorkers(1)
+            .numWorkers(NUM_WORKERS)
             .numBrokers(1)
             .workerProps(workerProps)
             .build();
 
         // start the clusters
         connect.start();
+
+        connect.assertions().assertAtLeastNumWorkersAreUp(NUM_WORKERS,
+                "Initial group of workers did not start in time.");
 
         WorkerHandle worker = connect.workers().stream()
             .findFirst()
@@ -97,6 +102,8 @@ public class RestExtensionIntegrationTest {
             connectorHandle.taskHandle(connectorHandle.name() + "-0");
             StartAndStopLatch connectorStartLatch = connectorHandle.expectedStarts(1);
             connect.configureConnector(connectorHandle.name(), connectorProps);
+            connect.assertions().assertConnectorAndAtLeastNumTasksAreRunning(connectorHandle.name(), 1,
+                    "Connector tasks did not start in time.");
             connectorStartLatch.await(CONNECTOR_HEALTH_AND_CONFIG_TIMEOUT_MS, TimeUnit.MILLISECONDS);
 
             String workerId = String.format("%s:%d", worker.url().getHost(), worker.url().getPort());
@@ -138,8 +145,9 @@ public class RestExtensionIntegrationTest {
     private boolean extensionIsRegistered() {
         try {
             String extensionUrl = connect.endpointForResource("integration-test-rest-extension/registered");
-            return "true".equals(connect.executeGet(extensionUrl));
-        } catch (ConnectRestException | IOException e) {
+            Response response = connect.requestGet(extensionUrl);
+            return response.getStatus() < BAD_REQUEST.getStatusCode();
+        } catch (ConnectException e) {
             return false;
         }
     }

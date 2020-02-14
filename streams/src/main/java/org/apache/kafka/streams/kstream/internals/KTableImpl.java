@@ -130,12 +130,12 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
     public KTableImpl(final String name,
                       final Serde<K> keySerde,
                       final Serde<V> valSerde,
-                      final Set<String> sourceNodes,
+                      final Set<String> subTopologySourceNodes,
                       final String queryableStoreName,
                       final ProcessorSupplier<?, ?> processorSupplier,
                       final StreamsGraphNode streamsGraphNode,
                       final InternalStreamsBuilder builder) {
-        super(name, keySerde, valSerde, sourceNodes, streamsGraphNode, builder);
+        super(name, keySerde, valSerde, subTopologySourceNodes, streamsGraphNode, builder);
         this.processorSupplier = processorSupplier;
         this.queryableStoreName = queryableStoreName;
     }
@@ -191,14 +191,15 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
 
         builder.addGraphNode(this.streamsGraphNode, tableNode);
 
-        return new KTableImpl<>(name,
-                                keySerde,
-                                valueSerde,
-                                sourceNodes,
-                                queryableStoreName,
-                                processorSupplier,
-                                tableNode,
-                                builder);
+        return new KTableImpl<>(
+            name,
+            keySerde,
+            valueSerde,
+            subTopologySourceNodes,
+            queryableStoreName,
+            processorSupplier,
+            tableNode,
+            builder);
     }
 
     @Override
@@ -310,7 +311,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
             name,
             keySerde,
             valueSerde,
-            sourceNodes,
+            subTopologySourceNodes,
             queryableStoreName,
             processorSupplier,
             tableNode,
@@ -463,7 +464,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
             name,
             keySerde,
             valueSerde,
-            sourceNodes,
+            subTopologySourceNodes,
             queryableStoreName,
             processorSupplier,
             tableNode,
@@ -493,7 +494,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         builder.addGraphNode(this.streamsGraphNode, toStreamNode);
 
         // we can inherit parent key and value serde
-        return new KStreamImpl<>(name, keySerde, valSerde, sourceNodes, false, toStreamNode, builder);
+        return new KStreamImpl<>(name, keySerde, valSerde, subTopologySourceNodes, false, toStreamNode, builder);
     }
 
     @Override
@@ -683,7 +684,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
             enableSendingOldValues();
         }
         if (rightOuter) {
-            ((KTableImpl) other).enableSendingOldValues();
+            ((KTableImpl<?, ?, ?>) other).enableSendingOldValues();
         }
 
         final KTableKTableAbstractJoin<K, VR, V, VO> joinThis;
@@ -732,9 +733,9 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
                 .withJoinThisProcessorParameters(joinThisProcessorParameters)
                 .withJoinOtherProcessorParameters(joinOtherProcessorParameters)
                 .withThisJoinSideNodeName(name)
-                .withOtherJoinSideNodeName(((KTableImpl) other).name)
+                .withOtherJoinSideNodeName(((KTableImpl<?, ?, ?>) other).name)
                 .withJoinThisStoreNames(valueGetterSupplier().storeNames())
-                .withJoinOtherStoreNames(((KTableImpl) other).valueGetterSupplier().storeNames())
+                .withJoinOtherStoreNames(((KTableImpl<?, ?, ?>) other).valueGetterSupplier().storeNames())
                 .withKeySerde(keySerde)
                 .withValueSerde(valueSerde)
                 .withQueryableStoreName(queryableStoreName)
@@ -790,7 +791,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         return new KGroupedTableImpl<>(
             builder,
             selectName,
-            sourceNodes,
+            subTopologySourceNodes,
             groupedInternal,
             groupByMapNode
         );
@@ -952,24 +953,35 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         //This occurs whenever the extracted foreignKey changes values.
         enableSendingOldValues();
 
-        final Serde<KO> foreignKeySerde = ((KTableImpl<KO, VO, ?>) foreignKeyTable).keySerde;
-        final Serde<SubscriptionWrapper<K>> subscriptionWrapperSerde = new SubscriptionWrapperSerde<>(keySerde);
-        final SubscriptionResponseWrapperSerde<VO> responseWrapperSerde =
-            new SubscriptionResponseWrapperSerde<>(((KTableImpl<KO, VO, VO>) foreignKeyTable).valSerde);
 
 
         final NamedInternal renamed = new NamedInternal(joinName);
         final String subscriptionTopicName = renamed.suffixWithOrElseGet("-subscription-registration", builder, SUBSCRIPTION_REGISTRATION) + TOPIC_SUFFIX;
+        final String subscriptionPrimaryKeySerdePseudoTopic = subscriptionTopicName + "-pk";
+        final String subscriptionForeignKeySerdePseudoTopic = subscriptionTopicName + "-fk";
+        final String valueHashSerdePseudoTopic = subscriptionTopicName + "-vh";
         builder.internalTopologyBuilder.addInternalTopic(subscriptionTopicName);
-        final CombinedKeySchema<KO, K> combinedKeySchema = new CombinedKeySchema<>(subscriptionTopicName, foreignKeySerde, keySerde);
+
+        final Serde<KO> foreignKeySerde = ((KTableImpl<KO, VO, ?>) foreignKeyTable).keySerde;
+        final Serde<SubscriptionWrapper<K>> subscriptionWrapperSerde = new SubscriptionWrapperSerde<>(subscriptionPrimaryKeySerdePseudoTopic, keySerde);
+        final SubscriptionResponseWrapperSerde<VO> responseWrapperSerde =
+            new SubscriptionResponseWrapperSerde<>(((KTableImpl<KO, VO, VO>) foreignKeyTable).valSerde);
+
+        final CombinedKeySchema<KO, K> combinedKeySchema = new CombinedKeySchema<>(
+            subscriptionForeignKeySerdePseudoTopic,
+            foreignKeySerde,
+            subscriptionPrimaryKeySerdePseudoTopic,
+            keySerde
+        );
 
         final ProcessorGraphNode<K, Change<V>> subscriptionNode = new ProcessorGraphNode<>(
             new ProcessorParameters<>(
                 new ForeignJoinSubscriptionSendProcessorSupplier<>(
                     foreignKeyExtractor,
+                    subscriptionForeignKeySerdePseudoTopic,
+                    valueHashSerdePseudoTopic,
                     foreignKeySerde,
-                    subscriptionTopicName,
-                    valSerde.serializer(),
+                    valSerde == null ? null : valSerde.serializer(),
                     leftJoin
                 ),
                 renamed.suffixWithOrElseGet("-subscription-registration-processor", builder, SUBSCRIPTION_REGISTRATION)
@@ -995,7 +1007,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         // The subscription source is the source node on the *receiving* end *after* the repartition.
         // This topic needs to be copartitioned with the Foreign Key table.
         final Set<String> copartitionedRepartitionSources =
-            new HashSet<>(((KTableImpl<?, ?, ?>) foreignKeyTable).sourceNodes);
+            new HashSet<>(((KTableImpl<?, ?, ?>) foreignKeyTable).subTopologySourceNodes);
         copartitionedRepartitionSources.add(subscriptionSource.nodeName());
         builder.internalTopologyBuilder.copartitionSources(copartitionedRepartitionSources);
 
@@ -1065,14 +1077,14 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         builder.addGraphNode(foreignResponseSink, foreignResponseSource);
 
         // the response topic has to be copartitioned with the left (primary) side of the join
-        final Set<String> resultSourceNodes = new HashSet<>(this.sourceNodes);
+        final Set<String> resultSourceNodes = new HashSet<>(this.subTopologySourceNodes);
         resultSourceNodes.add(foreignResponseSource.nodeName());
         builder.internalTopologyBuilder.copartitionSources(resultSourceNodes);
 
         final KTableValueGetterSupplier<K, V> primaryKeyValueGetter = valueGetterSupplier();
         final SubscriptionResolverJoinProcessorSupplier<K, V, VO, VR> resolverProcessorSupplier = new SubscriptionResolverJoinProcessorSupplier<>(
             primaryKeyValueGetter,
-            valueSerde().serializer(),
+            valSerde == null ? null : valSerde.serializer(),
             joiner,
             leftJoin
         );
@@ -1107,9 +1119,8 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         );
 
         final StoreBuilder<TimestampedKeyValueStore<K, VR>> resultStore =
-            materializedInternal.queryableStoreName() == null
-                ? null
-                : new TimestampedKeyValueStoreMaterializer<>(materializedInternal).materialize();
+            new TimestampedKeyValueStoreMaterializer<>(materializedInternal).materialize();
+
         final TableProcessorNode<K, VR> resultNode = new TableProcessorNode<>(
             resultProcessorName,
             new ProcessorParameters<>(

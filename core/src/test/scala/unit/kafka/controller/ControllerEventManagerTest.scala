@@ -20,9 +20,9 @@ package kafka.controller
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.atomic.AtomicInteger
 
-import com.yammer.metrics.Metrics
 import com.yammer.metrics.core.{Histogram, MetricName, Timer}
 import kafka.controller
+import kafka.metrics.KafkaYammerMetrics
 import kafka.utils.TestUtils
 import org.apache.kafka.common.message.UpdateMetadataResponseData
 import org.apache.kafka.common.protocol.Errors
@@ -54,7 +54,7 @@ class ControllerEventManagerTest {
     }
 
     def allEventManagerMetrics: Set[MetricName] = {
-      Metrics.defaultRegistry.allMetrics.asScala.keySet
+      KafkaYammerMetrics.defaultRegistry.allMetrics.asScala.keySet
         .filter(_.getMBeanName.startsWith("kafka.controller:type=ControllerEventManager"))
         .toSet
     }
@@ -111,7 +111,7 @@ class ControllerEventManagerTest {
     }
 
     // The metric should not already exist
-    assertTrue(Metrics.defaultRegistry.allMetrics.asScala.filterKeys(_.getMBeanName == metricName).values.isEmpty)
+    assertTrue(KafkaYammerMetrics.defaultRegistry.allMetrics.asScala.filterKeys(_.getMBeanName == metricName).values.isEmpty)
 
     controllerEventManager = new ControllerEventManager(0, eventProcessor,
       time, controllerStats.rateAndTimeMetrics)
@@ -124,7 +124,7 @@ class ControllerEventManagerTest {
     TestUtils.waitUntilTrue(() => processedEvents.get() == 2,
       "Timed out waiting for processing of all events")
 
-    val queueTimeHistogram = Metrics.defaultRegistry.allMetrics.asScala.filterKeys(_.getMBeanName == metricName).values.headOption
+    val queueTimeHistogram = KafkaYammerMetrics.defaultRegistry.allMetrics.asScala.filterKeys(_.getMBeanName == metricName).values.headOption
       .getOrElse(fail(s"Unable to find metric $metricName")).asInstanceOf[Histogram]
 
     assertEquals(2, queueTimeHistogram.count)
@@ -179,7 +179,7 @@ class ControllerEventManagerTest {
   }
 
   private def timer(metricName: String): Timer = {
-    Metrics.defaultRegistry.allMetrics.asScala.filterKeys(_.getMBeanName == metricName).values.headOption
+    KafkaYammerMetrics.defaultRegistry.allMetrics.asScala.filterKeys(_.getMBeanName == metricName).values.headOption
       .getOrElse(fail(s"Unable to find metric $metricName")).asInstanceOf[Timer]
   }
 

@@ -60,8 +60,7 @@ public class InternalTopicManager {
     private final int retries;
     private final long retryBackOffMs;
 
-    public InternalTopicManager(final Admin adminClient,
-                                final StreamsConfig streamsConfig) {
+    public InternalTopicManager(final Admin adminClient, final StreamsConfig streamsConfig) {
         this.adminClient = adminClient;
 
         final LogContext logContext = new LogContext(String.format("stream-thread [%s] ", Thread.currentThread().getName()));
@@ -202,7 +201,7 @@ public class InternalTopicManager {
                 if (cause instanceof UnknownTopicOrPartitionException ||
                     cause instanceof LeaderNotAvailableException) {
                     // This topic didn't exist or leader is not known yet, proceed to try to create it
-                    log.debug("Topic {} is unknown or not found, hence not existed yet.", topicName);
+                    log.debug("Topic {} is unknown or not found, hence not existed yet: {}", topicName, cause.toString());
                 } else {
                     log.error("Unexpected error during topic description for {}.\n" +
                         "Error message was: {}", topicName, cause.toString());
@@ -217,15 +216,17 @@ public class InternalTopicManager {
     /**
      * Check the existing topics to have correct number of partitions; and return the remaining topics that needs to be created
      */
-    private Set<String> validateTopics(final Set<String> topicsToValidate,
-                                       final Map<String, InternalTopicConfig> topicsMap) {
+    private Set<String> validateTopics(final Set<String> topicsToValidate, final Map<String, InternalTopicConfig> topicsMap) {
+        if (!topicsMap.keySet().containsAll(topicsToValidate)) {
+            throw new IllegalStateException("The topics map " + topicsMap.keySet() + " does not contain all the topics " +
+                topicsToValidate + " trying to validate.");
+        }
 
         final Map<String, Integer> existedTopicPartition = getNumPartitions(topicsToValidate);
 
         final Set<String> topicsToCreate = new HashSet<>();
-        for (final Map.Entry<String, InternalTopicConfig> entry : topicsMap.entrySet()) {
-            final String topicName = entry.getKey();
-            final Optional<Integer> numberOfPartitions = entry.getValue().numberOfPartitions();
+        for (final String topicName : topicsToValidate) {
+            final Optional<Integer> numberOfPartitions = topicsMap.get(topicName).numberOfPartitions();
             if (existedTopicPartition.containsKey(topicName) && numberOfPartitions.isPresent()) {
                 if (!existedTopicPartition.get(topicName).equals(numberOfPartitions.get())) {
                     final String errorMsg = String.format("Existing internal topic %s has invalid partitions: " +

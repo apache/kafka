@@ -448,7 +448,9 @@ public class KafkaAdminClient extends AdminClient {
                 .timeWindow(config.getLong(AdminClientConfig.METRICS_SAMPLE_WINDOW_MS_CONFIG), TimeUnit.MILLISECONDS)
                 .recordLevel(Sensor.RecordingLevel.forName(config.getString(AdminClientConfig.METRICS_RECORDING_LEVEL_CONFIG)))
                 .tags(metricTags);
-            reporters.add(new JmxReporter(JMX_PREFIX));
+            JmxReporter jmxReporter = new JmxReporter(JMX_PREFIX);
+            jmxReporter.configure(config.originals());
+            reporters.add(jmxReporter);
             metrics = new Metrics(metricConfig, reporters, time);
             String metricGrpPrefix = "admin-client";
             channelBuilder = ClientUtils.createChannelBuilder(config, time, logContext);
@@ -1037,7 +1039,7 @@ public class KafkaAdminClient extends AdminClient {
                 }
                 ClientRequest clientRequest = client.newClientRequest(node.idString(), requestBuilder, now,
                         true, requestTimeoutMs, null);
-                log.trace("Sending {} to {}. correlationId={}", requestBuilder, node, clientRequest.correlationId());
+                log.debug("Sending {} to {}. correlationId={}", requestBuilder, node, clientRequest.correlationId());
                 client.send(clientRequest, now);
                 getOrCreateListValue(callsInFlight, node.idString()).add(call);
                 correlationIdToCalls.put(clientRequest.correlationId(), call);
@@ -3100,7 +3102,12 @@ public class KafkaAdminClient extends AdminClient {
                         final Long offset = partitionData.offset;
                         final String metadata = partitionData.metadata;
                         final Optional<Integer> leaderEpoch = partitionData.leaderEpoch;
-                        groupOffsetsListing.put(topicPartition, new OffsetAndMetadata(offset, leaderEpoch, metadata));
+                        // Negative offset indicates that the group has no committed offset for this partition
+                        if (offset < 0) {
+                            groupOffsetsListing.put(topicPartition, null);
+                        } else {
+                            groupOffsetsListing.put(topicPartition, new OffsetAndMetadata(offset, leaderEpoch, metadata));
+                        }
                     } else {
                         log.warn("Skipping return offset for {} due to error {}.", topicPartition, error);
                     }

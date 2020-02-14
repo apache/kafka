@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import org.apache.kafka.streams.StoreQueryParams;
+import org.apache.kafka.streams.StoreQueryParameters;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
@@ -47,7 +47,7 @@ public class StreamThreadStateStoreProvider {
     }
 
     @SuppressWarnings("unchecked")
-    public <T> List<T> stores(final StoreQueryParams storeQueryParams) {
+    public <T> List<T> stores(final StoreQueryParameters storeQueryParams) {
         final String storeName = storeQueryParams.storeName();
         final QueryableStoreType<T> queryableStoreType = storeQueryParams.queryableStoreType();
         final TaskId keyTaskId = createKeyTaskId(storeName, storeQueryParams.partition());
@@ -56,34 +56,47 @@ public class StreamThreadStateStoreProvider {
         }
         final StreamThread.State state = streamThread.state();
         if (storeQueryParams.staleStoresEnabled() ? state.isAlive() : state == StreamThread.State.RUNNING) {
-            final Iterable<? extends Task> tasks = storeQueryParams.staleStoresEnabled() ? streamThread.allTasks().values() : streamThread.activeTasks();
+            final Map<TaskId, ? extends Task> tasks = storeQueryParams.staleStoresEnabled() ? streamThread.allTasks() : streamThread.activeTaskMap();
             final List<T> stores = new ArrayList<>();
-            for (final Task task : tasks) {
-                if (keyTaskId != null && !keyTaskId.equals(task.id())) {
-                    continue;
+            if (keyTaskId != null) {
+                final T store = validateAndListStores(tasks.get(keyTaskId).getStore(storeName), queryableStoreType, storeName, keyTaskId);
+                if (store != null) {
+                    return Collections.singletonList(store);
                 }
-                final StateStore store = task.getStore(storeName);
-                if (store != null && queryableStoreType.accepts(store)) {
-                    if (!store.isOpen()) {
-                        throw new InvalidStateStoreException(
-                            "Cannot get state store " + storeName + " for task " + task +
-                                " because the store is not open. " +
-                                "The state store may have migrated to another instances.");
-                    }
-                    if (store instanceof TimestampedKeyValueStore && queryableStoreType instanceof QueryableStoreTypes.KeyValueStoreType) {
-                        stores.add((T) new ReadOnlyKeyValueStoreFacade<>((TimestampedKeyValueStore<Object, Object>) store));
-                    } else if (store instanceof TimestampedWindowStore && queryableStoreType instanceof QueryableStoreTypes.WindowStoreType) {
-                        stores.add((T) new ReadOnlyWindowStoreFacade<>((TimestampedWindowStore<Object, Object>) store));
-                    } else {
-                        stores.add((T) store);
+            } else {
+                for (final Task streamTask : tasks.values()) {
+                    final T store = validateAndListStores(streamTask.getStore(storeName), queryableStoreType, storeName, streamTask.id());
+                    if (store != null) {
+                        stores.add(store);
                     }
                 }
             }
             return stores;
         } else {
             throw new InvalidStateStoreException("Cannot get state store " + storeName + " because the stream thread is " +
-                                                     state + ", not RUNNING" +
-                                                     (storeQueryParams.staleStoresEnabled() ? " or REBALANCING" : ""));
+                                                    state + ", not RUNNING" +
+                                                    (storeQueryParams.staleStoresEnabled() ? " or REBALANCING" : ""));
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private <T> T validateAndListStores(final StateStore store, final QueryableStoreType<T> queryableStoreType, final String storeName, final TaskId taskId) {
+        if (store != null && queryableStoreType.accepts(store)) {
+            if (!store.isOpen()) {
+                throw new InvalidStateStoreException(
+                        "Cannot get state store " + storeName + " for task " + taskId +
+                            " because the store is not open. " +
+                            "The state store may have migrated to another instances.");
+            }
+            if (store instanceof TimestampedKeyValueStore && queryableStoreType instanceof QueryableStoreTypes.KeyValueStoreType) {
+                return (T) new ReadOnlyKeyValueStoreFacade<>((TimestampedKeyValueStore<Object, Object>) store);
+            } else if (store instanceof TimestampedWindowStore && queryableStoreType instanceof QueryableStoreTypes.WindowStoreType) {
+                return (T) new ReadOnlyWindowStoreFacade<>((TimestampedWindowStore<Object, Object>) store);
+            } else {
+                return (T) store;
+            }
+        } else {
+            return null;
         }
     }
 

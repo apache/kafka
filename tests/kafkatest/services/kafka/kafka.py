@@ -96,6 +96,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
                  client_sasl_mechanism=SecurityConfig.SASL_MECHANISM_GSSAPI, interbroker_sasl_mechanism=SecurityConfig.SASL_MECHANISM_GSSAPI,
                  authorizer_class_name=None, topics=None, version=DEV_BRANCH, jmx_object_names=None,
                  jmx_attributes=None, zk_connect_timeout=5000, zk_session_timeout=6000, server_prop_overides=None, zk_chroot=None,
+                 zk_client_secure=False,
                  listener_security_config=ListenerSecurityConfig(), per_node_server_prop_overrides=None, extra_kafka_opts=""):
         """
         :param context: test context
@@ -113,6 +114,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         :param int zk_session_timeout:
         :param dict server_prop_overides: overrides for kafka.properties file
         :param zk_chroot:
+        :param bool zk_client_secure: connect to Zookeeper over secure client port (TLS) when True
         :param ListenerSecurityConfig listener_security_config: listener config to use
         :param dict per_node_server_prop_overrides:
         :param str extra_kafka_opts: jvm args to add to KAFKA_OPTS variable
@@ -139,6 +141,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
             self.per_node_server_prop_overrides = per_node_server_prop_overrides
         self.log_level = "DEBUG"
         self.zk_chroot = zk_chroot
+        self.zk_client_secure = zk_client_secure
         self.listener_security_config = listener_security_config
         self.extra_kafka_opts = extra_kafka_opts
 
@@ -206,7 +209,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
     @property
     def security_config(self):
         config = SecurityConfig(self.context, self.security_protocol, self.interbroker_listener.security_protocol,
-                                zk_sasl=self.zk.zk_sasl,
+                                zk_sasl=self.zk.zk_sasl, zk_tls=self.zk_client_secure,
                                 client_sasl_mechanism=self.client_sasl_mechanism,
                                 interbroker_sasl_mechanism=self.interbroker_sasl_mechanism,
                                 listener_security_config=self.listener_security_config)
@@ -221,7 +224,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
     def close_port(self, listener_name):
         self.port_mappings[listener_name].open = False
 
-    def start_minikdc(self, add_principals=""):
+    def start_minikdc_if_necessary(self, add_principals=""):
         if self.security_config.has_sasl:
             if self.minikdc is None:
                 self.minikdc = MiniKdc(self.context, self.nodes, extra_principals = add_principals)
@@ -233,10 +236,12 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         return len(self.pids(node)) > 0
 
     def start(self, add_principals=""):
+        if self.zk_client_secure and not self.zk.client_secure_port:
+            raise Exception("Unable to start Kafka: TLS to Zookeeper requested but Zookeeper secure port not enabled")
         self.open_port(self.security_protocol)
         self.interbroker_listener.open = True
 
-        self.start_minikdc(add_principals)
+        self.start_minikdc_if_necessary(add_principals)
         self._ensure_zk_chroot()
 
         Service.start(self)
@@ -300,6 +305,11 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         override_configs = KafkaConfig(**node.config)
         override_configs[config_property.ADVERTISED_HOSTNAME] = node.account.hostname
         override_configs[config_property.ZOOKEEPER_CONNECT] = self.zk_connect_setting()
+        if self.zk_client_secure:
+            override_configs[config_property.ZOOKEEPER_SSL_CLIENT_ENABLE] = 'true'
+            override_configs[config_property.ZOOKEEPER_CLIENT_CNXN_SOCKET] = 'org.apache.zookeeper.ClientCnxnSocketNetty'
+        else:
+            override_configs[config_property.ZOOKEEPER_SSL_CLIENT_ENABLE] = 'false'
 
         for prop in self.server_prop_overides:
             override_configs[prop[0]] = prop[1]
@@ -643,14 +653,16 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
 
         return missing
 
-    def restart_cluster(self, clean_shutdown=True):
+    def restart_cluster(self, clean_shutdown=True, timeout_sec=60, after_each_broker_restart=None, *args):
         for node in self.nodes:
-            self.restart_node(node, clean_shutdown=clean_shutdown)
+            self.restart_node(node, clean_shutdown=clean_shutdown, timeout_sec=timeout_sec)
+            if after_each_broker_restart is not None:
+                after_each_broker_restart(*args)
 
-    def restart_node(self, node, clean_shutdown=True):
+    def restart_node(self, node, clean_shutdown=True, timeout_sec=60):
         """Restart the given node."""
-        self.stop_node(node, clean_shutdown)
-        self.start_node(node)
+        self.stop_node(node, clean_shutdown, timeout_sec)
+        self.start_node(node, timeout_sec)
 
     def isr_idx_list(self, topic, partition=0):
         """ Get in-sync replica list the given topic and partition.
@@ -777,7 +789,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         return output
 
     def zk_connect_setting(self):
-        return self.zk.connect_setting(self.zk_chroot)
+        return self.zk.connect_setting(self.zk_chroot, self.zk_client_secure)
 
     def __bootstrap_servers(self, port, validate=True, offline_nodes=[]):
         if validate and not port.open:
@@ -817,7 +829,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         """
         Check whether a broker is registered in Zookeeper
         """
-        self.logger.debug("Querying zookeeper to see if broker %s is registered", node)
+        self.logger.debug("Querying zookeeper to see if broker %s is registered", str(node))
         broker_info = self.zk.query("/brokers/ids/%s" % self.idx(node), chroot=self.zk_chroot)
         self.logger.debug("Broker info: %s", broker_info)
         return broker_info is not None

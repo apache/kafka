@@ -232,7 +232,7 @@
     <br>
             Examples using console-producer and console-consumer:
             <pre class="brush: bash;">
-            kafka-console-producer.sh --broker-list localhost:9093 --topic test --producer.config client-ssl.properties
+            kafka-console-producer.sh --bootstrap-server localhost:9093 --topic test --producer.config client-ssl.properties
             kafka-console-consumer.sh --bootstrap-server localhost:9093 --topic test --consumer.config client-ssl.properties</pre>
         </li>
     </ol>
@@ -1014,8 +1014,8 @@
     </ol>
 
     <h3><a id="security_authz" href="#security_authz">7.4 Authorization and ACLs</a></h3>
-    Kafka ships with a pluggable Authorizer and an out-of-box authorizer implementation that uses zookeeper to store all the acls. The Authorizer is configured by setting <code>authorizer.class.name</code> in server.properties. To enable the out of the box implementation use:
-    <pre>authorizer.class.name=kafka.security.auth.SimpleAclAuthorizer</pre>
+    Kafka ships with a pluggable Authorizer and an out-of-box authorizer implementation that uses zookeeper to store all the acls. The Authorizer is configured by setting <tt>authorizer.class.name</tt> in server.properties. To enable the out of the box implementation use:
+    <pre>authorizer.class.name=kafka.security.authorizer.AclAuthorizer</pre>
     Kafka acls are defined in the general format of "Principal P is [Allowed/Denied] Operation O From Host H on any Resource R matching ResourcePattern RP". You can read more about the acl structure in KIP-11 and resource patterns in KIP-290. In order to add, remove or list acls you can use the Kafka authorizer CLI. By default, if no ResourcePatterns match a specific Resource R, then R has no associated acls, and therefore no one other than super users is allowed to access R. If you want to change that behavior, you can include the following in server.properties.
     <pre>allow.everyone.if.no.acl.found=true</pre>
     One can also add super users in server.properties like the following (note that the delimiter is semicolon since SSL user names may contain comma). Default PrincipalType string "User" is case sensitive.
@@ -1097,7 +1097,7 @@
         <tr>
             <td>--authorizer</td>
             <td>Fully qualified class name of the authorizer.</td>
-            <td>kafka.security.auth.SimpleAclAuthorizer</td>
+            <td>kafka.security.authorizer.AclAuthorizer</td>
             <td>Configuration</td>
         </tr>
         <tr>
@@ -1238,6 +1238,19 @@
             <td> Convenience option to assume yes to all queries and do not prompt.</td>
             <td></td>
             <td>Convenience</td>
+        </tr>
+        <tr>
+            <td>--zk-tls-config-file</td>
+            <td> Identifies the file where ZooKeeper client TLS connectivity properties for the authorizer are defined.
+                Any properties other than the following (with or without an "authorizer." prefix) are ignored:
+                zookeeper.clientCnxnSocket, zookeeper.ssl.cipher.suites, zookeeper.ssl.client.enable,
+                zookeeper.ssl.crl.enable, zookeeper.ssl.enabled.protocols, zookeeper.ssl.endpoint.identification.algorithm,
+                zookeeper.ssl.keystore.location, zookeeper.ssl.keystore.password, zookeeper.ssl.keystore.type,
+                zookeeper.ssl.ocsp.enable, zookeeper.ssl.protocol, zookeeper.ssl.truststore.location,
+                zookeeper.ssl.truststore.password, zookeeper.ssl.truststore.type
+            </td>
+            <td></td>
+            <td>Configuration</td>
         </tr>
     </tbody></table>
 
@@ -1858,8 +1871,48 @@
 
 
     <h3><a id="zk_authz" href="#zk_authz">7.6 ZooKeeper Authentication</a></h3>
+    ZooKeeper supports mutual TLS (mTLS) authentication beginning with the 3.5.x versions.
+    Kafka supports authenticating to ZooKeeper with SASL and mTLS -- either individually or both together --
+    beginning with version 2.5. See
+    <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-515%3A+Enable+ZK+client+to+use+the+new+TLS+supported+authentication">KIP-515: Enable ZK client to use the new TLS supported authentication</a>
+    for more details.
+    <p>When using mTLS alone, every broker and any CLI tools (such as the <a href="#zk_authz_migration">ZooKeeper Security Migration Tool</a>)
+        should identify itself with the same Distinguished Name (DN) because it is the DN that is ACL'ed.
+        This can be changed as described below, but it involves writing and deploying a custom ZooKeeper authentication provider.
+        Generally each certificate should have the same DN but a different Subject Alternative Name (SAN)
+        so that hostname verification of the brokers and any CLI tools by ZooKeeper will succeed.
+        <p>
+        When using SASL authentication to ZooKeeper together with mTLS, both the SASL identity and
+        either the DN that created the znode (i.e. the creating broker's certificate)
+        or the DN of the Security Migration Tool (if migration was performed after the znode was created)
+        will be ACL'ed, and all brokers and CLI tools will be authorized even if they all use different DNs
+        because they will all use the same ACL'ed SASL identity.
+        It is only when  using mTLS authentication alone that all the DNs must match (and SANs become critical --
+        again, in the absence of writing and deploying a custom ZooKeeper authentication provider as described below).
+        </p>
+    Note that ZooKeeper version 3.5.6 <strong>requires</strong> clients that connect via TLS to present their own certificate
+    (i.e. encryption and mTLS authentication are linked rather than independent of each other in this ZooKeeper version).
+    There is a ZooKeeper sever-side config <tt>ssl.clientAuth</tt> that is recognized
+    (case-insensitively: <tt>want</tt>/<tt>need</tt>/<tt>none</tt> are the valid options),
+    but this config <a href="https://issues.apache.org/jira/browse/ZOOKEEPER-3674">is not acted upon in version 3.5.6</a>.
+    A future version of ZooKeeper will both recognize and act upon this config and allow clients to connect via a TLS-encrypted connection
+    without presenting their own certificate -- i.e. encryption and authentication will become independent of each other.
+    But for now this is not the case.
+    </p>
+    <p>
+        Use the broker properties file to set TLS configs for brokers as described below.
+    </p>
+    <p>
+        Use the <tt>--zk-tls-config-file &lt;file&gt;</tt> option to set TLS configs in the Zookeeper Security Migration Tool.
+        The <tt>kafka-acls.sh</tt> and <tt>kafka-configs.sh</tt> CLI tools also support the <tt>--zk-tls-config-file &lt;file&gt;</tt> option.
+    </p>
+    <p>
+        Use the <tt>-zk-tls-config-file &lt;file&gt;</tt> option (note the single-dash rather than double-dash)
+        to set TLS configs for the <tt>zookeeper-shell.sh</tt> CLI tool.
+    </p>
     <h4><a id="zk_authz_new" href="#zk_authz_new">7.6.1 New clusters</a></h4>
-    To enable ZooKeeper authentication on brokers, there are two necessary steps:
+    <h5><a id="zk_authz_new_sasl" href="#zk_authz_new_sasl">7.6.1.1 ZooKeeper SASL Authentication</a></h5>
+    To enable ZooKeeper SASL authentication on brokers, there are two necessary steps:
     <ol>
         <li> Create a JAAS login file and set the appropriate system property to point to it as described above</li>
         <li> Set the configuration property <tt>zookeeper.set.acl</tt> in each broker to true</li>
@@ -1867,18 +1920,83 @@
 
     The metadata stored in ZooKeeper for the Kafka cluster is world-readable, but can only be modified by the brokers. The rationale behind this decision is that the data stored in ZooKeeper is not sensitive, but inappropriate manipulation of that data can cause cluster disruption. We also recommend limiting the access to ZooKeeper via network segmentation (only brokers and some admin tools need access to ZooKeeper).
 
+    <h5><a id="zk_authz_new_mtls" href="#zk_authz_new_mtls">7.6.1.2 ZooKeeper Mutual TLS Authentication</a></h5>
+    ZooKeeper mTLS authentication can be enabled with or without SASL authentication.  As mentioned above,
+    when using mTLS alone, every broker and any CLI tools (such as the <a href="#zk_authz_migration">ZooKeeper Security Migration Tool</a>)
+    must generally identify itself with the same Distinguished Name (DN) because it is the DN that is ACL'ed, which means
+    each certificate should have an appropriate Subject Alternative Name (SAN) so that
+    hostname verification of the brokers and any CLI tool by ZooKeeper will succeed.
+    <p>
+        It is possible to use something other than the DN for the identity of mTLS clients by writing a class that
+        extends <tt>org.apache.zookeeper.server.auth.X509AuthenticationProvider</tt> and overrides the method
+        <tt>protected String getClientId(X509Certificate clientCert)</tt>.
+        Choose a scheme name and set <tt>authProvider.[scheme]</tt> in ZooKeeper to be the fully-qualified class name
+        of the custom implementation; then set <tt>ssl.authProvider=[scheme]</tt> to use it.
+    </p>
+    Here is a sample (partial) ZooKeeper configuration for enabling TLS authentication.
+    These configurations are described in the
+    <a href="https://zookeeper.apache.org/doc/r3.5.6/zookeeperAdmin.html#sc_authOptions">ZooKeeper Admin Guide</a>.
+    <pre>
+        secureClientPort=2182
+        serverCnxnFactory=org.apache.zookeeper.server.NettyServerCnxnFactory
+        authProvider.x509=org.apache.zookeeper.server.auth.X509AuthenticationProvider
+        ssl.keyStore.location=/path/to/zk/keystore.jks
+        ssl.keyStore.password=zk-ks-passwd
+        ssl.trustStore.location=/path/to/zk/truststore.jks
+        ssl.trustStore.password=zk-ts-passwd
+    </pre>
+    <strong>IMPORTANT</strong>: ZooKeeper does not support setting the key password in the ZooKeeper server keystore
+    to a value different from the keystore password itself.
+    Be sure to set the key password to be the same as the keystore password.
+
+    Here is a sample (partial) Kafka Broker configuration for connecting to ZooKeeper with mTLS authentication.
+    These configuration are described above in <a href="#brokerconfigs">Broker Configs</a>.
+    <pre>
+        # connect to the ZooKeeper port configured for TLS
+        zookeeper.connect=zk1:2182,zk2:2182,zk3:2182
+        # required to use TLS to ZooKeeper (default is false)
+        zookeeper.ssl.client.enable=true
+        # required to use TLS to ZooKeeper
+        zookeeper.clientCnxnSocket=org.apache.zookeeper.ClientCnxnSocketNetty
+        # define key/trust stores to use TLS to ZooKeeper; ignored unless zookeeper.ssl.client.enable=true
+        zookeeper.ssl.keystore.location=/path/to/kafka/keystore.jks
+        zookeeper.ssl.keystore.password=kafka-ks-passwd
+        zookeeper.ssl.truststore.location=/path/to/kafka/truststore.jks
+        zookeeper.ssl.truststore.password=kafka-ts-passwd
+        # tell broker to create ACLs on znodes
+        zookeeper.set.acl=true
+    </pre>
+    <strong>IMPORTANT</strong>: ZooKeeper does not support setting the key password in the ZooKeeper client (i.e. broker) keystore
+    to a value different from the keystore password itself.
+    Be sure to set the key password to be the same as the keystore password.
+
     <h4><a id="zk_authz_migration" href="#zk_authz_migration">7.6.2 Migrating clusters</a></h4>
     If you are running a version of Kafka that does not support security or simply with security disabled, and you want to make the cluster secure, then you need to execute the following steps to enable ZooKeeper authentication with minimal disruption to your operations:
     <ol>
-        <li>Perform a rolling restart setting the JAAS login file, which enables brokers to authenticate. At the end of the rolling restart, brokers are able to manipulate znodes with strict ACLs, but they will not create znodes with those ACLs</li>
+        <li>Enable SASL and/or mTLS authentication on ZooKeeper.  If enabling mTLS, you would now have both a non-TLS port and a TLS port, like this:
+            <pre>
+    clientPort=2181
+    secureClientPort=2182
+    serverCnxnFactory=org.apache.zookeeper.server.NettyServerCnxnFactory
+    authProvider.x509=org.apache.zookeeper.server.auth.X509AuthenticationProvider
+    ssl.keyStore.location=/path/to/zk/keystore.jks
+    ssl.keyStore.password=zk-ks-passwd
+    ssl.trustStore.location=/path/to/zk/truststore.jks
+    ssl.trustStore.password=zk-ts-passwd
+            </pre>
+        </li>
+        <li>Perform a rolling restart of brokers setting the JAAS login file and/or defining ZooKeeper mutual TLS configurations (including connecting to the TLS-enabled ZooKeeper port) as required, which enables brokers to authenticate to ZooKeeper. At the end of the rolling restart, brokers are able to manipulate znodes with strict ACLs, but they will not create znodes with those ACLs</li>
+        <li>If you enabled mTLS, disable the non-TLS port in ZooKeeper</li>
         <li>Perform a second rolling restart of brokers, this time setting the configuration parameter <tt>zookeeper.set.acl</tt> to true, which enables the use of secure ACLs when creating znodes</li>
-        <li>Execute the ZkSecurityMigrator tool. To execute the tool, there is this script: <tt>./bin/zookeeper-security-migration.sh</tt> with <tt>zookeeper.acl</tt> set to secure. This tool traverses the corresponding sub-trees changing the ACLs of the znodes</li>
+        <li>Execute the ZkSecurityMigrator tool. To execute the tool, there is this script: <tt>./bin/zookeeper-security-migration.sh</tt> with <tt>zookeeper.acl</tt> set to secure. This tool traverses the corresponding sub-trees changing the ACLs of the znodes. Use the <code>--zk-tls-config-file &lt;file&gt;</code> option if you enable mTLS.</li>
     </ol>
     <p>It is also possible to turn off authentication in a secure cluster. To do it, follow these steps:</p>
     <ol>
-        <li>Perform a rolling restart of brokers setting the JAAS login file, which enables brokers to authenticate, but setting <tt>zookeeper.set.acl</tt> to false. At the end of the rolling restart, brokers stop creating znodes with secure ACLs, but are still able to authenticate and manipulate all znodes</li>
-        <li>Execute the ZkSecurityMigrator tool. To execute the tool, run this script <tt>./bin/zookeeper-security-migration.sh</tt> with <tt>zookeeper.acl</tt> set to unsecure. This tool traverses the corresponding sub-trees changing the ACLs of the znodes</li>
-        <li>Perform a second rolling restart of brokers, this time omitting the system property that sets the JAAS login file</li>
+        <li>Perform a rolling restart of brokers setting the JAAS login file and/or defining ZooKeeper mutual TLS configurations, which enables brokers to authenticate, but setting <tt>zookeeper.set.acl</tt> to false. At the end of the rolling restart, brokers stop creating znodes with secure ACLs, but are still able to authenticate and manipulate all znodes</li>
+        <li>Execute the ZkSecurityMigrator tool. To execute the tool, run this script <tt>./bin/zookeeper-security-migration.sh</tt> with <tt>zookeeper.acl</tt> set to unsecure. This tool traverses the corresponding sub-trees changing the ACLs of the znodes. Use the <code>--zk-tls-config-file &lt;file&gt;</code> option if you need to set TLS configuration.</li></li>
+        <li>If you are disabling mTLS, enable the non-TLS port in ZooKeeper</li>
+        <li>Perform a second rolling restart of brokers, this time omitting the system property that sets the JAAS login file and/or removing ZooKeeper mutual TLS configuration (including connecting to the non-TLS-enabled ZooKeeper port) as required</li>
+        <li>If you are disabling mTLS, disable the TLS port in ZooKeeper</li>
     </ol>
     Here is an example of how to run the migration tool:
     <pre class="brush: bash;">
@@ -1889,11 +2007,14 @@
     ./bin/zookeeper-security-migration.sh --help
     </pre>
     <h4><a id="zk_authz_ensemble" href="#zk_authz_ensemble">7.6.3 Migrating the ZooKeeper ensemble</a></h4>
-    It is also necessary to enable authentication on the ZooKeeper ensemble. To do it, we need to perform a rolling restart of the server and set a few properties. Please refer to the ZooKeeper documentation for more detail:
+    It is also necessary to enable SASL and/or mTLS authentication on the ZooKeeper ensemble. To do it, we need to perform a rolling restart of the server and set a few properties. See above for mTLS information.  Please refer to the ZooKeeper documentation for more detail:
     <ol>
-        <li><a href="http://zookeeper.apache.org/doc/r3.5.5/zookeeperProgrammers.html#sc_ZooKeeperAccessControl">Apache ZooKeeper documentation</a></li>
+        <li><a href="http://zookeeper.apache.org/doc/r3.5.6/zookeeperProgrammers.html#sc_ZooKeeperAccessControl">Apache ZooKeeper documentation</a></li>
         <li><a href="https://cwiki.apache.org/confluence/display/ZOOKEEPER/Zookeeper+and+SASL">Apache ZooKeeper wiki</a></li>
     </ol>
+    <h4><a id="zk_authz_quorum" href="#zk_authz_quorum">7.6.4 ZooKeeper Quorum Mutial TLS Authentication</a></h4>
+    It is possible to enable mTLS authentication between the ZooKeeper servers themselves.
+    Please refer to the <a href="https://zookeeper.apache.org/doc/r3.5.6/zookeeperAdmin.html#Quorum+TLS">ZooKeeper documentation</a> for more detail.
 </script>
 
 <div class="p-security"></div>

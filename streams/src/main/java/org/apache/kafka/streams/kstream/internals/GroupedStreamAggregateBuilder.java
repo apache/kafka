@@ -26,12 +26,11 @@ import org.apache.kafka.streams.kstream.internals.graph.StreamsGraphNode;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 
-import static org.apache.kafka.streams.kstream.internals.graph.OptimizableRepartitionNode.OptimizableRepartitionNodeBuilder;
-import static org.apache.kafka.streams.kstream.internals.graph.OptimizableRepartitionNode.optimizableRepartitionNodeBuilder;
-
-
 import java.util.Collections;
 import java.util.Set;
+
+import static org.apache.kafka.streams.kstream.internals.graph.OptimizableRepartitionNode.OptimizableRepartitionNodeBuilder;
+import static org.apache.kafka.streams.kstream.internals.graph.OptimizableRepartitionNode.optimizableRepartitionNodeBuilder;
 
 class GroupedStreamAggregateBuilder<K, V> {
 
@@ -40,7 +39,7 @@ class GroupedStreamAggregateBuilder<K, V> {
     private final Serde<V> valueSerde;
     private final boolean repartitionRequired;
     private final String userProvidedRepartitionTopicName;
-    private final Set<String> sourceNodes;
+    private final Set<String> subTopologySourceNodes;
     private final String name;
     private final StreamsGraphNode streamsGraphNode;
     private StreamsGraphNode repartitionNode;
@@ -54,7 +53,7 @@ class GroupedStreamAggregateBuilder<K, V> {
     GroupedStreamAggregateBuilder(final InternalStreamsBuilder builder,
                                   final GroupedInternal<K, V> groupedInternal,
                                   final boolean repartitionRequired,
-                                  final Set<String> sourceNodes,
+                                  final Set<String> subTopologySourceNodes,
                                   final String name,
                                   final StreamsGraphNode streamsGraphNode) {
 
@@ -62,7 +61,7 @@ class GroupedStreamAggregateBuilder<K, V> {
         this.keySerde = groupedInternal.keySerde();
         this.valueSerde = groupedInternal.valueSerde();
         this.repartitionRequired = repartitionRequired;
-        this.sourceNodes = sourceNodes;
+        this.subTopologySourceNodes = subTopologySourceNodes;
         this.name = name;
         this.streamsGraphNode = streamsGraphNode;
         this.userProvidedRepartitionTopicName = groupedInternal.name();
@@ -110,7 +109,7 @@ class GroupedStreamAggregateBuilder<K, V> {
         return new KTableImpl<>(aggFunctionName,
                                 keySerde,
                                 valSerde,
-                                sourceName.equals(this.name) ? sourceNodes : Collections.singleton(sourceName),
+                                sourceName.equals(this.name) ? subTopologySourceNodes : Collections.singleton(sourceName),
                                 queryableStoreName,
                                 aggregateSupplier,
                                 statefulProcessorNode,
