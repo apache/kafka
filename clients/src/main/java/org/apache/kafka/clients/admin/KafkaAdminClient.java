@@ -3803,11 +3803,11 @@ public class KafkaAdminClient extends AdminClient {
                     }
 
                     if (!partitionsWithErrors.isEmpty()) {
-                        partitionsToQuery.keySet().retainAll(partitionsWithErrors);
                         Set<String> retryTopics = partitionsWithErrors.stream().map(tp -> tp.topic()).collect(Collectors.toSet());
+                        topicPartitionOffsets.keySet().retainAll(partitionsWithErrors);
                         MetadataOperationContext<ListOffsetsResultInfo, ListOffsetsOptions> retryContext =
                                 new MetadataOperationContext<>(retryTopics, context.options(), context.deadline(), futures);
-                        rescheduleMetadataTask(retryContext, () -> Collections.singletonList(this));
+                        rescheduleMetadataTask(retryContext, () -> getListOffsetsCalls(retryContext, topicPartitionOffsets, futures));
                     }
                 }
 
