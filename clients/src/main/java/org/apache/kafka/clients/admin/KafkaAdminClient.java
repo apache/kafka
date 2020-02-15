@@ -17,7 +17,6 @@
 
 package org.apache.kafka.clients.admin;
 
-import javax.swing.text.html.Option;
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.ClientDnsLookup;
 import org.apache.kafka.clients.ClientRequest;
@@ -817,11 +816,11 @@ public class KafkaAdminClient extends AdminClient {
             return internal;
         }
 
-        public int getTries() {
+        public int tries() {
             return tries;
         }
 
-        public long getDeadlineMs() {
+        public long nextAllowedTryMs() {
             return nextAllowedTryMs;
         }
     }
@@ -2834,8 +2833,8 @@ public class KafkaAdminClient extends AdminClient {
 
                 // If coordinator changed since we fetched it, retry
                 if (ConsumerGroupOperationContext.hasCoordinatorMoved(response)) {
-                    Call call = getDescribeConsumerGroupsCall(context, Optional.of(this.getTries()),
-                        Optional.of(this.getDeadlineMs()));
+                    Call call = getDescribeConsumerGroupsCall(context, Optional.of(this.tries()),
+                        Optional.of(this.nextAllowedTryMs()));
                     rescheduleFindCoordinatorTask(context, () -> call);
                     return;
                 }
@@ -3105,8 +3104,8 @@ public class KafkaAdminClient extends AdminClient {
 
                 // If coordinator changed since we fetched it, retry
                 if (ConsumerGroupOperationContext.hasCoordinatorMoved(response)) {
-                    Call call = getListConsumerGroupOffsetsCall(context, Optional.of(this.getTries()),
-                        Optional.of(this.getDeadlineMs()));
+                    Call call = getListConsumerGroupOffsetsCall(context, Optional.of(this.tries()),
+                        Optional.of(this.nextAllowedTryMs()));
                     rescheduleFindCoordinatorTask(context, () -> call);
                     return;
                 }
@@ -3188,8 +3187,8 @@ public class KafkaAdminClient extends AdminClient {
 
                 // If coordinator changed since we fetched it, retry
                 if (ConsumerGroupOperationContext.hasCoordinatorMoved(response)) {
-                    Call call = getDeleteConsumerGroupsCall(context, Optional.of(this.getTries()),
-                        Optional.of(this.getDeadlineMs()));
+                    Call call = getDeleteConsumerGroupsCall(context, Optional.of(this.tries()),
+                        Optional.of(this.nextAllowedTryMs()));
                     rescheduleFindCoordinatorTask(context, () -> call);
                     return;
                 }
@@ -3268,7 +3267,7 @@ public class KafkaAdminClient extends AdminClient {
                 // If coordinator changed since we fetched it, retry
                 if (ConsumerGroupOperationContext.hasCoordinatorMoved(response)) {
                     Call call = getDeleteConsumerGroupOffsetsCall(context, partitions,
-                        Optional.of(this.getTries()), Optional.of(this.getDeadlineMs()));
+                        Optional.of(this.tries()), Optional.of(this.nextAllowedTryMs()));
                     rescheduleFindCoordinatorTask(context, () -> call);
                     return;
                 }
@@ -3617,8 +3616,8 @@ public class KafkaAdminClient extends AdminClient {
 
                 // If coordinator changed since we fetched it, retry
                 if (ConsumerGroupOperationContext.hasCoordinatorMoved(response)) {
-                    Call call = getRemoveMembersFromGroupCall(context, Optional.of(this.getTries()),
-                        Optional.of(this.getDeadlineMs()));
+                    Call call = getRemoveMembersFromGroupCall(context, Optional.of(this.tries()),
+                        Optional.of(this.nextAllowedTryMs()));
                     rescheduleFindCoordinatorTask(context, () -> call);
                     return;
                 }
@@ -3711,8 +3710,15 @@ public class KafkaAdminClient extends AdminClient {
 
                 // If coordinator changed since we fetched it, retry
                 if (ConsumerGroupOperationContext.hasCoordinatorMoved(response)) {
+                    long nextAllowedTryMs = this.nextAllowedTryMs();
+                    if (nextAllowedTryMs == 0) {
+                        // new call, have to fast forward next allowed try ourselves
+                        nextAllowedTryMs = time.milliseconds() + retryBackoffMs;
+                    } else {
+                        nextAllowedTryMs += retryBackoffMs;
+                    }
                     Call call = getAlterConsumerGroupOffsetsCall(context, offsets,
-                        Optional.of(this.getTries()), Optional.of(this.getDeadlineMs()));
+                        Optional.of(this.tries()), Optional.of(nextAllowedTryMs));
                     rescheduleFindCoordinatorTask(context, () -> call);
                     return;
                 }
@@ -3722,8 +3728,15 @@ public class KafkaAdminClient extends AdminClient {
                     for (OffsetCommitResponsePartition partition : topic.partitions()) {
                         Errors error = Errors.forCode(partition.errorCode());
                         if (ConsumerGroupOperationContext.shouldRefreshCoordinator(error)) {
+                            long nextAllowedTryMs = this.nextAllowedTryMs();
+                            if (nextAllowedTryMs == 0) {
+                                // new call, have to fast forward next allowed try ourselves
+                                nextAllowedTryMs = time.milliseconds() + retryBackoffMs;
+                            } else {
+                                nextAllowedTryMs += retryBackoffMs;
+                            }
                             Call call = getAlterConsumerGroupOffsetsCall(context, offsets,
-                                Optional.of(this.getTries()), Optional.of(this.getDeadlineMs()));
+                                Optional.of(this.tries()), Optional.of(nextAllowedTryMs));
                             rescheduleFindCoordinatorTask(context, () -> call);
                             return;
                         }
