@@ -2785,7 +2785,15 @@ public class KafkaAdminClient extends AdminClient {
 
                 context.setNode(response.node());
 
-                runnable.call(nextCall.get(), time.milliseconds());
+                Call call = nextCall.get();
+
+                if (call.tries() > maxRetries) {
+                    log.debug("Max retries for {} reached", call);
+                    call.fail(time.milliseconds(), new TimeoutException());
+                    return;
+                }
+
+                runnable.call(call, time.milliseconds());
             }
 
             @Override
