@@ -77,6 +77,7 @@ public class MonitorableSinkConnector extends TestSinkConnector {
 
     @Override
     public void stop() {
+        log.info("Stopped {} connector {}", this.getClass().getSimpleName(), connectorName);
         connectorHandle.recordConnectorStop();
     }
 
@@ -153,6 +154,7 @@ public class MonitorableSinkConnector extends TestSinkConnector {
 
         @Override
         public void stop() {
+            log.info("Stopped {} task {}", this.getClass().getSimpleName(), taskId);
             taskHandle.recordTaskStop();
         }
     }
