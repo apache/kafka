@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.consumer.Consumer;
+import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.common.KafkaException;
@@ -179,6 +180,7 @@ public class StoreChangelogReader implements ChangelogReader {
     private final Logger log;
     private final Duration pollTime;
     private final long updateOffsetIntervalMs;
+    private final int retries;
 
     // 1) we keep adding partitions to restore consumer whenever new tasks are registered with the state manager;
     // 2) we do not unassign partitions when we switch between standbys and actives, we just pause / resume them;
@@ -189,13 +191,16 @@ public class StoreChangelogReader implements ChangelogReader {
     // source of the truth of the current registered changelogs;
     // NOTE a changelog would only be removed when its corresponding task
     // is being removed from the thread; otherwise it would stay in this map even after completed
-    private final Map<TopicPartition, ChangelogMetadata> changelogs;
+    private final Map<TopicPartition, ChangelogMetadata> changelogs = new HashMap<>();
 
     // the changelog reader only need the main consumer to get committed offsets for source changelog partitions
     // to update offset limit for standby tasks;
     private Consumer<byte[], byte[]> mainConsumer;
 
-    private long lastUpdateOffsetTime;
+    private long lastUpdateOffsetTime = 0L;
+    private int fetchPositionAttempts = 0;
+    private int fetchEndOffsetsAttempts = 0;
+    private int commitOffsetsAttempts = 0;
 
     void setMainConsumer(final Consumer<byte[], byte[]> consumer) {
         this.mainConsumer = consumer;
@@ -215,12 +220,10 @@ public class StoreChangelogReader implements ChangelogReader {
         // NOTE for restoring active and updating standby we may prefer different poll time
         // in order to make sure we call the main consumer#poll in time.
         // TODO: once both of these are moved to a separate thread this may no longer be a concern
-        this.pollTime = Duration.ofMillis(config.getLong(StreamsConfig.POLL_MS_CONFIG));
-        this.updateOffsetIntervalMs = config.getLong(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG) == Long.MAX_VALUE ?
+        pollTime = Duration.ofMillis(config.getLong(StreamsConfig.POLL_MS_CONFIG));
+        updateOffsetIntervalMs = config.getLong(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG) == Long.MAX_VALUE ?
             DEFAULT_OFFSET_UPDATE_MS : config.getLong(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG);
-        this.lastUpdateOffsetTime = 0L;
-
-        this.changelogs = new HashMap<>();
+        retries = config.getInt(StreamsConfig.RETRIES_CONFIG);
     }
 
     private static String recordEndOffset(final Long endOffset) {
@@ -253,13 +256,47 @@ public class StoreChangelogReader implements ChangelogReader {
             //     the first record in the remaining buffer and see if that record is no smaller than the end offset.
             final TopicPartition partition = metadata.storeMetadata.changelogPartition();
             try {
-                return restoreConsumer.position(partition) >= endOffset;
-            } catch (final TimeoutException e) {
-                // if we cannot get the position of the consumer within timeout, just return false
+                final boolean restoreCompleted = restoreConsumer.position(partition) >= endOffset;
+                fetchPositionAttempts = 0;
+                return restoreCompleted;
+            } catch (final TimeoutException retryableException) {
+                if (++fetchPositionAttempts > retries) {
+                    log.error(
+                        "Restore consumer failed to fetch position for partition {} after {} retry attempts. " +
+                            "You can increase the number of retries via configuration parameter `{}`.",
+                        partition,
+                        retries,
+                        StreamsConfig.RETRIES_CONFIG,
+                        retryableException
+                    );
+                    throw new StreamsException(
+                        String.format(
+                            "Restore consumer failed to fetch position for partition %s after %d retry attempts. " +
+                                "You can increase the number of retries via configuration parameter `%s`.",
+                            partition,
+                            retries,
+                            StreamsConfig.RETRIES_CONFIG
+                        ),
+                        retryableException
+                    );
+                }
+                log.warn(
+                    "Restore consumer failed to fetch position for partition {}. " +
+                        "Will retry in the next loop (attempt {} of {}). " +
+                        "Consider overwriting consumer config `{}` to a larger value to avoid timeout errors.",
+                    partition,
+                    fetchPositionAttempts,
+                    retries,
+                    ConsumerConfig.DEFAULT_API_TIMEOUT_MS_CONFIG,
+                    retryableException
+                );
+
                 return false;
-            } catch (final KafkaException e) {
-                throw new StreamsException("Restore consumer get unexpected error trying to get the position " +
-                    " of " + partition, e);
+            } catch (final KafkaException error) {
+                throw new StreamsException(
+                    String.format("Restore consumer failed to fetch position for partition %s", partition),
+                    error
+                );
             }
         } else {
             return metadata.bufferedRecords.get(0).offset() >= endOffset;
@@ -406,11 +443,14 @@ public class StoreChangelogReader implements ChangelogReader {
 
             try {
                 polledRecords = restoreConsumer.poll(pollTime);
-            } catch (final FencedInstanceIdException e) {
+            } catch (final FencedInstanceIdException recoverableException) {
                 // when the consumer gets fenced, all its tasks should be migrated
-                throw new TaskMigratedException("Restore consumer get fenced by instance-id polling records.", e);
-            } catch (final KafkaException e) {
-                throw new StreamsException("Restore consumer get unexpected error polling records.", e);
+                throw new TaskMigratedException(
+                    "Restore consumer get fenced by instance-id polling records.",
+                    recoverableException
+                );
+            } catch (final KafkaException error) {
+                throw new StreamsException("Restore consumer get unexpected error polling records.", error);
             }
 
             for (final TopicPartition partition : polledRecords.partitions()) {
@@ -498,8 +538,8 @@ public class StoreChangelogReader implements ChangelogReader {
             if (changelogMetadata.stateManager.taskType() == Task.TaskType.ACTIVE) {
                 try {
                     stateRestoreListener.onBatchRestored(partition, storeName, currentOffset, numRecords);
-                } catch (final Exception e) {
-                    throw new StreamsException("State restore listener failed on batch restored", e);
+                } catch (final Exception error) {
+                    throw new StreamsException("State restore listener failed on batch restored", error);
                 }
             }
         }
@@ -529,11 +569,42 @@ public class StoreChangelogReader implements ChangelogReader {
             // those do not have a committed offset would default to 0
             committedOffsets =  mainConsumer.committed(partitions).entrySet().stream()
                 .collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue() == null ? 0L : e.getValue().offset()));
-        } catch (final TimeoutException e) {
-            // if it timed out we just retry next time.
+            commitOffsetsAttempts = 0;
+        } catch (final TimeoutException retryableException) {
+            if (++commitOffsetsAttempts > retries) {
+                log.error(
+                    "Failed to fetch committed offsets for partitions {} after {} retry attempts. " +
+                        "You can increase the number of retries via configuration parameter `{}`.",
+                    partitions,
+                    retries,
+                    StreamsConfig.RETRIES_CONFIG,
+                    retryableException
+                );
+                throw new StreamsException(
+                    String.format(
+                        "Failed to fetch committed offsets for partitions %s after %d retry attempts. " +
+                            "You can increase the number of retries via configuration parameter `%s`.",
+                        partitions,
+                        retries,
+                        StreamsConfig.RETRIES_CONFIG
+                    ),
+                    retryableException
+                );
+            }
+            log.warn(
+                "Failed to fetch committed offsets for partitions {}. " +
+                    "Will retry in the next run loop (attempt {} of {}). " +
+                    "Consider overwriting consumer config `{}` to a larger value to avoid timeout errors.",
+                partitions,
+                commitOffsetsAttempts,
+                retries,
+                ConsumerConfig.DEFAULT_API_TIMEOUT_MS_CONFIG,
+                retryableException
+            );
+
             return Collections.emptyMap();
-        } catch (final KafkaException e) {
-            throw new StreamsException(String.format("Failed to retrieve end offsets for %s", partitions), e);
+        } catch (final KafkaException error) {
+            throw new StreamsException(String.format("Failed to commit offsets for partitions %s", partitions), error);
         }
 
         lastUpdateOffsetTime = time.milliseconds();
@@ -546,13 +617,45 @@ public class StoreChangelogReader implements ChangelogReader {
             return Collections.emptyMap();
 
         try {
-            return restoreConsumer.endOffsets(partitions);
-        } catch (final TimeoutException e) {
-            // if timeout exception gets thrown we just give up this time and retry in the next run loop
-            log.debug("Could not fetch all end offsets for {}, will retry in the next run loop", partitions);
+            final Map<TopicPartition, Long> endOffsets = restoreConsumer.endOffsets(partitions);
+            fetchEndOffsetsAttempts = 0;
+            return endOffsets;
+        } catch (final TimeoutException retryableException) {
+            if (++fetchEndOffsetsAttempts > retries) {
+                log.error(
+                    "Restore consumer failed to fetch end offsets for partitions {} after {} retry attempts. " +
+                        "You can increase the number of retries via configuration parameter `retries`.",
+                    partitions,
+                    retries,
+                    retryableException
+                );
+                throw new StreamsException(
+                    String.format(
+                        "Restore consumer failed to fetch end offsets for partitions %s after %d retry attempts. " +
+                            "You can increase the number of retries via configuration parameter `retries`.",
+                        partitions,
+                        retries
+                    ),
+                    retryableException
+                );
+            }
+            log.warn(
+                "Restore consumer failed not fetch end offsets for partitions {}. " +
+                    "Will retry in the next run loop (attempt {} of {}). " +
+                    "Consider overwriting consumer config `{}` to a larger value to avoid timeout errors.",
+                partitions,
+                fetchEndOffsetsAttempts,
+                retries,
+                ConsumerConfig.DEFAULT_API_TIMEOUT_MS_CONFIG,
+                retryableException
+            );
+
             return Collections.emptyMap();
-        } catch (final KafkaException e) {
-            throw new StreamsException(String.format("Failed to retrieve end offsets for %s", partitions), e);
+        } catch (final KafkaException error) {
+            throw new StreamsException(
+                String.format("Failed to fetch end offsets for partitions %s", partitions),
+                error
+            );
         }
     }
 
@@ -756,17 +859,26 @@ public class StoreChangelogReader implements ChangelogReader {
                 long startOffset = 0L;
                 try {
                     startOffset = restoreConsumer.position(partition);
-                } catch (final TimeoutException e) {
-                    // if we cannot find the starting position at the beginning, just use the default 0L
-                } catch (final KafkaException e) {
-                    throw new StreamsException("Restore consumer get unexpected error trying to get the position " +
-                        " of " + partition, e);
+                } catch (final TimeoutException swallow) {
+                    log.debug(
+                        "Restore consumer failed to fetch position for partition {}. " +
+                            "Starting restore from offset zero as fall back.",
+                        partition
+                    );
+                } catch (final KafkaException error) {
+                    throw new StreamsException(
+                        String.format(
+                            "Restore consumer get unexpected error trying to get the position of %s",
+                            partition
+                        ),
+                        error
+                    );
                 }
 
                 try {
                     stateRestoreListener.onRestoreStart(partition, storeName, startOffset, changelogMetadata.restoreEndOffset);
-                } catch (final Exception e) {
-                    throw new StreamsException("State restore listener failed on batch restored", e);
+                } catch (final Exception error) {
+                    throw new StreamsException("State restore listener failed on batch restored", error);
                 }
             }
         }

@@ -84,6 +84,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
 
     private final long maxTaskIdleMs;
     private final int maxBufferedSize;
+    private final int retries;
     private final StreamsMetricsImpl streamsMetrics;
     private final PartitionGroup partitionGroup;
     private final RecordCollector recordCollector;
@@ -102,6 +103,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     private long idleStartTime;
     private boolean commitNeeded = false;
     private boolean commitRequested = false;
+    private int initTaskTimeAttempts = 0;
 
     public StreamTask(final TaskId id,
                       final Set<TopicPartition> partitions,
@@ -145,6 +147,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         systemTimePunctuationQueue = new PunctuationQueue();
         maxTaskIdleMs = config.getLong(StreamsConfig.MAX_TASK_IDLE_MS_CONFIG);
         maxBufferedSize = config.getInt(StreamsConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG);
+        retries = config.getInt(StreamsConfig.RETRIES_CONFIG);
 
         // initialize the consumed and committed offset cache
         consumedOffsets = new HashMap<>();
@@ -613,18 +616,49 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         return checkpointableOffsets;
     }
 
+    /*
+     * @throws TimeoutException if fetching committed offsets timed out
+     */
     private void initializeMetadata() {
         try {
             final Map<TopicPartition, OffsetAndMetadata> offsetsAndMetadata = consumer.committed(partitions).entrySet().stream()
                 .filter(e -> e.getValue() != null)
                 .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
             initializeTaskTime(offsetsAndMetadata);
-        } catch (final TimeoutException e) {
-            log.warn("Encountered {} while trying to fetch committed offsets, will retry initializing the metadata in the next loop." +
-                "\nConsider overwriting consumer config {} to a larger value to avoid timeout errors",
-                ConsumerConfig.DEFAULT_API_TIMEOUT_MS_CONFIG);
+            initTaskTimeAttempts = 0;
+        } catch (final TimeoutException retryableException) {
+            if (++initTaskTimeAttempts > retries) {
+                log.error(
+                    "Failed to fetch committed offsets for partitions {} after {} retry attempts. " +
+                        "You can increase the number of retries via configuration parameter `{}`.",
+                    partitions,
+                    retries,
+                    StreamsConfig.RETRIES_CONFIG,
+                    retryableException
+                );
+                throw new StreamsException(
+                    String.format(
+                        "Failed to fetch committed offsets for partitions %s after %d retry attempts. " +
+                            "You can increase the number of retries via configuration parameter `%s`.",
+                        partitions,
+                        retries,
+                        StreamsConfig.RETRIES_CONFIG
+                    ),
+                    retryableException
+                );
+            }
+            log.warn(
+                "Failed not fetch committed offsets for partitions {}. " +
+                    "Will retry in the next run loop (attempt {} of {}). " +
+                    "Consider overwriting consumer config `{}` to a larger value to avoid timeout errors.",
+                partitions,
+                initTaskTimeAttempts,
+                retries,
+                ConsumerConfig.DEFAULT_API_TIMEOUT_MS_CONFIG,
+                retryableException
+            );
 
-            throw e;
+            throw retryableException;
         } catch (final KafkaException e) {
             throw new StreamsException(format("task [%s] Failed to initialize offsets for %s", id, partitions), e);
         }

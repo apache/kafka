@@ -704,7 +704,7 @@ public class StreamsConfig extends AbstractConfig {
                     CommonClientConfigs.RECONNECT_BACKOFF_MAX_MS_DOC)
             .define(RETRIES_CONFIG,
                     Type.INT,
-                    0,
+                    5,
                     between(0, Integer.MAX_VALUE),
                     ConfigDef.Importance.LOW,
                     CommonClientConfigs.RETRIES_DOC)

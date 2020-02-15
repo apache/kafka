@@ -24,6 +24,7 @@ import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.MetricConfig;
@@ -82,6 +83,7 @@ import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.streams.processor.internals.StreamTask.encodeTimestamp;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.THREAD_ID_TAG;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.THREAD_ID_TAG_0100_TO_24;
+import static org.easymock.EasyMock.replay;
 import static org.easymock.EasyMock.verify;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.nullValue;
@@ -852,7 +854,7 @@ public class StreamTaskTest {
     }
 
     @Test
-    public void shouldNotBeProcessableIfNoDataAvailble() {
+    public void shouldNotBeProcessableIfNoDataAvailable() {
         task = createStatelessTask(createConfig(false, "100"), StreamsConfig.METRICS_LATEST);
         task.initializeIfNeeded();
         task.completeRestoration();
@@ -1449,6 +1451,25 @@ public class StreamTaskTest {
         // close call are not idempotent since we are already in closed
         assertThrows(IllegalStateException.class, task::closeClean);
         assertThrows(IllegalStateException.class, task::closeDirty);
+    }
+
+    @Test
+    public void shouldRetryOnTimeoutException() {
+        final TimeoutException timeoutException = new TimeoutException();
+        task = createOptimizedStatefulTask(createConfig(false, "0"), consumer);
+        replay(stateManager);
+        task.initializeIfNeeded();
+
+        int counter = 5;
+        while (counter-- > 0) {
+            consumer.setCommittedException(timeoutException);
+            assertThrows(TimeoutException.class, task::completeRestoration);
+        }
+        consumer.setCommittedException(timeoutException);
+        final StreamsException thrown = assertThrows(StreamsException.class, task::completeRestoration);
+
+        assertThat(thrown.getCause(), equalTo(timeoutException));
+        assertThat(thrown.getMessage(), equalTo("Failed to fetch committed offsets for partitions [topic1-1] after 5 retry attempts. You can increase the number of retries via configuration parameter `retries`."));
     }
 
     private StreamTask createOptimizedStatefulTask(final StreamsConfig config, final Consumer<byte[], byte[]> consumer) {

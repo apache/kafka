@@ -60,17 +60,17 @@ public class TaskManager {
     private final String logPrefix;
     private final StreamThread.AbstractTaskCreator<? extends Task> taskCreator;
     private final StreamThread.AbstractTaskCreator<? extends Task> standbyTaskCreator;
-
+    private final InternalTopologyBuilder builder;
     private final Admin adminClient;
-    private DeleteRecordsResult deleteRecordsResult;
-    private boolean rebalanceInProgress = false;  // if we are in the middle of a rebalance, it is not safe to commit
-
     private final Map<TaskId, Task> tasks = new TreeMap<>();
     // materializing this relationship because the lookup is on the hot path
     private final Map<TopicPartition, Task> partitionToTask = new HashMap<>();
 
+    // cannot be `final` to break circular dependency
     private Consumer<byte[], byte[]> consumer;
-    private final InternalTopologyBuilder builder;
+
+    private DeleteRecordsResult deleteRecordsResult;
+    private boolean rebalanceInProgress = false;  // if we are in the middle of a rebalance, it is not safe to commit
 
     TaskManager(final ChangelogReader changelogReader,
                 final UUID processId,
@@ -215,11 +215,18 @@ public class TaskManager {
             if (task.state() == CREATED) {
                 try {
                     task.initializeIfNeeded();
-                } catch (final LockException | TimeoutException e) {
+                } catch (final LockException | TimeoutException retryableException) {
+                    // we don't maintain a `retry` counter here, because the `TimeoutException` was rethrown
+                    // and retries are counted within `StreamTask`
+
                     // it is possible that if there are multiple threads within the instance that one thread
                     // trying to grab the task from the other, while the other has not released the lock since
                     // it did not participate in the rebalance. In this case we can just retry in the next iteration
-                    log.debug("Could not initialize {} due to {}; will retry", task.id(), e.toString());
+                    log.debug(
+                        "Could not initialize {} due to {}. Will retry in next loop.",
+                        task.id(),
+                        retryableException.toString());
+
                     allRunning = false;
                 }
             }
@@ -235,8 +242,13 @@ public class TaskManager {
                 if (restored.containsAll(task.changelogPartitions())) {
                     try {
                         task.completeRestoration();
-                    } catch (final TimeoutException e) {
-                        log.debug("Cloud complete restoration for {} due to {}; will retry", task.id(), e.toString());
+                    } catch (final TimeoutException retryableException) {
+                        // we don't maintain a `retry` counter here, because the `TimeoutException` was rethrown
+                        // and retries are counted within `StreamTask`
+                        log.debug(
+                            "Cloud not complete restoration for {} due to {}. Will retry in next loop.",
+                            task.id(),
+                            retryableException.toString());
 
                         allRunning = false;
                     }

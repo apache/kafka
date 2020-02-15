@@ -64,6 +64,7 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
     private Map<TopicPartition, List<ConsumerRecord<K, V>>> records;
     private KafkaException pollException;
     private KafkaException offsetsException;
+    private KafkaException committedException;
     private AtomicBoolean wakeup;
     private boolean closed;
 
@@ -76,7 +77,6 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
         this.beginningOffsets = new HashMap<>();
         this.endOffsets = new HashMap<>();
         this.pollTasks = new LinkedList<>();
-        this.pollException = null;
         this.wakeup = new AtomicBoolean(false);
         this.committed = new HashMap<>();
     }
@@ -242,6 +242,10 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
         this.offsetsException = exception;
     }
 
+    public synchronized void setCommittedException(KafkaException exception) {
+        this.committedException = exception;
+    }
+
     @Override
     public synchronized void commitAsync(Map<TopicPartition, OffsetAndMetadata> offsets, OffsetCommitCallback callback) {
         ensureNotClosed();
@@ -310,6 +314,12 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
     @Override
     public synchronized Map<TopicPartition, OffsetAndMetadata> committed(final Set<TopicPartition> partitions) {
         ensureNotClosed();
+
+        if (committedException != null) {
+            RuntimeException exception = this.committedException;
+            this.committedException = null;
+            throw exception;
+        }
 
         return partitions.stream()
             .filter(committed::containsKey)

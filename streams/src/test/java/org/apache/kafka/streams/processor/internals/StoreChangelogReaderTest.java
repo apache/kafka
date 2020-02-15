@@ -55,13 +55,15 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.common.utils.Utils.mkSet;
-import static org.apache.kafka.streams.processor.internals.Task.TaskType.ACTIVE;
-import static org.apache.kafka.streams.processor.internals.Task.TaskType.STANDBY;
 import static org.apache.kafka.streams.processor.internals.StoreChangelogReader.ChangelogReaderState.ACTIVE_RESTORING;
 import static org.apache.kafka.streams.processor.internals.StoreChangelogReader.ChangelogReaderState.STANDBY_UPDATING;
+import static org.apache.kafka.streams.processor.internals.Task.TaskType.ACTIVE;
+import static org.apache.kafka.streams.processor.internals.Task.TaskType.STANDBY;
 import static org.apache.kafka.test.MockStateRestoreListener.RESTORE_BATCH;
 import static org.apache.kafka.test.MockStateRestoreListener.RESTORE_END;
 import static org.apache.kafka.test.MockStateRestoreListener.RESTORE_START;
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.core.IsEqual.equalTo;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
@@ -420,6 +422,38 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
     }
 
     @Test
+    public void shouldRespectRetriesIfPositionTimesOut() {
+        EasyMock.expect(storeMetadata.offset()).andReturn(10L).anyTimes();
+        EasyMock.replay(activeStateManager, storeMetadata, store);
+
+        final TimeoutException timeoutException = new TimeoutException();
+        final MockConsumer<byte[], byte[]> consumer = new MockConsumer<byte[], byte[]>(OffsetResetStrategy.EARLIEST) {
+            @Override
+            public long position(final TopicPartition partition) {
+                throw timeoutException;
+            }
+
+            @Override
+            public Map<TopicPartition, Long> endOffsets(final Collection<TopicPartition> partitions) {
+                return partitions.stream().collect(Collectors.toMap(Function.identity(), partition -> 10L));
+            }
+        };
+
+        final StoreChangelogReader changelogReader = new StoreChangelogReader(time, config, logContext, consumer, callback);
+
+        changelogReader.register(tp, activeStateManager);
+
+        int counter = 5;
+        while (counter-- > 0) {
+            changelogReader.restore();
+        }
+        final StreamsException thrown = assertThrows(StreamsException.class, changelogReader::restore);
+
+        assertThat(thrown.getCause(), equalTo(timeoutException));
+        assertThat(thrown.getMessage(), equalTo("Restore consumer failed to fetch position for partition topic-0 after 5 retry attempts. You can increase the number of retries via configuration parameter `retries`."));
+    }
+
+    @Test
     public void shouldThrowIfPositionFail() {
         EasyMock.expect(storeMetadata.offset()).andReturn(10L).anyTimes();
         EasyMock.replay(activeStateManager, storeMetadata, store);
@@ -481,6 +515,33 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
         assertEquals(StoreChangelogReader.ChangelogState.RESTORING, changelogReader.changelogMetadata(tp).state());
         assertEquals(10L, (long) changelogReader.changelogMetadata(tp).endOffset());
         assertEquals(6L, consumer.position(tp));
+    }
+
+    @Test
+    public void shouldRespectRetiresIfEndOffsetsTimesOut() {
+        EasyMock.expect(storeMetadata.offset()).andReturn(10L).anyTimes();
+        EasyMock.replay(activeStateManager, storeMetadata, store);
+
+        final TimeoutException timeoutException = new TimeoutException();
+        final MockConsumer<byte[], byte[]> consumer = new MockConsumer<byte[], byte[]>(OffsetResetStrategy.EARLIEST) {
+            @Override
+            public Map<TopicPartition, Long> endOffsets(final Collection<TopicPartition> partitions) {
+                throw timeoutException;
+            }
+        };
+
+        final StoreChangelogReader changelogReader = new StoreChangelogReader(time, config, logContext, consumer, callback);
+
+        changelogReader.register(tp, activeStateManager);
+
+        int counter = 5;
+        while (counter-- > 0) {
+            changelogReader.restore();
+        }
+        final StreamsException thrown = assertThrows(StreamsException.class, changelogReader::restore);
+
+        assertThat(thrown.getCause(), equalTo(timeoutException));
+        assertThat(thrown.getMessage(), equalTo("Restore consumer failed to fetch end offsets for partitions [topic-0] after 5 retry attempts. You can increase the number of retries via configuration parameter `retries`."));
     }
 
     @Test
@@ -547,6 +608,44 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
         assertEquals(StoreChangelogReader.ChangelogState.RESTORING, changelogReader.changelogMetadata(tp).state());
         assertEquals(type == ACTIVE ? 10L : 0L, (long) changelogReader.changelogMetadata(tp).endOffset());
         assertEquals(6L, consumer.position(tp));
+    }
+
+    @Test
+    public void shouldRespectRetryIfCommittedTimesOutForActiveTasks() {
+        // StandbyTasks don't fetch committed offsets and thus this test does not apply
+        if (type == STANDBY) {
+            return;
+        }
+
+        EasyMock.expect(stateManager.changelogAsSource(tp)).andReturn(true).anyTimes();
+        EasyMock.expect(storeMetadata.offset()).andReturn(10L).anyTimes();
+        EasyMock.replay(stateManager, storeMetadata, store);
+
+        final TimeoutException timeoutException = new TimeoutException();
+        final MockConsumer<byte[], byte[]> consumer = new MockConsumer<byte[], byte[]>(OffsetResetStrategy.EARLIEST) {
+            @Override
+            public Map<TopicPartition, Long> endOffsets(final Collection<TopicPartition> partitions) {
+                return partitions.stream().collect(Collectors.toMap(Function.identity(), partition -> 10L));
+            }
+
+            @Override
+            public Map<TopicPartition, OffsetAndMetadata> committed(final Set<TopicPartition> partitions) {
+                throw timeoutException;
+            }
+        };
+        final StoreChangelogReader changelogReader = new StoreChangelogReader(time, config, logContext, consumer, callback);
+        changelogReader.setMainConsumer(consumer);
+
+        changelogReader.register(tp, stateManager);
+
+        int counter = 5;
+        while (counter-- > 0) {
+            changelogReader.restore();
+        }
+        final StreamsException thrown = assertThrows(StreamsException.class, changelogReader::restore);
+
+        assertThat(thrown.getCause(), equalTo(timeoutException));
+        assertThat(thrown.getMessage(), equalTo("Failed to fetch committed offsets for partitions [topic-0] after 5 retry attempts. You can increase the number of retries via configuration parameter `retries`."));
     }
 
     @Test
