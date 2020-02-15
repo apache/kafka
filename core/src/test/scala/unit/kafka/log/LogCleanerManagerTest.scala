@@ -495,15 +495,15 @@ class LogCleanerManagerTest extends Logging {
 
     var lastCleanOffset = Some(15L)
     var cleanableOffsets = LogCleanerManager.cleanableOffsets(logs.get(tp), lastCleanOffset, time.milliseconds)
-    assertEquals("Checkpoint offset should not be reset if valid", false, cleanableOffsets.forceUpdateCheckpoint)
+    assertFalse("Checkpoint offset should not be reset if valid", cleanableOffsets.forceUpdateCheckpoint)
 
     logs.get(tp).maybeIncrementLogStartOffset(20L)
     cleanableOffsets = LogCleanerManager.cleanableOffsets(logs.get(tp), lastCleanOffset, time.milliseconds)
-    assertEquals("Checkpoint offset needs to be reset if less than log start offset", true, cleanableOffsets.forceUpdateCheckpoint)
+    assertTrue("Checkpoint offset needs to be reset if less than log start offset", cleanableOffsets.forceUpdateCheckpoint)
 
     lastCleanOffset = Some(25L)
     cleanableOffsets = LogCleanerManager.cleanableOffsets(logs.get(tp), lastCleanOffset, time.milliseconds)
-    assertEquals("Checkpoint offset needs to be reset if greater than log end offset", true, cleanableOffsets.forceUpdateCheckpoint)
+    assertTrue("Checkpoint offset needs to be reset if greater than log end offset", cleanableOffsets.forceUpdateCheckpoint)
   }
 
   @Test
