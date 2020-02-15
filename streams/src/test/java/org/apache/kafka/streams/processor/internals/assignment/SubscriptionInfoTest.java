@@ -262,8 +262,8 @@ public class SubscriptionInfoTest {
 
     @Test
     public void shouldEncodeAndDecodeVersion5() {
-        final SubscriptionInfo info = new SubscriptionInfo(5, LATEST_SUPPORTED_VERSION, processId, "localhost:80",
-            TASK_LAGS);
+        final SubscriptionInfo info =
+            new SubscriptionInfo(5, LATEST_SUPPORTED_VERSION, processId, "localhost:80", TASK_LAGS);
         assertEquals(info, SubscriptionInfo.decode(info.encode()));
     }
 
@@ -279,10 +279,10 @@ public class SubscriptionInfoTest {
         final int usedVersion = LATEST_SUPPORTED_VERSION - 1;
         final int latestSupportedVersion = LATEST_SUPPORTED_VERSION - 1;
 
-        final SubscriptionInfo info = new SubscriptionInfo(usedVersion, latestSupportedVersion, processId, "localhost:80",
-            TASK_LAGS);
-        final SubscriptionInfo expectedInfo = new SubscriptionInfo(usedVersion, latestSupportedVersion, processId, "localhost:80",
-            TASK_LAGS);
+        final SubscriptionInfo info =
+            new SubscriptionInfo(usedVersion, latestSupportedVersion, processId, "localhost:80", TASK_LAGS);
+        final SubscriptionInfo expectedInfo =
+            new SubscriptionInfo(usedVersion, latestSupportedVersion, processId, "localhost:80", TASK_LAGS);
         assertEquals(expectedInfo, SubscriptionInfo.decode(info.encode()));
     }
 
