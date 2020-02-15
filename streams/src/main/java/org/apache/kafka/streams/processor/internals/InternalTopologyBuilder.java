@@ -1878,13 +1878,13 @@ public class InternalTopologyBuilder {
 
             if  (!existingTopics.equals(assignedTopics)) {
                 assignedTopics.addAll(existingTopics);
+                updateSubscribedTopics(assignedTopics, logPrefix);
             }
-            updateSubscribedTopics(assignedTopics, logPrefix);
         }
     }
 
     synchronized void addSubscribedTopicsFromMetadata(final Set<String> topics, final String logPrefix) {
-        if (usesPatternSubscription() && subscriptionUpdates() != topics) {
+        if (usesPatternSubscription() && !subscriptionUpdates().equals(topics)) {
             updateSubscribedTopics(topics, logPrefix);
         }
     }
