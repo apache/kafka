@@ -839,7 +839,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
 
         cmd = self.path.script("kafka-run-class.sh", node)
         cmd += " kafka.tools.GetOffsetShell"
-        cmd += " --topic %s --broker-list %s --max-wait-ms %s --offsets %s --time %s" % (topic, self.bootstrap_servers(self.security_protocol), max_wait_ms, offsets, time)
+        cmd += " --topic %s --bootstrap-server %s --max-wait-ms %s --offsets %s --time %s" % (topic, self.bootstrap_servers(self.security_protocol), max_wait_ms, offsets, time)
 
         if partitions:
             cmd += '  --partitions %s' % partitions
