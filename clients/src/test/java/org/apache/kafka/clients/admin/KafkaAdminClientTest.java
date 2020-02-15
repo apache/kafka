@@ -1277,6 +1277,7 @@ public class KafkaAdminClientTest {
 
             AtomicLong firstAttemptTime = new AtomicLong(0);
             AtomicLong secondAttemptTime = new AtomicLong(0);
+            AtomicLong thirdAttemptTime = new AtomicLong(0);
 
             final String groupId = "group-0";
             final TopicPartition tp1 = new TopicPartition("foo", 0);
@@ -1294,16 +1295,25 @@ public class KafkaAdminClientTest {
             env.kafkaClient().prepareResponse(body -> {
                 secondAttemptTime.set(time.milliseconds());
                 return true;
+            }, prepareOffsetCommitResponse(tp1, Errors.NOT_COORDINATOR));
+
+
+            env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
+
+            env.kafkaClient().prepareResponse(body -> {
+                thirdAttemptTime.set(time.milliseconds());
+                return true;
             }, prepareOffsetCommitResponse(tp1, Errors.NONE));
 
             Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
             offsets.put(tp1, new OffsetAndMetadata(123L));
             final AlterConsumerGroupOffsetsResult result1 = env.adminClient().alterConsumerGroupOffsets(groupId, offsets);
 
+            TestUtils.waitForCondition(() -> ((KafkaAdminClient) env.adminClient()).numPendingCalls() == 1,"Failed to add retry CommitOffsets call on first failure");
 
-            TestUtils.waitForCondition(() -> mockClient.numAwaitingResponses() == 1,"Failed awaiting CommitOffsets first request failure");
+            time.sleep(retryBackoff);
 
-            TestUtils.waitForCondition(() -> ((KafkaAdminClient) env.adminClient()).numPendingCalls() == 1,"Failed to add retry CommitOffsets call");
+            TestUtils.waitForCondition(() -> ((KafkaAdminClient) env.adminClient()).numPendingCalls() == 1,"Failed to add retry CommitOffsets call on second failure");
 
             time.sleep(retryBackoff);
 
@@ -1311,6 +1321,9 @@ public class KafkaAdminClientTest {
 
             long actualRetryBackoff = secondAttemptTime.get() - firstAttemptTime.get();
             assertEquals("CommitOffsets retry did not await expected backoff the first time!", retryBackoff, actualRetryBackoff);
+
+            actualRetryBackoff = thirdAttemptTime.get() - secondAttemptTime.get();
+            assertEquals("CommitOffsets retry did not await expected backoff the second time!", retryBackoff, actualRetryBackoff);
         }
     }
 
