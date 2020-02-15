@@ -192,21 +192,30 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
                 highWatermarks = globalConsumer.endOffsets(topicPartitions);
             } catch (final TimeoutException retryableException) {
                 if (++attempts > retries) {
-                    log.error("Failed to get end offsets for topic partitions of global store {} after {} retry attempts. " +
-                        "You can increase the number of retries via configuration parameter `retries`.",
+                    log.error(
+                        "Failed to get end offsets for topic partitions of global store {} after {} retry attempts. " +
+                            "You can increase the number of retries via configuration parameter `retries`.",
                         store.name(),
                         retries,
-                        retryableException);
-                    throw new StreamsException(String.format("Failed to get end offsets for topic partitions of global store %s after %d retry attempts. " +
-                            "You can increase the number of retries via configuration parameter `retries`.", store.name(), retries),
+                        retryableException
+                    );
+                    throw new StreamsException(
+                        String.format(
+                            "Failed to get end offsets for topic partitions of global store %s after %d retry attempts. " +
+                                "You can increase the number of retries via configuration parameter `retries`.",
+                            store.name(),
+                            retries
+                        ),
                         retryableException);
                 }
-                log.debug("Failed to get end offsets for partitions {}, backing off for {} ms to retry (attempt {} of {})",
+                log.warn(
+                    "Failed to get end offsets for partitions {}, backing off for {} ms to retry (attempt {} of {})",
                     topicPartitions,
                     retryBackoffMs,
                     attempts,
                     retries,
-                    retryableException);
+                    retryableException
+                );
                 Utils.sleep(retryBackoffMs);
             }
         }
@@ -235,24 +244,34 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
                 break;
             } catch (final TimeoutException retryableException) {
                 if (++attempts > retries) {
-                    log.error("Failed to get partitions for topic {} after {} retry attempts due to timeout. " +
+                    log.error(
+                        "Failed to get partitions for topic {} after {} retry attempts due to timeout. " +
                             "The broker may be transiently unavailable at the moment. " +
                             "You can increase the number of retries via configuration parameter `retries`.",
                         sourceTopic,
                         retries,
-                        retryableException);
-                    throw new StreamsException(String.format("Failed to get partitions for topic %s after %d retry attempts due to timeout. " +
-                        "The broker may be transiently unavailable at the moment. " +
-                        "You can increase the number of retries via configuration parameter `retries`.", sourceTopic, retries),
-                        retryableException);
+                        retryableException
+                    );
+                    throw new StreamsException(
+                        String.format(
+                            "Failed to get partitions for topic %s after %d retry attempts due to timeout. " +
+                                "The broker may be transiently unavailable at the moment. " +
+                                "You can increase the number of retries via configuration parameter `retries`.",
+                            sourceTopic,
+                            retries
+                        ),
+                        retryableException
+                    );
                 }
-                log.debug("Failed to get partitions for topic {} due to timeout. The broker may be transiently unavailable at the moment. " +
+                log.warn(
+                    "Failed to get partitions for topic {} due to timeout. The broker may be transiently unavailable at the moment. " +
                         "Backing off for {} ms to retry (attempt {} of {})",
                     sourceTopic,
                     retryBackoffMs,
                     attempts,
                     retries,
-                    retryableException);
+                    retryableException
+                );
                 Utils.sleep(retryBackoffMs);
             }
         }
@@ -289,24 +308,35 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
                     offset = globalConsumer.position(topicPartition);
                 } catch (final TimeoutException retryableException) {
                     if (++attempts > retries) {
-                        log.error("Failed to get position for partition {} after {} retry attempts due to timeout. " +
+                        log.error(
+                            "Failed to get position for partition {} after {} retry attempts due to timeout. " +
                                 "The broker may be transiently unavailable at the moment. " +
                                 "You can increase the number of retries via configuration parameter `retries`.",
                             topicPartition,
                             retries,
-                            retryableException);
-                        throw new StreamsException(String.format("Failed to get position for partition %s after %d retry attempts due to timeout. " +
-                            "The broker may be transiently unavailable at the moment. " +
-                            "You can increase the number of retries via configuration parameter `retries`.", topicPartition, retries),
-                            retryableException);
+                            retryableException
+                        );
+                        throw new StreamsException(
+                            String.format(
+                                "Failed to get position for partition %s after %d retry attempts due to timeout. " +
+                                    "The broker may be transiently unavailable at the moment. " +
+                                    "You can increase the number of retries via configuration parameter `retries`.",
+                                topicPartition,
+                                retries
+                            ),
+                            retryableException
+                        );
                     }
-                    log.debug("Failed to get position for partition {} due to timeout. The broker may be transiently unavailable at the moment. " +
+                    log.warn(
+                        "Failed to get position for partition {} due to timeout. " +
+                            "The broker may be transiently unavailable at the moment. " +
                             "Backing off for {} ms to retry (attempt {} of {})",
                         topicPartition,
                         retryBackoffMs,
                         attempts,
                         retries,
-                        retryableException);
+                        retryableException
+                    );
                     Utils.sleep(retryBackoffMs);
                 }
             } while (offset == -1);
