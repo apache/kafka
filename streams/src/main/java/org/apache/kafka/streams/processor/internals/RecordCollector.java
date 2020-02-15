@@ -48,6 +48,13 @@ public interface RecordCollector extends AutoCloseable {
     void commit(final Map<TopicPartition, OffsetAndMetadata> offsets);
 
     /**
+     * Initialize the internal {@link Producer}; note this function should be made idempotent
+     *
+     * @throws org.apache.kafka.common.errors.TimeoutException if producer initializing txn id timed out
+     */
+    void initialize();
+
+    /**
      * Flush the internal {@link Producer}.
      */
     void flush();

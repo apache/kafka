@@ -454,27 +454,27 @@ public class RecordCollectorTest {
     }
 
     @Test
-    public void shouldThrowStreamsExceptionOnEOSInitializeTimeout() {
+    public void shouldRethrowOnEOSInitializeTimeout() {
         final KafkaException exception = new TimeoutException("KABOOM!");
         final Properties props = StreamsTestUtils.getStreamsConfig("test");
         props.setProperty(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE);
 
-        final StreamsException thrown = assertThrows(StreamsException.class, () ->
-            new RecordCollectorImpl(
-                taskId,
-                new StreamsConfig(props),
-                logContext,
-                streamsMetrics,
-                null,
-                id -> new MockProducer<byte[], byte[]>(cluster, true, new DefaultPartitioner(), byteArraySerializer, byteArraySerializer) {
-                    @Override
-                    public void initTransactions() {
-                        throw exception;
-                    }
+        final RecordCollector recordCollector = new RecordCollectorImpl(
+            taskId,
+            new StreamsConfig(props),
+            logContext,
+            streamsMetrics,
+            null,
+            id -> new MockProducer<byte[], byte[]>(cluster, true, new DefaultPartitioner(), byteArraySerializer, byteArraySerializer) {
+                @Override
+                public void initTransactions() {
+                    throw exception;
                 }
-            )
+            }
         );
-        assertEquals(exception, thrown.getCause());
+
+        final TimeoutException thrown = assertThrows(TimeoutException.class, recordCollector::initialize);
+        assertEquals(exception, thrown);
     }
 
     @Test
@@ -483,21 +483,21 @@ public class RecordCollectorTest {
         final Properties props = StreamsTestUtils.getStreamsConfig("test");
         props.setProperty(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE);
 
-        final StreamsException thrown = assertThrows(StreamsException.class, () ->
-            new RecordCollectorImpl(
-                taskId,
-                new StreamsConfig(props),
-                logContext,
-                streamsMetrics,
-                null,
-                id -> new MockProducer<byte[], byte[]>(cluster, true, new DefaultPartitioner(), byteArraySerializer, byteArraySerializer) {
-                    @Override
-                    public void initTransactions() {
-                        throw exception;
-                    }
+        final RecordCollector recordCollector = new RecordCollectorImpl(
+            taskId,
+            new StreamsConfig(props),
+            logContext,
+            streamsMetrics,
+            null,
+            id -> new MockProducer<byte[], byte[]>(cluster, true, new DefaultPartitioner(), byteArraySerializer, byteArraySerializer) {
+                @Override
+                public void initTransactions() {
+                    throw exception;
                 }
-            )
+            }
         );
+
+        final StreamsException thrown = assertThrows(StreamsException.class, recordCollector::initialize);
         assertEquals(exception, thrown.getCause());
     }
 
@@ -625,6 +625,7 @@ public class RecordCollectorTest {
                 }
             }
         );
+        collector.initialize();
 
         assertThrows(TaskMigratedException.class, () -> collector.commit(null));
     }
@@ -646,6 +647,7 @@ public class RecordCollectorTest {
                 }
             }
         );
+        collector.initialize();
 
         assertThrows(TaskMigratedException.class, () -> collector.commit(Collections.emptyMap()));
     }
@@ -688,6 +690,7 @@ public class RecordCollectorTest {
                 }
             }
         );
+        collector.initialize();
 
         assertThrows(StreamsException.class, () -> collector.commit(null));
     }
@@ -709,6 +712,7 @@ public class RecordCollectorTest {
                 }
             }
         );
+        collector.initialize();
 
         assertThrows(StreamsException.class, () -> collector.commit(Collections.emptyMap()));
     }
@@ -780,7 +784,7 @@ public class RecordCollectorTest {
                 }
             }
         );
-
+        collector.initialize();
         collector.send(topic, "3", "0", null, null, stringSerializer, stringSerializer, streamPartitioner);
         collector.commit(Collections.emptyMap());
 
@@ -807,7 +811,7 @@ public class RecordCollectorTest {
                 }
             }
         );
-
+        collector.initialize();
         collector.send(topic, "3", "0", null, null, stringSerializer, stringSerializer, streamPartitioner);
 
         final StreamsException thrown = assertThrows(StreamsException.class, collector::close);
@@ -831,6 +835,7 @@ public class RecordCollectorTest {
                 }
             }
         );
+        collector.initialize();
 
         // this call is to begin an inflight txn
         collector.send(topic, "3", "0", null, null, stringSerializer, stringSerializer, streamPartitioner);
