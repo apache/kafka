@@ -625,8 +625,8 @@ public class Sender implements Runnable {
                             "topic-partition may not exist or the user may not have Describe access to it",
                         batch.topicPartition);
                 } else {
-                    // log.warn("Received invalid metadata error in produce request on partition {} due to {}. Going " +
-                    //         "to request metadata update now", batch.topicPartition, error.exception().toString());
+                    log.warn("Received invalid metadata error in produce request on partition {} due to {}. Going " +
+                            "to request metadata update now", batch.topicPartition, error.exception().toString());
                 }
                 metadata.requestUpdate();
             }
