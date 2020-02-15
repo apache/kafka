@@ -2701,6 +2701,14 @@ public class KafkaAdminClient extends AdminClient {
                 context.node().orElse(null));
         // Requeue the task so that we can try with new coordinator
         context.setNode(null);
+
+        Call call = nextCall.get();
+
+        if (call.tries() > maxRetries) {
+            log.debug("Max retries for {} reached", call);
+            call.fail(time.milliseconds(), new TimeoutException());
+            return;
+        }
         Call findCoordinatorCall = getFindCoordinatorCall(context, nextCall);
         runnable.call(findCoordinatorCall, time.milliseconds());
     }
@@ -2785,15 +2793,7 @@ public class KafkaAdminClient extends AdminClient {
 
                 context.setNode(response.node());
 
-                Call call = nextCall.get();
-
-                if (call.tries() > maxRetries) {
-                    log.debug("Max retries for {} reached", call);
-                    call.fail(time.milliseconds(), new TimeoutException());
-                    return;
-                }
-
-                runnable.call(call, time.milliseconds());
+                runnable.call(nextCall.get(), time.milliseconds());
             }
 
             @Override
