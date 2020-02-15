@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.streams.processor.internals.assignment;
 
+import java.util.HashMap;
+import java.util.Map;
 import org.apache.kafka.streams.processor.TaskId;
 import org.junit.Test;
 
@@ -31,13 +33,21 @@ import static org.junit.Assert.assertNull;
 
 public class SubscriptionInfoTest {
     private final UUID processId = UUID.randomUUID();
-    private final Set<TaskId> activeTasks = new HashSet<>(Arrays.asList(
+    private static final Set<TaskId> activeTasks = new HashSet<>(Arrays.asList(
         new TaskId(0, 0),
         new TaskId(0, 1),
         new TaskId(1, 0)));
-    private final Set<TaskId> standbyTasks = new HashSet<>(Arrays.asList(
+    private static final Set<TaskId> standbyTasks = new HashSet<>(Arrays.asList(
         new TaskId(1, 1),
         new TaskId(2, 0)));
+    private static final Map<TaskId, Integer> taskLags = new HashMap<>();
+    static {
+        taskLags.put(new TaskId(0, 0), -1);
+        taskLags.put(new TaskId(0, 1), -1);
+        taskLags.put(new TaskId(1, 0), -1);
+        taskLags.put(new TaskId(1, 1), 0);
+        taskLags.put(new TaskId(2, 0), 10);
+    }
 
     private final static String IGNORED_USER_ENDPOINT = "ignoredUserEndpoint:80";
 
@@ -47,9 +57,8 @@ public class SubscriptionInfoTest {
             0,
             LATEST_SUPPORTED_VERSION,
             processId,
-            activeTasks,
-            standbyTasks,
-            "localhost:80"
+            "localhost:80",
+            taskLags
         );
     }
 
@@ -59,9 +68,8 @@ public class SubscriptionInfoTest {
             LATEST_SUPPORTED_VERSION + 1,
             LATEST_SUPPORTED_VERSION,
             processId,
-            activeTasks,
-            standbyTasks,
-            "localhost:80"
+            "localhost:80",
+            taskLags
         );
     }
 
@@ -71,9 +79,8 @@ public class SubscriptionInfoTest {
             1,
             LATEST_SUPPORTED_VERSION,
             processId,
-            activeTasks,
-            standbyTasks,
-            IGNORED_USER_ENDPOINT
+            IGNORED_USER_ENDPOINT,
+            taskLags
         );
         final SubscriptionInfo decoded = SubscriptionInfo.decode(info.encode());
         assertEquals(1, decoded.version());
@@ -90,9 +97,8 @@ public class SubscriptionInfoTest {
             1,
             1234,
             processId,
-            activeTasks,
-            standbyTasks,
-            "ignoreme"
+            "ignoreme",
+            taskLags
         );
         final ByteBuffer buffer = info.encode();
 
@@ -105,7 +111,6 @@ public class SubscriptionInfoTest {
         assertNull(decoded.userEndPoint());
     }
 
-
     @Test
     public void generatedVersion1ShouldDecodeLegacyFormat() {
         final LegacySubscriptionInfoSerde info = new LegacySubscriptionInfoSerde(
@@ -114,7 +119,8 @@ public class SubscriptionInfoTest {
             processId,
             activeTasks,
             standbyTasks,
-            "localhost:80"
+            "localhost:80",
+            null
         );
         final ByteBuffer buffer = info.encode();
         buffer.rewind();
@@ -133,9 +139,8 @@ public class SubscriptionInfoTest {
             2,
             LATEST_SUPPORTED_VERSION,
             processId,
-            activeTasks,
-            standbyTasks,
-            "localhost:80"
+            "localhost:80",
+            taskLags
         );
         final SubscriptionInfo decoded = SubscriptionInfo.decode(info.encode());
         assertEquals(2, decoded.version());
@@ -152,9 +157,8 @@ public class SubscriptionInfoTest {
             2,
             LATEST_SUPPORTED_VERSION,
             processId,
-            activeTasks,
-            standbyTasks,
-            "localhost:80"
+            "localhost:80",
+            taskLags
         );
         final ByteBuffer buffer = info.encode();
 
@@ -175,7 +179,8 @@ public class SubscriptionInfoTest {
             processId,
             activeTasks,
             standbyTasks,
-            "localhost:80"
+            "localhost:80",
+            null
         );
         final ByteBuffer buffer = info.encode();
         buffer.rewind();
@@ -195,9 +200,8 @@ public class SubscriptionInfoTest {
                 version,
                 LATEST_SUPPORTED_VERSION,
                 processId,
-                activeTasks,
-                standbyTasks,
-                "localhost:80"
+                "localhost:80",
+                taskLags
             );
             final SubscriptionInfo decoded = SubscriptionInfo.decode(info.encode());
             assertEquals(version, decoded.version());
@@ -216,9 +220,8 @@ public class SubscriptionInfoTest {
                 version,
                 LATEST_SUPPORTED_VERSION,
                 processId,
-                activeTasks,
-                standbyTasks,
-                "localhost:80"
+                "localhost:80",
+                taskLags
             );
             final ByteBuffer buffer = info.encode();
 
@@ -241,7 +244,8 @@ public class SubscriptionInfoTest {
                 processId,
                 activeTasks,
                 standbyTasks,
-                "localhost:80"
+                "localhost:80",
+                null
             );
             final ByteBuffer buffer = info.encode();
             buffer.rewind();
@@ -258,7 +262,7 @@ public class SubscriptionInfoTest {
 
     @Test
     public void shouldEncodeAndDecodeVersion5() {
-        final SubscriptionInfo info = new SubscriptionInfo(5, LATEST_SUPPORTED_VERSION, processId, activeTasks, standbyTasks, "localhost:80");
+        final SubscriptionInfo info = new SubscriptionInfo(5, LATEST_SUPPORTED_VERSION, processId, "localhost:80", taskLags);
         assertEquals(info, SubscriptionInfo.decode(info.encode()));
     }
 
@@ -274,8 +278,8 @@ public class SubscriptionInfoTest {
         final int usedVersion = LATEST_SUPPORTED_VERSION - 1;
         final int latestSupportedVersion = LATEST_SUPPORTED_VERSION - 1;
 
-        final SubscriptionInfo info = new SubscriptionInfo(usedVersion, latestSupportedVersion, processId, activeTasks, standbyTasks, "localhost:80");
-        final SubscriptionInfo expectedInfo = new SubscriptionInfo(usedVersion, latestSupportedVersion, processId, activeTasks, standbyTasks, "localhost:80");
+        final SubscriptionInfo info = new SubscriptionInfo(usedVersion, latestSupportedVersion, processId, "localhost:80", taskLags);
+        final SubscriptionInfo expectedInfo = new SubscriptionInfo(usedVersion, latestSupportedVersion, processId, "localhost:80");
         assertEquals(expectedInfo, SubscriptionInfo.decode(info.encode()));
     }
 

@@ -95,6 +95,41 @@ public class SubscriptionInfo {
         this.data = data;
     }
 
+    public SubscriptionInfo(final int version,
+                            final int latestSupportedVersion,
+                            final UUID processId,
+                            final Set<TaskId> prevTasks,
+                            final Set<TaskId> standbyTasks,
+                            final String userEndPoint) {
+        validateVersions(version, latestSupportedVersion);
+        if (version >= 7) {
+            throw new IllegalStateException("Version 7 subscriptions should use task lag map instead of prev and standby sets");
+        }
+
+        final SubscriptionInfoData data = new SubscriptionInfoData();
+        data.setVersion(version);
+        data.setProcessId(processId);
+
+        if (version >= 2) {
+            data.setUserEndPoint(userEndPoint == null
+                                     ? new byte[0]
+                                     : userEndPoint.getBytes(StandardCharsets.UTF_8));
+        }
+        if (version >= 3) {
+            data.setLatestSupportedVersion(latestSupportedVersion);
+        }
+
+        data.setPrevTasks(prevTasks);
+        data.setStandbyTasks(standbyTasks)
+        if (version >= 7) {
+            setTaskLagDataFromTaskLagMap(data, taskLags);
+        } else {
+            setPrevAndStandbySetsFromParsedTaskLagMap(data, taskLags);
+        }
+        this.data = data;
+    }
+
+
     private static void setTaskLagDataFromTaskLagMap(final SubscriptionInfoData data,
                                                      final Map<TaskId, Integer> taskLags) {
         data.setTaskLags(taskLags.entrySet().stream().map(t -> {
@@ -111,7 +146,7 @@ public class SubscriptionInfo {
         final Set<TaskId> prevTasks = new HashSet<>();
         final Set<TaskId> standbyTasks = new HashSet<>();
 
-        for (Map.Entry<TaskId, Integer> taskLagEntry : taskLags.entrySet()) {
+        for (final Map.Entry<TaskId, Integer> taskLagEntry : taskLags.entrySet()) {
             if (taskLagEntry.getValue() == -1) {
                 prevTasks.add(taskLagEntry.getKey());
             } else {
@@ -152,6 +187,11 @@ public class SubscriptionInfo {
 
     public Set<TaskId> prevTasks() {
         if (prevTasksCache == null) {
+            // lazily initialize the prev and standby task maps as they may not be needed
+            if (data.version() >= 7) {
+                setPrevAndStandbySetsFromParsedTaskLagMap(data, taskLags());
+
+            }
             prevTasksCache = Collections.unmodifiableSet(
                 data.prevTasks()
                     .stream()
@@ -164,6 +204,11 @@ public class SubscriptionInfo {
 
     public Set<TaskId> standbyTasks() {
         if (standbyTasksCache == null) {
+            // lazily initialize the prev and standby task maps as they may not be needed
+            if (data.version() >= 7) {
+                setPrevAndStandbySetsFromParsedTaskLagMap(data, taskLags());
+
+            }
             standbyTasksCache = Collections.unmodifiableSet(
                 data.standbyTasks()
                     .stream()
@@ -179,8 +224,7 @@ public class SubscriptionInfo {
             taskLagsCache = Collections.unmodifiableMap(
                 data.taskLags()
                     .stream()
-                    .collect(Collectors.toMap(t -> new TaskId(t.topicGroupId(), t.partition()),
-                                              l -> l.lag()))
+                    .collect(Collectors.toMap(t -> new TaskId(t.topicGroupId(), t.partition()), l -> l.lag()))
 
             );
         }
