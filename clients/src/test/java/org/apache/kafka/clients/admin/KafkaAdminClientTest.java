@@ -1414,29 +1414,13 @@ public class KafkaAdminClientTest {
             env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
 
             data = new DescribeGroupsResponseData();
-            TopicPartition myTopicPartition0 = new TopicPartition("my_topic", 0);
-            TopicPartition myTopicPartition1 = new TopicPartition("my_topic", 1);
-            TopicPartition myTopicPartition2 = new TopicPartition("my_topic", 2);
-
-            final List<TopicPartition> topicPartitions = new ArrayList<>();
-            topicPartitions.add(0, myTopicPartition0);
-            topicPartitions.add(1, myTopicPartition1);
-            topicPartitions.add(2, myTopicPartition2);
-
-            final ByteBuffer memberAssignment = ConsumerProtocol.serializeAssignment(new ConsumerPartitionAssignor.Assignment(topicPartitions));
-            byte[] memberAssignmentBytes = new byte[memberAssignment.remaining()];
-            memberAssignment.get(memberAssignmentBytes);
-
-            DescribedGroupMember memberOne = DescribeGroupsResponse.groupMember("0", "instance1", "clientId0", "clientHost", memberAssignmentBytes, null);
-            DescribedGroupMember memberTwo = DescribeGroupsResponse.groupMember("1", "instance2", "clientId1", "clientHost", memberAssignmentBytes, null);
-
             data.groups().add(DescribeGroupsResponse.groupMetadata(
                 "group-0",
                 Errors.NONE,
                 "",
                 ConsumerProtocol.PROTOCOL_TYPE,
                 "",
-                asList(memberOne, memberTwo),
+                Collections.emptyList(),
                 Collections.emptySet()));
 
             env.kafkaClient().prepareResponse( body -> {
@@ -1664,7 +1648,65 @@ public class KafkaAdminClientTest {
     }
 
     @Test
-    public void testDescribeConsumerGroupOffsets() throws Exception {
+    public void testListConsumerGroupOffsetsNumRetries() throws Exception {
+        final Cluster cluster = mockCluster(3, 0);
+        final Time time = new MockTime();
+
+        try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(time, cluster,
+            AdminClientConfig.RETRIES_CONFIG, "0")) {
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+
+            env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
+            env.kafkaClient().prepareResponse(new OffsetFetchResponse(Errors.NOT_COORDINATOR, Collections.emptyMap()));
+
+            final ListConsumerGroupOffsetsResult result = env.adminClient().listConsumerGroupOffsets("group-0");
+
+            TestUtils.assertFutureError(result.partitionsToOffsetAndMetadata(), TimeoutException.class);
+        }
+    }
+
+    @Test
+    public void testListConsumerGroupOffsetsRetryBackoff() throws Exception {
+        MockTime time = new MockTime();
+        int retryBackoff = 100;
+
+        try (final AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(time,
+            mockCluster(3, 0),
+            newStrMap(AdminClientConfig.RETRY_BACKOFF_MS_CONFIG, "" + retryBackoff))) {
+            MockClient mockClient = env.kafkaClient();
+
+            mockClient.setNodeApiVersions(NodeApiVersions.create());
+
+            AtomicLong firstAttemptTime = new AtomicLong(0);
+            AtomicLong secondAttemptTime = new AtomicLong(0);
+
+            env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
+            env.kafkaClient().prepareResponse(body -> {
+                firstAttemptTime.set(time.milliseconds());
+                return true;
+            }, new OffsetFetchResponse(Errors.NOT_COORDINATOR, Collections.emptyMap()));
+
+            env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
+
+            env.kafkaClient().prepareResponse(body -> {
+                secondAttemptTime.set(time.milliseconds());
+                return true;
+            },new OffsetFetchResponse(Errors.NONE, Collections.emptyMap()));
+
+            final ListConsumerGroupOffsetsResult result = env.adminClient().listConsumerGroupOffsets("group-0");
+
+            TestUtils.waitForCondition(() -> ((KafkaAdminClient) env.adminClient()).numPendingCalls() == 1,"Failed to add retry ListConsumerGroupOffsets call on first failure");
+            time.sleep(retryBackoff);
+
+            result.partitionsToOffsetAndMetadata().get();
+
+            long actualRetryBackoff = secondAttemptTime.get() - firstAttemptTime.get();
+            assertEquals("ListConsumerGroupOffsets retry did not await expected backoff the first time!", retryBackoff, actualRetryBackoff);
+        }
+    }
+
+    @Test
+    public void testListConsumerGroupOffsets() throws Exception {
         try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(mockCluster(1, 0))) {
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
 
