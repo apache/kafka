@@ -125,7 +125,7 @@ object ConsoleProducer {
       .withRequiredArg
       .describedAs("topic")
       .ofType(classOf[String])
-    val brokerListOpt = parser.accepts("broker-list", "DEPRECATED, use --bootstrap-server instead; ignored if --bootstrap-server is specified.  The broker list string in the form HOST1:PORT1,HOST2:PORT2.")
+    val brokerListOpt = parser.accepts("broker-list", "DEPRECATED, use --bootstrap-server instead; ignored if --bootstrap-server is specified. The broker list string in the form HOST1:PORT1,HOST2:PORT2.")
       .withRequiredArg
       .describedAs("broker-list")
       .ofType(classOf[String])

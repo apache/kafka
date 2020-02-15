@@ -78,8 +78,9 @@ class ConsumerPerformanceTest {
   }
 
   @Test
-  def testBrokerListOverride(): Unit = {
+  def testBootstrapServerOverridesBrokerList(): Unit = {
     //Given
+    // broker-list is deprecated in favor of bootstrap-server
     val args: Array[String] = Array(
       "--broker-list", "localhost:9094",
       "--bootstrap-server", "localhost:9092",
@@ -100,7 +101,7 @@ class ConsumerPerformanceTest {
   def testConfigWithUnrecognizedOption(): Unit = {
     //Given
     val args: Array[String] = Array(
-      "--broker-list", "localhost:9092",
+      "--bootstrap-server", "localhost:9092",
       "--topic", "test",
       "--messages", "10",
       "--new-consumer"

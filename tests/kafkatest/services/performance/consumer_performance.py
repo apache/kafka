@@ -28,7 +28,7 @@ class ConsumerPerformanceService(PerformanceService):
         "zookeeper" "The connection string for the zookeeper connection in the form host:port. Multiple URLS can
                      be given to allow fail-over. This option is only used with the old consumer."
 
-        "broker-list", "A broker list to use for connecting if using the new consumer."
+        "bootstrap-server", "A broker list to use for connecting if using the new consumer."
 
         "topic", "REQUIRED: The topic to consume from."
 
@@ -110,7 +110,7 @@ class ConsumerPerformanceService(PerformanceService):
         if self.new_consumer:
             if version <= LATEST_0_10_0:
                 args['new-consumer'] = ""
-            args['broker-list'] = self.kafka.bootstrap_servers(self.security_config.security_protocol)
+            args['bootstrap-server'] = self.kafka.bootstrap_servers(self.security_config.security_protocol)
         else:
             args['zookeeper'] = self.kafka.zk_connect_setting()
 
