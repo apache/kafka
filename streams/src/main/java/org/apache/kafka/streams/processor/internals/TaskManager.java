@@ -22,6 +22,7 @@ import org.apache.kafka.clients.admin.RecordsToDelete;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.errors.LockException;
 import org.apache.kafka.streams.errors.StreamsException;
@@ -214,7 +215,7 @@ public class TaskManager {
             if (task.state() == CREATED) {
                 try {
                     task.initializeIfNeeded();
-                } catch (final LockException e) {
+                } catch (final LockException | TimeoutException e) {
                     // it is possible that if there are multiple threads within the instance that one thread
                     // trying to grab the task from the other, while the other has not released the lock since
                     // it did not participate in the rebalance. In this case we can just retry in the next iteration
@@ -232,7 +233,13 @@ public class TaskManager {
             final Set<TopicPartition> restored = changelogReader.completedChangelogs();
             for (final Task task : restoringTasks) {
                 if (restored.containsAll(task.changelogPartitions())) {
-                    task.completeRestoration();
+                    try {
+                        task.completeRestoration();
+                    } catch (final TimeoutException e) {
+                        log.debug("Cloud complete restoration for {} due to {}; will retry", task.id(), e.toString());
+
+                        allRunning = false;
+                    }
                 } else {
                     // we found a restoring task that isn't done restoring, which is evidence that
                     // not all tasks are running
