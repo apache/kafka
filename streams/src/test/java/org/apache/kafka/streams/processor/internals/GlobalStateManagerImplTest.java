@@ -678,6 +678,39 @@ public class GlobalStateManagerImplTest {
         }
     }
 
+    @Test
+    public void shouldRetryWhenPositionThrowsTimeoutException() {
+        final int retries = 2;
+        final AtomicInteger numberOfCalls = new AtomicInteger(0);
+        consumer = new MockConsumer<byte[], byte[]>(OffsetResetStrategy.EARLIEST) {
+            @Override
+            public synchronized long position(final TopicPartition partition) {
+                numberOfCalls.incrementAndGet();
+                throw new TimeoutException();
+            }
+        };
+        streamsConfig = new StreamsConfig(new Properties() {
+            {
+                put(StreamsConfig.APPLICATION_ID_CONFIG, "appId");
+                put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy:1234");
+                put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
+                put(StreamsConfig.RETRIES_CONFIG, retries);
+            }
+        });
+
+        try {
+            new GlobalStateManagerImpl(
+                new LogContext("mock"),
+                topology,
+                consumer,
+                stateDirectory,
+                stateRestoreListener,
+                streamsConfig);
+        } catch (final StreamsException expected) {
+            assertEquals(numberOfCalls.get(), retries);
+        }
+    }
+
     private void writeCorruptCheckpoint() throws IOException {
         final File checkpointFile = new File(stateManager.baseDir(), StateManagerUtil.CHECKPOINT_FILE_NAME);
         try (final OutputStream stream = Files.newOutputStream(checkpointFile.toPath())) {

@@ -282,7 +282,35 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
                 globalConsumer.seekToBeginning(Collections.singletonList(topicPartition));
             }
 
-            long offset = globalConsumer.position(topicPartition);
+            long offset = -1;
+            int attempts = 0;
+            do {
+                try {
+                    offset = globalConsumer.position(topicPartition);
+                } catch (final TimeoutException retryableException) {
+                    if (++attempts > retries) {
+                        log.error("Failed to get position for partition {} after {} retry attempts due to timeout. " +
+                                "The broker may be transiently unavailable at the moment. " +
+                                "You can increase the number of retries via configuration parameter `retries`.",
+                            topicPartition,
+                            retries,
+                            retryableException);
+                        throw new StreamsException(String.format("Failed to get position for partition %s after %d retry attempts due to timeout. " +
+                            "The broker may be transiently unavailable at the moment. " +
+                            "You can increase the number of retries via configuration parameter `retries`.", topicPartition, retries),
+                            retryableException);
+                    }
+                    log.debug("Failed to get position for partition {} due to timeout. The broker may be transiently unavailable at the moment. " +
+                            "Backing off for {} ms to retry (attempt {} of {})",
+                        topicPartition,
+                        retryBackoffMs,
+                        attempts,
+                        retries,
+                        retryableException);
+                    Utils.sleep(retryBackoffMs);
+                }
+            } while (offset == -1);
+
             final Long highWatermark = highWatermarks.get(topicPartition);
             final RecordBatchingStateRestoreCallback stateRestoreAdapter =
                 StateRestoreCallbackAdapter.adapt(stateRestoreCallback);
@@ -294,12 +322,20 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
                 try {
                     final ConsumerRecords<byte[], byte[]> records = globalConsumer.poll(pollTime);
                     final List<ConsumerRecord<byte[], byte[]>> restoreRecords = new ArrayList<>();
-                    for (final ConsumerRecord<byte[], byte[]> record : records.records(topicPartition)) {
-                        if (record.key() != null) {
-                            restoreRecords.add(recordConverter.convert(record));
+                    if (!records.isEmpty()) {
+                        for (final ConsumerRecord<byte[], byte[]> record : records.records(topicPartition)) {
+                            if (record.key() != null) {
+                                restoreRecords.add(recordConverter.convert(record));
+                            }
+                        }
+                        try {
+                            offset = globalConsumer.position(topicPartition);
+                        } catch (final TimeoutException error) {
+                            // the `globalConsumer.position()` call should never block because `poll()` did return data
+                            // hence, a `TimeoutException` indicates a bug and thus we rethrow it as fatal `IllegalStateException`
+                            throw new IllegalStateException(error);
                         }
                     }
-                    offset = globalConsumer.position(topicPartition);
                     stateRestoreAdapter.restoreBatch(restoreRecords);
                     stateRestoreListener.onBatchRestored(topicPartition, storeName, offset, restoreRecords.size());
                     restoreCount += restoreRecords.size();
