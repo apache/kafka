@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.processor.internals.assignment;
 
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -31,7 +30,6 @@ import java.util.Collection;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.UUID;
-import scala.Int;
 
 public class LegacySubscriptionInfoSerde {
 
@@ -179,10 +177,19 @@ public class LegacySubscriptionInfoSerde {
     }
 
     public static void encodeUserEndPoint(final ByteBuffer buf,
-                                             final byte[] endPointBytes) {
+                                          final byte[] endPointBytes) {
         if (endPointBytes != null) {
             buf.putInt(endPointBytes.length);
             buf.put(endPointBytes);
+        }
+    }
+
+    public static void encodeTaskLags(final ByteBuffer buf,
+                                      final Map<TaskId, Integer> taskLags) {
+        buf.putInt(taskLags.size());
+        for (final Map.Entry<TaskId, Integer> taskLagEntry : taskLags.entrySet()) {
+            taskLagEntry.getKey().writeTo(buf);
+            buf.putInt(taskLagEntry.getValue());
         }
     }
 
@@ -203,7 +210,7 @@ public class LegacySubscriptionInfoSerde {
         data.rewind();
 
         final int usedVersion = data.getInt();
-       if (usedVersion > 2 && usedVersion < 7) {
+        if (usedVersion > 2 && usedVersion < 7) {
             final int latestSupportedVersion = data.getInt();
             final UUID processId = decodeProcessId(data);
             final Set<TaskId> prevTasks = decodeTasks(data);

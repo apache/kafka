@@ -95,41 +95,6 @@ public class SubscriptionInfo {
         this.data = data;
     }
 
-    public SubscriptionInfo(final int version,
-                            final int latestSupportedVersion,
-                            final UUID processId,
-                            final Set<TaskId> prevTasks,
-                            final Set<TaskId> standbyTasks,
-                            final String userEndPoint) {
-        validateVersions(version, latestSupportedVersion);
-        if (version >= 7) {
-            throw new IllegalStateException("Version 7 subscriptions should use task lag map instead of prev and standby sets");
-        }
-
-        final SubscriptionInfoData data = new SubscriptionInfoData();
-        data.setVersion(version);
-        data.setProcessId(processId);
-
-        if (version >= 2) {
-            data.setUserEndPoint(userEndPoint == null
-                                     ? new byte[0]
-                                     : userEndPoint.getBytes(StandardCharsets.UTF_8));
-        }
-        if (version >= 3) {
-            data.setLatestSupportedVersion(latestSupportedVersion);
-        }
-
-        data.setPrevTasks(prevTasks);
-        data.setStandbyTasks(standbyTasks)
-        if (version >= 7) {
-            setTaskLagDataFromTaskLagMap(data, taskLags);
-        } else {
-            setPrevAndStandbySetsFromParsedTaskLagMap(data, taskLags);
-        }
-        this.data = data;
-    }
-
-
     private static void setTaskLagDataFromTaskLagMap(final SubscriptionInfoData data,
                                                      final Map<TaskId, Integer> taskLags) {
         data.setTaskLags(taskLags.entrySet().stream().map(t -> {

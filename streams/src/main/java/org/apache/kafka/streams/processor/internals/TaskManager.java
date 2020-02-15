@@ -53,6 +53,8 @@ import static org.apache.kafka.streams.processor.internals.Task.State.CREATED;
 import static org.apache.kafka.streams.processor.internals.Task.State.RESTORING;
 
 public class TaskManager {
+    static final int ACTIVE_TASK_SENTINEL_LAG = -1;
+
     // initialize the task list
     // activeTasks needs to be concurrent as it can be accessed
     // by QueryableState
@@ -116,7 +118,8 @@ public class TaskManager {
         return rebalanceInProgress;
     }
 
-    void handleRebalanceStart(final Set<String> subscribedTopics) {
+    // visible for testing
+    public void handleRebalanceStart(final Set<String> subscribedTopics) {
         builder.addSubscribedTopicsFromMetadata(subscribedTopics, logPrefix);
 
         rebalanceInProgress = true;
@@ -355,10 +358,26 @@ public class TaskManager {
     }
 
     /**
+     * @return Map from task id to that task's overall lag across all state stores
+     */
+    public Map<TaskId, Integer> getTaskLags() {
+        final Map<TaskId, Integer> taskLags = new HashMap<>();
+
+        for (final TaskId id : tasksOnLocalStorage()) {
+            if (activeTaskMap().containsKey(id)) {
+                taskLags.put(id, ACTIVE_TASK_SENTINEL_LAG);
+            } else {
+                taskLags.put(id, 0);
+            }
+        }
+        return taskLags;
+    }
+
+    /**
      * Returns ids of tasks whose states are kept on the local storage. This includes active, standby, and previously
      * assigned but not yet cleaned up tasks
      */
-    public Set<TaskId> tasksOnLocalStorage() {
+    Set<TaskId> tasksOnLocalStorage() {
         // A client could contain some inactive tasks whose states are still kept on the local storage in the following scenarios:
         // 1) the client is actively maintaining standby tasks by maintaining their states from the change log.
         // 2) the client has just got some tasks migrated out of itself to other clients while these task states

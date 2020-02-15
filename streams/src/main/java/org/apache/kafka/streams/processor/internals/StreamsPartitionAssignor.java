@@ -217,54 +217,17 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
     public ByteBuffer subscriptionUserData(final Set<String> topics) {
         // Adds the following information to subscription
         // 1. Client UUID (a unique id assigned to an instance of KafkaStreams)
-        // 2. Task ids of previously running tasks
-        // 3. Task ids of valid local states on the client's state directory.
-        final Set<TaskId> standbyTasks = taskManager.tasksOnLocalStorage();
-        final Set<TaskId> activeTasks = prepareForSubscription(taskManager,
-            topics,
-            standbyTasks,
-            rebalanceProtocol);
+        // 2. Map from task id to its overall lag
 
-        final Map<TaskId, Integer> taskLags = new HashMap<>(activeTasks.stream()
-                                                  .collect(Collectors.toMap(t -> t, l -> -1)));
-        taskLags.putAll(standbyTasks.stream()
-                            .collect(Collectors.toMap(t -> t, l -> 0)));
+        taskManager.handleRebalanceStart(topics);
 
         return new SubscriptionInfo(
             usedSubscriptionMetadataVersion,
             LATEST_SUPPORTED_VERSION,
             taskManager.processId(),
             userEndPoint,
-            taskLags)
+            taskManager.getTaskLags())
                 .encode();
-    }
-
-    protected static Set<TaskId> prepareForSubscription(final TaskManager taskManager,
-                                                        final Set<String> topics,
-                                                        final Set<TaskId> standbyTasks,
-                                                        final RebalanceProtocol rebalanceProtocol) {
-        // Any tasks that are not yet running are counted as standby tasks for assignment purposes,
-        // along with any old tasks for which we still found state on disk
-        final Set<TaskId> activeTasks;
-
-        switch (rebalanceProtocol) {
-            case EAGER:
-                // In eager, onPartitionsRevoked is called first and we must get the previously saved running task ids
-                activeTasks = taskManager.activeTaskIds();
-                standbyTasks.removeAll(activeTasks);
-                break;
-            case COOPERATIVE:
-                // In cooperative, we will use the encoded ownedPartitions to determine the running tasks
-                activeTasks = Collections.emptySet();
-                standbyTasks.removeAll(taskManager.activeTaskIds());
-                break;
-            default:
-                throw new IllegalStateException("Streams partition assignor's rebalance protocol is unknown");
-        }
-
-        taskManager.handleRebalanceStart(topics);
-
-        return activeTasks;
     }
 
     private Map<String, Assignment> errorAssignment(final Map<UUID, ClientMetadata> clientsMetadata,
@@ -1301,4 +1264,5 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
     protected TaskManager taskManger() {
         return taskManager;
     }
+
 }

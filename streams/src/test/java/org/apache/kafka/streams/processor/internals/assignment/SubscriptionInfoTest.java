@@ -33,20 +33,20 @@ import static org.junit.Assert.assertNull;
 
 public class SubscriptionInfoTest {
     private final UUID processId = UUID.randomUUID();
-    private static final Set<TaskId> activeTasks = new HashSet<>(Arrays.asList(
+    private static final Set<TaskId> ACTIVE_TASKS = new HashSet<>(Arrays.asList(
         new TaskId(0, 0),
         new TaskId(0, 1),
         new TaskId(1, 0)));
-    private static final Set<TaskId> standbyTasks = new HashSet<>(Arrays.asList(
+    private static final Set<TaskId> STANDBY_TASKS = new HashSet<>(Arrays.asList(
         new TaskId(1, 1),
         new TaskId(2, 0)));
-    private static final Map<TaskId, Integer> taskLags = new HashMap<>();
+    private static final Map<TaskId, Integer> TASK_LAGS = new HashMap<>();
     static {
-        taskLags.put(new TaskId(0, 0), -1);
-        taskLags.put(new TaskId(0, 1), -1);
-        taskLags.put(new TaskId(1, 0), -1);
-        taskLags.put(new TaskId(1, 1), 0);
-        taskLags.put(new TaskId(2, 0), 10);
+        TASK_LAGS.put(new TaskId(0, 0), -1);
+        TASK_LAGS.put(new TaskId(0, 1), -1);
+        TASK_LAGS.put(new TaskId(1, 0), -1);
+        TASK_LAGS.put(new TaskId(1, 1), 0);
+        TASK_LAGS.put(new TaskId(2, 0), 10);
     }
 
     private final static String IGNORED_USER_ENDPOINT = "ignoredUserEndpoint:80";
@@ -58,7 +58,7 @@ public class SubscriptionInfoTest {
             LATEST_SUPPORTED_VERSION,
             processId,
             "localhost:80",
-            taskLags
+            TASK_LAGS
         );
     }
 
@@ -69,7 +69,7 @@ public class SubscriptionInfoTest {
             LATEST_SUPPORTED_VERSION,
             processId,
             "localhost:80",
-            taskLags
+            TASK_LAGS
         );
     }
 
@@ -80,14 +80,14 @@ public class SubscriptionInfoTest {
             LATEST_SUPPORTED_VERSION,
             processId,
             IGNORED_USER_ENDPOINT,
-            taskLags
+            TASK_LAGS
         );
         final SubscriptionInfo decoded = SubscriptionInfo.decode(info.encode());
         assertEquals(1, decoded.version());
         assertEquals(SubscriptionInfo.UNKNOWN, decoded.latestSupportedVersion());
         assertEquals(processId, decoded.processId());
-        assertEquals(activeTasks, decoded.prevTasks());
-        assertEquals(standbyTasks, decoded.standbyTasks());
+        assertEquals(ACTIVE_TASKS, decoded.prevTasks());
+        assertEquals(STANDBY_TASKS, decoded.standbyTasks());
         assertNull(decoded.userEndPoint());
     }
 
@@ -98,7 +98,7 @@ public class SubscriptionInfoTest {
             1234,
             processId,
             "ignoreme",
-            taskLags
+            TASK_LAGS
         );
         final ByteBuffer buffer = info.encode();
 
@@ -106,8 +106,8 @@ public class SubscriptionInfoTest {
         assertEquals(1, decoded.version());
         assertEquals(SubscriptionInfo.UNKNOWN, decoded.latestSupportedVersion());
         assertEquals(processId, decoded.processId());
-        assertEquals(activeTasks, decoded.prevTasks());
-        assertEquals(standbyTasks, decoded.standbyTasks());
+        assertEquals(ACTIVE_TASKS, decoded.prevTasks());
+        assertEquals(STANDBY_TASKS, decoded.standbyTasks());
         assertNull(decoded.userEndPoint());
     }
 
@@ -117,8 +117,8 @@ public class SubscriptionInfoTest {
             1,
             LATEST_SUPPORTED_VERSION,
             processId,
-            activeTasks,
-            standbyTasks,
+            ACTIVE_TASKS,
+            STANDBY_TASKS,
             "localhost:80",
             null
         );
@@ -128,8 +128,8 @@ public class SubscriptionInfoTest {
         assertEquals(1, decoded.version());
         assertEquals(SubscriptionInfo.UNKNOWN, decoded.latestSupportedVersion());
         assertEquals(processId, decoded.processId());
-        assertEquals(activeTasks, decoded.prevTasks());
-        assertEquals(standbyTasks, decoded.standbyTasks());
+        assertEquals(ACTIVE_TASKS, decoded.prevTasks());
+        assertEquals(STANDBY_TASKS, decoded.standbyTasks());
         assertNull(decoded.userEndPoint());
     }
 
@@ -140,14 +140,14 @@ public class SubscriptionInfoTest {
             LATEST_SUPPORTED_VERSION,
             processId,
             "localhost:80",
-            taskLags
+            TASK_LAGS
         );
         final SubscriptionInfo decoded = SubscriptionInfo.decode(info.encode());
         assertEquals(2, decoded.version());
         assertEquals(SubscriptionInfo.UNKNOWN, decoded.latestSupportedVersion());
         assertEquals(processId, decoded.processId());
-        assertEquals(activeTasks, decoded.prevTasks());
-        assertEquals(standbyTasks, decoded.standbyTasks());
+        assertEquals(ACTIVE_TASKS, decoded.prevTasks());
+        assertEquals(STANDBY_TASKS, decoded.standbyTasks());
         assertEquals("localhost:80", decoded.userEndPoint());
     }
 
@@ -158,7 +158,7 @@ public class SubscriptionInfoTest {
             LATEST_SUPPORTED_VERSION,
             processId,
             "localhost:80",
-            taskLags
+            TASK_LAGS
         );
         final ByteBuffer buffer = info.encode();
 
@@ -166,8 +166,8 @@ public class SubscriptionInfoTest {
         assertEquals(2, decoded.version());
         assertEquals(SubscriptionInfo.UNKNOWN, decoded.latestSupportedVersion());
         assertEquals(processId, decoded.processId());
-        assertEquals(activeTasks, decoded.prevTasks());
-        assertEquals(standbyTasks, decoded.standbyTasks());
+        assertEquals(ACTIVE_TASKS, decoded.prevTasks());
+        assertEquals(STANDBY_TASKS, decoded.standbyTasks());
         assertEquals("localhost:80", decoded.userEndPoint());
     }
 
@@ -177,8 +177,8 @@ public class SubscriptionInfoTest {
             2,
             LATEST_SUPPORTED_VERSION,
             processId,
-            activeTasks,
-            standbyTasks,
+            ACTIVE_TASKS,
+            STANDBY_TASKS,
             "localhost:80",
             null
         );
@@ -188,8 +188,8 @@ public class SubscriptionInfoTest {
         assertEquals(2, decoded.version());
         assertEquals(SubscriptionInfo.UNKNOWN, decoded.latestSupportedVersion());
         assertEquals(processId, decoded.processId());
-        assertEquals(activeTasks, decoded.prevTasks());
-        assertEquals(standbyTasks, decoded.standbyTasks());
+        assertEquals(ACTIVE_TASKS, decoded.prevTasks());
+        assertEquals(STANDBY_TASKS, decoded.standbyTasks());
         assertEquals("localhost:80", decoded.userEndPoint());
     }
 
@@ -201,14 +201,14 @@ public class SubscriptionInfoTest {
                 LATEST_SUPPORTED_VERSION,
                 processId,
                 "localhost:80",
-                taskLags
+                TASK_LAGS
             );
             final SubscriptionInfo decoded = SubscriptionInfo.decode(info.encode());
             assertEquals(version, decoded.version());
             assertEquals(LATEST_SUPPORTED_VERSION, decoded.latestSupportedVersion());
             assertEquals(processId, decoded.processId());
-            assertEquals(activeTasks, decoded.prevTasks());
-            assertEquals(standbyTasks, decoded.standbyTasks());
+            assertEquals(ACTIVE_TASKS, decoded.prevTasks());
+            assertEquals(STANDBY_TASKS, decoded.standbyTasks());
             assertEquals("localhost:80", decoded.userEndPoint());
         }
     }
@@ -221,7 +221,7 @@ public class SubscriptionInfoTest {
                 LATEST_SUPPORTED_VERSION,
                 processId,
                 "localhost:80",
-                taskLags
+                TASK_LAGS
             );
             final ByteBuffer buffer = info.encode();
 
@@ -229,8 +229,8 @@ public class SubscriptionInfoTest {
             assertEquals(version, decoded.version());
             assertEquals(LATEST_SUPPORTED_VERSION, decoded.latestSupportedVersion());
             assertEquals(processId, decoded.processId());
-            assertEquals(activeTasks, decoded.prevTasks());
-            assertEquals(standbyTasks, decoded.standbyTasks());
+            assertEquals(ACTIVE_TASKS, decoded.prevTasks());
+            assertEquals(STANDBY_TASKS, decoded.standbyTasks());
             assertEquals("localhost:80", decoded.userEndPoint());
         }
     }
@@ -242,8 +242,8 @@ public class SubscriptionInfoTest {
                 version,
                 LATEST_SUPPORTED_VERSION,
                 processId,
-                activeTasks,
-                standbyTasks,
+                ACTIVE_TASKS,
+                STANDBY_TASKS,
                 "localhost:80",
                 null
             );
@@ -254,15 +254,16 @@ public class SubscriptionInfoTest {
             assertEquals(message, version, decoded.version());
             assertEquals(message, LATEST_SUPPORTED_VERSION, decoded.latestSupportedVersion());
             assertEquals(message, processId, decoded.processId());
-            assertEquals(message, activeTasks, decoded.prevTasks());
-            assertEquals(message, standbyTasks, decoded.standbyTasks());
+            assertEquals(message, ACTIVE_TASKS, decoded.prevTasks());
+            assertEquals(message, STANDBY_TASKS, decoded.standbyTasks());
             assertEquals(message, "localhost:80", decoded.userEndPoint());
         }
     }
 
     @Test
     public void shouldEncodeAndDecodeVersion5() {
-        final SubscriptionInfo info = new SubscriptionInfo(5, LATEST_SUPPORTED_VERSION, processId, "localhost:80", taskLags);
+        final SubscriptionInfo info = new SubscriptionInfo(5, LATEST_SUPPORTED_VERSION, processId, "localhost:80",
+            TASK_LAGS);
         assertEquals(info, SubscriptionInfo.decode(info.encode()));
     }
 
@@ -278,9 +279,21 @@ public class SubscriptionInfoTest {
         final int usedVersion = LATEST_SUPPORTED_VERSION - 1;
         final int latestSupportedVersion = LATEST_SUPPORTED_VERSION - 1;
 
-        final SubscriptionInfo info = new SubscriptionInfo(usedVersion, latestSupportedVersion, processId, "localhost:80", taskLags);
-        final SubscriptionInfo expectedInfo = new SubscriptionInfo(usedVersion, latestSupportedVersion, processId, "localhost:80");
+        final SubscriptionInfo info = new SubscriptionInfo(usedVersion, latestSupportedVersion, processId, "localhost:80",
+            TASK_LAGS);
+        final SubscriptionInfo expectedInfo = new SubscriptionInfo(usedVersion, latestSupportedVersion, processId, "localhost:80",
+            TASK_LAGS);
         assertEquals(expectedInfo, SubscriptionInfo.decode(info.encode()));
+    }
+
+    @Test
+    public void shouldEncodeVersion7() {
+        //TODO-soph
+    }
+
+    @Test
+    public void shouldConvertTaskLagMapToTaskSetsForOlderVersion() {
+        // TODO-soph
     }
 
     private static ByteBuffer encodeFutureVersion() {

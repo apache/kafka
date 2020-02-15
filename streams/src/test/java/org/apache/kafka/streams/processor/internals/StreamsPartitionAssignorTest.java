@@ -204,8 +204,8 @@ public class StreamsPartitionAssignorTest {
                                        final InternalTopologyBuilder builder) {
         taskManager = EasyMock.createNiceMock(TaskManager.class);
         EasyMock.expect(taskManager.builder()).andReturn(builder).anyTimes();
-        EasyMock.expect(taskManager.activeTaskIds()).andReturn(prevTasks).anyTimes();
-        EasyMock.expect(taskManager.tasksOnLocalStorage()).andReturn(cachedTasks).anyTimes();
+        //EasyMock.expect(taskManager.activeTaskIds()).andReturn(prevTasks).anyTimes();
+        EasyMock.expect(taskManager.getTaskLags()).andReturn(getTaskLags(prevTasks, cachedTasks)).anyTimes();
         EasyMock.expect(taskManager.processId()).andReturn(processId).anyTimes();
         builder.setApplicationId(APPLICATION_ID);
         builder.buildTopology();
@@ -227,18 +227,21 @@ public class StreamsPartitionAssignorTest {
                                             final Set<TaskId> prevTasks,
                                             final Set<TaskId> standbyTasks,
                                             final String userEndPoint) {
-        return new SubscriptionInfo(version, LATEST_SUPPORTED_VERSION, processId, prevTasks, standbyTasks, userEndPoint);
+        return new SubscriptionInfo(
+            version, LATEST_SUPPORTED_VERSION, processId, userEndPoint, getTaskLags(prevTasks, standbyTasks));
     }
 
     private static SubscriptionInfo getInfo(final UUID processId,
                                             final Set<TaskId> prevTasks,
                                             final Set<TaskId> standbyTasks,
                                             final String userEndPoint) {
-        return new SubscriptionInfo(LATEST_SUPPORTED_VERSION, LATEST_SUPPORTED_VERSION, processId, prevTasks, standbyTasks, userEndPoint);
+        return new SubscriptionInfo(
+            LATEST_SUPPORTED_VERSION, LATEST_SUPPORTED_VERSION, processId, userEndPoint, getTaskLags(prevTasks, standbyTasks));
     }
 
     private static SubscriptionInfo getInfo(final UUID processId, final Set<TaskId> prevTasks, final Set<TaskId> standbyTasks) {
-        return new SubscriptionInfo(LATEST_SUPPORTED_VERSION, LATEST_SUPPORTED_VERSION, processId, prevTasks, standbyTasks, USER_END_POINT);
+        return new SubscriptionInfo(
+            LATEST_SUPPORTED_VERSION, LATEST_SUPPORTED_VERSION, processId, USER_END_POINT, getTaskLags(prevTasks, standbyTasks));
     }
 
     @Test
@@ -1991,6 +1994,10 @@ public class StreamsPartitionAssignorTest {
 
             assertThat(thisTaskList, equalTo(otherTaskList));
         }
+    }
+
+    static Map<TaskId, Integer> getTaskLags(final Set<TaskId> activeTasks, final Set<TaskId> cachedTasks) {
+        return cachedTasks.stream().collect(Collectors.toMap(t -> t, l -> activeTasks.contains(l) ? -1 : 0));
     }
 
 }
