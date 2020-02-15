@@ -287,13 +287,17 @@ public class SubscriptionInfoTest {
     }
 
     @Test
-    public void shouldEncodeVersion7() {
-        //TODO-soph
+    public void shouldEncodeAndDecodeVersion7() {
+        final SubscriptionInfo info =
+            new SubscriptionInfo(7, LATEST_SUPPORTED_VERSION, processId, "localhost:80", TASK_LAGS);
+        assertEquals(info, SubscriptionInfo.decode(info.encode()));
     }
 
     @Test
     public void shouldConvertTaskLagMapToTaskSetsForOlderVersion() {
-        // TODO-soph
+        final SubscriptionInfo info = new SubscriptionInfo(7, LATEST_SUPPORTED_VERSION, processId, "localhost:80", TASK_LAGS);
+        assertEquals(info.prevTasks(), ACTIVE_TASKS);
+        assertEquals(info.standbyTasks(), STANDBY_TASKS);
     }
 
     private static ByteBuffer encodeFutureVersion() {
