@@ -3718,7 +3718,7 @@ public class KafkaAdminClient extends AdminClient {
                         nextAllowedTryMs += retryBackoffMs;
                     }
                     Call call = getAlterConsumerGroupOffsetsCall(context, offsets,
-                        Optional.of(this.tries()), Optional.of(nextAllowedTryMs));
+                        Optional.of(this.tries() + 1), Optional.of(nextAllowedTryMs));
                     rescheduleFindCoordinatorTask(context, () -> call);
                     return;
                 }
@@ -3736,7 +3736,7 @@ public class KafkaAdminClient extends AdminClient {
                                 nextAllowedTryMs += retryBackoffMs;
                             }
                             Call call = getAlterConsumerGroupOffsetsCall(context, offsets,
-                                Optional.of(this.tries()), Optional.of(nextAllowedTryMs));
+                                Optional.of(this.tries() + 1), Optional.of(nextAllowedTryMs));
                             rescheduleFindCoordinatorTask(context, () -> call);
                             return;
                         }
