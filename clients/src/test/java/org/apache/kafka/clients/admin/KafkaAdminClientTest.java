@@ -2496,7 +2496,7 @@ public class KafkaAdminClientTest {
     }
 
     @Test
-    public void testListOffsetsNotLeaderException() throws Exception {
+    public void testListOffsetsWithLeaderChange() throws Exception {
         Node node0 = new Node(0, "localhost", 8120);
         Node node1 = new Node(1, "localhost", 8121);
         Node node2 = new Node(2, "localhost", 8122);
@@ -2513,7 +2513,7 @@ public class KafkaAdminClientTest {
 
             env.kafkaClient().prepareResponse(prepareMetadataResponse(oldCluster, Errors.NONE));
             Map<TopicPartition, PartitionData> responseData2 = new HashMap<>();
-            responseData2.put(tp0, new PartitionData(Errors.LEADER_NOT_AVAILABLE, -1L, 345L, Optional.of(543)));
+            responseData2.put(tp0, new PartitionData(Errors.NOT_LEADER_FOR_PARTITION, -1L, 345L, Optional.of(543)));
             env.kafkaClient().prepareResponseFrom(new ListOffsetResponse(responseData2), node0);
 
             // metadata refresh because of NOT_LEADER_FOR_PARTITION, updating leader from node0 to node1
