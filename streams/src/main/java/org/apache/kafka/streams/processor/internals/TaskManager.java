@@ -225,7 +225,8 @@ public class TaskManager {
                     log.debug(
                         "Could not initialize {} due to {}. Will retry in next loop.",
                         task.id(),
-                        retryableException.toString());
+                        retryableException.toString()
+                    );
 
                     allRunning = false;
                 }
@@ -248,7 +249,8 @@ public class TaskManager {
                         log.debug(
                             "Cloud not complete restoration for {} due to {}. Will retry in next loop.",
                             task.id(),
-                            retryableException.toString());
+                            retryableException.toString()
+                        );
 
                         allRunning = false;
                     }

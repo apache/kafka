@@ -659,8 +659,8 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             );
 
             throw retryableException;
-        } catch (final KafkaException e) {
-            throw new StreamsException(format("task [%s] Failed to initialize offsets for %s", id, partitions), e);
+        } catch (final KafkaException error) {
+            throw new StreamsException(format("task [%s] Failed to initialize offsets for %s", id, partitions), error);
         }
     }
 

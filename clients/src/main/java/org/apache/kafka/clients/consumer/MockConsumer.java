@@ -175,7 +175,7 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
             throw new WakeupException();
         }
 
-        if (pollException != null) {
+        if (this.pollException != null) {
             RuntimeException exception = this.pollException;
             this.pollException = null;
             throw exception;
@@ -315,7 +315,7 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
     public synchronized Map<TopicPartition, OffsetAndMetadata> committed(final Set<TopicPartition> partitions) {
         ensureNotClosed();
 
-        if (committedException != null) {
+        if (this.committedException != null) {
             RuntimeException exception = this.committedException;
             this.committedException = null;
             throw exception;
@@ -434,7 +434,7 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
 
     @Override
     public synchronized Map<TopicPartition, Long> beginningOffsets(Collection<TopicPartition> partitions) {
-        if (offsetsException != null) {
+        if (this.offsetsException != null) {
             RuntimeException exception = this.offsetsException;
             this.offsetsException = null;
             throw exception;
@@ -451,7 +451,7 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
 
     @Override
     public synchronized Map<TopicPartition, Long> endOffsets(Collection<TopicPartition> partitions) {
-        if (offsetsException != null) {
+        if (this.offsetsException != null) {
             RuntimeException exception = this.offsetsException;
             this.offsetsException = null;
             throw exception;
@@ -471,7 +471,7 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
         close(KafkaConsumer.DEFAULT_CLOSE_TIMEOUT_MS, TimeUnit.MILLISECONDS);
     }
 
-    @SuppressWarnings("deprecation")
+    @Deprecated
     @Override
     public synchronized void close(long timeout, TimeUnit unit) {
         this.closed = true;
