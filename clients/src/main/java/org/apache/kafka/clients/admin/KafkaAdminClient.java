@@ -2841,8 +2841,9 @@ public class KafkaAdminClient extends AdminClient {
 
                 // If coordinator changed since we fetched it, retry
                 if (ConsumerGroupOperationContext.hasCoordinatorMoved(response)) {
-                    Call call = getDescribeConsumerGroupsCall(context, Optional.of(this.tries()),
-                        Optional.of(this.nextAllowedTryMs()));
+                    long nextAllowedTryMs = calculateNextAllowedRetryMs(this.nextAllowedTryMs());
+                    Call call = getDescribeConsumerGroupsCall(context, Optional.of(this.tries() + 1),
+                        Optional.of(nextAllowedTryMs));
                     rescheduleFindCoordinatorTask(context, () -> call);
                     return;
                 }
@@ -3112,8 +3113,9 @@ public class KafkaAdminClient extends AdminClient {
 
                 // If coordinator changed since we fetched it, retry
                 if (ConsumerGroupOperationContext.hasCoordinatorMoved(response)) {
-                    Call call = getListConsumerGroupOffsetsCall(context, Optional.of(this.tries()),
-                        Optional.of(this.nextAllowedTryMs()));
+                    long nextAllowedTryMs = calculateNextAllowedRetryMs(this.nextAllowedTryMs());
+                    Call call = getListConsumerGroupOffsetsCall(context, Optional.of(this.tries() + 1),
+                        Optional.of(nextAllowedTryMs));
                     rescheduleFindCoordinatorTask(context, () -> call);
                     return;
                 }
@@ -3195,8 +3197,9 @@ public class KafkaAdminClient extends AdminClient {
 
                 // If coordinator changed since we fetched it, retry
                 if (ConsumerGroupOperationContext.hasCoordinatorMoved(response)) {
-                    Call call = getDeleteConsumerGroupsCall(context, Optional.of(this.tries()),
-                        Optional.of(this.nextAllowedTryMs()));
+                    long nextAllowedTryMs = calculateNextAllowedRetryMs(this.nextAllowedTryMs());
+                    Call call = getDeleteConsumerGroupsCall(context, Optional.of(this.tries() + 1),
+                        Optional.of(nextAllowedTryMs));
                     rescheduleFindCoordinatorTask(context, () -> call);
                     return;
                 }
@@ -3274,8 +3277,9 @@ public class KafkaAdminClient extends AdminClient {
 
                 // If coordinator changed since we fetched it, retry
                 if (ConsumerGroupOperationContext.hasCoordinatorMoved(response)) {
+                    long nextAllowedTryMs = calculateNextAllowedRetryMs(this.nextAllowedTryMs());
                     Call call = getDeleteConsumerGroupOffsetsCall(context, partitions,
-                        Optional.of(this.tries()), Optional.of(this.nextAllowedTryMs()));
+                        Optional.of(this.tries() + 1), Optional.of(nextAllowedTryMs));
                     rescheduleFindCoordinatorTask(context, () -> call);
                     return;
                 }
@@ -3574,6 +3578,12 @@ public class KafkaAdminClient extends AdminClient {
         return new ListPartitionReassignmentsResult(partitionReassignmentsFuture);
     }
 
+    private long calculateNextAllowedRetryMs(long currNextAllowedRetryMs) {
+        return (currNextAllowedRetryMs == 0) ?
+            time.milliseconds() + retryBackoffMs :
+            currNextAllowedRetryMs + retryBackoffMs;
+    }
+
     private void handleNotControllerError(Errors error) throws ApiException {
         metadataManager.clearController();
         metadataManager.requestUpdate();
@@ -3624,8 +3634,9 @@ public class KafkaAdminClient extends AdminClient {
 
                 // If coordinator changed since we fetched it, retry
                 if (ConsumerGroupOperationContext.hasCoordinatorMoved(response)) {
-                    Call call = getRemoveMembersFromGroupCall(context, Optional.of(this.tries()),
-                        Optional.of(this.nextAllowedTryMs()));
+                    long nextAllowedTryMs = calculateNextAllowedRetryMs(this.nextAllowedTryMs());
+                    Call call = getRemoveMembersFromGroupCall(context, Optional.of(this.tries() + 1),
+                        Optional.of(nextAllowedTryMs));
                     rescheduleFindCoordinatorTask(context, () -> call);
                     return;
                 }
@@ -3718,13 +3729,7 @@ public class KafkaAdminClient extends AdminClient {
 
                 // If coordinator changed since we fetched it, retry
                 if (ConsumerGroupOperationContext.hasCoordinatorMoved(response)) {
-                    long nextAllowedTryMs = this.nextAllowedTryMs();
-                    if (nextAllowedTryMs == 0) {
-                        // new call, have to fast forward next allowed try ourselves
-                        nextAllowedTryMs = time.milliseconds() + retryBackoffMs;
-                    } else {
-                        nextAllowedTryMs += retryBackoffMs;
-                    }
+                    long nextAllowedTryMs = calculateNextAllowedRetryMs(this.nextAllowedTryMs());
                     Call call = getAlterConsumerGroupOffsetsCall(context, offsets,
                         Optional.of(this.tries() + 1), Optional.of(nextAllowedTryMs));
                     rescheduleFindCoordinatorTask(context, () -> call);
@@ -3736,13 +3741,7 @@ public class KafkaAdminClient extends AdminClient {
                     for (OffsetCommitResponsePartition partition : topic.partitions()) {
                         Errors error = Errors.forCode(partition.errorCode());
                         if (ConsumerGroupOperationContext.shouldRefreshCoordinator(error)) {
-                            long nextAllowedTryMs = this.nextAllowedTryMs();
-                            if (nextAllowedTryMs == 0) {
-                                // new call, have to fast forward next allowed try ourselves
-                                nextAllowedTryMs = time.milliseconds() + retryBackoffMs;
-                            } else {
-                                nextAllowedTryMs += retryBackoffMs;
-                            }
+                            long nextAllowedTryMs = calculateNextAllowedRetryMs(this.nextAllowedTryMs());
                             Call call = getAlterConsumerGroupOffsetsCall(context, offsets,
                                 Optional.of(this.tries() + 1), Optional.of(nextAllowedTryMs));
                             rescheduleFindCoordinatorTask(context, () -> call);
