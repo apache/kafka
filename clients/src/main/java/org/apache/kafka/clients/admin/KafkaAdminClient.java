@@ -3788,8 +3788,7 @@ public class KafkaAdminClient extends AdminClient {
                 new MetadataOperationContext<>(topics, options, deadline, futures);
 
         Call metadataCall = getMetadataCall(context, 
-            () -> KafkaAdminClient.this.getListOffsetsCalls(context, topicPartitionOffsets, futures,
-                Optional.empty(), Optional.empty()));
+            () -> KafkaAdminClient.this.getListOffsetsCalls(context, topicPartitionOffsets, futures));
         runnable.call(metadataCall, nowMetadata);
 
         return new ListOffsetsResult(new HashMap<>(futures));
@@ -3797,8 +3796,7 @@ public class KafkaAdminClient extends AdminClient {
 
     private List<Call> getListOffsetsCalls(MetadataOperationContext<ListOffsetsResultInfo, ListOffsetsOptions> context,
                                            Map<TopicPartition, OffsetSpec> topicPartitionOffsets,
-                                           Map<TopicPartition, KafkaFutureImpl<ListOffsetsResultInfo>> futures,
-                                           Optional<Integer> numTries, Optional<Long> nextAllowedRetryMs) {
+                                           Map<TopicPartition, KafkaFutureImpl<ListOffsetsResultInfo>> futures) {
 
         MetadataResponse mr = context.response().orElseThrow(() -> new IllegalStateException("No Metadata response"));
         List<Call> calls = new ArrayList<>();
@@ -3833,8 +3831,7 @@ public class KafkaAdminClient extends AdminClient {
             final int brokerId = entry.getKey().id();
             final Map<TopicPartition, ListOffsetRequest.PartitionData> partitionsToQuery = entry.getValue();
 
-            calls.add(new Call("listOffsets on broker " + brokerId, context.deadline(), new ConstantNodeIdProvider(brokerId),
-                numTries, nextAllowedRetryMs) {
+            calls.add(new Call("listOffsets on broker " + brokerId, context.deadline(), new ConstantNodeIdProvider(brokerId)) {
 
                 @Override
                 ListOffsetRequest.Builder createRequest(int timeoutMs) {

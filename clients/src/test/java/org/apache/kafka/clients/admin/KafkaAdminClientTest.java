@@ -2214,7 +2214,6 @@ public class KafkaAdminClientTest {
     public void testRemoveMembersFromGroupRetryBackoff() throws Exception {
         MockTime time = new MockTime();
         int retryBackoff = 100;
-        final List<String> groupIds = singletonList("group-0");
 
         try (final AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(time,
             mockCluster(3, 0),
