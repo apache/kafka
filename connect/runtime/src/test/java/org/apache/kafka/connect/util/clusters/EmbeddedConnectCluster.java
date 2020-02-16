@@ -16,9 +16,11 @@
  */
 package org.apache.kafka.connect.util.clusters;
 
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.connect.errors.ConnectException;
+import org.apache.kafka.connect.runtime.rest.entities.ActiveTopicsInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ServerInfo;
 import org.apache.kafka.connect.runtime.rest.errors.ConnectRestException;
@@ -36,6 +38,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
@@ -353,6 +356,52 @@ public class EmbeddedConnectCluster {
         }
         throw new ConnectRestException(response.getStatus(),
                 "Could not read connector state. Error response: " + responseToString(response));
+    }
+
+    /**
+     * Get the active topics of a connector running in this cluster.
+     *
+     * @param connectorName name of the connector
+     * @return an instance of {@link ConnectorStateInfo} populated with state information of the connector and its tasks.
+     * @throws ConnectRestException if the HTTP request to the REST API failed with a valid status code.
+     * @throws ConnectException for any other error.
+     */
+    public ActiveTopicsInfo connectorTopics(String connectorName) {
+        ObjectMapper mapper = new ObjectMapper();
+        String url = endpointForResource(String.format("connectors/%s/topics", connectorName));
+        Response response = requestGet(url);
+        try {
+            if (response.getStatus() < Response.Status.BAD_REQUEST.getStatusCode()) {
+                Map<String, Map<String, List<String>>> activeTopics = mapper
+                        .readerFor(new TypeReference<Map<String, Map<String, List<String>>>>() { })
+                        .readValue(responseToString(response));
+                return new ActiveTopicsInfo(connectorName,
+                        activeTopics.get(connectorName).getOrDefault("topics", Collections.emptyList()));
+            }
+        } catch (IOException e) {
+            log.error("Could not read connector state from response: {}",
+                    responseToString(response), e);
+            throw new ConnectException("Could not not parse connector state", e);
+        }
+        throw new ConnectRestException(response.getStatus(),
+                "Could not read connector state. Error response: " + responseToString(response));
+    }
+
+    /**
+     * Reset the set of active topics of a connector running in this cluster.
+     *
+     * @param connectorName name of the connector
+     * @throws ConnectRestException if the HTTP request to the REST API failed with a valid status code.
+     * @throws ConnectException for any other error.
+     */
+    public void resetConnectorTopics(String connectorName) {
+        String url = endpointForResource(String.format("connectors/%s/topics/reset", connectorName));
+        Response response = requestPut(url, null);
+        if (response.getStatus() >= Response.Status.BAD_REQUEST.getStatusCode()) {
+            throw new ConnectRestException(response.getStatus(),
+                    "Resetting active topics for connector " + connectorName + " failed. "
+                    + "Error response: " + responseToString(response));
+        }
     }
 
     /**

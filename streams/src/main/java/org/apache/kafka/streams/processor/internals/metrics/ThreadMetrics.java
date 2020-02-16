@@ -22,15 +22,17 @@ import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.V
 
 import java.util.Map;
 
-import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.RATE_DESCRIPTION;
-import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.ROLLUP_VALUE;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.LATENCY_SUFFIX;
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.RATE_DESCRIPTION;
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.RATE_SUFFIX;
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.ROLLUP_VALUE;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.TASK_LEVEL_GROUP;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.THREAD_LEVEL_GROUP;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.THREAD_LEVEL_GROUP_0100_TO_24;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.TOTAL_DESCRIPTION;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addAvgAndMaxToSensor;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addInvocationRateAndCountToSensor;
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addRateOfSumAndSumMetricsToSensor;
 
 public class ThreadMetrics {
     private ThreadMetrics() {}
@@ -146,18 +148,40 @@ public class ThreadMetrics {
         );
     }
 
-    public static Sensor processSensor(final String threadId,
-                                       final StreamsMetricsImpl streamsMetrics) {
-        return invocationRateAndCountAndAvgAndMaxLatencySensor(
-            threadId,
+    public static Sensor processLatencySensor(final String threadId,
+                                              final StreamsMetricsImpl streamsMetrics) {
+        final Sensor sensor = streamsMetrics.threadLevelSensor(threadId,
+                                                               PROCESS + LATENCY_SUFFIX,
+                                                               RecordingLevel.INFO);
+        final Map<String, String> tagMap = streamsMetrics.threadLevelTagMap(threadId);
+        final String threadLevelGroup = threadLevelGroup(streamsMetrics);
+        addAvgAndMaxToSensor(
+            sensor,
+            threadLevelGroup,
+            tagMap,
+            PROCESS + LATENCY_SUFFIX,
+            PROCESS_AVG_LATENCY_DESCRIPTION,
+            PROCESS_MAX_LATENCY_DESCRIPTION
+        );
+        return sensor;
+    }
+
+    public static Sensor processRateSensor(final String threadId,
+                                              final StreamsMetricsImpl streamsMetrics) {
+        final Sensor sensor = streamsMetrics.threadLevelSensor(threadId,
+                                                               PROCESS + RATE_SUFFIX,
+                                                               RecordingLevel.INFO);
+        final Map<String, String> tagMap = streamsMetrics.threadLevelTagMap(threadId);
+        final String threadLevelGroup = threadLevelGroup(streamsMetrics);
+        addRateOfSumAndSumMetricsToSensor(
+            sensor,
+            threadLevelGroup,
+            tagMap,
             PROCESS,
             PROCESS_RATE_DESCRIPTION,
-            PROCESS_TOTAL_DESCRIPTION,
-            PROCESS_AVG_LATENCY_DESCRIPTION,
-            PROCESS_MAX_LATENCY_DESCRIPTION,
-            Sensor.RecordingLevel.INFO,
-            streamsMetrics
+            PROCESS_TOTAL_DESCRIPTION
         );
+        return sensor;
     }
 
     public static Sensor punctuateSensor(final String threadId,

@@ -77,6 +77,9 @@ public class MockRecordCollector implements RecordCollector {
     }
 
     @Override
+    public void initialize() {}
+
+    @Override
     public void commit(final Map<TopicPartition, OffsetAndMetadata> offsets) {
         committed.add(offsets);
     }

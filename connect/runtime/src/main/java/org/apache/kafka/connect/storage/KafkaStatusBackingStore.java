@@ -85,10 +85,10 @@ import java.util.concurrent.ConcurrentMap;
 public class KafkaStatusBackingStore implements StatusBackingStore {
     private static final Logger log = LoggerFactory.getLogger(KafkaStatusBackingStore.class);
 
-    private static final String TASK_STATUS_PREFIX = "status-task-";
-    private static final String CONNECTOR_STATUS_PREFIX = "status-connector-";
-    private static final String TOPIC_STATUS_PREFIX = "status-topic-";
-    private static final String TOPIC_STATUS_SEPARATOR = ":connector-";
+    public static final String TASK_STATUS_PREFIX = "status-task-";
+    public static final String CONNECTOR_STATUS_PREFIX = "status-connector-";
+    public static final String TOPIC_STATUS_PREFIX = "status-topic-";
+    public static final String TOPIC_STATUS_SEPARATOR = ":connector-";
 
     public static final String STATE_KEY_NAME = "state";
     public static final String TRACE_KEY_NAME = "trace";
@@ -122,9 +122,9 @@ public class KafkaStatusBackingStore implements StatusBackingStore {
 
     private final Time time;
     private final Converter converter;
-    private final Table<String, Integer, CacheEntry<TaskStatus>> tasks;
-    private final Map<String, CacheEntry<ConnectorStatus>> connectors;
     //visible for testing
+    protected final Table<String, Integer, CacheEntry<TaskStatus>> tasks;
+    protected final Map<String, CacheEntry<ConnectorStatus>> connectors;
     protected final ConcurrentMap<String, ConcurrentMap<String, TopicStatus>> topics;
 
     private String statusTopic;
@@ -435,7 +435,7 @@ public class KafkaStatusBackingStore implements StatusBackingStore {
         }
     }
 
-    private TopicStatus parseTopicStatus(byte[] data) {
+    protected TopicStatus parseTopicStatus(byte[] data) {
         try {
             SchemaAndValue schemaAndValue = converter.toConnectData(statusTopic, data);
             if (!(schemaAndValue.value() instanceof Map)) {

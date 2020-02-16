@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.consumer.Consumer;
+import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.KafkaException;
@@ -186,11 +187,14 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
 
     /**
      * @throws LockException could happen when multi-threads within the single instance, could retry
+     * @throws TimeoutException if initializing record collector timed out
      * @throws StreamsException fatal error, should close the thread
      */
     @Override
     public void initializeIfNeeded() {
         if (state() == State.CREATED) {
+            recordCollector.initialize();
+
             StateManagerUtil.registerStateStores(log, logPrefix, topology, stateMgr, stateDirectory, processorContext);
 
             transitionTo(State.RESTORING);
@@ -199,6 +203,9 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         }
     }
 
+    /**
+     * @throws TimeoutException if fetching committed offsets timed out
+     */
     @Override
     public void completeRestoration() {
         if (state() == State.RESTORING) {
@@ -612,6 +619,12 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                 .filter(e -> e.getValue() != null)
                 .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
             initializeTaskTime(offsetsAndMetadata);
+        } catch (final TimeoutException e) {
+            log.warn("Encountered {} while trying to fetch committed offsets, will retry initializing the metadata in the next loop." +
+                "\nConsider overwriting consumer config {} to a larger value to avoid timeout errors",
+                ConsumerConfig.DEFAULT_API_TIMEOUT_MS_CONFIG);
+
+            throw e;
         } catch (final KafkaException e) {
             throw new StreamsException(format("task [%s] Failed to initialize offsets for %s", id, partitions), e);
         }

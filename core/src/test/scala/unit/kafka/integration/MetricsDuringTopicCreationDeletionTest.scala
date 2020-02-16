@@ -18,14 +18,15 @@
 package kafka.integration
 
 import java.util.Properties
+
 import kafka.server.KafkaConfig
 import kafka.utils.{Logging, TestUtils}
+
 import scala.collection.JavaConverters.mapAsScalaMapConverter
 import org.scalatest.Assertions.fail
-
 import org.junit.{Before, Test}
-import com.yammer.metrics.Metrics
 import com.yammer.metrics.core.Gauge
+import kafka.metrics.KafkaYammerMetrics
 
 class MetricsDuringTopicCreationDeletionTest extends KafkaServerTestHarness with Logging {
 
@@ -57,8 +58,8 @@ class MetricsDuringTopicCreationDeletionTest extends KafkaServerTestHarness with
     // This is a test workaround to the issue that prior harness runs may have left a populated registry.
     // see https://issues.apache.org/jira/browse/KAFKA-4605
     for (m <- testedMetrics) {
-        val metricName = Metrics.defaultRegistry.allMetrics.asScala.keys.find(_.getName.endsWith(m))
-        metricName.foreach(Metrics.defaultRegistry.removeMetric)
+        val metricName = KafkaYammerMetrics.defaultRegistry.allMetrics.asScala.keys.find(_.getName.endsWith(m))
+        metricName.foreach(KafkaYammerMetrics.defaultRegistry.removeMetric)
     }
 
     super.setUp
@@ -122,11 +123,11 @@ class MetricsDuringTopicCreationDeletionTest extends KafkaServerTestHarness with
   }
 
   private def getGauge(metricName: String) = {
-    Metrics.defaultRegistry.allMetrics.asScala
-           .filterKeys(k => k.getName.endsWith(metricName))
-           .headOption
-           .getOrElse { fail( "Unable to find metric " + metricName ) }
-           ._2.asInstanceOf[Gauge[Int]]
+    KafkaYammerMetrics.defaultRegistry.allMetrics.asScala
+                      .filterKeys(k => k.getName.endsWith(metricName))
+                      .headOption
+                      .getOrElse { fail( "Unable to find metric " + metricName ) }
+                      ._2.asInstanceOf[Gauge[Int]]
   }
 
   private def createDeleteTopics(): Unit = {
