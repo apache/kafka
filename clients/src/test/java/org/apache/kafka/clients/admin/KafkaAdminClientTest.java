@@ -1329,7 +1329,7 @@ public class KafkaAdminClientTest {
             future.get();
 
             long actualRetryBackoff = secondAttemptTime.get() - firstAttemptTime.get();
-            assertEquals("CommitOffsets retry did not await expected backoff the first time!", retryBackoff, actualRetryBackoff);
+            assertEquals("CommitOffsets retry did not await expected backoff!", retryBackoff, actualRetryBackoff);
         }
     }
 
@@ -1421,7 +1421,7 @@ public class KafkaAdminClientTest {
             future.get();
 
             long actualRetryBackoff = secondAttemptTime.get() - firstAttemptTime.get();
-            assertEquals("DescribeConsumerGroup retry did not await expected backoff the first time!", retryBackoff, actualRetryBackoff);
+            assertEquals("DescribeConsumerGroup retry did not await expected backoff!", retryBackoff, actualRetryBackoff);
         }
     }
 
@@ -1687,7 +1687,7 @@ public class KafkaAdminClientTest {
             future.get();
 
             long actualRetryBackoff = secondAttemptTime.get() - firstAttemptTime.get();
-            assertEquals("ListConsumerGroupOffsets retry did not await expected backoff the first time!", retryBackoff, actualRetryBackoff);
+            assertEquals("ListConsumerGroupOffsets retry did not await expected backoff!", retryBackoff, actualRetryBackoff);
         }
     }
 
@@ -1769,64 +1769,59 @@ public class KafkaAdminClientTest {
         }
     }
 
-//    @Test
-//    public void testDeleteConsumerGroupsRetryBackoff() throws Exception {
-//        MockTime time = new MockTime();
-//        int retryBackoff = 100;
-//        final List<String> groupIds = singletonList("group-0");
-//
-//        try (final AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(time,
-//            mockCluster(3, 0),
-//            newStrMap(AdminClientConfig.RETRY_BACKOFF_MS_CONFIG, "" + retryBackoff))) {
-//            MockClient mockClient = env.kafkaClient();
-//
-//            mockClient.setNodeApiVersions(NodeApiVersions.create());
-//
-//            AtomicLong firstAttemptTime = new AtomicLong(0);
-//            AtomicLong secondAttemptTime = new AtomicLong(0);
-//
-//            env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
-//
-//            DeletableGroupResultCollection validResponse = new DeletableGroupResultCollection();
-//            validResponse.add(new DeletableGroupResult()
-//                .setGroupId("group-0")
-//                .setErrorCode(Errors.NOT_COORDINATOR.code()));
-//
-//
-//            env.kafkaClient().prepareResponse(body -> {
-//                firstAttemptTime.set(time.milliseconds());
-//                System.out.println("firstAttempt.set(): " + time.milliseconds());
-//                return true;
-//            }, new DeleteGroupsResponse(new DeleteGroupsResponseData().setResults(validResponse)));
-//
-//            env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
-//
-//
-//            validResponse = new DeletableGroupResultCollection();
-//            validResponse.add(new DeletableGroupResult()
-//                .setGroupId("group-0")
-//                .setErrorCode(Errors.NONE.code()));
-//
-//            env.kafkaClient().prepareResponse(body -> {
-//                secondAttemptTime.set(time.milliseconds());
-//                System.out.println("secondAttemptTime.set(): " + time.milliseconds());
-//                return true;
-//            }, new DeleteGroupsResponse(new DeleteGroupsResponseData().setResults(validResponse)));
-//
-//            final DeleteConsumerGroupsResult result = env.adminClient().deleteConsumerGroups(groupIds);
-//
-//            TestUtils.waitForCondition(() -> ((KafkaAdminClient) env.adminClient()).numPendingCalls() == 1,"Failed to add retry DeleteConsumerGroups call on first failure");
-//            time.sleep(retryBackoff);
-//
-//            result.deletedGroups().get("group-0");
-//
-//            System.out.println("firstAttemptTime: " + firstAttemptTime.get());
-//            System.out.println("secondAttemptTime: " + secondAttemptTime.get());
-//            long actualRetryBackoff = secondAttemptTime.get() - firstAttemptTime.get();
-//            assertEquals("DeleteConsumerGroups retry did not await expected backoff the first time!", retryBackoff, actualRetryBackoff);
-//            mockClient.close();
-//        }
-//    }
+    @Test
+    public void testDeleteConsumerGroupsRetryBackoff() throws Exception {
+        MockTime time = new MockTime();
+        int retryBackoff = 100;
+        final List<String> groupIds = singletonList("group-0");
+
+        try (final AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(time,
+            mockCluster(3, 0),
+            newStrMap(AdminClientConfig.RETRY_BACKOFF_MS_CONFIG, "" + retryBackoff))) {
+            MockClient mockClient = env.kafkaClient();
+
+            mockClient.setNodeApiVersions(NodeApiVersions.create());
+
+            AtomicLong firstAttemptTime = new AtomicLong(0);
+            AtomicLong secondAttemptTime = new AtomicLong(0);
+
+            mockClient.prepareResponse(prepareFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
+
+            DeletableGroupResultCollection validResponse = new DeletableGroupResultCollection();
+            validResponse.add(new DeletableGroupResult()
+                .setGroupId("group-0")
+                .setErrorCode(Errors.NOT_COORDINATOR.code()));
+
+
+            mockClient.prepareResponse(body -> {
+                firstAttemptTime.set(time.milliseconds());
+                return true;
+            }, new DeleteGroupsResponse(new DeleteGroupsResponseData().setResults(validResponse)));
+
+            mockClient.prepareResponse(prepareFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
+
+            validResponse = new DeletableGroupResultCollection();
+            validResponse.add(new DeletableGroupResult()
+                .setGroupId("group-0")
+                .setErrorCode(Errors.NONE.code()));
+
+            mockClient.prepareResponse(body -> {
+                secondAttemptTime.set(time.milliseconds());
+                return true;
+            }, new DeleteGroupsResponse(new DeleteGroupsResponseData().setResults(validResponse)));
+
+            final KafkaFuture<Void> future = env.adminClient().deleteConsumerGroups(groupIds).all();
+
+            TestUtils.waitForCondition(() -> mockClient.numAwaitingResponses() == 1, "Failed awaiting DeleteConsumerGroups first request failure");
+            TestUtils.waitForCondition(() -> ((KafkaAdminClient) env.adminClient()).numPendingCalls() == 1,"Failed to add retry DeleteConsumerGroups call on first failure");
+            time.sleep(retryBackoff);
+
+            future.get();
+
+            long actualRetryBackoff = secondAttemptTime.get() - firstAttemptTime.get();
+            assertEquals("DeleteConsumerGroups retry did not await expected backoff!", retryBackoff, actualRetryBackoff);
+        }
+    }
 
     @Test
     public void testDeleteConsumerGroups() throws Exception {
