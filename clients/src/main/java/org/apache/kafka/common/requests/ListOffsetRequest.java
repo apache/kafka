@@ -32,6 +32,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 
@@ -202,6 +203,19 @@ public class ListOffsetRequest extends AbstractRequest {
 
         public PartitionData(long timestamp, Optional<Integer> currentLeaderEpoch) {
             this(timestamp, 1, currentLeaderEpoch);
+        }
+
+        @Override
+        public boolean equals(Object obj) {
+            if (!(obj instanceof PartitionData)) return false;
+            PartitionData other = (PartitionData) obj;
+            return this.timestamp == other.timestamp &&
+                this.currentLeaderEpoch.equals(other.currentLeaderEpoch);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(timestamp, currentLeaderEpoch);
         }
 
         @Override
