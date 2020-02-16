@@ -37,6 +37,7 @@ buildscript {
     classpath "org.owasp:dependency-check-gradle:$versions.owaspDepCheckPlugin"
     classpath "com.diffplug.spotless:spotless-plugin-gradle:$versions.spotlessPlugin"
     classpath "com.github.spotbugs:spotbugs-gradle-plugin:$versions.spotbugsPlugin"
+    classpath "org.gradle:test-retry-gradle-plugin:$versions.testRetryPlugin"
   }
 }
 
@@ -96,6 +97,9 @@ ext {
   buildVersionFileName = "kafka-version.properties"
 
   userMaxForks = project.hasProperty('maxParallelForks') ? maxParallelForks.toInteger() : null
+
+  userMaxTestRetries = project.hasProperty('maxTestRetries') ? maxTestRetries.toInteger() : 0
+  userMaxTestRetryFailures = project.hasProperty('maxTestRetryFailures') ? maxTestRetryFailures.toInteger() : 0
 
   skipSigning = project.hasProperty('skipSigning') && skipSigning.toBoolean()
   shouldSign = !skipSigning && !version.endsWith("SNAPSHOT") && project.gradle.startParameter.taskNames.any { it.contains("upload") }
@@ -163,6 +167,7 @@ subprojects {
   apply plugin: 'signing'
   apply plugin: 'checkstyle'
   apply plugin: "com.github.spotbugs"
+  apply plugin: 'org.gradle.test-retry'
 
   sourceCompatibility = minJavaVersion
   targetCompatibility = minJavaVersion
@@ -289,6 +294,11 @@ subprojects {
       exceptionFormat = testExceptionFormat
     }
     logTestStdout.rehydrate(delegate, owner, this)()
+
+    retry {
+      maxRetries = userMaxTestRetries
+      maxFailures = userMaxTestRetryFailures
+    }
   }
 
   task integrationTest(type: Test, dependsOn: compileJava) {

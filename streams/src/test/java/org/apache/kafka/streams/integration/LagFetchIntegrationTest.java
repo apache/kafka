@@ -36,6 +36,7 @@ import java.util.Properties;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 import kafka.utils.MockTime;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.TopicPartition;
@@ -65,6 +66,8 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 import org.junit.rules.TestName;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 @Category({IntegrationTest.class})
 public class LagFetchIntegrationTest {
@@ -72,7 +75,8 @@ public class LagFetchIntegrationTest {
     @ClassRule
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(1);
 
-    private static final long CONSUMER_TIMEOUT_MS = 60000;
+    private static final long WAIT_TIMEOUT_MS = 120000;
+    private static final Logger LOG = LoggerFactory.getLogger(LagFetchIntegrationTest.class);
 
     private final MockTime mockTime = CLUSTER.time;
     private Properties streamsConfiguration;
@@ -109,6 +113,18 @@ public class LagFetchIntegrationTest {
     @After
     public void shutdown() throws Exception {
         IntegrationTestUtils.purgeLocalStreamsState(streamsConfiguration);
+    }
+
+    private Map<String, Map<Integer, LagInfo>> getFirstNonEmptyLagMap(final KafkaStreams streams) throws InterruptedException {
+        final Map<String, Map<Integer, LagInfo>> offsetLagInfoMap = new HashMap<>();
+        TestUtils.waitForCondition(() -> {
+            final Map<String, Map<Integer, LagInfo>> lagMap = streams.allLocalStorePartitionLags();
+            if (lagMap.size() > 0) {
+                offsetLagInfoMap.putAll(lagMap);
+            }
+            return lagMap.size() > 0;
+        }, WAIT_TIMEOUT_MS, "Should obtain non-empty lag information eventually");
+        return offsetLagInfoMap;
     }
 
     private void shouldFetchLagsDuringRebalancing(final String optimization) throws Exception {
@@ -166,8 +182,9 @@ public class LagFetchIntegrationTest {
 
         try {
             // First start up the active.
-            Map<String, Map<Integer, LagInfo>> offsetLagInfoMap = activeStreams.allLocalStorePartitionLags();
-            assertThat(offsetLagInfoMap.size(), equalTo(0));
+            TestUtils.waitForCondition(() -> activeStreams.allLocalStorePartitionLags().size() == 0,
+                WAIT_TIMEOUT_MS,
+                "Should see empty lag map before streams is started.");
             activeStreams.start();
             latchTillActiveIsRunning.await(60, TimeUnit.SECONDS);
 
@@ -175,9 +192,9 @@ public class LagFetchIntegrationTest {
                 consumerConfiguration,
                 outputTopicName,
                 5,
-                CONSUMER_TIMEOUT_MS);
+                WAIT_TIMEOUT_MS);
             // Check the active reports proper lag values.
-            offsetLagInfoMap = activeStreams.allLocalStorePartitionLags();
+            Map<String, Map<Integer, LagInfo>> offsetLagInfoMap = getFirstNonEmptyLagMap(activeStreams);
             assertThat(offsetLagInfoMap.size(), equalTo(1));
             assertThat(offsetLagInfoMap.keySet(), equalTo(mkSet(stateStoreName)));
             assertThat(offsetLagInfoMap.get(stateStoreName).size(), equalTo(1));
@@ -189,7 +206,7 @@ public class LagFetchIntegrationTest {
             // start up the standby & make it pause right after it has partition assigned
             standbyStreams.start();
             latchTillStandbyHasPartitionsAssigned.await(60, TimeUnit.SECONDS);
-            offsetLagInfoMap = standbyStreams.allLocalStorePartitionLags();
+            offsetLagInfoMap = getFirstNonEmptyLagMap(standbyStreams);
             assertThat(offsetLagInfoMap.size(), equalTo(1));
             assertThat(offsetLagInfoMap.keySet(), equalTo(mkSet(stateStoreName)));
             assertThat(offsetLagInfoMap.get(stateStoreName).size(), equalTo(1));
@@ -202,6 +219,7 @@ public class LagFetchIntegrationTest {
 
             // wait till the lag goes down to 0, on the standby
             TestUtils.waitForCondition(() -> standbyStreams.allLocalStorePartitionLags().get(stateStoreName).get(0).offsetLag() == 0,
+                WAIT_TIMEOUT_MS,
                 "Standby should eventually catchup and have zero lag.");
         } finally {
             for (final KafkaStreams streams : streamsList) {
@@ -246,8 +264,9 @@ public class LagFetchIntegrationTest {
 
         try {
             // First start up the active.
-            Map<String, Map<Integer, LagInfo>> offsetLagInfoMap = streams.allLocalStorePartitionLags();
-            assertThat(offsetLagInfoMap.size(), equalTo(0));
+            TestUtils.waitForCondition(() -> streams.allLocalStorePartitionLags().size() == 0,
+                WAIT_TIMEOUT_MS,
+                "Should see empty lag map before streams is started.");
 
             // Get the instance to fully catch up and reach RUNNING state
             startApplicationAndWaitUntilRunning(Collections.singletonList(streams), Duration.ofSeconds(60));
@@ -255,17 +274,23 @@ public class LagFetchIntegrationTest {
                 consumerConfiguration,
                 outputTopicName,
                 5,
-                CONSUMER_TIMEOUT_MS);
+                WAIT_TIMEOUT_MS);
 
             // check for proper lag values.
-            offsetLagInfoMap = streams.allLocalStorePartitionLags();
-            assertThat(offsetLagInfoMap.size(), equalTo(1));
-            assertThat(offsetLagInfoMap.keySet(), equalTo(mkSet(stateStoreName)));
-            assertThat(offsetLagInfoMap.get(stateStoreName).size(), equalTo(1));
-            final LagInfo zeroLagInfo = offsetLagInfoMap.get(stateStoreName).get(0);
-            assertThat(zeroLagInfo.currentOffsetPosition(), equalTo(5L));
-            assertThat(zeroLagInfo.endOffsetPosition(), equalTo(5L));
-            assertThat(zeroLagInfo.offsetLag(), equalTo(0L));
+            final AtomicReference<LagInfo> zeroLagRef = new AtomicReference<>();
+            TestUtils.waitForCondition(() -> {
+                final Map<String, Map<Integer, LagInfo>> offsetLagInfoMap = streams.allLocalStorePartitionLags();
+                assertThat(offsetLagInfoMap.size(), equalTo(1));
+                assertThat(offsetLagInfoMap.keySet(), equalTo(mkSet(stateStoreName)));
+                assertThat(offsetLagInfoMap.get(stateStoreName).size(), equalTo(1));
+
+                final LagInfo zeroLagInfo = offsetLagInfoMap.get(stateStoreName).get(0);
+                assertThat(zeroLagInfo.currentOffsetPosition(), equalTo(5L));
+                assertThat(zeroLagInfo.endOffsetPosition(), equalTo(5L));
+                assertThat(zeroLagInfo.offsetLag(), equalTo(0L));
+                zeroLagRef.set(zeroLagInfo);
+                return true;
+            }, WAIT_TIMEOUT_MS, "Eventually should reach zero lag.");
 
             // Kill instance, delete state to force restoration.
             assertThat("Streams instance did not close within timeout", streams.close(Duration.ofSeconds(60)));
@@ -277,12 +302,17 @@ public class LagFetchIntegrationTest {
             // wait till the lag goes down to 0
             final KafkaStreams restartedStreams = new KafkaStreams(builder.build(), props);
             // set a state restoration listener to track progress of restoration
+            final CountDownLatch restorationEndLatch = new CountDownLatch(1);
             final Map<String, Map<Integer, LagInfo>> restoreStartLagInfo = new HashMap<>();
             final Map<String, Map<Integer, LagInfo>> restoreEndLagInfo = new HashMap<>();
             restartedStreams.setGlobalStateRestoreListener(new StateRestoreListener() {
                 @Override
                 public void onRestoreStart(final TopicPartition topicPartition, final String storeName, final long startingOffset, final long endingOffset) {
-                    restoreStartLagInfo.putAll(restartedStreams.allLocalStorePartitionLags());
+                    try {
+                        restoreStartLagInfo.putAll(getFirstNonEmptyLagMap(restartedStreams));
+                    } catch (final Exception e) {
+                        LOG.error("Exception while trying to obtain lag map", e);
+                    }
                 }
 
                 @Override
@@ -291,21 +321,29 @@ public class LagFetchIntegrationTest {
 
                 @Override
                 public void onRestoreEnd(final TopicPartition topicPartition, final String storeName, final long totalRestored) {
-                    restoreEndLagInfo.putAll(restartedStreams.allLocalStorePartitionLags());
+                    try {
+                        restoreEndLagInfo.putAll(getFirstNonEmptyLagMap(restartedStreams));
+                    } catch (final Exception e) {
+                        LOG.error("Exception while trying to obtain lag map", e);
+                    }
+                    restorationEndLatch.countDown();
                 }
             });
 
             restartedStreams.start();
+            restorationEndLatch.await(WAIT_TIMEOUT_MS, TimeUnit.MILLISECONDS);
             TestUtils.waitForCondition(() -> restartedStreams.allLocalStorePartitionLags().get(stateStoreName).get(0).offsetLag() == 0,
+                WAIT_TIMEOUT_MS,
                 "Standby should eventually catchup and have zero lag.");
             final LagInfo fullLagInfo = restoreStartLagInfo.get(stateStoreName).get(0);
             assertThat(fullLagInfo.currentOffsetPosition(), equalTo(0L));
             assertThat(fullLagInfo.endOffsetPosition(), equalTo(5L));
             assertThat(fullLagInfo.offsetLag(), equalTo(5L));
 
-            assertThat(zeroLagInfo, equalTo(restoreEndLagInfo.get(stateStoreName).get(0)));
+            assertThat(restoreEndLagInfo.get(stateStoreName).get(0), equalTo(zeroLagRef.get()));
         } finally {
             streams.close();
+            streams.cleanUp();
         }
     }
 }

@@ -41,7 +41,7 @@ import org.apache.kafka.streams.state.internals.Murmur3;
  */
 public class SubscriptionResolverJoinProcessorSupplier<K, V, VO, VR> implements ProcessorSupplier<K, SubscriptionResponseWrapper<VO>> {
     private final KTableValueGetterSupplier<K, V> valueGetterSupplier;
-    private final Serializer<V> valueSerializer;
+    private final Serializer<V> constructionTimeValueSerializer;
     private final ValueJoiner<V, VO, VR> joiner;
     private final boolean leftJoin;
 
@@ -50,7 +50,7 @@ public class SubscriptionResolverJoinProcessorSupplier<K, V, VO, VR> implements 
                                                      final ValueJoiner<V, VO, VR> joiner,
                                                      final boolean leftJoin) {
         this.valueGetterSupplier = valueGetterSupplier;
-        this.valueSerializer = valueSerializer;
+        constructionTimeValueSerializer = valueSerializer;
         this.joiner = joiner;
         this.leftJoin = leftJoin;
     }
@@ -58,14 +58,19 @@ public class SubscriptionResolverJoinProcessorSupplier<K, V, VO, VR> implements 
     @Override
     public Processor<K, SubscriptionResponseWrapper<VO>> get() {
         return new AbstractProcessor<K, SubscriptionResponseWrapper<VO>>() {
+            private Serializer<V> runtimeValueSerializer = constructionTimeValueSerializer;
 
             private KTableValueGetter<K, V> valueGetter;
 
+            @SuppressWarnings("unchecked")
             @Override
             public void init(final ProcessorContext context) {
                 super.init(context);
                 valueGetter = valueGetterSupplier.get();
                 valueGetter.init(context);
+                if (runtimeValueSerializer == null) {
+                    runtimeValueSerializer = (Serializer<V>) context.valueSerde().serializer();
+                }
             }
 
             @Override
@@ -86,7 +91,7 @@ public class SubscriptionResolverJoinProcessorSupplier<K, V, VO, VR> implements 
                 final String dummySerializationTopic = context().topic() + "-join-resolver";
                 final long[] currentHash = currentValueWithTimestamp == null ?
                     null :
-                    Murmur3.hash128(valueSerializer.serialize(dummySerializationTopic, currentValueWithTimestamp.value()));
+                    Murmur3.hash128(runtimeValueSerializer.serialize(dummySerializationTopic, currentValueWithTimestamp.value()));
 
                 final long[] messageHash = value.getOriginalValueHash();
 

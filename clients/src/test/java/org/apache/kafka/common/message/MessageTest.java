@@ -104,9 +104,9 @@ public final class MessageTest {
     @Test
     public void testDescribeAclsRequest() throws Exception {
         testAllMessageRoundTrips(new DescribeAclsRequestData().
-                setResourceType((byte) 42).
+                setResourceTypeFilter((byte) 42).
                 setResourceNameFilter(null).
-                setResourcePatternType((byte) 3).
+                setPatternTypeFilter((byte) 3).
                 setPrincipalFilter("abc").
                 setHostFilter(null).
                 setOperation((byte) 0).
@@ -431,11 +431,11 @@ public final class MessageTest {
 
             if (version < 3) {
                 final short finalVersion = version;
-                assertThrows(UnsupportedVersionException.class, () -> testAllMessageRoundTripsFromVersion(finalVersion, requestData));
+                assertThrows(UnsupportedVersionException.class, () -> testEquivalentMessageRoundTrip(finalVersion, requestData));
                 requestData.setGroupInstanceId(null);
-                assertThrows(UnsupportedVersionException.class, () -> testAllMessageRoundTripsFromVersion(finalVersion, requestData));
+                assertThrows(UnsupportedVersionException.class, () -> testEquivalentMessageRoundTrip(finalVersion, requestData));
                 requestData.setMemberId("");
-                assertThrows(UnsupportedVersionException.class, () -> testAllMessageRoundTripsFromVersion(finalVersion, requestData));
+                assertThrows(UnsupportedVersionException.class, () -> testEquivalentMessageRoundTrip(finalVersion, requestData));
                 requestData.setGenerationId(-1);
             }
 

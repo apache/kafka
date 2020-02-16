@@ -19,16 +19,16 @@ package org.apache.kafka.clients.consumer.internals;
 import org.apache.kafka.clients.GroupRebalanceConfig;
 import org.apache.kafka.clients.consumer.CommitFailedException;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
-import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor;
 import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
+import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor;
+import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.Assignment;
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.GroupSubscription;
+import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.RebalanceProtocol;
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.Subscription;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
 import org.apache.kafka.clients.consumer.RetriableCommitFailedException;
-import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.Assignment;
-import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.RebalanceProtocol;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
@@ -366,14 +366,14 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             revokedPartitions.removeAll(assignedPartitions);
 
             log.info("Updating assignment with\n" +
-                    "now assigned partitions: {}\n" +
-                    "compare with previously owned partitions: {}\n" +
-                    "newly added partitions: {}\n" +
-                    "revoked partitions: {}\n",
-                Utils.join(assignedPartitions, ", "),
-                Utils.join(ownedPartitions, ", "),
-                Utils.join(addedPartitions, ", "),
-                Utils.join(revokedPartitions, ", ")
+                    "\tAssigned partitions:                       {}\n" +
+                    "\tCurrent owned partitions:                  {}\n" +
+                    "\tAdded partitions (assigned - owned):       {}\n" +
+                    "\tRevoked partitions (owned - assigned):     {}\n",
+                assignedPartitions,
+                ownedPartitions,
+                addedPartitions,
+                revokedPartitions
             );
 
             if (!revokedPartitions.isEmpty()) {
@@ -709,10 +709,10 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
         if (subscriptions.hasAutoAssignedPartitions() && !droppedPartitions.isEmpty()) {
             final Exception e;
-            if (generation() != Generation.NO_GENERATION) {
-                e = invokePartitionsRevoked(droppedPartitions);
-            } else {
+            if (generation() == Generation.NO_GENERATION || rebalanceInProgress()) {
                 e = invokePartitionsLost(droppedPartitions);
+            } else {
+                e = invokePartitionsRevoked(droppedPartitions);
             }
 
             subscriptions.assignFromSubscribed(Collections.emptySet());
@@ -766,10 +766,10 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 // it's possible that the partition is no longer assigned when the response is received,
                 // so we need to ignore seeking if that's the case
                 if (this.subscriptions.isAssigned(tp)) {
-                    final ConsumerMetadata.LeaderAndEpoch leaderAndEpoch = metadata.leaderAndEpoch(tp);
+                    final ConsumerMetadata.LeaderAndEpoch leaderAndEpoch = metadata.currentLeader(tp);
                     final SubscriptionState.FetchPosition position = new SubscriptionState.FetchPosition(
-                        offsetAndMetadata.offset(), offsetAndMetadata.leaderEpoch(),
-                        leaderAndEpoch);
+                            offsetAndMetadata.offset(), offsetAndMetadata.leaderEpoch(),
+                            leaderAndEpoch);
 
                     this.subscriptions.seekUnvalidated(tp, position);
 
@@ -1291,7 +1291,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 // just retry
                 log.info("The following partitions still have unstable offsets " +
                              "which are not cleared on the broker side: {}" +
-                             ", this could be either" +
+                             ", this could be either " +
                              "transactional offsets waiting for completion, or " +
                              "normal offsets waiting for replication after appending to local log", unstableTxnOffsetTopicPartitions);
                 future.raise(new UnstableOffsetCommitException("There are unstable offsets for the requested topic partitions"));
@@ -1357,7 +1357,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
         private MetadataSnapshot(SubscriptionState subscription, Cluster cluster, int version) {
             Map<String, Integer> partitionsPerTopic = new HashMap<>();
-            for (String topic : subscription.groupSubscription()) {
+            for (String topic : subscription.metadataTopics()) {
                 Integer numPartitions = cluster.partitionCountForTopic(topic);
                 if (numPartitions != null)
                     partitionsPerTopic.put(topic, numPartitions);
@@ -1370,9 +1370,6 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             return version == other.version || partitionsPerTopic.equals(other.partitionsPerTopic);
         }
 
-        Map<String, Integer> partitionsPerTopic() {
-            return partitionsPerTopic;
-        }
     }
 
     private static class OffsetCommitCompletion {

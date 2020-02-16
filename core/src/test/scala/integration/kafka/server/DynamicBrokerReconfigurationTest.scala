@@ -26,15 +26,15 @@ import java.time.Duration
 import java.util
 import java.util.{Collections, Properties}
 import java.util.concurrent._
-import javax.management.ObjectName
 
-import com.yammer.metrics.Metrics
+import javax.management.ObjectName
 import com.yammer.metrics.core.MetricName
 import kafka.admin.ConfigCommand
 import kafka.api.{KafkaSasl, SaslSetup}
 import kafka.controller.{ControllerBrokerStateInfo, ControllerChannelManager}
 import kafka.log.LogConfig
 import kafka.message.ProducerCompressionCodec
+import kafka.metrics.KafkaYammerMetrics
 import kafka.network.{Processor, RequestChannel}
 import kafka.utils._
 import kafka.utils.Implicits._
@@ -505,6 +505,40 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
   }
 
   @Test
+  def testConsecutiveConfigChange(): Unit = {
+    val topic2 = "testtopic2"
+    val topicProps = new Properties
+    topicProps.put(KafkaConfig.MinInSyncReplicasProp, "2")
+    TestUtils.createTopic(zkClient, topic2, 1, replicationFactor = numServers, servers, topicProps)
+    var log = servers.head.logManager.getLog(new TopicPartition(topic2, 0)).getOrElse(throw new IllegalStateException("Log not found"))
+    assertTrue(log.config.overriddenConfigs.contains(KafkaConfig.MinInSyncReplicasProp))
+    assertEquals("2", log.config.originals().get(KafkaConfig.MinInSyncReplicasProp).toString)
+
+    val props = new Properties
+    props.put(KafkaConfig.MinInSyncReplicasProp, "3")
+    // Make a broker-default config
+    reconfigureServers(props, perBrokerConfig = false, (KafkaConfig.MinInSyncReplicasProp, "3"))
+    // Verify that all broker defaults have been updated again
+    servers.foreach { server =>
+      props.asScala.foreach { case (k, v) =>
+        assertEquals(s"Not reconfigured $k", v, server.config.originals.get(k).toString)
+      }
+    }
+
+    log = servers.head.logManager.getLog(new TopicPartition(topic2, 0)).getOrElse(throw new IllegalStateException("Log not found"))
+    assertTrue(log.config.overriddenConfigs.contains(KafkaConfig.MinInSyncReplicasProp))
+    assertEquals("2", log.config.originals().get(KafkaConfig.MinInSyncReplicasProp).toString) // Verify topic-level config survives
+
+    // Make a second broker-default change
+    props.clear()
+    props.put(KafkaConfig.LogRetentionTimeMillisProp, "604800000")
+    reconfigureServers(props, perBrokerConfig = false, (KafkaConfig.LogRetentionTimeMillisProp, "604800000"))
+    log = servers.head.logManager.getLog(new TopicPartition(topic2, 0)).getOrElse(throw new IllegalStateException("Log not found"))
+    assertTrue(log.config.overriddenConfigs.contains(KafkaConfig.MinInSyncReplicasProp))
+    assertEquals("2", log.config.originals().get(KafkaConfig.MinInSyncReplicasProp).toString) // Verify topic-level config still survives
+  }
+
+  @Test
   def testDefaultTopicConfig(): Unit = {
     val (producerThread, consumerThread) = startProduceConsume(retries = 0)
 
@@ -746,8 +780,8 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
   }
 
   private def clearLeftOverProcessorMetrics(): Unit = {
-    val metricsFromOldTests = Metrics.defaultRegistry.allMetrics.keySet.asScala.filter(isProcessorMetric)
-    metricsFromOldTests.foreach(Metrics.defaultRegistry.removeMetric)
+    val metricsFromOldTests = KafkaYammerMetrics.defaultRegistry.allMetrics.keySet.asScala.filter(isProcessorMetric)
+    metricsFromOldTests.foreach(KafkaYammerMetrics.defaultRegistry.removeMetric)
   }
 
   // Verify that metrics from processors that were removed have been deleted.
@@ -761,7 +795,7 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
       .groupBy(_.tags.get(Processor.NetworkProcessorMetricTag))
     assertEquals(numProcessors, kafkaMetrics.size)
 
-    Metrics.defaultRegistry.allMetrics.keySet.asScala
+    KafkaYammerMetrics.defaultRegistry.allMetrics.keySet.asScala
       .filter(isProcessorMetric)
       .groupBy(_.getName)
       .foreach { case (name, set) => assertEquals(s"Metrics not deleted $name", numProcessors, set.size) }
@@ -774,7 +808,7 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
     val partitions = (0 until numPartitions).map(i => new TopicPartition(topic, i)).filter { tp =>
       zkClient.getLeaderForPartition(tp).contains(leaderId)
     }
-    assertTrue(s"Partitons not found with leader $leaderId", partitions.nonEmpty)
+    assertTrue(s"Partitions not found with leader $leaderId", partitions.nonEmpty)
     partitions.foreach { tp =>
       (1 to 2).foreach { i =>
         val replicaFetcherManager = servers(i).replicaManager.replicaFetcherManager

@@ -18,14 +18,14 @@ package kafka.cluster
 
 import java.nio.ByteBuffer
 import java.util.{Optional, Properties}
-import java.util.concurrent.{CountDownLatch, Executors, TimeoutException, TimeUnit}
+import java.util.concurrent.{CountDownLatch, Executors, TimeUnit, TimeoutException}
 import java.util.concurrent.atomic.AtomicBoolean
 
-import com.yammer.metrics.Metrics
 import com.yammer.metrics.core.Metric
 import kafka.api.{ApiVersion, LeaderAndIsr}
 import kafka.common.UnexpectedAppendOffsetException
 import kafka.log.{Defaults => _, _}
+import kafka.metrics.KafkaYammerMetrics
 import kafka.server._
 import kafka.utils._
 import org.apache.kafka.common.{IsolationLevel, TopicPartition}
@@ -1485,7 +1485,7 @@ class PartitionTest extends AbstractPartitionTest {
       "AtMinIsr")
 
     def getMetric(metric: String): Option[Metric] = {
-      Metrics.defaultRegistry().allMetrics().asScala.filterKeys { metricName =>
+      KafkaYammerMetrics.defaultRegistry().allMetrics().asScala.filterKeys { metricName =>
         metricName.getName == metric && metricName.getType == "Partition"
       }.headOption.map(_._2)
     }
@@ -1494,7 +1494,7 @@ class PartitionTest extends AbstractPartitionTest {
 
     Partition.removeMetrics(topicPartition)
 
-    assertEquals(Set(), Metrics.defaultRegistry().allMetrics().asScala.keySet.filter(_.getType == "Partition"))
+    assertEquals(Set(), KafkaYammerMetrics.defaultRegistry().allMetrics().asScala.keySet.filter(_.getType == "Partition"))
   }
 
   @Test

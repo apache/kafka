@@ -22,13 +22,13 @@ import java.nio.ByteBuffer
 import java.util.concurrent.locks.ReentrantLock
 import java.util.{Collections, Optional}
 
-import com.yammer.metrics.Metrics
 import com.yammer.metrics.core.Gauge
 import javax.management.ObjectName
 import kafka.api._
 import kafka.cluster.Partition
 import kafka.common.OffsetAndMetadata
 import kafka.log.{AppendOrigin, Log, LogAppendInfo}
+import kafka.metrics.KafkaYammerMetrics
 import kafka.server.{FetchDataInfo, FetchLogEnd, HostedPartition, KafkaConfig, LogOffsetMetadata, ReplicaManager}
 import kafka.utils.{KafkaScheduler, MockTime, TestUtils}
 import kafka.zk.KafkaZkClient
@@ -157,7 +157,7 @@ class GroupMetadataManagerTest {
     assertEquals(generation, group.generationId)
     assertEquals(Some(protocolType), group.protocolType)
     assertNull(group.leaderOrNull)
-    assertNull(group.protocolOrNull)
+    assertNull(group.protocolName.orNull)
     committedOffsets.foreach { case (topicPartition, offset) =>
       assertEquals(Some(offset), group.offset(topicPartition).map(_.offset))
     }
@@ -634,7 +634,7 @@ class GroupMetadataManagerTest {
     assertEquals(memberId, group.leaderOrNull)
     assertEquals(generation, group.generationId)
     assertEquals(Some(protocolType), group.protocolType)
-    assertEquals(protocol, group.protocolOrNull)
+    assertEquals(protocol, group.protocolName.orNull)
     assertEquals(Set(memberId), group.allMembers)
     assertEquals(committedOffsets.size, group.allOffsets.size)
     committedOffsets.foreach { case (topicPartition, offset) =>
@@ -863,7 +863,7 @@ class GroupMetadataManagerTest {
     assertTrue(group.is(Stable))
     assertEquals(generation, group.generationId)
     assertEquals(Some(protocolType), group.protocolType)
-    assertEquals(protocol, group.protocolOrNull)
+    assertEquals(protocol, group.protocolName.orNull)
     assertEquals(Some(Set(topic)), group.getSubscribedTopics)
     assertTrue(group.has(memberId))
   }
@@ -879,7 +879,7 @@ class GroupMetadataManagerTest {
     assertTrue(group.is(Empty))
     assertEquals(generation, group.generationId)
     assertEquals(Some(protocolType), group.protocolType)
-    assertNull(group.protocolOrNull)
+    assertNull(group.protocolName.orNull)
     assertEquals(Some(Set.empty), group.getSubscribedTopics)
   }
 
@@ -903,7 +903,7 @@ class GroupMetadataManagerTest {
     assertTrue(group.is(Stable))
     assertEquals(generation, group.generationId)
     assertEquals(Some(protocolType), group.protocolType)
-    assertEquals(protocol, group.protocolOrNull)
+    assertEquals(protocol, group.protocolName.orNull)
     assertEquals(None, group.getSubscribedTopics)
     assertTrue(group.has(memberId))
   }
@@ -922,7 +922,7 @@ class GroupMetadataManagerTest {
       assertEquals(groupId, deserializedGroupMetadata.groupId)
       assertEquals(generation, deserializedGroupMetadata.generationId)
       assertEquals(protocolType, deserializedGroupMetadata.protocolType.get)
-      assertEquals(protocol, deserializedGroupMetadata.protocolOrNull)
+      assertEquals(protocol, deserializedGroupMetadata.protocolName.orNull)
       assertEquals(1, deserializedGroupMetadata.allMembers.size)
       assertTrue(deserializedGroupMetadata.allMembers.contains(memberId))
       assertTrue(deserializedGroupMetadata.allStaticMembers.isEmpty)
@@ -1945,7 +1945,7 @@ class GroupMetadataManagerTest {
     assertEquals(memberId, group.leaderOrNull)
     assertEquals(generation, group.generationId)
     assertEquals(Some(protocolType), group.protocolType)
-    assertEquals(protocol, group.protocolOrNull)
+    assertEquals(protocol, group.protocolName.orNull)
     assertEquals(Set(memberId), group.allMembers)
     assertEquals(committedOffsets.size, group.allOffsets.size)
     committedOffsets.foreach { case (topicPartition, offset) =>
@@ -1985,7 +1985,7 @@ class GroupMetadataManagerTest {
     assertEquals(memberId, group.leaderOrNull)
     assertEquals(generation, group.generationId)
     assertEquals(Some(protocolType), group.protocolType)
-    assertEquals(protocol, group.protocolOrNull)
+    assertEquals(protocol, group.protocolName.orNull)
     assertEquals(Set(memberId), group.allMembers)
     assertEquals(committedOffsets.size, group.allOffsets.size)
     committedOffsets.foreach { case (topicPartition, offset) =>
@@ -2137,7 +2137,7 @@ class GroupMetadataManagerTest {
     assertEquals(generation, group.generationId)
     assertEquals(Some(protocolType), group.protocolType)
     assertNull(group.leaderOrNull)
-    assertNull(group.protocolOrNull)
+    assertNull(group.protocolName.orNull)
     committedOffsets.foreach { case (topicPartition, offset) =>
       assertEquals(Some(offset), group.offset(topicPartition).map(_.offset))
     }
@@ -2327,7 +2327,7 @@ class GroupMetadataManagerTest {
   }
 
   private def getGauge(manager: GroupMetadataManager, name: String): Gauge[Int]  = {
-    Metrics.defaultRegistry().allMetrics().get(manager.metricName(name, Map.empty)).asInstanceOf[Gauge[Int]]
+    KafkaYammerMetrics.defaultRegistry().allMetrics().get(manager.metricName(name, Map.empty)).asInstanceOf[Gauge[Int]]
   }
 
   private def expectMetrics(manager: GroupMetadataManager,

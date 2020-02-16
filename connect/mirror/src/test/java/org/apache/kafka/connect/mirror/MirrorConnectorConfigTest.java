@@ -22,26 +22,14 @@ import org.junit.Test;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
-import java.util.HashMap;
 import java.util.HashSet;
 
+import static org.apache.kafka.connect.mirror.TestUtils.makeProps;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertEquals;
 
 public class MirrorConnectorConfigTest {
-
-    private Map<String, String> makeProps(String... keyValues) {
-        Map<String, String> props = new HashMap<>();
-        props.put("name", "ConnectorName");
-        props.put("connector.class", "ConnectorClass");
-        props.put("source.cluster.alias", "source1");
-        props.put("target.cluster.alias", "target2");
-        for (int i = 0; i < keyValues.length; i += 2) {
-            props.put(keyValues[i], keyValues[i + 1]);
-        }
-        return props;
-    }
 
     @Test
     public void testTaskConfigTopicPartitions() {

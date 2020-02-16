@@ -18,14 +18,15 @@
   "type": "request",
   "name": "DescribeAclsRequest",
   // Version 1 adds resource pattern type.
-  "validVersions": "0-1",
-  "flexibleVersions": "none",
+  // Version 2 enables flexible versions.
+  "validVersions": "0-2",
+  "flexibleVersions": "2+",
   "fields": [
-    { "name": "ResourceType", "type": "int8", "versions": "0+",
+    { "name": "ResourceTypeFilter", "type": "int8", "versions": "0+",
       "about": "The resource type." },
     { "name": "ResourceNameFilter", "type": "string", "versions": "0+", "nullableVersions": "0+",
       "about": "The resource name, or null to match any resource name." },
-    { "name": "ResourcePatternType", "type": "int8", "versions": "1+", "default": "3", "ignorable": false,
+    { "name": "PatternTypeFilter", "type": "int8", "versions": "1+", "default": "3", "ignorable": false,
       "about": "The resource pattern to match." },
     { "name": "PrincipalFilter", "type": "string", "versions": "0+", "nullableVersions": "0+",
       "about": "The principal to match, or null to match any principal." },

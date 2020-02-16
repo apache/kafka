@@ -973,11 +973,11 @@ public class NetworkClient implements KafkaClient {
         private final Metadata metadata;
 
         // Defined if there is a request in progress, null otherwise
-        private Integer inProgressRequestVersion;
+        private InProgressData inProgress;
 
         DefaultMetadataUpdater(Metadata metadata) {
             this.metadata = metadata;
-            this.inProgressRequestVersion = null;
+            this.inProgress = null;
         }
 
         @Override
@@ -991,7 +991,7 @@ public class NetworkClient implements KafkaClient {
         }
 
         private boolean hasFetchInProgress() {
-            return inProgressRequestVersion != null;
+            return inProgress != null;
         }
 
         @Override
@@ -1045,7 +1045,7 @@ public class NetworkClient implements KafkaClient {
         public void handleFailedRequest(long now, Optional<KafkaException> maybeFatalException) {
             maybeFatalException.ifPresent(metadata::fatalError);
             metadata.failedUpdate(now);
-            inProgressRequestVersion = null;
+            inProgress = null;
         }
 
         @Override
@@ -1055,7 +1055,7 @@ public class NetworkClient implements KafkaClient {
             // This could be a transient issue if listeners were added dynamically to brokers.
             List<TopicPartition> missingListenerPartitions = response.topicMetadata().stream().flatMap(topicMetadata ->
                 topicMetadata.partitionMetadata().stream()
-                    .filter(partitionMetadata -> partitionMetadata.error() == Errors.LISTENER_NOT_FOUND)
+                    .filter(partitionMetadata -> partitionMetadata.error == Errors.LISTENER_NOT_FOUND)
                     .map(partitionMetadata -> new TopicPartition(topicMetadata.topic(), partitionMetadata.partition())))
                 .collect(Collectors.toList());
             if (!missingListenerPartitions.isEmpty()) {
@@ -1075,10 +1075,10 @@ public class NetworkClient implements KafkaClient {
                 log.trace("Ignoring empty metadata response with correlation id {}.", requestHeader.correlationId());
                 this.metadata.failedUpdate(now);
             } else {
-                this.metadata.update(inProgressRequestVersion, response, now);
+                this.metadata.update(inProgress.requestVersion, response, inProgress.isPartialUpdate, now);
             }
 
-            inProgressRequestVersion = null;
+            inProgress = null;
         }
 
         @Override
@@ -1105,11 +1105,11 @@ public class NetworkClient implements KafkaClient {
             String nodeConnectionId = node.idString();
 
             if (canSendRequest(nodeConnectionId, now)) {
-                Metadata.MetadataRequestAndVersion requestAndVersion = metadata.newMetadataRequestAndVersion();
+                Metadata.MetadataRequestAndVersion requestAndVersion = metadata.newMetadataRequestAndVersion(now);
                 MetadataRequest.Builder metadataRequest = requestAndVersion.requestBuilder;
                 log.debug("Sending metadata request {} to node {}", metadataRequest, node);
                 sendInternalMetadataRequest(metadataRequest, nodeConnectionId, now);
-                this.inProgressRequestVersion = requestAndVersion.requestVersion;
+                inProgress = new InProgressData(requestAndVersion.requestVersion, requestAndVersion.isPartialUpdate);
                 return defaultRequestTimeoutMs;
             }
 
@@ -1134,6 +1134,16 @@ public class NetworkClient implements KafkaClient {
             // connection might be usable again.
             return Long.MAX_VALUE;
         }
+
+        public class InProgressData {
+            public final int requestVersion;
+            public final boolean isPartialUpdate;
+
+            private InProgressData(int requestVersion, boolean isPartialUpdate) {
+                this.requestVersion = requestVersion;
+                this.isPartialUpdate = isPartialUpdate;
+            }
+        };
 
     }
 

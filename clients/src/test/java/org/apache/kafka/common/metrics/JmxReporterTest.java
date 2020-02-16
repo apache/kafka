@@ -24,6 +24,8 @@ import org.junit.Test;
 import javax.management.MBeanServer;
 import javax.management.ObjectName;
 import java.lang.management.ManagementFactory;
+import java.util.HashMap;
+import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -107,6 +109,48 @@ public class JmxReporterTest {
             assertFalse(server.isRegistered(new ObjectName(":type=group,id=\"foo\\?\"")));
             assertFalse(server.isRegistered(new ObjectName(":type=group,id=\"foo:\"")));
             assertFalse(server.isRegistered(new ObjectName(":type=group,id=foo%")));
+        } finally {
+            metrics.close();
+        }
+    }
+
+    @Test
+    public void testPredicateAndDynamicReload() throws Exception {
+        Metrics metrics = new Metrics();
+        MBeanServer server = ManagementFactory.getPlatformMBeanServer();
+
+        Map<String, String> configs = new HashMap<>();
+
+        configs.put(JmxReporter.BLACKLIST_CONFIG,
+                    JmxReporter.getMBeanName("", metrics.metricName("pack.bean2.total", "grp2")));
+
+        try {
+            JmxReporter reporter = new JmxReporter();
+            reporter.configure(configs);
+            metrics.addReporter(reporter);
+
+            Sensor sensor = metrics.sensor("kafka.requests");
+            sensor.add(metrics.metricName("pack.bean2.avg", "grp1"), new Avg());
+            sensor.add(metrics.metricName("pack.bean2.total", "grp2"), new CumulativeSum());
+            sensor.record();
+
+            assertTrue(server.isRegistered(new ObjectName(":type=grp1")));
+            assertEquals(1.0, server.getAttribute(new ObjectName(":type=grp1"), "pack.bean2.avg"));
+            assertFalse(server.isRegistered(new ObjectName(":type=grp2")));
+
+            sensor.record();
+
+            configs.put(JmxReporter.BLACKLIST_CONFIG,
+                        JmxReporter.getMBeanName("", metrics.metricName("pack.bean2.avg", "grp1")));
+
+            reporter.reconfigure(configs);
+
+            assertFalse(server.isRegistered(new ObjectName(":type=grp1")));
+            assertTrue(server.isRegistered(new ObjectName(":type=grp2")));
+            assertEquals(2.0, server.getAttribute(new ObjectName(":type=grp2"), "pack.bean2.total"));
+
+            metrics.removeMetric(metrics.metricName("pack.bean2.total", "grp2"));
+            assertFalse(server.isRegistered(new ObjectName(":type=grp2")));
         } finally {
             metrics.close();
         }

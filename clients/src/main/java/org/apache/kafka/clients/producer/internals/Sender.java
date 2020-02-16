@@ -23,7 +23,6 @@ import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.NetworkClientUtils;
 import org.apache.kafka.clients.RequestCompletionHandler;
-import org.apache.kafka.common.utils.ProducerIdAndEpoch;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.MetricName;
@@ -32,13 +31,10 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.ClusterAuthorizationException;
 import org.apache.kafka.common.errors.InvalidMetadataException;
-import org.apache.kafka.common.errors.OutOfOrderSequenceException;
 import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
-import org.apache.kafka.common.errors.UnsupportedVersionException;
-import org.apache.kafka.common.message.InitProducerIdRequestData;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.metrics.stats.Max;
@@ -48,8 +44,6 @@ import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.FindCoordinatorRequest;
-import org.apache.kafka.common.requests.InitProducerIdRequest;
-import org.apache.kafka.common.requests.InitProducerIdResponse;
 import org.apache.kafka.common.requests.ProduceRequest;
 import org.apache.kafka.common.requests.ProduceResponse;
 import org.apache.kafka.common.requests.RequestHeader;
@@ -300,31 +294,27 @@ public class Sender implements Runnable {
     void runOnce() {
         if (transactionManager != null) {
             try {
-                transactionManager.resetProducerIdIfNeeded();
+                transactionManager.maybeResolveSequences();
 
-                if (!transactionManager.isTransactional()) {
-                    // this is an idempotent producer, so make sure we have a producer id
-                    maybeWaitForProducerId();
-                } else if (transactionManager.hasUnresolvedSequences() && !transactionManager.hasFatalError()) {
-                    transactionManager.transitionToFatalError(
-                        new KafkaException("The client hasn't received acknowledgment for " +
-                            "some previously sent messages and can no longer retry them. It isn't safe to continue."));
-                } else if (maybeSendAndPollTransactionalRequest()) {
-                    return;
-                }
-
-                // do not continue sending if the transaction manager is in a failed state or if there
-                // is no producer id (for the idempotent case).
-                if (transactionManager.hasFatalError() || !transactionManager.hasProducerId()) {
+                // do not continue sending if the transaction manager is in a failed state
+                if (transactionManager.hasFatalError()) {
                     RuntimeException lastError = transactionManager.lastError();
                     if (lastError != null)
                         maybeAbortBatches(lastError);
                     client.poll(retryBackoffMs, time.milliseconds());
                     return;
                 }
+
+                // Check whether we need a new producerId. If so, we will enqueue an InitProducerId
+                // request which will be sent below
+                transactionManager.bumpIdempotentEpochAndResetIdIfNeeded();
+
+                if (maybeSendAndPollTransactionalRequest()) {
+                    return;
+                }
             } catch (AuthenticationException e) {
                 // This is already logged as error, but propagated here to perform any clean ups.
-                log.trace("Authentication exception while processing transactional request: {}", e);
+                log.trace("Authentication exception while processing transactional request", e);
                 transactionManager.authenticationFailed(e);
             }
         }
@@ -380,7 +370,7 @@ public class Sender implements Runnable {
         expiredBatches.addAll(expiredInflightBatches);
 
         // Reset the producer id if an expired batch has previously been sent to the broker. Also update the metrics
-        // for expired batches. see the documentation of @TransactionState.resetProducerId to understand why
+        // for expired batches. see the documentation of @TransactionState.resetIdempotentProducerId to understand why
         // we need to reset the producer id here.
         if (!expiredBatches.isEmpty())
             log.trace("Expired {} batches in accumulator", expiredBatches.size());
@@ -390,7 +380,7 @@ public class Sender implements Runnable {
             failBatch(expiredBatch, -1, NO_TIMESTAMP, new TimeoutException(errorMessage), false);
             if (transactionManager != null && expiredBatch.inRetry()) {
                 // This ensures that no new batches are drained until the current in flight batches are fully resolved.
-                transactionManager.markSequenceUnresolved(expiredBatch.topicPartition);
+                transactionManager.markSequenceUnresolved(expiredBatch);
             }
         }
         sensors.updateProduceRequestMetrics(batches);
@@ -419,7 +409,7 @@ public class Sender implements Runnable {
      * Returns true if a transactional request is sent or polled, or if a FindCoordinator request is enqueued
      */
     private boolean maybeSendAndPollTransactionalRequest() {
-        if (transactionManager.hasInFlightTransactionalRequest()) {
+        if (transactionManager.hasInFlightRequest()) {
             // as long as there are outstanding transactional requests, we simply wait for them to return
             client.poll(retryBackoffMs, time.milliseconds());
             return true;
@@ -443,7 +433,7 @@ public class Sender implements Runnable {
             accumulator.beginFlush();
         }
 
-        TransactionManager.TxnRequestHandler nextRequestHandler = transactionManager.nextRequestHandler(accumulator.hasIncomplete());
+        TransactionManager.TxnRequestHandler nextRequestHandler = transactionManager.nextRequest(accumulator.hasIncomplete());
         if (nextRequestHandler == null)
             return false;
 
@@ -452,16 +442,17 @@ public class Sender implements Runnable {
         try {
             targetNode = awaitNodeReady(nextRequestHandler.coordinatorType());
             if (targetNode == null) {
-                lookupCoordinatorAndRetry(nextRequestHandler);
+                maybeFindCoordinatorAndRetry(nextRequestHandler);
                 return true;
             }
 
             if (nextRequestHandler.isRetry())
                 time.sleep(nextRequestHandler.retryBackoffMs());
+
             long currentTimeMs = time.milliseconds();
             ClientRequest clientRequest = client.newClientRequest(
                 targetNode.idString(), requestBuilder, currentTimeMs, true, requestTimeoutMs, nextRequestHandler);
-            log.debug("Sending transactional request {} to node {}", requestBuilder, targetNode);
+            log.debug("Sending transactional request {} to node {} with correlation ID {}", requestBuilder, targetNode, clientRequest.correlationId());
             client.send(clientRequest, currentTimeMs);
             transactionManager.setInFlightCorrelationId(clientRequest.correlationId());
             client.poll(retryBackoffMs, time.milliseconds());
@@ -470,12 +461,12 @@ public class Sender implements Runnable {
             log.debug("Disconnect from {} while trying to send request {}. Going " +
                     "to back off and retry.", targetNode, requestBuilder, e);
             // We break here so that we pick up the FindCoordinator request immediately.
-            lookupCoordinatorAndRetry(nextRequestHandler);
+            maybeFindCoordinatorAndRetry(nextRequestHandler);
             return true;
         }
     }
 
-    private void lookupCoordinatorAndRetry(TransactionManager.TxnRequestHandler nextRequestHandler) {
+    private void maybeFindCoordinatorAndRetry(TransactionManager.TxnRequestHandler nextRequestHandler) {
         if (nextRequestHandler.needsCoordinator()) {
             transactionManager.lookupCoordinator(nextRequestHandler);
         } else {
@@ -517,60 +508,21 @@ public class Sender implements Runnable {
         return running;
     }
 
-    private ClientResponse sendAndAwaitInitProducerIdRequest(Node node) throws IOException {
-        String nodeId = node.idString();
-        InitProducerIdRequestData requestData = new InitProducerIdRequestData()
-                .setTransactionalId(null)
-                .setTransactionTimeoutMs(Integer.MAX_VALUE);
-        InitProducerIdRequest.Builder builder = new InitProducerIdRequest.Builder(requestData);
-        ClientRequest request = client.newClientRequest(nodeId, builder, time.milliseconds(), true, requestTimeoutMs, null);
-        return NetworkClientUtils.sendAndReceive(client, request, time);
-    }
-
     private Node awaitNodeReady(FindCoordinatorRequest.CoordinatorType coordinatorType) throws IOException {
         Node node = coordinatorType != null ?
                 transactionManager.coordinator(coordinatorType) :
                 client.leastLoadedNode(time.milliseconds());
 
         if (node != null && NetworkClientUtils.awaitReady(client, node, time, requestTimeoutMs)) {
+            if (coordinatorType == FindCoordinatorRequest.CoordinatorType.TRANSACTION) {
+                // Indicate to the transaction manager that the coordinator is ready, allowing it to check ApiVersions
+                // This allows us to bump transactional epochs even if the coordinator is temporarily unavailable at
+                // the time when the abortable error is handled
+                transactionManager.handleCoordinatorReady();
+            }
             return node;
         }
         return null;
-    }
-
-    private void maybeWaitForProducerId() {
-        while (!forceClose && !transactionManager.hasProducerId() && !transactionManager.hasError()) {
-            Node node = null;
-            try {
-                node = awaitNodeReady(null);
-                if (node != null) {
-                    ClientResponse response = sendAndAwaitInitProducerIdRequest(node);
-                    InitProducerIdResponse initProducerIdResponse = (InitProducerIdResponse) response.responseBody();
-                    Errors error = initProducerIdResponse.error();
-                    if (error == Errors.NONE) {
-                        ProducerIdAndEpoch producerIdAndEpoch = new ProducerIdAndEpoch(
-                                initProducerIdResponse.data.producerId(), initProducerIdResponse.data.producerEpoch());
-                        transactionManager.setProducerIdAndEpoch(producerIdAndEpoch);
-                        return;
-                    } else if (error.exception() instanceof RetriableException) {
-                        log.debug("Retriable error from InitProducerId response", error.message());
-                    } else {
-                        transactionManager.transitionToFatalError(error.exception());
-                        break;
-                    }
-                } else {
-                    log.debug("Could not find an available broker to send InitProducerIdRequest to. Will back off and retry.");
-                }
-            } catch (UnsupportedVersionException e) {
-                transactionManager.transitionToFatalError(e);
-                break;
-            } catch (IOException e) {
-                log.debug("Broker {} disconnected while awaiting InitProducerId response", node, e);
-            }
-            log.trace("Retry InitProducerIdRequest in {}ms.", retryBackoffMs);
-            time.sleep(retryBackoffMs);
-            metadata.requestUpdate();
-        }
     }
 
     /**
@@ -646,19 +598,7 @@ public class Sender implements Runnable {
                     batch.topicPartition,
                     this.retries - batch.attempts() - 1,
                     error);
-                if (transactionManager == null) {
-                    reenqueueBatch(batch, now);
-                } else if (transactionManager.hasProducerIdAndEpoch(batch.producerId(), batch.producerEpoch())) {
-                    // If idempotence is enabled only retry the request if the current producer id is the same as
-                    // the producer id of the batch.
-                    log.debug("Retrying batch to topic-partition {}. ProducerId: {}; Sequence number : {}",
-                            batch.topicPartition, batch.producerId(), batch.baseSequence());
-                    reenqueueBatch(batch, now);
-                } else {
-                    failBatch(batch, response, new OutOfOrderSequenceException("Attempted to retry sending a " +
-                            "batch but the producer id changed from " + batch.producerId() + " to " +
-                            transactionManager.producerIdAndEpoch().producerId + " in the mean time. This batch will be dropped."), false);
-                }
+                reenqueueBatch(batch, now);
             } else if (error == Errors.DUPLICATE_SEQUENCE_NUMBER) {
                 // If we have received a duplicate sequence error, it means that the sequence number has advanced beyond
                 // the sequence of the current batch, and we haven't retained batch metadata on the broker to return
@@ -747,8 +687,9 @@ public class Sender implements Runnable {
         return !batch.hasReachedDeliveryTimeout(accumulator.getDeliveryTimeoutMs(), now) &&
             batch.attempts() < this.retries &&
             !batch.isDone() &&
-            ((response.error.exception() instanceof RetriableException) ||
-                (transactionManager != null && transactionManager.canRetry(response, batch)));
+            (transactionManager == null ?
+                    response.error.exception() instanceof RetriableException :
+                    transactionManager.canRetry(response, batch));
     }
 
     /**

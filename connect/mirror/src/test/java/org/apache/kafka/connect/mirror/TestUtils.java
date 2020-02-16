@@ -14,14 +14,22 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.processor.internals;
+package org.apache.kafka.connect.mirror;
 
-import org.apache.kafka.common.TopicPartition;
-
+import java.util.HashMap;
 import java.util.Map;
 
-// Interface to indicate that an object has associated partition offsets that can be checkpointed
-interface Checkpointable {
-    void checkpoint(final Map<TopicPartition, Long> offsets);
-    Map<TopicPartition, Long> checkpointed();
+public class TestUtils {
+
+    static Map<String, String> makeProps(String... keyValues) {
+        Map<String, String> props = new HashMap<>();
+        props.put("name", "ConnectorName");
+        props.put("connector.class", "ConnectorClass");
+        props.put("source.cluster.alias", "source1");
+        props.put("target.cluster.alias", "target2");
+        for (int i = 0; i < keyValues.length; i += 2) {
+            props.put(keyValues[i], keyValues[i + 1]);
+        }
+        return props;
+    }
 }

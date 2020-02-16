@@ -131,9 +131,9 @@ abstract class AbstractCreateTopicsRequestTest extends BaseRequestTest {
 
           if (replication == -1) {
             assertEquals("The topic should have the default replication factor",
-              configs.head.defaultReplicationFactor, metadataForTopic.partitionMetadata.asScala.head.replicas.size)
+              configs.head.defaultReplicationFactor, metadataForTopic.partitionMetadata.asScala.head.replicaIds.size)
           } else {
-            assertEquals("The topic should have the correct replication factor", replication, metadataForTopic.partitionMetadata.asScala.head.replicas.size)
+            assertEquals("The topic should have the correct replication factor", replication, metadataForTopic.partitionMetadata.asScala.head.replicaIds.size)
           }
         }
       }

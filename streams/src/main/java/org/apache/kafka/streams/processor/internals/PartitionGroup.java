@@ -59,14 +59,14 @@ public class PartitionGroup {
     private boolean allBuffered;
 
 
-    public static class RecordInfo {
+    static class RecordInfo {
         RecordQueue queue;
 
-        public ProcessorNode node() {
+        ProcessorNode node() {
             return queue.source();
         }
 
-        public TopicPartition partition() {
+        TopicPartition partition() {
             return queue.partition();
         }
 
@@ -88,7 +88,7 @@ public class PartitionGroup {
     long partitionTimestamp(final TopicPartition partition) {
         final RecordQueue queue = partitionQueues.get(partition);
         if (queue == null) {
-            throw new NullPointerException("Partition " + partition + " not found.");
+            throw new IllegalStateException("Partition " + partition + " not found.");
         }
         return queue.partitionTime();
     }
@@ -96,7 +96,7 @@ public class PartitionGroup {
     void setPartitionTime(final TopicPartition partition, final long partitionTime) {
         final RecordQueue queue = partitionQueues.get(partition);
         if (queue == null) {
-            throw new NullPointerException("Partition " + partition + " not found.");
+            throw new IllegalStateException("Partition " + partition + " not found.");
         }
         if (streamTime < partitionTime) {
             streamTime = partitionTime;
@@ -152,6 +152,10 @@ public class PartitionGroup {
     int addRawRecords(final TopicPartition partition, final Iterable<ConsumerRecord<byte[], byte[]>> rawRecords) {
         final RecordQueue recordQueue = partitionQueues.get(partition);
 
+        if (recordQueue == null) {
+            throw new IllegalStateException("Partition " + partition + " not found.");
+        }
+
         final int oldSize = recordQueue.size();
         final int newSize = recordQueue.addRawRecords(rawRecords);
 
@@ -172,15 +176,25 @@ public class PartitionGroup {
         return newSize;
     }
 
-    public Set<TopicPartition> partitions() {
+    Set<TopicPartition> partitions() {
         return Collections.unmodifiableSet(partitionQueues.keySet());
     }
 
     /**
      * Return the stream-time of this partition group defined as the largest timestamp seen across all partitions
      */
-    public long streamTime() {
+    long streamTime() {
         return streamTime;
+    }
+
+    Long headRecordOffset(final TopicPartition partition) {
+        final RecordQueue recordQueue = partitionQueues.get(partition);
+
+        if (recordQueue == null) {
+            throw new IllegalStateException("Partition " + partition + " not found.");
+        }
+
+        return recordQueue.headRecordOffset();
     }
 
     /**
@@ -190,7 +204,7 @@ public class PartitionGroup {
         final RecordQueue recordQueue = partitionQueues.get(partition);
 
         if (recordQueue == null) {
-            throw new IllegalStateException(String.format("Record's partition %s does not belong to this partition-group.", partition));
+            throw new IllegalStateException("Partition " + partition + " not found.");
         }
 
         return recordQueue.size();
@@ -204,14 +218,15 @@ public class PartitionGroup {
         return allBuffered;
     }
 
-    public void close() {
+    void close() {
         clear();
         partitionQueues.clear();
+        streamTime = RecordQueue.UNKNOWN;
     }
 
-    public void clear() {
+    void clear() {
         nonEmptyQueuesByTime.clear();
-        streamTime = RecordQueue.UNKNOWN;
+        totalBuffered = 0;
         for (final RecordQueue queue : partitionQueues.values()) {
             queue.clear();
         }

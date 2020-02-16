@@ -106,7 +106,7 @@ public class MirrorCheckpointTask extends SourceTask {
 
     @Override
     public List<SourceRecord> poll() throws InterruptedException {
-        try { 
+        try {
             long deadline = System.currentTimeMillis() + interval.toMillis();
             while (!stopping && System.currentTimeMillis() < deadline) {
                 offsetSyncStore.update(pollTimeout);

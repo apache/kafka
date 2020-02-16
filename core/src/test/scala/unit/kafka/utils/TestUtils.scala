@@ -37,9 +37,9 @@ import kafka.security.auth.{Acl, Authorizer => LegacyAuthorizer, Resource}
 import kafka.server._
 import kafka.server.checkpoints.OffsetCheckpointFile
 import Implicits._
-import com.yammer.metrics.Metrics
 import com.yammer.metrics.core.Meter
 import kafka.controller.LeaderIsrAndControllerEpoch
+import kafka.metrics.KafkaYammerMetrics
 import kafka.zk._
 import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType
@@ -597,7 +597,8 @@ object TestUtils extends Logging {
                            trustStoreFile: Option[File] = None,
                            saslProperties: Option[Properties] = None,
                            keySerializer: Serializer[K] = new ByteArraySerializer,
-                           valueSerializer: Serializer[V] = new ByteArraySerializer): KafkaProducer[K, V] = {
+                           valueSerializer: Serializer[V] = new ByteArraySerializer,
+                           enableIdempotence: Boolean = false): KafkaProducer[K, V] = {
     val producerProps = new Properties
     producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
     producerProps.put(ProducerConfig.ACKS_CONFIG, acks.toString)
@@ -609,6 +610,7 @@ object TestUtils extends Logging {
     producerProps.put(ProducerConfig.LINGER_MS_CONFIG, lingerMs.toString)
     producerProps.put(ProducerConfig.BATCH_SIZE_CONFIG, batchSize.toString)
     producerProps.put(ProducerConfig.COMPRESSION_TYPE_CONFIG, compressionType)
+    producerProps.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, enableIdempotence.toString)
     producerProps ++= producerSecurityConfigs(securityProtocol, trustStoreFile, saslProperties)
     new KafkaProducer[K, V](producerProps, keySerializer, valueSerializer)
   }
@@ -1376,7 +1378,8 @@ object TestUtils extends Logging {
                                   servers: Seq[KafkaServer],
                                   batchSize: Int = 16384,
                                   transactionTimeoutMs: Long = 60000,
-                                  maxBlockMs: Long = 60000) = {
+                                  maxBlockMs: Long = 60000,
+                                  deliveryTimeoutMs: Int = 120000) = {
     val props = new Properties()
     props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, TestUtils.getBrokerListStrFromServers(servers))
     props.put(ProducerConfig.ACKS_CONFIG, "all")
@@ -1385,6 +1388,8 @@ object TestUtils extends Logging {
     props.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "true")
     props.put(ProducerConfig.TRANSACTION_TIMEOUT_CONFIG, transactionTimeoutMs.toString)
     props.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, maxBlockMs.toString)
+    props.put(ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG, deliveryTimeoutMs.toString)
+    props.put(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG, deliveryTimeoutMs.toString)
     new KafkaProducer[Array[Byte], Array[Byte]](props, new ByteArraySerializer, new ByteArraySerializer)
   }
 
@@ -1426,20 +1431,18 @@ object TestUtils extends Logging {
     asString(record.value)
   }
 
-  def producerRecordWithExpectedTransactionStatus(topic: String, key: Array[Byte], value: Array[Byte],
-                                                  willBeCommitted: Boolean) : ProducerRecord[Array[Byte], Array[Byte]] = {
+  def producerRecordWithExpectedTransactionStatus(topic: String, partition: Integer, key: Array[Byte], value: Array[Byte], willBeCommitted: Boolean): ProducerRecord[Array[Byte], Array[Byte]] = {
     val header = new Header {override def key() = transactionStatusKey
       override def value() = if (willBeCommitted)
         committedValue
       else
         abortedValue
     }
-    new ProducerRecord[Array[Byte], Array[Byte]](topic, null, key, value, Collections.singleton(header))
+    new ProducerRecord[Array[Byte], Array[Byte]](topic, partition, key, value, Collections.singleton(header))
   }
 
-  def producerRecordWithExpectedTransactionStatus(topic: String, key: String, value: String,
-                                                  willBeCommitted: Boolean) : ProducerRecord[Array[Byte], Array[Byte]] = {
-    producerRecordWithExpectedTransactionStatus(topic, asBytes(key), asBytes(value), willBeCommitted)
+  def producerRecordWithExpectedTransactionStatus(topic: String, partition: Integer, key: String, value: String, willBeCommitted: Boolean): ProducerRecord[Array[Byte], Array[Byte]] = {
+    producerRecordWithExpectedTransactionStatus(topic, partition, asBytes(key), asBytes(value), willBeCommitted)
   }
 
   // Collect the current positions for all partition in the consumers current assignment.
@@ -1626,7 +1629,7 @@ object TestUtils extends Logging {
   }
 
   def meterCount(metricName: String): Long = {
-    Metrics.defaultRegistry.allMetrics.asScala
+    KafkaYammerMetrics.defaultRegistry.allMetrics.asScala
       .filterKeys(_.getMBeanName.endsWith(metricName))
       .values
       .headOption
@@ -1636,8 +1639,8 @@ object TestUtils extends Logging {
   }
 
   def clearYammerMetrics(): Unit = {
-    for (metricName <- Metrics.defaultRegistry.allMetrics.keySet.asScala)
-      Metrics.defaultRegistry.removeMetric(metricName)
+    for (metricName <- KafkaYammerMetrics.defaultRegistry.allMetrics.keySet.asScala)
+      KafkaYammerMetrics.defaultRegistry.removeMetric(metricName)
   }
 
   def stringifyTopicPartitions(partitions: Set[TopicPartition]): String = {

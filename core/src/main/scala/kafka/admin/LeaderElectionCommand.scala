@@ -79,7 +79,8 @@ object LeaderElectionCommand extends Logging {
         AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG,
         commandOptions.options.valueOf(commandOptions.bootstrapServer)
       )
-      props.setProperty(AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG, timeout.toMillis.toString)
+      props.setProperty(AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG, timeout.toMillis.toString)
+      props.setProperty(AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG, (timeout.toMillis / 2).toString)
 
       Admin.create(props)
     }

@@ -75,7 +75,7 @@ public class RecordQueue {
         );
         this.log = logContext.logger(RecordQueue.class);
     }
- 
+
     void setPartitionTime(final long partitionTime) {
         this.partitionTime = partitionTime;
     }
@@ -156,13 +156,16 @@ public class RecordQueue {
         return headRecord == null ? UNKNOWN : headRecord.timestamp;
     }
 
+    public Long headRecordOffset() {
+        return headRecord == null ? null : headRecord.offset();
+    }
+
     /**
-     * Clear the fifo queue of its elements, also clear the time tracker's kept stamped elements
+     * Clear the fifo queue of its elements
      */
     public void clear() {
         fifoQueue.clear();
         headRecord = null;
-        partitionTime = RecordQueue.UNKNOWN;
     }
 
     private void updateHead() {

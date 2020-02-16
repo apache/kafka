@@ -19,9 +19,8 @@ package kafka.log
 
 import java.io.PrintWriter
 
-import com.yammer.metrics.Metrics
 import com.yammer.metrics.core.{Gauge, MetricName}
-import kafka.metrics.KafkaMetricsGroup
+import kafka.metrics.{KafkaMetricsGroup, KafkaYammerMetrics}
 import kafka.utils.{MockTime, TestUtils}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.record.{CompressionType, RecordBatch}
@@ -90,7 +89,7 @@ class LogCleanerIntegrationTest extends AbstractLogCleanerIntegrationTest with K
   }
 
   private def getGauge[T](filter: MetricName => Boolean): Gauge[T] = {
-    Metrics.defaultRegistry.allMetrics.asScala
+    KafkaYammerMetrics.defaultRegistry.allMetrics.asScala
       .filterKeys(filter(_))
       .headOption
       .getOrElse { fail(s"Unable to find metric") }

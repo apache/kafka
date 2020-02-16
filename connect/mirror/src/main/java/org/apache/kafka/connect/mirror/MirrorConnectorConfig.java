@@ -270,7 +270,9 @@ public class MirrorConnectorConfig extends AbstractConfig {
     List<MetricsReporter> metricsReporters() {
         List<MetricsReporter> reporters = getConfiguredInstances(
                 CommonClientConfigs.METRIC_REPORTER_CLASSES_CONFIG, MetricsReporter.class);
-        reporters.add(new JmxReporter("kafka.connect.mirror"));
+        JmxReporter jmxReporter = new JmxReporter("kafka.connect.mirror");
+        jmxReporter.configure(this.originals());
+        reporters.add(jmxReporter);
         return reporters;
     }
 

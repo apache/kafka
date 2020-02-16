@@ -237,6 +237,7 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
       case Some(authz: Reconfigurable) => addReconfigurable(authz)
       case _ =>
     }
+    addReconfigurable(kafkaServer.kafkaYammerMetrics)
     addReconfigurable(new DynamicMetricsReporters(kafkaConfig.brokerId, kafkaServer))
     addReconfigurable(new DynamicClientQuotaCallback(kafkaConfig.brokerId, kafkaServer))
 
@@ -619,7 +620,7 @@ class DynamicLogConfig(logManager: LogManager, server: KafkaServer) extends Brok
       props ++= newBrokerDefaults
       props ++= log.config.originals.asScala.filterKeys(log.config.overriddenConfigs.contains)
 
-      val logConfig = LogConfig(props.asJava)
+      val logConfig = LogConfig(props.asJava, log.config.overriddenConfigs)
       log.updateConfig(logConfig)
     }
   }

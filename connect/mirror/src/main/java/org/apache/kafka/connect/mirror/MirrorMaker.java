@@ -164,7 +164,7 @@ public class MirrorMaker {
         }
         startLatch = new CountDownLatch(herders.size());
         stopLatch = new CountDownLatch(herders.size());
-        Runtime.getRuntime().addShutdownHook(shutdownHook);
+        Exit.addShutdownHook("mirror-maker-shutdown-hook", shutdownHook);
         for (Herder herder : herders.values()) {
             try {
                 herder.start();

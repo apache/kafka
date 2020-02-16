@@ -708,7 +708,7 @@ public class JsonConverter implements Converter, HeaderConverter {
         final Schema.Type schemaType;
         if (schema != null) {
             schemaType = schema.type();
-            if (jsonValue.isNull()) {
+            if (jsonValue == null || jsonValue.isNull()) {
                 if (schema.defaultValue() != null)
                     return schema.defaultValue(); // any logical type conversions should already have been applied
                 if (schema.isOptional())

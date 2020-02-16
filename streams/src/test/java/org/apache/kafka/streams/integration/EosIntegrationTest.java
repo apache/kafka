@@ -16,14 +16,22 @@
  */
 package org.apache.kafka.streams.integration;
 
+import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.AdminClientConfig;
+import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.IsolationLevel;
+import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.StoreQueryParameters;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
@@ -49,6 +57,7 @@ import org.junit.experimental.categories.Category;
 
 import java.io.File;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -60,6 +69,9 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
+import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.waitForEmptyConsumerGroup;
 import static org.apache.kafka.test.StreamsTestUtils.startKafkaStreamsAndWaitForRunningState;
 import static org.apache.kafka.test.TestUtils.waitForCondition;
 import static org.hamcrest.CoreMatchers.equalTo;
@@ -67,6 +79,7 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
+
 
 @Category({IntegrationTest.class})
 public class EosIntegrationTest {
@@ -115,38 +128,66 @@ public class EosIntegrationTest {
 
     @Test
     public void shouldBeAbleToRunWithEosEnabled() throws Exception {
-        runSimpleCopyTest(1, SINGLE_PARTITION_INPUT_TOPIC, null, SINGLE_PARTITION_OUTPUT_TOPIC);
+        runSimpleCopyTest(1, SINGLE_PARTITION_INPUT_TOPIC, null, SINGLE_PARTITION_OUTPUT_TOPIC, false);
+    }
+
+    @Test
+    public void shouldCommitCorrectOffsetIfInputTopicIsTransactional() throws Exception {
+        runSimpleCopyTest(1, SINGLE_PARTITION_INPUT_TOPIC, null, SINGLE_PARTITION_OUTPUT_TOPIC, true);
+
+        try (final Admin adminClient = Admin.create(mkMap(mkEntry(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers())));
+             final Consumer<byte[], byte[]> consumer = new KafkaConsumer<>(mkMap(
+                 mkEntry(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers()),
+                 mkEntry(ConsumerConfig.GROUP_ID_CONFIG, applicationId),
+                 mkEntry(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class),
+                 mkEntry(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class)))) {
+
+            waitForEmptyConsumerGroup(adminClient, applicationId, 5 * MAX_POLL_INTERVAL_MS);
+
+            final TopicPartition topicPartition = new TopicPartition(SINGLE_PARTITION_INPUT_TOPIC, 0);
+            final Collection<TopicPartition> topicPartitions = Collections.singleton(topicPartition);
+
+            final long committedOffset = adminClient.listConsumerGroupOffsets(applicationId).partitionsToOffsetAndMetadata().get().get(topicPartition).offset();
+
+            consumer.assign(topicPartitions);
+            final long consumerPosition = consumer.position(topicPartition);
+            final long endOffset = consumer.endOffsets(topicPartitions).get(topicPartition);
+
+            assertThat(committedOffset, equalTo(consumerPosition));
+            assertThat(committedOffset, equalTo(endOffset));
+        }
     }
 
     @Test
     public void shouldBeAbleToRestartAfterClose() throws Exception {
-        runSimpleCopyTest(2, SINGLE_PARTITION_INPUT_TOPIC, null, SINGLE_PARTITION_OUTPUT_TOPIC);
+        runSimpleCopyTest(2, SINGLE_PARTITION_INPUT_TOPIC, null, SINGLE_PARTITION_OUTPUT_TOPIC, false);
     }
 
     @Test
     public void shouldBeAbleToCommitToMultiplePartitions() throws Exception {
-        runSimpleCopyTest(1, SINGLE_PARTITION_INPUT_TOPIC, null, MULTI_PARTITION_OUTPUT_TOPIC);
+        runSimpleCopyTest(1, SINGLE_PARTITION_INPUT_TOPIC, null, MULTI_PARTITION_OUTPUT_TOPIC, false);
     }
 
     @Test
     public void shouldBeAbleToCommitMultiplePartitionOffsets() throws Exception {
-        runSimpleCopyTest(1, MULTI_PARTITION_INPUT_TOPIC, null, SINGLE_PARTITION_OUTPUT_TOPIC);
+        runSimpleCopyTest(1, MULTI_PARTITION_INPUT_TOPIC, null, SINGLE_PARTITION_OUTPUT_TOPIC, false);
     }
 
     @Test
     public void shouldBeAbleToRunWithTwoSubtopologies() throws Exception {
-        runSimpleCopyTest(1, SINGLE_PARTITION_INPUT_TOPIC, SINGLE_PARTITION_THROUGH_TOPIC, SINGLE_PARTITION_OUTPUT_TOPIC);
+        runSimpleCopyTest(1, SINGLE_PARTITION_INPUT_TOPIC, SINGLE_PARTITION_THROUGH_TOPIC, SINGLE_PARTITION_OUTPUT_TOPIC, false);
     }
 
     @Test
     public void shouldBeAbleToRunWithTwoSubtopologiesAndMultiplePartitions() throws Exception {
-        runSimpleCopyTest(1, MULTI_PARTITION_INPUT_TOPIC, MULTI_PARTITION_THROUGH_TOPIC, MULTI_PARTITION_OUTPUT_TOPIC);
+        runSimpleCopyTest(1, MULTI_PARTITION_INPUT_TOPIC, MULTI_PARTITION_THROUGH_TOPIC, MULTI_PARTITION_OUTPUT_TOPIC, false);
     }
 
     private void runSimpleCopyTest(final int numberOfRestarts,
                                    final String inputTopic,
                                    final String throughTopic,
-                                   final String outputTopic) throws Exception {
+                                   final String outputTopic,
+                                   final boolean inputTopicTransactional) throws Exception {
         final StreamsBuilder builder = new StreamsBuilder();
         final KStream<Long, Long> input = builder.stream(inputTopic);
         KStream<Long, Long> output = input;
@@ -176,11 +217,17 @@ public class EosIntegrationTest {
 
                 final List<KeyValue<Long, Long>> inputData = prepareData(i * 100, i * 100 + 10L, 0L, 1L);
 
+                final Properties producerConfigs = new Properties();
+                if (inputTopicTransactional) {
+                    producerConfigs.setProperty(ProducerConfig.TRANSACTIONAL_ID_CONFIG, applicationId + "-input-producer");
+                }
+
                 IntegrationTestUtils.produceKeyValuesSynchronously(
                     inputTopic,
                     inputData,
-                    TestUtils.producerConfig(CLUSTER.bootstrapServers(), LongSerializer.class, LongSerializer.class),
-                    CLUSTER.time
+                    TestUtils.producerConfig(CLUSTER.bootstrapServers(), LongSerializer.class, LongSerializer.class, producerConfigs),
+                    CLUSTER.time,
+                    inputTopicTransactional
                 );
 
                 final List<KeyValue<Long, Long>> committedRecords =
@@ -203,8 +250,7 @@ public class EosIntegrationTest {
         }
     }
 
-    private void checkResultPerKey(final List<KeyValue<Long, Long>> result,
-                                   final List<KeyValue<Long, Long>> expectedResult) {
+    private void checkResultPerKey(final List<KeyValue<Long, Long>> result, final List<KeyValue<Long, Long>> expectedResult) {
         final Set<Long> allKeys = new HashSet<>();
         addAllKeys(allKeys, result);
         addAllKeys(allKeys, expectedResult);
@@ -215,15 +261,13 @@ public class EosIntegrationTest {
 
     }
 
-    private void addAllKeys(final Set<Long> allKeys,
-                            final List<KeyValue<Long, Long>> records) {
+    private void addAllKeys(final Set<Long> allKeys, final List<KeyValue<Long, Long>> records) {
         for (final KeyValue<Long, Long> record : records) {
             allKeys.add(record.key);
         }
     }
 
-    private List<KeyValue<Long, Long>> getAllRecordPerKey(final Long key,
-                                                          final List<KeyValue<Long, Long>> records) {
+    private List<KeyValue<Long, Long>> getAllRecordPerKey(final Long key, final List<KeyValue<Long, Long>> records) {
         final List<KeyValue<Long, Long>> recordsPerKey = new ArrayList<>(records.size());
 
         for (final KeyValue<Long, Long> record : records) {
@@ -589,8 +633,7 @@ public class EosIntegrationTest {
                     }
 
                     @Override
-                    public KeyValue<Long, Long> transform(final Long key,
-                                                          final Long value) {
+                    public KeyValue<Long, Long> transform(final Long key, final Long value) {
                         if (gcInjected.compareAndSet(true, false)) {
                             while (doGC) {
                                 try {
@@ -750,7 +793,7 @@ public class EosIntegrationTest {
         final long maxWaitingTime = System.currentTimeMillis() + 300000L;
         while (System.currentTimeMillis() < maxWaitingTime) {
             try {
-                store = streams.store(storeName, QueryableStoreTypes.keyValueStore());
+                store = streams.store(StoreQueryParameters.fromNameAndType(storeName, QueryableStoreTypes.keyValueStore()));
                 break;
             } catch (final InvalidStateStoreException okJustRetry) {
                 try {
@@ -768,5 +811,4 @@ public class EosIntegrationTest {
 
         assertTrue(expectedStoreContent.isEmpty());
     }
-
 }

@@ -203,7 +203,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BulkLoadingSt
             // metrics recorder will clean up statistics object
             final Statistics statistics = new Statistics();
             userSpecifiedOptions.setStatistics(statistics);
-            metricsRecorder.addStatistics(name, statistics, (StreamsMetricsImpl) context.metrics(), context.taskId());
+            metricsRecorder.addStatistics(name, statistics);
         }
     }
 
@@ -221,10 +221,12 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BulkLoadingSt
         }
     }
 
+    @Override
     public void init(final ProcessorContext context,
                      final StateStore root) {
         // open the DB dir
         internalProcessorContext = context;
+        metricsRecorder.init((StreamsMetricsImpl) context.metrics(), context.taskId());
         openDB(context);
         batchingStateRestoreCallback = new RocksDBBatchingRestoreCallback(this);
 

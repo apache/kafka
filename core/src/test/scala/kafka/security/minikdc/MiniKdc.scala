@@ -49,7 +49,7 @@ import org.apache.directory.server.kerberos.shared.keytab.{Keytab, KeytabEntry}
 import org.apache.directory.server.protocol.shared.transport.{TcpTransport, UdpTransport}
 import org.apache.directory.server.xdbm.Index
 import org.apache.directory.shared.kerberos.KerberosTime
-import org.apache.kafka.common.utils.{Java, KafkaThread, Utils}
+import org.apache.kafka.common.utils.{Java, Utils}
 
 /**
   * Mini KDC based on Apache Directory Server that can be embedded in tests or used from command line as a standalone
@@ -370,7 +370,7 @@ object MiniKdc {
     }
   }
 
-  private def start(workDir: File, config: Properties, keytabFile: File, principals: Seq[String]): Unit = {
+  private[minikdc] def start(workDir: File, config: Properties, keytabFile: File, principals: Seq[String]): MiniKdc = {
     val miniKdc = new MiniKdc(config, workDir)
     miniKdc.start()
     miniKdc.createPrincipal(keytabFile, principals: _*)
@@ -390,9 +390,8 @@ object MiniKdc {
       |
     """.stripMargin
     println(infoMessage)
-    Runtime.getRuntime.addShutdownHook(new KafkaThread("minikdc-shutdown-hook", false) {
-      miniKdc.stop()
-    })
+    Exit.addShutdownHook("minikdc-shutdown-hook", miniKdc.stop)
+    miniKdc
   }
 
   val OrgName = "org.name"

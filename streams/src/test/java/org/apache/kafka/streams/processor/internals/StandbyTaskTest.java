@@ -16,11 +16,6 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import org.apache.kafka.clients.consumer.Consumer;
-import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.apache.kafka.clients.consumer.MockConsumer;
-import org.apache.kafka.clients.consumer.OffsetAndMetadata;
-import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
@@ -29,111 +24,70 @@ import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.CumulativeSum;
-import org.apache.kafka.common.record.TimestampType;
-import org.apache.kafka.common.serialization.IntegerDeserializer;
 import org.apache.kafka.common.serialization.IntegerSerializer;
-import org.apache.kafka.common.serialization.LongSerializer;
-import org.apache.kafka.common.serialization.Serdes;
-import org.apache.kafka.common.serialization.Serializer;
-import org.apache.kafka.common.utils.Bytes;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.errors.LockException;
 import org.apache.kafka.streams.errors.ProcessorStateException;
-import org.apache.kafka.streams.kstream.Materialized;
-import org.apache.kafka.streams.kstream.TimeWindows;
-import org.apache.kafka.streams.kstream.Windowed;
-import org.apache.kafka.streams.kstream.internals.ConsumedInternal;
-import org.apache.kafka.streams.kstream.internals.InternalStreamsBuilder;
-import org.apache.kafka.streams.kstream.internals.InternalStreamsBuilderTest;
-import org.apache.kafka.streams.kstream.internals.TimeWindow;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
-import org.apache.kafka.streams.state.KeyValueIterator;
-import org.apache.kafka.streams.state.TimestampedWindowStore;
-import org.apache.kafka.streams.state.ValueAndTimestamp;
-import org.apache.kafka.streams.state.WindowStore;
-import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
-import org.apache.kafka.streams.state.internals.WindowKeySchema;
 import org.apache.kafka.test.MockKeyValueStore;
 import org.apache.kafka.test.MockKeyValueStoreBuilder;
 import org.apache.kafka.test.MockRestoreConsumer;
-import org.apache.kafka.test.MockStateRestoreListener;
 import org.apache.kafka.test.MockTimestampExtractor;
 import org.apache.kafka.test.TestUtils;
+import org.easymock.EasyMock;
+import org.easymock.EasyMockRunner;
+import org.easymock.Mock;
+import org.easymock.MockType;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
+import org.junit.runner.RunWith;
 
 import java.io.File;
 import java.io.IOException;
-import java.time.Duration;
-import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicInteger;
 
-import static java.time.Duration.ofMillis;
 import static java.util.Arrays.asList;
-import static java.util.Collections.emptyList;
-import static java.util.Collections.emptySet;
-import static java.util.Collections.singletonList;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkProperties;
-import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import static org.junit.Assert.assertThrows;
 
+
+@RunWith(EasyMockRunner.class)
 public class StandbyTaskTest {
 
+    private final String threadName = "threadName";
     private final String threadId = Thread.currentThread().getName();
-    private final TaskId taskId = new TaskId(0, 1);
-    private StandbyTask task;
-    private final Serializer<Integer> intSerializer = new IntegerSerializer();
+    private final TaskId taskId = new TaskId(0, 0);
 
-    private final String applicationId = "test-application";
     private final String storeName1 = "store1";
     private final String storeName2 = "store2";
+    private final String applicationId = "test-application";
     private final String storeChangelogTopicName1 = ProcessorStateManager.storeChangelogTopic(applicationId, storeName1);
     private final String storeChangelogTopicName2 = ProcessorStateManager.storeChangelogTopic(applicationId, storeName2);
-    private final String globalStoreName = "ktable1";
 
-    private final TopicPartition partition1 = new TopicPartition(storeChangelogTopicName1, 1);
-    private final TopicPartition partition2 = new TopicPartition(storeChangelogTopicName2, 1);
-    private final MockStateRestoreListener stateRestoreListener = new MockStateRestoreListener();
+    private final TopicPartition partition = new TopicPartition(storeChangelogTopicName1, 0);
+    private final MockKeyValueStore store1 = (MockKeyValueStore) new MockKeyValueStoreBuilder(storeName1, false).build();
+    private final MockKeyValueStore store2 = (MockKeyValueStore) new MockKeyValueStoreBuilder(storeName2, true).build();
 
-    private final Set<TopicPartition> topicPartitions = Collections.emptySet();
     private final ProcessorTopology topology = ProcessorTopologyFactories.withLocalStores(
-        asList(new MockKeyValueStoreBuilder(storeName1, false).build(),
-               new MockKeyValueStoreBuilder(storeName2, true).build()),
-        mkMap(
-            mkEntry(storeName1, storeChangelogTopicName1),
-            mkEntry(storeName2, storeChangelogTopicName2)
-        )
+        asList(store1, store2),
+        mkMap(mkEntry(storeName1, storeChangelogTopicName1), mkEntry(storeName2, storeChangelogTopicName2))
     );
-    private final TopicPartition globalTopicPartition = new TopicPartition(globalStoreName, 0);
-    private final Set<TopicPartition> ktablePartitions = Utils.mkSet(globalTopicPartition);
-    private final ProcessorTopology ktableTopology = ProcessorTopologyFactories.withLocalStores(
-        singletonList(new MockKeyValueStoreBuilder(globalTopicPartition.topic(), true)
-                          .withLoggingDisabled().build()),
-        mkMap(
-            mkEntry(globalStoreName, globalTopicPartition.topic())
-        )
-    );
+    private final StreamsMetricsImpl streamsMetrics =
+        new StreamsMetricsImpl(new Metrics(), threadName, StreamsConfig.METRICS_LATEST);
 
     private File baseDir;
+    private StreamsConfig config;
     private StateDirectory stateDirectory;
+    private StandbyTask task;
 
     private StreamsConfig createConfig(final File baseDir) throws IOException {
         return new StreamsConfig(mkProperties(mkMap(
@@ -145,27 +99,18 @@ public class StandbyTaskTest {
         )));
     }
 
-    private final MockConsumer<byte[], byte[]> consumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST);
     private final MockRestoreConsumer<Integer, Integer> restoreStateConsumer = new MockRestoreConsumer<>(
         new IntegerSerializer(),
         new IntegerSerializer()
     );
-    private final StoreChangelogReader changelogReader = new StoreChangelogReader(
-        restoreStateConsumer,
-        Duration.ZERO,
-        stateRestoreListener,
-        new LogContext("standby-task-test ")
-    );
 
-    private final byte[] recordValue = intSerializer.serialize(null, 10);
-    private final byte[] recordKey = intSerializer.serialize(null, 1);
-
-    private final String threadName = "threadName";
-    private final StreamsMetricsImpl streamsMetrics =
-        new StreamsMetricsImpl(new Metrics(), threadName, StreamsConfig.METRICS_LATEST);
+    @Mock(type = MockType.NICE)
+    private ProcessorStateManager stateManager;
 
     @Before
     public void setup() throws Exception {
+        EasyMock.expect(stateManager.taskId()).andReturn(taskId).anyTimes();
+
         restoreStateConsumer.reset();
         restoreStateConsumer.updatePartitions(storeChangelogTopicName1, asList(
             new PartitionInfo(storeChangelogTopicName1, 0, Node.noNode(), new Node[0], new Node[0]),
@@ -179,615 +124,234 @@ public class StandbyTaskTest {
             new PartitionInfo(storeChangelogTopicName2, 2, Node.noNode(), new Node[0], new Node[0])
         ));
         baseDir = TestUtils.tempDirectory();
-        stateDirectory = new StateDirectory(createConfig(baseDir), new MockTime(), true);
+        config = createConfig(baseDir);
+        stateDirectory = new StateDirectory(config, new MockTime(), true);
     }
 
     @After
     public void cleanup() throws IOException {
         if (task != null && !task.isClosed()) {
-            task.close(true, false);
+            task.closeDirty();
             task = null;
         }
         Utils.delete(baseDir);
     }
 
     @Test
-    public void testStorePartitions() throws IOException {
-        final StreamsConfig config = createConfig(baseDir);
-        task = new StandbyTask(taskId,
-                               topicPartitions,
-                               topology,
-                               consumer,
-                               changelogReader,
-                               config,
-                               streamsMetrics,
-                               stateDirectory);
-        task.initializeStateStores();
-        assertEquals(Utils.mkSet(partition2, partition1), new HashSet<>(task.checkpointedOffsets().keySet()));
-    }
+    public void shouldThrowLockExceptionIfFailedToLockStateDirectory() throws IOException {
+        stateDirectory = EasyMock.createNiceMock(StateDirectory.class);
+        EasyMock.expect(stateDirectory.lock(taskId)).andReturn(false);
+        EasyMock.replay(stateDirectory);
 
-    @SuppressWarnings("unchecked")
-    @Test
-    public void testUpdateNonInitializedStore() throws IOException {
-        final StreamsConfig config = createConfig(baseDir);
-        task = new StandbyTask(taskId,
-                               topicPartitions,
-                               topology,
-                               consumer,
-                               changelogReader,
-                               config,
-                               streamsMetrics,
-                               stateDirectory);
+        task = createStandbyTask();
 
-        restoreStateConsumer.assign(new ArrayList<>(task.checkpointedOffsets().keySet()));
-
-        try {
-            task.update(partition1,
-                        singletonList(
-                            new ConsumerRecord<>(
-                                partition1.topic(),
-                                partition1.partition(),
-                                10,
-                                0L,
-                                TimestampType.CREATE_TIME,
-                                0L,
-                                0,
-                                0,
-                                recordKey,
-                                recordValue))
-            );
-            fail("expected an exception");
-        } catch (final NullPointerException npe) {
-            assertThat(npe.getMessage(), containsString("stateRestoreCallback must not be null"));
-        }
-
+        assertThrows(LockException.class, task::initializeIfNeeded);
     }
 
     @Test
-    public void testUpdate() throws IOException {
-        final StreamsConfig config = createConfig(baseDir);
-        task = new StandbyTask(taskId,
-                               topicPartitions,
-                               topology,
-                               consumer,
-                               changelogReader,
-                               config,
-                               streamsMetrics,
-                               stateDirectory);
-        task.initializeStateStores();
-        assertThat(task.checkpointedOffsets(),
-                   equalTo(mkMap(mkEntry(partition1, -1L), mkEntry(partition2, -1L))));
-        final Set<TopicPartition> partition = Collections.singleton(partition2);
-        restoreStateConsumer.assign(partition);
+    public void shouldTransitToRunningAfterInitialization() {
+        stateManager.registerStore(store1, store1.stateRestoreCallback);
+        EasyMock.expectLastCall();
+        stateManager.registerStore(store2, store2.stateRestoreCallback);
+        EasyMock.expectLastCall();
 
-        for (final ConsumerRecord<Integer, Integer> record : asList(new ConsumerRecord<>(partition2.topic(),
-                                                                                         partition2.partition(),
-                                                                                         10,
-                                                                                         0L,
-                                                                                         TimestampType.CREATE_TIME,
-                                                                                         0L,
-                                                                                         0,
-                                                                                         0,
-                                                                                         1,
-                                                                                         100),
-                                                                    new ConsumerRecord<>(partition2.topic(),
-                                                                                         partition2.partition(),
-                                                                                         20,
-                                                                                         0L,
-                                                                                         TimestampType.CREATE_TIME,
-                                                                                         0L,
-                                                                                         0,
-                                                                                         0,
-                                                                                         2,
-                                                                                         100),
-                                                                    new ConsumerRecord<>(partition2.topic(),
-                                                                                         partition2.partition(),
-                                                                                         30,
-                                                                                         0L,
-                                                                                         TimestampType.CREATE_TIME,
-                                                                                         0L,
-                                                                                         0,
-                                                                                         0,
-                                                                                         3,
-                                                                                         100))) {
-            restoreStateConsumer.bufferRecord(record);
-        }
+        EasyMock.replay(stateManager);
 
-        restoreStateConsumer.seekToBeginning(partition);
-        task.update(partition2, restoreStateConsumer.poll(ofMillis(100)).records(partition2));
-        assertThat(
-            task.checkpointedOffsets(),
-            equalTo(
-                mkMap(
-                    mkEntry(partition1, -1L),
-                    mkEntry(partition2, 31L /*the checkpoint should be 1+ the highest consumed offset*/)
-                )
-            )
-        );
-        final StandbyContextImpl context = (StandbyContextImpl) task.context();
-        final MockKeyValueStore store1 = (MockKeyValueStore) context.getStateMgr().getStore(storeName1);
-        final MockKeyValueStore store2 = (MockKeyValueStore) context.getStateMgr().getStore(storeName2);
+        task = createStandbyTask();
 
-        assertEquals(Collections.emptyList(), store1.keys);
-        assertEquals(asList(1, 2, 3), store2.keys);
+        assertEquals(Task.State.CREATED, task.state());
+
+        task.initializeIfNeeded();
+
+        assertEquals(Task.State.RUNNING, task.state());
+
+        // initialize should be idempotent
+        task.initializeIfNeeded();
+
+        assertEquals(Task.State.RUNNING, task.state());
+
+        EasyMock.verify(stateManager);
     }
 
     @Test
-    public void shouldRestoreToWindowedStores() throws IOException {
-        final String storeName = "windowed-store";
-        final String changelogName = applicationId + "-" + storeName + "-changelog";
+    public void shouldThrowIfCommittingOnIllegalState() {
+        task = createStandbyTask();
 
-        final TopicPartition topicPartition = new TopicPartition(changelogName, 1);
+        assertThrows(IllegalStateException.class, task::commit);
+    }
 
-        final Set<TopicPartition> partitions = Collections.singleton(topicPartition);
+    @Test
+    public void shouldFlushAndCheckpointStateManagerOnCommit() {
+        stateManager.flush();
+        EasyMock.expectLastCall();
+        stateManager.checkpoint(EasyMock.eq(Collections.emptyMap()));
+        EasyMock.replay(stateManager);
 
-        consumer.assign(partitions);
-
-        final InternalTopologyBuilder internalTopologyBuilder = new InternalTopologyBuilder().setApplicationId(applicationId);
-
-        final InternalStreamsBuilder builder = new InternalStreamsBuilder(internalTopologyBuilder);
-
-        builder
-            .stream(Collections.singleton("topic"), new ConsumedInternal<>())
-            .groupByKey()
-            .windowedBy(TimeWindows.of(ofMillis(60_000)).grace(ofMillis(0L)))
-            .count(Materialized.<Object, Long, WindowStore<Bytes, byte[]>>as(storeName).withRetention(ofMillis(120_000L)));
-
-        builder.buildAndOptimizeTopology();
-
-        task = new StandbyTask(
-            taskId,
-            partitions,
-            internalTopologyBuilder.build(0),
-            consumer,
-            new StoreChangelogReader(
-                restoreStateConsumer,
-                Duration.ZERO,
-                stateRestoreListener,
-                new LogContext("standby-task-test ")
-            ),
-            createConfig(baseDir),
-            new MockStreamsMetrics(new Metrics()),
-            stateDirectory
-        );
-
-        task.initializeStateStores();
-
-        consumer.commitSync(mkMap(mkEntry(topicPartition, new OffsetAndMetadata(35L))));
+        task = createStandbyTask();
+        task.initializeIfNeeded();
         task.commit();
 
-        final List<ConsumerRecord<byte[], byte[]>> remaining1 = task.update(
-            topicPartition,
-            asList(
-                makeWindowedConsumerRecord(changelogName, 10, 1, 0L, 60_000L),
-                makeWindowedConsumerRecord(changelogName, 20, 2, 60_000L, 120_000),
-                makeWindowedConsumerRecord(changelogName, 30, 3, 120_000L, 180_000),
-                makeWindowedConsumerRecord(changelogName, 40, 4, 180_000L, 240_000)
-            )
-        );
-
-        assertEquals(
-            asList(
-                new KeyValue<>(new Windowed<>(1, new TimeWindow(0, 60_000)), ValueAndTimestamp.make(100L, 60_000L)),
-                new KeyValue<>(new Windowed<>(2, new TimeWindow(60_000, 120_000)), ValueAndTimestamp.make(100L, 120_000L)),
-                new KeyValue<>(new Windowed<>(3, new TimeWindow(120_000, 180_000)), ValueAndTimestamp.make(100L, 180_000L))
-            ),
-            getWindowedStoreContents(storeName, task)
-        );
-
-        consumer.commitSync(mkMap(mkEntry(topicPartition, new OffsetAndMetadata(45L))));
-        task.commit();
-
-        final List<ConsumerRecord<byte[], byte[]>> remaining2 = task.update(topicPartition, remaining1);
-        assertEquals(emptyList(), remaining2);
-
-        // the first record's window should have expired.
-        assertEquals(
-            asList(
-                new KeyValue<>(new Windowed<>(2, new TimeWindow(60_000, 120_000)), ValueAndTimestamp.make(100L, 120_000L)),
-                new KeyValue<>(new Windowed<>(3, new TimeWindow(120_000, 180_000)), ValueAndTimestamp.make(100L, 180_000L)),
-                new KeyValue<>(new Windowed<>(4, new TimeWindow(180_000, 240_000)), ValueAndTimestamp.make(100L, 240_000L))
-            ),
-            getWindowedStoreContents(storeName, task)
-        );
-    }
-
-    private ConsumerRecord<byte[], byte[]> makeWindowedConsumerRecord(final String changelogName,
-                                                                      final int offset,
-                                                                      final int key,
-                                                                      final long start,
-                                                                      final long end) {
-        final Windowed<Integer> data = new Windowed<>(key, new TimeWindow(start, end));
-        final Bytes wrap = Bytes.wrap(new IntegerSerializer().serialize(null, data.key()));
-        final byte[] keyBytes = WindowKeySchema.toStoreKeyBinary(new Windowed<>(wrap, data.window()), 1).get();
-        return new ConsumerRecord<>(
-            changelogName,
-            1,
-            offset,
-            end,
-            TimestampType.CREATE_TIME,
-            0L,
-            0,
-            0,
-            keyBytes,
-            new LongSerializer().serialize(null, 100L)
-        );
+        EasyMock.verify(stateManager);
     }
 
     @Test
-    public void shouldWriteCheckpointFile() throws IOException {
-        final String storeName = "checkpoint-file-store";
-        final String changelogName = applicationId + "-" + storeName + "-changelog";
+    public void shouldReturnStateManagerChangelogOffsets() {
+        EasyMock.expect(stateManager.changelogOffsets()).andReturn(Collections.singletonMap(partition, 50L));
+        EasyMock.replay(stateManager);
 
-        final TopicPartition topicPartition = new TopicPartition(changelogName, 1);
-        final Set<TopicPartition> partitions = Collections.singleton(topicPartition);
+        task = createStandbyTask();
 
-        final InternalTopologyBuilder internalTopologyBuilder = new InternalTopologyBuilder().setApplicationId(applicationId);
+        assertEquals(Collections.singletonMap(partition, 50L), task.changelogOffsets());
 
-        final InternalStreamsBuilder builder = new InternalStreamsBuilder(internalTopologyBuilder);
-        builder.stream(Collections.singleton("topic"), new ConsumedInternal<>())
-               .groupByKey()
-               .count(Materialized.as(storeName));
-
-        builder.buildAndOptimizeTopology();
-
-        consumer.assign(partitions);
-
-        task = new StandbyTask(
-            taskId,
-            partitions,
-            internalTopologyBuilder.build(0),
-            consumer,
-            changelogReader,
-            createConfig(baseDir),
-            new MockStreamsMetrics(new Metrics()),
-            stateDirectory
-        );
-        task.initializeStateStores();
-
-        consumer.commitSync(mkMap(mkEntry(topicPartition, new OffsetAndMetadata(20L))));
-        task.commit();
-
-        task.update(
-            topicPartition,
-            singletonList(makeWindowedConsumerRecord(changelogName, 10, 1, 0L, 60_000L))
-        );
-
-        task.close(true, false);
-
-        final File taskDir = stateDirectory.directoryForTask(taskId);
-        final OffsetCheckpoint checkpoint = new OffsetCheckpoint(new File(taskDir, StateManagerUtil.CHECKPOINT_FILE_NAME));
-        final Map<TopicPartition, Long> offsets = checkpoint.read();
-
-        assertEquals(1, offsets.size());
-        assertEquals(Long.valueOf(11L), offsets.get(topicPartition));
-    }
-
-    @SuppressWarnings("unchecked")
-    private List<KeyValue<Windowed<Integer>, ValueAndTimestamp<Long>>> getWindowedStoreContents(final String storeName,
-                                                                                                final StandbyTask task) {
-        final StandbyContextImpl context = (StandbyContextImpl) task.context();
-
-        final List<KeyValue<Windowed<Integer>, ValueAndTimestamp<Long>>> result = new ArrayList<>();
-
-        try (final KeyValueIterator<Windowed<byte[]>, ValueAndTimestamp<Long>> iterator =
-                 ((TimestampedWindowStore) context.getStateMgr().getStore(storeName)).all()) {
-
-            while (iterator.hasNext()) {
-                final KeyValue<Windowed<byte[]>, ValueAndTimestamp<Long>> next = iterator.next();
-                final Integer deserializedKey = new IntegerDeserializer().deserialize(null, next.key.key());
-                result.add(new KeyValue<>(new Windowed<>(deserializedKey, next.key.window()), next.value));
-            }
-        }
-
-        return result;
+        EasyMock.verify(stateManager);
     }
 
     @Test
-    public void shouldRestoreToKTable() throws IOException {
-        consumer.assign(Collections.singletonList(globalTopicPartition));
-        consumer.commitSync(mkMap(mkEntry(globalTopicPartition, new OffsetAndMetadata(0L))));
+    public void shouldDoNothingWithCreatedStateOnClose() {
+        stateManager.close();
+        EasyMock.expectLastCall().andThrow(new AssertionError("Close should not be called")).anyTimes();
+        stateManager.flush();
+        EasyMock.expectLastCall().andThrow(new AssertionError("Flush should not be called")).anyTimes();
+        stateManager.checkpoint(EasyMock.anyObject());
+        EasyMock.expectLastCall().andThrow(new AssertionError("Checkpoint should not be called")).anyTimes();
+        EasyMock.replay(stateManager);
+        final MetricName metricName = setupCloseTaskMetric();
 
-        task = new StandbyTask(
-            taskId,
-            ktablePartitions,
-            ktableTopology,
-            consumer,
-            changelogReader,
-            createConfig(baseDir),
-            streamsMetrics,
-            stateDirectory
-        );
-        task.initializeStateStores();
+        task = createStandbyTask();
+        task.closeClean();
 
-        // The commit offset is at 0L. Records should not be processed
-        List<ConsumerRecord<byte[], byte[]>> remaining = task.update(
-            globalTopicPartition,
-            asList(
-                makeConsumerRecord(globalTopicPartition, 10, 1),
-                makeConsumerRecord(globalTopicPartition, 20, 2),
-                makeConsumerRecord(globalTopicPartition, 30, 3),
-                makeConsumerRecord(globalTopicPartition, 40, 4),
-                makeConsumerRecord(globalTopicPartition, 50, 5)
-            )
-        );
-        assertEquals(5, remaining.size());
+        assertEquals(Task.State.CLOSED, task.state());
 
-        consumer.commitSync(mkMap(mkEntry(globalTopicPartition, new OffsetAndMetadata(10L))));
-        task.commit(); // update offset limits
+        final double expectedCloseTaskMetric = 1.0;
+        verifyCloseTaskMetric(expectedCloseTaskMetric, streamsMetrics, metricName);
 
-        // The commit offset has not reached, yet.
-        remaining = task.update(globalTopicPartition, remaining);
-        assertEquals(5, remaining.size());
-
-        consumer.commitSync(mkMap(mkEntry(globalTopicPartition, new OffsetAndMetadata(11L))));
-        task.commit(); // update offset limits
-
-        // one record should be processed.
-        remaining = task.update(globalTopicPartition, remaining);
-        assertEquals(4, remaining.size());
-
-        consumer.commitSync(mkMap(mkEntry(globalTopicPartition, new OffsetAndMetadata(45L))));
-        task.commit(); // update offset limits
-
-        // The commit offset is now 45. All record except for the last one should be processed.
-        remaining = task.update(globalTopicPartition, remaining);
-        assertEquals(1, remaining.size());
-
-        consumer.commitSync(mkMap(mkEntry(globalTopicPartition, new OffsetAndMetadata(50L))));
-        task.commit(); // update offset limits
-
-        // The commit offset is now 50. Still the last record remains.
-        remaining = task.update(globalTopicPartition, remaining);
-        assertEquals(1, remaining.size());
-
-        consumer.commitSync(mkMap(mkEntry(globalTopicPartition, new OffsetAndMetadata(60L))));
-        task.commit(); // update offset limits
-
-        // The commit offset is now 60. No record should be left.
-        remaining = task.update(globalTopicPartition, remaining);
-        assertEquals(emptyList(), remaining);
-    }
-
-    private ConsumerRecord<byte[], byte[]> makeConsumerRecord(final TopicPartition topicPartition,
-                                                              final long offset,
-                                                              final int key) {
-        final IntegerSerializer integerSerializer = new IntegerSerializer();
-        return new ConsumerRecord<>(
-            topicPartition.topic(),
-            topicPartition.partition(),
-            offset,
-            0L,
-            TimestampType.CREATE_TIME,
-            0L,
-            0,
-            0,
-            integerSerializer.serialize(null, key),
-            integerSerializer.serialize(null, 100)
-        );
+        EasyMock.verify(stateManager);
     }
 
     @Test
-    public void shouldNotGetConsumerCommittedOffsetIfThereAreNoRecordUpdates() throws IOException {
-        final AtomicInteger committedCallCount = new AtomicInteger();
+    public void shouldNotCommitAndThrowOnCloseDirty() {
+        stateManager.close();
+        EasyMock.expectLastCall().andThrow(new ProcessorStateException("KABOOM!")).anyTimes();
+        stateManager.flush();
+        EasyMock.expectLastCall().andThrow(new AssertionError("Flush should not be called")).anyTimes();
+        stateManager.checkpoint(EasyMock.anyObject());
+        EasyMock.expectLastCall().andThrow(new AssertionError("Checkpoint should not be called")).anyTimes();
+        EasyMock.replay(stateManager);
+        final MetricName metricName = setupCloseTaskMetric();
 
-        final Consumer<byte[], byte[]> consumer = new MockConsumer<byte[], byte[]>(OffsetResetStrategy.EARLIEST) {
-            @Override
-            public synchronized Map<TopicPartition, OffsetAndMetadata> committed(final Set<TopicPartition> partitions) {
-                committedCallCount.getAndIncrement();
-                return super.committed(partitions);
-            }
-        };
+        task = createStandbyTask();
+        task.initializeIfNeeded();
+        task.closeDirty();
 
-        consumer.assign(Collections.singletonList(globalTopicPartition));
-        consumer.commitSync(mkMap(mkEntry(globalTopicPartition, new OffsetAndMetadata(0L))));
+        assertEquals(Task.State.CLOSED, task.state());
 
-        task = new StandbyTask(
-            taskId,
-            ktablePartitions,
-            ktableTopology,
-            consumer,
-            changelogReader,
-            createConfig(baseDir),
-            streamsMetrics,
-            stateDirectory
-        );
-        task.initializeStateStores();
-        assertThat(committedCallCount.get(), equalTo(0));
+        final double expectedCloseTaskMetric = 1.0;
+        verifyCloseTaskMetric(expectedCloseTaskMetric, streamsMetrics, metricName);
 
-        task.update(globalTopicPartition, Collections.emptyList());
-        // We should not make a consumer.committed() call because there are no new records.
-        assertThat(committedCallCount.get(), equalTo(0));
+        EasyMock.verify(stateManager);
     }
 
     @Test
-    public void shouldGetConsumerCommittedOffsetsOncePerCommit() throws IOException {
-        final AtomicInteger committedCallCount = new AtomicInteger();
+    public void shouldCommitOnCloseClean() {
+        stateManager.close();
+        EasyMock.expectLastCall();
+        stateManager.flush();
+        EasyMock.expectLastCall();
+        stateManager.checkpoint(EasyMock.eq(Collections.emptyMap()));
+        EasyMock.expectLastCall();
+        EasyMock.replay(stateManager);
+        final MetricName metricName = setupCloseTaskMetric();
 
-        final Consumer<byte[], byte[]> consumer = new MockConsumer<byte[], byte[]>(OffsetResetStrategy.EARLIEST) {
-            @Override
-            public synchronized Map<TopicPartition, OffsetAndMetadata> committed(final Set<TopicPartition> partitions) {
-                committedCallCount.getAndIncrement();
-                return super.committed(partitions);
-            }
-        };
+        task = createStandbyTask();
+        task.initializeIfNeeded();
+        task.closeClean();
 
-        consumer.assign(Collections.singletonList(globalTopicPartition));
-        consumer.commitSync(mkMap(mkEntry(globalTopicPartition, new OffsetAndMetadata(0L))));
+        assertEquals(Task.State.CLOSED, task.state());
 
-        task = new StandbyTask(
-            taskId,
-            ktablePartitions,
-            ktableTopology,
-            consumer,
-            changelogReader,
-            createConfig(baseDir),
-            streamsMetrics,
-            stateDirectory
-        );
-        task.initializeStateStores();
+        final double expectedCloseTaskMetric = 1.0;
+        verifyCloseTaskMetric(expectedCloseTaskMetric, streamsMetrics, metricName);
 
-        task.update(
-            globalTopicPartition,
-            Collections.singletonList(
-                makeConsumerRecord(globalTopicPartition, 1, 1)
-            )
-        );
-        assertThat(committedCallCount.get(), equalTo(1));
-
-        task.update(
-            globalTopicPartition,
-            Collections.singletonList(
-                makeConsumerRecord(globalTopicPartition, 1, 1)
-            )
-        );
-        // We should not make another consumer.committed() call until we commit
-        assertThat(committedCallCount.get(), equalTo(1));
-
-        task.commit();
-        task.update(
-            globalTopicPartition,
-            Collections.singletonList(
-                makeConsumerRecord(globalTopicPartition, 1, 1)
-            )
-        );
-        // We committed so we're allowed to make another consumer.committed() call
-        assertThat(committedCallCount.get(), equalTo(2));
+        EasyMock.verify(stateManager);
     }
 
     @Test
-    public void shouldInitializeStateStoreWithoutException() throws IOException {
-        final InternalStreamsBuilder builder = new InternalStreamsBuilder(new InternalTopologyBuilder());
-        builder.stream(Collections.singleton("topic"), new ConsumedInternal<>()).groupByKey().count();
+    public void shouldThrowOnCloseCleanError() {
+        stateManager.close();
+        EasyMock.expectLastCall().andThrow(new RuntimeException("KABOOM!")).anyTimes();
+        EasyMock.replay(stateManager);
+        final MetricName metricName = setupCloseTaskMetric();
 
-        initializeStandbyStores(builder);
+        task = createStandbyTask();
+        task.initializeIfNeeded();
+
+        assertThrows(RuntimeException.class, task::closeClean);
+
+        assertEquals(Task.State.CLOSING, task.state());
+
+        final double expectedCloseTaskMetric = 0.0;
+        verifyCloseTaskMetric(expectedCloseTaskMetric, streamsMetrics, metricName);
+
+        EasyMock.verify(stateManager);
+        EasyMock.reset(stateManager);
+        EasyMock.replay(stateManager);
     }
 
     @Test
-    public void shouldInitializeWindowStoreWithoutException() throws IOException {
-        final InternalStreamsBuilder builder = new InternalStreamsBuilder(new InternalTopologyBuilder());
-        builder.stream(Collections.singleton("topic"),
-                       new ConsumedInternal<>()).groupByKey().windowedBy(TimeWindows.of(ofMillis(100))).count();
+    public void shouldThrowOnCloseCleanFlushError() {
+        stateManager.flush();
+        EasyMock.expectLastCall().andThrow(new RuntimeException("KABOOM!")).anyTimes();
+        EasyMock.replay(stateManager);
+        final MetricName metricName = setupCloseTaskMetric();
 
-        initializeStandbyStores(builder);
-    }
+        task = createStandbyTask();
+        task.initializeIfNeeded();
 
-    private void initializeStandbyStores(final InternalStreamsBuilder builder) throws IOException {
-        final StreamsConfig config = createConfig(baseDir);
-        builder.buildAndOptimizeTopology();
-        final InternalTopologyBuilder internalTopologyBuilder = InternalStreamsBuilderTest.internalTopologyBuilder(builder);
-        final ProcessorTopology topology = internalTopologyBuilder.setApplicationId(applicationId).build(0);
+        assertThrows(RuntimeException.class, task::closeClean);
+        assertEquals(Task.State.RUNNING, task.state());
 
-        task = new StandbyTask(
-            taskId,
-            emptySet(),
-            topology,
-            consumer,
-            changelogReader,
-            config,
-            new MockStreamsMetrics(new Metrics()),
-            stateDirectory
-        );
+        final double expectedCloseTaskMetric = 0.0;
+        verifyCloseTaskMetric(expectedCloseTaskMetric, streamsMetrics, metricName);
 
-        task.initializeStateStores();
-
-        assertTrue(task.hasStateStores());
+        EasyMock.verify(stateManager);
+        EasyMock.reset(stateManager);
+        EasyMock.replay(stateManager);
     }
 
     @Test
-    public void shouldCheckpointStoreOffsetsOnCommit() throws IOException {
-        consumer.assign(Collections.singletonList(globalTopicPartition));
-        final Map<TopicPartition, OffsetAndMetadata> committedOffsets = new HashMap<>();
-        committedOffsets.put(new TopicPartition(globalTopicPartition.topic(), globalTopicPartition.partition()),
-                             new OffsetAndMetadata(100L));
-        consumer.commitSync(committedOffsets);
+    public void shouldThrowOnCloseCleanCheckpointError() {
+        stateManager.checkpoint(EasyMock.anyObject());
+        EasyMock.expectLastCall().andThrow(new RuntimeException("KABOOM!")).anyTimes();
+        EasyMock.replay(stateManager);
+        final MetricName metricName = setupCloseTaskMetric();
 
-        restoreStateConsumer.updatePartitions(
-            globalStoreName,
-            Collections.singletonList(new PartitionInfo(globalStoreName, 0, Node.noNode(), new Node[0], new Node[0]))
-        );
+        task = createStandbyTask();
+        task.initializeIfNeeded();
 
-        final TaskId taskId = new TaskId(0, 0);
-        final MockTime time = new MockTime();
-        final StreamsConfig config = createConfig(baseDir);
-        task = new StandbyTask(
-            taskId,
-            ktablePartitions,
-            ktableTopology,
-            consumer,
-            changelogReader,
-            config,
-            streamsMetrics,
-            stateDirectory
-        );
-        task.initializeStateStores();
+        assertThrows(RuntimeException.class, task::closeClean);
 
-        restoreStateConsumer.assign(new ArrayList<>(task.checkpointedOffsets().keySet()));
+        assertEquals(Task.State.RUNNING, task.state());
 
-        final byte[] serializedValue = Serdes.Integer().serializer().serialize("", 1);
-        task.update(
-            globalTopicPartition,
-            singletonList(new ConsumerRecord<>(globalTopicPartition.topic(),
-                                               globalTopicPartition.partition(),
-                                               50L,
-                                               serializedValue,
-                                               serializedValue))
-        );
+        final double expectedCloseTaskMetric = 0.0;
+        verifyCloseTaskMetric(expectedCloseTaskMetric, streamsMetrics, metricName);
 
-        time.sleep(config.getLong(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG));
-        task.commit();
-
-        final Map<TopicPartition, Long> checkpoint = new OffsetCheckpoint(
-            new File(stateDirectory.directoryForTask(taskId), StateManagerUtil.CHECKPOINT_FILE_NAME)
-        ).read();
-        assertThat(checkpoint, equalTo(Collections.singletonMap(globalTopicPartition, 51L)));
-
+        EasyMock.verify(stateManager);
+        EasyMock.reset(stateManager);
+        EasyMock.replay(stateManager);
     }
 
     @Test
-    public void shouldCloseStateMangerOnTaskCloseWhenCommitFailed() throws Exception {
-        consumer.assign(Collections.singletonList(globalTopicPartition));
-        final Map<TopicPartition, OffsetAndMetadata> committedOffsets = new HashMap<>();
-        committedOffsets.put(new TopicPartition(globalTopicPartition.topic(), globalTopicPartition.partition()),
-                             new OffsetAndMetadata(100L));
-        consumer.commitSync(committedOffsets);
+    public void shouldThrowIfClosingOnIllegalState() {
+        task = createStandbyTask();
 
-        restoreStateConsumer.updatePartitions(
-            globalStoreName,
-            Collections.singletonList(new PartitionInfo(globalStoreName, 0, Node.noNode(), new Node[0], new Node[0]))
-        );
+        task.closeClean();
 
-        final StreamsConfig config = createConfig(baseDir);
-        final AtomicBoolean closedStateManager = new AtomicBoolean(false);
-        task = new StandbyTask(
-            taskId,
-            ktablePartitions,
-            ktableTopology,
-            consumer,
-            changelogReader,
-            config,
-            streamsMetrics,
-            stateDirectory
-        ) {
-            @Override
-            public void commit() {
-                throw new RuntimeException("KABOOM!");
-            }
+        // close call are not idempotent since we are already in closed
+        assertThrows(IllegalStateException.class, task::closeClean);
+        assertThrows(IllegalStateException.class, task::closeDirty);
+    }
 
-            @Override
-            void closeStateManager(final boolean clean) throws ProcessorStateException {
-                closedStateManager.set(true);
-            }
-        };
-        task.initializeStateStores();
-        try {
-            task.close(true, false);
-            fail("should have thrown exception");
-        } catch (final Exception e) {
-            // expected
-            task = null;
-        }
-        assertTrue(closedStateManager.get());
+    private StandbyTask createStandbyTask() {
+        return new StandbyTask(taskId, Collections.singleton(partition), topology, config, streamsMetrics, stateManager, stateDirectory);
     }
 
     private MetricName setupCloseTaskMetric() {
@@ -797,33 +361,9 @@ public class StandbyTaskTest {
         return metricName;
     }
 
-    private void verifyCloseTaskMetric(final double expected,
-                                       final StreamsMetricsImpl streamsMetrics,
-                                       final MetricName metricName) {
+    private void verifyCloseTaskMetric(final double expected, final StreamsMetricsImpl streamsMetrics, final MetricName metricName) {
         final KafkaMetric metric = (KafkaMetric) streamsMetrics.metrics().get(metricName);
         final double totalCloses = metric.measurable().measure(metric.config(), System.currentTimeMillis());
         assertThat(totalCloses, equalTo(expected));
-    }
-
-    @Test
-    public void shouldRecordTaskClosedMetricOnClose() throws IOException {
-        final MetricName metricName = setupCloseTaskMetric();
-        final StandbyTask task = new StandbyTask(
-            taskId,
-            ktablePartitions,
-            ktableTopology,
-            consumer,
-            changelogReader,
-            createConfig(baseDir),
-            streamsMetrics,
-            stateDirectory
-        );
-
-        final boolean clean = true;
-        final boolean isZombie = false;
-        task.close(clean, isZombie);
-
-        final double expectedCloseTaskMetric = 1.0;
-        verifyCloseTaskMetric(expectedCloseTaskMetric, streamsMetrics, metricName);
     }
 }
