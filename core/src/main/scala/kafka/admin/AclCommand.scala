@@ -198,7 +198,7 @@ object AclCommand extends Logging {
         } else {
           defaultProps
         }
-      val authorizerProperties =
+      var authorizerProperties =
         if (opts.options.has(opts.zkTlsConfigFile)) {
           // load in TLS configs both with and without the "authorizer." prefix
           val validKeys = (KafkaConfig.ZkSslConfigToSystemPropertyMap.keys.toList ++ KafkaConfig.ZkSslConfigToSystemPropertyMap.keys.map("authorizer." + _).toList).asJava
@@ -206,6 +206,13 @@ object AclCommand extends Logging {
         }
         else
           authorizerPropertiesWithoutTls
+
+      val resourcePatternFilters: Set[ResourcePatternFilter]= getResourceFilter(opts, dieIfNoResourceFound = false)
+      resourcePatternFilters.foreach(r => {
+        if (r.patternType == PatternType.LITERAL) {
+          authorizerProperties += (r.resourceType.name -> r.name)
+        }
+      })
 
       val authZ = AuthorizerUtils.createAuthorizer(authorizerClassName)
       try {
