@@ -1929,7 +1929,6 @@ public class KafkaAdminClientTest {
     public void testDeleteConsumerGroupOffsetsRetryBackoff() throws Exception {
         MockTime time = new MockTime();
         int retryBackoff = 100;
-        final List<String> groupIds = singletonList("group-0");
 
         try (final AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(time,
             mockCluster(3, 0),
@@ -2185,6 +2184,83 @@ public class KafkaAdminClientTest {
 
             env.kafkaClient().prepareResponse(new IncrementalAlterConfigsResponse(responseData));
             env.adminClient().incrementalAlterConfigs(Collections.singletonMap(brokerResource, singletonList(alterConfigOp1))).all().get();
+        }
+    }
+
+    @Test
+    public void testRemoveMembersFromGroupNumRetries() throws Exception {
+        final Cluster cluster = mockCluster(3, 0);
+        final Time time = new MockTime();
+
+        try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(time, cluster,
+            AdminClientConfig.RETRIES_CONFIG, "0")) {
+
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+
+            env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
+
+            env.kafkaClient().prepareResponse(new LeaveGroupResponse(new LeaveGroupResponseData().setErrorCode(Errors.NOT_COORDINATOR.code())));
+
+            Collection<MemberToRemove> membersToRemove = Arrays.asList(new MemberToRemove("instance-1"), new MemberToRemove("instance-2"));
+
+            final RemoveMembersFromConsumerGroupResult result = env.adminClient().removeMembersFromConsumerGroup(
+                "groupId", new RemoveMembersFromConsumerGroupOptions(membersToRemove));
+
+            TestUtils.assertFutureError(result.all(), TimeoutException.class);
+        }
+    }
+
+    @Test
+    public void testRemoveMembersFromGroupRetryBackoff() throws Exception {
+        MockTime time = new MockTime();
+        int retryBackoff = 100;
+        final List<String> groupIds = singletonList("group-0");
+
+        try (final AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(time,
+            mockCluster(3, 0),
+            newStrMap(AdminClientConfig.RETRY_BACKOFF_MS_CONFIG, "" + retryBackoff))) {
+            MockClient mockClient = env.kafkaClient();
+
+            mockClient.setNodeApiVersions(NodeApiVersions.create());
+
+            AtomicLong firstAttemptTime = new AtomicLong(0);
+            AtomicLong secondAttemptTime = new AtomicLong(0);
+
+            final TopicPartition tp1 = new TopicPartition("foo", 0);
+
+            mockClient.prepareResponse(prepareFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
+
+            env.kafkaClient().prepareResponse(body -> {
+                firstAttemptTime.set(time.milliseconds());
+                return true;
+            }, new LeaveGroupResponse(new LeaveGroupResponseData().setErrorCode(Errors.NOT_COORDINATOR.code())));
+
+            mockClient.prepareResponse(prepareFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
+
+            MemberResponse responseOne = new MemberResponse()
+                .setGroupInstanceId("instance-1")
+                .setErrorCode(Errors.NONE.code());
+            env.kafkaClient().prepareResponse(body -> {
+                secondAttemptTime.set(time.milliseconds());
+                return true;
+            },new LeaveGroupResponse(new LeaveGroupResponseData()
+                .setErrorCode(Errors.NONE.code())
+                .setMembers(Collections.singletonList(responseOne))));
+
+            Collection<MemberToRemove> membersToRemove = singletonList(new MemberToRemove("instance-1"));
+
+            final KafkaFuture<Void> future = env.adminClient().removeMembersFromConsumerGroup(
+                "groupId", new RemoveMembersFromConsumerGroupOptions(membersToRemove)).all();
+
+
+            TestUtils.waitForCondition(() -> mockClient.numAwaitingResponses() == 1, "Failed awaiting RemoveMembersFromGroup first request failure");
+            TestUtils.waitForCondition(() -> ((KafkaAdminClient) env.adminClient()).numPendingCalls() == 1,"Failed to add retry RemoveMembersFromGroup call on first failure");
+            time.sleep(retryBackoff);
+
+            future.get();
+
+            long actualRetryBackoff = secondAttemptTime.get() - firstAttemptTime.get();
+            assertEquals("RemoveMembersFromGroup retry did not await expected backoff!", retryBackoff, actualRetryBackoff);
         }
     }
 
