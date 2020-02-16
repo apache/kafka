@@ -48,6 +48,7 @@ import org.apache.kafka.common.errors.GroupSubscribedToTopicException;
 import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.LeaderNotAvailableException;
+import org.apache.kafka.common.errors.MaxRetriesReachedException;
 import org.apache.kafka.common.errors.NotLeaderForPartitionException;
 import org.apache.kafka.common.errors.OffsetOutOfRangeException;
 import org.apache.kafka.common.errors.SaslAuthenticationException;
@@ -1282,7 +1283,7 @@ public class KafkaAdminClientTest {
             offsets.put(tp1, new OffsetAndMetadata(123L));
             final AlterConsumerGroupOffsetsResult result = env.adminClient().alterConsumerGroupOffsets(groupId, offsets);
 
-            TestUtils.assertFutureError(result.all(), TimeoutException.class);
+            TestUtils.assertFutureError(result.all(), MaxRetriesReachedException.class);
         }
     }
 
@@ -1358,7 +1359,7 @@ public class KafkaAdminClientTest {
 
             final DescribeConsumerGroupsResult result = env.adminClient().describeConsumerGroups(singletonList("group-0"));
 
-            TestUtils.assertFutureError(result.all(), TimeoutException.class);
+            TestUtils.assertFutureError(result.all(), MaxRetriesReachedException.class);
         }
     }
 
@@ -1646,7 +1647,7 @@ public class KafkaAdminClientTest {
 
             final ListConsumerGroupOffsetsResult result = env.adminClient().listConsumerGroupOffsets("group-0");
 
-            TestUtils.assertFutureError(result.partitionsToOffsetAndMetadata(), TimeoutException.class);
+            TestUtils.assertFutureError(result.partitionsToOffsetAndMetadata(), MaxRetriesReachedException.class);
         }
     }
 
@@ -1763,7 +1764,7 @@ public class KafkaAdminClientTest {
 
             final DeleteConsumerGroupsResult result = env.adminClient().deleteConsumerGroups(groupIds);
 
-            TestUtils.assertFutureError(result.all(), TimeoutException.class);
+            TestUtils.assertFutureError(result.all(), MaxRetriesReachedException.class);
         }
     }
 
@@ -1921,7 +1922,7 @@ public class KafkaAdminClientTest {
             final DeleteConsumerGroupOffsetsResult result = env.adminClient()
                 .deleteConsumerGroupOffsets("group-0", Stream.of(tp1).collect(Collectors.toSet()));
 
-            TestUtils.assertFutureError(result.all(), TimeoutException.class);
+            TestUtils.assertFutureError(result.all(), MaxRetriesReachedException.class);
         }
     }
 
@@ -2206,7 +2207,7 @@ public class KafkaAdminClientTest {
             final RemoveMembersFromConsumerGroupResult result = env.adminClient().removeMembersFromConsumerGroup(
                 "groupId", new RemoveMembersFromConsumerGroupOptions(membersToRemove));
 
-            TestUtils.assertFutureError(result.all(), TimeoutException.class);
+            TestUtils.assertFutureError(result.all(), MaxRetriesReachedException.class);
         }
     }
 
