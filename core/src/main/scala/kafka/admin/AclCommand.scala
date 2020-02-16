@@ -187,20 +187,13 @@ object AclCommand extends Logging {
 
     private def withAuthorizer()(f: Authorizer => Unit): Unit = {
       val defaultProps = Map(KafkaConfig.ZkEnableSecureAclsProp -> JaasUtils.isZkSecurityEnabled)
-      var authorizerProperties =
+      val authorizerProperties =
         if (opts.options.has(opts.authorizerPropertiesOpt)) {
           val authorizerProperties = opts.options.valuesOf(opts.authorizerPropertiesOpt).asScala
           defaultProps ++ CommandLineUtils.parseKeyValueArgs(authorizerProperties, acceptMissingValue = false).asScala
         } else {
           defaultProps
         }
-
-      val resourcePatternFilters: Set[ResourcePatternFilter]= getResourceFilter(opts, dieIfNoResourceFound = false)
-      resourcePatternFilters.foreach(r => {
-        if (r.patternType == PatternType.LITERAL) {
-          authorizerProperties += (r.resourceType.name -> r.name)
-        }
-      })
 
       val authZ = AuthorizerUtils.createAuthorizer(authorizerClassName)
       try {
