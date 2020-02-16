@@ -1,13 +1,13 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- * <p>
- * http://www.apache.org/licenses/LICENSE-2.0
- * <p>
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -47,7 +47,8 @@ import static org.apache.kafka.common.log.remote.storage.RemoteLogSegmentContext
 public final class LocalRemoteStorageManager implements RemoteStorageManager  {
     public static final String STORAGE_ID_PROP = "remote.log.storage.local.id";
     public static final String DELETE_ON_CLOSE_PROP = "remote.log.storage.local.delete.on.close";
-    public static final String TRANSFERER_PROP = "remote.log.storage.local.transferer";
+    public static final String TRANSFERER_CLASS_PROP = "remote.log.storage.local.transferer";
+    public static final String ENABLE_DELETE_API_PROP = "remote.log.storage.local.delete.enable";
 
     private static final String ROOT_STORAGES_DIR_NAME = "remote-storage";
 
@@ -66,6 +67,13 @@ public final class LocalRemoteStorageManager implements RemoteStorageManager  {
     private volatile boolean deleteOnClose = true;
 
     /**
+     * Whether the deleteLogSegment() implemented by this storage should actually delete data or behave
+     * as a no-operation. This allows to simulate non-strongly consistent storage systems which do not
+     * guarantee visibility of a successful delete for subsequent read or list operations.
+     */
+    private volatile boolean deleteEnabled = true;
+
+    /**
      * The implementation of the transfer of the data of the canonical segment and index files to
      * this storage.
      */
@@ -75,25 +83,34 @@ public final class LocalRemoteStorageManager implements RemoteStorageManager  {
     public void configure(Map<String, ?> configs) {
         if (storageDirectory != null) {
             throw new InvalidConfigurationException(format("This instance of local remote storage" +
-                    "was already configured. The existing storage directory is %s. Ensure the method " +
-                    "configure(configs: util.Map[String, _]) is only called once.", storageDirectory.getAbsolutePath()));
-
+                    "is already configured. The existing storage directory is %s. Ensure the method " +
+                    "configure() is only called once.", storageDirectory.getAbsolutePath()));
         }
 
         final String storageId = (String) configs.get(STORAGE_ID_PROP);
-        final Boolean shouldDeleteOnClose = (Boolean) configs.get(DELETE_ON_CLOSE_PROP);
-        final Transferer transfererOverride = (Transferer) configs.get(TRANSFERER_PROP);
+        final String shouldDeleteOnClose = (String) configs.get(DELETE_ON_CLOSE_PROP);
+        final String transfererClass = (String) configs.get(TRANSFERER_CLASS_PROP);
+        final String isDeleteEnabled = (String) configs.get(ENABLE_DELETE_API_PROP);
 
         if (storageId == null) {
             throw new InvalidConfigurationException("No storage id provided: " + STORAGE_ID_PROP);
         }
 
         if (shouldDeleteOnClose != null) {
-            deleteOnClose = shouldDeleteOnClose;
+            deleteOnClose = Boolean.valueOf(shouldDeleteOnClose);
         }
 
-        if (transfererOverride != null) {
-            transferer = transfererOverride;
+        if (isDeleteEnabled != null) {
+            deleteEnabled = Boolean.valueOf(isDeleteEnabled);
+        }
+
+        if (transfererClass != null) {
+            try {
+                transferer = (Transferer) getClass().getClassLoader().loadClass(transfererClass).newInstance();
+
+            } catch (InstantiationException | IllegalAccessException | ClassNotFoundException | ClassCastException e) {
+                throw new RuntimeException(format("Cannot create transferer from class '%s'", transfererClass), e);
+            }
         }
 
         Directory directory = openDirectory(ROOT_STORAGES_DIR_NAME + "/" + storageId, new File("."));
@@ -115,6 +132,13 @@ public final class LocalRemoteStorageManager implements RemoteStorageManager  {
         return wrap(() -> {
             final RemoteLogSegmentFiles remote = new RemoteLogSegmentFiles(id, false);
             try {
+                final TopicPartition topicPartition = id.topicPartition();
+
+                LOGGER.info(format("Transferring log segment for topic=%s partition=%d from offset=%s",
+                        topicPartition.topic(),
+                        topicPartition.partition(),
+                        data.logSegment().getName().split("\\.")[0]));
+
                 remote.copyAll(data);
 
             } catch (final Exception e) {
@@ -141,7 +165,6 @@ public final class LocalRemoteStorageManager implements RemoteStorageManager  {
             checkArgument(endPosition >= startPosition,
                     "End position cannot be less than startPosition", startPosition, endPosition);
         }
-
         return wrap(() -> {
             final RemoteLogSegmentFiles remote = new RemoteLogSegmentFiles(metadata.remoteLogSegmentId(), true);
             final InputStream inputStream = newInputStream(remote.logSegment.toPath(), READ);
@@ -173,8 +196,11 @@ public final class LocalRemoteStorageManager implements RemoteStorageManager  {
     @Override
     public boolean deleteLogSegment(final RemoteLogSegmentMetadata metadata) throws RemoteStorageException {
         return wrap(() -> {
-            final RemoteLogSegmentFiles remote = new RemoteLogSegmentFiles(metadata.remoteLogSegmentId(), true);
-            return remote.deleteAll();
+            if (deleteEnabled) {
+                final RemoteLogSegmentFiles remote = new RemoteLogSegmentFiles(metadata.remoteLogSegmentId(), true);
+                return remote.deleteAll();
+            }
+            return true;
         });
     }
 

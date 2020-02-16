@@ -1,13 +1,13 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- * <p>
- * http://www.apache.org/licenses/LICENSE-2.0
- * <p>
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -29,6 +29,7 @@ import java.time.format.*;
 import java.util.*;
 
 import static java.lang.String.*;
+
 import static org.apache.kafka.common.log.storage.LocalRemoteStorageManager.*;
 import static org.junit.Assert.*;
 
@@ -42,16 +43,21 @@ public final class LocalRemoteStorageManagerTest {
     private LocalRemoteStorageManager remoteStorage;
     private LocalRemoteStorageVerifier remoteStorageVerifier;
 
-    @Before
-    public void before() {
+    private void init(Map<String, Object> extraConfig) {
         remoteStorage = new LocalRemoteStorageManager();
         remoteStorageVerifier = new LocalRemoteStorageVerifier(remoteStorage, topicPartition);
 
         Map<String, Object> config = new HashMap<>();
         config.put(STORAGE_ID_PROP, generateStorageId());
-        config.put(DELETE_ON_CLOSE_PROP, true);
+        config.put(DELETE_ON_CLOSE_PROP, "true");
+        config.putAll(extraConfig);
 
         remoteStorage.configure(config);
+    }
+
+    @Before
+    public void before() {
+        init(Collections.emptyMap());
     }
 
     @After
@@ -123,6 +129,20 @@ public final class LocalRemoteStorageManagerTest {
 
         remoteStorage.deleteLogSegment(newRemoteLogSegmentMetadata(id));
         remoteStorageVerifier.verifyLogSegmentFilesAbsent(id, segment);
+    }
+
+    @Test
+    public void segmentsAreNotDeletedIfDeleteApiIsDisabled() throws RemoteStorageException {
+        init(Collections.singletonMap(ENABLE_DELETE_API_PROP, "false"));
+
+        final RemoteLogSegmentId id = newRemoteLogSegmentId();
+        final LogSegmentData segment = localLogSegments.nextSegment();
+
+        remoteStorage.copyLogSegment(id, segment);
+        remoteStorageVerifier.verifyContainsLogSegmentFiles(id, segment);
+
+        remoteStorage.deleteLogSegment(newRemoteLogSegmentMetadata(id));
+        remoteStorageVerifier.verifyContainsLogSegmentFiles(id, segment);
     }
 
     @Test
