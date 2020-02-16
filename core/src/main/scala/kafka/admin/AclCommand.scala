@@ -195,8 +195,12 @@ object AclCommand extends Logging {
           defaultProps
         }
 
-      val loadAclCache = opts.options.valueOf(opts.loadAclCacheOpt)
-      authorizerProperties += (AclAuthorizer.LoadAclCacheSwitchProp->loadAclCache)
+      val resourcePatternFilters: Set[ResourcePatternFilter]= getResourceFilter(opts, dieIfNoResourceFound = false)
+      resourcePatternFilters.foreach(r => {
+        if (r.patternType == PatternType.LITERAL) {
+          authorizerProperties += (r.resourceType.name -> r.name)
+        }
+      })
 
       val authZ = AuthorizerUtils.createAuthorizer(authorizerClassName)
       try {
@@ -482,12 +486,6 @@ object AclCommand extends Logging {
       .withOptionalArg()
       .describedAs("command-config")
       .ofType(classOf[String])
-
-    val loadAclCacheOpt = parser.accepts("load-acl-cache", "If you just run AclCommand,turn off this switch to avoid loading all ACL cache.")
-      .withOptionalArg
-      .describedAs("load-acl-cache")
-      .ofType(classOf[String])
-      .defaultsTo("true")
 
     val authorizerOpt = parser.accepts("authorizer", "Fully qualified class name of the authorizer, defaults to kafka.security.auth.SimpleAclAuthorizer.")
       .withRequiredArg

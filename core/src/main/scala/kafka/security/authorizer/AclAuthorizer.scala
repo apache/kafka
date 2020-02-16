@@ -22,6 +22,8 @@ import java.util.concurrent.locks.ReentrantReadWriteLock
 
 import com.typesafe.scalalogging.Logger
 import kafka.api.KAFKA_2_0_IV1
+import kafka.security.auth.Resource
+import org.apache.kafka.common.resource.ResourceType
 import kafka.security.authorizer.AclAuthorizer.VersionedAcls
 import kafka.security.authorizer.AclEntry.ResourceSeparator
 import kafka.server.KafkaConfig
@@ -36,7 +38,7 @@ import org.apache.kafka.common.errors.{ApiException, InvalidRequestException, Un
 import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.resource._
 import org.apache.kafka.common.security.auth.KafkaPrincipal
-import org.apache.kafka.common.utils.{Time, SecurityUtils}
+import org.apache.kafka.common.utils.{SecurityUtils, Time}
 import org.apache.kafka.server.authorizer.AclDeleteResult.AclBindingDeleteResult
 import org.apache.kafka.server.authorizer._
 
@@ -59,7 +61,6 @@ object AclAuthorizer {
   val AllowEveryoneIfNoAclIsFoundProp = "allow.everyone.if.no.acl.found"
   //If you just run AclCommand,use this switch to avoid loading all ACL cache
   val LoadAclCacheSwitchProp = "load.cache.switch"
-  val DefaultLoadAclCache = "true"
 
   case class VersionedAcls(acls: Set[AclEntry], zkVersion: Int) {
     def exists: Boolean = zkVersion != ZkVersion.UnknownVersion
@@ -134,13 +135,20 @@ class AclAuthorizer extends Authorizer with Logging {
 
     extendedAclSupport = kafkaConfig.interBrokerProtocolVersion >= KAFKA_2_0_IV1
 
-    /** ********* If you just run AclCommand,use this switch to avoid loading all ACL cache ********* */
-    val loadCacheSwitch =configs.getOrElse(AclAuthorizer.LoadAclCacheSwitchProp,AclAuthorizer.DefaultLoadAclCache)
-
     // Start change listeners first and then populate the cache so that there is no timing window
     // between loading cache and processing change notifications.
     startZkChangeListeners()
-    if (AclAuthorizer.DefaultLoadAclCache.equals(loadCacheSwitch)) loadCache()
+
+    var resourcesLoadMap = Map.empty[ResourceType,String]
+    ResourceType.values.foreach(rt=>{
+      configs.get(rt.name) match {
+        case Some(resourceName) =>{
+          resourcesLoadMap += (rt -> resourceName.toString)
+        }
+        case None => resourcesLoadMap
+      }
+    })
+    loadCache(resourcesLoadMap)
   }
 
   override def start(serverInfo: AuthorizerServerInfo): util.Map[Endpoint, _ <: CompletionStage[Void]] = {
@@ -352,7 +360,7 @@ class AclAuthorizer extends Authorizer with Logging {
     }
   }
 
-  private def loadCache(): Unit = {
+  private def loadCache(resourcesLoadMap: Map[ResourceType,String]): Unit = {
     inWriteLock(lock) {
       ZkAclStore.stores.foreach(store => {
         val resourceTypes = zkClient.getResourceTypes(store.patternType)
@@ -360,11 +368,18 @@ class AclAuthorizer extends Authorizer with Logging {
           val resourceType = Try(SecurityUtils.resourceType(rType))
           resourceType match {
             case Success(resourceTypeObj) =>
-              val resourceNames = zkClient.getResourceNames(store.patternType, resourceTypeObj)
-              for (resourceName <- resourceNames) {
-                val resource = new ResourcePattern(resourceTypeObj, resourceName, store.patternType)
+              val resourceLoad = resourcesLoadMap.getOrElse(resourceTypeObj,ResourcePattern.WILDCARD_RESOURCE)
+              if (!ResourcePattern.WILDCARD_RESOURCE.eq(resourceLoad)) {
+                val resource = new ResourcePattern(resourceTypeObj, resourceLoad, store.patternType)
                 val versionedAcls = getAclsFromZk(resource)
                 updateCache(resource, versionedAcls)
+              }else {
+                val resourceNames = zkClient.getResourceNames(store.patternType, resourceTypeObj)
+                for (resourceName <- resourceNames) {
+                  val resource = new ResourcePattern(resourceTypeObj, resourceName, store.patternType)
+                  val versionedAcls = getAclsFromZk(resource)
+                  updateCache(resource, versionedAcls)
+                }
               }
             case Failure(_) => warn(s"Ignoring unknown ResourceType: $rType")
           }

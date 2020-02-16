@@ -43,11 +43,8 @@ class AclCommandLoadCacheTest extends ZooKeeperTestHarness {
   private val aclAuthorizer = new AclAuthorizer
   private var config: KafkaConfig = _
 
-  private val testUsers1 = "User:test1"
   private val testUsers2 = "User:test2"
-  private val topic1 = "test.topic.00001"
   private val topic2 = "test.topic.00002"
-  private val notLoadCache = "false"
 
   @Before
   override def setUp(): Unit = {
@@ -66,20 +63,6 @@ class AclCommandLoadCacheTest extends ZooKeeperTestHarness {
 
   /** every pull request run all test case,it may run some diff erro,we can improve this,I think */
   @Test
-  def notLoadCacheTest(): Unit = {
-    val principal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "test1")
-    val requestContext = newRequestContext(principal, InetAddress.getByName("192.168.0.1"))
-
-    AclCommand.main(Array[String]("--authorizer-properties", "zookeeper.connect=" + zkConnect, "--add", "--allow-principal", testUsers1, "--operation", "read", "--topic", topic1, "--load-acl-cache", notLoadCache))
-    Thread.sleep(1500)
-    assertTrue(authorize(aclAuthorizer, requestContext, READ, new ResourcePattern(TOPIC, topic1, LITERAL)))
-
-    AclCommand.main(Array[String]("--authorizer-properties", "zookeeper.connect=" + zkConnect, "--force", "--remove", "--allow-principal", testUsers1, "--operation", "read", "--topic", topic1, "--resource-pattern-type", PatternType.LITERAL.toString, "--load-acl-cache", notLoadCache))
-    Thread.sleep(10000)
-    assertFalse(authorize(aclAuthorizer, requestContext, READ, new ResourcePattern(TOPIC, topic1, LITERAL)))
-  }
-
-  @Test
   def loadCacheTest(): Unit = {
     val principal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "test2")
     val requestContext = newRequestContext(principal, InetAddress.getByName("192.168.0.2"))
@@ -87,6 +70,9 @@ class AclCommandLoadCacheTest extends ZooKeeperTestHarness {
     AclCommand.main(Array[String]("--authorizer-properties", "zookeeper.connect=" + zkConnect, "--add", "--allow-principal", testUsers2, "--operation", "read", "--topic", topic2, "--resource-pattern-type", PatternType.LITERAL.toString))
     Thread.sleep(1500)
     assertTrue(authorize(aclAuthorizer, requestContext, READ, new ResourcePattern(TOPIC, topic2, LITERAL)))
+
+    println("list the topic info...")
+    AclCommand.main(Array[String]("--authorizer-properties", "zookeeper.connect=" + zkConnect, "--list", "--operation", "read", "--topic", topic2, "--resource-pattern-type", PatternType.LITERAL.toString))
 
     AclCommand.main(Array[String]("--authorizer-properties", "zookeeper.connect=" + zkConnect, "--force", "--remove", "--allow-principal", testUsers2, "--operation", "read", "--topic", topic2, "--resource-pattern-type", PatternType.LITERAL.toString))
     Thread.sleep(10000)
