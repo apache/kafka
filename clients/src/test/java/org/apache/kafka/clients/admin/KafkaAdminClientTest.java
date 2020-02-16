@@ -1763,8 +1763,6 @@ public class KafkaAdminClientTest {
 
             final DeleteConsumerGroupsResult result = env.adminClient().deleteConsumerGroups(groupIds);
 
-            result.deletedGroups().get("group-0");
-
             TestUtils.assertFutureError(result.all(), TimeoutException.class);
         }
     }
@@ -1902,6 +1900,73 @@ public class KafkaAdminClientTest {
 
             final KafkaFuture<Void> errorResults = errorResult1.deletedGroups().get("group-0");
             assertNull(errorResults.get());
+        }
+    }
+
+    @Test
+    public void testDeleteConsumerGroupOffsetsNumRetries() throws Exception {
+        final Cluster cluster = mockCluster(3, 0);
+        final Time time = new MockTime();
+
+        try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(time, cluster,
+            AdminClientConfig.RETRIES_CONFIG, "0")) {
+            final TopicPartition tp1 = new TopicPartition("foo", 0);
+
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+
+            env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
+
+            env.kafkaClient().prepareResponse(prepareOffsetDeleteResponse("foo", 0,Errors.NOT_COORDINATOR));
+
+            final DeleteConsumerGroupOffsetsResult result = env.adminClient()
+                .deleteConsumerGroupOffsets("group-0", Stream.of(tp1).collect(Collectors.toSet()));
+
+            TestUtils.assertFutureError(result.all(), TimeoutException.class);
+        }
+    }
+
+    @Test
+    public void testDeleteConsumerGroupOffsetsRetryBackoff() throws Exception {
+        MockTime time = new MockTime();
+        int retryBackoff = 100;
+        final List<String> groupIds = singletonList("group-0");
+
+        try (final AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(time,
+            mockCluster(3, 0),
+            newStrMap(AdminClientConfig.RETRY_BACKOFF_MS_CONFIG, "" + retryBackoff))) {
+            MockClient mockClient = env.kafkaClient();
+
+            mockClient.setNodeApiVersions(NodeApiVersions.create());
+
+            AtomicLong firstAttemptTime = new AtomicLong(0);
+            AtomicLong secondAttemptTime = new AtomicLong(0);
+
+            final TopicPartition tp1 = new TopicPartition("foo", 0);
+
+            mockClient.prepareResponse(prepareFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
+
+            mockClient.prepareResponse(body -> {
+                firstAttemptTime.set(time.milliseconds());
+                return true;
+            }, prepareOffsetDeleteResponse("foo", 0,Errors.NOT_COORDINATOR));
+
+            mockClient.prepareResponse(prepareFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
+
+            mockClient.prepareResponse(body -> {
+                secondAttemptTime.set(time.milliseconds());
+                return true;
+            }, prepareOffsetDeleteResponse("foo", 0,Errors.NONE));
+
+            final KafkaFuture<Void> future = env.adminClient().deleteConsumerGroupOffsets("group-0", Stream.of(tp1).collect(Collectors.toSet())).all();
+
+            TestUtils.waitForCondition(() -> mockClient.numAwaitingResponses() == 1, "Failed awaiting DeleteConsumerGroupOffsets first request failure");
+            TestUtils.waitForCondition(() -> ((KafkaAdminClient) env.adminClient()).numPendingCalls() == 1,"Failed to add retry DeleteConsumerGroupOffsets call on first failure");
+            time.sleep(retryBackoff);
+
+            future.get();
+
+            long actualRetryBackoff = secondAttemptTime.get() - firstAttemptTime.get();
+            assertEquals("DeleteConsumerGroupOffsets retry did not await expected backoff!", retryBackoff, actualRetryBackoff);
         }
     }
 

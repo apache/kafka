@@ -3246,8 +3246,9 @@ public class KafkaAdminClient extends AdminClient {
 
     private Call getDeleteConsumerGroupOffsetsCall(
             ConsumerGroupOperationContext<Map<TopicPartition, Errors>, DeleteConsumerGroupOffsetsOptions> context,
-            Set<TopicPartition> partitions, Optional<Integer> numRetries, Optional<Long> nextRetryAllowedMs) {
-        return new Call("deleteConsumerGroupOffsets", context.deadline(), new ConstantNodeIdProvider(context.node().get().id())) {
+            Set<TopicPartition> partitions, Optional<Integer> numTries, Optional<Long> nextRetryAllowedMs) {
+        return new Call("deleteConsumerGroupOffsets", context.deadline(), new ConstantNodeIdProvider(context.node().get().id()),
+            numTries, nextRetryAllowedMs) {
 
             @Override
             OffsetDeleteRequest.Builder createRequest(int timeoutMs) {
@@ -3617,10 +3618,10 @@ public class KafkaAdminClient extends AdminClient {
     }
 
     private Call getRemoveMembersFromGroupCall(ConsumerGroupOperationContext<Map<MemberIdentity, Errors>, RemoveMembersFromConsumerGroupOptions> context,
-        Optional<Integer> numRetries, Optional<Long> nextAllowedTryMs) {
+        Optional<Integer> numTries, Optional<Long> nextAllowedTryMs) {
         return new Call("leaveGroup",
                         context.deadline(),
-                        new ConstantNodeIdProvider(context.node().get().id()), numRetries, nextAllowedTryMs) {
+                        new ConstantNodeIdProvider(context.node().get().id()), numTries, nextAllowedTryMs) {
             @Override
             LeaveGroupRequest.Builder createRequest(int timeoutMs) {
                 return new LeaveGroupRequest.Builder(context.groupId(),
@@ -3686,10 +3687,10 @@ public class KafkaAdminClient extends AdminClient {
     private Call getAlterConsumerGroupOffsetsCall(ConsumerGroupOperationContext<Map<TopicPartition, Errors>,
                                                   AlterConsumerGroupOffsetsOptions> context,
                                                   Map<TopicPartition, OffsetAndMetadata> offsets,
-                                                  Optional<Integer> numRetries, Optional<Long> nextAllowedRetryMs) {
+                                                  Optional<Integer> numTries, Optional<Long> nextAllowedRetryMs) {
 
         return new Call("commitOffsets", context.deadline(), new ConstantNodeIdProvider(context.node().get().id()),
-                        numRetries, nextAllowedRetryMs) {
+                        numTries, nextAllowedRetryMs) {
 
             @Override
             OffsetCommitRequest.Builder createRequest(int timeoutMs) {
@@ -3797,7 +3798,7 @@ public class KafkaAdminClient extends AdminClient {
     private List<Call> getListOffsetsCalls(MetadataOperationContext<ListOffsetsResultInfo, ListOffsetsOptions> context,
                                            Map<TopicPartition, OffsetSpec> topicPartitionOffsets,
                                            Map<TopicPartition, KafkaFutureImpl<ListOffsetsResultInfo>> futures,
-                                           Optional<Integer> numRetries, Optional<Long> nextAllowedRetryMs) {
+                                           Optional<Integer> numTries, Optional<Long> nextAllowedRetryMs) {
 
         MetadataResponse mr = context.response().orElseThrow(() -> new IllegalStateException("No Metadata response"));
         List<Call> calls = new ArrayList<>();
@@ -3833,7 +3834,7 @@ public class KafkaAdminClient extends AdminClient {
             final Map<TopicPartition, ListOffsetRequest.PartitionData> partitionsToQuery = entry.getValue();
 
             calls.add(new Call("listOffsets on broker " + brokerId, context.deadline(), new ConstantNodeIdProvider(brokerId),
-                numRetries, nextAllowedRetryMs) {
+                numTries, nextAllowedRetryMs) {
 
                 @Override
                 ListOffsetRequest.Builder createRequest(int timeoutMs) {
