@@ -266,8 +266,8 @@ public class TaskManager {
         for (final Task task : tasks.values()) {
             if (remainingPartitions.containsAll(task.inputPartitions())) {
                 revokedTasks.add(task.id());
-                remainingPartitions.removeAll(task.inputPartitions());
             }
+            remainingPartitions.removeAll(task.inputPartitions());
         }
 
         if (!remainingPartitions.isEmpty()) {

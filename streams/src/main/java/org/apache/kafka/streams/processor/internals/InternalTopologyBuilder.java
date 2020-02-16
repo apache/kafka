@@ -1873,30 +1873,30 @@ public class InternalTopologyBuilder {
             for (final TopicPartition topicPartition : partitions) {
                 assignedTopics.add(topicPartition.topic());
             }
-            updateSubscribedTopics(assignedTopics, logPrefix);
+
+            final Collection<String> existingTopics = subscriptionUpdates();
+
+            if  (!existingTopics.equals(assignedTopics)) {
+                assignedTopics.addAll(existingTopics);
+                updateSubscribedTopics(assignedTopics, logPrefix);
+            }
         }
     }
 
     synchronized void addSubscribedTopicsFromMetadata(final Set<String> topics, final String logPrefix) {
-        if (usesPatternSubscription()) {
+        if (usesPatternSubscription() && !subscriptionUpdates().equals(topics)) {
             updateSubscribedTopics(topics, logPrefix);
         }
     }
 
     private void updateSubscribedTopics(final Set<String> topics, final String logPrefix) {
-        final Collection<String> existingTopics = subscriptionUpdates();
+        subscriptionUpdates.clear();
+        subscriptionUpdates.addAll(topics);
 
-        if  (!existingTopics.equals(topics)) {
-            topics.addAll(existingTopics);
+        log.debug("{}found {} topics possibly matching subscription", logPrefix, topics.size());
 
-            subscriptionUpdates.clear();
-            subscriptionUpdates.addAll(topics);
-
-            log.debug("{}found {} topics possibly matching subscription", logPrefix, topics.size());
-
-            setRegexMatchedTopicsToSourceNodes();
-            setRegexMatchedTopicToStateStore();
-        }
+        setRegexMatchedTopicsToSourceNodes();
+        setRegexMatchedTopicToStateStore();
     }
 
     // following functions are for test only
