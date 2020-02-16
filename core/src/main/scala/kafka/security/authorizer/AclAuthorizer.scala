@@ -22,8 +22,6 @@ import java.util.concurrent.locks.ReentrantReadWriteLock
 
 import com.typesafe.scalalogging.Logger
 import kafka.api.KAFKA_2_0_IV1
-import kafka.security.auth.Resource
-import org.apache.kafka.common.resource.ResourceType
 import kafka.security.authorizer.AclAuthorizer.VersionedAcls
 import kafka.security.authorizer.AclEntry.ResourceSeparator
 import kafka.server.{KafkaConfig, KafkaServer}
@@ -38,7 +36,7 @@ import org.apache.kafka.common.errors.{ApiException, InvalidRequestException, Un
 import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.resource._
 import org.apache.kafka.common.security.auth.KafkaPrincipal
-import org.apache.kafka.common.utils.{SecurityUtils, Time}
+import org.apache.kafka.common.utils.{Time, SecurityUtils}
 import org.apache.kafka.server.authorizer.AclDeleteResult.AclBindingDeleteResult
 import org.apache.kafka.server.authorizer._
 import org.apache.zookeeper.client.ZKClientConfig
@@ -61,8 +59,6 @@ object AclAuthorizer {
   val SuperUsersProp = "super.users"
   // If set to true when no acls are found for a resource, authorizer allows access to everyone. Defaults to false.
   val AllowEveryoneIfNoAclIsFoundProp = "allow.everyone.if.no.acl.found"
-  //If you just run AclCommand,use this switch to avoid loading all ACL cache
-  val LoadAclCacheSwitchProp = "load.cache.switch"
 
   case class VersionedAcls(acls: Set[AclEntry], zkVersion: Int) {
     def exists: Boolean = zkVersion != ZkVersion.UnknownVersion
