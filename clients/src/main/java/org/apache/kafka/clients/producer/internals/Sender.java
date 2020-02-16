@@ -31,7 +31,6 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.ClusterAuthorizationException;
 import org.apache.kafka.common.errors.InvalidMetadataException;
-import org.apache.kafka.common.errors.OutOfOrderSequenceException;
 import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
@@ -295,13 +294,7 @@ public class Sender implements Runnable {
     void runOnce() {
         if (transactionManager != null) {
             try {
-                if (transactionManager.isTransactional()
-                        && transactionManager.hasUnresolvedSequences()
-                        && !transactionManager.hasFatalError()) {
-                    transactionManager.transitionToFatalError(
-                            new KafkaException("The client hasn't received acknowledgment for " +
-                                    "some previously sent messages and can no longer retry them. It isn't safe to continue."));
-                }
+                transactionManager.maybeResolveSequences();
 
                 // do not continue sending if the transaction manager is in a failed state
                 if (transactionManager.hasFatalError()) {
@@ -314,14 +307,14 @@ public class Sender implements Runnable {
 
                 // Check whether we need a new producerId. If so, we will enqueue an InitProducerId
                 // request which will be sent below
-                transactionManager.resetIdempotentProducerIdIfNeeded();
+                transactionManager.bumpIdempotentEpochAndResetIdIfNeeded();
 
                 if (maybeSendAndPollTransactionalRequest()) {
                     return;
                 }
             } catch (AuthenticationException e) {
                 // This is already logged as error, but propagated here to perform any clean ups.
-                log.trace("Authentication exception while processing transactional request: {}", e);
+                log.trace("Authentication exception while processing transactional request", e);
                 transactionManager.authenticationFailed(e);
             }
         }
@@ -387,7 +380,7 @@ public class Sender implements Runnable {
             failBatch(expiredBatch, -1, NO_TIMESTAMP, new TimeoutException(errorMessage), false);
             if (transactionManager != null && expiredBatch.inRetry()) {
                 // This ensures that no new batches are drained until the current in flight batches are fully resolved.
-                transactionManager.markSequenceUnresolved(expiredBatch.topicPartition);
+                transactionManager.markSequenceUnresolved(expiredBatch);
             }
         }
         sensors.updateProduceRequestMetrics(batches);
@@ -459,7 +452,7 @@ public class Sender implements Runnable {
             long currentTimeMs = time.milliseconds();
             ClientRequest clientRequest = client.newClientRequest(
                 targetNode.idString(), requestBuilder, currentTimeMs, true, requestTimeoutMs, nextRequestHandler);
-            log.debug("Sending transactional request {} to node {}", requestBuilder, targetNode);
+            log.debug("Sending transactional request {} to node {} with correlation ID {}", requestBuilder, targetNode, clientRequest.correlationId());
             client.send(clientRequest, currentTimeMs);
             transactionManager.setInFlightCorrelationId(clientRequest.correlationId());
             client.poll(retryBackoffMs, time.milliseconds());
@@ -521,6 +514,12 @@ public class Sender implements Runnable {
                 client.leastLoadedNode(time.milliseconds());
 
         if (node != null && NetworkClientUtils.awaitReady(client, node, time, requestTimeoutMs)) {
+            if (coordinatorType == FindCoordinatorRequest.CoordinatorType.TRANSACTION) {
+                // Indicate to the transaction manager that the coordinator is ready, allowing it to check ApiVersions
+                // This allows us to bump transactional epochs even if the coordinator is temporarily unavailable at
+                // the time when the abortable error is handled
+                transactionManager.handleCoordinatorReady();
+            }
             return node;
         }
         return null;
@@ -599,19 +598,7 @@ public class Sender implements Runnable {
                     batch.topicPartition,
                     this.retries - batch.attempts() - 1,
                     error);
-                if (transactionManager == null) {
-                    reenqueueBatch(batch, now);
-                } else if (transactionManager.hasProducerIdAndEpoch(batch.producerId(), batch.producerEpoch())) {
-                    // If idempotence is enabled only retry the request if the current producer id is the same as
-                    // the producer id of the batch.
-                    log.debug("Retrying batch to topic-partition {}. ProducerId: {}; Sequence number : {}",
-                            batch.topicPartition, batch.producerId(), batch.baseSequence());
-                    reenqueueBatch(batch, now);
-                } else {
-                    failBatch(batch, response, new OutOfOrderSequenceException("Attempted to retry sending a " +
-                            "batch but the producer id changed from " + batch.producerId() + " to " +
-                            transactionManager.producerIdAndEpoch().producerId + " in the mean time. This batch will be dropped."), false);
-                }
+                reenqueueBatch(batch, now);
             } else if (error == Errors.DUPLICATE_SEQUENCE_NUMBER) {
                 // If we have received a duplicate sequence error, it means that the sequence number has advanced beyond
                 // the sequence of the current batch, and we haven't retained batch metadata on the broker to return
@@ -700,8 +687,9 @@ public class Sender implements Runnable {
         return !batch.hasReachedDeliveryTimeout(accumulator.getDeliveryTimeoutMs(), now) &&
             batch.attempts() < this.retries &&
             !batch.isDone() &&
-            ((response.error.exception() instanceof RetriableException) ||
-                (transactionManager != null && transactionManager.canRetry(response, batch)));
+            (transactionManager == null ?
+                    response.error.exception() instanceof RetriableException :
+                    transactionManager.canRetry(response, batch));
     }
 
     /**

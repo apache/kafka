@@ -705,8 +705,9 @@ public class RecordAccumulatorTest {
         String metricGrpName = "producer-metrics";
 
         apiVersions.update("foobar", NodeApiVersions.create(ApiKeys.PRODUCE.id, (short) 0, (short) 2));
+        TransactionManager transactionManager = new TransactionManager(new LogContext(), null, 0, 100L, new ApiVersions());
         RecordAccumulator accum = new RecordAccumulator(logContext, batchSize + DefaultRecordBatch.RECORD_BATCH_OVERHEAD,
-            CompressionType.NONE, lingerMs, retryBackoffMs, deliveryTimeoutMs, metrics, metricGrpName, time, apiVersions, new TransactionManager(),
+            CompressionType.NONE, lingerMs, retryBackoffMs, deliveryTimeoutMs, metrics, metricGrpName, time, apiVersions, transactionManager,
             new BufferPool(totalSize, batchSize, metrics, time, metricGrpName));
         accum.append(tp1, 0L, key, value, Record.EMPTY_HEADERS, null, 0, false, time.milliseconds());
     }
