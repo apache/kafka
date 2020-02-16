@@ -139,6 +139,8 @@ class AclAuthorizer extends Authorizer with Logging {
     // between loading cache and processing change notifications.
     startZkChangeListeners()
 
+    // resourcesLoadMap : When we want to specify the resource to load, we can put the resource information.
+    // so we can specify TOPIC/GROUP/CLUSTER, we just load what we care, not all.
     var resourcesLoadMap = Map.empty[ResourceType,String]
     ResourceType.values.foreach(rt=>{
       configs.get(rt.name) match {
