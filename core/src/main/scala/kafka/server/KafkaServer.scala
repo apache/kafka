@@ -25,7 +25,7 @@ import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger}
 
 import com.yammer.metrics.core.Gauge
 import kafka.api.{KAFKA_0_9_0, KAFKA_2_2_IV0, KAFKA_2_4_IV1}
-import kafka.cluster.Broker
+import kafka.cluster.{Broker, EndPoint}
 import kafka.common.{GenerateBrokerIdException, InconsistentBrokerIdException, InconsistentBrokerMetadataException, InconsistentClusterIdException}
 import kafka.controller.KafkaController
 import kafka.coordinator.group.GroupCoordinator
@@ -267,7 +267,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
         socketServer = new SocketServer(config, metrics, time, credentialProvider)
         socketServer.startup(startupProcessors = false)
 
-        remoteLogManager = createRemoteLogManager(remoteLogManagerConfig)
+        remoteLogManager = createRemoteLogManager(remoteLogManagerConfig, config.advertisedListeners)
 
         /* start replica manager */
         replicaManager = createReplicaManager(isShuttingDown)
@@ -370,7 +370,8 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
     clusterResourceListeners.onUpdate(new ClusterResource(clusterId))
   }
 
-  protected def createRemoteLogManager(remoteLogManagerConfig: RemoteLogManagerConfig): Option[RemoteLogManager] = {
+  protected def createRemoteLogManager(remoteLogManagerConfig: RemoteLogManagerConfig,
+                                       advertisedEndPoints: Seq[EndPoint]): Option[RemoteLogManager] = {
     if (remoteLogManagerConfig.remoteLogStorageEnable) {
       def fetchLog(tp: TopicPartition): Option[Log] = {
         logManager.getLog(tp)
@@ -381,7 +382,20 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
           log.updateLogStartOffsetFromRemoteTier(remoteLso)
         })
       }
-      Some(new RemoteLogManager(fetchLog, updateRemoteLogStartOffset, remoteLogManagerConfig, time))
+      val ep = remoteLogManagerConfig.listenerName match {
+        case Some(name) =>
+          val matchedEndpoints = advertisedEndPoints.filter(ep => name.equals(ep.listenerName.value()))
+          if(matchedEndpoints.isEmpty) {
+            throw new IllegalArgumentException(s"Listener with name ${name} does not exist on this broker")
+          }
+          matchedEndpoints.head
+        case None => advertisedEndPoints.head
+      }
+      val serversStr: String =
+        if (ep.host == null || ep.host.trim.isEmpty) InetAddress.getLocalHost.getCanonicalHostName + ":" + ep.port
+        else ep.host + ":" + ep.port
+      Some(new RemoteLogManager(fetchLog, updateRemoteLogStartOffset, remoteLogManagerConfig, time, serversStr,
+        config.brokerId, config.logDirs.head))
     } else {
       None
     }

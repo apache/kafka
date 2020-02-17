@@ -23,14 +23,14 @@ import java.util.function.{Consumer, Function}
 
 import kafka.log.Log
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.log.remote.storage.RemoteLogIndexEntry
+import org.apache.kafka.common.log.remote.storage.{RemoteLogIndexEntry, RemoteLogStorageManager}
 import org.apache.kafka.common.utils.Utils
 
 object RLMIndexer {
   val UNKNOWN_INDEX: Long = -1L
 }
 
-class RLMIndexer(rsm: RemoteStorageManager, logFetcher: TopicPartition => Option[Log]) extends AutoCloseable {
+class RLMIndexer(rsm: RemoteLogStorageManager, logFetcher: TopicPartition => Option[Log]) extends AutoCloseable {
 
   private val remoteIndexes: util.concurrent.ConcurrentMap[TopicPartition, TopicPartitionRemoteIndex] = new ConcurrentHashMap[TopicPartition, TopicPartitionRemoteIndex]()
 

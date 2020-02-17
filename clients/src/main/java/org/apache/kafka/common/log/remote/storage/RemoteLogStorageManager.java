@@ -91,9 +91,9 @@ public interface RemoteLogStorageManager extends Configurable, Closeable {
      * Broker pushes an event to __delete_failed_remote_log_segments topic for failed segment deletions so that users
      * can do the cleanup later.
      *
-     * @param remoteLogSegmentId
+     * @param remoteLogSegmentMetadata
      * @return
      * @throws IOException
      */
-    boolean deleteLogSegment(RemoteLogSegmentId remoteLogSegmentId) throws IOException;
+    boolean deleteLogSegment(RemoteLogSegmentMetadata remoteLogSegmentMetadata) throws IOException;
 }

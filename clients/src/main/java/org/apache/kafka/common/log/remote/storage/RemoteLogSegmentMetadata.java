@@ -16,10 +16,19 @@
  */
 package org.apache.kafka.common.log.remote.storage;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
+import java.io.Serializable;
+
 /**
  * Metadata about the log segment stored in remote tier storage.
  */
-public class RemoteLogSegmentMetadata {
+public class RemoteLogSegmentMetadata implements Serializable {
+
+    private static final long serialVersionUID = 1L;
 
     /**
      * Universally unique remote log segment id.
@@ -113,5 +122,20 @@ public class RemoteLogSegmentMetadata {
 
     public byte[] remoteLogSegmentContext() {
         return remoteLogSegmentContext;
+    }
+
+    //todo Add efficient ser/des mechanism, may be avro/protobuf or any other.
+    public static byte[] asBytes(RemoteLogSegmentMetadata remoteLogSegmentMetadata) throws IOException {
+        try (ByteArrayOutputStream baos = new ByteArrayOutputStream(512);
+             ObjectOutputStream objectOutputStream = new ObjectOutputStream(baos)) {
+            objectOutputStream.writeObject(remoteLogSegmentMetadata);
+            return baos.toByteArray();
+        }
+    }
+
+    public static RemoteLogSegmentMetadata fromBytes(byte[] bytes) throws IOException, ClassNotFoundException {
+        try (ObjectInputStream objectInputStream = new ObjectInputStream(new ByteArrayInputStream(bytes))) {
+            return (RemoteLogSegmentMetadata) objectInputStream.readObject();
+        }
     }
 }

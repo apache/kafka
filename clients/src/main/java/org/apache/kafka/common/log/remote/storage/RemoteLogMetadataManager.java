@@ -19,7 +19,6 @@ package org.apache.kafka.common.log.remote.storage;
 import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.annotation.InterfaceStability;
-import org.apache.kafka.common.record.FileRecords;
 
 import java.io.Closeable;
 import java.io.IOException;
@@ -28,10 +27,23 @@ import java.util.Optional;
 
 /**
  * This interface provides storing and fetching remote log segment metadata with strongly consistent semantics.
- *
  */
 @InterfaceStability.Unstable
 public interface RemoteLogMetadataManager extends Configurable, Closeable {
+    /**
+     *
+     */
+    String BROKER_ID_CONFIG = "broker.id";
+
+    /**
+     *
+     */
+    String CLUSTER_ID_CONFIG = "cluster.id";
+
+    /**
+     *
+     */
+    String LOCAL_BOOTSTRAP_SERVER = "local.bootstrap.server";
 
     /**
      * Stores RemoteLogSegmentMetadata for the given RemoteLogSegmentMetadata.
@@ -55,11 +67,11 @@ public interface RemoteLogMetadataManager extends Configurable, Closeable {
     /**
      * Fetches RemoteLogSegmentMetadata for the given RemoteLogSegmentId.
      *
-     * @param metadata
+     * @param remoteLogSegmentId
      * @return
      * @throws IOException
      */
-    RemoteLogSegmentMetadata getRemoteLogSegmentMetadata(RemoteLogSegmentId metadata) throws IOException;
+    RemoteLogSegmentMetadata getRemoteLogSegmentMetadata(RemoteLogSegmentId remoteLogSegmentId) throws IOException;
 
     /**
      * Earliest log offset if exists for the given topic partition in the remote storage. Return {@link Optional#empty()}
@@ -69,6 +81,14 @@ public interface RemoteLogMetadataManager extends Configurable, Closeable {
      * @return
      */
     Optional<Long> earliestLogOffset(TopicPartition tp) throws IOException;
+
+    /**
+     * Deletes the log segment metadata for the given remoteLogSegmentId.
+     *
+     * @param remoteLogSegmentId
+     * @throws IOException
+     */
+    void deleteRemoteLogSegmentMetadata(RemoteLogSegmentId remoteLogSegmentId) throws IOException;
 
     /**
      * List the remote log segment files of the given topicPartition.
@@ -81,11 +101,27 @@ public interface RemoteLogMetadataManager extends Configurable, Closeable {
     }
 
     /**
-     *
      * @param topicPartition
      * @param minOffset
      * @return
      */
     List<RemoteLogSegmentMetadata> listRemoteLogSegments(TopicPartition topicPartition, long minOffset);
+
+    /**
+     * This method is invoked only when there are changes in leadership of the topic partitions that this broker is
+     * responsible for.
+     *
+     * @param leaderPartitions   partitions that have become leaders on this broker.
+     * @param followerPartitions partitions that have become followers on this broker.
+     */
+    void onPartitionLeadershipChanges(List<TopicPartition> leaderPartitions, List<TopicPartition> followerPartitions);
+
+    /**
+     * This method is invoked only when the given topic partitions are stopped on this broker. This can happen when a
+     * partition is emigrated to other broker or a partition is deleted.
+     *
+     * @param partitions
+     */
+    void onStopPartitions(List<TopicPartition> partitions);
 
 }

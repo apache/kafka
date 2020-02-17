@@ -20,6 +20,7 @@ import org.apache.kafka.common.TopicPartition;
 
 import static java.util.Objects.requireNonNull;
 
+import java.io.Serializable;
 import java.util.Objects;
 import java.util.UUID;
 
@@ -27,7 +28,9 @@ import java.util.UUID;
  * This represents a universally unique associated to a topic partition's log segment. This will be regenerated for
  * every attempt of copying a specific log segment in {@link RemoteStorageManager#copyLogSegment(RemoteLogSegmentId, LogSegmentData)}.
  */
-public class RemoteLogSegmentId {
+public class RemoteLogSegmentId implements Comparable<RemoteLogSegmentId>, Serializable {
+    private static final long serialVersionUID = 1L;
+
     private final TopicPartition topicPartition;
     private final UUID id;
 
@@ -64,5 +67,12 @@ public class RemoteLogSegmentId {
     @Override
     public int hashCode() {
         return Objects.hash(topicPartition, id);
+    }
+
+    @Override
+    public int compareTo(RemoteLogSegmentId other) {
+        Objects.requireNonNull(other, "other instance can not be null");
+
+        return id.compareTo(other.id());
     }
 }

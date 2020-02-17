@@ -30,6 +30,7 @@ import kafka.server.checkpoints.LazyOffsetCheckpoints
 import kafka.utils.{MockScheduler, MockTime, TestUtils}
 import kafka.zk.KafkaZkClient
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.log.remote.storage.{RemoteLogIndexEntry, RemoteLogSegmentInfo}
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.record._
@@ -38,7 +39,6 @@ import org.apache.kafka.common.utils.Utils
 import org.easymock.EasyMock
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
-import org.apache.kafka.common.log.remote.storage.{RemoteLogIndexEntry, RemoteLogSegmentInfo}
 
 class RemoteLogManagerTest {
 
@@ -119,7 +119,7 @@ class RemoteLogManagerTest {
     def lsoUpdater(tp: TopicPartition, los: Long): Unit = {}
 
     // this should initialize RSM
-    new RemoteLogManager(logFetcher, lsoUpdater, rlmConfig, time)
+    new RemoteLogManager(logFetcher, lsoUpdater, rlmConfig, time, "localhost:9092", 1, "/tmp/logs")
 
     assertTrue(rsmConfig.count { case (k, v) => MockRemoteStorageManager.configs.get(k) == v } == rsmConfig.size)
     assertEquals(MockRemoteStorageManager.configs.get(KafkaConfig.RemoteLogRetentionBytesProp),
