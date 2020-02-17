@@ -138,6 +138,54 @@ public class KStreamTransformValuesTest {
         assertArrayEquals(expected, supplier.theCapturedProcessor().processed.toArray());
     }
 
+    @Test
+    public void shouldEmitNoRecordIfTransformReturnsNull() {
+        final StreamsBuilder builder = new StreamsBuilder();
+
+        final ValueTransformerWithKeySupplier<Integer, Integer, Integer> valueTransformerSupplier =
+            () -> new ValueTransformerWithKey<Integer, Integer, Integer>() {
+                private int total = 0;
+
+                @Override
+                public void init(final ProcessorContext context) { }
+
+                @Override
+                public Integer transform(final Integer key, final Integer value) {
+                    if (key % 4 != 0) {
+                        total += value;
+                        return total;
+                    }
+
+                    return null;
+                }
+
+                @Override
+                public void close() { }
+            };
+
+        final int[] expectedKeys = {2, 4, 6, 8, 10};
+
+        final KStream<Integer, Integer> stream;
+        stream = builder.stream(topicName, Consumed.with(Serdes.Integer(), Serdes.Integer()));
+        stream.transformValues(valueTransformerSupplier).process(supplier);
+
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+            final TestInputTopic<Integer, Integer> inputTopic =
+                driver.createInputTopic(topicName, new IntegerSerializer(), new IntegerSerializer());
+
+            for (final int expectedKey : expectedKeys) {
+                inputTopic.pipeInput(expectedKey, expectedKey * 10, expectedKey * 100L);
+            }
+        }
+        final KeyValueTimestamp[] expected = {
+            new KeyValueTimestamp<>(2, 20, 200),
+            new KeyValueTimestamp<>(6, 80, 600),
+            new KeyValueTimestamp<>(10, 180, 1000)
+        };
+
+        assertArrayEquals(expected, supplier.theCapturedProcessor().processed.toArray());
+    }
+
     @SuppressWarnings("unchecked")
     @Test
     public void shouldInitializeTransformerWithForwardDisabledProcessorContext() {
