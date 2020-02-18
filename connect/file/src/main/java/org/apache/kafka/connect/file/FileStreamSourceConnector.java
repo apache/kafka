@@ -38,6 +38,7 @@ public class FileStreamSourceConnector extends SourceConnector {
     public static final String TOPIC_CONFIG = "topic";
     public static final String FILE_CONFIG = "file";
     public static final String TASK_BATCH_SIZE_CONFIG = "batch.size";
+    public static final String TASK_CLASS = "task.class";
 
     public static final int DEFAULT_TASK_BATCH_SIZE = 2000;
 
@@ -45,11 +46,13 @@ public class FileStreamSourceConnector extends SourceConnector {
         .define(FILE_CONFIG, Type.STRING, null, Importance.HIGH, "Source filename. If not specified, the standard input will be used")
         .define(TOPIC_CONFIG, Type.LIST, Importance.HIGH, "The topic to publish data to")
         .define(TASK_BATCH_SIZE_CONFIG, Type.INT, DEFAULT_TASK_BATCH_SIZE, Importance.LOW,
-                "The maximum number of records the Source task can read from file one time");
+                "The maximum number of records the Source task can read from file one time")
+        .define(TASK_CLASS, Type.CLASS, FileStreamSourceTask.class.getName(), Importance.LOW, "Class name of the Task implementation");
 
     private String filename;
     private String topic;
     private int batchSize;
+    private Class<? extends Task> taskClass;
 
     @Override
     public String version() {
@@ -66,11 +69,18 @@ public class FileStreamSourceConnector extends SourceConnector {
         }
         topic = topics.get(0);
         batchSize = parsedConfig.getInt(TASK_BATCH_SIZE_CONFIG);
+
+        final Class<?> proposedTaskClass = parsedConfig.getClass(TASK_CLASS);
+        if (Task.class.isAssignableFrom(proposedTaskClass)) {
+            taskClass = proposedTaskClass.asSubclass(Task.class);
+        } else {
+            throw new ConfigException("Task class needs to be a subclass of "+Task.class.getCanonicalName());
+        }
     }
 
     @Override
     public Class<? extends Task> taskClass() {
-        return FileStreamSourceTask.class;
+        return taskClass;
     }
 
     @Override

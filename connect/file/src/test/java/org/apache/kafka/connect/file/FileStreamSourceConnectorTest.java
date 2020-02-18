@@ -19,6 +19,7 @@ package org.apache.kafka.connect.file;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.ConfigValue;
 import org.apache.kafka.connect.connector.ConnectorContext;
+import org.apache.kafka.connect.connector.Task;
 import org.easymock.EasyMock;
 import org.easymock.EasyMockSupport;
 import org.junit.Before;
@@ -130,6 +131,30 @@ public class FileStreamSourceConnectorTest extends EasyMockSupport {
     @Test(expected = ConfigException.class)
     public void testInvalidBatchSize() {
         sourceProperties.put(FileStreamSourceConnector.TASK_BATCH_SIZE_CONFIG, "abcd");
+        connector.start(sourceProperties);
+    }
+
+    // we'll test if we can really assign a custom Task through configuration
+    private static class MockCustomTask implements Task {
+        @Override
+        public String version() {
+            return "mock";
+        }
+        @Override
+        public void start(Map<String, String> props) { }
+        @Override
+        public void stop() { }
+    }
+
+    @Test
+    public void testCustomTask() {
+        sourceProperties.put(FileStreamSourceConnector.TASK_CLASS, MockCustomTask.class.getName());
+        connector.start(sourceProperties);
+    }
+
+    @Test(expected = ConfigException.class)
+    public void testInvalidTask() {
+        sourceProperties.put(FileStreamSourceConnector.TASK_CLASS, java.io.File.class.getName());
         connector.start(sourceProperties);
     }
 }
