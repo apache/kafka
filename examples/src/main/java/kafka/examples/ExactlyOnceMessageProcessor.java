@@ -16,25 +16,17 @@
  */
 package kafka.examples;
 
-import org.apache.kafka.clients.consumer.CommitFailedException;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
-import org.apache.kafka.clients.consumer.InvalidOffsetException;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.errors.AuthenticationException;
-import org.apache.kafka.common.errors.AuthorizationException;
 import org.apache.kafka.common.errors.FencedInstanceIdException;
-import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.ProducerFencedException;
-import org.apache.kafka.common.errors.TimeoutException;
-import org.apache.kafka.common.errors.UnsupportedForMessageFormatException;
-import org.apache.kafka.common.errors.UnsupportedVersionException;
 
 import java.time.Duration;
 import java.util.ArrayList;
@@ -63,6 +55,7 @@ public class ExactlyOnceMessageProcessor extends Thread {
     private final int numInstances;
     private final int instanceIdx;
     private final String transactionalId;
+    private final String groupInstanceId;
 
     private final KafkaProducer<Integer, String> producer;
     private final KafkaConsumer<Integer, String> consumer;
@@ -91,8 +84,9 @@ public class ExactlyOnceMessageProcessor extends Thread {
         producer = new Producer(outputTopic, true, transactionalId, true, -1, transactionTimeoutMs, null).get();
         // Consumer must be in read_committed mode, which means it won't be able to read uncommitted data.
         // Consumer could optionally configure groupInstanceId to avoid unnecessary rebalances.
-        Optional<String> groupInstanceId = Optional.of("Txn-consumer-" + instanceIdx);
-        consumer = new Consumer(inputTopic, consumerGroupId, groupInstanceId, READ_COMMITTED, -1, null).get();
+        groupInstanceId = "Txn-consumer-" + instanceIdx;
+        consumer = new Consumer(inputTopic, consumerGroupId,
+            Optional.of(groupInstanceId), READ_COMMITTED, -1, null).get();
         this.latch = latch;
     }
 
@@ -161,19 +155,19 @@ public class ExactlyOnceMessageProcessor extends Thread {
                     producer.commitTransaction();
                     messageProcessed += records.count();
                 }
-            } catch (CommitFailedException | InvalidOffsetException e) {
-                // In case of a retriable exception, suggest aborting the ongoing transaction for correctness.
-                // Note that abort transaction call could also throw fatal exceptions such as producer fenced.
+            } catch (ProducerFencedException e) {
+                throw new KafkaException(String.format("The transactional.id %s has been claimed by another process", transactionalId));
+            } catch (FencedInstanceIdException e) {
+                throw new KafkaException(String.format("The group.instance.id %s has been claimed by another process", groupInstanceId));
+            } catch (KafkaException e) {
+                // If we have not been fenced, try to abort the transaction and continue. This will raise immediately
+                // if the producer has hit a fatal error.
                 producer.abortTransaction();
 
                 // The consumer fetch position also needs to be reset.
                 resetToLastCommittedPositions(consumer);
-            } catch (ProducerFencedException | FencedInstanceIdException | AuthorizationException |
-                         AuthenticationException | UnsupportedVersionException |
-                         UnsupportedForMessageFormatException | InvalidTopicException e) {
-                // Normally the above exceptions are fatal, we catch them here just for demo purpose.
-                throw new KafkaException("Encountered fatal error during processing: " + e.getMessage());
             }
+
             messageRemaining.set(messagesRemaining(consumer));
             printWithTxnId("Message remaining: " + messageRemaining);
         }
