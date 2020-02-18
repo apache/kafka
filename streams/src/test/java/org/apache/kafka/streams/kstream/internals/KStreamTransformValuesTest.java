@@ -34,6 +34,7 @@ import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.SingletonNoOpValueTransformer;
 import org.apache.kafka.test.StreamsTestUtils;
+import org.easymock.EasyMock;
 import org.easymock.EasyMockRunner;
 import org.easymock.Mock;
 import org.easymock.MockType;
@@ -42,6 +43,7 @@ import org.junit.runner.RunWith;
 
 import java.util.Properties;
 
+import static org.easymock.EasyMock.mock;
 import static org.hamcrest.CoreMatchers.isA;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertArrayEquals;
@@ -140,50 +142,20 @@ public class KStreamTransformValuesTest {
 
     @Test
     public void shouldEmitNoRecordIfTransformReturnsNull() {
-        final StreamsBuilder builder = new StreamsBuilder();
+        final ProcessorContext context = mock(ProcessorContext.class);
+        final ValueTransformerWithKey<Integer, Integer, Integer> valueTransformer = mock(ValueTransformerWithKey.class);
+        final KStreamTransformValues.KStreamTransformValuesProcessor<Integer, Integer, Integer> processor = new KStreamTransformValues.KStreamTransformValuesProcessor<>(valueTransformer);
+        processor.init(context);
+        EasyMock.reset(context, valueTransformer);
 
-        final ValueTransformerWithKeySupplier<Integer, Integer, Integer> valueTransformerSupplier =
-            () -> new ValueTransformerWithKey<Integer, Integer, Integer>() {
-                private int total = 0;
+        final Integer inputKey = 1;
+        final Integer inputValue = 10;
+        EasyMock.expect(valueTransformer.transform(inputKey, inputValue)).andReturn(null);
+        EasyMock.replay(context, valueTransformer);
 
-                @Override
-                public void init(final ProcessorContext context) { }
+        processor.process(inputKey, inputValue);
 
-                @Override
-                public Integer transform(final Integer key, final Integer value) {
-                    if (key % 4 != 0) {
-                        total += value;
-                        return total;
-                    }
-
-                    return null;
-                }
-
-                @Override
-                public void close() { }
-            };
-
-        final int[] expectedKeys = {2, 4, 6, 8, 10};
-
-        final KStream<Integer, Integer> stream;
-        stream = builder.stream(topicName, Consumed.with(Serdes.Integer(), Serdes.Integer()));
-        stream.transformValues(valueTransformerSupplier).process(supplier);
-
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
-            final TestInputTopic<Integer, Integer> inputTopic =
-                driver.createInputTopic(topicName, new IntegerSerializer(), new IntegerSerializer());
-
-            for (final int expectedKey : expectedKeys) {
-                inputTopic.pipeInput(expectedKey, expectedKey * 10, expectedKey * 100L);
-            }
-        }
-        final KeyValueTimestamp[] expected = {
-            new KeyValueTimestamp<>(2, 20, 200),
-            new KeyValueTimestamp<>(6, 80, 600),
-            new KeyValueTimestamp<>(10, 180, 1000)
-        };
-
-        assertArrayEquals(expected, supplier.theCapturedProcessor().processed.toArray());
+        EasyMock.verify(context, valueTransformer);
     }
 
     @SuppressWarnings("unchecked")
