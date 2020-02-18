@@ -3785,7 +3785,6 @@ public class KafkaAdminClient extends AdminClient {
                 @Override
                 void handleResponse(AbstractResponse abstractResponse) {
                     ListOffsetResponse response = (ListOffsetResponse) abstractResponse;
-                    Set<TopicPartition> partitionsWithErrors = new HashSet<>();
                     Map<TopicPartition, OffsetSpec> retryTopicPartitionOffsets = new HashMap<>();
 
                     for (Entry<TopicPartition, PartitionData> result : response.responseData().entrySet()) {
@@ -3794,8 +3793,11 @@ public class KafkaAdminClient extends AdminClient {
 
                         KafkaFutureImpl<ListOffsetsResultInfo> future = futures.get(tp);
                         Errors error = partitionData.error;
-                        if (MetadataOperationContext.shouldRefreshMetadata(error) && topicPartitionOffsets.get(tp) != null) {
-                            partitionsWithErrors.add(tp);
+                        if (topicPartitionOffsets.get(tp) == null) {
+                            future.completeExceptionally(error.exception());
+                            continue;
+                        }
+                        if (MetadataOperationContext.shouldRefreshMetadata(error)) {
                             retryTopicPartitionOffsets.put(tp, topicPartitionOffsets.get(tp));
                         } else if (error == Errors.NONE) {
                             future.complete(new ListOffsetsResultInfo(partitionData.offset, partitionData.timestamp, partitionData.leaderEpoch));
@@ -3804,8 +3806,9 @@ public class KafkaAdminClient extends AdminClient {
                         }
                     }
 
-                    if (!partitionsWithErrors.isEmpty()) {
-                        Set<String> retryTopics = partitionsWithErrors.stream().map(tp -> tp.topic()).collect(Collectors.toSet());
+                    if (!retryTopicPartitionOffsets.isEmpty()) {
+                        Set<String> retryTopics = retryTopicPartitionOffsets.keySet().stream().map(
+                            TopicPartition::topic).collect(Collectors.toSet());
                         MetadataOperationContext<ListOffsetsResultInfo, ListOffsetsOptions> retryContext =
                             new MetadataOperationContext<>(retryTopics, context.options(), context.deadline(), futures);
                         rescheduleMetadataTask(retryContext, () -> getListOffsetsCalls(retryContext, retryTopicPartitionOffsets, futures));
