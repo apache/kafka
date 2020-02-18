@@ -234,14 +234,6 @@ subprojects {
 
     def logFiles = new HashMap<String, File>()
     def logStreams = new HashMap<String, FileOutputStream>()
-    beforeTest { TestDescriptor td ->
-      def tid = testId(td)
-      def logFile = new File(
-          "${projectDir}/build/reports/testOutput/${tid}.test.stdout")
-      logFile.parentFile.mkdirs()
-      logFiles.put(tid, logFile)
-      logStreams.put(tid, new FileOutputStream(logFile))
-    }
     onOutput { TestDescriptor td, TestOutputEvent toe ->
       def tid = testId(td)
       // Some output can happen outside the context of a specific test (e.g. at the class level)
@@ -256,6 +248,14 @@ subprojects {
         return
       }
       try {
+        if (logStreams.get(tid) == null) {
+          def logFile = new File(
+                  "${projectDir}/build/reports/testOutput/${tid}.test.stdout")
+          logFile.parentFile.mkdirs()
+          logFiles.put(tid, logFile)
+          logStreams.put(tid, new FileOutputStream(logFile))
+        }
+
         logStreams.get(tid).write(toe.message.getBytes(StandardCharsets.UTF_8))
       } catch (Exception e) {
         println "ERROR: Failed to write output for test ${tid}"
@@ -264,20 +264,22 @@ subprojects {
     }
     afterTest { TestDescriptor td, TestResult tr ->
       def tid = testId(td)
-      try {
-        logStreams.get(tid).close()
-        if (tr.resultType != TestResult.ResultType.FAILURE) {
-          logFiles.get(tid).delete()
-        } else {
-          def file = logFiles.get(tid)
-          println "${tid} failed, log available in ${file}"
+      if (logStreams.get(tid) != null) {
+        try {
+          logStreams.get(tid).close()
+          if (tr.resultType != TestResult.ResultType.FAILURE) {
+            logFiles.get(tid).delete()
+          } else {
+            def file = logFiles.get(tid)
+            println "${tid} failed, log available in ${file}"
+          }
+        } catch (Exception e) {
+          println "ERROR: Failed to close stdout file for ${tid}"
+          e.printStackTrace()
+        } finally {
+          logFiles.remove(tid)
+          logStreams.remove(tid)
         }
-      } catch (Exception e) {
-        println "ERROR: Failed to close stdout file for ${tid}"
-        e.printStackTrace()
-      } finally {
-        logFiles.remove(tid)
-        logStreams.remove(tid)
       }
     }
   }
