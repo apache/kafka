@@ -17,7 +17,6 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.easymock.EasyMockRunner;
-import org.easymock.Mock;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.rocksdb.AbstractCompactionFilter;
@@ -53,6 +52,7 @@ import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.List;
 
+import static org.easymock.EasyMock.mock;
 import static org.easymock.EasyMock.replay;
 import static org.easymock.EasyMock.reset;
 import static org.easymock.EasyMock.verify;
@@ -82,11 +82,6 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapterTest {
         }
     };
 
-    @Mock
-    private DBOptions dbOptions;
-    @Mock
-    private ColumnFamilyOptions columnFamilyOptions;
-
     @Test
     public void shouldOverwriteAllOptionsMethods() throws Exception {
         for (final Method method : Options.class.getMethods()) {
@@ -110,14 +105,15 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapterTest {
     }
 
     private void verifyDBOptionsMethodCall(final Method method) throws Exception {
+        final DBOptions mockedDbOptions = mock(DBOptions.class);
         final RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter optionsFacadeDbOptions
-            = new RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter(dbOptions, new ColumnFamilyOptions());
+            = new RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter(mockedDbOptions, new ColumnFamilyOptions());
 
         final Object[] parameters = getDBOptionsParameters(method.getParameterTypes());
 
         try {
-            reset(dbOptions);
-            replay(dbOptions);
+            reset(mockedDbOptions);
+            replay(mockedDbOptions);
             method.invoke(optionsFacadeDbOptions, parameters);
             verify();
             fail("Should have called DBOptions." + method.getName() + "()");
@@ -196,14 +192,15 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapterTest {
     }
 
     private void verifyColumnFamilyOptionsMethodCall(final Method method) throws Exception {
+        final ColumnFamilyOptions mockedColumnFamilyOptions = mock(ColumnFamilyOptions.class);
         final RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter optionsFacadeColumnFamilyOptions
-            = new RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter(new DBOptions(), columnFamilyOptions);
+            = new RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter(new DBOptions(), mockedColumnFamilyOptions);
 
         final Object[] parameters = getColumnFamilyOptionsParameters(method.getParameterTypes());
 
         try {
-            reset(columnFamilyOptions);
-            replay(columnFamilyOptions);
+            reset(mockedColumnFamilyOptions);
+            replay(mockedColumnFamilyOptions);
             method.invoke(optionsFacadeColumnFamilyOptions, parameters);
             verify();
             fail("Should have called ColumnFamilyOptions." + method.getName() + "()");
