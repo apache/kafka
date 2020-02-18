@@ -144,18 +144,19 @@ public class KStreamTransformValuesTest {
     public void shouldEmitNoRecordIfTransformReturnsNull() {
         final ProcessorContext context = mock(ProcessorContext.class);
         final ValueTransformerWithKey<Integer, Integer, Integer> valueTransformer = mock(ValueTransformerWithKey.class);
-        final KStreamTransformValues.KStreamTransformValuesProcessor<Integer, Integer, Integer> processor = new KStreamTransformValues.KStreamTransformValuesProcessor<>(valueTransformer);
+        final KStreamTransformValues.KStreamTransformValuesProcessor<Integer, Integer, Integer> processor =
+            new KStreamTransformValues.KStreamTransformValuesProcessor<>(valueTransformer);
         processor.init(context);
-        EasyMock.reset(context, valueTransformer);
+        EasyMock.reset(valueTransformer);
 
         final Integer inputKey = 1;
         final Integer inputValue = 10;
-        EasyMock.expect(valueTransformer.transform(inputKey, inputValue)).andReturn(null);
-        EasyMock.replay(context, valueTransformer);
+        EasyMock.expect(valueTransformer.transform(inputKey, inputValue)).andStubReturn(null);
+        EasyMock.replay(context);
 
         processor.process(inputKey, inputValue);
 
-        EasyMock.verify(context, valueTransformer);
+        EasyMock.verify(context);
     }
 
     @SuppressWarnings("unchecked")
