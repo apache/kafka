@@ -3793,13 +3793,14 @@ public class KafkaAdminClient extends AdminClient {
 
                         KafkaFutureImpl<ListOffsetsResultInfo> future = futures.get(tp);
                         Errors error = partitionData.error;
-                        if (topicPartitionOffsets.get(tp) == null) {
-                            future.completeExceptionally(error.exception());
-                            continue;
+                        OffsetSpec offsetRequestSpec = topicPartitionOffsets.get(tp);
+                        if (offsetRequestSpec == null) {
+                            future.completeExceptionally(new KafkaException("Unexpected topic partition {} in broker response!" + tp));
                         }
-                        if (MetadataOperationContext.shouldRefreshMetadata(error)) {
-                            retryTopicPartitionOffsets.put(tp, topicPartitionOffsets.get(tp));
-                        } else if (error == Errors.NONE) {
+                        else if (MetadataOperationContext.shouldRefreshMetadata(error)){
+                            retryTopicPartitionOffsets.put(tp, offsetRequestSpec);
+                        }
+                        else if (error == Errors.NONE) {
                             future.complete(new ListOffsetsResultInfo(partitionData.offset, partitionData.timestamp, partitionData.leaderEpoch));
                         } else {
                             future.completeExceptionally(error.exception());
