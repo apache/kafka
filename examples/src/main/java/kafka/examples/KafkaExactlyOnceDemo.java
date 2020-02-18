@@ -38,7 +38,11 @@ import java.util.concurrent.TimeUnit;
  *   - partition: number of partitions for input/output topic
  *   - instances: number of instances
  *   - records: number of records
- * An example argument list would be `groupMode 6 3 50000`
+ * An example argument list would be `groupMode 6 3 50000`.
+ *
+ * If you are using Intellij, the above arguments should be put in the configuration's `Program Arguments`.
+ * Also recommended to set an output log file by `Edit Configuration -> Logs -> Save console
+ * output to file` to record all the log output together.
  *
  * The driver could be decomposed as following stages:
  *
