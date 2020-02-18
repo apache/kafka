@@ -76,6 +76,14 @@ class SslStores(object):
         self.runcmd("keytool -importcert -keystore %s -storepass %s -storetype JKS -keypass %s -alias kafka -file %s -noprompt" % (ks_path, self.keystore_passwd, self.key_passwd, crt_path))
         node.account.copy_to(ks_path, SecurityConfig.KEYSTORE_PATH)
 
+        # generate ZooKeeper client TLS config file for encryption-only (no client cert) use case
+        str = """zookeeper.clientCnxnSocket=org.apache.zookeeper.ClientCnxnSocketNetty
+zookeeper.ssl.client.enable=true
+zookeeper.ssl.truststore.location=%s
+zookeeper.ssl.truststore.password=%s
+""" % (SecurityConfig.TRUSTSTORE_PATH, self.truststore_passwd)
+        node.account.create_file(SecurityConfig.ZK_CLIENT_TLS_ENCRYPT_ONLY_CONFIG_PATH, str)
+
         # also generate ZooKeeper client TLS config file for mutual authentication use case
         str = """zookeeper.clientCnxnSocket=org.apache.zookeeper.ClientCnxnSocketNetty
 zookeeper.ssl.client.enable=true
@@ -120,6 +128,7 @@ class SecurityConfig(TemplateRenderer):
     CONFIG_DIR = "/mnt/security"
     KEYSTORE_PATH = "/mnt/security/test.keystore.jks"
     TRUSTSTORE_PATH = "/mnt/security/test.truststore.jks"
+    ZK_CLIENT_TLS_ENCRYPT_ONLY_CONFIG_PATH = "/mnt/security/zk_client_tls_encrypt_only_config.properties"
     ZK_CLIENT_MUTUAL_AUTH_CONFIG_PATH = "/mnt/security/zk_client_mutual_auth_config.properties"
     JAAS_CONF_PATH = "/mnt/security/jaas.conf"
     KRB5CONF_PATH = "/mnt/security/krb5.conf"

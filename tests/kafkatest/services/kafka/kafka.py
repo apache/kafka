@@ -236,7 +236,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         return len(self.pids(node)) > 0
 
     def start(self, add_principals=""):
-        if self.zk_client_secure and not self.zk.client_secure_port:
+        if self.zk_client_secure and not self.zk.zk_client_secure_port:
             raise Exception("Unable to start Kafka: TLS to Zookeeper requested but Zookeeper secure port not enabled")
         self.open_port(self.security_protocol)
         self.interbroker_listener.open = True
@@ -435,8 +435,8 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         kafka_topic_script = self.path.script("kafka-topics.sh", node)
 
         cmd = kafka_topic_script + " "
-        cmd += "--zookeeper %(zk_connect)s --create --topic %(topic)s " % {
-                'zk_connect': self.zk_connect_setting(),
+        cmd += "--bootstrap-server %(bootstrap_server)s --create --topic %(topic)s " % {
+                'bootstrap_server': self.bootstrap_servers(self.security_protocol),
                 'topic': topic_cfg.get("topic"),
            }
         if 'replica-assignment' in topic_cfg:
@@ -482,8 +482,8 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
     def describe_topic(self, topic, node=None):
         if node is None:
             node = self.nodes[0]
-        cmd = "%s --zookeeper %s --topic %s --describe" % \
-              (self.path.script("kafka-topics.sh", node), self.zk_connect_setting(), topic)
+        cmd = "%s --bootstrap-server %s --topic %s --describe" % \
+              (self.path.script("kafka-topics.sh", node), self.bootstrap_servers(self.security_protocol), topic)
         output = ""
         for line in node.account.ssh_capture(cmd):
             output += line
@@ -492,8 +492,8 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
     def list_topics(self, topic=None, node=None):
         if node is None:
             node = self.nodes[0]
-        cmd = "%s --zookeeper %s --list" % \
-              (self.path.script("kafka-topics.sh", node), self.zk_connect_setting())
+        cmd = "%s --bootstrap-server %s --list" % \
+              (self.path.script("kafka-topics.sh", node), self.bootstrap_servers(self.security_protocol))
         for line in node.account.ssh_capture(cmd):
             if not line.startswith("SLF4J"):
                 yield line.rstrip()
@@ -502,8 +502,8 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         if node is None:
             node = self.nodes[0]
         self.logger.info("Altering message format version for topic %s with format %s", topic, msg_format_version)
-        cmd = "%s --zookeeper %s --entity-name %s --entity-type topics --alter --add-config message.format.version=%s" % \
-              (self.path.script("kafka-configs.sh", node), self.zk_connect_setting(), topic, msg_format_version)
+        cmd = "%s --zookeeper %s %s --entity-name %s --entity-type topics --alter --add-config message.format.version=%s" % \
+              (self.path.script("kafka-configs.sh", node), self.zk_connect_setting(), self.zk.zkTlsConfigFileOption(), topic, msg_format_version)
         self.logger.info("Running alter message format command...\n%s" % cmd)
         node.account.ssh(cmd)
 
@@ -514,8 +514,8 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
             self.logger.info("Enabling unclean leader election for topic %s", topic)
         else:
             self.logger.info("Disabling unclean leader election for topic %s", topic)
-        cmd = "%s --zookeeper %s --entity-name %s --entity-type topics --alter --add-config unclean.leader.election.enable=%s" % \
-              (self.path.script("kafka-configs.sh", node), self.zk_connect_setting(), topic, str(value).lower())
+        cmd = "%s --zookeeper %s %s --entity-name %s --entity-type topics --alter --add-config unclean.leader.election.enable=%s" % \
+              (self.path.script("kafka-configs.sh", node), self.zk_connect_setting(), self.zk.zkTlsConfigFileOption(), topic, str(value).lower())
         self.logger.info("Running alter unclean leader command...\n%s" % cmd)
         node.account.ssh(cmd)
 
