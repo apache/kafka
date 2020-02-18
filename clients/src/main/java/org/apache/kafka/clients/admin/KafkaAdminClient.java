@@ -3795,12 +3795,10 @@ public class KafkaAdminClient extends AdminClient {
                         Errors error = partitionData.error;
                         OffsetSpec offsetRequestSpec = topicPartitionOffsets.get(tp);
                         if (offsetRequestSpec == null) {
-                            future.completeExceptionally(new KafkaException("Unexpected topic partition {} in broker response!" + tp));
-                        }
-                        else if (MetadataOperationContext.shouldRefreshMetadata(error)){
+                            future.completeExceptionally(new KafkaException("Unexpected topic partition " + tp + " in broker response!"));
+                        } else if (MetadataOperationContext.shouldRefreshMetadata(error)){
                             retryTopicPartitionOffsets.put(tp, offsetRequestSpec);
-                        }
-                        else if (error == Errors.NONE) {
+                        } else if (error == Errors.NONE) {
                             future.complete(new ListOffsetsResultInfo(partitionData.offset, partitionData.timestamp, partitionData.leaderEpoch));
                         } else {
                             future.completeExceptionally(error.exception());
