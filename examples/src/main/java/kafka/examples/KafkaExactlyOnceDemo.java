@@ -33,12 +33,11 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 
 /**
- * This exactly once demo driver takes 4 arguments:
- *   - mode: whether to run as standalone app, or a group
+ * This exactly once demo driver takes 3 arguments:
  *   - partition: number of partitions for input/output topic
  *   - instances: number of instances
  *   - records: number of records
- * An example argument list would be `groupMode 6 3 50000`.
+ * An example argument list would be `6 3 50000`.
  *
  * If you are using Intellij, the above arguments should be put in the configuration's `Program Arguments`.
  * Also recommended to set an output log file by `Edit Configuration -> Logs -> Save console
@@ -65,10 +64,10 @@ import java.util.concurrent.TimeUnit;
  *    The driver will block for the consumption of all committed records.
  *
  * From this demo, you could see that all the records from pre-population are processed exactly once,
- * in either standalone mode or group mode, with strong partition level ordering guarantee.
+ * with strong partition level ordering guarantee.
  *
  * Note: please start the kafka broker and zookeeper in local first. The broker version must be >= 2.5
- * in order to run group mode, otherwise the app could throw
+ * in order to run, otherwise the app could throw
  * {@link org.apache.kafka.common.errors.UnsupportedVersionException}.
  */
 public class KafkaExactlyOnceDemo {
@@ -77,15 +76,14 @@ public class KafkaExactlyOnceDemo {
     private static final String OUTPUT_TOPIC = "output-topic";
 
     public static void main(String[] args) throws InterruptedException, ExecutionException {
-        if (args.length != 4) {
-            throw new IllegalArgumentException("Should accept 4 parameters: [mode], " +
+        if (args.length != 3) {
+            throw new IllegalArgumentException("Should accept 3 parameters: " +
                 "[number of partitions], [number of instances], [number of records]");
         }
 
-        String mode = args[0];
-        int numPartitions = Integer.parseInt(args[1]);
-        int numInstances = Integer.parseInt(args[2]);
-        int numRecords = Integer.parseInt(args[3]);
+        int numPartitions = Integer.parseInt(args[0]);
+        int numInstances = Integer.parseInt(args[1]);
+        int numRecords = Integer.parseInt(args[2]);
 
         /* Stage 1: topic cleanup and recreation */
         recreateTopics(numPartitions);
@@ -104,9 +102,8 @@ public class KafkaExactlyOnceDemo {
 
         /* Stage 3: transactionally process all messages */
         for (int instanceIdx = 0; instanceIdx < numInstances; instanceIdx++) {
-            ExactlyOnceMessageProcessor messageProcessor = new ExactlyOnceMessageProcessor(mode,
-                INPUT_TOPIC, OUTPUT_TOPIC, numPartitions,
-                numInstances, instanceIdx, transactionalCopyLatch);
+            ExactlyOnceMessageProcessor messageProcessor = new ExactlyOnceMessageProcessor(
+                INPUT_TOPIC, OUTPUT_TOPIC, instanceIdx, transactionalCopyLatch);
             messageProcessor.start();
         }
 

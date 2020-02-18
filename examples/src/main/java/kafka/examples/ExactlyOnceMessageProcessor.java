@@ -33,7 +33,6 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CountDownLatch;
@@ -47,13 +46,8 @@ public class ExactlyOnceMessageProcessor extends Thread {
 
     private static final boolean READ_COMMITTED = true;
 
-    private final String mode;
     private final String inputTopic;
     private final String outputTopic;
-    private final String consumerGroupId;
-    private final int numPartitions;
-    private final int numInstances;
-    private final int instanceIdx;
     private final String transactionalId;
     private final String groupInstanceId;
 
@@ -62,20 +56,12 @@ public class ExactlyOnceMessageProcessor extends Thread {
 
     private final CountDownLatch latch;
 
-    public ExactlyOnceMessageProcessor(final String mode,
-                                       final String inputTopic,
+    public ExactlyOnceMessageProcessor(final String inputTopic,
                                        final String outputTopic,
-                                       final int numPartitions,
-                                       final int numInstances,
                                        final int instanceIdx,
                                        final CountDownLatch latch) {
-        this.mode = mode;
         this.inputTopic = inputTopic;
         this.outputTopic = outputTopic;
-        this.consumerGroupId = "Eos-consumer";
-        this.numPartitions = numPartitions;
-        this.numInstances = numInstances;
-        this.instanceIdx = instanceIdx;
         this.transactionalId = "Processor-" + instanceIdx;
         // If we are using the group mode, it is recommended to have a relatively short txn timeout
         // in order to clear pending offsets faster.
@@ -84,8 +70,8 @@ public class ExactlyOnceMessageProcessor extends Thread {
         producer = new Producer(outputTopic, true, transactionalId, true, -1, transactionTimeoutMs, null).get();
         // Consumer must be in read_committed mode, which means it won't be able to read uncommitted data.
         // Consumer could optionally configure groupInstanceId to avoid unnecessary rebalances.
-        groupInstanceId = "Txn-consumer-" + instanceIdx;
-        consumer = new Consumer(inputTopic, consumerGroupId,
+        this.groupInstanceId = "Txn-consumer-" + instanceIdx;
+        consumer = new Consumer(inputTopic, "Eos-consumer",
             Optional.of(groupInstanceId), READ_COMMITTED, -1, null).get();
         this.latch = latch;
     }
@@ -97,35 +83,18 @@ public class ExactlyOnceMessageProcessor extends Thread {
 
         final AtomicLong messageRemaining = new AtomicLong(Long.MAX_VALUE);
 
-        // Under group mode, topic based subscription is sufficient as EOS apps are safe to cooperate transactionally after 2.5.
-        // Under standalone mode, user needs to manually assign the topic partitions and make sure the assignment is unique
-        // across the consumer group instances.
-        if (this.mode.equals("groupMode")) {
-            consumer.subscribe(Collections.singleton(inputTopic), new ConsumerRebalanceListener() {
-                @Override
-                public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
-                    printWithTxnId("Revoked partition assignment to kick-off rebalancing: " + partitions);
-                }
-
-                @Override
-                public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
-                    printWithTxnId("Received partition assignment after rebalancing: " + partitions);
-                    messageRemaining.set(messagesRemaining(consumer));
-                }
-            });
-        } else {
-            // Do a range assignment of topic partitions.
-            List<TopicPartition> topicPartitions = new ArrayList<>();
-            int rangeSize = numPartitions / numInstances;
-            int startPartition = rangeSize * instanceIdx;
-            int endPartition = Math.min(numPartitions - 1, startPartition + rangeSize - 1);
-            for (int partition = startPartition; partition <= endPartition; partition++) {
-                topicPartitions.add(new TopicPartition(inputTopic, partition));
+        consumer.subscribe(Collections.singleton(inputTopic), new ConsumerRebalanceListener() {
+            @Override
+            public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
+                printWithTxnId("Revoked partition assignment to kick-off rebalancing: " + partitions);
             }
 
-            consumer.assign(topicPartitions);
-            printWithTxnId("Manually assign partitions: " + topicPartitions);
-        }
+            @Override
+            public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
+                printWithTxnId("Received partition assignment after rebalancing: " + partitions);
+                messageRemaining.set(messagesRemaining(consumer));
+            }
+        });
 
         int messageProcessed = 0;
         while (messageRemaining.get() > 0) {
@@ -139,17 +108,12 @@ public class ExactlyOnceMessageProcessor extends Thread {
                         ProducerRecord<Integer, String> customizedRecord = transform(record);
                         producer.send(customizedRecord);
                     }
-                    Map<TopicPartition, OffsetAndMetadata> positions = new HashMap<>();
-                    for (TopicPartition topicPartition : consumer.assignment()) {
-                        positions.put(topicPartition, new OffsetAndMetadata(consumer.position(topicPartition), null));
-                    }
+
+                    Map<TopicPartition, OffsetAndMetadata> offsets = consumerOffsets();
+
                     // Checkpoint the progress by sending offsets to group coordinator broker.
-                    // Under group mode, we must apply consumer group metadata for proper fencing.
-                    if (this.mode.equals("groupMode")) {
-                        producer.sendOffsetsToTransaction(positions, consumer.groupMetadata());
-                    } else {
-                        producer.sendOffsetsToTransaction(positions, consumerGroupId);
-                    }
+                    // Note that this API is only available for broker >= 2.5.
+                    producer.sendOffsetsToTransaction(offsets, consumer.groupMetadata());
 
                     // Finish the transaction. All sent records should be visible for consumption now.
                     producer.commitTransaction();
@@ -164,7 +128,8 @@ public class ExactlyOnceMessageProcessor extends Thread {
                 // if the producer has hit a fatal error.
                 producer.abortTransaction();
 
-                // The consumer fetch position also needs to be reset.
+                // The consumer fetch position needs to be restored to the committed offset
+                // before the transaction started.
                 resetToLastCommittedPositions(consumer);
             }
 
@@ -174,6 +139,14 @@ public class ExactlyOnceMessageProcessor extends Thread {
 
         printWithTxnId("Finished processing " + messageProcessed + " records");
         latch.countDown();
+    }
+
+    private Map<TopicPartition, OffsetAndMetadata> consumerOffsets() {
+        Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
+        for (TopicPartition topicPartition : consumer.assignment()) {
+            offsets.put(topicPartition, new OffsetAndMetadata(consumer.position(topicPartition), null));
+        }
+        return offsets;
     }
 
     private void printWithTxnId(final String message) {
