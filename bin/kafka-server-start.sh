@@ -14,6 +14,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+PIDFILE="${PIDFILE:-"/var/run/kafka.pid"}"
+
 if [ $# -lt 1 ];
 then
 	echo "USAGE: $0 [-daemon] server.properties [--override property=value]*"
@@ -41,4 +43,11 @@ case $COMMAND in
     ;;
 esac
 
+if [ ! -e "${PIDFILE}" ]; then
+  echo "pidfile already exists. maybe kafka is already running under pid $(cat "${PIDFILE}")"
+  exit 1
+fi
+
 exec $base_dir/kafka-run-class.sh $EXTRA_ARGS kafka.Kafka "$@"
+
+echo "$!" > "${PIDFILE}"
