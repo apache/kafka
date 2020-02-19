@@ -274,7 +274,7 @@ public class MemoryRecordsTest {
 
                 @Override
                 protected long retrieveDeleteHorizon(RecordBatch batch) {
-                    return deleteHorizon; // arbitrary value > 1
+                    return deleteHorizon; // arbitrary value > 0
                 }
             }, filtered, Integer.MAX_VALUE, BufferSupplier.NO_CACHING);
             filtered.flip();

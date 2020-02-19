@@ -501,6 +501,11 @@ private[log] class Cleaner(val id: Int,
     doClean(cleanable, time.milliseconds(), trackedHorizon = deleteHorizonMs)
   }
 
+  private[log] def doTwoPassClean(cleanable: LogToClean, currentTime: Long, trackedHorizon: Long = -1L) : (Long, CleanerStats) = {
+    val firstResult = doClean(cleanable, currentTime, trackedHorizon)
+    doClean(cleanable, currentTime, trackedHorizon)
+  }
+
   private[log] def doClean(cleanable: LogToClean, currentTime: Long, trackedHorizon: Long = -1L): (Long, CleanerStats) = {
     info("Beginning cleaning of log %s.".format(cleanable.log.name))
 
@@ -642,7 +647,7 @@ private[log] class Cleaner(val id: Int,
                              transactionMetadata: CleanedTransactionMetadata,
                              lastRecordsOfActiveProducers: Map[Long, LastRecord],
                              stats: CleanerStats,
-                             currentTime: Long = RecordBatch.NO_TIMESTAMP): Long = {
+                             currentTime: Long): Long = {
     var latestDeleteHorizon: Long = RecordBatch.NO_TIMESTAMP
 
     val logCleanerFilter: RecordFilter = new RecordFilter {
@@ -805,7 +810,7 @@ private[log] class Cleaner(val id: Int,
                                  batch: RecordBatch,
                                  record: Record,
                                  stats: CleanerStats,
-                                 currentTime: Long = -1L): Boolean = {
+                                 currentTime: Long): Boolean = {
     val pastLatestOffset = record.offset > map.latestOffset
     if (pastLatestOffset)
       return true

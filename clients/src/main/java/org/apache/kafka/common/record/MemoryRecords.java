@@ -177,7 +177,6 @@ public class MemoryRecords extends AbstractRecords {
             // allow for the possibility that a previous version corrupted the log by writing a compressed record batch
             // with a magic value not matching the magic of the records (magic < 2). This will be fixed as we
             // recopy the messages to the destination buffer.
-
             byte batchMagic = batch.magic();
             // we want to check if the delete horizon has been set or stayed the same
             boolean writeOriginalBatch = true;
@@ -194,12 +193,17 @@ public class MemoryRecords extends AbstractRecords {
                 // we check if the delete horizon should be set to a new value
                 // in which case, we need to reset the base timestamp and overwrite the timestamp deltas
                 // if the batch does not contain tombstones, then we don't need to overwrite batch
-                boolean canControlBatchBeRemoved = batch.isControlBatch() && deleteHorizonMs > RecordBatch.NO_TIMESTAMP;
-                if (writeOriginalBatch && (deleteHorizonMs == batch.deleteHorizonMs() || (!containsTombstonesOrMarker && !canControlBatchBeRemoved))) {
+                boolean needToSetDeleteHorizon = batch.magic() >= 2 && containsTombstonesOrMarker && !batch.deleteHorizonSet();
+                if (writeOriginalBatch && (!needToSetDeleteHorizon || deleteHorizonMs == RecordBatch.NO_TIMESTAMP)) {
                     batch.writeTo(bufferOutputStream);
                     filterResult.updateRetainedBatchMetadata(batch, retainedRecords.size(), false);
                 } else {
-                    MemoryRecordsBuilder builder = buildRetainedRecordsInto(batch, retainedRecords, bufferOutputStream, deleteHorizonMs);
+                    final MemoryRecordsBuilder builder;
+                    if (containsTombstonesOrMarker)
+                        builder = buildRetainedRecordsInto(batch, retainedRecords, bufferOutputStream, deleteHorizonMs);
+                    else
+                        builder = buildRetainedRecordsInto(batch, retainedRecords, bufferOutputStream, RecordBatch.NO_TIMESTAMP);
+
                     MemoryRecords records = builder.build();
                     int filteredBatchSize = records.sizeInBytes();
                     if (filteredBatchSize > batch.sizeInBytes() && filteredBatchSize > maxRecordBatchSize)
@@ -244,7 +248,7 @@ public class MemoryRecords extends AbstractRecords {
                                                          boolean recordsFiltered,
                                                          long maxOffset,
                                                          List<Record> retainedRecords) {
-        boolean containsTombstonesOrMarker = false;
+        boolean containsTombstonesOrMarker = batch.isControlBatch();
         try (final CloseableIterator<Record> iterator = batch.streamingIterator(decompressionBufferSupplier)) {
             while (iterator.hasNext()) {
                 Record record = iterator.next();
@@ -379,10 +383,10 @@ public class MemoryRecords extends AbstractRecords {
         protected abstract boolean shouldRetainRecord(RecordBatch recordBatch, Record record);
 
         /**
-         * Retrieves the delete horizon ms for a specific batch
+         * Retrieves the latest delete horizon for given batch
          */
         protected long retrieveDeleteHorizon(RecordBatch recordBatch) {
-            return -1L;
+            return RecordBatch.NO_TIMESTAMP;
         }
     }
 
