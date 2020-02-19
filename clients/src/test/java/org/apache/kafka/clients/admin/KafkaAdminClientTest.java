@@ -2740,11 +2740,14 @@ public class KafkaAdminClientTest {
             // Wait for the request to be timed out before backing off
             TestUtils.waitForCondition(() -> !env.kafkaClient().hasInFlightRequests(),
                     "Timed out waiting for inFlightRequests to be timed out");
-            time.sleep(retryBackoffMs);
 
             // Since api timeout bound is not hit, AdminClient should retry
-            TestUtils.waitForCondition(() -> env.kafkaClient().hasInFlightRequests(),
-                    "Timed out waiting for Metadata request to be sent");
+            TestUtils.waitForCondition(() -> {
+                boolean hasInflightRequests = env.kafkaClient().hasInFlightRequests();
+                if (!hasInflightRequests)
+                    time.sleep(retryBackoffMs);
+                return hasInflightRequests;
+            }, "Timed out waiting for Metadata request to be sent");
             time.sleep(requestTimeoutMs + 1);
 
             TestUtils.assertFutureThrows(result.future, TimeoutException.class);
