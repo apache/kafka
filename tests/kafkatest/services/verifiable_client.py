@@ -21,7 +21,7 @@ import importlib
 import os
 import subprocess
 import signal
-from kafkatest.kafka.util import fix_opts_for_new_jvm
+from kafkatest.services.kafka import fix_opts_for_new_jvm
 
 
 """This module abstracts the implementation of a verifiable client, allowing

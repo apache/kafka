@@ -24,7 +24,7 @@ from kafkatest.services.kafka import TopicPartition
 from kafkatest.services.verifiable_client import VerifiableClientMixin
 from kafkatest.utils import is_int, is_int_with_prefix
 from kafkatest.version import DEV_BRANCH
-from kafkatest.kafka.util import fix_opts_for_new_jvm
+from kafkatest.services.kafka import fix_opts_for_new_jvm
 
 
 class VerifiableProducer(KafkaPathResolverMixin, VerifiableClientMixin, BackgroundThreadService):

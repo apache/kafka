@@ -17,7 +17,7 @@ from ducktape.services.background_thread import BackgroundThreadService
 
 from kafkatest.directory_layout.kafka_path import KafkaPathResolverMixin
 from kafkatest.services.security.security_config import SecurityConfig
-from kafkatest.kafka.util import fix_opts_for_new_jvm
+from kafkatest.services.kafka import fix_opts_for_new_jvm
 
 
 class KafkaLog4jAppender(KafkaPathResolverMixin, BackgroundThreadService):
