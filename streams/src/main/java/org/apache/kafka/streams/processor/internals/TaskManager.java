@@ -132,7 +132,14 @@ public class TaskManager {
             final Set<TopicPartition> corruptedPartitions = entry.getValue();
             task.markChangelogAsCorrupted(corruptedPartitions);
 
-            task.closeDirty();
+            try {
+                task.closeClean();
+            } catch (final RuntimeException e) {
+                log.error("Failed to close task {} cleanly. Attempting to re-close it as dirty.", task.id());
+                // We've already recorded the exception (which is the point of clean).
+                // Now, we should go ahead and complete the close because a half-closed task is no good to anyone.
+                task.closeDirty();
+            }
 
             task.revive();
         }

@@ -57,6 +57,7 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import static java.lang.String.format;
+import static java.util.Collections.emptyMap;
 import static java.util.Collections.singleton;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.maybeMeasureLatency;
 
@@ -228,25 +229,32 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         if (state() == State.CREATED || state() == State.CLOSING || state() == State.SUSPENDED) {
             // do nothing
             log.trace("Skip suspending since state is {}", state());
+        } else if (state() == State.RUNNING) {
+            closeTopology(true);
+
+            commitState();
+            // whenever we have successfully committed state during suspension, it is safe to checkpoint
+            // the state as well no matter if EOS is enabled or not
+            stateMgr.checkpoint(checkpointableOffsets());
+
+            // we should also clear any buffered records of a task when suspending it
+            partitionGroup.clear();
+
+            transitionTo(State.SUSPENDED);
+            log.info("Suspended running");
+        } else if (state() == State.RESTORING) {
+            // we just checkpoint the position that we've restored up to without
+            // going through the commit process
+            stateMgr.flush();
+            stateMgr.checkpoint(emptyMap());
+
+            // we should also clear any buffered records of a task when suspending it
+            partitionGroup.clear();
+
+            transitionTo(State.SUSPENDED);
+            log.info("Suspended running");
         } else {
-            if (state() == State.RUNNING) {
-                closeTopology(true);
-            }
-
-            if (state() == State.RUNNING || state() == State.RESTORING) {
-                commitState();
-                // whenever we have successfully committed state during suspension, it is safe to checkpoint
-                // the state as well no matter if EOS is enabled or not
-                stateMgr.checkpoint(checkpointableOffsets());
-
-                // we should also clear any buffered records of a task when suspending it
-                partitionGroup.clear();
-
-                transitionTo(State.SUSPENDED);
-                log.info("Suspended running");
-            } else {
-                throw new IllegalStateException("Illegal state " + state() + " while suspending active task " + id);
-            }
+            throw new IllegalStateException("Illegal state " + state() + " while suspending active task " + id);
         }
     }
 
@@ -402,29 +410,22 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         } else {
             if (state() == State.RUNNING) {
                 closeTopology(clean);
-            }
 
-            if (state() == State.RUNNING || state() == State.RESTORING) {
                 if (clean) {
                     commitState();
                     // whenever we have successfully committed state, it is safe to checkpoint
                     // the state as well no matter if EOS is enabled or not
                     stateMgr.checkpoint(checkpointableOffsets());
                 } else {
-                    try {
-                        // if from unclean close, then only need to flush state to make sure that when later
-                        // closing the states, there's no records triggering any processing anymore; also swallow all caught exceptions.
-                        // However, for a _clean_ shutdown, we try to commit and checkpoint. If there are any exceptions, they become
-                        // fatal for the "closeClean()" call, and the caller can try again with closeDirty() to complete the shutdown.
-                        stateMgr.flush();
-
-                        // just re-write the checkpoint file without updating the store offsets,
-                        // if there are any corrupted partitions then they will be excluded from the overwritten file
-                        stateMgr.checkpoint(Collections.emptyMap());
-                    } catch (final RuntimeException error) {
-                        log.debug("Ignoring flush error in unclean close.", error);
-                    }
+                    executeAndMaybeSwallow(false, stateMgr::flush, "state manager flush");
                 }
+
+                transitionTo(State.CLOSING);
+            } else if (state() == State.RESTORING) {
+                executeAndMaybeSwallow(clean, () -> {
+                    stateMgr.flush();
+                    stateMgr.checkpoint(Collections.emptyMap());
+                }, "state manager flush and checkpoint");
 
                 transitionTo(State.CLOSING);
             } else if (state() == State.SUSPENDED) {
@@ -443,7 +444,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                     StateManagerUtil.wipeStateStores(log, stateMgr);
                 }
 
-                closeRecordCollector(clean);
+                executeAndMaybeSwallow(clean, recordCollector::close, "record collector close");
             } else {
                 throw new IllegalStateException("Illegal state " + state() + " while closing active task " + id);
             }
@@ -696,12 +697,14 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         }
     }
 
-    private void closeRecordCollector(final boolean clean) {
+    private void executeAndMaybeSwallow(final boolean clean, final Runnable runnable, final String name) {
         try {
-            recordCollector.close();
+            runnable.run();
         } catch (final RuntimeException e) {
             if (clean) {
                 throw e;
+            } else {
+                log.debug("Ignoring error in unclean {}", name);
             }
         }
     }
