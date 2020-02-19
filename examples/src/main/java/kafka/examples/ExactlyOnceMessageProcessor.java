@@ -63,9 +63,8 @@ public class ExactlyOnceMessageProcessor extends Thread {
         this.inputTopic = inputTopic;
         this.outputTopic = outputTopic;
         this.transactionalId = "Processor-" + instanceIdx;
-        // If we are using the group mode, it is recommended to have a relatively short txn timeout
-        // in order to clear pending offsets faster.
-        final int transactionTimeoutMs = this.mode.equals("groupMode") ? 10000 : -1;
+        // It is recommended to have a relatively short txn timeout in order to clear pending offsets faster.
+        final int transactionTimeoutMs = 10000;
         // A unique transactional.id must be provided in order to properly use EOS.
         producer = new Producer(outputTopic, true, transactionalId, true, -1, transactionTimeoutMs, null).get();
         // Consumer must be in read_committed mode, which means it won't be able to read uncommitted data.
