@@ -684,7 +684,7 @@ public class StoreChangelogReader implements ChangelogReader {
     private void pauseChangelogsFromRestoreConsumer(final Collection<TopicPartition> partitions) {
         final Set<TopicPartition> assignment = new HashSet<>(restoreConsumer.assignment());
 
-        // the current assignment should contain the all partitions to pause
+        // the current assignment should contain all the partitions to pause
         if (!assignment.containsAll(partitions)) {
             throw new IllegalStateException("The current assignment " + assignment + " " +
                 "does not contain some of the partitions " + partitions + " for pausing.");
@@ -695,7 +695,7 @@ public class StoreChangelogReader implements ChangelogReader {
     private void removeChangelogsFromRestoreConsumer(final Collection<TopicPartition> partitions) {
         final Set<TopicPartition> assignment = new HashSet<>(restoreConsumer.assignment());
 
-        // the current assignment should contain the all partitions to remove
+        // the current assignment should contain all the partitions to remove
         if (!assignment.containsAll(partitions)) {
             throw new IllegalStateException("The current assignment " + assignment + " " +
                 "does not contain some of the partitions " + partitions + " for removing.");
@@ -707,7 +707,7 @@ public class StoreChangelogReader implements ChangelogReader {
     private void resumeChangelogsFromRestoreConsumer(final Collection<TopicPartition> partitions) {
         final Set<TopicPartition> assignment = new HashSet<>(restoreConsumer.assignment());
 
-        // the current assignment should contain the all partitions to resume
+        // the current assignment should contain all the partitions to resume
         if (!assignment.containsAll(partitions)) {
             throw new IllegalStateException("The current assignment " + assignment + " " +
                 "does not contain some of the partitions " + partitions + " for resuming.");

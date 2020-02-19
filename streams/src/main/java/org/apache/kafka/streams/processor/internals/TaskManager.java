@@ -150,10 +150,10 @@ public class TaskManager {
             } else /* we previously owned this task, and we don't have it anymore, or it has changed active/standby state */ {
                 final Set<TopicPartition> inputPartitions = task.inputPartitions();
                 try {
-                    task.closeClean();
                     changelogReader.remove(task.changelogPartitions());
+                    task.closeClean();
                 } catch (final RuntimeException e) {
-                    log.error("Failed to close task {} cleanly. Attempting to close remaining tasks before re-throwing.", task.id());
+                    log.error("Failed to close task {} cleanly. Attempting to close remaining tasks before re-throwing:", task.id(), e);
                     taskCloseExceptions.put(task.id(), e);
                     // We've already recorded the exception (which is the point of clean).
                     // Now, we should go ahead and complete the close because a half-closed task is no good to anyone.
