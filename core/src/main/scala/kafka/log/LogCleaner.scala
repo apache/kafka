@@ -501,11 +501,6 @@ private[log] class Cleaner(val id: Int,
     doClean(cleanable, time.milliseconds(), trackedHorizon = deleteHorizonMs)
   }
 
-  private[log] def doTwoPassClean(cleanable: LogToClean, currentTime: Long, trackedHorizon: Long = -1L) : (Long, CleanerStats) = {
-    val firstResult = doClean(cleanable, currentTime, trackedHorizon)
-    doClean(cleanable, currentTime, trackedHorizon)
-  }
-
   private[log] def doClean(cleanable: LogToClean, currentTime: Long, trackedHorizon: Long = -1L): (Long, CleanerStats) = {
     info("Beginning cleaning of log %s.".format(cleanable.log.name))
 
