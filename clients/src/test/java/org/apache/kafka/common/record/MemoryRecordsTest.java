@@ -19,6 +19,7 @@ package org.apache.kafka.common.record;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.CorruptRecordException;
 import org.apache.kafka.common.header.internals.RecordHeaders;
+import org.apache.kafka.common.record.MemoryRecords.RecordFilter;
 import org.apache.kafka.common.record.MemoryRecords.RecordFilter.BatchRetention;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.TestUtils;
@@ -261,7 +262,7 @@ public class MemoryRecordsTest {
 
             ByteBuffer filtered = ByteBuffer.allocate(2048);
             final long deleteHorizon = Integer.MAX_VALUE / 2;
-            builder.build().filterTo(new TopicPartition("random", 0), new MemoryRecords.RecordFilter() {
+            final RecordFilter recordFilter = new MemoryRecords.RecordFilter() {
                 @Override
                 protected boolean shouldRetainRecord(RecordBatch recordBatch, Record record) {
                     return true;
@@ -273,10 +274,13 @@ public class MemoryRecordsTest {
                 }
 
                 @Override
-                protected long retrieveDeleteHorizon(RecordBatch batch) {
-                    return deleteHorizon; // arbitrary value > 0
+                protected boolean containsEmptyMarker(RecordBatch batch) {
+                    return true;
                 }
-            }, filtered, Integer.MAX_VALUE, BufferSupplier.NO_CACHING);
+            };
+            recordFilter.currentTime = deleteHorizon;
+            recordFilter.tombstoneRetentionMs = 0L;
+            builder.build().filterTo(new TopicPartition("random", 0), recordFilter, filtered, Integer.MAX_VALUE, BufferSupplier.NO_CACHING);
             filtered.flip();
             MemoryRecords filteredRecords = MemoryRecords.readableRecords(filtered);
 

@@ -400,13 +400,6 @@ public class MemoryRecords extends AbstractRecords {
         protected abstract boolean shouldRetainRecord(RecordBatch recordBatch, Record record);
 
         /**
-         * Retrieves the latest delete horizon for given batch
-         */
-        protected long retrieveDeleteHorizon(RecordBatch recordBatch) {
-            return RecordBatch.NO_TIMESTAMP;
-        }
-
-        /**
          * Checks whether or not the batch can be discarded
          */
         protected boolean containsEmptyMarker(RecordBatch batch) {
