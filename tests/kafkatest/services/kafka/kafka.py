@@ -32,7 +32,7 @@ from kafkatest.services.security.minikdc import MiniKdc
 from kafkatest.services.security.listener_security_config import ListenerSecurityConfig
 from kafkatest.services.security.security_config import SecurityConfig
 from kafkatest.version import DEV_BRANCH, LATEST_0_10_0, LATEST_0_9, LATEST_0_8_2
-from kafkatest.services.kafka import fix_opts_for_new_jvm
+from kafkatest.services.kafka.util import fix_opts_for_new_jvm
 
 
 class KafkaListener:
