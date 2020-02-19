@@ -1616,10 +1616,7 @@ object ReassignPartitionsCommand extends Logging {
         }
         parsePartitionReassignmentData(version, js)
       case Left(f) =>
-        if (NonFatal(f))
-          throw new AdminCommandFailedException("Admin command failed", f)
-        else
-          throw f
+        throw f
     }
   }
 

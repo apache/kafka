@@ -35,7 +35,7 @@ object Json {
    * Parse a JSON string into a JsonValue if possible. `None` is returned if `input` is not valid JSON.
    */
   def parseFull(input: String): Option[JsonValue] =
-    try Option(mapper.readTree(input)).map(JsonValue(_))
+    try doParseFull(input)
     catch { case _: JsonProcessingException => None }
 
   /**
