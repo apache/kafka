@@ -491,8 +491,9 @@ public class TaskManager {
         return tasks.values().stream().filter(t -> !t.isActive());
     }
 
-    private boolean isActive(final TaskId task) {
-        return tasks.get(task).isActive();
+    private boolean isActive(final TaskId id) {
+        final Task task = tasks.get(id);
+        return task != null && task.isActive();
     }
 
     /**
