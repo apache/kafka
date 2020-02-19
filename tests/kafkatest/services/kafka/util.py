@@ -16,3 +16,16 @@
 from collections import namedtuple
 
 TopicPartition = namedtuple('TopicPartition', ['topic', 'partition'])
+
+def fix_opts_for_new_jvm(self, node):
+    java_version = node.account.ssh_capture("java -version 2>&1 | sed -E -n 's/.* version \"([0-9]*).*$/\1/p'")
+
+    if java_version <= 9
+        return ""
+
+    cmd = ""
+    if node.version == LATEST_0_9 or node.version == LATEST_0_8_2:
+        cmd += "export KAFKA_GC_LOG_OPTS=\"-verbose:gc\"; "
+    if node.version == LATEST_0_8_2:
+        cmd += "export KAFKA_JVM_PERFORMANCE_OPTS=\"-server -XX:+UseConcMarkSweepGC -XX:+CMSClassUnloadingEnabled -XX:+CMSScavengeBeforeRemark -XX:+DisableExplicitGC -Djava.awt.headless=true\"; "
+    return cmd
