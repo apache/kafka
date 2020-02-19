@@ -48,7 +48,7 @@ class SslStores(object):
         Generate CA private key and certificate.
         """
 
-        self.runcmd("keytool -genkeypair -alias ca -keyalg RSA -keysize 2048 -keystore %s -storetype JKS -storepass %s -keypass %s -dname CN=SystemTestCA -startdate %s" % (self.ca_jks_path, self.ca_passwd, self.ca_passwd, self.startdate))
+        self.runcmd("keytool -genkeypair -alias ca -keyalg RSA -keysize 2048 -keystore %s -storetype JKS -storepass %s -keypass %s -dname CN=SystemTestCA -startdate %s --ext bc=ca:true" % (self.ca_jks_path, self.ca_passwd, self.ca_passwd, self.startdate))
         self.runcmd("keytool -export -alias ca -keystore %s -storepass %s -storetype JKS -rfc -file %s" % (self.ca_jks_path, self.ca_passwd, self.ca_crt_path))
 
     def generate_truststore(self):

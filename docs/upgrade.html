@@ -38,6 +38,10 @@
         for details of the new Java authorizer API added in 2.4.0.  Note that <code>kafka.security.auth.Authorizer</code>
         and <code>kafka.security.auth.SimpleAclAuthorizer</code> were deprecated in 2.4.0.
     </li>
+    <li>TLSv1 and TLSv1.1 have been disabled by default since these have known security vulnerabilities. Only TLSv1.2 is now
+        enabled by default. You can continue to use TLSv1 and TLSv1.1 by explicitly enabling these in the configuration options
+        <code>ssl.protocol</code> and <code>ssl.enabled.protocols</code>.
+    </li>
 </ul>
 
 <h4><a id="upgrade_2_4_0" href="#upgrade_2_4_0">Upgrading from 0.8.x, 0.9.x, 0.10.0.x, 0.10.1.x, 0.10.2.x, 0.11.0.x, 1.0.x, 1.1.x, 2.0.x or 2.1.x or 2.2.x or 2.3.x to 2.4.0</a></h4>
