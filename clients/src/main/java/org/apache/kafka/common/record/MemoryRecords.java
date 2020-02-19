@@ -262,7 +262,7 @@ public class MemoryRecords extends AbstractRecords {
                                                          boolean recordsFiltered,
                                                          long maxOffset,
                                                          List<Record> retainedRecords) {
-        boolean containsTombstones = batch.isControlBatch();
+        boolean containsTombstones = false;
         try (final CloseableIterator<Record> iterator = batch.streamingIterator(decompressionBufferSupplier)) {
             while (iterator.hasNext()) {
                 Record record = iterator.next();
