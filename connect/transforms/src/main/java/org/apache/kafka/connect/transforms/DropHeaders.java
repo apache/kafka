@@ -17,10 +17,11 @@
 package org.apache.kafka.connect.transforms;
 
 import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.connect.connector.ConnectRecord;
 import org.apache.kafka.connect.header.ConnectHeaders;
 import org.apache.kafka.connect.header.Headers;
-import org.apache.kafka.connect.transforms.util.NonBlankStringListValidator;
+import org.apache.kafka.connect.transforms.util.NonEmptyListValidator;
 import org.apache.kafka.connect.transforms.util.SimpleConfig;
 
 import java.util.List;
@@ -34,8 +35,25 @@ public class DropHeaders<R extends ConnectRecord<R>> implements Transformation<R
     public static final String HEADER_NAMES_CONFIG = "names";
 
     public static final ConfigDef CONFIG_DEF = new ConfigDef()
-        .define(HEADER_NAMES_CONFIG, ConfigDef.Type.LIST, ConfigDef.NO_DEFAULT_VALUE,
-            new NonBlankStringListValidator(), ConfigDef.Importance.MEDIUM,
+        .define(HEADER_NAMES_CONFIG, ConfigDef.Type.LIST, ConfigDef.NO_DEFAULT_VALUE, new ConfigDef.Validator() {
+            @SuppressWarnings("unchecked")
+            @Override
+            public void ensureValid(String name, Object valueObject) {
+                final NonEmptyListValidator nonEmptyListValidator = new NonEmptyListValidator();
+                nonEmptyListValidator.ensureValid(name, valueObject);
+                List<String> lst = (List<String>) valueObject;
+
+                long emptyValues = lst.stream().filter(v -> v.isEmpty()).count();
+                if (emptyValues > 0) {
+                    throw new ConfigException("String must be non-blank");
+                }
+            }
+
+            @Override
+            public String toString() {
+                return "list of colon-delimited pairs, e.g. <code>foo:bar,abc:xyz</code>";
+            }
+            }, ConfigDef.Importance.MEDIUM,
             "Header name(s) to remove.");
 
     private List<String> headerNames;

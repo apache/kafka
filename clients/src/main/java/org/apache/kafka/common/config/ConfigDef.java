@@ -1063,22 +1063,6 @@ public class ConfigDef {
         }
     }
 
-    public static class NonBlankString implements Validator {
-
-        @Override
-        public void ensureValid(String name, Object o) {
-            String s = (String) o;
-            if (s != null && s.trim().isEmpty()) {
-                throw new ConfigException(name, o, "String must be non-blank");
-            }
-        }
-
-        @Override
-        public String toString() {
-            return "non-blank string";
-        }
-    }
-
     public static class NonEmptyStringWithoutControlChars implements Validator {
 
         public static NonEmptyStringWithoutControlChars nonEmptyStringWithoutControlChars() {
