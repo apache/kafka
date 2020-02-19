@@ -31,5 +31,5 @@ def fix_opts_for_new_jvm(self, node):
     if node.version == LATEST_0_9 or node.version == LATEST_0_8_2:
         cmd += "export KAFKA_GC_LOG_OPTS=\"-verbose:gc\"; "
     if node.version == LATEST_0_8_2:
-        cmd += "export KAFKA_JVM_PERFORMANCE_OPTS=\"-server -XX:+UseConcMarkSweepGC -XX:+CMSClassUnloadingEnabled -XX:+CMSScavengeBeforeRemark -XX:+DisableExplicitGC -Djava.awt.headless=true\"; "
+        cmd += "export KAFKA_JVM_PERFORMANCE_OPTS=\"-server -XX:+CMSClassUnloadingEnabled -XX:+CMSScavengeBeforeRemark -XX:+DisableExplicitGC -Djava.awt.headless=true\"; "
     return cmd
