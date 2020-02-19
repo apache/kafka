@@ -147,7 +147,6 @@ public class KStreamTransformValuesTest {
         final KStreamTransformValues.KStreamTransformValuesProcessor<Integer, Integer, Integer> processor =
             new KStreamTransformValues.KStreamTransformValuesProcessor<>(valueTransformer);
         processor.init(context);
-        EasyMock.reset(valueTransformer);
 
         final Integer inputKey = 1;
         final Integer inputValue = 10;
