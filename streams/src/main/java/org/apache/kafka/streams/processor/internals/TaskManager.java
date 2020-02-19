@@ -364,7 +364,7 @@ public class TaskManager {
         final Map<TaskId, Integer> taskLags = new HashMap<>();
 
         for (final TaskId id : tasksOnLocalStorage()) {
-            if (activeTaskMap().containsKey(id)) {
+            if (isActive(id)) {
                 taskLags.put(id, ACTIVE_TASK_SENTINEL_LAG);
             } else {
                 taskLags.put(id, 0);
@@ -489,6 +489,10 @@ public class TaskManager {
 
     private Stream<Task> standbyTaskStream() {
         return tasks.values().stream().filter(t -> !t.isActive());
+    }
+
+    private boolean isActive(final TaskId task) {
+        return tasks.get(task).isActive();
     }
 
     /**

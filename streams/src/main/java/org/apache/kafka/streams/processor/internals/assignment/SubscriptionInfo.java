@@ -155,7 +155,6 @@ public class SubscriptionInfo {
             // lazily initialize the prev and standby task maps as they may not be needed
             if (data.version() >= 7) {
                 setPrevAndStandbySetsFromParsedTaskLagMap(data, taskLags());
-
             }
             prevTasksCache = Collections.unmodifiableSet(
                 data.prevTasks()
@@ -172,7 +171,6 @@ public class SubscriptionInfo {
             // lazily initialize the prev and standby task maps as they may not be needed
             if (data.version() >= 7) {
                 setPrevAndStandbySetsFromParsedTaskLagMap(data, taskLags());
-
             }
             standbyTasksCache = Collections.unmodifiableSet(
                 data.standbyTasks()
@@ -190,7 +188,6 @@ public class SubscriptionInfo {
                 data.taskLags()
                     .stream()
                     .collect(Collectors.toMap(t -> new TaskId(t.topicGroupId(), t.partition()), l -> l.lag()))
-
             );
         }
         return taskLagsCache;

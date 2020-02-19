@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.streams.processor.internals.assignment;
 
+import static org.apache.kafka.streams.processor.internals.assignment.StreamsAssignmentProtocolVersions.LATEST_SUPPORTED_VERSION;
+
 import java.util.HashMap;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -35,7 +37,6 @@ public class LegacySubscriptionInfoSerde {
 
     private static final Logger log = LoggerFactory.getLogger(LegacySubscriptionInfoSerde.class);
 
-    public static final int LATEST_SUPPORTED_VERSION = 6;
     static final int UNKNOWN = -1;
 
     private final int usedVersion;
@@ -66,8 +67,8 @@ public class LegacySubscriptionInfoSerde {
         usedVersion = version;
         this.latestSupportedVersion = latestSupportedVersion;
         this.processId = processId;
-        this.prevTasks = prevTasks == null ? taskLagMapToPrevTaskSet(taskLags) : prevTasks();
-        this.standbyTasks = standbyTasks == null ? taskLagMapToStandbyTaskSet(taskLags) : standbyTasks();
+        this.prevTasks = prevTasks == null ? taskLagMapToPrevTaskSet(taskLags) : prevTasks;
+        this.standbyTasks = standbyTasks == null ? taskLagMapToStandbyTaskSet(taskLags) : standbyTasks;
         // Coerce empty string to null. This was the effect of the serialization logic, anyway.
         this.userEndPoint = userEndPoint == null || userEndPoint.isEmpty() ? null : userEndPoint;
         this.taskLags = taskLags == null ? prevAndStandbyTasksToTaskLagMap(prevTasks, standbyTasks) : taskLags;

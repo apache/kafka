@@ -282,7 +282,6 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         // keep track of any future consumers in a "dummy" Client since we can't decipher their subscription
         final UUID futureId = randomUUID();
         final ClientMetadata futureClient = new ClientMetadata(null);
-        clientMetadataMap.put(futureId, futureClient);
 
         int minReceivedMetadataVersion = LATEST_SUPPORTED_VERSION;
         int minSupportedMetadataVersion = LATEST_SUPPORTED_VERSION;
@@ -301,6 +300,9 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             if (usedVersion > LATEST_SUPPORTED_VERSION) {
                 futureMetadataVersion = usedVersion;
                 processId = futureId;
+                if (!clientMetadataMap.containsKey(futureId)) {
+                    clientMetadataMap.put(futureId, futureClient);
+                }
             } else {
                 processId = info.processId();
             }
@@ -313,7 +315,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                 clientMetadataMap.put(info.processId(), clientMetadata);
             }
 
-            // add the consumer and any info its its subscription to the client
+            // add the consumer and any info in its subscription to the client
             clientMetadata.addConsumer(consumerId, subscription.ownedPartitions());
             allOwnedPartitions.addAll(subscription.ownedPartitions());
             clientMetadata.addPreviousTasks(info);
@@ -557,12 +559,13 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
 
         final Map<UUID, ClientState> states = new HashMap<>();
         for (final Map.Entry<UUID, ClientMetadata> entry : clientMetadataMap.entrySet()) {
+            final UUID uuid = entry.getKey();
             final ClientState state = entry.getValue().state;
-            states.put(entry.getKey(), state);
+            states.put(uuid, state);
 
-            // Either the active tasks (eager) OR the owned partitions (cooperative) were encoded in the subscription
-            // according to the rebalancing protocol, so convert any partitions in a client to tasks where necessary
-            if (!state.ownedPartitions().isEmpty()) {
+            // this is an optimization: we can't decode the future subscription's prev tasks, but we can figure them
+            // out from the encoded ownedPartitions
+            if (uuid == futureId && !state.ownedPartitions().isEmpty()) {
                 final Set<TaskId> previousActiveTasks = new HashSet<>();
                 for (final Map.Entry<TopicPartition, String> partitionEntry : state.ownedPartitions().entrySet()) {
                     final TopicPartition tp = partitionEntry.getKey();
