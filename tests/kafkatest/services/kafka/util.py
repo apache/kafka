@@ -18,6 +18,10 @@ from collections import namedtuple
 TopicPartition = namedtuple('TopicPartition', ['topic', 'partition'])
 
 def fix_opts_for_new_jvm(self, node):
+    # Startup scripts for early versions of Kafka contains options
+    # that not supported on latest versions of JVM like -XX:+PrintGCDateStamps or -XX:UseParNewGC.
+    # When system test run on JVM that doesn't support these options
+    # we should setup environment variables with correct options.
     java_version = node.account.ssh_capture("java -version 2>&1 | sed -E -n 's/.* version \"([0-9]*).*$/\1/p'")
 
     if java_version <= 9
