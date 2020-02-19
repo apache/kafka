@@ -165,7 +165,7 @@ public class MemoryRecords extends AbstractRecords {
             // which indicates if the control batch is empty or not
             // we do this to avoid calling CleanedTransactionMetadata#onControlBatchRead
             // more than once since each call is relatively expensive
-            long deleteHorizonMs = filter.retrieveDeleteHorizon(batch);
+            final boolean containsEmptyMarker = filter.containsEmptyMarker(batch);
             final BatchRetention batchRetention = filter.checkBatchRetention(batch);
 
             filterResult.bytesRead += batch.sizeInBytes();
@@ -180,12 +180,12 @@ public class MemoryRecords extends AbstractRecords {
             byte batchMagic = batch.magic();
             // we want to check if the delete horizon has been set or stayed the same
             boolean writeOriginalBatch = true;
-            boolean containsTombstonesOrMarker = false;
+            boolean containsTombstones = false;
             List<Record> retainedRecords = new ArrayList<>();
 
             final BatchIterationResult iterationResult = iterateOverBatch(batch, decompressionBufferSupplier, filterResult, filter,
                                                                           batchMagic, writeOriginalBatch, maxOffset, retainedRecords);
-            containsTombstonesOrMarker = iterationResult.containsTombstonesOrMarker();
+            containsTombstones = iterationResult.containsTombstonesOrMarker();
             writeOriginalBatch = iterationResult.shouldWriteOriginalBatch();
             maxOffset = iterationResult.maxOffset();
 
@@ -193,15 +193,20 @@ public class MemoryRecords extends AbstractRecords {
                 // we check if the delete horizon should be set to a new value
                 // in which case, we need to reset the base timestamp and overwrite the timestamp deltas
                 // if the batch does not contain tombstones, then we don't need to overwrite batch
-                boolean needToSetDeleteHorizon = batch.magic() >= 2 && containsTombstonesOrMarker && !batch.deleteHorizonSet();
-                if (writeOriginalBatch && (!needToSetDeleteHorizon || deleteHorizonMs == RecordBatch.NO_TIMESTAMP)) {
+                boolean needToSetDeleteHorizon = batch.magic() >= 2 && (containsTombstones || containsEmptyMarker)
+                    && !batch.deleteHorizonSet();
+                if (writeOriginalBatch && (!needToSetDeleteHorizon)) {
                     batch.writeTo(bufferOutputStream);
                     filterResult.updateRetainedBatchMetadata(batch, retainedRecords.size(), false);
                 } else {
                     final MemoryRecordsBuilder builder;
-                    if (containsTombstonesOrMarker)
+                    if (needToSetDeleteHorizon) {
+                        long deleteHorizonMs = retrieveDeleteHorizon(batch, filter, containsEmptyMarker);
                         builder = buildRetainedRecordsInto(batch, retainedRecords, bufferOutputStream, deleteHorizonMs);
-                    else
+                        if (deleteHorizonMs > filterResult.latestDeleteHorizon()) {
+                            filterResult.updateLatestDeleteHorizon(deleteHorizonMs);
+                        }
+                    } else
                         builder = buildRetainedRecordsInto(batch, retainedRecords, bufferOutputStream, RecordBatch.NO_TIMESTAMP);
 
                     MemoryRecords records = builder.build();
@@ -240,6 +245,15 @@ public class MemoryRecords extends AbstractRecords {
         return filterResult;
     }
 
+    private static long retrieveDeleteHorizon(final RecordBatch batch,
+                                              final RecordFilter filter,
+                                              final boolean containsEmptyMarker) {
+        if (batch.isControlBatch() && !containsEmptyMarker) {
+            return RecordBatch.NO_TIMESTAMP;
+        }
+        return filter.currentTime + filter.tombstoneRetentionMs;
+    }
+
     private static BatchIterationResult iterateOverBatch(RecordBatch batch,
                                                          BufferSupplier decompressionBufferSupplier,
                                                          FilterResult filterResult,
@@ -248,7 +262,7 @@ public class MemoryRecords extends AbstractRecords {
                                                          boolean recordsFiltered,
                                                          long maxOffset,
                                                          List<Record> retainedRecords) {
-        boolean containsTombstonesOrMarker = batch.isControlBatch();
+        boolean containsTombstones = batch.isControlBatch();
         try (final CloseableIterator<Record> iterator = batch.streamingIterator(decompressionBufferSupplier)) {
             while (iterator.hasNext()) {
                 Record record = iterator.next();
@@ -266,13 +280,13 @@ public class MemoryRecords extends AbstractRecords {
                     retainedRecords.add(record);
 
                     if (!record.hasValue()) {
-                        containsTombstonesOrMarker = true;
+                        containsTombstones = true;
                     }
                 } else {
                     recordsFiltered = false;
                 }
             }
-            return new BatchIterationResult(recordsFiltered, containsTombstonesOrMarker, maxOffset);
+            return new BatchIterationResult(recordsFiltered, containsTombstones, maxOffset);
         }
     }
 
@@ -363,6 +377,9 @@ public class MemoryRecords extends AbstractRecords {
     }
 
     public static abstract class RecordFilter {
+        public long currentTime = RecordBatch.NO_TIMESTAMP;
+        public long tombstoneRetentionMs = RecordBatch.NO_TIMESTAMP;
+
         public enum BatchRetention {
             DELETE, // Delete the batch without inspecting records
             RETAIN_EMPTY, // Retain the batch even if it is empty
@@ -388,6 +405,13 @@ public class MemoryRecords extends AbstractRecords {
         protected long retrieveDeleteHorizon(RecordBatch recordBatch) {
             return RecordBatch.NO_TIMESTAMP;
         }
+
+        /**
+         * Checks whether or not the batch can be discarded
+         */
+        protected boolean containsEmptyMarker(RecordBatch batch) {
+            return false;
+        }
     }
 
     public static class FilterResult {
@@ -401,9 +425,18 @@ public class MemoryRecords extends AbstractRecords {
         private long maxOffset = -1L;
         private long maxTimestamp = RecordBatch.NO_TIMESTAMP;
         private long shallowOffsetOfMaxTimestamp = -1L;
+        private long latestDeleteHorizonMs = RecordBatch.NO_TIMESTAMP;
 
         private FilterResult(ByteBuffer outputBuffer) {
             this.outputBuffer = outputBuffer;
+        }
+
+        public void updateLatestDeleteHorizon(long deleteHorizon) {
+            this.latestDeleteHorizonMs = deleteHorizon;
+        }
+
+        public long latestDeleteHorizon() {
+            return latestDeleteHorizonMs;
         }
 
         private void updateRetainedBatchMetadata(MutableRecordBatch retainedBatch, int numMessagesInBatch, boolean headerOnly) {
