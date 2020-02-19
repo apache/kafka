@@ -211,7 +211,6 @@ public class RegexSourceIntegrationTest {
                         super.subscribe(topics, new TheConsumerRebalanceListener(assignedTopics, listener));
                     }
                 };
-
             }
         });
 
