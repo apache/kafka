@@ -203,13 +203,14 @@ public class TaskManager {
     }
 
     /**
+     * Tries to initialize any new or still-uninitialized tasks, then checks if they can/have completed restoration.
+     *
      * @throws IllegalStateException If store gets registered after initialized is already finished
      * @throws StreamsException if the store's change log does not contain the partition
      */
-    boolean checkForCompletedRestoration() {
+    boolean tryToCompleteRestoration() {
         boolean allRunning = true;
 
-        // first initialize the created tasks, then check if they can complete the restoration
         final List<Task> restoringTasks = new LinkedList<>();
         for (final Task task : tasks.values()) {
             if (task.state() == CREATED) {
@@ -236,7 +237,7 @@ public class TaskManager {
                     try {
                         task.completeRestoration();
                     } catch (final TimeoutException e) {
-                        log.debug("Cloud complete restoration for {} due to {}; will retry", task.id(), e.toString());
+                        log.debug("Could not complete restoration for {} due to {}; will retry", task.id(), e.toString());
 
                         allRunning = false;
                     }

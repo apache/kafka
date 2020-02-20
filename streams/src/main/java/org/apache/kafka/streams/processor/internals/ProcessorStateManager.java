@@ -251,7 +251,7 @@ public class ProcessorStateManager implements StateManager {
         // is not log enabled (including global stores), and hence it does not need to be restored
         if (topic != null) {
             // NOTE we assume the partition of the topic can always be inferred from the task id;
-            // if user ever use a default partition grouper (deprecated in KIP-528) this would break and
+            // if user ever use a custom partition grouper (deprecated in KIP-528) this would break and
             // it is not a regression (it would always break anyways)
             final TopicPartition storePartition = new TopicPartition(topic, taskId.partition);
             final StateStoreMetadata storeMetadata = new StateStoreMetadata(

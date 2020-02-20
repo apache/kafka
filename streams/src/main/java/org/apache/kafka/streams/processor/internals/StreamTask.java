@@ -254,7 +254,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                 partitionGroup.clear();
 
                 transitionTo(State.SUSPENDED);
-                log.info("Suspended running");
+                log.info("Suspended active");
             } else {
                 throw new IllegalStateException("Illegal state " + state() + " while suspending active task " + id);
             }

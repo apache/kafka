@@ -189,6 +189,7 @@ public class StoreChangelogReader implements ChangelogReader {
     // source of the truth of the current registered changelogs;
     // NOTE a changelog would only be removed when its corresponding task
     // is being removed from the thread; otherwise it would stay in this map even after completed
+    // thus it should be in sync with the restore consumer's assignment until all restoration is complete
     private final Map<TopicPartition, ChangelogMetadata> changelogs;
 
     // the changelog reader only need the main consumer to get committed offsets for source changelog partitions
@@ -274,7 +275,9 @@ public class StoreChangelogReader implements ChangelogReader {
     // immediately transit back -- there's no overhead of transiting back and forth but simplifies the logic a lot.
     @Override
     public void transitToRestoreActive() {
-        log.debug("Transiting to restore active tasks: {}", changelogs);
+        if (state != ChangelogReaderState.ACTIVE_RESTORING) {
+            log.debug("Transiting to restore active tasks: {}", changelogs);
+        }
 
         // pause all partitions that are for standby tasks from the restore consumer
         pauseChangelogsFromRestoreConsumer(standbyRestoringChangelogs());
@@ -306,7 +309,8 @@ public class StoreChangelogReader implements ChangelogReader {
 
     /**
      * Since it is shared for multiple tasks and hence multiple state managers, the registration would take its
-     * corresponding state manager as well for restoring.
+     * corresponding state manager as well for restoring. A registered changelog will be added to the restore
+     * consumer's assignment but remain paused until it's initialized.
      */
     @Override
     public void register(final TopicPartition partition, final ProcessorStateManager stateManager) {
@@ -327,6 +331,9 @@ public class StoreChangelogReader implements ChangelogReader {
             throw new IllegalStateException("There is already a changelog registered for " + partition +
                 ", this should not happen: " + changelogs);
         }
+
+        addChangelogsToRestoreConsumer(Collections.singleton(partition));
+        pauseChangelogsFromRestoreConsumer(Collections.singleton(partition));
     }
 
     private ChangelogMetadata restoringChangelogByPartition(final TopicPartition partition) {
