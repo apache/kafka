@@ -525,11 +525,24 @@ public final class RecordAccumulator {
                 // we cannot send the batch until we have refreshed the producer id
                 return true;
 
-            if (!first.hasSequence() && transactionManager.hasUnresolvedSequence(first.topicPartition))
-                // Don't drain any new batches while the state of previous sequence numbers
-                // is unknown. The previous batches would be unknown if they were aborted
-                // on the client after being sent to the broker at least once.
-                return true;
+            if (!first.hasSequence()) {
+                if (transactionManager.hasInflightBatches(tp)) {
+                    // Don't drain any new batches while the partition has in-flight batches with a different epoch
+                    // and/or producer ID. Otherwise, a batch with a new epoch and sequence number
+                    // 0 could be written before earlier batches complete, which would cause out of sequence errors
+                    ProducerBatch firstInFlightBatch = transactionManager.nextBatchBySequence(tp);
+
+                    if (firstInFlightBatch != null && !transactionManager.matchesProducerIdAndEpoch(firstInFlightBatch)) {
+                        return true;
+                    }
+                }
+
+                if (transactionManager.hasUnresolvedSequence(first.topicPartition))
+                    // Don't drain any new batches while the state of previous sequence numbers
+                    // is unknown. The previous batches would be unknown if they were aborted
+                    // on the client after being sent to the broker at least once.
+                    return true;
+            }
 
             int firstInFlightSequence = transactionManager.firstInFlightSequence(first.topicPartition);
             if (firstInFlightSequence != RecordBatch.NO_SEQUENCE && first.hasSequence()

@@ -711,10 +711,6 @@ public class StreamThreadTest {
         thread.taskManager().handleAssignment(activeTasks, Collections.emptyMap());
         thread.rebalanceListener.onPartitionsAssigned(assignedPartitions);
 
-        for (final Task task : thread.activeTasks()) {
-            assertTrue(((MockProducer) ((RecordCollectorImpl) ((StreamTask) task).recordCollector()).producer()).transactionInitialized());
-        }
-
         thread.shutdown();
         TestUtils.waitForCondition(
             () -> thread.state() == StreamThread.State.DEAD,
@@ -1154,7 +1150,7 @@ public class StreamThreadTest {
         standbyTasks.put(task3, Collections.singleton(t2p1));
 
         thread.taskManager().handleAssignment(Collections.emptyMap(), standbyTasks);
-        thread.taskManager().checkForCompletedRestoration();
+        thread.taskManager().tryToCompleteRestoration();
 
         thread.rebalanceListener.onPartitionsAssigned(Collections.emptyList());
 

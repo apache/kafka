@@ -276,7 +276,9 @@ public class StoreChangelogReader implements ChangelogReader {
     // immediately transit back -- there's no overhead of transiting back and forth but simplifies the logic a lot.
     @Override
     public void transitToRestoreActive() {
-        log.debug("Transiting to restore active tasks: {}", changelogs);
+        if (state != ChangelogReaderState.ACTIVE_RESTORING) {
+            log.debug("Transiting to restore active tasks: {}", changelogs);
+        }
 
         // pause all partitions that are for standby tasks from the restore consumer
         pauseChangelogsFromRestoreConsumer(standbyRestoringChangelogs());
@@ -699,7 +701,7 @@ public class StoreChangelogReader implements ChangelogReader {
     private void pauseChangelogsFromRestoreConsumer(final Collection<TopicPartition> partitions) {
         final Set<TopicPartition> assignment = new HashSet<>(restoreConsumer.assignment());
 
-        // the current assignment should contain the all partitions to pause
+        // the current assignment should contain all the partitions to pause
         if (!assignment.containsAll(partitions)) {
             throw new IllegalStateException("The current assignment " + assignment + " " +
                 "does not contain some of the partitions " + partitions + " for pausing.");
@@ -712,17 +714,19 @@ public class StoreChangelogReader implements ChangelogReader {
     private void removeChangelogsFromRestoreConsumer(final Collection<TopicPartition> partitions) {
         final Set<TopicPartition> assignment = new HashSet<>(restoreConsumer.assignment());
 
-        if (assignment.removeAll(partitions)) {
-            restoreConsumer.assign(assignment);
-
-            log.debug("Removed partitions {} from the restore consumer, current assignment is {}", partitions, assignment);
+        // the current assignment should contain all the partitions to remove
+        if (!assignment.containsAll(partitions)) {
+            throw new IllegalStateException("The current assignment " + assignment + " " +
+                "does not contain some of the partitions " + partitions + " for removing.");
         }
+        assignment.removeAll(partitions);
+        restoreConsumer.assign(assignment);
     }
 
     private void resumeChangelogsFromRestoreConsumer(final Collection<TopicPartition> partitions) {
         final Set<TopicPartition> assignment = new HashSet<>(restoreConsumer.assignment());
 
-        // the current assignment should contain the all partitions to resume
+        // the current assignment should contain all the partitions to resume
         if (!assignment.containsAll(partitions)) {
             throw new IllegalStateException("The current assignment " + assignment + " " +
                 "does not contain some of the partitions " + partitions + " for resuming.");
@@ -793,12 +797,18 @@ public class StoreChangelogReader implements ChangelogReader {
 
     @Override
     public void remove(final Collection<TopicPartition> revokedChangelogs) {
+        // Only changelogs that are initialized that been added to the restore consumer's assignment
+        final List<TopicPartition> revokedInitializedChangelogs = new ArrayList<>();
+
         for (final TopicPartition partition : revokedChangelogs) {
             final ChangelogMetadata changelogMetadata = changelogs.remove(partition);
+            if (changelogMetadata.state() != ChangelogState.REGISTERED) {
+                revokedInitializedChangelogs.add(partition);
+            }
             changelogMetadata.clear();
         }
 
-        removeChangelogsFromRestoreConsumer(revokedChangelogs);
+        removeChangelogsFromRestoreConsumer(revokedInitializedChangelogs);
     }
 
     @Override
