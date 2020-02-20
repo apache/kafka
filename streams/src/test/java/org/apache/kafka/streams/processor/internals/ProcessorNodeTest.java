@@ -16,9 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import java.util.Arrays;
-import java.util.Properties;
-import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
@@ -28,14 +26,16 @@ import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
-import org.apache.kafka.test.InternalMockProcessorContext;
+import org.apache.kafka.test.MockInternalProcessorContext;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.junit.Test;
 
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Properties;
 
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.ROLLUP_VALUE;
 import static org.hamcrest.CoreMatchers.containsString;
@@ -46,6 +46,8 @@ import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
 public class ProcessorNodeTest {
+
+    public static final String METRIC_GROUP = "stream-processor-node-metrics";
 
     @SuppressWarnings("unchecked")
     @Test(expected = StreamsException.class)
@@ -106,15 +108,15 @@ public class ProcessorNodeTest {
     }
 
     private void testMetrics(final String builtInMetricsVersion) {
-        final Metrics metrics = new Metrics();
-        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, "test-client", builtInMetricsVersion);
-        final InternalMockProcessorContext context = new InternalMockProcessorContext(streamsMetrics);
-        final ProcessorNode<Object, Object> node = new ProcessorNode<>("name", new NoOpProcessor(), Collections.<String>emptySet());
+        final Properties properties = StreamsTestUtils.getStreamsConfig();
+        properties.put(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, builtInMetricsVersion);
+        final InternalProcessorContext context = new MockInternalProcessorContext(properties, new TaskId(0, 0), null);
+        final StreamsMetricsImpl metrics = context.metrics();
+        final ProcessorNode<Object, Object> node = new ProcessorNode<>("name", new NoOpProcessor(), Collections.emptySet());
         node.init(context);
 
         final String threadId = Thread.currentThread().getName();
         final String[] latencyOperations = {"process", "punctuate", "create", "destroy"};
-        final String groupName = "stream-processor-node-metrics";
         final Map<String, String> metricTags = new LinkedHashMap<>();
         final String threadIdTagKey =
             StreamsConfig.METRICS_0100_TO_24.equals(builtInMetricsVersion) ? "client-id" : "thread-id";
@@ -124,35 +126,35 @@ public class ProcessorNodeTest {
 
         if (StreamsConfig.METRICS_0100_TO_24.equals(builtInMetricsVersion)) {
             for (final String opName : latencyOperations) {
-                assertTrue(StreamsTestUtils.containsMetric(metrics, opName + "-latency-avg", groupName, metricTags));
-                assertTrue(StreamsTestUtils.containsMetric(metrics, opName + "-latency-max", groupName, metricTags));
-                assertTrue(StreamsTestUtils.containsMetric(metrics, opName + "-rate", groupName, metricTags));
-                assertTrue(StreamsTestUtils.containsMetric(metrics, opName + "-total", groupName, metricTags));
+                assertTrue(containsMetric(metrics, opName + "-latency-avg", metricTags));
+                assertTrue(containsMetric(metrics, opName + "-latency-max", metricTags));
+                assertTrue(containsMetric(metrics, opName + "-rate", metricTags));
+                assertTrue(containsMetric(metrics, opName + "-total", metricTags));
             }
 
             // test parent sensors
             metricTags.put("processor-node-id", ROLLUP_VALUE);
             for (final String opName : latencyOperations) {
-                assertTrue(StreamsTestUtils.containsMetric(metrics, opName + "-latency-avg", groupName, metricTags));
-                assertTrue(StreamsTestUtils.containsMetric(metrics, opName + "-latency-max", groupName, metricTags));
-                assertTrue(StreamsTestUtils.containsMetric(metrics, opName + "-rate", groupName, metricTags));
-                assertTrue(StreamsTestUtils.containsMetric(metrics, opName + "-total", groupName, metricTags));
+                assertTrue(containsMetric(metrics, opName + "-latency-avg", metricTags));
+                assertTrue(containsMetric(metrics, opName + "-latency-max", metricTags));
+                assertTrue(containsMetric(metrics, opName + "-rate", metricTags));
+                assertTrue(containsMetric(metrics, opName + "-total", metricTags));
             }
         } else {
             for (final String opName : latencyOperations) {
-                assertFalse(StreamsTestUtils.containsMetric(metrics, opName + "-latency-avg", groupName, metricTags));
-                assertFalse(StreamsTestUtils.containsMetric(metrics, opName + "-latency-max", groupName, metricTags));
-                assertFalse(StreamsTestUtils.containsMetric(metrics, opName + "-rate", groupName, metricTags));
-                assertFalse(StreamsTestUtils.containsMetric(metrics, opName + "-total", groupName, metricTags));
+                assertFalse(containsMetric(metrics, opName + "-latency-avg", metricTags));
+                assertFalse(containsMetric(metrics, opName + "-latency-max", metricTags));
+                assertFalse(containsMetric(metrics, opName + "-rate", metricTags));
+                assertFalse(containsMetric(metrics, opName + "-total", metricTags));
             }
 
             // test parent sensors
             metricTags.put("processor-node-id", ROLLUP_VALUE);
             for (final String opName : latencyOperations) {
-                assertFalse(StreamsTestUtils.containsMetric(metrics, opName + "-latency-avg", groupName, metricTags));
-                assertFalse(StreamsTestUtils.containsMetric(metrics, opName + "-latency-max", groupName, metricTags));
-                assertFalse(StreamsTestUtils.containsMetric(metrics, opName + "-rate", groupName, metricTags));
-                assertFalse(StreamsTestUtils.containsMetric(metrics, opName + "-total", groupName, metricTags));
+                assertFalse(containsMetric(metrics, opName + "-latency-avg", metricTags));
+                assertFalse(containsMetric(metrics, opName + "-latency-max", metricTags));
+                assertFalse(containsMetric(metrics, opName + "-rate", metricTags));
+                assertFalse(containsMetric(metrics, opName + "-total", metricTags));
             }
         }
     }
@@ -166,9 +168,7 @@ public class ProcessorNodeTest {
         final StreamsBuilder builder = new StreamsBuilder();
 
         builder.<String, String>stream("streams-plaintext-input")
-            .flatMapValues(value -> {
-                return Arrays.asList("");
-            });
+            .flatMapValues(value -> Collections.singletonList(""));
         final Topology topology = builder.build();
 
         final TopologyTestDriver testDriver = new TopologyTestDriver(topology, props);
@@ -194,15 +194,21 @@ public class ProcessorNodeTest {
 
     @Test
     public void testTopologyLevelClassCastExceptionDirect() {
-        final Metrics metrics = new Metrics();
-        final StreamsMetricsImpl streamsMetrics =
-            new StreamsMetricsImpl(metrics, "test-client", StreamsConfig.METRICS_LATEST);
-        final InternalMockProcessorContext context = new InternalMockProcessorContext(streamsMetrics);
-        final ProcessorNode<Object, Object> node = new ProcessorNode<Object, Object>("name", new ClassCastProcessor(), Collections.<String>emptySet());
+        final Properties properties = StreamsTestUtils.getStreamsConfig();
+        properties.put(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, StreamsConfig.METRICS_LATEST);
+        final InternalProcessorContext context = new MockInternalProcessorContext(properties, new TaskId(0, 0), null);
+        final ProcessorNode<Object, Object> node = new ProcessorNode<>("name", new ClassCastProcessor(), Collections.emptySet());
         node.init(context);
         final StreamsException se = assertThrows(StreamsException.class, () -> node.process("aKey", "aValue"));
         assertThat(se.getCause(), instanceOf(ClassCastException.class));
         assertThat(se.getMessage(), containsString("default Serdes"));
         assertThat(se.getMessage(), containsString("input types"));
+    }
+
+    private boolean containsMetric(final StreamsMetricsImpl streamsMetrics,
+                                   final String name,
+                                   final Map<String, String> tags) {
+        final MetricName metricName = new MetricName(name, METRIC_GROUP, "", tags);
+        return streamsMetrics.metrics().containsKey(metricName);
     }
 }
