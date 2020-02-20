@@ -472,7 +472,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             // a task is only closing / closed when 1) task manager is closing, 2) a rebalance is undergoing;
             // in either case we can just log it and move on without notifying the thread since the consumer
             // would soon be updated to not return any records for this task anymore.
-            log.info("Stream task {} is already in {} state, skip adding records to it.", id(), state());
+            log.info("Stream task {} is already in {} state, skip processing it.", id(), state());
 
             return false;
         }

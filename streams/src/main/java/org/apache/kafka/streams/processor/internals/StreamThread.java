@@ -725,7 +725,7 @@ public class StreamThread extends Thread {
             // we have caught all Kafka related exceptions, and other runtime exceptions
             // should be due to user application errors
             log.error("Encountered the following exception during processing " +
-                "and the thread is going to shutdown: ", e);
+                "and the thread is going to shut down: ", e);
             throw e;
         } finally {
             completeShutdown(cleanRun);
@@ -745,7 +745,7 @@ public class StreamThread extends Thread {
             try {
                 runOnce();
                 if (assignmentErrorCode.get() == AssignorError.VERSION_PROBING.code()) {
-                    log.info("Version probing detected. Rejoin the consumer group to trigger a new rebalance.");
+                    log.info("Version probing detected. Rejoining the consumer group to trigger a new rebalance.");
 
                     assignmentErrorCode.set(AssignorError.NONE.code());
                     enforceRebalance();
