@@ -282,7 +282,7 @@ class ConnectStandaloneService(ConnectServiceBase):
                           self.logs["connect_heap_dump_file"]["path"]
         other_kafka_opts = self.security_config.kafka_opts.strip('\"')
 
-        cmd += fix_opts_for_new_jvm(node)
+        cmd += fix_opts_for_new_jvm(node, self.path)
         cmd += "export KAFKA_OPTS=\"%s %s\"; " % (heap_kafka_opts, other_kafka_opts)
         for envvar in self.environment:
             cmd += "export %s=%s; " % (envvar, str(self.environment[envvar]))

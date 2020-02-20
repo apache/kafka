@@ -17,11 +17,11 @@ import os.path
 
 from collections import namedtuple
 from kafkatest.version import DEV_BRANCH, LATEST_0_8_2, LATEST_0_9, LATEST_0_10_0, LATEST_0_10_1, LATEST_0_10_2, LATEST_0_11, LATEST_1_0
-from kafkatest.directory_layout.kafka_path import SCRATCH_ROOT
+from kafkatest.directory_layout.kafka_path import create_path_resolver
 
 TopicPartition = namedtuple('TopicPartition', ['topic', 'partition'])
 
-def fix_opts_for_new_jvm(node):
+def fix_opts_for_new_jvm(node, path):
     # Startup scripts for early versions of Kafka contains options
     # that not supported on latest versions of JVM like -XX:+PrintGCDateStamps or -XX:UseParNewGC.
     # When system test run on JVM that doesn't support these options
@@ -32,7 +32,7 @@ def fix_opts_for_new_jvm(node):
 
     cmd = ""
     if node.version == LATEST_0_8_2 or node.version == LATEST_0_9 or node.version == LATEST_0_10_0 or node.version == LATEST_0_10_1 or node.version == LATEST_0_10_2 or node.version == LATEST_0_11 or node.version == LATEST_1_0:
-        gc_log_file = os.path.join(SCRATCH_ROOT, "kafka", "gc.log")
+        gc_log_file = os.path.join(path.home(node), "logs", "kafka-gc.log")
         cmd += "export KAFKA_GC_LOG_OPTS=\"-Xlog:gc*:file=%s:time,tags:filecount=10,filesize=102400\"; " % gc_log_file
         cmd += "export KAFKA_JVM_PERFORMANCE_OPTS=\"-server -XX:+UseG1GC -XX:MaxGCPauseMillis=20 -XX:InitiatingHeapOccupancyPercent=35 -XX:+ExplicitGCInvokesConcurrent -XX:MaxInlineLevel=15 -Djava.awt.headless=true\"; "
     return cmd

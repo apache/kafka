@@ -341,7 +341,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
                           self.logs["kafka_heap_dump_file"]["path"]
         security_kafka_opts = self.security_config.kafka_opts.strip('\"')
 
-        cmd += fix_opts_for_new_jvm(node)
+        cmd += fix_opts_for_new_jvm(node, self.path)
         cmd += "export KAFKA_OPTS=\"%s %s %s\"; " % (heap_kafka_opts, security_kafka_opts, self.extra_kafka_opts)
         cmd += "%s %s 1>> %s 2>> %s &" % \
                (self.path.script("kafka-server-start.sh", node),
@@ -437,7 +437,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
                          topic_cfg["topic"], topic_cfg)
         kafka_topic_script = self.path.script("kafka-topics.sh", node)
 
-        cmd = fix_opts_for_new_jvm(node)
+        cmd = fix_opts_for_new_jvm(node, self.path)
         cmd += kafka_topic_script + " "
         cmd += "--zookeeper %(zk_connect)s --create --topic %(topic)s " % {
                 'zk_connect': self.zk_connect_setting(),
@@ -475,7 +475,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         self.logger.info("Deleting topic %s" % topic)
         kafka_topic_script = self.path.script("kafka-topics.sh", node)
 
-        cmd = fix_opts_for_new_jvm(node)
+        cmd = fix_opts_for_new_jvm(node, self.path)
         cmd += kafka_topic_script + " "
         cmd += "--bootstrap-server %(bootstrap_servers)s --delete --topic %(topic)s " % {
             'bootstrap_servers': self.bootstrap_servers(self.security_protocol),
@@ -487,7 +487,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
     def describe_topic(self, topic, node=None):
         if node is None:
             node = self.nodes[0]
-        cmd = fix_opts_for_new_jvm(node, cmd)
+        cmd = fix_opts_for_new_jvm(node, self.path)
         cmd += "%s --zookeeper %s --topic %s --describe" % \
               (self.path.script("kafka-topics.sh", node), self.zk_connect_setting(), topic)
         output = ""
@@ -499,7 +499,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         if node is None:
             node = self.nodes[0]
 
-        cmd = fix_opts_for_new_jvm(node)
+        cmd = fix_opts_for_new_jvm(node, self.path)
         cmd += "%s --zookeeper %s --list" % \
               (self.path.script("kafka-topics.sh", node), self.zk_connect_setting())
         for line in node.account.ssh_capture(cmd):
@@ -511,7 +511,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
             node = self.nodes[0]
         self.logger.info("Altering message format version for topic %s with format %s", topic, msg_format_version)
 
-        cmd = fix_opts_for_new_jvm(node)
+        cmd = fix_opts_for_new_jvm(node, self.path)
         cmd += "%s --zookeeper %s --entity-name %s --entity-type topics --alter --add-config message.format.version=%s" % \
               (self.path.script("kafka-configs.sh", node), self.zk_connect_setting(), topic, msg_format_version)
         self.logger.info("Running alter message format command...\n%s" % cmd)
@@ -525,7 +525,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         else:
             self.logger.info("Disabling unclean leader election for topic %s", topic)
 
-        cmd = fix_opts_for_new_jvm(node)
+        cmd = fix_opts_for_new_jvm(node, self.path)
         cmd += "%s --zookeeper %s --entity-name %s --entity-type topics --alter --add-config unclean.leader.election.enable=%s" % \
               (self.path.script("kafka-configs.sh", node), self.zk_connect_setting(), topic, str(value).lower())
         self.logger.info("Running alter unclean leader command...\n%s" % cmd)
@@ -573,7 +573,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         json_str = json.dumps(json_str)
 
         # create command
-        cmd = fix_opts_for_new_jvm(node)
+        cmd = fix_opts_for_new_jvm(node, self.path)
         cmd += "echo %s > %s && " % (json_str, json_file)
         cmd += "%s " % self.path.script("kafka-reassign-partitions.sh", node)
         cmd += "--zookeeper %s " % self.zk_connect_setting()
@@ -613,7 +613,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         json_str = json.dumps(json_str)
 
         # create command
-        cmd = fix_opts_for_new_jvm(node)
+        cmd = fix_opts_for_new_jvm(node, self.path)
         cmd += "echo %s > %s && " % (json_str, json_file)
         cmd += "%s " % self.path.script( "kafka-reassign-partitions.sh", node)
         cmd += "--zookeeper %s " % self.zk_connect_setting()
@@ -649,7 +649,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
 
             # Check each data file to see if it contains the messages we want
             for log in files:
-                cmd = fix_opts_for_new_jvm(node)
+                cmd = fix_opts_for_new_jvm(node, self.path)
                 cmd += "%s kafka.tools.DumpLogSegments --print-data-log --files %s | grep -E \"%s\"" % \
                       (self.path.script("kafka-run-class.sh", node), log.strip(), payload_match)
 
@@ -766,7 +766,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         else:
             command_config = "--command-config " + command_config
 
-        cmd = fix_opts_for_new_jvm(node)
+        cmd = fix_opts_for_new_jvm(node, self.path)
         cmd += "%s --bootstrap-server %s %s --list" % \
               (consumer_group_script,
                self.bootstrap_servers(self.security_protocol),
@@ -791,7 +791,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         else:
             command_config = "--command-config " + command_config
 
-        cmd = fix_opts_for_new_jvm(node)
+        cmd = fix_opts_for_new_jvm(node, self.path)
         cmd += "%s --bootstrap-server %s %s --group %s --describe" % \
               (consumer_group_script,
                self.bootstrap_servers(self.security_protocol),
@@ -854,7 +854,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
     def get_offset_shell(self, topic, partitions, max_wait_ms, offsets, time):
         node = self.nodes[0]
 
-        cmd = fix_opts_for_new_jvm(node)
+        cmd = fix_opts_for_new_jvm(node, self.path)
         cmd += self.path.script("kafka-run-class.sh", node)
         cmd += " kafka.tools.GetOffsetShell"
         cmd += " --topic %s --broker-list %s --max-wait-ms %s --offsets %s --time %s" % (topic, self.bootstrap_servers(self.security_protocol), max_wait_ms, offsets, time)

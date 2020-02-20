@@ -45,7 +45,7 @@ class KafkaLog4jAppender(KafkaPathResolverMixin, BackgroundThreadService):
         node.account.ssh(cmd)
 
     def start_cmd(self, node):
-        cmd = fix_opts_for_new_jvm(node)
+        cmd = fix_opts_for_new_jvm(node, self.path)
         cmd += self.path.script("kafka-run-class.sh", node)
         cmd += " "
         cmd += self.java_class_name()
