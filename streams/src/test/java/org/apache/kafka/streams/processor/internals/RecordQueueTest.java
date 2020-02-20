@@ -27,24 +27,29 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.LogAndContinueExceptionHandler;
 import org.apache.kafka.streams.errors.LogAndFailExceptionHandler;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.FailOnInvalidTimestamp;
 import org.apache.kafka.streams.processor.LogAndSkipOnInvalidTimestamp;
+import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.TimestampExtractor;
-import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.test.InternalMockProcessorContext;
+import org.apache.kafka.test.MockInternalProcessorContext;
 import org.apache.kafka.test.MockRecordCollector;
 import org.apache.kafka.test.MockSourceNode;
 import org.apache.kafka.test.MockTimestampExtractor;
+import org.apache.kafka.test.StreamsTestUtils;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
+import java.io.File;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.Properties;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.equalTo;
@@ -56,31 +61,41 @@ import static org.junit.Assert.assertTrue;
 
 public class RecordQueueTest {
     private final Serializer<Integer> intSerializer = new IntegerSerializer();
-    private final Deserializer<Integer> intDeserializer = new IntegerDeserializer();
-    private final TimestampExtractor timestampExtractor = new MockTimestampExtractor();
 
-    final InternalMockProcessorContext context = new InternalMockProcessorContext(
-        StateSerdes.withBuiltinTypes("anyName", Bytes.class, Bytes.class),
-        new MockRecordCollector()
-    );
-    private final MockSourceNode mockSourceNodeWithMetrics = new MockSourceNode<>(new String[] {"topic"}, intDeserializer, intDeserializer);
-    private final RecordQueue queue = new RecordQueue(
-        new TopicPartition("topic", 1),
-        mockSourceNodeWithMetrics,
-        timestampExtractor,
-        new LogAndFailExceptionHandler(),
-        context,
-        new LogContext());
-    private final RecordQueue queueThatSkipsDeserializeErrors = new RecordQueue(
-        new TopicPartition("topic", 1),
-        mockSourceNodeWithMetrics,
-        timestampExtractor,
-        new LogAndContinueExceptionHandler(),
-        context,
-        new LogContext());
+    final MockInternalProcessorContext context;
+    private final MockSourceNode mockSourceNodeWithMetrics;
+    private final RecordQueue queue;
+    private final RecordQueue queueThatSkipsDeserializeErrors;
 
     private final byte[] recordValue = intSerializer.serialize(null, 10);
     private final byte[] recordKey = intSerializer.serialize(null, 1);
+
+    public RecordQueueTest() {
+        final Properties properties = StreamsTestUtils.getStreamsConfig();
+        properties.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Bytes.class);
+        properties.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Bytes.class);
+        context = new MockInternalProcessorContext(properties, new TaskId(0, 0), (File) null);
+        context.setRecordCollector(new MockRecordCollector());
+        final Deserializer<Integer> intDeserializer = new IntegerDeserializer();
+        mockSourceNodeWithMetrics = new MockSourceNode<>(new String[]{"topic"}, intDeserializer, intDeserializer);
+        TimestampExtractor timestampExtractor = new MockTimestampExtractor();
+        queue = new RecordQueue(
+                new TopicPartition("topic", 1),
+                mockSourceNodeWithMetrics,
+                timestampExtractor,
+                new LogAndFailExceptionHandler(),
+                context,
+                new LogContext()
+        );
+        queueThatSkipsDeserializeErrors = new RecordQueue(
+                new TopicPartition("topic", 1),
+                mockSourceNodeWithMetrics,
+                timestampExtractor,
+                new LogAndContinueExceptionHandler(),
+                context,
+                new LogContext()
+        );
+    }
 
     @Before
     public void before() {

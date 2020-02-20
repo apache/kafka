@@ -49,6 +49,9 @@ import static org.apache.kafka.streams.processor.internals.StateRestoreCallbackA
 
 public class MockInternalProcessorContext extends MockProcessorContext implements InternalProcessorContext {
 
+    public static final String DEFAULT_NODE_NAME = "TESTING_NODE";
+    public static final TaskId DEFAULT_TASK_ID = new TaskId(0, 0);
+
     private final Map<String, StateRestoreCallback> restoreCallbacks = new LinkedHashMap<>();
     private final Map<String, StateRestoreCallback> restoreFuncs = new HashMap<>();
     private final ThreadCache threadCache;
@@ -61,10 +64,15 @@ public class MockInternalProcessorContext extends MockProcessorContext implement
         threadCache = null;
     }
 
+    public MockInternalProcessorContext(final Properties config) {
+        this(config, DEFAULT_TASK_ID, TestUtils.tempDirectory());
+    }
+
     public MockInternalProcessorContext(final Properties config, final TaskId taskId, final File stateDir) {
         super(config, taskId, stateDir);
         threadCache = null;
         setMetrics((StreamsMetricsImpl) super.metrics());
+        setCurrentNode(new ProcessorNode<>(DEFAULT_NODE_NAME));
     }
 
     public MockInternalProcessorContext(final Properties config, final TaskId taskId, final LogContext logContext, final long maxCacheSizeBytes) {
@@ -79,6 +87,7 @@ public class MockInternalProcessorContext extends MockProcessorContext implement
         super(config, taskId, stateDir);
         threadCache = new ThreadCache(logContext, maxCacheSizeBytes, metrics);
         setMetrics((StreamsMetricsImpl) super.metrics());
+        setCurrentNode(new ProcessorNode<>(DEFAULT_NODE_NAME));
     }
 
     public MockInternalProcessorContext(final Properties config, final TaskId taskId, final Metrics metrics) {
