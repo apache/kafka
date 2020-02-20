@@ -343,7 +343,7 @@ public class Sender implements Runnable {
         }
 
         // remove any nodes we aren't ready to send to
-        Iterator<Node> iter = result.readyNodes.iterator();
+        Iterator<Node> iter = result.tpsByNode.keySet().iterator();
         long notReadyTimeout = Long.MAX_VALUE;
         while (iter.hasNext()) {
             Node node = iter.next();
@@ -354,7 +354,7 @@ public class Sender implements Runnable {
         }
 
         // create produce requests
-        Map<Integer, List<ProducerBatch>> batches = this.accumulator.drain(cluster, result.readyNodes, this.maxRequestSize, now);
+        Map<Integer, List<ProducerBatch>> batches = this.accumulator.drain(result.tpsByNode, this.maxRequestSize, now);
         addToInflightBatches(batches);
         if (guaranteeMessageOrder) {
             // Mute all the partitions drained
@@ -393,8 +393,8 @@ public class Sender implements Runnable {
         long pollTimeout = Math.min(result.nextReadyCheckDelayMs, notReadyTimeout);
         pollTimeout = Math.min(pollTimeout, this.accumulator.nextExpiryTimeMs() - now);
         pollTimeout = Math.max(pollTimeout, 0);
-        if (!result.readyNodes.isEmpty()) {
-            log.trace("Nodes with data ready to send: {}", result.readyNodes);
+        if (!result.tpsByNode.isEmpty()) {
+            log.trace("Nodes with data ready to send: {}", result.tpsByNode);
             // if some partitions are already ready to be sent, the select time would be 0;
             // otherwise if some partition already has some data accumulated but not ready yet,
             // the select time will be the time difference between now and its linger expiry time;

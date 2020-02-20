@@ -113,7 +113,7 @@ public class RecordAccumulatorTest {
 
             ProducerBatch batch = partitionBatches.peekFirst();
             assertTrue(batch.isWritable());
-            assertEquals("No partitions should be ready.", 0, accum.ready(cluster, now).readyNodes.size());
+            assertEquals("No partitions should be ready.", 0, accum.ready(cluster, now).tpsByNode.size());
         }
 
         // this append doesn't fit in the first batch, so a new batch is created and the first batch is closed
@@ -123,7 +123,7 @@ public class RecordAccumulatorTest {
         assertEquals(2, partitionBatches.size());
         Iterator<ProducerBatch> partitionBatchesIterator = partitionBatches.iterator();
         assertTrue(partitionBatchesIterator.next().isWritable());
-        assertEquals("Our partition's leader should be ready", Collections.singleton(node1), accum.ready(cluster, time.milliseconds()).readyNodes);
+        assertEquals("Our partition's leader should be ready", Collections.singleton(node1), accum.ready(cluster, time.milliseconds()).tpsByNode.keySet());
 
         List<ProducerBatch> batches = accum.drain(cluster, Collections.singleton(node1), Integer.MAX_VALUE, 0).get(node1.id());
         assertEquals(1, batches.size());
@@ -154,7 +154,7 @@ public class RecordAccumulatorTest {
         RecordAccumulator accum = createTestRecordAccumulator(
                 batchSize + DefaultRecordBatch.RECORD_BATCH_OVERHEAD, 10 * 1024, compressionType, 0);
         accum.append(tp1, 0L, key, value, Record.EMPTY_HEADERS, null, maxBlockTimeMs, false, time.milliseconds());
-        assertEquals("Our partition's leader should be ready", Collections.singleton(node1), accum.ready(cluster, time.milliseconds()).readyNodes);
+        assertEquals("Our partition's leader should be ready", Collections.singleton(node1), accum.ready(cluster, time.milliseconds()).tpsByNode.keySet());
 
         Deque<ProducerBatch> batches = accum.batches().get(tp1);
         assertEquals(1, batches.size());
@@ -192,7 +192,7 @@ public class RecordAccumulatorTest {
         RecordAccumulator accum = createTestRecordAccumulator(
                 batchSize + DefaultRecordBatch.RECORD_BATCH_OVERHEAD, 10 * 1024, compressionType, 0);
         accum.append(tp1, 0L, key, value, Record.EMPTY_HEADERS, null, maxBlockTimeMs, false, time.milliseconds());
-        assertEquals("Our partition's leader should be ready", Collections.singleton(node1), accum.ready(cluster, time.milliseconds()).readyNodes);
+        assertEquals("Our partition's leader should be ready", Collections.singleton(node1), accum.ready(cluster, time.milliseconds()).tpsByNode.keySet());
 
         Deque<ProducerBatch> batches = accum.batches().get(tp1);
         assertEquals(1, batches.size());
@@ -216,9 +216,9 @@ public class RecordAccumulatorTest {
         RecordAccumulator accum = createTestRecordAccumulator(
                 1024 + DefaultRecordBatch.RECORD_BATCH_OVERHEAD, 10 * 1024, CompressionType.NONE, lingerMs);
         accum.append(tp1, 0L, key, value, Record.EMPTY_HEADERS, null, maxBlockTimeMs, false, time.milliseconds());
-        assertEquals("No partitions should be ready", 0, accum.ready(cluster, time.milliseconds()).readyNodes.size());
+        assertEquals("No partitions should be ready", 0, accum.ready(cluster, time.milliseconds()).tpsByNode.size());
         time.sleep(10);
-        assertEquals("Our partition's leader should be ready", Collections.singleton(node1), accum.ready(cluster, time.milliseconds()).readyNodes);
+        assertEquals("Our partition's leader should be ready", Collections.singleton(node1), accum.ready(cluster, time.milliseconds()).tpsByNode.keySet());
         List<ProducerBatch> batches = accum.drain(cluster, Collections.singleton(node1), Integer.MAX_VALUE, 0).get(node1.id());
         assertEquals(1, batches.size());
         ProducerBatch batch = batches.get(0);
@@ -240,7 +240,7 @@ public class RecordAccumulatorTest {
             for (int i = 0; i < appends; i++)
                 accum.append(tp, 0L, key, value, Record.EMPTY_HEADERS, null, maxBlockTimeMs, false, time.milliseconds());
         }
-        assertEquals("Partition's leader should be ready", Collections.singleton(node1), accum.ready(cluster, time.milliseconds()).readyNodes);
+        assertEquals("Partition's leader should be ready", Collections.singleton(node1), accum.ready(cluster, time.milliseconds()).tpsByNode.keySet());
 
         List<ProducerBatch> batches = accum.drain(cluster, Collections.singleton(node1), 1024, 0).get(node1.id());
         assertEquals("But due to size bound only one partition should have been retrieved", 1, batches.size());
@@ -273,7 +273,7 @@ public class RecordAccumulatorTest {
         int read = 0;
         long now = time.milliseconds();
         while (read < numThreads * msgs) {
-            Set<Node> nodes = accum.ready(cluster, now).readyNodes;
+            Set<Node> nodes = accum.ready(cluster, now).tpsByNode.keySet();
             List<ProducerBatch> batches = accum.drain(cluster, nodes, 5 * 1024, 0).get(node1.id());
             if (batches != null) {
                 for (ProducerBatch batch : batches) {
@@ -306,7 +306,7 @@ public class RecordAccumulatorTest {
         for (int i = 0; i < appends; i++)
             accum.append(tp1, 0L, key, value, Record.EMPTY_HEADERS, null, maxBlockTimeMs, false, time.milliseconds());
         RecordAccumulator.ReadyCheckResult result = accum.ready(cluster, time.milliseconds());
-        assertEquals("No nodes should be ready.", 0, result.readyNodes.size());
+        assertEquals("No nodes should be ready.", 0, result.tpsByNode.size());
         assertEquals("Next check time should be the linger time", lingerMs, result.nextReadyCheckDelayMs);
 
         time.sleep(lingerMs / 2);
@@ -315,14 +315,14 @@ public class RecordAccumulatorTest {
         for (int i = 0; i < appends; i++)
             accum.append(tp3, 0L, key, value, Record.EMPTY_HEADERS, null, maxBlockTimeMs, false, time.milliseconds());
         result = accum.ready(cluster, time.milliseconds());
-        assertEquals("No nodes should be ready.", 0, result.readyNodes.size());
+        assertEquals("No nodes should be ready.", 0, result.tpsByNode.size());
         assertEquals("Next check time should be defined by node1, half remaining linger time", lingerMs / 2, result.nextReadyCheckDelayMs);
 
         // Add data for another partition on node1, enough to make data sendable immediately
         for (int i = 0; i < appends + 1; i++)
             accum.append(tp2, 0L, key, value, Record.EMPTY_HEADERS, null, maxBlockTimeMs, false, time.milliseconds());
         result = accum.ready(cluster, time.milliseconds());
-        assertEquals("Node1 should be ready", Collections.singleton(node1), result.readyNodes);
+        assertEquals("Node1 should be ready", Collections.singleton(node1), result.tpsByNode.keySet());
         // Note this can actually be < linger time because it may use delays from partitions that aren't sendable
         // but have leaders with other sendable data.
         assertTrue("Next check time should be defined by node2, at most linger time", result.nextReadyCheckDelayMs <= lingerMs);
@@ -344,8 +344,8 @@ public class RecordAccumulatorTest {
         long now = time.milliseconds();
         accum.append(tp1, 0L, key, value, Record.EMPTY_HEADERS, null, maxBlockTimeMs, false, time.milliseconds());
         RecordAccumulator.ReadyCheckResult result = accum.ready(cluster, now + lingerMs + 1);
-        assertEquals("Node1 should be ready", Collections.singleton(node1), result.readyNodes);
-        Map<Integer, List<ProducerBatch>> batches = accum.drain(cluster, result.readyNodes, Integer.MAX_VALUE, now + lingerMs + 1);
+        assertEquals("Node1 should be ready", Collections.singleton(node1), result.tpsByNode.keySet());
+        Map<Integer, List<ProducerBatch>> batches = accum.drain(result.tpsByNode, Integer.MAX_VALUE, now + lingerMs + 1);
         assertEquals("Node1 should be the only ready node.", 1, batches.size());
         assertEquals("Partition 0 should only have one batch drained.", 1, batches.get(0).size());
 
@@ -356,18 +356,18 @@ public class RecordAccumulatorTest {
         // Put message for partition 1 into accumulator
         accum.append(tp2, 0L, key, value, Record.EMPTY_HEADERS, null, maxBlockTimeMs, false, time.milliseconds());
         result = accum.ready(cluster, now + lingerMs + 1);
-        assertEquals("Node1 should be ready", Collections.singleton(node1), result.readyNodes);
+        assertEquals("Node1 should be ready", Collections.singleton(node1), result.tpsByNode.keySet());
 
         // tp1 should backoff while tp2 should not
-        batches = accum.drain(cluster, result.readyNodes, Integer.MAX_VALUE, now + lingerMs + 1);
+        batches = accum.drain(result.tpsByNode, Integer.MAX_VALUE, now + lingerMs + 1);
         assertEquals("Node1 should be the only ready node.", 1, batches.size());
         assertEquals("Node1 should only have one batch drained.", 1, batches.get(0).size());
         assertEquals("Node1 should only have one batch for partition 1.", tp2, batches.get(0).get(0).topicPartition);
 
         // Partition 0 can be drained after retry backoff
         result = accum.ready(cluster, now + retryBackoffMs + 1);
-        assertEquals("Node1 should be ready", Collections.singleton(node1), result.readyNodes);
-        batches = accum.drain(cluster, result.readyNodes, Integer.MAX_VALUE, now + retryBackoffMs + 1);
+        assertEquals("Node1 should be ready", Collections.singleton(node1), result.tpsByNode.keySet());
+        batches = accum.drain(result.tpsByNode, Integer.MAX_VALUE, now + retryBackoffMs + 1);
         assertEquals("Node1 should be the only ready node.", 1, batches.size());
         assertEquals("Node1 should only have one batch drained.", 1, batches.get(0).size());
         assertEquals("Node1 should only have one batch for partition 0.", tp1, batches.get(0).get(0).topicPartition);
@@ -384,13 +384,13 @@ public class RecordAccumulatorTest {
             assertTrue(accum.hasIncomplete());
         }
         RecordAccumulator.ReadyCheckResult result = accum.ready(cluster, time.milliseconds());
-        assertEquals("No nodes should be ready.", 0, result.readyNodes.size());
+        assertEquals("No nodes should be ready.", 0, result.tpsByNode.size());
 
         accum.beginFlush();
         result = accum.ready(cluster, time.milliseconds());
 
         // drain and deallocate all batches
-        Map<Integer, List<ProducerBatch>> results = accum.drain(cluster, result.readyNodes, Integer.MAX_VALUE, time.milliseconds());
+        Map<Integer, List<ProducerBatch>> results = accum.drain(result.tpsByNode, Integer.MAX_VALUE, time.milliseconds());
         assertTrue(accum.hasIncomplete());
 
         for (List<ProducerBatch> batches: results.values())
@@ -449,8 +449,8 @@ public class RecordAccumulatorTest {
         for (int i = 0; i < numRecords; i++)
             accum.append(new TopicPartition(topic, i % 3), 0L, key, value, null, new TestCallback(), maxBlockTimeMs, false, time.milliseconds());
         RecordAccumulator.ReadyCheckResult result = accum.ready(cluster, time.milliseconds());
-        assertFalse(result.readyNodes.isEmpty());
-        Map<Integer, List<ProducerBatch>> drained = accum.drain(cluster, result.readyNodes, Integer.MAX_VALUE, time.milliseconds());
+        assertFalse(result.tpsByNode.isEmpty());
+        Map<Integer, List<ProducerBatch>> drained = accum.drain(result.tpsByNode, Integer.MAX_VALUE, time.milliseconds());
         assertTrue(accum.hasUndrained());
         assertTrue(accum.hasIncomplete());
 
@@ -490,8 +490,8 @@ public class RecordAccumulatorTest {
         for (int i = 0; i < numRecords; i++)
             accum.append(new TopicPartition(topic, i % 3), 0L, key, value, null, new TestCallback(), maxBlockTimeMs, false, time.milliseconds());
         RecordAccumulator.ReadyCheckResult result = accum.ready(cluster, time.milliseconds());
-        assertFalse(result.readyNodes.isEmpty());
-        Map<Integer, List<ProducerBatch>> drained = accum.drain(cluster, result.readyNodes, Integer.MAX_VALUE,
+        assertFalse(result.tpsByNode.isEmpty());
+        Map<Integer, List<ProducerBatch>> drained = accum.drain(result.tpsByNode, Integer.MAX_VALUE,
                 time.milliseconds());
         assertTrue(accum.hasUndrained());
         assertTrue(accum.hasIncomplete());
@@ -528,10 +528,10 @@ public class RecordAccumulatorTest {
             if (time.milliseconds() < System.currentTimeMillis())
                 time.setCurrentTimeMs(System.currentTimeMillis());
             accum.append(tp1, 0L, key, value, Record.EMPTY_HEADERS, null, maxBlockTimeMs, false, time.milliseconds());
-            assertEquals("No partition should be ready.", 0, accum.ready(cluster, time.milliseconds()).readyNodes.size());
+            assertEquals("No partition should be ready.", 0, accum.ready(cluster, time.milliseconds()).tpsByNode.size());
 
             time.sleep(lingerMs);
-            readyNodes = accum.ready(cluster, time.milliseconds()).readyNodes;
+            readyNodes = accum.ready(cluster, time.milliseconds()).tpsByNode.keySet();
             assertEquals("Our partition's leader should be ready", Collections.singleton(node1), readyNodes);
 
             expiredBatches = accum.expiredBatches(time.milliseconds());
@@ -546,7 +546,7 @@ public class RecordAccumulatorTest {
             time.sleep(deliveryTimeoutMs - lingerMs);
             expiredBatches = accum.expiredBatches(time.milliseconds());
             assertEquals("The batch may expire when the partition is muted", 1, expiredBatches.size());
-            assertEquals("No partitions should be ready.", 0, accum.ready(cluster, time.milliseconds()).readyNodes.size());
+            assertEquals("No partitions should be ready.", 0, accum.ready(cluster, time.milliseconds()).tpsByNode.size());
         }
     }
 
@@ -577,11 +577,11 @@ public class RecordAccumulatorTest {
         // Test batches not in retry
         for (int i = 0; i < appends; i++) {
             accum.append(tp1, 0L, key, value, Record.EMPTY_HEADERS, null, maxBlockTimeMs, false, time.milliseconds());
-            assertEquals("No partitions should be ready.", 0, accum.ready(cluster, time.milliseconds()).readyNodes.size());
+            assertEquals("No partitions should be ready.", 0, accum.ready(cluster, time.milliseconds()).tpsByNode.size());
         }
         // Make the batches ready due to batch full
         accum.append(tp1, 0L, key, value, Record.EMPTY_HEADERS, null, 0, false, time.milliseconds());
-        Set<Node> readyNodes = accum.ready(cluster, time.milliseconds()).readyNodes;
+        Set<Node> readyNodes = accum.ready(cluster, time.milliseconds()).tpsByNode.keySet();
         assertEquals("Our partition's leader should be ready", Collections.singleton(node1), readyNodes);
         // Advance the clock to expire the batch.
         time.sleep(deliveryTimeoutMs + 1);
@@ -592,7 +592,7 @@ public class RecordAccumulatorTest {
         accum.unmutePartition(tp1, 0L);
         expiredBatches = accum.expiredBatches(time.milliseconds());
         assertEquals("All batches should have been expired earlier", 0, expiredBatches.size());
-        assertEquals("No partitions should be ready.", 0, accum.ready(cluster, time.milliseconds()).readyNodes.size());
+        assertEquals("No partitions should be ready.", 0, accum.ready(cluster, time.milliseconds()).tpsByNode.size());
 
         // Advance the clock to make the next batch ready due to linger.ms
         time.sleep(lingerMs);
@@ -606,13 +606,13 @@ public class RecordAccumulatorTest {
         accum.unmutePartition(tp1, 0L);
         expiredBatches = accum.expiredBatches(time.milliseconds());
         assertEquals("All batches should have been expired", 0, expiredBatches.size());
-        assertEquals("No partitions should be ready.", 0, accum.ready(cluster, time.milliseconds()).readyNodes.size());
+        assertEquals("No partitions should be ready.", 0, accum.ready(cluster, time.milliseconds()).tpsByNode.size());
 
         // Test batches in retry.
         // Create a retried batch
         accum.append(tp1, 0L, key, value, Record.EMPTY_HEADERS, null, 0, false, time.milliseconds());
         time.sleep(lingerMs);
-        readyNodes = accum.ready(cluster, time.milliseconds()).readyNodes;
+        readyNodes = accum.ready(cluster, time.milliseconds()).tpsByNode.keySet();
         assertEquals("Our partition's leader should be ready", Collections.singleton(node1), readyNodes);
         Map<Integer, List<ProducerBatch>> drained = accum.drain(cluster, readyNodes, Integer.MAX_VALUE, time.milliseconds());
         assertEquals("There should be only one batch.", drained.get(node1.id()).size(), 1);
@@ -636,7 +636,7 @@ public class RecordAccumulatorTest {
         // Test that when being throttled muted batches are expired before the throttle time is over.
         accum.append(tp1, 0L, key, value, Record.EMPTY_HEADERS, null, 0, false, time.milliseconds());
         time.sleep(lingerMs);
-        readyNodes = accum.ready(cluster, time.milliseconds()).readyNodes;
+        readyNodes = accum.ready(cluster, time.milliseconds()).tpsByNode.keySet();
         assertEquals("Our partition's leader should be ready", Collections.singleton(node1), readyNodes);
         // Advance the clock to expire the batch.
         time.sleep(requestTimeout + 1);
@@ -654,7 +654,7 @@ public class RecordAccumulatorTest {
         time.sleep(throttleTimeMs);
         expiredBatches = accum.expiredBatches(time.milliseconds());
         assertEquals("All batches should have been expired earlier", 0, expiredBatches.size());
-        assertEquals("No partitions should be ready.", 1, accum.ready(cluster, time.milliseconds()).readyNodes.size());
+        assertEquals("No partitions should be ready.", 1, accum.ready(cluster, time.milliseconds()).tpsByNode.size());
     }
 
     @Test
@@ -668,28 +668,28 @@ public class RecordAccumulatorTest {
         int appends = expectedNumAppends(batchSize);
         for (int i = 0; i < appends; i++) {
             accum.append(tp1, 0L, key, value, Record.EMPTY_HEADERS, null, maxBlockTimeMs, false, time.milliseconds());
-            assertEquals("No partitions should be ready.", 0, accum.ready(cluster, now).readyNodes.size());
+            assertEquals("No partitions should be ready.", 0, accum.ready(cluster, now).tpsByNode.size());
         }
         time.sleep(2000);
 
         // Test ready with muted partition
         accum.mutePartition(tp1);
         RecordAccumulator.ReadyCheckResult result = accum.ready(cluster, time.milliseconds());
-        assertEquals("No node should be ready", 0, result.readyNodes.size());
+        assertEquals("No node should be ready", 0, result.tpsByNode.size());
 
         // Test ready without muted partition
         accum.unmutePartition(tp1, 0L);
         result = accum.ready(cluster, time.milliseconds());
-        assertTrue("The batch should be ready", result.readyNodes.size() > 0);
+        assertTrue("The batch should be ready", result.tpsByNode.size() > 0);
 
         // Test drain with muted partition
         accum.mutePartition(tp1);
-        Map<Integer, List<ProducerBatch>> drained = accum.drain(cluster, result.readyNodes, Integer.MAX_VALUE, time.milliseconds());
+        Map<Integer, List<ProducerBatch>> drained = accum.drain(result.tpsByNode, Integer.MAX_VALUE, time.milliseconds());
         assertEquals("No batch should have been drained", 0, drained.get(node1.id()).size());
 
         // Test drain without muted partition.
         accum.unmutePartition(tp1, 0L);
-        drained = accum.drain(cluster, result.readyNodes, Integer.MAX_VALUE, time.milliseconds());
+        drained = accum.drain(result.tpsByNode, Integer.MAX_VALUE, time.milliseconds());
         assertTrue("The batch should have been drained.", drained.get(node1.id()).size() > 0);
     }
 
@@ -741,15 +741,15 @@ public class RecordAccumulatorTest {
         time.sleep(101L);
         // Drain the batch.
         RecordAccumulator.ReadyCheckResult result = accum.ready(cluster, time.milliseconds());
-        assertTrue("The batch should be ready", result.readyNodes.size() > 0);
-        Map<Integer, List<ProducerBatch>> drained = accum.drain(cluster, result.readyNodes, Integer.MAX_VALUE, time.milliseconds());
+        assertTrue("The batch should be ready", result.tpsByNode.size() > 0);
+        Map<Integer, List<ProducerBatch>> drained = accum.drain(result.tpsByNode, Integer.MAX_VALUE, time.milliseconds());
         assertEquals("Only node1 should be drained", 1, drained.size());
         assertEquals("Only one batch should be drained", 1, drained.get(node1.id()).size());
         // Split and reenqueue the batch.
         accum.splitAndReenqueue(drained.get(node1.id()).get(0));
         time.sleep(101L);
 
-        drained = accum.drain(cluster, result.readyNodes, Integer.MAX_VALUE, time.milliseconds());
+        drained = accum.drain(result.tpsByNode, Integer.MAX_VALUE, time.milliseconds());
         assertFalse(drained.isEmpty());
         assertFalse(drained.get(node1.id()).isEmpty());
         drained.get(node1.id()).get(0).done(acked.get(), 100L, null);
@@ -757,7 +757,7 @@ public class RecordAccumulatorTest {
         assertTrue(future1.isDone());
         assertEquals(0, future1.get().offset());
 
-        drained = accum.drain(cluster, result.readyNodes, Integer.MAX_VALUE, time.milliseconds());
+        drained = accum.drain(result.tpsByNode, Integer.MAX_VALUE, time.milliseconds());
         assertFalse(drained.isEmpty());
         assertFalse(drained.get(node1.id()).isEmpty());
         drained.get(node1.id()).get(0).done(acked.get(), 100L, null);
@@ -781,12 +781,12 @@ public class RecordAccumulatorTest {
         RecordAccumulator.ReadyCheckResult result = accum.ready(cluster, time.milliseconds());
         for (int i = 0; i < numSplitBatches; i++) {
             Map<Integer, List<ProducerBatch>> drained =
-                accum.drain(cluster, result.readyNodes, Integer.MAX_VALUE, time.milliseconds());
+                accum.drain(result.tpsByNode, Integer.MAX_VALUE, time.milliseconds());
             assertFalse(drained.isEmpty());
             assertFalse(drained.get(node1.id()).isEmpty());
         }
         assertTrue("All the batches should have been drained.",
-                accum.ready(cluster, time.milliseconds()).readyNodes.isEmpty());
+                accum.ready(cluster, time.milliseconds()).tpsByNode.isEmpty());
         assertEquals("The split batches should be allocated off the accumulator",
                 bufferCapacity, accum.bufferPoolAvailableMemory());
     }
@@ -833,7 +833,7 @@ public class RecordAccumulatorTest {
             batchSize + DefaultRecordBatch.RECORD_BATCH_OVERHEAD, 10 * batchSize, CompressionType.NONE, lingerMs);
 
         accum.append(tp1, 0L, key, value, Record.EMPTY_HEADERS, null, maxBlockTimeMs, false, time.milliseconds());
-        Set<Node> readyNodes = accum.ready(cluster, time.milliseconds()).readyNodes;
+        Set<Node> readyNodes = accum.ready(cluster, time.milliseconds()).tpsByNode.keySet();
         Map<Integer, List<ProducerBatch>> drained = accum.drain(cluster, readyNodes, Integer.MAX_VALUE, time.milliseconds());
         assertTrue(drained.isEmpty());
         //assertTrue(accum.soonToExpireInFlightBatches().isEmpty());
@@ -841,7 +841,7 @@ public class RecordAccumulatorTest {
         // advanced clock and send one batch out but it should not be included in soon to expire inflight
         // batches because batch's expiry is quite far.
         time.sleep(lingerMs + 1);
-        readyNodes = accum.ready(cluster, time.milliseconds()).readyNodes;
+        readyNodes = accum.ready(cluster, time.milliseconds()).tpsByNode.keySet();
         drained = accum.drain(cluster, readyNodes, Integer.MAX_VALUE, time.milliseconds());
         assertEquals("A batch did not drain after linger", 1, drained.size());
         //assertTrue(accum.soonToExpireInFlightBatches().isEmpty());
@@ -851,7 +851,7 @@ public class RecordAccumulatorTest {
         time.sleep(lingerMs * 4);
 
         // Now drain and check that accumulator picked up the drained batch because its expiry is soon.
-        readyNodes = accum.ready(cluster, time.milliseconds()).readyNodes;
+        readyNodes = accum.ready(cluster, time.milliseconds()).tpsByNode.keySet();
         drained = accum.drain(cluster, readyNodes, Integer.MAX_VALUE, time.milliseconds());
         assertEquals("A batch did not drain after linger", 1, drained.size());
     }
@@ -874,7 +874,7 @@ public class RecordAccumulatorTest {
         for (Boolean mute : muteStates) {
             accum.append(tp1, 0L, key, value, Record.EMPTY_HEADERS, null, 0, false, time.milliseconds());
             time.sleep(lingerMs);
-            readyNodes = accum.ready(cluster, time.milliseconds()).readyNodes;
+            readyNodes = accum.ready(cluster, time.milliseconds()).tpsByNode.keySet();
             assertEquals("Our partition's leader should be ready", Collections.singleton(node1), readyNodes);
             Map<Integer, List<ProducerBatch>> drained = accum.drain(cluster, readyNodes, Integer.MAX_VALUE, time.milliseconds());
             assertEquals("There should be only one batch.", 1, drained.get(node1.id()).size());
@@ -929,12 +929,12 @@ public class RecordAccumulatorTest {
             // We only appended if we do not retry.
             if (!switchPartition) {
                 appends++;
-                assertEquals("No partitions should be ready.", 0, accum.ready(cluster, now).readyNodes.size());
+                assertEquals("No partitions should be ready.", 0, accum.ready(cluster, now).tpsByNode.size());
             }
         }
 
         // Batch should be full.
-        assertEquals(1, accum.ready(cluster, time.milliseconds()).readyNodes.size());
+        assertEquals(1, accum.ready(cluster, time.milliseconds()).tpsByNode.size());
         assertEquals(appends, expectedAppends);
         switchPartition = false;
 
@@ -981,8 +981,8 @@ public class RecordAccumulatorTest {
         }
 
         RecordAccumulator.ReadyCheckResult result = accum.ready(cluster, time.milliseconds());
-        assertFalse(result.readyNodes.isEmpty());
-        Map<Integer, List<ProducerBatch>> batches = accum.drain(cluster, result.readyNodes, Integer.MAX_VALUE, time.milliseconds());
+        assertFalse(result.tpsByNode.isEmpty());
+        Map<Integer, List<ProducerBatch>> batches = accum.drain(result.tpsByNode, Integer.MAX_VALUE, time.milliseconds());
         assertEquals(1, batches.size());
         assertEquals(1, batches.values().iterator().next().size());
         ProducerBatch batch = batches.values().iterator().next().get(0);
@@ -999,7 +999,7 @@ public class RecordAccumulatorTest {
         do {
             batchDrained = false;
             RecordAccumulator.ReadyCheckResult result = accum.ready(cluster, time.milliseconds());
-            Map<Integer, List<ProducerBatch>> batches = accum.drain(cluster, result.readyNodes, Integer.MAX_VALUE, time.milliseconds());
+            Map<Integer, List<ProducerBatch>> batches = accum.drain(result.tpsByNode, Integer.MAX_VALUE, time.milliseconds());
             for (List<ProducerBatch> batchList : batches.values()) {
                 for (ProducerBatch batch : batchList) {
                     batchDrained = true;

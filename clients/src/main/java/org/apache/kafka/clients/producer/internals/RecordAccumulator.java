@@ -29,6 +29,7 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.Collectors;
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.common.utils.ProducerIdAndEpoch;
@@ -36,7 +37,6 @@ import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.Node;
-import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.header.Header;
@@ -459,7 +459,7 @@ public final class RecordAccumulator {
      * </ol>
      */
     public ReadyCheckResult ready(Cluster cluster, long nowMs) {
-        Set<Node> readyNodes = new HashSet<>();
+        Map<Node, List<TopicPartition>> readyNodes = new HashMap<>();
         long nextReadyCheckDelayMs = Long.MAX_VALUE;
         Set<String> unknownLeaderTopics = new HashSet<>();
 
@@ -477,7 +477,7 @@ public final class RecordAccumulator {
                         // This is a partition for which leader is not known, but messages are available to send.
                         // Note that entries are currently not removed from batches when deque is empty.
                         unknownLeaderTopics.add(part.topic());
-                    } else if (!readyNodes.contains(leader) && !isMuted(part, nowMs)) {
+                    } else if (!isMuted(part, nowMs)) {
                         long waitedTimeMs = batch.waitedTimeMs(nowMs);
                         boolean backingOff = batch.attempts() > 0 && waitedTimeMs < retryBackoffMs;
                         long timeToWaitMs = backingOff ? retryBackoffMs : lingerMs;
@@ -485,7 +485,8 @@ public final class RecordAccumulator {
                         boolean expired = waitedTimeMs >= timeToWaitMs;
                         boolean sendable = full || expired || exhausted || closed || flushInProgress();
                         if (sendable && !backingOff) {
-                            readyNodes.add(leader);
+                            List<TopicPartition> topicPartitions = readyNodes.computeIfAbsent(leader, l -> new ArrayList<>());
+                            topicPartitions.add(entry.getKey());
                         } else {
                             long timeLeftMs = Math.max(timeToWaitMs - waitedTimeMs, 0);
                             // Note that this results in a conservative estimate since an un-sendable partition may have
@@ -556,16 +557,14 @@ public final class RecordAccumulator {
         return false;
     }
 
-    private List<ProducerBatch> drainBatchesForOneNode(Cluster cluster, Node node, int maxSize, long now) {
+    private List<ProducerBatch> drainBatches(List<TopicPartition> topicPartitions, int maxSize, long now) {
         int size = 0;
-        List<PartitionInfo> parts = cluster.partitionsForNode(node.id());
         List<ProducerBatch> ready = new ArrayList<>();
         /* to make starvation less likely this loop doesn't start at 0 */
-        int start = drainIndex = drainIndex % parts.size();
+        int start = drainIndex = drainIndex % topicPartitions.size();
         do {
-            PartitionInfo part = parts.get(drainIndex);
-            TopicPartition tp = new TopicPartition(part.topic(), part.partition());
-            this.drainIndex = (this.drainIndex + 1) % parts.size();
+            TopicPartition tp = topicPartitions.get(drainIndex);
+            this.drainIndex = (this.drainIndex + 1) % topicPartitions.size();
 
             // Only proceed if the partition has no in-flight batches.
             if (isMuted(tp, now))
@@ -643,8 +642,32 @@ public final class RecordAccumulator {
 
         Map<Integer, List<ProducerBatch>> batches = new HashMap<>();
         for (Node node : nodes) {
-            List<ProducerBatch> ready = drainBatchesForOneNode(cluster, node, maxSize, now);
+            List<TopicPartition> partitions = cluster.partitionsForNode(node.id()).stream()
+                    .map(partitionInfo -> new TopicPartition(partitionInfo.topic(), partitionInfo.partition()))
+                    .collect(Collectors.toList());
+            List<ProducerBatch> ready = drainBatches(partitions, maxSize, now);
             batches.put(node.id(), ready);
+        }
+        return batches;
+    }
+
+    /**
+     * Drain all the data for the given topic partitions and collate them into a list of batches that will fit within the specified
+     * size on a per-node basis. This method attempts to avoid choosing the same topic-node over and over.
+     *
+     * @param tpsByNode The list of topic partitions per node to drain
+     * @param maxSize The maximum number of bytes to drain
+     * @param now The current unix time in milliseconds
+     * @return A list of {@link ProducerBatch} for each node specified with total size less than the requested maxSize.
+     */
+    public Map<Integer, List<ProducerBatch>> drain(Map<Node, List<TopicPartition>> tpsByNode, int maxSize, long now) {
+        if (tpsByNode.isEmpty())
+            return Collections.emptyMap();
+
+        Map<Integer, List<ProducerBatch>> batches = new HashMap<>();
+        for (Map.Entry<Node, List<TopicPartition>> entry : tpsByNode.entrySet()) {
+            List<ProducerBatch> ready = drainBatches(entry.getValue(), maxSize, now);
+            batches.put(entry.getKey().id(), ready);
         }
         return batches;
     }
@@ -839,12 +862,12 @@ public final class RecordAccumulator {
      * The set of nodes that have at least one complete record batch in the accumulator
      */
     public final static class ReadyCheckResult {
-        public final Set<Node> readyNodes;
+        public final Map<Node, List<TopicPartition>> tpsByNode;
         public final long nextReadyCheckDelayMs;
         public final Set<String> unknownLeaderTopics;
 
-        public ReadyCheckResult(Set<Node> readyNodes, long nextReadyCheckDelayMs, Set<String> unknownLeaderTopics) {
-            this.readyNodes = readyNodes;
+        public ReadyCheckResult(Map<Node, List<TopicPartition>> tpsByNode, long nextReadyCheckDelayMs, Set<String> unknownLeaderTopics) {
+            this.tpsByNode = tpsByNode;
             this.nextReadyCheckDelayMs = nextReadyCheckDelayMs;
             this.unknownLeaderTopics = unknownLeaderTopics;
         }
