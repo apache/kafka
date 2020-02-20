@@ -40,7 +40,6 @@ import scala.collection.{Map, Seq, mutable}
 import scala.compat.java8.OptionConverters._
 import scala.math.Ordered.orderingToOrdered
 
-import scala.util.control.NonFatal
 
 object ReassignPartitionsCommand extends Logging {
   private[admin] val AnyLogDir = "any"
