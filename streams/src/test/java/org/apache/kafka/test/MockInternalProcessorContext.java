@@ -17,6 +17,7 @@
 package org.apache.kafka.test;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
@@ -51,30 +52,43 @@ public class MockInternalProcessorContext extends MockProcessorContext implement
     private final Map<String, StateRestoreCallback> restoreCallbacks = new LinkedHashMap<>();
     private final Map<String, StateRestoreCallback> restoreFuncs = new HashMap<>();
     private final ThreadCache threadCache;
+    private final StreamsMetricsImpl metrics;
     private ProcessorNode currentNode;
     private RecordCollector recordCollector;
 
     public MockInternalProcessorContext() {
         super();
-        this.threadCache = null;
+        threadCache = null;
+        metrics = (StreamsMetricsImpl) super.metrics();
     }
 
     public MockInternalProcessorContext(final Properties config, final TaskId taskId, final File stateDir) {
         super(config, taskId, stateDir);
-        this.threadCache = null;
+        threadCache = null;
+        metrics = (StreamsMetricsImpl) super.metrics();
     }
 
     public MockInternalProcessorContext(final Properties config, final TaskId taskId, final LogContext logContext, final long maxCacheSizeBytes) {
-        super(config,
-              taskId,
-              new File(new QuietStreamsConfig(config).getString(StreamsConfig.STATE_DIR_CONFIG)));
-        ((StreamsMetricsImpl) super.metrics()).setRocksDBMetricsRecordingTrigger(new RocksDBMetricsRecordingTrigger());
-        this.threadCache = new ThreadCache(logContext, maxCacheSizeBytes, (StreamsMetricsImpl) super.metrics());
+        super(config, taskId, createStateDir(config));
+        metrics = (StreamsMetricsImpl) super.metrics();
+        metrics.setRocksDBMetricsRecordingTrigger(new RocksDBMetricsRecordingTrigger());
+        threadCache = new ThreadCache(logContext, maxCacheSizeBytes, metrics);
+    }
+
+    public MockInternalProcessorContext(final Properties config, final TaskId taskId, final Metrics metrics) {
+        super(config, taskId, createStateDir(config));
+        this.metrics = new StreamsMetricsImpl(metrics, "client-id", config.getProperty(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG));
+        setCurrentNode(new ProcessorNode<>("TESTING_NODE"));
+        threadCache = null;
+    }
+
+    private static File createStateDir(Properties config) {
+        return new File(new QuietStreamsConfig(config).getString(StreamsConfig.STATE_DIR_CONFIG));
     }
 
     @Override
     public StreamsMetricsImpl metrics() {
-        return (StreamsMetricsImpl) super.metrics();
+        return metrics;
     }
 
     @Override

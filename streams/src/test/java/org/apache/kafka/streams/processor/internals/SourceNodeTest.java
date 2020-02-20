@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.common.Metric;
+import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.Metrics;
@@ -23,8 +25,10 @@ import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.SensorAccessor;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.test.InternalMockProcessorContext;
+import org.apache.kafka.test.MockInternalProcessorContext;
 import org.apache.kafka.test.MockSourceNode;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.junit.Test;
@@ -32,6 +36,7 @@ import org.junit.Test;
 import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 import java.util.Map;
+import java.util.Properties;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
@@ -81,9 +86,10 @@ public class SourceNodeTest {
     }
 
     private void shouldExposeProcessMetrics(final String builtInMetricsVersion) {
+        final Properties properties = StreamsTestUtils.getStreamsConfig();
+        properties.put(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, builtInMetricsVersion);
         final Metrics metrics = new Metrics();
-        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, "test-client", builtInMetricsVersion);
-        final InternalMockProcessorContext context = new InternalMockProcessorContext(streamsMetrics);
+        final InternalProcessorContext context = new MockInternalProcessorContext(properties, new TaskId(0, 0), metrics);
         final SourceNode<String, String> node =
             new SourceNode<>(context.currentNode().name(), Collections.singletonList("topic"), new TheDeserializer(), new TheDeserializer());
         node.init(context);
@@ -126,5 +132,13 @@ public class SourceNodeTest {
                 contains(sensorNamePrefix + ".s.process")
             );
         }
+    }
+
+    private boolean containsMetric(final StreamsMetricsImpl streamsMetrics,
+                                   final String name,
+                                   final String group,
+                                   final Map<String, String> tags) {
+        final MetricName metricName = new MetricName(name, group, "", tags);
+        return streamsMetrics.metrics().containsKey(metricName);
     }
 }
