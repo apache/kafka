@@ -13,8 +13,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import os.path
+
 from collections import namedtuple
 from kafkatest.version import DEV_BRANCH, LATEST_0_8_2, LATEST_0_9, LATEST_0_10_0, LATEST_0_10_1, LATEST_0_10_2, LATEST_0_11, LATEST_1_0
+from kafkatest.services.kafka import OPERATIONAL_LOG_DEBUG_DIR
 
 TopicPartition = namedtuple('TopicPartition', ['topic', 'partition'])
 
@@ -24,27 +27,28 @@ def fix_opts_for_new_jvm(node):
     # When system test run on JVM that doesn't support these options
     # we should setup environment variables with correct options.
     java_ver = java_version(node)
-
     if java_ver <= 9:
         return ""
 
     cmd = ""
     if node.version == LATEST_0_8_2 or node.version == LATEST_0_9 or node.version == LATEST_0_10_0 or node.version == LATEST_0_10_1 or node.version == LATEST_0_10_2 or node.version == LATEST_0_11 or node.version == LATEST_1_0:
-        cmd += "export KAFKA_GC_LOG_OPTS=\"-Xlog:gc*:file=/home/ducker/gc.log:time,tags:filecount=10,filesize=102400\"; "
-    if node.version == LATEST_0_8_2:
+        gc_log_file = os.path.join(OPERATIONAL_LOG_DEBUG_DIR, "gc.log")
+        cmd += "export KAFKA_GC_LOG_OPTS=\"-Xlog:gc*:file=%s:time,tags:filecount=10,filesize=102400\"; " % gc_log_file
         cmd += "export KAFKA_JVM_PERFORMANCE_OPTS=\"-server -XX:+UseG1GC -XX:MaxGCPauseMillis=20 -XX:InitiatingHeapOccupancyPercent=35 -XX:+ExplicitGCInvokesConcurrent -XX:MaxInlineLevel=15 -Djava.awt.headless=true\"; "
-
     return cmd
 
 def java_version(node):
     # Determine java version on the node
-    version = 9
+    version = -1
     for line in node.account.ssh_capture("java -version"):
         if line.find("version") != -1:
             version = parse_version_str(line)
     return version
 
 def parse_version_str(line):
+    # Parse java version string. Examples:
+    #`openjdk version "11.0.5" 2019-10-15` will return 11.
+    #`java version "1.5.0"` will return 5.
     line = line[line.find('version \"') + 9:]
     dot_pos = line.find(".")
     if line[:dot_pos] == "1":
