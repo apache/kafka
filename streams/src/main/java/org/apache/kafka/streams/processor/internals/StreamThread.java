@@ -247,10 +247,6 @@ public class StreamThread extends Thread {
         return assignmentErrorCode.get();
     }
 
-    void setRebalanceException(final Throwable rebalanceException) {
-        this.rebalanceException = rebalanceException;
-    }
-
     static abstract class AbstractTaskCreator<T extends Task> {
         final String applicationId;
         final InternalTopologyBuilder builder;
@@ -502,7 +498,6 @@ public class StreamThread extends Thread {
     private long lastPollMs;
     private long lastCommitMs;
     private int numIterations;
-    private Throwable rebalanceException = null;
     private volatile State state = State.CREATED;
     private volatile ThreadMetadata threadMetadata;
     private StreamThread.StateListener stateListener;
@@ -927,14 +922,6 @@ public class StreamThread extends Thread {
             resetInvalidOffsets(e);
         }
 
-        if (rebalanceException != null) {
-            if (rebalanceException instanceof TaskMigratedException) {
-                throw (TaskMigratedException) rebalanceException;
-            } else {
-                throw new StreamsException(logPrefix + "Failed to rebalance.", rebalanceException);
-            }
-        }
-
         return records;
     }
 
@@ -1253,9 +1240,5 @@ public class StreamThread extends Thread {
 
     int currentNumIterations() {
         return numIterations;
-    }
-
-    Throwable rebalanceException() {
-        return rebalanceException;
     }
 }

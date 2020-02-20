@@ -107,6 +107,7 @@ import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -938,8 +939,7 @@ public class StreamThreadTest {
         assertThat(thread.activeTasks().size(), equalTo(1));
 
         clientSupplier.producers.get(0).commitTransactionException = new ProducerFencedException("Producer is fenced");
-        thread.rebalanceListener.onPartitionsRevoked(assignedPartitions);
-        assertTrue(thread.rebalanceException() instanceof TaskMigratedException);
+        assertThrows(TaskMigratedException.class, () -> thread.rebalanceListener.onPartitionsRevoked(assignedPartitions));
         assertFalse(clientSupplier.producers.get(0).transactionCommitted());
         assertFalse(clientSupplier.producers.get(0).closed());
         assertEquals(1, thread.activeTasks().size());
