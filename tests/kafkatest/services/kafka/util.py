@@ -23,9 +23,9 @@ def fix_opts_for_new_jvm(node):
     # that not supported on latest versions of JVM like -XX:+PrintGCDateStamps or -XX:UseParNewGC.
     # When system test run on JVM that doesn't support these options
     # we should setup environment variables with correct options.
-    java_version = java_version(node)
+    java_ver = java_version(node)
 
-    if int(java_version) <= 9:
+    if java_ver <= 9:
         return ""
 
     cmd = ""
@@ -39,12 +39,15 @@ def fix_opts_for_new_jvm(node):
 def java_version(node):
     # Determine java version on the node
     version = 9
-
     for line in node.account.ssh_capture("java -version"):
-        print(line)
         if line.find("version") != -1
-            print(line)
-
+            version = parse_version_str(line)
     return version
 
-
+def parse_version_str(line):
+    line = line[line.find('version \"') + 9:]
+    dot_pos = line.find(".")
+    if line[:dot_pos] == "1":
+        return int(line[dot_pos+1:line.find(".", dot_pos+1)])
+    else:
+        return int(line[:dot_pos])
