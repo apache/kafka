@@ -33,12 +33,14 @@ import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.state.TimestampedBytesStore;
 import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
 import org.apache.kafka.streams.state.internals.WrappedStateStore;
-import org.apache.kafka.test.InternalMockProcessorContext;
+import org.apache.kafka.test.MockInternalProcessorContext;
 import org.apache.kafka.test.MockStateRestoreListener;
 import org.apache.kafka.test.NoOpReadOnlyStore;
+import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Before;
@@ -72,7 +74,6 @@ import static org.junit.Assert.fail;
 
 public class GlobalStateManagerImplTest {
 
-
     private final MockTime time = new MockTime();
     private final TheStateRestoreCallback stateRestoreCallback = new TheStateRestoreCallback();
     private final MockStateRestoreListener stateRestoreListener = new MockStateRestoreListener();
@@ -91,7 +92,6 @@ public class GlobalStateManagerImplTest {
     private MockConsumer<byte[], byte[]> consumer;
     private File checkpointFile;
     private ProcessorTopology topology;
-    private InternalMockProcessorContext processorContext;
 
     static ProcessorTopology withGlobalStores(final List<StateStore> stateStores,
                                               final Map<String, String> storeToChangelogTopic) {
@@ -136,8 +136,11 @@ public class GlobalStateManagerImplTest {
             stateDirectory,
             stateRestoreListener,
             streamsConfig);
-        processorContext = new InternalMockProcessorContext(stateDirectory.globalStateDir(), streamsConfig);
-        stateManager.setGlobalProcessorContext(processorContext);
+        stateManager.setGlobalProcessorContext(new MockInternalProcessorContext(
+                StreamsTestUtils.getStreamsConfig(),
+                new TaskId(0, 0),
+                stateDirectory.globalStateDir()
+        ));
         checkpointFile = new File(stateManager.baseDir(), StateManagerUtil.CHECKPOINT_FILE_NAME);
     }
 
