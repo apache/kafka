@@ -40,7 +40,7 @@ def java_version(node):
     # Determine java version on the node
     version = 9
     for line in node.account.ssh_capture("java -version"):
-        if line.find("version") != -1
+        if line.find("version") != -1:
             version = parse_version_str(line)
     return version
 
