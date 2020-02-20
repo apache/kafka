@@ -19,6 +19,7 @@ package org.apache.kafka.test;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
@@ -64,6 +65,8 @@ public class MockInternalProcessorContext extends MockProcessorContext implement
     private StreamsMetricsImpl metrics;
     private ProcessorNode currentNode;
     private RecordCollector recordCollector;
+    private Serde keySerde;
+    private Serde valueSerde;
 
     public MockInternalProcessorContext() {
         super();
@@ -73,6 +76,8 @@ public class MockInternalProcessorContext extends MockProcessorContext implement
     public MockInternalProcessorContext(final Properties config) {
         this(config, DEFAULT_TASK_ID, TestUtils.tempDirectory());
         setRecordContext(new ProcessorRecordContext(DEFAULT_TIMESTAMP, DEFAULT_OFFSET, DEFAULT_PARTITION, DEFAULT_TOPIC, DEFAULT_HEADERS));
+        this.keySerde = super.keySerde();
+        this.valueSerde = super.valueSerde();
     }
 
     public MockInternalProcessorContext(final Properties config, final TaskId taskId, final File stateDir) {
@@ -80,6 +85,9 @@ public class MockInternalProcessorContext extends MockProcessorContext implement
         threadCache = null;
         setMetrics((StreamsMetricsImpl) super.metrics());
         setCurrentNode(new ProcessorNode<>(DEFAULT_NODE_NAME));
+        this.keySerde = super.keySerde();
+        this.valueSerde = super.valueSerde();
+        setRecordContext(new ProcessorRecordContext(DEFAULT_TIMESTAMP, DEFAULT_OFFSET, DEFAULT_PARTITION, DEFAULT_TOPIC, DEFAULT_HEADERS));
     }
 
     public MockInternalProcessorContext(final Properties config, final TaskId taskId, final LogContext logContext, final long maxCacheSizeBytes) {
@@ -95,22 +103,34 @@ public class MockInternalProcessorContext extends MockProcessorContext implement
         threadCache = new ThreadCache(logContext, maxCacheSizeBytes, metrics);
         setMetrics((StreamsMetricsImpl) super.metrics());
         setCurrentNode(new ProcessorNode<>(DEFAULT_NODE_NAME));
+        this.keySerde = super.keySerde();
+        this.valueSerde = super.valueSerde();
+        setRecordContext(new ProcessorRecordContext(DEFAULT_TIMESTAMP, DEFAULT_OFFSET, DEFAULT_PARTITION, DEFAULT_TOPIC, DEFAULT_HEADERS));
     }
 
     public MockInternalProcessorContext(final Properties config, final TaskId taskId, final Metrics metrics) {
-        super(config, taskId, createStateDir(config));
+        super(config, taskId, new File(new QuietStreamsConfig(config).getString(StreamsConfig.STATE_DIR_CONFIG)));
         setMetrics(new StreamsMetricsImpl(metrics, "client-id", config.getProperty(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG)));
         setCurrentNode(new ProcessorNode<>("TESTING_NODE"));
         threadCache = null;
-    }
-
-    private static File createStateDir(Properties config) {
-        return new File(new QuietStreamsConfig(config).getString(StreamsConfig.STATE_DIR_CONFIG));
+        this.keySerde = super.keySerde();
+        this.valueSerde = super.valueSerde();
+        setRecordContext(new ProcessorRecordContext(DEFAULT_TIMESTAMP, DEFAULT_OFFSET, DEFAULT_PARTITION, DEFAULT_TOPIC, DEFAULT_HEADERS));
     }
 
     private void setMetrics(final StreamsMetricsImpl metrics) {
         this.metrics = metrics;
         this.metrics().setRocksDBMetricsRecordingTrigger(new RocksDBMetricsRecordingTrigger());
+    }
+
+    @Override
+    public Serde<?> keySerde() {
+        return keySerde;
+    }
+
+    @Override
+    public Serde<?> valueSerde() {
+        return valueSerde;
     }
 
     @Override
@@ -203,5 +223,13 @@ public class MockInternalProcessorContext extends MockProcessorContext implement
         }
 
         return CompositeRestoreListener.NO_OP_STATE_RESTORE_LISTENER;
+    }
+
+    public void setKeySerde(Serde keySerde) {
+        this.keySerde = keySerde;
+    }
+
+    public void setValueSerde(Serde valueSerde) {
+        this.valueSerde = valueSerde;
     }
 }

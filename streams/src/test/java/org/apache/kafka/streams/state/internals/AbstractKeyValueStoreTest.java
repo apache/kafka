@@ -26,7 +26,7 @@ import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.KeyValueStoreTestDriver;
-import org.apache.kafka.test.InternalMockProcessorContext;
+import org.apache.kafka.test.MockInternalProcessorContext;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -52,15 +52,15 @@ public abstract class AbstractKeyValueStoreTest {
 
     protected abstract <K, V> KeyValueStore<K, V> createKeyValueStore(final ProcessorContext context);
 
-    protected InternalMockProcessorContext context;
+    protected MockInternalProcessorContext context;
     protected KeyValueStore<Integer, String> store;
     protected KeyValueStoreTestDriver<Integer, String> driver;
 
     @Before
     public void before() {
         driver = KeyValueStoreTestDriver.create(Integer.class, String.class);
-        context = (InternalMockProcessorContext) driver.context();
-        context.setTime(10);
+        context = (MockInternalProcessorContext) driver.context();
+        context.setTimestamp(10);
         store = createKeyValueStore(context);
     }
 
