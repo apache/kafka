@@ -71,11 +71,13 @@ public class MockInternalProcessorContext extends MockProcessorContext implement
     public MockInternalProcessorContext() {
         super();
         threadCache = null;
+        setMetrics((StreamsMetricsImpl) super.metrics());
     }
 
     public MockInternalProcessorContext(final ThreadCache cache) {
-        super();
+        super(StreamsTestUtils.getStreamsConfig(), DEFAULT_TASK_ID, TestUtils.tempDirectory());
         threadCache = cache;
+        setMetrics((StreamsMetricsImpl) super.metrics());
     }
 
     public MockInternalProcessorContext(final Properties config) {
@@ -83,6 +85,7 @@ public class MockInternalProcessorContext extends MockProcessorContext implement
         setRecordContext(new ProcessorRecordContext(DEFAULT_TIMESTAMP, DEFAULT_OFFSET, DEFAULT_PARTITION, DEFAULT_TOPIC, DEFAULT_HEADERS));
         this.keySerde = super.keySerde();
         this.valueSerde = super.valueSerde();
+        setMetrics((StreamsMetricsImpl) super.metrics());
     }
 
     public MockInternalProcessorContext(final Properties config, final TaskId taskId, final File stateDir) {

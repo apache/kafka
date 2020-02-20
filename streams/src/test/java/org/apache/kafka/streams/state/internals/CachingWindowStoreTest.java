@@ -42,7 +42,7 @@ import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 import org.apache.kafka.streams.TestInputTopic;
-import org.apache.kafka.test.InternalMockProcessorContext;
+import org.apache.kafka.test.MockInternalProcessorContext;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Before;
@@ -78,7 +78,7 @@ public class CachingWindowStoreTest {
     private static final long DEFAULT_TIMESTAMP = 10L;
     private static final Long WINDOW_SIZE = 10L;
     private static final long SEGMENT_INTERVAL = 100L;
-    private InternalMockProcessorContext context;
+    private MockInternalProcessorContext context;
     private RocksDBSegmentedBytesStore underlying;
     private CachingWindowStore cachingStore;
     private CachingKeyValueStoreTest.CacheFlushListenerStub<Windowed<String>, String> cacheListener;
@@ -101,7 +101,7 @@ public class CachingWindowStoreTest {
         cachingStore.setFlushListener(cacheListener, false);
         cache = new ThreadCache(new LogContext("testCache "), MAX_CACHE_SIZE_BYTES, new MockStreamsMetrics(new Metrics()));
         topic = "topic";
-        context = new InternalMockProcessorContext(TestUtils.tempDirectory(), null, null, null, cache);
+        context = new MockInternalProcessorContext(cache);
         context.setRecordContext(new ProcessorRecordContext(DEFAULT_TIMESTAMP, 0, 0, topic, null));
         cachingStore.init(context, cachingStore);
     }
@@ -294,7 +294,7 @@ public class CachingWindowStoreTest {
     public void shouldFetchAllWithinTimestampRange() {
         final String[] array = {"a", "b", "c", "d", "e", "f", "g", "h"};
         for (int i = 0; i < array.length; i++) {
-            context.setTime(i);
+            context.setTimestamp(i);
             cachingStore.put(bytesKey(array[i]), bytesValue(array[i]));
         }
 
