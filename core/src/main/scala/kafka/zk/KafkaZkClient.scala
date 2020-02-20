@@ -457,7 +457,7 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
 
   /**
    * Gets all topics in the cluster.
-   * @param registerWatch indicates if a what must be registered or not
+   * @param registerWatch indicates if a watch must be registered or not
    * @return sequence of topics in the cluster.
    */
   def getAllTopicsInCluster(registerWatch: Boolean = false): Set[String] = {
@@ -469,12 +469,6 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
       case _ => throw getChildrenResponse.resultException.get
     }
   }
-
-  /**
-   * Gets all topics in the cluster. It does not register a watch.
-   * @return sequence of topics in the cluster.
-   */
-//  def getAllTopicsInCluster(): Set[String] = getAllTopicsInCluster(false)
 
   /**
    * Checks the topic existence
