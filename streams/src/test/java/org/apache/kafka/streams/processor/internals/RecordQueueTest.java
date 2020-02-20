@@ -33,7 +33,6 @@ import org.apache.kafka.streams.errors.LogAndFailExceptionHandler;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.FailOnInvalidTimestamp;
 import org.apache.kafka.streams.processor.LogAndSkipOnInvalidTimestamp;
-import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.MockInternalProcessorContext;
@@ -45,7 +44,6 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
-import java.io.File;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
@@ -78,7 +76,7 @@ public class RecordQueueTest {
         context.setRecordCollector(new MockRecordCollector());
         final Deserializer<Integer> intDeserializer = new IntegerDeserializer();
         mockSourceNodeWithMetrics = new MockSourceNode<>(new String[]{"topic"}, intDeserializer, intDeserializer);
-        TimestampExtractor timestampExtractor = new MockTimestampExtractor();
+        final TimestampExtractor timestampExtractor = new MockTimestampExtractor();
         queue = new RecordQueue(
                 new TopicPartition("topic", 1),
                 mockSourceNodeWithMetrics,

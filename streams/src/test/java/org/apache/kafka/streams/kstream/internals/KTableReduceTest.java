@@ -21,7 +21,6 @@ import org.apache.kafka.streams.processor.internals.ProcessorNode;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.test.GenericInMemoryTimestampedKeyValueStore;
-import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.MockInternalProcessorContext;
 import org.junit.Test;
 
