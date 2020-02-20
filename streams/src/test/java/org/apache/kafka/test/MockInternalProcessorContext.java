@@ -75,7 +75,11 @@ public class MockInternalProcessorContext extends MockProcessorContext implement
     }
 
     public MockInternalProcessorContext(final ThreadCache cache) {
-        super(StreamsTestUtils.getStreamsConfig(), DEFAULT_TASK_ID, TestUtils.tempDirectory());
+        this(cache, TestUtils.tempDirectory());
+    }
+
+    public MockInternalProcessorContext(final ThreadCache cache, final File stateDir) {
+        super(StreamsTestUtils.getStreamsConfig(), DEFAULT_TASK_ID, stateDir);
         threadCache = cache;
         setMetrics((StreamsMetricsImpl) super.metrics());
     }
