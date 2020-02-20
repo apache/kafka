@@ -112,8 +112,8 @@ class DemoCallBack implements Callback {
      * be called when the record sent to the server has been acknowledged. When exception is not null in the callback,
      * metadata will contain the special -1 value for all fields except for topicPartition, which will be valid.
      *
-     * @param metadata  The metadata for the record that was sent (i.e. the partition and offset). Null if an error
-     *                  occurred.
+     * @param metadata  The metadata for the record that was sent (i.e. the partition and offset). An empty metadata
+     *                  with -1 value for all fields except for topicPartition will be returned if an error occurred.
      * @param exception The exception thrown during processing of this record. Null if no error occurred.
      */
     public void onCompletion(RecordMetadata metadata, Exception exception) {
