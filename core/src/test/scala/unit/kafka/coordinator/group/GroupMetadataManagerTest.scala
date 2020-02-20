@@ -2385,9 +2385,12 @@ class GroupMetadataManagerTest {
 
     expectGroupMetadataLoad(groupMetadataTopicPartition, startOffset, records)
     EasyMock.replay(replicaManager)
-    groupMetadataManager.loadGroupsAndOffsets(groupMetadataTopicPartition, _ => ())
 
-    assertTrue(partitionLoadTime("partition-load-time-max") >= 0.0)
-    assertTrue(partitionLoadTime( "partition-load-time-avg") >= 0.0)
+    // When passed a specific start offset, assert that the measured values are in excess of that.
+    val now = time.milliseconds()
+    val diff = 1000
+    groupMetadataManager.loadGroupsAndOffsets(groupMetadataTopicPartition, _ => (), now - diff)
+    assertTrue(partitionLoadTime("partition-load-time-max") >= diff)
+    assertTrue(partitionLoadTime("partition-load-time-avg") >= diff)
   }
 }

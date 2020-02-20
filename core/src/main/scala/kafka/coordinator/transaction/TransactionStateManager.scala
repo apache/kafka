@@ -288,7 +288,6 @@ class TransactionStateManager(brokerId: Int,
   private def loadTransactionMetadata(topicPartition: TopicPartition, coordinatorEpoch: Int): Pool[String, TransactionMetadata] =  {
     def logEndOffset = replicaManager.getLogEndOffset(topicPartition).getOrElse(-1L)
 
-    val startMs = time.milliseconds()
     val loadedTransactions = new Pool[String, TransactionMetadata]
 
     replicaManager.getLog(topicPartition) match {
@@ -352,10 +351,6 @@ class TransactionStateManager(brokerId: Int,
                 currOffset = batch.nextOffset
               }
             }
-            val endMs = time.milliseconds()
-            val timeLapse = endMs - startMs
-            partitionLoadSensor.record(timeLapse, endMs, false)
-            info(s"Finished loading ${loadedTransactions.size} transaction metadata from $topicPartition in $timeLapse milliseconds")
           }
         } catch {
           case t: Throwable => error(s"Error loading transactions from transaction log $topicPartition", t)
@@ -393,11 +388,16 @@ class TransactionStateManager(brokerId: Int,
       loadingPartitions.add(partitionAndLeaderEpoch)
     }
 
-    def loadTransactions(): Unit = {
+    def loadTransactions(startTimeInMs: java.lang.Long = 0L): Unit = {
+      val schedulerTime = time.milliseconds() - startTimeInMs
       info(s"Loading transaction metadata from $topicPartition at epoch $coordinatorEpoch")
       validateTransactionTopicPartitionCountIsStable()
 
       val loadedTransactions = loadTransactionMetadata(topicPartition, coordinatorEpoch)
+      val endTimeInMs = time.milliseconds()
+      val timeLapse = endTimeInMs - startTimeInMs
+      partitionLoadSensor.record(timeLapse, endTimeInMs, false)
+      info(s"Finished loading ${loadedTransactions.size} transaction metadata from $topicPartition in $timeLapse milliseconds, of which $schedulerTime milliseconds was spent in the scheduler.")
 
       inWriteLock(stateLock) {
         if (loadingPartitions.contains(partitionAndLeaderEpoch)) {
@@ -435,7 +435,8 @@ class TransactionStateManager(brokerId: Int,
       info(s"Completed loading transaction metadata from $topicPartition for coordinator epoch $coordinatorEpoch")
     }
 
-    scheduler.schedule(s"load-txns-for-partition-$topicPartition", loadTransactions)
+    val nowInMs = time.milliseconds()
+    scheduler.schedule(s"load-txns-for-partition-$topicPartition", () => loadTransactions(nowInMs))
   }
 
   def removeTransactionsForTxnTopicPartition(partitionId: Int): Unit = {
