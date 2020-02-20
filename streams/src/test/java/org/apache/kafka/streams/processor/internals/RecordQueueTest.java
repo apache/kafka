@@ -74,7 +74,7 @@ public class RecordQueueTest {
         final Properties properties = StreamsTestUtils.getStreamsConfig();
         properties.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Bytes.class);
         properties.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Bytes.class);
-        context = new MockInternalProcessorContext(properties, new TaskId(0, 0), (File) null);
+        context = new MockInternalProcessorContext(properties);
         context.setRecordCollector(new MockRecordCollector());
         final Deserializer<Integer> intDeserializer = new IntegerDeserializer();
         mockSourceNodeWithMetrics = new MockSourceNode<>(new String[]{"topic"}, intDeserializer, intDeserializer);

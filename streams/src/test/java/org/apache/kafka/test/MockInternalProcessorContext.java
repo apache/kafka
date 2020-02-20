@@ -17,6 +17,7 @@
 package org.apache.kafka.test;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.KeyValue;
@@ -51,6 +52,11 @@ public class MockInternalProcessorContext extends MockProcessorContext implement
 
     public static final String DEFAULT_NODE_NAME = "TESTING_NODE";
     public static final TaskId DEFAULT_TASK_ID = new TaskId(0, 0);
+    public static final RecordHeaders DEFAULT_HEADERS = new RecordHeaders();
+    public static final String DEFAULT_TOPIC = "";
+    public static final int DEFAULT_PARTITION = 0;
+    public static final long DEFAULT_OFFSET = 0L;
+    public static final long DEFAULT_TIMESTAMP = 0L;
 
     private final Map<String, StateRestoreCallback> restoreCallbacks = new LinkedHashMap<>();
     private final Map<String, StateRestoreCallback> restoreFuncs = new HashMap<>();
@@ -66,6 +72,7 @@ public class MockInternalProcessorContext extends MockProcessorContext implement
 
     public MockInternalProcessorContext(final Properties config) {
         this(config, DEFAULT_TASK_ID, TestUtils.tempDirectory());
+        setRecordContext(new ProcessorRecordContext(DEFAULT_TIMESTAMP, DEFAULT_OFFSET, DEFAULT_PARTITION, DEFAULT_TOPIC, DEFAULT_HEADERS));
     }
 
     public MockInternalProcessorContext(final Properties config, final TaskId taskId, final File stateDir) {

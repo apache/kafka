@@ -20,13 +20,16 @@ import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.StreamPartitioner;
-import org.apache.kafka.streams.state.StateSerdes;
-import org.apache.kafka.test.InternalMockProcessorContext;
+import org.apache.kafka.test.MockInternalProcessorContext;
 import org.apache.kafka.test.MockRecordCollector;
+import org.apache.kafka.test.StreamsTestUtils;
 import org.junit.Before;
 import org.junit.Test;
+
+import java.util.Properties;
 
 import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.CoreMatchers.instanceOf;
@@ -34,7 +37,6 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.fail;
 
 public class SinkNodeTest {
-    private final StateSerdes<Bytes, Bytes> anyStateSerde = StateSerdes.withBuiltinTypes("anyName", Bytes.class, Bytes.class);
     private final Serializer<byte[]> anySerializer = Serdes.ByteArray().serializer();
     private final RecordCollector recordCollector = new MockRecordCollector() {
         @Override
@@ -50,13 +52,21 @@ public class SinkNodeTest {
         }
     };
 
-    private final InternalMockProcessorContext context = new InternalMockProcessorContext(anyStateSerde, recordCollector);
+    private final MockInternalProcessorContext context;
     private final SinkNode<byte[], byte[]> sink = new SinkNode<>("anyNodeName",
             new StaticTopicNameExtractor<>("any-output-topic"), anySerializer, anySerializer, null);
 
     // Used to verify that the correct exceptions are thrown if the compiler checks are bypassed
     @SuppressWarnings("unchecked")
     private final SinkNode<Object, Object> illTypedSink = (SinkNode) sink;
+
+    public SinkNodeTest() {
+        final Properties properties = StreamsTestUtils.getStreamsConfig();
+        properties.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Bytes.class);
+        properties.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Bytes.class);
+        context = new MockInternalProcessorContext(properties);
+        context.setRecordCollector(recordCollector);
+    }
 
     @Before
     public void before() {
@@ -66,7 +76,7 @@ public class SinkNodeTest {
     @Test
     public void shouldThrowStreamsExceptionOnInputRecordWithInvalidTimestamp() {
         // When/Then
-        context.setTime(-1); // ensures a negative timestamp is set for the record we send next
+        context.setTimestamp(-1); // ensures a negative timestamp is set for the record we send next
         try {
             illTypedSink.process("any key".getBytes(), "any value".getBytes());
             fail("Should have thrown StreamsException");
@@ -78,7 +88,7 @@ public class SinkNodeTest {
     @Test
     public void shouldThrowStreamsExceptionWithClassCastFromRecordCollector() {
         // When/Then
-        context.setTime(0);
+        context.setTimestamp(0);
         try {
             illTypedSink.process("key", "value");
             fail("Should have thrown StreamsException");
@@ -90,7 +100,7 @@ public class SinkNodeTest {
     @Test
     public void shouldThrowStreamsExceptionNullKeyWithClassCastFromRecordCollector() {
         // When/Then
-        context.setTime(1);
+        context.setTimestamp(1);
         try {
             illTypedSink.process(null, "");
             fail("Should have thrown StreamsException");
@@ -103,7 +113,7 @@ public class SinkNodeTest {
     @Test
     public void shouldThrowStreamsExceptionNullValueWithClassCastFromRecordCollector() {
         // When/Then
-        context.setTime(1);
+        context.setTimestamp(1);
         try {
             illTypedSink.process("", null);
             fail("Should have thrown StreamsException");
