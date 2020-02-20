@@ -598,7 +598,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
      */
     public void suspend() {
         log.debug("Suspending");
-        suspend(true, false);
+        suspend(true);
     }
 
     /**
@@ -614,8 +614,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
      *                               or if the task producer got fenced (EOS)
      */
     // visible for testing
-    void suspend(final boolean clean,
-                 final boolean isZombie) {
+    void suspend(final boolean clean) {
         // this is necessary because all partition times are reset to -1 during close
         // we need to preserve the original partitions times before calling commit
         final Map<TopicPartition, Long> partitionTimes = extractPartitionTimes();
@@ -720,7 +719,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
 
     /**
      * <pre>
-     * - {@link #suspend(boolean, boolean) suspend(clean)}
+     * - {@link #suspend(boolean) suspend(clean)}
      *   - close topology
      *   - if (clean) {@link #commit()}
      *     - flush state and producer
@@ -743,7 +742,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
 
         RuntimeException firstException = null;
         try {
-            suspend(clean, isZombie);
+            suspend(clean);
         } catch (final RuntimeException e) {
             clean = false;
             firstException = e;

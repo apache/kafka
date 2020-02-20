@@ -1317,26 +1317,26 @@ public class StreamTaskTest {
     }
 
     @Test
-    public void shouldAbortTransactionAndCloseProducerOnUncleanCloseWithEosEnabled() {
+    public void shouldNotAbortTransactionAndCloseProducerOnUncleanCloseWithEosEnabled() {
         task = createStatelessTask(createConfig(true), StreamsConfig.METRICS_LATEST);
         task.initializeTopology();
 
         task.close(false, false);
         task = null;
 
-        assertTrue(producer.transactionAborted());
-        assertFalse(producer.transactionInFlight());
+        assertFalse(producer.transactionAborted());
+        assertTrue(producer.transactionInFlight());
         assertTrue(producer.closed());
     }
 
     @Test
-    public void shouldAbortTransactionAndCloseProducerOnErrorDuringUncleanCloseWithEosEnabled() {
+    public void shouldNotAbortTransactionAndCloseProducerOnErrorDuringUncleanCloseWithEosEnabled() {
         task = createTaskThatThrowsException(true);
         task.initializeTopology();
 
         task.close(false, false);
 
-        assertTrue(producer.transactionAborted());
+        assertFalse(producer.transactionAborted());
         assertTrue(producer.closed());
     }
 
@@ -1561,7 +1561,7 @@ public class StreamTaskTest {
         task.close(false, false);
         task = null;
 
-        assertTrue(producer.transactionAborted());
+        assertFalse(producer.transactionAborted());
         assertFalse(producer.closed());
     }
 
