@@ -215,7 +215,7 @@ public class SaslClientAuthenticator implements Authenticator {
                 if (apiVersionsResponse == null)
                     break;
                 else {
-                    saslApiVersions(apiVersionsResponse);
+                    setSaslAuthenticateAndHandshakeVersions(apiVersionsResponse);
                     reauthInfo.apiVersionsResponseReceivedFromBroker = apiVersionsResponse;
                     setSaslState(SaslState.SEND_HANDSHAKE_REQUEST);
                     // Fall through to send handshake request with the latest supported version
@@ -238,7 +238,7 @@ public class SaslClientAuthenticator implements Authenticator {
                 setSaslState(SaslState.INTERMEDIATE);
                 break;
             case REAUTH_PROCESS_ORIG_APIVERSIONS_RESPONSE:
-                saslApiVersions(reauthInfo.apiVersionsResponseFromOriginalAuthentication);
+                setSaslAuthenticateAndHandshakeVersions(reauthInfo.apiVersionsResponseFromOriginalAuthentication);
                 setSaslState(SaslState.REAUTH_SEND_HANDSHAKE_REQUEST); // Will set immediately
                 // Fall through to send handshake request with the latest supported version
             case REAUTH_SEND_HANDSHAKE_REQUEST:
@@ -346,7 +346,7 @@ public class SaslClientAuthenticator implements Authenticator {
     }
 
     // Visible to override for testing
-    protected void saslApiVersions(ApiVersionsResponse apiVersionsResponse) {
+    protected void setSaslAuthenticateAndHandshakeVersions(ApiVersionsResponse apiVersionsResponse) {
         ApiVersionsResponseKey authenticateVersion = apiVersionsResponse.apiVersion(ApiKeys.SASL_AUTHENTICATE.id);
         if (authenticateVersion != null) {
             this.saslAuthenticateVersion = (short) Math.min(authenticateVersion.maxVersion(),

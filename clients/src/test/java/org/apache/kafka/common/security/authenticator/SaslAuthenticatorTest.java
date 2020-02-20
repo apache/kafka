@@ -770,9 +770,9 @@ public class SaslAuthenticatorTest {
 
     @Test
     public void testForBrokenSaslHandshakeVersionBump() {
-        assertEquals("It is not possible to easily bump SASL_HANDSHAKE schema without "
-                        + "due to improper version negotiation for clients < 2.5. "
-                        + "Please see https://issues.apache.org/jira/browse/KAFKA-9577",
+        assertEquals("It is not possible to easily bump SASL_HANDSHAKE schema"
+                        + " due to improper version negotiation in clients < 2.5."
+                        + " Please see https://issues.apache.org/jira/browse/KAFKA-9577",
                 ApiKeys.SASL_HANDSHAKE.latestVersion(),
                 1);
     }
@@ -1891,7 +1891,7 @@ public class SaslAuthenticatorTest {
                         return buildSaslHandshakeRequest(saslMechanism, (short) 0);
                     }
                     @Override
-                    protected void saslApiVersions(ApiVersionsResponse apiVersionsResponse) {
+                    protected void setSaslAuthenticateAndHandshakeVersions(ApiVersionsResponse apiVersionsResponse) {
                         // Don't set version so that headers are disabled
                     }
                 };
