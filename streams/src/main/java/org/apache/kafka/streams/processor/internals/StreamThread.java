@@ -820,14 +820,10 @@ public class StreamThread extends Thread {
             return;
         }
 
-        // we can always let changelog reader to try restoring in order to initialize the changelogs;
-        // if there's no active restoring or standby updating it would not try to fetch any data
-        changelogReader.restore();
-
         // only try to initialize the assigned tasks
         // if the state is still in PARTITION_ASSIGNED after the poll call
         if (state == State.PARTITIONS_ASSIGNED) {
-            if (taskManager.checkForCompletedRestoration()) {
+            if (taskManager.tryToCompleteRestoration()) {
                 changelogReader.transitToUpdateStandby();
 
                 setState(State.RUNNING);
@@ -836,6 +832,10 @@ public class StreamThread extends Thread {
                 changelogReader.transitToRestoreActive();
             }
         }
+
+        // we can always let changelog reader try restoring in order to initialize the changelogs;
+        // if there's no active restoring or standby updating it would not try to fetch any data
+        changelogReader.restore();
 
         advanceNowAndComputeLatency();
 

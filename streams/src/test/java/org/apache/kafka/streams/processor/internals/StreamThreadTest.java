@@ -1151,7 +1151,7 @@ public class StreamThreadTest {
         standbyTasks.put(task3, Collections.singleton(t2p1));
 
         thread.taskManager().handleAssignment(Collections.emptyMap(), standbyTasks);
-        thread.taskManager().checkForCompletedRestoration();
+        thread.taskManager().tryToCompleteRestoration();
 
         thread.rebalanceListener.onPartitionsAssigned(Collections.emptyList());
 

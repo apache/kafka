@@ -150,10 +150,10 @@ public class TaskManager {
             } else /* we previously owned this task, and we don't have it anymore, or it has changed active/standby state */ {
                 final Set<TopicPartition> inputPartitions = task.inputPartitions();
                 try {
-                    task.closeClean();
                     changelogReader.remove(task.changelogPartitions());
+                    task.closeClean();
                 } catch (final RuntimeException e) {
-                    log.error("Failed to close task {} cleanly. Attempting to close remaining tasks before re-throwing.", task.id());
+                    log.error(String.format("Failed to close task %s cleanly. Attempting to close remaining tasks before re-throwing:", task.id()), e);
                     taskCloseExceptions.put(task.id(), e);
                     // We've already recorded the exception (which is the point of clean).
                     // Now, we should go ahead and complete the close because a half-closed task is no good to anyone.
@@ -203,13 +203,14 @@ public class TaskManager {
     }
 
     /**
+     * Tries to initialize any new or still-uninitialized tasks, then checks if they can/have completed restoration.
+     *
      * @throws IllegalStateException If store gets registered after initialized is already finished
      * @throws StreamsException if the store's change log does not contain the partition
      */
-    boolean checkForCompletedRestoration() {
+    boolean tryToCompleteRestoration() {
         boolean allRunning = true;
 
-        // first initialize the created tasks, then check if they can complete the restoration
         final List<Task> restoringTasks = new LinkedList<>();
         for (final Task task : tasks.values()) {
             if (task.state() == CREATED) {
@@ -236,7 +237,7 @@ public class TaskManager {
                     try {
                         task.completeRestoration();
                     } catch (final TimeoutException e) {
-                        log.debug("Cloud complete restoration for {} due to {}; will retry", task.id(), e.toString());
+                        log.debug("Could not complete restoration for {} due to {}; will retry", task.id(), e.toString());
 
                         allRunning = false;
                     }
