@@ -53,7 +53,6 @@ import org.apache.kafka.common.message.OffsetCommitResponseData;
 import org.apache.kafka.common.message.SyncGroupResponseData;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Metrics;
-import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.requests.AbstractRequest;
@@ -250,10 +249,6 @@ public class ConsumerCoordinatorTest {
 
     private KafkaMetric getMetric(final String name) {
         return metrics.metrics().get(metrics.metricName(name, "consumer" + groupId + "-coordinator-metrics"));
-    }
-
-    private Sensor getSensor(final String name) {
-        return metrics.sensor(name);
     }
 
     @Test
