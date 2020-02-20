@@ -164,7 +164,7 @@ class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService)
         else:
             args['kafka_opts'] = self.security_config.kafka_opts
 
-        cmd = fix_opts_for_new_jvm(node, self.path)
+        cmd = fix_opts_for_new_jvm(node)
         cmd += "export JMX_PORT=%(jmx_port)s; " \
               "export LOG_DIR=%(log_dir)s; " \
               "export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:%(log4j_config)s\"; " \
