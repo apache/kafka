@@ -127,7 +127,8 @@ class TransactionStateManagerTest {
     transactionManager.putTransactionStateIfNotExists(metadata2)
 
     def cachedProducerEpoch(transactionalId: String): Option[Short] = {
-      transactionManager.getTransactionState(transactionalId).toOption.flatten
+      // fold for 2.11 compatibility
+      transactionManager.getTransactionState(transactionalId).fold((left) => None, (right) => Some(right)).flatten
         .map(_.transactionMetadata.producerEpoch)
     }
 
@@ -187,8 +188,10 @@ class TransactionStateManagerTest {
     val coordinatorEpoch = 0
     val partitionAndLeaderEpoch = TransactionPartitionAndLeaderEpoch(partitionId, coordinatorEpoch)
 
-    val loadingThread = new Thread(() => {
-      transactionManager.loadTransactionsForTxnTopicPartition(partitionId, coordinatorEpoch, (_, _, _, _, _) => ())
+    val loadingThread = new Thread(new Runnable {
+      def run(): Unit = {
+        transactionManager.loadTransactionsForTxnTopicPartition(partitionId, coordinatorEpoch, (_, _, _, _, _) => ())
+      }
     })
     loadingThread.start()
     TestUtils.waitUntilTrue(() => transactionManager.loadingPartitions.contains(partitionAndLeaderEpoch),
