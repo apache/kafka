@@ -43,16 +43,15 @@ import java.util.Set;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
-import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.Windowed;
-import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
+import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.streams.state.KeyValueIterator;
@@ -60,6 +59,7 @@ import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 import org.apache.kafka.test.InternalMockProcessorContext;
+import org.apache.kafka.test.MockInternalProcessorContext;
 import org.apache.kafka.test.MockRecordCollector;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
@@ -76,7 +76,7 @@ public abstract class WindowBytesStoreTest {
     static final long RETENTION_PERIOD = 2 * SEGMENT_INTERVAL;
 
     WindowStore<Integer, String> windowStore;
-    InternalMockProcessorContext context;
+    MockInternalProcessorContext context;
     MockRecordCollector recordCollector;
 
     final File baseDir = TestUtils.tempDirectory("test");
@@ -97,16 +97,16 @@ public abstract class WindowBytesStoreTest {
         windowStore = buildWindowStore(RETENTION_PERIOD, WINDOW_SIZE, false, Serdes.Integer(), Serdes.String());
 
         recordCollector = new MockRecordCollector();
-        context = new InternalMockProcessorContext(
-            baseDir,
-            Serdes.String(),
-            Serdes.Integer(),
-            recordCollector,
-            new ThreadCache(
-                new LogContext("testCache"),
-                0,
-                new MockStreamsMetrics(new Metrics())));
-        context.setTime(1L);
+        final Properties properties = new Properties();
+        properties.put(StreamsConfig.APPLICATION_ID_CONFIG, "");
+        properties.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "");
+        context = new MockInternalProcessorContext(
+                properties,
+                new TaskId(0, 0),
+                baseDir
+        );
+        context.setRecordCollector(recordCollector);
+        context.setTimestamp(1L);
 
         windowStore.init(context, windowStore);
     }
@@ -999,7 +999,7 @@ public abstract class WindowBytesStoreTest {
     @SuppressWarnings("deprecation")
     private void putFirstBatch(final WindowStore<Integer, String> store,
         @SuppressWarnings("SameParameterValue") final long startTime,
-        final InternalMockProcessorContext context) {
+        final InternalProcessorContext context) {
         context.setRecordContext(createRecordContext(startTime));
         store.put(0, "zero");
         context.setRecordContext(createRecordContext(startTime + 1L));
@@ -1015,7 +1015,7 @@ public abstract class WindowBytesStoreTest {
     @SuppressWarnings("deprecation")
     private void putSecondBatch(final WindowStore<Integer, String> store,
         @SuppressWarnings("SameParameterValue") final long startTime,
-        final InternalMockProcessorContext context) {
+        final InternalProcessorContext context) {
         context.setRecordContext(createRecordContext(startTime + 3L));
         store.put(2, "two+1");
         context.setRecordContext(createRecordContext(startTime + 4L));

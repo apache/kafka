@@ -391,7 +391,7 @@ public class RocksDBWindowStoreTest extends WindowBytesStoreTest {
             Serdes.String());
         windowStore.init(context, windowStore);
 
-        context.setTime(0L);
+        context.setTimestamp(0L);
         setCurrentTime(0);
         windowStore.put(0, "v");
         assertEquals(

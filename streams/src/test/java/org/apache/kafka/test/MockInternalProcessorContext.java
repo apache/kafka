@@ -16,29 +16,40 @@
  */
 package org.apache.kafka.test;
 
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.internals.QuietStreamsConfig;
 import org.apache.kafka.streams.processor.MockProcessorContext;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
+import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.internals.CompositeRestoreListener;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.ProcessorNode;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
+import org.apache.kafka.streams.processor.internals.RecordBatchingStateRestoreCallback;
 import org.apache.kafka.streams.processor.internals.RecordCollector;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 import org.apache.kafka.streams.state.internals.metrics.RocksDBMetricsRecordingTrigger;
 
 import java.io.File;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+
+import static org.apache.kafka.streams.processor.internals.StateRestoreCallbackAdapter.adapt;
 
 public class MockInternalProcessorContext extends MockProcessorContext implements InternalProcessorContext {
 
     private final Map<String, StateRestoreCallback> restoreCallbacks = new LinkedHashMap<>();
+    private final Map<String, StateRestoreCallback> restoreFuncs = new HashMap<>();
     private final ThreadCache threadCache;
     private ProcessorNode currentNode;
     private RecordCollector recordCollector;
@@ -115,10 +126,39 @@ public class MockInternalProcessorContext extends MockProcessorContext implement
     @Override
     public void register(final StateStore store, final StateRestoreCallback stateRestoreCallback) {
         restoreCallbacks.put(store.name(), stateRestoreCallback);
+        restoreFuncs.put(store.name(), stateRestoreCallback);
         super.register(store, stateRestoreCallback);
     }
 
     public StateRestoreCallback stateRestoreCallback(final String storeName) {
         return restoreCallbacks.get(storeName);
+    }
+
+    public StateRestoreListener getRestoreListener(final String storeName) {
+        return getStateRestoreListener(restoreFuncs.get(storeName));
+    }
+
+    public void restore(final String storeName, final Iterable<KeyValue<byte[], byte[]>> changeLog) {
+        final RecordBatchingStateRestoreCallback restoreCallback = adapt(restoreFuncs.get(storeName));
+        final StateRestoreListener restoreListener = getRestoreListener(storeName);
+
+        restoreListener.onRestoreStart(null, storeName, 0L, 0L);
+
+        final List<ConsumerRecord<byte[], byte[]>> records = new ArrayList<>();
+        for (final KeyValue<byte[], byte[]> keyValue : changeLog) {
+            records.add(new ConsumerRecord<>("", 0, 0L, keyValue.key, keyValue.value));
+        }
+
+        restoreCallback.restoreBatch(records);
+
+        restoreListener.onRestoreEnd(null, storeName, 0L);
+    }
+
+    private StateRestoreListener getStateRestoreListener(final StateRestoreCallback restoreCallback) {
+        if (restoreCallback instanceof StateRestoreListener) {
+            return (StateRestoreListener) restoreCallback;
+        }
+
+        return CompositeRestoreListener.NO_OP_STATE_RESTORE_LISTENER;
     }
 }
