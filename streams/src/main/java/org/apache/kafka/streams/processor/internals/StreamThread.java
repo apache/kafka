@@ -723,7 +723,7 @@ public class StreamThread extends Thread {
             // we have caught all Kafka related exceptions, and other runtime exceptions
             // should be due to user application errors
             log.error("Encountered the following exception during processing " +
-                "and the thread is going to shutdown: ", e);
+                "and the thread is going to shut down: ", e);
             throw e;
         } finally {
             completeShutdown(cleanRun);
