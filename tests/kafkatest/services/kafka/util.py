@@ -38,7 +38,7 @@ def fix_opts_for_new_jvm(node):
 
 def java_version(node):
     # Determine java version on the node
-    version = -1
+    version = 9
 
     for line in node.account.ssh_capture("java -version"):
         print(line)
