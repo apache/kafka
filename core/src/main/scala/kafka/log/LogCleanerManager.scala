@@ -98,20 +98,26 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
 
   /* gauges for tracking the number of uncleanable bytes from uncleanable partitions for each log directory */
   for (dir <- logDirs) {
-    newGauge("uncleanable-bytes",
-      () => inLock(lock) {
-        uncleanablePartitions.get(dir.getAbsolutePath) match {
-          case Some(partitions) =>
-            val lastClean = allCleanerCheckpoints
-            val now = Time.SYSTEM.milliseconds
-            partitions.iterator.map { tp =>
-              val log = logs.get(tp)
-              val lastCleanOffset = lastClean.get(tp)
-              val offsetsToClean = cleanableOffsets(log, lastCleanOffset, now)
-              val (_, uncleanableBytes) = calculateCleanableBytes(log, offsetsToClean.firstDirtyOffset, offsetsToClean.firstUncleanableDirtyOffset)
-              uncleanableBytes
-            }.sum
-          case None => 0
+    newGauge(
+      "uncleanable-bytes",
+      new Gauge[Long] {
+        def value = {
+          inLock(lock) {
+            uncleanablePartitions.get(dir.getAbsolutePath) match {
+              case Some(partitions) => {
+                val lastClean = allCleanerCheckpoints
+                val now = Time.SYSTEM.milliseconds
+                partitions.map { tp =>
+                  val log = logs.get(tp)
+                  val lastCleanOffset = lastClean.get(tp)
+                  val offsetsToClean = cleanableOffsets(log, lastCleanOffset, now)
+                  val (_, uncleanableBytes) = calculateCleanableBytes(log, offsetsToClean.firstDirtyOffset, offsetsToClean.firstUncleanableDirtyOffset)
+                  uncleanableBytes
+                }.sum
+              }
+              case _ => 0
+            }
+          }
         }
       },
       Map("logDirectory" -> dir.getAbsolutePath)
