@@ -73,6 +73,11 @@ public class MockInternalProcessorContext extends MockProcessorContext implement
         threadCache = null;
     }
 
+    public MockInternalProcessorContext(final ThreadCache cache) {
+        super();
+        threadCache = cache;
+    }
+
     public MockInternalProcessorContext(final Properties config) {
         this(config, DEFAULT_TASK_ID, TestUtils.tempDirectory());
         setRecordContext(new ProcessorRecordContext(DEFAULT_TIMESTAMP, DEFAULT_OFFSET, DEFAULT_PARTITION, DEFAULT_TOPIC, DEFAULT_HEADERS));
