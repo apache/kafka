@@ -447,7 +447,7 @@ public class StreamThread extends Thread {
 
             final ProcessorTopology topology = builder.buildSubtopology(taskId.topicGroupId);
 
-            if (topology.hasStateWithLoggingEnabled()) {
+            if (topology.hasStateWithChangelogs()) {
                 final ProcessorStateManager stateManager = new ProcessorStateManager(
                     taskId,
                     partitions,

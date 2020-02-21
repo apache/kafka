@@ -92,7 +92,7 @@ public class ProcessorTopology {
         return repartitionTopics.contains(topic);
     }
 
-    boolean hasStateWithLoggingEnabled() {
+    boolean hasStateWithChangelogs() {
         for (final StateStore stateStore : stateStores) {
             if (storeToChangelogTopic.containsKey(stateStore.name())) {
                 return true;
