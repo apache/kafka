@@ -41,23 +41,19 @@ import java.util.Set;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
-import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.SessionWindow;
-import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.SessionStore;
-import org.apache.kafka.test.InternalMockProcessorContext;
+import org.apache.kafka.test.MockInternalProcessorContext;
 import org.apache.kafka.test.MockRecordCollector;
 import org.apache.kafka.test.StreamsTestUtils;
-import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -72,7 +68,7 @@ public abstract class SessionBytesStoreTest {
 
     private MockRecordCollector recordCollector;
 
-    private InternalMockProcessorContext context;
+    private MockInternalProcessorContext context;
 
     abstract <K, V> SessionStore<K, V> buildSessionStore(final long retentionPeriod,
                                                          final Serde<K> keySerde,
@@ -86,17 +82,12 @@ public abstract class SessionBytesStoreTest {
     public void setUp() {
         sessionStore = buildSessionStore(RETENTION_PERIOD, Serdes.String(), Serdes.Long());
         recordCollector = new MockRecordCollector();
-        context = new InternalMockProcessorContext(
-            TestUtils.tempDirectory(),
-            Serdes.String(),
-            Serdes.Long(),
-            recordCollector,
-            new ThreadCache(
-                new LogContext("testCache"),
-                0,
-                new MockStreamsMetrics(new Metrics())));
-        context.setTime(1L);
-
+        final Properties properties = StreamsTestUtils.getStreamsConfig();
+        properties.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.StringSerde.class);
+        properties.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.LongSerde.class);
+        context = new MockInternalProcessorContext(properties);
+        context.setRecordCollector(recordCollector);
+        context.setTimestamp(1L);
         sessionStore.init(context, sessionStore);
     }
 
@@ -421,12 +412,9 @@ public abstract class SessionBytesStoreTest {
         final Properties streamsConfig = StreamsTestUtils.getStreamsConfig();
         streamsConfig.setProperty(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, builtInMetricsVersion);
         final SessionStore<String, Long> sessionStore = buildSessionStore(RETENTION_PERIOD, Serdes.String(), Serdes.Long());
-        final InternalMockProcessorContext context = new InternalMockProcessorContext(
-            TestUtils.tempDirectory(),
-            new StreamsConfig(streamsConfig),
-            recordCollector
-        );
-        context.setTime(1L);
+        final MockInternalProcessorContext context = new MockInternalProcessorContext(streamsConfig);
+        context.setRecordCollector(recordCollector);
+        context.setTimestamp(1L);
         sessionStore.init(context, sessionStore);
 
         // Advance stream time by inserting record with large enough timestamp that records with timestamp 0 are expired
