@@ -1324,6 +1324,7 @@ public class StreamTaskTest {
         task.close(false, false);
         task = null;
 
+        // Make sure no method call on the producer during an unclean close (such as abort).
         assertTrue(producer.transactionInFlight());
         assertTrue(producer.closed());
     }
