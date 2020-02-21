@@ -3908,6 +3908,30 @@ public class FetcherTest {
         assertEquals(1, fetcher.sendFetches());
     }
 
+    @Test
+    public void testCorruptMessageError() {
+        buildFetcher();
+        assignFromUser(singleton(tp0));
+        subscriptions.seek(tp0, 0);
+
+        assertEquals(1, fetcher.sendFetches());
+        assertFalse(fetcher.hasCompletedFetches());
+
+        // Prepare a response with the CORRUPT_MESSAGE error.
+        client.prepareResponse(fullFetchResponse(
+                tp0,
+                buildRecords(1L, 1, 1),
+                Errors.CORRUPT_MESSAGE,
+                100L, 0));
+        consumerClient.poll(time.timer(0));
+        assertTrue(fetcher.hasCompletedFetches());
+
+        // Trigger the exception.
+        assertThrows(KafkaException.class, () -> {
+            fetchedRecords();
+        });
+    }
+
     private MockClient.RequestMatcher listOffsetRequestMatcher(final long timestamp) {
         // matches any list offset request with the provided timestamp
         return body -> {

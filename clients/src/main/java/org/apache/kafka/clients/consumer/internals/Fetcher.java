@@ -1272,9 +1272,19 @@ public class Fetcher<K, V> implements Closeable {
             } else if (error == Errors.UNKNOWN_LEADER_EPOCH) {
                 log.debug("Received unknown leader epoch error in fetch for partition {}", tp);
             } else if (error == Errors.UNKNOWN_SERVER_ERROR) {
-                log.warn("Unknown error fetching data for topic-partition {}", tp);
+                log.warn("Unknown server error while fetching offset {} for topic-partition {}",
+                        fetchOffset, tp);
+            } else if (error == Errors.CORRUPT_MESSAGE) {
+                throw new KafkaException("Encountered corrupt message when fetching offset "
+                        + fetchOffset
+                        + " for topic-partition "
+                        + tp);
             } else {
-                throw new IllegalStateException("Unexpected error code " + error.code() + " while fetching from partition " + tp);
+                throw new IllegalStateException("Unexpected error code "
+                        + error.code()
+                        + " while fetching at offset "
+                        + fetchOffset
+                        + " from topic-partition " + tp);
             }
         } finally {
             if (completedFetch == null)

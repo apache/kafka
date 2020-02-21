@@ -67,6 +67,8 @@ import static org.apache.kafka.common.requests.FetchMetadata.INVALID_SESSION_ID;
  * - {@link Errors#KAFKA_STORAGE_ERROR} If the log directory for one of the requested partitions is offline
  * - {@link Errors#UNSUPPORTED_COMPRESSION_TYPE} If a fetched topic is using a compression type which is
  *     not supported by the fetch request version
+ * - {@link Errors#CORRUPT_MESSAGE} If corrupt message encountered, e.g. when the broker scans the log to find
+ *     the fetch offset after the index lookup
  * - {@link Errors#UNKNOWN_SERVER_ERROR} For any unexpected errors
  */
 public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
