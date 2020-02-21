@@ -563,6 +563,7 @@ private[log] class Cleaner(val id: Int,
     // create a new segment with a suffix appended to the name of the log and indexes
     val cleaned = LogCleaner.createNewCleanedSegment(log, segments.head.baseOffset)
     transactionMetadata.cleanedIndex = Some(cleaned.txnIndex)
+    log.latestDeleteHorizon = RecordBatch.NO_TIMESTAMP
 
     try {
       // clean segments into the new destination segment
@@ -589,8 +590,6 @@ private[log] class Cleaner(val id: Int,
                     log.config.maxMessageSize, transactionMetadata, lastOffsetOfActiveProducers, stats, currentTime = currentTime)
           if (log.latestDeleteHorizon < latestDeleteHorizon) {
             log.latestDeleteHorizon = latestDeleteHorizon
-          } else if (log.latestDeleteHorizon < currentTime) {
-            log.latestDeleteHorizon = RecordBatch.NO_TIMESTAMP
           }
         } catch {
           case e: LogSegmentOffsetOverflowException =>
@@ -651,12 +650,13 @@ private[log] class Cleaner(val id: Int,
                              currentTime: Long): Long = {
     var latestDeleteHorizon: Long = RecordBatch.NO_TIMESTAMP
 
-    val logCleanerFilter: RecordFilter = new RecordFilter {
+    val logCleanerFilter: RecordFilter = new RecordFilter (currentTime, tombstoneRetentionMs) {
       var discardBatchRecords: Boolean = _
-      var isBatchDiscardable: Boolean = _
 
-      override def checkBatchRetention(batch: RecordBatch): BatchRetention = {
-        val canDiscardBatch = isBatchDiscardable
+      override def checkBatchRetention(batch: RecordBatch): BatchRetentionAndEmptyMarker = {
+        // we piggy-back on the tombstone retention logic to delay deletion of transaction markers.
+        // note that we will never delete a marker until all the records from that transaction are removed.
+        val canDiscardBatch = shouldDiscardBatch(batch, transactionMetadata)
 
         if (batch.isControlBatch) {
           if (batch.magic() < 2) {
@@ -684,12 +684,14 @@ private[log] class Cleaner(val id: Int,
           }
         }
 
+        var batchRetention: BatchRetention = BatchRetention.RETAIN_EMPTY
         if (batch.hasProducerId && isBatchLastRecordOfProducer)
-          BatchRetention.RETAIN_EMPTY
+          batchRetention = BatchRetention.RETAIN_EMPTY
         else if (discardBatchRecords)
-          BatchRetention.DELETE
+          batchRetention = BatchRetention.DELETE
         else
-          BatchRetention.DELETE_EMPTY
+          batchRetention = BatchRetention.DELETE_EMPTY
+        new BatchRetentionAndEmptyMarker(batchRetention, canDiscardBatch)
       }
 
       override def shouldRetainRecord(batch: RecordBatch, record: Record): Boolean = {
@@ -701,14 +703,7 @@ private[log] class Cleaner(val id: Int,
           isRecordRetained = Cleaner.this.shouldRetainRecord(map, retainDeletesAndTxnMarkers, batch, record, stats, currentTime = currentTime)
         isRecordRetained
       }
-
-      override def containsEmptyMarker(batch: RecordBatch) : Boolean = {
-        isBatchDiscardable = shouldDiscardBatch(batch, transactionMetadata)
-        isBatchDiscardable
-      }
     }
-    logCleanerFilter.currentTime = currentTime
-    logCleanerFilter.tombstoneRetentionMs = tombstoneRetentionMs
 
     var position = 0
     while (position < sourceRecords.sizeInBytes) {

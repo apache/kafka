@@ -262,24 +262,17 @@ public class MemoryRecordsTest {
 
             ByteBuffer filtered = ByteBuffer.allocate(2048);
             final long deleteHorizon = Integer.MAX_VALUE / 2;
-            final RecordFilter recordFilter = new MemoryRecords.RecordFilter() {
+            final RecordFilter recordFilter = new MemoryRecords.RecordFilter(deleteHorizon - 1, 1) {
                 @Override
                 protected boolean shouldRetainRecord(RecordBatch recordBatch, Record record) {
                     return true;
                 }
 
                 @Override
-                protected BatchRetention checkBatchRetention(RecordBatch batch) {
-                    return BatchRetention.RETAIN_EMPTY;
-                }
-
-                @Override
-                protected boolean containsEmptyMarker(RecordBatch batch) {
-                    return true;
+                protected BatchRetentionAndEmptyMarker checkBatchRetention(RecordBatch batch) {
+                    return new BatchRetentionAndEmptyMarker(BatchRetention.RETAIN_EMPTY, true);
                 }
             };
-            recordFilter.currentTime = deleteHorizon;
-            recordFilter.tombstoneRetentionMs = 0L;
             builder.build().filterTo(new TopicPartition("random", 0), recordFilter, filtered, Integer.MAX_VALUE, BufferSupplier.NO_CACHING);
             filtered.flip();
             MemoryRecords filteredRecords = MemoryRecords.readableRecords(filtered);
@@ -312,11 +305,11 @@ public class MemoryRecordsTest {
 
                 ByteBuffer filtered = ByteBuffer.allocate(2048);
                 MemoryRecords.FilterResult filterResult = records.filterTo(new TopicPartition("foo", 0),
-                        new MemoryRecords.RecordFilter() {
+                        new MemoryRecords.RecordFilter(0, 0) {
                             @Override
-                            protected BatchRetention checkBatchRetention(RecordBatch batch) {
+                            protected BatchRetentionAndEmptyMarker checkBatchRetention(RecordBatch batch) {
                                 // retain all batches
-                                return BatchRetention.RETAIN_EMPTY;
+                                return new BatchRetentionAndEmptyMarker(BatchRetention.RETAIN_EMPTY, true);
                             }
 
                             @Override
@@ -374,11 +367,11 @@ public class MemoryRecordsTest {
             ByteBuffer filtered = ByteBuffer.allocate(2048);
             MemoryRecords records = MemoryRecords.readableRecords(buffer);
             MemoryRecords.FilterResult filterResult = records.filterTo(new TopicPartition("foo", 0),
-                    new MemoryRecords.RecordFilter() {
+                    new MemoryRecords.RecordFilter(0, 0) {
                         @Override
-                        protected BatchRetention checkBatchRetention(RecordBatch batch) {
+                        protected BatchRetentionAndEmptyMarker checkBatchRetention(RecordBatch batch) {
                             // retain all batches
-                            return BatchRetention.RETAIN_EMPTY;
+                            return new BatchRetentionAndEmptyMarker(BatchRetention.RETAIN_EMPTY, false);
                         }
 
                         @Override
@@ -424,10 +417,10 @@ public class MemoryRecordsTest {
                 ByteBuffer filtered = ByteBuffer.allocate(2048);
                 MemoryRecords records = MemoryRecords.readableRecords(buffer);
                 MemoryRecords.FilterResult filterResult = records.filterTo(new TopicPartition("foo", 0),
-                        new MemoryRecords.RecordFilter() {
+                        new MemoryRecords.RecordFilter(0, 0) {
                             @Override
-                            protected BatchRetention checkBatchRetention(RecordBatch batch) {
-                                return deleteRetention;
+                            protected BatchRetentionAndEmptyMarker checkBatchRetention(RecordBatch batch) {
+                                return new BatchRetentionAndEmptyMarker(deleteRetention, true);
                             }
 
                             @Override
@@ -512,13 +505,13 @@ public class MemoryRecordsTest {
         buffer.flip();
 
         ByteBuffer filtered = ByteBuffer.allocate(2048);
-        MemoryRecords.readableRecords(buffer).filterTo(new TopicPartition("foo", 0), new MemoryRecords.RecordFilter() {
+        MemoryRecords.readableRecords(buffer).filterTo(new TopicPartition("foo", 0), new MemoryRecords.RecordFilter(0, 0) {
             @Override
-            protected BatchRetention checkBatchRetention(RecordBatch batch) {
+            protected BatchRetentionAndEmptyMarker checkBatchRetention(RecordBatch batch) {
                 // discard the second and fourth batches
                 if (batch.lastOffset() == 2L || batch.lastOffset() == 6L)
-                    return BatchRetention.DELETE;
-                return BatchRetention.DELETE_EMPTY;
+                    return new BatchRetentionAndEmptyMarker(BatchRetention.DELETE, false);
+                return new BatchRetentionAndEmptyMarker(BatchRetention.DELETE_EMPTY, true);
             }
 
             @Override
@@ -952,9 +945,13 @@ public class MemoryRecordsTest {
     }
 
     private static class RetainNonNullKeysFilter extends MemoryRecords.RecordFilter {
+        public RetainNonNullKeysFilter() {
+            super(0, 0);
+        }
+
         @Override
-        protected BatchRetention checkBatchRetention(RecordBatch batch) {
-            return BatchRetention.DELETE_EMPTY;
+        protected BatchRetentionAndEmptyMarker checkBatchRetention(RecordBatch batch) {
+            return new BatchRetentionAndEmptyMarker(BatchRetention.DELETE_EMPTY, false);
         }
 
         @Override

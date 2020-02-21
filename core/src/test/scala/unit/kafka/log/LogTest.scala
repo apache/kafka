@@ -966,8 +966,9 @@ class LogTest {
     records.batches.asScala.foreach(_.setPartitionLeaderEpoch(0))
 
     val filtered = ByteBuffer.allocate(2048)
-    records.filterTo(new TopicPartition("foo", 0), new RecordFilter {
-      override def checkBatchRetention(batch: RecordBatch): BatchRetention = RecordFilter.BatchRetention.DELETE_EMPTY
+    records.filterTo(new TopicPartition("foo", 0), new RecordFilter(0, 0) {
+      override def checkBatchRetention(batch: RecordBatch): BatchRetentionAndEmptyMarker =
+        new BatchRetentionAndEmptyMarker(RecordFilter.BatchRetention.DELETE_EMPTY, false)
       override def shouldRetainRecord(recordBatch: RecordBatch, record: Record): Boolean = !record.hasKey
     }, filtered, Int.MaxValue, BufferSupplier.NO_CACHING)
     filtered.flip()
@@ -1007,8 +1008,9 @@ class LogTest {
     records.batches.asScala.foreach(_.setPartitionLeaderEpoch(0))
 
     val filtered = ByteBuffer.allocate(2048)
-    records.filterTo(new TopicPartition("foo", 0), new RecordFilter {
-      override def checkBatchRetention(batch: RecordBatch): BatchRetention = RecordFilter.BatchRetention.RETAIN_EMPTY
+    records.filterTo(new TopicPartition("foo", 0), new RecordFilter(0, 0) {
+      override def checkBatchRetention(batch: RecordBatch): BatchRetentionAndEmptyMarker =
+        new BatchRetentionAndEmptyMarker(RecordFilter.BatchRetention.RETAIN_EMPTY, true)
       override def shouldRetainRecord(recordBatch: RecordBatch, record: Record): Boolean = false
     }, filtered, Int.MaxValue, BufferSupplier.NO_CACHING)
     filtered.flip()
@@ -1050,8 +1052,9 @@ class LogTest {
     records.batches.asScala.foreach(_.setPartitionLeaderEpoch(0))
 
     val filtered = ByteBuffer.allocate(2048)
-    records.filterTo(new TopicPartition("foo", 0), new RecordFilter {
-      override def checkBatchRetention(batch: RecordBatch): BatchRetention = RecordFilter.BatchRetention.DELETE_EMPTY
+    records.filterTo(new TopicPartition("foo", 0), new RecordFilter(0, 0) {
+      override def checkBatchRetention(batch: RecordBatch): BatchRetentionAndEmptyMarker =
+        new BatchRetentionAndEmptyMarker(RecordFilter.BatchRetention.DELETE_EMPTY, false)
       override def shouldRetainRecord(recordBatch: RecordBatch, record: Record): Boolean = !record.hasKey
     }, filtered, Int.MaxValue, BufferSupplier.NO_CACHING)
     filtered.flip()
