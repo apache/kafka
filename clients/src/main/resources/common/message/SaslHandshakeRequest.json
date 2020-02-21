@@ -19,7 +19,8 @@
   "name": "SaslHandshakeRequest",
   // Version 1 supports SASL_AUTHENTICATE.
   // NOTE: Version cannot be easily bumped due to incorrect
-  // client negotiation. See https://issues.apache.org/jira/browse/KAFKA-9577
+  // client negotiation for clients <= 2.4.
+  // See https://issues.apache.org/jira/browse/KAFKA-9577
   "validVersions": "0-1",
   "fields": [
     { "name": "Mechanism", "type": "string", "versions": "0+",
