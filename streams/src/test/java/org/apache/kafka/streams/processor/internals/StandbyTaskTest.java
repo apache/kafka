@@ -57,7 +57,9 @@ import static org.apache.kafka.common.utils.Utils.mkProperties;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertThrows;
+import static org.junit.Assert.assertTrue;
 
 
 @RunWith(EasyMockRunner.class)
@@ -185,6 +187,7 @@ public class StandbyTaskTest {
         stateManager.flush();
         EasyMock.expectLastCall();
         stateManager.checkpoint(EasyMock.eq(Collections.emptyMap()));
+        EasyMock.expect(stateManager.changelogOffsets()).andReturn(Collections.singletonMap(partition, 50L));
         EasyMock.replay(stateManager);
 
         task = createStandbyTask();
@@ -259,6 +262,7 @@ public class StandbyTaskTest {
         EasyMock.expectLastCall();
         stateManager.checkpoint(EasyMock.eq(Collections.emptyMap()));
         EasyMock.expectLastCall();
+        EasyMock.expect(stateManager.changelogOffsets()).andReturn(Collections.singletonMap(partition, 50L));
         EasyMock.replay(stateManager);
         final MetricName metricName = setupCloseTaskMetric();
 
@@ -275,9 +279,38 @@ public class StandbyTaskTest {
     }
 
     @Test
+    public void shouldOnlyNeedCommitWhenChangelogOffsetChanged() {
+        EasyMock.expect(stateManager.changelogOffsets())
+            .andReturn(Collections.singletonMap(partition, 50L))
+            .andReturn(Collections.singletonMap(partition, 50L))
+            .andReturn(Collections.singletonMap(partition, 60L));
+        stateManager.flush();
+        EasyMock.expectLastCall();
+        stateManager.checkpoint(EasyMock.eq(Collections.emptyMap()));
+        EasyMock.expectLastCall();
+        EasyMock.replay(stateManager);
+
+        task = createStandbyTask();
+        task.initializeIfNeeded();
+
+        assertTrue(task.commitNeeded());
+
+        task.commit();
+
+        // do not need to commit if there's no update
+        assertFalse(task.commitNeeded());
+
+        // could commit if the offset advanced
+        assertTrue(task.commitNeeded());
+
+        EasyMock.verify(stateManager);
+    }
+
+    @Test
     public void shouldThrowOnCloseCleanError() {
         stateManager.close();
         EasyMock.expectLastCall().andThrow(new RuntimeException("KABOOM!")).anyTimes();
+        EasyMock.expect(stateManager.changelogOffsets()).andReturn(Collections.singletonMap(partition, 50L));
         EasyMock.replay(stateManager);
         final MetricName metricName = setupCloseTaskMetric();
 
