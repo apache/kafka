@@ -25,7 +25,6 @@ import org.apache.kafka.common.serialization.IntegerDeserializer;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
-import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.LogAndContinueExceptionHandler;
@@ -70,8 +69,8 @@ public class RecordQueueTest {
 
     public RecordQueueTest() {
         final Properties properties = StreamsTestUtils.getStreamsConfig();
-        properties.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Bytes.class);
-        properties.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Bytes.class);
+        properties.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.BytesSerde.class);
+        properties.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.BytesSerde.class);
         context = new MockInternalProcessorContext(properties);
         context.setRecordCollector(new MockRecordCollector());
         final Deserializer<Integer> intDeserializer = new IntegerDeserializer();

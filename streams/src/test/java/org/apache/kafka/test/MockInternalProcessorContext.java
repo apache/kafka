@@ -112,8 +112,8 @@ public class MockInternalProcessorContext extends MockProcessorContext implement
                                         final long maxCacheSizeBytes,
                                         final File stateDir) {
         super(config, taskId, stateDir);
-        threadCache = new ThreadCache(logContext, maxCacheSizeBytes, metrics);
         setMetrics((StreamsMetricsImpl) super.metrics());
+        threadCache = new ThreadCache(logContext, maxCacheSizeBytes, metrics);
         setCurrentNode(new ProcessorNode<>(DEFAULT_NODE_NAME));
         this.keySerde = super.keySerde();
         this.valueSerde = super.valueSerde();

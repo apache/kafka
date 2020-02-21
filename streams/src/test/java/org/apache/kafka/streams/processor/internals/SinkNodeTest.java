@@ -19,7 +19,6 @@ package org.apache.kafka.streams.processor.internals;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
-import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.StreamPartitioner;
@@ -62,8 +61,8 @@ public class SinkNodeTest {
 
     public SinkNodeTest() {
         final Properties properties = StreamsTestUtils.getStreamsConfig();
-        properties.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Bytes.class);
-        properties.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Bytes.class);
+        properties.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.BytesSerde.class);
+        properties.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.BytesSerde.class);
         context = new MockInternalProcessorContext(properties);
         context.setRecordCollector(recordCollector);
     }
