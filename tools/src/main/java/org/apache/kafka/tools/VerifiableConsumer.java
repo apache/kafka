@@ -667,7 +667,7 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
         }
         try {
             final VerifiableConsumer consumer = createFromArgs(parser, args);
-            //Can't use `Exit.exit` here because `Exit` doesn't exists on 0.8.2.2.
+            //Can't use `Exit.addShutdownHook` here because `Exit` doesn't exists on 0.8.2.2.
             Runtime.getRuntime().addShutdownHook(new Thread(consumer::close, "verifiable-consumer-shutdown-hook"));
 
             consumer.run();
