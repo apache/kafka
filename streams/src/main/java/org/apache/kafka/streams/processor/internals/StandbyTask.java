@@ -42,6 +42,8 @@ public class StandbyTask extends AbstractTask implements Task {
     private final Sensor closeTaskSensor;
     private final InternalProcessorContext processorContext;
 
+    private Map<TopicPartition, Long> changelogOffsetSnapshot;
+
     /**
      * @param id             the ID of this task
      * @param partitions     input topic partitions, used for thread metadata only
@@ -125,6 +127,8 @@ public class StandbyTask extends AbstractTask implements Task {
                 // and the state current offset would be used to checkpoint
                 stateMgr.checkpoint(Collections.emptyMap());
 
+                changelogOffsetSnapshot = stateMgr.changelogOffsets();
+
                 log.info("Committed");
                 break;
 
@@ -188,7 +192,8 @@ public class StandbyTask extends AbstractTask implements Task {
 
     @Override
     public boolean commitNeeded() {
-        return false;
+        // we can commit if the store's offset has changed since last commit
+        return changelogOffsetSnapshot == null || !changelogOffsetSnapshot.equals(stateMgr.changelogOffsets());
     }
 
     @Override
