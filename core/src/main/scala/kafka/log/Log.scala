@@ -1464,9 +1464,12 @@ class Log(@volatile var dir: File,
       var segmentEntry = segments.floorEntry(startOffset)
 
       // return error on attempt to read beyond the log end offset or read below log start offset
-      if (startOffset > endOffset || segmentEntry == null || startOffset < logStartOffset)
+      if (startOffset > endOffset || segmentEntry == null || startOffset < logStartOffset) {
+        info(s"Received request for offset $startOffset for partition $topicPartition, " +
+          s"but we only have log segments in the range $logStartOffset to $endOffset.")
         throw new OffsetOutOfRangeException(s"Received request for offset $startOffset for partition $topicPartition, " +
           s"but we only have log segments in the range $logStartOffset to $endOffset.")
+      }
 
       val maxOffsetMetadata = isolation match {
         case FetchLogEnd => nextOffsetMetadata
