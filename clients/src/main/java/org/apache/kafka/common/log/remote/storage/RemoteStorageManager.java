@@ -53,7 +53,8 @@ public interface RemoteStorageManager extends Configurable, Closeable {
      * @return
      * @throws IOException
      */
-    RemoteLogSegmentContext copyLogSegment(RemoteLogSegmentId remoteLogSegmentId, LogSegmentData logSegmentData) throws IOException;
+    RemoteLogSegmentContext copyLogSegment(RemoteLogSegmentId remoteLogSegmentId, LogSegmentData logSegmentData)
+            throws RemoteStorageException;
 
     /**
      * Returns the remote log segment data file/object as InputStream for the given RemoteLogSegmentMetadata starting
@@ -66,7 +67,8 @@ public interface RemoteStorageManager extends Configurable, Closeable {
      * @return
      * @throws IOException
      */
-    InputStream fetchLogSegmentData(RemoteLogSegmentMetadata remoteLogSegmentMetadata, Long startPosition, Optional<Long> endPosition) throws IOException;
+    InputStream fetchLogSegmentData(RemoteLogSegmentMetadata remoteLogSegmentMetadata,
+                                    Long startPosition, Optional<Long> endPosition) throws RemoteStorageException;
 
     /**
      * Returns the offset index for the respective log segment of {@link RemoteLogSegmentMetadata}.
@@ -75,7 +77,7 @@ public interface RemoteStorageManager extends Configurable, Closeable {
      * @return
      * @throws IOException
      */
-    InputStream fetchOffsetIndex(RemoteLogSegmentMetadata remoteLogSegmentMetadata) throws IOException;
+    InputStream fetchOffsetIndex(RemoteLogSegmentMetadata remoteLogSegmentMetadata) throws RemoteStorageException;
 
     /**
      * Returns the timestamp index for the respective log segment of {@link RemoteLogSegmentMetadata}.
@@ -84,7 +86,7 @@ public interface RemoteStorageManager extends Configurable, Closeable {
      * @return
      * @throws IOException
      */
-    InputStream fetchTimestampIndex(RemoteLogSegmentMetadata remoteLogSegmentMetadata) throws IOException;
+    InputStream fetchTimestampIndex(RemoteLogSegmentMetadata remoteLogSegmentMetadata) throws RemoteStorageException;
 
     /**
      * Deletes the remote log segment for the given remoteLogSegmentId. Returns true if the deletion is successful.
@@ -95,5 +97,5 @@ public interface RemoteStorageManager extends Configurable, Closeable {
      * @return
      * @throws IOException
      */
-    boolean deleteLogSegment(RemoteLogSegmentMetadata remoteLogSegmentMetadata) throws IOException;
+    boolean deleteLogSegment(RemoteLogSegmentMetadata remoteLogSegmentMetadata) throws RemoteStorageException;
 }

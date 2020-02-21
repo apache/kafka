@@ -16,8 +16,19 @@
  */
 package org.apache.kafka.common.log.remote.storage;
 
-public interface RemoteLogSegmentContext {
-    byte[] asBytes();
+/**
+ * Base exception exposed by the Tiered Storage framework to the Apache Kafka runtime.
+ *
+ * Implementors of the SPI should always ensure exceptions thrown from exposed interfaces
+ * such as {@link RemoteStorageManager} are derived from this type.
+ */
+public class RemoteStorageException extends Exception {
 
-    RemoteLogSegmentContext EMPTY_CONTEXT = () -> new byte[0];
+    public RemoteStorageException(final String message) {
+        super(message);
+    }
+
+    public RemoteStorageException(final String message, final Throwable cause) {
+        super(message, cause);
+    }
 }
