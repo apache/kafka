@@ -57,7 +57,6 @@ import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
-import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.MockInternalProcessorContext;
 import org.apache.kafka.test.MockRecordCollector;
 import org.apache.kafka.test.StreamsTestUtils;
@@ -818,12 +817,9 @@ public abstract class WindowBytesStoreTest {
         streamsConfig.setProperty(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, builtInMetricsVersion);
         final WindowStore<Integer, String> windowStore =
             buildWindowStore(RETENTION_PERIOD, WINDOW_SIZE, false, Serdes.Integer(), Serdes.String());
-        final InternalMockProcessorContext context = new InternalMockProcessorContext(
-            TestUtils.tempDirectory(),
-            new StreamsConfig(streamsConfig),
-            recordCollector
-        );
-        context.setTime(1L);
+        final MockInternalProcessorContext context = new MockInternalProcessorContext(streamsConfig);
+        context.setRecordCollector(recordCollector);
+        context.setTimestamp(1L);
         windowStore.init(context, windowStore);
 
         // Advance stream time by inserting record with large enough timestamp that records with timestamp 0 are expired
