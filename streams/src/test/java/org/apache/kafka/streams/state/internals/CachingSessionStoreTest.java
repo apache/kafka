@@ -29,12 +29,12 @@ import org.apache.kafka.streams.kstream.SessionWindowedDeserializer;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.Change;
 import org.apache.kafka.streams.kstream.internals.SessionWindow;
+import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.streams.state.KeyValueIterator;
-import org.apache.kafka.test.InternalMockProcessorContext;
-import org.apache.kafka.test.TestUtils;
+import org.apache.kafka.test.MockInternalProcessorContext;
 import org.junit.After;
 import org.junit.Test;
 
@@ -80,8 +80,9 @@ public class CachingSessionStoreTest {
             new RocksDBSegmentedBytesStore("test", "metrics-scope", 0L, SEGMENT_INTERVAL, schema);
         final RocksDBSessionStore sessionStore = new RocksDBSessionStore(root);
         cachingStore = new CachingSessionStore(sessionStore, SEGMENT_INTERVAL);
-        cache = new ThreadCache(new LogContext("testCache "), MAX_CACHE_SIZE_BYTES, new MockStreamsMetrics(new Metrics()));
-        final InternalMockProcessorContext context = new InternalMockProcessorContext(TestUtils.tempDirectory(), null, null, null, cache);
+        final MockStreamsMetrics streamsMetrics = new MockStreamsMetrics(new Metrics());
+        cache = new ThreadCache(new LogContext("testCache "), MAX_CACHE_SIZE_BYTES, streamsMetrics);
+        final InternalProcessorContext context = new MockInternalProcessorContext(streamsMetrics, cache);
         context.setRecordContext(new ProcessorRecordContext(DEFAULT_TIMESTAMP, 0, 0, "topic", null));
         cachingStore.init(context, cachingStore);
     }
