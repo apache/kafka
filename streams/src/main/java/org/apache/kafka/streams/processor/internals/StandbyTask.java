@@ -30,6 +30,7 @@ import org.apache.kafka.streams.processor.internals.metrics.ThreadMetrics;
 import org.slf4j.Logger;
 
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 
@@ -42,7 +43,7 @@ public class StandbyTask extends AbstractTask implements Task {
     private final Sensor closeTaskSensor;
     private final InternalProcessorContext processorContext;
 
-    private Map<TopicPartition, Long> changelogOffsetSnapshot;
+    private Map<TopicPartition, Long> offsetSnapshotSinceLastCommit;
 
     /**
      * @param id             the ID of this task
@@ -127,7 +128,7 @@ public class StandbyTask extends AbstractTask implements Task {
                 // and the state current offset would be used to checkpoint
                 stateMgr.checkpoint(Collections.emptyMap());
 
-                changelogOffsetSnapshot = stateMgr.changelogOffsets();
+                offsetSnapshotSinceLastCommit = new HashMap<>(stateMgr.changelogOffsets());
 
                 log.info("Committed");
                 break;
@@ -193,7 +194,7 @@ public class StandbyTask extends AbstractTask implements Task {
     @Override
     public boolean commitNeeded() {
         // we can commit if the store's offset has changed since last commit
-        return changelogOffsetSnapshot == null || !changelogOffsetSnapshot.equals(stateMgr.changelogOffsets());
+        return offsetSnapshotSinceLastCommit == null || !offsetSnapshotSinceLastCommit.equals(stateMgr.changelogOffsets());
     }
 
     @Override
