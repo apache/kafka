@@ -19,6 +19,7 @@ package org.apache.kafka.streams.processor.internals;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.processor.internals.StreamThread.State;
 import org.apache.kafka.streams.processor.internals.assignment.AssignorError;
 import org.slf4j.Logger;
@@ -70,6 +71,8 @@ public class StreamsRebalanceListener implements ConsumerRebalanceListener {
             final long start = time.milliseconds();
             try {
                 taskManager.handleRevocation(partitions);
+            } catch (final Throwable t) {
+                throw new TaskMigratedException("Error caught during partitions revocation", t);
             } finally {
                 log.info("partition revocation took {} ms.", time.milliseconds() - start);
             }
@@ -90,6 +93,8 @@ public class StreamsRebalanceListener implements ConsumerRebalanceListener {
         try {
             // close all active tasks as lost but don't try to commit offsets as we no longer own them
             taskManager.handleLostAll();
+        } catch (final Throwable t) {
+            throw new TaskMigratedException("Error caught during partitions lost", t);
         } finally {
             log.info("partitions lost took {} ms.", time.milliseconds() - start);
         }

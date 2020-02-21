@@ -744,8 +744,13 @@ public class StreamThread extends Thread {
     private void runLoop() {
         subscribeConsumer();
 
+        boolean needRebalance = false;
         while (isRunning()) {
             try {
+                if (needRebalance) {
+                    enforceRebalance();
+                    needRebalance = false;
+                }
                 runOnce();
                 if (assignmentErrorCode.get() == AssignorError.VERSION_PROBING.code()) {
                     log.info("Version probing detected. Rejoining the consumer group to trigger a new rebalance.");
@@ -764,7 +769,7 @@ public class StreamThread extends Thread {
                     "Will close out all assigned tasks and rejoin the consumer group.");
 
                 taskManager.handleLostAll();
-                enforceRebalance();
+                needRebalance = true;
             }
         }
     }
