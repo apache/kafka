@@ -43,7 +43,6 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.FencedInstanceIdException;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.serialization.StringDeserializer;
-import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -633,7 +632,7 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
             brokerHostandPort = res.getString("brokerList");
         } else {
             parser.printHelp();
-            Exit.exit(0);
+            System.exit(0);
         }
         consumerProps.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerHostandPort);
 
@@ -663,16 +662,17 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
         ArgumentParser parser = argParser();
         if (args.length == 0) {
             parser.printHelp();
-            Exit.exit(0);
+            System.exit(0);
         }
         try {
             final VerifiableConsumer consumer = createFromArgs(parser, args);
-            Exit.addShutdownHook("verifiable-consumer-shutdown-hook", () -> consumer.close());
+            Runtime.getRuntime().addShutdownHook(new Thread(consumer::close, "verifiable-consumer-shutdown-hook"));
 
             consumer.run();
         } catch (ArgumentParserException e) {
             parser.handleError(e);
-            Exit.exit(1);
+            //Can't use `Exit.exit` here because `Exit` doesn't exists on old version of Kafka.
+            System.exit(1);
         }
     }
 
