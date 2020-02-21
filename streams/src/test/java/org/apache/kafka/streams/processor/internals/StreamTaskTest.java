@@ -1317,26 +1317,25 @@ public class StreamTaskTest {
     }
 
     @Test
-    public void shouldAbortTransactionAndCloseProducerOnUncleanCloseWithEosEnabled() {
+    public void shouldCloseProducerOnUncleanCloseWithEosEnabled() {
         task = createStatelessTask(createConfig(true), StreamsConfig.METRICS_LATEST);
         task.initializeTopology();
 
         task.close(false, false);
         task = null;
 
-        assertTrue(producer.transactionAborted());
-        assertFalse(producer.transactionInFlight());
+        // Make sure no method call on the producer during an unclean close (such as abort).
+        assertTrue(producer.transactionInFlight());
         assertTrue(producer.closed());
     }
 
     @Test
-    public void shouldAbortTransactionAndCloseProducerOnErrorDuringUncleanCloseWithEosEnabled() {
+    public void shouldCloseProducerOnErrorDuringUncleanCloseWithEosEnabled() {
         task = createTaskThatThrowsException(true);
         task.initializeTopology();
 
         task.close(false, false);
 
-        assertTrue(producer.transactionAborted());
         assertTrue(producer.closed());
     }
 
@@ -1553,7 +1552,7 @@ public class StreamTaskTest {
     }
 
     @Test
-    public void shouldAbortTransactionButNotCloseProducerIfFencedOnCloseDuringUncleanCloseWithEosEnabled() {
+    public void shouldNotCloseProducerIfFencedOnCloseDuringUncleanCloseWithEosEnabled() {
         task = createStatelessTask(createConfig(true), StreamsConfig.METRICS_LATEST);
         task.initializeTopology();
         producer.fenceProducerOnClose();
@@ -1561,7 +1560,6 @@ public class StreamTaskTest {
         task.close(false, false);
         task = null;
 
-        assertTrue(producer.transactionAborted());
         assertFalse(producer.closed());
     }
 
