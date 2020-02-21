@@ -33,7 +33,6 @@ import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.FailOnInvalidTimestamp;
 import org.apache.kafka.streams.processor.LogAndSkipOnInvalidTimestamp;
 import org.apache.kafka.streams.processor.TimestampExtractor;
-import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.MockInternalProcessorContext;
 import org.apache.kafka.test.MockSourceNode;
 import org.apache.kafka.test.MockTimestampExtractor;
@@ -310,7 +309,7 @@ public class RecordQueueTest {
             mockSourceNodeWithMetrics,
             new FailOnInvalidTimestamp(),
             new LogAndContinueExceptionHandler(),
-            new InternalMockProcessorContext(),
+            new MockInternalProcessorContext(),
             new LogContext());
 
         final StreamsException exception = assertThrows(
@@ -335,7 +334,7 @@ public class RecordQueueTest {
             mockSourceNodeWithMetrics,
             new LogAndSkipOnInvalidTimestamp(),
             new LogAndContinueExceptionHandler(),
-            new InternalMockProcessorContext(),
+            new MockInternalProcessorContext(),
             new LogContext());
         queue.addRawRecords(records);
 
