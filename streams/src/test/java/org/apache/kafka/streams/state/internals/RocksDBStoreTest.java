@@ -29,12 +29,12 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.processor.StateRestoreListener;
+import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.RocksDBConfigSetter;
 import org.apache.kafka.streams.state.internals.metrics.RocksDBMetrics;
 import org.apache.kafka.streams.state.internals.metrics.RocksDBMetricsRecorder;
-import org.apache.kafka.streams.state.internals.metrics.RocksDBMetricsRecordingTrigger;
-import org.apache.kafka.test.InternalMockProcessorContext;
+import org.apache.kafka.test.MockInternalProcessorContext;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
@@ -88,20 +88,22 @@ public class RocksDBStoreTest {
 
     private final RocksDBMetricsRecorder metricsRecorder = mock(RocksDBMetricsRecorder.class);
 
-    InternalMockProcessorContext context;
+    MockInternalProcessorContext context;
     RocksDBStore rocksDBStore;
 
     @Before
     public void setUp() {
+        init(MockRocksDbConfigSetter.class);
+    }
+
+    private void init(final Class<?> rocksDBConfigSetterClassConfig) {
         final Properties props = StreamsTestUtils.getStreamsConfig();
-        props.put(StreamsConfig.ROCKSDB_CONFIG_SETTER_CLASS_CONFIG, MockRocksDbConfigSetter.class);
+        props.put(StreamsConfig.ROCKSDB_CONFIG_SETTER_CLASS_CONFIG, rocksDBConfigSetterClassConfig);
+        props.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.StringSerde.class);
+        props.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.StringSerde.class);
         dir = TestUtils.tempDirectory();
-        context = new InternalMockProcessorContext(dir,
-            Serdes.String(),
-            Serdes.String(),
-            new StreamsConfig(props));
+        context = new MockInternalProcessorContext(props, dir);
         rocksDBStore = getRocksDBStore();
-        context.metrics().setRocksDBMetricsRecordingTrigger(new RocksDBMetricsRecordingTrigger());
     }
 
     RocksDBStore getRocksDBStore() {
@@ -112,14 +114,11 @@ public class RocksDBStoreTest {
         return new RocksDBStore(DB_NAME, METRICS_SCOPE, metricsRecorder);
     }
 
-    private InternalMockProcessorContext getProcessorContext(final Properties streamsProps) {
-        return new InternalMockProcessorContext(
-            TestUtils.tempDirectory(),
-            new StreamsConfig(streamsProps)
-        );
+    private InternalProcessorContext getProcessorContext(final Properties streamsProps) {
+        return new MockInternalProcessorContext(streamsProps);
     }
 
-    private InternalMockProcessorContext getProcessorContext(
+    private InternalProcessorContext getProcessorContext(
         final RecordingLevel recordingLevel,
         final Class<? extends RocksDBConfigSetter> rocksDBConfigSetterClass) {
 
@@ -129,7 +128,7 @@ public class RocksDBStoreTest {
         return getProcessorContext(streamsProps);
     }
 
-    private InternalMockProcessorContext getProcessorContext(final RecordingLevel recordingLevel) {
+    private InternalProcessorContext getProcessorContext(final RecordingLevel recordingLevel) {
         final Properties streamsProps = StreamsTestUtils.getStreamsConfig();
         streamsProps.setProperty(StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG, recordingLevel.name());
         return getProcessorContext(streamsProps);
@@ -143,7 +142,7 @@ public class RocksDBStoreTest {
     @Test
     public void shouldAddStatisticsToInjectedMetricsRecorderWhenRecordingLevelIsDebug() {
         final RocksDBStore store = getRocksDBStoreWithRocksDBMetricsRecorder();
-        final InternalMockProcessorContext mockContext = getProcessorContext(RecordingLevel.DEBUG);
+        final InternalProcessorContext mockContext = getProcessorContext(RecordingLevel.DEBUG);
         reset(metricsRecorder);
         metricsRecorder.addStatistics(
             eq(DB_NAME),
@@ -159,7 +158,7 @@ public class RocksDBStoreTest {
     @Test
     public void shouldNotAddStatisticsToInjectedMetricsRecorderWhenRecordingLevelIsInfo() {
         final RocksDBStore store = getRocksDBStoreWithRocksDBMetricsRecorder();
-        final InternalMockProcessorContext mockContext = getProcessorContext(RecordingLevel.INFO);
+        final InternalProcessorContext mockContext = getProcessorContext(RecordingLevel.INFO);
         reset(metricsRecorder);
         replay(metricsRecorder);
 
@@ -171,7 +170,7 @@ public class RocksDBStoreTest {
     @Test
     public void shouldRemoveStatisticsFromInjectedMetricsRecorderOnCloseWhenRecordingLevelIsDebug() {
         final RocksDBStore store = getRocksDBStoreWithRocksDBMetricsRecorder();
-        final InternalMockProcessorContext mockContext = getProcessorContext(RecordingLevel.DEBUG);
+        final InternalProcessorContext mockContext = getProcessorContext(RecordingLevel.DEBUG);
         store.openDB(mockContext);
         reset(metricsRecorder);
         metricsRecorder.removeStatistics(DB_NAME);
@@ -185,7 +184,7 @@ public class RocksDBStoreTest {
     @Test
     public void shouldNotRemoveStatisticsFromInjectedMetricsRecorderOnCloseWhenRecordingLevelIsInfo() {
         final RocksDBStore store = getRocksDBStoreWithRocksDBMetricsRecorder();
-        final InternalMockProcessorContext mockContext = getProcessorContext(RecordingLevel.INFO);
+        final InternalProcessorContext mockContext = getProcessorContext(RecordingLevel.INFO);
         store.openDB(mockContext);
         reset(metricsRecorder);
         replay(metricsRecorder);
@@ -210,7 +209,7 @@ public class RocksDBStoreTest {
     @Test
     public void shouldNotAddStatisticsToInjectedMetricsRecorderWhenUserProvidesStatistics() {
         final RocksDBStore store = getRocksDBStoreWithRocksDBMetricsRecorder();
-        final InternalMockProcessorContext mockContext =
+        final InternalProcessorContext mockContext =
             getProcessorContext(RecordingLevel.DEBUG, RocksDBConfigSetterWithUserProvidedStatistics.class);
         replay(metricsRecorder);
 
@@ -221,7 +220,7 @@ public class RocksDBStoreTest {
     @Test
     public void shouldNotRemoveStatisticsFromInjectedMetricsRecorderOnCloseWhenUserProvidesStatistics() {
         final RocksDBStore store = getRocksDBStoreWithRocksDBMetricsRecorder();
-        final InternalMockProcessorContext mockContext =
+        final InternalProcessorContext mockContext =
             getProcessorContext(RecordingLevel.DEBUG, RocksDBConfigSetterWithUserProvidedStatistics.class);
         store.openDB(mockContext);
         reset(metricsRecorder);
@@ -284,7 +283,7 @@ public class RocksDBStoreTest {
     @Test
     public void shouldThrowProcessorStateExceptionOnOpeningReadOnlyDir() {
         final File tmpDir = TestUtils.tempDirectory();
-        final InternalMockProcessorContext tmpContext = new InternalMockProcessorContext(tmpDir, new StreamsConfig(StreamsTestUtils.getStreamsConfig()));
+        final InternalProcessorContext tmpContext = new MockInternalProcessorContext(tmpDir);
 
         assertTrue(tmpDir.setReadOnly());
 
@@ -565,16 +564,7 @@ public class RocksDBStoreTest {
 
     @Test
     public void shouldHandleToggleOfEnablingBloomFilters() {
-
-        final Properties props = StreamsTestUtils.getStreamsConfig();
-        props.put(StreamsConfig.ROCKSDB_CONFIG_SETTER_CLASS_CONFIG, TestingBloomFilterRocksDBConfigSetter.class);
-        rocksDBStore = getRocksDBStore();
-        dir = TestUtils.tempDirectory();
-        context = new InternalMockProcessorContext(dir,
-            Serdes.String(),
-            Serdes.String(),
-            new StreamsConfig(props));
-        context.metrics().setRocksDBMetricsRecordingTrigger(new RocksDBMetricsRecordingTrigger());
+        init(TestingBloomFilterRocksDBConfigSetter.class);
 
         enableBloomFilters = false;
         rocksDBStore.init(context, rocksDBStore);
