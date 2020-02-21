@@ -37,6 +37,7 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 import static java.lang.String.format;
@@ -84,11 +85,15 @@ public class ProcessorStateManager implements StateManager {
         //      update blindly with the given offset
         private Long offset;
 
+        // corrupted state store should not be included in checkpointing
+        private boolean corrupted;
+
         private StateStoreMetadata(final StateStore stateStore) {
             this.stateStore = stateStore;
             this.restoreCallback = null;
             this.recordConverter = null;
             this.changelogPartition = null;
+            this.corrupted = false;
             this.offset = null;
         }
 
@@ -282,6 +287,20 @@ public class ProcessorStateManager implements StateManager {
         return changelogOffsets().keySet();
     }
 
+    void markChangelogAsCorrupted(final Set<TopicPartition> partitions) {
+        for (final StateStoreMetadata storeMetadata : stores.values()) {
+            if (partitions.contains(storeMetadata.changelogPartition)) {
+                storeMetadata.corrupted = true;
+                partitions.remove(storeMetadata.changelogPartition);
+            }
+        }
+
+        if (!partitions.isEmpty()) {
+            throw new IllegalStateException("Some partitions " + partitions + " are not contained in the store list of task " +
+                taskId + " marking as corrupted, this is not expected");
+        }
+    }
+
     @Override
     public Map<TopicPartition, Long> changelogOffsets() {
         // return the current offsets for those logged stores
@@ -415,6 +434,8 @@ public class ProcessorStateManager implements StateManager {
                     log.error("Failed to close state store {}: ", store.name(), exception);
                 }
             }
+
+            stores.clear();
         }
 
         if (firstException != null) {
@@ -439,10 +460,11 @@ public class ProcessorStateManager implements StateManager {
 
         final Map<TopicPartition, Long> checkpointingOffsets = new HashMap<>();
         for (final StateStoreMetadata storeMetadata : stores.values()) {
-            // store is logged, persistent, and has a valid current offset
+            // store is logged, persistent, not corrupted, and has a valid current offset
             if (storeMetadata.changelogPartition != null &&
                 storeMetadata.stateStore.persistent() &&
-                storeMetadata.offset != null) {
+                storeMetadata.offset != null &&
+                !storeMetadata.corrupted) {
                 checkpointingOffsets.put(storeMetadata.changelogPartition, storeMetadata.offset);
             }
         }

@@ -29,7 +29,6 @@ import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.metrics.ThreadMetrics;
 import org.slf4j.Logger;
 
-import java.util.Collection;
 import java.util.Collections;
 import java.util.Map;
 import java.util.Set;
@@ -188,6 +187,16 @@ public class StandbyTask extends AbstractTask implements Task {
     }
 
     @Override
+    public boolean commitNeeded() {
+        return false;
+    }
+
+    @Override
+    public Map<TopicPartition, Long> changelogOffsets() {
+        return Collections.unmodifiableMap(stateMgr.changelogOffsets());
+    }
+
+    @Override
     public void addRecords(final TopicPartition partition, final Iterable<ConsumerRecord<byte[], byte[]>> records) {
         throw new IllegalStateException("Attempted to add records to task " + id() + " for invalid input partition " + partition);
     }
@@ -222,17 +231,5 @@ public class StandbyTask extends AbstractTask implements Task {
         }
 
         return sb.toString();
-    }
-
-    public boolean commitNeeded() {
-        return false;
-    }
-
-    public Collection<TopicPartition> changelogPartitions() {
-        return stateMgr.changelogPartitions();
-    }
-
-    public Map<TopicPartition, Long> changelogOffsets() {
-        return Collections.unmodifiableMap(stateMgr.changelogOffsets());
     }
 }

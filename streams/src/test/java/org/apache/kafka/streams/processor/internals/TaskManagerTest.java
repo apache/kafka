@@ -25,9 +25,12 @@ import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
+import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 
+import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.easymock.EasyMock;
 import org.easymock.EasyMockRunner;
 import org.easymock.Mock;
@@ -115,9 +118,11 @@ public class TaskManagerTest {
 
     @Before
     public void setUp() {
+        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(new Metrics(), "clientId", StreamsConfig.METRICS_LATEST);
         taskManager = new TaskManager(changeLogReader,
                                       UUID.randomUUID(),
-                                      "",
+                                      "taskManagerTest",
+                                      streamsMetrics,
                                       activeTaskCreator,
                                       standbyTaskCreator,
                                       topologyBuilder,
