@@ -632,7 +632,7 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
             brokerHostandPort = res.getString("brokerList");
         } else {
             parser.printHelp();
-            //Can't use `Exit.exit` here because `Exit` doesn't exists on old version of Kafka.
+            //Can't use `Exit.exit` here because `Exit` doesn't exists on 0.8.2.2.
             System.exit(0);
         }
         consumerProps.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerHostandPort);
@@ -667,13 +667,13 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
         }
         try {
             final VerifiableConsumer consumer = createFromArgs(parser, args);
-            //Can't use `Exit.exit` here because `Exit` doesn't exists on old version of Kafka.
+            //Can't use `Exit.exit` here because `Exit` doesn't exists on 0.8.2.2.
             Runtime.getRuntime().addShutdownHook(new Thread(consumer::close, "verifiable-consumer-shutdown-hook"));
 
             consumer.run();
         } catch (ArgumentParserException e) {
             parser.handleError(e);
-            //Can't use `Exit.exit` here because `Exit` doesn't exists on old version of Kafka.
+            //Can't use `Exit.exit` here because `Exit` doesn't exists on 0.8.2.2.
             System.exit(1);
         }
     }
