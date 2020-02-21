@@ -1570,6 +1570,92 @@ public class StreamThreadTest {
     }
 
     @Test
+    public void shouldThrowTaskMigratedExceptionHandlingTaskLost() {
+        final Set<TopicPartition> assignedPartitions = Collections.singleton(t1p1);
+
+        final TaskManager taskManager = EasyMock.createNiceMock(TaskManager.class);
+        final MockConsumer<byte[], byte[]> consumer = new MockConsumer<>(OffsetResetStrategy.LATEST);
+        consumer.assign(assignedPartitions);
+        consumer.updateBeginningOffsets(Collections.singletonMap(t1p1, 0L));
+        consumer.updateEndOffsets(Collections.singletonMap(t1p1, 10L));
+
+        taskManager.handleLostAll();
+        EasyMock.expectLastCall()
+            .andThrow(new RuntimeException("Task lost exception"));
+
+        EasyMock.replay(taskManager);
+
+        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, CLIENT_ID, StreamsConfig.METRICS_LATEST);
+        final StreamThread thread = new StreamThread(
+            mockTime,
+            config,
+            null,
+            null,
+            consumer,
+            consumer,
+            changelogReader,
+            null,
+            taskManager,
+            streamsMetrics,
+            internalTopologyBuilder,
+            CLIENT_ID,
+            new LogContext(""),
+            new AtomicInteger()
+        ).updateThreadMetadata(getSharedAdminClientId(CLIENT_ID));
+
+        consumer.schedulePollTask(() -> {
+            thread.setState(StreamThread.State.PARTITIONS_REVOKED);
+            thread.rebalanceListener.onPartitionsLost(assignedPartitions);
+        });
+
+        thread.setState(StreamThread.State.STARTING);
+        assertThrows(TaskMigratedException.class, thread::runOnce);
+    }
+
+    @Test
+    public void shouldThrowTaskMigratedExceptionHandlingRevocation() {
+        final Set<TopicPartition> assignedPartitions = Collections.singleton(t1p1);
+
+        final TaskManager taskManager = EasyMock.createNiceMock(TaskManager.class);
+        final MockConsumer<byte[], byte[]> consumer = new MockConsumer<>(OffsetResetStrategy.LATEST);
+        consumer.assign(assignedPartitions);
+        consumer.updateBeginningOffsets(Collections.singletonMap(t1p1, 0L));
+        consumer.updateEndOffsets(Collections.singletonMap(t1p1, 10L));
+
+        taskManager.handleRevocation(assignedPartitions);
+        EasyMock.expectLastCall()
+            .andThrow(new TaskMigratedException("Revocation non fatal exception", new RuntimeException()));
+
+        EasyMock.replay(taskManager);
+
+        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, CLIENT_ID, StreamsConfig.METRICS_LATEST);
+        final StreamThread thread = new StreamThread(
+            mockTime,
+            config,
+            null,
+            null,
+            consumer,
+            consumer,
+            changelogReader,
+            null,
+            taskManager,
+            streamsMetrics,
+            internalTopologyBuilder,
+            CLIENT_ID,
+            new LogContext(""),
+            new AtomicInteger()
+        ).updateThreadMetadata(getSharedAdminClientId(CLIENT_ID));
+
+        consumer.schedulePollTask(() -> {
+            thread.setState(StreamThread.State.PARTITIONS_REVOKED);
+            thread.rebalanceListener.onPartitionsRevoked(assignedPartitions);
+        });
+
+        thread.setState(StreamThread.State.STARTING);
+        assertThrows(TaskMigratedException.class, thread::runOnce);
+    }
+
+    @Test
     public void shouldLogAndRecordSkippedRecordsForInvalidTimestampsWithBuiltInMetricsVersion0100To24() {
         shouldLogAndRecordSkippedRecordsForInvalidTimestamps(StreamsConfig.METRICS_0100_TO_24);
     }

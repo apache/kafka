@@ -71,7 +71,7 @@ public class StreamsRebalanceListener implements ConsumerRebalanceListener {
             final long start = time.milliseconds();
             try {
                 taskManager.handleRevocation(partitions);
-            }  finally {
+            } finally {
                 log.info("partition revocation took {} ms.", time.milliseconds() - start);
             }
         }
@@ -91,11 +91,10 @@ public class StreamsRebalanceListener implements ConsumerRebalanceListener {
         try {
             // close all active tasks as lost but don't try to commit offsets as we no longer own them
             taskManager.handleLostAll();
-        } catch (final Throwable t) {
-            throw new TaskMigratedException("Error caught during partitions lost", t);
+        } catch (final Exception e) {
+            throw new TaskMigratedException("Error caught during partitions lost", e);
         } finally {
             log.info("partitions lost took {} ms.", time.milliseconds() - start);
         }
     }
-
 }
