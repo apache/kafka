@@ -277,7 +277,7 @@ class ConnectStandaloneService(ConnectServiceBase):
         return self.nodes[0]
 
     def start_cmd(self, node, connector_configs):
-        cmd += "( export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:%s\"; " % self.LOG4J_CONFIG_FILE
+        cmd = "( export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:%s\"; " % self.LOG4J_CONFIG_FILE
         heap_kafka_opts = "-XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=%s" % \
                           self.logs["connect_heap_dump_file"]["path"]
         other_kafka_opts = self.security_config.kafka_opts.strip('\"')
