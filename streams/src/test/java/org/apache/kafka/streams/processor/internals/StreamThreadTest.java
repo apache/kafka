@@ -189,7 +189,7 @@ public class StreamThreadTest {
             config.getString(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG)
         );
 
-        internalTopologyBuilder.build();
+        internalTopologyBuilder.buildTopology();
         
         return StreamThread.create(
             internalTopologyBuilder,

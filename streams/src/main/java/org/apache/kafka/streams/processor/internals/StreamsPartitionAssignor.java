@@ -549,6 +549,9 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             }
         }
 
+        // We only create a standby for tasks that are stateful and have at least one changelog
+        final Set<TaskId> standbyTaskIds = new HashSet<>();
+
         // add tasks to state change log topic subscribers
         final Map<String, InternalTopicConfig> changelogTopicMetadata = new HashMap<>();
         for (final Map.Entry<Integer, InternalTopologyBuilder.TopicsInfo> entry : topicGroups.entrySet()) {
@@ -560,6 +563,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                 int numPartitions = UNKNOWN;
                 if (tasksByTopicGroup.get(topicGroupId) != null) {
                     for (final TaskId task : tasksByTopicGroup.get(topicGroupId)) {
+                        standbyTaskIds.add(task);
                         if (numPartitions < task.partition + 1) {
                             numPartitions = task.partition + 1;
                         }
@@ -605,7 +609,8 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             partitionsForTask.keySet(), states, numStandbyReplicas);
 
         // assign tasks to clients
-        final StickyTaskAssignor<UUID> taskAssignor = new StickyTaskAssignor<>(states, partitionsForTask.keySet());
+        final StickyTaskAssignor<UUID> taskAssignor =
+            new StickyTaskAssignor<>(states, partitionsForTask.keySet(), standbyTaskIds);
         taskAssignor.assign(numStandbyReplicas);
 
         log.info("Assigned tasks to clients as {}{}.", Utils.NL, states.entrySet().stream()

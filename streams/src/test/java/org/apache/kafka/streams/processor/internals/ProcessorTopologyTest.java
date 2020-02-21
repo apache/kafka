@@ -115,7 +115,7 @@ public class ProcessorTopologyTest {
         topology.addSink("sink-1", "topic-3", "processor-1");
         topology.addSink("sink-2", "topic-4", "processor-1", "processor-2");
 
-        final ProcessorTopology processorTopology = topology.getInternalBuilder("X").build();
+        final ProcessorTopology processorTopology = topology.getInternalBuilder("X").buildTopology();
 
         assertEquals(6, processorTopology.processors().size());
 
@@ -317,7 +317,7 @@ public class ProcessorTopologyTest {
     @Test
     public void shouldCreateStringWithSourceAndTopics() {
         topology.addSource("source", "topic1", "topic2");
-        final ProcessorTopology processorTopology = topology.getInternalBuilder().build();
+        final ProcessorTopology processorTopology = topology.getInternalBuilder().buildTopology();
         final String result = processorTopology.toString();
         assertThat(result, containsString("source:\n\t\ttopics:\t\t[topic1, topic2]\n"));
     }
@@ -326,7 +326,7 @@ public class ProcessorTopologyTest {
     public void shouldCreateStringWithMultipleSourcesAndTopics() {
         topology.addSource("source", "topic1", "topic2");
         topology.addSource("source2", "t", "t1", "t2");
-        final ProcessorTopology processorTopology = topology.getInternalBuilder().build();
+        final ProcessorTopology processorTopology = topology.getInternalBuilder().buildTopology();
         final String result = processorTopology.toString();
         assertThat(result, containsString("source:\n\t\ttopics:\t\t[topic1, topic2]\n"));
         assertThat(result, containsString("source2:\n\t\ttopics:\t\t[t, t1, t2]\n"));
@@ -337,7 +337,7 @@ public class ProcessorTopologyTest {
         topology.addSource("source", "t")
                 .addProcessor("processor", mockProcessorSupplier, "source")
                 .addProcessor("other", mockProcessorSupplier, "source");
-        final ProcessorTopology processorTopology = topology.getInternalBuilder().build();
+        final ProcessorTopology processorTopology = topology.getInternalBuilder().buildTopology();
         final String result = processorTopology.toString();
         assertThat(result, containsString("\t\tchildren:\t[processor, other]"));
         assertThat(result, containsString("processor:\n"));
@@ -353,7 +353,7 @@ public class ProcessorTopologyTest {
                 .addProcessor("child-two", mockProcessorSupplier, "processor")
                 .addProcessor("child-two-one", mockProcessorSupplier, "child-two");
 
-        final String result = topology.getInternalBuilder().build().toString();
+        final String result = topology.getInternalBuilder().buildTopology().toString();
         assertThat(result, containsString("child-one:\n\t\tchildren:\t[child-one-one]"));
         assertThat(result, containsString("child-two:\n\t\tchildren:\t[child-two-one]"));
     }
@@ -449,7 +449,7 @@ public class ProcessorTopologyTest {
     @Test
     public void statelessTopologyShouldNotHavePersistentStore() {
         final TopologyWrapper topology = new TopologyWrapper();
-        final ProcessorTopology processorTopology = topology.getInternalBuilder("anyAppId").build();
+        final ProcessorTopology processorTopology = topology.getInternalBuilder("anyAppId").buildTopology();
         assertFalse(processorTopology.hasPersistentLocalStore());
         assertFalse(processorTopology.hasPersistentGlobalStore());
     }
@@ -486,7 +486,7 @@ public class ProcessorTopologyTest {
         topology.addSource("source", STRING_DESERIALIZER, STRING_DESERIALIZER, "topic")
                 .addProcessor(processor, () -> new StatefulProcessor(storeSupplier.name()), "source")
                 .addStateStore(storeBuilder, processor);
-        return topology.getInternalBuilder("anyAppId").build();
+        return topology.getInternalBuilder("anyAppId").buildTopology();
     }
 
     private ProcessorTopology createGlobalStoreTopology(final KeyValueBytesStoreSupplier storeSupplier) {
@@ -495,7 +495,7 @@ public class ProcessorTopologyTest {
                 Stores.keyValueStoreBuilder(storeSupplier, Serdes.String(), Serdes.String()).withLoggingDisabled();
         topology.addGlobalStore(storeBuilder, "global", STRING_DESERIALIZER, STRING_DESERIALIZER, "topic", "processor",
                 define(new StatefulProcessor(storeSupplier.name())));
-        return topology.getInternalBuilder("anyAppId").build();
+        return topology.getInternalBuilder("anyAppId").buildTopology();
     }
 
     private void assertNextOutputRecord(final TestRecord<String, String> record,

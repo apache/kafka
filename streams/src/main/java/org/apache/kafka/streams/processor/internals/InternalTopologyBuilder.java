@@ -789,7 +789,10 @@ public class InternalTopologyBuilder {
         return newNodeGroupId;
     }
 
-    public synchronized ProcessorTopology build() {
+    /**
+     * @return the full topology minus any global state
+     */
+    public synchronized ProcessorTopology buildTopology() {
         final Set<String> nodeGroup = new HashSet<>();
         for (final Set<String> value : nodeGroups().values()) {
             nodeGroup.addAll(value);
@@ -800,14 +803,18 @@ public class InternalTopologyBuilder {
         return build(nodeGroup);
     }
 
-    public synchronized ProcessorTopology build(final int topicGroupId) {
+    /**
+     * @param topicGroupId group of topics corresponding to a single subtopology
+     * @return subset of the full topology
+     */
+    public synchronized ProcessorTopology buildSubtopology(final int topicGroupId) {
         final Set<String> nodeGroup = nodeGroups().get(topicGroupId);
         return build(nodeGroup);
     }
 
     /**
      * Builds the topology for any global state stores
-     * @return ProcessorTopology
+     * @return ProcessorTopology of global state
      */
     public synchronized ProcessorTopology buildGlobalStateTopology() {
         Objects.requireNonNull(applicationId, "topology has not completed optimization");
