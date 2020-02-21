@@ -556,30 +556,35 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         final Map<String, InternalTopicConfig> changelogTopicMetadata = new HashMap<>();
         for (final Map.Entry<Integer, InternalTopologyBuilder.TopicsInfo> entry : topicGroups.entrySet()) {
             final int topicGroupId = entry.getKey();
-            final Map<String, InternalTopicConfig> stateChangelogTopics = entry.getValue().stateChangelogTopics;
+            final InternalTopologyBuilder.TopicsInfo topicsInfo = entry.getValue();
+            final Map<String, InternalTopicConfig> stateChangelogTopics = topicsInfo.stateChangelogTopics;
 
             final Set<TaskId> topicGroupTasks = tasksByTopicGroup.get(topicGroupId);
             if (topicGroupTasks == null) {
                 log.debug("No tasks found for topic group {}", topicGroupId);
                 continue;
+            } else if (stateChangelogTopics.isEmpty()) {
+                continue;
             }
 
-            if (entry.getValue().hasStateToRestore) {
-                standbyTaskIds.addAll(topicGroupTasks);
-            }
+            standbyTaskIds.addAll(topicGroupTasks);
 
-            for (final InternalTopicConfig topicConfig : stateChangelogTopics.values()) {
-                // the expected number of partitions is the max value of TaskId.partition + 1
-                int numPartitions = UNKNOWN;
-                for (final TaskId task : topicGroupTasks) {
-                    if (numPartitions < task.partition + 1) {
-                        numPartitions = task.partition + 1;
+            for (final Map.Entry<String, InternalTopicConfig> changelogEntry : stateChangelogTopics.entrySet()) {
+                final String changelogTopic = changelogEntry.getKey();
+
+                // stateChangelogTopics may include optimized source topics that are reused as changelogs
+                if (!topicsInfo.sourceTopics.contains(changelogTopic)) {
+                    final InternalTopicConfig topicConfig = changelogEntry.getValue();
+                    // the expected number of partitions is the max value of TaskId.partition + 1
+                    int numPartitions = UNKNOWN;
+                    for (final TaskId task : topicGroupTasks) {
+                        if (numPartitions < task.partition + 1) {
+                            numPartitions = task.partition + 1;
+                        }
                     }
+                    topicConfig.setNumberOfPartitions(numPartitions);
+                    changelogTopicMetadata.put(topicConfig.name(), topicConfig);
                 }
-                topicConfig.setNumberOfPartitions(numPartitions);
-
-                changelogTopicMetadata.put(topicConfig.name(), topicConfig);
-
             }
         }
 
