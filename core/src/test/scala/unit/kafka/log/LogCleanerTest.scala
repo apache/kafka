@@ -815,6 +815,7 @@ class LogCleanerTest {
                (0 until leo.toInt by 2).forall(!keys.contains(_)))
   }
 
+  @Test
   def testLogCleanerStats(): Unit = {
     // because loadFactor is 0.75, this means we can fit 2 messages in the map
     val cleaner = makeCleaner(2)
@@ -834,10 +835,10 @@ class LogCleanerTest {
     val initialLogSize = log.size
 
     val (endOffset, stats) = cleaner.clean(LogToClean(new TopicPartition("test", 0), log, 2, log.activeSegment.baseOffset))
-    assertEquals(5, endOffset)
+    assertEquals(3, endOffset)
     assertEquals(5, stats.messagesRead)
     assertEquals(initialLogSize, stats.bytesRead)
-    assertEquals(2, stats.messagesWritten)
+    assertEquals(4, stats.messagesWritten)
     assertEquals(log.size, stats.bytesWritten)
     assertEquals(0, stats.invalidMessagesRead)
     assertTrue(stats.endTime >= stats.startTime)

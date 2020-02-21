@@ -396,6 +396,7 @@ public class PartitionGroupTest {
         group.addRawRecords(partition1, list);
     }
 
+    @Test
     public void shouldCleanPartitionsOnClose() {
         final List<ConsumerRecord<byte[], byte[]>> list = Arrays.asList(
             new ConsumerRecord<>("topic", 1, 1L, recordKey, recordValue),
