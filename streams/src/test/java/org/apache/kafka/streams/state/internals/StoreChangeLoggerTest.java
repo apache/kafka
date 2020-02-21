@@ -19,10 +19,15 @@ package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.common.record.Record;
+import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.state.StateSerdes;
-import org.apache.kafka.test.InternalMockProcessorContext;
+import org.apache.kafka.test.MockInternalProcessorContext;
 import org.apache.kafka.test.MockRecordCollector;
+import org.apache.kafka.test.StreamsTestUtils;
 import org.junit.Test;
+
+import java.util.Properties;
 
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.nullValue;
@@ -31,25 +36,30 @@ import static org.hamcrest.MatcherAssert.assertThat;
 
 public class StoreChangeLoggerTest {
 
-    private final String topic = "topic";
-
     private final MockRecordCollector collector = new MockRecordCollector();
-    private final InternalMockProcessorContext context = new InternalMockProcessorContext(
-        StateSerdes.withBuiltinTypes(topic, Integer.class, String.class),
-        collector);
+    private final MockInternalProcessorContext context;
 
-    private final StoreChangeLogger<Integer, String> changeLogger =
-        new StoreChangeLogger<>(topic, context, StateSerdes.withBuiltinTypes(topic, Integer.class, String.class));
+    private final StoreChangeLogger<Integer, String> changeLogger;
+
+    public StoreChangeLoggerTest() {
+        final Properties properties = StreamsTestUtils.getStreamsConfig();
+        properties.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.IntegerSerde.class);
+        properties.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.StringSerde.class);
+        context = new MockInternalProcessorContext(properties);
+        context.setRecordCollector(collector);
+        final String topic = "topic";
+        changeLogger = new StoreChangeLogger<>(topic, context, StateSerdes.withBuiltinTypes(topic, Integer.class, String.class));
+    }
 
     @Test
     public void testAddRemove() {
-        context.setTime(1);
+        context.setTimestamp(1);
         changeLogger.logChange(0, "zero");
-        context.setTime(5);
+        context.setTimestamp(5);
         changeLogger.logChange(1, "one");
         changeLogger.logChange(2, "two");
         changeLogger.logChange(3, "three", 42L);
-        context.setTime(9);
+        context.setTimestamp(9);
         changeLogger.logChange(0, null);
 
         assertThat(collector.collected().size(), equalTo(5));
