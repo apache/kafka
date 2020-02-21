@@ -71,7 +71,7 @@ public class StreamsRebalanceListener implements ConsumerRebalanceListener {
             final long start = time.milliseconds();
             try {
                 taskManager.handleRevocation(partitions);
-            } catch (final Throwable t) {
+            } catch (final Exception t) {
                 throw new TaskMigratedException("Error caught during partitions revocation", t);
             } finally {
                 log.info("partition revocation took {} ms.", time.milliseconds() - start);
