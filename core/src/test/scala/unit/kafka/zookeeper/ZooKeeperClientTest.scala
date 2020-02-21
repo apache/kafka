@@ -428,7 +428,7 @@ class ZooKeeperClientTest extends ZooKeeperTestHarness {
       CreateRequest(child1Path, Array.empty[Byte], ZooDefs.Ids.OPEN_ACL_UNSAFE.asScala, CreateMode.PERSISTENT))
     assertEquals("Response code for create child1 should be OK", Code.OK, createResponseChild1.resultCode)
     assertTrue("Failed to receive child change notification",
-      zNodeChildChangeHandlerCountDownLatch.await(100, TimeUnit.MILLISECONDS))
+      zNodeChildChangeHandlerCountDownLatch.await(5, TimeUnit.SECONDS))
   }
 
   @Test
