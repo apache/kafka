@@ -240,7 +240,7 @@
         <li><code>POST /connectors/{name}/tasks/{taskId}/restart</code> - restart an individual task (typically because it has failed)</li>
         <li><code>DELETE /connectors/{name}</code> - delete a connector, halting all tasks and deleting its configuration</li>
         <li><code>GET /connectors/{name}/topics</code> - get the set of topics that a specific connector is using since the connector was created or since a request to reset its set of active topics was issued</li>
-        <li><code>PUT /connectors/{name}/topics/reset</code> - send a request to empty the set of active topics the connector </li>
+        <li><code>PUT /connectors/{name}/topics/reset</code> - send a request to empty the set of active topics of a connector</li>
     </ul>
 
     <p>Kafka Connect also provides a REST API for getting information about connector plugins:</p>
