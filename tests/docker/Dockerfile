@@ -15,6 +15,7 @@
 
 ARG jdk_version=openjdk:8
 FROM $jdk_version
+ARG jdk_version
 
 MAINTAINER Apache Kafka dev@kafka.apache.org
 VOLUME ["/opt/kafka-dev"]
@@ -45,11 +46,13 @@ RUN echo 'PermitUserEnvironment yes' >> /etc/ssh/sshd_config
 # Install binary test dependencies.
 # we use the same versions as in vagrant/base.sh
 ARG KAFKA_MIRROR="https://s3-us-west-2.amazonaws.com/kafka-packages"
+ARG MVN_MIRROR="https://repo1.maven.org/maven2"
 RUN mkdir -p "/opt/kafka-0.8.2.2" && chmod a+rw /opt/kafka-0.8.2.2 && curl -s "$KAFKA_MIRROR/kafka_2.11-0.8.2.2.tgz" | tar xz --strip-components=1 -C "/opt/kafka-0.8.2.2"
 RUN mkdir -p "/opt/kafka-0.9.0.1" && chmod a+rw /opt/kafka-0.9.0.1 && curl -s "$KAFKA_MIRROR/kafka_2.11-0.9.0.1.tgz" | tar xz --strip-components=1 -C "/opt/kafka-0.9.0.1"
 RUN mkdir -p "/opt/kafka-0.10.0.1" && chmod a+rw /opt/kafka-0.10.0.1 && curl -s "$KAFKA_MIRROR/kafka_2.11-0.10.0.1.tgz" | tar xz --strip-components=1 -C "/opt/kafka-0.10.0.1"
 RUN mkdir -p "/opt/kafka-0.10.1.1" && chmod a+rw /opt/kafka-0.10.1.1 && curl -s "$KAFKA_MIRROR/kafka_2.11-0.10.1.1.tgz" | tar xz --strip-components=1 -C "/opt/kafka-0.10.1.1"
 RUN mkdir -p "/opt/kafka-0.10.2.2" && chmod a+rw /opt/kafka-0.10.2.2 && curl -s "$KAFKA_MIRROR/kafka_2.11-0.10.2.2.tgz" | tar xz --strip-components=1 -C "/opt/kafka-0.10.2.2"
+RUN if [ "x$jdk_version" = "xopenjdk:11" ] ; then chmod a+wr /opt/kafka-0.10.2.2/libs && curl -s "$MVN_MIRROR/com/sun/xml/bind/jaxb-impl/2.3.2/jaxb-impl-2.3.2.jar" -o /opt/kafka-0.10.2.2/libs/jaxb-impl-2.3.2.jar ; fi
 RUN mkdir -p "/opt/kafka-0.11.0.3" && chmod a+rw /opt/kafka-0.11.0.3 && curl -s "$KAFKA_MIRROR/kafka_2.11-0.11.0.3.tgz" | tar xz --strip-components=1 -C "/opt/kafka-0.11.0.3"
 RUN mkdir -p "/opt/kafka-1.0.2" && chmod a+rw /opt/kafka-1.0.2 && curl -s "$KAFKA_MIRROR/kafka_2.11-1.0.2.tgz" | tar xz --strip-components=1 -C "/opt/kafka-1.0.2"
 RUN mkdir -p "/opt/kafka-1.1.1" && chmod a+rw /opt/kafka-1.1.1 && curl -s "$KAFKA_MIRROR/kafka_2.11-1.1.1.tgz" | tar xz --strip-components=1 -C "/opt/kafka-1.1.1"
