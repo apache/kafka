@@ -33,7 +33,6 @@ import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
-import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.MockInternalProcessorContext;
 import org.easymock.EasyMock;
 import org.junit.After;
@@ -126,7 +125,7 @@ public class CachingKeyValueStoreTest extends AbstractKeyValueStoreTest {
     public void shouldCloseAfterErrorWithFlush() {
         try {
             cache = EasyMock.niceMock(ThreadCache.class);
-            context = new InternalMockProcessorContext(null, null, null, null, cache);
+            context = new MockInternalProcessorContext(new MockStreamsMetrics(new Metrics()), cache);
             context.setRecordContext(new ProcessorRecordContext(10, 0, 0, topic, null));
             store.init(context, null);
             cache.flush("0_0-store");
