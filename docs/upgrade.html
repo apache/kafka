@@ -42,9 +42,14 @@
         enabled by default. You can continue to use TLSv1 and TLSv1.1 by explicitly enabling these in the configuration options
         <code>ssl.protocol</code> and <code>ssl.enabled.protocols</code>.
     </li>
-    <li>ZooKeeper has been upgraded to version 3.5.7.  This resolves bugs that could have impacted ZooKeeper upgrades as mentioned
-        in the 2.4.0 upgrade notes, so those comments do not apply to this version of Kafka.  ZooKeeper version 3.5.7 supports TLS-encrypted connectivity
-        to ZooKeeper both with or without client certificates, and additional Kafka configurations are available to take advantage of this.
+    <li>ZooKeeper has been upgraded to 3.5.7, and a ZooKeeper upgrade from 3.4.X to 3.5.7 can fail if there are no snapshot files in the 3.4 data directory.
+        This usually happens in test upgrades where ZooKeeper 3.5.7 is trying to load an existing 3.4 data dir in which no snapshot file has been created.
+        For more details about the issue please refer to <a href="https://issues.apache.org/jira/browse/ZOOKEEPER-3056">ZOOKEEPER-3056</a>.
+        A fix is given in <a href="https://issues.apache.org/jira/browse/ZOOKEEPER-3056">ZOOKEEPER-3056</a>, which is to set <code>snapshot.trust.empty=true</code>
+        config in <code>zookeeper.properties</code> before the upgrade.
+    </li>
+    <li>ZooKeeper version 3.5.7 supports TLS-encrypted connectivity to ZooKeeper both with or without client certificates,
+        and additional Kafka configurations are available to take advantage of this.
         See <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-515%3A+Enable+ZK+client+to+use+the+new+TLS+supported+authentication">KIP-515</a> for details.
     </li>
 </ul>
