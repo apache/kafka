@@ -113,6 +113,9 @@ public class InternalTopologyBuilder {
 
     private final QuickUnion<String> nodeGrouper = new QuickUnion<>();
 
+    // state stores whose source topics are reused as their changelog
+    private final Set<String> optimizedSourceTables = new HashSet<>();
+
     // Used to capture subscribed topics via Patterns discovered during the partition assignment process.
     private final Set<String> subscriptionUpdates = new HashSet<>();
 
@@ -609,12 +612,16 @@ public class InternalTopologyBuilder {
     }
 
     public void connectSourceStoreAndTopic(final String sourceStoreName,
-                                            final String topic) {
+                                           final String topic) {
         if (storeToChangelogTopic.containsKey(sourceStoreName)) {
             throw new TopologyException("Source store " + sourceStoreName + " is already added.");
         }
         storeToChangelogTopic.put(sourceStoreName, topic);
         changelogTopicToStore.put(topic, sourceStoreName);
+    }
+
+    public void addOptimizedSourceTable(final String storeName) {
+        optimizedSourceTables.add(storeName);
     }
 
     public final void addInternalTopic(final String topicName) {
@@ -999,6 +1006,7 @@ public class InternalTopologyBuilder {
             final Set<String> sourceTopics = new HashSet<>();
             final Map<String, InternalTopicConfig> repartitionTopics = new HashMap<>();
             final Map<String, InternalTopicConfig> stateChangelogTopics = new HashMap<>();
+            boolean hasStateToRestore = false;
             for (final String node : entry.getValue()) {
                 // if the node is a source node, add to the source topics
                 final List<String> topics = nodeToSourceTopics.get(node);
@@ -1045,6 +1053,9 @@ public class InternalTopologyBuilder {
                                 createChangelogTopicConfig(stateFactory, topicName);
                             stateChangelogTopics.put(topicName, internalTopicConfig);
                         }
+                        hasStateToRestore = true;
+                    } else if (optimizedSourceTables.contains(stateFactory.name())) {
+                        hasStateToRestore = true;
                     }
                 }
             }
@@ -1053,7 +1064,8 @@ public class InternalTopologyBuilder {
                         Collections.unmodifiableSet(sinkTopics),
                         Collections.unmodifiableSet(sourceTopics),
                         Collections.unmodifiableMap(repartitionTopics),
-                        Collections.unmodifiableMap(stateChangelogTopics)));
+                        Collections.unmodifiableMap(stateChangelogTopics),
+                        hasStateToRestore));
             }
         }
 
@@ -1705,15 +1717,18 @@ public class InternalTopologyBuilder {
         public final Set<String> sourceTopics;
         public final Map<String, InternalTopicConfig> stateChangelogTopics;
         public final Map<String, InternalTopicConfig> repartitionSourceTopics;
+        public final boolean hasStateToRestore;
 
         TopicsInfo(final Set<String> sinkTopics,
                    final Set<String> sourceTopics,
                    final Map<String, InternalTopicConfig> repartitionSourceTopics,
-                   final Map<String, InternalTopicConfig> stateChangelogTopics) {
+                   final Map<String, InternalTopicConfig> stateChangelogTopics,
+                   final boolean hasStateToRestore) {
             this.sinkTopics = sinkTopics;
             this.sourceTopics = sourceTopics;
             this.stateChangelogTopics = stateChangelogTopics;
             this.repartitionSourceTopics = repartitionSourceTopics;
+            this.hasStateToRestore = hasStateToRestore;
         }
 
         @Override

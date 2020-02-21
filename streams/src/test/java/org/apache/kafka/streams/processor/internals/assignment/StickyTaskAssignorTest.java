@@ -682,16 +682,6 @@ public class StickyTaskAssignorTest {
                                         new HashSet<>(taskIds));
     }
 
-    private StickyTaskAssignor<Integer> createTaskAssignorWithStatelessTasks(final Set<TaskId> allTasks,
-                                                                             final TaskId... statelessTasks) {
-        final Set<TaskId> standbyTasks = new HashSet<>(allTasks);
-        for (final TaskId task : statelessTasks) {
-            standbyTasks.remove(task);
-        }
-
-        return new StickyTaskAssignor<>(clients, allTasks, standbyTasks);
-    }
-
     private List<TaskId> allActiveTasks() {
         final List<TaskId> allActive = new ArrayList<>();
         for (final ClientState client : clients.values()) {

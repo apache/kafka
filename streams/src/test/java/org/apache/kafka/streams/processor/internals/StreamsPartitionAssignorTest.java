@@ -895,6 +895,8 @@ public class StreamsPartitionAssignorTest {
         builder.addSource(null, "source1", null, null, null, "topic1");
         builder.addSource(null, "source2", null, null, null, "topic2");
         builder.addProcessor("processor", new MockProcessorSupplier(), "source1", "source2");
+        builder.addStateStore(new MockKeyValueStoreBuilder("store1", false), "processor");
+
         final List<String> topics = asList("topic1", "topic2");
         final Set<TopicPartition> allTopicPartitions = topics.stream()
             .map(topic -> asList(new TopicPartition(topic, 0), new TopicPartition(topic, 1), new TopicPartition(topic, 2)))
@@ -902,7 +904,6 @@ public class StreamsPartitionAssignorTest {
             .collect(Collectors.toSet());
 
         final Set<TaskId> allTasks = mkSet(task0_0, task0_1, task0_2);
-
 
         final Set<TaskId> prevTasks00 = mkSet(task0_0);
         final Set<TaskId> prevTasks01 = mkSet(task0_1);
@@ -1607,7 +1608,13 @@ public class StreamsPartitionAssignorTest {
 
     @Test
     public void shouldReturnNormalAssignmentForOldAndFutureInstancesDuringVersionProbing() {
+        final Map<String, Object> props = configProps();
+        props.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, "1");
+        final StreamsConfig streamsConfig = new StreamsConfig(props);
+
         builder.addSource(null, "source1", null, null, null, "topic1");
+        builder.addProcessor("processor", new MockProcessorSupplier(), "source1");
+        builder.addStateStore(new MockKeyValueStoreBuilder("store1", false), "processor");
 
         final Set<TaskId> allTasks = mkSet(task0_0, task0_1, task0_2);
 
@@ -1621,25 +1628,27 @@ public class StreamsPartitionAssignorTest {
             mkEntry(task0_1, Collections.singleton(t1p1))
         );
 
-        subscriptions.put("consumer1",
-                new ConsumerPartitionAssignor.Subscription(
-                        Collections.singletonList("topic1"),
-                        getInfo(UUID.randomUUID(), activeTasks, standbyTasks, null).encode(),
-                        asList(t1p0, t1p1))
-        );
-        subscriptions.put("future-consumer",
-                          new ConsumerPartitionAssignor.Subscription(
-                              Collections.singletonList("topic1"),
-                              encodeFutureSubscription(),
-                              Collections.singletonList(t1p2))
-        );
-
-        streamsMetadataState = EasyMock.createNiceMock(StreamsMetadataState.class);
         createMockTaskManager(allTasks, allTasks, UUID.randomUUID(), builder);
         EasyMock.replay(taskManager);
-        final Map<String, Object> props = configProps();
-        props.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);
-        partitionAssignor.configure(props);
+
+        streamsMetadataState = EasyMock.createNiceMock(StreamsMetadataState.class);
+
+        configurePartitionAssignor(Collections.singletonMap(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1));
+        partitionAssignor.setInternalTopicManager(new MockInternalTopicManager(streamsConfig, mockClientSupplier.restoreConsumer));
+
+        subscriptions.put("consumer1",
+            new ConsumerPartitionAssignor.Subscription(
+                Collections.singletonList("topic1"),
+                getInfo(UUID.randomUUID(), activeTasks, standbyTasks, null).encode(),
+                asList(t1p0, t1p1))
+        );
+        subscriptions.put("future-consumer",
+            new ConsumerPartitionAssignor.Subscription(
+                Collections.singletonList("topic1"),
+                encodeFutureSubscription(),
+                Collections.singletonList(t1p2))
+        );
+
         final Map<String, ConsumerPartitionAssignor.Assignment> assignment = partitionAssignor.assign(metadata, new GroupSubscription(subscriptions)).groupAssignment();
 
         assertThat(assignment.size(), equalTo(2));

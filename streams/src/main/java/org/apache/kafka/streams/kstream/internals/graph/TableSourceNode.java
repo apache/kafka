@@ -115,6 +115,7 @@ public class TableSourceNode<K, V> extends StreamSourceNode<K, V> {
                 if (shouldReuseSourceTopicForChangelog) {
                     storeBuilder.withLoggingDisabled();
                     topologyBuilder.connectSourceStoreAndTopic(storeBuilder.name(), topicName);
+                    topologyBuilder.addOptimizedSourceTable(storeBuilder.name());
                 }
             }
         }

@@ -558,22 +558,28 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             final int topicGroupId = entry.getKey();
             final Map<String, InternalTopicConfig> stateChangelogTopics = entry.getValue().stateChangelogTopics;
 
+            final Set<TaskId> topicGroupTasks = tasksByTopicGroup.get(topicGroupId);
+            if (topicGroupTasks == null) {
+                log.debug("No tasks found for topic group {}", topicGroupId);
+                continue;
+            }
+
+            if (entry.getValue().hasStateToRestore) {
+                standbyTaskIds.addAll(topicGroupTasks);
+            }
+
             for (final InternalTopicConfig topicConfig : stateChangelogTopics.values()) {
                 // the expected number of partitions is the max value of TaskId.partition + 1
                 int numPartitions = UNKNOWN;
-                if (tasksByTopicGroup.get(topicGroupId) != null) {
-                    for (final TaskId task : tasksByTopicGroup.get(topicGroupId)) {
-                        standbyTaskIds.add(task);
-                        if (numPartitions < task.partition + 1) {
-                            numPartitions = task.partition + 1;
-                        }
+                for (final TaskId task : topicGroupTasks) {
+                    if (numPartitions < task.partition + 1) {
+                        numPartitions = task.partition + 1;
                     }
-                    topicConfig.setNumberOfPartitions(numPartitions);
-
-                    changelogTopicMetadata.put(topicConfig.name(), topicConfig);
-                } else {
-                    log.debug("No tasks found for topic group {}", topicGroupId);
                 }
+                topicConfig.setNumberOfPartitions(numPartitions);
+
+                changelogTopicMetadata.put(topicConfig.name(), topicConfig);
+
             }
         }
 
