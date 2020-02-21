@@ -212,7 +212,7 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
     zkClient.createTopicAssignment(topic1, Map.empty)
 
     assertTrue("Failed to receive watch notification",
-      latch.await(1, TimeUnit.SECONDS))
+      latch.await(100, TimeUnit.MILLISECONDS))
 
     assertTrue(zkClient.topicExists(topic1))
   }
@@ -228,7 +228,7 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
     zkClient.createTopicAssignment(topic1, Map.empty)
 
     assertFalse("Received watch notification",
-      latch.await(1, TimeUnit.SECONDS))
+      latch.await(100, TimeUnit.MILLISECONDS))
 
     assertTrue(zkClient.topicExists(topic1))
   }
