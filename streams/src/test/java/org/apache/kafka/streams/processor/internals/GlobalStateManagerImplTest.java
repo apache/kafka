@@ -33,14 +33,12 @@ import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
-import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.state.TimestampedBytesStore;
 import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
 import org.apache.kafka.streams.state.internals.WrappedStateStore;
 import org.apache.kafka.test.MockInternalProcessorContext;
 import org.apache.kafka.test.MockStateRestoreListener;
 import org.apache.kafka.test.NoOpReadOnlyStore;
-import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Before;
@@ -136,11 +134,7 @@ public class GlobalStateManagerImplTest {
             stateDirectory,
             stateRestoreListener,
             streamsConfig);
-        stateManager.setGlobalProcessorContext(new MockInternalProcessorContext(
-                StreamsTestUtils.getStreamsConfig(),
-                new TaskId(0, 0),
-                stateDirectory.globalStateDir()
-        ));
+        stateManager.setGlobalProcessorContext(new MockInternalProcessorContext(stateDirectory.globalStateDir()));
         checkpointFile = new File(stateManager.baseDir(), StateManagerUtil.CHECKPOINT_FILE_NAME);
     }
 

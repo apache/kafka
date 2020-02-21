@@ -16,11 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import org.apache.kafka.common.metrics.Metrics;
-import org.apache.kafka.common.utils.LogContext;
-import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.test.MockInternalProcessorContext;
-import org.apache.kafka.test.MockRecordCollector;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Before;
@@ -54,11 +50,7 @@ public class KeyValueSegmentsTest {
     @Before
     public void createContext() {
         stateDirectory = TestUtils.tempDirectory();
-        context = new MockInternalProcessorContext(
-                new ThreadCache(new LogContext("testCache "), 0, new MockStreamsMetrics(new Metrics())),
-                stateDirectory
-        );
-        context.setRecordCollector(new MockRecordCollector());
+        context = new MockInternalProcessorContext(stateDirectory);
         segments = new KeyValueSegments(storeName, METRICS_SCOPE, RETENTION_PERIOD, SEGMENT_INTERVAL);
         segments.openExisting(context, -1L);
     }

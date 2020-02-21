@@ -17,7 +17,6 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.MetricName;
-import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.KeyValue;
@@ -29,8 +28,7 @@ import org.apache.kafka.streams.kstream.Merger;
 import org.apache.kafka.streams.kstream.SessionWindows;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.Processor;
-import org.apache.kafka.streams.processor.TaskId;
-import org.apache.kafka.streams.processor.internals.ProcessorNode;
+import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.streams.state.KeyValueIterator;
@@ -83,16 +81,7 @@ public class KStreamSessionWindowAggregateProcessorTest {
 
     @Before
     public void initializeStore() {
-        context = new MockInternalProcessorContext(
-            StreamsTestUtils.getStreamsConfig(),
-            new TaskId(0, 0),
-            new LogContext("testCache "),
-            100000L
-        );
-        context.setCurrentNode(new ProcessorNode<>("TESTING_NODE"));
-        context.setRecordContext(
-            new ProcessorRecordContext(0L, 0L, 0, "topic", new RecordHeaders())
-        );
+        context = new MockInternalProcessorContext(new LogContext("testCache "), 100000L);
         initStore(true);
         processor.init(context);
     }
@@ -359,7 +348,7 @@ public class KStreamSessionWindowAggregateProcessorTest {
     }
 
     private void shouldLogAndMeterWhenSkippingNullKeyWithBuiltInMetrics(final String builtInMetricsVersion) {
-        final MockInternalProcessorContext context = createInternalMockProcessorContext(builtInMetricsVersion);
+        final InternalProcessorContext context = createInternalMockProcessorContext(builtInMetricsVersion);
         processor.init(context);
         context.setRecordContext(
             new ProcessorRecordContext(-1, -2, -3, "topic", null)
@@ -397,7 +386,7 @@ public class KStreamSessionWindowAggregateProcessorTest {
 
     private void shouldLogAndMeterWhenSkippingLateRecordWithZeroGrace(final String builtInMetricsVersion) {
         final LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
-        final MockInternalProcessorContext context = createInternalMockProcessorContext(builtInMetricsVersion);
+        final InternalProcessorContext context = createInternalMockProcessorContext(builtInMetricsVersion);
         final Processor<String, String> processor = new KStreamSessionWindowAggregate<>(
             SessionWindows.with(ofMillis(10L)).grace(ofMillis(0L)),
             STORE_NAME,
@@ -490,7 +479,7 @@ public class KStreamSessionWindowAggregateProcessorTest {
 
     private void shouldLogAndMeterWhenSkippingLateRecordWithNonzeroGrace(final String builtInMetricsVersion) {
         final LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
-        final MockInternalProcessorContext context = createInternalMockProcessorContext(builtInMetricsVersion);
+        final InternalProcessorContext context = createInternalMockProcessorContext(builtInMetricsVersion);
         final Processor<String, String> processor = new KStreamSessionWindowAggregate<>(
             SessionWindows.with(ofMillis(10L)).grace(ofMillis(1L)),
             STORE_NAME,
@@ -580,19 +569,10 @@ public class KStreamSessionWindowAggregateProcessorTest {
             hasItem("Skipping record for expired window. key=[Late1] topic=[topic] partition=[-3] offset=[-2] timestamp=[0] window=[0,0] expiration=[1] streamTime=[2]"));
     }
 
-    private static MockInternalProcessorContext createInternalMockProcessorContext(final String builtInMetricsVersion) {
+    private static InternalProcessorContext createInternalMockProcessorContext(final String builtInMetricsVersion) {
         final Properties streamsConfig = StreamsTestUtils.getStreamsConfig();
         streamsConfig.setProperty(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, builtInMetricsVersion);
-        final MockInternalProcessorContext context = new MockInternalProcessorContext(
-            streamsConfig,
-            new TaskId(0, 0),
-            new LogContext("testCache "),
-            100000L
-        );
-        context.setCurrentNode(new ProcessorNode<>("TESTING_NODE"));
-        context.setRecordContext(
-            new ProcessorRecordContext(0L, 0L, 0, "topic", new RecordHeaders())
-        );
+        final MockInternalProcessorContext context = new MockInternalProcessorContext(streamsConfig);
 
         final StoreBuilder<SessionStore<String, Long>> storeBuilder =
             Stores.sessionStoreBuilder(

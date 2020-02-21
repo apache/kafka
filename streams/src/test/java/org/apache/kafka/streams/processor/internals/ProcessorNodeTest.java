@@ -26,13 +26,11 @@ import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.test.MockInternalProcessorContext;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.junit.Test;
 
-import java.io.File;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -111,7 +109,7 @@ public class ProcessorNodeTest {
     private void testMetrics(final String builtInMetricsVersion) {
         final Properties properties = StreamsTestUtils.getStreamsConfig();
         properties.put(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, builtInMetricsVersion);
-        final InternalProcessorContext context = new MockInternalProcessorContext(properties, new TaskId(0, 0), (File) null);
+        final InternalProcessorContext context = new MockInternalProcessorContext(properties);
         final StreamsMetricsImpl metrics = context.metrics();
         final ProcessorNode<Object, Object> node = new ProcessorNode<>("name", new NoOpProcessor(), Collections.emptySet());
         node.init(context);
@@ -197,7 +195,7 @@ public class ProcessorNodeTest {
     public void testTopologyLevelClassCastExceptionDirect() {
         final Properties properties = StreamsTestUtils.getStreamsConfig();
         properties.put(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, StreamsConfig.METRICS_LATEST);
-        final InternalProcessorContext context = new MockInternalProcessorContext(properties, new TaskId(0, 0), (File) null);
+        final InternalProcessorContext context = new MockInternalProcessorContext(properties);
         final ProcessorNode<Object, Object> node = new ProcessorNode<>("name", new ClassCastProcessor(), Collections.emptySet());
         node.init(context);
         final StreamsException se = assertThrows(StreamsException.class, () -> node.process("aKey", "aValue"));

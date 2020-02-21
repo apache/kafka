@@ -20,7 +20,6 @@ import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
@@ -28,13 +27,11 @@ import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.SessionWindow;
 import org.apache.kafka.streams.processor.StateRestoreListener;
-import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.test.MockInternalProcessorContext;
-import org.apache.kafka.test.MockRecordCollector;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
@@ -122,14 +119,7 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
         bytesStore = getBytesStore();
 
         stateDir = TestUtils.tempDirectory();
-        context = new MockInternalProcessorContext(
-                StreamsTestUtils.getStreamsConfig(),
-                new TaskId(0, 0),
-                new LogContext("testCache "),
-                0,
-                stateDir
-        );
-        context.setRecordCollector(new MockRecordCollector());
+        context = new MockInternalProcessorContext(stateDir);
         bytesStore.init(context, bytesStore);
     }
 
@@ -420,11 +410,7 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
         final Properties streamsConfig = StreamsTestUtils.getStreamsConfig();
         streamsConfig.setProperty(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, builtInMetricsVersion);
         final AbstractRocksDBSegmentedBytesStore<S> bytesStore = getBytesStore();
-        final InternalProcessorContext context = new MockInternalProcessorContext(
-                streamsConfig,
-                new TaskId(0, 0),
-                TestUtils.tempDirectory()
-        );
+        final InternalProcessorContext context = new MockInternalProcessorContext(streamsConfig);
         bytesStore.init(context, bytesStore);
 
         // write a record to advance stream time, with a high enough timestamp

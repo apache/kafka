@@ -50,7 +50,6 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.Windowed;
-import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
@@ -100,11 +99,7 @@ public abstract class WindowBytesStoreTest {
         final Properties properties = new Properties();
         properties.put(StreamsConfig.APPLICATION_ID_CONFIG, "");
         properties.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "");
-        context = new MockInternalProcessorContext(
-                properties,
-                new TaskId(0, 0),
-                baseDir
-        );
+        context = new MockInternalProcessorContext(properties, baseDir);
         context.setRecordCollector(recordCollector);
         context.setTimestamp(1L);
 

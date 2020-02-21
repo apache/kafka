@@ -247,7 +247,7 @@ public class KeyValueStoreTestDriver<K, V> {
         props.put(StreamsConfig.ROCKSDB_CONFIG_SETTER_CLASS_CONFIG, RocksDBKeyValueStoreTest.TheRocksDbConfigSetter.class);
         props.put(StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG, "DEBUG");
 
-        context = new MockInternalProcessorContext(props, new TaskId(0, 0), stateDir) {
+        context = new MockInternalProcessorContext(props, stateDir) {
             ThreadCache cache = new ThreadCache(new LogContext("testCache "), 1024 * 1024L, metrics());
 
             @Override

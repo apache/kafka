@@ -101,7 +101,7 @@ public class CachingWindowStoreTest {
         cachingStore.setFlushListener(cacheListener, false);
         cache = new ThreadCache(new LogContext("testCache "), MAX_CACHE_SIZE_BYTES, new MockStreamsMetrics(new Metrics()));
         topic = "topic";
-        context = new MockInternalProcessorContext(cache);
+        context = new MockInternalProcessorContext(new MockStreamsMetrics(new Metrics()), cache);
         context.setRecordContext(new ProcessorRecordContext(DEFAULT_TIMESTAMP, 0, 0, topic, null));
         cachingStore.init(context, cachingStore);
     }

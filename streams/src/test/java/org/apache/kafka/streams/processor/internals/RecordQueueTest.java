@@ -35,7 +35,6 @@ import org.apache.kafka.streams.processor.LogAndSkipOnInvalidTimestamp;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.MockInternalProcessorContext;
-import org.apache.kafka.test.MockRecordCollector;
 import org.apache.kafka.test.MockSourceNode;
 import org.apache.kafka.test.MockTimestampExtractor;
 import org.apache.kafka.test.StreamsTestUtils;
@@ -72,7 +71,6 @@ public class RecordQueueTest {
         properties.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.BytesSerde.class);
         properties.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.BytesSerde.class);
         context = new MockInternalProcessorContext(properties);
-        context.setRecordCollector(new MockRecordCollector());
         final Deserializer<Integer> intDeserializer = new IntegerDeserializer();
         mockSourceNodeWithMetrics = new MockSourceNode<>(new String[]{"topic"}, intDeserializer, intDeserializer);
         final TimestampExtractor timestampExtractor = new MockTimestampExtractor();

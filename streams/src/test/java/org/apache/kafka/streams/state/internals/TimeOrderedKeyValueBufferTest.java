@@ -27,17 +27,15 @@ import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.internals.Change;
 import org.apache.kafka.streams.kstream.internals.FullChangeSerde;
-import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.RecordBatchingStateRestoreCallback;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.internals.TimeOrderedKeyValueBuffer.Eviction;
 import org.apache.kafka.test.MockInternalProcessorContext;
 import org.apache.kafka.test.MockRecordCollector;
-import org.apache.kafka.test.TestUtils;
+import org.apache.kafka.test.StreamsTestUtils;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
@@ -47,7 +45,6 @@ import java.nio.ByteBuffer;
 import java.util.Collection;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.Properties;
 import java.util.Random;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
@@ -99,18 +96,8 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
     }
 
     private static MockInternalProcessorContext makeContext() {
-        final Properties properties = new Properties();
-        properties.setProperty(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID);
-        properties.setProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "");
-
-        final TaskId taskId = new TaskId(0, 0);
-
-        final MockInternalProcessorContext context = new MockInternalProcessorContext(properties, taskId, TestUtils.tempDirectory());
-        context.setRecordCollector(new MockRecordCollector());
-
-        return context;
+        return new MockInternalProcessorContext(StreamsTestUtils.getStreamsConfig(APP_ID));
     }
-
 
     private static void cleanup(final MockInternalProcessorContext context, final TimeOrderedKeyValueBuffer<String, String> buffer) {
         try {
