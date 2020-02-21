@@ -46,13 +46,11 @@ RUN echo 'PermitUserEnvironment yes' >> /etc/ssh/sshd_config
 # Install binary test dependencies.
 # we use the same versions as in vagrant/base.sh
 ARG KAFKA_MIRROR="https://s3-us-west-2.amazonaws.com/kafka-packages"
-ARG MVN_MIRROR="https://repo1.maven.org/maven2"
 RUN mkdir -p "/opt/kafka-0.8.2.2" && chmod a+rw /opt/kafka-0.8.2.2 && curl -s "$KAFKA_MIRROR/kafka_2.11-0.8.2.2.tgz" | tar xz --strip-components=1 -C "/opt/kafka-0.8.2.2"
 RUN mkdir -p "/opt/kafka-0.9.0.1" && chmod a+rw /opt/kafka-0.9.0.1 && curl -s "$KAFKA_MIRROR/kafka_2.11-0.9.0.1.tgz" | tar xz --strip-components=1 -C "/opt/kafka-0.9.0.1"
 RUN mkdir -p "/opt/kafka-0.10.0.1" && chmod a+rw /opt/kafka-0.10.0.1 && curl -s "$KAFKA_MIRROR/kafka_2.11-0.10.0.1.tgz" | tar xz --strip-components=1 -C "/opt/kafka-0.10.0.1"
 RUN mkdir -p "/opt/kafka-0.10.1.1" && chmod a+rw /opt/kafka-0.10.1.1 && curl -s "$KAFKA_MIRROR/kafka_2.11-0.10.1.1.tgz" | tar xz --strip-components=1 -C "/opt/kafka-0.10.1.1"
 RUN mkdir -p "/opt/kafka-0.10.2.2" && chmod a+rw /opt/kafka-0.10.2.2 && curl -s "$KAFKA_MIRROR/kafka_2.11-0.10.2.2.tgz" | tar xz --strip-components=1 -C "/opt/kafka-0.10.2.2"
-RUN if [ "x$jdk_version" = "xopenjdk:11" ] ; then chmod a+wr /opt/kafka-0.10.2.2/libs && curl -s "$MVN_MIRROR/com/sun/xml/bind/jaxb-impl/2.3.2/jaxb-impl-2.3.2.jar" -o /opt/kafka-0.10.2.2/libs/jaxb-impl-2.3.2.jar ; fi
 RUN mkdir -p "/opt/kafka-0.11.0.3" && chmod a+rw /opt/kafka-0.11.0.3 && curl -s "$KAFKA_MIRROR/kafka_2.11-0.11.0.3.tgz" | tar xz --strip-components=1 -C "/opt/kafka-0.11.0.3"
 RUN mkdir -p "/opt/kafka-1.0.2" && chmod a+rw /opt/kafka-1.0.2 && curl -s "$KAFKA_MIRROR/kafka_2.11-1.0.2.tgz" | tar xz --strip-components=1 -C "/opt/kafka-1.0.2"
 RUN mkdir -p "/opt/kafka-1.1.1" && chmod a+rw /opt/kafka-1.1.1 && curl -s "$KAFKA_MIRROR/kafka_2.11-1.1.1.tgz" | tar xz --strip-components=1 -C "/opt/kafka-1.1.1"
@@ -61,6 +59,13 @@ RUN mkdir -p "/opt/kafka-2.1.1" && chmod a+rw /opt/kafka-2.1.1 && curl -s "$KAFK
 RUN mkdir -p "/opt/kafka-2.2.2" && chmod a+rw /opt/kafka-2.2.2 && curl -s "$KAFKA_MIRROR/kafka_2.12-2.2.2.tgz" | tar xz --strip-components=1 -C "/opt/kafka-2.2.2"
 RUN mkdir -p "/opt/kafka-2.3.1" && chmod a+rw /opt/kafka-2.3.1 && curl -s "$KAFKA_MIRROR/kafka_2.12-2.3.1.tgz" | tar xz --strip-components=1 -C "/opt/kafka-2.3.1"
 RUN mkdir -p "/opt/kafka-2.4.0" && chmod a+rw /opt/kafka-2.4.0 && curl -s "$KAFKA_MIRROR/kafka_2.12-2.4.0.tgz" | tar xz --strip-components=1 -C "/opt/kafka-2.4.0"
+
+# Install jars missing on JDK11.
+ARG MVN_MIRROR="https://repo1.maven.org/maven2"
+RUN if [ "x$jdk_version" = "xopenjdk:11" ] ; then chmod a+wr /opt/kafka-0.10.1.1/libs && curl -s "$MVN_MIRROR/com/sun/xml/bind/jaxb-impl/2.3.1/jaxb-impl-2.3.1.jar" -o /opt/kafka-0.10.1.1/libs/jaxb-impl-2.3.1.jar ; fi
+RUN if [ "x$jdk_version" = "xopenjdk:11" ] ; then chmod a+wr /opt/kafka-0.10.2.2/libs && curl -s "$MVN_MIRROR/com/sun/xml/bind/jaxb-impl/2.3.1/jaxb-impl-2.3.1.jar" -o /opt/kafka-0.10.2.2/libs/jaxb-impl-2.3.1.jar ; fi
+RUN if [ "x$jdk_version" = "xopenjdk:11" ] ; then curl -s "$MVN_MIRROR/javax/xml/bind/jaxb-api/2.3.1/jaxb-api-2.3.1.jar" -o /opt/kafka-0.10.1.1/libs/jaxb-api-2.3.1.jar ; fi
+RUN if [ "x$jdk_version" = "xopenjdk:11" ] ; then curl -s "$MVN_MIRROR/javax/xml/bind/jaxb-api/2.3.1/jaxb-api-2.3.1.jar" -o /opt/kafka-0.10.1.1/libs/jaxb-api-2.3.1.jar ; fi
 
 # Streams test dependencies
 RUN curl -s "$KAFKA_MIRROR/kafka-streams-0.10.0.1-test.jar" -o /opt/kafka-0.10.0.1/libs/kafka-streams-0.10.0.1-test.jar
