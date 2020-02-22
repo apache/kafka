@@ -16,11 +16,15 @@
  */
 package org.apache.kafka.test;
 
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.header.internals.RecordHeader;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.AbstractNotifyingRestoreCallback;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
@@ -28,6 +32,8 @@ import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.internals.CompositeRestoreListener;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
+import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
+import org.apache.kafka.streams.processor.internals.RecordBatchingStateRestoreCallback;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.Version;
 import org.apache.kafka.streams.state.internals.ThreadCache;
@@ -37,7 +43,9 @@ import org.junit.Assert;
 import org.junit.Test;
 
 import java.io.File;
+import java.util.Arrays;
 import java.util.Collections;
+import java.util.List;
 import java.util.Properties;
 
 public class MockInternalProcessorContextTest {
@@ -91,7 +99,7 @@ public class MockInternalProcessorContextTest {
 
         final InternalProcessorContext context = new MockInternalProcessorContext(properties);
 
-        Assert.assertEquals(new File("state-dir").getAbsolutePath(), context.stateDir().getAbsolutePath());
+        Assert.assertEquals(new File(stateDir).getAbsolutePath(), context.stateDir().getAbsolutePath());
     }
 
     @Test
@@ -147,7 +155,7 @@ public class MockInternalProcessorContextTest {
             Assert.assertEquals(0L, startingOffset.getValue().longValue());
             Assert.assertEquals(0L, endingOffset.getValue().longValue());
             return null;
-        }).once();
+        });
         final Capture<Long> totalRestoredCapture = Capture.newInstance();
         stateRestoreListener.onRestoreEnd(
                 EasyMock.capture(topicPartitionCapture),
@@ -159,7 +167,7 @@ public class MockInternalProcessorContextTest {
             Assert.assertEquals(storeName, storeNameCapture.getValue());
             Assert.assertEquals(0L, totalRestoredCapture.getValue().longValue());
             return null;
-        }).once();
+        });
         EasyMock.replay(stateRestoreListener);
 
         final MockInternalProcessorContext context = new MockInternalProcessorContext();
@@ -167,6 +175,40 @@ public class MockInternalProcessorContextTest {
         context.restore(storeName, Collections.emptyList());
 
         EasyMock.verify(stateRestoreListener);
+    }
+
+    @Test
+    public void shouldRestoreBatch() {
+        final String storeName = "store-name";
+        final RecordBatchingStateRestoreCallback callback = EasyMock.mock(RecordBatchingStateRestoreCallback.class);
+        final List<KeyValue<byte[], byte[]>> changelog = Arrays.asList(
+                new KeyValue<>("key1".getBytes(), "value1".getBytes()),
+                new KeyValue<>("key2".getBytes(), "value2".getBytes())
+        );
+        Capture<List<ConsumerRecord<byte[], byte[]>>> recordsCapture = Capture.newInstance();
+        callback.restoreBatch(EasyMock.capture(recordsCapture));
+        EasyMock.expectLastCall().andAnswer(() -> {
+            final List<ConsumerRecord<byte[], byte[]>> records = recordsCapture.getValue();
+            Assert.assertEquals(records.size(), changelog.size());
+            for (int i = 0; i < records.size(); i++) {
+                final ConsumerRecord<byte[], byte[]> consumerRecord = records.get(i);
+                final KeyValue<byte[], byte[]> keyValue = changelog.get(i);
+                Assert.assertEquals(MockInternalProcessorContext.DEFAULT_TOPIC, consumerRecord.topic());
+                Assert.assertEquals(MockInternalProcessorContext.DEFAULT_PARTITION, consumerRecord.partition());
+                Assert.assertEquals(MockInternalProcessorContext.DEFAULT_OFFSET, consumerRecord.offset());
+                Assert.assertEquals(keyValue.key, consumerRecord.key());
+                Assert.assertEquals(keyValue.value, consumerRecord.value());
+            }
+            return null;
+        });
+        final MockInternalProcessorContext context = new MockInternalProcessorContext();
+        context.register(new MockKeyValueStore(storeName, false), callback);
+
+        EasyMock.replay(callback);
+
+        context.restore(storeName, changelog);
+
+        EasyMock.verify(callback);
     }
 
     @Test
@@ -215,6 +257,29 @@ public class MockInternalProcessorContextTest {
         final MockInternalProcessorContext context = new MockInternalProcessorContext(config);
 
         Assert.assertEquals(Serdes.StringSerde.class, context.valueSerde().getClass());
+    }
+
+    @Test
+    public void shouldSetRecordContext() {
+        final InternalProcessorContext context = new MockInternalProcessorContext();
+
+        final ProcessorRecordContext processorRecordContext = new ProcessorRecordContext(
+                1L,
+                1L,
+                1,
+                "topic",
+                new RecordHeaders(Arrays.asList(
+                        new RecordHeader("key1", "value1".getBytes()),
+                        new RecordHeader("key2", "value2".getBytes())
+                ))
+        );
+        context.setRecordContext(processorRecordContext);
+
+        Assert.assertEquals(processorRecordContext.timestamp(), context.timestamp());
+        Assert.assertEquals(processorRecordContext.offset(), context.offset());
+        Assert.assertEquals(processorRecordContext.partition(), context.partition());
+        Assert.assertEquals(processorRecordContext.topic(), context.topic());
+        Assert.assertEquals(processorRecordContext.headers(), context.headers());
     }
 
     private static void verifyDefaultRecordCollector(final MockInternalProcessorContext context) {

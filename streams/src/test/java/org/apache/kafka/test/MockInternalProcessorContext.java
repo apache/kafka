@@ -121,10 +121,10 @@ public class MockInternalProcessorContext extends MockProcessorContext implement
 
     private void init(final StreamsMetricsImpl metrics, final ThreadCache threadCache) {
         this.metrics = metrics;
-        this.metrics().setRocksDBMetricsRecordingTrigger(new RocksDBMetricsRecordingTrigger());
+        metrics.setRocksDBMetricsRecordingTrigger(new RocksDBMetricsRecordingTrigger());
         setCurrentNode(new ProcessorNode<>(DEFAULT_PROCESSOR_NODE_NAME));
         this.threadCache = threadCache;
-        recordCollector = new MockRecordCollector();
+        setRecordCollector(new MockRecordCollector());
         keySerde = super.keySerde();
         valueSerde = super.valueSerde();
         setRecordContext(new ProcessorRecordContext(DEFAULT_TIMESTAMP, DEFAULT_OFFSET, DEFAULT_PARTITION, DEFAULT_TOPIC, DEFAULT_HEADERS));
@@ -216,11 +216,11 @@ public class MockInternalProcessorContext extends MockProcessorContext implement
         final RecordBatchingStateRestoreCallback restoreCallback = adapt(restoreCallbacks.get(storeName));
         final StateRestoreListener restoreListener = getRestoreListener(storeName);
 
-        restoreListener.onRestoreStart(null, storeName, 0L, 0L);
+        restoreListener.onRestoreStart(null, storeName, DEFAULT_OFFSET, DEFAULT_OFFSET);
 
         final List<ConsumerRecord<byte[], byte[]>> records = new ArrayList<>();
         for (final KeyValue<byte[], byte[]> keyValue : changeLog) {
-            records.add(new ConsumerRecord<>("", 0, 0L, keyValue.key, keyValue.value));
+            records.add(new ConsumerRecord<>(DEFAULT_TOPIC, DEFAULT_PARTITION, DEFAULT_OFFSET, keyValue.key, keyValue.value));
         }
 
         restoreCallback.restoreBatch(records);
