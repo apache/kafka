@@ -1581,7 +1581,7 @@ public class StreamThreadTest {
 
         taskManager.handleLostAll();
         EasyMock.expectLastCall()
-            .andThrow(new RuntimeException("Task lost exception"));
+            .andThrow(new TaskMigratedException("Task lost exception", new RuntimeException()));
 
         EasyMock.replay(taskManager);
 
@@ -1591,9 +1591,10 @@ public class StreamThreadTest {
             config,
             null,
             null,
+            null,
             consumer,
             consumer,
-            changelogReader,
+            null,
             null,
             taskManager,
             streamsMetrics,
@@ -1634,9 +1635,10 @@ public class StreamThreadTest {
             config,
             null,
             null,
+            null,
             consumer,
             consumer,
-            changelogReader,
+            null,
             null,
             taskManager,
             streamsMetrics,

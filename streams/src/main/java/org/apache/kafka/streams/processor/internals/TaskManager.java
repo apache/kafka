@@ -318,6 +318,8 @@ public class TaskManager {
      * Closes active tasks as zombies, as these partitions have been lost and are no longer owned.
      * NOTE this method assumes that when it is called, EVERY task/partition has been lost and must
      * be closed as a zombie.
+     *
+     * @throws TaskMigratedException if the task producer got fenced (EOS only)
      */
     void handleLostAll() {
         log.debug("Closing lost active tasks as zombies.");
