@@ -1716,6 +1716,20 @@ public class InternalTopologyBuilder {
             this.repartitionSourceTopics = repartitionSourceTopics;
         }
 
+        /**
+         * Returns the config for any changelogs that must be prepared for this topic group, ie excluding any source
+         * topics that are reused as a changelog
+         */
+        public Set<InternalTopicConfig> nonSourceChangelogTopics() {
+            final Set<InternalTopicConfig> topicConfigs = new HashSet<>();
+            for (final Map.Entry<String, InternalTopicConfig> changelogTopicEntry : stateChangelogTopics.entrySet()) {
+                if (!sourceTopics.contains(changelogTopicEntry.getKey())) {
+                    topicConfigs.add(changelogTopicEntry.getValue());
+                }
+            }
+            return topicConfigs;
+        }
+
         @Override
         public boolean equals(final Object o) {
             if (o instanceof TopicsInfo) {

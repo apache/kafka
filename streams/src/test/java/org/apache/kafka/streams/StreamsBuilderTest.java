@@ -371,7 +371,7 @@ public class StreamsBuilderTest {
     }
 
     @Test
-    public void shouldReuseSourceTopicAsChangelogsWithOptimization20() {
+    public void shouldReuseSourceTopicAsChangelogsWithOptimization() {
         final String topic = "topic";
         builder.table(topic, Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("store"));
         final Properties props = StreamsTestUtils.getStreamsConfig();
@@ -391,7 +391,7 @@ public class StreamsBuilderTest {
             internalTopologyBuilder.stateStores().get("store").loggingEnabled(),
             equalTo(false));
         assertThat(
-            internalTopologyBuilder.topicGroups().get(0).stateChangelogTopics.isEmpty(),
+            internalTopologyBuilder.topicGroups().get(0).nonSourceChangelogTopics().isEmpty(),
             equalTo(true));
     }
 
