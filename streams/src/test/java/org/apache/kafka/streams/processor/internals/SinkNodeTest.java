@@ -51,7 +51,7 @@ public class SinkNodeTest {
         }
     };
 
-    private final MockInternalProcessorContext context;
+    private MockInternalProcessorContext context;
     private final SinkNode<byte[], byte[]> sink = new SinkNode<>("anyNodeName",
             new StaticTopicNameExtractor<>("any-output-topic"), anySerializer, anySerializer, null);
 
@@ -59,16 +59,13 @@ public class SinkNodeTest {
     @SuppressWarnings("unchecked")
     private final SinkNode<Object, Object> illTypedSink = (SinkNode) sink;
 
-    public SinkNodeTest() {
+    @Before
+    public void before() {
         final Properties properties = StreamsTestUtils.getStreamsConfig();
         properties.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.BytesSerde.class);
         properties.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.BytesSerde.class);
         context = new MockInternalProcessorContext(properties);
         context.setRecordCollector(recordCollector);
-    }
-
-    @Before
-    public void before() {
         sink.init(context);
     }
 

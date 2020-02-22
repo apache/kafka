@@ -57,15 +57,16 @@ import static org.junit.Assert.assertTrue;
 public class RecordQueueTest {
     private final Serializer<Integer> intSerializer = new IntegerSerializer();
 
-    final MockInternalProcessorContext context;
-    private final MockSourceNode mockSourceNodeWithMetrics;
-    private final RecordQueue queue;
-    private final RecordQueue queueThatSkipsDeserializeErrors;
+    MockInternalProcessorContext context;
+    private MockSourceNode mockSourceNodeWithMetrics;
+    private RecordQueue queue;
+    private RecordQueue queueThatSkipsDeserializeErrors;
 
     private final byte[] recordValue = intSerializer.serialize(null, 10);
     private final byte[] recordKey = intSerializer.serialize(null, 1);
 
-    public RecordQueueTest() {
+    @Before
+    public void before() {
         final Properties properties = StreamsTestUtils.getStreamsConfig();
         properties.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.BytesSerde.class);
         properties.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.BytesSerde.class);
@@ -89,10 +90,6 @@ public class RecordQueueTest {
                 context,
                 new LogContext()
         );
-    }
-
-    @Before
-    public void before() {
         mockSourceNodeWithMetrics.init(context);
     }
 
