@@ -348,7 +348,7 @@ public class KStreamSessionWindowAggregateProcessorTest {
     }
 
     private void shouldLogAndMeterWhenSkippingNullKeyWithBuiltInMetrics(final String builtInMetricsVersion) {
-        final InternalProcessorContext context = createInternalMockProcessorContext(builtInMetricsVersion);
+        final InternalProcessorContext context = createInternalProcessorContext(builtInMetricsVersion);
         processor.init(context);
         context.setRecordContext(
             new ProcessorRecordContext(-1, -2, -3, "topic", null)
@@ -386,7 +386,7 @@ public class KStreamSessionWindowAggregateProcessorTest {
 
     private void shouldLogAndMeterWhenSkippingLateRecordWithZeroGrace(final String builtInMetricsVersion) {
         final LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
-        final InternalProcessorContext context = createInternalMockProcessorContext(builtInMetricsVersion);
+        final InternalProcessorContext context = createInternalProcessorContext(builtInMetricsVersion);
         final Processor<String, String> processor = new KStreamSessionWindowAggregate<>(
             SessionWindows.with(ofMillis(10L)).grace(ofMillis(0L)),
             STORE_NAME,
@@ -479,7 +479,7 @@ public class KStreamSessionWindowAggregateProcessorTest {
 
     private void shouldLogAndMeterWhenSkippingLateRecordWithNonzeroGrace(final String builtInMetricsVersion) {
         final LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
-        final InternalProcessorContext context = createInternalMockProcessorContext(builtInMetricsVersion);
+        final InternalProcessorContext context = createInternalProcessorContext(builtInMetricsVersion);
         final Processor<String, String> processor = new KStreamSessionWindowAggregate<>(
             SessionWindows.with(ofMillis(10L)).grace(ofMillis(1L)),
             STORE_NAME,
@@ -569,7 +569,7 @@ public class KStreamSessionWindowAggregateProcessorTest {
             hasItem("Skipping record for expired window. key=[Late1] topic=[topic] partition=[-3] offset=[-2] timestamp=[0] window=[0,0] expiration=[1] streamTime=[2]"));
     }
 
-    private static InternalProcessorContext createInternalMockProcessorContext(final String builtInMetricsVersion) {
+    private static InternalProcessorContext createInternalProcessorContext(final String builtInMetricsVersion) {
         final Properties streamsConfig = StreamsTestUtils.getStreamsConfig();
         streamsConfig.setProperty(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, builtInMetricsVersion);
         final MockInternalProcessorContext context = new MockInternalProcessorContext(streamsConfig);
@@ -580,7 +580,7 @@ public class KStreamSessionWindowAggregateProcessorTest {
                 Serdes.String(),
                 Serdes.Long())
                 .withLoggingDisabled();
-        final SessionStore sessionStore = storeBuilder.build();
+        final SessionStore<String, Long> sessionStore = storeBuilder.build();
         sessionStore.init(context, sessionStore);
         return context;
     }
