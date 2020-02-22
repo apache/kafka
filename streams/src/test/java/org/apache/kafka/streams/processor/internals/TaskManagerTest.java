@@ -125,9 +125,10 @@ public class TaskManagerTest {
                                       streamsMetrics,
                                       activeTaskCreator,
                                       standbyTaskCreator,
+                                      new HashMap<>(),
                                       topologyBuilder,
                                       adminClient);
-        taskManager.setConsumer(consumer);
+        taskManager.setMainConsumer(consumer);
     }
 
     @Test

@@ -51,7 +51,7 @@ import java.util.stream.Collectors;
  * ChangelogReader is created and maintained by the stream thread and used for both updating standby tasks and
  * restoring active tasks. It manages the restore consumer, including its assigned partitions, when to pause / resume
  * these partitions, etc.
- *
+ * <p>
  * The reader also maintains the source of truth for restoration state: only active tasks restoring changelog could
  * be completed, while standby tasks updating changelog would always be in restoring state after being initialized.
  */
@@ -76,8 +76,10 @@ public class StoreChangelogReader implements ChangelogReader {
         }
     }
 
-    // NOTE we assume that the changelog read is used only for either 1) restoring active task
-    // or 2) updating standby task at a given time, but never doing both
+    // NOTE we assume that the changelog reader is used only for either
+    //   1) restoring active task or
+    //   2) updating standby task at a given time,
+    // but never doing both
     enum ChangelogReaderState {
         ACTIVE_RESTORING("ACTIVE_RESTORING"),
 
@@ -108,6 +110,7 @@ public class StoreChangelogReader implements ChangelogReader {
         //
         // the log-end-offset only needs to be updated once and only need to be for active tasks since for standby
         // tasks it would never "complete" based on the end-offset;
+        //
         // the committed-offset needs to be updated periodically for those standby tasks
         //
         // NOTE we do not book keep the current offset since we leverage state manager as its source of truth
@@ -136,10 +139,11 @@ public class StoreChangelogReader implements ChangelogReader {
         }
 
         private void transitTo(final ChangelogState newState) {
-            if (newState.prevStates.contains(changelogState.ordinal()))
+            if (newState.prevStates.contains(changelogState.ordinal())) {
                 changelogState = newState;
-            else
+            } else {
                 throw new IllegalStateException("Invalid transition from " + changelogState + " to " + newState);
+            }
         }
 
         @Override
@@ -171,7 +175,7 @@ public class StoreChangelogReader implements ChangelogReader {
         }
     }
 
-    private final static long DEFAULT_OFFSET_UPDATE_MS = 5 * 60 * 1000; // five minutes
+    private final static long DEFAULT_OFFSET_UPDATE_MS = Duration.ofMinutes(5L).toMillis();
 
     private ChangelogReaderState state;
 

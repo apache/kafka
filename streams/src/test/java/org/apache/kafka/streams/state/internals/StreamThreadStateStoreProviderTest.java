@@ -29,6 +29,7 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.TopologyWrapper;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.processor.internals.ProcessorTopology;
@@ -36,9 +37,9 @@ import org.apache.kafka.streams.processor.internals.RecordCollector;
 import org.apache.kafka.streams.processor.internals.RecordCollectorImpl;
 import org.apache.kafka.streams.processor.internals.StateDirectory;
 import org.apache.kafka.streams.processor.internals.StoreChangelogReader;
-import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.processor.internals.StreamTask;
 import org.apache.kafka.streams.processor.internals.StreamThread;
+import org.apache.kafka.streams.processor.internals.StreamsProducer;
 import org.apache.kafka.streams.processor.internals.Task;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
@@ -59,6 +60,7 @@ import org.junit.Test;
 import java.io.File;
 import java.io.IOException;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
@@ -66,7 +68,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.instanceOf;
@@ -324,13 +325,21 @@ public class StreamThreadStateStoreProviderTest {
                 clientSupplier.restoreConsumer,
                 new MockStateRestoreListener()),
             logContext);
+        final boolean eosEnabled = StreamsConfig.EXACTLY_ONCE.equals(streamsConfig.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG));
         final RecordCollector recordCollector = new RecordCollectorImpl(
-            taskId,
-            streamsConfig,
             logContext,
-            new MockStreamsMetrics(metrics),
+            taskId,
             clientSupplier.consumer,
-            id -> clientSupplier.getProducer(new HashMap<>()));
+            eosEnabled ?
+                new StreamsProducer(
+                    logContext,
+                    clientSupplier.getProducer(new HashMap<>()),
+                    streamsConfig.getString(StreamsConfig.APPLICATION_ID_CONFIG),
+                    taskId) :
+                new StreamsProducer(logContext, clientSupplier.getProducer(new HashMap<>())),
+            streamsConfig.defaultProductionExceptionHandler(),
+            eosEnabled,
+            new MockStreamsMetrics(metrics));
         return new StreamTask(
             taskId,
             partitions,
@@ -349,7 +358,7 @@ public class StreamThreadStateStoreProviderTest {
         EasyMock.expect(threadMock.isRunning()).andReturn(initialized);
         EasyMock.expect(threadMock.allTasks()).andStubReturn(tasks);
         EasyMock.expect(threadMock.activeTaskMap()).andStubReturn(tasks);
-        EasyMock.expect(threadMock.activeTasks()).andStubReturn(tasks.values().stream().collect(Collectors.toList()));
+        EasyMock.expect(threadMock.activeTasks()).andStubReturn(new ArrayList<>(tasks.values()));
         EasyMock.expect(threadMock.state()).andReturn(
             initialized ? StreamThread.State.RUNNING : StreamThread.State.PARTITIONS_ASSIGNED
         ).anyTimes();

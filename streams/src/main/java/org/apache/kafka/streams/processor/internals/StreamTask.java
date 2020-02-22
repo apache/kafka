@@ -74,7 +74,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     private final Time time;
     private final Logger log;
     private final String logPrefix;
-    private final Consumer<byte[], byte[]> consumer;
+    private final Consumer<byte[], byte[]> mainConsumer;
 
     // we want to abstract eos logic out of StreamTask, however
     // there's still an optimization that requires this info to be
@@ -104,7 +104,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     public StreamTask(final TaskId id,
                       final Set<TopicPartition> partitions,
                       final ProcessorTopology topology,
-                      final Consumer<byte[], byte[]> consumer,
+                      final Consumer<byte[], byte[]> mainConsumer,
                       final StreamsConfig config,
                       final StreamsMetricsImpl streamsMetrics,
                       final StateDirectory stateDirectory,
@@ -113,7 +113,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                       final ProcessorStateManager stateMgr,
                       final RecordCollector recordCollector) {
         super(id, topology, stateDirectory, stateMgr, partitions);
-        this.consumer = consumer;
+        this.mainConsumer = mainConsumer;
 
         final String threadIdPrefix = format("stream-thread [%s] ", Thread.currentThread().getName());
         logPrefix = threadIdPrefix + format("%s [%s] ", "task", id);
@@ -351,7 +351,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             Long offset = partitionGroup.headRecordOffset(partition);
             if (offset == null) {
                 try {
-                    offset = consumer.position(partition);
+                    offset = mainConsumer.position(partition);
                 } catch (final TimeoutException error) {
                     // the `consumer.position()` call should never block, because we know that we did process data
                     // for the requested partition and thus the consumer should have a valid local position
@@ -539,7 +539,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             // after processing this record, if its partition queue's buffered size has been
             // decreased to the threshold, we can then resume the consumption on this partition
             if (recordInfo.queue().size() == maxBufferedSize) {
-                consumer.resume(singleton(partition));
+                mainConsumer.resume(singleton(partition));
             }
         } catch (final StreamsException e) {
             throw e;
@@ -625,13 +625,14 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
 
     private void initializeMetadata() {
         try {
-            final Map<TopicPartition, OffsetAndMetadata> offsetsAndMetadata = consumer.committed(partitions).entrySet().stream()
+            final Map<TopicPartition, OffsetAndMetadata> offsetsAndMetadata = mainConsumer.committed(partitions).entrySet().stream()
                 .filter(e -> e.getValue() != null)
                 .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
             initializeTaskTime(offsetsAndMetadata);
         } catch (final TimeoutException e) {
             log.warn("Encountered {} while trying to fetch committed offsets, will retry initializing the metadata in the next loop." +
                 "\nConsider overwriting consumer config {} to a larger value to avoid timeout errors",
+                e.toString(),
                 ConsumerConfig.DEFAULT_API_TIMEOUT_MS_CONFIG);
 
             throw e;
@@ -740,7 +741,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         // if after adding these records, its partition queue's buffered size has been
         // increased beyond the threshold, we can then pause the consumption for this partition
         if (newQueueSize > maxBufferedSize) {
-            consumer.pause(singleton(partition));
+            mainConsumer.pause(singleton(partition));
         }
     }
 

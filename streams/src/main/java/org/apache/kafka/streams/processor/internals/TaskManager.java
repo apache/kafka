@@ -20,6 +20,7 @@ import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.DeleteRecordsResult;
 import org.apache.kafka.clients.admin.RecordsToDelete;
 import org.apache.kafka.clients.consumer.Consumer;
+import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.TimeoutException;
@@ -56,20 +57,22 @@ public class TaskManager {
     // activeTasks needs to be concurrent as it can be accessed
     // by QueryableState
     private final Logger log;
+    private final ChangelogReader changelogReader;
     private final UUID processId;
     private final String logPrefix;
-    private final InternalTopologyBuilder builder;
-    private final ChangelogReader changelogReader;
     private final StreamsMetricsImpl streamsMetrics;
     private final StreamThread.AbstractTaskCreator<? extends Task> activeTaskCreator;
     private final StreamThread.AbstractTaskCreator<? extends Task> standbyTaskCreator;
+    private final Map<TaskId, Producer<byte[], byte[]>> taskProducers;
+    private final InternalTopologyBuilder builder;
+    private final Admin adminClient;
 
     private final Map<TaskId, Task> tasks = new TreeMap<>();
     // materializing this relationship because the lookup is on the hot path
     private final Map<TopicPartition, Task> partitionToTask = new HashMap<>();
 
-    private final Admin adminClient;
-    private Consumer<byte[], byte[]> consumer;
+    private Consumer<byte[], byte[]> mainConsumer;
+
     private DeleteRecordsResult deleteRecordsResult;
 
     private boolean rebalanceInProgress = false;  // if we are in the middle of a rebalance, it is not safe to commit
@@ -80,23 +83,25 @@ public class TaskManager {
                 final StreamsMetricsImpl streamsMetrics,
                 final StreamThread.AbstractTaskCreator<? extends Task> activeTaskCreator,
                 final StreamThread.AbstractTaskCreator<? extends Task> standbyTaskCreator,
+                final Map<TaskId, Producer<byte[], byte[]>> taskProducers,
                 final InternalTopologyBuilder builder,
                 final Admin adminClient) {
-        this.builder = builder;
+        this.changelogReader = changelogReader;
         this.processId = processId;
         this.logPrefix = logPrefix;
-        this.adminClient = adminClient;
         this.streamsMetrics = streamsMetrics;
-        this.changelogReader = changelogReader;
         this.activeTaskCreator = activeTaskCreator;
         this.standbyTaskCreator = standbyTaskCreator;
+        this.taskProducers = taskProducers;
+        this.builder = builder;
+        this.adminClient = adminClient;
 
         final LogContext logContext = new LogContext(logPrefix);
         this.log = logContext.logger(getClass());
     }
 
-    void setConsumer(final Consumer<byte[], byte[]> consumer) {
-        this.consumer = consumer;
+    void setMainConsumer(final Consumer<byte[], byte[]> mainConsumer) {
+        this.mainConsumer = mainConsumer;
     }
 
     public UUID processId() {
@@ -116,7 +121,7 @@ public class TaskManager {
     void handleRebalanceComplete() {
         // we should pause consumer only within the listener since
         // before then the assignment has not been updated yet.
-        consumer.pause(consumer.assignment());
+        mainConsumer.pause(mainConsumer.assignment());
 
         rebalanceInProgress = false;
     }
@@ -184,6 +189,8 @@ public class TaskManager {
                     // We've already recorded the exception (which is the point of clean).
                     // Now, we should go ahead and complete the close because a half-closed task is no good to anyone.
                     task.closeDirty();
+                } finally {
+                    taskProducers.remove(task.id());
                 }
 
                 iterator.remove();
@@ -200,11 +207,11 @@ public class TaskManager {
         }
 
         if (!activeTasksToCreate.isEmpty()) {
-            activeTaskCreator.createTasks(consumer, activeTasksToCreate).forEach(this::addNewTask);
+            activeTaskCreator.createTasks(mainConsumer, activeTasksToCreate).forEach(this::addNewTask);
         }
 
         if (!standbyTasksToCreate.isEmpty()) {
-            standbyTaskCreator.createTasks(consumer, standbyTasksToCreate).forEach(this::addNewTask);
+            standbyTaskCreator.createTasks(mainConsumer, standbyTasksToCreate).forEach(this::addNewTask);
         }
 
         builder.addSubscribedTopicsFromAssignment(
@@ -231,6 +238,7 @@ public class TaskManager {
      *
      * @throws IllegalStateException If store gets registered after initialized is already finished
      * @throws StreamsException if the store's change log does not contain the partition
+     * @return {@code true} if all tasks are fully restored
      */
     boolean tryToCompleteRestoration() {
         boolean allRunning = true;
@@ -275,7 +283,7 @@ public class TaskManager {
 
         if (allRunning) {
             // we can call resume multiple times since it is idempotent.
-            consumer.resume(consumer.assignment());
+            mainConsumer.resume(mainConsumer.assignment());
         }
 
         return allRunning;
@@ -317,12 +325,18 @@ public class TaskManager {
         final Iterator<Task> iterator = tasks.values().iterator();
         while (iterator.hasNext()) {
             final Task task = iterator.next();
+            final Set<TopicPartition> inputPartitions = task.inputPartitions();
             // Even though we've apparently dropped out of the group, we can continue safely to maintain our
             // standby tasks while we rejoin.
             if (task.isActive()) {
                 cleanupTask(task);
                 task.closeDirty();
                 iterator.remove();
+                taskProducers.remove(task.id());
+            }
+
+            for (final TopicPartition inputPartition : inputPartitions) {
+                partitionToTask.remove(inputPartition);
             }
         }
     }
