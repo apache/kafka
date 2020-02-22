@@ -48,7 +48,7 @@ public class StickyTaskAssignor<ID> implements TaskAssignor<ID, TaskId> {
         this.allTaskIds = allTaskIds;
         this.standbyTaskIds = standbyTaskIds;
 
-        final int maxPairs = standbyTaskIds.size() * (standbyTaskIds.size() - 1) / 2;
+        final int maxPairs = allTaskIds.size() * (allTaskIds.size() - 1) / 2;
         taskPairs = new TaskPairs(maxPairs);
         mapPreviousTaskAssignment(clients);
     }
