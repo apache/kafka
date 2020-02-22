@@ -725,13 +725,12 @@ public class KafkaAdminClient extends AdminClient {
             tries++;
             nextAllowedTryMs = now + retryBackoffMs;
 
-
             // If the call has timed out, fail.
             if (calcTimeoutMsRemainingAsInt(now, deadlineMs) < 0) {
                 failWithTimeout(now, throwable);
                 return;
             }
-            // If the exception is not retryable, fail.
+            // If the exception is not retriable, fail.
             if (!(throwable instanceof RetriableException)) {
                 if (log.isDebugEnabled()) {
                     log.debug("{} failed with non-retriable exception after {} attempt(s)", this, tries,
@@ -785,7 +784,7 @@ public class KafkaAdminClient extends AdminClient {
 
         /**
          * Handle a failure. This will only be called if the failure exception was not
-         * retryable, or if we hit a timeout.
+         * retriable, or if we hit a timeout.
          *
          * @param throwable     The exception.
          */
@@ -1117,7 +1116,7 @@ public class KafkaAdminClient extends AdminClient {
                 }
 
                 // Handle the result of the call. This may involve retrying the call, if we got a
-                // retryible exception.
+                // retriable exception.
                 if (response.versionMismatch() != null) {
                     call.fail(now, response.versionMismatch());
                 } else if (response.wasDisconnected()) {
