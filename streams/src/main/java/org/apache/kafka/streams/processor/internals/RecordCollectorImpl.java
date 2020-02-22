@@ -157,12 +157,13 @@ public class RecordCollectorImpl implements RecordCollector {
             final String valueClass = value == null ? "unknown because value is null" : value.getClass().getName();
             throw new StreamsException(
                 String.format(
-                    "ClassCastException while producing data to a sink topic. " +
+                    "ClassCastException while producing data to topic %s. " +
                         "A serializer (key: %s / value: %s) is not compatible to the actual key or value type " +
                         "(key type: %s / value type: %s). " +
                         "Change the default Serdes in StreamConfig or provide correct Serdes via method parameters " +
                         "(for example if using the DSL, `#to(String topic, Produced<K, V> produced)` with " +
                         "`Produced.keySerde(WindowedSerdes.timeWindowedSerdeFrom(String.class))`).",
+                    topic,
                     keySerializer.getClass().getName(),
                     valueSerializer.getClass().getName(),
                     keyClass,

@@ -369,7 +369,7 @@ public class RecordCollectorTest {
         assertThat(
             expected.getMessage(),
             equalTo(
-                "ClassCastException while producing data to a sink topic. " +
+                "ClassCastException while producing data to topic topic. " +
                     "A serializer (key: org.apache.kafka.common.serialization.LongSerializer / value: org.apache.kafka.common.serialization.StringSerializer) " +
                     "is not compatible to the actual key or value type (key type: java.lang.String / value type: java.lang.String). " +
                     "Change the default Serdes in StreamConfig or provide correct Serdes via method parameters " +
@@ -397,7 +397,7 @@ public class RecordCollectorTest {
         assertThat(
             expected.getMessage(),
             equalTo(
-                "ClassCastException while producing data to a sink topic. " +
+                "ClassCastException while producing data to topic topic. " +
                     "A serializer (key: org.apache.kafka.common.serialization.LongSerializer / value: org.apache.kafka.common.serialization.StringSerializer) " +
                     "is not compatible to the actual key or value type (key type: java.lang.String / value type: unknown because value is null). " +
                     "Change the default Serdes in StreamConfig or provide correct Serdes via method parameters " +
@@ -425,7 +425,7 @@ public class RecordCollectorTest {
         assertThat(
             expected.getMessage(),
             equalTo(
-                "ClassCastException while producing data to a sink topic. " +
+                "ClassCastException while producing data to topic topic. " +
                     "A serializer (key: org.apache.kafka.common.serialization.StringSerializer / value: org.apache.kafka.common.serialization.LongSerializer) " +
                     "is not compatible to the actual key or value type (key type: java.lang.String / value type: java.lang.String). " +
                     "Change the default Serdes in StreamConfig or provide correct Serdes via method parameters " +
@@ -453,7 +453,7 @@ public class RecordCollectorTest {
         assertThat(
             expected.getMessage(),
             equalTo(
-                "ClassCastException while producing data to a sink topic. " +
+                "ClassCastException while producing data to topic topic. " +
                     "A serializer (key: org.apache.kafka.common.serialization.StringSerializer / value: org.apache.kafka.common.serialization.LongSerializer) " +
                     "is not compatible to the actual key or value type (key type: unknown because key is null / value type: java.lang.String). " +
                     "Change the default Serdes in StreamConfig or provide correct Serdes via method parameters " +
