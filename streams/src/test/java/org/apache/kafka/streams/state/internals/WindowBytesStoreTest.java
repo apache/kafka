@@ -95,9 +95,7 @@ public abstract class WindowBytesStoreTest {
         windowStore = buildWindowStore(RETENTION_PERIOD, WINDOW_SIZE, false, Serdes.Integer(), Serdes.String());
 
         recordCollector = new MockRecordCollector();
-        final Properties properties = new Properties();
-        properties.put(StreamsConfig.APPLICATION_ID_CONFIG, "");
-        properties.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "");
+        final Properties properties = StreamsTestUtils.getStreamsConfig();
         context = new MockInternalProcessorContext(properties, baseDir);
         context.setRecordCollector(recordCollector);
         context.setTimestamp(1L);
