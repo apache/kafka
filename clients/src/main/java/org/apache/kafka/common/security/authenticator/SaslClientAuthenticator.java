@@ -133,6 +133,8 @@ public class SaslClientAuthenticator implements Authenticator {
     private RequestHeader currentRequestHeader;
     // Version of SaslAuthenticate request/responses
     private short saslAuthenticateVersion;
+    // Version of SaslHandshake request/responses
+    private short saslHandshakeVersion;
 
     public SaslClientAuthenticator(Map<String, ?> configs,
                                    AuthenticateCallbackHandler callbackHandler,
@@ -213,13 +215,13 @@ public class SaslClientAuthenticator implements Authenticator {
                 if (apiVersionsResponse == null)
                     break;
                 else {
-                    saslAuthenticateVersion(apiVersionsResponse);
+                    setSaslAuthenticateAndHandshakeVersions(apiVersionsResponse);
                     reauthInfo.apiVersionsResponseReceivedFromBroker = apiVersionsResponse;
                     setSaslState(SaslState.SEND_HANDSHAKE_REQUEST);
                     // Fall through to send handshake request with the latest supported version
                 }
             case SEND_HANDSHAKE_REQUEST:
-                sendHandshakeRequest(reauthInfo.apiVersionsResponseReceivedFromBroker);
+                sendHandshakeRequest(saslHandshakeVersion);
                 setSaslState(SaslState.RECEIVE_HANDSHAKE_RESPONSE);
                 break;
             case RECEIVE_HANDSHAKE_RESPONSE:
@@ -236,11 +238,11 @@ public class SaslClientAuthenticator implements Authenticator {
                 setSaslState(SaslState.INTERMEDIATE);
                 break;
             case REAUTH_PROCESS_ORIG_APIVERSIONS_RESPONSE:
-                saslAuthenticateVersion(reauthInfo.apiVersionsResponseFromOriginalAuthentication);
+                setSaslAuthenticateAndHandshakeVersions(reauthInfo.apiVersionsResponseFromOriginalAuthentication);
                 setSaslState(SaslState.REAUTH_SEND_HANDSHAKE_REQUEST); // Will set immediately
                 // Fall through to send handshake request with the latest supported version
             case REAUTH_SEND_HANDSHAKE_REQUEST:
-                sendHandshakeRequest(reauthInfo.apiVersionsResponseFromOriginalAuthentication);
+                sendHandshakeRequest(saslHandshakeVersion);
                 setSaslState(SaslState.REAUTH_RECEIVE_HANDSHAKE_OR_OTHER_RESPONSE);
                 break;
             case REAUTH_RECEIVE_HANDSHAKE_OR_OTHER_RESPONSE:
@@ -285,9 +287,8 @@ public class SaslClientAuthenticator implements Authenticator {
         }
     }
 
-    private void sendHandshakeRequest(ApiVersionsResponse apiVersionsResponse) throws IOException {
-        SaslHandshakeRequest handshakeRequest = createSaslHandshakeRequest(
-                apiVersionsResponse.apiVersion(ApiKeys.SASL_HANDSHAKE.id).maxVersion());
+    private void sendHandshakeRequest(short version) throws IOException {
+        SaslHandshakeRequest handshakeRequest = createSaslHandshakeRequest(version);
         send(handshakeRequest.toSend(node, nextRequestHeader(ApiKeys.SASL_HANDSHAKE, handshakeRequest.version())));
     }
 
@@ -345,11 +346,17 @@ public class SaslClientAuthenticator implements Authenticator {
     }
 
     // Visible to override for testing
-    protected void saslAuthenticateVersion(ApiVersionsResponse apiVersionsResponse) {
+    protected void setSaslAuthenticateAndHandshakeVersions(ApiVersionsResponse apiVersionsResponse) {
         ApiVersionsResponseKey authenticateVersion = apiVersionsResponse.apiVersion(ApiKeys.SASL_AUTHENTICATE.id);
-        if (authenticateVersion != null)
+        if (authenticateVersion != null) {
             this.saslAuthenticateVersion = (short) Math.min(authenticateVersion.maxVersion(),
                     ApiKeys.SASL_AUTHENTICATE.latestVersion());
+        }
+        ApiVersionsResponseKey handshakeVersion = apiVersionsResponse.apiVersion(ApiKeys.SASL_HANDSHAKE.id);
+        if (handshakeVersion != null) {
+            this.saslHandshakeVersion = (short) Math.min(handshakeVersion.maxVersion(),
+                    ApiKeys.SASL_HANDSHAKE.latestVersion());
+        }
     }
 
     private void setSaslState(SaslState saslState) {
