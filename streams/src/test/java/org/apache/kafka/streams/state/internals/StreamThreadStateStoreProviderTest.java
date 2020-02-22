@@ -72,7 +72,9 @@ import java.util.Set;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.instanceOf;
 import static org.hamcrest.Matchers.not;
+import static org.hamcrest.core.IsEqual.equalTo;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertThrows;
 
 public class StreamThreadStateStoreProviderTest {
 
@@ -288,6 +290,48 @@ public class StreamThreadStateStoreProviderTest {
         assertEquals(
             Collections.emptyList(),
             provider.stores(StoreQueryParameters.fromNameAndType("not-a-store", QueryableStoreTypes.keyValueStore())));
+    }
+
+    @Test
+    public void shouldReturnSingleStoreForPartition() {
+        mockThread(true);
+        {
+            final List<ReadOnlyKeyValueStore<String, String>> kvStores =
+                provider.stores(
+                    StoreQueryParameters
+                        .fromNameAndType("kv-store", QueryableStoreTypes.keyValueStore())
+                        .withPartition(0));
+            assertEquals(1, kvStores.size());
+            for (final ReadOnlyKeyValueStore<String, String> store : kvStores) {
+                assertThat(store, instanceOf(ReadOnlyKeyValueStore.class));
+                assertThat(store, not(instanceOf(TimestampedKeyValueStore.class)));
+            }
+        }
+        {
+            final List<ReadOnlyKeyValueStore<String, String>> kvStores =
+                provider.stores(
+                    StoreQueryParameters
+                        .fromNameAndType("kv-store", QueryableStoreTypes.keyValueStore())
+                        .withPartition(1));
+            assertEquals(1, kvStores.size());
+            for (final ReadOnlyKeyValueStore<String, String> store : kvStores) {
+                assertThat(store, instanceOf(ReadOnlyKeyValueStore.class));
+                assertThat(store, not(instanceOf(TimestampedKeyValueStore.class)));
+            }
+        }
+    }
+
+    @Test
+    public void shouldThrowForInvalidPartitions() {
+        mockThread(true);
+        final InvalidStateStoreException thrown = assertThrows(
+            InvalidStateStoreException.class,
+            () -> provider.stores(
+                StoreQueryParameters
+                    .fromNameAndType("kv-store", QueryableStoreTypes.keyValueStore())
+                    .withPartition(2))
+        );
+        assertThat(thrown.getMessage(), equalTo("The specified partition 2 for store kv-store does not exist."));
     }
 
     @Test
