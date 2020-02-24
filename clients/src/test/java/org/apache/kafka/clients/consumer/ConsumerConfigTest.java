@@ -29,8 +29,8 @@ import static org.junit.Assert.assertEquals;
 
 public class ConsumerConfigTest {
 
-    private final Deserializer keyDeserializer = new ByteArrayDeserializer();
-    private final Deserializer valueDeserializer = new StringDeserializer();
+    private final Deserializer<byte[]> keyDeserializer = new ByteArrayDeserializer();
+    private final Deserializer<String> valueDeserializer = new StringDeserializer();
     private final String keyDeserializerClassName = keyDeserializer.getClass().getName();
     private final String valueDeserializerClassName = valueDeserializer.getClass().getName();
     private final Object keyDeserializerClass = keyDeserializer.getClass();

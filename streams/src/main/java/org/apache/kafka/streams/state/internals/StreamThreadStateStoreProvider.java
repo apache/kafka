@@ -59,7 +59,14 @@ public class StreamThreadStateStoreProvider {
             final Map<TaskId, ? extends Task> tasks = storeQueryParams.staleStoresEnabled() ? streamThread.allTasks() : streamThread.activeTaskMap();
             final List<T> stores = new ArrayList<>();
             if (keyTaskId != null) {
-                final T store = validateAndListStores(tasks.get(keyTaskId).getStore(storeName), queryableStoreType, storeName, keyTaskId);
+                final Task task = tasks.get(keyTaskId);
+                if (task == null) {
+                    throw new InvalidStateStoreException(
+                        String.format("The specified partition %d for store %s does not exist.",
+                            storeQueryParams.partition(),
+                            storeName));
+                }
+                final T store = validateAndListStores(task.getStore(storeName), queryableStoreType, storeName, keyTaskId);
                 if (store != null) {
                     return Collections.singletonList(store);
                 }
