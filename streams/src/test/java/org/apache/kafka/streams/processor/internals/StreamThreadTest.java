@@ -107,6 +107,7 @@ import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -938,8 +939,7 @@ public class StreamThreadTest {
         assertThat(thread.activeTasks().size(), equalTo(1));
 
         clientSupplier.producers.get(0).commitTransactionException = new ProducerFencedException("Producer is fenced");
-        thread.rebalanceListener.onPartitionsRevoked(assignedPartitions);
-        assertTrue(thread.rebalanceException() instanceof TaskMigratedException);
+        assertThrows(TaskMigratedException.class, () -> thread.rebalanceListener.onPartitionsRevoked(assignedPartitions));
         assertFalse(clientSupplier.producers.get(0).transactionCommitted());
         assertFalse(clientSupplier.producers.get(0).closed());
         assertEquals(1, thread.activeTasks().size());
@@ -1567,6 +1567,94 @@ public class StreamThreadTest {
         final List<String> strings = appender.getMessages();
         assertTrue(strings.contains("stream-thread [" + Thread.currentThread().getName() + "] task [0_1] Skipping record due to deserialization error. topic=[topic1] partition=[1] offset=[0]"));
         assertTrue(strings.contains("stream-thread [" + Thread.currentThread().getName() + "] task [0_1] Skipping record due to deserialization error. topic=[topic1] partition=[1] offset=[1]"));
+    }
+
+    @Test
+    public void shouldThrowTaskMigratedExceptionHandlingTaskLost() {
+        final Set<TopicPartition> assignedPartitions = Collections.singleton(t1p1);
+
+        final TaskManager taskManager = EasyMock.createNiceMock(TaskManager.class);
+        final MockConsumer<byte[], byte[]> consumer = new MockConsumer<>(OffsetResetStrategy.LATEST);
+        consumer.assign(assignedPartitions);
+        consumer.updateBeginningOffsets(Collections.singletonMap(t1p1, 0L));
+        consumer.updateEndOffsets(Collections.singletonMap(t1p1, 10L));
+
+        taskManager.handleLostAll();
+        EasyMock.expectLastCall()
+            .andThrow(new TaskMigratedException("Task lost exception", new RuntimeException()));
+
+        EasyMock.replay(taskManager);
+
+        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, CLIENT_ID, StreamsConfig.METRICS_LATEST);
+        final StreamThread thread = new StreamThread(
+            mockTime,
+            config,
+            null,
+            null,
+            null,
+            consumer,
+            consumer,
+            null,
+            null,
+            taskManager,
+            streamsMetrics,
+            internalTopologyBuilder,
+            CLIENT_ID,
+            new LogContext(""),
+            new AtomicInteger()
+        ).updateThreadMetadata(getSharedAdminClientId(CLIENT_ID));
+
+        consumer.schedulePollTask(() -> {
+            thread.setState(StreamThread.State.PARTITIONS_REVOKED);
+            thread.rebalanceListener.onPartitionsLost(assignedPartitions);
+        });
+
+        thread.setState(StreamThread.State.STARTING);
+        assertThrows(TaskMigratedException.class, thread::runOnce);
+    }
+
+    @Test
+    public void shouldThrowTaskMigratedExceptionHandlingRevocation() {
+        final Set<TopicPartition> assignedPartitions = Collections.singleton(t1p1);
+
+        final TaskManager taskManager = EasyMock.createNiceMock(TaskManager.class);
+        final MockConsumer<byte[], byte[]> consumer = new MockConsumer<>(OffsetResetStrategy.LATEST);
+        consumer.assign(assignedPartitions);
+        consumer.updateBeginningOffsets(Collections.singletonMap(t1p1, 0L));
+        consumer.updateEndOffsets(Collections.singletonMap(t1p1, 10L));
+
+        taskManager.handleRevocation(assignedPartitions);
+        EasyMock.expectLastCall()
+            .andThrow(new TaskMigratedException("Revocation non fatal exception", new RuntimeException()));
+
+        EasyMock.replay(taskManager);
+
+        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, CLIENT_ID, StreamsConfig.METRICS_LATEST);
+        final StreamThread thread = new StreamThread(
+            mockTime,
+            config,
+            null,
+            null,
+            null,
+            consumer,
+            consumer,
+            null,
+            null,
+            taskManager,
+            streamsMetrics,
+            internalTopologyBuilder,
+            CLIENT_ID,
+            new LogContext(""),
+            new AtomicInteger()
+        ).updateThreadMetadata(getSharedAdminClientId(CLIENT_ID));
+
+        consumer.schedulePollTask(() -> {
+            thread.setState(StreamThread.State.PARTITIONS_REVOKED);
+            thread.rebalanceListener.onPartitionsRevoked(assignedPartitions);
+        });
+
+        thread.setState(StreamThread.State.STARTING);
+        assertThrows(TaskMigratedException.class, thread::runOnce);
     }
 
     @Test
