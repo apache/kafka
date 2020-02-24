@@ -556,7 +556,7 @@ public class ProcessorStateManagerTest {
         };
         stateManager.registerStore(stateStore, stateStore.stateRestoreCallback);
 
-        final ProcessorStateException thrown = assertThrows(ProcessorStateException.class, () -> stateManager.close());
+        final ProcessorStateException thrown = assertThrows(ProcessorStateException.class, stateManager::close);
         assertEquals(exception, thrown.getCause());
     }
 
@@ -572,7 +572,7 @@ public class ProcessorStateManagerTest {
         };
         stateManager.registerStore(stateStore, stateStore.stateRestoreCallback);
 
-        final StreamsException thrown = assertThrows(StreamsException.class, () -> stateManager.close());
+        final StreamsException thrown = assertThrows(StreamsException.class, stateManager::close);
         assertEquals(exception, thrown);
     }
 
@@ -724,7 +724,7 @@ public class ProcessorStateManagerTest {
         return new ConverterStore(persistentStoreName, true);
     }
 
-    private class ConverterStore extends MockKeyValueStore implements TimestampedBytesStore {
+    private static class ConverterStore extends MockKeyValueStore implements TimestampedBytesStore {
         ConverterStore(final String name, final boolean persistent) {
             super(name, persistent);
         }

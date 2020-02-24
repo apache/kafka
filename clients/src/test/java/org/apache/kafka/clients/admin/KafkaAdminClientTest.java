@@ -2496,6 +2496,115 @@ public class KafkaAdminClientTest {
     }
 
     @Test
+    public void testListOffsetsWithMultiplePartitionsLeaderChange() throws Exception {
+        Node node0 = new Node(0, "localhost", 8120);
+        Node node1 = new Node(1, "localhost", 8121);
+        Node node2 = new Node(2, "localhost", 8122);
+        List<Node> nodes = Arrays.asList(node0, node1, node2);
+
+        final PartitionInfo oldPInfo1 = new PartitionInfo("foo", 0, node0,
+            new Node[]{node0, node1, node2}, new Node[]{node0, node1, node2});
+        final PartitionInfo oldPnfo2 = new PartitionInfo("foo", 1, node0,
+            new Node[]{node0, node1, node2}, new Node[]{node0, node1, node2});
+        List<PartitionInfo> oldPInfos = Arrays.asList(oldPInfo1, oldPnfo2);
+
+        final Cluster oldCluster = new Cluster("mockClusterId", nodes, oldPInfos,
+            Collections.emptySet(), Collections.emptySet(), node0);
+        final TopicPartition tp0 = new TopicPartition("foo", 0);
+        final TopicPartition tp1 = new TopicPartition("foo", 1);
+
+        try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(oldCluster)) {
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+
+            env.kafkaClient().prepareResponse(prepareMetadataResponse(oldCluster, Errors.NONE));
+
+            Map<TopicPartition, PartitionData> responseData = new HashMap<>();
+            responseData.put(tp0, new PartitionData(Errors.NOT_LEADER_FOR_PARTITION, -1L, 345L, Optional.of(543)));
+            responseData.put(tp1, new PartitionData(Errors.LEADER_NOT_AVAILABLE, -2L, 123L, Optional.of(456)));
+            env.kafkaClient().prepareResponseFrom(new ListOffsetResponse(responseData), node0);
+
+            final PartitionInfo newPInfo1 = new PartitionInfo("foo", 0, node1,
+                new Node[]{node0, node1, node2}, new Node[]{node0, node1, node2});
+            final PartitionInfo newPInfo2 = new PartitionInfo("foo", 1, node2,
+                new Node[]{node0, node1, node2}, new Node[]{node0, node1, node2});
+            List<PartitionInfo> newPInfos = Arrays.asList(newPInfo1, newPInfo2);
+
+            final Cluster newCluster = new Cluster("mockClusterId", nodes, newPInfos,
+                Collections.emptySet(), Collections.emptySet(), node0);
+
+            env.kafkaClient().prepareResponse(prepareMetadataResponse(newCluster, Errors.NONE));
+
+            responseData = new HashMap<>();
+            responseData.put(tp0, new PartitionData(Errors.NONE, -1L, 345L, Optional.of(543)));
+            env.kafkaClient().prepareResponseFrom(new ListOffsetResponse(responseData), node1);
+
+            responseData = new HashMap<>();
+            responseData.put(tp1, new PartitionData(Errors.NONE, -2L, 123L, Optional.of(456)));
+            env.kafkaClient().prepareResponseFrom(new ListOffsetResponse(responseData), node2);
+
+            Map<TopicPartition, OffsetSpec> partitions = new HashMap<>();
+            partitions.put(tp0, OffsetSpec.latest());
+            partitions.put(tp1, OffsetSpec.latest());
+            ListOffsetsResult result = env.adminClient().listOffsets(partitions);
+            Map<TopicPartition, ListOffsetsResultInfo> offsets = result.all().get();
+
+            assertFalse(offsets.isEmpty());
+            assertEquals(345L, offsets.get(tp0).offset());
+            assertEquals(543, offsets.get(tp0).leaderEpoch().get().intValue());
+            assertEquals(-1L, offsets.get(tp0).timestamp());
+            assertEquals(123L, offsets.get(tp1).offset());
+            assertEquals(456, offsets.get(tp1).leaderEpoch().get().intValue());
+            assertEquals(-2L, offsets.get(tp1).timestamp());
+        }
+    }
+
+    @Test
+    public void testListOffsetsWithLeaderChange() throws Exception {
+        Node node0 = new Node(0, "localhost", 8120);
+        Node node1 = new Node(1, "localhost", 8121);
+        Node node2 = new Node(2, "localhost", 8122);
+        List<Node> nodes = Arrays.asList(node0, node1, node2);
+
+        final PartitionInfo oldPartitionInfo = new PartitionInfo("foo", 0, node0,
+            new Node[]{node0, node1, node2}, new Node[]{node0, node1, node2});
+        final Cluster oldCluster = new Cluster("mockClusterId", nodes, singletonList(oldPartitionInfo),
+            Collections.emptySet(), Collections.emptySet(), node0);
+        final TopicPartition tp0 = new TopicPartition("foo", 0);
+
+        try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(oldCluster)) {
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+
+            env.kafkaClient().prepareResponse(prepareMetadataResponse(oldCluster, Errors.NONE));
+
+            Map<TopicPartition, PartitionData> responseData = new HashMap<>();
+            responseData.put(tp0, new PartitionData(Errors.NOT_LEADER_FOR_PARTITION, -1L, 345L, Optional.of(543)));
+            env.kafkaClient().prepareResponseFrom(new ListOffsetResponse(responseData), node0);
+
+            // updating leader from node0 to node1 and metadata refresh because of NOT_LEADER_FOR_PARTITION
+            final PartitionInfo newPartitionInfo = new PartitionInfo("foo", 0, node1,
+                new Node[]{node0, node1, node2}, new Node[]{node0, node1, node2});
+            final Cluster newCluster = new Cluster("mockClusterId", nodes, singletonList(newPartitionInfo),
+                Collections.emptySet(), Collections.emptySet(), node0);
+
+            env.kafkaClient().prepareResponse(prepareMetadataResponse(newCluster, Errors.NONE));
+
+            responseData = new HashMap<>();
+            responseData.put(tp0, new PartitionData(Errors.NONE, -2L, 123L, Optional.of(456)));
+            env.kafkaClient().prepareResponseFrom(new ListOffsetResponse(responseData), node1);
+
+            Map<TopicPartition, OffsetSpec> partitions = new HashMap<>();
+            partitions.put(tp0, OffsetSpec.latest());
+            ListOffsetsResult result = env.adminClient().listOffsets(partitions);
+            Map<TopicPartition, ListOffsetsResultInfo> offsets = result.all().get();
+
+            assertFalse(offsets.isEmpty());
+            assertEquals(123L, offsets.get(tp0).offset());
+            assertEquals(456, offsets.get(tp0).leaderEpoch().get().intValue());
+            assertEquals(-2L, offsets.get(tp0).timestamp());
+        }
+    }
+
+    @Test
     public void testListOffsetsMetadataNonRetriableErrors() throws Exception {
 
         Node node0 = new Node(0, "localhost", 8120);
@@ -2631,11 +2740,14 @@ public class KafkaAdminClientTest {
             // Wait for the request to be timed out before backing off
             TestUtils.waitForCondition(() -> !env.kafkaClient().hasInFlightRequests(),
                     "Timed out waiting for inFlightRequests to be timed out");
-            time.sleep(retryBackoffMs);
 
             // Since api timeout bound is not hit, AdminClient should retry
-            TestUtils.waitForCondition(() -> env.kafkaClient().hasInFlightRequests(),
-                    "Timed out waiting for Metadata request to be sent");
+            TestUtils.waitForCondition(() -> {
+                boolean hasInflightRequests = env.kafkaClient().hasInFlightRequests();
+                if (!hasInflightRequests)
+                    time.sleep(retryBackoffMs);
+                return hasInflightRequests;
+            }, "Timed out waiting for Metadata request to be sent");
             time.sleep(requestTimeoutMs + 1);
 
             TestUtils.assertFutureThrows(result.future, TimeoutException.class);
