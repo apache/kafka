@@ -115,17 +115,17 @@
             signing request, which is the basis for creating a certificate. To add authentication capabilities this signing request needs to be signed
             by a trusted authority, which will be created in this step.
 
-            <p>A certificate authority (CA) is responsible for signing certificates. CAs works likes a government that issues passports—the government
+            <p>A certificate authority (CA) is responsible for signing certificates. CAs works likes a government that issues passports - the government
             stamps (signs) each passport so that the passport becomes difficult to forge. Other governments verify the stamps to ensure the passport is
             authentic. Similarly, the CA signs the certificates, and the cryptography guarantees that a signed certificate is computationally difficult to
             forge. Thus, as long as the CA is a genuine and trusted authority, the clients have a strong assurance that they are connecting to the authentic
             machines.
 
-            <p>For this guide we will be our own Certificate Authority, when setting up a production cluster in a corporate environment these certificates would
-            usually be signed by a corporate CA that is trusted throughout the company, please see <a href="#security_ssl_production">Common Pitfalls in
+            <p>For this guide we will be our own Certificate Authority. When setting up a production cluster in a corporate environment these certificates would
+            usually be signed by a corporate CA that is trusted throughout the company. Please see <a href="#security_ssl_production">Common Pitfalls in
             Production</a> for some things to consider for this case.
 
-            <p>Due to a <a href="https://www.openssl.org/docs/man1.1.1/man1/x509.html#BUGS">bug</a> in OpenSSL the x509 module will not copy requested
+            <p>Due to a <a href="https://www.openssl.org/docs/man1.1.1/man1/x509.html#BUGS">bug</a> in OpenSSL, the x509 module will not copy requested
             extension fields from CSRs into the final certificate. Since we want the SAN extension to be present in our certificate to enable hostname
             verification, we'll use the <i>ca</i> module instead. This requires some additional configuration to be in place before we generate our
             CA keypair.<br>
@@ -239,7 +239,7 @@ keyUsage               = digitalSignature, keyEncipherment
             </pre>
 
             <b>Note:</b>
-            If you configure the Kafka brokers to require client authentication by setting ssl.client.auth to be "requested" or "required" on the
+            If you configure the Kafka brokers to require client authentication by setting ssl.client.auth to be "requested" or "required" in the
             <a href="#config_broker">Kafka brokers config</a> then you must provide a truststore for the Kafka brokers as well and it should have
             all the CA certificates that clients' keys were signed by.
             <pre class="brush: bash;">
