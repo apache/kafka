@@ -546,13 +546,18 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
         describeResult
       }
 
-      override def alterConfigs(configs: util.Map[ConfigResource, Config], options: AlterConfigsOptions): AlterConfigsResult = {
+      override def incrementalAlterConfigs(configs: util.Map[ConfigResource, util.Collection[AlterConfigOp]], options: AlterConfigsOptions): AlterConfigsResult = {
         assertEquals(1, configs.size)
         val entry = configs.entrySet.iterator.next
         val resource = entry.getKey
-        val config = entry.getValue
+        val alterConfigOps = entry.getValue
         assertEquals(ConfigResource.Type.BROKER, resource.`type`)
-        config.entries.asScala.foreach { e => brokerConfigs.put(e.name, e.value) }
+        for (op <- alterConfigOps.asScala) {
+          op.opType match {
+            case AlterConfigOp.OpType.SET => brokerConfigs.put(op.configEntry.name, op.configEntry.value)
+            case AlterConfigOp.OpType.DELETE => brokerConfigs.remove(op.configEntry.name)
+          }
+        }
         alterResult
       }
     }
