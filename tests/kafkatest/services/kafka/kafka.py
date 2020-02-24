@@ -96,7 +96,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
 
     def __init__(self, context, num_nodes, zk, security_protocol=SecurityConfig.PLAINTEXT, interbroker_security_protocol=SecurityConfig.PLAINTEXT,
                  client_sasl_mechanism=SecurityConfig.SASL_MECHANISM_GSSAPI, interbroker_sasl_mechanism=SecurityConfig.SASL_MECHANISM_GSSAPI,
-                 authorizer_class_name=None, topics=None, project="kafka", dist_version=None, version=DEV_BRANCH, jmx_object_names=None,
+                 authorizer_class_name=None, topics=None, version=DEV_BRANCH, jmx_object_names=None,
                  jmx_attributes=None, zk_connect_timeout=5000, zk_session_timeout=6000, server_prop_overides=None, zk_chroot=None,
                  zk_client_secure=False,
                  listener_security_config=ListenerSecurityConfig(), per_node_server_prop_overrides=None, extra_kafka_opts=""):
@@ -126,8 +126,6 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
                           root=KafkaService.PERSISTENT_ROOT)
 
         self.zk = zk
-        self.project = project
-        self.dist_version = dist_version
 
         self.security_protocol = security_protocol
         self.client_sasl_mechanism = client_sasl_mechanism
