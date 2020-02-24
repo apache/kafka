@@ -18,6 +18,7 @@ package org.apache.kafka.clients.consumer;
 
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.ClientDnsLookup;
+import org.apache.kafka.clients.ClientId;
 import org.apache.kafka.clients.ClientUtils;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.GroupRebalanceConfig;
@@ -560,7 +561,6 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
 
     private static final String CLIENT_ID_METRIC_TAG = "client-id";
     private static final long NO_CURRENT_THREAD = -1L;
-    private static final AtomicInteger CONSUMER_CLIENT_ID_SEQUENCE = new AtomicInteger(1);
     private static final String JMX_PREFIX = "kafka.consumer";
     static final long DEFAULT_CLOSE_TIMEOUT_MS = 30 * 1000;
 
@@ -674,7 +674,10 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     GroupRebalanceConfig.ProtocolType.CONSUMER);
 
             this.groupId = Optional.ofNullable(groupRebalanceConfig.groupId);
-            this.clientId = buildClientId(config.getString(CommonClientConfigs.CLIENT_ID_CONFIG), groupRebalanceConfig);
+
+            final String clientIdConfig = config.getString(CommonClientConfigs.CLIENT_ID_CONFIG);
+            this.clientId = ClientId.newBuilder().setGroupRebalanceConfig(groupRebalanceConfig)
+                .setUserAgent(clientIdConfig).build();
 
             LogContext logContext;
 
@@ -862,17 +865,6 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         this.assignors = assignors;
         this.groupId = Optional.ofNullable(groupId);
         this.kafkaConsumerMetrics = new KafkaConsumerMetrics(metrics, "consumer");
-    }
-
-    private static String buildClientId(String configuredClientId, GroupRebalanceConfig rebalanceConfig) {
-        if (!configuredClientId.isEmpty())
-            return configuredClientId;
-
-        if (rebalanceConfig.groupId != null && !rebalanceConfig.groupId.isEmpty())
-            return "consumer-" + rebalanceConfig.groupId + "-" + rebalanceConfig.groupInstanceId.orElseGet(() ->
-                    CONSUMER_CLIENT_ID_SEQUENCE.getAndIncrement() + "");
-
-        return "consumer-" + CONSUMER_CLIENT_ID_SEQUENCE.getAndIncrement();
     }
 
     private static Metrics buildMetrics(ConsumerConfig config, Time time, String clientId) {

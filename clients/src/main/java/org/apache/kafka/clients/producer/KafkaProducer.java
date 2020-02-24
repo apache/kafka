@@ -18,6 +18,7 @@ package org.apache.kafka.clients.producer;
 
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.ClientDnsLookup;
+import org.apache.kafka.clients.ClientId;
 import org.apache.kafka.clients.ClientUtils;
 import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.NetworkClient;
@@ -333,7 +334,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             String transactionalId = userProvidedConfigs.containsKey(ProducerConfig.TRANSACTIONAL_ID_CONFIG) ?
                     (String) userProvidedConfigs.get(ProducerConfig.TRANSACTIONAL_ID_CONFIG) : null;
 
-            this.clientId = config.getString(ProducerConfig.CLIENT_ID_CONFIG);
+            this.clientId = ClientId.newBuilder().setUserAgent(config.getString(ProducerConfig.CLIENT_ID_CONFIG)).build();
 
             LogContext logContext;
             if (transactionalId == null)
