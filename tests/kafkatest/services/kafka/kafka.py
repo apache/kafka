@@ -64,6 +64,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
     DATA_LOG_DIR_1 = "%s-1" % (DATA_LOG_DIR_PREFIX)
     DATA_LOG_DIR_2 = "%s-2" % (DATA_LOG_DIR_PREFIX)
     CONFIG_FILE = os.path.join(PERSISTENT_ROOT, "kafka.properties")
+    COMMAND_CONFIG_FILE = os.path.join(PERSISTENT_ROOT, "command_config.properties")
     # Kafka Authorizer
     ACL_AUTHORIZER = "kafka.security.authorizer.AclAuthorizer"
     # Old Kafka Authorizer. This is deprecated but still supported.
@@ -375,6 +376,10 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         if len(self.pids(node)) == 0:
             raise Exception("No process ids recorded on node %s" % node.account.hostname)
 
+        command_config = "" if self.security_protocol is SecurityConfig.PLAINTEXT else str(self.security_config.client_config())
+        self.logger.debug("%s = %s" % (KafkaService.COMMAND_CONFIG_FILE, command_config))
+        node.account.create_file(KafkaService.COMMAND_CONFIG_FILE, command_config)
+
     def pids(self, node):
         """Return process ids associated with running processes on the given node."""
         try:
@@ -434,9 +439,16 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
                          topic_cfg["topic"], topic_cfg)
         kafka_topic_script = self.path.script("kafka-topics.sh", node)
 
-        cmd = kafka_topic_script + " "
-        cmd += "--bootstrap-server %(bootstrap_server)s --create --topic %(topic)s " % {
+        if self.security_protocol is SecurityConfig.PLAINTEXT:
+            command_config = ""
+        else:
+            command_config = "--command-config " + KafkaService.COMMAND_CONFIG_FILE
+
+        cmd = "export KAFKA_OPTS=%s;" % self.security_config.kafka_opts
+        cmd += (kafka_topic_script + " ")
+        cmd += "--bootstrap-server %(bootstrap_server)s %(command_config)s --create --topic %(topic)s " % {
                 'bootstrap_server': self.bootstrap_servers(self.security_protocol),
+                'command_config': command_config,
                 'topic': topic_cfg.get("topic"),
            }
         if 'replica-assignment' in topic_cfg:
@@ -471,9 +483,16 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         self.logger.info("Deleting topic %s" % topic)
         kafka_topic_script = self.path.script("kafka-topics.sh", node)
 
-        cmd = kafka_topic_script + " "
-        cmd += "--bootstrap-server %(bootstrap_servers)s --delete --topic %(topic)s " % {
+        if self.security_protocol is SecurityConfig.PLAINTEXT:
+            command_config = ""
+        else:
+            command_config = "--command-config " + KafkaService.COMMAND_CONFIG_FILE
+
+        cmd = "export KAFKA_OPTS=%s;" % self.security_config.kafka_opts
+        cmd += (kafka_topic_script + " ")
+        cmd += "--bootstrap-server %(bootstrap_servers)s %(command_config)s --delete --topic %(topic)s " % {
             'bootstrap_servers': self.bootstrap_servers(self.security_protocol),
+            'command_config': command_config,
             'topic': topic
         }
         self.logger.info("Running topic delete command...\n%s" % cmd)
@@ -482,8 +501,15 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
     def describe_topic(self, topic, node=None):
         if node is None:
             node = self.nodes[0]
-        cmd = "%s --bootstrap-server %s --topic %s --describe" % \
-              (self.path.script("kafka-topics.sh", node), self.bootstrap_servers(self.security_protocol), topic)
+
+        if self.security_protocol is SecurityConfig.PLAINTEXT:
+            command_config = ""
+        else:
+            command_config = "--command-config " + KafkaService.COMMAND_CONFIG_FILE
+
+        cmd = "export KAFKA_OPTS=%s;" % self.security_config.kafka_opts
+        cmd += "%s --bootstrap-server %s %s --topic %s --describe" % \
+              (self.path.script("kafka-topics.sh", node), self.bootstrap_servers(self.security_protocol), command_config, topic)
         output = ""
         for line in node.account.ssh_capture(cmd):
             output += line
@@ -492,8 +518,15 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
     def list_topics(self, topic=None, node=None):
         if node is None:
             node = self.nodes[0]
-        cmd = "%s --bootstrap-server %s --list" % \
-              (self.path.script("kafka-topics.sh", node), self.bootstrap_servers(self.security_protocol))
+
+        if self.security_protocol is SecurityConfig.PLAINTEXT:
+            command_config = ""
+        else:
+            command_config = "--command-config " + KafkaService.COMMAND_CONFIG_FILE
+
+        cmd = "export KAFKA_OPTS=%s;" % self.security_config.kafka_opts
+        cmd += "%s --bootstrap-server %s %s --list" % \
+              (self.path.script("kafka-topics.sh", node), self.bootstrap_servers(self.security_protocol), command_config)
         for line in node.account.ssh_capture(cmd):
             if not line.startswith("SLF4J"):
                 yield line.rstrip()

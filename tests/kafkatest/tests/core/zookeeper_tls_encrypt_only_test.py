@@ -30,7 +30,7 @@ class ZookeeperTlsEncryptOnlyTest(ProduceConsumeValidateTest):
     """
 
     def __init__(self, test_context):
-        super(ZookeeperTlsEncryptOnlyTest   , self).__init__(test_context=test_context)
+        super(ZookeeperTlsEncryptOnlyTest, self).__init__(test_context=test_context)
 
     def setUp(self):
         self.topic = "test_topic"
