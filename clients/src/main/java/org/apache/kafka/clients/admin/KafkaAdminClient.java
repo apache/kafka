@@ -3794,7 +3794,7 @@ public class KafkaAdminClient extends AdminClient {
 
     private List<Call> getListOffsetsCalls(MetadataOperationContext<ListOffsetsResultInfo, ListOffsetsOptions> context,
                                            Map<TopicPartition, OffsetSpec> topicPartitionOffsets,
-                                           Map<TopicPartition, KafkaFutureImpl<ListOffsetsResultInfo>> futures,) {
+                                           Map<TopicPartition, KafkaFutureImpl<ListOffsetsResultInfo>> futures) {
 
         MetadataResponse mr = context.response().orElseThrow(() -> new IllegalStateException("No Metadata response"));
         List<Call> calls = new ArrayList<>();
