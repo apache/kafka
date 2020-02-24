@@ -3244,9 +3244,9 @@ public class KafkaAdminClient extends AdminClient {
 
     private Call getDeleteConsumerGroupOffsetsCall(
             ConsumerGroupOperationContext<Map<TopicPartition, Errors>, DeleteConsumerGroupOffsetsOptions> context,
-            Set<TopicPartition> partitions, Optional<Integer> numTries, Optional<Long> nextTryAllowedMs) {
+            Set<TopicPartition> partitions, Optional<Integer> numTries, Optional<Long> nextAllowedTryMs) {
         return new Call("deleteConsumerGroupOffsets", context.deadline(), new ConstantNodeIdProvider(context.node().get().id()),
-            numTries, nextTryAllowedMs) {
+            numTries, nextAllowedTryMs) {
 
             @Override
             OffsetDeleteRequest.Builder createRequest(int timeoutMs) {
