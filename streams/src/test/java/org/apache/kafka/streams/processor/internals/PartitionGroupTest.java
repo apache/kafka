@@ -380,38 +380,42 @@ public class PartitionGroupTest {
     }
 
     @Test
-    public void shouldEmpyPartitionsOnClean() {
+    public void shouldEmptyPartitionsOnClear() {
         final List<ConsumerRecord<byte[], byte[]>> list = Arrays.asList(
             new ConsumerRecord<>("topic", 1, 1L, recordKey, recordValue),
             new ConsumerRecord<>("topic", 1, 3L, recordKey, recordValue),
             new ConsumerRecord<>("topic", 1, 5L, recordKey, recordValue));
         group.addRawRecords(partition1, list);
+        group.nextRecord(new PartitionGroup.RecordInfo());
+        group.nextRecord(new PartitionGroup.RecordInfo());
 
         group.clear();
 
         assertThat(group.numBuffered(), equalTo(0));
-        assertThat(group.streamTime(), equalTo(RecordQueue.UNKNOWN));
+        assertThat(group.streamTime(), equalTo(3L));
         assertThat(group.nextRecord(new PartitionGroup.RecordInfo()), equalTo(null));
+        assertThat(group.partitionTimestamp(partition1), equalTo(RecordQueue.UNKNOWN));
 
         group.addRawRecords(partition1, list);
     }
 
+    @Test
     public void shouldCleanPartitionsOnClose() {
         final List<ConsumerRecord<byte[], byte[]>> list = Arrays.asList(
             new ConsumerRecord<>("topic", 1, 1L, recordKey, recordValue),
             new ConsumerRecord<>("topic", 1, 3L, recordKey, recordValue),
             new ConsumerRecord<>("topic", 1, 5L, recordKey, recordValue));
         group.addRawRecords(partition1, list);
+        group.nextRecord(new PartitionGroup.RecordInfo());
 
         group.close();
 
         assertThat(group.numBuffered(), equalTo(0));
         assertThat(group.streamTime(), equalTo(RecordQueue.UNKNOWN));
         assertThat(group.nextRecord(new PartitionGroup.RecordInfo()), equalTo(null));
+        assertThat(group.partitionTimestamp(partition1), equalTo(RecordQueue.UNKNOWN));
 
-        final IllegalStateException exception = assertThrows(
-            IllegalStateException.class,
-            () -> group.addRawRecords(partition1, list));
-        assertThat("Partition topic-1 not found.", equalTo(exception.getMessage()));
+        // The partition1 should still be able to find.
+        assertThat(group.addRawRecords(partition1, list), equalTo(3));
     }
 }

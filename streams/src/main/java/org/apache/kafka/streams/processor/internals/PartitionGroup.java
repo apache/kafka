@@ -220,7 +220,7 @@ public class PartitionGroup {
 
     void close() {
         clear();
-        partitionQueues.clear();
+
         streamTime = RecordQueue.UNKNOWN;
     }
 
