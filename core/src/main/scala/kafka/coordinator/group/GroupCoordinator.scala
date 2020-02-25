@@ -74,7 +74,7 @@ class GroupCoordinator(val brokerId: Int,
       "group-coordinator-metrics",
       "The total number of administrative deleted offsets")))
 
-  val groupCompletedRebalanceSensor = metrics.sensor("OffsetDeletions")
+  val groupCompletedRebalanceSensor = metrics.sensor("CompletedRebalances")
 
   groupCompletedRebalanceSensor.add(new Meter(
     metrics.metricName("group-completed-rebalance-rate",
