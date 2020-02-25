@@ -48,7 +48,7 @@ import org.apache.kafka.common.errors.GroupSubscribedToTopicException;
 import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.LeaderNotAvailableException;
-import org.apache.kafka.common.errors.MaxRetriesReachedException;
+import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.NotLeaderForPartitionException;
 import org.apache.kafka.common.errors.OffsetOutOfRangeException;
 import org.apache.kafka.common.errors.SaslAuthenticationException;
@@ -1283,7 +1283,7 @@ public class KafkaAdminClientTest {
             offsets.put(tp1, new OffsetAndMetadata(123L));
             final AlterConsumerGroupOffsetsResult result = env.adminClient().alterConsumerGroupOffsets(groupId, offsets);
 
-            TestUtils.assertFutureError(result.all(), MaxRetriesReachedException.class);
+            TestUtils.assertFutureError(result.all(), TimeoutException.class);
         }
     }
 
@@ -1324,7 +1324,7 @@ public class KafkaAdminClientTest {
             final KafkaFuture<Void> future = env.adminClient().alterConsumerGroupOffsets(groupId, offsets).all();
 
             TestUtils.waitForCondition(() -> mockClient.numAwaitingResponses() == 1, "Failed awaiting CommitOffsets first request failure");
-            TestUtils.waitForCondition(() -> ((KafkaAdminClient) env.adminClient()).numPendingCalls() == 1,"Failed to add retry CommitOffsets call on first failure");
+            TestUtils.waitForCondition(() -> ((KafkaAdminClient) env.adminClient()).numPendingCalls() == 1, "Failed to add retry CommitOffsets call on first failure");
             time.sleep(retryBackoff);
 
             future.get();
@@ -1359,7 +1359,7 @@ public class KafkaAdminClientTest {
 
             final DescribeConsumerGroupsResult result = env.adminClient().describeConsumerGroups(singletonList("group-0"));
 
-            TestUtils.assertFutureError(result.all(), MaxRetriesReachedException.class);
+            TestUtils.assertFutureError(result.all(), TimeoutException.class);
         }
     }
 
@@ -1390,10 +1390,10 @@ public class KafkaAdminClientTest {
                 Collections.emptyList(),
                 Collections.emptySet()));
 
-            mockClient.prepareResponse( body -> {
-                    firstAttemptTime.set(time.milliseconds());
-                    return true;
-                }, new DescribeGroupsResponse(data));
+            mockClient.prepareResponse(body -> {
+                firstAttemptTime.set(time.milliseconds());
+                return true;
+            }, new DescribeGroupsResponse(data));
 
             mockClient.prepareResponse(prepareFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
 
@@ -1407,7 +1407,7 @@ public class KafkaAdminClientTest {
                 Collections.emptyList(),
                 Collections.emptySet()));
 
-            mockClient.prepareResponse( body -> {
+            mockClient.prepareResponse(body -> {
                 secondAttemptTime.set(time.milliseconds());
                 return true;
             }, new DescribeGroupsResponse(data));
@@ -1416,7 +1416,7 @@ public class KafkaAdminClientTest {
                 env.adminClient().describeConsumerGroups(singletonList("group-0")).all();
 
             TestUtils.waitForCondition(() -> mockClient.numAwaitingResponses() == 1, "Failed awaiting DescribeConsumerGroup first request failure");
-            TestUtils.waitForCondition(() -> ((KafkaAdminClient) env.adminClient()).numPendingCalls() == 1,"Failed to add retry DescribeConsumerGroup call on first failure");
+            TestUtils.waitForCondition(() -> ((KafkaAdminClient) env.adminClient()).numPendingCalls() == 1, "Failed to add retry DescribeConsumerGroup call on first failure");
             time.sleep(retryBackoff);
 
             future.get();
@@ -1647,7 +1647,7 @@ public class KafkaAdminClientTest {
 
             final ListConsumerGroupOffsetsResult result = env.adminClient().listConsumerGroupOffsets("group-0");
 
-            TestUtils.assertFutureError(result.partitionsToOffsetAndMetadata(), MaxRetriesReachedException.class);
+            TestUtils.assertFutureError(result.partitionsToOffsetAndMetadata(), TimeoutException.class);
         }
     }
 
@@ -1677,12 +1677,12 @@ public class KafkaAdminClientTest {
             mockClient.prepareResponse(body -> {
                 secondAttemptTime.set(time.milliseconds());
                 return true;
-            },new OffsetFetchResponse(Errors.NONE, Collections.emptyMap()));
+            }, new OffsetFetchResponse(Errors.NONE, Collections.emptyMap()));
 
             final KafkaFuture<Map<TopicPartition, OffsetAndMetadata>> future = env.adminClient().listConsumerGroupOffsets("group-0").partitionsToOffsetAndMetadata();
 
             TestUtils.waitForCondition(() -> mockClient.numAwaitingResponses() == 1, "Failed awaiting ListConsumerGroupOffsets first request failure");
-            TestUtils.waitForCondition(() -> ((KafkaAdminClient) env.adminClient()).numPendingCalls() == 1,"Failed to add retry ListConsumerGroupOffsets call on first failure");
+            TestUtils.waitForCondition(() -> ((KafkaAdminClient) env.adminClient()).numPendingCalls() == 1, "Failed to add retry ListConsumerGroupOffsets call on first failure");
             time.sleep(retryBackoff);
 
             future.get();
@@ -1764,7 +1764,7 @@ public class KafkaAdminClientTest {
 
             final DeleteConsumerGroupsResult result = env.adminClient().deleteConsumerGroups(groupIds);
 
-            TestUtils.assertFutureError(result.all(), MaxRetriesReachedException.class);
+            TestUtils.assertFutureError(result.all(), TimeoutException.class);
         }
     }
 
@@ -1812,7 +1812,7 @@ public class KafkaAdminClientTest {
             final KafkaFuture<Void> future = env.adminClient().deleteConsumerGroups(groupIds).all();
 
             TestUtils.waitForCondition(() -> mockClient.numAwaitingResponses() == 1, "Failed awaiting DeleteConsumerGroups first request failure");
-            TestUtils.waitForCondition(() -> ((KafkaAdminClient) env.adminClient()).numPendingCalls() == 1,"Failed to add retry DeleteConsumerGroups call on first failure");
+            TestUtils.waitForCondition(() -> ((KafkaAdminClient) env.adminClient()).numPendingCalls() == 1, "Failed to add retry DeleteConsumerGroups call on first failure");
             time.sleep(retryBackoff);
 
             future.get();
@@ -1917,12 +1917,12 @@ public class KafkaAdminClientTest {
 
             env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
 
-            env.kafkaClient().prepareResponse(prepareOffsetDeleteResponse("foo", 0,Errors.NOT_COORDINATOR));
+            env.kafkaClient().prepareResponse(prepareOffsetDeleteResponse("foo", 0, Errors.NOT_COORDINATOR));
 
             final DeleteConsumerGroupOffsetsResult result = env.adminClient()
                 .deleteConsumerGroupOffsets("group-0", Stream.of(tp1).collect(Collectors.toSet()));
 
-            TestUtils.assertFutureError(result.all(), MaxRetriesReachedException.class);
+            TestUtils.assertFutureError(result.all(), TimeoutException.class);
         }
     }
 
@@ -1948,19 +1948,19 @@ public class KafkaAdminClientTest {
             mockClient.prepareResponse(body -> {
                 firstAttemptTime.set(time.milliseconds());
                 return true;
-            }, prepareOffsetDeleteResponse("foo", 0,Errors.NOT_COORDINATOR));
+            }, prepareOffsetDeleteResponse("foo", 0, Errors.NOT_COORDINATOR));
 
             mockClient.prepareResponse(prepareFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
 
             mockClient.prepareResponse(body -> {
                 secondAttemptTime.set(time.milliseconds());
                 return true;
-            }, prepareOffsetDeleteResponse("foo", 0,Errors.NONE));
+            }, prepareOffsetDeleteResponse("foo", 0, Errors.NONE));
 
             final KafkaFuture<Void> future = env.adminClient().deleteConsumerGroupOffsets("group-0", Stream.of(tp1).collect(Collectors.toSet())).all();
 
             TestUtils.waitForCondition(() -> mockClient.numAwaitingResponses() == 1, "Failed awaiting DeleteConsumerGroupOffsets first request failure");
-            TestUtils.waitForCondition(() -> ((KafkaAdminClient) env.adminClient()).numPendingCalls() == 1,"Failed to add retry DeleteConsumerGroupOffsets call on first failure");
+            TestUtils.waitForCondition(() -> ((KafkaAdminClient) env.adminClient()).numPendingCalls() == 1, "Failed to add retry DeleteConsumerGroupOffsets call on first failure");
             time.sleep(retryBackoff);
 
             future.get();
@@ -2207,7 +2207,7 @@ public class KafkaAdminClientTest {
             final RemoveMembersFromConsumerGroupResult result = env.adminClient().removeMembersFromConsumerGroup(
                 "groupId", new RemoveMembersFromConsumerGroupOptions(membersToRemove));
 
-            TestUtils.assertFutureError(result.all(), MaxRetriesReachedException.class);
+            TestUtils.assertFutureError(result.all(), TimeoutException.class);
         }
     }
 
@@ -2243,7 +2243,7 @@ public class KafkaAdminClientTest {
             env.kafkaClient().prepareResponse(body -> {
                 secondAttemptTime.set(time.milliseconds());
                 return true;
-            },new LeaveGroupResponse(new LeaveGroupResponseData()
+            }, new LeaveGroupResponse(new LeaveGroupResponseData()
                 .setErrorCode(Errors.NONE.code())
                 .setMembers(Collections.singletonList(responseOne))));
 
@@ -2254,7 +2254,7 @@ public class KafkaAdminClientTest {
 
 
             TestUtils.waitForCondition(() -> mockClient.numAwaitingResponses() == 1, "Failed awaiting RemoveMembersFromGroup first request failure");
-            TestUtils.waitForCondition(() -> ((KafkaAdminClient) env.adminClient()).numPendingCalls() == 1,"Failed to add retry RemoveMembersFromGroup call on first failure");
+            TestUtils.waitForCondition(() -> ((KafkaAdminClient) env.adminClient()).numPendingCalls() == 1, "Failed to add retry RemoveMembersFromGroup call on first failure");
             time.sleep(retryBackoff);
 
             future.get();

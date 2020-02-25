@@ -61,7 +61,6 @@ import org.apache.kafka.common.errors.DisconnectException;
 import org.apache.kafka.common.errors.InvalidGroupIdException;
 import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.errors.InvalidTopicException;
-import org.apache.kafka.common.errors.MaxRetriesReachedException;
 import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.UnknownServerException;
@@ -2704,7 +2703,7 @@ public class KafkaAdminClient extends AdminClient {
 
         if (call.tries() > maxRetries) {
             log.debug("Max retries for {} reached", call);
-            call.fail(time.milliseconds(), new MaxRetriesReachedException());
+            call.fail(time.milliseconds(), new TimeoutException());
             return;
         }
         Call findCoordinatorCall = getFindCoordinatorCall(context, nextCall);
