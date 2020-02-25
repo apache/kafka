@@ -427,4 +427,9 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
         <Bug pattern="RV_RETURN_VALUE_IGNORED_NO_SIDE_EFFECT"/>
     </Match>
 
+    <Match>
+        <Package name="io.confluent.support.metrics.collectors"/>
+        <Source name="CollectorFactory.java"/>
+        <Bug pattern="IS2_INCONSISTENT_SYNC"/>
+    </Match>
 </FindBugsFilter>

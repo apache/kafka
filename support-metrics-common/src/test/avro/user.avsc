@@ -1,0 +1,11 @@
+{
+  "namespace": "io.confluent.support.metrics.serde.test",
+  "type": "record",
+  "name": "User",
+  "fields": [
+    {
+      "name": "name",
+      "type": "string"
+    }
+  ]
+}
