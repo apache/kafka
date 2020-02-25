@@ -762,6 +762,7 @@ public class MetadataTest {
         return brokers;
     }
 
+    @Test
     public void testMetadataMerge() {
         Time time = new MockTime();
 

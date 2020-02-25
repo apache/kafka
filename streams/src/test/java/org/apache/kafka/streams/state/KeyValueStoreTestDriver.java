@@ -30,6 +30,7 @@ import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.errors.DefaultProductionExceptionHandler;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
@@ -38,12 +39,12 @@ import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.processor.internals.RecordCollector;
 import org.apache.kafka.streams.processor.internals.RecordCollectorImpl;
+import org.apache.kafka.streams.processor.internals.StreamsProducer;
 import org.apache.kafka.streams.state.internals.MeteredKeyValueStore;
 import org.apache.kafka.streams.state.internals.RocksDBKeyValueStoreTest;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.MockTimestampExtractor;
-import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
 
 import java.io.File;
@@ -195,13 +196,15 @@ public class KeyValueStoreTestDriver<K, V> {
         final Producer<byte[], byte[]> producer = new MockProducer<>(true, rawSerializer, rawSerializer);
         final Consumer<byte[], byte[]> consumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST);
 
+        final LogContext logContext = new LogContext("KeyValueStoreTestDriver ");
         final RecordCollector recordCollector = new RecordCollectorImpl(
+            logContext,
             new TaskId(0, 0),
-            new StreamsConfig(StreamsTestUtils.getStreamsConfig("test")),
-            new LogContext("KeyValueStoreTestDriver "),
-            new MockStreamsMetrics(new Metrics()),
             consumer,
-            id -> producer
+            new StreamsProducer(logContext, producer),
+            new DefaultProductionExceptionHandler(),
+            false,
+            new MockStreamsMetrics(new Metrics())
         ) {
             @Override
             public <K1, V1> void send(final String topic,

@@ -279,7 +279,7 @@
                         <p>You must provide a name for the table (more precisely, for the internal
                             <a class="reference internal" href="../architecture.html#streams_architecture_state"><span class="std std-ref">state store</span></a> that backs the table).  This is required for
                             supporting <a class="reference internal" href="interactive-queries.html#streams-developer-guide-interactive-queries"><span class="std std-ref">interactive queries</span></a> against the table. When a
-                            name is not provided the table will not queryable and an internal name will be provided for the state store.</p>
+                            name is not provided the table will not be queryable and an internal name will be provided for the state store.</p>
                         <p>If you do not specify SerDes explicitly, the default SerDes from the
                             <a class="reference internal" href="config-streams.html#streams-developer-guide-configuration"><span class="std std-ref">configuration</span></a> are used.</p>
                         <p>You <strong>must specify SerDes explicitly</strong> if the key or value types of the records in the Kafka input
@@ -303,7 +303,7 @@
                         <p>You must provide a name for the table (more precisely, for the internal
                             <a class="reference internal" href="../architecture.html#streams_architecture_state"><span class="std std-ref">state store</span></a> that backs the table).  This is required for
                             supporting <a class="reference internal" href="interactive-queries.html#streams-developer-guide-interactive-queries"><span class="std std-ref">interactive queries</span></a> against the table. When a
-                            name is not provided the table will not queryable and an internal name will be provided for the state store.</p>
+                            name is not provided the table will not be queryable and an internal name will be provided for the state store.</p>
                         <div class="highlight-java"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">org.apache.kafka.common.serialization.Serdes</span><span class="o">;</span>
 <span class="kn">import</span> <span class="nn">org.apache.kafka.streams.StreamsBuilder</span><span class="o">;</span>
 <span class="kn">import</span> <span class="nn">org.apache.kafka.streams.kstream.GlobalKTable</span><span class="o">;</span>

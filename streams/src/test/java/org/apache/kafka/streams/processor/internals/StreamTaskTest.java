@@ -1322,6 +1322,46 @@ public class StreamTaskTest {
     }
 
     @Test
+    public void shouldNotCommitOnSuspendRestoring() {
+        stateManager.flush();
+        EasyMock.expectLastCall();
+        stateManager.checkpoint(EasyMock.eq(Collections.emptyMap()));
+        EasyMock.expectLastCall();
+        recordCollector.commit(EasyMock.anyObject());
+        EasyMock.expectLastCall().andThrow(new AssertionError("Should not call this function")).anyTimes();
+        EasyMock.replay(stateManager);
+
+        task = createOptimizedStatefulTask(createConfig(false, "100"), consumer);
+
+        task.initializeIfNeeded();
+        task.suspend();
+
+        assertEquals(Task.State.SUSPENDED, task.state());
+
+        verify(stateManager);
+    }
+
+    @Test
+    public void shouldNotCommitOnCloseRestoring() {
+        stateManager.flush();
+        EasyMock.expectLastCall();
+        stateManager.checkpoint(EasyMock.eq(Collections.emptyMap()));
+        EasyMock.expectLastCall();
+        recordCollector.commit(EasyMock.anyObject());
+        EasyMock.expectLastCall().andThrow(new AssertionError("Should not call this function")).anyTimes();
+        EasyMock.replay(stateManager);
+
+        task = createOptimizedStatefulTask(createConfig(false, "100"), consumer);
+
+        task.initializeIfNeeded();
+        task.closeClean();
+
+        assertEquals(Task.State.CLOSED, task.state());
+
+        verify(stateManager);
+    }
+
+    @Test
     public void shouldCommitOnCloseClean() {
         final long offset = 543L;
 
@@ -1339,6 +1379,7 @@ public class StreamTaskTest {
 
         task = createOptimizedStatefulTask(createConfig(false, "100"), consumer);
         task.initializeIfNeeded();
+        task.completeRestoration();
         task.closeClean();
 
         assertEquals(Task.State.CLOSED, task.state());
@@ -1365,6 +1406,7 @@ public class StreamTaskTest {
 
         task = createOptimizedStatefulTask(createConfig(false, "100"), consumer);
         task.initializeIfNeeded();
+        task.completeRestoration();
 
         assertThrows(ProcessorStateException.class, task::closeClean);
 
@@ -1418,7 +1460,7 @@ public class StreamTaskTest {
         EasyMock.expectLastCall();
         stateManager.flush();
         EasyMock.expectLastCall();
-        stateManager.checkpoint(Collections.singletonMap(changelogPartition, offset));
+        stateManager.checkpoint(Collections.emptyMap());
         EasyMock.expectLastCall().andThrow(new ProcessorStateException("KABOOM!")).anyTimes();
         stateManager.close();
         EasyMock.expectLastCall().andThrow(new AssertionError("Close should not be called!")).anyTimes();

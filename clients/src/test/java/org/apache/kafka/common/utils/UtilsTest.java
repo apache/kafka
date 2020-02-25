@@ -72,8 +72,8 @@ public class UtilsTest {
         cases.put("lkjh234lh9fiuh90y23oiuhsafujhadof229phr9h19h89h8".getBytes(), -58897971);
         cases.put(new byte[]{'a', 'b', 'c'}, 479470107);
 
-        for (Map.Entry c : cases.entrySet()) {
-            assertEquals((int) c.getValue(), murmur2((byte[]) c.getKey()));
+        for (Map.Entry<byte[], Integer> c : cases.entrySet()) {
+            assertEquals(c.getValue().intValue(), murmur2(c.getKey()));
         }
     }
 

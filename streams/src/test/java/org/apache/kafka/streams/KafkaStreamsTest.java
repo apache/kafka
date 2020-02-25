@@ -246,7 +246,7 @@ public class KafkaStreamsTest {
         globalStreamThread.shutdown();
         EasyMock.expectLastCall().andAnswer(() -> {
             supplier.restoreConsumer.close();
-            for (final MockProducer producer : supplier.producers) {
+            for (final MockProducer<byte[], byte[]> producer : supplier.producers) {
                 producer.close();
             }
             globalThreadState.set(GlobalStreamThread.State.DEAD);
@@ -302,7 +302,7 @@ public class KafkaStreamsTest {
         EasyMock.expectLastCall().andAnswer(() -> {
             supplier.consumer.close();
             supplier.restoreConsumer.close();
-            for (final MockProducer producer : supplier.producers) {
+            for (final MockProducer<byte[], byte[]> producer : supplier.producers) {
                 producer.close();
             }
             state.set(StreamThread.State.DEAD);
@@ -478,7 +478,7 @@ public class KafkaStreamsTest {
 
         assertTrue(supplier.consumer.closed());
         assertTrue(supplier.restoreConsumer.closed());
-        for (final MockProducer p : supplier.producers) {
+        for (final MockProducer<byte[], byte[]> p : supplier.producers) {
             assertTrue(p.closed());
         }
     }
@@ -920,7 +920,7 @@ public class KafkaStreamsTest {
             Serdes.String().deserializer(),
             globalTopicName,
             globalTopicName + "-processor",
-            new MockProcessorSupplier());
+            new MockProcessorSupplier<byte[], byte[]>());
         return topology;
     }
 

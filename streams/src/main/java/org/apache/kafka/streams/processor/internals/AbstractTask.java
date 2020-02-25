@@ -20,8 +20,10 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 
+import java.util.Collection;
 import java.util.Set;
 
+import static org.apache.kafka.streams.processor.internals.Task.State.CLOSED;
 import static org.apache.kafka.streams.processor.internals.Task.State.CREATED;
 
 public abstract class AbstractTask implements Task {
@@ -56,6 +58,16 @@ public abstract class AbstractTask implements Task {
     }
 
     @Override
+    public Collection<TopicPartition> changelogPartitions() {
+        return stateMgr.changelogPartitions();
+    }
+
+    @Override
+    public void markChangelogAsCorrupted(final Set<TopicPartition> partitions) {
+        stateMgr.markChangelogAsCorrupted(partitions);
+    }
+
+    @Override
     public StateStore getStore(final String name) {
         return stateMgr.getStore(name);
     }
@@ -68,6 +80,15 @@ public abstract class AbstractTask implements Task {
     @Override
     public final Task.State state() {
         return state;
+    }
+
+    @Override
+    public void revive() {
+        if (state == CLOSED) {
+            transitionTo(CREATED);
+        } else {
+            throw new IllegalStateException("Illegal state " + state() + " while reviving task " + id);
+        }
     }
 
     final void transitionTo(final Task.State newState) {
