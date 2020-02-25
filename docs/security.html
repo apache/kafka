@@ -1890,14 +1890,6 @@
         It is only when  using mTLS authentication alone that all the DNs must match (and SANs become critical --
         again, in the absence of writing and deploying a custom ZooKeeper authentication provider as described below).
         </p>
-    Note that ZooKeeper version 3.5.6 <strong>requires</strong> clients that connect via TLS to present their own certificate
-    (i.e. encryption and mTLS authentication are linked rather than independent of each other in this ZooKeeper version).
-    There is a ZooKeeper sever-side config <tt>ssl.clientAuth</tt> that is recognized
-    (case-insensitively: <tt>want</tt>/<tt>need</tt>/<tt>none</tt> are the valid options),
-    but this config <a href="https://issues.apache.org/jira/browse/ZOOKEEPER-3674">is not acted upon in version 3.5.6</a>.
-    A future version of ZooKeeper will both recognize and act upon this config and allow clients to connect via a TLS-encrypted connection
-    without presenting their own certificate -- i.e. encryption and authentication will become independent of each other.
-    But for now this is not the case.
     </p>
     <p>
         Use the broker properties file to set TLS configs for brokers as described below.
@@ -1935,7 +1927,7 @@
     </p>
     Here is a sample (partial) ZooKeeper configuration for enabling TLS authentication.
     These configurations are described in the
-    <a href="https://zookeeper.apache.org/doc/r3.5.6/zookeeperAdmin.html#sc_authOptions">ZooKeeper Admin Guide</a>.
+    <a href="https://zookeeper.apache.org/doc/r3.5.7/zookeeperAdmin.html#sc_authOptions">ZooKeeper Admin Guide</a>.
     <pre>
         secureClientPort=2182
         serverCnxnFactory=org.apache.zookeeper.server.NettyServerCnxnFactory
@@ -1949,8 +1941,9 @@
     to a value different from the keystore password itself.
     Be sure to set the key password to be the same as the keystore password.
 
-    Here is a sample (partial) Kafka Broker configuration for connecting to ZooKeeper with mTLS authentication.
-    These configuration are described above in <a href="#brokerconfigs">Broker Configs</a>.
+    <p>Here is a sample (partial) Kafka Broker configuration for connecting to ZooKeeper with mTLS authentication.
+    These configurations are described above in <a href="#brokerconfigs">Broker Configs</a>.
+    </p>
     <pre>
         # connect to the ZooKeeper port configured for TLS
         zookeeper.connect=zk1:2182,zk2:2182,zk3:2182
@@ -2009,12 +2002,34 @@
     <h4><a id="zk_authz_ensemble" href="#zk_authz_ensemble">7.6.3 Migrating the ZooKeeper ensemble</a></h4>
     It is also necessary to enable SASL and/or mTLS authentication on the ZooKeeper ensemble. To do it, we need to perform a rolling restart of the server and set a few properties. See above for mTLS information.  Please refer to the ZooKeeper documentation for more detail:
     <ol>
-        <li><a href="http://zookeeper.apache.org/doc/r3.5.6/zookeeperProgrammers.html#sc_ZooKeeperAccessControl">Apache ZooKeeper documentation</a></li>
+        <li><a href="https://zookeeper.apache.org/doc/r3.5.7/zookeeperProgrammers.html#sc_ZooKeeperAccessControl">Apache ZooKeeper documentation</a></li>
         <li><a href="https://cwiki.apache.org/confluence/display/ZOOKEEPER/Zookeeper+and+SASL">Apache ZooKeeper wiki</a></li>
     </ol>
-    <h4><a id="zk_authz_quorum" href="#zk_authz_quorum">7.6.4 ZooKeeper Quorum Mutial TLS Authentication</a></h4>
+    <h4><a id="zk_authz_quorum" href="#zk_authz_quorum">7.6.4 ZooKeeper Quorum Mutual TLS Authentication</a></h4>
     It is possible to enable mTLS authentication between the ZooKeeper servers themselves.
-    Please refer to the <a href="https://zookeeper.apache.org/doc/r3.5.6/zookeeperAdmin.html#Quorum+TLS">ZooKeeper documentation</a> for more detail.
+    Please refer to the <a href="https://zookeeper.apache.org/doc/r3.5.7/zookeeperAdmin.html#Quorum+TLS">ZooKeeper documentation</a> for more detail.
+
+    <h3><a id="zk_encryption" href="#zk_encryption">7.7 ZooKeeper Encryption</a></h3>
+    ZooKeeper connections that use mutual TLS are encrypted.
+    Beginning with ZooKeeper version 3.5.7 (the version shipped with Kafka version 2.5) ZooKeeper supports a sever-side config
+    <tt>ssl.clientAuth</tt> (case-insensitively: <tt>want</tt>/<tt>need</tt>/<tt>none</tt> are the valid options, the default is <tt>need</tt>),
+    and setting this value to <tt>none</tt> in ZooKeeper allows clients to connect via a TLS-encrypted connection
+    without presenting their own certificate.  Here is a sample (partial) Kafka Broker configuration for connecting to ZooKeeper with just TLS encryption.
+    These configurations are described above in <a href="#brokerconfigs">Broker Configs</a>.
+    <pre>
+        # connect to the ZooKeeper port configured for TLS
+        zookeeper.connect=zk1:2182,zk2:2182,zk3:2182
+        # required to use TLS to ZooKeeper (default is false)
+        zookeeper.ssl.client.enable=true
+        # required to use TLS to ZooKeeper
+        zookeeper.clientCnxnSocket=org.apache.zookeeper.ClientCnxnSocketNetty
+        # define trust stores to use TLS to ZooKeeper; ignored unless zookeeper.ssl.client.enable=true
+        # no need to set keystore information assuming ssl.clientAuth=none on ZooKeeper
+        zookeeper.ssl.truststore.location=/path/to/kafka/truststore.jks
+        zookeeper.ssl.truststore.password=kafka-ts-passwd
+        # tell broker to create ACLs on znodes (if using SASL authentication, otherwise do not set this)
+        zookeeper.set.acl=true
+    </pre>
 </script>
 
 <div class="p-security"></div>
