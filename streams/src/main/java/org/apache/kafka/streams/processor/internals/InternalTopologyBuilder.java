@@ -609,7 +609,7 @@ public class InternalTopologyBuilder {
     }
 
     public void connectSourceStoreAndTopic(final String sourceStoreName,
-                                            final String topic) {
+                                           final String topic) {
         if (storeToChangelogTopic.containsKey(sourceStoreName)) {
             throw new TopologyException("Source store " + sourceStoreName + " is already added.");
         }
@@ -789,7 +789,10 @@ public class InternalTopologyBuilder {
         return newNodeGroupId;
     }
 
-    public synchronized ProcessorTopology build() {
+    /**
+     * @return the full topology minus any global state
+     */
+    public synchronized ProcessorTopology buildTopology() {
         final Set<String> nodeGroup = new HashSet<>();
         for (final Set<String> value : nodeGroups().values()) {
             nodeGroup.addAll(value);
@@ -800,14 +803,18 @@ public class InternalTopologyBuilder {
         return build(nodeGroup);
     }
 
-    public synchronized ProcessorTopology build(final int topicGroupId) {
+    /**
+     * @param topicGroupId group of topics corresponding to a single subtopology
+     * @return subset of the full topology
+     */
+    public synchronized ProcessorTopology buildSubtopology(final int topicGroupId) {
         final Set<String> nodeGroup = nodeGroups().get(topicGroupId);
         return build(nodeGroup);
     }
 
     /**
      * Builds the topology for any global state stores
-     * @return ProcessorTopology
+     * @return ProcessorTopology of global state
      */
     public synchronized ProcessorTopology buildGlobalStateTopology() {
         Objects.requireNonNull(applicationId, "topology has not completed optimization");
@@ -1029,10 +1036,8 @@ public class InternalTopologyBuilder {
                 // if the node is connected to a state store whose changelog topics are not predefined,
                 // add to the changelog topics
                 for (final StateStoreFactory stateFactory : stateFactories.values()) {
-                    if (stateFactory.loggingEnabled() && stateFactory.users().contains(node)) {
-                        final String topicName = storeToChangelogTopic.containsKey(stateFactory.name()) ?
-                                storeToChangelogTopic.get(stateFactory.name()) :
-                                ProcessorStateManager.storeChangelogTopic(applicationId, stateFactory.name());
+                    if (stateFactory.users().contains(node) && storeToChangelogTopic.containsKey(stateFactory.name())) {
+                        final String topicName = storeToChangelogTopic.get(stateFactory.name());
                         if (!stateChangelogTopics.containsKey(topicName)) {
                             final InternalTopicConfig internalTopicConfig =
                                 createChangelogTopicConfig(stateFactory, topicName);
@@ -1707,6 +1712,20 @@ public class InternalTopologyBuilder {
             this.sourceTopics = sourceTopics;
             this.stateChangelogTopics = stateChangelogTopics;
             this.repartitionSourceTopics = repartitionSourceTopics;
+        }
+
+        /**
+         * Returns the config for any changelogs that must be prepared for this topic group, ie excluding any source
+         * topics that are reused as a changelog
+         */
+        public Set<InternalTopicConfig> nonSourceChangelogTopics() {
+            final Set<InternalTopicConfig> topicConfigs = new HashSet<>();
+            for (final Map.Entry<String, InternalTopicConfig> changelogTopicEntry : stateChangelogTopics.entrySet()) {
+                if (!sourceTopics.contains(changelogTopicEntry.getKey())) {
+                    topicConfigs.add(changelogTopicEntry.getValue());
+                }
+            }
+            return topicConfigs;
         }
 
         @Override

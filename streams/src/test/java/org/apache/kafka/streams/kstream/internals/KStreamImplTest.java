@@ -366,7 +366,7 @@ public class KStreamImplTest {
     public void shouldNotAllowNullNamedOnFlatMap() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
-            () -> testStream.flatMap((k, v) -> Collections.emptyList(), null));
+            () -> testStream.flatMap((k, v) -> Collections.singleton(new KeyValue<>(k, v)), null));
         assertThat(exception.getMessage(), equalTo("named can't be null"));
     }
 
@@ -1340,7 +1340,7 @@ public class KStreamImplTest {
                 1 + // to
                 2 + // through
                 1, // process
-            TopologyWrapper.getInternalTopologyBuilder(builder.build()).setApplicationId("X").build().processors().size());
+            TopologyWrapper.getInternalTopologyBuilder(builder.build()).setApplicationId("X").buildTopology().processors().size());
     }
 
     @SuppressWarnings("rawtypes")
@@ -1444,7 +1444,7 @@ public class KStreamImplTest {
         stream1.to("topic-5");
         stream2.through("topic-6");
 
-        final ProcessorTopology processorTopology = TopologyWrapper.getInternalTopologyBuilder(builder.build()).setApplicationId("X").build();
+        final ProcessorTopology processorTopology = TopologyWrapper.getInternalTopologyBuilder(builder.build()).setApplicationId("X").buildTopology();
         assertThat(processorTopology.source("topic-6").getTimestampExtractor(), instanceOf(FailOnInvalidTimestamp.class));
         assertNull(processorTopology.source("topic-4").getTimestampExtractor());
         assertNull(processorTopology.source("topic-3").getTimestampExtractor());
@@ -1523,7 +1523,7 @@ public class KStreamImplTest {
                 Serdes.String()))
             .to("output-topic", Produced.with(Serdes.String(), Serdes.String()));
 
-        final ProcessorTopology topology = TopologyWrapper.getInternalTopologyBuilder(builder.build()).setApplicationId("X").build();
+        final ProcessorTopology topology = TopologyWrapper.getInternalTopologyBuilder(builder.build()).setApplicationId("X").buildTopology();
 
         final SourceNode originalSourceNode = topology.source("topic-1");
 
@@ -1553,7 +1553,7 @@ public class KStreamImplTest {
         )
             .to("output-topic", Produced.with(Serdes.String(), Serdes.String()));
 
-        final ProcessorTopology topology = TopologyWrapper.getInternalTopologyBuilder(builder.build()).setApplicationId("X").build();
+        final ProcessorTopology topology = TopologyWrapper.getInternalTopologyBuilder(builder.build()).setApplicationId("X").buildTopology();
 
         final SourceNode originalSourceNode = topology.source("topic-1");
 
