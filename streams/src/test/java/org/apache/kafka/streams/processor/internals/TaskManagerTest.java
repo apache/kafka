@@ -715,6 +715,11 @@ public class TaskManagerTest {
         verify(consumer);
     }
 
+    @Test
+    public void shouldHaveRemainingPartitionsUncleared() {
+
+    }
+
     private static void expectRestoreToBeCompleted(final Consumer<byte[], byte[]> consumer,
                                                    final ChangelogReader changeLogReader) {
         final Set<TopicPartition> assignment = singleton(new TopicPartition("assignment", 0));
