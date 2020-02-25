@@ -786,8 +786,8 @@ public class JsonConverterTest {
         assertEquals(new SchemaAndValue(Schema.STRING_SCHEMA, "foo-bar-baz"), converter.toConnectHeader(TOPIC, "headerName", "{ \"schema\": { \"type\": \"string\" }, \"payload\": \"foo-bar-baz\" }".getBytes()));
     }
 
-    // Value `null` is valid for an optional filed, even though the filed has a default value.
-    // Only when field is required, the converter return default value fallback when value is `null`.
+    // Value `null` is valid for an optional field, even though the field has a default value.
+    // Return a default value fallback instead of `null` when the field is actually required.
 
     @Test
     public void nullValueWithDefaultValueAndOptionalToJson() {

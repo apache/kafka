@@ -582,8 +582,8 @@ public class JsonConverter implements Converter, HeaderConverter {
         if (logicalValue == null) {
             if (schema == null) // Any schema is valid and we don't have a default, so treat this as an optional schema
                 return null;
-            // Value `null` is valid for an optional filed, even though the filed has a default value.
-            // Only when field is required, the converter return default value fallback when value is `null`.
+            // Value `null` is valid for an optional field, even though the field has a default value.
+            // Return a default value fallback instead of `null` when the field is actually required
             if (schema.isOptional())
                 return JsonNodeFactory.instance.nullNode();
             if (schema.defaultValue() != null)
