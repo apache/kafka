@@ -306,7 +306,7 @@ public class TaskManager {
         if (!remainingPartitions.isEmpty()) {
             log.warn("The following partitions {} are missing from the task partitions. It could potentially " +
                 "due to race condition of consumer detecting the heartbeat failure, or the tasks " +
-                "have been cleaned up by the handleAssignment callback", remainingPartitions);
+                "have been cleaned up by the handleAssignment callback.", remainingPartitions);
         }
 
         for (final TaskId taskId : revokedTasks) {
