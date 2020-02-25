@@ -44,7 +44,6 @@ public class DescribeLogDirsRequest extends AbstractRequest {
                     new Field(PARTITIONS_KEY_NAME, new ArrayOf(INT32), "List of partition ids of the topic.")))));
 
     private final DescribeLogDirsRequestData data;
-    private final short version;
 
     public static class Builder extends AbstractRequest.Builder<DescribeLogDirsRequest> {
         private final DescribeLogDirsRequestData data;
@@ -69,14 +68,12 @@ public class DescribeLogDirsRequest extends AbstractRequest {
     public DescribeLogDirsRequest(Struct struct, short version) {
         super(ApiKeys.DESCRIBE_LOG_DIRS, version);
         this.data = new DescribeLogDirsRequestData(struct, version);
-        this.version = version;
     }
 
     // topicPartitions == null indicates requesting all partitions, and an empty list indicates requesting no partitions.
     public DescribeLogDirsRequest(DescribeLogDirsRequestData data, short version) {
         super(ApiKeys.DESCRIBE_LOG_DIRS, version);
         this.data = data;
-        this.version = version;
     }
 
     public DescribeLogDirsRequestData data() {
@@ -85,7 +82,7 @@ public class DescribeLogDirsRequest extends AbstractRequest {
 
     @Override
     protected Struct toStruct() {
-        return data.toStruct(version);
+        return data.toStruct(version());
     }
 
     @Override

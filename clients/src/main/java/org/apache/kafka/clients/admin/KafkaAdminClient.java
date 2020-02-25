@@ -2311,10 +2311,10 @@ public class KafkaAdminClient extends AdminClient {
             }
             DescribableLogDirTopic describableLogDirTopic = requestData.topics().find(replica.topic());
             if (describableLogDirTopic == null) {
-                ArrayList<Integer> v = new ArrayList<>();
-                v.add(replica.partition());
+                List<Integer> partitionIndex = new ArrayList<>();
+                partitionIndex.add(replica.partition());
                 describableLogDirTopic = new DescribableLogDirTopic().setTopic(replica.topic())
-                        .setPartitionIndex(v);
+                        .setPartitionIndex(partitionIndex);
                 requestData.topics().add(describableLogDirTopic);
             } else {
                 describableLogDirTopic.partitionIndex().add(replica.partition());
