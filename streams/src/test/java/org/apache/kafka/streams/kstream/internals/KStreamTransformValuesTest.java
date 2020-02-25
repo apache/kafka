@@ -33,7 +33,6 @@ import org.apache.kafka.streams.test.ConsumerRecordFactory;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.SingletonNoOpValueTransformer;
 import org.apache.kafka.test.StreamsTestUtils;
-import org.easymock.EasyMock;
 import org.easymock.EasyMockRunner;
 import org.easymock.Mock;
 import org.easymock.MockType;
@@ -42,7 +41,6 @@ import org.junit.runner.RunWith;
 
 import java.util.Properties;
 
-import static org.easymock.EasyMock.mock;
 import static org.hamcrest.CoreMatchers.isA;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertArrayEquals;
@@ -129,24 +127,6 @@ public class KStreamTransformValuesTest {
         final String[] expected = {"1:11 (ts: 0)", "10:121 (ts: 5)", "100:1221 (ts: 50)", "1000:12221 (ts: 500)"};
 
         assertArrayEquals(expected, supplier.theCapturedProcessor().processed.toArray());
-    }
-
-    @Test
-    public void shouldEmitNoRecordIfTransformReturnsNull() {
-        final ProcessorContext context = mock(ProcessorContext.class);
-        final ValueTransformerWithKey<Integer, Integer, Integer> valueTransformer = mock(ValueTransformerWithKey.class);
-        final KStreamTransformValues.KStreamTransformValuesProcessor<Integer, Integer, Integer> processor =
-            new KStreamTransformValues.KStreamTransformValuesProcessor<>(valueTransformer);
-        processor.init(context);
-
-        final Integer inputKey = 1;
-        final Integer inputValue = 10;
-        EasyMock.expect(valueTransformer.transform(inputKey, inputValue)).andStubReturn(null);
-        EasyMock.replay(context);
-
-        processor.process(inputKey, inputValue);
-
-        EasyMock.verify(context);
     }
 
     @SuppressWarnings("unchecked")
