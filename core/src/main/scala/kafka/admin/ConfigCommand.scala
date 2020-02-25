@@ -310,14 +310,15 @@ object ConfigCommand extends Config {
     val alterOptions = new AlterConfigsOptions().timeoutMs(30000).validateOnly(false)
     val alterEntries = (configsToBeAdded.values.map(new AlterConfigOp(_, AlterConfigOp.OpType.SET))
       ++ configsToBeDeleted.map { k => new AlterConfigOp(new ConfigEntry(k, ""), AlterConfigOp.OpType.DELETE) }
-      ).asJavaCollection
-    val oldConfig = getConfig(adminClient, entityType, entityName, includeSynonyms = false, describeAll = false)
-      .map { entry => (entry.name, entry) }.toMap
-    val invalidConfigs = configsToBeDeleted.filterNot(oldConfig.contains)
+    ).asJavaCollection
 
     entityType match {
       case ConfigType.Topic =>
         // fail the command if any of the configs to be deleted does not exist
+        val oldConfig = getConfig(adminClient, ConfigType.Topic, entityName, includeSynonyms = false, describeAll = false)
+          .map { entry => (entry.name, entry) }.toMap
+        val invalidConfigs = configsToBeDeleted.filterNot(oldConfig.contains)
+
         if (invalidConfigs.nonEmpty)
           throw new InvalidConfigurationException(s"Invalid config(s): ${invalidConfigs.mkString(",")}")
 
@@ -326,6 +327,10 @@ object ConfigCommand extends Config {
 
       case ConfigType.Broker =>
         // fail the command if any of the configs to be deleted does not exist
+        val oldConfig = getConfig(adminClient, ConfigType.Broker, entityName, includeSynonyms = false, describeAll = false)
+          .map { entry => (entry.name, entry) }.toMap
+        val invalidConfigs = configsToBeDeleted.filterNot(oldConfig.contains)
+
         if (invalidConfigs.nonEmpty)
           throw new InvalidConfigurationException(s"Invalid config(s): ${invalidConfigs.mkString(",")}")
 
