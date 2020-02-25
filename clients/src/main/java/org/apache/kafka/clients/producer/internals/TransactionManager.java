@@ -706,9 +706,9 @@ public class TransactionManager {
         maybeTransitionToErrorState(exception);
         removeInFlightBatch(batch);
 
-        if (!matchesProducerIdAndEpoch(batch)) {
+        if (!matchesProducerIdAndEpoch(batch) || hasFatalError()) {
             log.debug("Ignoring failed batch {} with producer id {}, epoch {}, and sequence number {} " +
-                            "since the producerId has been reset internally", batch, batch.producerId(),
+                            "since the batch has been reset internally", batch, batch.producerId(),
                     batch.producerEpoch(), batch.baseSequence(), exception);
             return;
         }
