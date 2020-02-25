@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.integration.utils;
 
+import kafka.server.ConfigType;
 import kafka.server.KafkaConfig$;
 import kafka.server.KafkaServer;
 import kafka.utils.MockTime;
@@ -338,5 +339,13 @@ public class EmbeddedKafkaCluster extends ExternalResource {
             servers.add(broker.kafkaServer());
         }
         return servers;
+    }
+
+    public Properties getLogConfig(final String topic) {
+        return brokers[0].kafkaServer().zkClient().getEntityConfigs(ConfigType.Topic(), topic);
+    }
+
+    public Set<String> getAllTopicsInCluster() {
+        return JavaConverters.setAsJavaSetConverter(brokers[0].kafkaServer().zkClient().getAllTopicsInCluster()).asJava();
     }
 }
