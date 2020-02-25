@@ -304,8 +304,8 @@ public class TaskManager {
         }
 
         if (!remainingPartitions.isEmpty()) {
-            throw new IllegalStateException("Some revoked partitions that do not belong " +
-                "to any tasks remain: " + remainingPartitions);
+            log.info("The following partitions {} are missing from the task partitions. It is possible that" +
+                "they have been cleaned up by the onAssignment callback", remainingPartitions);
         }
 
         for (final TaskId taskId : revokedTasks) {
