@@ -448,6 +448,7 @@ public class InternalTopologyBuilderTest {
         builder.addProcessor("processor-5", new MockProcessorSupplier(), "source-5");
         builder.addStateStore(new MockKeyValueStoreBuilder("store-3", false));
         builder.connectProcessorAndStateStores("processor-5", "store-3");
+        builder.buildTopology();
 
         final Map<Integer, InternalTopologyBuilder.TopicsInfo> topicGroups = builder.topicGroups();
 
@@ -659,6 +660,7 @@ public class InternalTopologyBuilderTest {
                 ),
                 "processor"
         );
+        builder.buildTopology();
         final Map<Integer, InternalTopologyBuilder.TopicsInfo> topicGroups = builder.topicGroups();
         final InternalTopologyBuilder.TopicsInfo topicsInfo = topicGroups.values().iterator().next();
         final InternalTopicConfig topicConfig1 = topicsInfo.stateChangelogTopics.get("appId-store1-changelog");
@@ -683,6 +685,7 @@ public class InternalTopologyBuilderTest {
         builder.addSource(null, "source", null, null, null, "topic");
         builder.addProcessor("processor", new MockProcessorSupplier(), "source");
         builder.addStateStore(storeBuilder, "processor");
+        builder.buildTopology();
         final Map<Integer, InternalTopologyBuilder.TopicsInfo> topicGroups = builder.topicGroups();
         final InternalTopologyBuilder.TopicsInfo topicsInfo = topicGroups.values().iterator().next();
         final InternalTopicConfig topicConfig = topicsInfo.stateChangelogTopics.get("appId-store-changelog");
@@ -698,6 +701,7 @@ public class InternalTopologyBuilderTest {
         builder.setApplicationId("appId");
         builder.addInternalTopic("foo");
         builder.addSource(null, "source", null, null, null, "foo");
+        builder.buildTopology();
         final InternalTopologyBuilder.TopicsInfo topicsInfo = builder.topicGroups().values().iterator().next();
         final InternalTopicConfig topicConfig = topicsInfo.repartitionSourceTopics.get("appId-foo");
         final Map<String, String> properties = topicConfig.getProperties(Collections.emptyMap(), 10000);

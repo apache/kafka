@@ -371,7 +371,7 @@ public class StreamsBuilderTest {
     }
 
     @Test
-    public void shouldReuseSourceTopicAsChangelogsWithOptimization() {
+    public void shouldReuseSourceTopicAsChangelogsWithOptimization20() {
         final String topic = "topic";
         builder.table(topic, Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("store"));
         final Properties props = StreamsTestUtils.getStreamsConfig();

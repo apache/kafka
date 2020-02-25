@@ -1036,10 +1036,8 @@ public class InternalTopologyBuilder {
                 // if the node is connected to a state store whose changelog topics are not predefined,
                 // add to the changelog topics
                 for (final StateStoreFactory stateFactory : stateFactories.values()) {
-                    if (stateFactory.users().contains(node)) {
-                        final String topicName = storeToChangelogTopic.containsKey(stateFactory.name()) ?
-                                storeToChangelogTopic.get(stateFactory.name()) :
-                                ProcessorStateManager.storeChangelogTopic(applicationId, stateFactory.name());
+                    if (stateFactory.users().contains(node) && storeToChangelogTopic.containsKey(stateFactory.name())) {
+                        final String topicName = storeToChangelogTopic.get(stateFactory.name());
                         if (!stateChangelogTopics.containsKey(topicName)) {
                             final InternalTopicConfig internalTopicConfig =
                                 createChangelogTopicConfig(stateFactory, topicName);
