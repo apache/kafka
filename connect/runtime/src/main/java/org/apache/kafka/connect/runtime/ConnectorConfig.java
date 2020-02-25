@@ -38,6 +38,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.apache.kafka.common.config.ConfigDef.NonEmptyStringWithoutControlChars.nonEmptyStringWithoutControlChars;
@@ -332,15 +333,15 @@ public class ConnectorConfig extends AbstractConfig {
             throw new ConfigException(key, String.valueOf(transformationCls), "Not a Transformation");
         }
         if (Modifier.isAbstract(transformationCls.getModifiers())) {
-            String[] childClasses = Stream.of(transformationCls.getClasses())
+            String childClassNames = Stream.of(transformationCls.getClasses())
                 .filter(transformationCls::isAssignableFrom)
                 .filter(c -> !Modifier.isAbstract(c.getModifiers()))
                 .filter(c -> Modifier.isPublic(c.getModifiers()))
                 .map(Class::getName)
-                .toArray(String[]::new);
-            String message = childClasses.length > 0 ?
-                "Transformation is abstract and cannot be created. Did you mean " + String.join(", ", childClasses) + "?" :
-                "Transformation is abstract and cannot be created.";
+                .collect(Collectors.joining(", "));
+            String message = childClassNames.trim().isEmpty() ?
+                "Transformation is abstract and cannot be created." :
+                "Transformation is abstract and cannot be created. Did you mean " + childClassNames + "?";
             throw new ConfigException(key, String.valueOf(transformationCls), message);
         }
         Transformation transformation;
