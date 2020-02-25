@@ -388,7 +388,7 @@ class TransactionStateManager(brokerId: Int,
       loadingPartitions.add(partitionAndLeaderEpoch)
     }
 
-    def loadTransactions(startTimeInMs: java.lang.Long = 0L): Unit = {
+    def loadTransactions(startTimeInMs: java.lang.Long): Unit = {
       val schedulerTime = time.milliseconds() - startTimeInMs
       info(s"Loading transaction metadata from $topicPartition at epoch $coordinatorEpoch")
       validateTransactionTopicPartitionCountIsStable()
