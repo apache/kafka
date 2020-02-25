@@ -32,7 +32,6 @@ public class DeleteRecordsRequest extends AbstractRequest {
     public static final long HIGH_WATERMARK = -1L;
 
     private final DeleteRecordsRequestData data;
-    private final short version;
 
     public static class Builder extends AbstractRequest.Builder<DeleteRecordsRequest> {
         private DeleteRecordsRequestData data;
@@ -56,18 +55,16 @@ public class DeleteRecordsRequest extends AbstractRequest {
     private DeleteRecordsRequest(DeleteRecordsRequestData data, short version) {
         super(ApiKeys.DELETE_RECORDS, version);
         this.data = data;
-        this.version = version;
     }
 
     public DeleteRecordsRequest(Struct struct, short version) {
         super(ApiKeys.DELETE_RECORDS, version);
         this.data = new DeleteRecordsRequestData(struct, version);
-        this.version = version;
     }
 
     @Override
     protected Struct toStruct() {
-        return data.toStruct(version);
+        return data.toStruct(version());
     }
 
     public DeleteRecordsRequestData data() {

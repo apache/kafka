@@ -175,7 +175,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     ApiKeys.CREATE_TOPICS -> ((resp: CreateTopicsResponse) => Errors.forCode(resp.data.topics.find(topic).errorCode())),
     ApiKeys.DELETE_TOPICS -> ((resp: requests.DeleteTopicsResponse) => Errors.forCode(resp.data.responses.find(topic).errorCode())),
     ApiKeys.DELETE_RECORDS -> ((resp: requests.DeleteRecordsResponse) => Errors.forCode(resp.data.topics
-      .find(deleteRecordsPartition.topic).partitions().find(deleteRecordsPartition.partition).errorCode)),
+      .find(tp.topic).partitions().find(tp.partition).errorCode)),
     ApiKeys.OFFSET_FOR_LEADER_EPOCH -> ((resp: OffsetsForLeaderEpochResponse) => resp.responses.get(tp).error),
     ApiKeys.DESCRIBE_CONFIGS -> ((resp: DescribeConfigsResponse) =>
       resp.configs.get(new ConfigResource(ConfigResource.Type.TOPIC, tp.topic)).error.error),

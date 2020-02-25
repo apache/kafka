@@ -1832,7 +1832,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       deleteRecordsRequest.data.topics.asScala.map(_.name))
     for ((topicPartition, offset) <- deleteRecordsRequest.data.topics.asScala.flatMap(deleteTopic => {
       deleteTopic.partitions.asScala.map(deletePartition => {
-        new TopicPartition(deleteTopic.name, deletePartition.partitionIndex) -> deletePartition.offset()
+        new TopicPartition(deleteTopic.name, deletePartition.partitionIndex) -> deletePartition.offset
       })
     })) {
       if (!authorizedTopics.contains(topicPartition.topic))
@@ -1851,7 +1851,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     def sendResponseCallback(authorizedTopicResponses: Map[TopicPartition, DeleteRecordsPartitionResult]): Unit = {
       val mergedResponseStatus = authorizedTopicResponses ++ unauthorizedTopicResponses ++ nonExistingTopicResponses
       mergedResponseStatus.foreach { case (topicPartition, status) =>
-        if (status.errorCode != Errors.NONE) {
+        if (status.errorCode != Errors.NONE.code) {
           debug("DeleteRecordsRequest with correlation id %d from client %s on partition %s failed due to %s".format(
             request.header.correlationId,
             request.header.clientId,
@@ -1863,7 +1863,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       sendResponseMaybeThrottle(request, requestThrottleMs =>
         new DeleteRecordsResponse(new DeleteRecordsResponseData()
           .setThrottleTimeMs(requestThrottleMs)
-          .setTopics(new DeleteRecordsResponseData.DeleteRecordsTopicResultCollection(mergedResponseStatus.groupBy(_._1.topic()).map { case (topic, partitionMap) => {
+          .setTopics(new DeleteRecordsResponseData.DeleteRecordsTopicResultCollection(mergedResponseStatus.groupBy(_._1.topic).map { case (topic, partitionMap) => {
             new DeleteRecordsTopicResult()
               .setName(topic)
               .setPartitions(new DeleteRecordsResponseData.DeleteRecordsPartitionResultCollection(partitionMap.map { case (topicPartition, partitionResult) => {
