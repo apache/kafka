@@ -168,6 +168,7 @@ class TransactionCoordinator(brokerId: Int,
               newMetadata.producerId,
               newMetadata.producerEpoch,
               TransactionResult.ABORT,
+              fromClient = false,
               sendRetriableErrorCallback)
           } else {
             def sendPidResponseCallback(error: Errors): Unit = {
@@ -351,6 +352,7 @@ class TransactionCoordinator(brokerId: Int,
                            producerId: Long,
                            producerEpoch: Short,
                            txnMarkerResult: TransactionResult,
+                           fromClient: Boolean,
                            responseCallback: EndTxnCallback): Unit = {
     if (transactionalId == null || transactionalId.isEmpty)
       responseCallback(Errors.INVALID_REQUEST)
@@ -366,7 +368,8 @@ class TransactionCoordinator(brokerId: Int,
           txnMetadata.inLock {
             if (txnMetadata.producerId != producerId)
               Left(Errors.INVALID_PRODUCER_ID_MAPPING)
-            else if (producerEpoch < txnMetadata.producerEpoch)
+            else if ((fromClient && producerEpoch != txnMetadata.producerEpoch) || producerEpoch < txnMetadata.producerEpoch)
+              // Strict equality is enforced on the client side requests, as they shouldn't bump the producer epoch.
               Left(Errors.INVALID_PRODUCER_EPOCH)
             else if (txnMetadata.pendingTransitionInProgress && txnMetadata.pendingState.get != PrepareEpochFence)
               Left(Errors.CONCURRENT_TRANSACTIONS)
@@ -546,6 +549,7 @@ class TransactionCoordinator(brokerId: Int,
               txnTransitMetadata.producerId,
               txnTransitMetadata.producerEpoch,
               TransactionResult.ABORT,
+              fromClient = false,
               onComplete(txnIdAndPidEpoch))
           }
       }

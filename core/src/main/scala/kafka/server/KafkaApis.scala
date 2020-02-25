@@ -1969,6 +1969,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         endTxnRequest.data.producerId,
         endTxnRequest.data.producerEpoch,
         endTxnRequest.result(),
+        fromClient = true,
         sendResponseCallback)
     } else
       sendResponseMaybeThrottle(request, requestThrottleMs =>
