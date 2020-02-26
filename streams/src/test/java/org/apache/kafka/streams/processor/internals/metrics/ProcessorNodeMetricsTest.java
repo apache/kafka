@@ -121,7 +121,7 @@ public class ProcessorNodeMetricsTest {
         final String descriptionOfRate = "The average number of calls to process per second";
         expect(streamsMetrics.taskLevelSensor(THREAD_ID, TASK_ID, metricNamePrefix, RecordingLevel.DEBUG))
             .andReturn(expectedParentSensor);
-        expect(streamsMetrics.nodeLevelTagMap(THREAD_ID, TASK_ID, StreamsMetricsImpl.ROLLUP_VALUE))
+        expect(streamsMetrics.taskLevelTagMap(THREAD_ID, TASK_ID))
             .andReturn(parentTagMap);
         StreamsMetricsImpl.addInvocationRateAndCountToSensor(
             expectedParentSensor,
