@@ -337,7 +337,9 @@ class ZkPartitionStateMachine(config: KafkaConfig,
 
       finished.foreach {
         case (partition, Left(e)) =>
-          logFailedStateChange(partition, partitionState(partition), OnlinePartition, e)
+          logger.error(s"Controller $controllerId epoch ${controllerContext.epoch} failed to "
+            + s" change state for partition $partition from ${partitionState(partition)} "
+            + s"to $OnlinePartition", e)
         case (_, Right(_)) => // Ignore; success so no need to log failed state change
       }
 
