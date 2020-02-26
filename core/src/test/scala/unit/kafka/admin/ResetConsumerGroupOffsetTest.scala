@@ -29,41 +29,6 @@ import org.junit.Test
 import scala.collection.JavaConverters._
 import scala.collection.Seq
 
-class TimeConversionTests {
-
-  @Test
-  def testDateTimeFormats(): Unit = {
-    //check valid formats
-    invokeGetDateTimeMethod(new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS"))
-    invokeGetDateTimeMethod(new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSZ"))
-    invokeGetDateTimeMethod(new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSX"))
-    invokeGetDateTimeMethod(new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSXX"))
-    invokeGetDateTimeMethod(new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSXXX"))
-
-    //check some invalid formats
-    try {
-      invokeGetDateTimeMethod(new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss"))
-      fail("Call to getDateTime should fail")
-    } catch {
-      case _: ParseException =>
-    }
-
-    try {
-      invokeGetDateTimeMethod(new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.X"))
-      fail("Call to getDateTime should fail")
-    } catch {
-      case _: ParseException =>
-    }
-  }
-
-  private def invokeGetDateTimeMethod(format: SimpleDateFormat): Unit = {
-    val checkpoint = new Date()
-    val timestampString = format.format(checkpoint)
-    ConsumerGroupCommand.convertTimestamp(timestampString)
-  }
-
-}
-
 /**
   * Test cases by:
   * - Non-existing consumer group
