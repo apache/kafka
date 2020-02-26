@@ -767,7 +767,13 @@ public class KafkaProducerTest {
 
             assertThrows(TimeoutException.class, producer::initTransactions);
 
-            client.respond(FindCoordinatorResponse.prepareResponse(Errors.NONE, host1));
+            assertTrue("Should at most have one pending quest to find coordinator", client.inFlightRequestCount() <= 1);
+            if (client.inFlightRequestCount() > 0) {
+                client.respond(FindCoordinatorResponse.prepareResponse(Errors.NONE, host1));
+            } else {
+                client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, host1));
+            }
+
             client.prepareResponse(initProducerIdResponse(1L, (short) 5, Errors.NONE));
 
             // retry initialization should work
