@@ -1673,12 +1673,12 @@ All of the following metrics have a recording level of <code>info</code>:
       </tr>
       <tr>
         <td>poll-latency-avg</td>
-        <td>The average execution time in ms, for polling.</td>
+        <td>The average execution time in ms, for consumer polling.</td>
         <td>kafka.streams:type=stream-thread-metrics,thread-id=([-.\w]+)</td>
       </tr>
       <tr>
         <td>poll-latency-max</td>
-        <td>The maximum execution time in ms, for polling.</td>
+        <td>The maximum execution time in ms, for consumer polling.</td>
         <td>kafka.streams:type=stream-thread-metrics,thread-id=([-.\w]+)</td>
       </tr>
       <tr>
@@ -1713,12 +1713,12 @@ All of the following metrics have a recording level of <code>info</code>:
       </tr>
       <tr>
         <td>poll-rate</td>
-        <td>The average number of polls per second.</td>
+        <td>The average number of consumer poll calls per second.</td>
         <td>kafka.streams:type=stream-thread-metrics,thread-id=([-.\w]+)</td>
       </tr>
       <tr>
         <td>poll-total</td>
-        <td>The total number of poll calls.</td>
+        <td>The total number of consumer poll calls.</td>
         <td>kafka.streams:type=stream-thread-metrics,thread-id=([-.\w]+)</td>
       </tr>
       <tr>
@@ -1787,12 +1787,12 @@ dropped-records-rate and dropped-records-total which have a recording level of <
       <tr>
         <td>process-rate</td>
         <td>The average number of processed records per second across all source processor nodes of this task.</td>
-        <td>kafka.streams:type=stream-thread-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),processor-node-id=all</td>
+        <td>kafka.streams:type=stream-task-metrics,thread-id=([-.\w]+),task-id=([-.\w]+)</td>
        </tr>
       <tr>
         <td>process-total</td>
         <td>The total number of processed records across all source processor nodes of this task.</td>
-        <td>kafka.streams:type=stream-thread-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),processor-node-id=all</td>
+        <td>kafka.streams:type=stream-task-metrics,thread-id=([-.\w]+),task-id=([-.\w]+)</td>
       </tr>
       <tr>
         <td>commit-latency-avg</td>
