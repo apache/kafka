@@ -66,7 +66,6 @@ import java.time.Duration;
 import java.util.Arrays;
 import java.util.Base64;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -736,14 +735,6 @@ public class StreamTaskTest {
         task.commit();
 
         verify(recordCollector);
-    }
-
-    private Map<TopicPartition, Long> getCommittetOffsets(final Map<TopicPartition, OffsetAndMetadata> committedOffsetsAndMetadata) {
-        final Map<TopicPartition, Long> committedOffsets = new HashMap<>();
-        for (final Map.Entry<TopicPartition, OffsetAndMetadata> e : committedOffsetsAndMetadata.entrySet()) {
-            committedOffsets.put(e.getKey(), e.getValue().offset());
-        }
-        return committedOffsets;
     }
 
     @Test
