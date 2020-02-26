@@ -176,7 +176,7 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
 
   @Test
   def testTopicAssignmentMethods(): Unit = {
-    assertTrue(zkClient.getAllTopicsInCluster.isEmpty)
+    assertTrue(zkClient.getAllTopicsInCluster().isEmpty)
 
     // test with non-existing topic
     assertFalse(zkClient.topicExists(topic1))
@@ -220,7 +220,56 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
 
     zkClient.createTopicAssignment(topic2, secondAssignment)
 
-    assertEquals(Set(topic1, topic2), zkClient.getAllTopicsInCluster.toSet)
+    assertEquals(Set(topic1, topic2), zkClient.getAllTopicsInCluster())
+  }
+
+  @Test
+  def testGetAllTopicsInClusterTriggersWatch(): Unit = {
+    zkClient.createTopLevelPaths()
+    val latch = registerChildChangeHandler(1)
+
+    // Listing all the topics and register the watch
+    assertTrue(zkClient.getAllTopicsInCluster(true).isEmpty)
+
+    // Verifies that listing all topics without registering the watch does
+    // not interfere with the previous registered watcher
+    assertTrue(zkClient.getAllTopicsInCluster(false).isEmpty)
+
+    zkClient.createTopicAssignment(topic1, Map.empty)
+
+    assertTrue("Failed to receive watch notification",
+      latch.await(5, TimeUnit.SECONDS))
+
+    assertTrue(zkClient.topicExists(topic1))
+  }
+
+  @Test
+  def testGetAllTopicsInClusterDoesNotTriggerWatch(): Unit = {
+    zkClient.createTopLevelPaths()
+    val latch = registerChildChangeHandler(1)
+
+    // Listing all the topics and don't register the watch
+    assertTrue(zkClient.getAllTopicsInCluster(false).isEmpty)
+
+    zkClient.createTopicAssignment(topic1, Map.empty)
+
+    assertFalse("Received watch notification",
+      latch.await(100, TimeUnit.MILLISECONDS))
+
+    assertTrue(zkClient.topicExists(topic1))
+  }
+
+  private def registerChildChangeHandler(count: Int): CountDownLatch = {
+    val znodeChildChangeHandlerCountDownLatch = new CountDownLatch(1)
+    val znodeChildChangeHandler = new ZNodeChildChangeHandler {
+      override val path: String = TopicsZNode.path
+
+      override def handleChildChange(): Unit = {
+        znodeChildChangeHandlerCountDownLatch.countDown()
+      }
+    }
+    zkClient.registerZNodeChildChangeHandler(znodeChildChangeHandler)
+    znodeChildChangeHandlerCountDownLatch
   }
 
   @Test
@@ -926,12 +975,12 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
 
   @Test
   def testGetTopicsAndPartitions(): Unit = {
-    assertTrue(zkClient.getAllTopicsInCluster.isEmpty)
+    assertTrue(zkClient.getAllTopicsInCluster().isEmpty)
     assertTrue(zkClient.getAllPartitions.isEmpty)
 
     zkClient.createRecursive(TopicZNode.path(topic1))
     zkClient.createRecursive(TopicZNode.path(topic2))
-    assertEquals(Set(topic1, topic2), zkClient.getAllTopicsInCluster.toSet)
+    assertEquals(Set(topic1, topic2), zkClient.getAllTopicsInCluster())
 
     assertTrue(zkClient.getAllPartitions.isEmpty)
 
