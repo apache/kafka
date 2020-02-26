@@ -486,14 +486,14 @@ class LogCleanerTest {
 
     // first time through the control batch is retained as an empty batch
     // Expected State: [{Producer1: EmptyBatch}], [{2}, {3}]
-    var dirtyOffset = cleaner.doTwoPassClean(LogToClean(tp, log, 0L, log.activeSegment.baseOffset), currentTime = largeDeleteHorizon)._1
+    var dirtyOffset = runTwoPassClean(cleaner, LogToClean(tp, log, 0L, log.activeSegment.baseOffset), currentTime = largeDeleteHorizon)
     assertEquals(List(2, 3), LogTest.keysInLog(log))
     assertEquals(List(1, 2), offsetsInLog(log))
     assertEquals(List(0, 1, 2), lastOffsetsPerBatchInLog(log))
 
     // the empty control batch does not cause an exception when cleaned
     // Expected State: [{Producer1: EmptyBatch}], [{2}, {3}]
-    dirtyOffset = cleaner.doTwoPassClean(LogToClean(tp, log, dirtyOffset, log.activeSegment.baseOffset), currentTime = Long.MaxValue)._1
+    dirtyOffset = runTwoPassClean(cleaner, LogToClean(tp, log, dirtyOffset, log.activeSegment.baseOffset), currentTime = Long.MaxValue)
     assertEquals(List(2, 3), LogTest.keysInLog(log))
     assertEquals(List(1, 2), offsetsInLog(log))
     assertEquals(List(0, 1, 2), lastOffsetsPerBatchInLog(log))
@@ -648,14 +648,14 @@ class LogCleanerTest {
     assertAbortedTransactionIndexed()
 
     // first time through the records are removed
-    var dirtyOffset = cleaner.doTwoPassClean(LogToClean(tp, log, 0L, log.activeSegment.baseOffset), currentTime = largeDeleteHorizon)._1
+    var dirtyOffset = runTwoPassClean(cleaner, LogToClean(tp, log, 0L, log.activeSegment.baseOffset), currentTime = largeDeleteHorizon)
     assertAbortedTransactionIndexed()
     assertEquals(List(), LogTest.keysInLog(log))
     assertEquals(List(2), offsetsInLog(log)) // abort marker is retained
     assertEquals(List(1, 2), lastOffsetsPerBatchInLog(log)) // empty batch is retained
 
     // the empty batch remains if cleaned again because it still holds the last sequence
-    dirtyOffset = cleaner.doTwoPassClean(LogToClean(tp, log, dirtyOffset, log.activeSegment.baseOffset), currentTime = largeDeleteHorizon)._1
+    dirtyOffset = runTwoPassClean(cleaner, LogToClean(tp, log, dirtyOffset, log.activeSegment.baseOffset), currentTime = largeDeleteHorizon)
     assertAbortedTransactionIndexed()
     assertEquals(List(), LogTest.keysInLog(log))
     assertEquals(List(2), offsetsInLog(log)) // abort marker is still retained
@@ -671,7 +671,7 @@ class LogCleanerTest {
     assertEquals(List(2, 3), offsetsInLog(log)) // abort marker is not yet gone because we read the empty batch
     assertEquals(List(2, 3), lastOffsetsPerBatchInLog(log)) // but we do not preserve the empty batch
 
-    dirtyOffset = cleaner.doTwoPassClean(LogToClean(tp, log, dirtyOffset, log.activeSegment.baseOffset), currentTime = largeDeleteHorizon)._1
+    dirtyOffset = runTwoPassClean(cleaner, LogToClean(tp, log, dirtyOffset, log.activeSegment.baseOffset), currentTime = largeDeleteHorizon)
     assertEquals(List(1), LogTest.keysInLog(log))
     assertEquals(List(3), offsetsInLog(log)) // abort marker is gone
     assertEquals(List(3), lastOffsetsPerBatchInLog(log))
@@ -1678,8 +1678,10 @@ class LogCleanerTest {
     LogTest.recoverAndCheck(dir, config, expectedKeys, new BrokerTopicStats(), time, time.scheduler)
   }
 
-  private def runTwoPassClean(cleaner: Cleaner, logToClean: LogToClean, currentTime: Long) : Long = {
-    cleaner.doTwoPassClean(logToClean, currentTime = currentTime)._1
+  private def runTwoPassClean(cleaner: Cleaner, logToClean: LogToClean, currentTime: Long,
+                              legacyDeleteHorizonMs: Long = -1L, tombstoneRetentionMs: Long = 86400000) : Long = {
+    cleaner.doClean(logToClean, currentTime, legacyDeleteHorizonMs)
+    cleaner.doClean(logToClean, currentTime + tombstoneRetentionMs + 1, legacyDeleteHorizonMs)._1
   }
 }
 

@@ -19,7 +19,7 @@ package org.apache.kafka.common.record;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.CorruptRecordException;
 import org.apache.kafka.common.record.MemoryRecords.RecordFilter.BatchRetention;
-import org.apache.kafka.common.record.MemoryRecords.RecordFilter.BatchRetentionAndEmptyMarker;
+import org.apache.kafka.common.record.MemoryRecords.RecordFilter.BatchRetentionResult;
 import org.apache.kafka.common.utils.AbstractIterator;
 import org.apache.kafka.common.utils.ByteBufferOutputStream;
 import org.apache.kafka.common.utils.CloseableIterator;
@@ -153,7 +153,7 @@ public class MemoryRecords extends AbstractRecords {
 
     /**
      * Note: This method is also used to convert the first timestamp of the batch (which is usually the timestamp of the first record)
-     * to the delete horizon of the tombstones which are present in the batch. 
+     * to the delete horizon of the tombstones or txn markers which are present in the batch. 
      */
     private static FilterResult filterTo(TopicPartition partition, Iterable<MutableRecordBatch> batches,
                                          RecordFilter filter, ByteBuffer destinationBuffer, int maxRecordBatchSize,
@@ -162,12 +162,9 @@ public class MemoryRecords extends AbstractRecords {
         ByteBufferOutputStream bufferOutputStream = new ByteBufferOutputStream(destinationBuffer);
         for (MutableRecordBatch batch : batches) {
             long maxOffset = -1L;
-            // we first call this method here so that the flag in LogCleaner has been set
-            // which indicates if the control batch is empty or not
-            // we do this to avoid calling CleanedTransactionMetadata#onControlBatchRead
-            // more than once since each call is relatively expensive
-            final BatchRetentionAndEmptyMarker batchRetentionAndEmptyMarker = filter.checkBatchRetention(batch);
-            final boolean containsEmptyMarker = batchRetentionAndEmptyMarker.containsEmptyMarker;
+
+            final BatchRetentionResult batchRetentionAndEmptyMarker = filter.checkBatchRetention(batch);
+            final boolean containsMarkerForEmptyTxn = batchRetentionAndEmptyMarker.containsMarkerForEmptyTxn;
             final BatchRetention batchRetention = batchRetentionAndEmptyMarker.batchRetention;
 
             filterResult.bytesRead += batch.sizeInBytes();
@@ -180,7 +177,6 @@ public class MemoryRecords extends AbstractRecords {
             // with a magic value not matching the magic of the records (magic < 2). This will be fixed as we
             // recopy the messages to the destination buffer.
             byte batchMagic = batch.magic();
-            // we want to check if the delete horizon has been set or stayed the same
             boolean writeOriginalBatch = true;
             boolean containsTombstones = false;
             List<Record> retainedRecords = new ArrayList<>();
@@ -195,15 +191,17 @@ public class MemoryRecords extends AbstractRecords {
                 // we check if the delete horizon should be set to a new value
                 // in which case, we need to reset the base timestamp and overwrite the timestamp deltas
                 // if the batch does not contain tombstones, then we don't need to overwrite batch
-                boolean needToSetDeleteHorizon = batch.magic() >= 2 && (containsTombstones || containsEmptyMarker)
+                boolean needToSetDeleteHorizon = batch.magic() >= 2 && (containsTombstones || containsMarkerForEmptyTxn)
                     && !batch.deleteHorizonSet();
                 if (writeOriginalBatch && (!needToSetDeleteHorizon)) {
+                    if (batch.deleteHorizonMs() > filterResult.latestDeleteHorizon()) 
+                        filterResult.updateLatestDeleteHorizon(batch.deleteHorizonMs());
                     batch.writeTo(bufferOutputStream);
                     filterResult.updateRetainedBatchMetadata(batch, retainedRecords.size(), false);
                 } else {
                     final MemoryRecordsBuilder builder;
                     if (needToSetDeleteHorizon) {
-                        long deleteHorizonMs = retrieveDeleteHorizon(batch, filter, containsEmptyMarker);
+                        long deleteHorizonMs = filter.currentTime + filter.tombstoneRetentionMs;
                         builder = buildRetainedRecordsInto(batch, retainedRecords, bufferOutputStream, deleteHorizonMs);
                         if (deleteHorizonMs > filterResult.latestDeleteHorizon()) {
                             filterResult.updateLatestDeleteHorizon(deleteHorizonMs);
@@ -245,12 +243,6 @@ public class MemoryRecords extends AbstractRecords {
         }
 
         return filterResult;
-    }
-
-    private static long retrieveDeleteHorizon(final RecordBatch batch,
-                                              final RecordFilter filter,
-                                              final boolean containsEmptyMarker) {
-        return filter.currentTime + filter.tombstoneRetentionMs;
     }
 
     private static BatchIterationResult iterateOverBatch(RecordBatch batch,
@@ -384,13 +376,13 @@ public class MemoryRecords extends AbstractRecords {
             this.tombstoneRetentionMs = tombstoneRetentionMs;
         }
 
-        public class BatchRetentionAndEmptyMarker {
+        public class BatchRetentionResult {
             public final BatchRetention batchRetention;
-            public final boolean containsEmptyMarker;
-            public BatchRetentionAndEmptyMarker(final BatchRetention batchRetention,
-                                                final boolean containsEmptyMarker) {
+            public final boolean containsMarkerForEmptyTxn;
+            public BatchRetentionResult(final BatchRetention batchRetention,
+                                                final boolean containsMarkerForEmptyTxn) {
                 this.batchRetention = batchRetention;
-                this.containsEmptyMarker = containsEmptyMarker;
+                this.containsMarkerForEmptyTxn = containsMarkerForEmptyTxn;
             }
         }
 
@@ -404,7 +396,7 @@ public class MemoryRecords extends AbstractRecords {
          * Check whether the full batch can be discarded (i.e. whether we even need to
          * check the records individually).
          */
-        protected abstract BatchRetentionAndEmptyMarker checkBatchRetention(RecordBatch batch);
+        protected abstract BatchRetentionResult checkBatchRetention(RecordBatch batch);
 
         /**
          * Check whether a record should be retained in the log. Note that {@link #checkBatchRetention(RecordBatch)}

@@ -35,7 +35,6 @@ import org.apache.kafka.common.{InvalidRecordException, KafkaException, TopicPar
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.record.FileRecords.TimestampAndOffset
 import org.apache.kafka.common.record.MemoryRecords.RecordFilter
-import org.apache.kafka.common.record.MemoryRecords.RecordFilter.BatchRetention
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests.FetchResponse.AbortedTransaction
 import org.apache.kafka.common.requests.{ListOffsetRequest, ListOffsetResponse}
@@ -967,8 +966,8 @@ class LogTest {
 
     val filtered = ByteBuffer.allocate(2048)
     records.filterTo(new TopicPartition("foo", 0), new RecordFilter(0, 0) {
-      override def checkBatchRetention(batch: RecordBatch): BatchRetentionAndEmptyMarker =
-        new BatchRetentionAndEmptyMarker(RecordFilter.BatchRetention.DELETE_EMPTY, false)
+      override def checkBatchRetention(batch: RecordBatch): BatchRetentionResult =
+        new BatchRetentionResult(RecordFilter.BatchRetention.DELETE_EMPTY, false)
       override def shouldRetainRecord(recordBatch: RecordBatch, record: Record): Boolean = !record.hasKey
     }, filtered, Int.MaxValue, BufferSupplier.NO_CACHING)
     filtered.flip()
@@ -1009,8 +1008,8 @@ class LogTest {
 
     val filtered = ByteBuffer.allocate(2048)
     records.filterTo(new TopicPartition("foo", 0), new RecordFilter(0, 0) {
-      override def checkBatchRetention(batch: RecordBatch): BatchRetentionAndEmptyMarker =
-        new BatchRetentionAndEmptyMarker(RecordFilter.BatchRetention.RETAIN_EMPTY, true)
+      override def checkBatchRetention(batch: RecordBatch): BatchRetentionResult =
+        new BatchRetentionResult(RecordFilter.BatchRetention.RETAIN_EMPTY, true)
       override def shouldRetainRecord(recordBatch: RecordBatch, record: Record): Boolean = false
     }, filtered, Int.MaxValue, BufferSupplier.NO_CACHING)
     filtered.flip()
@@ -1053,8 +1052,8 @@ class LogTest {
 
     val filtered = ByteBuffer.allocate(2048)
     records.filterTo(new TopicPartition("foo", 0), new RecordFilter(0, 0) {
-      override def checkBatchRetention(batch: RecordBatch): BatchRetentionAndEmptyMarker =
-        new BatchRetentionAndEmptyMarker(RecordFilter.BatchRetention.DELETE_EMPTY, false)
+      override def checkBatchRetention(batch: RecordBatch): BatchRetentionResult =
+        new BatchRetentionResult(RecordFilter.BatchRetention.DELETE_EMPTY, false)
       override def shouldRetainRecord(recordBatch: RecordBatch, record: Record): Boolean = !record.hasKey
     }, filtered, Int.MaxValue, BufferSupplier.NO_CACHING)
     filtered.flip()
