@@ -112,8 +112,8 @@ public class SourceNodeTest {
             assertTrue(StreamsTestUtils.containsMetric(metrics, "process-total", groupName, metricTags));
 
             // test parent sensors
-            metricTags.put("processor-node-id", StreamsMetricsImpl.ROLLUP_VALUE);
             final String parentGroupName = "stream-task-metrics";
+            metricTags.remove("processor-node-id");
             assertTrue(StreamsTestUtils.containsMetric(metrics, "process-rate", parentGroupName, metricTags));
             assertTrue(StreamsTestUtils.containsMetric(metrics, "process-total", parentGroupName, metricTags));
 
