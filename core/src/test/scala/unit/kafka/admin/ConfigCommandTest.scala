@@ -16,6 +16,7 @@
  */
 package kafka.admin
 
+import java.io.{File, FileWriter}
 import java.util
 import java.util.Properties
 
@@ -26,10 +27,10 @@ import kafka.server.{ConfigEntityName, ConfigType, KafkaConfig}
 import kafka.utils.{Exit, Logging}
 import kafka.zk.{AdminZkClient, BrokerInfo, KafkaZkClient, ZooKeeperTestHarness}
 import org.apache.kafka.clients.admin._
-import org.apache.kafka.common.config.{ConfigException, ConfigResource}
-import org.apache.kafka.common.internals.KafkaFutureImpl
 import org.apache.kafka.common.Node
+import org.apache.kafka.common.config.{ConfigException, ConfigResource}
 import org.apache.kafka.common.errors.InvalidConfigurationException
+import org.apache.kafka.common.internals.KafkaFutureImpl
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity, ClientQuotaFilter}
 import org.apache.kafka.common.security.auth.SecurityProtocol
@@ -40,8 +41,8 @@ import org.junit.Assert._
 import org.junit.Test
 import org.scalatest.Assertions.intercept
 
+import scala.collection.JavaConverters._
 import scala.collection.{Seq, mutable}
-import scala.jdk.CollectionConverters._
 
 class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
 
@@ -161,9 +162,22 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
     createOpts.checkArgs()
 
     createOpts = new ConfigCommandOptions(Array(connectOpts._1, connectOpts._2,
+      "--entity-name", "1",
+      "--entity-type", entityType,
+      "--alter",
+      "--add-config-file", "/tmp/new.properties"))
+    createOpts.checkArgs()
+
+    createOpts = new ConfigCommandOptions(Array(connectOpts._1, connectOpts._2,
       shortFlag, "1",
       "--alter",
       "--add-config", "a=b,c=d"))
+    createOpts.checkArgs()
+
+    createOpts = new ConfigCommandOptions(Array(connectOpts._1, connectOpts._2,
+      shortFlag, "1",
+      "--alter",
+      "--add-config-file", "/tmp/new.properties"))
     createOpts.checkArgs()
 
     // For alter and deleted config
@@ -224,6 +238,52 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
     assertEquals("e", addedProps2.getProperty("d"))
     assertTrue(addedProps2.getProperty("c").isEmpty)
     assertTrue(addedProps2.getProperty("f").isEmpty)
+  }
+
+  @Test(expected = classOf[IllegalArgumentException])
+  def shouldFailIfAddAndAddFile(): Unit = {
+
+    // Should not parse correctly
+    val createOpts = new ConfigCommandOptions(Array("--bootstrap-server", "localhost:9092",
+      "--entity-name", "1",
+      "--entity-type", "brokers",
+      "--alter",
+      "--add-config", "a=b,c=d",
+      "--add-config-file", "/tmp/new.properties"
+    ))
+    createOpts.checkArgs()
+  }
+
+  @Test
+  def testParseConfigsToBeAddedForAddConfigFile(): Unit = {
+    val fileContents =
+      """a=b
+        |c = d
+        |json = {"key": "val"}
+        |nested = [[1, 2], [3, 4]]
+        |""".stripMargin
+
+    val file = File.createTempFile("testParseConfigsToBeAddedForAddConfigFile", ".properties")
+    file.deleteOnExit()
+    val writer = new FileWriter(file)
+    writer.write(fileContents)
+    writer.close()
+
+    val addConfigFileArgs = Array("--add-config-file", file.getPath)
+
+    val createOpts = new ConfigCommandOptions(Array("--bootstrap-server", "localhost:9092",
+      "--entity-name", "1",
+      "--entity-type", "brokers",
+      "--alter")
+      ++ addConfigFileArgs)
+    createOpts.checkArgs()
+
+    val addedProps = ConfigCommand.parseConfigsToBeAdded(createOpts)
+    assertEquals(4, addedProps.size())
+    assertEquals("b", addedProps.getProperty("a"))
+    assertEquals("d", addedProps.getProperty("c"))
+    assertEquals("{\"key\": \"val\"}", addedProps.getProperty("json"))
+    assertEquals("[[1, 2], [3, 4]]", addedProps.getProperty("nested"))
   }
 
   def doTestOptionEntityTypeNames(zkConfig: Boolean): Unit = {
