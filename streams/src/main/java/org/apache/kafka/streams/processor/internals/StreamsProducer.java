@@ -213,10 +213,13 @@ public class StreamsProducer {
     }
 
     public void close() {
-        try {
-            producer.close();
-        } catch (final KafkaException error) {
-            throw new StreamsException("Producer encounter unexpected error trying to close" + (taskId == null ? "" : " " + logMessage), error);
+        if (eosEnabled) {
+            try {
+                producer.close();
+            } catch (final KafkaException error) {
+                throw new StreamsException("Producer encounter unexpected " +
+                    "error trying to close" + (taskId == null ? "" : " " + logMessage), error);
+            }
         }
     }
 
