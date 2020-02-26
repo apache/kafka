@@ -99,11 +99,11 @@ public class SubscriptionInfo {
     private static void setTaskLagDataFromTaskLagMap(final SubscriptionInfoData data,
                                                      final Map<TaskId, Integer> taskLags) {
         data.setTaskLags(taskLags.entrySet().stream().map(t -> {
-            final SubscriptionInfoData.TaskLagPair taskLagPair = new SubscriptionInfoData.TaskLagPair();
-            taskLagPair.setTopicGroupId(t.getKey().topicGroupId);
-            taskLagPair.setPartition(t.getKey().partition);
-            taskLagPair.setLag(t.getValue());
-            return taskLagPair;
+            final SubscriptionInfoData.TaskLag taskLag = new SubscriptionInfoData.TaskLag();
+            taskLag.setTopicGroupId(t.getKey().topicGroupId);
+            taskLag.setPartition(t.getKey().partition);
+            taskLag.setLag(t.getValue());
+            return taskLag;
         }).collect(Collectors.toList()));
     }
 
