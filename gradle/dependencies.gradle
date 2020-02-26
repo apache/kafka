@@ -60,8 +60,6 @@ versions += [
   apacheda: "1.0.2",
   apacheds: "2.0.0-M24",
   argparse4j: "0.7.0",
-  avro: "1.9.1",
-  avroPlugin: "0.17.0",
   bcpkix: "1.64",
   checkstyle: "8.20",
   commonsCli: "1.4",
@@ -131,7 +129,6 @@ libs += [
   apachedsMavibotPartition: "org.apache.directory.server:apacheds-mavibot-partition:$versions.apacheds",
   apachedsJdbmPartition: "org.apache.directory.server:apacheds-jdbm-partition:$versions.apacheds",
   argparse4j: "net.sourceforge.argparse4j:argparse4j:$versions.argparse4j",
-  avro: "org.apache.avro:avro:$versions.avro",
   bcpkix: "org.bouncycastle:bcpkix-jdk15on:$versions.bcpkix",
   commonsCli: "commons-cli:commons-cli:$versions.commonsCli",
   easymock: "org.easymock:easymock:$versions.easymock",
@@ -187,5 +184,4 @@ libs += [
   mavenArtifact: "org.apache.maven:maven-artifact:$versions.mavenArtifact",
   zstd: "com.github.luben:zstd-jni:$versions.zstd",
   httpclient: "org.apache.httpcomponents:httpclient:$versions.httpclient",
-  httpmime: "org.apache.httpcomponents:httpmime:$versions.httpclient"
 ]

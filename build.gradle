@@ -38,7 +38,6 @@ buildscript {
     classpath "com.diffplug.spotless:spotless-plugin-gradle:$versions.spotlessPlugin"
     classpath "com.github.spotbugs:spotbugs-gradle-plugin:$versions.spotbugsPlugin"
     classpath "org.gradle:test-retry-gradle-plugin:$versions.testRetryPlugin"
-    classpath "com.commercehub.gradle.plugin:gradle-avro-plugin:$versions.avroPlugin"
   }
 }
 
@@ -204,11 +203,7 @@ subprojects {
     options.compilerArgs << "-Xlint:-rawtypes"
     options.compilerArgs << "-Xlint:-serial"
     options.compilerArgs << "-Xlint:-try"
-    if (!project.name.equals('support-metrics-common')) {
-      // Do not enable -Werror for subprojects with automatically generated code.
-      // We can't fix the warnings in automatically generated code.
-      options.compilerArgs << "-Werror"
-    }
+    options.compilerArgs << "-Werror"
     // --release is the recommended way to select the target release, but it's only supported in Java 9 so we also
     // set --source and --target via `sourceCompatibility` and `targetCompatibility`. If/when Gradle supports `--release`
     // natively (https://github.com/gradle/gradle/issues/2510), we should switch to that.
@@ -713,7 +708,6 @@ def pkgs = [
     'streams:examples',
     'streams:streams-scala',
     'streams:test-utils',
-    'support-metrics-common', 
     'tools'
 ] + connectPkgs
 
@@ -951,8 +945,6 @@ project(':core') {
     from(project(':streams:streams-scala').configurations.runtime) { into("libs/") }
     from(project(':streams:test-utils').jar) { into("libs/") }
     from(project(':streams:test-utils').configurations.runtime) { into("libs/") }
-    from(project(':support-metrics-common').jar) { into("libs/") }
-    from(project(':support-metrics-common').configurations.runtime) { into("libs/") }
     from(project(':streams:examples').jar) { into("libs/") }
     from(project(':streams:examples').configurations.runtime) { into("libs/") }
     duplicatesStrategy 'exclude'
@@ -1382,88 +1374,6 @@ project(':streams:test-utils') {
     dependsOn 'copyDependantLibs'
   }
 
-}
-
-project(':support-metrics-common') {
-  archivesBaseName = "support-metrics-common"
-  group = "io.confluent.support"
-
-  dependencies {
-    compile libs.avro
-    // ensure we use the jackson version we define instead of what is defined by `avro`
-    compile libs.jacksonDatabind
-    compile libs.httpclient
-    compile libs.httpmime
-    compile libs.slf4jlog4j
-    compile project(':clients')
-    // projects that require the KafkaSubmitter have to add the Core dependency explicitly, typically
-    // they only need ConfluentSubmitter
-    compileOnly project(':core')
-
-    testCompile project(':core')
-    testCompile project(':core').sourceSets.test.output
-    testCompile project(':clients').sourceSets.test.output // for org.apache.kafka.test.IntegrationTest
-    testCompile libs.junit
-    testCompile libs.mockitoCore
-  }
-
-  javadoc {
-    enabled = false
-  }
-
-  sourceSets {
-    main {
-      java {
-        srcDirs = ["src/main/generated/java", "src/main/java"]
-      }
-    }
-    test {
-      java {
-        srcDirs = ["src/main/generated/java", "src/test/generated/java", "src/test/java"]
-      }
-    }
-  }
-
-  tasks.create(name: "generateAvro", type: com.commercehub.gradle.plugin.avro.GenerateAvroJavaTask) {
-    source("src/main/avro/")
-    outputDir = file("src/main/generated/java/")
-  }
-
-  tasks.create(name: "generateTestAvro", type: com.commercehub.gradle.plugin.avro.GenerateAvroJavaTask) {
-    source("src/test/avro/")
-    outputDir = file("src/test/generated/java/")
-  }
-
-  tasks.create(name: "copyDependantLibs", type: Copy) {
-    from (configurations.testRuntime) {
-      include('slf4j-log4j12*')
-      include('log4j*jar')
-    }
-    from (configurations.runtime) {
-    }
-    into "$buildDir/dependant-libs-${versions.scala}"
-    duplicatesStrategy 'exclude'
-  }
-
-  compileJava {
-    dependsOn 'generateAvro'
-  }
-
-  compileTestJava {
-    dependsOn 'generateTestAvro'
-  }
-
-  jar {
-    dependsOn 'copyDependantLibs'
-  }
-
-  checkstyle {
-    configProperties = checkstyleConfigProperties("confluent-import-control.xml")
-  }
-
-  checkstyleTest {
-    configProperties = checkstyleConfigProperties("confluent-import-control.xml")
-  }
 }
 
 project(':streams:examples') {
