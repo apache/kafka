@@ -44,7 +44,8 @@ class ZookeeperService(KafkaPathResolverMixin, Service):
             "collect_default": True}
     }
 
-    def __init__(self, context, num_nodes, zk_sasl = False, zk_client_port = True, zk_client_secure_port = False):
+    def __init__(self, context, num_nodes, zk_sasl = False, zk_client_port = True, zk_client_secure_port = False,
+                 zk_tls_encrypt_only = False):
         """
         :type context
         """
@@ -54,6 +55,7 @@ class ZookeeperService(KafkaPathResolverMixin, Service):
             raise Exception("Cannot disable both ZK clientPort and clientSecurePort")
         self.zk_client_port = zk_client_port
         self.zk_client_secure_port = zk_client_secure_port
+        self.zk_tls_encrypt_only = zk_tls_encrypt_only
         super(ZookeeperService, self).__init__(context, num_nodes)
 
     @property
@@ -147,6 +149,12 @@ class ZookeeperService(KafkaPathResolverMixin, Service):
         return ','.join([node.account.hostname + (':2182' if not self.zk_client_port or force_tls else ':2181') + chroot
                          for node in self.nodes])
 
+    def zkTlsConfigFileOption(self, forZooKeeperMain=False):
+        if not self.zk_client_secure_port:
+            return ""
+        return ("-zk-tls-config-file " if forZooKeeperMain else "--zk-tls-config-file ") + \
+               (SecurityConfig.ZK_CLIENT_TLS_ENCRYPT_ONLY_CONFIG_PATH if self.zk_tls_encrypt_only else SecurityConfig.ZK_CLIENT_MUTUAL_AUTH_CONFIG_PATH)
+
     #
     # This call is used to simulate a rolling upgrade to enable/disable
     # the use of ZooKeeper ACLs.
@@ -157,8 +165,7 @@ class ZookeeperService(KafkaPathResolverMixin, Service):
         la_migra_cmd += "%s --zookeeper.acl=%s --zookeeper.connect=%s %s" % \
                        (self.path.script("zookeeper-security-migration.sh", node), zk_acl,
                         self.connect_setting(force_tls=self.zk_client_secure_port),
-                        "--zk-tls-config-file=" + SecurityConfig.ZK_CLIENT_MUTUAL_AUTH_CONFIG_PATH \
-                            if self.zk_client_secure_port else "")
+                        self.zkTlsConfigFileOption())
         node.account.ssh(la_migra_cmd)
 
     def _check_chroot(self, chroot):
@@ -176,7 +183,7 @@ class ZookeeperService(KafkaPathResolverMixin, Service):
         kafka_run_class = self.path.script("kafka-run-class.sh", DEV_BRANCH)
         cmd = "%s %s -server %s %s get %s" % \
               (kafka_run_class, self.java_cli_class_name(), self.connect_setting(force_tls=self.zk_client_secure_port),
-               "-zk-tls-config-file " + SecurityConfig.ZK_CLIENT_MUTUAL_AUTH_CONFIG_PATH if self.zk_client_secure_port else "",
+               self.zkTlsConfigFileOption(True),
                chroot_path)
         self.logger.debug(cmd)
 
@@ -201,7 +208,7 @@ class ZookeeperService(KafkaPathResolverMixin, Service):
         kafka_run_class = self.path.script("kafka-run-class.sh", DEV_BRANCH)
         cmd = "%s %s -server %s %s create %s '%s'" % \
               (kafka_run_class, self.java_cli_class_name(), self.connect_setting(force_tls=self.zk_client_secure_port),
-               "-zk-tls-config-file " + SecurityConfig.ZK_CLIENT_MUTUAL_AUTH_CONFIG_PATH if self.zk_client_secure_port else "",
+               self.zkTlsConfigFileOption(True),
                chroot_path, value)
         self.logger.debug(cmd)
         output = self.nodes[0].account.ssh_output(cmd)
@@ -215,7 +222,7 @@ class ZookeeperService(KafkaPathResolverMixin, Service):
         kafka_run_class = self.path.script("kafka-run-class.sh", DEV_BRANCH)
         cmd = "%s kafka.admin.ConfigCommand --zookeeper %s %s --describe --topic %s" % \
               (kafka_run_class, self.connect_setting(force_tls=self.zk_client_secure_port),
-               "--zk-tls-config-file " + SecurityConfig.ZK_CLIENT_MUTUAL_AUTH_CONFIG_PATH if self.zk_client_secure_port else "",
+               self.zkTlsConfigFileOption(),
                topic)
         self.logger.debug(cmd)
         output = self.nodes[0].account.ssh_output(cmd)
@@ -229,7 +236,7 @@ class ZookeeperService(KafkaPathResolverMixin, Service):
         kafka_run_class = self.path.script("kafka-run-class.sh", DEV_BRANCH)
         cmd = "%s kafka.admin.AclCommand --authorizer-properties zookeeper.connect=%s %s --list --topic %s" % \
               (kafka_run_class, self.connect_setting(force_tls=self.zk_client_secure_port),
-               "--zk-tls-config-file " + SecurityConfig.ZK_CLIENT_MUTUAL_AUTH_CONFIG_PATH if self.zk_client_secure_port else "",
+               self.zkTlsConfigFileOption(),
                topic)
         self.logger.debug(cmd)
         output = self.nodes[0].account.ssh_output(cmd)

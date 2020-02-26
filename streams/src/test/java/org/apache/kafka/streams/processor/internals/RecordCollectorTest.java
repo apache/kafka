@@ -649,6 +649,35 @@ public class RecordCollectorTest {
         assertThat(thrown.getMessage(), equalTo("Could not get partition information for topic topic for task 0_0. This can happen if the topic does not exist."));
     }
 
+    @Test
+    public void shouldCloseInternalProducerForEOS() {
+        final RecordCollector collector = new RecordCollectorImpl(
+            logContext,
+            taskId,
+            mockConsumer,
+            new StreamsProducer(
+                logContext,
+                mockProducer,
+                "appId",
+                taskId),
+            productionExceptionHandler,
+            true,
+            streamsMetrics
+        );
+
+        collector.close();
+
+        // Flush should not throw as producer is still alive.
+        assertThrows(IllegalStateException.class, streamsProducer::flush);
+    }
+
+    @Test
+    public void shouldNotCloseInternalProducerForNonEOS() {
+        collector.close();
+
+        // Flush should not throw as producer is still alive.
+        streamsProducer.flush();
+    }
 
     private static class CustomStringSerializer extends StringSerializer {
         private boolean isKey;

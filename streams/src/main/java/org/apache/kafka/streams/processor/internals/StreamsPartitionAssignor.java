@@ -549,27 +549,35 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             }
         }
 
+        // We only create a standby for tasks that are stateful and have at least one changelog
+        final Set<TaskId> standbyTaskIds = new HashSet<>();
+
         // add tasks to state change log topic subscribers
         final Map<String, InternalTopicConfig> changelogTopicMetadata = new HashMap<>();
         for (final Map.Entry<Integer, InternalTopologyBuilder.TopicsInfo> entry : topicGroups.entrySet()) {
             final int topicGroupId = entry.getKey();
-            final Map<String, InternalTopicConfig> stateChangelogTopics = entry.getValue().stateChangelogTopics;
+            final InternalTopologyBuilder.TopicsInfo topicsInfo = entry.getValue();
 
-            for (final InternalTopicConfig topicConfig : stateChangelogTopics.values()) {
-                // the expected number of partitions is the max value of TaskId.partition + 1
+            final Set<TaskId> topicGroupTasks = tasksByTopicGroup.get(topicGroupId);
+            if (topicGroupTasks == null) {
+                log.debug("No tasks found for topic group {}", topicGroupId);
+                continue;
+            } else if (topicsInfo.stateChangelogTopics.isEmpty()) {
+                continue;
+            }
+
+            standbyTaskIds.addAll(topicGroupTasks);
+
+            for (final InternalTopicConfig topicConfig : topicsInfo.nonSourceChangelogTopics()) {
+                 // the expected number of partitions is the max value of TaskId.partition + 1
                 int numPartitions = UNKNOWN;
-                if (tasksByTopicGroup.get(topicGroupId) != null) {
-                    for (final TaskId task : tasksByTopicGroup.get(topicGroupId)) {
-                        if (numPartitions < task.partition + 1) {
-                            numPartitions = task.partition + 1;
-                        }
+                for (final TaskId task : topicGroupTasks) {
+                    if (numPartitions < task.partition + 1) {
+                        numPartitions = task.partition + 1;
                     }
-                    topicConfig.setNumberOfPartitions(numPartitions);
-
-                    changelogTopicMetadata.put(topicConfig.name(), topicConfig);
-                } else {
-                    log.debug("No tasks found for topic group {}", topicGroupId);
                 }
+                topicConfig.setNumberOfPartitions(numPartitions);
+                changelogTopicMetadata.put(topicConfig.name(), topicConfig);
             }
         }
 
@@ -605,7 +613,8 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             partitionsForTask.keySet(), states, numStandbyReplicas);
 
         // assign tasks to clients
-        final StickyTaskAssignor<UUID> taskAssignor = new StickyTaskAssignor<>(states, partitionsForTask.keySet());
+        final StickyTaskAssignor<UUID> taskAssignor =
+            new StickyTaskAssignor<>(states, partitionsForTask.keySet(), standbyTaskIds);
         taskAssignor.assign(numStandbyReplicas);
 
         log.info("Assigned tasks to clients as {}{}.", Utils.NL, states.entrySet().stream()

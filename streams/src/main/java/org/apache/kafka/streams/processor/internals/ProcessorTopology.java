@@ -30,9 +30,11 @@ public class ProcessorTopology {
     private final Map<String, SourceNode> sourcesByTopic;
     private final Map<String, SinkNode> sinksByTopic;
     private final List<StateStore> stateStores;
+    private final Set<String> repartitionTopics;
+
+    // the following contains entries for the entire topology, eg stores that do not belong to this ProcessorTopology
     private final List<StateStore> globalStateStores;
     private final Map<String, String> storeToChangelogTopic;
-    private final Set<String> repartitionTopics;
 
     public ProcessorTopology(final List<ProcessorNode> processorNodes,
                              final Map<String, SourceNode> sourcesByTopic,
@@ -70,10 +72,6 @@ public class ProcessorTopology {
         return sinksByTopic.get(topic);
     }
 
-    public Set<SinkNode> sinks() {
-        return new HashSet<>(sinksByTopic.values());
-    }
-
     public List<ProcessorNode> processors() {
         return processorNodes;
     }
@@ -92,6 +90,15 @@ public class ProcessorTopology {
 
     boolean isRepartitionTopic(final String topic) {
         return repartitionTopics.contains(topic);
+    }
+
+    boolean hasStateWithChangelogs() {
+        for (final StateStore stateStore : stateStores) {
+            if (storeToChangelogTopic.containsKey(stateStore.name())) {
+                return true;
+            }
+        }
+        return false;
     }
 
     public boolean hasPersistentLocalStore() {

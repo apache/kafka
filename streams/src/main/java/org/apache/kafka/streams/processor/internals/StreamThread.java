@@ -358,7 +358,7 @@ public class StreamThread extends Thread {
             final String logPrefix = threadIdPrefix + String.format("%s [%s] ", "task", taskId);
             final LogContext logContext = new LogContext(logPrefix);
 
-            final ProcessorTopology topology = builder.build(taskId.topicGroupId);
+            final ProcessorTopology topology = builder.buildSubtopology(taskId.topicGroupId);
 
             final ProcessorStateManager stateManager = new ProcessorStateManager(
                 taskId,
@@ -445,9 +445,9 @@ public class StreamThread extends Thread {
             final String logPrefix = threadIdPrefix + String.format("%s [%s] ", "standby-task", taskId);
             final LogContext logContext = new LogContext(logPrefix);
 
-            final ProcessorTopology topology = builder.build(taskId.topicGroupId);
+            final ProcessorTopology topology = builder.buildSubtopology(taskId.topicGroupId);
 
-            if (!topology.stateStores().isEmpty() && !topology.storeToChangelogTopic().isEmpty()) {
+            if (topology.hasStateWithChangelogs()) {
                 final ProcessorStateManager stateManager = new ProcessorStateManager(
                     taskId,
                     partitions,

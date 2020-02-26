@@ -59,7 +59,7 @@ class TopicCommandTest extends ZooKeeperTestHarness with Logging with RackAwareT
     topicService.createTopic(new TopicCommandOptions(
       Array("--partitions", "2", "--replication-factor", "1", "--topic", testTopicName)))
 
-    assertTrue(zkClient.getAllTopicsInCluster.contains(testTopicName))
+    assertTrue(zkClient.getAllTopicsInCluster().contains(testTopicName))
   }
 
   @Test
