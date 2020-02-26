@@ -24,7 +24,6 @@ import java.util.Map;
 
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.LATENCY_SUFFIX;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.RATE_DESCRIPTION;
-import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.RATE_SUFFIX;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.ROLLUP_VALUE;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.TASK_LEVEL_GROUP;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.THREAD_LEVEL_GROUP;
@@ -150,9 +149,8 @@ public class ThreadMetrics {
 
     public static Sensor processLatencySensor(final String threadId,
                                               final StreamsMetricsImpl streamsMetrics) {
-        final Sensor sensor = streamsMetrics.threadLevelSensor(threadId,
-                                                               PROCESS + LATENCY_SUFFIX,
-                                                               RecordingLevel.INFO);
+        final Sensor sensor =
+            streamsMetrics.threadLevelSensor(threadId, PROCESS + LATENCY_SUFFIX, RecordingLevel.INFO);
         final Map<String, String> tagMap = streamsMetrics.threadLevelTagMap(threadId);
         final String threadLevelGroup = threadLevelGroup(streamsMetrics);
         addAvgAndMaxToSensor(
@@ -166,11 +164,10 @@ public class ThreadMetrics {
         return sensor;
     }
 
-    public static Sensor processRateSensor(final String threadId,
-                                              final StreamsMetricsImpl streamsMetrics) {
-        final Sensor sensor = streamsMetrics.threadLevelSensor(threadId,
-                                                               PROCESS + RATE_SUFFIX,
-                                                               RecordingLevel.INFO);
+    public static Sensor processSensor(final String threadId,
+                                       final StreamsMetricsImpl streamsMetrics) {
+        final Sensor sensor =
+            streamsMetrics.threadLevelSensor(threadId, PROCESS, RecordingLevel.INFO);
         final Map<String, String> tagMap = streamsMetrics.threadLevelTagMap(threadId);
         final String threadLevelGroup = threadLevelGroup(streamsMetrics);
         addRateOfSumAndSumMetricsToSensor(
