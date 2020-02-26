@@ -252,7 +252,7 @@ class AclAuthorizer extends Authorizer with Logging {
       }
     }
     val deletedResult = deletedBindings.groupBy(_._2)
-      .mapValues(_.map{ case (binding, _) => new AclBindingDeleteResult(binding, deleteExceptions.getOrElse(binding, null)) })
+      .mapValues(_.map { case (binding, _) => new AclBindingDeleteResult(binding, deleteExceptions.getOrElse(binding, null)) })
     (0 until aclBindingFilters.size).map { i =>
       new AclDeleteResult(deletedResult.getOrElse(i, Set.empty[AclBindingDeleteResult]).toSet.asJava)
     }.map(CompletableFuture.completedFuture[AclDeleteResult]).asJava
@@ -260,10 +260,15 @@ class AclAuthorizer extends Authorizer with Logging {
 
   override def acls(filter: AclBindingFilter): lang.Iterable[AclBinding] = {
     inReadLock(lock) {
-      unorderedAcls.flatMap { case (resource, versionedAcls) =>
-        versionedAcls.acls.map(acl => new AclBinding(resource, acl.ace))
-            .filter(filter.matches)
-      }.asJava
+      val aclBindings = new util.ArrayList[AclBinding]()
+      unorderedAcls.foreach { case (resource, versionedAcls) =>
+        versionedAcls.acls.foreach { acl =>
+          val binding = new AclBinding(resource, acl.ace)
+          if (filter.matches(binding))
+            aclBindings.add(binding)
+        }
+      }
+      aclBindings
     }
   }
 
