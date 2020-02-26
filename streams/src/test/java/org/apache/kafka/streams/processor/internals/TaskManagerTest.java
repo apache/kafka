@@ -31,6 +31,7 @@ import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
+import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.easymock.EasyMock;
 import org.easymock.EasyMockRunner;
 import org.easymock.Mock;
@@ -48,6 +49,7 @@ import java.util.Collection;
 import java.util.Deque;
 import java.util.HashMap;
 import java.util.LinkedList;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -70,6 +72,7 @@ import static org.easymock.EasyMock.expectLastCall;
 import static org.easymock.EasyMock.replay;
 import static org.easymock.EasyMock.resetToStrict;
 import static org.easymock.EasyMock.verify;
+import static org.hamcrest.CoreMatchers.hasItem;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.instanceOf;
 import static org.hamcrest.Matchers.is;
@@ -713,6 +716,29 @@ public class TaskManagerTest {
         // this could be a bit mysterious; we're verifying _no_ interactions on the consumer,
         // since the taskManager should _not_ resume the assignment while we're still in RESTORING
         verify(consumer);
+    }
+
+    @Test
+    public void shouldHaveRemainingPartitionsUncleared() {
+        final LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
+
+        final StateMachineTask task00 = new StateMachineTask(taskId00, taskId00Partitions, true);
+
+        expectRestoreToBeCompleted(consumer, changeLogReader);
+        expect(activeTaskCreator.createTasks(anyObject(), eq(taskId00Assignment))).andReturn(singletonList(task00));
+
+        replay(activeTaskCreator, consumer, changeLogReader);
+        taskManager.handleAssignment(taskId00Assignment, emptyMap());
+        assertThat(taskManager.tryToCompleteRestoration(), is(true));
+        assertThat(task00.state(), is(Task.State.RUNNING));
+
+        taskManager.handleRevocation(mkSet(t1p0, new TopicPartition("unknown", 0)));
+        assertThat(task00.state(), is(Task.State.SUSPENDED));
+
+        final List<String> messages = appender.getMessages();
+        assertThat(messages, hasItem("taskManagerTestThe following partitions [unknown-0] are missing " +
+            "from the task partitions. It could potentially due to race condition of consumer " +
+            "detecting the heartbeat failure, or the tasks have been cleaned up by the handleAssignment callback."));
     }
 
     private static void expectRestoreToBeCompleted(final Consumer<byte[], byte[]> consumer,
