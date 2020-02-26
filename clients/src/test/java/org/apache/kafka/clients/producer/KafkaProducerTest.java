@@ -767,7 +767,6 @@ public class KafkaProducerTest {
 
             assertThrows(TimeoutException.class, producer::initTransactions);
 
-            assertTrue("Should at most have one pending quest to find coordinator", client.inFlightRequestCount() <= 1);
             if (client.inFlightRequestCount() > 0) {
                 client.respond(FindCoordinatorResponse.prepareResponse(Errors.NONE, host1));
             } else {
