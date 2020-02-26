@@ -40,7 +40,13 @@ public class SubscriptionInfoTest {
     private static final Set<TaskId> STANDBY_TASKS = new HashSet<>(Arrays.asList(
         new TaskId(1, 1),
         new TaskId(2, 0)));
-    private static final Map<TaskId, Integer> TASK_LAGS = new HashMap<>();
+    private static final Map<TaskId, Integer> TASK_LAGS = mkMap(
+        mkEntry(new TaskId(0, 0), -1),
+        mkEntry(new TaskId(0, 1), -1),
+        mkEntry(new TaskId(1, 0), -1),
+        mkEntry(new TaskId(1, 1), 0),
+        mkEntry(new TaskId(2, 0), 10)
+    );
     static {
         TASK_LAGS.put(new TaskId(0, 0), -1);
         TASK_LAGS.put(new TaskId(0, 1), -1);
@@ -290,14 +296,14 @@ public class SubscriptionInfoTest {
     public void shouldEncodeAndDecodeVersion7() {
         final SubscriptionInfo info =
             new SubscriptionInfo(7, LATEST_SUPPORTED_VERSION, processId, "localhost:80", TASK_LAGS);
-        assertEquals(info, SubscriptionInfo.decode(info.encode()));
+        assertThat(SubscriptionInfo.decode(info.encode()), is(info));
     }
 
     @Test
     public void shouldConvertTaskLagMapToTaskSetsForOlderVersion() {
         final SubscriptionInfo info = new SubscriptionInfo(7, LATEST_SUPPORTED_VERSION, processId, "localhost:80", TASK_LAGS);
-        assertEquals(info.prevTasks(), ACTIVE_TASKS);
-        assertEquals(info.standbyTasks(), STANDBY_TASKS);
+        assertThat(info.prevTasks(), is(ACTIVE_TASKS));
+        assertThat(info.standbyTasks(), is(STANDBY_TASKS));
     }
 
     private static ByteBuffer encodeFutureVersion() {
