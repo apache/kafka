@@ -63,8 +63,6 @@ import static org.apache.kafka.streams.processor.internals.assignment.StreamsAss
 
 public class StreamsUpgradeTest {
 
-    private static final RebalanceProtocol REBALANCE_PROTOCOL = RebalanceProtocol.COOPERATIVE;
-
     @SuppressWarnings("unchecked")
     public static void main(final String[] args) throws Exception {
         if (args.length < 1) {

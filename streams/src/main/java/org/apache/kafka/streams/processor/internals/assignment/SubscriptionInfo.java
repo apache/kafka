@@ -38,6 +38,7 @@ import static org.apache.kafka.streams.processor.internals.assignment.StreamsAss
 public class SubscriptionInfo {
     private static final Logger LOG = LoggerFactory.getLogger(SubscriptionInfo.class);
 
+    public static final int ACTIVE_TASK_SENTINEL_LAG = -1;
     static final int UNKNOWN = -1;
 
     private final SubscriptionInfoData data;

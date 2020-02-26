@@ -51,10 +51,9 @@ import java.util.stream.Stream;
 
 import static org.apache.kafka.streams.processor.internals.Task.State.CREATED;
 import static org.apache.kafka.streams.processor.internals.Task.State.RESTORING;
+import static org.apache.kafka.streams.processor.internals.assignment.SubscriptionInfo.ACTIVE_TASK_SENTINEL_LAG;
 
 public class TaskManager {
-    static final int ACTIVE_TASK_SENTINEL_LAG = -1;
-
     // initialize the task list
     // activeTasks needs to be concurrent as it can be accessed
     // by QueryableState

@@ -324,7 +324,6 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         final boolean versionProbing;
         if (futureMetadataVersion == UNKNOWN) {
             versionProbing = false;
-            clientMetadataMap.remove(futureId);
         } else if (minReceivedMetadataVersion >= EARLIEST_PROBEABLE_VERSION) {
             versionProbing = true;
             log.info("Received a future (version probing) subscription (version: {})."
@@ -563,8 +562,8 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             final ClientState state = entry.getValue().state;
             states.put(uuid, state);
 
-            // this is an optimization: we can't decode the future subscription's prev tasks, but we can figure them
-            // out from the encoded ownedPartitions
+            // this is an optimization: we can't decode the future subscription info's prev tasks, but we can figure
+            // them out from the encoded ownedPartitions
             if (uuid == futureId && !state.ownedPartitions().isEmpty()) {
                 final Set<TaskId> previousActiveTasks = new HashSet<>();
                 for (final Map.Entry<TopicPartition, String> partitionEntry : state.ownedPartitions().entrySet()) {
