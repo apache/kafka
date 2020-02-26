@@ -642,7 +642,7 @@ public class StreamThread extends Thread {
         this.commitSensor = ThreadMetrics.commitSensor(threadId, streamsMetrics);
         this.pollSensor = ThreadMetrics.pollSensor(threadId, streamsMetrics);
         this.processLatencySensor = ThreadMetrics.processLatencySensor(threadId, streamsMetrics);
-        this.processRateSensor = ThreadMetrics.processSensor(threadId, streamsMetrics);
+        this.processRateSensor = ThreadMetrics.processRateSensor(threadId, streamsMetrics);
         this.punctuateSensor = ThreadMetrics.punctuateSensor(threadId, streamsMetrics);
 
         // The following sensors are created here but their references are not stored in this object, since within
