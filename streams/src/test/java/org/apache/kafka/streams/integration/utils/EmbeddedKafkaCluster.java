@@ -348,6 +348,6 @@ public class EmbeddedKafkaCluster extends ExternalResource {
     }
 
     public Set<String> getAllTopicsInCluster() {
-        return JavaConverters.setAsJavaSetConverter(brokers[0].kafkaServer().zkClient().getAllTopicsInCluster()).asJava();
+        return JavaConverters.setAsJavaSetConverter(brokers[0].kafkaServer().zkClient().getAllTopicsInCluster(false)).asJava();
     }
 }
