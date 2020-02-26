@@ -282,9 +282,8 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                 break;
 
             case SUSPENDED:
-                // just re-initilaize the topology is sufficient
-                initializeTopology();
-
+                // just transit the state without any logical changes: suspended and restoring states
+                // are not actually any different for inner modules
                 transitionTo(State.RESTORING);
                 log.info("Resumed to restoring state");
 
