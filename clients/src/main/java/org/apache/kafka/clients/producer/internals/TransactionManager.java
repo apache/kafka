@@ -864,12 +864,15 @@ public class TransactionManager {
             enqueueRequest(addPartitionsToTransactionHandler());
 
         TxnRequestHandler nextRequestHandler = pendingRequests.peek();
-        if (nextRequestHandler == null)
+
+        if (nextRequestHandler == null) {
             return null;
+        }
 
         // Do not send the EndTxn until all batches have been flushed
-        if (nextRequestHandler.isEndTxn() && hasIncompleteBatches)
+        if (nextRequestHandler.isEndTxn() && hasIncompleteBatches) {
             return null;
+        }
 
         pendingRequests.poll();
         if (maybeTerminateRequestWithError(nextRequestHandler)) {
@@ -1112,7 +1115,7 @@ public class TransactionManager {
         return false;
     }
 
-    private void enqueueRequest(TxnRequestHandler requestHandler) {
+    void enqueueRequest(TxnRequestHandler requestHandler) {
         log.debug("Enqueuing transactional request {}", requestHandler.requestBuilder());
         pendingRequests.add(requestHandler);
     }

@@ -96,6 +96,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
@@ -1664,6 +1665,7 @@ public class SenderTest {
         assertTrue(request3.isDone());
         assertEquals(1012L, request3.get().offset());
         assertEquals(OptionalLong.of(1012L), transactionManager.lastAckedOffset(tp0));
+        assertFalse(transactionManager.hasError());
     }
 
     @Test

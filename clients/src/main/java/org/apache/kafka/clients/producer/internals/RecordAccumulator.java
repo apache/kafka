@@ -278,11 +278,11 @@ public final class RecordAccumulator {
         return muted.contains(tp);
     }
 
-    public void resetNextBatchExpiryTime() {
+    void resetNextBatchExpiryTime() {
         nextBatchExpiryTimeMs = Long.MAX_VALUE;
     }
 
-    public void maybeUpdateNextBatchExpiryTime(ProducerBatch batch) {
+    void maybeUpdateNextBatchExpiryTime(ProducerBatch batch) {
         if (batch.createdMs + deliveryTimeoutMs  > 0) {
             // the non-negative check is to guard us against potential overflow due to setting
             // a large value for deliveryTimeoutMs
@@ -453,13 +453,13 @@ public final class RecordAccumulator {
                 // We check whether a batch exists first to avoid the more expensive checks whenever possible.
                 ProducerBatch batch = deque.peekFirst();
                 if (batch != null) {
-                    TopicPartition part = entry.getKey();
-                    Node leader = cluster.leaderFor(part);
+                    TopicPartition partition = entry.getKey();
+                    Node leader = cluster.leaderFor(partition);
                     if (leader == null) {
                         // This is a partition for which leader is not known, but messages are available to send.
                         // Note that entries are currently not removed from batches when deque is empty.
-                        unknownLeaderTopics.add(part.topic());
-                    } else if (!readyNodes.contains(leader) && !isMuted(part)) {
+                        unknownLeaderTopics.add(partition.topic());
+                    } else if (!readyNodes.contains(leader) && !isMuted(partition)) {
                         long waitedTimeMs = batch.waitedTimeMs(nowMs);
                         boolean backingOff = batch.attempts() > 0 && waitedTimeMs < retryBackoffMs;
                         long timeToWaitMs = backingOff ? retryBackoffMs : lingerMs;
