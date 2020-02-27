@@ -747,8 +747,9 @@ public class KafkaProducerTest {
     @Test
     public void testInitTransactionTimeout() {
         Map<String, Object> configs = new HashMap<>();
+        final long maxBlockMs = 500L;
         configs.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, "bad-transaction");
-        configs.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, 500);
+        configs.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, maxBlockMs);
         configs.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9000");
 
         Time time = new MockTime(1);
@@ -767,6 +768,8 @@ public class KafkaProducerTest {
 
             assertThrows(TimeoutException.class, producer::initTransactions);
 
+            // Explicit poll once here to clean up any unfinished find coordinator response
+            client.poll(maxBlockMs, time.milliseconds());
             if (client.inFlightRequestCount() > 0) {
                 client.respond(FindCoordinatorResponse.prepareResponse(Errors.NONE, host1));
             } else {
