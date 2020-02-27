@@ -31,7 +31,6 @@ import org.apache.kafka.clients.consumer.OffsetCommitCallback;
 import org.apache.kafka.clients.consumer.RetriableCommitFailedException;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
-import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.FencedInstanceIdException;
@@ -411,13 +410,12 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
         // Add partitions that were not previously owned but are now assigned
         firstException.compareAndSet(null, invokePartitionsAssigned(addedPartitions));
-        Exception exceptionCaught = firstException.get();
 
-        if (exceptionCaught != null) {
-            if (exceptionCaught instanceof KafkaException) {
-                throw (KafkaException) exceptionCaught;
+        if (firstException.get() != null) {
+            if (firstException.get() instanceof KafkaException) {
+                throw (KafkaException) firstException.get();
             } else {
-                throw new KafkaException("User rebalance callback throws an error", exceptionCaught);
+                throw new KafkaException("User rebalance callback throws an error", firstException.get());
             }
         }
     }

@@ -27,7 +27,6 @@ import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.errors.LockException;
 import org.apache.kafka.streams.errors.StreamsException;
-import org.apache.kafka.streams.errors.TaskCorruptedException;
 import org.apache.kafka.streams.errors.TaskIdFormatException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.processor.TaskId;
@@ -199,8 +198,7 @@ public class TaskManager {
         }
 
         if (!taskCloseExceptions.isEmpty()) {
-            final Map.Entry<TaskId, RuntimeException> first = taskCloseExceptions.entrySet().iterator().next();
-            for (Map.Entry<TaskId, RuntimeException> entry : taskCloseExceptions.entrySet()) {
+            for (final Map.Entry<TaskId, RuntimeException> entry : taskCloseExceptions.entrySet()) {
                 if (!(entry.getValue() instanceof TaskMigratedException)) {
                     throw new RuntimeException(
                         "Unexpected failure to close " + taskCloseExceptions.size() +
@@ -210,6 +208,7 @@ public class TaskManager {
                 }
             }
 
+            final Map.Entry<TaskId, RuntimeException> first = taskCloseExceptions.entrySet().iterator().next();
             // If all exceptions are task-migrated, we would just throw the first one.
             throw first.getValue();
         }
@@ -301,12 +300,11 @@ public class TaskManager {
      * @throws TaskMigratedException if the task producer got fenced (EOS only)
      */
     void handleRevocation(final Collection<TopicPartition> revokedPartitions) {
-        final Set<TaskId> revokedTasks = new HashSet<>();
         final Set<TopicPartition> remainingPartitions = new HashSet<>(revokedPartitions);
 
         for (final Task task : tasks.values()) {
             if (remainingPartitions.containsAll(task.inputPartitions())) {
-                revokedTasks.add(task.id());
+                task.suspend();
             }
             remainingPartitions.removeAll(task.inputPartitions());
         }
@@ -315,17 +313,6 @@ public class TaskManager {
             log.warn("The following partitions {} are missing from the task partitions. It could potentially " +
                 "due to race condition of consumer detecting the heartbeat failure, or the tasks " +
                 "have been cleaned up by the handleAssignment callback.", remainingPartitions);
-        }
-
-        for (final TaskId taskId : revokedTasks) {
-            final Task task = tasks.get(taskId);
-            try {
-                task.suspend();
-            } catch (RuntimeException e) {
-                log.error("Failed to suspend task {} due to {}, Closing it uncleanly.", e, task.id());
-
-                task.closeDirty();
-            }
         }
     }
 
