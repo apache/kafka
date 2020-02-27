@@ -82,6 +82,17 @@
     </li>
 </ol>
 
+<h5><a id="upgrade_241_notable" href="#upgrade_241_notable">Notable changes in 2.4.1</a></h5>
+<ul>
+    <li>
+        ZooKeeper has been upgraded to 3.5.7, and a ZooKeeper upgrade from 3.4.X to 3.5.7 can fail if there are no snapshot files in the 3.4 data directory.
+        This usually happens in test upgrades where ZooKeeper 3.5.7 is trying to load an existing 3.4 data dir in which no snapshot file has been created.
+        For more information, see <a href="https://issues.apache.org/jira/browse/ZOOKEEPER-3056">ZOOKEEPER-3056</a>.
+        A fix is given in <a href="https://issues.apache.org/jira/browse/ZOOKEEPER-3056">ZOOKEEPER-3056</a>, which is to set the <code>snapshot.trust.empty=true</code>
+        config in <code>zookeeper.properties</code> before the upgrade.
+    </li>
+</ul>
+
 <h5><a id="upgrade_240_notable" href="#upgrade_240_notable">Notable changes in 2.4.0</a></h5>
 <ul>
     <li>A new Admin API has been added for partition reassignments. Due to changing the way Kafka propagates reassignment information,
