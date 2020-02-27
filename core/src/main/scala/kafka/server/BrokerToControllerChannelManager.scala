@@ -87,7 +87,8 @@ class BrokerToControllerChannelManager(metadataCache: MetadataCache,
         brokerToControllerListenerName,
         config.saslMechanismInterBrokerProtocol,
         time,
-        config.saslInterBrokerHandshakeRequestEnable
+        config.saslInterBrokerHandshakeRequestEnable,
+        logContext
       )
       val selector = new Selector(
         NetworkReceive.UNLIMITED,
