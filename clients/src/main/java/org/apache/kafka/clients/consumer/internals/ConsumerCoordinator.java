@@ -31,6 +31,7 @@ import org.apache.kafka.clients.consumer.OffsetCommitCallback;
 import org.apache.kafka.clients.consumer.RetriableCommitFailedException;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.FencedInstanceIdException;
@@ -333,7 +334,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                                   ByteBuffer assignmentBuffer) {
         log.debug("Executing onJoinComplete with generation {} and memberId {}", generation, memberId);
 
-        // only the leader is responsible for monitoring for metadata changes (i.e. partition changes)
+        // Only the leader is responsible for monitoring for metadata changes (i.e. partition changes)
         if (!isLeader)
             assignmentSnapshot = null;
 
@@ -377,12 +378,12 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             );
 
             if (!revokedPartitions.isEmpty()) {
-                // revoke partitions that were previously owned but no longer assigned;
+                // Revoke partitions that were previously owned but no longer assigned;
                 // note that we should only change the assignment (or update the assignor's state)
                 // AFTER we've triggered  the revoke callback
                 firstException.compareAndSet(null, invokePartitionsRevoked(revokedPartitions));
 
-                // if revoked any partitions, need to re-join the group afterwards
+                // If revoked any partitions, need to re-join the group afterwards
                 log.debug("Need to revoke partitions {} and re-join the group", revokedPartitions);
                 requestRejoin();
             }
@@ -392,21 +393,33 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         // were not explicitly requested, so we update the joined subscription here.
         maybeUpdateJoinedSubscription(assignedPartitions);
 
-        // give the assignor a chance to update internal state based on the received assignment
+        // Give the assignor a chance to update internal state based on the received assignment
         groupMetadata = new ConsumerGroupMetadata(rebalanceConfig.groupId, generation, memberId, rebalanceConfig.groupInstanceId);
-        assignor.onAssignment(assignment, groupMetadata);
 
-        // reschedule the auto commit starting from now
+        // Catch any exception here to make sure we could complete the user callback.
+        try {
+            assignor.onAssignment(assignment, groupMetadata);
+        } catch (Exception e) {
+            firstException.compareAndSet(null, e);
+        }
+
+        // Reschedule the auto commit starting from now
         if (autoCommitEnabled)
             this.nextAutoCommitTimer.updateAndReset(autoCommitIntervalMs);
 
         subscriptions.assignFromSubscribed(assignedPartitions);
 
-        // add partitions that were not previously owned but are now assigned
+        // Add partitions that were not previously owned but are now assigned
         firstException.compareAndSet(null, invokePartitionsAssigned(addedPartitions));
+        Exception exceptionCaught = firstException.get();
 
-        if (firstException.get() != null)
-            throw new KafkaException("User rebalance callback throws an error", firstException.get());
+        if (exceptionCaught != null) {
+            if (exceptionCaught instanceof KafkaException) {
+                throw (KafkaException) exceptionCaught;
+            } else {
+                throw new KafkaException("User rebalance callback throws an error", exceptionCaught);
+            }
+        }
     }
 
     void maybeUpdateSubscriptionMetadata() {

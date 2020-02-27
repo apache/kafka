@@ -27,6 +27,7 @@ import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.errors.LockException;
 import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.errors.TaskCorruptedException;
 import org.apache.kafka.streams.errors.TaskIdFormatException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.processor.TaskId;
@@ -199,11 +200,18 @@ public class TaskManager {
 
         if (!taskCloseExceptions.isEmpty()) {
             final Map.Entry<TaskId, RuntimeException> first = taskCloseExceptions.entrySet().iterator().next();
-            throw new RuntimeException(
-                "Unexpected failure to close " + taskCloseExceptions.size() +
-                    " task(s) [" + taskCloseExceptions.keySet() + "]. " +
-                    "First exception (for task " + first.getKey() + ") follows.", first.getValue()
-            );
+            for (Map.Entry<TaskId, RuntimeException> entry : taskCloseExceptions.entrySet()) {
+                if (!(entry.getValue() instanceof TaskMigratedException)) {
+                    throw new RuntimeException(
+                        "Unexpected failure to close " + taskCloseExceptions.size() +
+                            " task(s) [" + taskCloseExceptions.keySet() + "]. " +
+                            "First unexpected exception (for task " + entry.getKey() + ") follows.", entry.getValue()
+                    );
+                }
+            }
+
+            // If all exceptions are task-migrated, we would just throw the first one.
+            throw first.getValue();
         }
 
         if (!activeTasksToCreate.isEmpty()) {
@@ -311,7 +319,13 @@ public class TaskManager {
 
         for (final TaskId taskId : revokedTasks) {
             final Task task = tasks.get(taskId);
-            task.suspend();
+            try {
+                task.suspend();
+            } catch (RuntimeException e) {
+                log.error("Failed to suspend task {} due to {}, Closing it uncleanly.", e, task.id());
+
+                task.closeDirty();
+            }
         }
     }
 
