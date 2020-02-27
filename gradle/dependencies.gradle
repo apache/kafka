@@ -22,7 +22,7 @@ ext {
   libs = [:]
   
   // Enabled by default when commands like `testAll` are invoked
-  defaultScalaVersions = [ '2.12', '2.13' ]
+  defaultScalaVersions = [ '2.12' ]
   // Available if -PscalaVersion is used. This is useful when we want to support a Scala version that has
   // a higher minimum Java requirement than Kafka. This was previously the case for Scala 2.12 and Java 7.
   availableScalaVersions = [ '2.12', '2.13' ]
@@ -69,6 +69,7 @@ versions += [
   httpclient: "4.5.11",
   easymock: "4.1",
   jackson: "2.10.2",
+  jacksonDatabind: "2.10.2",
   jacoco: "0.8.3",
   jetty: "9.4.26.v20200117",
   jersey: "2.28",
@@ -131,7 +132,7 @@ libs += [
   bcpkix: "org.bouncycastle:bcpkix-jdk15on:$versions.bcpkix",
   commonsCli: "commons-cli:commons-cli:$versions.commonsCli",
   easymock: "org.easymock:easymock:$versions.easymock",
-  jacksonDatabind: "com.fasterxml.jackson.core:jackson-databind:$versions.jackson",
+  jacksonDatabind: "com.fasterxml.jackson.core:jackson-databind:$versions.jacksonDatabind",
   jacksonDataformatCsv: "com.fasterxml.jackson.dataformat:jackson-dataformat-csv:$versions.jackson",
   jacksonModuleScala: "com.fasterxml.jackson.module:jackson-module-scala_$versions.baseScala:$versions.jackson",
   jacksonJDK8Datatypes: "com.fasterxml.jackson.datatype:jackson-datatype-jdk8:$versions.jackson",
@@ -182,5 +183,5 @@ libs += [
   jfreechart: "jfreechart:jfreechart:$versions.jfreechart",
   mavenArtifact: "org.apache.maven:maven-artifact:$versions.mavenArtifact",
   zstd: "com.github.luben:zstd-jni:$versions.zstd",
-  httpclient: "org.apache.httpcomponents:httpclient:$versions.httpclient"
+  httpclient: "org.apache.httpcomponents:httpclient:$versions.httpclient",
 ]
