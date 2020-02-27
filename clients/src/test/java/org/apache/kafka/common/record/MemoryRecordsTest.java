@@ -309,7 +309,7 @@ public class MemoryRecordsTest {
                             @Override
                             protected BatchRetentionResult checkBatchRetention(RecordBatch batch) {
                                 // retain all batches
-                                return new BatchRetentionResult(BatchRetention.RETAIN_EMPTY, true);
+                                return new BatchRetentionResult(BatchRetention.RETAIN_EMPTY, false);
                             }
 
                             @Override
@@ -420,7 +420,7 @@ public class MemoryRecordsTest {
                         new MemoryRecords.RecordFilter(0, 0) {
                             @Override
                             protected BatchRetentionResult checkBatchRetention(RecordBatch batch) {
-                                return new BatchRetentionResult(deleteRetention, true);
+                                return new BatchRetentionResult(deleteRetention, false);
                             }
 
                             @Override
@@ -511,7 +511,7 @@ public class MemoryRecordsTest {
                 // discard the second and fourth batches
                 if (batch.lastOffset() == 2L || batch.lastOffset() == 6L)
                     return new BatchRetentionResult(BatchRetention.DELETE, false);
-                return new BatchRetentionResult(BatchRetention.DELETE_EMPTY, true);
+                return new BatchRetentionResult(BatchRetention.DELETE_EMPTY, false);
             }
 
             @Override

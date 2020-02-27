@@ -180,7 +180,7 @@ class LogCleanerIntegrationTest extends AbstractLogCleanerIntegrationTest with K
   }
 
   @Test
-  def testTombstoneCleanWithLowThoroughput() : Unit = {
+  def testTombstoneCleanWithLowThroughput() : Unit = {
     val tombstoneRetentionMs = 1000 // this is in milliseconds -> 1 second 
 
     val topicPartitions = Array(new TopicPartition("log-partition", 0))
@@ -199,40 +199,22 @@ class LogCleanerIntegrationTest extends AbstractLogCleanerIntegrationTest with K
 
     cleaner.startup()
 
-    import JavaConverters._
-    var containsTombstones: Boolean = false
-    for (segment <- log.logSegments; record <- segment.log.records.asScala) {
-      containsTombstones = true
-    }
-    assertTrue(containsTombstones)
+    Thread.sleep(200)
+    assertEquals(log.latestDeleteHorizon, T0 + tombstoneRetentionMs)
 
-    // We sleep a little bit, so that log cleaner has already gone through 
-    // some iterations, ensures that delete horizons has been updated correctly
-    Thread.sleep(300L)
     time.sleep(tombstoneRetentionMs + 1)
 
-    val latestOffset: Long = log.latestEpoch match {
-      case None => 
-        fail("There should be epoch defined.")
-        RecordBatch.NO_TIMESTAMP
-      case Some(epoch) =>
-        log.endOffsetForEpoch(epoch) match {
-          case None =>
-            fail("Offset should have been found.")
-            RecordBatch.NO_TIMESTAMP
-          case Some(offsetAndEpoch) =>
-            offsetAndEpoch.offset
-        }
-    }
+    val latestOffset: Long = log.logEndOffset
 
     // the first block should get cleaned
     cleaner.awaitCleaned(new TopicPartition("log-partition", 0), 
-                         latestOffset + 1, maxWaitMs = tombstoneRetentionMs)
+                         latestOffset + 1, maxWaitMs = 5000)
 
-    assertEquals(log.latestDeleteHorizon, RecordBatch.NO_TIMESTAMP)
+    import JavaConverters._
     for (segment <- log.logSegments; record <- segment.log.records.asScala) {
       fail ("The log should not contain record " + record + ", tombstone has expired its lifetime.")
     }
+    assertEquals(log.latestDeleteHorizon, RecordBatch.NO_TIMESTAMP)
   }
 
   private def readFromLog(log: Log): Iterable[(Int, Int)] = {

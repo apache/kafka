@@ -575,13 +575,13 @@ private[log] class Cleaner(val id: Int,
         val abortedTransactions = log.collectAbortedTransactions(startOffset, upperBoundOffset)
         transactionMetadata.addAbortedTransactions(abortedTransactions)
 
-        val retainDeletesAndTxnMarkers = currentSegment.lastModified > legacyDeleteHorizonMs
+        val retainLegacyDeletesAndTxnMarkers = currentSegment.lastModified > legacyDeleteHorizonMs
         info(s"Cleaning $currentSegment in log ${log.name} into ${cleaned.baseOffset} " +
           s"with legacy deletion horizon $legacyDeleteHorizonMs, " +
-          s"${if(retainDeletesAndTxnMarkers) "retaining" else "discarding"} deletes.")
+          s"${if(retainLegacyDeletesAndTxnMarkers) "retaining" else "discarding"} deletes.")
 
         try {
-          val latestDeleteHorizon: Long = cleanInto(log.topicPartition, currentSegment.log, cleaned, map, retainDeletesAndTxnMarkers, log.config.deleteRetentionMs,
+          val latestDeleteHorizon: Long = cleanInto(log.topicPartition, currentSegment.log, cleaned, map, retainLegacyDeletesAndTxnMarkers, log.config.deleteRetentionMs,
                     log.config.maxMessageSize, transactionMetadata, lastOffsetOfActiveProducers, stats, currentTime = currentTime)
           if (log.latestDeleteHorizon < latestDeleteHorizon) {
             log.latestDeleteHorizon = latestDeleteHorizon
@@ -626,7 +626,7 @@ private[log] class Cleaner(val id: Int,
    * @param sourceRecords The dirty log segment
    * @param dest The cleaned log segment
    * @param map The key=>offset mapping
-   * @param retainDeletesAndTxnMarkers Should tombstones (lower than version 2) and markers be retained while cleaning this segment
+   * @param retainLegacyDeletesAndTxnMarkers Should tombstones (lower than version 2) and markers be retained while cleaning this segment
    * @param tombstoneRetentionMs Defines how long a tombstone should be kept as defined by log configuration
    * @param maxLogMessageSize The maximum message size of the corresponding topic
    * @param stats Collector for cleaning statistics
@@ -636,7 +636,7 @@ private[log] class Cleaner(val id: Int,
                              sourceRecords: FileRecords,
                              dest: LogSegment,
                              map: OffsetMap,
-                             retainDeletesAndTxnMarkers: Boolean,
+                             retainLegacyDeletesAndTxnMarkers: Boolean,
                              tombstoneRetentionMs: Long,
                              maxLogMessageSize: Int,
                              transactionMetadata: CleanedTransactionMetadata,
@@ -655,7 +655,7 @@ private[log] class Cleaner(val id: Int,
 
         if (batch.isControlBatch) {
           if (batch.magic() < 2) {
-            discardBatchRecords = canDiscardBatch && !retainDeletesAndTxnMarkers
+            discardBatchRecords = canDiscardBatch && !retainLegacyDeletesAndTxnMarkers
           } else {
             discardBatchRecords = canDiscardBatch && 
               batch.deleteHorizonSet() && batch.deleteHorizonMs() <= currentTime
@@ -695,7 +695,7 @@ private[log] class Cleaner(val id: Int,
           // The batch is only retained to preserve producer sequence information; the records can be removed
           isRecordRetained = false
         else
-          isRecordRetained = Cleaner.this.shouldRetainRecord(map, retainDeletesAndTxnMarkers, batch, record, stats, currentTime = currentTime)
+          isRecordRetained = Cleaner.this.shouldRetainRecord(map, retainLegacyDeletesAndTxnMarkers, batch, record, stats, currentTime = currentTime)
         isRecordRetained
       }
     }

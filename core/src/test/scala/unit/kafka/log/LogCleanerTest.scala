@@ -80,14 +80,15 @@ class LogCleanerTest {
     // pretend we have the following keys
     val keys = immutable.ListSet(1L, 3L, 5L, 7L, 9L)
     val map = new FakeOffsetMap(Int.MaxValue)
-    keys.foreach(k => map.put(key(k), largeDeleteHorizon))
+    keys.foreach(k => map.put(key(k), Long.MaxValue))
 
     // clean the log
     val segments = log.logSegments.take(3).toSeq
     val stats = new CleanerStats()
     val expectedBytesRead = segments.map(_.size).sum
-    cleaner.cleanSegments(log, segments, map, 0L, stats, new CleanedTransactionMetadata)
     val shouldRemain = LogTest.keysInLog(log).filter(!keys.contains(_))
+
+    cleaner.cleanSegments(log, segments, map, 0L, stats, new CleanedTransactionMetadata)
     assertEquals(shouldRemain, LogTest.keysInLog(log))
     assertEquals(expectedBytesRead, stats.bytesRead)
   }
@@ -1678,6 +1679,12 @@ class LogCleanerTest {
     LogTest.recoverAndCheck(dir, config, expectedKeys, new BrokerTopicStats(), time, time.scheduler)
   }
 
+  /**
+   * We need to run a two pass clean to perform the following steps to stimulate a proper clean:
+   *  1. On the first run, set the delete horizon stored in the first timestamp of the batches in the log.
+   *  2. For the second pass, we will advance the current time by tombstoneRetentionMs, which will cause the 
+   *     tombstones to expire, leading to their prompt removal from the log.
+   */
   private def runTwoPassClean(cleaner: Cleaner, logToClean: LogToClean, currentTime: Long,
                               legacyDeleteHorizonMs: Long = -1L, tombstoneRetentionMs: Long = 86400000) : Long = {
     cleaner.doClean(logToClean, currentTime, legacyDeleteHorizonMs)

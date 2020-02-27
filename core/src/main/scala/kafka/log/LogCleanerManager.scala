@@ -31,6 +31,7 @@ import kafka.utils.{Logging, Pool}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.common.errors.KafkaStorageException
+import org.apache.kafka.common.record.RecordBatch
 
 import scala.collection.{Iterable, Seq, mutable}
 
@@ -211,7 +212,7 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
             // therefore, we should take advantage of this fact and remove tombstones if we can
             // under the condition that the log's latest delete horizon is less than the current time
             // tracked
-            ltc.log.latestDeleteHorizon != -1L && ltc.log.latestDeleteHorizon <= time.milliseconds()
+            ltc.log.latestDeleteHorizon != RecordBatch.NO_TIMESTAMP && ltc.log.latestDeleteHorizon <= time.milliseconds()
         }
         if (!logsWithTombstonesExpired.isEmpty) {
           val filthiest = logsWithTombstonesExpired.max

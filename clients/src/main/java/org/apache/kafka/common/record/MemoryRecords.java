@@ -163,9 +163,9 @@ public class MemoryRecords extends AbstractRecords {
         for (MutableRecordBatch batch : batches) {
             long maxOffset = -1L;
 
-            final BatchRetentionResult batchRetentionAndEmptyMarker = filter.checkBatchRetention(batch);
-            final boolean containsMarkerForEmptyTxn = batchRetentionAndEmptyMarker.containsMarkerForEmptyTxn;
-            final BatchRetention batchRetention = batchRetentionAndEmptyMarker.batchRetention;
+            final BatchRetentionResult batchRetentionResult = filter.checkBatchRetention(batch);
+            final boolean containsMarkerForEmptyTxn = batchRetentionResult.containsMarkerForEmptyTxn;
+            final BatchRetention batchRetention = batchRetentionResult.batchRetention;
 
             filterResult.bytesRead += batch.sizeInBytes();
 
@@ -206,8 +206,11 @@ public class MemoryRecords extends AbstractRecords {
                         if (deleteHorizonMs > filterResult.latestDeleteHorizon()) {
                             filterResult.updateLatestDeleteHorizon(deleteHorizonMs);
                         }
-                    } else
-                        builder = buildRetainedRecordsInto(batch, retainedRecords, bufferOutputStream, RecordBatch.NO_TIMESTAMP);
+                    } else {
+                        builder = buildRetainedRecordsInto(batch, retainedRecords, bufferOutputStream, batch.deleteHorizonMs());
+                        if (batch.deleteHorizonMs() > filterResult.latestDeleteHorizon())
+                            filterResult.updateLatestDeleteHorizon(batch.deleteHorizonMs());
+                    }
 
                     MemoryRecords records = builder.build();
                     int filteredBatchSize = records.sizeInBytes();
