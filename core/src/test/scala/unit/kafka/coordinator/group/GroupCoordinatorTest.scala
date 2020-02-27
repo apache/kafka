@@ -34,7 +34,6 @@ import java.util.concurrent.locks.ReentrantLock
 
 import kafka.cluster.Partition
 import kafka.log.AppendOrigin
-import kafka.zk.KafkaZkClient
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.Subscription
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol
 import org.apache.kafka.common.internals.{KafkaFutureImpl, Topic}
