@@ -358,17 +358,17 @@ public class StreamThreadStateStoreProviderTest {
         final Set<TopicPartition> partitions = Collections.singleton(new TopicPartition(topicName, taskId.partition));
         final ProcessorStateManager stateManager = new ProcessorStateManager(
             taskId,
-            partitions,
             Task.TaskType.ACTIVE,
+            logContext,
             stateDirectory,
-            topology.storeToChangelogTopic(),
             new StoreChangelogReader(
                 new MockTime(),
                 streamsConfig,
                 logContext,
                 clientSupplier.restoreConsumer,
                 new MockStateRestoreListener()),
-            logContext);
+            topology.storeToChangelogTopic(),
+            partitions);
         final boolean eosEnabled = StreamsConfig.EXACTLY_ONCE.equals(streamsConfig.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG));
         final RecordCollector recordCollector = new RecordCollectorImpl(
             logContext,

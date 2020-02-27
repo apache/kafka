@@ -161,19 +161,19 @@ public class ProcessorStateManager implements StateManager {
      * @throws ProcessorStateException if the task directory does not exist and could not be created
      */
     public ProcessorStateManager(final TaskId taskId,
-                                 final Collection<TopicPartition> sources,
                                  final TaskType taskType,
+                                 final LogContext logContext,
                                  final StateDirectory stateDirectory,
-                                 final Map<String, String> storeToChangelogTopic,
                                  final ChangelogRegister changelogReader,
-                                 final LogContext logContext) throws ProcessorStateException {
-        this.logPrefix = format("task [%s] ", taskId);
-        this.log = logContext.logger(ProcessorStateManager.class);
+                                 final Map<String, String> storeToChangelogTopic,
+                                 final Collection<TopicPartition> sourcePartitions) throws ProcessorStateException {
 
+        this.log = logContext.logger(ProcessorStateManager.class);
+        this.logPrefix = logContext.logPrefix();
         this.taskId = taskId;
         this.taskType = taskType;
-        this.sourcePartitions = sources;
         this.changelogReader = changelogReader;
+        this.sourcePartitions = sourcePartitions;
         this.storeToChangelogTopic = storeToChangelogTopic;
 
         this.baseDir = stateDirectory.directoryForTask(taskId);
@@ -211,7 +211,15 @@ public class ProcessorStateManager implements StateManager {
                         log.debug("State store {} initialized from checkpoint with offset {} at changelog {}",
                             store.stateStore.name(), store.offset, store.changelogPartition);
                     } else {
-                        // TODO K9113: for EOS when there's no checkpointed offset, we should treat it as TaskCorrupted
+                        // with EOS, if the previous run did not shutdown gracefully, we would always close
+                        // all tasks as dirty before complete the shutdown which will already wipe out the local
+                        // stores including the checkpoint store. That means, here if the checkpoint file does not
+                        // contain the corresponding offset, there are only two possibilities:
+                        //
+                        // 1. the local state store is also empty, in which case it is safe to restore from scratch.
+                        // 2. the local state store is not empty but it only contains committed records (i.e. only
+                        //    the checkpoint file when corrupted), in which case it is safe to restore and overwrite
+                        //    from scratch too.
 
                         log.info("State store {} did not find checkpoint offset, hence would " +
                                 "default to the starting offset at changelog {}",

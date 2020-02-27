@@ -362,12 +362,12 @@ public class StreamThread extends Thread {
 
             final ProcessorStateManager stateManager = new ProcessorStateManager(
                 taskId,
-                partitions,
                 Task.TaskType.ACTIVE,
+                logContext,
                 stateDirectory,
-                topology.storeToChangelogTopic(),
                 storeChangelogReader,
-                logContext);
+                topology.storeToChangelogTopic(),
+                partitions);
 
             if (threadProducer == null) {
                 // create one producer per task for EOS
@@ -450,12 +450,12 @@ public class StreamThread extends Thread {
             if (topology.hasStateWithChangelogs()) {
                 final ProcessorStateManager stateManager = new ProcessorStateManager(
                     taskId,
-                    partitions,
                     Task.TaskType.STANDBY,
+                    logContext,
                     stateDirectory,
-                    topology.storeToChangelogTopic(),
                     storeChangelogReader,
-                    logContext);
+                    topology.storeToChangelogTopic(),
+                    partitions);
 
                 return new StandbyTask(
                     taskId,
