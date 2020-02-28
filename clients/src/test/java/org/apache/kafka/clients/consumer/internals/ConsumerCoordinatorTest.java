@@ -479,9 +479,6 @@ public class ConsumerCoordinatorTest {
 
     @Test
     public void testRevokeExceptionThrownFirstNonBlockingSubCallbacks() {
-        client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
-        coordinator.ensureCoordinatorReady(time.timer(Long.MAX_VALUE));
-
         MockRebalanceListener throwOnRevokeListener = new MockRebalanceListener() {
             @Override
             public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
@@ -502,9 +499,6 @@ public class ConsumerCoordinatorTest {
 
     @Test
     public void testOnAssignmentExceptionThrownFirstNonBlockingSubCallbacks() {
-        client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
-        coordinator.ensureCoordinatorReady(time.timer(Long.MAX_VALUE));
-
         MockRebalanceListener throwOnAssignListener = new MockRebalanceListener() {
             @Override
             public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
@@ -519,9 +513,6 @@ public class ConsumerCoordinatorTest {
 
     @Test
     public void testOnPartitionsAssignExceptionThrownWhenNoPreviousThrownCallbacks() {
-        client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
-        coordinator.ensureCoordinatorReady(time.timer(Long.MAX_VALUE));
-
         MockRebalanceListener throwOnAssignListener = new MockRebalanceListener() {
             @Override
             public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
@@ -536,9 +527,6 @@ public class ConsumerCoordinatorTest {
 
     @Test
     public void testOnRevokeExceptionShouldBeRenderedIfNotKafkaException() {
-        client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
-        coordinator.ensureCoordinatorReady(time.timer(Long.MAX_VALUE));
-
         MockRebalanceListener throwOnRevokeListener = new MockRebalanceListener() {
             @Override
             public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
@@ -560,9 +548,6 @@ public class ConsumerCoordinatorTest {
 
     @Test
     public void testOnAssignmentExceptionShouldBeRenderedIfNotKafkaException() {
-        client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
-        coordinator.ensureCoordinatorReady(time.timer(Long.MAX_VALUE));
-
         MockRebalanceListener throwOnAssignListener = new MockRebalanceListener() {
             @Override
             public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
@@ -577,9 +562,6 @@ public class ConsumerCoordinatorTest {
 
     @Test
     public void testOnPartitionsAssignExceptionShouldBeRenderedIfNotKafkaException() {
-        client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
-        coordinator.ensureCoordinatorReady(time.timer(Long.MAX_VALUE));
-
         MockRebalanceListener throwOnAssignListener = new MockRebalanceListener() {
             @Override
             public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
@@ -597,6 +579,9 @@ public class ConsumerCoordinatorTest {
                                             final String assignorName,
                                             final String exceptionMessage,
                                             final String causeMessage) {
+        client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
+        coordinator.ensureCoordinatorReady(time.timer(Long.MAX_VALUE));
+
         subscriptions.subscribe(singleton(topic1), rebalanceListener);
         ByteBuffer buffer = ConsumerProtocol.serializeAssignment(
             new ConsumerPartitionAssignor.Assignment(Collections.singletonList(t1p), ByteBuffer.wrap(new byte[0])));
@@ -615,11 +600,9 @@ public class ConsumerCoordinatorTest {
         assertEquals(protocol == COOPERATIVE ? 1 : 0, rebalanceListener.revokedCount);
         assertEquals(0, rebalanceListener.lostCount);
         assertEquals(1, rebalanceListener.assignedCount);
-        if (assignorMap.containsKey(assignorName)) {
-            assertEquals(1, assignorMap.get(assignorName).numAssignment());
-        } else {
-            throw new IllegalArgumentException("Unknown assignor name: " + assignorName);
-        }
+        assertTrue("Unknown assignor name: " + assignorName,
+            assignorMap.containsKey(assignorName));
+        assertEquals(1, assignorMap.get(assignorName).numAssignment());
     }
 
     @Test
