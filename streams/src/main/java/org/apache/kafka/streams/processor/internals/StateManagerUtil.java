@@ -84,7 +84,7 @@ final class StateManagerUtil {
             Utils.delete(stateMgr.baseDir());
         } catch (final IOException fatalException) {
             // since it is only called under dirty close, we always swallow the exception
-            log.warn("Failed to wiping state stores for task {}", stateMgr.taskId());
+            log.warn("Failed to wiping state stores for task {} due to {}", stateMgr.taskId(), fatalException);
         }
     }
 
