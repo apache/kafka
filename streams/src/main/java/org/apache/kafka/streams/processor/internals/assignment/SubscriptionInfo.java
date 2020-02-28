@@ -22,6 +22,7 @@ import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.ObjectSerializationCache;
 import org.apache.kafka.streams.errors.TaskAssignmentException;
 import org.apache.kafka.streams.internals.generated.SubscriptionInfoData;
+import org.apache.kafka.streams.internals.generated.SubscriptionInfoData.TaskOffsetSum;
 import org.apache.kafka.streams.processor.TaskId;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -38,13 +39,13 @@ import static org.apache.kafka.streams.processor.internals.assignment.StreamsAss
 public class SubscriptionInfo {
     private static final Logger LOG = LoggerFactory.getLogger(SubscriptionInfo.class);
 
-    public static final int ACTIVE_TASK_SENTINEL_LAG = -1;
+    public static final int ACTIVE_TASK_SENTINEL_OFFSET = -1;
     static final int UNKNOWN = -1;
 
     private final SubscriptionInfoData data;
     private Set<TaskId> prevTasksCache = null;
     private Set<TaskId> standbyTasksCache = null;
-    private Map<TaskId, Integer> taskLagsCache = null;
+    private Map<TaskId, Integer> taskOffsetSumsCache = null;
 
     static {
         // Just statically check to make sure that the generated code always stays in sync with the overall protocol
@@ -74,7 +75,7 @@ public class SubscriptionInfo {
                             final int latestSupportedVersion,
                             final UUID processId,
                             final String userEndPoint,
-                            final Map<TaskId, Integer> taskLags) {
+                            final Map<TaskId, Integer> taskOffsetSums) {
         validateVersions(version, latestSupportedVersion);
         final SubscriptionInfoData data = new SubscriptionInfoData();
         data.setVersion(version);
@@ -89,34 +90,34 @@ public class SubscriptionInfo {
             data.setLatestSupportedVersion(latestSupportedVersion);
         }
         if (version >= 7) {
-            setTaskLagDataFromTaskLagMap(data, taskLags);
+            setTaskOffsetSumDataFromTaskOffsetSumMap(data, taskOffsetSums);
         } else {
-            setPrevAndStandbySetsFromParsedTaskLagMap(data, taskLags);
+            setPrevAndStandbySetsFromParsedTaskOffsetSumMap(data, taskOffsetSums);
         }
         this.data = data;
     }
 
-    private static void setTaskLagDataFromTaskLagMap(final SubscriptionInfoData data,
-                                                     final Map<TaskId, Integer> taskLags) {
-        data.setTaskLags(taskLags.entrySet().stream().map(t -> {
-            final SubscriptionInfoData.TaskLag taskLag = new SubscriptionInfoData.TaskLag();
-            taskLag.setTopicGroupId(t.getKey().topicGroupId);
-            taskLag.setPartition(t.getKey().partition);
-            taskLag.setLag(t.getValue());
-            return taskLag;
+    private static void setTaskOffsetSumDataFromTaskOffsetSumMap(final SubscriptionInfoData data,
+                                                                 final Map<TaskId, Integer> taskOffsetSums) {
+        data.setTaskOffsetSums(taskOffsetSums.entrySet().stream().map(t -> {
+            final SubscriptionInfoData.TaskOffsetSum taskOffsetSum = new SubscriptionInfoData.TaskOffsetSum();
+            taskOffsetSum.setTopicGroupId(t.getKey().topicGroupId);
+            taskOffsetSum.setPartition(t.getKey().partition);
+            taskOffsetSum.setOffsetSum(t.getValue());
+            return taskOffsetSum;
         }).collect(Collectors.toList()));
     }
 
-    private static void setPrevAndStandbySetsFromParsedTaskLagMap(final SubscriptionInfoData data,
-                                                                  final Map<TaskId, Integer> taskLags) {
+    private static void setPrevAndStandbySetsFromParsedTaskOffsetSumMap(final SubscriptionInfoData data,
+                                                                        final Map<TaskId, Integer> taskOffsetSums) {
         final Set<TaskId> prevTasks = new HashSet<>();
         final Set<TaskId> standbyTasks = new HashSet<>();
 
-        for (final Map.Entry<TaskId, Integer> taskLagEntry : taskLags.entrySet()) {
-            if (taskLagEntry.getValue() == -1) {
-                prevTasks.add(taskLagEntry.getKey());
+        for (final Map.Entry<TaskId, Integer> taskOffsetSum : taskOffsetSums.entrySet()) {
+            if (taskOffsetSum.getValue() == -1) {
+                prevTasks.add(taskOffsetSum.getKey());
             } else {
-                standbyTasks.add(taskLagEntry.getKey());
+                standbyTasks.add(taskOffsetSum.getKey());
             }
         }
 
@@ -155,7 +156,7 @@ public class SubscriptionInfo {
         if (prevTasksCache == null) {
             // lazily initialize the prev and standby task maps as they may not be needed
             if (data.version() >= 7) {
-                setPrevAndStandbySetsFromParsedTaskLagMap(data, taskLags());
+                setPrevAndStandbySetsFromParsedTaskOffsetSumMap(data, taskOffsetSums());
             }
             prevTasksCache = Collections.unmodifiableSet(
                 data.prevTasks()
@@ -171,7 +172,7 @@ public class SubscriptionInfo {
         if (standbyTasksCache == null) {
             // lazily initialize the prev and standby task maps as they may not be needed
             if (data.version() >= 7) {
-                setPrevAndStandbySetsFromParsedTaskLagMap(data, taskLags());
+                setPrevAndStandbySetsFromParsedTaskOffsetSumMap(data, taskOffsetSums());
             }
             standbyTasksCache = Collections.unmodifiableSet(
                 data.standbyTasks()
@@ -183,15 +184,15 @@ public class SubscriptionInfo {
         return standbyTasksCache;
     }
 
-    public Map<TaskId, Integer> taskLags() {
-        if (taskLagsCache == null) {
-            taskLagsCache = Collections.unmodifiableMap(
-                data.taskLags()
+    public Map<TaskId, Integer> taskOffsetSums() {
+        if (taskOffsetSumsCache == null) {
+            taskOffsetSumsCache = Collections.unmodifiableMap(
+                data.taskOffsetSums()
                     .stream()
-                    .collect(Collectors.toMap(t -> new TaskId(t.topicGroupId(), t.partition()), l -> l.lag()))
+                    .collect(Collectors.toMap(t -> new TaskId(t.topicGroupId(), t.partition()), TaskOffsetSum::offsetSum))
             );
         }
-        return taskLagsCache;
+        return taskOffsetSumsCache;
     }
 
     public String userEndPoint() {

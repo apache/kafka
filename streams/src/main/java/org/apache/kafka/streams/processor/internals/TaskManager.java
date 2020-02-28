@@ -51,7 +51,7 @@ import java.util.stream.Stream;
 
 import static org.apache.kafka.streams.processor.internals.Task.State.CREATED;
 import static org.apache.kafka.streams.processor.internals.Task.State.RESTORING;
-import static org.apache.kafka.streams.processor.internals.assignment.SubscriptionInfo.ACTIVE_TASK_SENTINEL_LAG;
+import static org.apache.kafka.streams.processor.internals.assignment.SubscriptionInfo.ACTIVE_TASK_SENTINEL_OFFSET;
 
 public class TaskManager {
     // initialize the task list
@@ -364,7 +364,7 @@ public class TaskManager {
 
         for (final TaskId id : tasksOnLocalStorage()) {
             if (isActive(id)) {
-                taskLags.put(id, ACTIVE_TASK_SENTINEL_LAG);
+                taskLags.put(id, ACTIVE_TASK_SENTINEL_OFFSET);
             } else {
                 taskLags.put(id, 0);
             }

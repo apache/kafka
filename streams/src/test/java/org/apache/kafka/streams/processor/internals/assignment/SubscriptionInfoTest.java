@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.processor.internals.assignment;
 
-import java.util.HashMap;
 import java.util.Map;
 import org.apache.kafka.streams.processor.TaskId;
 import org.junit.Test;
@@ -27,7 +26,11 @@ import java.util.HashSet;
 import java.util.Set;
 import java.util.UUID;
 
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.streams.processor.internals.assignment.StreamsAssignmentProtocolVersions.LATEST_SUPPORTED_VERSION;
+import static org.hamcrest.CoreMatchers.is;
+import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 
@@ -40,7 +43,7 @@ public class SubscriptionInfoTest {
     private static final Set<TaskId> STANDBY_TASKS = new HashSet<>(Arrays.asList(
         new TaskId(1, 1),
         new TaskId(2, 0)));
-    private static final Map<TaskId, Integer> TASK_LAGS = mkMap(
+    private static final Map<TaskId, Integer> TASK_OFFSET_SUMS = mkMap(
         mkEntry(new TaskId(0, 0), -1),
         mkEntry(new TaskId(0, 1), -1),
         mkEntry(new TaskId(1, 0), -1),
@@ -48,11 +51,11 @@ public class SubscriptionInfoTest {
         mkEntry(new TaskId(2, 0), 10)
     );
     static {
-        TASK_LAGS.put(new TaskId(0, 0), -1);
-        TASK_LAGS.put(new TaskId(0, 1), -1);
-        TASK_LAGS.put(new TaskId(1, 0), -1);
-        TASK_LAGS.put(new TaskId(1, 1), 0);
-        TASK_LAGS.put(new TaskId(2, 0), 10);
+        TASK_OFFSET_SUMS.put(new TaskId(0, 0), -1);
+        TASK_OFFSET_SUMS.put(new TaskId(0, 1), -1);
+        TASK_OFFSET_SUMS.put(new TaskId(1, 0), -1);
+        TASK_OFFSET_SUMS.put(new TaskId(1, 1), 0);
+        TASK_OFFSET_SUMS.put(new TaskId(2, 0), 10);
     }
 
     private final static String IGNORED_USER_ENDPOINT = "ignoredUserEndpoint:80";
@@ -64,7 +67,7 @@ public class SubscriptionInfoTest {
             LATEST_SUPPORTED_VERSION,
             processId,
             "localhost:80",
-            TASK_LAGS
+            TASK_OFFSET_SUMS
         );
     }
 
@@ -75,7 +78,7 @@ public class SubscriptionInfoTest {
             LATEST_SUPPORTED_VERSION,
             processId,
             "localhost:80",
-            TASK_LAGS
+            TASK_OFFSET_SUMS
         );
     }
 
@@ -86,7 +89,7 @@ public class SubscriptionInfoTest {
             LATEST_SUPPORTED_VERSION,
             processId,
             IGNORED_USER_ENDPOINT,
-            TASK_LAGS
+            TASK_OFFSET_SUMS
         );
         final SubscriptionInfo decoded = SubscriptionInfo.decode(info.encode());
         assertEquals(1, decoded.version());
@@ -104,7 +107,7 @@ public class SubscriptionInfoTest {
             1234,
             processId,
             "ignoreme",
-            TASK_LAGS
+            TASK_OFFSET_SUMS
         );
         final ByteBuffer buffer = info.encode();
 
@@ -146,7 +149,7 @@ public class SubscriptionInfoTest {
             LATEST_SUPPORTED_VERSION,
             processId,
             "localhost:80",
-            TASK_LAGS
+            TASK_OFFSET_SUMS
         );
         final SubscriptionInfo decoded = SubscriptionInfo.decode(info.encode());
         assertEquals(2, decoded.version());
@@ -164,7 +167,7 @@ public class SubscriptionInfoTest {
             LATEST_SUPPORTED_VERSION,
             processId,
             "localhost:80",
-            TASK_LAGS
+            TASK_OFFSET_SUMS
         );
         final ByteBuffer buffer = info.encode();
 
@@ -207,7 +210,7 @@ public class SubscriptionInfoTest {
                 LATEST_SUPPORTED_VERSION,
                 processId,
                 "localhost:80",
-                TASK_LAGS
+                TASK_OFFSET_SUMS
             );
             final SubscriptionInfo decoded = SubscriptionInfo.decode(info.encode());
             assertEquals(version, decoded.version());
@@ -227,7 +230,7 @@ public class SubscriptionInfoTest {
                 LATEST_SUPPORTED_VERSION,
                 processId,
                 "localhost:80",
-                TASK_LAGS
+                TASK_OFFSET_SUMS
             );
             final ByteBuffer buffer = info.encode();
 
@@ -269,7 +272,7 @@ public class SubscriptionInfoTest {
     @Test
     public void shouldEncodeAndDecodeVersion5() {
         final SubscriptionInfo info =
-            new SubscriptionInfo(5, LATEST_SUPPORTED_VERSION, processId, "localhost:80", TASK_LAGS);
+            new SubscriptionInfo(5, LATEST_SUPPORTED_VERSION, processId, "localhost:80", TASK_OFFSET_SUMS);
         assertEquals(info, SubscriptionInfo.decode(info.encode()));
     }
 
@@ -286,29 +289,30 @@ public class SubscriptionInfoTest {
         final int latestSupportedVersion = LATEST_SUPPORTED_VERSION - 1;
 
         final SubscriptionInfo info =
-            new SubscriptionInfo(usedVersion, latestSupportedVersion, processId, "localhost:80", TASK_LAGS);
+            new SubscriptionInfo(usedVersion, latestSupportedVersion, processId, "localhost:80", TASK_OFFSET_SUMS);
         final SubscriptionInfo expectedInfo =
-            new SubscriptionInfo(usedVersion, latestSupportedVersion, processId, "localhost:80", TASK_LAGS);
+            new SubscriptionInfo(usedVersion, latestSupportedVersion, processId, "localhost:80", TASK_OFFSET_SUMS);
         assertEquals(expectedInfo, SubscriptionInfo.decode(info.encode()));
     }
 
     @Test
     public void shouldEncodeAndDecodeVersion7() {
         final SubscriptionInfo info =
-            new SubscriptionInfo(7, LATEST_SUPPORTED_VERSION, processId, "localhost:80", TASK_LAGS);
-        assertThat(SubscriptionInfo.decode(info.encode()), is(info));
+            new SubscriptionInfo(7, LATEST_SUPPORTED_VERSION, processId, "localhost:80", TASK_OFFSET_SUMS);
+        assertThat(info, is(SubscriptionInfo.decode(info.encode())));
     }
 
     @Test
-    public void shouldConvertTaskLagMapToTaskSetsForOlderVersion() {
-        final SubscriptionInfo info = new SubscriptionInfo(7, LATEST_SUPPORTED_VERSION, processId, "localhost:80", TASK_LAGS);
+    public void shouldConvertTaskOffsetSumMapToTaskSetsForOlderVersion() {
+        final SubscriptionInfo info =
+            new SubscriptionInfo(7, LATEST_SUPPORTED_VERSION, processId, "localhost:80", TASK_OFFSET_SUMS);
         assertThat(info.prevTasks(), is(ACTIVE_TASKS));
         assertThat(info.standbyTasks(), is(STANDBY_TASKS));
     }
 
     private static ByteBuffer encodeFutureVersion() {
         final ByteBuffer buf = ByteBuffer.allocate(4 /* used version */
-                                                       + 4 /* supported version */);
+                                                 + 4 /* supported version */);
         buf.putInt(LATEST_SUPPORTED_VERSION + 1);
         buf.putInt(LATEST_SUPPORTED_VERSION + 1);
         buf.rewind();

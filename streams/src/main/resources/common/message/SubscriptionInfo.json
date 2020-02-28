@@ -49,9 +49,9 @@
       "type": "bytes"
     },
     {
-      "name": "taskLags",
+      "name": "taskOffsetSums",
       "versions": "7+",
-      "type": "[]TaskLag"
+      "type": "[]TaskOffsetSum"
     }
   ],
   "commonStructs": [
@@ -72,7 +72,7 @@
       ]
     },
     {
-      "name": "TaskLag",
+      "name": "TaskOffsetSum",
       "versions": "7+",
       "fields": [
         {
@@ -86,7 +86,7 @@
           "type": "int32"
         },
         {
-          "name": "lag",
+          "name": "offsetSum",
           "versions": "1+",
           "type": "int32"
         }
