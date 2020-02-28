@@ -160,7 +160,6 @@ import org.apache.kafka.common.requests.FindCoordinatorRequest.CoordinatorType;
 import org.apache.kafka.common.requests.FindCoordinatorResponse;
 import org.apache.kafka.common.requests.IncrementalAlterConfigsRequest;
 import org.apache.kafka.common.requests.IncrementalAlterConfigsResponse;
-import org.apache.kafka.common.requests.JoinGroupRequest;
 import org.apache.kafka.common.requests.LeaveGroupRequest;
 import org.apache.kafka.common.requests.LeaveGroupResponse;
 import org.apache.kafka.common.requests.ListGroupsRequest;
@@ -3511,10 +3510,8 @@ public class KafkaAdminClient extends AdminClient {
 
                 final Map<MemberIdentity, Errors> memberErrors = new HashMap<>();
                 for (MemberResponse memberResponse : response.memberResponses()) {
-                    // We set member.id to empty here explicitly, so that the lookup will succeed as user doesn't
-                    // know the exact member.id.
                     memberErrors.put(new MemberIdentity()
-                                         .setMemberId(JoinGroupRequest.UNKNOWN_MEMBER_ID)
+                                         .setMemberId(memberResponse.memberId())
                                          .setGroupInstanceId(memberResponse.groupInstanceId()),
                                      Errors.forCode(memberResponse.errorCode()));
                 }

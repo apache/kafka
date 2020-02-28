@@ -1939,6 +1939,7 @@ public class KafkaAdminClientTest {
         try (AdminClientUnitTestEnv env = mockClientEnv()) {
             final String instanceOne = "instance-1";
             final String instanceTwo = "instance-2";
+            final String memberOneOfInstanceOne = instanceOne + "-member-1";
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
 
             // Retriable FindCoordinatorResponse errors should be retried
@@ -1958,15 +1959,15 @@ public class KafkaAdminClientTest {
                                                                          .setErrorCode(Errors.UNKNOWN_SERVER_ERROR.code())));
 
             String groupId = "groupId";
-            Collection<MemberToRemove> membersToRemove = Arrays.asList(new MemberToRemove(instanceOne),
-                                                                       new MemberToRemove(instanceTwo));
+            Collection<MemberToRemove> membersToRemove = Arrays.asList(new MemberToRemove().withGroupInstanceId(instanceOne),
+                    new MemberToRemove().withGroupInstanceId(instanceTwo));
             final RemoveMembersFromConsumerGroupResult unknownErrorResult = env.adminClient().removeMembersFromConsumerGroup(
                 groupId,
                 new RemoveMembersFromConsumerGroupOptions(membersToRemove)
             );
 
-            MemberToRemove memberOne = new MemberToRemove(instanceOne);
-            MemberToRemove memberTwo = new MemberToRemove(instanceTwo);
+            MemberToRemove memberOne = new MemberToRemove().withGroupInstanceId(instanceOne);
+            MemberToRemove memberTwo = new MemberToRemove().withGroupInstanceId(instanceTwo);
 
             TestUtils.assertFutureError(unknownErrorResult.all(), UnknownServerException.class);
             TestUtils.assertFutureError(unknownErrorResult.memberResult(memberOne), UnknownServerException.class);
@@ -2028,6 +2029,48 @@ public class KafkaAdminClientTest {
             assertNull(noErrorResult.all().get());
             assertNull(noErrorResult.memberResult(memberOne).get());
             assertNull(noErrorResult.memberResult(memberTwo).get());
+
+            // Return with FENCED_INSTANCE_ID error
+            // Scenario:
+            // The group instance instanceOne has been registered with a new member id on broker side, trying to delete
+            // the group instance with the old member id will get FENCED_INSTANCE_ID error
+            MemberToRemove fencedMember = new MemberToRemove().withMemberId(memberOneOfInstanceOne)
+                    .withGroupInstanceId(instanceOne);
+            env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
+            env.kafkaClient().prepareResponse(new LeaveGroupResponse(
+                    new LeaveGroupResponseData().setErrorCode(Errors.NONE.code()).setMembers(
+                            Arrays.asList(new MemberResponse().setErrorCode(Errors.FENCED_INSTANCE_ID.code())
+                            .setGroupInstanceId(instanceOne).setMemberId(memberOneOfInstanceOne))
+                    )
+            ));
+
+            final RemoveMembersFromConsumerGroupResult fencedInstanceErrorResult = env.adminClient()
+                    .removeMembersFromConsumerGroup(groupId, new RemoveMembersFromConsumerGroupOptions(
+                            Arrays.asList(fencedMember)
+                    ));
+
+            TestUtils.assertFutureError(fencedInstanceErrorResult.all(), FencedInstanceIdException.class);
+            TestUtils.assertFutureError(fencedInstanceErrorResult.memberResult(fencedMember),
+                    FencedInstanceIdException.class);
+
+            // Remove dynamic member successfully
+            MemberToRemove dynamicMemberOne = new MemberToRemove().withMemberId(memberOneOfInstanceOne);
+            env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
+            env.kafkaClient().prepareResponse(new LeaveGroupResponse(
+                    new LeaveGroupResponseData().setErrorCode(Errors.NONE.code()).setMembers(
+                            Arrays.asList(new MemberResponse().setMemberId(memberOneOfInstanceOne)
+                                    .setGroupInstanceId(null)
+                                    .setErrorCode(Errors.NONE.code())
+                            )
+                    )));
+
+            final RemoveMembersFromConsumerGroupResult removeDynamicMemberNoErrorResult = env.adminClient()
+                    .removeMembersFromConsumerGroup(groupId, new RemoveMembersFromConsumerGroupOptions(
+                            Arrays.asList(new MemberToRemove().withMemberId(memberOneOfInstanceOne))));
+
+            assertNull(removeDynamicMemberNoErrorResult.all().get());
+            assertNull(removeDynamicMemberNoErrorResult.memberResult(dynamicMemberOne).get());
+
         }
     }
 

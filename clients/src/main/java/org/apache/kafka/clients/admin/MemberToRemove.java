@@ -25,17 +25,34 @@ import java.util.Objects;
  * A struct containing information about the member to be removed.
  */
 public class MemberToRemove {
-    private final String groupInstanceId;
+    private String groupInstanceId;
+    private String memberId;
 
+    public MemberToRemove() {
+        this.memberId = JoinGroupRequest.UNKNOWN_MEMBER_ID;
+        this.groupInstanceId = null;
+    }
+
+    /**
+     * @deprecated use {@link #MemberToRemove()} instead
+     */
+    @Deprecated
     public MemberToRemove(String groupInstanceId) {
         this.groupInstanceId = groupInstanceId;
+        this.memberId = JoinGroupRequest.UNKNOWN_MEMBER_ID;
     }
 
     @Override
     public boolean equals(Object o) {
         if (o instanceof MemberToRemove) {
             MemberToRemove otherMember = (MemberToRemove) o;
-            return this.groupInstanceId.equals(otherMember.groupInstanceId);
+            Boolean groupInstanceIdEquality;
+            if (this.groupInstanceId == null) {
+                groupInstanceIdEquality = otherMember.groupInstanceId == null;
+            } else {
+                groupInstanceIdEquality = this.groupInstanceId.equals(otherMember.groupInstanceId);
+            }
+            return groupInstanceIdEquality && this.memberId.equals(otherMember.memberId);
         } else {
             return false;
         }
@@ -43,16 +60,28 @@ public class MemberToRemove {
 
     @Override
     public int hashCode() {
-        return Objects.hash(groupInstanceId);
+        return Objects.hash(groupInstanceId, memberId);
     }
 
     MemberIdentity toMemberIdentity() {
         return new MemberIdentity()
                    .setGroupInstanceId(groupInstanceId)
-                   .setMemberId(JoinGroupRequest.UNKNOWN_MEMBER_ID);
+                   .setMemberId(memberId);
     }
 
-    public String groupInstanceId() {
-        return groupInstanceId;
+    public MemberToRemove withGroupInstanceId(String groupInstanceId) {
+        this.groupInstanceId = groupInstanceId;
+        return this;
+    }
+
+    public MemberToRemove withMemberId(String memberId) {
+        this.memberId = memberId;
+        return this;
+    }
+
+    @Override
+    public String toString() {
+        return "(memberId=" + memberId +
+                ", groupInstanceId=" + groupInstanceId;
     }
 }

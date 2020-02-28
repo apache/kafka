@@ -27,6 +27,8 @@ import org.apache.kafka.clients.admin.DeleteTopicsResult;
 import org.apache.kafka.clients.admin.DescribeConsumerGroupsOptions;
 import org.apache.kafka.clients.admin.DescribeConsumerGroupsResult;
 import org.apache.kafka.clients.admin.MemberDescription;
+import org.apache.kafka.clients.admin.MemberToRemove;
+import org.apache.kafka.clients.admin.RemoveMembersFromConsumerGroupOptions;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
@@ -106,6 +108,7 @@ public class StreamsResetter {
     private static OptionSpec versionOption;
     private static OptionSpecBuilder executeOption;
     private static OptionSpec<String> commandConfigOption;
+    private static OptionSpec forceOption;
 
     private static String usage = "This tool helps to quickly reset an application in order to reprocess "
             + "its data from scratch.\n"
@@ -149,7 +152,7 @@ public class StreamsResetter {
             properties.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, options.valueOf(bootstrapServerOption));
 
             adminClient = Admin.create(properties);
-            validateNoActiveConsumers(groupId, adminClient);
+            maybeDeleteActiveConsumers(groupId, adminClient);
 
             allTopics.clear();
             allTopics.addAll(adminClient.listTopics().names().get(60, TimeUnit.SECONDS));
@@ -176,20 +179,41 @@ public class StreamsResetter {
         return exitCode;
     }
 
-    private void validateNoActiveConsumers(final String groupId,
-                                           final Admin adminClient)
-        throws ExecutionException, InterruptedException {
+    private void maybeDeleteActiveConsumers(final String groupId,
+                                            final Admin adminClient)
+            throws ExecutionException, InterruptedException {
 
         final DescribeConsumerGroupsResult describeResult = adminClient.describeConsumerGroups(
-            Collections.singleton(groupId),
-            new DescribeConsumerGroupsOptions().timeoutMs(10 * 1000));
-        final List<MemberDescription> members =
-            new ArrayList<>(describeResult.describedGroups().get(groupId).get().members());
-        if (!members.isEmpty()) {
-            throw new IllegalStateException("Consumer group '" + groupId + "' is still active "
-                    + "and has following members: " + members + ". "
-                    + "Make sure to stop all running application instances before running the reset tool.");
+                Collections.singleton(groupId),
+                new DescribeConsumerGroupsOptions().timeoutMs(10 * 1000));
+            List<MemberDescription> activeMembers =  new ArrayList<>(describeResult.describedGroups().get(groupId).get().members());
+            if (!activeMembers.isEmpty()) {
+                if (options.has(forceOption)) {
+                    forceDeleteAllMembers(groupId, adminClient, activeMembers);
+                } else {
+                    throw new IllegalStateException("Consumer group '" + groupId + "' is still active "
+                            + "and has following members: " + activeMembers + ". "
+                            + "Make sure to stop all running application instances before running the reset tool." +
+                            "Try set '--force' in the cmdline to force delete active members.");
+                }
+            }
         }
+
+    // visible for testing
+    public void forceDeleteAllMembers(final String groupId, final Admin adminClient, final List<MemberDescription> members)
+            throws ExecutionException, InterruptedException {
+        List<MemberToRemove> membersToRemove = new ArrayList<>();
+        for (MemberDescription member: members) {
+            MemberToRemove memberToRemove = new MemberToRemove();
+            if (member.groupInstanceId().isPresent()) {
+                memberToRemove.withGroupInstanceId(member.groupInstanceId().get());
+            }
+            memberToRemove.withMemberId(member.consumerId());
+            membersToRemove.add(memberToRemove);
+        }
+        adminClient.removeMembersFromConsumerGroup(groupId,
+                new RemoveMembersFromConsumerGroupOptions(membersToRemove)).all().get();
+        System.out.println("Active members: " + membersToRemove + " has been force removed.");
     }
 
     private void parseArguments(final String[] args) {
@@ -240,6 +264,8 @@ public class StreamsResetter {
         dryRunOption = optionParser.accepts("dry-run", "Display the actions that would be performed without executing the reset commands.");
         helpOption = optionParser.accepts("help", "Print usage information.").forHelp();
         versionOption = optionParser.accepts("version", "Print version information and exit.").forHelp();
+        forceOption = optionParser.accepts("force", "Force remove members when long session time out has been configured, " +
+                "please make sure to shut down all stream applications when this option is specified to avoid unexpected rebalances.");
 
         // TODO: deprecated in 1.0; can be removed eventually: https://issues.apache.org/jira/browse/KAFKA-7606
         optionParser.accepts("zookeeper", "Zookeeper option is deprecated by bootstrap.servers, as the reset tool would no longer access Zookeeper directly.");

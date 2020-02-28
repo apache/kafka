@@ -38,8 +38,8 @@ import static org.junit.Assert.assertThrows;
 
 public class RemoveMembersFromConsumerGroupResultTest {
 
-    private final MemberToRemove instanceOne = new MemberToRemove("instance-1");
-    private final MemberToRemove instanceTwo = new MemberToRemove("instance-2");
+    private final MemberToRemove instanceOne = new MemberToRemove().withGroupInstanceId("instance-1");
+    private final MemberToRemove instanceTwo = new MemberToRemove().withGroupInstanceId("instance-2").withMemberId("member-2");
     private Set<MemberToRemove> membersToRemove;
     private Map<MemberIdentity, Errors> errorsMap;
 
@@ -87,7 +87,7 @@ public class RemoveMembersFromConsumerGroupResultTest {
     public void testMemberLevelErrorInResponseConstructor() throws InterruptedException, ExecutionException {
         RemoveMembersFromConsumerGroupResult memberLevelErrorResult = createAndVerifyMemberLevelError();
         assertThrows(IllegalArgumentException.class, () -> memberLevelErrorResult.memberResult(
-            new MemberToRemove("invalid-instance-id"))
+            new MemberToRemove().withGroupInstanceId("invalid-instance-id"))
         );
     }
 

@@ -18,18 +18,22 @@ package org.apache.kafka.clients.admin;
 
 import org.junit.Test;
 
-import java.util.Collections;
+import java.util.Arrays;
 
-import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 
 public class RemoveMembersFromConsumerGroupOptionsTest {
 
     @Test
     public void testConstructor() {
+        MemberToRemove staticMember1 = new MemberToRemove().withGroupInstanceId("instance-1");
+        MemberToRemove staticMember2 = new MemberToRemove().withGroupInstanceId("instance-2").withMemberId("member-2");
+        MemberToRemove dynamicMember = new MemberToRemove().withMemberId("member-1");
         RemoveMembersFromConsumerGroupOptions options = new RemoveMembersFromConsumerGroupOptions(
-            Collections.singleton(new MemberToRemove("instance-1")));
+                Arrays.asList(staticMember1, dynamicMember, staticMember2));
 
-        assertEquals(Collections.singleton(
-            new MemberToRemove("instance-1")), options.members());
+        assertTrue(options.members().contains(staticMember1));
+        assertTrue(options.members().contains(dynamicMember));
+        assertTrue(options.members().contains(staticMember2));
     }
 }
