@@ -162,6 +162,8 @@ def regexReplace(path, pattern, replacement):
 
 def user_ok(msg):
     ok = raw_input(msg)
+    while ok.strip() not in ('y', 'n'):
+        ok = raw_input("Please enter either 'y' or 'n': ")
     return ok.strip().lower() == 'y'
 
 def sftp_mkdir(dir):
