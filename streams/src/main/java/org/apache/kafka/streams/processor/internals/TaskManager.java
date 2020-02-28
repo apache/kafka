@@ -200,11 +200,16 @@ public class TaskManager {
         if (!taskCloseExceptions.isEmpty()) {
             for (final Map.Entry<TaskId, RuntimeException> entry : taskCloseExceptions.entrySet()) {
                 if (!(entry.getValue() instanceof TaskMigratedException)) {
-                    throw new RuntimeException(
-                        "Unexpected failure to close " + taskCloseExceptions.size() +
-                            " task(s) [" + taskCloseExceptions.keySet() + "]. " +
-                            "First unexpected exception (for task " + entry.getKey() + ") follows.", entry.getValue()
-                    );
+                    if (entry.getValue() instanceof KafkaException) {
+                        log.error("Hit Kafka exception while closing for first task {}", entry.getKey());
+                        throw entry.getValue();
+                    } else {
+                        throw new RuntimeException(
+                            "Unexpected failure to close " + taskCloseExceptions.size() +
+                                " task(s) [" + taskCloseExceptions.keySet() + "]. " +
+                                "First unexpected exception (for task " + entry.getKey() + ") follows.", entry.getValue()
+                        );
+                    }
                 }
             }
 
