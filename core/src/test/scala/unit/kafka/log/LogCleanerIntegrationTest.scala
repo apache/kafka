@@ -199,22 +199,18 @@ class LogCleanerIntegrationTest extends AbstractLogCleanerIntegrationTest with K
 
     cleaner.startup()
 
-    Thread.sleep(200)
+    val latestOffset: Long = log.logEndOffset
+
+    cleaner.awaitCleaned(new TopicPartition("log-partition", 0),
+                         latestOffset + 1, maxWaitMs = 5000)
     assertEquals(log.latestDeleteHorizon, T0 + tombstoneRetentionMs)
 
     time.sleep(tombstoneRetentionMs + 1)
 
-    val latestOffset: Long = log.logEndOffset
-
     // the first block should get cleaned
     cleaner.awaitCleaned(new TopicPartition("log-partition", 0), 
                          latestOffset + 1, maxWaitMs = 5000)
-
-    import JavaConverters._
-    for (segment <- log.logSegments; record <- segment.log.records.asScala) {
-      fail ("The log should not contain record " + record + ", tombstone has expired its lifetime.")
-    }
-    assertEquals(log.latestDeleteHorizon, RecordBatch.NO_TIMESTAMP)
+    TestUtils.waitUntilTrue(() => log.size == 0, "Log should be empty", tombstoneRetentionMs, 100)
   }
 
   private def readFromLog(log: Log): Iterable[(Int, Int)] = {
