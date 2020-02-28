@@ -485,20 +485,20 @@ public class SmokeTestDriver extends SmokeTestUtil {
                 if (!expected.equals(actual)) {
                     resultStream.printf("%s fail: key=%s actual=%s expected=%s%n", topic, key, actual, expected);
 
-                    if (printResults) {
-                        resultStream.printf("\t inputEvents=%n%s%n\t" +
-                                "echoEvents=%n%s%n\tmaxEvents=%n%s%n\tminEvents=%n%s%n\tdifEvents=%n%s%n\tcntEvents=%n%s%n\ttaggEvents=%n%s%n",
-                            indent("\t\t", observedInputEvents.get(key)),
-                            indent("\t\t", events.getOrDefault("echo", emptyMap()).getOrDefault(key, new LinkedList<>())),
-                            indent("\t\t", events.getOrDefault("max", emptyMap()).getOrDefault(key, new LinkedList<>())),
-                            indent("\t\t", events.getOrDefault("min", emptyMap()).getOrDefault(key, new LinkedList<>())),
-                            indent("\t\t", events.getOrDefault("dif", emptyMap()).getOrDefault(key, new LinkedList<>())),
-                            indent("\t\t", events.getOrDefault("cnt", emptyMap()).getOrDefault(key, new LinkedList<>())),
-                            indent("\t\t", events.getOrDefault("tagg", emptyMap()).getOrDefault(key, new LinkedList<>())));
-
-                        if (!Utils.mkSet("echo", "max", "min", "dif", "cnt", "tagg").contains(topic))
-                            resultStream.printf("%sEvents=%n%s%n", topic, indent("\t\t", entry.getValue()));
-                    }
+//                    if (printResults) {
+//                        resultStream.printf("\t inputEvents=%n%s%n\t" +
+//                                "echoEvents=%n%s%n\tmaxEvents=%n%s%n\tminEvents=%n%s%n\tdifEvents=%n%s%n\tcntEvents=%n%s%n\ttaggEvents=%n%s%n",
+//                            indent("\t\t", observedInputEvents.get(key)),
+//                            indent("\t\t", events.getOrDefault("echo", emptyMap()).getOrDefault(key, new LinkedList<>())),
+//                            indent("\t\t", events.getOrDefault("max", emptyMap()).getOrDefault(key, new LinkedList<>())),
+//                            indent("\t\t", events.getOrDefault("min", emptyMap()).getOrDefault(key, new LinkedList<>())),
+//                            indent("\t\t", events.getOrDefault("dif", emptyMap()).getOrDefault(key, new LinkedList<>())),
+//                            indent("\t\t", events.getOrDefault("cnt", emptyMap()).getOrDefault(key, new LinkedList<>())),
+//                            indent("\t\t", events.getOrDefault("tagg", emptyMap()).getOrDefault(key, new LinkedList<>())));
+//
+//                        if (!Utils.mkSet("echo", "max", "min", "dif", "cnt", "tagg").contains(topic))
+//                            resultStream.printf("%sEvents=%n%s%n", topic, indent("\t\t", entry.getValue()));
+//                    }
 
                     return false;
                 }
