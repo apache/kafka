@@ -205,7 +205,7 @@ public class StreamsPartitionAssignorTest {
                                        final InternalTopologyBuilder builder) {
         taskManager = EasyMock.createNiceMock(TaskManager.class);
         EasyMock.expect(taskManager.builder()).andReturn(builder).anyTimes();
-        EasyMock.expect(taskManager.getTaskLags()).andReturn(getTaskLags(prevTasks, standbyTasks)).anyTimes();
+        EasyMock.expect(taskManager.getTaskOffsetSums()).andReturn(getTaskOffsetSums(prevTasks, standbyTasks)).anyTimes();
         EasyMock.expect(taskManager.processId()).andReturn(processId).anyTimes();
         builder.setApplicationId(APPLICATION_ID);
         builder.buildTopology();
@@ -228,7 +228,7 @@ public class StreamsPartitionAssignorTest {
                                             final Set<TaskId> standbyTasks,
                                             final String userEndPoint) {
         return new SubscriptionInfo(
-            version, LATEST_SUPPORTED_VERSION, processId, userEndPoint, getTaskLags(prevTasks, standbyTasks));
+            version, LATEST_SUPPORTED_VERSION, processId, userEndPoint, getTaskOffsetSums(prevTasks, standbyTasks));
     }
 
     private static SubscriptionInfo getInfo(final UUID processId,
@@ -240,7 +240,7 @@ public class StreamsPartitionAssignorTest {
 
     private static SubscriptionInfo getInfo(final UUID processId, final Set<TaskId> prevTasks, final Set<TaskId> standbyTasks) {
         return new SubscriptionInfo(
-            LATEST_SUPPORTED_VERSION, LATEST_SUPPORTED_VERSION, processId, USER_END_POINT, getTaskLags(prevTasks, standbyTasks));
+            LATEST_SUPPORTED_VERSION, LATEST_SUPPORTED_VERSION, processId, USER_END_POINT, getTaskOffsetSums(prevTasks, standbyTasks));
     }
 
     @Test
@@ -452,7 +452,7 @@ public class StreamsPartitionAssignorTest {
         assertEquals(asList("topic1", "topic2"), subscription.topics());
 
         
-        final SubscriptionInfo info = getInfo(processId, getTaskLags(prevTasks, standbyTasks), null);
+        final SubscriptionInfo info = getInfo(processId, getTaskOffsetSums(prevTasks, standbyTasks), null);
         assertEquals(info, SubscriptionInfo.decode(subscription.userData()));
     }
 
@@ -485,7 +485,7 @@ public class StreamsPartitionAssignorTest {
         final Set<TaskId> standbyTasks = new HashSet<>(cachedTasks);
         standbyTasks.removeAll(prevTasks);
 
-        final SubscriptionInfo info = getInfo(processId, getTaskLags(prevTasks, cachedTasks), null);
+        final SubscriptionInfo info = getInfo(processId, getTaskOffsetSums(prevTasks, cachedTasks), null);
         assertEquals(info, SubscriptionInfo.decode(subscription.userData()));
     }
 
@@ -517,17 +517,17 @@ public class StreamsPartitionAssignorTest {
         subscriptions.put("consumer10",
                           new Subscription(
                               topics,
-                              getInfo(uuid1, getTaskLags(prevTasks10, standbyTasks10), USER_END_POINT).encode()
+                              getInfo(uuid1, getTaskOffsetSums(prevTasks10, standbyTasks10), USER_END_POINT).encode()
                           ));
         subscriptions.put("consumer11",
                           new Subscription(
                               topics,
-                              getInfo(uuid1, getTaskLags(prevTasks11, standbyTasks11), USER_END_POINT).encode()
+                              getInfo(uuid1, getTaskOffsetSums(prevTasks11, standbyTasks11), USER_END_POINT).encode()
                           ));
         subscriptions.put("consumer20",
                           new Subscription(
                               topics,
-                              getInfo(uuid2, getTaskLags(prevTasks20, standbyTasks20), USER_END_POINT).encode()
+                              getInfo(uuid2, getTaskOffsetSums(prevTasks20, standbyTasks20), USER_END_POINT).encode()
                           ));
 
         final Map<String, Assignment> assignments = partitionAssignor.assign(metadata, new GroupSubscription(subscriptions)).groupAssignment();
@@ -904,11 +904,11 @@ public class StreamsPartitionAssignorTest {
         subscriptions.put("consumer10",
             new Subscription(
                 topics,
-                getInfo(uuid1, getTaskLags(mkSet(task0_0), Collections.emptySet()), "any:9096").encode()));
+                getInfo(uuid1, getTaskOffsetSums(mkSet(task0_0), Collections.emptySet()), "any:9096").encode()));
         subscriptions.put("consumer20",
             new Subscription(
                 topics,
-                getInfo(uuid2, getTaskLags(mkSet(task0_2), Collections.emptySet()), "any:9097").encode()));
+                getInfo(uuid2, getTaskOffsetSums(mkSet(task0_2), Collections.emptySet()), "any:9097").encode()));
 
         final Map<String, Assignment> assignments =
             partitionAssignor.assign(metadata, new GroupSubscription(subscriptions)).groupAssignment();
@@ -943,11 +943,11 @@ public class StreamsPartitionAssignorTest {
         subscriptions.put("consumer10",
             new Subscription(
                 topics,
-                getInfo(uuid1, getTaskLags(mkSet(task0_0), Collections.emptySet()), "any:9096").encode()));
+                getInfo(uuid1, getTaskOffsetSums(mkSet(task0_0), Collections.emptySet()), "any:9096").encode()));
         subscriptions.put("consumer20",
             new Subscription(
                 topics,
-                getInfo(uuid2, getTaskLags(mkSet(task0_2), Collections.emptySet()), "any:9097").encode()));
+                getInfo(uuid2, getTaskOffsetSums(mkSet(task0_2), Collections.emptySet()), "any:9097").encode()));
 
         final Map<String, Assignment> assignments =
             partitionAssignor.assign(metadata, new GroupSubscription(subscriptions)).groupAssignment();
@@ -999,15 +999,15 @@ public class StreamsPartitionAssignorTest {
         subscriptions.put("consumer10",
                           new Subscription(
                               topics,
-                              getInfo(uuid1, getTaskLags(prevTasks00, standbyTasks01), "any:9096").encode()));
+                              getInfo(uuid1, getTaskOffsetSums(prevTasks00, standbyTasks01), "any:9096").encode()));
         subscriptions.put("consumer11",
                           new Subscription(
                               topics,
-                              getInfo(uuid1, getTaskLags(prevTasks01, standbyTasks02), "any:9096").encode()));
+                              getInfo(uuid1, getTaskOffsetSums(prevTasks01, standbyTasks02), "any:9096").encode()));
         subscriptions.put("consumer20",
                           new Subscription(
                               topics,
-                              getInfo(uuid2, getTaskLags(prevTasks02, standbyTasks00), "any:9097").encode()));
+                              getInfo(uuid2, getTaskOffsetSums(prevTasks02, standbyTasks00), "any:9097").encode()));
 
         final Map<String, Assignment> assignments =
             partitionAssignor.assign(metadata, new GroupSubscription(subscriptions)).groupAssignment();
@@ -1448,7 +1448,7 @@ public class StreamsPartitionAssignorTest {
         subscriptions.put("consumer2",
                           new Subscription(
                               Collections.singletonList("topic1"),
-                              getInfo(UUID.randomUUID(), getTaskLags(emptyTasks, emptyTasks), "other:9090").encode())
+                              getInfo(UUID.randomUUID(), getTaskOffsetSums(emptyTasks, emptyTasks), "other:9090").encode())
         );
         final Set<TopicPartition> allPartitions = mkSet(t1p0, t1p1, t1p2);
         final Map<String, Assignment> assign = partitionAssignor.assign(metadata, new GroupSubscription(subscriptions)).groupAssignment();
@@ -1625,13 +1625,13 @@ public class StreamsPartitionAssignorTest {
         subscriptions.put(CONSUMER_1,
                           new Subscription(
                 Collections.singletonList("topic1"),
-                getInfo(UUID.randomUUID(), getTaskLags(allTasks, Collections.emptySet()), null).encode(),
+                getInfo(UUID.randomUUID(), getTaskOffsetSums(allTasks, Collections.emptySet()), null).encode(),
                 asList(t1p0, t1p1, t1p2))
         );
         subscriptions.put(CONSUMER_2,
                           new Subscription(
                 Collections.singletonList("topic1"),
-                getInfo(UUID.randomUUID(), getTaskLags(Collections.emptySet(), Collections.emptySet()), null).encode(),
+                getInfo(UUID.randomUUID(), getTaskOffsetSums(Collections.emptySet(), Collections.emptySet()), null).encode(),
                 emptyList())
         );
 
@@ -1704,7 +1704,7 @@ public class StreamsPartitionAssignorTest {
         subscriptions.put("consumer1",
                 new Subscription(
                         Collections.singletonList("topic1"),
-                        getInfo(UUID.randomUUID(), getTaskLags(activeTasks, standbyTasks), null).encode(),
+                        getInfo(UUID.randomUUID(), getTaskOffsetSums(activeTasks, standbyTasks), null).encode(),
                         asList(t1p0, t1p1))
         );
         subscriptions.put("future-consumer",
@@ -1982,7 +1982,7 @@ public class StreamsPartitionAssignorTest {
         }
     }
 
-    static Map<TaskId, Integer> getTaskLags(final Set<TaskId> activeTasks, final Set<TaskId> standbyTasks) {
+    static Map<TaskId, Integer> getTaskOffsetSums(final Set<TaskId> activeTasks, final Set<TaskId> standbyTasks) {
         final Map<TaskId, Integer> taskLags = activeTasks.stream().collect(Collectors.toMap(t -> t, t -> -1));
         taskLags.putAll(standbyTasks.stream().collect(Collectors.toMap(t -> t, t -> 0)));
         return taskLags;

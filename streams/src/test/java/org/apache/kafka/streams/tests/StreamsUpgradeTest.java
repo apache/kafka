@@ -152,14 +152,14 @@ public class StreamsUpgradeTest {
                     LATEST_SUPPORTED_VERSION + 1,
                     taskManager.processId(),
                     userEndPoint(),
-                    taskManager.getTaskLags()
+                    taskManager.getTaskOffsetSums()
                 ).encode();
             } else {
                 return new FutureSubscriptionInfo(
                     usedSubscriptionMetadataVersion,
                     taskManager.processId(),
                     userEndPoint(),
-                    taskManager.getTaskLags())
+                    taskManager.getTaskOffsetSums())
                     .encode();
             }
         }
@@ -248,7 +248,7 @@ public class StreamsUpgradeTest {
                                 LATEST_SUPPORTED_VERSION,
                                 LATEST_SUPPORTED_VERSION,
                                 info.processId(),
-                                info.userEndPoint(), taskManger().getTaskLags())
+                                info.userEndPoint(), taskManger().getTaskOffsetSums())
                                 .encode(),
                             subscription.ownedPartitions()
                         ));

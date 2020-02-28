@@ -359,17 +359,17 @@ public class TaskManager {
     /**
      * @return Map from task id to that task's overall lag across all state stores
      */
-    public Map<TaskId, Integer> getTaskLags() {
-        final Map<TaskId, Integer> taskLags = new HashMap<>();
+    public Map<TaskId, Integer> getTaskOffsetSums() {
+        final Map<TaskId, Integer> taskOffsetSums = new HashMap<>();
 
         for (final TaskId id : tasksOnLocalStorage()) {
             if (isActive(id)) {
-                taskLags.put(id, ACTIVE_TASK_SENTINEL_OFFSET);
+                taskOffsetSums.put(id, ACTIVE_TASK_SENTINEL_OFFSET);
             } else {
-                taskLags.put(id, 0);
+                taskOffsetSums.put(id, 0);
             }
         }
-        return taskLags;
+        return taskOffsetSums;
     }
 
     /**

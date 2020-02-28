@@ -226,7 +226,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             LATEST_SUPPORTED_VERSION,
             taskManager.processId(),
             userEndPoint,
-            taskManager.getTaskLags())
+            taskManager.getTaskOffsetSums())
                 .encode();
     }
 
