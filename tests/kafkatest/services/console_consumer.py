@@ -284,9 +284,13 @@ class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService)
         jmx_tool.jmx_attributes = ["assigned-partitions"]
         jmx_tool.assigned_partitions_jmx_attr = "kafka.consumer:type=consumer-coordinator-metrics,client-id=%s:assigned-partitions" % self.client_id
         jmx_tool.start_jmx_tool(self.idx(node), node)
-        jmx_tool.read_jmx_output(self.idx(node), node)
         assigned_partitions_jmx_attr = "kafka.consumer:type=consumer-coordinator-metrics,client-id=%s:assigned-partitions" % self.client_id
-        wait_until(lambda: assigned_partitions_jmx_attr in jmx_tool.maximum_jmx_value,
+
+        def read_and_check():
+            jmx_tool.read_jmx_output(self.idx(node), node)
+            return assigned_partitions_jmx_attr in jmx_tool.maximum_jmx_value
+
+        wait_until(lambda: read_and_check(),
                 timeout_sec=timeout_sec,
                 backoff_sec=.5,
                 err_msg="consumer was not assigned partitions within %d seconds" % timeout_sec)
