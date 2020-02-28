@@ -50,10 +50,10 @@ public class StreamsRebalanceListener implements ConsumerRebalanceListener {
             log.error("Received error code {} - shutdown", streamThread.getAssignmentErrorCode());
             streamThread.shutdown();
         } else {
-            taskManager.handleRebalanceComplete();
-
             streamThread.setState(State.PARTITIONS_ASSIGNED);
         }
+
+        taskManager.handleRebalanceComplete();
     }
 
     @Override

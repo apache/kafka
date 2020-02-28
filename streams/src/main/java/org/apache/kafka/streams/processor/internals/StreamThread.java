@@ -744,7 +744,9 @@ public class StreamThread extends Thread {
     private void runLoop() {
         subscribeConsumer();
 
-        while (isRunning()) {
+        // if the thread is still in the middle of a rebalance, we should keep polling
+        // until the rebalance is completed before we close and commit the tasks
+        while (isRunning() || taskManager.isRebalanceInProgress()) {
             try {
                 runOnce();
                 if (assignmentErrorCode.get() == AssignorError.VERSION_PROBING.code()) {
@@ -806,6 +808,10 @@ public class StreamThread extends Thread {
             // try to fetch some records with normal poll time
             // in order to get long polling
             records = pollRequests(pollTime);
+        } else if (state == State.PENDING_SHUTDOWN) {
+            // we are only here because there's rebalance in progress,
+            // just poll with zero to complete it
+            records = pollRequests(Duration.ZERO);
         } else {
             // any other state should not happen
             log.error("Unexpected state {} during normal iteration", state);

@@ -18,7 +18,7 @@ package kafka.cluster
 
 import java.nio.ByteBuffer
 import java.util.{Optional, Properties}
-import java.util.concurrent.{CountDownLatch, Executors, TimeUnit, TimeoutException}
+import java.util.concurrent.{CountDownLatch, Executors, Semaphore, TimeUnit, TimeoutException}
 import java.util.concurrent.atomic.AtomicBoolean
 
 import com.yammer.metrics.core.Metric
@@ -27,6 +27,7 @@ import kafka.common.UnexpectedAppendOffsetException
 import kafka.log.{Defaults => _, _}
 import kafka.metrics.KafkaYammerMetrics
 import kafka.server._
+import kafka.server.checkpoints.OffsetCheckpoints
 import kafka.utils._
 import org.apache.kafka.common.{IsolationLevel, TopicPartition}
 import org.apache.kafka.common.errors.{ApiException, OffsetNotAvailableException, ReplicaNotAvailableException}
@@ -133,6 +134,59 @@ class PartitionTest extends AbstractPartitionTest {
     thread1.join()
     thread2.join()
     assertEquals(None, partition.futureLog)
+  }
+
+  // Verify that partition.makeFollower() and partition.appendRecordsToFollowerOrFutureReplica() can run concurrently
+  @Test
+  def testMakeFollowerWithWithFollowerAppendRecords(): Unit = {
+    val appendSemaphore = new Semaphore(0)
+    val mockTime = new MockTime()
+
+    partition = new Partition(
+      topicPartition,
+      replicaLagTimeMaxMs = Defaults.ReplicaLagTimeMaxMs,
+      interBrokerProtocolVersion = ApiVersion.latestVersion,
+      localBrokerId = brokerId,
+      time,
+      stateStore,
+      delayedOperations,
+      metadataCache,
+      logManager) {
+
+      override def createLog(replicaId: Int, isNew: Boolean, isFutureReplica: Boolean, offsetCheckpoints: OffsetCheckpoints): Log = {
+        val log = super.createLog(replicaId, isNew, isFutureReplica, offsetCheckpoints)
+        new SlowLog(log, mockTime, appendSemaphore)
+      }
+    }
+
+    partition.createLogIfNotExists(brokerId, isNew = true, isFutureReplica = false, offsetCheckpoints)
+
+    val appendThread = new Thread {
+      override def run(): Unit = {
+        val records = createRecords(List(new SimpleRecord("k1".getBytes, "v1".getBytes),
+          new SimpleRecord("k2".getBytes, "v2".getBytes)),
+          baseOffset = 0)
+        partition.appendRecordsToFollowerOrFutureReplica(records, isFuture = false)
+      }
+    }
+    appendThread.start()
+    TestUtils.waitUntilTrue(() => appendSemaphore.hasQueuedThreads, "follower log append is not called.")
+
+    val partitionState = new LeaderAndIsrPartitionState()
+      .setControllerEpoch(0)
+      .setLeader(2)
+      .setLeaderEpoch(1)
+      .setIsr(List[Integer](0, 1, 2, brokerId).asJava)
+      .setZkVersion(1)
+      .setReplicas(List[Integer](0, 1, 2, brokerId).asJava)
+      .setIsNew(false)
+    assertTrue(partition.makeFollower(0, partitionState, 0, offsetCheckpoints))
+
+    appendSemaphore.release()
+    appendThread.join()
+
+    assertEquals(2L, partition.localLogOrException.logEndOffset)
+    assertEquals(2L, partition.leaderReplicaIdOpt.get)
   }
 
   @Test
@@ -1659,6 +1713,27 @@ class PartitionTest extends AbstractPartitionTest {
       val records = MemoryRecords.withRecords(0L, CompressionType.NONE, leaderEpoch,
         new SimpleRecord(s"k$i".getBytes, s"v$i".getBytes))
       log.appendAsLeader(records, leaderEpoch)
+    }
+  }
+
+  private class SlowLog(log: Log, mockTime: MockTime, appendSemaphore: Semaphore) extends Log(
+    log.dir,
+    log.config,
+    log.logStartOffset,
+    log.recoveryPoint,
+    mockTime.scheduler,
+    new BrokerTopicStats,
+    log.time,
+    log.maxProducerIdExpirationMs,
+    log.producerIdExpirationCheckIntervalMs,
+    log.topicPartition,
+    log.producerStateManager,
+    new LogDirFailureChannel(1)) {
+
+    override def appendAsFollower(records: MemoryRecords): LogAppendInfo = {
+      appendSemaphore.acquire()
+      val appendInfo = super.appendAsFollower(records)
+      appendInfo
     }
   }
 }

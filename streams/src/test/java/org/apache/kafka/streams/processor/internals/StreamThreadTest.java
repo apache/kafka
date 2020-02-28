@@ -691,6 +691,51 @@ public class StreamThreadTest {
     }
 
     @Test
+    public void shouldOnlyCompleteShutdownAfterRebalanceNotInProgress() throws InterruptedException {
+        internalTopologyBuilder.addSource(null, "source1", null, null, null, topic1);
+
+        final StreamThread thread = createStreamThread(CLIENT_ID, new StreamsConfig(configProps(true)), true);
+
+        thread.start();
+        TestUtils.waitForCondition(
+            () -> thread.state() == StreamThread.State.STARTING,
+            10 * 1000,
+            "Thread never started.");
+
+        thread.rebalanceListener.onPartitionsRevoked(Collections.emptyList());
+        thread.taskManager().handleRebalanceStart(Collections.singleton(topic1));
+
+        final Map<TaskId, Set<TopicPartition>> activeTasks = new HashMap<>();
+        final List<TopicPartition> assignedPartitions = new ArrayList<>();
+
+        // assign single partition
+        assignedPartitions.add(t1p1);
+        assignedPartitions.add(t1p2);
+        activeTasks.put(task1, Collections.singleton(t1p1));
+        activeTasks.put(task2, Collections.singleton(t1p2));
+
+        thread.taskManager().handleAssignment(activeTasks, Collections.emptyMap());
+
+        thread.shutdown();
+
+        // even if thread is no longer running, it should still be polling
+        // as long as the rebalance is still ongoing
+        assertFalse(thread.isRunning());
+
+        Thread.sleep(1000);
+        assertEquals(Utils.mkSet(task1, task2), thread.taskManager().activeTaskIds());
+        assertEquals(StreamThread.State.PENDING_SHUTDOWN, thread.state());
+
+        thread.rebalanceListener.onPartitionsAssigned(assignedPartitions);
+
+        TestUtils.waitForCondition(
+            () -> thread.state() == StreamThread.State.DEAD,
+            10 * 1000,
+            "Thread never shut down.");
+        assertEquals(Collections.emptySet(), thread.taskManager().activeTaskIds());
+    }
+
+    @Test
     public void shouldCloseAllTaskProducersOnCloseIfEosEnabled() throws InterruptedException {
         internalTopologyBuilder.addSource(null, "source1", null, null, null, topic1);
 

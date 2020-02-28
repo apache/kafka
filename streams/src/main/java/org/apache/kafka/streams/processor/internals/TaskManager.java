@@ -112,6 +112,10 @@ public class TaskManager {
         return builder;
     }
 
+    boolean isRebalanceInProgress() {
+        return rebalanceInProgress;
+    }
+
     void handleRebalanceStart(final Set<String> subscribedTopics) {
         builder.addSubscribedTopicsFromMetadata(subscribedTopics, logPrefix);
 
@@ -198,12 +202,24 @@ public class TaskManager {
         }
 
         if (!taskCloseExceptions.isEmpty()) {
+            for (final Map.Entry<TaskId, RuntimeException> entry : taskCloseExceptions.entrySet()) {
+                if (!(entry.getValue() instanceof TaskMigratedException)) {
+                    if (entry.getValue() instanceof KafkaException) {
+                        log.error("Hit Kafka exception while closing for first task {}", entry.getKey());
+                        throw entry.getValue();
+                    } else {
+                        throw new RuntimeException(
+                            "Unexpected failure to close " + taskCloseExceptions.size() +
+                                " task(s) [" + taskCloseExceptions.keySet() + "]. " +
+                                "First unexpected exception (for task " + entry.getKey() + ") follows.", entry.getValue()
+                        );
+                    }
+                }
+            }
+
             final Map.Entry<TaskId, RuntimeException> first = taskCloseExceptions.entrySet().iterator().next();
-            throw new RuntimeException(
-                "Unexpected failure to close " + taskCloseExceptions.size() +
-                    " task(s) [" + taskCloseExceptions.keySet() + "]. " +
-                    "First exception (for task " + first.getKey() + ") follows.", first.getValue()
-            );
+            // If all exceptions are task-migrated, we would just throw the first one.
+            throw first.getValue();
         }
 
         if (!activeTasksToCreate.isEmpty()) {
@@ -293,24 +309,19 @@ public class TaskManager {
      * @throws TaskMigratedException if the task producer got fenced (EOS only)
      */
     void handleRevocation(final Collection<TopicPartition> revokedPartitions) {
-        final Set<TaskId> revokedTasks = new HashSet<>();
         final Set<TopicPartition> remainingPartitions = new HashSet<>(revokedPartitions);
 
         for (final Task task : tasks.values()) {
             if (remainingPartitions.containsAll(task.inputPartitions())) {
-                revokedTasks.add(task.id());
+                task.suspend();
             }
             remainingPartitions.removeAll(task.inputPartitions());
         }
 
         if (!remainingPartitions.isEmpty()) {
-            throw new IllegalStateException("Some revoked partitions that do not belong " +
-                "to any tasks remain: " + remainingPartitions);
-        }
-
-        for (final TaskId taskId : revokedTasks) {
-            final Task task = tasks.get(taskId);
-            task.suspend();
+            log.warn("The following partitions {} are missing from the task partitions. It could potentially " +
+                "due to race condition of consumer detecting the heartbeat failure, or the tasks " +
+                "have been cleaned up by the handleAssignment callback.", remainingPartitions);
         }
     }
 

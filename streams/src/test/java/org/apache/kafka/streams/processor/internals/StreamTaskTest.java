@@ -24,6 +24,7 @@ import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.MetricConfig;
@@ -66,7 +67,6 @@ import java.time.Duration;
 import java.util.Arrays;
 import java.util.Base64;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -738,14 +738,6 @@ public class StreamTaskTest {
         verify(recordCollector);
     }
 
-    private Map<TopicPartition, Long> getCommittetOffsets(final Map<TopicPartition, OffsetAndMetadata> committedOffsetsAndMetadata) {
-        final Map<TopicPartition, Long> committedOffsets = new HashMap<>();
-        for (final Map.Entry<TopicPartition, OffsetAndMetadata> e : committedOffsetsAndMetadata.entrySet()) {
-            committedOffsets.put(e.getKey(), e.getValue().offset());
-        }
-        return committedOffsets;
-    }
-
     @Test
     public void shouldRespectCommitRequested() {
         task = createStatelessTask(createConfig(false, "100"), StreamsConfig.METRICS_LATEST);
@@ -1039,15 +1031,27 @@ public class StreamTaskTest {
     }
 
     @Test
-    public void shouldReInitializeTopologyWhenResuming() throws IOException {
-        final Long offset = 543L;
-
+    public void shouldReadCommittedOffsetAndRethrowTimeoutWhenCompleteRestoration() throws IOException {
         stateDirectory = EasyMock.createNiceMock(StateDirectory.class);
         EasyMock.expect(stateDirectory.lock(taskId)).andReturn(true);
-        EasyMock.expect(recordCollector.offsets()).andReturn(Collections.singletonMap(changelogPartition, offset));
-        recordCollector.commit(EasyMock.eq(Collections.emptyMap()));
-        EasyMock.expectLastCall();
-        stateManager.checkpoint(EasyMock.eq(Collections.singletonMap(changelogPartition, offset)));
+
+        EasyMock.replay(recordCollector, stateDirectory, stateManager);
+
+        task = createDisconnectedTask(createConfig(false, "100"));
+
+        task.initializeIfNeeded();
+
+        assertThrows(TimeoutException.class, task::completeRestoration);
+    }
+
+    @Test
+    public void shouldNotReInitializeTopologyWhenResuming() throws IOException {
+        stateDirectory = EasyMock.createNiceMock(StateDirectory.class);
+        EasyMock.expect(stateDirectory.lock(taskId)).andReturn(true);
+        EasyMock.expect(recordCollector.offsets()).andThrow(new AssertionError("Should not try to read offsets")).anyTimes();
+        recordCollector.commit(EasyMock.anyObject());
+        EasyMock.expectLastCall().andThrow(new AssertionError("Should not try to commit")).anyTimes();
+        stateManager.checkpoint(EasyMock.eq(Collections.emptyMap()));
         EasyMock.expectLastCall();
 
         EasyMock.replay(recordCollector, stateDirectory, stateManager);
@@ -1065,8 +1069,16 @@ public class StreamTaskTest {
         task.resume();
 
         assertEquals(Task.State.RESTORING, task.state());
+        assertFalse(source1.initialized);
+        assertFalse(source2.initialized);
+
+        task.completeRestoration();
+
+        assertEquals(Task.State.RUNNING, task.state());
         assertTrue(source1.initialized);
         assertTrue(source2.initialized);
+
+        EasyMock.verify(stateManager, recordCollector);
     }
 
     @Test
@@ -1505,6 +1517,36 @@ public class StreamTaskTest {
         return new StreamTask(
             taskId,
             mkSet(partition1),
+            topology,
+            consumer,
+            config,
+            streamsMetrics,
+            stateDirectory,
+            null,
+            time,
+            stateManager,
+            recordCollector);
+    }
+
+    private StreamTask createDisconnectedTask(final StreamsConfig config) {
+        final MockKeyValueStore stateStore = new MockKeyValueStore(storeName, false);
+
+        final ProcessorTopology topology = ProcessorTopologyFactories.with(
+            asList(source1, source2),
+            mkMap(mkEntry(topic1, source1), mkEntry(topic2, source2)),
+            singletonList(stateStore),
+            Collections.emptyMap());
+
+        final MockConsumer<byte[], byte[]> consumer = new MockConsumer<byte[], byte[]>(OffsetResetStrategy.EARLIEST) {
+            @Override
+            public Map<TopicPartition, OffsetAndMetadata> committed(final Set<TopicPartition> partitions) {
+                throw new TimeoutException("KABOOM!");
+            }
+        };
+
+        return new StreamTask(
+            taskId,
+            partitions,
             topology,
             consumer,
             config,

@@ -23,14 +23,17 @@ import org.apache.kafka.clients.admin.DeletedRecords;
 import org.apache.kafka.clients.admin.RecordsToDelete;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
+import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.easymock.EasyMock;
 import org.easymock.EasyMockRunner;
 import org.easymock.Mock;
@@ -48,6 +51,7 @@ import java.util.Collection;
 import java.util.Deque;
 import java.util.HashMap;
 import java.util.LinkedList;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -70,12 +74,11 @@ import static org.easymock.EasyMock.expectLastCall;
 import static org.easymock.EasyMock.replay;
 import static org.easymock.EasyMock.resetToStrict;
 import static org.easymock.EasyMock.verify;
+import static org.hamcrest.CoreMatchers.hasItem;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.instanceOf;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.core.IsEqual.equalTo;
 import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.fail;
 
 @RunWith(EasyMockRunner.class)
 public class TaskManagerTest {
@@ -459,13 +462,9 @@ public class TaskManagerTest {
 
         task00.setCommitNeeded();
 
-        try {
-            taskManager.commitAll();
-            fail("should have thrown");
-        } catch (final RuntimeException e) {
-            assertThat(e, instanceOf(RuntimeException.class));
-            assertThat(e.getMessage(), equalTo("opsh."));
-        }
+        final RuntimeException thrown =
+            assertThrows(RuntimeException.class, () -> taskManager.commitAll());
+        assertThat(thrown.getMessage(), equalTo("opsh."));
     }
 
     @Test
@@ -490,13 +489,9 @@ public class TaskManagerTest {
 
         task01.setCommitNeeded();
 
-        try {
-            taskManager.commitAll();
-            fail("should have thrown");
-        } catch (final RuntimeException e) {
-            assertThat(e, instanceOf(RuntimeException.class));
-            assertThat(e.getMessage(), equalTo("opsh."));
-        }
+        final RuntimeException thrown =
+            assertThrows(RuntimeException.class, () -> taskManager.commitAll());
+        assertThat(thrown.getMessage(), equalTo("opsh."));
     }
 
     @Test
@@ -713,6 +708,108 @@ public class TaskManagerTest {
         // this could be a bit mysterious; we're verifying _no_ interactions on the consumer,
         // since the taskManager should _not_ resume the assignment while we're still in RESTORING
         verify(consumer);
+    }
+
+    @Test
+    public void shouldHaveRemainingPartitionsUncleared() {
+        final LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
+
+        final StateMachineTask task00 = new StateMachineTask(taskId00, taskId00Partitions, true);
+
+        expectRestoreToBeCompleted(consumer, changeLogReader);
+        expect(activeTaskCreator.createTasks(anyObject(), eq(taskId00Assignment))).andReturn(singletonList(task00));
+
+        replay(activeTaskCreator, consumer, changeLogReader);
+        taskManager.handleAssignment(taskId00Assignment, emptyMap());
+        assertThat(taskManager.tryToCompleteRestoration(), is(true));
+        assertThat(task00.state(), is(Task.State.RUNNING));
+
+        taskManager.handleRevocation(mkSet(t1p0, new TopicPartition("unknown", 0)));
+        assertThat(task00.state(), is(Task.State.SUSPENDED));
+
+        final List<String> messages = appender.getMessages();
+        assertThat(messages, hasItem("taskManagerTestThe following partitions [unknown-0] are missing " +
+            "from the task partitions. It could potentially due to race condition of consumer " +
+            "detecting the heartbeat failure, or the tasks have been cleaned up by the handleAssignment callback."));
+    }
+
+    @Test
+    public void shouldThrowTaskMigratedWhenAllTaskCloseExceptionsAreTaskMigrated() {
+        final StateMachineTask migratedTask01 = new StateMachineTask(taskId01, taskId01Partitions, false) {
+            @Override
+            public void closeClean() {
+                throw new TaskMigratedException("t1 close exception", new RuntimeException());
+            }
+        };
+
+        final StateMachineTask migratedTask02 = new StateMachineTask(taskId02, taskId02Partitions, false) {
+            @Override
+            public void closeClean() {
+                throw new TaskMigratedException("t2 close exception", new RuntimeException());
+            }
+        };
+        taskManager.tasks().put(taskId01, migratedTask01);
+        taskManager.tasks().put(taskId02, migratedTask02);
+
+        final TaskMigratedException thrown = assertThrows(TaskMigratedException.class,
+            () -> taskManager.handleAssignment(emptyMap(), emptyMap()));
+        // The task map orders tasks based on topic group id and partition, so here
+        // t1 should always be the first.
+        assertThat(thrown.getMessage(), equalTo("t1 close exception; it means all tasks belonging to this thread should be migrated."));
+    }
+
+    @Test
+    public void shouldThrowRuntimeExceptionWhenEncounteredUnknownExceptionDuringTaskClose() {
+        final StateMachineTask migratedTask01 = new StateMachineTask(taskId01, taskId01Partitions, false) {
+            @Override
+            public void closeClean() {
+                throw new TaskMigratedException("t1 close exception", new RuntimeException());
+            }
+        };
+
+        final StateMachineTask migratedTask02 = new StateMachineTask(taskId02, taskId02Partitions, false) {
+            @Override
+            public void closeClean() {
+                throw new IllegalStateException("t2 illegal state exception", new RuntimeException());
+            }
+        };
+        taskManager.tasks().put(taskId01, migratedTask01);
+        taskManager.tasks().put(taskId02, migratedTask02);
+
+        final RuntimeException thrown = assertThrows(RuntimeException.class,
+            () -> taskManager.handleAssignment(emptyMap(), emptyMap()));
+        // Fatal exception thrown first.
+        assertThat(thrown.getMessage(), equalTo("Unexpected failure to close 2 task(s) [[0_1, 0_2]]. " +
+            "First unexpected exception (for task 0_2) follows."));
+
+        assertThat(thrown.getCause().getMessage(), equalTo("t2 illegal state exception"));
+    }
+
+    @Test
+    public void shouldThrowSameKafkaExceptionWhenEncounteredDuringTaskClose() {
+        final StateMachineTask migratedTask01 = new StateMachineTask(taskId01, taskId01Partitions, false) {
+            @Override
+            public void closeClean() {
+                throw new TaskMigratedException("t1 close exception", new RuntimeException());
+            }
+        };
+
+        final StateMachineTask migratedTask02 = new StateMachineTask(taskId02, taskId02Partitions, false) {
+            @Override
+            public void closeClean() {
+                throw new KafkaException("Kaboom for t2!", new RuntimeException());
+            }
+        };
+        taskManager.tasks().put(taskId01, migratedTask01);
+        taskManager.tasks().put(taskId02, migratedTask02);
+
+        final KafkaException thrown = assertThrows(KafkaException.class,
+            () -> taskManager.handleAssignment(emptyMap(), emptyMap()));
+
+        // Expecting the original Kafka exception instead of a wrapped one.
+        assertThat(thrown.getMessage(), equalTo("Kaboom for t2!"));
+
+        assertThat(thrown.getCause().getMessage(), equalTo(null));
     }
 
     private static void expectRestoreToBeCompleted(final Consumer<byte[], byte[]> consumer,
