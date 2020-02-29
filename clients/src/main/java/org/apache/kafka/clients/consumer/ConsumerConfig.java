@@ -91,7 +91,7 @@ public class ConsumerConfig extends AbstractConfig {
      * <code>enable.auto.commit</code>
      */
     public static final String ENABLE_AUTO_COMMIT_CONFIG = "enable.auto.commit";
-    private static final String ENABLE_AUTO_COMMIT_DOC = "If true the consumer's offset will be periodically committed in the background.";
+    private static final String ENABLE_AUTO_COMMIT_DOC = "If true the consumer's offset will be periodically committed in the background. However, this is not guaranteed; commit actually only happens when the consumer calls poll function again and the interval between two poll calls has exceeded <code>auto.commit.interval.ms</code>.";
 
     /**
      * <code>auto.commit.interval.ms</code>
