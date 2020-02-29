@@ -274,7 +274,7 @@ class MetadataRequestTest extends BaseRequestTest {
       val serverId = server.dataPlaneRequestProcessor.brokerId
       val leaderId = partitionMetadata.leaderId
       val replicaIds = partitionMetadata.replicaIds.asScala
-      serverId != leaderId && replicaIds.contains(serverId)
+      leaderId.isPresent && leaderId.get() != serverId && replicaIds.contains(serverId)
     }.get
     downNode.shutdown()
 
