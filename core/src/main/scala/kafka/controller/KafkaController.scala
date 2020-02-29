@@ -938,7 +938,7 @@ class KafkaController(val config: KafkaConfig,
 
     val reassigningPartitions = zkClient.getPartitionReassignment()
     val (removingPartitions, updatedPartitionsBeingReassigned) = reassigningPartitions.partition { case (tp, replicas) =>
-      shouldRemoveReassignment(tp, replicas)
+      shouldRemoveReassignment(tp, replicas) || !controllerContext.partitionsBeingReassigned.contains(tp)
     }
     info(s"Removing partitions $removingPartitions from the list of reassigned partitions in zookeeper")
 
