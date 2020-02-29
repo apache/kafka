@@ -39,6 +39,7 @@ import static org.apache.kafka.streams.processor.internals.assignment.StreamsAss
 public class SubscriptionInfo {
     private static final Logger LOG = LoggerFactory.getLogger(SubscriptionInfo.class);
 
+    // encode -1 to differentiate between an active task and a standby task that has caught up to the same offsets
     public static final int ACTIVE_TASK_SENTINEL_OFFSET = -1;
     static final int UNKNOWN = -1;
 
@@ -114,7 +115,7 @@ public class SubscriptionInfo {
         final Set<TaskId> standbyTasks = new HashSet<>();
 
         for (final Map.Entry<TaskId, Integer> taskOffsetSum : taskOffsetSums.entrySet()) {
-            if (taskOffsetSum.getValue() == -1) {
+            if (taskOffsetSum.getValue() == ACTIVE_TASK_SENTINEL_OFFSET) {
                 prevTasks.add(taskOffsetSum.getKey());
             } else {
                 standbyTasks.add(taskOffsetSum.getKey());

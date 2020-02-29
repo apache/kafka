@@ -117,8 +117,7 @@ public class TaskManager {
         return rebalanceInProgress;
     }
 
-    // visible for testing
-    public void handleRebalanceStart(final Set<String> subscribedTopics) {
+    void handleRebalanceStart(final Set<String> subscribedTopics) {
         builder.addSubscribedTopicsFromMetadata(subscribedTopics, logPrefix);
 
         rebalanceInProgress = true;
@@ -376,7 +375,7 @@ public class TaskManager {
      * Returns ids of tasks whose states are kept on the local storage. This includes active, standby, and previously
      * assigned but not yet cleaned up tasks
      */
-    Set<TaskId> tasksOnLocalStorage() {
+    private Set<TaskId> tasksOnLocalStorage() {
         // A client could contain some inactive tasks whose states are still kept on the local storage in the following scenarios:
         // 1) the client is actively maintaining standby tasks by maintaining their states from the change log.
         // 2) the client has just got some tasks migrated out of itself to other clients while these task states

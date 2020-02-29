@@ -77,17 +77,17 @@
       "fields": [
         {
           "name": "topicGroupId",
-          "versions": "1+",
+          "versions": "7+",
           "type": "int32"
         },
         {
           "name": "partition",
-          "versions": "1+",
+          "versions": "7+",
           "type": "int32"
         },
         {
           "name": "offsetSum",
-          "versions": "1+",
+          "versions": "7+",
           "type": "int32"
         }
       ]

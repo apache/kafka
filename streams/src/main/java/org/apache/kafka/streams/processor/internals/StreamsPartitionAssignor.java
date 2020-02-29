@@ -562,9 +562,10 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             final ClientState state = entry.getValue().state;
             states.put(uuid, state);
 
-            // this is an optimization: we can't decode the future subscription info's prev tasks, but we can figure
-            // them out from the encoded ownedPartitions
-            if (uuid == futureId && !state.ownedPartitions().isEmpty()) {
+            // there are two cases where we need to construct the prevTasks from the ownedPartitions:
+            // 1) COOPERATIVE clients on version 2.4-2.5 do not encode active tasks and rely on ownedPartitions instead
+            // 2) future clientduring version probing: we can't decode the future subscription info's prev tasks
+            if (!state.ownedPartitions().isEmpty() && (uuid == futureId ||state.prevActiveTasks().isEmpty())) {
                 final Set<TaskId> previousActiveTasks = new HashSet<>();
                 for (final Map.Entry<TopicPartition, String> partitionEntry : state.ownedPartitions().entrySet()) {
                     final TopicPartition tp = partitionEntry.getKey();
@@ -1264,7 +1265,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         return userEndPoint;
     }
 
-    protected TaskManager taskManger() {
+    protected TaskManager taskManager() {
         return taskManager;
     }
 

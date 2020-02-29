@@ -20,7 +20,6 @@ import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor;
-import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.RebalanceProtocol;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.TopicPartition;
@@ -139,12 +138,13 @@ public class StreamsUpgradeTest {
 
         @Override
         public ByteBuffer subscriptionUserData(final Set<String> topics) {
+            super.subscriptionUserData(topics);
+
             // Adds the following information to subscription
             // 1. Client UUID (a unique id assigned to an instance of KafkaStreams)
             // 2. Task ids of previously running tasks
             // 3. Task ids of valid local states on the client's state directory.
-            final TaskManager taskManager = taskManger();
-            taskManager.handleRebalanceStart(topics);
+            final TaskManager taskManager = taskManager();
 
             if (usedSubscriptionMetadataVersion <= LATEST_SUPPORTED_VERSION) {
                 return new SubscriptionInfo(
@@ -203,7 +203,7 @@ public class StreamsUpgradeTest {
 
             final Map<TaskId, Set<TopicPartition>> activeTasks = getActiveTasks(partitions, info);
 
-            final TaskManager taskManager = taskManger();
+            final TaskManager taskManager = taskManager();
             taskManager.handleAssignment(activeTasks, info.standbyTasks());
             usedSubscriptionMetadataVersionPeek.set(usedSubscriptionMetadataVersion);
         }
@@ -248,7 +248,7 @@ public class StreamsUpgradeTest {
                                 LATEST_SUPPORTED_VERSION,
                                 LATEST_SUPPORTED_VERSION,
                                 info.processId(),
-                                info.userEndPoint(), taskManger().getTaskOffsetSums())
+                                info.userEndPoint(), taskManager().getTaskOffsetSums())
                                 .encode(),
                             subscription.ownedPartitions()
                         ));
