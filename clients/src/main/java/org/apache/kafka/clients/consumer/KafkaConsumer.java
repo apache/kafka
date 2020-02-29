@@ -75,7 +75,6 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Pattern;
 
@@ -559,7 +558,7 @@ import static org.apache.kafka.clients.consumer.internals.PartitionAssignorAdapt
 public class KafkaConsumer<K, V> implements Consumer<K, V> {
 
     private static final String CLIENT_ID_METRIC_TAG = "client-id";
-    private static final long NO_CURRENT_THREAD = -1L;
+    private static final Thread NO_CURRENT_THREAD = null;
     private static final String JMX_PREFIX = "kafka.consumer";
     static final long DEFAULT_CLOSE_TIMEOUT_MS = 30 * 1000;
 
@@ -586,10 +585,10 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     private volatile boolean closed = false;
     private List<ConsumerPartitionAssignor> assignors;
 
-    // currentThread holds the threadId of the current thread accessing KafkaConsumer
+    // ownerThread holds the thread currently accessing KafkaConsumer
     // and is used to prevent multi-threaded access
-    private final AtomicLong currentThread = new AtomicLong(NO_CURRENT_THREAD);
-    // refcount is used to allow reentrant access by the thread who has acquired currentThread
+    private final AtomicReference<Thread> ownerThread = new AtomicReference<>(NO_CURRENT_THREAD);
+    // refcount is used to allow reentrant access by ownerThread
     private final AtomicInteger refcount = new AtomicInteger(0);
 
     // to keep from repeatedly scanning subscriptions in poll(), cache the result during metadata updates
@@ -2444,9 +2443,12 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * @throws ConcurrentModificationException if another thread already has the lock
      */
     private void acquire() {
-        long threadId = Thread.currentThread().getId();
-        if (threadId != currentThread.get() && !currentThread.compareAndSet(NO_CURRENT_THREAD, threadId))
-            throw new ConcurrentModificationException("KafkaConsumer is not safe for multi-threaded access");
+        Thread current = Thread.currentThread();
+        Thread owner = ownerThread.get();
+        if (current != owner && !ownerThread.compareAndSet(NO_CURRENT_THREAD, current)) {
+            throw new ConcurrentModificationException("KafkaConsumer is not safe for multi-threaded access. This thread is "
+                                                    + current + ", current owner thread is " + owner);
+        }
         refcount.incrementAndGet();
     }
 
@@ -2454,8 +2456,9 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * Release the light lock protecting the consumer from multi-threaded access.
      */
     private void release() {
-        if (refcount.decrementAndGet() == 0)
-            currentThread.set(NO_CURRENT_THREAD);
+        if (refcount.decrementAndGet() == 0) {
+            ownerThread.set(NO_CURRENT_THREAD);
+        }
     }
 
     private void throwIfNoAssignorsConfigured() {
