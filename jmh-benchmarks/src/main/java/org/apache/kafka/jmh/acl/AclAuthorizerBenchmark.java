@@ -20,14 +20,11 @@ package org.apache.kafka.jmh.acl;
 import kafka.security.authorizer.AclAuthorizer;
 import kafka.security.authorizer.AclEntry;
 import org.apache.kafka.common.acl.AccessControlEntry;
-import org.apache.kafka.common.acl.AccessControlEntryFilter;
-import org.apache.kafka.common.acl.AclBinding;
 import org.apache.kafka.common.acl.AclBindingFilter;
 import org.apache.kafka.common.acl.AclOperation;
 import org.apache.kafka.common.acl.AclPermissionType;
 import org.apache.kafka.common.resource.PatternType;
 import org.apache.kafka.common.resource.ResourcePattern;
-import org.apache.kafka.common.resource.ResourcePatternFilter;
 import org.apache.kafka.common.resource.ResourceType;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.mockito.internal.util.reflection.FieldSetter;
@@ -52,7 +49,6 @@ import scala.math.Ordering;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
-import java.util.Random;
 import java.util.concurrent.TimeUnit;
 
 @State(Scope.Benchmark)
@@ -66,43 +62,31 @@ public class AclAuthorizerBenchmark {
     @Param({"5000", "10000", "50000"})
     public static Integer resourceCount;
     //no. of. rules per resource
-    @Param({"5", "10"})
+    @Param({"5", "10", "15"})
     public static Integer aclCount;
 
     private AclAuthorizer aclAuthorizer = new AclAuthorizer();
     private KafkaPrincipal principal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "test-user");
 
-    public static void main(String[] args) throws NoSuchFieldException {
-        AclAuthorizerBenchmark aclAuthorizerBenchmark = new AclAuthorizerBenchmark();
-        aclAuthorizerBenchmark.setup();
-        aclAuthorizerBenchmark.testAclsIterator();
-    }
-
     @Setup(Level.Trial)
     public void setup() throws NoSuchFieldException {
-        FieldSetter.setField(aclAuthorizer, AclAuthorizer.class.getDeclaredField("aclCache"),
-            prepareAclCache());
+        FieldSetter.setField(aclAuthorizer, AclAuthorizer.class.getDeclaredField("aclCache"), prepareAclCache());
     }
 
     private TreeMap prepareAclCache() {
-        Random random = new Random();
         Map<ResourcePattern, java.util.Set<AclEntry>> aclEntries = new HashMap<>();
+        for (int resourceId = 0; resourceId < resourceCount; resourceId++) {
 
-        for (int i = 0; i < resourceCount; i++) {
-            // set TOPIC, GROUP, or CLUSTER
-            int resourceCode = random.nextInt(3) + 2;
-            ResourceType resourceType = ResourceType.fromCode((byte) resourceCode);
+            ResourcePattern resource = new ResourcePattern(
+                (resourceId % 10 == 0) ? ResourceType.GROUP : ResourceType.TOPIC,
+                "resource-" + resourceId,
+                (resourceId % 5 == 0) ? PatternType.PREFIXED : PatternType.LITERAL);
 
-            // set LITERAL or PREFIXED
-            int pattenCode = random.nextInt(2) + 3;
-            PatternType pattenType = PatternType.fromCode((byte) pattenCode);
-
-            ResourcePattern resource = new ResourcePattern(resourceType, "resource-" + i, pattenType);
             java.util.Set<AclEntry> entries = aclEntries.computeIfAbsent(resource, k -> new HashSet<>());
 
-            for (int j = 0; j < aclCount; j++) {
+            for (int aclId = 0; aclId < aclCount; aclId++) {
                 AccessControlEntry ace =
-                    new AccessControlEntry(principal.toString(), "*", AclOperation.READ, AclPermissionType.ALLOW);
+                    new AccessControlEntry(principal.toString() + aclId, "*", AclOperation.READ, AclPermissionType.ALLOW);
                 entries.add(new AclEntry(ace));
             }
         }
@@ -124,29 +108,6 @@ public class AclAuthorizerBenchmark {
     public void testAclsIterator() {
         aclAuthorizer.acls(AclBindingFilter.ANY);
     }
-
-    /*
-    @Benchmark
-    public void testMatchingAcls() {
-
-        aclAuthorizer.authorize()
-        AclBindingFilter filter =
-            new AclBindingFilter(new ResourcePatternFilter(ResourceType.TOPIC, "resource-10", PatternType.PREFIXED),
-                AccessControlEntryFilter.ANY);
-        //new AccessControlEntryFilter("User:ANONYMOUS", "127.0.0.1", AclOperation.READ, AclPermissionType.DENY));
-        //Iterable acls = aclAuthorizer.acls(AclBindingFilter.ANY);
-        Iterable acls = aclAuthorizer.acls(filter);
-        int counter = 0;
-        for (Object i : acls) {
-            if (((AclBinding)i).pattern().patternType() == PatternType.PREFIXED)
-                System.out.println(i);
-
-            counter++;
-        }
-        System.out.println("acls size: " + counter);
-    }
-
-    */
 
     private class ResourceOrdering implements Ordering<ResourcePattern> {
         @Override
