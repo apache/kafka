@@ -18,27 +18,13 @@ from collections import defaultdict
 
 from ducktape.mark.resource import cluster
 
-from kafkatest.directory_layout.kafka_path import KafkaPathResolverMixin
 from kafkatest.services.console_consumer import ConsoleConsumer
 from kafkatest.services.kafka import KafkaService
-from kafkatest.services.monitor.jmx import JmxMixin
+from kafkatest.services.monitor.jmx import JmxTool
 from kafkatest.services.verifiable_producer import VerifiableProducer
 from kafkatest.services.zookeeper import ZookeeperService
 from kafkatest.tests.produce_consume_validate import ProduceConsumeValidateTest
 from kafkatest.utils import is_int
-
-
-class JmxTool(JmxMixin, KafkaPathResolverMixin):
-    """
-    Simple helper class for using the JmxTool directly instead of as a mix-in
-    """
-    def __init__(self, text_context, *args, **kwargs):
-        JmxMixin.__init__(self, num_nodes=1, *args, **kwargs)
-        self.context = text_context
-
-    @property
-    def logger(self):
-        return self.context.logger
 
 
 class FetchFromFollowerTest(ProduceConsumeValidateTest):
