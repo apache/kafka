@@ -239,7 +239,7 @@ public class VerifiableProducer implements AutoCloseable {
             producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, res.getString("brokerList"));
         } else {
             parser.printHelp();
-            //Can't use `Exit.exit` here because `Exit` doesn't exists until 0.11.0.0.
+            // Can't use `Exit.exit` here because it didn't exist until 0.11.0.0.
             System.exit(0);
         }
 
@@ -528,7 +528,7 @@ public class VerifiableProducer implements AutoCloseable {
         ArgumentParser parser = argParser();
         if (args.length == 0) {
             parser.printHelp();
-            //Can't use `Exit.exit` here because `Exit` doesn't exists until 0.11.0.0.
+            // Can't use `Exit.exit` here because it didn't exist until 0.11.0.0.
             System.exit(0);
         }
 
@@ -538,7 +538,7 @@ public class VerifiableProducer implements AutoCloseable {
             final long startMs = System.currentTimeMillis();
             ThroughputThrottler throttler = new ThroughputThrottler(producer.throughput, startMs);
 
-            //Can't use `Exit.addShutdownHook` here because `Exit` doesn't exists until 0.11.0.0.
+            // Can't use `Exit.addShutdownHook` here because it didn't exist until 2.5.0.
             Runtime.getRuntime().addShutdownHook(new Thread(() -> {
                 // Trigger main thread to stop producing messages
                 producer.stopProducing = true;
@@ -556,7 +556,7 @@ public class VerifiableProducer implements AutoCloseable {
             producer.run(throttler);
         } catch (ArgumentParserException e) {
             parser.handleError(e);
-            //Can't use `Exit.exit` here because `Exit` doesn't exists until 0.11.0.0.
+            // Can't use `Exit.exit` here because it didn't exist until 0.11.0.0.
             System.exit(1);
         }
     }
