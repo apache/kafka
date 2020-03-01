@@ -1402,7 +1402,7 @@ class LogCleanerTest {
       messageCount += 1
     }
     for (k <- 1 until messageCount by 2)
-      offsetMap.put(key(k), largeTimestamp)
+      offsetMap.put(key(k), Long.MaxValue)
     cleaner.cleanSegments(log, log.logSegments.take(9).toSeq, offsetMap, 0L, new CleanerStats(),
       new CleanedTransactionMetadata)
     // clear scheduler so that async deletes don't run
