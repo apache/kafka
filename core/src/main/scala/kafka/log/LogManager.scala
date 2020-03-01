@@ -1059,7 +1059,7 @@ object LogManager {
 
     // read the log configurations from zookeeper
     val (topicConfigs, failed) = zkClient.getLogConfigs(
-      zkClient.getAllTopicsInCluster,
+      zkClient.getAllTopicsInCluster(),
       defaultProps
     )
     if (!failed.isEmpty) throw failed.head._2

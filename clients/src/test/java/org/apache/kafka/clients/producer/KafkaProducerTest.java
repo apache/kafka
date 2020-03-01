@@ -767,7 +767,11 @@ public class KafkaProducerTest {
 
             assertThrows(TimeoutException.class, producer::initTransactions);
 
-            client.respond(FindCoordinatorResponse.prepareResponse(Errors.NONE, host1));
+            client.prepareResponse(
+                request -> request instanceof FindCoordinatorRequest &&
+                               ((FindCoordinatorRequest) request).data().keyType() == FindCoordinatorRequest.CoordinatorType.TRANSACTION.id(),
+                FindCoordinatorResponse.prepareResponse(Errors.NONE, host1));
+
             client.prepareResponse(initProducerIdResponse(1L, (short) 5, Errors.NONE));
 
             // retry initialization should work

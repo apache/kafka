@@ -252,7 +252,13 @@ subprojects {
       // code in the test (best guess is that it is tail output from last test). We won't have
       // an output file for these, so simply ignore them. If they become critical for debugging,
       // they can be seen with showStandardStreams.
-      if (td.name == td.className) {
+      if (td.name == td.className || td.className == null) {
+        // silently ignore output unrelated to specific test methods
+        return
+      } else if (logStreams.get(tid) == null) {
+        println "WARNING: unexpectedly got output for a test [${tid}]" +
+                " that we didn't previously see in the beforeTest hook." +
+                " Message for debugging: [" + toe.message + "]."
         return
       }
       try {

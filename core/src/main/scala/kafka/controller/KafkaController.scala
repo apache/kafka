@@ -727,7 +727,7 @@ class KafkaController(val config: KafkaConfig,
     val curBrokerAndEpochs = zkClient.getAllBrokerAndEpochsInCluster
     controllerContext.setLiveBrokerAndEpochs(curBrokerAndEpochs)
     info(s"Initialized broker epochs cache: ${controllerContext.liveBrokerIdAndEpochs}")
-    controllerContext.allTopics = zkClient.getAllTopicsInCluster
+    controllerContext.allTopics = zkClient.getAllTopicsInCluster(true)
     registerPartitionModificationsHandlers(controllerContext.allTopics.toSeq)
     zkClient.getFullReplicaAssignmentForTopics(controllerContext.allTopics.toSet).foreach {
       case (topicPartition, replicaAssignment) =>
@@ -1420,7 +1420,7 @@ class KafkaController(val config: KafkaConfig,
 
   private def processTopicChange(): Unit = {
     if (!isActive) return
-    val topics = zkClient.getAllTopicsInCluster
+    val topics = zkClient.getAllTopicsInCluster(true)
     val newTopics = topics -- controllerContext.allTopics
     val deletedTopics = controllerContext.allTopics -- topics
     controllerContext.allTopics = topics

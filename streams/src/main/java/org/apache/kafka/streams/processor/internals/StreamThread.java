@@ -358,7 +358,7 @@ public class StreamThread extends Thread {
             final String logPrefix = threadIdPrefix + String.format("%s [%s] ", "task", taskId);
             final LogContext logContext = new LogContext(logPrefix);
 
-            final ProcessorTopology topology = builder.build(taskId.topicGroupId);
+            final ProcessorTopology topology = builder.buildSubtopology(taskId.topicGroupId);
 
             final ProcessorStateManager stateManager = new ProcessorStateManager(
                 taskId,
@@ -445,9 +445,9 @@ public class StreamThread extends Thread {
             final String logPrefix = threadIdPrefix + String.format("%s [%s] ", "standby-task", taskId);
             final LogContext logContext = new LogContext(logPrefix);
 
-            final ProcessorTopology topology = builder.build(taskId.topicGroupId);
+            final ProcessorTopology topology = builder.buildSubtopology(taskId.topicGroupId);
 
-            if (!topology.stateStores().isEmpty() && !topology.storeToChangelogTopic().isEmpty()) {
+            if (topology.hasStateWithChangelogs()) {
                 final ProcessorStateManager stateManager = new ProcessorStateManager(
                     taskId,
                     partitions,
@@ -744,14 +744,16 @@ public class StreamThread extends Thread {
     private void runLoop() {
         subscribeConsumer();
 
-        while (isRunning()) {
+        // if the thread is still in the middle of a rebalance, we should keep polling
+        // until the rebalance is completed before we close and commit the tasks
+        while (isRunning() || taskManager.isRebalanceInProgress()) {
             try {
                 runOnce();
                 if (assignmentErrorCode.get() == AssignorError.VERSION_PROBING.code()) {
                     log.info("Version probing detected. Rejoining the consumer group to trigger a new rebalance.");
 
                     assignmentErrorCode.set(AssignorError.NONE.code());
-                    enforceRebalance();
+                    mainConsumer.enforceRebalance();
                 }
             } catch (final TaskCorruptedException e) {
                 log.warn("Detected the states of tasks {} are corrupted. " +
@@ -764,16 +766,11 @@ public class StreamThread extends Thread {
                     "Will close out all assigned tasks and rejoin the consumer group.");
 
                 taskManager.handleLostAll();
-                enforceRebalance();
+                mainConsumer.enforceRebalance();
             }
         }
     }
-
-    private void enforceRebalance() {
-        mainConsumer.unsubscribe();
-        subscribeConsumer();
-    }
-
+    
     private void subscribeConsumer() {
         if (builder.usesPatternSubscription()) {
             mainConsumer.subscribe(builder.sourceTopicPattern(), rebalanceListener);
@@ -806,6 +803,10 @@ public class StreamThread extends Thread {
             // try to fetch some records with normal poll time
             // in order to get long polling
             records = pollRequests(pollTime);
+        } else if (state == State.PENDING_SHUTDOWN) {
+            // we are only here because there's rebalance in progress,
+            // just poll with zero to complete it
+            records = pollRequests(Duration.ZERO);
         } else {
             // any other state should not happen
             log.error("Unexpected state {} during normal iteration", state);

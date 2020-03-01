@@ -927,7 +927,7 @@ class AclAuthorizerTest extends ZooKeeperTestHarness {
 
   private def getAclChangeEventAsString(patternType: PatternType) = {
     val store = ZkAclStore(patternType)
-    val children = zooKeeperClient.handleRequest(GetChildrenRequest(store.changeStore.aclChangePath))
+    val children = zooKeeperClient.handleRequest(GetChildrenRequest(store.changeStore.aclChangePath, registerWatch = true))
     children.maybeThrow()
     assertEquals("Expecting 1 change event", 1, children.children.size)
 

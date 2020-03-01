@@ -387,11 +387,11 @@ public class InternalTopologyBuilderTest {
         builder.addSource(null, "source-1", null, null, null, "topic-1");
         builder.addProcessor("processor-1", new MockProcessorSupplier(), "source-1");
 
-        assertEquals(0, builder.build().stateStores().size());
+        assertEquals(0, builder.buildTopology().stateStores().size());
 
         builder.connectProcessorAndStateStores("processor-1", storeBuilder.name());
 
-        final List<StateStore> suppliers = builder.build().stateStores();
+        final List<StateStore> suppliers = builder.buildTopology().stateStores();
         assertEquals(1, suppliers.size());
         assertEquals(storeBuilder.name(), suppliers.get(0).name());
     }
@@ -448,6 +448,7 @@ public class InternalTopologyBuilderTest {
         builder.addProcessor("processor-5", new MockProcessorSupplier(), "source-5");
         builder.addStateStore(new MockKeyValueStoreBuilder("store-3", false));
         builder.connectProcessorAndStateStores("processor-5", "store-3");
+        builder.buildTopology();
 
         final Map<Integer, InternalTopologyBuilder.TopicsInfo> topicGroups = builder.topicGroups();
 
@@ -485,9 +486,9 @@ public class InternalTopologyBuilderTest {
         builder.addProcessor("processor-3", new MockProcessorSupplier(), "source-3", "source-4");
 
         builder.setApplicationId("X");
-        final ProcessorTopology topology0 = builder.build(0);
-        final ProcessorTopology topology1 = builder.build(1);
-        final ProcessorTopology topology2 = builder.build(2);
+        final ProcessorTopology topology0 = builder.buildSubtopology(0);
+        final ProcessorTopology topology1 = builder.buildSubtopology(1);
+        final ProcessorTopology topology2 = builder.buildSubtopology(2);
 
         assertEquals(mkSet("source-1", "source-2", "processor-1", "processor-2"), nodeNames(topology0.processors()));
         assertEquals(mkSet("source-3", "source-4", "processor-3"), nodeNames(topology1.processors()));
@@ -659,6 +660,7 @@ public class InternalTopologyBuilderTest {
                 ),
                 "processor"
         );
+        builder.buildTopology();
         final Map<Integer, InternalTopologyBuilder.TopicsInfo> topicGroups = builder.topicGroups();
         final InternalTopologyBuilder.TopicsInfo topicsInfo = topicGroups.values().iterator().next();
         final InternalTopicConfig topicConfig1 = topicsInfo.stateChangelogTopics.get("appId-store1-changelog");
@@ -683,6 +685,7 @@ public class InternalTopologyBuilderTest {
         builder.addSource(null, "source", null, null, null, "topic");
         builder.addProcessor("processor", new MockProcessorSupplier(), "source");
         builder.addStateStore(storeBuilder, "processor");
+        builder.buildTopology();
         final Map<Integer, InternalTopologyBuilder.TopicsInfo> topicGroups = builder.topicGroups();
         final InternalTopologyBuilder.TopicsInfo topicsInfo = topicGroups.values().iterator().next();
         final InternalTopicConfig topicConfig = topicsInfo.stateChangelogTopics.get("appId-store-changelog");
@@ -698,6 +701,7 @@ public class InternalTopologyBuilderTest {
         builder.setApplicationId("appId");
         builder.addInternalTopic("foo");
         builder.addSource(null, "source", null, null, null, "foo");
+        builder.buildTopology();
         final InternalTopologyBuilder.TopicsInfo topicsInfo = builder.topicGroups().values().iterator().next();
         final InternalTopicConfig topicConfig = topicsInfo.repartitionSourceTopics.get("appId-foo");
         final Map<String, String> properties = topicConfig.getProperties(Collections.emptyMap(), 10000);
@@ -734,7 +738,7 @@ public class InternalTopologyBuilderTest {
     @Test
     public void shouldAddTimestampExtractorPerSource() {
         builder.addSource(null, "source", new MockTimestampExtractor(), null, null, "topic");
-        final ProcessorTopology processorTopology = builder.rewriteTopology(new StreamsConfig(StreamsTestUtils.getStreamsConfig())).build();
+        final ProcessorTopology processorTopology = builder.rewriteTopology(new StreamsConfig(StreamsTestUtils.getStreamsConfig())).buildTopology();
         assertThat(processorTopology.source("topic").getTimestampExtractor(), instanceOf(MockTimestampExtractor.class));
     }
 
@@ -742,7 +746,7 @@ public class InternalTopologyBuilderTest {
     public void shouldAddTimestampExtractorWithPatternPerSource() {
         final Pattern pattern = Pattern.compile("t.*");
         builder.addSource(null, "source", new MockTimestampExtractor(), null, null, pattern);
-        final ProcessorTopology processorTopology = builder.rewriteTopology(new StreamsConfig(StreamsTestUtils.getStreamsConfig())).build();
+        final ProcessorTopology processorTopology = builder.rewriteTopology(new StreamsConfig(StreamsTestUtils.getStreamsConfig())).buildTopology();
         assertThat(processorTopology.source(pattern.pattern()).getTimestampExtractor(), instanceOf(MockTimestampExtractor.class));
     }
 

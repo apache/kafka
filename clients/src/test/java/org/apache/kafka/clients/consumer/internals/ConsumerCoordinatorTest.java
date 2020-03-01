@@ -22,7 +22,6 @@ import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.consumer.CommitFailedException;
 import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor;
-import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
@@ -106,6 +105,8 @@ import static java.util.Collections.singletonList;
 import static java.util.Collections.singletonMap;
 import static org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.RebalanceProtocol.COOPERATIVE;
 import static org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.RebalanceProtocol.EAGER;
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.test.TestUtils.toSet;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -134,7 +135,10 @@ public class ConsumerCoordinatorTest {
 
     private final ConsumerPartitionAssignor.RebalanceProtocol protocol;
     private final MockPartitionAssignor partitionAssignor;
+    private final ThrowOnAssignmentAssignor throwOnAssignmentAssignor;
+    private final ThrowOnAssignmentAssignor throwFatalErrorOnAssignmentAssignor;
     private final List<ConsumerPartitionAssignor> assignors;
+    private final Map<String, MockPartitionAssignor> assignorMap;
     private MockClient client;
     private MetadataResponse metadataResponse = TestUtils.metadataUpdateWith(1, new HashMap<String, Integer>() {
         {
@@ -153,8 +157,18 @@ public class ConsumerCoordinatorTest {
 
     public ConsumerCoordinatorTest(final ConsumerPartitionAssignor.RebalanceProtocol protocol) {
         this.protocol = protocol;
+
         this.partitionAssignor = new MockPartitionAssignor(Collections.singletonList(protocol));
-        this.assignors = Collections.singletonList(partitionAssignor);
+        this.throwOnAssignmentAssignor = new ThrowOnAssignmentAssignor(Collections.singletonList(protocol),
+            new KafkaException("Kaboom for assignment!"),
+            "throw-on-assignment-assignor");
+        this.throwFatalErrorOnAssignmentAssignor = new ThrowOnAssignmentAssignor(Collections.singletonList(protocol),
+            new IllegalStateException("Illegal state for assignment!"),
+            "throw-fatal-error-on-assignment-assignor");
+        this.assignors = Arrays.asList(partitionAssignor, throwOnAssignmentAssignor, throwFatalErrorOnAssignmentAssignor);
+        this.assignorMap = mkMap(mkEntry(partitionAssignor.name(), partitionAssignor),
+            mkEntry(throwOnAssignmentAssignor.name(), throwOnAssignmentAssignor),
+            mkEntry(throwFatalErrorOnAssignmentAssignor.name(), throwFatalErrorOnAssignmentAssignor));
     }
 
     @Parameterized.Parameters(name = "rebalance protocol = {0}")
@@ -338,14 +352,11 @@ public class ConsumerCoordinatorTest {
 
         for (int i = 0; i < numRequests; i++) {
             Map<TopicPartition, OffsetAndMetadata> offsets = singletonMap(tp, new OffsetAndMetadata(i));
-            coordinator.commitOffsetsAsync(offsets, new OffsetCommitCallback() {
-                @Override
-                public void onComplete(Map<TopicPartition, OffsetAndMetadata> offsets, Exception exception) {
-                    responses.incrementAndGet();
-                    Throwable cause = exception.getCause();
-                    assertTrue("Unexpected exception cause type: " + (cause == null ? null : cause.getClass()),
-                            cause instanceof DisconnectException);
-                }
+            coordinator.commitOffsetsAsync(offsets, (offsets1, exception) -> {
+                responses.incrementAndGet();
+                Throwable cause = exception.getCause();
+                assertTrue("Unexpected exception cause type: " + (cause == null ? null : cause.getClass()),
+                        cause instanceof DisconnectException);
             });
         }
 
@@ -463,6 +474,134 @@ public class ConsumerCoordinatorTest {
         coordinator.onLeavePrepare();
         assertEquals(1, rebalanceListener.lostCount);
         assertEquals(0, rebalanceListener.revokedCount);
+    }
+
+    @Test
+    public void testRevokeExceptionThrownFirstNonBlockingSubCallbacks() {
+        MockRebalanceListener throwOnRevokeListener = new MockRebalanceListener() {
+            @Override
+            public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
+                super.onPartitionsRevoked(partitions);
+                throw new KafkaException("Kaboom on revoke!");
+            }
+        };
+
+        if (protocol == COOPERATIVE) {
+            verifyOnCallbackExceptions(throwOnRevokeListener,
+                throwOnAssignmentAssignor.name(), "Kaboom on revoke!", null);
+        } else {
+            // Eager protocol doesn't revoke partitions.
+            verifyOnCallbackExceptions(throwOnRevokeListener,
+                throwOnAssignmentAssignor.name(), "Kaboom for assignment!", null);
+        }
+    }
+
+    @Test
+    public void testOnAssignmentExceptionThrownFirstNonBlockingSubCallbacks() {
+        MockRebalanceListener throwOnAssignListener = new MockRebalanceListener() {
+            @Override
+            public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
+                super.onPartitionsAssigned(partitions);
+                throw new KafkaException("Kaboom on partition assign!");
+            }
+        };
+
+        verifyOnCallbackExceptions(throwOnAssignListener,
+            throwOnAssignmentAssignor.name(), "Kaboom for assignment!", null);
+    }
+
+    @Test
+    public void testOnPartitionsAssignExceptionThrownWhenNoPreviousThrownCallbacks() {
+        MockRebalanceListener throwOnAssignListener = new MockRebalanceListener() {
+            @Override
+            public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
+                super.onPartitionsAssigned(partitions);
+                throw new KafkaException("Kaboom on partition assign!");
+            }
+        };
+
+        verifyOnCallbackExceptions(throwOnAssignListener,
+            partitionAssignor.name(), "Kaboom on partition assign!", null);
+    }
+
+    @Test
+    public void testOnRevokeExceptionShouldBeRenderedIfNotKafkaException() {
+        MockRebalanceListener throwOnRevokeListener = new MockRebalanceListener() {
+            @Override
+            public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
+                super.onPartitionsRevoked(partitions);
+                throw new IllegalStateException("Illegal state on partition revoke!");
+            }
+        };
+
+        if (protocol == COOPERATIVE) {
+            verifyOnCallbackExceptions(throwOnRevokeListener,
+                throwOnAssignmentAssignor.name(),
+                "User rebalance callback throws an error", "Illegal state on partition revoke!");
+        } else {
+            // Eager protocol doesn't revoke partitions.
+            verifyOnCallbackExceptions(throwOnRevokeListener,
+                throwOnAssignmentAssignor.name(), "Kaboom for assignment!", null);
+        }
+    }
+
+    @Test
+    public void testOnAssignmentExceptionShouldBeRenderedIfNotKafkaException() {
+        MockRebalanceListener throwOnAssignListener = new MockRebalanceListener() {
+            @Override
+            public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
+                super.onPartitionsAssigned(partitions);
+                throw new KafkaException("Kaboom on partition assign!");
+            }
+        };
+        verifyOnCallbackExceptions(throwOnAssignListener,
+            throwFatalErrorOnAssignmentAssignor.name(),
+            "User rebalance callback throws an error", "Illegal state for assignment!");
+    }
+
+    @Test
+    public void testOnPartitionsAssignExceptionShouldBeRenderedIfNotKafkaException() {
+        MockRebalanceListener throwOnAssignListener = new MockRebalanceListener() {
+            @Override
+            public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
+                super.onPartitionsAssigned(partitions);
+                throw new IllegalStateException("Illegal state on partition assign!");
+            }
+        };
+
+        verifyOnCallbackExceptions(throwOnAssignListener,
+            partitionAssignor.name(), "User rebalance callback throws an error",
+            "Illegal state on partition assign!");
+    }
+
+    private void verifyOnCallbackExceptions(final MockRebalanceListener rebalanceListener,
+                                            final String assignorName,
+                                            final String exceptionMessage,
+                                            final String causeMessage) {
+        client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
+        coordinator.ensureCoordinatorReady(time.timer(Long.MAX_VALUE));
+
+        subscriptions.subscribe(singleton(topic1), rebalanceListener);
+        ByteBuffer buffer = ConsumerProtocol.serializeAssignment(
+            new ConsumerPartitionAssignor.Assignment(Collections.singletonList(t1p), ByteBuffer.wrap(new byte[0])));
+        subscriptions.assignFromSubscribed(singleton(t2p));
+
+        if (exceptionMessage != null) {
+            final Exception exception = assertThrows(KafkaException.class,
+                () -> coordinator.onJoinComplete(1, "memberId", assignorName, buffer));
+            assertEquals(exceptionMessage, exception.getMessage());
+            if (causeMessage != null) {
+                assertEquals(causeMessage, exception.getCause().getMessage());
+            }
+        }
+
+        // Eager doesn't trigger on partition revoke.
+        assertEquals(protocol == COOPERATIVE ? 1 : 0, rebalanceListener.revokedCount);
+        assertEquals(0, rebalanceListener.lostCount);
+        assertEquals(1, rebalanceListener.assignedCount);
+        assertTrue("Unknown assignor name: " + assignorName,
+            assignorMap.containsKey(assignorName));
+        assertEquals(1, assignorMap.get(assignorName).numAssignment());
     }
 
     @Test
@@ -2760,33 +2899,6 @@ public class ConsumerCoordinatorTest {
         public void onComplete(Map<TopicPartition, OffsetAndMetadata> offsets, Exception exception) {
             invoked++;
             this.exception = exception;
-        }
-    }
-
-    private static class MockRebalanceListener implements ConsumerRebalanceListener {
-        public Collection<TopicPartition> lost;
-        public Collection<TopicPartition> revoked;
-        public Collection<TopicPartition> assigned;
-        public int lostCount = 0;
-        public int revokedCount = 0;
-        public int assignedCount = 0;
-
-        @Override
-        public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
-            this.assigned = partitions;
-            assignedCount++;
-        }
-
-        @Override
-        public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
-            this.revoked = partitions;
-            revokedCount++;
-        }
-
-        @Override
-        public void onPartitionsLost(Collection<TopicPartition> partitions) {
-            this.lost = partitions;
-            lostCount++;
         }
     }
 }
