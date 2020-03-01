@@ -18,6 +18,7 @@
 package org.apache.kafka.jmh.acl;
 
 import kafka.security.authorizer.AclAuthorizer;
+import kafka.security.authorizer.AclAuthorizer.VersionedAcls;
 import kafka.security.authorizer.AclEntry;
 import org.apache.kafka.common.acl.AccessControlEntry;
 import org.apache.kafka.common.acl.AclBindingFilter;
@@ -27,7 +28,6 @@ import org.apache.kafka.common.resource.PatternType;
 import org.apache.kafka.common.resource.ResourcePattern;
 import org.apache.kafka.common.resource.ResourceType;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
-import org.mockito.internal.util.reflection.FieldSetter;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
 import org.openjdk.jmh.annotations.Fork;
@@ -41,14 +41,15 @@ import org.openjdk.jmh.annotations.Setup;
 import org.openjdk.jmh.annotations.State;
 import org.openjdk.jmh.annotations.TearDown;
 import org.openjdk.jmh.annotations.Warmup;
-import scala.Tuple2;
 import scala.collection.JavaConverters;
 import scala.collection.immutable.TreeMap;
 import scala.math.Ordering;
 
+import java.lang.reflect.Field;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 @State(Scope.Benchmark)
@@ -60,21 +61,28 @@ import java.util.concurrent.TimeUnit;
 
 public class AclAuthorizerBenchmark {
     @Param({"5000", "10000", "50000"})
-    public static Integer resourceCount;
+    private int resourceCount;
     //no. of. rules per resource
     @Param({"5", "10", "15"})
-    public static Integer aclCount;
+    private int aclCount;
 
     private AclAuthorizer aclAuthorizer = new AclAuthorizer();
     private KafkaPrincipal principal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "test-user");
 
     @Setup(Level.Trial)
-    public void setup() throws NoSuchFieldException {
-        FieldSetter.setField(aclAuthorizer, AclAuthorizer.class.getDeclaredField("aclCache"), prepareAclCache());
+    public void setup() throws Exception {
+        setFieldValue(aclAuthorizer, AclAuthorizer.class.getDeclaredField("aclCache").getName(),
+            prepareAclCache());
     }
 
-    private TreeMap prepareAclCache() {
-        Map<ResourcePattern, java.util.Set<AclEntry>> aclEntries = new HashMap<>();
+    private void setFieldValue(Object obj, String fieldName, Object value) throws Exception {
+        Field field = obj.getClass().getDeclaredField(fieldName);
+        field.setAccessible(true);
+        field.set(obj, value);
+    }
+
+    private TreeMap<ResourcePattern, VersionedAcls> prepareAclCache() {
+        Map<ResourcePattern, Set<AclEntry>> aclEntries = new HashMap<>();
         for (int resourceId = 0; resourceId < resourceCount; resourceId++) {
 
             ResourcePattern resource = new ResourcePattern(
@@ -82,20 +90,21 @@ public class AclAuthorizerBenchmark {
                 "resource-" + resourceId,
                 (resourceId % 5 == 0) ? PatternType.PREFIXED : PatternType.LITERAL);
 
-            java.util.Set<AclEntry> entries = aclEntries.computeIfAbsent(resource, k -> new HashSet<>());
+            Set<AclEntry> entries = aclEntries.computeIfAbsent(resource, k -> new HashSet<>());
 
             for (int aclId = 0; aclId < aclCount; aclId++) {
-                AccessControlEntry ace =
-                    new AccessControlEntry(principal.toString() + aclId, "*", AclOperation.READ, AclPermissionType.ALLOW);
+                AccessControlEntry ace = new AccessControlEntry(principal.toString() + aclId,
+                    "*", AclOperation.READ, AclPermissionType.ALLOW);
                 entries.add(new AclEntry(ace));
             }
         }
 
-        TreeMap<ResourcePattern, AclAuthorizer.VersionedAcls> aclCache = new TreeMap<>(new ResourceOrdering());
-        for (Map.Entry<ResourcePattern, java.util.Set<AclEntry>> entry : aclEntries.entrySet()) {
-            aclCache = aclCache.$plus(new Tuple2<>(entry.getKey(),
-                new AclAuthorizer.VersionedAcls(JavaConverters.asScalaSet(entry.getValue()).toSet(), 1)));
+        TreeMap<ResourcePattern, VersionedAcls> aclCache = new TreeMap<>(new ResourceOrdering());
+        for (Map.Entry<ResourcePattern, Set<AclEntry>> entry : aclEntries.entrySet()) {
+            aclCache = aclCache.updated(entry.getKey(),
+                new VersionedAcls(JavaConverters.asScalaSetConverter(entry.getValue()).asScala().toSet(), 1));
         }
+
         return aclCache;
     }
 
@@ -109,7 +118,7 @@ public class AclAuthorizerBenchmark {
         aclAuthorizer.acls(AclBindingFilter.ANY);
     }
 
-    private class ResourceOrdering implements Ordering<ResourcePattern> {
+    private static class ResourceOrdering implements Ordering<ResourcePattern> {
         @Override
         public int compare(final ResourcePattern a, final ResourcePattern b) {
             int rt = a.resourceType().compareTo(b.resourceType());
