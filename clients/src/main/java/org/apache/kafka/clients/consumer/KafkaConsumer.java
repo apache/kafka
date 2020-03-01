@@ -2248,6 +2248,39 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     }
 
     /**
+     * Alert the consumer to trigger a new rebalance by rejoining the group. This is a nonblocking call that forces
+     * the consumer to trigger a new rebalance on the next {@link #poll(Duration)} call. Note that this API does not
+     * itself initiate the rebalance, so you must still call {@link #poll(Duration)}. If a rebalance is already in
+     * progress this call will be a no-op. If you wish to force an additional rebalance you must complete the current
+     * one by calling poll before retrying this API.
+     * <p>
+     * You do not need to call this during normal processing, as the consumer group will manage itself
+     * automatically and rebalance when necessary. However there may be situations where the application wishes to
+     * trigger a rebalance that would otherwise not occur. For example, if some condition external and invisible to
+     * the Consumer and its group changes in a way that would affect the userdata encoded in the
+     * {@link org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.Subscription Subscription}, the Consumer
+     * will not be notified and no rebalance will occur. This API can be used to force the group to rebalance so that
+     * the assignor can perform a partition reassignment based on the latest userdata. If your assignor does not use
+     * this userdata, or you do not use a custom
+     * {@link org.apache.kafka.clients.consumer.ConsumerPartitionAssignor ConsumerPartitionAssignor}, you should not
+     * use this API.
+     *
+     * @throws java.lang.IllegalStateException if the consumer does not use group subscription
+     */
+    @Override
+    public void enforceRebalance() {
+        acquireAndEnsureOpen();
+        try {
+            if (coordinator == null) {
+                throw new IllegalStateException("Tried to force a rebalance but consumer does not have a group.");
+            }
+            coordinator.requestRejoin();
+        } finally {
+            release();
+        }
+    }
+
+    /**
      * Close the consumer, waiting for up to the default timeout of 30 seconds for any needed cleanup.
      * If auto-commit is enabled, this will commit the current offsets if possible within the default
      * timeout. See {@link #close(Duration)} for details. Note that {@link #wakeup()}
