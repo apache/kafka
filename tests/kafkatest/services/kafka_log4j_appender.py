@@ -17,7 +17,6 @@ from ducktape.services.background_thread import BackgroundThreadService
 
 from kafkatest.directory_layout.kafka_path import KafkaPathResolverMixin
 from kafkatest.services.security.security_config import SecurityConfig
-from kafkatest.services.kafka.util import fix_opts_for_new_jvm
 
 
 class KafkaLog4jAppender(KafkaPathResolverMixin, BackgroundThreadService):
@@ -45,8 +44,7 @@ class KafkaLog4jAppender(KafkaPathResolverMixin, BackgroundThreadService):
         node.account.ssh(cmd)
 
     def start_cmd(self, node):
-        cmd = fix_opts_for_new_jvm(node)
-        cmd += self.path.script("kafka-run-class.sh", node)
+        cmd = self.path.script("kafka-run-class.sh", node)
         cmd += " "
         cmd += self.java_class_name()
         cmd += " --topic %s --broker-list %s" % (self.topic, self.kafka.bootstrap_servers(self.security_protocol))
