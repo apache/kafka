@@ -201,16 +201,12 @@ class LogCleanerIntegrationTest extends AbstractLogCleanerIntegrationTest with K
 
     val latestOffset: Long = log.logEndOffset
 
-    cleaner.awaitCleaned(new TopicPartition("log-partition", 0),
-                         latestOffset + 1, maxWaitMs = 5000)
+    assertTrue(cleaner.awaitCleaned(new TopicPartition("log-partition", 0),
+                                    latestOffset, maxWaitMs = 5000))
     assertEquals(log.latestDeleteHorizon, T0 + tombstoneRetentionMs)
 
     time.sleep(tombstoneRetentionMs + 1)
-
-    // the first block should get cleaned
-    cleaner.awaitCleaned(new TopicPartition("log-partition", 0), 
-                         latestOffset + 1, maxWaitMs = 5000)
-    TestUtils.waitUntilTrue(() => log.size == 0, "Log should be empty", tombstoneRetentionMs, 100)
+    TestUtils.waitUntilTrue(() => log.size == 0, "Log should be empty")
   }
 
   private def readFromLog(log: Log): Iterable[(Int, Int)] = {
