@@ -74,7 +74,7 @@
 
   Whenever a broker stops or crashes, leadership for that broker's partitions transfers to other replicas. When the broker is restarted it will only be a follower for all its partitions, meaning it will not be used for client reads and writes.
   <p>
-  To avoid this imbalance, Kafka has a notion of preferred replicas. If the list of replicas for a partition is 1,5,9 then node 1 is preferred as the leader to either node 5 or 9 because it is earlier in the replica list. By default the Kafka cluster will try to restore leadership to the restored replicas.  This behaviour is configured with:
+  To avoid this imbalance, Kafka has a notion of preferred replicas. If the list of replicas for a partition is 1,5,9 then node 1 is preferred as the leader to either node 5 or 9 because it is earlier in the replica list. By default the Kafka cluster will try to restore leadership to the preferred replicas.  This behaviour is configured with:
 
   <pre class="line-numbers"><code class="language-text">      auto.leader.rebalance.enable=true</code></pre>
     You can also set this to false, but you will then need to manually restore leadership to the restored replicas by running the command:
