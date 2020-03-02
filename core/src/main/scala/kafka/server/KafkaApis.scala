@@ -47,7 +47,7 @@ import org.apache.kafka.common.acl.AclOperation._
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.FatalExitError
-import org.apache.kafka.common.internals.Topic.{isInternal, GROUP_METADATA_TOPIC_NAME, TRANSACTION_STATE_TOPIC_NAME}
+import org.apache.kafka.common.internals.Topic.{GROUP_METADATA_TOPIC_NAME, TRANSACTION_STATE_TOPIC_NAME, isInternal}
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopic
 import org.apache.kafka.common.message.CreatePartitionsResponseData.CreatePartitionsTopicResult
 import org.apache.kafka.common.message.{AlterPartitionReassignmentsResponseData, CreateAclsResponseData, CreatePartitionsResponseData, CreateTopicsResponseData, DeleteAclsResponseData, DeleteGroupsResponseData, DeleteTopicsResponseData, DescribeAclsResponseData, DescribeGroupsResponseData, EndTxnResponseData, ExpireDelegationTokenResponseData, FindCoordinatorResponseData, HeartbeatResponseData, InitProducerIdResponseData, JoinGroupResponseData, LeaveGroupResponseData, ListGroupsResponseData, ListPartitionReassignmentsResponseData, OffsetCommitRequestData, OffsetCommitResponseData, OffsetDeleteResponseData, RenewDelegationTokenResponseData, SaslAuthenticateResponseData, SaslHandshakeResponseData, StopReplicaResponseData, SyncGroupResponseData, UpdateMetadataResponseData}
@@ -77,12 +77,13 @@ import org.apache.kafka.common.security.token.delegation.{DelegationToken, Token
 import org.apache.kafka.common.utils.{ProducerIdAndEpoch, Time, Utils}
 import org.apache.kafka.common.{Node, TopicPartition}
 import org.apache.kafka.common.message.MetadataResponseData
+import org.apache.kafka.common.message.MetadataResponseData.{MetadataResponsePartition, MetadataResponseTopic}
 import org.apache.kafka.server.authorizer._
 
 import scala.compat.java8.OptionConverters._
 import scala.collection.JavaConverters._
 import scala.collection.mutable.ArrayBuffer
-import scala.collection.{immutable, mutable, Map, Seq, Set}
+import scala.collection.{Map, Seq, Set, immutable, mutable}
 import scala.util.{Failure, Success, Try}
 
 
@@ -1001,24 +1002,30 @@ class KafkaApis(val requestChannel: RequestChannel,
   private def createTopic(topic: String,
                           numPartitions: Int,
                           replicationFactor: Int,
-                          properties: util.Properties = new util.Properties()): MetadataResponse.TopicMetadata = {
+                          properties: util.Properties = new util.Properties()): MetadataResponseTopic = {
     try {
       adminZkClient.createTopic(topic, numPartitions, replicationFactor, properties, RackAwareMode.Safe)
       info("Auto creation of topic %s with %d partitions and replication factor %d is successful"
         .format(topic, numPartitions, replicationFactor))
-      new MetadataResponse.TopicMetadata(Errors.LEADER_NOT_AVAILABLE, topic, isInternal(topic),
-        util.Collections.emptyList())
+      metadataResponseTopic(Errors.LEADER_NOT_AVAILABLE.code(), topic, isInternal(topic), util.Collections.emptyList())
     } catch {
       case _: TopicExistsException => // let it go, possibly another broker created this topic
-        new MetadataResponse.TopicMetadata(Errors.LEADER_NOT_AVAILABLE, topic, isInternal(topic),
-          util.Collections.emptyList())
+        metadataResponseTopic(Errors.LEADER_NOT_AVAILABLE.code(), topic, isInternal(topic), util.Collections.emptyList())
       case ex: Throwable  => // Catch all to prevent unhandled errors
-        new MetadataResponse.TopicMetadata(Errors.forException(ex), topic, isInternal(topic),
-          util.Collections.emptyList())
+        metadataResponseTopic(Errors.forException(ex).code(), topic, isInternal(topic), util.Collections.emptyList())
     }
   }
 
-  private def createInternalTopic(topic: String): MetadataResponse.TopicMetadata = {
+  private def metadataResponseTopic(errorCode: Short, topic: String, isInternal: Boolean,
+                                    partitionData: util.List[MetadataResponsePartition]): MetadataResponseTopic = {
+    new MetadataResponseTopic()
+      .setErrorCode(errorCode)
+      .setName(topic)
+      .setIsInternal(isInternal)
+      .setPartitions(partitionData)
+  }
+
+  private def createInternalTopic(topic: String): MetadataResponseTopic = {
     if (topic == null)
       throw new IllegalArgumentException("topic must not be null")
 
@@ -1031,7 +1038,7 @@ class KafkaApis(val requestChannel: RequestChannel,
             s"'${config.offsetsTopicReplicationFactor}' for the offsets topic (configured via " +
             s"'${KafkaConfig.OffsetsTopicReplicationFactorProp}'). This error can be ignored if the cluster is starting up " +
             s"and not all brokers are up yet.")
-          new MetadataResponse.TopicMetadata(Errors.COORDINATOR_NOT_AVAILABLE, topic, true, util.Collections.emptyList())
+          metadataResponseTopic(Errors.COORDINATOR_NOT_AVAILABLE.code(), topic, true, util.Collections.emptyList())
         } else {
           createTopic(topic, config.offsetsTopicPartitions, config.offsetsTopicReplicationFactor.toInt,
             groupCoordinator.offsetsTopicConfigs)
@@ -1042,7 +1049,7 @@ class KafkaApis(val requestChannel: RequestChannel,
             s"'${config.transactionTopicReplicationFactor}' for the transactions state topic (configured via " +
             s"'${KafkaConfig.TransactionsTopicReplicationFactorProp}'). This error can be ignored if the cluster is starting up " +
             s"and not all brokers are up yet.")
-          new MetadataResponse.TopicMetadata(Errors.COORDINATOR_NOT_AVAILABLE, topic, true, util.Collections.emptyList())
+          metadataResponseTopic(Errors.COORDINATOR_NOT_AVAILABLE.code(), topic, true, util.Collections.emptyList())
         } else {
           createTopic(topic, config.transactionTopicPartitions, config.transactionTopicReplicationFactor.toInt,
             txnCoordinator.transactionTopicConfigs)
@@ -1058,7 +1065,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 
   private def getTopicMetadata(allowAutoTopicCreation: Boolean, topics: Set[String], listenerName: ListenerName,
                                errorUnavailableEndpoints: Boolean,
-                               errorUnavailableListeners: Boolean): Seq[MetadataResponse.TopicMetadata] = {
+                               errorUnavailableListeners: Boolean): Seq[MetadataResponseTopic] = {
     val topicResponses = metadataCache.getTopicMetadata(topics, listenerName,
         errorUnavailableEndpoints, errorUnavailableListeners)
     if (topics.isEmpty || topicResponses.size == topics.size) {
@@ -1068,14 +1075,14 @@ class KafkaApis(val requestChannel: RequestChannel,
       val responsesForNonExistentTopics = nonExistentTopics.map { topic =>
         if (isInternal(topic)) {
           val topicMetadata = createInternalTopic(topic)
-          if (topicMetadata.error == Errors.COORDINATOR_NOT_AVAILABLE)
-            new MetadataResponse.TopicMetadata(Errors.INVALID_REPLICATION_FACTOR, topic, true, util.Collections.emptyList())
+          if (topicMetadata.errorCode() == Errors.COORDINATOR_NOT_AVAILABLE.code())
+            metadataResponseTopic(Errors.INVALID_REPLICATION_FACTOR.code(), topic, true, util.Collections.emptyList())
           else
             topicMetadata
         } else if (allowAutoTopicCreation && config.autoCreateTopicsEnable) {
           createTopic(topic, config.numPartitions, config.defaultReplicationFactor)
         } else {
-          new MetadataResponse.TopicMetadata(Errors.UNKNOWN_TOPIC_OR_PARTITION, topic, false, util.Collections.emptyList())
+          metadataResponseTopic(Errors.UNKNOWN_TOPIC_OR_PARTITION.code(), topic, false, util.Collections.emptyList())
         }
       }
       topicResponses ++ responsesForNonExistentTopics
@@ -1110,17 +1117,17 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
 
     val unauthorizedForCreateTopicMetadata = unauthorizedForCreateTopics.map(topic =>
-      new MetadataResponse.TopicMetadata(Errors.TOPIC_AUTHORIZATION_FAILED, topic, isInternal(topic),
-        util.Collections.emptyList()))
+      metadataResponseTopic(Errors.TOPIC_AUTHORIZATION_FAILED.code(), topic, isInternal(topic), util.Collections.emptyList()))
+
 
     // do not disclose the existence of topics unauthorized for Describe, so we've not even checked if they exist or not
     val unauthorizedForDescribeTopicMetadata =
       // In case of all topics, don't include topics unauthorized for Describe
       if ((requestVersion == 0 && (metadataRequest.topics == null || metadataRequest.topics.isEmpty)) || metadataRequest.isAllTopics)
-        Set.empty[MetadataResponse.TopicMetadata]
+        Set.empty[MetadataResponseTopic]
       else
         unauthorizedForDescribeTopics.map(topic =>
-          new MetadataResponse.TopicMetadata(Errors.TOPIC_AUTHORIZATION_FAILED, topic, false, util.Collections.emptyList()))
+          metadataResponseTopic(Errors.TOPIC_AUTHORIZATION_FAILED.code(), topic, false, util.Collections.emptyList()))
 
     // In version 0, we returned an error when brokers with replicas were unavailable,
     // while in higher versions we simply don't include the broker in the returned broker list
@@ -1130,7 +1137,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     val errorUnavailableListeners = requestVersion >= 6
     val topicMetadata =
       if (authorizedTopics.isEmpty)
-        Seq.empty[MetadataResponse.TopicMetadata]
+        Seq.empty[MetadataResponseTopic]
       else
         getTopicMetadata(metadataRequest.allowAutoTopicCreation, authorizedTopics, request.context.listenerName,
           errorUnavailableEndpoints, errorUnavailableListeners)
@@ -1148,7 +1155,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       // get topic authorized operations
       if (metadataRequest.data.includeTopicAuthorizedOperations) {
         topicMetadata.foreach { topicData =>
-          topicData.authorizedOperations(authorizedOperations(request, new Resource(ResourceType.TOPIC, topicData.topic)))
+          topicData.setTopicAuthorizedOperations(authorizedOperations(request, new Resource(ResourceType.TOPIC, topicData.name())))
         }
       }
     }
@@ -1163,10 +1170,10 @@ class KafkaApis(val requestChannel: RequestChannel,
     sendResponseMaybeThrottle(request, requestThrottleMs =>
        MetadataResponse.prepareResponse(
          requestThrottleMs,
+         completeTopicMetadata.asJava,
          brokers.flatMap(_.getNode(request.context.listenerName)).asJava,
          clusterId,
          metadataCache.getControllerId.getOrElse(MetadataResponse.NO_CONTROLLER_ID),
-         completeTopicMetadata.asJava,
          clusterAuthorizedOperations
       ))
   }
