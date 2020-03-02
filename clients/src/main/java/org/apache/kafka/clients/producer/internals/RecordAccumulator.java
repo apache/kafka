@@ -116,6 +116,41 @@ public final class RecordAccumulator {
                              ApiVersions apiVersions,
                              TransactionManager transactionManager,
                              BufferPool bufferPool) {
+        this(logContext, batchSize, compression, lingerMs, retryBackoffMs, deliveryTimeoutMs, metrics, metricGrpName,
+                time, apiVersions, transactionManager, bufferPool, new IncompleteBatches());
+    }
+
+    /**
+     * Create a new record accumulator (package private for testing purpose)
+     *
+     * @param logContext The log context used for logging
+     * @param batchSize The size to use when allocating {@link MemoryRecords} instances
+     * @param compression The compression codec for the records
+     * @param lingerMs An artificial delay time to add before declaring a records instance that isn't full ready for
+     *        sending. This allows time for more records to arrive. Setting a non-zero lingerMs will trade off some
+     *        latency for potentially better throughput due to more batching (and hence fewer, larger requests).
+     * @param retryBackoffMs An artificial delay time to retry the produce request upon receiving an error. This avoids
+     *        exhausting all retries in a short period of time.
+     * @param metrics The metrics
+     * @param time The time instance to use.
+     * @param apiVersions Request API versions for current connected brokers
+     * @param transactionManager The shared transaction state object which tracks producer IDs, epochs, and sequence
+     *                           numbers per partition.
+     * @param incomplete the IncompleteBatches object to track the batches to be sent.
+     */
+    RecordAccumulator(final LogContext logContext,
+                      final int batchSize,
+                      final CompressionType compression,
+                      final int lingerMs,
+                      long retryBackoffMs,
+                      int deliveryTimeoutMs,
+                      Metrics metrics,
+                      String metricGrpName,
+                      Time time,
+                      ApiVersions apiVersions,
+                      TransactionManager transactionManager,
+                      BufferPool bufferPool,
+                      IncompleteBatches incomplete) {
         this.log = logContext.logger(RecordAccumulator.class);
         this.drainIndex = 0;
         this.closed = false;
@@ -128,7 +163,7 @@ public final class RecordAccumulator {
         this.deliveryTimeoutMs = deliveryTimeoutMs;
         this.batches = new CopyOnWriteMap<>();
         this.free = bufferPool;
-        this.incomplete = new IncompleteBatches();
+        this.incomplete = incomplete;
         this.muted = new HashMap<>();
         this.time = time;
         this.apiVersions = apiVersions;
@@ -726,8 +761,9 @@ public final class RecordAccumulator {
      */
     public void awaitFlushCompletion() throws InterruptedException {
         try {
-            for (ProducerBatch batch : this.incomplete.copyAll())
-                batch.produceFuture.await();
+            for (ProducerBatch batch : this.incomplete.copyAll()) {
+                batch.await();
+            }
         } finally {
             this.flushesInProgress.decrementAndGet();
         }

@@ -18,6 +18,7 @@ package org.apache.kafka.clients.producer.internals;
 
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 
 /*
@@ -45,7 +46,7 @@ class IncompleteBatches {
         }
     }
 
-    public Iterable<ProducerBatch> copyAll() {
+    public List<ProducerBatch> copyAll() {
         synchronized (incomplete) {
             return new ArrayList<>(this.incomplete);
         }
