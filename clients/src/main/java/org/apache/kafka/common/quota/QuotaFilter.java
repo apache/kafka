@@ -25,7 +25,7 @@ import java.util.Objects;
 public class QuotaFilter {
 
     // Matches all entities with the entity type specified.
-    private static final String MATCH_SPECIFIED = "<specified>";
+    private static final String MATCH_SPECIFIED = "";
 
     private final String entityType;
     private final String match;

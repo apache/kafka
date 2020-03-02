@@ -163,6 +163,10 @@
     <subpackage name="utils">
       <allow pkg="org.apache.kafka.common" />
     </subpackage>
+
+    <subpackage name="quotas">
+      <allow pkg="org.apache.kafka.common" />
+    </subpackage>
   </subpackage>
 
   <subpackage name="clients">
