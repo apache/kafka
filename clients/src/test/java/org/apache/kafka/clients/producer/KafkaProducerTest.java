@@ -602,11 +602,36 @@ public class KafkaProducerTest {
     }
 
     @Test
-    public void testFlush() {
+    public void closeWithNegativeTimestampShouldThrow() {
         Properties producerProps = new Properties();
         producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9000");
-        try (KafkaProducer producer = new KafkaProducer<>(producerProps, new ByteArraySerializer(), new ByteArraySerializer())) {
+        try (Producer producer = new KafkaProducer<>(producerProps, new ByteArraySerializer(), new ByteArraySerializer())) {
+            assertThrows(IllegalArgumentException.class, () -> producer.close(Duration.ofMillis(-100)));
+        }
+    }
+
+    @Test
+    public void testFlush() {
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9000");
+
+        Time time = new MockTime(1);
+        MetadataResponse initialUpdateResponse = TestUtils.metadataUpdateWith(1, singletonMap("topic", 1));
+        ProducerMetadata metadata = newMetadata(0, Long.MAX_VALUE);
+
+        MockClient client = new MockClient(time, metadata);
+        client.updateMetadata(initialUpdateResponse);
+
+        try (Producer<String, String> producer = new KafkaProducer<>(configs, new StringSerializer(),
+                new StringSerializer(), metadata, client, null, time)) {
+            ArrayList<Future<RecordMetadata>> futureResponses = new ArrayList<>();
+            for (int i = 0; i < 50; i++) {
+                Future<RecordMetadata> response = producer.send(new ProducerRecord<>("topic", "value" + i));
+                futureResponses.add(response);
+            }
+            futureResponses.forEach(res -> assertTrue(!res.isDone()));
             producer.flush();
+            futureResponses.forEach(res -> assertTrue(res.isDone()));
         }
     }
 
@@ -712,7 +737,6 @@ public class KafkaProducerTest {
     public void testAbortTransaction() {
         Map<String, Object> configs = new HashMap<>();
         configs.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, "some.id");
-        configs.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, 10000);
         configs.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9000");
 
         Time time = new MockTime(1);
