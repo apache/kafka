@@ -637,11 +637,28 @@ class AdminManager(val config: KafkaConfig,
   }
 
   private def configType(name: String, synonyms: List[String]): ConfigDef.Type = {
-    val configType = config.typeOf(name)
-    if (configType != null)
-      configType
-    else
-      synonyms.iterator.map(config.typeOf).find(_ != null).orNull
+    configTypeExact(name).getOrElse {
+      val iter = synonyms.iterator
+      var curType: ConfigDef.Type = null
+      while (curType == null && iter.hasNext) {
+        curType = configTypeExact(iter.next()).getOrElse(null)
+      }
+      curType
+    }
+  }
+
+  private def configTypeExact(exactName: String): Option[ConfigDef.Type] = {
+    val configType = config.typeOf(exactName)
+    if (configType != null) {
+      Some(configType)
+    } else {
+      val configKey = DynamicConfig.Broker.brokerConfigDef.configKeys().get(exactName)
+      if (configKey != null) {
+        Some(configKey.`type`)
+      } else {
+        None
+      }
+    }
   }
 
   private def configSynonyms(name: String, synonyms: List[String], isSensitive: Boolean): List[DescribeConfigsResponse.ConfigSynonym] = {
