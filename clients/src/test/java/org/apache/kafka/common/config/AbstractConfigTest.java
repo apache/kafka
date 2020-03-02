@@ -349,6 +349,7 @@ public class AbstractConfigTest {
         assertEquals(config.originals().get("sasl.kerberos.password"), "randomPassword");
         assertEquals(config.originals().get("prefix.ssl.truststore.location.number"), 5);
         assertEquals(config.originals().get("sasl.kerberos.service.name"), "service name");
+        MockFileConfigProvider.assertClosed();
     }
 
     @Test
@@ -363,6 +364,7 @@ public class AbstractConfigTest {
         TestIndirectConfigResolution config = new TestIndirectConfigResolution(props, convertPropertiesToMap(providers));
         assertEquals(config.originals().get("sasl.kerberos.key"), "testKey");
         assertEquals(config.originals().get("sasl.kerberos.password"), "randomPassword");
+        MockFileConfigProvider.assertClosed();
     }
 
     @Test
@@ -377,6 +379,7 @@ public class AbstractConfigTest {
         Map<String, ?> provMap = convertPropertiesToMap(providers);
         TestIndirectConfigResolution config = new TestIndirectConfigResolution(immutableMap, provMap);
         assertEquals(config.originals().get("sasl.kerberos.key"), "testKey");
+        MockFileConfigProvider.assertClosed();
     }
 
     @Test
@@ -396,6 +399,7 @@ public class AbstractConfigTest {
         assertEquals(config.originals().get("sasl.kerberos.password"), "randomPassword");
         assertEquals(config.originals().get("sasl.truststore.key"), "testTruststoreKey");
         assertEquals(config.originals().get("sasl.truststore.password"), "randomtruststorePassword");
+        MockFileConfigProvider.assertClosed();
     }
 
     @Test

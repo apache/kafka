@@ -19,11 +19,31 @@ package org.apache.kafka.common.config.provider;
 import java.io.IOException;
 import java.io.Reader;
 import java.io.StringReader;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Set;
 
 public class MockFileConfigProvider extends FileConfigProvider {
+
+    private static Set<MockFileConfigProvider> unclosedInstances = new HashSet<>();
+
+    public void configure(Map<String, ?> configs) {
+        unclosedInstances.add(this);
+    }
 
     @Override
     protected Reader reader(String path) throws IOException {
         return new StringReader("key=testKey\npassword=randomPassword");
+    }
+
+    @Override
+    public void close() {
+        unclosedInstances.remove(this);
+    }
+
+    public static void assertClosed() {
+        if (!unclosedInstances.isEmpty()) {
+            throw new AssertionError("Unclosed ConfigProvider");
+        }
     }
 }

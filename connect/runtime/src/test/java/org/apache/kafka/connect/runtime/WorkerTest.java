@@ -24,6 +24,7 @@ import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.config.provider.MockFileConfigProvider;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.connector.Connector;
@@ -146,6 +147,8 @@ public class WorkerTest extends ThreadedTest {
         workerProps.put("internal.value.converter.schemas.enable", "false");
         workerProps.put("offset.storage.file.filename", "/tmp/connect.offsets");
         workerProps.put(CommonClientConfigs.METRIC_REPORTER_CLASSES_CONFIG, MockMetricsReporter.class.getName());
+        workerProps.put("config.providers", "file");
+        workerProps.put("config.providers.file.class", MockFileConfigProvider.class.getName());
         config = new StandaloneConfig(workerProps);
 
         defaultProducerConfigs.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
@@ -189,9 +192,11 @@ public class WorkerTest extends ThreadedTest {
 
         EasyMock.expect(connector.version()).andReturn("1.0");
 
+        expectFileConfigProvider();
         EasyMock.expect(plugins.compareAndSwapLoaders(connector))
                 .andReturn(delegatingLoader)
                 .times(2);
+
         connector.initialize(anyObject(ConnectorContext.class));
         EasyMock.expectLastCall();
         connector.start(props);
@@ -238,12 +243,24 @@ public class WorkerTest extends ThreadedTest {
         assertStatistics(worker, 0, 0);
 
         PowerMock.verifyAll();
+        MockFileConfigProvider.assertClosed();
+    }
+
+    private void expectFileConfigProvider() {
+        EasyMock.expect(plugins.newConfigProvider(EasyMock.anyObject(),
+                    EasyMock.eq("config.providers.file"), EasyMock.anyObject()))
+                .andAnswer(() -> {
+                    MockFileConfigProvider mockFileConfigProvider = new MockFileConfigProvider();
+                    mockFileConfigProvider.configure(Collections.emptyMap());
+                    return mockFileConfigProvider;
+                });
     }
 
     @Test
     public void testStartConnectorFailure() {
         expectConverters();
         expectStartStorage();
+        expectFileConfigProvider();
 
         Map<String, String> props = new HashMap<>();
         props.put(SinkConnectorConfig.TOPICS_CONFIG, "foo,bar");
@@ -289,6 +306,7 @@ public class WorkerTest extends ThreadedTest {
     public void testAddConnectorByAlias() {
         expectConverters();
         expectStartStorage();
+        expectFileConfigProvider();
 
         EasyMock.expect(plugins.currentThreadLoader()).andReturn(delegatingLoader).times(2);
         EasyMock.expect(plugins.newConnector("WorkerTestConnector")).andReturn(connector);
@@ -354,6 +372,7 @@ public class WorkerTest extends ThreadedTest {
     public void testAddConnectorByShortAlias() {
         expectConverters();
         expectStartStorage();
+        expectFileConfigProvider();
 
         EasyMock.expect(plugins.currentThreadLoader()).andReturn(delegatingLoader).times(2);
         EasyMock.expect(plugins.newConnector("WorkerTest")).andReturn(connector);
@@ -416,6 +435,7 @@ public class WorkerTest extends ThreadedTest {
     public void testStopInvalidConnector() {
         expectConverters();
         expectStartStorage();
+        expectFileConfigProvider();
 
         PowerMock.replayAll();
 
@@ -432,6 +452,7 @@ public class WorkerTest extends ThreadedTest {
     public void testReconfigureConnectorTasks() {
         expectConverters();
         expectStartStorage();
+        expectFileConfigProvider();
 
         EasyMock.expect(plugins.currentThreadLoader()).andReturn(delegatingLoader).times(3);
         EasyMock.expect(plugins.newConnector(WorkerTestConnector.class.getName()))
@@ -521,6 +542,7 @@ public class WorkerTest extends ThreadedTest {
     public void testAddRemoveTask() throws Exception {
         expectConverters();
         expectStartStorage();
+        expectFileConfigProvider();
 
         EasyMock.expect(workerTask.id()).andStubReturn(TASK_ID);
 
@@ -617,6 +639,7 @@ public class WorkerTest extends ThreadedTest {
     public void testTaskStatusMetricsStatuses() throws Exception {
         expectConverters();
         expectStartStorage();
+        expectFileConfigProvider();
 
         EasyMock.expect(workerTask.id()).andStubReturn(TASK_ID);
 
@@ -749,10 +772,9 @@ public class WorkerTest extends ThreadedTest {
         tasks.put(new ConnectorTaskId("c1", 1), workerTask);
         tasks.put(new ConnectorTaskId("c2", 0), workerTask);
 
-
         expectConverters();
-
         expectStartStorage();
+        expectFileConfigProvider();
 
         EasyMock.expect(Plugins.compareAndSwapLoaders(pluginLoader)).andReturn(delegatingLoader);
         EasyMock.expect(Plugins.compareAndSwapLoaders(pluginLoader)).andReturn(delegatingLoader);
@@ -784,6 +806,7 @@ public class WorkerTest extends ThreadedTest {
     public void testStartTaskFailure() {
         expectConverters();
         expectStartStorage();
+        expectFileConfigProvider();
 
         Map<String, String> origProps = new HashMap<>();
         origProps.put(TaskConfig.TASK_CLASS_CONFIG, "missing.From.This.Workers.Classpath");
@@ -830,6 +853,7 @@ public class WorkerTest extends ThreadedTest {
     public void testCleanupTasksOnStop() throws Exception {
         expectConverters();
         expectStartStorage();
+        expectFileConfigProvider();
 
         EasyMock.expect(workerTask.id()).andStubReturn(TASK_ID);
 
@@ -922,6 +946,7 @@ public class WorkerTest extends ThreadedTest {
     public void testConverterOverrides() throws Exception {
         expectConverters();
         expectStartStorage();
+        expectFileConfigProvider();
 
         EasyMock.expect(workerTask.id()).andStubReturn(TASK_ID);
 

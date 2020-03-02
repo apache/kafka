@@ -20,6 +20,7 @@ import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.provider.ConfigProvider;
 import org.apache.kafka.common.config.ConfigTransformer;
 import org.apache.kafka.common.config.ConfigTransformerResult;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.runtime.Herder.ConfigReloadAction;
 import org.apache.kafka.connect.util.Callback;
 import org.slf4j.Logger;
@@ -40,9 +41,11 @@ public class WorkerConfigTransformer {
     private final Worker worker;
     private final ConfigTransformer configTransformer;
     private final ConcurrentMap<String, Map<String, HerderRequest>> requests = new ConcurrentHashMap<>();
+    private final Map<String, ConfigProvider> configProviders;
 
     public WorkerConfigTransformer(Worker worker, Map<String, ConfigProvider> configProviders) {
         this.worker = worker;
+        this.configProviders = configProviders;
         this.configTransformer = new ConfigTransformer(configProviders);
     }
 
@@ -97,5 +100,9 @@ public class WorkerConfigTransformer {
         };
         HerderRequest request = worker.herder().restartConnector(ttl, connectorName, cb);
         connectorRequests.put(path, request);
+    }
+
+    public void close() {
+        configProviders.values().forEach(x -> Utils.closeQuietly(x, "config provider"));
     }
 }

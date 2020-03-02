@@ -220,6 +220,8 @@ public class Worker {
 
         workerMetricsGroup.close();
         connectorStatusMetricsGroup.close();
+
+        workerConfigTransformer.close();
     }
 
     /**
