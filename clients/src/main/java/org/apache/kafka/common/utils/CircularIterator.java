@@ -36,8 +36,7 @@ public class CircularIterator<T> implements Iterator<T> {
 
     private final Iterable<T> iterable;
     private Iterator<T> iterator;
-    private T peek;
-    private boolean hasPeek;
+    private T nextValue;
 
     /**
      * Create a new instance of a CircularIterator. The ordering of this
@@ -51,11 +50,10 @@ public class CircularIterator<T> implements Iterator<T> {
     public CircularIterator(final Collection<T> col) {
         this.iterable = Objects.requireNonNull(col);
         this.iterator = col.iterator();
-        this.peek = null;
-        this.hasPeek = false;
         if (col.isEmpty()) {
             throw new IllegalArgumentException("CircularIterator can only be used on non-empty lists");
         }
+        this.nextValue = advance();
     }
 
     /**
@@ -66,26 +64,27 @@ public class CircularIterator<T> implements Iterator<T> {
      */
     @Override
     public boolean hasNext() {
-        if (this.hasPeek) {
-            return true;
-        }
-        if (!this.iterator.hasNext()) {
-            this.iterator = this.iterable.iterator();
-        }
         return true;
     }
 
     @Override
     public T next() {
-        final T nextValue;
-        if (this.hasPeek) {
-            nextValue = this.peek;
-            this.peek = null;
-            this.hasPeek = false;
-        } else {
-            nextValue = this.iterator.next();
+        final T next = this.nextValue;
+        this.nextValue = advance();
+        return next;
+    }
+
+    /**
+     * Return the next value in the {@code Iterator}, restarting the
+     * {@code Iterator} if necessary.
+     *
+     * @return The next value in the iterator
+     */
+    private T advance() {
+        if (!this.iterator.hasNext()) {
+            this.iterator = this.iterable.iterator();
         }
-        return nextValue;
+        return this.iterator.next();
     }
 
     /**
@@ -97,11 +96,7 @@ public class CircularIterator<T> implements Iterator<T> {
      * @return The next value in this {@code Iterator}
      */
     public T peek() {
-        if (!this.hasPeek) {
-            this.peek = next();
-            this.hasPeek = true;
-        }
-        return this.peek;
+        return this.nextValue;
     }
 
     @Override
