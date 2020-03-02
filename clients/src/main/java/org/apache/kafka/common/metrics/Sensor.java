@@ -304,9 +304,6 @@ public final class Sensor {
         return (time.milliseconds() - this.lastRecordTime) > this.inactiveSensorExpirationTimeMs;
     }
 
-    /**
-     * Visible for testing.
-     */
     synchronized List<KafkaMetric> metrics() {
         return unmodifiableList(new ArrayList<>(this.metrics.values()));
     }
