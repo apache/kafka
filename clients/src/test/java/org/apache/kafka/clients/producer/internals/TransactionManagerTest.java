@@ -2678,7 +2678,7 @@ public class TransactionManagerTest {
 
         // The second batch should not bump the epoch as txn manager is already in fatal error state
         ProducerBatch b2 = writeIdempotentBatchWithValue(transactionManager, tp0, "2");
-        transactionManager.handleFailedBatch(b2, new TimeoutException(), false);
+        transactionManager.handleFailedBatch(b2, new TimeoutException(), true);
         transactionManager.bumpIdempotentEpochAndResetIdIfNeeded();
         assertEquals(idAndEpochAfterFirstBatch, transactionManager.producerIdAndEpoch());
     }
