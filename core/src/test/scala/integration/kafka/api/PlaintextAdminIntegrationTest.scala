@@ -1285,7 +1285,6 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     var electResult = client.electLeaders(ElectionType.PREFERRED, Set(partition1).asJava)
     var exception = electResult.partitions.get.get(partition1).get
     assertEquals(classOf[ElectionNotNeededException], exception.getClass)
-    assertEquals("Leader election not needed for topic partition", exception.getMessage)
     TestUtils.assertLeader(client, partition1, 0)
 
     // Noop election with null partitions

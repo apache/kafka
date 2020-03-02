@@ -47,7 +47,7 @@ public class RecordQueue {
     private final ArrayDeque<ConsumerRecord<byte[], byte[]>> fifoQueue;
 
     private StampedRecord headRecord = null;
-    private long partitionTime = RecordQueue.UNKNOWN;
+    private long partitionTime;
 
     private final Sensor droppedRecordsSensor;
 
@@ -74,6 +74,7 @@ public class RecordQueue {
             droppedRecordsSensor
         );
         this.log = logContext.logger(RecordQueue.class);
+        setPartitionTime(UNKNOWN);
     }
 
     void setPartitionTime(final long partitionTime) {
@@ -166,6 +167,7 @@ public class RecordQueue {
     public void clear() {
         fifoQueue.clear();
         headRecord = null;
+        setPartitionTime(UNKNOWN);
     }
 
     private void updateHead() {

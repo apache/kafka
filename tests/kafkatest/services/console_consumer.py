@@ -17,9 +17,10 @@ import itertools
 import os
 
 from ducktape.services.background_thread import BackgroundThreadService
+from ducktape.utils.util import wait_until
 
 from kafkatest.directory_layout.kafka_path import KafkaPathResolverMixin
-from kafkatest.services.monitor.jmx import JmxMixin
+from kafkatest.services.monitor.jmx import JmxMixin, JmxTool
 from kafkatest.version import DEV_BRANCH, LATEST_0_8_2, LATEST_0_9, LATEST_0_10_0, V_0_9_0_0, V_0_10_0_0, V_0_11_0_0, V_2_0_0
 
 """
@@ -62,7 +63,8 @@ class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService)
                  client_id="console-consumer", print_key=False, jmx_object_names=None, jmx_attributes=None,
                  enable_systest_events=False, stop_timeout_sec=35, print_timestamp=False, print_partition=False,
                  isolation_level="read_uncommitted", jaas_override_variables=None,
-                 kafka_opts_override="", client_prop_file_override="", consumer_properties={}):
+                 kafka_opts_override="", client_prop_file_override="", consumer_properties={},
+                 wait_until_partitions_assigned=False):
         """
         Args:
             context:                    standard context
@@ -124,6 +126,7 @@ class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService)
         self.kafka_opts_override = kafka_opts_override
         self.client_prop_file_override = client_prop_file_override
         self.consumer_properties = consumer_properties
+        self.wait_until_partitions_assigned = wait_until_partitions_assigned
 
 
     def prop_file(self, node):
@@ -273,8 +276,29 @@ class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService)
         with self.lock:
             self.read_jmx_output(idx, node)
 
+    def _wait_until_partitions_assigned(self, node, timeout_sec=60):
+        if self.jmx_object_names is not None:
+            raise Exception("'wait_until_partitions_assigned' is not supported while using 'jmx_object_names'/'jmx_attributes'")
+        jmx_tool = JmxTool(self.context, jmx_poll_ms=100)
+        jmx_tool.jmx_object_names = ["kafka.consumer:type=consumer-coordinator-metrics,client-id=%s" % self.client_id]
+        jmx_tool.jmx_attributes = ["assigned-partitions"]
+        jmx_tool.assigned_partitions_jmx_attr = "kafka.consumer:type=consumer-coordinator-metrics,client-id=%s:assigned-partitions" % self.client_id
+        jmx_tool.start_jmx_tool(self.idx(node), node)
+        assigned_partitions_jmx_attr = "kafka.consumer:type=consumer-coordinator-metrics,client-id=%s:assigned-partitions" % self.client_id
+
+        def read_and_check():
+            jmx_tool.read_jmx_output(self.idx(node), node)
+            return assigned_partitions_jmx_attr in jmx_tool.maximum_jmx_value
+
+        wait_until(lambda: read_and_check(),
+                timeout_sec=timeout_sec,
+                backoff_sec=.5,
+                err_msg="consumer was not assigned partitions within %d seconds" % timeout_sec)
+
     def start_node(self, node):
         BackgroundThreadService.start_node(self, node)
+        if self.wait_until_partitions_assigned:
+            self._wait_until_partitions_assigned(node)
 
     def stop_node(self, node):
         self.logger.info("%s Stopping node %s" % (self.__class__.__name__, str(node.account)))

@@ -183,12 +183,6 @@ public class StreamsProducerTest {
         verify(producer);
     }
 
-    @Test
-    public void shouldCloseProducerOnClose() {
-        streamsProducer.close();
-        assertTrue(mockProducer.closed());
-    }
-
     // error handling tests
 
     @Test
@@ -247,28 +241,11 @@ public class StreamsProducerTest {
     }
 
     @Test
-    public void shouldThrowStreamsExceptionOnCloseError() {
+    public void shouldNotCloseProducerIfEosDisabled() {
         mockProducer.closeException = new KafkaException("KABOOM!");
+        streamsProducer.close();
 
-        final StreamsException thrown = assertThrows(
-            StreamsException.class,
-            streamsProducer::close
-        );
-
-        assertEquals(mockProducer.closeException, thrown.getCause());
-        assertThat(thrown.getMessage(), equalTo("Producer encounter unexpected error trying to close"));
-    }
-
-    @Test
-    public void shouldFailOnCloseFatal() {
-        mockProducer.closeException = new RuntimeException("KABOOM!");
-
-        final RuntimeException thrown = assertThrows(
-            RuntimeException.class,
-            streamsProducer::close
-        );
-
-        assertThat(thrown.getMessage(), equalTo("KABOOM!"));
+        assertFalse(mockProducer.closed());
     }
 
     // EOS tests
@@ -634,5 +611,26 @@ public class StreamsProducerTest {
         final RuntimeException thrown = assertThrows(RuntimeException.class, eosStreamsProducer::abortTransaction);
 
         assertThat(thrown.getMessage(), equalTo("KABOOM!"));
+    }
+
+    @Test
+    public void shouldFailOnCloseFatal() {
+        eosMockProducer.closeException = new RuntimeException("KABOOM!");
+
+        final RuntimeException thrown = assertThrows(
+            RuntimeException.class,
+            eosStreamsProducer::close
+        );
+
+        assertThat(thrown.getMessage(), equalTo("KABOOM!"));
+    }
+
+    @Test
+    public void shouldCloseProducerIfEosEnabled() {
+        eosStreamsProducer.close();
+
+        final RuntimeException thrown = assertThrows(IllegalStateException.class, () -> eosStreamsProducer.send(record, null));
+
+        assertThat(thrown.getMessage(), equalTo("MockProducer is already closed."));
     }
 }

@@ -567,6 +567,10 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
     }
 
     @Override
+    public void enforceRebalance() {
+    }
+
+    @Override
     public void close(Duration timeout) {
         close();
     }

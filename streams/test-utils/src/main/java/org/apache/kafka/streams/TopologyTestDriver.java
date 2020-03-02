@@ -353,7 +353,7 @@ public class TopologyTestDriver implements Closeable {
         internalTopologyBuilder = builder;
         internalTopologyBuilder.rewriteTopology(streamsConfig);
 
-        processorTopology = internalTopologyBuilder.build();
+        processorTopology = internalTopologyBuilder.buildTopology();
         globalTopology = internalTopologyBuilder.buildGlobalStateTopology();
 
         for (final String topic : processorTopology.sourceTopics()) {

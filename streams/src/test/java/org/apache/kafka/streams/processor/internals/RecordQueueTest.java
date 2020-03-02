@@ -180,6 +180,7 @@ public class RecordQueueTest {
         assertTrue(queue.isEmpty());
         assertEquals(0, queue.size());
         assertEquals(RecordQueue.UNKNOWN, queue.headRecordTimestamp());
+        assertEquals(RecordQueue.UNKNOWN, queue.partitionTime());
         assertNull(queue.headRecordOffset());
 
         // re-insert the three records with 4, 5, 6

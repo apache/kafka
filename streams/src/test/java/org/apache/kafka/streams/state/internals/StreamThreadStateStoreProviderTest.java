@@ -137,7 +137,7 @@ public class StreamThreadStateStoreProviderTest {
         configureRestoreConsumer(clientSupplier, "applicationId-window-store-changelog");
 
         final InternalTopologyBuilder internalTopologyBuilder = topology.getInternalBuilder(applicationId);
-        final ProcessorTopology processorTopology = internalTopologyBuilder.build();
+        final ProcessorTopology processorTopology = internalTopologyBuilder.buildTopology();
 
         tasks = new HashMap<>();
         stateDirectory = new StateDirectory(streamsConfig, new MockTime(), true);
