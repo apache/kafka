@@ -1539,11 +1539,6 @@ $ bin/kafka-acls.sh \
         <td>0</td>
       </tr>
       <tr>
-        <td>Is controller active on broker</td>
-        <td>kafka.controller:type=KafkaController,name=ActiveControllerCount</td>
-        <td>only one broker in the cluster should have 1</td>
-      </tr>
-      <tr>
         <td>Leader election rate</td>
         <td>kafka.controller:type=ControllerStats,name=LeaderElectionRateAndTimeMs</td>
         <td>non-zero when there are broker failures</td>
@@ -1552,6 +1547,11 @@ $ bin/kafka-acls.sh \
         <td>Unclean leader election rate</td>
         <td>kafka.controller:type=ControllerStats,name=UncleanLeaderElectionsPerSec</td>
         <td>0</td>
+      </tr>
+      <tr>
+        <td>Is controller active on broker</td>
+        <td>kafka.controller:type=KafkaController,name=ActiveControllerCount</td>
+        <td>only one broker in the cluster should have 1</td>
       </tr>
       <tr>
         <td>Pending topic deletes</td>
