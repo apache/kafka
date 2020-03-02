@@ -17,7 +17,6 @@
 package kafka.server
 
 import java.util
-import java.util.Optional
 import util.Arrays.asList
 
 import org.apache.kafka.common.message.UpdateMetadataRequestData.{UpdateMetadataBroker, UpdateMetadataEndpoint, UpdateMetadataPartitionState}
