@@ -510,6 +510,11 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
   }
 
   private def processReconfiguration(newProps: Map[String, String], validateOnly: Boolean): (KafkaConfig, List[BrokerReconfigurable]) = {
+    try {
+      throw new RuntimeException("foo")
+    } catch {
+      case e: Throwable => logger.info("processReconfiguration(validateOnly=" + validateOnly + ")", e)
+    }
     val newConfig = new KafkaConfig(newProps.asJava, !validateOnly, None)
     val updatedMap = updatedConfigs(newConfig.originalsFromThisConfig, currentConfig.originals)
     if (updatedMap.nonEmpty) {

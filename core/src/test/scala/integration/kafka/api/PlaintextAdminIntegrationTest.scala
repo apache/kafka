@@ -27,7 +27,7 @@ import java.{time, util}
 
 import kafka.log.LogConfig
 import kafka.security.authorizer.AclEntry
-import kafka.server.{Defaults, KafkaConfig, KafkaServer}
+import kafka.server.{Defaults, DynamicConfig, KafkaConfig, KafkaServer}
 import kafka.utils.TestUtils._
 import kafka.utils.{Log4jController, TestUtils}
 import kafka.zk.KafkaZkClient
@@ -1738,6 +1738,42 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
 
     assertFutureExceptionTypeEquals(alterResult.values().get(topic1Resource), classOf[InvalidRequestException],
       Some("Invalid config value for resource"))
+
+    val broker0Resource = new ConfigResource(ConfigResource.Type.BROKER, "0")
+    client.incrementalAlterConfigs(Map(broker0Resource ->
+      Seq(new AlterConfigOp(new ConfigEntry(DynamicConfig.Broker.LeaderReplicationThrottledRateProp, "123"),
+          AlterConfigOp.OpType.SET),
+        new AlterConfigOp(new ConfigEntry(DynamicConfig.Broker.FollowerReplicationThrottledRateProp, "456"),
+          AlterConfigOp.OpType.SET),
+        new AlterConfigOp(new ConfigEntry(DynamicConfig.Broker.ReplicaAlterLogDirsIoMaxBytesPerSecondProp, "789"),
+          AlterConfigOp.OpType.SET)
+      ).asJavaCollection).asJava).all().get()
+    TestUtils.waitUntilTrue(() => {
+        val broker0Configs = client.describeConfigs(Seq(broker0Resource).asJava).
+          all().get().get(broker0Resource).entries().asScala.map {
+          case entry => (entry.name, entry.value)
+        }.toMap
+        ("123".equals(broker0Configs.getOrElse(DynamicConfig.Broker.LeaderReplicationThrottledRateProp, "")) &&
+          "456".equals(broker0Configs.getOrElse(DynamicConfig.Broker.FollowerReplicationThrottledRateProp, "")) &&
+          "789".equals(broker0Configs.getOrElse(DynamicConfig.Broker.ReplicaAlterLogDirsIoMaxBytesPerSecondProp, "")))
+      }, "expected to see the broker properties we just set", pause=25)
+    client.incrementalAlterConfigs(Map(broker0Resource ->
+      Seq(new AlterConfigOp(new ConfigEntry(DynamicConfig.Broker.LeaderReplicationThrottledRateProp, null),
+          AlterConfigOp.OpType.DELETE),
+        new AlterConfigOp(new ConfigEntry(DynamicConfig.Broker.FollowerReplicationThrottledRateProp, null),
+          AlterConfigOp.OpType.DELETE),
+        new AlterConfigOp(new ConfigEntry(DynamicConfig.Broker.ReplicaAlterLogDirsIoMaxBytesPerSecondProp, null),
+          AlterConfigOp.OpType.DELETE)
+      ).asJavaCollection).asJava).all().get()
+    TestUtils.waitUntilTrue(() => {
+        val broker0Configs = client.describeConfigs(Seq(broker0Resource).asJava).
+          all().get().get(broker0Resource).entries().asScala.map {
+          case entry => (entry.name, entry.value)
+        }.toMap
+        ("".equals(broker0Configs.getOrElse(DynamicConfig.Broker.LeaderReplicationThrottledRateProp, "")) &&
+         "".equals(broker0Configs.getOrElse(DynamicConfig.Broker.FollowerReplicationThrottledRateProp, "")) &&
+         "".equals(broker0Configs.getOrElse(DynamicConfig.Broker.ReplicaAlterLogDirsIoMaxBytesPerSecondProp, "")))
+      }, "expected to see the broker properties we just removed go away", pause=25)
   }
 
   @Test
