@@ -611,7 +611,7 @@ public class KafkaProducerTest {
     }
 
     @Test
-    public void testFlush() {
+    public void testFlushCompleteSendOfInflightBatches() {
         Map<String, Object> configs = new HashMap<>();
         configs.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9000");
 
