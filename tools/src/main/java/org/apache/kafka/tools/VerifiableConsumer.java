@@ -632,7 +632,7 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
             brokerHostandPort = res.getString("brokerList");
         } else {
             parser.printHelp();
-            //Can't use `Exit.exit` here because `Exit` doesn't exists until 0.11.0.0.
+            // Can't use `Exit.exit` here because it didn't exist until 0.11.0.0.
             System.exit(0);
         }
         consumerProps.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerHostandPort);
@@ -663,18 +663,18 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
         ArgumentParser parser = argParser();
         if (args.length == 0) {
             parser.printHelp();
-            //Can't use `Exit.exit` here because `Exit` doesn't exists until 0.11.0.0.
+            // Can't use `Exit.exit` here because it didn't exist until 0.11.0.0.
             System.exit(0);
         }
         try {
             final VerifiableConsumer consumer = createFromArgs(parser, args);
-            //Can't use `Exit.addShutdownHook` here because `Exit` doesn't exists until 0.11.0.0.
+            // Can't use `Exit.addShutdownHook` here because it didn't exist until 2.5.0.
             Runtime.getRuntime().addShutdownHook(new Thread(consumer::close, "verifiable-consumer-shutdown-hook"));
 
             consumer.run();
         } catch (ArgumentParserException e) {
             parser.handleError(e);
-            //Can't use `Exit.exit` here because `Exit` doesn't exists until 0.11.0.0.
+            // Can't use `Exit.exit` here because it didn't exist until 0.11.0.0.
             System.exit(1);
         }
     }
