@@ -43,7 +43,6 @@ import org.openjdk.jmh.annotations.TearDown;
 import org.openjdk.jmh.annotations.Warmup;
 import scala.collection.JavaConverters;
 import scala.collection.immutable.TreeMap;
-import scala.math.Ordering;
 
 import java.lang.reflect.Field;
 import java.util.HashMap;
@@ -99,7 +98,7 @@ public class AclAuthorizerBenchmark {
             }
         }
 
-        TreeMap<ResourcePattern, VersionedAcls> aclCache = new TreeMap<>(new ResourceOrdering());
+        TreeMap<ResourcePattern, VersionedAcls> aclCache = new TreeMap<>(new AclAuthorizer.ResourceOrdering());
         for (Map.Entry<ResourcePattern, Set<AclEntry>> entry : aclEntries.entrySet()) {
             aclCache = aclCache.updated(entry.getKey(),
                 new VersionedAcls(JavaConverters.asScalaSetConverter(entry.getValue()).asScala().toSet(), 1));
@@ -116,22 +115,5 @@ public class AclAuthorizerBenchmark {
     @Benchmark
     public void testAclsIterator() {
         aclAuthorizer.acls(AclBindingFilter.ANY);
-    }
-
-    private static class ResourceOrdering implements Ordering<ResourcePattern> {
-        @Override
-        public int compare(final ResourcePattern a, final ResourcePattern b) {
-            int rt = a.resourceType().compareTo(b.resourceType());
-            if (rt != 0) {
-                return rt;
-            } else {
-                int rnt = a.patternType().compareTo(b.patternType());
-                if (rnt != 0)
-                    return rnt;
-                else {
-                    return a.name().compareTo(b.name()) * -1;
-                }
-            }
-        }
     }
 }

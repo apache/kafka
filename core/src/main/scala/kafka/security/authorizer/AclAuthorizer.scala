@@ -22,7 +22,7 @@ import java.util.concurrent.locks.ReentrantReadWriteLock
 
 import com.typesafe.scalalogging.Logger
 import kafka.api.KAFKA_2_0_IV1
-import kafka.security.authorizer.AclAuthorizer.VersionedAcls
+import kafka.security.authorizer.AclAuthorizer.{ResourceOrdering, VersionedAcls}
 import kafka.security.authorizer.AclEntry.ResourceSeparator
 import kafka.server.{KafkaConfig, KafkaServer}
 import kafka.utils.CoreUtils.{inReadLock, inWriteLock}
@@ -36,7 +36,7 @@ import org.apache.kafka.common.errors.{ApiException, InvalidRequestException, Un
 import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.resource._
 import org.apache.kafka.common.security.auth.KafkaPrincipal
-import org.apache.kafka.common.utils.{Time, SecurityUtils}
+import org.apache.kafka.common.utils.{SecurityUtils, Time}
 import org.apache.kafka.server.authorizer.AclDeleteResult.AclBindingDeleteResult
 import org.apache.kafka.server.authorizer._
 import org.apache.zookeeper.client.ZKClientConfig
@@ -67,7 +67,7 @@ object AclAuthorizer {
   val WildcardHost = "*"
 
   // Orders by resource type, then resource pattern type and finally reverse ordering by name.
-  private object ResourceOrdering extends Ordering[ResourcePattern] {
+  class ResourceOrdering extends Ordering[ResourcePattern] {
 
     def compare(a: ResourcePattern, b: ResourcePattern): Int = {
       val rt = a.resourceType.compareTo(b.resourceType)
@@ -116,7 +116,7 @@ class AclAuthorizer extends Authorizer with Logging {
   private var extendedAclSupport: Boolean = _
 
   @volatile
-  private var aclCache = new scala.collection.immutable.TreeMap[ResourcePattern, VersionedAcls]()(AclAuthorizer.ResourceOrdering)
+  private var aclCache = new scala.collection.immutable.TreeMap[ResourcePattern, VersionedAcls]()(new ResourceOrdering)
   private val lock = new ReentrantReadWriteLock()
 
   // The maximum number of times we should try to update the resource acls in zookeeper before failing;
