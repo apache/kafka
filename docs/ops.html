@@ -1519,21 +1519,6 @@ $ bin/kafka-acls.sh \
         <td></td>
       </tr>
       <tr>
-        <td># of under replicated partitions (the number of non-reassigning replicas - the number of ISR &gt 0)</td>
-        <td>kafka.server:type=ReplicaManager,name=UnderReplicatedPartitions</td>
-        <td>0</td>
-      </tr>
-      <tr>
-        <td># of under minIsr partitions (|ISR| &lt min.insync.replicas)</td>
-        <td>kafka.server:type=ReplicaManager,name=UnderMinIsrPartitionCount</td>
-        <td>0</td>
-      </tr>
-      <tr>
-        <td># of at minIsr partitions (|ISR| = min.insync.replicas)</td>
-        <td>kafka.server:type=ReplicaManager,name=AtMinIsrPartitionCount</td>
-        <td>0</td>
-      </tr>
-      <tr>
         <td># of offline log directories</td>
         <td>kafka.log:type=LogManager,name=OfflineLogDirectoryCount</td>
         <td>0</td>
@@ -1572,6 +1557,21 @@ $ bin/kafka-acls.sh \
         <td>Ineligible pending replica deletes</td>
         <td>kafka.controller:type=KafkaController,name=ReplicasIneligibleToDeleteCount</td>
         <td></td>
+      </tr>
+      <tr>
+        <td># of under replicated partitions (|ISR| &lt |all replicas|)</td>
+        <td>kafka.server:type=ReplicaManager,name=UnderReplicatedPartitions</td>
+        <td>0</td>
+      </tr>
+      <tr>
+        <td># of under minIsr partitions (|ISR| &lt min.insync.replicas)</td>
+        <td>kafka.server:type=ReplicaManager,name=UnderMinIsrPartitionCount</td>
+        <td>0</td>
+      </tr>
+      <tr>
+        <td># of at minIsr partitions (|ISR| = min.insync.replicas)</td>
+        <td>kafka.server:type=ReplicaManager,name=AtMinIsrPartitionCount</td>
+        <td>0</td>
       </tr>
       <tr>
         <td>Partition counts</td>
