@@ -1204,12 +1204,12 @@ public class StreamThread extends Thread {
             if (producerMetrics != null) {
                 result.putAll(producerMetrics);
             }
-        } else {
+        } else if (taskProducers != null) {
             // When EOS is turned on, each task will have its own producer client
             // and the producer object passed in here will be null. We would then iterate through
             // all the active tasks and add their metrics to the output metrics map.
-            for (final StreamTask task : taskManager.fixmeStreamTasks().values()) {
-                final Map<MetricName, ? extends Metric> taskProducerMetrics = taskProducers.get(task.id).metrics();
+            for (final Map.Entry<TaskId, Producer<byte[], byte[]>> entry : taskProducers.entrySet()) {
+                final Map<MetricName, ? extends Metric> taskProducerMetrics = entry.getValue().metrics();
                 result.putAll(taskProducerMetrics);
             }
         }

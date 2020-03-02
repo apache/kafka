@@ -1952,7 +1952,6 @@ public class StreamThreadTest {
                                               final int numberOfCommits,
                                               final int commits) {
         final TaskManager taskManager = EasyMock.createNiceMock(TaskManager.class);
-        EasyMock.expect(taskManager.fixmeStreamTasks()).andReturn(Collections.emptyMap()).anyTimes();
         EasyMock.expect(taskManager.commitAll()).andReturn(commits).times(numberOfCommits);
         EasyMock.replay(taskManager, consumer);
         return taskManager;
