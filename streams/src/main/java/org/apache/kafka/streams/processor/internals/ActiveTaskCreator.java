@@ -33,16 +33,27 @@ import org.apache.kafka.streams.processor.internals.metrics.ThreadMetrics;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 import org.slf4j.Logger;
 
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.streams.StreamsConfig.EXACTLY_ONCE;
 
-class ActiveTaskCreator extends AbstractTaskCreator<Task> {
+class ActiveTaskCreator {
+    private final String applicationId;
+    private final InternalTopologyBuilder builder;
+    private final StreamsConfig config;
+    private final StreamsMetricsImpl streamsMetrics;
+    private final StateDirectory stateDirectory;
+    private final ChangelogReader storeChangelogReader;
+    private final Time time;
+    private final Logger log;
     private final String threadId;
     private final ThreadCache cache;
     private final Producer<byte[], byte[]> threadProducer;
@@ -68,14 +79,14 @@ class ActiveTaskCreator extends AbstractTaskCreator<Task> {
                       final KafkaClientSupplier clientSupplier,
                       final String threadId,
                       final Logger log) {
-        super(
-            builder,
-            config,
-            streamsMetrics,
-            stateDirectory,
-            storeChangelogReader,
-            time,
-            log);
+        applicationId = config.getString(StreamsConfig.APPLICATION_ID_CONFIG);
+        this.builder = builder;
+        this.config = config;
+        this.streamsMetrics = streamsMetrics;
+        this.stateDirectory = stateDirectory;
+        this.storeChangelogReader = storeChangelogReader;
+        this.time = time;
+        this.log = log;
 
         if (EXACTLY_ONCE.equals(config.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG))) {
             threadProducer = null;
@@ -96,59 +107,68 @@ class ActiveTaskCreator extends AbstractTaskCreator<Task> {
         createTaskSensor = ThreadMetrics.createTaskSensor(threadId, streamsMetrics);
     }
 
-    @Override
-    StreamTask createTask(final Consumer<byte[], byte[]> mainConsumer,
-                          final TaskId taskId,
-                          final Set<TopicPartition> partitions) {
-        createTaskSensor.record();
+    Collection<Task> createTasks(final Consumer<byte[], byte[]> consumer,
+                                 final Map<TaskId, Set<TopicPartition>> tasksToBeCreated) {
+        final List<Task> createdTasks = new ArrayList<>();
+        for (final Map.Entry<TaskId, Set<TopicPartition>> newTaskAndPartitions : tasksToBeCreated.entrySet()) {
+            final TaskId taskId = newTaskAndPartitions.getKey();
+            final Set<TopicPartition> partitions = newTaskAndPartitions.getValue();
 
-        final String threadIdPrefix = String.format("stream-thread [%s] ", Thread.currentThread().getName());
-        final String logPrefix = threadIdPrefix + String.format("%s [%s] ", "task", taskId);
-        final LogContext logContext = new LogContext(logPrefix);
+            final String threadIdPrefix = String.format("stream-thread [%s] ", Thread.currentThread().getName());
+            final String logPrefix = threadIdPrefix + String.format("%s [%s] ", "task", taskId);
+            final LogContext logContext = new LogContext(logPrefix);
 
-        final ProcessorTopology topology = builder.buildSubtopology(taskId.topicGroupId);
+            final ProcessorTopology topology = builder.buildSubtopology(taskId.topicGroupId);
 
-        final ProcessorStateManager stateManager = new ProcessorStateManager(
-            taskId,
-            partitions,
-            Task.TaskType.ACTIVE,
-            stateDirectory,
-            topology.storeToChangelogTopic(),
-            storeChangelogReader,
-            logContext);
+            final ProcessorStateManager stateManager = new ProcessorStateManager(
+                taskId,
+                partitions,
+                Task.TaskType.ACTIVE,
+                stateDirectory,
+                topology.storeToChangelogTopic(),
+                storeChangelogReader,
+                logContext);
 
-        if (threadProducer == null) {
-            // create one producer per task for EOS
-            // TODO: after KIP-447 this would be removed
-            final String taskProducerClientId = getTaskProducerClientId(threadId, taskId);
-            final Map<String, Object> producerConfigs = config.getProducerConfigs(taskProducerClientId);
-            producerConfigs.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, applicationId + "-" + taskId);
-            log.info("Creating producer client for task {}", taskId);
-            taskProducers.put(taskId, clientSupplier.getProducer(producerConfigs));
+            if (threadProducer == null) {
+                // create one producer per task for EOS
+                // TODO: after KIP-447 this would be removed
+                final String taskProducerClientId = getTaskProducerClientId(threadId, taskId);
+                final Map<String, Object> producerConfigs = config.getProducerConfigs(taskProducerClientId);
+                producerConfigs.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, applicationId + "-" + taskId);
+                log.info("Creating producer client for task {}", taskId);
+                taskProducers.put(taskId, clientSupplier.getProducer(producerConfigs));
+            }
+
+            final RecordCollector recordCollector = new RecordCollectorImpl(
+                logContext,
+                taskId,
+                consumer,
+                threadProducer != null ?
+                    new StreamsProducer(threadProducer, false, logContext, applicationId) :
+                    new StreamsProducer(taskProducers.get(taskId), true, logContext, applicationId),
+                config.defaultProductionExceptionHandler(),
+                EXACTLY_ONCE.equals(config.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG)),
+                streamsMetrics
+            );
+
+            final Task task = new StreamTask(
+                taskId,
+                partitions,
+                topology,
+                consumer,
+                config,
+                streamsMetrics,
+                stateDirectory,
+                cache,
+                time,
+                stateManager,
+                recordCollector);
+
+            log.trace("Created task {} with assigned partitions {}", taskId, partitions);
+            createdTasks.add(task);
+            createTaskSensor.record();
         }
-        final RecordCollector recordCollector = new RecordCollectorImpl(
-            logContext,
-            taskId,
-            mainConsumer,
-            threadProducer != null ?
-                new StreamsProducer(threadProducer, false, logContext, applicationId) :
-                new StreamsProducer(taskProducers.get(taskId), true, logContext, applicationId),
-            config.defaultProductionExceptionHandler(),
-            EXACTLY_ONCE.equals(config.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG)),
-            streamsMetrics);
-
-        return new StreamTask(
-            taskId,
-            partitions,
-            topology,
-            mainConsumer,
-            config,
-            streamsMetrics,
-            stateDirectory,
-            cache,
-            time,
-            stateManager,
-            recordCollector);
+        return createdTasks;
     }
 
     public void close() {
@@ -164,7 +184,7 @@ class ActiveTaskCreator extends AbstractTaskCreator<Task> {
         }
     }
 
-    void closeProducer(final TaskId id) {
+    void close(final TaskId id) {
         final Producer<byte[], byte[]> producer = taskProducers.remove(id);
         if (producer != null) {
             try {
@@ -203,5 +223,13 @@ class ActiveTaskCreator extends AbstractTaskCreator<Task> {
                                 .map(taskId -> getTaskProducerClientId(threadId, taskId))
                                 .collect(Collectors.toSet());
         }
+    }
+
+    public InternalTopologyBuilder builder() {
+        return builder;
+    }
+
+    public StateDirectory stateDirectory() {
+        return stateDirectory;
     }
 }

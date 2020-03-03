@@ -81,6 +81,7 @@ import java.io.File;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -92,6 +93,7 @@ import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static java.util.Collections.emptyMap;
+import static java.util.Collections.emptySet;
 import static java.util.Collections.singletonMap;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
@@ -100,9 +102,9 @@ import static org.apache.kafka.streams.processor.internals.StateManagerUtil.CHEC
 import static org.apache.kafka.streams.processor.internals.StreamThread.getSharedAdminClientId;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.not;
-import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.CoreMatchers.startsWith;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.empty;
 import static org.hamcrest.Matchers.is;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -193,7 +195,7 @@ public class StreamThreadTest {
         );
 
         internalTopologyBuilder.buildTopology();
-        
+
         return StreamThread.create(
             internalTopologyBuilder,
             config,
@@ -1260,18 +1262,14 @@ public class StreamThreadTest {
         setupInternalTopologyWithoutState();
         internalTopologyBuilder.addStateStore(new MockKeyValueStoreBuilder("myStore", true), "processor1");
 
-        final StandbyTask standbyTask = createStandbyTask();
-
-        assertThat(standbyTask, not(nullValue()));
+        assertThat(createStandbyTask(), not(empty()));
     }
 
     @Test
     public void shouldNotCreateStandbyTaskWithoutStateStores() {
         setupInternalTopologyWithoutState();
 
-        final StandbyTask standbyTask = createStandbyTask();
-
-        assertThat(standbyTask, nullValue());
+        assertThat(createStandbyTask(), empty());
     }
 
     @Test
@@ -1282,9 +1280,7 @@ public class StreamThreadTest {
         storeBuilder.withLoggingDisabled();
         internalTopologyBuilder.addStateStore(storeBuilder, "processor1");
 
-        final StandbyTask standbyTask = createStandbyTask();
-
-        assertThat(standbyTask, nullValue());
+        assertThat(createStandbyTask(), empty());
     }
 
     @Test
@@ -1934,7 +1930,7 @@ public class StreamThreadTest {
         internalTopologyBuilder.addProcessor("processor1", () -> mockProcessor, "source1");
     }
 
-    private StandbyTask createStandbyTask() {
+    private Collection<Task> createStandbyTask() {
         final LogContext logContext = new LogContext("test");
         final Logger log = logContext.logger(StreamThreadTest.class);
         final StreamsMetricsImpl streamsMetrics =
@@ -1945,13 +1941,9 @@ public class StreamThreadTest {
             streamsMetrics,
             stateDirectory,
             new MockChangelogReader(),
-            mockTime,
             CLIENT_ID,
             log);
-        return standbyTaskCreator.createTask(
-            new MockConsumer<>(OffsetResetStrategy.EARLIEST),
-            new TaskId(1, 2),
-            Collections.emptySet());
+        return standbyTaskCreator.createTasks(singletonMap(new TaskId(1, 2), emptySet()));
     }
 
     private void addRecord(final MockConsumer<byte[], byte[]> mockConsumer,

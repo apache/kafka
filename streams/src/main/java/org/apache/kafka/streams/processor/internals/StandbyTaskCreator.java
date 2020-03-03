@@ -16,20 +16,28 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.LogContext;
-import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.metrics.ThreadMetrics;
 import org.slf4j.Logger;
 
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
-class StandbyTaskCreator extends AbstractTaskCreator<StandbyTask> {
+class StandbyTaskCreator {
+    private final InternalTopologyBuilder builder;
+    private final StreamsConfig config;
+    private final StreamsMetricsImpl streamsMetrics;
+    private final StateDirectory stateDirectory;
+    private final ChangelogReader storeChangelogReader;
+    private final Logger log;
     private final Sensor createTaskSensor;
 
     StandbyTaskCreator(final InternalTopologyBuilder builder,
@@ -37,57 +45,67 @@ class StandbyTaskCreator extends AbstractTaskCreator<StandbyTask> {
                        final StreamsMetricsImpl streamsMetrics,
                        final StateDirectory stateDirectory,
                        final ChangelogReader storeChangelogReader,
-                       final Time time,
                        final String threadId,
                        final Logger log) {
-        super(
-            builder,
-            config,
-            streamsMetrics,
-            stateDirectory,
-            storeChangelogReader,
-            time,
-            log);
+        this.builder = builder;
+        this.config = config;
+        this.streamsMetrics = streamsMetrics;
+        this.stateDirectory = stateDirectory;
+        this.storeChangelogReader = storeChangelogReader;
+        this.log = log;
         createTaskSensor = ThreadMetrics.createTaskSensor(threadId, streamsMetrics);
     }
 
-    @Override
-    StandbyTask createTask(final Consumer<byte[], byte[]> consumer,
-                           final TaskId taskId,
-                           final Set<TopicPartition> partitions) {
-        createTaskSensor.record();
+    Collection<Task> createTasks(final Map<TaskId, Set<TopicPartition>> tasksToBeCreated) {
+        final List<Task> createdTasks = new ArrayList<>();
+        for (final Map.Entry<TaskId, Set<TopicPartition>> newTaskAndPartitions : tasksToBeCreated.entrySet()) {
+            final TaskId taskId = newTaskAndPartitions.getKey();
+            final Set<TopicPartition> partitions = newTaskAndPartitions.getValue();
 
-        final String threadIdPrefix = String.format("stream-thread [%s] ", Thread.currentThread().getName());
-        final String logPrefix = threadIdPrefix + String.format("%s [%s] ", "standby-task", taskId);
-        final LogContext logContext = new LogContext(logPrefix);
+            final String threadIdPrefix = String.format("stream-thread [%s] ", Thread.currentThread().getName());
+            final String logPrefix = threadIdPrefix + String.format("%s [%s] ", "standby-task", taskId);
+            final LogContext logContext = new LogContext(logPrefix);
 
-        final ProcessorTopology topology = builder.buildSubtopology(taskId.topicGroupId);
+            final ProcessorTopology topology = builder.buildSubtopology(taskId.topicGroupId);
 
-        if (topology.hasStateWithChangelogs()) {
-            final ProcessorStateManager stateManager = new ProcessorStateManager(
-                taskId,
-                partitions,
-                Task.TaskType.STANDBY,
-                stateDirectory,
-                topology.storeToChangelogTopic(),
-                storeChangelogReader,
-                logContext);
+            if (topology.hasStateWithChangelogs()) {
+                final ProcessorStateManager stateManager = new ProcessorStateManager(
+                    taskId,
+                    partitions,
+                    Task.TaskType.STANDBY,
+                    stateDirectory,
+                    topology.storeToChangelogTopic(),
+                    storeChangelogReader,
+                    logContext);
 
-            return new StandbyTask(
-                taskId,
-                partitions,
-                topology,
-                config,
-                streamsMetrics,
-                stateManager,
-                stateDirectory);
-        } else {
-            log.trace(
-                "Skipped standby task {} with assigned partitions {} " +
-                    "since it does not have any state stores to materialize",
-                taskId, partitions
-            );
-            return null;
+                final StandbyTask task = new StandbyTask(
+                    taskId,
+                    partitions,
+                    topology,
+                    config,
+                    streamsMetrics,
+                    stateManager,
+                    stateDirectory
+                );
+                log.trace("Created task {} with assigned partitions {}", taskId, partitions);
+                createdTasks.add(task);
+                createTaskSensor.record();
+            } else {
+                log.trace(
+                    "Skipped standby task {} with assigned partitions {} " +
+                        "since it does not have any state stores to materialize",
+                    taskId, partitions
+                );
+            }
         }
+        return createdTasks;
+    }
+
+    public InternalTopologyBuilder builder() {
+        return builder;
+    }
+
+    public StateDirectory stateDirectory() {
+        return stateDirectory;
     }
 }

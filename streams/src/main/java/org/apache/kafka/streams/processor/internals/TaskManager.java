@@ -63,7 +63,7 @@ public class TaskManager {
     private final String logPrefix;
     private final StreamsMetricsImpl streamsMetrics;
     private final ActiveTaskCreator activeTaskCreator;
-    private final AbstractTaskCreator<? extends Task> standbyTaskCreator;
+    private final StandbyTaskCreator standbyTaskCreator;
     private final InternalTopologyBuilder builder;
     private final Admin adminClient;
 
@@ -82,7 +82,7 @@ public class TaskManager {
                 final String logPrefix,
                 final StreamsMetricsImpl streamsMetrics,
                 final ActiveTaskCreator activeTaskCreator,
-                final AbstractTaskCreator<? extends Task> standbyTaskCreator,
+                final StandbyTaskCreator standbyTaskCreator,
                 final InternalTopologyBuilder builder,
                 final Admin adminClient) {
         this.changelogReader = changelogReader;
@@ -193,7 +193,7 @@ public class TaskManager {
                     task.closeDirty();
                 } finally {
                     if (task.isActive()) {
-                        activeTaskCreator.closeProducer(task.id());
+                        activeTaskCreator.close(task.id());
                     }
                 }
 
@@ -227,7 +227,7 @@ public class TaskManager {
         }
 
         if (!standbyTasksToCreate.isEmpty()) {
-            standbyTaskCreator.createTasks(mainConsumer, standbyTasksToCreate).forEach(this::addNewTask);
+            standbyTaskCreator.createTasks(standbyTasksToCreate).forEach(this::addNewTask);
         }
 
         builder.addSubscribedTopicsFromAssignment(
@@ -345,7 +345,7 @@ public class TaskManager {
                 cleanupTask(task);
                 task.closeDirty();
                 iterator.remove();
-                activeTaskCreator.closeProducer(task.id());
+                activeTaskCreator.close(task.id());
             }
 
             for (final TopicPartition inputPartition : inputPartitions) {

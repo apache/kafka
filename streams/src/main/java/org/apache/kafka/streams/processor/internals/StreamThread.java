@@ -323,7 +323,6 @@ public class StreamThread extends Thread {
             streamsMetrics,
             stateDirectory,
             changelogReader,
-            time,
             threadId,
             log);
         final TaskManager taskManager = new TaskManager(
