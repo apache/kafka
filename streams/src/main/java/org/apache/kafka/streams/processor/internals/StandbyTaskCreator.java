@@ -76,7 +76,8 @@ class StandbyTaskCreator {
                     stateDirectory,
                     topology.storeToChangelogTopic(),
                     storeChangelogReader,
-                    logContext);
+                    logContext
+                );
 
                 final StandbyTask task = new StandbyTask(
                     taskId,
@@ -87,6 +88,7 @@ class StandbyTaskCreator {
                     stateManager,
                     stateDirectory
                 );
+
                 log.trace("Created task {} with assigned partitions {}", taskId, partitions);
                 createdTasks.add(task);
                 createTaskSensor.record();

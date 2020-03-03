@@ -127,7 +127,8 @@ class ActiveTaskCreator {
                 stateDirectory,
                 topology.storeToChangelogTopic(),
                 storeChangelogReader,
-                logContext);
+                logContext
+            );
 
             if (threadProducer == null) {
                 // create one producer per task for EOS
@@ -162,7 +163,8 @@ class ActiveTaskCreator {
                 cache,
                 time,
                 stateManager,
-                recordCollector);
+                recordCollector
+            );
 
             log.trace("Created task {} with assigned partitions {}", taskId, partitions);
             createdTasks.add(task);
@@ -171,11 +173,11 @@ class ActiveTaskCreator {
         return createdTasks;
     }
 
-    public void close() {
+    public void releaseProducer() {
         if (threadProducer != null) {
             try {
                 threadProducer.close();
-            } catch (final Throwable e) {
+            } catch (final RuntimeException e) {
                 log.error("Failed to close producer due to the following error:", e);
             }
         }
@@ -184,12 +186,12 @@ class ActiveTaskCreator {
         }
     }
 
-    void close(final TaskId id) {
+    void releaseProducer(final TaskId id) {
         final Producer<byte[], byte[]> producer = taskProducers.remove(id);
         if (producer != null) {
             try {
                 producer.close();
-            } catch (final Throwable e) {
+            } catch (final RuntimeException e) {
                 log.error("Failed to close producer due to the following error:", e);
             }
         }

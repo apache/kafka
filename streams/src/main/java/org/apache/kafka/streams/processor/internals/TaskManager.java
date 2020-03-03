@@ -193,7 +193,7 @@ public class TaskManager {
                     task.closeDirty();
                 } finally {
                     if (task.isActive()) {
-                        activeTaskCreator.close(task.id());
+                        activeTaskCreator.releaseProducer(task.id());
                     }
                 }
 
@@ -345,7 +345,7 @@ public class TaskManager {
                 cleanupTask(task);
                 task.closeDirty();
                 iterator.remove();
-                activeTaskCreator.close(task.id());
+                activeTaskCreator.releaseProducer(task.id());
             }
 
             for (final TopicPartition inputPartition : inputPartitions) {
@@ -422,7 +422,7 @@ public class TaskManager {
             iterator.remove();
         }
 
-        activeTaskCreator.close();
+        activeTaskCreator.releaseProducer();
 
         final RuntimeException fatalException = firstException.get();
         if (fatalException != null) {

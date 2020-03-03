@@ -104,7 +104,7 @@ public class RecordCollectorTest {
     private final MockConsumer<byte[], byte[]> mockConsumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST);
     private final MockProducer<byte[], byte[]> mockProducer = new MockProducer<>(
         cluster, true, new DefaultPartitioner(), byteArraySerializer, byteArraySerializer);
-    private final StreamsProducer streamsProducer = new StreamsProducer(mockProducer, null != null, logContext, null);
+    private final StreamsProducer streamsProducer = new StreamsProducer(mockProducer, false, logContext, null);
 
     private RecordCollectorImpl collector;
 
