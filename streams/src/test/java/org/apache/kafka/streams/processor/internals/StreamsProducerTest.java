@@ -76,11 +76,11 @@ public class StreamsProducerTest {
 
     private final MockProducer<byte[], byte[]> mockProducer = new MockProducer<>(
         cluster, true, new DefaultPartitioner(), byteArraySerializer, byteArraySerializer);
-    private final StreamsProducer streamsProducer = new StreamsProducer(logContext, mockProducer, null, null);
+    private final StreamsProducer streamsProducer = new StreamsProducer(mockProducer, false, logContext, null);
 
     private final MockProducer<byte[], byte[]> eosMockProducer = new MockProducer<>(
         cluster, true, new DefaultPartitioner(), byteArraySerializer, byteArraySerializer);
-    private final StreamsProducer eosStreamsProducer = new StreamsProducer(logContext, eosMockProducer, "appId", taskId);
+    private final StreamsProducer eosStreamsProducer = new StreamsProducer(eosMockProducer, true, logContext, "appId");
 
     private final ProducerRecord<byte[], byte[]> record =
         new ProducerRecord<>(topic, 0, 0L, new byte[0], new byte[0], new RecordHeaders());
@@ -95,7 +95,7 @@ public class StreamsProducerTest {
         {
             final NullPointerException thrown = assertThrows(
                 NullPointerException.class,
-                () -> new StreamsProducer(logContext, null, null, null)
+                () -> new StreamsProducer(null, false, logContext, null)
             );
 
             assertThat(thrown.getMessage(), equalTo("producer cannot be null"));
@@ -104,35 +104,12 @@ public class StreamsProducerTest {
         {
             final NullPointerException thrown = assertThrows(
                 NullPointerException.class,
-                () -> new StreamsProducer(logContext, null, "appId", taskId)
+                () -> new StreamsProducer(null, true, logContext, "appId")
             );
 
             assertThat(thrown.getMessage(), equalTo("producer cannot be null"));
         }
     }
-
-    @Test
-    public void shouldThrowIfIncorrectlyInitialized() {
-        {
-            final IllegalArgumentException thrown = assertThrows(
-                IllegalArgumentException.class,
-                () -> new StreamsProducer(logContext, mockProducer, null, taskId)
-            );
-            assertThat(thrown.getMessage(), equalTo("applicationId and taskId must either be both null or both be not null"));
-        }
-
-        {
-            final IllegalArgumentException thrown = assertThrows(
-                IllegalArgumentException.class,
-                () -> new StreamsProducer(logContext, mockProducer, "appId", null)
-            );
-            assertThat(thrown.getMessage(), equalTo("applicationId and taskId must either be both null or both be not null"));
-        }
-    }
-
-    // non-eos tests
-
-    // functional tests
 
     @Test
     public void shouldNotInitTxIfEosDisable() {
@@ -160,7 +137,7 @@ public class StreamsProducerTest {
         expect(producer.partitionsFor("topic")).andReturn(expectedPartitionInfo);
         replay(producer);
 
-        final StreamsProducer streamsProducer = new StreamsProducer(logContext, producer, null, null);
+        final StreamsProducer streamsProducer = new StreamsProducer(producer, false, logContext, null);
 
         final List<PartitionInfo> partitionInfo = streamsProducer.partitionsFor(topic);
 
@@ -176,7 +153,7 @@ public class StreamsProducerTest {
         expectLastCall();
         replay(producer);
 
-        final StreamsProducer streamsProducer = new StreamsProducer(logContext, producer, null, null);
+        final StreamsProducer streamsProducer = new StreamsProducer(producer, false, logContext, null);
 
         streamsProducer.flush();
 
@@ -205,7 +182,8 @@ public class StreamsProducerTest {
         );
 
         assertEquals(mockProducer.sendException, thrown.getCause());
-        assertThat(thrown.getMessage(), equalTo("Error encountered sending record to topic topic due to:\norg.apache.kafka.common.KafkaException: KABOOM!"));
+        assertThat(thrown.getMessage(), equalTo("Error encountered sending record to topic topic"));
+        assertThat(thrown.getCause(), equalTo(mockProducer.sendException));
     }
 
     @Test
@@ -238,14 +216,6 @@ public class StreamsProducerTest {
         );
 
         assertThat(thrown.getMessage(), equalTo("EOS is disabled"));
-    }
-
-    @Test
-    public void shouldNotCloseProducerIfEosDisabled() {
-        mockProducer.closeException = new KafkaException("KABOOM!");
-        streamsProducer.close();
-
-        assertFalse(mockProducer.closed());
     }
 
     // EOS tests
@@ -291,7 +261,7 @@ public class StreamsProducerTest {
         expectLastCall();
         replay(producer);
 
-        final StreamsProducer streamsProducer = new StreamsProducer(logContext, producer, "appId", taskId);
+        final StreamsProducer streamsProducer = new StreamsProducer(producer, true, logContext, "appId");
         streamsProducer.initTransaction();
 
         streamsProducer.commitTransaction(offsetsAndMetadata);
@@ -346,7 +316,7 @@ public class StreamsProducerTest {
         expectLastCall();
         replay(producer);
 
-        final StreamsProducer streamsProducer = new StreamsProducer(logContext, producer, "appId", taskId);
+        final StreamsProducer streamsProducer = new StreamsProducer(producer, true, logContext, "appId");
         streamsProducer.initTransaction();
 
         streamsProducer.abortTransaction();
@@ -360,7 +330,7 @@ public class StreamsProducerTest {
     public void shouldThrowTimeoutExceptionOnEosInitTxTimeout() {
         // use `mockProducer` instead of `eosMockProducer` to avoid double Tx-Init
         mockProducer.initTransactionException = new TimeoutException("KABOOM!");
-        final StreamsProducer streamsProducer = new StreamsProducer(logContext, mockProducer, "appId", taskId);
+        final StreamsProducer streamsProducer = new StreamsProducer(mockProducer, true, logContext, "appId");
 
         final TimeoutException thrown = assertThrows(
             TimeoutException.class,
@@ -374,7 +344,7 @@ public class StreamsProducerTest {
     public void shouldThrowStreamsExceptionOnEosInitError() {
         // use `mockProducer` instead of `eosMockProducer` to avoid double Tx-Init
         mockProducer.initTransactionException = new KafkaException("KABOOM!");
-        final StreamsProducer streamsProducer = new StreamsProducer(logContext, mockProducer, "appId", taskId);
+        final StreamsProducer streamsProducer = new StreamsProducer(mockProducer, true, logContext, "appId");
 
         final StreamsException thrown = assertThrows(
             StreamsException.class,
@@ -382,14 +352,14 @@ public class StreamsProducerTest {
         );
 
         assertEquals(mockProducer.initTransactionException, thrown.getCause());
-        assertThat(thrown.getMessage(), equalTo("Error encountered while initializing transactions for task 0_0"));
+        assertThat(thrown.getMessage(), equalTo("Error encountered while initializing transactions"));
     }
 
     @Test
     public void shouldFailOnEosInitFatal() {
         // use `mockProducer` instead of `eosMockProducer` to avoid double Tx-Init
         mockProducer.initTransactionException = new RuntimeException("KABOOM!");
-        final StreamsProducer streamsProducer = new StreamsProducer(logContext, mockProducer, "appId", taskId);
+        final StreamsProducer streamsProducer = new StreamsProducer(mockProducer, true, logContext, "appId");
 
         final RuntimeException thrown = assertThrows(
             RuntimeException.class,
@@ -421,7 +391,7 @@ public class StreamsProducerTest {
             () -> eosStreamsProducer.send(null, null));
 
         assertEquals(eosMockProducer.beginTransactionException, thrown.getCause());
-        assertThat(thrown.getMessage(), equalTo("Producer encounter unexpected error trying to begin a new transaction for task 0_0"));
+        assertThat(thrown.getMessage(), equalTo("Producer encounter unexpected error trying to begin a new transaction"));
     }
 
     @Test
@@ -495,7 +465,7 @@ public class StreamsProducerTest {
         );
 
         assertEquals(eosMockProducer.sendOffsetsToTransactionException, thrown.getCause());
-        assertThat(thrown.getMessage(), equalTo("Producer encounter unexpected error trying to commit a transaction for task 0_0"));
+        assertThat(thrown.getMessage(), equalTo("Producer encounter unexpected error trying to commit a transaction"));
     }
 
     @Test
@@ -539,7 +509,7 @@ public class StreamsProducerTest {
 
         assertTrue(eosMockProducer.sentOffsets());
         assertEquals(eosMockProducer.commitTransactionException, thrown.getCause());
-        assertThat(thrown.getMessage(), equalTo("Timed out while committing a transaction for task " + taskId));
+        assertThat(thrown.getMessage(), equalTo("Timed out while committing a transaction"));
     }
 
     @Test
@@ -553,7 +523,7 @@ public class StreamsProducerTest {
 
         assertTrue(eosMockProducer.sentOffsets());
         assertEquals(eosMockProducer.commitTransactionException, thrown.getCause());
-        assertThat(thrown.getMessage(), equalTo("Producer encounter unexpected error trying to commit a transaction for task 0_0"));
+        assertThat(thrown.getMessage(), equalTo("Producer encounter unexpected error trying to commit a transaction"));
     }
 
     @Test
@@ -580,7 +550,7 @@ public class StreamsProducerTest {
         expectLastCall().andThrow(new ProducerFencedException("KABOOM!"));
         replay(producer);
 
-        final StreamsProducer streamsProducer = new StreamsProducer(logContext, producer, "appId", taskId);
+        final StreamsProducer streamsProducer = new StreamsProducer(producer, true, logContext, "appId");
         streamsProducer.initTransaction();
         // call `send()` to start a transaction
         streamsProducer.send(record, null);
@@ -599,7 +569,7 @@ public class StreamsProducerTest {
         final StreamsException thrown = assertThrows(StreamsException.class, eosStreamsProducer::abortTransaction);
 
         assertEquals(eosMockProducer.abortTransactionException, thrown.getCause());
-        assertThat(thrown.getMessage(), equalTo("Producer encounter unexpected error trying to abort a transaction for task 0_0"));
+        assertThat(thrown.getMessage(), equalTo("Producer encounter unexpected error trying to abort a transaction"));
     }
 
     @Test
@@ -611,26 +581,5 @@ public class StreamsProducerTest {
         final RuntimeException thrown = assertThrows(RuntimeException.class, eosStreamsProducer::abortTransaction);
 
         assertThat(thrown.getMessage(), equalTo("KABOOM!"));
-    }
-
-    @Test
-    public void shouldFailOnCloseFatal() {
-        eosMockProducer.closeException = new RuntimeException("KABOOM!");
-
-        final RuntimeException thrown = assertThrows(
-            RuntimeException.class,
-            eosStreamsProducer::close
-        );
-
-        assertThat(thrown.getMessage(), equalTo("KABOOM!"));
-    }
-
-    @Test
-    public void shouldCloseProducerIfEosEnabled() {
-        eosStreamsProducer.close();
-
-        final RuntimeException thrown = assertThrows(IllegalStateException.class, () -> eosStreamsProducer.send(record, null));
-
-        assertThat(thrown.getMessage(), equalTo("MockProducer is already closed."));
     }
 }

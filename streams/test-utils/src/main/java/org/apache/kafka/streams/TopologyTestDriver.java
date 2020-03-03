@@ -443,11 +443,7 @@ public class TopologyTestDriver implements Closeable {
                 logContext,
                 TASK_ID,
                 consumer,
-                new StreamsProducer(
-                    logContext,
-                    producer,
-                    eosEnabled ? streamsConfig.getString(StreamsConfig.APPLICATION_ID_CONFIG) : null,
-                    eosEnabled ? TASK_ID : null),
+                new StreamsProducer(producer, eosEnabled, logContext, streamsConfig.getString(StreamsConfig.APPLICATION_ID_CONFIG)),
                 streamsConfig.defaultProductionExceptionHandler(),
                 eosEnabled,
                 streamsMetrics);

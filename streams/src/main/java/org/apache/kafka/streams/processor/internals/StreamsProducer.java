@@ -31,7 +31,6 @@ import org.apache.kafka.common.errors.UnknownProducerIdException;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
-import org.apache.kafka.streams.processor.TaskId;
 import org.slf4j.Logger;
 
 import java.util.List;
@@ -52,29 +51,20 @@ public class StreamsProducer {
 
     private final Producer<byte[], byte[]> producer;
     private final String applicationId;
-    private final TaskId taskId;
-    private final String logMessage;
     private final boolean eosEnabled;
 
     private boolean transactionInFlight = false;
     private boolean transactionInitialized = false;
 
-    public StreamsProducer(final LogContext logContext,
-                           final Producer<byte[], byte[]> producer,
-                           final String applicationId,
-                           final TaskId taskId) {
+    public StreamsProducer(final Producer<byte[], byte[]> producer,
+                           final boolean eosEnabled,
+                           final LogContext logContext,
+                           final String applicationId) {
         this.log = logContext.logger(getClass());
 
         this.producer = Objects.requireNonNull(producer, "producer cannot be null");
         this.applicationId = applicationId;
-        this.taskId = taskId;
-        if (taskId != null) {
-            logMessage = "task " + taskId;
-            eosEnabled = true;
-        } else {
-            logMessage = "all owned active tasks";
-            eosEnabled = false;
-        }
+        this.eosEnabled = eosEnabled;
     }
 
     /**
@@ -91,17 +81,16 @@ public class StreamsProducer {
                 producer.initTransactions();
                 transactionInitialized = true;
             } catch (final TimeoutException exception) {
-                log.warn("Timeout exception caught when initializing transactions for {}. " +
+                log.warn("Timeout exception caught when initializing transactions. " +
                     "\nThe broker is either slow or in bad state (like not having enough replicas) in responding to the request, " +
                     "or the connection to broker was interrupted sending the request or receiving the response. " +
                     "Will retry initializing the task in the next loop. " +
                     "\nConsider overwriting {} to a larger value to avoid timeout errors",
-                    logMessage,
                     ProducerConfig.MAX_BLOCK_MS_CONFIG);
 
                 throw exception;
             } catch (final KafkaException exception) {
-                throw new StreamsException("Error encountered while initializing transactions for " + logMessage, exception);
+                throw new StreamsException("Error encountered while initializing transactions", exception);
             }
         }
     }
@@ -114,7 +103,7 @@ public class StreamsProducer {
             } catch (final ProducerFencedException error) {
                 throw new TaskMigratedException("Producer get fenced trying to begin a new transaction", error);
             } catch (final KafkaException error) {
-                throw new StreamsException("Producer encounter unexpected error trying to begin a new transaction for " + logMessage, error);
+                throw new StreamsException("Producer encounter unexpected error trying to begin a new transaction", error);
             }
         }
     }
@@ -131,10 +120,9 @@ public class StreamsProducer {
                 throw new TaskMigratedException("Producer cannot send records anymore since it got fenced", uncaughtException.getCause());
             } else {
                 final String errorMessage = String.format(
-                    "Error encountered sending record to topic %s%s due to:%n%s",
-                    record.topic(),
-                    taskId == null ? "" : " " + logMessage,
-                    uncaughtException.toString());
+                    "Error encountered sending record to topic %s",
+                    record.topic()
+                );
                 throw new StreamsException(errorMessage, uncaughtException);
             }
         }
@@ -162,9 +150,9 @@ public class StreamsProducer {
             throw new TaskMigratedException("Producer get fenced trying to commit a transaction", error);
         } catch (final TimeoutException error) {
             // TODO KIP-447: we can consider treating it as non-fatal and retry on the thread level
-            throw new StreamsException("Timed out while committing a transaction for " + logMessage, error);
+            throw new StreamsException("Timed out while committing a transaction", error);
         } catch (final KafkaException error) {
-            throw new StreamsException("Producer encounter unexpected error trying to commit a transaction for " + logMessage, error);
+            throw new StreamsException("Producer encounter unexpected error trying to commit a transaction", error);
         }
     }
 
@@ -188,7 +176,7 @@ public class StreamsProducer {
 
                 // can be ignored: transaction got already aborted by brokers/transactional-coordinator if this happens
             } catch (final KafkaException error) {
-                throw new StreamsException("Producer encounter unexpected error trying to abort a transaction for " + logMessage, error);
+                throw new StreamsException("Producer encounter unexpected error trying to abort a transaction", error);
             }
             transactionInFlight = false;
         }
@@ -200,17 +188,6 @@ public class StreamsProducer {
 
     public void flush() {
         producer.flush();
-    }
-
-    public void close() {
-        if (eosEnabled) {
-            try {
-                producer.close();
-            } catch (final KafkaException error) {
-                throw new StreamsException("Producer encounter unexpected " +
-                    "error trying to close" + (taskId == null ? "" : " " + logMessage), error);
-            }
-        }
     }
 
     // for testing only

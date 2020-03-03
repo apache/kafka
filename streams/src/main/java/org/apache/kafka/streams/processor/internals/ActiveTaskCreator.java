@@ -131,8 +131,8 @@ class ActiveTaskCreator extends AbstractTaskCreator<Task> {
             taskId,
             mainConsumer,
             threadProducer != null ?
-                new StreamsProducer(logContext, threadProducer, applicationId, taskId) :
-                new StreamsProducer(logContext, taskProducers.get(taskId), applicationId, taskId),
+                new StreamsProducer(threadProducer, false, logContext, applicationId) :
+                new StreamsProducer(taskProducers.get(taskId), true, logContext, applicationId),
             config.defaultProductionExceptionHandler(),
             EXACTLY_ONCE.equals(config.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG)),
             streamsMetrics);
