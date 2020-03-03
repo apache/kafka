@@ -21,7 +21,7 @@ import java.io.PrintStream
 import java.nio.ByteBuffer
 import java.nio.charset.StandardCharsets
 import java.util.Optional
-import java.util.concurrent.TimeUnit
+import java.util.concurrent.{ExecutionException, TimeUnit}
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.locks.ReentrantLock
 
@@ -47,6 +47,7 @@ import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.requests.{OffsetCommitRequest, OffsetFetchResponse}
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{KafkaException, TopicPartition}
+import org.apache.kafka.common.errors.{InvalidReplicationFactorException, LeaderNotAvailableException}
 
 import scala.jdk.CollectionConverters._
 import scala.collection._
@@ -925,7 +926,16 @@ class GroupMetadataManager(brokerId: Int,
    * The topic will be created if it doesn't exist yet based on the broker settings.
    */
   private def getGroupMetadataTopicPartitionCount: Int = {
-    controllerChannel.getPartitionCount(Topic.GROUP_METADATA_TOPIC_NAME).get
+    try {
+      controllerChannel.getPartitionCount(Topic.GROUP_METADATA_TOPIC_NAME).get
+    } catch {
+      case e: ExecutionException => e.getCause match {
+        case _: LeaderNotAvailableException => config.offsetsTopicNumPartitions
+        case _: InvalidReplicationFactorException => config.offsetsTopicNumPartitions
+        case e: Throwable => throw e
+      }
+      case e: Throwable => throw e
+    }
   }
 
   /**

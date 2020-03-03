@@ -37,6 +37,14 @@ import org.apache.kafka.common.security.JaasContext
 import scala.collection.JavaConverters._
 import scala.collection.mutable
 
+/**
+  * This class manages the connection between a broker and the controller. It runs a single
+  * {@link BrokerToControllerRequestThread} which uses the broker's metadata cache as its own metadata to find
+  * and connect to the controller. The channel is async and runs the network connection in the background.
+  * The maximum number of in-flght requests are set to one to ensure orderly response from the controller, therefore
+  * care must be taken to not block on outstanding requests for too long.
+  * execution of queued requests.
+  */
 class BrokerToControllerChannelManager(metadataCache: MetadataCache,
                                        time: Time,
                                        metrics: Metrics,
@@ -150,9 +158,11 @@ class BrokerToControllerRequestThread(networkClient: KafkaClient,
 
   override def requestTimeoutMs: Int = config.controllerSocketTimeoutMs
 
+  override def maxPollTime: Long = 100L
+
   override def generateRequests(): Iterable[RequestAndCompletionHandler] = {
     val requestsToSend = new mutable.Queue[RequestAndCompletionHandler]
-    while (requestQueue.peek() != null) {
+    if (requestQueue.peek() != null) {
       val topRequest = requestQueue.take()
       val request = RequestAndCompletionHandler(activeController.get, topRequest.request, handleResponse(topRequest))
       requestsToSend.enqueue(request)
@@ -181,7 +191,7 @@ class BrokerToControllerRequestThread(networkClient: KafkaClient,
       if (activeController.isDefined) {
         super.doWork()
       } else {
-        info("Controller isn't cached, looking for local metadata changes")
+        debug("Controller isn't cached, looking for local metadata changes")
         val controllerOpt = metadataCache.getControllerId.flatMap(metadataCache.getAliveBroker)
         if (controllerOpt.isDefined) {
           if (activeController.isEmpty || activeController.exists(_.id != controllerOpt.get.id))
@@ -190,7 +200,7 @@ class BrokerToControllerRequestThread(networkClient: KafkaClient,
           metadataUpdater.setNodes(metadataCache.getAliveBrokers.map(_.node(listenerName)).asJava)
         } else {
           // need to backoff to avoid tight loops
-          warn("No controller defined in metadata cache, retrying after backoff")
+          debug("No controller defined in metadata cache, retrying after backoff")
           backoff()
         }
       }

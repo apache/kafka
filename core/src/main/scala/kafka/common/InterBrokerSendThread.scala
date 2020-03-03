@@ -42,6 +42,7 @@ abstract class InterBrokerSendThread(name: String,
 
   def generateRequests(): Iterable[RequestAndCompletionHandler]
   def requestTimeoutMs: Int
+  def maxPollTime: Long = Long.MaxValue
   private val unsentRequests = new UnsentRequests
 
   def hasUnsentRequests: Boolean = unsentRequests.iterator().hasNext
@@ -87,7 +88,7 @@ abstract class InterBrokerSendThread(name: String,
   }
 
   private def sendRequests(now: Long): Long = {
-    var pollTimeout = Long.MaxValue
+    var pollTimeout = maxPollTime
     for (node <- unsentRequests.nodes.asScala) {
       val requestIterator = unsentRequests.requestIterator(node)
       while (requestIterator.hasNext) {
@@ -95,8 +96,9 @@ abstract class InterBrokerSendThread(name: String,
         if (networkClient.ready(node, now)) {
           networkClient.send(request, now)
           requestIterator.remove()
-        } else
+        } else {
           pollTimeout = Math.min(pollTimeout, networkClient.connectionDelay(node, now))
+        }
       }
     }
     pollTimeout

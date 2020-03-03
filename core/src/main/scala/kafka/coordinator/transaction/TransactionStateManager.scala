@@ -18,7 +18,7 @@ package kafka.coordinator.transaction
 
 import java.nio.ByteBuffer
 import java.util.Properties
-import java.util.concurrent.TimeUnit
+import java.util.concurrent.{ExecutionException, TimeUnit}
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.locks.ReentrantReadWriteLock
 
@@ -36,6 +36,7 @@ import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.requests.TransactionResult
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{KafkaException, TopicPartition}
+import org.apache.kafka.common.errors.{InvalidReplicationFactorException, LeaderNotAvailableException}
 
 import scala.jdk.CollectionConverters._
 import scala.collection.mutable
@@ -272,11 +273,20 @@ class TransactionStateManager(brokerId: Int,
   def partitionFor(transactionalId: String): Int = Utils.abs(transactionalId.hashCode) % transactionTopicPartitionCount
 
   /**
-   * Gets the partition count of the transaction log topic from ZooKeeper.
+   * Gets the partition count of the transaction log topic from the controller.
    * If the topic does not exist, the default partition count is returned.
    */
   private def getTransactionTopicPartitionCount: Int = {
-    controllerChannel.getPartitionCount(Topic.TRANSACTION_STATE_TOPIC_NAME).get
+    try {
+      controllerChannel.getPartitionCount(Topic.TRANSACTION_STATE_TOPIC_NAME).get
+    } catch {
+      case e: ExecutionException => e.getCause match {
+        case _: LeaderNotAvailableException => config.transactionLogNumPartitions
+        case _: InvalidReplicationFactorException => config.transactionLogNumPartitions
+        case e: Throwable => throw e
+      }
+      case e: Throwable => throw e
+    }
   }
 
   private def loadTransactionMetadata(topicPartition: TopicPartition, coordinatorEpoch: Int): Pool[String, TransactionMetadata] =  {
