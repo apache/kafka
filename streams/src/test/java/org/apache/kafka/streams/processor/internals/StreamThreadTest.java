@@ -1498,6 +1498,12 @@ public class StreamThreadTest {
                 }
             });
 
+            // after handling the exception and reviving the task, the position
+            // should be reset to the beginning.
+            TestUtils.waitForCondition(
+                () -> mockRestoreConsumer.position(changelogPartition) == 0L,
+                "Never restore first record");
+
             mockRestoreConsumer.addRecord(new ConsumerRecord<>(
                 "stream-thread-test-count-changelog",
                 0,
