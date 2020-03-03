@@ -19,7 +19,6 @@ package org.apache.kafka.connect.runtime.distributed;
 import org.apache.kafka.clients.consumer.internals.AbstractCoordinator;
 import org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient;
 import org.apache.kafka.clients.GroupRebalanceConfig;
-import org.apache.kafka.common.metrics.Measurable;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.requests.JoinGroupRequest;
@@ -92,7 +91,6 @@ public class WorkerCoordinator extends AbstractCoordinator implements Closeable 
         this.restUrl = restUrl;
         this.configStorage = configStorage;
         this.assignmentSnapshot = null;
-        new WorkerCoordinatorMetrics(metrics, metricGrpPrefix);
         this.listener = listener;
         this.rejoinRequested = false;
         this.protocolCompatibility = protocolCompatibility;
@@ -100,6 +98,20 @@ public class WorkerCoordinator extends AbstractCoordinator implements Closeable 
         this.eagerAssignor = new EagerAssignor(logContext);
         this.currentConnectProtocol = protocolCompatibility;
         this.coordinatorDiscoveryTimeoutMs = config.heartbeatIntervalMs;
+        metrics.addMetric(metrics.metricName("assigned-connectors", metricGrpPrefix + "-coordinator-metrics",
+                "The number of connector instances currently assigned to this consumer"),
+            (MetricConfig c, long now) -> {
+                final ExtendedAssignment localAssignmentSnapshot = assignmentSnapshot;
+                if (localAssignmentSnapshot == null) return 0.0;
+                return localAssignmentSnapshot.connectors().size();
+            });
+        metrics.addMetric(metrics.metricName("assigned-tasks", metricGrpPrefix + "-coordinator-metrics",
+                "The number of tasks currently assigned to this consumer"),
+            (MetricConfig c, long now) -> {
+                final ExtendedAssignment localAssignmentSnapshot = assignmentSnapshot;
+                if (localAssignmentSnapshot == null) return 0.0;
+                return localAssignmentSnapshot.tasks().size();
+            });
     }
 
     @Override
@@ -325,43 +337,6 @@ public class WorkerCoordinator extends AbstractCoordinator implements Closeable 
      */
     public short currentProtocolVersion() {
         return currentConnectProtocol.protocolVersion();
-    }
-
-    private class WorkerCoordinatorMetrics {
-        public final String metricGrpName;
-
-        public WorkerCoordinatorMetrics(Metrics metrics, String metricGrpPrefix) {
-            this.metricGrpName = metricGrpPrefix + "-coordinator-metrics";
-
-            Measurable numConnectors = new Measurable() {
-                @Override
-                public double measure(MetricConfig config, long now) {
-                    final ExtendedAssignment localAssignmentSnapshot = assignmentSnapshot;
-                    if (localAssignmentSnapshot == null) {
-                        return 0.0;
-                    }
-                    return localAssignmentSnapshot.connectors().size();
-                }
-            };
-
-            Measurable numTasks = new Measurable() {
-                @Override
-                public double measure(MetricConfig config, long now) {
-                    final ExtendedAssignment localAssignmentSnapshot = assignmentSnapshot;
-                    if (localAssignmentSnapshot == null) {
-                        return 0.0;
-                    }
-                    return localAssignmentSnapshot.tasks().size();
-                }
-            };
-
-            metrics.addMetric(metrics.metricName("assigned-connectors",
-                              this.metricGrpName,
-                              "The number of connector instances currently assigned to this consumer"), numConnectors);
-            metrics.addMetric(metrics.metricName("assigned-tasks",
-                              this.metricGrpName,
-                              "The number of tasks currently assigned to this consumer"), numTasks);
-        }
     }
 
     public static <K, V> Map<V, K> invertAssignment(Map<K, Collection<V>> assignment) {
