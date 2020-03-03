@@ -694,10 +694,10 @@ public class KafkaAdminClient extends AdminClient {
             int numTries, long nextAllowedTryMs) {
             this(false, callName, deadlineMs, nodeProvider);
             if (numTries < 0) {
-                throw new IllegalStateException("Number of tries for a call cannot be negative!");
+                throw new IllegalArgumentException("Number of tries for a call cannot be negative!");
             }
             if (nextAllowedTryMs < 0) {
-                throw new IllegalStateException("Next allowed time for a try for a call cannot"
+                throw new IllegalArgumentException("Next allowed time for a try for a call cannot"
                     + " be negative!");
             }
             this.tries = numTries;
