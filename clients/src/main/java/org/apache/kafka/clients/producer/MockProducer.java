@@ -308,7 +308,7 @@ public class MockProducer<K, V> implements Producer<K, V> {
                 0L, 0, 0, Time.SYSTEM);
         long offset = nextOffset(topicPartition);
         Completion completion = new Completion(offset, new RecordMetadata(topicPartition, 0, offset,
-                RecordBatch.NO_TIMESTAMP, Long.valueOf(0L), 0, 0), result, callback);
+                RecordBatch.NO_TIMESTAMP, 0L, 0, 0), result, callback);
 
         if (!this.transactionInFlight)
             this.sent.add(record);
