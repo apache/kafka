@@ -1080,15 +1080,15 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
           assertEquals(testGroupId, testGroupDescription.groupId())
           assertFalse(testGroupDescription.isSimpleConsumerGroup)
           assertEquals(2, testGroupDescription.members().size())
-//          val member = testGroupDescription.members().iterator().next()
           val staticMember = testGroupDescription.members().asScala.filter(_.groupInstanceId().isPresent).head
           val dynamicMember = testGroupDescription.members().asScala.filterNot(_.groupInstanceId().isPresent).head
 
           assertEquals(testClientId, staticMember.clientId())
-          val topicPartitions = staticMember.assignment().topicPartitions()
-//          assertEquals(testNumPartitions, topicPartitions.size())
-//          assertEquals(testNumPartitions, topicPartitions.asScala.
-//            count(tp => tp.topic().equals(testTopicName)))
+          val topicPartitions = staticMember.assignment().topicPartitions().asScala ++
+            dynamicMember.assignment().topicPartitions().asScala
+          assertEquals(testNumPartitions, topicPartitions.size)
+          assertEquals(testNumPartitions, topicPartitions.
+            count(tp => tp.topic().equals(testTopicName)))
           val expectedOperations = Group.supportedOperations
             .map(operation => operation.toJava).asJava
           assertEquals(expectedOperations, testGroupDescription.authorizedOperations())
