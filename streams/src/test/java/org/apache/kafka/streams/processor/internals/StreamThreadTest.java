@@ -1968,7 +1968,7 @@ public class StreamThreadTest {
         final Logger log = logContext.logger(StreamThreadTest.class);
         final StreamsMetricsImpl streamsMetrics =
             new StreamsMetricsImpl(metrics, CLIENT_ID, StreamsConfig.METRICS_LATEST);
-        final StreamThread.StandbyTaskCreator standbyTaskCreator = new StreamThread.StandbyTaskCreator(
+        final StandbyTaskCreator standbyTaskCreator = new StandbyTaskCreator(
             internalTopologyBuilder,
             config,
             streamsMetrics,

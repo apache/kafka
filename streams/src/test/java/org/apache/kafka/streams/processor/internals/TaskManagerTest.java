@@ -108,9 +108,9 @@ public class TaskManagerTest {
     @Mock(type = MockType.STRICT)
     private Consumer<byte[], byte[]> consumer;
     @Mock(type = MockType.STRICT)
-    private StreamThread.AbstractTaskCreator<Task> activeTaskCreator;
+    private ActiveTaskCreator activeTaskCreator;
     @Mock(type = MockType.NICE)
-    private StreamThread.AbstractTaskCreator<Task> standbyTaskCreator;
+    private AbstractTaskCreator<Task> standbyTaskCreator;
     @Mock(type = MockType.NICE)
     private Admin adminClient;
 
@@ -128,7 +128,6 @@ public class TaskManagerTest {
                                       streamsMetrics,
                                       activeTaskCreator,
                                       standbyTaskCreator,
-                                      new HashMap<>(),
                                       topologyBuilder,
                                       adminClient);
         taskManager.setMainConsumer(consumer);
@@ -183,6 +182,7 @@ public class TaskManagerTest {
         expectRestoreToBeCompleted(consumer, changeLogReader);
         expect(activeTaskCreator.createTasks(anyObject(), eq(taskId00Assignment))).andReturn(singletonList(task00)).anyTimes();
         expect(activeTaskCreator.createTasks(anyObject(), eq(emptyMap()))).andReturn(emptyList()).anyTimes();
+        expect(activeTaskCreator.taskProducers()).andReturn(emptyMap()).anyTimes();
         expect(standbyTaskCreator.createTasks(anyObject(), anyObject())).andReturn(emptyList()).anyTimes();
 
         topologyBuilder.addSubscribedTopicsFromAssignment(anyObject(), anyString());
@@ -208,6 +208,7 @@ public class TaskManagerTest {
 
         expectRestoreToBeCompleted(consumer, changeLogReader);
         expect(standbyTaskCreator.createTasks(anyObject(), eq(taskId00Assignment))).andReturn(singletonList(task00)).anyTimes();
+        expect(activeTaskCreator.taskProducers()).andReturn(emptyMap()).anyTimes();
         replay(activeTaskCreator, standbyTaskCreator, consumer, changeLogReader);
         taskManager.handleAssignment(emptyMap(), taskId00Assignment);
         assertThat(taskManager.tryToCompleteRestoration(), is(true));
@@ -735,6 +736,9 @@ public class TaskManagerTest {
 
     @Test
     public void shouldThrowTaskMigratedWhenAllTaskCloseExceptionsAreTaskMigrated() {
+        expect(activeTaskCreator.taskProducers()).andReturn(emptyMap()).anyTimes();
+        replay(activeTaskCreator);
+
         final StateMachineTask migratedTask01 = new StateMachineTask(taskId01, taskId01Partitions, false) {
             @Override
             public void closeClean() {
@@ -760,6 +764,8 @@ public class TaskManagerTest {
 
     @Test
     public void shouldThrowRuntimeExceptionWhenEncounteredUnknownExceptionDuringTaskClose() {
+        expect(activeTaskCreator.taskProducers()).andReturn(emptyMap()).anyTimes();
+        replay(activeTaskCreator);
         final StateMachineTask migratedTask01 = new StateMachineTask(taskId01, taskId01Partitions, false) {
             @Override
             public void closeClean() {
@@ -787,6 +793,8 @@ public class TaskManagerTest {
 
     @Test
     public void shouldThrowSameKafkaExceptionWhenEncounteredDuringTaskClose() {
+        expect(activeTaskCreator.taskProducers()).andReturn(emptyMap()).anyTimes();
+        replay(activeTaskCreator);
         final StateMachineTask migratedTask01 = new StateMachineTask(taskId01, taskId01Partitions, false) {
             @Override
             public void closeClean() {

@@ -306,7 +306,7 @@ public class RecordCollectorTest {
     @Test
     public void shouldForwardCloseToTransactionManager() {
         final StreamsProducer streamsProducer = mock(StreamsProducer.class);
-        streamsProducer.close();
+        streamsProducer.flush();
         expectLastCall();
         replay(streamsProducer);
 
@@ -328,7 +328,7 @@ public class RecordCollectorTest {
     public void shouldAbortTxIfEosEnabled() {
         final StreamsProducer streamsProducer = mock(StreamsProducer.class);
         streamsProducer.abortTransaction();
-        streamsProducer.close();
+        streamsProducer.flush();
         expectLastCall();
         replay(streamsProducer);
 
@@ -650,7 +650,7 @@ public class RecordCollectorTest {
     }
 
     @Test
-    public void shouldCloseInternalProducerForEOS() {
+    public void shouldNotCloseInternalProducerForEOS() {
         final RecordCollector collector = new RecordCollectorImpl(
             logContext,
             taskId,
@@ -668,7 +668,7 @@ public class RecordCollectorTest {
         collector.close();
 
         // Flush should not throw as producer is still alive.
-        assertThrows(IllegalStateException.class, streamsProducer::flush);
+        streamsProducer.flush();
     }
 
     @Test

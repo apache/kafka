@@ -20,7 +20,6 @@ import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.DeleteRecordsResult;
 import org.apache.kafka.clients.admin.RecordsToDelete;
 import org.apache.kafka.clients.consumer.Consumer;
-import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.TimeoutException;
@@ -61,9 +60,8 @@ public class TaskManager {
     private final UUID processId;
     private final String logPrefix;
     private final StreamsMetricsImpl streamsMetrics;
-    private final StreamThread.AbstractTaskCreator<? extends Task> activeTaskCreator;
-    private final StreamThread.AbstractTaskCreator<? extends Task> standbyTaskCreator;
-    private final Map<TaskId, Producer<byte[], byte[]>> taskProducers;
+    private final ActiveTaskCreator activeTaskCreator;
+    private final AbstractTaskCreator<? extends Task> standbyTaskCreator;
     private final InternalTopologyBuilder builder;
     private final Admin adminClient;
 
@@ -81,9 +79,8 @@ public class TaskManager {
                 final UUID processId,
                 final String logPrefix,
                 final StreamsMetricsImpl streamsMetrics,
-                final StreamThread.AbstractTaskCreator<? extends Task> activeTaskCreator,
-                final StreamThread.AbstractTaskCreator<? extends Task> standbyTaskCreator,
-                final Map<TaskId, Producer<byte[], byte[]>> taskProducers,
+                final ActiveTaskCreator activeTaskCreator,
+                final AbstractTaskCreator<? extends Task> standbyTaskCreator,
                 final InternalTopologyBuilder builder,
                 final Admin adminClient) {
         this.changelogReader = changelogReader;
@@ -92,7 +89,6 @@ public class TaskManager {
         this.streamsMetrics = streamsMetrics;
         this.activeTaskCreator = activeTaskCreator;
         this.standbyTaskCreator = standbyTaskCreator;
-        this.taskProducers = taskProducers;
         this.builder = builder;
         this.adminClient = adminClient;
 
@@ -194,7 +190,7 @@ public class TaskManager {
                     // Now, we should go ahead and complete the close because a half-closed task is no good to anyone.
                     task.closeDirty();
                 } finally {
-                    taskProducers.remove(task.id());
+                    activeTaskCreator.taskProducers().remove(task.id());
                 }
 
                 iterator.remove();
@@ -345,7 +341,7 @@ public class TaskManager {
                 cleanupTask(task);
                 task.closeDirty();
                 iterator.remove();
-                taskProducers.remove(task.id());
+                activeTaskCreator.taskProducers().remove(task.id());
             }
 
             for (final TopicPartition inputPartition : inputPartitions) {
