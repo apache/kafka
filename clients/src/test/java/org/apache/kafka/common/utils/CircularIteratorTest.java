@@ -39,55 +39,27 @@ public class CircularIteratorTest {
 
     @Test()
     public void testCycleCollection() {
-        final CircularIterator<String> it = new CircularIterator<>(Arrays.asList("A", "B", "C"));
+        final CircularIterator<String> it = new CircularIterator<>(Arrays.asList("A", "B", null, "C"));
 
+        assertEquals("A", it.peek());
         assertTrue(it.hasNext());
         assertEquals("A", it.next());
+        assertEquals("B", it.peek());
         assertTrue(it.hasNext());
         assertEquals("B", it.next());
-        assertTrue(it.hasNext());
-        assertEquals("C", it.next());
-        assertTrue(it.hasNext());
-        assertEquals("A", it.next());
-        assertTrue(it.hasNext());
-    }
-
-    @Test()
-    public void testPeekCollection() {
-        final CircularIterator<String> it = new CircularIterator<>(Arrays.asList("A", "B", "C"));
-
-        assertTrue(it.hasNext());
-        assertEquals("A", it.peek());
-        assertTrue(it.hasNext());
-        assertEquals("A", it.peek());
-        assertTrue(it.hasNext());
-        assertEquals("A", it.next());
-
-        assertEquals("B", it.next());
-        assertTrue(it.hasNext());
-        assertEquals("C", it.next());
-        assertTrue(it.hasNext());
-        assertEquals("A", it.next());
-        assertTrue(it.hasNext());
-    }
-
-    @Test()
-    public void testPeekCollectionNullValue() {
-        final CircularIterator<String> it = new CircularIterator<>(Arrays.asList("A", null, "C"));
-
-        assertTrue(it.hasNext());
-        assertEquals("A", it.peek());
-        assertTrue(it.hasNext());
-        assertEquals("A", it.next());
-
-        assertTrue(it.hasNext());
-        assertEquals(null, it.peek());
-        assertTrue(it.hasNext());
         assertEquals(null, it.peek());
         assertTrue(it.hasNext());
         assertEquals(null, it.next());
-
+        assertEquals("C", it.peek());
         assertTrue(it.hasNext());
         assertEquals("C", it.next());
+        assertEquals("A", it.peek());
+        assertTrue(it.hasNext());
+        assertEquals("A", it.next());
+        assertEquals("B", it.peek());
+
+        // Check that peek does not have any side-effects
+        assertEquals("B", it.peek());
     }
+
 }
