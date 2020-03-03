@@ -22,7 +22,6 @@ import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.InvalidOffsetException;
-import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
@@ -273,8 +272,6 @@ public class StreamThread extends Thread {
     final ConsumerRebalanceListener rebalanceListener;
     final Consumer<byte[], byte[]> mainConsumer;
     final Consumer<byte[], byte[]> restoreConsumer;
-    final Producer<byte[], byte[]> threadProducer;
-    final Map<TaskId, Producer<byte[], byte[]>> taskProducers;
     final InternalTopologyBuilder builder;
 
     public static StreamThread create(final InternalTopologyBuilder builder,
@@ -361,8 +358,6 @@ public class StreamThread extends Thread {
         final StreamThread streamThread = new StreamThread(
             time,
             config,
-            activeTaskCreator.threadProducer(),
-            activeTaskCreator.taskProducers(),
             adminClient,
             mainConsumer,
             restoreConsumer,
@@ -380,8 +375,6 @@ public class StreamThread extends Thread {
 
     public StreamThread(final Time time,
                         final StreamsConfig config,
-                        final Producer<byte[], byte[]> threadProducer,
-                        final Map<TaskId, Producer<byte[], byte[]>> taskProducers,
                         final Admin adminClient,
                         final Consumer<byte[], byte[]> mainConsumer,
                         final Consumer<byte[], byte[]> restoreConsumer,
@@ -424,8 +417,6 @@ public class StreamThread extends Thread {
         this.taskManager = taskManager;
         this.restoreConsumer = restoreConsumer;
         this.mainConsumer = mainConsumer;
-        this.threadProducer = threadProducer;
-        this.taskProducers = taskProducers;
         this.changelogReader = changelogReader;
         this.originalReset = originalReset;
         this.assignmentErrorCode = assignmentErrorCode;
@@ -443,14 +434,6 @@ public class StreamThread extends Thread {
         private InternalConsumerConfig(final Map<String, Object> props) {
             super(ConsumerConfig.addDeserializerToConfig(props, new ByteArrayDeserializer(), new ByteArrayDeserializer()), false);
         }
-    }
-
-    static String getTaskProducerClientId(final String threadClientId, final TaskId taskId) {
-        return threadClientId + "-" + taskId + "-producer";
-    }
-
-    static String getThreadProducerClientId(final String threadClientId) {
-        return threadClientId + "-producer";
     }
 
     private static String getConsumerClientId(final String threadClientId) {
@@ -886,9 +869,7 @@ public class StreamThread extends Thread {
             this.state().name(),
             getConsumerClientId(this.getName()),
             getRestoreConsumerClientId(this.getName()),
-            threadProducer == null ?
-                Collections.emptySet() :
-                Collections.singleton(getThreadProducerClientId(this.getName())),
+            taskManager.producerClientIds(),
             adminClientId,
             Collections.emptySet(),
             Collections.emptySet());
@@ -898,11 +879,9 @@ public class StreamThread extends Thread {
 
     private void updateThreadMetadata(final Map<TaskId, Task> activeTasks,
                                       final Map<TaskId, Task> standbyTasks) {
-        final Set<String> producerClientIds = new HashSet<>();
         final Set<TaskMetadata> activeTasksMetadata = new HashSet<>();
         for (final Map.Entry<TaskId, Task> task : activeTasks.entrySet()) {
             activeTasksMetadata.add(new TaskMetadata(task.getKey().toString(), task.getValue().inputPartitions()));
-            producerClientIds.add(getTaskProducerClientId(getName(), task.getKey()));
         }
         final Set<TaskMetadata> standbyTasksMetadata = new HashSet<>();
         for (final Map.Entry<TaskId, Task> task : standbyTasks.entrySet()) {
@@ -915,9 +894,7 @@ public class StreamThread extends Thread {
             this.state().name(),
             getConsumerClientId(this.getName()),
             getRestoreConsumerClientId(this.getName()),
-            threadProducer == null ?
-                producerClientIds :
-                Collections.singleton(getThreadProducerClientId(this.getName())),
+            taskManager.producerClientIds(),
             adminClientId,
             activeTasksMetadata,
             standbyTasksMetadata);
@@ -957,22 +934,7 @@ public class StreamThread extends Thread {
     }
 
     public Map<MetricName, Metric> producerMetrics() {
-        final LinkedHashMap<MetricName, Metric> result = new LinkedHashMap<>();
-        if (threadProducer != null) {
-            final Map<MetricName, ? extends Metric> producerMetrics = threadProducer.metrics();
-            if (producerMetrics != null) {
-                result.putAll(producerMetrics);
-            }
-        } else if (taskProducers != null) {
-            // When EOS is turned on, each task will have its own producer client
-            // and the producer object passed in here will be null. We would then iterate through
-            // all the active tasks and add their metrics to the output metrics map.
-            for (final Map.Entry<TaskId, Producer<byte[], byte[]>> entry : taskProducers.entrySet()) {
-                final Map<MetricName, ? extends Metric> taskProducerMetrics = entry.getValue().metrics();
-                result.putAll(taskProducerMetrics);
-            }
-        }
-        return result;
+        return taskManager.producerMetrics();
     }
 
     public Map<MetricName, Metric> consumerMetrics() {

@@ -24,9 +24,14 @@ import org.apache.kafka.clients.admin.RecordsToDelete;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.Metric;
+import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
+import org.apache.kafka.common.metrics.KafkaMetric;
+import org.apache.kafka.common.metrics.Measurable;
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.processor.StateStore;
@@ -182,7 +187,8 @@ public class TaskManagerTest {
         expectRestoreToBeCompleted(consumer, changeLogReader);
         expect(activeTaskCreator.createTasks(anyObject(), eq(taskId00Assignment))).andReturn(singletonList(task00)).anyTimes();
         expect(activeTaskCreator.createTasks(anyObject(), eq(emptyMap()))).andReturn(emptyList()).anyTimes();
-        expect(activeTaskCreator.taskProducers()).andReturn(emptyMap()).anyTimes();
+        activeTaskCreator.closeProducer(taskId00);
+        expectLastCall();
         expect(standbyTaskCreator.createTasks(anyObject(), anyObject())).andReturn(emptyList()).anyTimes();
 
         topologyBuilder.addSubscribedTopicsFromAssignment(anyObject(), anyString());
@@ -208,7 +214,6 @@ public class TaskManagerTest {
 
         expectRestoreToBeCompleted(consumer, changeLogReader);
         expect(standbyTaskCreator.createTasks(anyObject(), eq(taskId00Assignment))).andReturn(singletonList(task00)).anyTimes();
-        expect(activeTaskCreator.taskProducers()).andReturn(emptyMap()).anyTimes();
         replay(activeTaskCreator, standbyTaskCreator, consumer, changeLogReader);
         taskManager.handleAssignment(emptyMap(), taskId00Assignment);
         assertThat(taskManager.tryToCompleteRestoration(), is(true));
@@ -736,9 +741,6 @@ public class TaskManagerTest {
 
     @Test
     public void shouldThrowTaskMigratedWhenAllTaskCloseExceptionsAreTaskMigrated() {
-        expect(activeTaskCreator.taskProducers()).andReturn(emptyMap()).anyTimes();
-        replay(activeTaskCreator);
-
         final StateMachineTask migratedTask01 = new StateMachineTask(taskId01, taskId01Partitions, false) {
             @Override
             public void closeClean() {
@@ -764,8 +766,6 @@ public class TaskManagerTest {
 
     @Test
     public void shouldThrowRuntimeExceptionWhenEncounteredUnknownExceptionDuringTaskClose() {
-        expect(activeTaskCreator.taskProducers()).andReturn(emptyMap()).anyTimes();
-        replay(activeTaskCreator);
         final StateMachineTask migratedTask01 = new StateMachineTask(taskId01, taskId01Partitions, false) {
             @Override
             public void closeClean() {
@@ -793,8 +793,6 @@ public class TaskManagerTest {
 
     @Test
     public void shouldThrowSameKafkaExceptionWhenEncounteredDuringTaskClose() {
-        expect(activeTaskCreator.taskProducers()).andReturn(emptyMap()).anyTimes();
-        replay(activeTaskCreator);
         final StateMachineTask migratedTask01 = new StateMachineTask(taskId01, taskId01Partitions, false) {
             @Override
             public void closeClean() {
@@ -818,6 +816,23 @@ public class TaskManagerTest {
         assertThat(thrown.getMessage(), equalTo("Kaboom for t2!"));
 
         assertThat(thrown.getCause().getMessage(), equalTo(null));
+    }
+
+    @Test
+    public void shouldTransmitProducerMetrics() {
+        final MetricName testMetricName = new MetricName("test_metric", "", "", new HashMap<>());
+        final Metric testMetric = new KafkaMetric(
+            new Object(),
+            testMetricName,
+            (Measurable) (config, now) -> 0,
+            null,
+            new MockTime());
+        final Map<MetricName, Metric> dummyProducerMetrics = singletonMap(testMetricName, testMetric);
+
+        expect(activeTaskCreator.producerMetrics()).andReturn(dummyProducerMetrics);
+        replay(activeTaskCreator);
+
+        assertThat(taskManager.producerMetrics(), is(dummyProducerMetrics));
     }
 
     private static void expectRestoreToBeCompleted(final Consumer<byte[], byte[]> consumer,

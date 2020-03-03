@@ -21,6 +21,8 @@ import org.apache.kafka.clients.admin.DeleteRecordsResult;
 import org.apache.kafka.clients.admin.RecordsToDelete;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.Metric;
+import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.utils.LogContext;
@@ -190,7 +192,9 @@ public class TaskManager {
                     // Now, we should go ahead and complete the close because a half-closed task is no good to anyone.
                     task.closeDirty();
                 } finally {
-                    activeTaskCreator.taskProducers().remove(task.id());
+                    if (task.isActive()) {
+                        activeTaskCreator.closeProducer(task.id());
+                    }
                 }
 
                 iterator.remove();
@@ -341,7 +345,7 @@ public class TaskManager {
                 cleanupTask(task);
                 task.closeDirty();
                 iterator.remove();
-                activeTaskCreator.taskProducers().remove(task.id());
+                activeTaskCreator.closeProducer(task.id());
             }
 
             for (final TopicPartition inputPartition : inputPartitions) {
@@ -618,5 +622,13 @@ public class TaskManager {
             }
         }
         return null;
+    }
+
+    Map<MetricName, Metric> producerMetrics() {
+        return activeTaskCreator.producerMetrics();
+    }
+
+    Set<String> producerClientIds() {
+        return activeTaskCreator.producerClientIds();
     }
 }

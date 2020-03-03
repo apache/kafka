@@ -104,7 +104,7 @@ public class RecordCollectorTest {
     private final MockConsumer<byte[], byte[]> mockConsumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST);
     private final MockProducer<byte[], byte[]> mockProducer = new MockProducer<>(
         cluster, true, new DefaultPartitioner(), byteArraySerializer, byteArraySerializer);
-    private final StreamsProducer streamsProducer = new StreamsProducer(logContext, mockProducer);
+    private final StreamsProducer streamsProducer = new StreamsProducer(logContext, mockProducer, null, null);
 
     private RecordCollectorImpl collector;
 
@@ -395,15 +395,13 @@ public class RecordCollectorTest {
             logContext,
             taskId,
             mockConsumer,
-            new StreamsProducer(
-                logContext,
-                new MockProducer<byte[], byte[]>(cluster, true, new DefaultPartitioner(), byteArraySerializer, byteArraySerializer) {
-                    @Override
-                    public synchronized Future<RecordMetadata> send(final ProducerRecord<byte[], byte[]> record, final Callback callback) {
-                        callback.onCompletion(null, exception);
-                        return null;
-                    }
-                }),
+            new StreamsProducer(logContext, new MockProducer<byte[], byte[]>(cluster, true, new DefaultPartitioner(), byteArraySerializer, byteArraySerializer) {
+                                @Override
+                                public synchronized Future<RecordMetadata> send(final ProducerRecord<byte[], byte[]> record, final Callback callback) {
+                                    callback.onCompletion(null, exception);
+                                    return null;
+                                }
+                            }, null, null),
             productionExceptionHandler,
             false,
             streamsMetrics
@@ -434,15 +432,13 @@ public class RecordCollectorTest {
             logContext,
             taskId,
             mockConsumer,
-            new StreamsProducer(
-                logContext,
-                new MockProducer<byte[], byte[]>(cluster, true, new DefaultPartitioner(), byteArraySerializer, byteArraySerializer) {
-                    @Override
-                    public synchronized Future<RecordMetadata> send(final ProducerRecord<byte[], byte[]> record, final Callback callback) {
-                        callback.onCompletion(null, new Exception());
-                        return null;
-                    }
-                }),
+            new StreamsProducer(logContext, new MockProducer<byte[], byte[]>(cluster, true, new DefaultPartitioner(), byteArraySerializer, byteArraySerializer) {
+                                @Override
+                                public synchronized Future<RecordMetadata> send(final ProducerRecord<byte[], byte[]> record, final Callback callback) {
+                                    callback.onCompletion(null, new Exception());
+                                    return null;
+                                }
+                            }, null, null),
             new AlwaysContinueProductionExceptionHandler(),
             false,
             streamsMetrics
@@ -474,15 +470,13 @@ public class RecordCollectorTest {
             logContext,
             taskId,
             mockConsumer,
-            new StreamsProducer(
-                logContext,
-                new MockProducer<byte[], byte[]>(cluster, true, new DefaultPartitioner(), byteArraySerializer, byteArraySerializer) {
-                    @Override
-                    public synchronized Future<RecordMetadata> send(final ProducerRecord<byte[], byte[]> record, final Callback callback) {
-                        callback.onCompletion(null, exception);
-                        return null;
-                    }
-                }),
+            new StreamsProducer(logContext, new MockProducer<byte[], byte[]>(cluster, true, new DefaultPartitioner(), byteArraySerializer, byteArraySerializer) {
+                                @Override
+                                public synchronized Future<RecordMetadata> send(final ProducerRecord<byte[], byte[]> record, final Callback callback) {
+                                    callback.onCompletion(null, exception);
+                                    return null;
+                                }
+                            }, null, null),
             new AlwaysContinueProductionExceptionHandler(),
             false,
             streamsMetrics
@@ -628,14 +622,12 @@ public class RecordCollectorTest {
             logContext,
             taskId,
             mockConsumer,
-            new StreamsProducer(
-                logContext,
-                new MockProducer<byte[], byte[]>(cluster, true, new DefaultPartitioner(), byteArraySerializer, byteArraySerializer) {
-                    @Override
-                    public List<PartitionInfo> partitionsFor(final String topic) {
-                        return Collections.emptyList();
-                    }
-                }),
+            new StreamsProducer(logContext, new MockProducer<byte[], byte[]>(cluster, true, new DefaultPartitioner(), byteArraySerializer, byteArraySerializer) {
+                                @Override
+                                public List<PartitionInfo> partitionsFor(final String topic) {
+                                    return Collections.emptyList();
+                                }
+                            }, null, null),
             productionExceptionHandler,
             false,
             streamsMetrics

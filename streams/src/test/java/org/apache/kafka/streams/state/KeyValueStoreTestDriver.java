@@ -201,7 +201,7 @@ public class KeyValueStoreTestDriver<K, V> {
             logContext,
             new TaskId(0, 0),
             consumer,
-            new StreamsProducer(logContext, producer),
+            new StreamsProducer(logContext, producer, null, null),
             new DefaultProductionExceptionHandler(),
             false,
             new MockStreamsMetrics(new Metrics())

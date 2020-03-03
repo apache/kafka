@@ -60,26 +60,16 @@ public class StreamsProducer {
     private boolean transactionInitialized = false;
 
     public StreamsProducer(final LogContext logContext,
-                           final Producer<byte[], byte[]> producer) {
-        this(logContext, producer, null, null);
-    }
-
-    public StreamsProducer(final LogContext logContext,
                            final Producer<byte[], byte[]> producer,
                            final String applicationId,
                            final TaskId taskId) {
-        if ((applicationId != null && taskId == null) ||
-            (applicationId == null && taskId != null)) {
-            throw new IllegalArgumentException("applicationId and taskId must either be both null or both be not null");
-        }
-
         this.log = logContext.logger(getClass());
 
         this.producer = Objects.requireNonNull(producer, "producer cannot be null");
         this.applicationId = applicationId;
         this.taskId = taskId;
         if (taskId != null) {
-            logMessage = "task " + taskId.toString();
+            logMessage = "task " + taskId;
             eosEnabled = true;
         } else {
             logMessage = "all owned active tasks";

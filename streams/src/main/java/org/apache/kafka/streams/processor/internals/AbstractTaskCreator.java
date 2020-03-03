@@ -82,6 +82,4 @@ abstract class AbstractTaskCreator<T extends Task> {
     }
 
     abstract T createTask(final Consumer<byte[], byte[]> consumer, final TaskId id, final Set<TopicPartition> partitions);
-
-    void close() {}
 }

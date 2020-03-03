@@ -76,7 +76,7 @@ public class StreamsProducerTest {
 
     private final MockProducer<byte[], byte[]> mockProducer = new MockProducer<>(
         cluster, true, new DefaultPartitioner(), byteArraySerializer, byteArraySerializer);
-    private final StreamsProducer streamsProducer = new StreamsProducer(logContext, mockProducer);
+    private final StreamsProducer streamsProducer = new StreamsProducer(logContext, mockProducer, null, null);
 
     private final MockProducer<byte[], byte[]> eosMockProducer = new MockProducer<>(
         cluster, true, new DefaultPartitioner(), byteArraySerializer, byteArraySerializer);
@@ -95,7 +95,7 @@ public class StreamsProducerTest {
         {
             final NullPointerException thrown = assertThrows(
                 NullPointerException.class,
-                () -> new StreamsProducer(logContext, null)
+                () -> new StreamsProducer(logContext, null, null, null)
             );
 
             assertThat(thrown.getMessage(), equalTo("producer cannot be null"));
@@ -160,7 +160,7 @@ public class StreamsProducerTest {
         expect(producer.partitionsFor("topic")).andReturn(expectedPartitionInfo);
         replay(producer);
 
-        final StreamsProducer streamsProducer = new StreamsProducer(logContext, producer);
+        final StreamsProducer streamsProducer = new StreamsProducer(logContext, producer, null, null);
 
         final List<PartitionInfo> partitionInfo = streamsProducer.partitionsFor(topic);
 
@@ -176,7 +176,7 @@ public class StreamsProducerTest {
         expectLastCall();
         replay(producer);
 
-        final StreamsProducer streamsProducer = new StreamsProducer(logContext, producer);
+        final StreamsProducer streamsProducer = new StreamsProducer(logContext, producer, null, null);
 
         streamsProducer.flush();
 
