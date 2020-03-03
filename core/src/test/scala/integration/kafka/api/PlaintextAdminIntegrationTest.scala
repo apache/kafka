@@ -1031,20 +1031,29 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       newConsumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, testGroupId)
       newConsumerConfig.setProperty(ConsumerConfig.CLIENT_ID_CONFIG, testClientId)
       newConsumerConfig.setProperty(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG, testInstanceId)
+
+      val newDynamicConsumerConfig = new Properties(consumerConfig)
+      newDynamicConsumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, testGroupId)
+      newDynamicConsumerConfig.setProperty(ConsumerConfig.CLIENT_ID_CONFIG, testClientId)
+      val dynamicConsumer = createConsumer(configOverrides = newDynamicConsumerConfig)
+
       val consumer = createConsumer(configOverrides = newConsumerConfig)
-      val latch = new CountDownLatch(1)
+      val latch = new CountDownLatch(2)
       try {
         // Start a consumer in a thread that will subscribe to a new group.
         val consumerThread = new Thread {
           override def run : Unit = {
             consumer.subscribe(Collections.singleton(testTopicName))
+            dynamicConsumer.subscribe(Collections.singleton(testTopicName))
 
             try {
               while (true) {
                 consumer.poll(JDuration.ofSeconds(5))
+                dynamicConsumer.poll(JDuration.ofSeconds(5))
                 if (!consumer.assignment.isEmpty && latch.getCount > 0L)
                   latch.countDown()
                 consumer.commitSync()
+                dynamicConsumer.commitSync()
               }
             } catch {
               case _: InterruptException => // Suppress the output to stderr
@@ -1070,13 +1079,16 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
 
           assertEquals(testGroupId, testGroupDescription.groupId())
           assertFalse(testGroupDescription.isSimpleConsumerGroup)
-          assertEquals(1, testGroupDescription.members().size())
-          val member = testGroupDescription.members().iterator().next()
-          assertEquals(testClientId, member.clientId())
-          val topicPartitions = member.assignment().topicPartitions()
-          assertEquals(testNumPartitions, topicPartitions.size())
-          assertEquals(testNumPartitions, topicPartitions.asScala.
-            count(tp => tp.topic().equals(testTopicName)))
+          assertEquals(2, testGroupDescription.members().size())
+//          val member = testGroupDescription.members().iterator().next()
+          val staticMember = testGroupDescription.members().asScala.filter(_.groupInstanceId().isPresent).head
+          val dynamicMember = testGroupDescription.members().asScala.filterNot(_.groupInstanceId().isPresent).head
+
+          assertEquals(testClientId, staticMember.clientId())
+          val topicPartitions = staticMember.assignment().topicPartitions()
+//          assertEquals(testNumPartitions, topicPartitions.size())
+//          assertEquals(testNumPartitions, topicPartitions.asScala.
+//            count(tp => tp.topic().equals(testTopicName)))
           val expectedOperations = Group.supportedOperations
             .map(operation => operation.toJava).asJava
           assertEquals(expectedOperations, testGroupDescription.authorizedOperations())
@@ -1101,15 +1113,26 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
             parts.containsKey(part) && (parts.get(part).offset() == 1)
           }, s"Expected the offset for partition 0 to eventually become 1.")
 
-          // Test delete non-exist consumer instance
+          // Test delete non-exist static consumer instance
           val invalidInstanceId = "invalid-instance-id"
+          val invalidInstanceToRemove = new MemberToRemove().withGroupInstanceId(invalidInstanceId)
           var removeMembersResult = client.removeMembersFromConsumerGroup(testGroupId, new RemoveMembersFromConsumerGroupOptions(
-            Collections.singleton(new MemberToRemove(invalidInstanceId))
+            Collections.singleton(invalidInstanceToRemove)
           ))
 
           TestUtils.assertFutureExceptionTypeEquals(removeMembersResult.all, classOf[UnknownMemberIdException])
-          val firstMemberFuture = removeMembersResult.memberResult(new MemberToRemove(invalidInstanceId))
+          val firstMemberFuture = removeMembersResult.memberResult(invalidInstanceToRemove)
           TestUtils.assertFutureExceptionTypeEquals(firstMemberFuture, classOf[UnknownMemberIdException])
+
+          // Test delete fenced static member
+          val fencedMemberId = "fenced-" + staticMember.consumerId()
+          val fencedMemberToRemove = new MemberToRemove().withGroupInstanceId(testInstanceId).withMemberId(fencedMemberId)
+          removeMembersResult = client.removeMembersFromConsumerGroup(testGroupId, new RemoveMembersFromConsumerGroupOptions(
+            Collections.singleton(fencedMemberToRemove)
+          ))
+          TestUtils.assertFutureExceptionTypeEquals(removeMembersResult.all, classOf[FencedInstanceIdException])
+          val fencedMemberFuture = removeMembersResult.memberResult(fencedMemberToRemove)
+          TestUtils.assertFutureExceptionTypeEquals(fencedMemberFuture, classOf[FencedInstanceIdException])
 
           // Test consumer group deletion
           var deleteResult = client.deleteConsumerGroups(Seq(testGroupId, fakeGroupId).asJava)
@@ -1125,14 +1148,33 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
           assertFutureExceptionTypeEquals(deleteResult.deletedGroups().get(testGroupId),
             classOf[GroupNotEmptyException])
 
-          // Test delete correct member
+          // Test delete correct static member
           removeMembersResult = client.removeMembersFromConsumerGroup(testGroupId, new RemoveMembersFromConsumerGroupOptions(
-            Collections.singleton(new MemberToRemove(testInstanceId))
+            Collections.singleton(new MemberToRemove().withGroupInstanceId(testInstanceId))
           ))
 
           assertNull(removeMembersResult.all().get())
-          val validMemberFuture = removeMembersResult.memberResult(new MemberToRemove(testInstanceId))
+          val validMemberFuture = removeMembersResult.memberResult(new MemberToRemove().withGroupInstanceId(testInstanceId))
           assertNull(validMemberFuture.get())
+
+          // Test delete with the invalid member id
+          val memberId = dynamicMember.consumerId()
+          val invalidMemberId = "invalid-" + memberId
+          val invalidMemberToRemove = new MemberToRemove().withMemberId(invalidMemberId)
+          removeMembersResult = client.removeMembersFromConsumerGroup(testGroupId, new RemoveMembersFromConsumerGroupOptions(
+            Collections.singleton(invalidMemberToRemove)))
+          TestUtils.assertFutureExceptionTypeEquals(removeMembersResult.all, classOf[UnknownMemberIdException])
+          val invalidDynamicMemberFuture = removeMembersResult.memberResult(invalidMemberToRemove)
+          TestUtils.assertFutureExceptionTypeEquals(invalidDynamicMemberFuture,classOf[UnknownMemberIdException])
+
+          // Test delete with correct member id
+          val validMemberToRemove = new MemberToRemove().withMemberId(memberId)
+          removeMembersResult = client.removeMembersFromConsumerGroup(testGroupId, new RemoveMembersFromConsumerGroupOptions(
+            Collections.singleton(validMemberToRemove)
+          ))
+          assertNull(removeMembersResult.all().get())
+          val validDynamicMemberFuture = removeMembersResult.memberResult(validMemberToRemove)
+          assertNull(validDynamicMemberFuture.get())
 
           // The group should contain no member now.
           val describeTestGroupResult = client.describeConsumerGroups(Seq(testGroupId).asJava,
