@@ -1681,7 +1681,8 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
 
     //verify subtract operation
     topic1AlterConfigs = Seq(
-      new AlterConfigOp(new ConfigEntry(LogConfig.CleanupPolicyProp, LogConfig.Compact), AlterConfigOp.OpType.SUBTRACT)
+      new AlterConfigOp(new ConfigEntry(LogConfig.CleanupPolicyProp, LogConfig.Compact), AlterConfigOp.OpType.SUBTRACT),
+      new AlterConfigOp(new ConfigEntry(LogConfig.LeaderReplicationThrottledReplicasProp, "0"), AlterConfigOp.OpType.SUBTRACT)
     ).asJava
 
    alterResult = client.incrementalAlterConfigs(Map(
