@@ -163,11 +163,11 @@ public class TaskManager {
     public void handleAssignment(final Map<TaskId, Set<TopicPartition>> activeTasks,
                                  final Map<TaskId, Set<TopicPartition>> standbyTasks) {
         log.info("Handle new assignment with:\n" +
-                "\tNew active tasks: {}\n" +
-                "\tNew standby tasks: {}\n" +
-                "\tExisting active tasks: {}\n" +
-                "\tExisting standby tasks: {}",
-            activeTasks.keySet(), standbyTasks.keySet(), activeTaskIds(), standbyTaskIds());
+                     "\tNew active tasks: {}\n" +
+                     "\tNew standby tasks: {}\n" +
+                     "\tExisting active tasks: {}\n" +
+                     "\tExisting standby tasks: {}",
+                 activeTasks.keySet(), standbyTasks.keySet(), activeTaskIds(), standbyTaskIds());
 
         final Map<TaskId, Set<TopicPartition>> activeTasksToCreate = new TreeMap<>(activeTasks);
         final Map<TaskId, Set<TopicPartition>> standbyTasksToCreate = new TreeMap<>(standbyTasks);
@@ -189,14 +189,21 @@ public class TaskManager {
                 try {
                     task.closeClean();
                 } catch (final RuntimeException e) {
-                    log.error(String.format("Failed to close task %s cleanly. Attempting to close remaining tasks before re-throwing:", task.id()), e);
+                    final String uncleanMessage = String.format("Failed to close task %s cleanly. Attempting to close remaining tasks before re-throwing:", task.id());
+                    log.error(uncleanMessage, e);
                     taskCloseExceptions.put(task.id(), e);
                     // We've already recorded the exception (which is the point of clean).
                     // Now, we should go ahead and complete the close because a half-closed task is no good to anyone.
                     task.closeDirty();
                 } finally {
                     if (task.isActive()) {
-                        activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(task.id());
+                        try {
+                            activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(task.id());
+                        } catch (final RuntimeException e) {
+                            final String uncleanMessage = String.format("Failed to close task %s cleanly. Attempting to close remaining tasks before re-throwing:", task.id());
+                            log.error(uncleanMessage, e);
+                            taskCloseExceptions.putIfAbsent(task.id(), e);
+                        }
                     }
                 }
 
@@ -327,8 +334,8 @@ public class TaskManager {
 
         if (!remainingPartitions.isEmpty()) {
             log.warn("The following partitions {} are missing from the task partitions. It could potentially " +
-                "due to race condition of consumer detecting the heartbeat failure, or the tasks " +
-                "have been cleaned up by the handleAssignment callback.", remainingPartitions);
+                         "due to race condition of consumer detecting the heartbeat failure, or the tasks " +
+                         "have been cleaned up by the handleAssignment callback.", remainingPartitions);
         }
     }
 
@@ -352,7 +359,11 @@ public class TaskManager {
                 cleanupTask(task);
                 task.closeDirty();
                 iterator.remove();
-                activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(task.id());
+                try {
+                    activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(task.id());
+                } catch (final RuntimeException e) {
+                    log.debug("Error handling lostAll", e);
+                }
             }
 
             for (final TopicPartition inputPartition : inputPartitions) {
@@ -429,12 +440,28 @@ public class TaskManager {
                 task.closeDirty();
             }
             if (task.isActive()) {
-                activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(task.id());
+                try {
+                    activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(task.id());
+                } catch (final RuntimeException e) {
+                    if (clean) {
+                        firstException.compareAndSet(null, e);
+                    } else {
+                        log.warn("Ignoring an exception while closing task producer.", e);
+                    }
+                }
             }
             iterator.remove();
         }
 
-        activeTaskCreator.closeThreadProducerIfNeeded();
+        try {
+            activeTaskCreator.closeThreadProducerIfNeeded();
+        } catch (final RuntimeException e) {
+            if (clean) {
+                firstException.compareAndSet(null, e);
+            } else {
+                log.warn("Ignoring an exception while closing thread producer.", e);
+            }
+        }
 
         final RuntimeException fatalException = firstException.get();
         if (fatalException != null) {

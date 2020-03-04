@@ -572,6 +572,118 @@ public class TaskManagerTest {
     }
 
     @Test
+    public void shouldCloseActiveTasksAndPropagateTaskProducerExceptionsOnCleanShutdown() {
+        final TopicPartition changelog = new TopicPartition("changelog", 0);
+        final Map<TaskId, Set<TopicPartition>> assignment = mkMap(
+            mkEntry(taskId00, taskId00Partitions)
+        );
+        final Task task00 = new StateMachineTask(taskId00, taskId00Partitions, true) {
+            @Override
+            public Collection<TopicPartition> changelogPartitions() {
+                return singletonList(changelog);
+            }
+        };
+
+        resetToStrict(changeLogReader);
+        changeLogReader.transitToRestoreActive();
+        expectLastCall();
+        expect(changeLogReader.completedChangelogs()).andReturn(emptySet());
+        // make sure we also remove the changelog partitions from the changelog reader
+        changeLogReader.remove(eq(singletonList(changelog)));
+        expectLastCall();
+        expect(activeTaskCreator.createTasks(anyObject(), eq(assignment))).andReturn(singletonList(task00)).anyTimes();
+        activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(eq(taskId00));
+        expectLastCall().andThrow(new RuntimeException("whatever"));
+        activeTaskCreator.closeThreadProducerIfNeeded();
+        expectLastCall();
+        expect(standbyTaskCreator.createTasks(eq(emptyMap()))).andReturn(emptyList()).anyTimes();
+        replay(activeTaskCreator, standbyTaskCreator, changeLogReader);
+
+        taskManager.handleAssignment(assignment, emptyMap());
+
+        assertThat(task00.state(), is(Task.State.CREATED));
+
+        taskManager.tryToCompleteRestoration();
+
+        assertThat(task00.state(), is(Task.State.RESTORING));
+        assertThat(
+            taskManager.activeTaskMap(),
+            Matchers.equalTo(
+                mkMap(
+                    mkEntry(taskId00, task00)
+                )
+            )
+        );
+        assertThat(taskManager.standbyTaskMap(), Matchers.anEmptyMap());
+
+        final RuntimeException exception = assertThrows(RuntimeException.class, () -> taskManager.shutdown(true));
+
+        assertThat(task00.state(), is(Task.State.CLOSED));
+        assertThat(exception.getMessage(), is("Unexpected exception while closing task"));
+        assertThat(exception.getCause().getMessage(), is("whatever"));
+        assertThat(taskManager.activeTaskMap(), Matchers.anEmptyMap());
+        assertThat(taskManager.standbyTaskMap(), Matchers.anEmptyMap());
+        // the active task creator should also get closed (so that it closes the thread producer if applicable)
+        verify(activeTaskCreator, changeLogReader);
+    }
+
+    @Test
+    public void shouldCloseActiveTasksAndPropagateThreadProducerExceptionsOnCleanShutdown() {
+        final TopicPartition changelog = new TopicPartition("changelog", 0);
+        final Map<TaskId, Set<TopicPartition>> assignment = mkMap(
+            mkEntry(taskId00, taskId00Partitions)
+        );
+        final Task task00 = new StateMachineTask(taskId00, taskId00Partitions, true) {
+            @Override
+            public Collection<TopicPartition> changelogPartitions() {
+                return singletonList(changelog);
+            }
+        };
+
+        resetToStrict(changeLogReader);
+        changeLogReader.transitToRestoreActive();
+        expectLastCall();
+        expect(changeLogReader.completedChangelogs()).andReturn(emptySet());
+        // make sure we also remove the changelog partitions from the changelog reader
+        changeLogReader.remove(eq(singletonList(changelog)));
+        expectLastCall();
+        expect(activeTaskCreator.createTasks(anyObject(), eq(assignment))).andReturn(singletonList(task00)).anyTimes();
+        activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(eq(taskId00));
+        expectLastCall();
+        activeTaskCreator.closeThreadProducerIfNeeded();
+        expectLastCall().andThrow(new RuntimeException("whatever"));
+        expect(standbyTaskCreator.createTasks(eq(emptyMap()))).andReturn(emptyList()).anyTimes();
+        replay(activeTaskCreator, standbyTaskCreator, changeLogReader);
+
+        taskManager.handleAssignment(assignment, emptyMap());
+
+        assertThat(task00.state(), is(Task.State.CREATED));
+
+        taskManager.tryToCompleteRestoration();
+
+        assertThat(task00.state(), is(Task.State.RESTORING));
+        assertThat(
+            taskManager.activeTaskMap(),
+            Matchers.equalTo(
+                mkMap(
+                    mkEntry(taskId00, task00)
+                )
+            )
+        );
+        assertThat(taskManager.standbyTaskMap(), Matchers.anEmptyMap());
+
+        final RuntimeException exception = assertThrows(RuntimeException.class, () -> taskManager.shutdown(true));
+
+        assertThat(task00.state(), is(Task.State.CLOSED));
+        assertThat(exception.getMessage(), is("Unexpected exception while closing task"));
+        assertThat(exception.getCause().getMessage(), is("whatever"));
+        assertThat(taskManager.activeTaskMap(), Matchers.anEmptyMap());
+        assertThat(taskManager.standbyTaskMap(), Matchers.anEmptyMap());
+        // the active task creator should also get closed (so that it closes the thread producer if applicable)
+        verify(activeTaskCreator, changeLogReader);
+    }
+
+    @Test
     public void shouldCloseActiveTasksAndIgnoreExceptionsOnUncleanShutdown() {
         final TopicPartition changelog = new TopicPartition("changelog", 0);
         final Map<TaskId, Set<TopicPartition>> assignment = mkMap(
@@ -607,13 +719,13 @@ public class TaskManagerTest {
         expectLastCall();
         expect(activeTaskCreator.createTasks(anyObject(), eq(assignment))).andReturn(asList(task00, task01, task02)).anyTimes();
         activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(eq(taskId00));
-        expectLastCall();
+        expectLastCall().andThrow(new RuntimeException("whatever 0"));
         activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(eq(taskId01));
-        expectLastCall();
+        expectLastCall().andThrow(new RuntimeException("whatever 1"));
         activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(eq(taskId02));
-        expectLastCall();
+        expectLastCall().andThrow(new RuntimeException("whatever 2"));
         activeTaskCreator.closeThreadProducerIfNeeded();
-        expectLastCall();
+        expectLastCall().andThrow(new RuntimeException("whatever all"));
         expect(standbyTaskCreator.createTasks(eq(emptyMap()))).andReturn(emptyList()).anyTimes();
         replay(activeTaskCreator, standbyTaskCreator, changeLogReader);
 
