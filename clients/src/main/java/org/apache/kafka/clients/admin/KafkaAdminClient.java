@@ -976,11 +976,9 @@ public class KafkaAdminClient extends AdminClient {
         private long maybeDrainPendingCalls(long now) {
             long pollTimeout = Long.MAX_VALUE;
             log.trace("Trying to choose nodes for {} at {}", pendingCalls, now);
-
             Iterator<Call> pendingIter = pendingCalls.iterator();
             while (pendingIter.hasNext()) {
                 Call call = pendingIter.next();
-
                 // If the call is being retried, await the proper backoff before finding the node
                 if (now < call.nextAllowedTryMs) {
                     pollTimeout = Math.min(pollTimeout, call.nextAllowedTryMs - now);
@@ -2918,6 +2916,11 @@ public class KafkaAdminClient extends AdminClient {
                 context.setResponse(Optional.of(response));
 
                 for (Call call : nextCalls.get()) {
+                    if (call.tries() > maxRetries) {
+                        log.debug("Max retries {} for {} reached", maxRetries, this.tries());
+                        call.fail(time.milliseconds(), new TimeoutException());
+                        continue;
+                    }
                     runnable.call(call, time.milliseconds());
                 }
             }
@@ -3785,7 +3788,7 @@ public class KafkaAdminClient extends AdminClient {
                 new MetadataOperationContext<>(topics, options, deadline, futures);
 
         Call metadataCall = getMetadataCall(context, 
-            () -> KafkaAdminClient.this.getListOffsetsCalls(context, topicPartitionOffsets, futures));
+            () -> KafkaAdminClient.this.getListOffsetsCalls(context, topicPartitionOffsets, futures, Optional.empty(), Optional.empty()));
         runnable.call(metadataCall, nowMetadata);
 
         return new ListOffsetsResult(new HashMap<>(futures));
@@ -3793,7 +3796,8 @@ public class KafkaAdminClient extends AdminClient {
 
     private List<Call> getListOffsetsCalls(MetadataOperationContext<ListOffsetsResultInfo, ListOffsetsOptions> context,
                                            Map<TopicPartition, OffsetSpec> topicPartitionOffsets,
-                                           Map<TopicPartition, KafkaFutureImpl<ListOffsetsResultInfo>> futures) {
+                                           Map<TopicPartition, KafkaFutureImpl<ListOffsetsResultInfo>> futures,
+                                           Optional<Integer> numTries, Optional<Long> nextAllowedTryMs) {
 
         MetadataResponse mr = context.response().orElseThrow(() -> new IllegalStateException("No Metadata response"));
         List<Call> calls = new ArrayList<>();
@@ -3828,7 +3832,8 @@ public class KafkaAdminClient extends AdminClient {
             final int brokerId = entry.getKey().id();
             final Map<TopicPartition, ListOffsetRequest.PartitionData> partitionsToQuery = entry.getValue();
 
-            calls.add(new Call("listOffsets on broker " + brokerId, context.deadline(), new ConstantNodeIdProvider(brokerId)) {
+            calls.add(new Call("listOffsets on broker " + brokerId, context.deadline(),
+                    new ConstantNodeIdProvider(brokerId), numTries, nextAllowedTryMs) {
 
                 @Override
                 ListOffsetRequest.Builder createRequest(int timeoutMs) {
@@ -3865,7 +3870,10 @@ public class KafkaAdminClient extends AdminClient {
                             TopicPartition::topic).collect(Collectors.toSet());
                         MetadataOperationContext<ListOffsetsResultInfo, ListOffsetsOptions> retryContext =
                             new MetadataOperationContext<>(retryTopics, context.options(), context.deadline(), futures);
-                        rescheduleMetadataTask(retryContext, () -> getListOffsetsCalls(retryContext, retryTopicPartitionOffsets, futures));
+                        long nextAllowedTryMs = calculateNextAllowedRetryMs(this.nextAllowedTryMs());
+                        rescheduleMetadataTask(retryContext, () -> getListOffsetsCalls(
+                                retryContext, retryTopicPartitionOffsets, futures,
+                                Optional.of(this.tries() + 1), Optional.of(nextAllowedTryMs)));
                     }
                 }
 
