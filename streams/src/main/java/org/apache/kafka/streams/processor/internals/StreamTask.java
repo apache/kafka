@@ -411,7 +411,11 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
      */
     private void close(final boolean clean) {
         if (state() == State.CREATED) {
-            // the task is created and not initialized, do nothing
+            // the task is created and not initialized, just re-write the checkpoint file
+            executeAndMaybeSwallow(clean, () -> {
+                stateMgr.checkpoint(Collections.emptyMap());
+            }, "state manager checkpoint");
+
             transitionTo(State.CLOSING);
         } else {
             if (state() == State.RUNNING) {

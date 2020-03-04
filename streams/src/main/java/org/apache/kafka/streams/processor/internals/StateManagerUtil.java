@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.requests.ListOffsetResponse;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.errors.LockException;
 import org.apache.kafka.streams.errors.ProcessorStateException;
@@ -26,6 +28,9 @@ import org.apache.kafka.streams.state.internals.RecordConverter;
 import org.slf4j.Logger;
 
 import java.io.IOException;
+import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 import static org.apache.kafka.streams.state.internals.RecordConverters.identity;
 import static org.apache.kafka.streams.state.internals.RecordConverters.rawValueToTimestampedValue;
@@ -85,6 +90,16 @@ final class StateManagerUtil {
         } catch (final IOException fatalException) {
             // since it is only called under dirty close, we always swallow the exception
             log.warn("Failed to wiping state stores for task {} due to {}", stateMgr.taskId(), fatalException);
+        }
+    }
+
+    static void writeEmptyCheckpointFile(final ProcessorStateManager stateMgr) {
+        try {
+            final Map<TopicPartition, Long> emptyOffsets = stateMgr.changelogPartitions().stream()
+                .collect(Collectors.toMap(Function.identity(), entry -> ListOffsetResponse.UNKNOWN_OFFSET));
+            stateMgr.writeStoreOffsetsToCheckpoint(emptyOffsets);
+        } catch (final IOException e) {
+            throw new ProcessorStateException("Failed to write empty checkpoint files for task " + stateMgr.taskId(), e);
         }
     }
 

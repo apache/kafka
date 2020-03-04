@@ -158,6 +158,7 @@ public class ProcessorStateManagerTest {
         final ProcessorStateManager stateMgr = new ProcessorStateManager(
             taskId,
             Task.TaskType.STANDBY,
+            false,
             logContext,
             stateDirectory,
             changelogReader,
@@ -166,8 +167,7 @@ public class ProcessorStateManagerTest {
                 mkEntry(persistentStoreTwoName, persistentStoreTwoTopicName),
                 mkEntry(nonPersistentStoreName, nonPersistentStoreTopicName)
             ),
-            mkSet(persistentStorePartition, nonPersistentStorePartition)
-        );
+            mkSet(persistentStorePartition, nonPersistentStorePartition));
 
         assertTrue(stateMgr.changelogAsSource(persistentStorePartition));
         assertTrue(stateMgr.changelogAsSource(nonPersistentStorePartition));
@@ -179,14 +179,14 @@ public class ProcessorStateManagerTest {
         final ProcessorStateManager stateMgr = new ProcessorStateManager(
             taskId,
             Task.TaskType.STANDBY,
+            false,
             logContext,
             stateDirectory,
-            changelogReader,
-            mkMap(
+            changelogReader, mkMap(
                 mkEntry(persistentStoreName, persistentStoreTopicName),
                 mkEntry(persistentStoreTwoName, persistentStoreTopicName)
-            ), Collections.emptySet()
-        );
+            ),
+            Collections.emptySet());
 
         stateMgr.registerStore(persistentStore, persistentStore.stateRestoreCallback);
         stateMgr.registerStore(persistentStoreTwo, persistentStore.stateRestoreCallback);
@@ -288,12 +288,12 @@ public class ProcessorStateManagerTest {
         final ProcessorStateManager stateMgr = new ProcessorStateManager(
             taskId,
             Task.TaskType.STANDBY,
+            false,
             logContext,
             stateDirectory,
             changelogReader,
             emptyMap(),
-            emptySet()
-        );
+            emptySet());
 
         try {
             stateMgr.registerStore(persistentStore, persistentStore.stateRestoreCallback);
@@ -478,12 +478,12 @@ public class ProcessorStateManagerTest {
         final ProcessorStateManager stateMgr = new ProcessorStateManager(
             taskId,
             Task.TaskType.STANDBY,
+            false,
             logContext,
             stateDirectory,
             changelogReader,
             emptyMap(),
-            emptySet()
-        );
+            emptySet());
 
         try {
             stateMgr.registerStore(persistentStore, persistentStore.stateRestoreCallback);
@@ -711,13 +711,16 @@ public class ProcessorStateManagerTest {
     private ProcessorStateManager getStateManager(final Task.TaskType taskType) {
         return new ProcessorStateManager(
             taskId,
-            taskType, logContext, stateDirectory, changelogReader,
-            mkMap(
+            taskType,
+            false,
+            logContext,
+            stateDirectory,
+            changelogReader, mkMap(
                 mkEntry(persistentStoreName, persistentStoreTopicName),
                 mkEntry(persistentStoreTwoName, persistentStoreTwoTopicName),
                 mkEntry(nonPersistentStoreName, nonPersistentStoreTopicName)
-            ), emptySet()
-        );
+            ),
+            emptySet());
     }
 
     private MockKeyValueStore getConverterStore() {

@@ -18,10 +18,12 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.requests.ListOffsetResponse;
 import org.apache.kafka.common.utils.FixedOrderMap;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.errors.TaskCorruptedException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.processor.internals.Task.TaskType;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
@@ -34,10 +36,10 @@ import org.slf4j.Logger;
 import java.io.File;
 import java.io.IOException;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.stream.Collectors;
 
 import static java.lang.String.format;
@@ -141,6 +143,7 @@ public class ProcessorStateManager implements StateManager {
     private final TaskId taskId;
     private final String logPrefix;
     private final TaskType taskType;
+    private final boolean eosEnabled;
     private final ChangelogRegister changelogReader;
     private final Map<String, String> storeToChangelogTopic;
     private final Collection<TopicPartition> sourcePartitions;
@@ -152,8 +155,7 @@ public class ProcessorStateManager implements StateManager {
     private final File baseDir;
     private final OffsetCheckpoint checkpointFile;
 
-    public static String storeChangelogTopic(final String applicationId,
-                                             final String storeName) {
+    public static String storeChangelogTopic(final String applicationId, final String storeName) {
         return applicationId + "-" + storeName + STATE_CHANGELOG_TOPIC_SUFFIX;
     }
 
@@ -162,6 +164,7 @@ public class ProcessorStateManager implements StateManager {
      */
     public ProcessorStateManager(final TaskId taskId,
                                  final TaskType taskType,
+                                 final boolean eosEnabled,
                                  final LogContext logContext,
                                  final StateDirectory stateDirectory,
                                  final ChangelogRegister changelogReader,
@@ -172,6 +175,7 @@ public class ProcessorStateManager implements StateManager {
         this.logPrefix = logContext.logPrefix();
         this.taskId = taskId;
         this.taskType = taskType;
+        this.eosEnabled = eosEnabled;
         this.changelogReader = changelogReader;
         this.sourcePartitions = sourcePartitions;
         this.storeToChangelogTopic = storeToChangelogTopic;
@@ -206,24 +210,27 @@ public class ProcessorStateManager implements StateManager {
                     log.info("State store {} is not logged and hence would not be restored", store.stateStore.name());
                 } else {
                     if (loadedCheckpoints.containsKey(store.changelogPartition)) {
-                        store.setOffset(loadedCheckpoints.remove(store.changelogPartition));
+                        final long offset = loadedCheckpoints.remove(store.changelogPartition);
+                        if (offset != ListOffsetResponse.UNKNOWN_OFFSET)
+                            store.setOffset(offset);
 
                         log.debug("State store {} initialized from checkpoint with offset {} at changelog {}",
                             store.stateStore.name(), store.offset, store.changelogPartition);
                     } else {
-                        // with EOS, if the previous run did not shutdown gracefully, we would always close
-                        // all tasks as dirty before complete the shutdown which will already wipe out the local
-                        // stores including the checkpoint store. That means, here if the checkpoint file does not
-                        // contain the corresponding offset, there are only two possibilities:
-                        //
-                        // 1. the local state store is also empty, in which case it is safe to restore from scratch.
-                        // 2. the local state store is not empty but it only contains committed records (i.e. only
-                        //    the checkpoint file when corrupted), in which case it is safe to restore and overwrite
-                        //    from scratch too.
+                        // with EOS, if the previous run did not shutdown gracefully, we may lost the checkpoint file
+                        // and hence we are uncertain the the current local state only contains committed data;
+                        // in that case we need to treat it as a task-corrupted exception
+                        if (eosEnabled) {
+                            log.warn("State store {} did not find checkpoint offset with EOS enabled, would " +
+                                "treat it as a task corruption error and wipe out the local state of task {} " +
+                                "before re-bootstrapping", store.stateStore.name(), taskId);
 
-                        log.info("State store {} did not find checkpoint offset, hence would " +
+                            throw new TaskCorruptedException(Collections.singletonMap(taskId, changelogPartitions()));
+                        } else {
+                            log.info("State store {} did not find checkpoint offset, hence would " +
                                 "default to the starting offset at changelog {}",
-                            store.stateStore.name(), store.changelogPartition);
+                                store.stateStore.name(), store.changelogPartition);
+                        }
                     }
                 }
             }
@@ -239,6 +246,12 @@ public class ProcessorStateManager implements StateManager {
                 logPrefix), e);
         }
     }
+
+    void writeStoreOffsetsToCheckpoint(final Map<TopicPartition, Long> checkpointingOffsets) throws IOException {
+        log.debug("Writing checkpoint: {}", checkpointingOffsets);
+        checkpointFile.write(checkpointingOffsets);
+    }
+
 
     @Override
     public File baseDir() {
@@ -295,7 +308,7 @@ public class ProcessorStateManager implements StateManager {
         return changelogOffsets().keySet();
     }
 
-    void markChangelogAsCorrupted(final Set<TopicPartition> partitions) {
+    void markChangelogAsCorrupted(final Collection<TopicPartition> partitions) {
         for (final StateStoreMetadata storeMetadata : stores.values()) {
             if (partitions.contains(storeMetadata.changelogPartition)) {
                 storeMetadata.corrupted = true;
@@ -471,15 +484,14 @@ public class ProcessorStateManager implements StateManager {
             // store is logged, persistent, not corrupted, and has a valid current offset
             if (storeMetadata.changelogPartition != null &&
                 storeMetadata.stateStore.persistent() &&
-                storeMetadata.offset != null &&
-                !storeMetadata.corrupted) {
-                checkpointingOffsets.put(storeMetadata.changelogPartition, storeMetadata.offset);
+                storeMetadata.offset != null) {
+                checkpointingOffsets.put(storeMetadata.changelogPartition,
+                    storeMetadata.corrupted ? ListOffsetResponse.UNKNOWN_OFFSET : storeMetadata.offset);
             }
         }
 
-        log.debug("Writing checkpoint: {}", checkpointingOffsets);
         try {
-            checkpointFile.write(checkpointingOffsets);
+            writeStoreOffsetsToCheckpoint(checkpointingOffsets);
         } catch (final IOException e) {
             log.warn("Failed to write offset checkpoint file to [{}]", checkpointFile, e);
         }

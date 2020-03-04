@@ -63,7 +63,7 @@ public abstract class AbstractTask implements Task {
     }
 
     @Override
-    public void markChangelogAsCorrupted(final Set<TopicPartition> partitions) {
+    public void markChangelogAsCorrupted(final Collection<TopicPartition> partitions) {
         stateMgr.markChangelogAsCorrupted(partitions);
     }
 
