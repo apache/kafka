@@ -1015,7 +1015,7 @@ public class TaskManagerTest {
 
     @Test
     public void shouldPropagateTaskMigratedExceptionsInProcessActiveTasks() {
-        final StateMachineTask task00 = new StateMachineTask(taskId00, taskId00Partitions, true){
+        final StateMachineTask task00 = new StateMachineTask(taskId00, taskId00Partitions, true) {
             @Override
             public boolean process(final long wallClockTime) {
                 throw new TaskMigratedException("migrated", new RuntimeException("cause"));
@@ -1044,7 +1044,7 @@ public class TaskManagerTest {
 
     @Test
     public void shouldPropagateRuntimeExceptionsInProcessActiveTasks() {
-        final StateMachineTask task00 = new StateMachineTask(taskId00, taskId00Partitions, true){
+        final StateMachineTask task00 = new StateMachineTask(taskId00, taskId00Partitions, true) {
             @Override
             public boolean process(final long wallClockTime) {
                 throw new RuntimeException("oops");
@@ -1212,8 +1212,10 @@ public class TaskManagerTest {
         taskManager.tasks().put(taskId01, migratedTask01);
         taskManager.tasks().put(taskId02, migratedTask02);
 
-        final TaskMigratedException thrown = assertThrows(TaskMigratedException.class,
-                                                          () -> taskManager.handleAssignment(emptyMap(), emptyMap()));
+        final TaskMigratedException thrown = assertThrows(
+            TaskMigratedException.class,
+            () -> taskManager.handleAssignment(emptyMap(), emptyMap())
+        );
         // The task map orders tasks based on topic group id and partition, so here
         // t1 should always be the first.
         assertThat(thrown.getMessage(), equalTo("t1 close exception; it means all tasks belonging to this thread should be migrated."));
@@ -1237,8 +1239,10 @@ public class TaskManagerTest {
         taskManager.tasks().put(taskId01, migratedTask01);
         taskManager.tasks().put(taskId02, migratedTask02);
 
-        final RuntimeException thrown = assertThrows(RuntimeException.class,
-                                                     () -> taskManager.handleAssignment(emptyMap(), emptyMap()));
+        final RuntimeException thrown = assertThrows(
+            RuntimeException.class,
+            () -> taskManager.handleAssignment(emptyMap(), emptyMap())
+        );
         // Fatal exception thrown first.
         assertThat(thrown.getMessage(), equalTo("Unexpected failure to close 2 task(s) [[0_1, 0_2]]. " +
                                                     "First unexpected exception (for task 0_2) follows."));
@@ -1264,8 +1268,10 @@ public class TaskManagerTest {
         taskManager.tasks().put(taskId01, migratedTask01);
         taskManager.tasks().put(taskId02, migratedTask02);
 
-        final KafkaException thrown = assertThrows(KafkaException.class,
-                                                   () -> taskManager.handleAssignment(emptyMap(), emptyMap()));
+        final KafkaException thrown = assertThrows(
+            KafkaException.class,
+            () -> taskManager.handleAssignment(emptyMap(), emptyMap())
+        );
 
         // Expecting the original Kafka exception instead of a wrapped one.
         assertThat(thrown.getMessage(), equalTo("Kaboom for t2!"));
