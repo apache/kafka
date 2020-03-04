@@ -18,9 +18,6 @@ package org.apache.kafka.streams.processor.internals.assignment;
 
 import static org.apache.kafka.streams.processor.internals.assignment.StreamsAssignmentProtocolVersions.LATEST_SUPPORTED_VERSION;
 
-import java.util.HashMap;
-import java.util.Map;
-import java.util.stream.Collectors;
 import org.apache.kafka.streams.errors.TaskAssignmentException;
 import org.apache.kafka.streams.processor.TaskId;
 import org.slf4j.Logger;
