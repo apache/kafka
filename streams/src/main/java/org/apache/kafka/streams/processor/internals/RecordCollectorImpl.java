@@ -16,9 +16,6 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import org.apache.kafka.clients.consumer.CommitFailedException;
-import org.apache.kafka.clients.consumer.Consumer;
-import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.KafkaException;
@@ -33,7 +30,6 @@ import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.SecurityDisabledException;
 import org.apache.kafka.common.errors.SerializationException;
-import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.metrics.Sensor;
@@ -59,7 +55,6 @@ public class RecordCollectorImpl implements RecordCollector {
 
     private final Logger log;
     private final TaskId taskId;
-    private final Consumer<byte[], byte[]> mainConsumer;
     private final StreamsProducer streamsProducer;
     private final ProductionExceptionHandler productionExceptionHandler;
     private final Sensor droppedRecordsSensor;
@@ -73,17 +68,14 @@ public class RecordCollectorImpl implements RecordCollector {
      */
     public RecordCollectorImpl(final LogContext logContext,
                                final TaskId taskId,
-                               final Consumer<byte[], byte[]> mainConsumer,
                                final StreamsProducer streamsProducer,
                                final ProductionExceptionHandler productionExceptionHandler,
-                               final boolean eosEnabled,
                                final StreamsMetricsImpl streamsMetrics) {
         this.log = logContext.logger(getClass());
         this.taskId = taskId;
-        this.mainConsumer = mainConsumer;
         this.streamsProducer = streamsProducer;
         this.productionExceptionHandler = productionExceptionHandler;
-        this.eosEnabled = eosEnabled;
+        this.eosEnabled = streamsProducer.eosEnabled();
 
         final String threadId = Thread.currentThread().getName();
         this.droppedRecordsSensor = TaskMetrics.droppedRecordsSensorOrSkippedRecordsSensor(threadId, taskId.toString(), streamsMetrics);
@@ -240,25 +232,6 @@ public class RecordCollectorImpl implements RecordCollector {
             exception instanceof IllegalStateException;
 
         return securityException || communicationException;
-    }
-
-    public void commit(final Map<TopicPartition, OffsetAndMetadata> offsets) {
-        if (eosEnabled) {
-            streamsProducer.commitTransaction(offsets);
-        } else {
-            try {
-                mainConsumer.commitSync(offsets);
-            } catch (final CommitFailedException error) {
-                throw new TaskMigratedException("Consumer committing offsets failed, " +
-                    "indicating the corresponding thread is no longer part of the group", error);
-            } catch (final TimeoutException error) {
-                // TODO KIP-447: we can consider treating it as non-fatal and retry on the thread level
-                throw new StreamsException("Timed out while committing offsets via consumer for task " + taskId, error);
-            } catch (final KafkaException error) {
-                throw new StreamsException("Error encountered committing offsets via consumer for task " + taskId, error);
-            }
-        }
-
     }
 
     /**

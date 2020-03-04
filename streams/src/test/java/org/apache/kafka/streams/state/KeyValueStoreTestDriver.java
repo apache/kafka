@@ -200,10 +200,8 @@ public class KeyValueStoreTestDriver<K, V> {
         final RecordCollector recordCollector = new RecordCollectorImpl(
             logContext,
             new TaskId(0, 0),
-            consumer,
-            new StreamsProducer(producer, false, logContext, null),
+            new StreamsProducer(producer, false, null, logContext),
             new DefaultProductionExceptionHandler(),
-            false,
             new MockStreamsMetrics(new Metrics())
         ) {
             @Override

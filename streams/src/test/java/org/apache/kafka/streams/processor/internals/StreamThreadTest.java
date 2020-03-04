@@ -1046,6 +1046,10 @@ public class StreamThreadTest {
 
         assertThat(thread.activeTasks().size(), equalTo(1));
 
+        // need to process a record to enable committing
+        addRecord(mockConsumer, 0L);
+        thread.runOnce();
+
         clientSupplier.producers.get(0).commitTransactionException = new ProducerFencedException("Producer is fenced");
         assertThrows(TaskMigratedException.class, () -> thread.rebalanceListener.onPartitionsRevoked(assignedPartitions));
         assertFalse(clientSupplier.producers.get(0).transactionCommitted());
@@ -1132,6 +1136,10 @@ public class StreamThreadTest {
         thread.runOnce();
 
         assertThat(thread.activeTasks().size(), equalTo(1));
+
+        // need to process a record to enable committing
+        addRecord(mockConsumer, 0L);
+        thread.runOnce();
 
         thread.rebalanceListener.onPartitionsRevoked(assignedPartitions);
         assertTrue(clientSupplier.producers.get(0).transactionCommitted());
