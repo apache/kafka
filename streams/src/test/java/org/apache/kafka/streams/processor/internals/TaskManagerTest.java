@@ -169,7 +169,7 @@ public class TaskManagerTest {
 
         replay(activeTaskCreator, stateDirectory);
 
-        final Map<TaskId, Integer> taskOffsetSums = taskManager.getTaskOffsetSums();
+        final Map<TaskId, Long> taskOffsetSums = taskManager.getTaskOffsetSums();
 
         verify(activeTaskCreator, stateDirectory);
 
@@ -177,7 +177,7 @@ public class TaskManagerTest {
     }
 
     @Test
-    public void shouldCloseActiveUnAssignedSuspendedTasksWhenClosingRevokedTasks() {
+    public void shouldCloseActiveUnassignedSuspendedTasksWhenClosingRevokedTasks() {
         final Task task00 = new StateMachineTask(taskId00, taskId00Partitions, true);
 
         expectRestoreToBeCompleted(consumer, changeLogReader);

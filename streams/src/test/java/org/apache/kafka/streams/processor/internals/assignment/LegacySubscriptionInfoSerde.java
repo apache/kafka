@@ -45,15 +45,13 @@ public class LegacySubscriptionInfoSerde {
     private final Set<TaskId> prevTasks;
     private final Set<TaskId> standbyTasks;
     private final String userEndPoint;
-    private final Map<TaskId, Integer> taskLags;
 
     public LegacySubscriptionInfoSerde(final int version,
                                        final int latestSupportedVersion,
                                        final UUID processId,
                                        final Set<TaskId> prevTasks,
                                        final Set<TaskId> standbyTasks,
-                                       final String userEndPoint,
-                                       final Map<TaskId, Integer> taskLags) {
+                                       final String userEndPoint) {
         if (latestSupportedVersion == UNKNOWN && (version < 1 || version > 2)) {
             throw new IllegalArgumentException(
                 "Only versions 1 and 2 are expected to use an UNKNOWN (-1) latest supported version. " +
@@ -67,11 +65,10 @@ public class LegacySubscriptionInfoSerde {
         usedVersion = version;
         this.latestSupportedVersion = latestSupportedVersion;
         this.processId = processId;
-        this.prevTasks = prevTasks == null ? taskLagMapToPrevTaskSet(taskLags) : prevTasks;
-        this.standbyTasks = standbyTasks == null ? taskLagMapToStandbyTaskSet(taskLags) : standbyTasks;
+        this.prevTasks = prevTasks;
+        this.standbyTasks = standbyTasks;
         // Coerce empty string to null. This was the effect of the serialization logic, anyway.
         this.userEndPoint = userEndPoint == null || userEndPoint.isEmpty() ? null : userEndPoint;
-        this.taskLags = taskLags == null ? prevAndStandbyTasksToTaskLagMap(prevTasks, standbyTasks) : taskLags;
     }
 
     public int version() {
@@ -185,15 +182,6 @@ public class LegacySubscriptionInfoSerde {
         }
     }
 
-    public static void encodeTaskLags(final ByteBuffer buf,
-                                      final Map<TaskId, Integer> taskLags) {
-        buf.putInt(taskLags.size());
-        for (final Map.Entry<TaskId, Integer> taskLagEntry : taskLags.entrySet()) {
-            taskLagEntry.getKey().writeTo(buf);
-            buf.putInt(taskLagEntry.getValue());
-        }
-    }
-
     public static byte[] prepareUserEndPoint(final String userEndPoint) {
         if (userEndPoint == null) {
             return new byte[0];
@@ -217,22 +205,22 @@ public class LegacySubscriptionInfoSerde {
             final Set<TaskId> prevTasks = decodeTasks(data);
             final Set<TaskId> standbyTasks = decodeTasks(data);
             final String userEndPoint = decodeUserEndpoint(data);
-            return new LegacySubscriptionInfoSerde(usedVersion, latestSupportedVersion, processId, prevTasks, standbyTasks, userEndPoint, null);
+            return new LegacySubscriptionInfoSerde(usedVersion, latestSupportedVersion, processId, prevTasks, standbyTasks, userEndPoint);
         } else if (usedVersion == 2) {
             final UUID processId = decodeProcessId(data);
             final Set<TaskId> prevTasks = decodeTasks(data);
             final Set<TaskId> standbyTasks = decodeTasks(data);
             final String userEndPoint = decodeUserEndpoint(data);
-            return new LegacySubscriptionInfoSerde(2, UNKNOWN, processId, prevTasks, standbyTasks, userEndPoint, null);
+            return new LegacySubscriptionInfoSerde(2, UNKNOWN, processId, prevTasks, standbyTasks, userEndPoint);
         } else if (usedVersion == 1) {
             final UUID processId = decodeProcessId(data);
             final Set<TaskId> prevTasks = decodeTasks(data);
             final Set<TaskId> standbyTasks = decodeTasks(data);
-            return new LegacySubscriptionInfoSerde(1, UNKNOWN, processId, prevTasks, standbyTasks, null, null);
+            return new LegacySubscriptionInfoSerde(1, UNKNOWN, processId, prevTasks, standbyTasks, null);
         } else {
             final int latestSupportedVersion = data.getInt();
             log.info("Unable to decode subscription data: used version: {}; latest supported version: {}", usedVersion, LATEST_SUPPORTED_VERSION);
-            return new LegacySubscriptionInfoSerde(usedVersion, latestSupportedVersion, null, null, null, null, null);
+            return new LegacySubscriptionInfoSerde(usedVersion, latestSupportedVersion, null, null, null, null);
         }
     }
 
@@ -250,23 +238,6 @@ public class LegacySubscriptionInfoSerde {
             prevTasks.add(TaskId.readFrom(data));
         }
         return prevTasks;
-    }
-
-    private static Set<TaskId> taskLagMapToPrevTaskSet(final Map<TaskId, Integer> taskLags) {
-        return taskLags.entrySet().stream().filter(t -> t.getValue() == 0).map(Map.Entry::getKey).collect(Collectors.toSet());
-    }
-
-    private static Set<TaskId> taskLagMapToStandbyTaskSet(final Map<TaskId, Integer> taskLags) {
-        return taskLags.entrySet().stream().filter(t -> t.getValue() != 0).map(Map.Entry::getKey).collect(Collectors.toSet());
-    }
-
-    private static Map<TaskId, Integer> prevAndStandbyTasksToTaskLagMap(final Set<TaskId> prevTasks,
-        final Set<TaskId> standbyTasks) {
-        final Map<TaskId, Integer> taskLags = new HashMap<>(prevTasks.stream()
-                                                                .collect(Collectors.toMap(t -> t, l -> -1)));
-        taskLags.putAll(standbyTasks.stream()
-                            .collect(Collectors.toMap(t -> t, l -> 0)));
-        return taskLags;
     }
 
     private static UUID decodeProcessId(final ByteBuffer data) {

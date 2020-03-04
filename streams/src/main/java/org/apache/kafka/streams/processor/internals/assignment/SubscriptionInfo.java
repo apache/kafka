@@ -39,14 +39,14 @@ import static org.apache.kafka.streams.processor.internals.assignment.StreamsAss
 public class SubscriptionInfo {
     private static final Logger LOG = LoggerFactory.getLogger(SubscriptionInfo.class);
 
-    // encode -1 to differentiate between an active task and a standby task that has caught up to the same offsets
-    public static final int ACTIVE_TASK_SENTINEL_OFFSET = -1;
+    // encode running active tasks as -1 to skip computing their offset sum since we know they are caught up
+    public static final long ACTIVE_TASK_SENTINEL_OFFSET = -1;
     static final int UNKNOWN = -1;
 
     private final SubscriptionInfoData data;
     private Set<TaskId> prevTasksCache = null;
     private Set<TaskId> standbyTasksCache = null;
-    private Map<TaskId, Integer> taskOffsetSumsCache = null;
+    private Map<TaskId, Long> taskOffsetSumsCache = null;
 
     static {
         // Just statically check to make sure that the generated code always stays in sync with the overall protocol
@@ -76,7 +76,7 @@ public class SubscriptionInfo {
                             final int latestSupportedVersion,
                             final UUID processId,
                             final String userEndPoint,
-                            final Map<TaskId, Integer> taskOffsetSums) {
+                            final Map<TaskId, Long> taskOffsetSums) {
         validateVersions(version, latestSupportedVersion);
         final SubscriptionInfoData data = new SubscriptionInfoData();
         data.setVersion(version);
@@ -99,7 +99,7 @@ public class SubscriptionInfo {
     }
 
     private static void setTaskOffsetSumDataFromTaskOffsetSumMap(final SubscriptionInfoData data,
-                                                                 final Map<TaskId, Integer> taskOffsetSums) {
+                                                                 final Map<TaskId, Long> taskOffsetSums) {
         data.setTaskOffsetSums(taskOffsetSums.entrySet().stream().map(t -> {
             final SubscriptionInfoData.TaskOffsetSum taskOffsetSum = new SubscriptionInfoData.TaskOffsetSum();
             taskOffsetSum.setTopicGroupId(t.getKey().topicGroupId);
@@ -110,11 +110,11 @@ public class SubscriptionInfo {
     }
 
     private static void setPrevAndStandbySetsFromParsedTaskOffsetSumMap(final SubscriptionInfoData data,
-                                                                        final Map<TaskId, Integer> taskOffsetSums) {
+                                                                        final Map<TaskId, Long> taskOffsetSums) {
         final Set<TaskId> prevTasks = new HashSet<>();
         final Set<TaskId> standbyTasks = new HashSet<>();
 
-        for (final Map.Entry<TaskId, Integer> taskOffsetSum : taskOffsetSums.entrySet()) {
+        for (final Map.Entry<TaskId, Long> taskOffsetSum : taskOffsetSums.entrySet()) {
             if (taskOffsetSum.getValue() == ACTIVE_TASK_SENTINEL_OFFSET) {
                 prevTasks.add(taskOffsetSum.getKey());
             } else {
@@ -185,7 +185,7 @@ public class SubscriptionInfo {
         return standbyTasksCache;
     }
 
-    public Map<TaskId, Integer> taskOffsetSums() {
+    public Map<TaskId, Long> taskOffsetSums() {
         if (taskOffsetSumsCache == null) {
             taskOffsetSumsCache = Collections.unmodifiableMap(
                 data.taskOffsetSums()
@@ -200,6 +200,22 @@ public class SubscriptionInfo {
         return data.userEndPoint() == null || data.userEndPoint().length == 0
             ? null
             : new String(data.userEndPoint(), StandardCharsets.UTF_8);
+    }
+
+    public static Set<TaskId> getActiveTasksFromTaskOffsetSumMap(final Map<TaskId, Long> taskOffsetSums) {
+        return taskOffsetSumMapToTaskSet(taskOffsetSums, true);
+    }
+
+    public static Set<TaskId> getStandbyTasksFromTaskOffsetSumMap(final Map<TaskId, Long> taskOffsetSums) {
+        return taskOffsetSumMapToTaskSet(taskOffsetSums, false);
+    }
+
+    private static Set<TaskId> taskOffsetSumMapToTaskSet(final Map<TaskId, Long> taskOffsetSums,
+                                                         final boolean getActiveTasks) {
+        return taskOffsetSums.entrySet().stream()
+                   .filter(t -> getActiveTasks == (t.getValue() == ACTIVE_TASK_SENTINEL_OFFSET))
+                   .map(Map.Entry::getKey)
+                   .collect(Collectors.toSet());
     }
 
     /**

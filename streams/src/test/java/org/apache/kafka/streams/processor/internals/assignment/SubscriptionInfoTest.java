@@ -29,6 +29,7 @@ import java.util.UUID;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.streams.processor.internals.assignment.StreamsAssignmentProtocolVersions.LATEST_SUPPORTED_VERSION;
+import static org.apache.kafka.streams.processor.internals.assignment.SubscriptionInfo.ACTIVE_TASK_SENTINEL_OFFSET;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
@@ -43,20 +44,13 @@ public class SubscriptionInfoTest {
     private static final Set<TaskId> STANDBY_TASKS = new HashSet<>(Arrays.asList(
         new TaskId(1, 1),
         new TaskId(2, 0)));
-    private static final Map<TaskId, Integer> TASK_OFFSET_SUMS = mkMap(
-        mkEntry(new TaskId(0, 0), -1),
-        mkEntry(new TaskId(0, 1), -1),
-        mkEntry(new TaskId(1, 0), -1),
-        mkEntry(new TaskId(1, 1), 0),
-        mkEntry(new TaskId(2, 0), 10)
+    private static final Map<TaskId, Long> TASK_OFFSET_SUMS = mkMap(
+        mkEntry(new TaskId(0, 0), ACTIVE_TASK_SENTINEL_OFFSET),
+        mkEntry(new TaskId(0, 1), ACTIVE_TASK_SENTINEL_OFFSET),
+        mkEntry(new TaskId(1, 0), ACTIVE_TASK_SENTINEL_OFFSET),
+        mkEntry(new TaskId(1, 1), 0L),
+        mkEntry(new TaskId(2, 0), 10L)
     );
-    static {
-        TASK_OFFSET_SUMS.put(new TaskId(0, 0), -1);
-        TASK_OFFSET_SUMS.put(new TaskId(0, 1), -1);
-        TASK_OFFSET_SUMS.put(new TaskId(1, 0), -1);
-        TASK_OFFSET_SUMS.put(new TaskId(1, 1), 0);
-        TASK_OFFSET_SUMS.put(new TaskId(2, 0), 10);
-    }
 
     private final static String IGNORED_USER_ENDPOINT = "ignoredUserEndpoint:80";
 
@@ -128,8 +122,7 @@ public class SubscriptionInfoTest {
             processId,
             ACTIVE_TASKS,
             STANDBY_TASKS,
-            "localhost:80",
-            null
+            "localhost:80"
         );
         final ByteBuffer buffer = info.encode();
         buffer.rewind();
@@ -188,8 +181,7 @@ public class SubscriptionInfoTest {
             processId,
             ACTIVE_TASKS,
             STANDBY_TASKS,
-            "localhost:80",
-            null
+            "localhost:80"
         );
         final ByteBuffer buffer = info.encode();
         buffer.rewind();
@@ -253,8 +245,7 @@ public class SubscriptionInfoTest {
                 processId,
                 ACTIVE_TASKS,
                 STANDBY_TASKS,
-                "localhost:80",
-                null
+                "localhost:80"
             );
             final ByteBuffer buffer = info.encode();
             buffer.rewind();

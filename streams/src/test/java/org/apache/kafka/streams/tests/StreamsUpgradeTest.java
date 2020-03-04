@@ -158,8 +158,9 @@ public class StreamsUpgradeTest {
                 return new FutureSubscriptionInfo(
                     usedSubscriptionMetadataVersion,
                     taskManager.processId(),
-                    userEndPoint(),
-                    taskManager.getTaskOffsetSums())
+                    SubscriptionInfo.getActiveTasksFromTaskOffsetSumMap(taskManager.getTaskOffsetSums()),
+                    SubscriptionInfo.getStandbyTasksFromTaskOffsetSumMap(taskManager.getTaskOffsetSums()),
+                    userEndPoint())
                     .encode();
             }
         }
@@ -248,7 +249,8 @@ public class StreamsUpgradeTest {
                                 LATEST_SUPPORTED_VERSION,
                                 LATEST_SUPPORTED_VERSION,
                                 info.processId(),
-                                info.userEndPoint(), taskManager().getTaskOffsetSums())
+                                info.userEndPoint(),
+                                taskManager().getTaskOffsetSums())
                                 .encode(),
                             subscription.ownedPartitions()
                         ));
@@ -279,45 +281,44 @@ public class StreamsUpgradeTest {
     private static class FutureSubscriptionInfo {
         private final int version;
         private final UUID processId;
+        private final Set<TaskId> activeTasks;
+        private final Set<TaskId> standbyTasks;
         private final String userEndPoint;
-        private final Map<TaskId, Integer> taskLags;
 
         // for testing only; don't apply version checks
         FutureSubscriptionInfo(final int version,
                                final UUID processId,
-                               final String userEndPoint,
-                               final Map<TaskId, Integer> taskLags) {
+                               final Set<TaskId> activeTasks,
+                               final Set<TaskId> standbyTasks,
+                               final String userEndPoint) {
             this.version = version;
             this.processId = processId;
+            this.activeTasks = activeTasks;
+            this.standbyTasks = standbyTasks;
             this.userEndPoint = userEndPoint;
-            this.taskLags = taskLags;
             if (version <= LATEST_SUPPORTED_VERSION) {
                 throw new IllegalArgumentException("this class can't be used with version " + version);
             }
         }
 
         private ByteBuffer encode() {
-            final ByteBuffer buf = encodeFutureVersion();
-            buf.rewind();
-            return buf;
-        }
-
-        private ByteBuffer encodeFutureVersion() {
             final byte[] endPointBytes = LegacySubscriptionInfoSerde.prepareUserEndPoint(userEndPoint);
 
             final ByteBuffer buf = ByteBuffer.allocate(
                 4 + // used version
-                    4 + // latest supported version version
-                    16 + // client ID
-                    4 + endPointBytes.length +  // length + endpoint
-                    4 + taskLags.size() * 12 // length + task lag info
+                4 + // latest supported version version
+                16 + // client ID
+                4 + activeTasks.size() * 8 +   // length + active tasks
+                4 + standbyTasks.size() * 8 +  // length + standby tasks
+                4 + endPointBytes.length       // length + endpoint
             );
 
             buf.putInt(version); // used version
             buf.putInt(version); // supported version
             LegacySubscriptionInfoSerde.encodeClientUUID(buf, processId);
+            LegacySubscriptionInfoSerde.encodeTasks(buf, activeTasks);
+            LegacySubscriptionInfoSerde.encodeTasks(buf, standbyTasks);
             LegacySubscriptionInfoSerde.encodeUserEndPoint(buf, endPointBytes);
-            LegacySubscriptionInfoSerde.encodeTaskLags(buf, taskLags);
 
             buf.rewind();
 
