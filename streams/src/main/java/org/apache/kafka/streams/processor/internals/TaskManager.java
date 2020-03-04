@@ -51,7 +51,8 @@ import java.util.stream.Stream;
 
 import static org.apache.kafka.streams.processor.internals.Task.State.CREATED;
 import static org.apache.kafka.streams.processor.internals.Task.State.RESTORING;
-import static org.apache.kafka.streams.processor.internals.assignment.SubscriptionInfo.ACTIVE_TASK_SENTINEL_OFFSET;
+import static org.apache.kafka.streams.processor.internals.Task.State.RUNNING;
+import static org.apache.kafka.streams.processor.internals.assignment.SubscriptionInfo.RUNNING_TASK_SENTINEL_OFFSET;
 
 public class TaskManager {
     // initialize the task list
@@ -362,8 +363,8 @@ public class TaskManager {
         final Map<TaskId, Long> taskOffsetSums = new HashMap<>();
 
         for (final TaskId id : tasksOnLocalStorage()) {
-            if (isActive(id)) {
-                taskOffsetSums.put(id, ACTIVE_TASK_SENTINEL_OFFSET);
+            if (isRunning(id)) {
+                taskOffsetSums.put(id, RUNNING_TASK_SENTINEL_OFFSET);
             } else {
                 taskOffsetSums.put(id, 0L);
             }
@@ -489,9 +490,9 @@ public class TaskManager {
         return tasks.values().stream().filter(t -> !t.isActive());
     }
 
-    private boolean isActive(final TaskId id) {
+    private boolean isRunning(final TaskId id) {
         final Task task = tasks.get(id);
-        return task != null && task.isActive();
+        return task != null && task.isActive() && task.state() == RUNNING;
     }
 
     /**

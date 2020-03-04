@@ -29,7 +29,7 @@ import java.util.UUID;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.streams.processor.internals.assignment.StreamsAssignmentProtocolVersions.LATEST_SUPPORTED_VERSION;
-import static org.apache.kafka.streams.processor.internals.assignment.SubscriptionInfo.ACTIVE_TASK_SENTINEL_OFFSET;
+import static org.apache.kafka.streams.processor.internals.assignment.SubscriptionInfo.RUNNING_TASK_SENTINEL_OFFSET;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
@@ -45,9 +45,9 @@ public class SubscriptionInfoTest {
         new TaskId(1, 1),
         new TaskId(2, 0)));
     private static final Map<TaskId, Long> TASK_OFFSET_SUMS = mkMap(
-        mkEntry(new TaskId(0, 0), ACTIVE_TASK_SENTINEL_OFFSET),
-        mkEntry(new TaskId(0, 1), ACTIVE_TASK_SENTINEL_OFFSET),
-        mkEntry(new TaskId(1, 0), ACTIVE_TASK_SENTINEL_OFFSET),
+        mkEntry(new TaskId(0, 0), RUNNING_TASK_SENTINEL_OFFSET),
+        mkEntry(new TaskId(0, 1), RUNNING_TASK_SENTINEL_OFFSET),
+        mkEntry(new TaskId(1, 0), RUNNING_TASK_SENTINEL_OFFSET),
         mkEntry(new TaskId(1, 1), 0L),
         mkEntry(new TaskId(2, 0), 10L)
     );
