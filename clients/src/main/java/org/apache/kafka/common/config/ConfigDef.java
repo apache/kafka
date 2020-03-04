@@ -1166,8 +1166,15 @@ public class ConfigDef {
                     String defaultValueStr = convertToString(key.defaultValue, key.type);
                     if (defaultValueStr.isEmpty())
                         return "\"\"";
-                    else
-                        return defaultValueStr;
+                    else {
+                        String suffix = "";
+                        if (key.name.endsWith(".bytes")) {
+                            suffix = niceMemoryUnits(key);
+                        } else if (key.name.endsWith(".ms")) {
+                            suffix = niceTimeUnits(key);
+                        }
+                        return defaultValueStr + suffix;
+                    }
                 } else
                     return "";
             case "Valid Values":
@@ -1177,6 +1184,50 @@ public class ConfigDef {
             default:
                 throw new RuntimeException("Can't find value for header '" + headerName + "' in " + key.name);
         }
+    }
+
+    private static String niceMemoryUnits(ConfigKey key) {
+        final long defaultValueBytes = ((Number) key.defaultValue).longValue();
+        long defaultValue = defaultValueBytes;
+        int i = 0;
+        while (i < 5) {
+            if (defaultValue % 1024 != 0) {
+                break;
+            }
+            defaultValue /= 1024;
+            i++;
+        }
+        switch (i) {
+            case 1:
+                return " (=" + defaultValue + "KiB)";
+            case 2:
+                return " (=" + defaultValue + "MiB)";
+            case 3:
+                return " (=" + defaultValue + "GiB)";
+            case 4:
+                return " (=" + defaultValue + "TiB)";
+            default:
+                return "";
+        }
+    }
+
+    private static String niceTimeUnits(ConfigKey key) {
+        final long defaultValueBytes = ((Number) key.defaultValue).longValue();
+        long defaultValue = defaultValueBytes;
+        if (defaultValueBytes % 1000L * 60 * 60 * 24 == 0) {
+            defaultValue /= 1000L * 60 * 60 * 24;
+            return " (=" + defaultValue + " day" + (defaultValue > 1 ? "s)" : ")");
+        } else if (defaultValueBytes % 1000L * 60 * 60 == 0) {
+            defaultValue /= 1000L * 60 * 60;
+            return " (=" + defaultValue + " hour" + (defaultValue > 1 ? "s)" : ")");
+        } else if (defaultValueBytes % 1000L * 60 == 0) {
+            defaultValue /= 1000L * 60;
+            return " (=" + defaultValue + " minute" + (defaultValue > 1 ? "s)" : ")");
+        } else if (defaultValueBytes % 1000L  == 0) {
+            defaultValue /= 1000L;
+            return " (=" + defaultValue + " second" + (defaultValue > 1 ? "s)" : ")");
+        }
+        return "";
     }
 
     public String toHtmlTable() {
