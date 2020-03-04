@@ -457,8 +457,16 @@ public class StreamThreadTest {
     public void shouldRespectNumIterationsInMainLoop() {
         final MockProcessor<byte[], byte[]> mockProcessor = new MockProcessor<>(PunctuationType.WALL_CLOCK_TIME, 10L);
         internalTopologyBuilder.addSource(null, "source1", null, null, null, topic1);
-        internalTopologyBuilder.addProcessor("processor1", () -> mockProcessor, "source1");
-        internalTopologyBuilder.addProcessor("processor2", () -> new MockProcessor<byte[], byte[]>(PunctuationType.STREAM_TIME, 10L), "source1");
+        internalTopologyBuilder.addProcessor(
+            "processor1",
+            (ProcessorSupplier<byte[], byte[]>) () -> mockProcessor,
+            "source1"
+        );
+        internalTopologyBuilder.addProcessor(
+            "processor2",
+            (ProcessorSupplier<byte[], byte[]>) () -> new MockProcessor<>(PunctuationType.STREAM_TIME, 10L),
+            "source1"
+        );
 
         final Properties properties = new Properties();
         properties.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100L);
@@ -1038,6 +1046,10 @@ public class StreamThreadTest {
 
         assertThat(thread.activeTasks().size(), equalTo(1));
 
+        // need to process a record to enable committing
+        addRecord(mockConsumer, 0L);
+        thread.runOnce();
+
         clientSupplier.producers.get(0).commitTransactionException = new ProducerFencedException("Producer is fenced");
         assertThrows(TaskMigratedException.class, () -> thread.rebalanceListener.onPartitionsRevoked(assignedPartitions));
         assertFalse(clientSupplier.producers.get(0).transactionCommitted());
@@ -1124,6 +1136,10 @@ public class StreamThreadTest {
         thread.runOnce();
 
         assertThat(thread.activeTasks().size(), equalTo(1));
+
+        // need to process a record to enable committing
+        addRecord(mockConsumer, 0L);
+        thread.runOnce();
 
         thread.rebalanceListener.onPartitionsRevoked(assignedPartitions);
         assertTrue(clientSupplier.producers.get(0).transactionCommitted());
@@ -1663,7 +1679,8 @@ public class StreamThreadTest {
         mockConsumer.addRecord(new ConsumerRecord<>(
             t1p1.topic(),
             t1p1.partition(),
-            ++offset, -1,
+            ++offset,
+            -1,
             TimestampType.CREATE_TIME,
             ConsumerRecord.NULL_CHECKSUM,
             -1,
@@ -1995,7 +2012,11 @@ public class StreamThreadTest {
     private void setupInternalTopologyWithoutState() {
         final MockProcessor<byte[], byte[]> mockProcessor = new MockProcessor<>();
         internalTopologyBuilder.addSource(null, "source1", null, null, null, topic1);
-        internalTopologyBuilder.addProcessor("processor1", () -> mockProcessor, "source1");
+        internalTopologyBuilder.addProcessor(
+            "processor1",
+            (ProcessorSupplier<byte[], byte[]>) () -> mockProcessor,
+            "source1"
+        );
     }
 
     private Collection<Task> createStandbyTask() {

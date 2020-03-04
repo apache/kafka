@@ -130,10 +130,11 @@ final class StateManagerUtil {
         }
 
         if (exception != null) {
-            if (closeClean)
+            if (closeClean) {
                 throw exception;
-            else
+            } else {
                 log.warn("Closing {} task {} uncleanly and swallows an exception", taskType, id, exception);
+            }
         }
     }
 }

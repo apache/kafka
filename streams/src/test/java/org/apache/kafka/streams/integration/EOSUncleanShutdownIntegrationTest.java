@@ -103,7 +103,11 @@ public class EOSUncleanShutdownIntegrationTest {
 
         final KTable<String, String> valueCounts = inputStream
             .groupByKey()
-            .aggregate(() -> "()", (key, value, aggregate) -> aggregate + ",(" + key + ": " + value + ")", Materialized.as("aggregated_value"));
+            .aggregate(
+                () -> "()",
+                (key, value, aggregate) -> aggregate + ",(" + key + ": " + value + ")",
+                Materialized.as("aggregated_value"));
+
         valueCounts.toStream().peek((key, value) -> {
             if (recordCount.incrementAndGet() >= RECORD_TOTAL) {
                 throw new IllegalStateException("Crash on the " + RECORD_TOTAL + " record");

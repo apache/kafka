@@ -63,7 +63,7 @@ public class InternalTopologyBuilder {
 
     private final Map<String, StateStoreFactory> stateFactories = new HashMap<>();
 
-    private final Map<String, StoreBuilder> globalStateBuilders = new LinkedHashMap<>();
+    private final Map<String, StoreBuilder<?>> globalStateBuilders = new LinkedHashMap<>();
 
     // built global state stores
     private final Map<String, StateStore> globalStateStores = new LinkedHashMap<>();
@@ -125,7 +125,7 @@ public class InternalTopologyBuilder {
     private Map<Integer, Set<String>> nodeGroups = null;
 
     public static class StateStoreFactory {
-        private final StoreBuilder builder;
+        private final StoreBuilder<?> builder;
         private final Set<String> users = new HashSet<>();
 
         private StateStoreFactory(final StoreBuilder<?> builder) {
@@ -138,11 +138,11 @@ public class InternalTopologyBuilder {
 
         long retentionPeriod() {
             if (builder instanceof WindowStoreBuilder) {
-                return ((WindowStoreBuilder) builder).retentionPeriod();
+                return ((WindowStoreBuilder<?, ?>) builder).retentionPeriod();
             } else if (builder instanceof TimestampedWindowStoreBuilder) {
-                return ((TimestampedWindowStoreBuilder) builder).retentionPeriod();
+                return ((TimestampedWindowStoreBuilder<?, ?>) builder).retentionPeriod();
             } else if (builder instanceof SessionStoreBuilder) {
-                return ((SessionStoreBuilder) builder).retentionPeriod();
+                return ((SessionStoreBuilder<?, ?>) builder).retentionPeriod();
             } else {
                 throw new IllegalStateException("retentionPeriod is not supported when not a window store");
             }
@@ -169,7 +169,6 @@ public class InternalTopologyBuilder {
         // Apparently Java strips the generics from this method because we're using the raw type for builder,
         // even though this method doesn't use builder's (missing) type parameter. Our usage seems obviously
         // correct, though, hence the suppression.
-        @SuppressWarnings("unchecked")
         private Map<String, String> logConfig() {
             return builder.logConfig();
         }
@@ -185,7 +184,7 @@ public class InternalTopologyBuilder {
             this.predecessors = predecessors;
         }
 
-        public abstract ProcessorNode build();
+        public abstract ProcessorNode<?, ?> build();
 
         abstract AbstractNode describe();
     }
@@ -206,7 +205,7 @@ public class InternalTopologyBuilder {
         }
 
         @Override
-        public ProcessorNode build() {
+        public ProcessorNode<?, ?> build() {
             return new ProcessorNode<>(name, supplier.get(), stateStoreNames);
         }
 
@@ -268,7 +267,7 @@ public class InternalTopologyBuilder {
         }
 
         @Override
-        public ProcessorNode build() {
+        public ProcessorNode<?, ?> build() {
             final List<String> sourceTopics = nodeToSourceTopics.get(name);
 
             // if it is subscribed via patterns, it is possible that the topic metadata has not been updated
@@ -311,9 +310,9 @@ public class InternalTopologyBuilder {
         }
 
         @Override
-        public ProcessorNode build() {
+        public ProcessorNode<?, ?> build() {
             if (topicExtractor instanceof StaticTopicNameExtractor) {
-                final String topic = ((StaticTopicNameExtractor) topicExtractor).topicName;
+                final String topic = ((StaticTopicNameExtractor<?, ?>) topicExtractor).topicName;
                 if (internalTopicNames.contains(topic)) {
                     // prefix the internal topic name with the application id
                     return new SinkNode<>(name, new StaticTopicNameExtractor<>(decorateTopic(topic)), keySerializer, valSerializer, partitioner);
@@ -351,13 +350,13 @@ public class InternalTopologyBuilder {
                 storeFactory.builder.withCachingDisabled();
             }
 
-            for (final StoreBuilder storeBuilder : globalStateBuilders.values()) {
+            for (final StoreBuilder<?> storeBuilder : globalStateBuilders.values()) {
                 storeBuilder.withCachingDisabled();
             }
         }
 
         // build global state stores
-        for (final StoreBuilder storeBuilder : globalStateBuilders.values()) {
+        for (final StoreBuilder<?> storeBuilder : globalStateBuilders.values()) {
             globalStateStores.put(storeBuilder.name(), storeBuilder.build());
         }
 
@@ -367,8 +366,8 @@ public class InternalTopologyBuilder {
     public final void addSource(final Topology.AutoOffsetReset offsetReset,
                                 final String name,
                                 final TimestampExtractor timestampExtractor,
-                                final Deserializer keyDeserializer,
-                                final Deserializer valDeserializer,
+                                final Deserializer<?> keyDeserializer,
+                                final Deserializer<?> valDeserializer,
                                 final String... topics) {
         if (topics.length == 0) {
             throw new TopologyException("You must provide at least one topic");
@@ -394,8 +393,8 @@ public class InternalTopologyBuilder {
     public final void addSource(final Topology.AutoOffsetReset offsetReset,
                                 final String name,
                                 final TimestampExtractor timestampExtractor,
-                                final Deserializer keyDeserializer,
-                                final Deserializer valDeserializer,
+                                final Deserializer<?> keyDeserializer,
+                                final Deserializer<?> valDeserializer,
                                 final Pattern topicPattern) {
         Objects.requireNonNull(topicPattern, "topicPattern can't be null");
         Objects.requireNonNull(name, "name can't be null");
@@ -484,7 +483,7 @@ public class InternalTopologyBuilder {
     }
 
     public final void addProcessor(final String name,
-                                   final ProcessorSupplier supplier,
+                                   final ProcessorSupplier<?, ?> supplier,
                                    final String... predecessorNames) {
         Objects.requireNonNull(name, "name must not be null");
         Objects.requireNonNull(supplier, "supplier must not be null");
@@ -536,14 +535,14 @@ public class InternalTopologyBuilder {
         nodeGroups = null;
     }
 
-    public final void addGlobalStore(final StoreBuilder storeBuilder,
+    public final void addGlobalStore(final StoreBuilder<?> storeBuilder,
                                      final String sourceName,
                                      final TimestampExtractor timestampExtractor,
-                                     final Deserializer keyDeserializer,
-                                     final Deserializer valueDeserializer,
+                                     final Deserializer<?> keyDeserializer,
+                                     final Deserializer<?> valueDeserializer,
                                      final String topic,
                                      final String processorName,
-                                     final ProcessorSupplier stateUpdateSupplier) {
+                                     final ProcessorSupplier<?, ?> stateUpdateSupplier) {
         Objects.requireNonNull(storeBuilder, "store builder must not be null");
         validateGlobalStoreArguments(sourceName,
                                      topic,
@@ -629,7 +628,7 @@ public class InternalTopologyBuilder {
     private void validateGlobalStoreArguments(final String sourceName,
                                               final String topic,
                                               final String processorName,
-                                              final ProcessorSupplier stateUpdateSupplier,
+                                              final ProcessorSupplier<?, ?> stateUpdateSupplier,
                                               final String storeName,
                                               final boolean loggingEnabled) {
         Objects.requireNonNull(sourceName, "sourceName must not be null");
@@ -842,9 +841,9 @@ public class InternalTopologyBuilder {
     private ProcessorTopology build(final Set<String> nodeGroup) {
         Objects.requireNonNull(applicationId, "topology has not completed optimization");
 
-        final Map<String, ProcessorNode> processorMap = new LinkedHashMap<>();
-        final Map<String, SourceNode> topicSourceMap = new HashMap<>();
-        final Map<String, SinkNode> topicSinkMap = new HashMap<>();
+        final Map<String, ProcessorNode<?, ?>> processorMap = new LinkedHashMap<>();
+        final Map<String, SourceNode<?, ?>> topicSourceMap = new HashMap<>();
+        final Map<String, SinkNode<?, ?>> topicSinkMap = new HashMap<>();
         final Map<String, StateStore> stateStoreMap = new LinkedHashMap<>();
         final Set<String> repartitionTopics = new HashSet<>();
 
@@ -852,7 +851,7 @@ public class InternalTopologyBuilder {
         // also make sure the state store map values following the insertion ordering
         for (final NodeFactory factory : nodeFactories.values()) {
             if (nodeGroup == null || nodeGroup.contains(factory.name)) {
-                final ProcessorNode node = factory.build();
+                final ProcessorNode<?, ?> node = factory.build();
                 processorMap.put(node.name(), node);
 
                 if (factory instanceof ProcessorNodeFactory) {
@@ -865,14 +864,14 @@ public class InternalTopologyBuilder {
                     buildSourceNode(topicSourceMap,
                                     repartitionTopics,
                                     (SourceNodeFactory) factory,
-                                    (SourceNode) node);
+                                    (SourceNode<?, ?>) node);
 
                 } else if (factory instanceof SinkNodeFactory) {
                     buildSinkNode(processorMap,
                                   topicSinkMap,
                                   repartitionTopics,
-                                  (SinkNodeFactory) factory,
-                                  (SinkNode) node);
+                                  (SinkNodeFactory<?, ?>) factory,
+                                  (SinkNode<?, ?>) node);
                 } else {
                     throw new TopologyException("Unknown definition class: " + factory.getClass().getName());
                 }
@@ -888,17 +887,16 @@ public class InternalTopologyBuilder {
                                      repartitionTopics);
     }
 
-    @SuppressWarnings("unchecked")
-    private void buildSinkNode(final Map<String, ProcessorNode> processorMap,
-                               final Map<String, SinkNode> topicSinkMap,
+    private void buildSinkNode(final Map<String, ProcessorNode<?, ?>> processorMap,
+                               final Map<String, SinkNode<?, ?>> topicSinkMap,
                                final Set<String> repartitionTopics,
-                               final SinkNodeFactory sinkNodeFactory,
-                               final SinkNode node) {
+                               final SinkNodeFactory<?, ?> sinkNodeFactory,
+                               final SinkNode<?, ?> node) {
 
         for (final String predecessor : sinkNodeFactory.predecessors) {
             processorMap.get(predecessor).addChild(node);
             if (sinkNodeFactory.topicExtractor instanceof StaticTopicNameExtractor) {
-                final String topic = ((StaticTopicNameExtractor) sinkNodeFactory.topicExtractor).topicName;
+                final String topic = ((StaticTopicNameExtractor<?, ?>) sinkNodeFactory.topicExtractor).topicName;
 
                 if (internalTopicNames.contains(topic)) {
                     // prefix the internal topic name with the application id
@@ -913,10 +911,10 @@ public class InternalTopologyBuilder {
         }
     }
 
-    private void buildSourceNode(final Map<String, SourceNode> topicSourceMap,
+    private void buildSourceNode(final Map<String, SourceNode<?, ?>> topicSourceMap,
                                  final Set<String> repartitionTopics,
                                  final SourceNodeFactory sourceNodeFactory,
-                                 final SourceNode node) {
+                                 final SourceNode<?, ?> node) {
 
         final List<String> topics = (sourceNodeFactory.pattern != null) ?
                                     sourceNodeFactory.getTopics(subscriptionUpdates()) :
@@ -934,10 +932,10 @@ public class InternalTopologyBuilder {
         }
     }
 
-    private void buildProcessorNode(final Map<String, ProcessorNode> processorMap,
+    private void buildProcessorNode(final Map<String, ProcessorNode<?, ?>> processorMap,
                                     final Map<String, StateStore> stateStoreMap,
                                     final ProcessorNodeFactory factory,
-                                    final ProcessorNode node) {
+                                    final ProcessorNode<?, ?> node) {
 
         for (final String predecessor : factory.predecessors) {
             final ProcessorNode<?, ?> predecessorNode = processorMap.get(predecessor);
@@ -1570,10 +1568,10 @@ public class InternalTopologyBuilder {
     }
 
     public final static class Sink extends AbstractNode implements TopologyDescription.Sink {
-        private final TopicNameExtractor topicNameExtractor;
+        private final TopicNameExtractor<?, ?> topicNameExtractor;
 
         public Sink(final String name,
-                    final TopicNameExtractor topicNameExtractor) {
+                    final TopicNameExtractor<?, ?> topicNameExtractor) {
             super(name);
             this.topicNameExtractor = topicNameExtractor;
         }
@@ -1581,20 +1579,20 @@ public class InternalTopologyBuilder {
         public Sink(final String name,
                     final String topic) {
             super(name);
-            this.topicNameExtractor = new StaticTopicNameExtractor(topic);
+            this.topicNameExtractor = new StaticTopicNameExtractor<>(topic);
         }
 
         @Override
         public String topic() {
             if (topicNameExtractor instanceof StaticTopicNameExtractor) {
-                return ((StaticTopicNameExtractor) topicNameExtractor).topicName;
+                return ((StaticTopicNameExtractor<?, ?>) topicNameExtractor).topicName;
             } else {
                 return null;
             }
         }
 
         @Override
-        public TopicNameExtractor topicNameExtractor() {
+        public TopicNameExtractor<?, ?> topicNameExtractor() {
             if (topicNameExtractor instanceof StaticTopicNameExtractor) {
                 return null;
             } else {
