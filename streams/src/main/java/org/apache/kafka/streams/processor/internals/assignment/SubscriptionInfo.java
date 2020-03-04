@@ -24,6 +24,7 @@ import org.apache.kafka.streams.errors.TaskAssignmentException;
 import org.apache.kafka.streams.internals.generated.SubscriptionInfoData;
 import org.apache.kafka.streams.internals.generated.SubscriptionInfoData.TaskOffsetSum;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.internals.Task;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -39,8 +40,6 @@ import static org.apache.kafka.streams.processor.internals.assignment.StreamsAss
 public class SubscriptionInfo {
     private static final Logger LOG = LoggerFactory.getLogger(SubscriptionInfo.class);
 
-    // encode running active tasks as -1 to skip computing their offset sum since we know they are caught up
-    public static final long RUNNING_TASK_SENTINEL_OFFSET = -1;
     static final int UNKNOWN = -1;
 
     private final SubscriptionInfoData data;
@@ -115,7 +114,7 @@ public class SubscriptionInfo {
         final Set<TaskId> standbyTasks = new HashSet<>();
 
         for (final Map.Entry<TaskId, Long> taskOffsetSum : taskOffsetSums.entrySet()) {
-            if (taskOffsetSum.getValue() == RUNNING_TASK_SENTINEL_OFFSET) {
+            if (taskOffsetSum.getValue() == Task.LATEST_OFFSET) {
                 prevTasks.add(taskOffsetSum.getKey());
             } else {
                 standbyTasks.add(taskOffsetSum.getKey());
@@ -213,7 +212,7 @@ public class SubscriptionInfo {
     private static Set<TaskId> taskOffsetSumMapToTaskSet(final Map<TaskId, Long> taskOffsetSums,
                                                          final boolean getActiveTasks) {
         return taskOffsetSums.entrySet().stream()
-                   .filter(t -> getActiveTasks == (t.getValue() == RUNNING_TASK_SENTINEL_OFFSET))
+                   .filter(t -> getActiveTasks == (t.getValue() == Task.LATEST_OFFSET))
                    .map(Map.Entry::getKey)
                    .collect(Collectors.toSet());
     }
