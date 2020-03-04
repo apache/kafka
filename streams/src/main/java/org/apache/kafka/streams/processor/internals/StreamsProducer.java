@@ -23,6 +23,8 @@ import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.Metric;
+import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.ProducerFencedException;
@@ -58,15 +60,14 @@ public class StreamsProducer {
     private boolean transactionInitialized = false;
 
     public StreamsProducer(final Producer<byte[], byte[]> producer,
-                           final boolean eosEnabled,
-                           final LogContext logContext,
-                           final String applicationId) {
-        log = logContext.logger(getClass());
+                           final String applicationId,
+                           final LogContext logContext) {
+        log = Objects.requireNonNull(logContext.logger(getClass()), "logContext cannot be null");
         logPrefix = logContext.logPrefix().trim();
 
         this.producer = Objects.requireNonNull(producer, "producer cannot be null");
         this.applicationId = applicationId;
-        this.eosEnabled = eosEnabled;
+        this.eosEnabled = applicationId != null;
     }
 
     private String formatException(final String message) {
@@ -218,6 +219,18 @@ public class StreamsProducer {
 
     public void flush() {
         producer.flush();
+    }
+
+    public void close() {
+        try {
+            producer.close();
+        } catch (final KafkaException error) {
+            throw new StreamsException(formatException("Producer encounter unexpected error trying to close"), error);
+        }
+    }
+
+    public Map<MetricName, ? extends Metric> metrics() {
+        return producer.metrics();
     }
 
     // for testing only

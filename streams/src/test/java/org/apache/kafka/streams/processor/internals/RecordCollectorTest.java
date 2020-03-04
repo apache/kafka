@@ -104,7 +104,7 @@ public class RecordCollectorTest {
     private final MockConsumer<byte[], byte[]> mockConsumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST);
     private final MockProducer<byte[], byte[]> mockProducer = new MockProducer<>(
         cluster, true, new DefaultPartitioner(), byteArraySerializer, byteArraySerializer);
-    private final StreamsProducer streamsProducer = new StreamsProducer(mockProducer, false, logContext, null);
+    private final StreamsProducer streamsProducer = new StreamsProducer(mockProducer, null, logContext);
 
     private RecordCollectorImpl collector;
 
@@ -357,9 +357,8 @@ public class RecordCollectorTest {
                         return null;
                     }
                 },
-                true,
-                logContext,
-                "appId"
+                "appId",
+                logContext
             ),
             productionExceptionHandler,
             true,
@@ -400,9 +399,8 @@ public class RecordCollectorTest {
                         return null;
                     }
                 },
-                false,
-                logContext,
-                null
+                null,
+                logContext
             ),
             productionExceptionHandler,
             false,
@@ -442,9 +440,8 @@ public class RecordCollectorTest {
                         return null;
                     }
                 },
-                false,
-                logContext,
-                null
+                null,
+                logContext
             ),
             new AlwaysContinueProductionExceptionHandler(),
             false,
@@ -485,9 +482,8 @@ public class RecordCollectorTest {
                         return null;
                     }
                 },
-                false,
-                logContext,
-                null
+                null,
+                logContext
             ),
             new AlwaysContinueProductionExceptionHandler(),
             false,
@@ -616,9 +612,8 @@ public class RecordCollectorTest {
                         functionCalled.set(true);
                     }
                 },
-                true,
-                logContext,
-                "appId"
+                "appId",
+                logContext
             ),
             productionExceptionHandler,
             true,
@@ -642,9 +637,8 @@ public class RecordCollectorTest {
                         return Collections.emptyList();
                     }
                 },
-                false,
-                logContext,
-                null
+                null,
+                logContext
             ),
             productionExceptionHandler,
             false,
@@ -665,7 +659,7 @@ public class RecordCollectorTest {
             logContext,
             taskId,
             mockConsumer,
-            new StreamsProducer(mockProducer, true, logContext, "appId"),
+            new StreamsProducer(mockProducer, "appId", logContext),
             productionExceptionHandler,
             true,
             streamsMetrics

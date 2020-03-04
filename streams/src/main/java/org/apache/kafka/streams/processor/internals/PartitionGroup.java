@@ -62,7 +62,7 @@ public class PartitionGroup {
     static class RecordInfo {
         RecordQueue queue;
 
-        ProcessorNode node() {
+        ProcessorNode<?, ?> node() {
             return queue.source();
         }
 

@@ -64,8 +64,8 @@ import org.apache.kafka.streams.processor.internals.RecordCollectorImpl;
 import org.apache.kafka.streams.processor.internals.StateDirectory;
 import org.apache.kafka.streams.processor.internals.StoreChangelogReader;
 import org.apache.kafka.streams.processor.internals.StreamTask;
-import org.apache.kafka.streams.processor.internals.Task;
 import org.apache.kafka.streams.processor.internals.StreamsProducer;
+import org.apache.kafka.streams.processor.internals.Task;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.metrics.TaskMetrics;
 import org.apache.kafka.streams.state.KeyValueStore;
@@ -213,7 +213,9 @@ public class TopologyTestDriver implements Closeable {
     ProcessorTopology processorTopology;
     ProcessorTopology globalTopology;
 
+    private final MockConsumer<byte[], byte[]> consumer;
     private final MockProducer<byte[], byte[]> producer;
+    private final StreamsProducer streamsProducer;
 
     private final Map<String, TopicPartition> partitionsByInputTopic = new HashMap<>();
     private final Map<String, TopicPartition> globalPartitionsByInputTopic = new HashMap<>();
@@ -302,6 +304,7 @@ public class TopologyTestDriver implements Closeable {
             Math.max(0, streamsConfig.getLong(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG)),
             streamsMetrics);
 
+        consumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST);
         final Serializer<byte[]> bytesSerializer = new ByteArraySerializer();
         producer = new MockProducer<byte[], byte[]>(true, bytesSerializer, bytesSerializer) {
             @Override
@@ -309,6 +312,11 @@ public class TopologyTestDriver implements Closeable {
                 return Collections.singletonList(new PartitionInfo(topic, PARTITION_ID, null, null, null));
             }
         };
+        streamsProducer = new StreamsProducer(
+            producer,
+            eosEnabled ? streamsConfig.getString(StreamsConfig.APPLICATION_ID_CONFIG) : null,
+            logContext
+        );
 
         setupGlobalTask(streamsConfig, streamsMetrics, cache);
         setupTask(streamsConfig, streamsMetrics, cache);
@@ -418,7 +426,6 @@ public class TopologyTestDriver implements Closeable {
                            final StreamsMetricsImpl streamsMetrics,
                            final ThreadCache cache) {
         if (!partitionsByInputTopic.isEmpty()) {
-            final MockConsumer<byte[], byte[]> consumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST);
             consumer.assign(partitionsByInputTopic.values());
             final Map<TopicPartition, Long> startOffsets = new HashMap<>();
             for (final TopicPartition topicPartition : partitionsByInputTopic.values()) {
@@ -444,7 +451,7 @@ public class TopologyTestDriver implements Closeable {
                 logContext,
                 TASK_ID,
                 consumer,
-                new StreamsProducer(producer, eosEnabled, logContext, streamsConfig.getString(StreamsConfig.APPLICATION_ID_CONFIG)),
+                new StreamsProducer(producer, eosEnabled ? streamsConfig.getString(StreamsConfig.APPLICATION_ID_CONFIG) : null, logContext),
                 streamsConfig.defaultProductionExceptionHandler(),
                 eosEnabled,
                 streamsMetrics);

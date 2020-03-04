@@ -375,7 +375,7 @@ public class StreamThreadStateStoreProviderTest {
             logContext,
             taskId,
             clientSupplier.consumer,
-            new StreamsProducer(clientSupplier.getProducer(new HashMap<>()), eosEnabled, logContext, streamsConfig.getString(StreamsConfig.APPLICATION_ID_CONFIG)),
+            new StreamsProducer(clientSupplier.getProducer(new HashMap<>()), eosEnabled ? streamsConfig.getString(StreamsConfig.APPLICATION_ID_CONFIG) : null, logContext),
             streamsConfig.defaultProductionExceptionHandler(),
             eosEnabled,
             new MockStreamsMetrics(metrics));

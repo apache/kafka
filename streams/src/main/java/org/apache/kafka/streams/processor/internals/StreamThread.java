@@ -335,7 +335,8 @@ public class StreamThread extends Thread {
             standbyTaskCreator,
             builder,
             adminClient,
-            stateDirectory);
+            stateDirectory
+        );
 
         log.info("Creating consumer client");
         final String applicationId = config.getString(StreamsConfig.APPLICATION_ID_CONFIG);
@@ -368,7 +369,8 @@ public class StreamThread extends Thread {
             builder,
             threadId,
             logContext,
-            assignmentErrorCode);
+            assignmentErrorCode
+        );
 
         return streamThread.updateThreadMetadata(getSharedAdminClientId(clientId));
     }

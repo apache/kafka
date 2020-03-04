@@ -23,6 +23,8 @@ import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.internals.DefaultPartitioner;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.Metric;
+import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
@@ -38,6 +40,7 @@ import org.junit.Before;
 import org.junit.Test;
 
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -51,6 +54,7 @@ import static org.easymock.EasyMock.verify;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.sameInstance;
+import static org.hamcrest.core.IsEqual.equalTo;
 import static org.junit.Assert.assertThrows;
 
 public class StreamsProducerTest {
@@ -73,12 +77,12 @@ public class StreamsProducerTest {
     private final MockProducer<byte[], byte[]> mockProducer = new MockProducer<>(
         cluster, true, new DefaultPartitioner(), byteArraySerializer, byteArraySerializer);
     private final StreamsProducer aloStreamsProducer =
-        new StreamsProducer(mockProducer, false, logContext, null);
+        new StreamsProducer(mockProducer, null, logContext);
 
     private final MockProducer<byte[], byte[]> eosMockProducer = new MockProducer<>(
         cluster, true, new DefaultPartitioner(), byteArraySerializer, byteArraySerializer);
     private final StreamsProducer eosStreamsProducer =
-        new StreamsProducer(eosMockProducer, true, logContext, "appId");
+        new StreamsProducer(eosMockProducer, "appId", logContext);
 
     private final ProducerRecord<byte[], byte[]> record =
         new ProducerRecord<>(topic, 0, 0L, new byte[0], new byte[0], new RecordHeaders());
@@ -93,7 +97,7 @@ public class StreamsProducerTest {
         {
             final NullPointerException thrown = assertThrows(
                 NullPointerException.class,
-                () -> new StreamsProducer(null, false, logContext, null)
+                () -> new StreamsProducer(null, null, logContext)
             );
 
             assertThat(thrown.getMessage(), is("producer cannot be null"));
@@ -102,7 +106,7 @@ public class StreamsProducerTest {
         {
             final NullPointerException thrown = assertThrows(
                 NullPointerException.class,
-                () -> new StreamsProducer(null, true, logContext, "appId")
+                () -> new StreamsProducer(null, "appId", logContext)
             );
 
             assertThat(thrown.getMessage(), is("producer cannot be null"));
@@ -136,7 +140,7 @@ public class StreamsProducerTest {
         replay(producer);
 
         final StreamsProducer streamsProducer =
-            new StreamsProducer(producer, false, logContext, null);
+            new StreamsProducer(producer, null, logContext);
 
         final List<PartitionInfo> partitionInfo = streamsProducer.partitionsFor(topic);
 
@@ -153,11 +157,29 @@ public class StreamsProducerTest {
         replay(producer);
 
         final StreamsProducer streamsProducer =
-            new StreamsProducer(producer, false, logContext, null);
+            new StreamsProducer(producer, null, logContext);
 
         streamsProducer.flush();
 
         verify(producer);
+    }
+
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    @Test
+    public void shouldForwardCallToMetrics() {
+        final Producer<byte[], byte[]> producer = mock(Producer.class);
+
+        final Map expected = new HashMap<>();
+        expect(producer.metrics()).andReturn(expected);
+        replay(producer);
+
+        final StreamsProducer streamsProducer = new StreamsProducer(producer, null, new LogContext());
+
+        final Map<MetricName, ? extends Metric> metrics = streamsProducer.metrics();
+
+        verify(producer);
+
+        assertThat(expected, equalTo(metrics));
     }
 
     // error handling tests
@@ -262,7 +284,7 @@ public class StreamsProducerTest {
         replay(producer);
 
         final StreamsProducer streamsProducer = 
-            new StreamsProducer(producer, true, logContext, "appId");
+            new StreamsProducer(producer, "appId", logContext);
         streamsProducer.initTransaction();
 
         streamsProducer.commitTransaction(offsetsAndMetadata);
@@ -318,7 +340,7 @@ public class StreamsProducerTest {
         replay(producer);
 
         final StreamsProducer streamsProducer = 
-            new StreamsProducer(producer, true, logContext, "appId");
+            new StreamsProducer(producer, "appId", logContext);
         streamsProducer.initTransaction();
 
         streamsProducer.abortTransaction();
@@ -333,7 +355,7 @@ public class StreamsProducerTest {
         // use `mockProducer` instead of `eosMockProducer` to avoid double Tx-Init
         mockProducer.initTransactionException = new TimeoutException("KABOOM!");
         final StreamsProducer streamsProducer = 
-            new StreamsProducer(mockProducer, true, logContext, "appId");
+            new StreamsProducer(mockProducer, "appId", logContext);
 
         final TimeoutException thrown = assertThrows(
             TimeoutException.class,
@@ -348,7 +370,7 @@ public class StreamsProducerTest {
         // use `mockProducer` instead of `eosMockProducer` to avoid double Tx-Init
         mockProducer.initTransactionException = new KafkaException("KABOOM!");
         final StreamsProducer streamsProducer = 
-            new StreamsProducer(mockProducer, true, logContext, "appId");
+            new StreamsProducer(mockProducer, "appId", logContext);
 
         final StreamsException thrown = assertThrows(
             StreamsException.class,
@@ -364,7 +386,7 @@ public class StreamsProducerTest {
         // use `mockProducer` instead of `eosMockProducer` to avoid double Tx-Init
         mockProducer.initTransactionException = new RuntimeException("KABOOM!");
         final StreamsProducer streamsProducer =
-            new StreamsProducer(mockProducer, true, logContext, "appId");
+            new StreamsProducer(mockProducer, "appId", logContext);
 
         final RuntimeException thrown = assertThrows(
             RuntimeException.class,
@@ -585,7 +607,7 @@ public class StreamsProducerTest {
         replay(producer);
 
         final StreamsProducer streamsProducer =
-            new StreamsProducer(producer, true, logContext, "appId");
+            new StreamsProducer(producer, "appId", logContext);
         streamsProducer.initTransaction();
         // call `send()` to start a transaction
         streamsProducer.send(record, null);
