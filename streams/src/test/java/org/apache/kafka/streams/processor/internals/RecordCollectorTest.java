@@ -306,8 +306,6 @@ public class RecordCollectorTest {
     @Test
     public void shouldForwardCloseToTransactionManager() {
         final StreamsProducer streamsProducer = mock(StreamsProducer.class);
-        streamsProducer.flush();
-        expectLastCall();
         replay(streamsProducer);
 
         final RecordCollector collector = new RecordCollectorImpl(
@@ -328,8 +326,6 @@ public class RecordCollectorTest {
     public void shouldAbortTxIfEosEnabled() {
         final StreamsProducer streamsProducer = mock(StreamsProducer.class);
         streamsProducer.abortTransaction();
-        streamsProducer.flush();
-        expectLastCall();
         replay(streamsProducer);
 
         final RecordCollector collector = new RecordCollectorImpl(
