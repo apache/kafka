@@ -134,7 +134,7 @@ public class TaskManagerTest {
                                       activeTaskCreator,
                                       standbyTaskCreator,
                                       topologyBuilder,
-                                      adminClient);
+                                      adminClient, stateDirectory);
         taskManager.setMainConsumer(consumer);
     }
 
@@ -143,7 +143,6 @@ public class TaskManagerTest {
         final TopicPartition newTopicPartition = new TopicPartition("topic2", 1);
         final Map<TaskId, Set<TopicPartition>> assignment = mkMap(mkEntry(taskId01, mkSet(t1p1, newTopicPartition)));
 
-        expect(activeTaskCreator.builder()).andReturn(topologyBuilder).anyTimes();
         expect(activeTaskCreator.createTasks(anyObject(), eq(assignment))).andReturn(emptyList()).anyTimes();
 
         topologyBuilder.addSubscribedTopicsFromAssignment(eq(asList(t1p1, newTopicPartition)), anyString());
@@ -168,7 +167,6 @@ public class TaskManagerTest {
         assertThat((new File(taskFolders[1], StateManagerUtil.CHECKPOINT_FILE_NAME)).createNewFile(), is(true));
         assertThat((new File(taskFolders[3], StateManagerUtil.CHECKPOINT_FILE_NAME)).createNewFile(), is(true));
 
-        expect(activeTaskCreator.stateDirectory()).andReturn(stateDirectory).once();
         expect(stateDirectory.listTaskDirectories()).andReturn(taskFolders).once();
 
         replay(activeTaskCreator, stateDirectory);
@@ -187,7 +185,7 @@ public class TaskManagerTest {
         expectRestoreToBeCompleted(consumer, changeLogReader);
         expect(activeTaskCreator.createTasks(anyObject(), eq(taskId00Assignment))).andReturn(singletonList(task00)).anyTimes();
         expect(activeTaskCreator.createTasks(anyObject(), eq(emptyMap()))).andReturn(emptyList()).anyTimes();
-        activeTaskCreator.releaseProducer(taskId00);
+        activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(taskId00);
         expectLastCall();
         expect(standbyTaskCreator.createTasks(anyObject())).andReturn(emptyList()).anyTimes();
 
@@ -328,7 +326,9 @@ public class TaskManagerTest {
         changeLogReader.remove(eq(singletonList(changelog)));
         expectLastCall();
         expect(activeTaskCreator.createTasks(anyObject(), eq(assignment))).andReturn(singletonList(task00)).anyTimes();
-        activeTaskCreator.releaseProducer();
+        activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(eq(taskId00));
+        expectLastCall();
+        activeTaskCreator.closeThreadProducerIfNeeded();
         expectLastCall();
         expect(standbyTaskCreator.createTasks(eq(emptyMap()))).andReturn(emptyList()).anyTimes();
         replay(activeTaskCreator, standbyTaskCreator, changeLogReader);
@@ -361,7 +361,9 @@ public class TaskManagerTest {
         consumer.resume(eq(emptySet()));
         expectLastCall();
         expect(activeTaskCreator.createTasks(anyObject(), eq(emptyMap()))).andReturn(emptyList()).anyTimes();
-        activeTaskCreator.releaseProducer();
+        activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(eq(taskId00));
+        expectLastCall();
+        activeTaskCreator.closeThreadProducerIfNeeded();
         expectLastCall();
         expect(standbyTaskCreator.createTasks(eq(assignment))).andReturn(singletonList(task00)).anyTimes();
         replay(consumer, activeTaskCreator, standbyTaskCreator, changeLogReader);

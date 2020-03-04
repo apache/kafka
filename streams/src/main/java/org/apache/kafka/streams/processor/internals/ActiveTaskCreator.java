@@ -27,6 +27,7 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KafkaClientSupplier;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.metrics.ThreadMetrics;
@@ -131,8 +132,6 @@ class ActiveTaskCreator {
             );
 
             if (threadProducer == null) {
-                // create one producer per task for EOS
-                // TODO: after KIP-447 this would be removed
                 final String taskProducerClientId = getTaskProducerClientId(threadId, taskId);
                 final Map<String, Object> producerConfigs = config.getProducerConfigs(taskProducerClientId);
                 producerConfigs.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, applicationId + "-" + taskId);
@@ -173,26 +172,23 @@ class ActiveTaskCreator {
         return createdTasks;
     }
 
-    public void releaseProducer() {
+    void closeThreadProducerIfNeeded() {
         if (threadProducer != null) {
             try {
                 threadProducer.close();
             } catch (final RuntimeException e) {
-                log.error("Failed to close producer due to the following error:", e);
+                throw new StreamsException("Thread Producer encounter unexpected error trying to close", e);
             }
-        }
-        if (!taskProducers.isEmpty()) {
-            throw new IllegalStateException("Expected task producers to have been cleared before closing");
         }
     }
 
-    void releaseProducer(final TaskId id) {
+    void closeAndRemoveTaskProducerIfNeeded(final TaskId id) {
         final Producer<byte[], byte[]> producer = taskProducers.remove(id);
         if (producer != null) {
             try {
                 producer.close();
             } catch (final RuntimeException e) {
-                log.error("Failed to close producer due to the following error:", e);
+                throw new StreamsException("[" + id + "] Producer encounter unexpected error trying to close", e);
             }
         }
     }
@@ -225,13 +221,5 @@ class ActiveTaskCreator {
                                 .map(taskId -> getTaskProducerClientId(threadId, taskId))
                                 .collect(Collectors.toSet());
         }
-    }
-
-    public InternalTopologyBuilder builder() {
-        return builder;
-    }
-
-    public StateDirectory stateDirectory() {
-        return stateDirectory;
     }
 }

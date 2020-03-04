@@ -333,8 +333,8 @@ public class StreamThread extends Thread {
             activeTaskCreator,
             standbyTaskCreator,
             builder,
-            adminClient
-        );
+            adminClient,
+            stateDirectory);
 
         log.info("Creating consumer client");
         final String applicationId = config.getString(StreamsConfig.APPLICATION_ID_CONFIG);

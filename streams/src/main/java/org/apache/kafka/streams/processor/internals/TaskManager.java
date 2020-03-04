@@ -66,6 +66,7 @@ public class TaskManager {
     private final StandbyTaskCreator standbyTaskCreator;
     private final InternalTopologyBuilder builder;
     private final Admin adminClient;
+    private final StateDirectory stateDirectory;
 
     private final Map<TaskId, Task> tasks = new TreeMap<>();
     // materializing this relationship because the lookup is on the hot path
@@ -84,7 +85,8 @@ public class TaskManager {
                 final ActiveTaskCreator activeTaskCreator,
                 final StandbyTaskCreator standbyTaskCreator,
                 final InternalTopologyBuilder builder,
-                final Admin adminClient) {
+                final Admin adminClient,
+                final StateDirectory stateDirectory) {
         this.changelogReader = changelogReader;
         this.processId = processId;
         this.logPrefix = logPrefix;
@@ -93,6 +95,7 @@ public class TaskManager {
         this.standbyTaskCreator = standbyTaskCreator;
         this.builder = builder;
         this.adminClient = adminClient;
+        this.stateDirectory = stateDirectory;
 
         final LogContext logContext = new LogContext(logPrefix);
         this.log = logContext.logger(getClass());
@@ -193,7 +196,7 @@ public class TaskManager {
                     task.closeDirty();
                 } finally {
                     if (task.isActive()) {
-                        activeTaskCreator.releaseProducer(task.id());
+                        activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(task.id());
                     }
                 }
 
@@ -345,7 +348,7 @@ public class TaskManager {
                 cleanupTask(task);
                 task.closeDirty();
                 iterator.remove();
-                activeTaskCreator.releaseProducer(task.id());
+                activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(task.id());
             }
 
             for (final TopicPartition inputPartition : inputPartitions) {
@@ -366,7 +369,7 @@ public class TaskManager {
 
         final Set<TaskId> locallyStoredTasks = new HashSet<>();
 
-        final File[] stateDirs = activeTaskCreator.stateDirectory().listTaskDirectories();
+        final File[] stateDirs = stateDirectory.listTaskDirectories();
         if (stateDirs != null) {
             for (final File dir : stateDirs) {
                 try {
@@ -419,10 +422,11 @@ public class TaskManager {
             } else {
                 task.closeDirty();
             }
+            activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(task.id());
             iterator.remove();
         }
 
-        activeTaskCreator.releaseProducer();
+        activeTaskCreator.closeThreadProducerIfNeeded();
 
         final RuntimeException fatalException = firstException.get();
         if (fatalException != null) {
