@@ -753,7 +753,7 @@ public class StreamThread extends Thread {
                     log.info("Version probing detected. Rejoining the consumer group to trigger a new rebalance.");
 
                     assignmentErrorCode.set(AssignorError.NONE.code());
-                    enforceRebalance();
+                    mainConsumer.enforceRebalance();
                 }
             } catch (final TaskCorruptedException e) {
                 log.warn("Detected the states of tasks {} are corrupted. " +
@@ -766,16 +766,11 @@ public class StreamThread extends Thread {
                     "Will close out all assigned tasks and rejoin the consumer group.");
 
                 taskManager.handleLostAll();
-                enforceRebalance();
+                mainConsumer.enforceRebalance();
             }
         }
     }
-
-    private void enforceRebalance() {
-        mainConsumer.unsubscribe();
-        subscribeConsumer();
-    }
-
+    
     private void subscribeConsumer() {
         if (builder.usesPatternSubscription()) {
             mainConsumer.subscribe(builder.sourceTopicPattern(), rebalanceListener);
