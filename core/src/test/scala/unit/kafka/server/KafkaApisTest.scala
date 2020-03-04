@@ -25,6 +25,7 @@ import java.util.Random
 import java.util.{Collections, Optional}
 import java.util.concurrent.TimeUnit
 
+import kafka.api.LeaderAndIsr
 import kafka.api.{ApiVersion, KAFKA_0_10_2_IV0, KAFKA_2_2_IV1}
 import kafka.cluster.Partition
 import kafka.controller.KafkaController
@@ -48,6 +49,7 @@ import org.apache.kafka.common.memory.MemoryPool
 import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocol
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity
 import org.apache.kafka.common.message.OffsetDeleteRequestData.{OffsetDeleteRequestPartition, OffsetDeleteRequestTopic, OffsetDeleteRequestTopicCollection}
+import org.apache.kafka.common.message.StopReplicaRequestData.{StopReplicaPartitionState, StopReplicaTopicState}
 import org.apache.kafka.common.message.UpdateMetadataRequestData.{UpdateMetadataBroker, UpdateMetadataEndpoint, UpdateMetadataPartitionState}
 import org.apache.kafka.common.message._
 import org.apache.kafka.common.metrics.Metrics
@@ -469,24 +471,57 @@ class KafkaApisTest {
     val controllerEpoch = 5
     val brokerEpoch = 230498320L
 
+    val fooPartition = new TopicPartition("foo", 0)
     val groupMetadataPartition = new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0)
     val txnStatePartition = new TopicPartition(Topic.TRANSACTION_STATE_TOPIC_NAME, 0)
+
+    val topicStates = Seq(
+      new StopReplicaTopicState()
+        .setTopicName(groupMetadataPartition.topic())
+        .setPartitionStates(Seq(new StopReplicaPartitionState()
+          .setPartitionIndex(groupMetadataPartition.partition())
+          .setLeaderEpoch(LeaderAndIsr.initialLeaderEpoch + 2)
+          .setDeletePartition(true)).asJava),
+      new StopReplicaTopicState()
+        .setTopicName(txnStatePartition.topic())
+        .setPartitionStates(Seq(new StopReplicaPartitionState()
+          .setPartitionIndex(txnStatePartition.partition())
+          .setLeaderEpoch(LeaderAndIsr.initialLeaderEpoch + 2)
+          .setDeletePartition(true)).asJava),
+      new StopReplicaTopicState()
+        .setTopicName(fooPartition.topic())
+        .setPartitionStates(Seq(new StopReplicaPartitionState()
+          .setPartitionIndex(fooPartition.partition())
+          .setLeaderEpoch(LeaderAndIsr.initialLeaderEpoch + 2)
+          .setDeletePartition(true)).asJava)
+    ).asJava
 
     val stopReplicaRequest = new StopReplicaRequest.Builder(
       ApiKeys.STOP_REPLICA.latestVersion,
       controllerId,
       controllerEpoch,
       brokerEpoch,
-      true,
-      Set(groupMetadataPartition, txnStatePartition).asJava
+      false,
+      topicStates
     ).build()
     val request = buildRequest(stopReplicaRequest)
 
-    EasyMock.expect(replicaManager.stopReplicas(anyObject())).andReturn(
-      (mutable.Map(groupMetadataPartition -> Errors.NONE, txnStatePartition -> Errors.NONE), Errors.NONE))
+    EasyMock.expect(replicaManager.stopReplicas(
+      EasyMock.eq(request.context.correlationId),
+      EasyMock.eq(controllerId),
+      EasyMock.eq(controllerEpoch),
+      EasyMock.eq(brokerEpoch),
+      EasyMock.eq(stopReplicaRequest.partitionStates().asScala)
+    )).andReturn(
+      (mutable.Map(
+        groupMetadataPartition -> Errors.NONE,
+        txnStatePartition -> Errors.NONE,
+        fooPartition -> Errors.NONE
+      ), Errors.NONE)
+    )
     EasyMock.expect(controller.brokerEpoch).andStubReturn(brokerEpoch)
 
-    txnCoordinator.onResignation(txnStatePartition.partition, None)
+    txnCoordinator.onResignation(txnStatePartition.partition, Some(LeaderAndIsr.initialLeaderEpoch + 2))
     EasyMock.expectLastCall()
 
     groupCoordinator.onResignation(groupMetadataPartition.partition)

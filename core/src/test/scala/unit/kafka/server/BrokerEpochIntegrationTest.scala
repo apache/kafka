@@ -25,6 +25,7 @@ import kafka.utils.TestUtils.createTopic
 import kafka.zk.ZooKeeperTestHarness
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState
+import org.apache.kafka.common.message.StopReplicaRequestData.{StopReplicaPartitionState, StopReplicaTopicState}
 import org.apache.kafka.common.message.UpdateMetadataRequestData.{UpdateMetadataBroker, UpdateMetadataEndpoint, UpdateMetadataPartitionState}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.ListenerName
@@ -203,10 +204,18 @@ class BrokerEpochIntegrationTest extends ZooKeeperTestHarness {
 
       // Send StopReplica request with correct broker epoch
       {
+        val topicStates = Seq(
+          new StopReplicaTopicState()
+            .setTopicName(tp.topic())
+            .setPartitionStates(Seq(new StopReplicaPartitionState()
+              .setPartitionIndex(tp.partition())
+              .setLeaderEpoch(LeaderAndIsr.initialLeaderEpoch + 2)
+              .setDeletePartition(true)).asJava)
+        ).asJava
         val requestBuilder = new StopReplicaRequest.Builder(
           ApiKeys.STOP_REPLICA.latestVersion, controllerId, controllerEpoch,
           epochInRequest, // Correct broker epoch
-          true, Set(tp).asJava)
+          false, topicStates)
 
         if (isEpochInRequestStale) {
           sendAndVerifyStaleBrokerEpochInResponse(controllerChannelManager, requestBuilder)
