@@ -98,7 +98,7 @@ public class TaskManager {
         this.stateDirectory = stateDirectory;
 
         final LogContext logContext = new LogContext(logPrefix);
-        this.log = logContext.logger(getClass());
+        log = logContext.logger(getClass());
     }
 
     void setMainConsumer(final Consumer<byte[], byte[]> mainConsumer) {
@@ -226,11 +226,15 @@ public class TaskManager {
         }
 
         if (!activeTasksToCreate.isEmpty()) {
-            activeTaskCreator.createTasks(mainConsumer, activeTasksToCreate).forEach(this::addNewTask);
+            for (final Task task : activeTaskCreator.createTasks(mainConsumer, activeTasksToCreate)) {
+                addNewTask(task);
+            }
         }
 
         if (!standbyTasksToCreate.isEmpty()) {
-            standbyTaskCreator.createTasks(standbyTasksToCreate).forEach(this::addNewTask);
+            for (final Task task : standbyTaskCreator.createTasks(standbyTasksToCreate)) {
+                addNewTask(task);
+            }
         }
 
         builder.addSubscribedTopicsFromAssignment(
@@ -271,7 +275,7 @@ public class TaskManager {
                     // it is possible that if there are multiple threads within the instance that one thread
                     // trying to grab the task from the other, while the other has not released the lock since
                     // it did not participate in the rebalance. In this case we can just retry in the next iteration
-                    log.debug("Could not initialize {} due to {}; will retry", task.id(), e.toString());
+                    log.debug("Could not initialize {} due to {}; will retry", task.id(), e);
                     allRunning = false;
                 }
             }
@@ -288,7 +292,7 @@ public class TaskManager {
                     try {
                         task.completeRestoration();
                     } catch (final TimeoutException e) {
-                        log.debug("Could not complete restoration for {} due to {}; will retry", task.id(), e.toString());
+                        log.debug("Could not complete restoration for {} due to {}; will retry", task.id(), e);
 
                         allRunning = false;
                     }
@@ -392,7 +396,9 @@ public class TaskManager {
         // 1. remove the changelog partitions from changelog reader;
         // 2. remove the input partitions from the materialized map;
         // 3. remove the task metrics from the metrics registry
-        changelogReader.remove(task.changelogPartitions());
+        if (!task.changelogPartitions().isEmpty()) {
+            changelogReader.remove(task.changelogPartitions());
+        }
 
         for (final TopicPartition inputPartition : task.inputPartitions()) {
             partitionToTask.remove(inputPartition);
@@ -422,7 +428,9 @@ public class TaskManager {
             } else {
                 task.closeDirty();
             }
-            activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(task.id());
+            if (task.isActive()) {
+                activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(task.id());
+            }
             iterator.remove();
         }
 
@@ -430,7 +438,7 @@ public class TaskManager {
 
         final RuntimeException fatalException = firstException.get();
         if (fatalException != null) {
-            throw fatalException;
+            throw new RuntimeException("Unexpected exception while closing task", fatalException);
         }
     }
 
@@ -616,16 +624,6 @@ public class TaskManager {
                          .append('(').append(task.isActive() ? "active" : "standby").append(')');
         }
         return stringBuilder.toString();
-    }
-
-    // below are for testing only
-    StandbyTask standbyTask(final TopicPartition partition) {
-        for (final Task task : (Iterable<Task>) standbyTaskStream()::iterator) {
-            if (task.inputPartitions().contains(partition)) {
-                return (StandbyTask) task;
-            }
-        }
-        return null;
     }
 
     Map<MetricName, Metric> producerMetrics() {

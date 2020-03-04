@@ -27,16 +27,17 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Measurable;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.errors.LockException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
-
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.easymock.EasyMock;
@@ -207,6 +208,100 @@ public class TaskManagerTest {
     }
 
     @Test
+    public void shouldCloseActiveTasksWhenHandlingLostTasks() {
+        final Task task00 = new StateMachineTask(taskId00, taskId00Partitions, true);
+        final Task task01 = new StateMachineTask(taskId01, taskId01Partitions, false);
+
+        expectRestoreToBeCompleted(consumer, changeLogReader);
+        expect(activeTaskCreator.createTasks(anyObject(), eq(taskId00Assignment))).andReturn(singletonList(task00)).anyTimes();
+        expect(activeTaskCreator.createTasks(anyObject(), eq(emptyMap()))).andReturn(emptyList()).anyTimes();
+        activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(taskId00);
+        expectLastCall();
+        expect(standbyTaskCreator.createTasks(eq(taskId01Assignment))).andReturn(singletonList(task01)).anyTimes();
+
+        topologyBuilder.addSubscribedTopicsFromAssignment(anyObject(), anyString());
+        expectLastCall().anyTimes();
+
+        replay(activeTaskCreator, standbyTaskCreator, topologyBuilder, consumer, changeLogReader);
+
+        taskManager.handleAssignment(taskId00Assignment, taskId01Assignment);
+
+        assertThat(taskManager.tryToCompleteRestoration(), is(true));
+        assertThat(task00.state(), is(Task.State.RUNNING));
+        assertThat(task01.state(), is(Task.State.RUNNING));
+        taskManager.handleLostAll();
+        assertThat(task00.state(), is(Task.State.CLOSED));
+        assertThat(task01.state(), is(Task.State.RUNNING));
+        assertThat(taskManager.activeTaskMap(), Matchers.anEmptyMap());
+        assertThat(taskManager.standbyTaskMap(), is(singletonMap(taskId01, task01)));
+    }
+
+    @Test
+    public void shouldReviveCorruptTasks() {
+        final ProcessorStateManager stateManager = EasyMock.createStrictMock(ProcessorStateManager.class);
+        stateManager.markChangelogAsCorrupted(taskId00Partitions);
+        replay(stateManager);
+        final Task task00 = new StateMachineTask(taskId00, taskId00Partitions, true, stateManager);
+
+        expectRestoreToBeCompleted(consumer, changeLogReader);
+        expect(activeTaskCreator.createTasks(anyObject(), eq(taskId00Assignment))).andReturn(singletonList(task00)).anyTimes();
+        expect(activeTaskCreator.createTasks(anyObject(), eq(emptyMap()))).andReturn(emptyList()).anyTimes();
+        activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(taskId00);
+        expectLastCall();
+        expect(standbyTaskCreator.createTasks(anyObject())).andReturn(emptyList()).anyTimes();
+
+        topologyBuilder.addSubscribedTopicsFromAssignment(anyObject(), anyString());
+        expectLastCall().anyTimes();
+
+        replay(activeTaskCreator, standbyTaskCreator, topologyBuilder, consumer, changeLogReader);
+
+        taskManager.handleAssignment(taskId00Assignment, emptyMap());
+
+        assertThat(taskManager.tryToCompleteRestoration(), is(true));
+        assertThat(task00.state(), is(Task.State.RUNNING));
+        taskManager.handleCorruption(singletonMap(taskId00, taskId00Partitions));
+        assertThat(task00.state(), is(Task.State.CREATED));
+        assertThat(taskManager.activeTaskMap(), is(singletonMap(taskId00, task00)));
+        assertThat(taskManager.standbyTaskMap(), Matchers.anEmptyMap());
+        verify(stateManager);
+    }
+
+    @Test
+    public void shouldReviveCorruptTasksEvenIfTheyCannotCloseClean() {
+        final ProcessorStateManager stateManager = EasyMock.createStrictMock(ProcessorStateManager.class);
+        stateManager.markChangelogAsCorrupted(taskId00Partitions);
+        replay(stateManager);
+        final Task task00 = new StateMachineTask(taskId00, taskId00Partitions, true, stateManager) {
+            @Override
+            public void closeClean() {
+                throw new RuntimeException("oops");
+            }
+        };
+
+        expectRestoreToBeCompleted(consumer, changeLogReader);
+        expect(activeTaskCreator.createTasks(anyObject(), eq(taskId00Assignment))).andReturn(singletonList(task00)).anyTimes();
+        expect(activeTaskCreator.createTasks(anyObject(), eq(emptyMap()))).andReturn(emptyList()).anyTimes();
+        activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(taskId00);
+        expectLastCall();
+        expect(standbyTaskCreator.createTasks(anyObject())).andReturn(emptyList()).anyTimes();
+
+        topologyBuilder.addSubscribedTopicsFromAssignment(anyObject(), anyString());
+        expectLastCall().anyTimes();
+
+        replay(activeTaskCreator, standbyTaskCreator, topologyBuilder, consumer, changeLogReader);
+
+        taskManager.handleAssignment(taskId00Assignment, emptyMap());
+
+        assertThat(taskManager.tryToCompleteRestoration(), is(true));
+        assertThat(task00.state(), is(Task.State.RUNNING));
+        taskManager.handleCorruption(singletonMap(taskId00, taskId00Partitions));
+        assertThat(task00.state(), is(Task.State.CREATED));
+        assertThat(taskManager.activeTaskMap(), is(singletonMap(taskId00, task00)));
+        assertThat(taskManager.standbyTaskMap(), Matchers.anEmptyMap());
+        verify(stateManager);
+    }
+
+    @Test
     public void shouldCloseStandbyUnassignedTasksWhenCreatingNewTasks() {
         final Task task00 = new StateMachineTask(taskId00, taskId00Partitions, false);
 
@@ -225,20 +320,24 @@ public class TaskManagerTest {
     @Test
     public void shouldAddNonResumedSuspendedTasks() {
         final Task task00 = new StateMachineTask(taskId00, taskId00Partitions, true);
+        final Task task01 = new StateMachineTask(taskId01, taskId01Partitions, false);
 
         expectRestoreToBeCompleted(consumer, changeLogReader);
         // expect these calls twice (because we're going to tryToCompleteRestoration twice)
         expectRestoreToBeCompleted(consumer, changeLogReader);
         expect(activeTaskCreator.createTasks(anyObject(), eq(taskId00Assignment))).andReturn(singletonList(task00));
-        replay(activeTaskCreator, consumer, changeLogReader);
+        expect(standbyTaskCreator.createTasks(eq(taskId01Assignment))).andReturn(singletonList(task01));
+        replay(activeTaskCreator, standbyTaskCreator, consumer, changeLogReader);
 
-        taskManager.handleAssignment(taskId00Assignment, emptyMap());
+        taskManager.handleAssignment(taskId00Assignment, taskId01Assignment);
         assertThat(taskManager.tryToCompleteRestoration(), is(true));
         assertThat(task00.state(), is(Task.State.RUNNING));
+        assertThat(task01.state(), is(Task.State.RUNNING));
 
-        taskManager.handleAssignment(taskId00Assignment, emptyMap());
+        taskManager.handleAssignment(taskId00Assignment, taskId01Assignment);
         assertThat(taskManager.tryToCompleteRestoration(), is(true));
         assertThat(task00.state(), is(Task.State.RUNNING));
+        assertThat(task01.state(), is(Task.State.RUNNING));
 
         verify(activeTaskCreator);
     }
@@ -266,6 +365,89 @@ public class TaskManagerTest {
 
         assertThat(task00.state(), is(Task.State.RUNNING));
         assertThat(taskManager.activeTaskMap(), Matchers.equalTo(singletonMap(taskId00, task00)));
+        assertThat(taskManager.standbyTaskMap(), Matchers.anEmptyMap());
+        verify(activeTaskCreator);
+    }
+
+    @Test
+    public void shouldNotCompleteRestorationIfTasksCannotInitialize() {
+        final Map<TaskId, Set<TopicPartition>> assignment = mkMap(
+            mkEntry(taskId00, taskId00Partitions),
+            mkEntry(taskId01, taskId01Partitions)
+        );
+        final Task task00 = new StateMachineTask(taskId00, taskId00Partitions, true) {
+            @Override
+            public void initializeIfNeeded() {
+                throw new LockException("can't lock");
+            }
+        };
+        final Task task01 = new StateMachineTask(taskId01, taskId01Partitions, true) {
+            @Override
+            public void initializeIfNeeded() {
+                throw new TimeoutException("timed out");
+            }
+        };
+
+        expect(changeLogReader.completedChangelogs()).andReturn(emptySet());
+        expect(consumer.assignment()).andReturn(emptySet());
+        consumer.resume(eq(emptySet()));
+        expectLastCall();
+        changeLogReader.transitToRestoreActive();
+        expectLastCall();
+        expect(activeTaskCreator.createTasks(anyObject(), eq(assignment))).andReturn(asList(task00, task01)).anyTimes();
+        expect(standbyTaskCreator.createTasks(eq(emptyMap()))).andReturn(emptyList()).anyTimes();
+        replay(consumer, activeTaskCreator, standbyTaskCreator, changeLogReader);
+
+        taskManager.handleAssignment(assignment, emptyMap());
+
+        assertThat(task00.state(), is(Task.State.CREATED));
+        assertThat(task01.state(), is(Task.State.CREATED));
+
+        assertThat(taskManager.tryToCompleteRestoration(), is(false));
+
+        assertThat(task00.state(), is(Task.State.CREATED));
+        assertThat(task01.state(), is(Task.State.CREATED));
+        assertThat(
+            taskManager.activeTaskMap(),
+            Matchers.equalTo(mkMap(mkEntry(taskId00, task00), mkEntry(taskId01, task01)))
+        );
+        assertThat(taskManager.standbyTaskMap(), Matchers.anEmptyMap());
+        verify(activeTaskCreator);
+    }
+
+    @Test
+    public void shouldNotCompleteRestorationIfTaskCannotCompleteRestoration() {
+        final Map<TaskId, Set<TopicPartition>> assignment = mkMap(
+            mkEntry(taskId00, taskId00Partitions)
+        );
+        final Task task00 = new StateMachineTask(taskId00, taskId00Partitions, true) {
+            @Override
+            public void completeRestoration() {
+                throw new TimeoutException("timeout!");
+            }
+        };
+
+        expect(changeLogReader.completedChangelogs()).andReturn(emptySet());
+        expect(consumer.assignment()).andReturn(emptySet());
+        consumer.resume(eq(emptySet()));
+        expectLastCall();
+        changeLogReader.transitToRestoreActive();
+        expectLastCall();
+        expect(activeTaskCreator.createTasks(anyObject(), eq(assignment))).andReturn(singletonList(task00)).anyTimes();
+        expect(standbyTaskCreator.createTasks(eq(emptyMap()))).andReturn(emptyList()).anyTimes();
+        replay(consumer, activeTaskCreator, standbyTaskCreator, changeLogReader);
+
+        taskManager.handleAssignment(assignment, emptyMap());
+
+        assertThat(task00.state(), is(Task.State.CREATED));
+
+        assertThat(taskManager.tryToCompleteRestoration(), is(false));
+
+        assertThat(task00.state(), is(Task.State.RESTORING));
+        assertThat(
+            taskManager.activeTaskMap(),
+            Matchers.equalTo(mkMap(mkEntry(taskId00, task00)))
+        );
         assertThat(taskManager.standbyTaskMap(), Matchers.anEmptyMap());
         verify(activeTaskCreator);
     }
@@ -308,25 +490,45 @@ public class TaskManagerTest {
     }
 
     @Test
-    public void shouldCloseActiveTasksOnShutdown() {
+    public void shouldCloseActiveTasksAndPropogateExceptionsOnCleanShutdown() {
         final TopicPartition changelog = new TopicPartition("changelog", 0);
-        final Map<TaskId, Set<TopicPartition>> assignment = singletonMap(taskId00, taskId00Partitions);
+        final Map<TaskId, Set<TopicPartition>> assignment = mkMap(
+            mkEntry(taskId00, taskId00Partitions),
+            mkEntry(taskId01, taskId01Partitions),
+            mkEntry(taskId02, taskId02Partitions)
+        );
         final Task task00 = new StateMachineTask(taskId00, taskId00Partitions, true) {
             @Override
             public Collection<TopicPartition> changelogPartitions() {
                 return singletonList(changelog);
             }
         };
+        final Task task01 = new StateMachineTask(taskId01, taskId01Partitions, true) {
+            @Override
+            public void closeClean() {
+                throw new TaskMigratedException("migrated", new RuntimeException("cause"));
+            }
+        };
+        final Task task02 = new StateMachineTask(taskId02, taskId02Partitions, true) {
+            @Override
+            public void closeClean() {
+                throw new RuntimeException("oops");
+            }
+        };
 
-        EasyMock.resetToStrict(changeLogReader);
+        resetToStrict(changeLogReader);
         changeLogReader.transitToRestoreActive();
         expectLastCall();
         expect(changeLogReader.completedChangelogs()).andReturn(emptySet());
         // make sure we also remove the changelog partitions from the changelog reader
         changeLogReader.remove(eq(singletonList(changelog)));
         expectLastCall();
-        expect(activeTaskCreator.createTasks(anyObject(), eq(assignment))).andReturn(singletonList(task00)).anyTimes();
+        expect(activeTaskCreator.createTasks(anyObject(), eq(assignment))).andReturn(asList(task00, task01, task02)).anyTimes();
         activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(eq(taskId00));
+        expectLastCall();
+        activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(eq(taskId01));
+        expectLastCall();
+        activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(eq(taskId02));
         expectLastCall();
         activeTaskCreator.closeThreadProducerIfNeeded();
         expectLastCall();
@@ -336,15 +538,113 @@ public class TaskManagerTest {
         taskManager.handleAssignment(assignment, emptyMap());
 
         assertThat(task00.state(), is(Task.State.CREATED));
+        assertThat(task01.state(), is(Task.State.CREATED));
+        assertThat(task02.state(), is(Task.State.CREATED));
 
         taskManager.tryToCompleteRestoration();
 
         assertThat(task00.state(), is(Task.State.RESTORING));
-        assertThat(taskManager.activeTaskMap(), Matchers.equalTo(singletonMap(taskId00, task00)));
+        assertThat(task01.state(), is(Task.State.RUNNING));
+        assertThat(task02.state(), is(Task.State.RUNNING));
+        assertThat(
+            taskManager.activeTaskMap(),
+            Matchers.equalTo(
+                mkMap(
+                    mkEntry(taskId00, task00),
+                    mkEntry(taskId01, task01),
+                    mkEntry(taskId02, task02)
+                )
+            )
+        );
         assertThat(taskManager.standbyTaskMap(), Matchers.anEmptyMap());
-        taskManager.shutdown(true);
+
+        final RuntimeException exception = assertThrows(RuntimeException.class, () -> taskManager.shutdown(true));
 
         assertThat(task00.state(), is(Task.State.CLOSED));
+        assertThat(task01.state(), is(Task.State.CLOSED));
+        assertThat(task02.state(), is(Task.State.CLOSED));
+        assertThat(exception.getMessage(), is("Unexpected exception while closing task"));
+        assertThat(exception.getCause().getMessage(), is("oops"));
+        assertThat(taskManager.activeTaskMap(), Matchers.anEmptyMap());
+        assertThat(taskManager.standbyTaskMap(), Matchers.anEmptyMap());
+        // the active task creator should also get closed (so that it closes the thread producer if applicable)
+        verify(activeTaskCreator, changeLogReader);
+    }
+
+    @Test
+    public void shouldCloseActiveTasksAndIgnoreExceptionsOnUncleanShutdown() {
+        final TopicPartition changelog = new TopicPartition("changelog", 0);
+        final Map<TaskId, Set<TopicPartition>> assignment = mkMap(
+            mkEntry(taskId00, taskId00Partitions),
+            mkEntry(taskId01, taskId01Partitions),
+            mkEntry(taskId02, taskId02Partitions)
+        );
+        final Task task00 = new StateMachineTask(taskId00, taskId00Partitions, true) {
+            @Override
+            public Collection<TopicPartition> changelogPartitions() {
+                return singletonList(changelog);
+            }
+        };
+        final Task task01 = new StateMachineTask(taskId01, taskId01Partitions, true) {
+            @Override
+            public void closeClean() {
+                throw new TaskMigratedException("migrated", new RuntimeException("cause"));
+            }
+        };
+        final Task task02 = new StateMachineTask(taskId02, taskId02Partitions, true) {
+            @Override
+            public void closeClean() {
+                throw new RuntimeException("oops");
+            }
+        };
+
+        resetToStrict(changeLogReader);
+        changeLogReader.transitToRestoreActive();
+        expectLastCall();
+        expect(changeLogReader.completedChangelogs()).andReturn(emptySet());
+        // make sure we also remove the changelog partitions from the changelog reader
+        changeLogReader.remove(eq(singletonList(changelog)));
+        expectLastCall();
+        expect(activeTaskCreator.createTasks(anyObject(), eq(assignment))).andReturn(asList(task00, task01, task02)).anyTimes();
+        activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(eq(taskId00));
+        expectLastCall();
+        activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(eq(taskId01));
+        expectLastCall();
+        activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(eq(taskId02));
+        expectLastCall();
+        activeTaskCreator.closeThreadProducerIfNeeded();
+        expectLastCall();
+        expect(standbyTaskCreator.createTasks(eq(emptyMap()))).andReturn(emptyList()).anyTimes();
+        replay(activeTaskCreator, standbyTaskCreator, changeLogReader);
+
+        taskManager.handleAssignment(assignment, emptyMap());
+
+        assertThat(task00.state(), is(Task.State.CREATED));
+        assertThat(task01.state(), is(Task.State.CREATED));
+        assertThat(task02.state(), is(Task.State.CREATED));
+
+        taskManager.tryToCompleteRestoration();
+
+        assertThat(task00.state(), is(Task.State.RESTORING));
+        assertThat(task01.state(), is(Task.State.RUNNING));
+        assertThat(task02.state(), is(Task.State.RUNNING));
+        assertThat(
+            taskManager.activeTaskMap(),
+            Matchers.equalTo(
+                mkMap(
+                    mkEntry(taskId00, task00),
+                    mkEntry(taskId01, task01),
+                    mkEntry(taskId02, task02)
+                )
+            )
+        );
+        assertThat(taskManager.standbyTaskMap(), Matchers.anEmptyMap());
+
+        taskManager.shutdown(false);
+
+        assertThat(task00.state(), is(Task.State.CLOSED));
+        assertThat(task01.state(), is(Task.State.CLOSED));
+        assertThat(task02.state(), is(Task.State.CLOSED));
         assertThat(taskManager.activeTaskMap(), Matchers.anEmptyMap());
         assertThat(taskManager.standbyTaskMap(), Matchers.anEmptyMap());
         // the active task creator should also get closed (so that it closes the thread producer if applicable)
@@ -361,8 +661,6 @@ public class TaskManagerTest {
         consumer.resume(eq(emptySet()));
         expectLastCall();
         expect(activeTaskCreator.createTasks(anyObject(), eq(emptyMap()))).andReturn(emptyList()).anyTimes();
-        activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(eq(taskId00));
-        expectLastCall();
         activeTaskCreator.closeThreadProducerIfNeeded();
         expectLastCall();
         expect(standbyTaskCreator.createTasks(eq(assignment))).andReturn(singletonList(task00)).anyTimes();
@@ -424,6 +722,20 @@ public class TaskManagerTest {
     }
 
     @Test
+    public void shouldHandleRebalanceEvents() {
+        final Set<TopicPartition> assignment = singleton(new TopicPartition("assignment", 0));
+        expect(consumer.assignment()).andReturn(assignment);
+        consumer.pause(assignment);
+        expectLastCall();
+        replay(consumer);
+        assertThat(taskManager.isRebalanceInProgress(), is(false));
+        taskManager.handleRebalanceStart(emptySet());
+        assertThat(taskManager.isRebalanceInProgress(), is(true));
+        taskManager.handleRebalanceComplete();
+        assertThat(taskManager.isRebalanceInProgress(), is(false));
+    }
+
+    @Test
     public void shouldCommitActiveAndStandbyTasks() {
         final StateMachineTask task00 = new StateMachineTask(taskId00, taskId00Partitions, true);
         final StateMachineTask task01 = new StateMachineTask(taskId01, taskId01Partitions, false);
@@ -446,6 +758,41 @@ public class TaskManagerTest {
         task01.setCommitNeeded();
 
         assertThat(taskManager.commitAll(), equalTo(2));
+    }
+
+    @Test
+    public void shouldNotCommitActiveAndStandbyTasks() {
+        final StateMachineTask task00 = new StateMachineTask(taskId00, taskId00Partitions, true);
+        final StateMachineTask task01 = new StateMachineTask(taskId01, taskId01Partitions, false);
+
+        expectRestoreToBeCompleted(consumer, changeLogReader);
+        expect(activeTaskCreator.createTasks(anyObject(), eq(taskId00Assignment)))
+            .andReturn(singletonList(task00)).anyTimes();
+        expect(standbyTaskCreator.createTasks(eq(taskId01Assignment)))
+            .andReturn(singletonList(task01)).anyTimes();
+
+        replay(activeTaskCreator, standbyTaskCreator, consumer, changeLogReader);
+
+        taskManager.handleAssignment(taskId00Assignment, taskId01Assignment);
+        assertThat(taskManager.tryToCompleteRestoration(), is(true));
+
+        assertThat(task00.state(), is(Task.State.RUNNING));
+        assertThat(task01.state(), is(Task.State.RUNNING));
+
+        task00.setCommitNeeded();
+        task01.setCommitNeeded();
+
+        taskManager.handleRebalanceStart(emptySet());
+
+        assertThat(
+            taskManager.commitAll(),
+            equalTo(-1) // sentinel indicating that nothing was done because a rebalance is in progress
+        );
+
+        assertThat(
+            taskManager.maybeCommitActiveTasksPerUserRequested(),
+            equalTo(-1) // sentinel indicating that nothing was done because a rebalance is in progress
+        );
     }
 
     @Test
@@ -667,6 +1014,111 @@ public class TaskManagerTest {
     }
 
     @Test
+    public void shouldPropagateTaskMigratedExceptionsInProcessActiveTasks() {
+        final StateMachineTask task00 = new StateMachineTask(taskId00, taskId00Partitions, true){
+            @Override
+            public boolean process(final long wallClockTime) {
+                throw new TaskMigratedException("migrated", new RuntimeException("cause"));
+            }
+        };
+
+        expectRestoreToBeCompleted(consumer, changeLogReader);
+        expect(activeTaskCreator.createTasks(anyObject(), eq(taskId00Assignment)))
+            .andReturn(singletonList(task00)).anyTimes();
+
+        replay(activeTaskCreator, consumer, changeLogReader);
+
+        taskManager.handleAssignment(taskId00Assignment, emptyMap());
+        assertThat(taskManager.tryToCompleteRestoration(), is(true));
+
+        assertThat(task00.state(), is(Task.State.RUNNING));
+
+        final TopicPartition partition = taskId00Partitions.iterator().next();
+        task00.addRecords(
+            partition,
+            singletonList(new ConsumerRecord<>(partition.topic(), partition.partition(), 0L, null, null))
+        );
+
+        assertThrows(TaskMigratedException.class, () -> taskManager.process(0L));
+    }
+
+    @Test
+    public void shouldPropagateRuntimeExceptionsInProcessActiveTasks() {
+        final StateMachineTask task00 = new StateMachineTask(taskId00, taskId00Partitions, true){
+            @Override
+            public boolean process(final long wallClockTime) {
+                throw new RuntimeException("oops");
+            }
+        };
+
+        expectRestoreToBeCompleted(consumer, changeLogReader);
+        expect(activeTaskCreator.createTasks(anyObject(), eq(taskId00Assignment)))
+            .andReturn(singletonList(task00)).anyTimes();
+
+        replay(activeTaskCreator, consumer, changeLogReader);
+
+        taskManager.handleAssignment(taskId00Assignment, emptyMap());
+        assertThat(taskManager.tryToCompleteRestoration(), is(true));
+
+        assertThat(task00.state(), is(Task.State.RUNNING));
+
+        final TopicPartition partition = taskId00Partitions.iterator().next();
+        task00.addRecords(
+            partition,
+            singletonList(new ConsumerRecord<>(partition.topic(), partition.partition(), 0L, null, null))
+        );
+
+        final RuntimeException exception = assertThrows(RuntimeException.class, () -> taskManager.process(0L));
+        assertThat(exception.getMessage(), is("oops"));
+    }
+
+    @Test
+    public void shouldPropagateTaskMigratedExceptionsInPunctuateActiveTasks() {
+        final StateMachineTask task00 = new StateMachineTask(taskId00, taskId00Partitions, true) {
+            @Override
+            public boolean maybePunctuateStreamTime() {
+                throw new TaskMigratedException("migrated", new RuntimeException("cause"));
+            }
+        };
+
+        expectRestoreToBeCompleted(consumer, changeLogReader);
+        expect(activeTaskCreator.createTasks(anyObject(), eq(taskId00Assignment)))
+            .andReturn(singletonList(task00)).anyTimes();
+
+        replay(activeTaskCreator, consumer, changeLogReader);
+
+        taskManager.handleAssignment(taskId00Assignment, emptyMap());
+        assertThat(taskManager.tryToCompleteRestoration(), is(true));
+
+        assertThat(task00.state(), is(Task.State.RUNNING));
+
+        assertThrows(TaskMigratedException.class, () -> taskManager.punctuate());
+    }
+
+    @Test
+    public void shouldPropagateKafkaExceptionsInPunctuateActiveTasks() {
+        final StateMachineTask task00 = new StateMachineTask(taskId00, taskId00Partitions, true) {
+            @Override
+            public boolean maybePunctuateStreamTime() {
+                throw new KafkaException("oops");
+            }
+        };
+
+        expectRestoreToBeCompleted(consumer, changeLogReader);
+        expect(activeTaskCreator.createTasks(anyObject(), eq(taskId00Assignment)))
+            .andReturn(singletonList(task00)).anyTimes();
+
+        replay(activeTaskCreator, consumer, changeLogReader);
+
+        taskManager.handleAssignment(taskId00Assignment, emptyMap());
+        assertThat(taskManager.tryToCompleteRestoration(), is(true));
+
+        assertThat(task00.state(), is(Task.State.RUNNING));
+
+        assertThrows(KafkaException.class, () -> taskManager.punctuate());
+    }
+
+    @Test
     public void shouldPunctuateActiveTasks() {
         final StateMachineTask task00 = new StateMachineTask(taskId00, taskId00Partitions, true) {
             @Override
@@ -737,8 +1189,9 @@ public class TaskManagerTest {
 
         final List<String> messages = appender.getMessages();
         assertThat(messages, hasItem("taskManagerTestThe following partitions [unknown-0] are missing " +
-            "from the task partitions. It could potentially due to race condition of consumer " +
-            "detecting the heartbeat failure, or the tasks have been cleaned up by the handleAssignment callback."));
+                                         "from the task partitions. It could potentially due to race " +
+                                         "condition of consumer detecting the heartbeat failure, or the " +
+                                         "tasks have been cleaned up by the handleAssignment callback."));
     }
 
     @Test
@@ -760,7 +1213,7 @@ public class TaskManagerTest {
         taskManager.tasks().put(taskId02, migratedTask02);
 
         final TaskMigratedException thrown = assertThrows(TaskMigratedException.class,
-            () -> taskManager.handleAssignment(emptyMap(), emptyMap()));
+                                                          () -> taskManager.handleAssignment(emptyMap(), emptyMap()));
         // The task map orders tasks based on topic group id and partition, so here
         // t1 should always be the first.
         assertThat(thrown.getMessage(), equalTo("t1 close exception; it means all tasks belonging to this thread should be migrated."));
@@ -785,10 +1238,10 @@ public class TaskManagerTest {
         taskManager.tasks().put(taskId02, migratedTask02);
 
         final RuntimeException thrown = assertThrows(RuntimeException.class,
-            () -> taskManager.handleAssignment(emptyMap(), emptyMap()));
+                                                     () -> taskManager.handleAssignment(emptyMap(), emptyMap()));
         // Fatal exception thrown first.
         assertThat(thrown.getMessage(), equalTo("Unexpected failure to close 2 task(s) [[0_1, 0_2]]. " +
-            "First unexpected exception (for task 0_2) follows."));
+                                                    "First unexpected exception (for task 0_2) follows."));
 
         assertThat(thrown.getCause().getMessage(), equalTo("t2 illegal state exception"));
     }
@@ -812,7 +1265,7 @@ public class TaskManagerTest {
         taskManager.tasks().put(taskId02, migratedTask02);
 
         final KafkaException thrown = assertThrows(KafkaException.class,
-            () -> taskManager.handleAssignment(emptyMap(), emptyMap()));
+                                                   () -> taskManager.handleAssignment(emptyMap(), emptyMap()));
 
         // Expecting the original Kafka exception instead of a wrapped one.
         assertThat(thrown.getMessage(), equalTo("Kaboom for t2!"));
@@ -862,7 +1315,14 @@ public class TaskManagerTest {
         StateMachineTask(final TaskId id,
                          final Set<TopicPartition> partitions,
                          final boolean active) {
-            super(id, null, null, null, partitions);
+            this(id, partitions, active, null);
+        }
+
+        StateMachineTask(final TaskId id,
+                         final Set<TopicPartition> partitions,
+                         final boolean active,
+                         final ProcessorStateManager processorStateManager) {
+            super(id, null, null, processorStateManager, partitions);
             this.active = active;
         }
 

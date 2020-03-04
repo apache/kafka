@@ -91,6 +91,7 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.Stream;
 
 import static java.util.Collections.emptyMap;
 import static java.util.Collections.emptySet;
@@ -1225,8 +1226,8 @@ public class StreamThreadTest {
 
         thread.runOnce();
 
-        final StandbyTask standbyTask1 = thread.taskManager().standbyTask(t1p1);
-        final StandbyTask standbyTask2 = thread.taskManager().standbyTask(t2p1);
+        final StandbyTask standbyTask1 = standbyTask(thread.taskManager(), t1p1);
+        final StandbyTask standbyTask2 = standbyTask(thread.taskManager(), t2p1);
         assertEquals(task1, standbyTask1.id());
         assertEquals(task3, standbyTask2.id());
 
@@ -1965,5 +1966,15 @@ public class StreamThreadTest {
             -1,
             new byte[0],
             new byte[0]));
+    }
+
+    StandbyTask standbyTask(final TaskManager taskManager, final TopicPartition partition) {
+        final Stream<Task> standbys = taskManager.tasks().values().stream().filter(t -> !t.isActive());
+        for (final Task task : (Iterable<Task>) standbys::iterator) {
+            if (task.inputPartitions().contains(partition)) {
+                return (StandbyTask) task;
+            }
+        }
+        return null;
     }
 }
