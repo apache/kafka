@@ -604,14 +604,14 @@ class AdminManager(val config: KafkaConfig,
         case OpType.APPEND => {
           if (!listType(alterConfigOp.configEntry().name(), configKeys))
             throw new InvalidRequestException(s"Config value append is not allowed for config key: ${alterConfigOp.configEntry().name()}")
-          val oldValueList = configProps.getProperty(alterConfigOp.configEntry().name()).split(",").toList
+          val oldValueList = configProps.getProperty(alterConfigOp.configEntry().name(), "").split(",").toList.filter(_.trim.length > 0)
           val newValueList = oldValueList ::: alterConfigOp.configEntry().value().split(",").toList
           configProps.setProperty(alterConfigOp.configEntry().name(), newValueList.mkString(","))
         }
         case OpType.SUBTRACT => {
           if (!listType(alterConfigOp.configEntry().name(), configKeys))
             throw new InvalidRequestException(s"Config value subtract is not allowed for config key: ${alterConfigOp.configEntry().name()}")
-          val oldValueList = configProps.getProperty(alterConfigOp.configEntry().name()).split(",").toList
+          val oldValueList = configProps.getProperty(alterConfigOp.configEntry().name(), "").split(",").toList.filter(_.trim.length > 0)
           val newValueList = oldValueList.diff(alterConfigOp.configEntry().value().split(",").toList)
           configProps.setProperty(alterConfigOp.configEntry().name(), newValueList.mkString(","))
         }
