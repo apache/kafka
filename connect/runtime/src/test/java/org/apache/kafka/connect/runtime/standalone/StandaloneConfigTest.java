@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.runtime.standalone;
 
+import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.connect.runtime.WorkerConfig;
@@ -23,9 +24,7 @@ import org.junit.Test;
 
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Set;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 import static org.junit.Assert.assertEquals;
 
@@ -33,93 +32,57 @@ public class StandaloneConfigTest {
 
     private static final String HTTPS_LISTENER_PREFIX = "listeners.https.";
 
-    @Test
-    public void testRestServerPrefixedSslConfigs() {
-        Map<String, String> httpsListenerProps = new HashMap<String, String>() {
+    private Map<String, Object> sslProps() {
+        return new HashMap<String, Object>() {
             {
-                put(HTTPS_LISTENER_PREFIX + SslConfigs.SSL_KEY_PASSWORD_CONFIG, "ssl_key_password");
-                put(HTTPS_LISTENER_PREFIX + SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG, "ssl_keystore");
-                put(HTTPS_LISTENER_PREFIX + SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG, "ssk_keystore_password");
-                put(HTTPS_LISTENER_PREFIX + SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG, "ssl_truststore");
-                put(HTTPS_LISTENER_PREFIX + SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, "ssl_truststore_password");
+                put(SslConfigs.SSL_KEY_PASSWORD_CONFIG, new Password("ssl_key_password"));
+                put(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG, "ssl_keystore");
+                put(SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG, new Password("ssl_keystore_password"));
+                put(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG, "ssl_truststore");
+                put(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, new Password("ssl_truststore_password"));
             }
         };
+    }
 
-        Set<String> passwordConfigs = Stream.of(
-            SslConfigs.SSL_KEY_PASSWORD_CONFIG,
-            SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG,
-            SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG
-        ).map(key -> HTTPS_LISTENER_PREFIX + key)
-            .collect(Collectors.toSet());
-
-        Map<String, Object> expectedListenerProps = httpsListenerProps.entrySet().stream()
-            .collect(Collectors.toMap(
-                entry -> entry.getKey().substring(HTTPS_LISTENER_PREFIX.length()),
-                entry -> passwordConfigs.contains(entry.getKey())
-                        ? new Password(entry.getValue())
-                        : entry.getValue()
-            ));
-
-        Map<String, String> props = new HashMap<String, String>() {
+    private Map<String, String> baseWorkerProps() {
+        return new HashMap<String, String>() {
             {
-                // Base props required for standalone mode
                 put(WorkerConfig.KEY_CONVERTER_CLASS_CONFIG, "org.apache.kafka.connect.json.JsonConverter");
                 put(WorkerConfig.VALUE_CONVERTER_CLASS_CONFIG, "org.apache.kafka.connect.json.JsonConverter");
                 put(StandaloneConfig.OFFSET_STORAGE_FILE_FILENAME_CONFIG, "/tmp/foo");
-
-                // Custom props for test
-                putAll(httpsListenerProps);
             }
         };
-    
-        StandaloneConfig config = new StandaloneConfig(props);
-        Map<String, Object> actualHttpsListenerProps = config.valuesWithPrefixAllOrNothing(HTTPS_LISTENER_PREFIX);
-        assertEquals(expectedListenerProps, actualHttpsListenerProps);
+    }
+
+    private static Map<String, String> withStringValues(Map<String, ?> inputs, String prefix) {
+        return ConfigDef.convertToStringMapWithPasswordValues(inputs).entrySet().stream()
+            .collect(Collectors.toMap(
+                entry -> prefix + entry.getKey(),
+                Map.Entry::getValue
+            ));
+    }
+
+    @Test
+    public void testRestServerPrefixedSslConfigs() {
+        Map<String, String> workerProps = baseWorkerProps();
+        Map<String, Object> expectedSslProps = sslProps();
+        workerProps.putAll(withStringValues(expectedSslProps, HTTPS_LISTENER_PREFIX));
+
+        StandaloneConfig config = new StandaloneConfig(workerProps);
+        assertEquals(expectedSslProps, config.valuesWithPrefixAllOrNothing(HTTPS_LISTENER_PREFIX));
     }
 
     @Test
     public void testRestServerNonPrefixedSslConfigs() {
-        Map<String, String> httpsListenerProps = new HashMap<String, String>() {
-            {
-                put(SslConfigs.SSL_KEY_PASSWORD_CONFIG, "ssl_key_password");
-                put(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG, "ssl_keystore");
-                put(SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG, "ssk_keystore_password");
-                put(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG, "ssl_truststore");
-                put(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, "ssl_truststore_password");
-            }
-        };
-
-        Set<String> passwordConfigs = Stream.of(
-            SslConfigs.SSL_KEY_PASSWORD_CONFIG,
-            SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG,
-            SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG
-        ).collect(Collectors.toSet());
-
-        Map<String, Object> expectedListenerProps = httpsListenerProps.entrySet().stream()
-            .collect(Collectors.toMap(
-                Map.Entry::getKey,
-                entry -> passwordConfigs.contains(entry.getKey())
-                    ? new Password(entry.getValue())
-                    : entry.getValue()
-            ));
-
-        Map<String, String> props = new HashMap<String, String>() {
-            {
-                // Base props required for standalone mode
-                put(WorkerConfig.KEY_CONVERTER_CLASS_CONFIG, "org.apache.kafka.connect.json.JsonConverter");
-                put(WorkerConfig.VALUE_CONVERTER_CLASS_CONFIG, "org.apache.kafka.connect.json.JsonConverter");
-                put(StandaloneConfig.OFFSET_STORAGE_FILE_FILENAME_CONFIG, "/tmp/foad");
-
-                // Custom props for test
-                putAll(httpsListenerProps);
-            }
-        };
+        Map<String, String> props = baseWorkerProps();
+        Map<String, Object> expectedSslProps = sslProps();
+        props.putAll(withStringValues(expectedSslProps, ""));
 
         StandaloneConfig config = new StandaloneConfig(props);
-        Map<String, Object> actualHttpsListenerProps = config.valuesWithPrefixAllOrNothing(HTTPS_LISTENER_PREFIX)
+        Map<String, Object> actualProps = config.valuesWithPrefixAllOrNothing(HTTPS_LISTENER_PREFIX)
             .entrySet().stream()
-            .filter(entry -> expectedListenerProps.containsKey(entry.getKey()))
+            .filter(entry -> expectedSslProps.containsKey(entry.getKey()))
             .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
-        assertEquals(expectedListenerProps, actualHttpsListenerProps);
+        assertEquals(expectedSslProps, actualProps);
     }
 }
