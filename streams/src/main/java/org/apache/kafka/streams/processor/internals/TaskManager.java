@@ -357,7 +357,7 @@ public class TaskManager {
     }
 
     /**
-     * @return Map from task id to that task's overall lag across all state stores
+     * @return Map from task id to its total offset summed across all state stores
      */
     public Map<TaskId, Long> getTaskOffsetSums() {
         final Map<TaskId, Long> taskOffsetSums = new HashMap<>();
