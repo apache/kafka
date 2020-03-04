@@ -271,7 +271,7 @@ public class StateManagerUtilTest {
 
         LogCaptureAppender.unregister(appender);
         final List<String> strings = appender.getMessages();
-        assertTrue(strings.contains("testClosing active task 0_0 uncleanly and swallows an exception"));
+        assertTrue(strings.contains("testClosing ACTIVE task 0_0 uncleanly and swallows an exception"));
     }
 
     @Test
