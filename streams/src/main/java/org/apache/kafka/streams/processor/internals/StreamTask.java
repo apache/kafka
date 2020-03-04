@@ -402,6 +402,8 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
      *  3. then flush the record collector
      *  4. then commit the record collector -- for EOS this is the synchronization barrier
      *  5. then checkpoint the state manager -- even if we crash before this step, EOS is still guaranteed
+     *  6. then if we are closing on EOS and dirty, wipe out the state store directory
+     *  7. finally release the state manager lock
      * </pre>
      *
      * @param clean    shut down cleanly (ie, incl. flush and commit) if {@code true} --
@@ -440,15 +442,14 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             }
 
             if (state() == State.CLOSING) {
-                // first close state manager (which is idempotent) then close the record collector (which could throw),
-                // if the latter throws and we re-close dirty which would close the state manager again.
-                StateManagerUtil.closeStateManager(log, logPrefix, clean, stateMgr, stateDirectory);
-
                 // if EOS is enabled, we wipe out the whole state store for unclean close
                 // since they are invalid to use anymore
-                if (!clean && !eosDisabled) {
-                    StateManagerUtil.wipeStateStores(log, stateMgr);
-                }
+                final boolean wipeStateStore = !clean && !eosDisabled;
+
+                // first close state manager (which is idempotent) then close the record collector (which could throw),
+                // if the latter throws and we re-close dirty which would close the state manager again.
+                StateManagerUtil.closeStateManager(log, logPrefix, clean,
+                    wipeStateStore, stateMgr, stateDirectory, TaskType.ACTIVE);
 
                 executeAndMaybeSwallow(clean, recordCollector::close, "record collector close");
             } else {
