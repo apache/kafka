@@ -431,10 +431,4 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
         <!-- Suppress warnings related to jmh generated code -->
         <Package name="org.apache.kafka.jmh.acl.generated"/>
     </Match>
-
-    <Match>
-        <Package name="io.confluent.support.metrics.collectors"/>
-        <Source name="CollectorFactory.java"/>
-        <Bug pattern="IS2_INCONSISTENT_SYNC"/>
-    </Match>
 </FindBugsFilter>
