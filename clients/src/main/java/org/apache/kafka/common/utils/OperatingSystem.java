@@ -27,7 +27,7 @@ public final class OperatingSystem {
 
     public static final boolean IS_WINDOWS;
 
-    public static boolean IS_ZOS;
+    public static final boolean IS_ZOS;
 
     static {
         NAME = System.getProperty("os.name").toLowerCase(Locale.ROOT);
