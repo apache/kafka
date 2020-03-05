@@ -93,12 +93,14 @@ public class SubscriptionInfo {
         if (version >= 3) {
             data.setLatestSupportedVersion(latestSupportedVersion);
         }
+
+        this.data = data;
+        
         if (version >= 7) {
             setTaskOffsetSumDataFromTaskOffsetSumMap(taskOffsetSums);
         } else {
             setPrevAndStandbySetsFromParsedTaskOffsetSumMap(taskOffsetSums);
         }
-        this.data = data;
     }
 
     private SubscriptionInfo(final SubscriptionInfoData subscriptionInfoData) {
