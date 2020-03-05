@@ -239,7 +239,7 @@ class ProducerFailureHandlingTest extends KafkaServerTestHarness {
   }
 
   @Test
-  def testNotEnoughReplicas(): Unit = {
+  def testConfigurationMismatch(): Unit = {
     val topicName = "minisrtest"
     val topicProps = new Properties()
     topicProps.put("min.insync.replicas",(numServers+1).toString)
@@ -252,8 +252,8 @@ class ProducerFailureHandlingTest extends KafkaServerTestHarness {
       fail("Expected exception when producing to topic with fewer brokers than min.insync.replicas")
     } catch {
       case e: ExecutionException =>
-        if (!e.getCause.isInstanceOf[NotEnoughReplicasException]) {
-          fail("Expected NotEnoughReplicasException when producing to topic with fewer brokers than min.insync.replicas")
+        if (!e.getCause.isInstanceOf[ConfigurationMismatchException]) {
+          fail("Expected ConfigurationMismatchException when producing to topic with fewer brokers than min.insync.replicas")
         }
     }
   }
@@ -280,8 +280,9 @@ class ProducerFailureHandlingTest extends KafkaServerTestHarness {
       case e: ExecutionException =>
         if (!e.getCause.isInstanceOf[NotEnoughReplicasException]  &&
             !e.getCause.isInstanceOf[NotEnoughReplicasAfterAppendException] &&
+            !e.getCause.isInstanceOf[ConfigurationMismatchException]  &&
             !e.getCause.isInstanceOf[TimeoutException]) {
-          fail("Expected NotEnoughReplicasException or NotEnoughReplicasAfterAppendException when producing to topic " +
+          fail("Expected ConfigurationMismatchException or NotEnoughReplicasException or NotEnoughReplicasAfterAppendException when producing to topic " +
             "with fewer brokers than min.insync.replicas, but saw " + e.getCause)
         }
     }
