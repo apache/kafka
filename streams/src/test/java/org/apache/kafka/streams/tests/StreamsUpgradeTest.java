@@ -138,13 +138,12 @@ public class StreamsUpgradeTest {
 
         @Override
         public ByteBuffer subscriptionUserData(final Set<String> topics) {
-            super.subscriptionUserData(topics);
-
             // Adds the following information to subscription
             // 1. Client UUID (a unique id assigned to an instance of KafkaStreams)
             // 2. Task ids of previously running tasks
             // 3. Task ids of valid local states on the client's state directory.
             final TaskManager taskManager = taskManager();
+            handleRebalanceStart(topics);
 
             if (usedSubscriptionMetadataVersion <= LATEST_SUPPORTED_VERSION) {
                 return new SubscriptionInfo(

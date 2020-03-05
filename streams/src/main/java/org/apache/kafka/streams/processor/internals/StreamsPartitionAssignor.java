@@ -219,7 +219,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         // 1. Client UUID (a unique id assigned to an instance of KafkaStreams)
         // 2. Map from task id to its overall lag
 
-        taskManager.handleRebalanceStart(topics);
+        handleRebalanceStart(topics);
 
         return new SubscriptionInfo(
             usedSubscriptionMetadataVersion,
@@ -1267,6 +1267,10 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
 
     protected TaskManager taskManager() {
         return taskManager;
+    }
+
+    protected void handleRebalanceStart(final Set<String> topics) {
+        taskManager.handleRebalanceStart(topics);
     }
 
 }

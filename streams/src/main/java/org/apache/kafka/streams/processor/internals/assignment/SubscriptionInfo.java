@@ -95,7 +95,7 @@ public class SubscriptionInfo {
         }
 
         this.data = data;
-        
+
         if (version >= 7) {
             setTaskOffsetSumDataFromTaskOffsetSumMap(taskOffsetSums);
         } else {
