@@ -508,11 +508,12 @@ public class StreamThread extends Thread {
                     "Will close out all assigned tasks and rejoin the consumer group.");
 
                 taskManager.handleLostAll();
-                mainConsumer.enforceRebalance();
+                mainConsumer.unsubscribe();
+                subscribeConsumer();
             }
         }
     }
-    
+
     private void subscribeConsumer() {
         if (builder.usesPatternSubscription()) {
             mainConsumer.subscribe(builder.sourceTopicPattern(), rebalanceListener);
