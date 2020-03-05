@@ -199,8 +199,7 @@ public class StreamsResetter {
             }
         }
 
-    // visible for testing
-    public void forceDeleteAllMembers(final String groupId, final Admin adminClient, final List<MemberDescription> members)
+    private void forceDeleteAllMembers(final String groupId, final Admin adminClient, final List<MemberDescription> members)
             throws ExecutionException, InterruptedException {
         List<MemberToRemove> membersToRemove = new ArrayList<>();
         for (MemberDescription member: members) {
