@@ -80,7 +80,7 @@ public class StreamsMetadata {
      * @return set of active state store names
      */
     public Set<String> stateStoreNames() {
-        return stateStoreNames;
+        return Collections.unmodifiableSet(stateStoreNames);
     }
 
     /**
@@ -89,7 +89,7 @@ public class StreamsMetadata {
      * @return set of active topic partitions
      */
     public Set<TopicPartition> topicPartitions() {
-        return topicPartitions;
+        return Collections.unmodifiableSet(topicPartitions);
     }
 
     /**
@@ -98,7 +98,7 @@ public class StreamsMetadata {
      * @return set of standby topic partitions
      */
     public Set<TopicPartition> standbyTopicPartitions() {
-        return standbyTopicPartitions;
+        return Collections.unmodifiableSet(standbyTopicPartitions);
     }
 
     /**
@@ -107,7 +107,7 @@ public class StreamsMetadata {
      * @return set of standby state store names
      */
     public Set<String> standbyStateStoreNames() {
-        return standbyStateStoreNames;
+        return Collections.unmodifiableSet(standbyStateStoreNames);
     }
 
     public String host() {
