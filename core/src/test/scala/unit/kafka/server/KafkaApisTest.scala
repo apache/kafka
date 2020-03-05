@@ -197,6 +197,36 @@ class KafkaApisTest {
   }
 
   @Test
+  def shouldReplaceCoordinatorNotAvailableWithLoadInProcessInTxnOffsetCommitWithOlderClient(): Unit = {
+    val topic = "topic"
+    setupBasicMetadataCache(topic, numPartitions = 1)
+
+    EasyMock.reset(replicaManager, clientRequestQuotaManager, requestChannel, groupCoordinator)
+
+    val topicPartition = new TopicPartition(topic, 1)
+    val partitionOffsetCommitData = new TxnOffsetCommitRequest.CommittedOffset(15L, "", Optional.empty())
+    val offsetCommitRequest = new TxnOffsetCommitRequest.Builder(
+      "txnId",
+      "groupId",
+      15L,
+      0.toShort,
+      Map(topicPartition -> partitionOffsetCommitData).asJava
+    ).build(1)
+    val request = buildRequest(offsetCommitRequest)
+
+    val capturedResponse = expectNoThrottling()
+    EasyMock.replay(replicaManager, clientRequestQuotaManager, requestChannel, groupCoordinator)
+
+    createKafkaApis().handleTxnOffsetCommitRequest(request)).andReturn((Errors.COORDINATOR_LOAD_IN_PROGRESS, ))
+
+    createKafkaApis().handleTxnOffsetCommitRequest(request)
+
+    val response = readResponse(ApiKeys.TXN_OFFSET_COMMIT, offsetCommitRequest, capturedResponse)
+      .asInstanceOf[TxnOffsetCommitResponse]
+    assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION, response.errors().get(topicPartition))
+  }
+
+  @Test
   def testAddPartitionsToTxnWithInvalidPartition(): Unit = {
     val topic = "topic"
     setupBasicMetadataCache(topic, numPartitions = 1)
