@@ -362,7 +362,7 @@ public class TaskManager {
                 try {
                     activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(task.id());
                 } catch (final RuntimeException e) {
-                    log.debug("Error handling lostAll", e);
+                    log.warn("Error closing task producer for " + task.id() + " while handling lostAll", e);
                 }
             }
 
@@ -446,7 +446,7 @@ public class TaskManager {
                     if (clean) {
                         firstException.compareAndSet(null, e);
                     } else {
-                        log.warn("Ignoring an exception while closing task producer.", e);
+                        log.warn("Ignoring an exception while closing task " + task.id() + " producer.", e);
                     }
                 }
             }
