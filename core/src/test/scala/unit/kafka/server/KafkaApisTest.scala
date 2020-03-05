@@ -332,6 +332,7 @@ class KafkaApisTest {
       controllerId,
       controllerEpoch,
       brokerEpoch,
+      brokerEpoch,
       true,
       Set(groupMetadataPartition, txnStatePartition).asJava))
 
@@ -888,7 +889,7 @@ class KafkaApisTest {
             .setListener(plaintextListener.value)).asJava)
     )
     val updateMetadataRequest = new UpdateMetadataRequest.Builder(ApiKeys.UPDATE_METADATA.latestVersion, 0,
-      0, 0, Seq.empty[UpdateMetadataPartitionState].asJava, brokers.asJava).build()
+      0, 0, 0, Seq.empty[UpdateMetadataPartitionState].asJava, brokers.asJava).build()
     metadataCache.updateMetadata(correlationId = 0, updateMetadataRequest)
     (plaintextListener, anotherListener)
   }
@@ -1004,7 +1005,7 @@ class KafkaApisTest {
         .setListener(plaintextListener.value)).asJava)
     val partitionStates = (0 until numPartitions).map(createPartitionState)
     val updateMetadataRequest = new UpdateMetadataRequest.Builder(ApiKeys.UPDATE_METADATA.latestVersion, 0,
-      0, 0, partitionStates.asJava, Seq(broker).asJava).build()
+      0, 0, 0, partitionStates.asJava, Seq(broker).asJava).build()
     metadataCache.updateMetadata(correlationId = 0, updateMetadataRequest)
   }
 }

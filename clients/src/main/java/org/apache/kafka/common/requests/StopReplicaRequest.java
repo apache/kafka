@@ -43,9 +43,9 @@ public class StopReplicaRequest extends AbstractControlRequest {
         private final boolean deletePartitions;
         private final Collection<TopicPartition> partitions;
 
-        public Builder(short version, int controllerId, int controllerEpoch, long brokerEpoch, boolean deletePartitions,
+        public Builder(short version, int controllerId, int controllerEpoch, long brokerEpoch, long maxBrokerEpoch, boolean deletePartitions,
                        Collection<TopicPartition> partitions) {
-            super(ApiKeys.STOP_REPLICA, version, controllerId, controllerEpoch, brokerEpoch);
+            super(ApiKeys.STOP_REPLICA, version, controllerId, controllerEpoch, brokerEpoch, maxBrokerEpoch);
             this.deletePartitions = deletePartitions;
             this.partitions = partitions;
         }
@@ -55,6 +55,7 @@ public class StopReplicaRequest extends AbstractControlRequest {
                 .setControllerId(controllerId)
                 .setControllerEpoch(controllerEpoch)
                 .setBrokerEpoch(brokerEpoch)
+                .setMaxBrokerEpoch(maxBrokerEpoch)
                 .setDeletePartitions(deletePartitions);
 
             if (version >= 1) {
@@ -85,6 +86,7 @@ public class StopReplicaRequest extends AbstractControlRequest {
                 append(", controllerEpoch=").append(controllerEpoch).
                 append(", deletePartitions=").append(deletePartitions).
                 append(", brokerEpoch=").append(brokerEpoch).
+                append(", maxBrokerEpoch=").append(maxBrokerEpoch).
                 append(", partitions=").append(Utils.join(partitions, ",")).
                 append(")");
             return bld.toString();
@@ -154,6 +156,11 @@ public class StopReplicaRequest extends AbstractControlRequest {
     @Override
     public long brokerEpoch() {
         return data.brokerEpoch();
+    }
+
+    @Override
+    public long maxBrokerEpoch() {
+        return data.maxBrokerEpoch();
     }
 
     public static StopReplicaRequest parse(ByteBuffer buffer, short version) {

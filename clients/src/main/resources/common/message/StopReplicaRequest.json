@@ -19,15 +19,21 @@
   "name": "StopReplicaRequest",
   // Version 1 adds the broker epoch and reorganizes the partitions to be stored
   // per topic.
-  "validVersions": "0-2",
-  "flexibleVersions": "2+",
+  //
+  // Version 2 adds the max broker epoch to make the UpdateMetadataRequest cacheable
+  //
+  // Version 3 is the first flexible version.
+  "validVersions": "0-3",
+  "flexibleVersions": "3+",
   "fields": [
     { "name": "ControllerId", "type": "int32", "versions": "0+", "entityType": "brokerId",
       "about": "The controller id." },
     { "name": "ControllerEpoch", "type": "int32", "versions": "0+",
       "about": "The controller epoch." },
-    { "name": "BrokerEpoch", "type": "int64", "versions": "1+", "default": "-1", "ignorable": true,
+    { "name": "BrokerEpoch", "type": "int64", "versions": "1", "default": "-1", "ignorable": true,
       "about": "The broker epoch." },
+    { "name": "MaxBrokerEpoch", "type": "int64", "versions": "2+", "default": "-1", "ignorable": true,
+      "about": "The max broker epoch." },
     { "name": "DeletePartitions", "type": "bool", "versions": "0+",
       "about": "Whether these partitions should be deleted." },
     { "name": "UngroupedPartitions", "type": "[]StopReplicaPartitionV0", "versions": "0",

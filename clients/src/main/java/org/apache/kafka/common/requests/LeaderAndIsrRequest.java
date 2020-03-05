@@ -45,9 +45,9 @@ public class LeaderAndIsrRequest extends AbstractControlRequest {
         private final List<LeaderAndIsrPartitionState> partitionStates;
         private final Collection<Node> liveLeaders;
 
-        public Builder(short version, int controllerId, int controllerEpoch, long brokerEpoch,
+        public Builder(short version, int controllerId, int controllerEpoch, long brokerEpoch, long maxBrokerEpoch,
                        List<LeaderAndIsrPartitionState> partitionStates, Collection<Node> liveLeaders) {
-            super(ApiKeys.LEADER_AND_ISR, version, controllerId, controllerEpoch, brokerEpoch);
+            super(ApiKeys.LEADER_AND_ISR, version, controllerId, controllerEpoch, brokerEpoch, maxBrokerEpoch);
             this.partitionStates = partitionStates;
             this.liveLeaders = liveLeaders;
         }
@@ -64,6 +64,7 @@ public class LeaderAndIsrRequest extends AbstractControlRequest {
                 .setControllerId(controllerId)
                 .setControllerEpoch(controllerEpoch)
                 .setBrokerEpoch(brokerEpoch)
+                .setMaxBrokerEpoch(maxBrokerEpoch)
                 .setLiveLeaders(leaders);
 
             if (version >= 2) {
@@ -95,6 +96,7 @@ public class LeaderAndIsrRequest extends AbstractControlRequest {
                 .append(", controllerId=").append(controllerId)
                 .append(", controllerEpoch=").append(controllerEpoch)
                 .append(", brokerEpoch=").append(brokerEpoch)
+                .append(", maxBrokerEpoch=").append(maxBrokerEpoch)
                 .append(", partitionStates=").append(partitionStates)
                 .append(", liveLeaders=(").append(Utils.join(liveLeaders, ", ")).append(")")
                 .append(")");
@@ -162,6 +164,11 @@ public class LeaderAndIsrRequest extends AbstractControlRequest {
     @Override
     public long brokerEpoch() {
         return data.brokerEpoch();
+    }
+
+    @Override
+    public long maxBrokerEpoch() {
+        return data.maxBrokerEpoch();
     }
 
     public Iterable<LeaderAndIsrPartitionState> partitionStates() {

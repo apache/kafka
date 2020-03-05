@@ -377,7 +377,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
         .setSecurityProtocol(securityProtocol.id)
         .setListener(ListenerName.forSecurityProtocol(securityProtocol).value)).asJava)).asJava
     val version = ApiKeys.UPDATE_METADATA.latestVersion
-    new requests.UpdateMetadataRequest.Builder(version, brokerId, Int.MaxValue, Long.MaxValue, partitionStates, brokers).build()
+    new requests.UpdateMetadataRequest.Builder(version, brokerId, Int.MaxValue, Long.MaxValue, Long.MaxValue, partitionStates, brokers).build()
   }
 
   private def createJoinGroupRequest = {
@@ -458,7 +458,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   ).build()
 
   private def leaderAndIsrRequest = {
-    new requests.LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion, brokerId, Int.MaxValue, Long.MaxValue,
+    new requests.LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion, brokerId, Int.MaxValue, Long.MaxValue, Long.MaxValue,
       Seq(new LeaderAndIsrPartitionState()
         .setTopicName(tp.topic)
         .setPartitionIndex(tp.partition)
@@ -472,7 +472,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
       Set(new Node(brokerId, "localhost", 0)).asJava).build()
   }
 
-  private def stopReplicaRequest = new StopReplicaRequest.Builder(ApiKeys.STOP_REPLICA.latestVersion, brokerId, Int.MaxValue, Long.MaxValue, true, Set(tp).asJava).build()
+  private def stopReplicaRequest = new StopReplicaRequest.Builder(ApiKeys.STOP_REPLICA.latestVersion, brokerId, Int.MaxValue, Long.MaxValue, Long.MaxValue, true, Set(tp).asJava).build()
 
   private def controlledShutdownRequest = new ControlledShutdownRequest.Builder(
       new ControlledShutdownRequestData()

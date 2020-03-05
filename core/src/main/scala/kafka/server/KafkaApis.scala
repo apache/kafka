@@ -210,11 +210,12 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
 
     authorizeClusterOperation(request, CLUSTER_ACTION)
-    if (isBrokerEpochStale(leaderAndIsrRequest.brokerEpoch())) {
+    if (isBrokerEpochStale(leaderAndIsrRequest.brokerEpoch(), leaderAndIsrRequest.maxBrokerEpoch())) {
       // When the broker restarts very quickly, it is possible for this broker to receive request intended
       // for its previous generation so the broker should skip the stale request.
-      info("Received LeaderAndIsr request with broker epoch " +
-        s"${leaderAndIsrRequest.brokerEpoch()} smaller than the current broker epoch ${controller.brokerEpoch}")
+      info("Received LeaderAndIsr request with stale broker epoch info " +
+        "(broker epoch:" + leaderAndIsrRequest.brokerEpoch() +"},max broker epoch:" + leaderAndIsrRequest.maxBrokerEpoch() + ") " +
+        "when the current broker epoch is " + controller.brokerEpoch)
       sendResponseExemptThrottle(request, leaderAndIsrRequest.getErrorResponse(0, Errors.STALE_BROKER_EPOCH.exception))
     } else {
       val response = replicaManager.becomeLeaderOrFollower(correlationId, leaderAndIsrRequest, onLeadershipChange)
@@ -228,11 +229,12 @@ class KafkaApis(val requestChannel: RequestChannel,
     // stop serving data to clients for the topic being deleted
     val stopReplicaRequest = request.body[StopReplicaRequest]
     authorizeClusterOperation(request, CLUSTER_ACTION)
-    if (isBrokerEpochStale(stopReplicaRequest.brokerEpoch())) {
+    if (isBrokerEpochStale(stopReplicaRequest.brokerEpoch(), stopReplicaRequest.maxBrokerEpoch())) {
       // When the broker restarts very quickly, it is possible for this broker to receive request intended
       // for its previous generation so the broker should skip the stale request.
-      info("Received stop replica request with broker epoch " +
-        s"${stopReplicaRequest.brokerEpoch()} smaller than the current broker epoch ${controller.brokerEpoch}")
+      info("Received stop replica request with stale broker epoch info " +
+        s"(broker epoch:${stopReplicaRequest.brokerEpoch()},max broker epoch:${stopReplicaRequest.maxBrokerEpoch()})" +
+        s"when the current broker epoch is ${controller.brokerEpoch}")
       sendResponseExemptThrottle(request, new StopReplicaResponse(new StopReplicaResponseData().setErrorCode(Errors.STALE_BROKER_EPOCH.code)))
     } else {
       val (result, error) = replicaManager.stopReplicas(stopReplicaRequest)
@@ -268,11 +270,12 @@ class KafkaApis(val requestChannel: RequestChannel,
     val updateMetadataRequest = request.body[UpdateMetadataRequest]
 
     authorizeClusterOperation(request, CLUSTER_ACTION)
-    if (isBrokerEpochStale(updateMetadataRequest.brokerEpoch)) {
+    if (isBrokerEpochStale(updateMetadataRequest.brokerEpoch, updateMetadataRequest.maxBrokerEpoch)) {
       // When the broker restarts very quickly, it is possible for this broker to receive request intended
       // for its previous generation so the broker should skip the stale request.
-      info("Received update metadata request with broker epoch " +
-        s"${updateMetadataRequest.brokerEpoch} smaller than the current broker epoch ${controller.brokerEpoch}")
+      info("Received update metadata request with stale broker epoch info " +
+        s"(broker epoch:${updateMetadataRequest.brokerEpoch},max broker epoch: ${updateMetadataRequest.maxBrokerEpoch}) " +
+        s"when the current broker epoch ${controller.brokerEpoch}")
       sendResponseExemptThrottle(request,
         new UpdateMetadataResponse(new UpdateMetadataResponseData().setErrorCode(Errors.STALE_BROKER_EPOCH.code)))
     } else {
@@ -2965,16 +2968,16 @@ class KafkaApis(val requestChannel: RequestChannel,
     requestChannel.sendResponse(response)
   }
 
-  private def isBrokerEpochStale(brokerEpochInRequest: Long): Boolean = {
-    // Broker epoch in LeaderAndIsr/UpdateMetadata/StopReplica request is unknown
-    // if the controller hasn't been upgraded to use KIP-380
-    if (brokerEpochInRequest == AbstractControlRequest.UNKNOWN_BROKER_EPOCH) false
-    else {
+  private def isBrokerEpochStale(brokerEpochInRequest: Long, maxBrokerEpochInRequest: Long): Boolean = {
+    if (maxBrokerEpochInRequest != AbstractControlRequest.UNKNOWN_BROKER_EPOCH)  {
+      maxBrokerEpochInRequest < controller.brokerEpoch
+    }
+    else if (brokerEpochInRequest != AbstractControlRequest.UNKNOWN_BROKER_EPOCH) {
       val curBrokerEpoch = controller.brokerEpoch
       if (brokerEpochInRequest < curBrokerEpoch) true
       else if (brokerEpochInRequest == curBrokerEpoch) false
       else throw new IllegalStateException(s"Epoch $brokerEpochInRequest larger than current broker epoch $curBrokerEpoch")
-    }
+    } else false
   }
 
   private def observeRequestResponse(request: RequestChannel.Request, response: AbstractResponse): Unit = {

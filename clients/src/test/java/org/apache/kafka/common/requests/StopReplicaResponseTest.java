@@ -36,7 +36,7 @@ public class StopReplicaResponseTest {
 
     @Test
     public void testErrorCountsFromGetErrorResponse() {
-        StopReplicaRequest request = new StopReplicaRequest.Builder(ApiKeys.STOP_REPLICA.latestVersion(), 15, 20, 0, false,
+        StopReplicaRequest request = new StopReplicaRequest.Builder(ApiKeys.STOP_REPLICA.latestVersion(), 15, 20, 0, 0, false,
                 Utils.mkSet(new TopicPartition("foo", 0), new TopicPartition("foo", 1))).build();
         StopReplicaResponse response = request.getErrorResponse(0, Errors.CLUSTER_AUTHORIZATION_FAILED.exception());
         assertEquals(Collections.singletonMap(Errors.CLUSTER_AUTHORIZATION_FAILED, 2), response.errorCounts());

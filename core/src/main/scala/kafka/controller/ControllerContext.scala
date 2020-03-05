@@ -196,6 +196,7 @@ class ControllerContext {
   def liveOrShuttingDownBrokerIds: Set[Int] = liveBrokerEpochs.keySet
   def liveOrShuttingDownBrokers: Set[Broker] = liveBrokers
   def liveBrokerIdAndEpochs: Map[Int, Long] = liveBrokerEpochs
+  def maxBrokerEpoch: Long = liveBrokerEpochs.values.max
   def liveOrShuttingDownBroker(brokerId: Int): Option[Broker] = liveOrShuttingDownBrokers.find(_.id == brokerId)
 
   def partitionsOnBroker(brokerId: Int): Set[TopicPartition] = {

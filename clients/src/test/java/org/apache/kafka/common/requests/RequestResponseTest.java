@@ -1178,7 +1178,7 @@ public class RequestResponseTest {
 
     private StopReplicaRequest createStopReplicaRequest(int version, boolean deletePartitions) {
         Set<TopicPartition> partitions = Utils.mkSet(new TopicPartition("test", 0));
-        return new StopReplicaRequest.Builder((short) version, 0, 1, 0, deletePartitions, partitions).build();
+        return new StopReplicaRequest.Builder((short) version, 0, 1, 0, 0, deletePartitions, partitions).build();
     }
 
     private StopReplicaResponse createStopReplicaResponse() {
@@ -1265,7 +1265,7 @@ public class RequestResponseTest {
                 new Node(0, "test0", 1223),
                 new Node(1, "test1", 1223)
         );
-        return new LeaderAndIsrRequest.Builder((short) version, 1, 10, 0, partitionStates, leaders).build();
+        return new LeaderAndIsrRequest.Builder((short) version, 1, 10, 0, 0, partitionStates, leaders).build();
     }
 
     private LeaderAndIsrResponse createLeaderAndIsrResponse() {
@@ -1354,7 +1354,7 @@ public class RequestResponseTest {
                 .setEndpoints(endpoints2)
                 .setRack(rack)
         );
-        return new UpdateMetadataRequest.Builder((short) version, 1, 10, 0, partitionStates,
+        return new UpdateMetadataRequest.Builder((short) version, 1, 10, 0, 0, partitionStates,
             liveBrokers).build();
     }
 

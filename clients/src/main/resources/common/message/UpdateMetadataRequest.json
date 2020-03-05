@@ -26,17 +26,23 @@
   // Version 4 adds the offline replica list.
   //
   // Version 5 adds the broker epoch field and normalizes partitions by topic.
-  "validVersions": "0-6",
-  "flexibleVersions": "6+",
+  //
+  // Version 6 adds the max broker epoch to make the UpdateMetadataRequest cacheable
+  //
+  // Version 7 is the first flexible version.
+  "validVersions": "0-7",
+  "flexibleVersions": "7+",
   "fields": [
     { "name": "ControllerId", "type": "int32", "versions": "0+", "entityType": "brokerId",
       "about": "The controller id." },
     { "name": "ControllerEpoch", "type": "int32", "versions": "0+",
       "about": "The controller epoch." },
-    { "name": "BrokerEpoch", "type": "int64", "versions": "5+", "ignorable": true, "default": "-1",
+    { "name": "BrokerEpoch", "type": "int64", "versions": "5", "ignorable": true, "default": "-1",
       "about": "The broker epoch." },
     { "name": "UngroupedPartitionStates", "type": "[]UpdateMetadataPartitionState", "versions": "0-4",
       "about": "In older versions of this RPC, each partition that we would like to update." },
+    { "name": "MaxBrokerEpoch", "type": "int64", "versions": "6+", "ignorable": true, "default": "-1",
+      "about": "The max broker epoch." },
     { "name": "TopicStates", "type": "[]UpdateMetadataTopicState", "versions": "5+",
       "about": "In newer versions of this RPC, each topic that we would like to update.", "fields": [
       { "name": "TopicName", "type": "string", "versions": "5+", "entityType": "topicName",

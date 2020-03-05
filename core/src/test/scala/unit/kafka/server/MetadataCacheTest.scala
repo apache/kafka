@@ -106,7 +106,7 @@ class MetadataCacheTest {
         .setReplicas(asList(2, 1, 3)))
 
     val version = ApiKeys.UPDATE_METADATA.latestVersion
-    val updateMetadataRequest = new UpdateMetadataRequest.Builder(version, controllerId, controllerEpoch, brokerEpoch,
+    val updateMetadataRequest = new UpdateMetadataRequest.Builder(version, controllerId, controllerEpoch, brokerEpoch, brokerEpoch,
       partitionStates.asJava, brokers.asJava).build()
     cache.updateMetadata(15, updateMetadataRequest)
 
@@ -251,7 +251,7 @@ class MetadataCacheTest {
       .setReplicas(asList(0)))
 
     val version = ApiKeys.UPDATE_METADATA.latestVersion
-    val updateMetadataRequest = new UpdateMetadataRequest.Builder(version, controllerId, controllerEpoch, brokerEpoch,
+    val updateMetadataRequest = new UpdateMetadataRequest.Builder(version, controllerId, controllerEpoch, brokerEpoch, brokerEpoch,
       partitionStates.asJava, brokers.asJava).build()
     cache.updateMetadata(15, updateMetadataRequest)
 
@@ -309,7 +309,7 @@ class MetadataCacheTest {
         .setReplicas(replicas))
 
     val version = ApiKeys.UPDATE_METADATA.latestVersion
-    val updateMetadataRequest = new UpdateMetadataRequest.Builder(version, controllerId, controllerEpoch, brokerEpoch,
+    val updateMetadataRequest = new UpdateMetadataRequest.Builder(version, controllerId, controllerEpoch, brokerEpoch, brokerEpoch,
       partitionStates.asJava, brokers.asJava).build()
     cache.updateMetadata(15, updateMetadataRequest)
 
@@ -383,7 +383,7 @@ class MetadataCacheTest {
       .setReplicas(replicas))
 
     val version = ApiKeys.UPDATE_METADATA.latestVersion
-    val updateMetadataRequest = new UpdateMetadataRequest.Builder(version, controllerId, controllerEpoch, brokerEpoch,
+    val updateMetadataRequest = new UpdateMetadataRequest.Builder(version, controllerId, controllerEpoch, brokerEpoch, brokerEpoch,
       partitionStates.asJava, brokers.asJava).build()
     cache.updateMetadata(15, updateMetadataRequest)
 
@@ -448,7 +448,7 @@ class MetadataCacheTest {
       .setZkVersion(3)
       .setReplicas(replicas))
     val version = ApiKeys.UPDATE_METADATA.latestVersion
-    val updateMetadataRequest = new UpdateMetadataRequest.Builder(version, 2, controllerEpoch, brokerEpoch, partitionStates.asJava,
+    val updateMetadataRequest = new UpdateMetadataRequest.Builder(version, 2, controllerEpoch, brokerEpoch, brokerEpoch, partitionStates.asJava,
       brokers.asJava).build()
     cache.updateMetadata(15, updateMetadataRequest)
 
@@ -490,7 +490,7 @@ class MetadataCacheTest {
         .setZkVersion(3)
         .setReplicas(replicas))
       val version = ApiKeys.UPDATE_METADATA.latestVersion
-      val updateMetadataRequest = new UpdateMetadataRequest.Builder(version, 2, controllerEpoch, brokerEpoch, partitionStates.asJava,
+      val updateMetadataRequest = new UpdateMetadataRequest.Builder(version, 2, controllerEpoch, brokerEpoch, brokerEpoch, partitionStates.asJava,
         brokers.asJava).build()
       cache.updateMetadata(15, updateMetadataRequest)
     }

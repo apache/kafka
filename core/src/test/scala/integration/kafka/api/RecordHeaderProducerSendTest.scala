@@ -26,7 +26,6 @@ import org.apache.kafka.common.header.internals.RecordHeaders
 import org.junit.Test
 
 class RecordHeaderProducerSendTest extends BaseProducerSendTest {
-
   @Test
   def testRecordHeaders(): Unit = {
     val producerProps = new Properties()
@@ -35,37 +34,41 @@ class RecordHeaderProducerSendTest extends BaseProducerSendTest {
     producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.StringSerializer")
     producerProps.put(ProducerConfig.ALLOW_AUTO_CREATE_TOPICS_CONFIG, "true")
     val producer = new KafkaProducer[String, String](producerProps)
-    var invalidRecordHeaders = new RecordHeaders()
-    invalidRecordHeaders.add("RecordHeaderKey", "RecordHeaderValue".getBytes)
-    // The record is invalid because it contain header with keys that doesn't start with a "_"
-    // Keys that do start with a "_" are internal to the clients and are dropped at the producer.
-    val invalidRecord = new ProducerRecord[String, String](
-      topic,
-      new Integer(0),
-      "RecordKey",
-      "RecordValue",
-      invalidRecordHeaders
-    )
     try {
-      producer.send(invalidRecord).get
-      throw new IllegalStateException("The invalid record should have thrown an exception")
-    } catch {
-      // Ignore the exception because a non internal header was introduced into the producer record
-      case ignored: IllegalArgumentException =>
+      var invalidRecordHeaders = new RecordHeaders()
+      invalidRecordHeaders.add("RecordHeaderKey", "RecordHeaderValue".getBytes)
+      // The record is invalid because it contain header with keys that doesn't start with a "_"
+      // Keys that do start with a "_" are internal to the clients and are dropped at the producer.
+      val invalidRecord = new ProducerRecord[String, String](
+        topic,
+        new Integer(0),
+        "RecordKey",
+        "RecordValue",
+        invalidRecordHeaders
+      )
+      try {
+        producer.send(invalidRecord).get
+        throw new IllegalStateException("The invalid record should have thrown an exception")
+      } catch {
+        // Ignore the exception because a non internal header was introduced into the producer record
+        case ignored: IllegalArgumentException =>
+      }
+  
+      val validRecordHeaders = new RecordHeaders()
+      validRecordHeaders.add("_RecordHeaderKey", "RecordHeaderValue".getBytes)
+      val record = new ProducerRecord[String, String](
+        topic,
+        new Integer(0),
+        "RecordKey",
+        "RecordValue",
+        validRecordHeaders
+      )
+      producer.send(record).get
+    } finally {
+      producer.close()
     }
-
-    val validRecordHeaders = new RecordHeaders()
-    validRecordHeaders.add("_RecordHeaderKey", "RecordHeaderValue".getBytes)
-    val record = new ProducerRecord[String, String](
-      topic,
-      new Integer(0),
-      "RecordKey",
-      "RecordValue",
-      validRecordHeaders
-    )
-    producer.send(record).get
-    producer.close()
   }
+
 
   override def overrideConfigs(): Properties = {
     val properties = new Properties()

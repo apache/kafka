@@ -38,7 +38,7 @@ public class StopReplicaRequestTest {
     public void testUnsupportedVersion() {
         StopReplicaRequest.Builder builder = new StopReplicaRequest.Builder(
                 (short) (STOP_REPLICA.latestVersion() + 1),
-                0, 0, 0L, false, Collections.emptyList());
+                0, 0, 0L, 0L, false, Collections.emptyList());
         assertThrows(UnsupportedVersionException.class, builder::build);
     }
 
@@ -46,7 +46,7 @@ public class StopReplicaRequestTest {
     public void testGetErrorResponse() {
         for (short version = STOP_REPLICA.oldestVersion(); version < STOP_REPLICA.latestVersion(); version++) {
             StopReplicaRequest.Builder builder = new StopReplicaRequest.Builder(version,
-                    0, 0, 0L, false, Collections.emptyList());
+                    0, 0, 0L, 0L, false, Collections.emptyList());
             StopReplicaRequest request = builder.build();
             StopReplicaResponse response = request.getErrorResponse(0,
                     new ClusterAuthorizationException("Not authorized"));
@@ -57,7 +57,7 @@ public class StopReplicaRequestTest {
     @Test
     public void testStopReplicaRequestNormalization() {
         Set<TopicPartition> tps = TestUtils.generateRandomTopicPartitions(10, 10);
-        StopReplicaRequest.Builder builder = new StopReplicaRequest.Builder((short) 5, 0, 0, 0, false, tps);
+        StopReplicaRequest.Builder builder = new StopReplicaRequest.Builder((short) 5, 0, 0, 0, 0, false, tps);
         assertTrue(MessageTestUtil.messageSize(builder.build((short) 1).data(), (short) 1) <
             MessageTestUtil.messageSize(builder.build((short) 0).data(), (short) 0));
     }

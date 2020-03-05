@@ -91,6 +91,8 @@ object ApiVersion {
     KAFKA_2_3_IV0,
     // Add rack_id to FetchRequest, preferred_read_replica to FetchResponse, and replica_id to OffsetsForLeaderRequest
     KAFKA_2_3_IV1,
+    // Add cacheable broker epoch to UpdateMetadataRequest
+    KAFKA_2_3_IV2,
     // Add adding_replicas and removing_replicas fields to LeaderAndIsrRequest
     KAFKA_2_4_IV0,
     // Flexible version support in inter-broker APIs
@@ -320,19 +322,27 @@ case object KAFKA_2_3_IV1 extends DefaultApiVersion {
   val id: Int = 23
 }
 
+case object KAFKA_2_3_IV2 extends DefaultApiVersion {
+  val shortVersion: String = "2.3"
+  val subVersion = "IV2"
+  val recordVersion = RecordVersion.V2
+  val id: Int = 24
+}
+
 case object KAFKA_2_4_IV0 extends DefaultApiVersion {
   val shortVersion: String = "2.4"
   val subVersion = "IV0"
   val recordVersion = RecordVersion.V2
-  val id: Int = 24
+  val id: Int = 25
 }
 
 case object KAFKA_2_4_IV1 extends DefaultApiVersion {
   val shortVersion: String = "2.4"
   val subVersion = "IV1"
   val recordVersion = RecordVersion.V2
-  val id: Int = 25
+  val id: Int = 26
 }
+
 
 object ApiVersionValidator extends Validator {
 

@@ -51,9 +51,9 @@ public class UpdateMetadataRequest extends AbstractControlRequest {
         // LIKAFKA-18349 - Cache the UpdateMetadataRequest Objects to reduce memory usage
         private final Map<Short, UpdateMetadataRequest> requestCache = new HashMap<>();
 
-        public Builder(short version, int controllerId, int controllerEpoch, long brokerEpoch,
+        public Builder(short version, int controllerId, int controllerEpoch, long brokerEpoch, long maxBrokerEpoch,
                        List<UpdateMetadataPartitionState> partitionStates, List<UpdateMetadataBroker> liveBrokers) {
-            super(ApiKeys.UPDATE_METADATA, version, controllerId, controllerEpoch, brokerEpoch);
+            super(ApiKeys.UPDATE_METADATA, version, controllerId, controllerEpoch, brokerEpoch, maxBrokerEpoch);
             this.partitionStates = partitionStates;
             this.liveBrokers = liveBrokers;
         }
@@ -90,6 +90,7 @@ public class UpdateMetadataRequest extends AbstractControlRequest {
                     .setControllerId(controllerId)
                     .setControllerEpoch(controllerEpoch)
                     .setBrokerEpoch(brokerEpoch)
+                    .setMaxBrokerEpoch(maxBrokerEpoch)
                     .setLiveBrokers(liveBrokers);
 
             if (version >= 5) {
@@ -130,6 +131,7 @@ public class UpdateMetadataRequest extends AbstractControlRequest {
                 append(", controllerId=").append(controllerId).
                 append(", controllerEpoch=").append(controllerEpoch).
                 append(", brokerEpoch=").append(brokerEpoch).
+                append(", maxBrokerEpoch=").append(maxBrokerEpoch).
                 append(", liveBrokers=").append(Utils.join(liveBrokers, ", ")).
                 append(")");
 
@@ -213,6 +215,11 @@ public class UpdateMetadataRequest extends AbstractControlRequest {
     @Override
     public long brokerEpoch() {
         return data.brokerEpoch();
+    }
+
+    @Override
+    public long maxBrokerEpoch() {
+        return data.maxBrokerEpoch();
     }
 
     @Override

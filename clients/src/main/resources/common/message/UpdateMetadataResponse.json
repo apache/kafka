@@ -17,9 +17,11 @@
   "apiKey": 6,
   "type": "response",
   "name": "UpdateMetadataResponse",
-  // Versions 1, 2, 3, 4, and 5 are the same as version 0
-  "validVersions": "0-6",
-  "flexibleVersions": "6+",
+  // Versions 1, 2, 3, 4, 5 and 6 are the same as version 0
+  //
+  // Version 7 is the first flexible version.
+  "validVersions": "0-7",
+  "flexibleVersions": "7+",
   "fields": [
       { "name": "ErrorCode", "type": "int16", "versions": "0+",
         "about": "The error code, or 0 if there was no error." }

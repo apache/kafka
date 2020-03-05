@@ -50,7 +50,7 @@ public class LeaderAndIsrRequestTest {
     @Test
     public void testUnsupportedVersion() {
         LeaderAndIsrRequest.Builder builder = new LeaderAndIsrRequest.Builder(
-                (short) (LEADER_AND_ISR.latestVersion() + 1), 0, 0, 0,
+                (short) (LEADER_AND_ISR.latestVersion() + 1), 0, 0, 0L, 0L,
                 Collections.emptyList(), Collections.emptySet());
         assertThrows(UnsupportedVersionException.class, builder::build);
     }
@@ -58,7 +58,7 @@ public class LeaderAndIsrRequestTest {
     @Test
     public void testGetErrorResponse() {
         for (short version = LEADER_AND_ISR.oldestVersion(); version < LEADER_AND_ISR.latestVersion(); version++) {
-            LeaderAndIsrRequest.Builder builder = new LeaderAndIsrRequest.Builder(version, 0, 0, 0,
+            LeaderAndIsrRequest.Builder builder = new LeaderAndIsrRequest.Builder(version, 0, 0, 0, 0,
                     Collections.emptyList(), Collections.emptySet());
             LeaderAndIsrRequest request = builder.build();
             LeaderAndIsrResponse response = request.getErrorResponse(0,
@@ -116,7 +116,7 @@ public class LeaderAndIsrRequestTest {
                 new Node(0, "host0", 9090),
                 new Node(1, "host1", 9091)
             );
-            LeaderAndIsrRequest request = new LeaderAndIsrRequest.Builder(version, 1, 2, 3, partitionStates,
+            LeaderAndIsrRequest request = new LeaderAndIsrRequest.Builder(version, 1, 2, 3, 3, partitionStates,
                 liveNodes).build();
 
             List<LeaderAndIsrLiveLeader> liveLeaders = liveNodes.stream().map(n -> new LeaderAndIsrLiveLeader()
@@ -133,9 +133,9 @@ public class LeaderAndIsrRequestTest {
             LeaderAndIsrRequest deserializedRequest = new LeaderAndIsrRequest(new LeaderAndIsrRequestData(
                 new ByteBufferAccessor(byteBuffer), version), version);
 
-            // Adding/removing replicas is only supported from version 3, so the deserialized request won't have
+            // Adding/removing replicas is only supported from version 4, so the deserialized request won't have
             // them for earlier versions.
-            if (version < 3) {
+            if (version < 4) {
                 partitionStates.get(0)
                     .setAddingReplicas(emptyList())
                     .setRemovingReplicas(emptyList());
@@ -158,7 +158,7 @@ public class LeaderAndIsrRequestTest {
                 .setTopicName(tp.topic())
                 .setPartitionIndex(tp.partition()));
         }
-        LeaderAndIsrRequest.Builder builder = new LeaderAndIsrRequest.Builder((short) 2, 0, 0, 0,
+        LeaderAndIsrRequest.Builder builder = new LeaderAndIsrRequest.Builder((short) 2, 0, 0, 0, 0,
             partitionStates, Collections.emptySet());
 
         LeaderAndIsrRequest v2 = builder.build((short) 2);
