@@ -53,6 +53,7 @@ import org.apache.kafka.test.MockTimestampExtractor;
 import org.apache.kafka.test.TestUtils;
 import org.easymock.EasyMock;
 import org.easymock.EasyMockRunner;
+import org.easymock.IMocksControl;
 import org.easymock.Mock;
 import org.easymock.MockType;
 import org.junit.After;
@@ -82,6 +83,7 @@ import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.streams.processor.internals.StreamTask.encodeTimestamp;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.THREAD_ID_TAG;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.THREAD_ID_TAG_0100_TO_24;
+import static org.easymock.EasyMock.createStrictControl;
 import static org.easymock.EasyMock.verify;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.nullValue;
@@ -239,6 +241,37 @@ public class StreamTaskTest {
 
         // should fail if lock is called
         verify(stateDirectory);
+    }
+
+    @Test
+    public void shouldAttemptToDeleteStateDirectoryWhenCloseDirtyAndEosEnabled() throws IOException {
+        final IMocksControl ctrl = createStrictControl();
+        final ProcessorStateManager stateManager = ctrl.createMock(ProcessorStateManager.class);
+        stateDirectory = ctrl.createMock(StateDirectory.class);
+
+        stateManager.registerGlobalStateStores(Collections.emptyList());
+        EasyMock.expectLastCall();
+
+        EasyMock.expect(stateManager.taskId()).andReturn(taskId);
+
+        stateManager.close();
+        EasyMock.expectLastCall();
+
+        // The `baseDir` will be accessed when attempting to delete the state store.
+        EasyMock.expect(stateManager.baseDir()).andReturn(TestUtils.tempDirectory("state_store"));
+
+        stateDirectory.unlock(taskId);
+        EasyMock.expectLastCall();
+
+        ctrl.checkOrder(true);
+        ctrl.replay();
+
+        task = createStatefulTask(createConfig(true, "100"), true, stateManager);
+        task.transitionTo(Task.State.CLOSING);
+        task.closeDirty();
+        task = null;
+
+        ctrl.verify();
     }
 
     @Test
@@ -1580,6 +1613,10 @@ public class StreamTaskTest {
     }
 
     private StreamTask createStatefulTask(final StreamsConfig config, final boolean logged) {
+        return createStatefulTask(config, logged, stateManager);
+    }
+
+    private StreamTask createStatefulTask(final StreamsConfig config, final boolean logged, final ProcessorStateManager stateManager) {
         final MockKeyValueStore stateStore = new MockKeyValueStore(storeName, logged);
 
         final ProcessorTopology topology = ProcessorTopologyFactories.with(

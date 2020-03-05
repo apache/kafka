@@ -24,6 +24,7 @@ import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.internals.Task.TaskType;
 import org.apache.kafka.streams.state.internals.RecordConverter;
 import org.slf4j.Logger;
 
@@ -36,6 +37,10 @@ import static org.apache.kafka.streams.state.internals.RecordConverters.identity
 import static org.apache.kafka.streams.state.internals.RecordConverters.rawValueToTimestampedValue;
 import static org.apache.kafka.streams.state.internals.WrappedStateStore.isTimestamped;
 
+/**
+ * Shared functions to handle state store registration and cleanup between
+ * active and standby tasks.
+ */
 final class StateManagerUtil {
     static final String CHECKPOINT_FILE_NAME = ".checkpoint";
 
@@ -83,48 +88,49 @@ final class StateManagerUtil {
         log.debug("Initialized state stores");
     }
 
-    static void wipeStateStores(final Logger log, final ProcessorStateManager stateMgr) {
-        // we can just delete the whole dir of the task, including the state store images and the checkpoint files
-        try {
-            Utils.delete(stateMgr.baseDir());
-        } catch (final IOException fatalException) {
-            // since it is only called under dirty close, we always swallow the exception
-            log.warn("Failed to wiping state stores for task {} due to {}", stateMgr.taskId(), fatalException);
-        }
-    }
-
-    static void writeEmptyCheckpointFile(final ProcessorStateManager stateMgr) {
-        try {
-            final Map<TopicPartition, Long> emptyOffsets = stateMgr.changelogPartitions().stream()
-                .collect(Collectors.toMap(Function.identity(), entry -> ListOffsetResponse.UNKNOWN_OFFSET));
-            stateMgr.writeStoreOffsetsToCheckpoint(emptyOffsets);
-        } catch (final IOException e) {
-            throw new ProcessorStateException("Failed to write empty checkpoint files for task " + stateMgr.taskId(), e);
-        }
-    }
-
     /**
      * @throws ProcessorStateException if there is an error while closing the state manager
      */
     static void closeStateManager(final Logger log,
                                   final String logPrefix,
                                   final boolean closeClean,
+                                  final boolean wipeStateStore,
                                   final ProcessorStateManager stateMgr,
-                                  final StateDirectory stateDirectory) {
+                                  final StateDirectory stateDirectory,
+                                  final TaskType taskType) {
+        if (closeClean && wipeStateStore) {
+            throw new IllegalArgumentException("State store could not be wiped out during clean close");
+        }
+
         ProcessorStateException exception = null;
-        log.trace("Closing state manager");
 
         final TaskId id = stateMgr.taskId();
+        log.trace("Closing state manager for {}", id);
+
         try {
             stateMgr.close();
+
+            if (wipeStateStore) {
+                // we can just delete the whole dir of the task, including the state store images and the checkpoint files,
+                // and then we write an empty checkpoint file indicating that the previous close is graceful and we just
+                // need to re-bootstrap the restoration from the beginning
+                Utils.delete(stateMgr.baseDir());
+
+                final Map<TopicPartition, Long> emptyOffsets = stateMgr.changelogPartitions().stream()
+                    .collect(Collectors.toMap(Function.identity(), entry -> ListOffsetResponse.UNKNOWN_OFFSET));
+                stateMgr.writeStoreOffsetsToCheckpoint(emptyOffsets);
+            }
         } catch (final ProcessorStateException e) {
             exception = e;
+        } catch (final IOException e) {
+            throw new ProcessorStateException("Failed to wiping state stores for task " + id, e);
         } finally {
             try {
                 stateDirectory.unlock(id);
             } catch (final IOException e) {
                 if (exception == null) {
-                    exception = new ProcessorStateException(String.format("%sFailed to release state dir lock", logPrefix), e);
+                    exception = new ProcessorStateException(
+                        String.format("%sFailed to release state dir lock", logPrefix), e);
                 }
             }
         }
@@ -133,7 +139,7 @@ final class StateManagerUtil {
             if (closeClean)
                 throw exception;
             else
-                log.warn("Closing standby task " + id + " uncleanly throws an exception " + exception);
+                log.warn("Closing {} task {} uncleanly and swallows an exception", taskType, id, exception);
         }
     }
 }
