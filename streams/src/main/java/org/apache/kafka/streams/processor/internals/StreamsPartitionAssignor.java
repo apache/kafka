@@ -564,7 +564,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
 
             // there are two cases where we need to construct the prevTasks from the ownedPartitions:
             // 1) COOPERATIVE clients on version 2.4-2.5 do not encode active tasks and rely on ownedPartitions instead
-            // 2) future clientduring version probing: we can't decode the future subscription info's prev tasks
+            // 2) future client during version probing, when we can't decode the future subscription info's prev tasks
             if (!state.ownedPartitions().isEmpty() && (uuid == futureId || state.prevActiveTasks().isEmpty())) {
                 final Set<TaskId> previousActiveTasks = new HashSet<>();
                 for (final Map.Entry<TopicPartition, String> partitionEntry : state.ownedPartitions().entrySet()) {

@@ -81,6 +81,17 @@
           "type": "int32"
         },
         {
+          "name": "partitionToOffsetSum",
+          "versions": "7+",
+          "type": "[]PartitionToOffsetSum"
+        }
+      ]
+    },
+    {
+      "name": "PartitionToOffsetSum",
+      "versions": "7+",
+      "fields": [
+        {
           "name": "partition",
           "versions": "7+",
           "type": "int32"

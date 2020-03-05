@@ -16,12 +16,16 @@
  */
 package org.apache.kafka.streams.processor.internals.assignment;
 
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.ObjectSerializationCache;
 import org.apache.kafka.streams.errors.TaskAssignmentException;
 import org.apache.kafka.streams.internals.generated.SubscriptionInfoData;
+import org.apache.kafka.streams.internals.generated.SubscriptionInfoData.PartitionToOffsetSum;
 import org.apache.kafka.streams.internals.generated.SubscriptionInfoData.TaskOffsetSum;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.Task;
@@ -103,11 +107,20 @@ public class SubscriptionInfo {
     }
 
     private void setTaskOffsetSumDataFromTaskOffsetSumMap(final Map<TaskId, Long> taskOffsetSums) {
-        data.setTaskOffsetSums(taskOffsetSums.entrySet().stream().map(t -> {
+        final Map<Integer, List<SubscriptionInfoData.PartitionToOffsetSum>> topicGroupIdToPartitionOffsetSum = new HashMap<>();
+        for (final Map.Entry<TaskId, Long> taskEntry : taskOffsetSums.entrySet()) {
+            final TaskId task = taskEntry.getKey();
+            topicGroupIdToPartitionOffsetSum.putIfAbsent(task.topicGroupId, new ArrayList<>());
+            topicGroupIdToPartitionOffsetSum.get(task.topicGroupId).add(
+                new SubscriptionInfoData.PartitionToOffsetSum()
+                         .setPartition(task.partition)
+                         .setOffsetSum(taskEntry.getValue()));
+        }
+
+        data.setTaskOffsetSums(topicGroupIdToPartitionOffsetSum.entrySet().stream().map(t -> {
             final SubscriptionInfoData.TaskOffsetSum taskOffsetSum = new SubscriptionInfoData.TaskOffsetSum();
-            taskOffsetSum.setTopicGroupId(t.getKey().topicGroupId);
-            taskOffsetSum.setPartition(t.getKey().partition);
-            taskOffsetSum.setOffsetSum(t.getValue());
+            taskOffsetSum.setTopicGroupId(t.getKey());
+            taskOffsetSum.setPartitionToOffsetSum(t.getValue());
             return taskOffsetSum;
         }).collect(Collectors.toList()));
     }
@@ -184,11 +197,13 @@ public class SubscriptionInfo {
 
     public Map<TaskId, Long> taskOffsetSums() {
         if (taskOffsetSumsCache == null) {
-            taskOffsetSumsCache = Collections.unmodifiableMap(
-                data.taskOffsetSums()
-                    .stream()
-                    .collect(Collectors.toMap(t -> new TaskId(t.topicGroupId(), t.partition()), TaskOffsetSum::offsetSum))
-            );
+            taskOffsetSumsCache = new HashMap<>();
+            for (final TaskOffsetSum topicGroup : data.taskOffsetSums()) {
+                for (final PartitionToOffsetSum partitionOffsetSum : topicGroup.partitionToOffsetSum()) {
+                    taskOffsetSumsCache.put(new TaskId(topicGroup.topicGroupId(), partitionOffsetSum.partition()),
+                                            partitionOffsetSum.offsetSum());
+                }
+            }
         }
         return taskOffsetSumsCache;
     }
