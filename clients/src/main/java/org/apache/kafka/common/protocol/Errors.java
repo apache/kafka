@@ -21,7 +21,7 @@ import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.BrokerNotAvailableException;
 import org.apache.kafka.common.errors.ClusterAuthorizationException;
 import org.apache.kafka.common.errors.ConcurrentTransactionsException;
-import org.apache.kafka.common.errors.ConfigurationMismatchException;
+import org.apache.kafka.common.errors.InconsistentReplicaConfigurationException;
 import org.apache.kafka.common.errors.GroupSubscribedToTopicException;
 import org.apache.kafka.common.errors.ControllerMovedException;
 import org.apache.kafka.common.errors.CoordinatorLoadInProgressException;
@@ -321,8 +321,8 @@ public enum Errors {
         GroupSubscribedToTopicException::new),
     INVALID_RECORD(87, "This record has failed the validation on broker and hence be rejected.", InvalidRecordException::new),
     UNSTABLE_OFFSET_COMMIT(88, "There are unstable offsets that need to be cleared.", UnstableOffsetCommitException::new),
-    CONFIGURATION_MISMATCH(89, "Replication factor is set lower than min.isr. Acks requirements cannot be satisfied.",
-            ConfigurationMismatchException::new);
+    INCONSISTENT_REPLICA_CONFIGURATION(89, "Replication factor is set lower than min.isr. Acks requirements cannot be satisfied.",
+            InconsistentReplicaConfigurationException::new);
 
     private static final Logger log = LoggerFactory.getLogger(Errors.class);
 
