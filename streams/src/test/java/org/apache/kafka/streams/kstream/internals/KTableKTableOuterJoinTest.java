@@ -29,8 +29,8 @@ import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.processor.api.MockProcessorContext;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.Record;
-import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.streams.test.TestRecord;
+import org.apache.kafka.test.LogCaptureContext;
 import org.apache.kafka.test.MockApiProcessor;
 import org.apache.kafka.test.MockApiProcessorSupplier;
 import org.apache.kafka.test.MockValueJoiner;
@@ -418,12 +418,13 @@ public class KTableKTableOuterJoinTest {
         context.setRecordMetadata("left", -1, -2);
         join.init(context);
 
-        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(KTableKTableOuterJoin.class)) {
+        try (final LogCaptureContext logCaptureContext = LogCaptureContext.create(this.getClass().getName()
+            + "#shouldLogAndMeterSkippedRecordsDueToNullLeftKey")) {
             join.process(new Record<>(null, new Change<>("new", "old"), 0));
 
             assertThat(
-                appender.getMessages(),
-                hasItem("Skipping record due to null key. topic=[left] partition=[-1] offset=[-2]")
+                logCaptureContext.getMessages(),
+                hasItem("WARN Skipping record due to null key. topic=[left] partition=[-1] offset=[-2] ")
             );
         }
     }

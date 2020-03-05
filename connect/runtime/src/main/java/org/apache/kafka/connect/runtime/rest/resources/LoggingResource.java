@@ -18,9 +18,10 @@ package org.apache.kafka.connect.runtime.rest.resources;
 
 import org.apache.kafka.connect.errors.NotFoundException;
 import org.apache.kafka.connect.runtime.rest.errors.BadRequestException;
-import org.apache.log4j.Level;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.apache.logging.log4j.Level;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.core.Logger;
+import org.apache.logging.log4j.core.LoggerContext;
 
 import javax.ws.rs.Consumes;
 import javax.ws.rs.GET;
@@ -30,14 +31,16 @@ import javax.ws.rs.PathParam;
 import javax.ws.rs.Produces;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
+
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.Enumeration;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.TreeMap;
+import java.util.stream.Collectors;
 
 /**
  * A set of endpoints to adjust the log levels of runtime loggers.
@@ -48,7 +51,10 @@ import java.util.TreeMap;
 public class LoggingResource {
 
     /**
-     * Log4j uses "root" (case insensitive) as name of the root logger.
+     * Note: In log4j, the root logger's name was "root" and Kafka also followed that name for dynamic logging control feature.
+     *
+     * The root logger's name is changed in log4j2 to empty string (see: [[LogManager.ROOT_LOGGER_NAME]]) but for backward-
+     * compatibility. Kafka keeps its original root logger name. It is why here is a dedicated definition for the root logger name.
      */
     private static final String ROOT_LOGGER_NAME = "root";
 
@@ -60,67 +66,60 @@ public class LoggingResource {
     @GET
     @Path("/")
     public Response listLoggers() {
-        Map<String, Map<String, String>> loggers = new TreeMap<>();
-        Enumeration<Logger> enumeration = currentLoggers();
-        Collections.list(enumeration)
-                .stream()
-                .filter(logger -> logger.getLevel() != null)
-                .forEach(logger -> loggers.put(logger.getName(), levelToMap(logger)));
+        // current loggers
+        final Map<String, Map<String, String>> loggers = currentLoggers()
+            .stream()
+            .filter(logger -> logger.getLevel() != Level.OFF)
+            .collect(Collectors.toMap(logger -> logger.getName(), logger -> levelToMap(logger)));
 
+        // Replace "" logger to "root" logger
         Logger root = rootLogger();
-        if (root.getLevel() != null) {
+        if (root.getLevel() != Level.OFF) {
             loggers.put(ROOT_LOGGER_NAME, levelToMap(root));
         }
 
-        return Response.ok(loggers).build();
+        return Response.ok(new TreeMap<>(loggers)).build();
     }
 
     /**
      * Get the log level of a named logger.
      *
-     * @param namedLogger name of a logger
+     * @param loggerName name of a logger
      * @return level of the logger, effective level if the level was not explicitly set.
      */
     @GET
     @Path("/{logger}")
-    public Response getLogger(final @PathParam("logger") String namedLogger) {
-        Objects.requireNonNull(namedLogger, "require non-null name");
+    public Response getLogger(final @PathParam("logger") String loggerName) {
+        Objects.requireNonNull(loggerName, "require non-null name");
 
-        Logger logger = null;
-        if (ROOT_LOGGER_NAME.equalsIgnoreCase(namedLogger)) {
+        final Logger logger;
+        if (ROOT_LOGGER_NAME.equalsIgnoreCase(loggerName)) {
             logger = rootLogger();
         } else {
-            Enumeration<Logger> en = currentLoggers();
-            // search within existing loggers for the given name.
-            // using LogManger.getLogger() will create a logger if it doesn't exist
-            // (potential leak since these don't get cleaned up).
-            while (en.hasMoreElements()) {
-                Logger l = en.nextElement();
-                if (namedLogger.equals(l.getName())) {
-                    logger = l;
-                    break;
-                }
-            }
+            List<Logger> en = currentLoggers();
+            Optional<Logger> found = en.stream().filter(existingLogger -> loggerName.equals(existingLogger.getName())).findAny();
+
+            logger = found.orElse(null);
         }
+
         if (logger == null) {
-            throw new NotFoundException("Logger " + namedLogger + " not found.");
+            throw new NotFoundException("Logger " + loggerName + " not found.");
         } else {
             return Response.ok(effectiveLevelToMap(logger)).build();
         }
     }
 
-
     /**
      * Adjust level of a named logger. if name corresponds to an ancestor, then the log level is applied to all child loggers.
      *
-     * @param namedLogger name of the logger
-     * @param levelMap a map that is expected to contain one key 'level', and a value that is one of the log4j levels:
-     *                 DEBUG, ERROR, FATAL, INFO, TRACE, WARN
+     * @param loggerName  name of the logger
+     * @param levelMap    a map that is expected to contain one key 'level', and a value that is one of the log4j levels:
+     *                    DEBUG, ERROR, FATAL, INFO, TRACE, WARN, OFF
      * @return names of loggers whose levels were modified
      */
     @PUT
     @Path("/{logger}")
-    public Response setLevel(final @PathParam("logger") String namedLogger,
+    public Response setLevel(final @PathParam("logger") String loggerName,
                              final Map<String, String> levelMap) {
         String desiredLevelStr = levelMap.get("level");
         if (desiredLevelStr == null) {
@@ -133,20 +132,18 @@ public class LoggingResource {
         }
 
         List<Logger> childLoggers;
-        if (ROOT_LOGGER_NAME.equalsIgnoreCase(namedLogger)) {
-            childLoggers = Collections.list(currentLoggers());
+        if (ROOT_LOGGER_NAME.equalsIgnoreCase(loggerName)) {
+            childLoggers = new ArrayList<>(currentLoggers());
             childLoggers.add(rootLogger());
         } else {
             childLoggers = new ArrayList<>();
-            Logger ancestorLogger = lookupLogger(namedLogger);
-            Enumeration<Logger> en = currentLoggers();
+            Logger ancestorLogger = lookupLogger(loggerName);
             boolean present = false;
-            while (en.hasMoreElements()) {
-                Logger current = en.nextElement();
-                if (current.getName().startsWith(namedLogger)) {
-                    childLoggers.add(current);
+            for (Logger logger : currentLoggers()) {
+                if (logger.getName().startsWith(loggerName)) {
+                    childLoggers.add(logger);
                 }
-                if (namedLogger.equals(current.getName())) {
+                if (loggerName.equals(logger.getName())) {
                     present = true;
                 }
             }
@@ -158,43 +155,50 @@ public class LoggingResource {
         List<String> modifiedLoggerNames = new ArrayList<>();
         for (Logger logger: childLoggers) {
             logger.setLevel(level);
-            modifiedLoggerNames.add(logger.getName());
+            if (LogManager.ROOT_LOGGER_NAME.equals(logger.getName())) {
+                modifiedLoggerNames.add(ROOT_LOGGER_NAME);
+            } else {
+                modifiedLoggerNames.add(logger.getName());
+            }
         }
         Collections.sort(modifiedLoggerNames);
 
         return Response.ok(modifiedLoggerNames).build();
     }
 
-    protected Logger lookupLogger(String namedLogger) {
-        return LogManager.getLogger(namedLogger);
+    protected Logger lookupLogger(String loggerName) {
+        final LoggerContext loggerContext = (LoggerContext) LogManager.getContext(false);
+
+        return loggerContext.getLogger(loggerName);
     }
 
     @SuppressWarnings("unchecked")
-    protected Enumeration<Logger> currentLoggers() {
-        return LogManager.getCurrentLoggers();
+    protected List<Logger> currentLoggers() {
+        final LoggerContext loggerContext = (LoggerContext) LogManager.getContext(false);
+
+        return loggerContext.getLoggers()
+            .stream()
+            .filter(logger -> !logger.getName().equals(LogManager.ROOT_LOGGER_NAME))
+            .collect(Collectors.toList());
     }
 
     protected Logger rootLogger() {
-        return LogManager.getRootLogger();
+        final LoggerContext loggerContext = (LoggerContext) LogManager.getContext(false);
+
+        return loggerContext.getRootLogger();
     }
 
     /**
-     *
      * Map representation of a logger's effective log level.
      *
      * @param logger a non-null log4j logger
      * @return a singleton map whose key is level and the value is the string representation of the logger's effective log level.
      */
     private static Map<String, String> effectiveLevelToMap(Logger logger) {
-        Level level = logger.getLevel();
-        if (level == null) {
-            level = logger.getEffectiveLevel();
-        }
-        return Collections.singletonMap("level", String.valueOf(level));
+        return Collections.singletonMap("level", logger.getLevel() != null ? logger.getLevel().toString() : null);
     }
 
     /**
-     *
      * Map representation of a logger's log level.
      *
      * @param logger a non-null log4j logger

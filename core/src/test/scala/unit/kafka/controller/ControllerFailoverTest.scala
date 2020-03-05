@@ -26,12 +26,10 @@ import kafka.server.KafkaConfig
 import kafka.utils._
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.metrics.Metrics
-import org.apache.log4j.Logger
 import org.junit.jupiter.api.{AfterEach, Test}
 import org.junit.jupiter.api.Assertions._
 
 class ControllerFailoverTest extends KafkaServerTestHarness with Logging {
-  val log = Logger.getLogger(classOf[ControllerFailoverTest])
   val numNodes = 2
   val numParts = 1
   val msgQueueSize = 1

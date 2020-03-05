@@ -37,14 +37,13 @@ import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.metrics.TaskMetrics;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
-import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
-import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender.Event;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 import org.apache.kafka.test.InternalMockProcessorContext;
+import org.apache.kafka.test.LogCaptureContext;
 import org.apache.kafka.test.MockRecordCollector;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
@@ -55,7 +54,6 @@ import org.junit.Test;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import java.util.stream.Collectors;
 
 import static java.time.Duration.ofMillis;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
@@ -373,17 +371,14 @@ public class KStreamSessionWindowAggregateProcessorTest {
             new ProcessorRecordContext(-1, -2, -3, "topic", new RecordHeaders())
         );
 
-        try (final LogCaptureAppender appender =
-                 LogCaptureAppender.createAndRegister(KStreamSessionWindowAggregate.class)) {
+        try (final LogCaptureContext logCaptureContext =
+                 LogCaptureContext.create(this.getClass().getName() + "#shouldLogAndMeterWhenSkippingNullKeyWithBuiltInMetrics")) {
 
             processor.process(new Record<>(null, "1", 0L));
 
             assertThat(
-                appender.getEvents().stream()
-                    .filter(e -> e.getLevel().equals("WARN"))
-                    .map(Event::getMessage)
-                    .collect(Collectors.toList()),
-                hasItem("Skipping record due to null key. topic=[topic] partition=[-3] offset=[-2]")
+                logCaptureContext.getMessages(),
+                hasItem("WARN Skipping record due to null key. topic=[topic] partition=[-3] offset=[-2] ")
             );
         }
 
@@ -417,17 +412,17 @@ public class KStreamSessionWindowAggregateProcessorTest {
         context.setRecordContext(new ProcessorRecordContext(11, -2, -3, "topic", new RecordHeaders()));
         processor.process(new Record<>("dummy", "dummy", 11L));
 
-        try (final LogCaptureAppender appender =
-                 LogCaptureAppender.createAndRegister(KStreamSessionWindowAggregate.class)) {
+        try (final LogCaptureContext logCaptureContext =
+                 LogCaptureContext.create(this.getClass().getName() + "#shouldLogAndMeterWhenSkippingLateRecordWithZeroGrace")) {
 
             // record is late
             context.setRecordContext(new ProcessorRecordContext(0, -2, -3, "topic", new RecordHeaders()));
             processor.process(new Record<>("Late1", "1", 0L));
 
             assertThat(
-                appender.getMessages(),
-                hasItem("Skipping record for expired window." +
-                    " topic=[topic] partition=[-3] offset=[-2] timestamp=[0] window=[0,0] expiration=[1] streamTime=[11]")
+                logCaptureContext.getMessages(),
+                hasItem("WARN Skipping record for expired window." +
+                    " topic=[topic] partition=[-3] offset=[-2] timestamp=[0] window=[0,0] expiration=[1] streamTime=[11] ")
             );
         }
 
@@ -470,8 +465,8 @@ public class KStreamSessionWindowAggregateProcessorTest {
         ).get();
         processor.init(context);
 
-        try (final LogCaptureAppender appender =
-                 LogCaptureAppender.createAndRegister(KStreamSessionWindowAggregate.class)) {
+        try (final LogCaptureContext logCaptureContext =
+                 LogCaptureContext.create(this.getClass().getName() + "#shouldLogAndMeterWhenSkippingLateRecordWithNonzeroGrace")) {
 
             // dummy record to establish stream time = 0
             context.setRecordContext(new ProcessorRecordContext(0, -2, -3, "topic", new RecordHeaders()));
@@ -498,9 +493,9 @@ public class KStreamSessionWindowAggregateProcessorTest {
             processor.process(new Record<>("Late1", "1", 0L));
 
             assertThat(
-                appender.getMessages(),
-                hasItem("Skipping record for expired window." +
-                    " topic=[topic] partition=[-3] offset=[-2] timestamp=[0] window=[0,0] expiration=[1] streamTime=[12]")
+                logCaptureContext.getMessages(),
+                hasItem("WARN Skipping record for expired window." +
+                    " topic=[topic] partition=[-3] offset=[-2] timestamp=[0] window=[0,0] expiration=[1] streamTime=[12] ")
             );
         }
 

@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
+import org.apache.kafka.test.LogCaptureContext;
 import org.easymock.EasyMockRunner;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -54,20 +54,20 @@ import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 
 import java.util.Arrays;
-import java.util.Set;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 import static org.easymock.EasyMock.mock;
 import static org.easymock.EasyMock.replay;
 import static org.easymock.EasyMock.reset;
 import static org.easymock.EasyMock.verify;
-import static org.hamcrest.CoreMatchers.hasItem;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.instanceOf;
+import static org.hamcrest.Matchers.hasItem;
 import static org.hamcrest.Matchers.matchesPattern;
 import static org.junit.Assert.fail;
 
@@ -330,9 +330,11 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapterTest {
 
     @Test
     public void shouldLogWarningWhenSettingWalOptions() throws Exception {
-
-        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter.class)) {
-
+        try (final LogCaptureContext logCaptureContext = LogCaptureContext.create(this.getClass().getName()
+                + "#shouldLogWarningWhenSettingWalOptions",
+            Collections.singletonMap(RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter.class.getName(), "WARN")
+        )) {
+            logCaptureContext.setLatch(16);
             final RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter adapter
                 = new RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter(new DBOptions(), new ColumnFamilyOptions());
 
@@ -344,13 +346,10 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapterTest {
 
             final List<String> walOptions = Arrays.asList("walDir", "walFilter", "walRecoveryMode", "walBytesPerSync", "walSizeLimitMB", "manualWalFlush", "maxTotalWalSize", "walTtlSeconds");
 
-            final Set<String> logMessages = appender.getEvents().stream()
-                .filter(e -> e.getLevel().equals("WARN"))
-                .map(LogCaptureAppender.Event::getMessage)
-                .collect(Collectors.toSet());
-
-            walOptions.forEach(option -> assertThat(logMessages, hasItem(String.format("WAL is explicitly disabled by Streams in RocksDB. Setting option '%s' will be ignored", option))));
-
+            logCaptureContext.await();
+            walOptions.forEach(option -> assertThat(logCaptureContext.getMessages(),
+                hasItem(containsString(String.format("WARN WAL is explicitly disabled by Streams in RocksDB. Setting option '%s' will be ignored", option))))
+            );
         }
     }
 }

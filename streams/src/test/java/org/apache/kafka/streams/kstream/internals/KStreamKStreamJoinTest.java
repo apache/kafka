@@ -33,10 +33,10 @@ import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.StreamJoined;
 import org.apache.kafka.streams.processor.internals.InternalTopicConfig;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
-import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
+import org.apache.kafka.test.LogCaptureContext;
 import org.apache.kafka.test.MockApiProcessor;
 import org.apache.kafka.test.MockApiProcessorSupplier;
 import org.apache.kafka.test.MockValueJoiner;
@@ -74,7 +74,7 @@ public class KStreamKStreamJoinTest {
     private final String errorMessagePrefix = "Window settings mismatch. WindowBytesStoreSupplier settings";
 
     @Test
-    public void shouldLogAndMeterOnSkippedRecordsWithNullValueWithBuiltInMetricsVersionLatest() {
+    public void shouldLogAndMeterOnSkippedRecordsWithNullValueWithBuiltInMetricsVersionLatest() throws InterruptedException {
         final StreamsBuilder builder = new StreamsBuilder();
 
         final KStream<String, Integer> left = builder.stream("left", Consumed.with(Serdes.String(), Serdes.Integer()));
@@ -89,17 +89,20 @@ public class KStreamKStreamJoinTest {
 
         props.setProperty(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, StreamsConfig.METRICS_LATEST);
 
-        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(KStreamKStreamJoin.class);
-             final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+        try (final LogCaptureContext logCaptureContext = LogCaptureContext.create(this.getClass().getName()
+            + "#shouldLogAndMeterOnSkippedRecordsWithNullValueWithBuiltInMetricsVersionLatest")) {
+            logCaptureContext.setLatch(6);
+
+            final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props);
 
             final TestInputTopic<String, Integer> inputTopic =
                 driver.createInputTopic("left", new StringSerializer(), new IntegerSerializer());
             inputTopic.pipeInput("A", null);
 
+            logCaptureContext.await();
             assertThat(
-                appender.getMessages(),
-                hasItem("Skipping record due to null key or value. topic=[left] partition=[0] offset=[0]")
-            );
+                logCaptureContext.getMessages(),
+                hasItem("WARN Skipping record due to null key or value. topic=[left] partition=[0] offset=[0] "));
         }
     }
 
@@ -275,7 +278,10 @@ public class KStreamKStreamJoinTest {
 
     @Test
     public void shouldBuildJoinWithCustomStoresAndCorrectWindowSettings() {
-        //Case where everything matches up
+        // Case where everything matches up
+        final WindowBytesStoreSupplier thisStoreSupplier = buildWindowBytesStoreSupplier("in-memory-join-store", 150, 100, true);
+        final WindowBytesStoreSupplier otherStoreSupplier = buildWindowBytesStoreSupplier("in-memory-join-store-other", 150, 100, true);
+
         final StreamsBuilder builder = new StreamsBuilder();
         final KStream<String, Integer> left = builder.stream("left", Consumed.with(Serdes.String(), Serdes.Integer()));
         final KStream<String, Integer> right = builder.stream("right", Consumed.with(Serdes.String(), Serdes.Integer()));

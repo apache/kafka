@@ -34,12 +34,12 @@ import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
-import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 import org.apache.kafka.test.InternalMockProcessorContext;
+import org.apache.kafka.test.LogCaptureContext;
 import org.apache.kafka.test.MockRecordCollector;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
@@ -968,17 +968,18 @@ public abstract class AbstractWindowBytesStoreTest {
 
     @Test
     public void shouldNotThrowInvalidRangeExceptionWithNegativeFromKey() {
-        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
-             final KeyValueIterator<Windowed<Integer>, String> iterator = windowStore.fetch(-1, 1, 0L, 10L)) {
+        try (final LogCaptureContext logCaptureContext =
+                 LogCaptureContext.create(this.getClass().getName() + "#shouldNotThrowInvalidRangeExceptionWithNegativeFromKey")) {
+            final KeyValueIterator<Windowed<Integer>, String> iterator = windowStore.fetch(-1, 1, 0L, 10L);
             assertFalse(iterator.hasNext());
 
-            final List<String> messages = appender.getMessages();
+            final List<String> messages = logCaptureContext.getMessages();
             assertThat(
                 messages,
-                hasItem("Returning empty iterator for fetch with invalid key range: from > to." +
+                hasItem("WARN Returning empty iterator for fetch with invalid key range: from > to." +
                     " This may be due to range arguments set in the wrong order, " +
                     "or serdes that don't preserve ordering when lexicographically comparing the serialized bytes." +
-                    " Note that the built-in numerical serdes do not follow this for negative numbers")
+                    " Note that the built-in numerical serdes do not follow this for negative numbers ")
             );
         }
     }
@@ -998,7 +999,8 @@ public abstract class AbstractWindowBytesStoreTest {
         context.setTime(1L);
         windowStore.init((StateStoreContext) context, windowStore);
 
-        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister()) {
+        try (final LogCaptureContext logCaptureContext = LogCaptureContext.create(this.getClass().getName()
+            + "#shouldLogAndMeasureExpiredRecords")) {
             // Advance stream time by inserting record with large enough timestamp that records with timestamp 0 are expired
             windowStore.put(1, "initial record", 2 * RETENTION_PERIOD);
 
@@ -1006,8 +1008,8 @@ public abstract class AbstractWindowBytesStoreTest {
             windowStore.put(1, "late record", 0L);
             windowStore.put(1, "another on-time record", RETENTION_PERIOD + 1);
 
-            final List<String> messages = appender.getMessages();
-            assertThat(messages, hasItem("Skipping record for expired segment."));
+            final List<String> messages = logCaptureContext.getMessages();
+            assertThat(messages, hasItem("WARN Skipping record for expired segment. "));
         }
 
         final Map<MetricName, ? extends Metric> metrics = context.metrics().metrics();

@@ -54,11 +54,11 @@ import org.apache.kafka.streams.processor.internals.StreamsMetadataState;
 import org.apache.kafka.streams.processor.internals.TopologyMetadata;
 import org.apache.kafka.streams.processor.internals.ThreadMetadataImpl;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
-import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.internals.metrics.RocksDBMetricsRecordingTrigger;
+import org.apache.kafka.test.LogCaptureContext;
 import org.apache.kafka.test.MockClientSupplier;
 import org.apache.kafka.test.MockMetricsReporter;
 import org.apache.kafka.test.MockProcessorSupplier;
@@ -476,7 +476,8 @@ public class KafkaStreamsTest {
         final StreamsBuilder builder = getBuilderWithSource();
         builder.globalTable("anyTopic");
 
-        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(KafkaStreams.class);
+        try (final LogCaptureContext logCaptureContext =
+                 LogCaptureContext.create(this.getClass().getName() + "#shouldCleanupResourcesOnCloseWithoutPreviousStart");
             final KafkaStreams streams = new KafkaStreams(builder.build(), props, supplier, time)) {
             streams.close();
 
@@ -484,7 +485,7 @@ public class KafkaStreamsTest {
                 () -> streams.state() == KafkaStreams.State.NOT_RUNNING,
                 "Streams never stopped.");
 
-            assertThat(appender.getMessages(), not(hasItem(containsString("ERROR"))));
+            assertThat(logCaptureContext.getMessages(), not(hasItem(containsString("ERROR"))));
         }
 
         assertTrue(supplier.consumer.closed());
@@ -536,8 +537,9 @@ public class KafkaStreamsTest {
         final StreamsBuilder builder = getBuilderWithSource();
         builder.globalTable("anyTopic");
 
-        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(KafkaStreams.class);
-            final KafkaStreams streams = new KafkaStreams(builder.build(), props, supplier, time)) {
+        try (final LogCaptureContext logCaptureContext =
+                 LogCaptureContext.create(this.getClass().getName() + "#testStateGlobalThreadClose");
+             final KafkaStreams streams = new KafkaStreams(builder.build(), props, supplier, time)) {
             streams.start();
             waitForCondition(
                 () -> streams.state() == KafkaStreams.State.RUNNING,
@@ -562,7 +564,7 @@ public class KafkaStreamsTest {
                 "Thread never stopped."
             );
 
-            assertThat(appender.getMessages(), hasItem(containsString("ERROR")));
+            assertThat(logCaptureContext.getMessages(), hasItem(containsString("ERROR")));
         }
     }
 

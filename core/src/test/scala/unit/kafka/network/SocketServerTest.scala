@@ -47,9 +47,11 @@ import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.common.security.scram.internals.ScramMechanism
 import org.apache.kafka.common.utils.{AppInfoParser, LogContext, MockTime, Time, Utils}
 import org.apache.kafka.test.{TestSslUtils, TestUtils => JTestUtils}
-import org.apache.log4j.Level
+import org.apache.logging.log4j.Level
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api._
+import unit.kafka.utils.LoggingUtil
+
 import java.util.concurrent.atomic.AtomicInteger
 
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
@@ -82,7 +84,6 @@ class SocketServerTest {
   server.startup()
   val sockets = new ArrayBuffer[Socket]
 
-  private val kafkaLogger = org.apache.log4j.LogManager.getLogger("kafka")
   private var logLevelToRestore: Level = _
   def endpoint: EndPoint = {
     KafkaConfig.fromProps(props, doLog = false).dataPlaneListeners.head
@@ -93,9 +94,7 @@ class SocketServerTest {
   @BeforeEach
   def setUp(): Unit = {
     // Run the tests with TRACE logging to exercise request logging path
-    logLevelToRestore = kafkaLogger.getLevel
-    kafkaLogger.setLevel(Level.TRACE)
-
+    logLevelToRestore = LoggingUtil.setLevel("kafka", Level.TRACE)
     assertTrue(server.controlPlaneRequestChannelOpt.isEmpty)
   }
 
@@ -104,7 +103,7 @@ class SocketServerTest {
     shutdownServerAndMetrics(server)
     sockets.foreach(_.close())
     sockets.clear()
-    kafkaLogger.setLevel(logLevelToRestore)
+    LoggingUtil.setLevel("kafka", logLevelToRestore)
   }
 
   def sendRequest(socket: Socket, request: Array[Byte], id: Option[Short] = None, flush: Boolean = true): Unit = {

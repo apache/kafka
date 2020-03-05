@@ -33,10 +33,9 @@ import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
-import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
-import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender.Event;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.test.TestRecord;
+import org.apache.kafka.test.LogCaptureContext;
 import org.apache.kafka.test.MockApiProcessor;
 import org.apache.kafka.test.MockApiProcessorSupplier;
 import org.apache.kafka.test.StreamsTestUtils;
@@ -45,8 +44,8 @@ import org.junit.Test;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Collections;
 import java.util.Properties;
-import java.util.stream.Collectors;
 
 import static java.util.Arrays.asList;
 import static org.apache.kafka.test.StreamsTestUtils.getMetricByName;
@@ -136,7 +135,9 @@ public class KTableSourceTest {
         final String topic = "topic";
         builder.table(topic, stringConsumed);
 
-        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(KTableSource.class);
+        try (final LogCaptureContext logCaptureContext =
+                 LogCaptureContext.create(this.getClass().getName() + "#kTableShouldLogAndMeterOnSkippedRecords",
+                     Collections.singletonMap(KTableSource.class.getName(), "WARN"));
              final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
 
             final TestInputTopic<String, String> inputTopic =
@@ -150,11 +151,8 @@ public class KTableSourceTest {
             inputTopic.pipeInput(null, "value");
 
             assertThat(
-                appender.getEvents().stream()
-                    .filter(e -> e.getLevel().equals("WARN"))
-                    .map(Event::getMessage)
-                    .collect(Collectors.toList()),
-                hasItem("Skipping record due to null key. topic=[topic] partition=[0] offset=[0]")
+                logCaptureContext.getMessages(),
+                hasItem("WARN Skipping record due to null key. topic=[topic] partition=[0] offset=[0] ")
             );
         }
     }
@@ -165,7 +163,9 @@ public class KTableSourceTest {
         final String topic = "topic";
         builder.table(topic, stringConsumed, Materialized.as("store"));
 
-        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(KTableSource.class);
+        try (final LogCaptureContext logCaptureContext =
+                 LogCaptureContext.create(this.getClass().getName() + "#kTableShouldLogOnOutOfOrder",
+                     Collections.singletonMap(KTableSource.class.getName(), "WARN"));
             final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
 
             final TestInputTopic<String, String> inputTopic =
@@ -179,13 +179,8 @@ public class KTableSourceTest {
             inputTopic.pipeInput("key", "value", 10L);
             inputTopic.pipeInput("key", "value", 5L);
 
-            assertThat(
-                appender.getEvents().stream()
-                    .filter(e -> e.getLevel().equals("WARN"))
-                    .map(Event::getMessage)
-                    .collect(Collectors.toList()),
-                hasItem("Detected out-of-order KTable update for store, old timestamp=[10] new timestamp=[5]. topic=[topic] partition=[0] offset=[1].")
-            );
+            assertThat(logCaptureContext.getMessages(),
+                hasItem("WARN Detected out-of-order KTable update for store, old timestamp=[10] new timestamp=[5]. topic=[topic] partition=[0] offset=[1]. "));
         }
     }
 

@@ -44,11 +44,11 @@ import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.Task.TaskType;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
-import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.test.InternalMockProcessorContext;
+import org.apache.kafka.test.LogCaptureContext;
 import org.apache.kafka.test.MockRecordCollector;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
@@ -803,7 +803,8 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
         context.setSystemTimeMs(time.milliseconds());
         bytesStore.init((StateStoreContext) context, bytesStore);
 
-        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister()) {
+        try (final LogCaptureContext logCaptureContext =
+                 LogCaptureContext.create(this.getClass().getName() + "#shouldLogAndMeasureExpiredRecords")) {
             // write a record to advance stream time, with a high enough timestamp
             // that the subsequent record in windows[0] will already be expired.
             bytesStore.put(serializeKey(new Windowed<>("dummy", nextSegmentWindow)), serializeValue(0));
@@ -812,8 +813,8 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
             final byte[] value = serializeValue(5);
             bytesStore.put(key, value);
 
-            final List<String> messages = appender.getMessages();
-            assertThat(messages, hasItem("Skipping record for expired segment."));
+            final List<String> messages = logCaptureContext.getMessages();
+            assertThat(messages, hasItem("WARN Skipping record for expired segment. "));
         }
 
         final Map<MetricName, ? extends Metric> metrics = context.metrics().metrics();

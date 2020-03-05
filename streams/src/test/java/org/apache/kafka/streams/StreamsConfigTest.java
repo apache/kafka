@@ -32,7 +32,7 @@ import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.FailOnInvalidTimestamp;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 import org.apache.kafka.streams.processor.internals.StreamsPartitionAssignor;
-import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
+import org.apache.kafka.test.LogCaptureContext;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -40,6 +40,7 @@ import java.io.File;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -66,10 +67,10 @@ import static org.apache.kafka.streams.StreamsConfig.producerPrefix;
 import static org.apache.kafka.streams.internals.StreamsConfigUtils.getTotalCacheSize;
 import static org.apache.kafka.test.StreamsTestUtils.getStreamsConfig;
 import static org.hamcrest.CoreMatchers.containsString;
-import static org.hamcrest.CoreMatchers.hasItem;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.hasItem;
 import static org.hamcrest.core.IsEqual.equalTo;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
@@ -80,7 +81,6 @@ import static org.junit.Assert.fail;
 public class StreamsConfigTest {
 
     private final Properties props = new Properties();
-    private StreamsConfig streamsConfig;
 
     private final String groupId = "example-application";
     private final String clientId = "client";
@@ -94,7 +94,6 @@ public class StreamsConfigTest {
         props.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
         props.put("key.deserializer.encoding", StandardCharsets.UTF_8.name());
         props.put("value.deserializer.encoding", StandardCharsets.UTF_16.name());
-        streamsConfig = new StreamsConfig(props);
     }
 
     @Test
@@ -136,6 +135,7 @@ public class StreamsConfigTest {
 
     @Test
     public void testGetProducerConfigs() {
+        final StreamsConfig streamsConfig = new StreamsConfig(props);
         final Map<String, Object> returnedProps = streamsConfig.getProducerConfigs(clientId);
         assertThat(returnedProps.get(ProducerConfig.CLIENT_ID_CONFIG), equalTo(clientId));
         assertThat(returnedProps.get(ProducerConfig.LINGER_MS_CONFIG), equalTo("100"));
@@ -143,6 +143,7 @@ public class StreamsConfigTest {
 
     @Test
     public void testGetConsumerConfigs() {
+        final StreamsConfig streamsConfig = new StreamsConfig(props);
         final Map<String, Object> returnedProps = streamsConfig.getMainConsumerConfigs(groupId, clientId, threadIdx);
         assertThat(returnedProps.get(ConsumerConfig.CLIENT_ID_CONFIG), equalTo(clientId));
         assertThat(returnedProps.get(ConsumerConfig.GROUP_ID_CONFIG), equalTo(groupId));
@@ -211,6 +212,7 @@ public class StreamsConfigTest {
 
     @Test
     public void testGetRestoreConsumerConfigs() {
+        final StreamsConfig streamsConfig = new StreamsConfig(props);
         final Map<String, Object> returnedProps = streamsConfig.getRestoreConsumerConfigs(clientId);
         assertEquals(returnedProps.get(ConsumerConfig.CLIENT_ID_CONFIG), clientId);
         assertNull(returnedProps.get(ConsumerConfig.GROUP_ID_CONFIG));
@@ -218,6 +220,7 @@ public class StreamsConfigTest {
 
     @Test
     public void defaultSerdeShouldBeConfigured() {
+        final StreamsConfig streamsConfig = new StreamsConfig(props);
         final Map<String, Object> serializerConfigs = new HashMap<>();
         serializerConfigs.put("key.serializer.encoding", StandardCharsets.UTF_8.name());
         serializerConfigs.put("value.serializer.encoding", StandardCharsets.UTF_16.name());
@@ -468,6 +471,7 @@ public class StreamsConfigTest {
 
     @Test
     public void testGetGlobalConsumerConfigs() {
+        final StreamsConfig streamsConfig = new StreamsConfig(props);
         final Map<String, Object> returnedProps = streamsConfig.getGlobalConsumerConfigs(clientId);
         assertEquals(returnedProps.get(ConsumerConfig.CLIENT_ID_CONFIG), clientId + "-global-consumer");
         assertNull(returnedProps.get(ConsumerConfig.GROUP_ID_CONFIG));
@@ -523,6 +527,7 @@ public class StreamsConfigTest {
 
     @Test
     public void shouldNotSetInternalThrowOnFetchStableOffsetUnsupportedConfigToFalseInConsumerForEosDisabled() {
+        final StreamsConfig streamsConfig = new StreamsConfig(props);
         final Map<String, Object> consumerConfigs = streamsConfig.getMainConsumerConfigs(groupId, clientId, threadIdx);
         assertThat(consumerConfigs.get("internal.throw.on.fetch.stable.offset.unsupported"), is(nullValue()));
     }
@@ -555,6 +560,7 @@ public class StreamsConfigTest {
 
     @Test
     public void shouldNotSetInternalAutoDowngradeTxnCommitToTrueInProducerForEosDisabled() {
+        final StreamsConfig streamsConfig = new StreamsConfig(props);
         final Map<String, Object> producerConfigs = streamsConfig.getProducerConfigs(clientId);
         assertThat(producerConfigs.get("internal.auto.downgrade.txn.commit"), is(nullValue()));
     }
@@ -1002,6 +1008,7 @@ public class StreamsConfigTest {
 
     @Test
     public void shouldStateDirStartsWithJavaIOTmpDir() {
+        final StreamsConfig streamsConfig = new StreamsConfig(props);
         final String expectedPrefix = System.getProperty("java.io.tmpdir") + File.separator;
         final String actual = streamsConfig.getString(STATE_DIR_CONFIG);
         assertTrue(actual.startsWith(expectedPrefix));
@@ -1009,8 +1016,9 @@ public class StreamsConfigTest {
 
     @Test
     public void shouldSpecifyNoOptimizationWhenNotExplicitlyAddedToConfigs() {
-        final String expectedOptimizeConfig = "none";
+        final StreamsConfig streamsConfig = new StreamsConfig(props);
         final String actualOptimizedConifig = streamsConfig.getString(TOPOLOGY_OPTIMIZATION_CONFIG);
+        final String expectedOptimizeConfig = "none";
         assertEquals("Optimization should be \"none\"", expectedOptimizeConfig, actualOptimizedConifig);
     }
 
@@ -1032,7 +1040,8 @@ public class StreamsConfigTest {
     @Test
     public void shouldSpecifyRocksdbWhenNotExplicitlyAddedToConfigs() {
         final String expectedDefaultStoreType = StreamsConfig.ROCKS_DB;
-        final String actualDefaultStoreType = streamsConfig.getString(DEFAULT_DSL_STORE_CONFIG);
+        final StreamsConfig config = new StreamsConfig(props);
+        final String actualDefaultStoreType = config.getString(DEFAULT_DSL_STORE_CONFIG);
         assertEquals("default.dsl.store should be \"rocksDB\"", expectedDefaultStoreType, actualDefaultStoreType);
     }
 
@@ -1053,55 +1062,65 @@ public class StreamsConfigTest {
 
     @SuppressWarnings("deprecation")
     @Test
-    public void shouldLogWarningWhenEosAlphaIsUsed() {
-        props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE);
+    public void shouldLogWarningWhenEosAlphaIsUsed() throws InterruptedException {
+        try (final LogCaptureContext logCaptureContext = LogCaptureContext.create(
+            this.getClass().getName() + "#shouldLogWarningWhenEosAlphaIsUsed",
+            Collections.singletonMap(StreamsConfig.class.getName(), "DEBUG")
+        )) {
+            logCaptureContext.setLatch(3);
 
-        LogCaptureAppender.setClassLoggerToDebug(StreamsConfig.class);
-        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(StreamsConfig.class)) {
+            props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE);
             new StreamsConfig(props);
 
+            logCaptureContext.await();
             assertThat(
-                appender.getMessages(),
-                hasItem("Configuration parameter `" + StreamsConfig.EXACTLY_ONCE +
-                            "` is deprecated and will be removed in the 4.0.0 release. " +
-                            "Please use `" + StreamsConfig.EXACTLY_ONCE_V2 + "` instead. "  +
-                            "Note that this requires broker version 2.5+ so you should prepare " +
-                            "to upgrade your brokers if necessary.")
+                logCaptureContext.getMessages(),
+                hasItem("WARN Configuration parameter `" + StreamsConfig.EXACTLY_ONCE +
+                    "` is deprecated and will be removed in the 4.0.0 release. " +
+                    "Please use `" + StreamsConfig.EXACTLY_ONCE_V2 + "` instead. "  +
+                    "Note that this requires broker version 2.5+ so you should prepare " +
+                    "to upgrade your brokers if necessary. ")
             );
         }
     }
 
     @SuppressWarnings("deprecation")
     @Test
-    public void shouldLogWarningWhenEosBetaIsUsed() {
-        props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_BETA);
+    public void shouldLogWarningWhenEosBetaIsUsed() throws InterruptedException {
+        try (final LogCaptureContext logCaptureContext = LogCaptureContext.create(
+            this.getClass().getName() + "#shouldLogWarningWhenEosBetaIsUsed",
+            Collections.singletonMap(StreamsConfig.class.getName(), "DEBUG")
+        )) {
+            logCaptureContext.setLatch(3);
 
-        LogCaptureAppender.setClassLoggerToDebug(StreamsConfig.class);
-        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(StreamsConfig.class)) {
+            props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_BETA);
             new StreamsConfig(props);
 
+            logCaptureContext.await();
             assertThat(
-                appender.getMessages(),
-                hasItem("Configuration parameter `" + StreamsConfig.EXACTLY_ONCE_BETA +
-                            "` is deprecated and will be removed in the 4.0.0 release. " +
-                            "Please use `" + StreamsConfig.EXACTLY_ONCE_V2 + "` instead.")
+                logCaptureContext.getMessages(),
+                hasItem("WARN Configuration parameter `" + StreamsConfig.EXACTLY_ONCE_BETA +
+                    "` is deprecated and will be removed in the 4.0.0 release. " +
+                    "Please use `" + StreamsConfig.EXACTLY_ONCE_V2 + "` instead. ")
             );
         }
     }
 
     @SuppressWarnings("deprecation")
     @Test
-    public void shouldLogWarningWhenRetriesIsUsed() {
-        props.put(StreamsConfig.RETRIES_CONFIG, 0);
+    public void shouldLogWarningWhenRetriesIsUsed() throws InterruptedException {
+        try (final LogCaptureContext logCaptureContext = LogCaptureContext.create(this.getClass().getName()
+                + "#shouldLogWarningWhenRetriesIsUsed")) {
+            logCaptureContext.setLatch(1);
 
-        LogCaptureAppender.setClassLoggerToDebug(StreamsConfig.class);
-        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(StreamsConfig.class)) {
+            props.put(StreamsConfig.RETRIES_CONFIG, 0);
             new StreamsConfig(props);
 
+            logCaptureContext.await();
             assertThat(
-                appender.getMessages(),
-                hasItem("Configuration parameter `" + StreamsConfig.RETRIES_CONFIG +
-                            "` is deprecated and will be removed in the 4.0.0 release.")
+                logCaptureContext.getMessages(),
+                hasItem("WARN Configuration parameter `" + StreamsConfig.RETRIES_CONFIG
+                    + "` is deprecated and will be removed in the 4.0.0 release. ")
             );
         }
     }
@@ -1285,7 +1304,7 @@ public class StreamsConfigTest {
 
     static class MisconfiguredSerde implements Serde<Object> {
         @Override
-        public void configure(final Map<String, ?>  configs, final boolean isKey) {
+        public void configure(final Map<String, ?> configs, final boolean isKey) {
             throw new RuntimeException("boom");
         }
 
