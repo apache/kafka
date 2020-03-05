@@ -90,15 +90,19 @@ public class SubscriptionInfo {
             data.setLatestSupportedVersion(latestSupportedVersion);
         }
         if (version >= 7) {
-            setTaskOffsetSumDataFromTaskOffsetSumMap(data, taskOffsetSums);
+            setTaskOffsetSumDataFromTaskOffsetSumMap(taskOffsetSums);
         } else {
-            setPrevAndStandbySetsFromParsedTaskOffsetSumMap(data, taskOffsetSums);
+            setPrevAndStandbySetsFromParsedTaskOffsetSumMap(taskOffsetSums);
         }
         this.data = data;
     }
 
-    private static void setTaskOffsetSumDataFromTaskOffsetSumMap(final SubscriptionInfoData data,
-                                                                 final Map<TaskId, Long> taskOffsetSums) {
+    private SubscriptionInfo(final SubscriptionInfoData subscriptionInfoData) {
+        validateVersions(subscriptionInfoData.version(), subscriptionInfoData.latestSupportedVersion());
+        this.data = subscriptionInfoData;
+    }
+
+    private void setTaskOffsetSumDataFromTaskOffsetSumMap(final Map<TaskId, Long> taskOffsetSums) {
         data.setTaskOffsetSums(taskOffsetSums.entrySet().stream().map(t -> {
             final SubscriptionInfoData.TaskOffsetSum taskOffsetSum = new SubscriptionInfoData.TaskOffsetSum();
             taskOffsetSum.setTopicGroupId(t.getKey().topicGroupId);
@@ -108,8 +112,7 @@ public class SubscriptionInfo {
         }).collect(Collectors.toList()));
     }
 
-    private static void setPrevAndStandbySetsFromParsedTaskOffsetSumMap(final SubscriptionInfoData data,
-                                                                        final Map<TaskId, Long> taskOffsetSums) {
+    private void setPrevAndStandbySetsFromParsedTaskOffsetSumMap(final Map<TaskId, Long> taskOffsetSums) {
         final Set<TaskId> prevTasks = new HashSet<>();
         final Set<TaskId> standbyTasks = new HashSet<>();
 
@@ -135,11 +138,6 @@ public class SubscriptionInfo {
         }).collect(Collectors.toList()));
     }
 
-    private SubscriptionInfo(final SubscriptionInfoData subscriptionInfoData) {
-        validateVersions(subscriptionInfoData.version(), subscriptionInfoData.latestSupportedVersion());
-        this.data = subscriptionInfoData;
-    }
-
     public int version() {
         return data.version();
     }
@@ -154,32 +152,32 @@ public class SubscriptionInfo {
 
     public Set<TaskId> prevTasks() {
         if (prevTasksCache == null) {
-            // lazily initialize the prev and standby task maps as they may not be needed
             if (data.version() >= 7) {
-                setPrevAndStandbySetsFromParsedTaskOffsetSumMap(data, taskOffsetSums());
+                prevTasksCache = getActiveTasksFromTaskOffsetSumMap(taskOffsetSums());
+            } else {
+                prevTasksCache = Collections.unmodifiableSet(
+                    data.prevTasks()
+                        .stream()
+                        .map(t -> new TaskId(t.topicGroupId(), t.partition()))
+                        .collect(Collectors.toSet())
+                );
             }
-            prevTasksCache = Collections.unmodifiableSet(
-                data.prevTasks()
-                    .stream()
-                    .map(t -> new TaskId(t.topicGroupId(), t.partition()))
-                    .collect(Collectors.toSet())
-            );
         }
         return prevTasksCache;
     }
 
     public Set<TaskId> standbyTasks() {
         if (standbyTasksCache == null) {
-            // lazily initialize the prev and standby task maps as they may not be needed
             if (data.version() >= 7) {
-                setPrevAndStandbySetsFromParsedTaskOffsetSumMap(data, taskOffsetSums());
+                standbyTasksCache = getStandbyTasksFromTaskOffsetSumMap(taskOffsetSums());
+            } else {
+                standbyTasksCache = Collections.unmodifiableSet(
+                    data.standbyTasks()
+                        .stream()
+                        .map(t -> new TaskId(t.topicGroupId(), t.partition()))
+                        .collect(Collectors.toSet())
+                );
             }
-            standbyTasksCache = Collections.unmodifiableSet(
-                data.standbyTasks()
-                    .stream()
-                    .map(t -> new TaskId(t.topicGroupId(), t.partition()))
-                    .collect(Collectors.toSet())
-            );
         }
         return standbyTasksCache;
     }
