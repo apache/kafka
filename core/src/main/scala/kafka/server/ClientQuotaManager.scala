@@ -562,6 +562,8 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
             // /config/users/<default>/clients/<default>
             quota = overriddenQuotas.get(DefaultUserClientIdQuotaEntity)
           }
+          if (quota == null)
+            quota = ClientQuotaManagerConfig.UnlimitedQuota
         } else if (!sanitizedUser.isEmpty) {
           // /config/users/<user>
           quota = overriddenQuotas.get(KafkaQuotaEntity(userEntity, None))
@@ -569,6 +571,8 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
             // /config/users/<default>
             quota = overriddenQuotas.get(DefaultUserQuotaEntity)
           }
+          if (quota == null)
+            quota = ClientQuotaManagerConfig.UnlimitedQuota
         } else if (!clientId.isEmpty) {
           // /config/clients/<client-id>
           quota = overriddenQuotas.get(KafkaQuotaEntity(None, clientIdEntity))
