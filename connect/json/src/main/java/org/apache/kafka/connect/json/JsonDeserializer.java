@@ -19,6 +19,7 @@ package org.apache.kafka.connect.json;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import java.util.Collections;
 import java.util.Set;
 import org.apache.kafka.common.errors.SerializationException;
@@ -35,7 +36,7 @@ public class JsonDeserializer implements Deserializer<JsonNode> {
      * Default constructor needed by Kafka
      */
     public JsonDeserializer() {
-        this(Collections.emptySet());
+        this(Collections.emptySet(), false);
     }
 
     /**
@@ -43,9 +44,14 @@ public class JsonDeserializer implements Deserializer<JsonNode> {
      * for the deserializer
      *
      * @param deserializationFeatures the specified deserialization features
+     * @param exactDecimals {@code true} if trailing zeros on decimals should be maintained.
      */
-    JsonDeserializer(final Set<DeserializationFeature> deserializationFeatures) {
+    JsonDeserializer(
+        final Set<DeserializationFeature> deserializationFeatures,
+        final boolean exactDecimals
+    ) {
         deserializationFeatures.forEach(objectMapper::enable);
+        objectMapper.setNodeFactory(JsonNodeFactory.withExactBigDecimals(exactDecimals));
     }
 
     @Override

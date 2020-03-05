@@ -191,6 +191,9 @@ public class JsonConverter implements Converter, HeaderConverter {
     // Convert values in Kafka Connect form into/from their logical types. These logical converters are discovered by logical type
     // names specified in the field
     private static final HashMap<String, LogicalTypeConverter> LOGICAL_CONVERTERS = new HashMap<>();
+
+    private static final JsonNodeFactory JSON_NODE_FACTORY = JsonNodeFactory.withExactBigDecimals(true);
+
     static {
         LOGICAL_CONVERTERS.put(Decimal.LOGICAL_NAME, new LogicalTypeConverter() {
             @Override
@@ -201,9 +204,9 @@ public class JsonConverter implements Converter, HeaderConverter {
                 final BigDecimal decimal = (BigDecimal) value;
                 switch (config.decimalFormat()) {
                     case NUMERIC:
-                        return JsonNodeFactory.instance.numberNode(decimal);
+                        return JSON_NODE_FACTORY.numberNode(decimal);
                     case BASE64:
-                        return JsonNodeFactory.instance.binaryNode(Decimal.fromLogical(schema, decimal));
+                        return JSON_NODE_FACTORY.binaryNode(Decimal.fromLogical(schema, decimal));
                     default:
                         throw new DataException("Unexpected " + JsonConverterConfig.DECIMAL_FORMAT_CONFIG + ": " + config.decimalFormat());
                 }
@@ -229,7 +232,7 @@ public class JsonConverter implements Converter, HeaderConverter {
             public JsonNode toJson(final Schema schema, final Object value, final JsonConverterConfig config) {
                 if (!(value instanceof java.util.Date))
                     throw new DataException("Invalid type for Date, expected Date but was " + value.getClass());
-                return JsonNodeFactory.instance.numberNode(Date.fromLogical(schema, (java.util.Date) value));
+                return JSON_NODE_FACTORY.numberNode(Date.fromLogical(schema, (java.util.Date) value));
             }
 
             @Override
@@ -245,7 +248,7 @@ public class JsonConverter implements Converter, HeaderConverter {
             public JsonNode toJson(final Schema schema, final Object value, final JsonConverterConfig config) {
                 if (!(value instanceof java.util.Date))
                     throw new DataException("Invalid type for Time, expected Date but was " + value.getClass());
-                return JsonNodeFactory.instance.numberNode(Time.fromLogical(schema, (java.util.Date) value));
+                return JSON_NODE_FACTORY.numberNode(Time.fromLogical(schema, (java.util.Date) value));
             }
 
             @Override
@@ -261,7 +264,7 @@ public class JsonConverter implements Converter, HeaderConverter {
             public JsonNode toJson(final Schema schema, final Object value, final JsonConverterConfig config) {
                 if (!(value instanceof java.util.Date))
                     throw new DataException("Invalid type for Timestamp, expected Date but was " + value.getClass());
-                return JsonNodeFactory.instance.numberNode(Timestamp.fromLogical(schema, (java.util.Date) value));
+                return JSON_NODE_FACTORY.numberNode(Timestamp.fromLogical(schema, (java.util.Date) value));
             }
 
             @Override
@@ -285,7 +288,7 @@ public class JsonConverter implements Converter, HeaderConverter {
         // floating point numbers that cannot fit into float64
         final Set<DeserializationFeature> deserializationFeatures = new HashSet<>();
         deserializationFeatures.add(DeserializationFeature.USE_BIG_DECIMAL_FOR_FLOATS);
-        deserializer = new JsonDeserializer(deserializationFeatures);
+        deserializer = new JsonDeserializer(deserializationFeatures, true);
     }
 
     @Override
@@ -362,7 +365,7 @@ public class JsonConverter implements Converter, HeaderConverter {
         // The deserialized data should either be an envelope object containing the schema and the payload or the schema
         // was stripped during serialization and we need to fill in an all-encompassing schema.
         if (!config.schemasEnabled()) {
-            ObjectNode envelope = JsonNodeFactory.instance.objectNode();
+            ObjectNode envelope = JSON_NODE_FACTORY.objectNode();
             envelope.set(JsonSchema.ENVELOPE_SCHEMA_FIELD_NAME, null);
             envelope.set(JsonSchema.ENVELOPE_PAYLOAD_FIELD_NAME, jsonValue);
             jsonValue = envelope;
@@ -413,17 +416,17 @@ public class JsonConverter implements Converter, HeaderConverter {
                 jsonSchema = JsonSchema.STRING_SCHEMA.deepCopy();
                 break;
             case ARRAY:
-                jsonSchema = JsonNodeFactory.instance.objectNode().put(JsonSchema.SCHEMA_TYPE_FIELD_NAME, JsonSchema.ARRAY_TYPE_NAME);
+                jsonSchema = JSON_NODE_FACTORY.objectNode().put(JsonSchema.SCHEMA_TYPE_FIELD_NAME, JsonSchema.ARRAY_TYPE_NAME);
                 jsonSchema.set(JsonSchema.ARRAY_ITEMS_FIELD_NAME, asJsonSchema(schema.valueSchema()));
                 break;
             case MAP:
-                jsonSchema = JsonNodeFactory.instance.objectNode().put(JsonSchema.SCHEMA_TYPE_FIELD_NAME, JsonSchema.MAP_TYPE_NAME);
+                jsonSchema = JSON_NODE_FACTORY.objectNode().put(JsonSchema.SCHEMA_TYPE_FIELD_NAME, JsonSchema.MAP_TYPE_NAME);
                 jsonSchema.set(JsonSchema.MAP_KEY_FIELD_NAME, asJsonSchema(schema.keySchema()));
                 jsonSchema.set(JsonSchema.MAP_VALUE_FIELD_NAME, asJsonSchema(schema.valueSchema()));
                 break;
             case STRUCT:
-                jsonSchema = JsonNodeFactory.instance.objectNode().put(JsonSchema.SCHEMA_TYPE_FIELD_NAME, JsonSchema.STRUCT_TYPE_NAME);
-                ArrayNode fields = JsonNodeFactory.instance.arrayNode();
+                jsonSchema = JSON_NODE_FACTORY.objectNode().put(JsonSchema.SCHEMA_TYPE_FIELD_NAME, JsonSchema.STRUCT_TYPE_NAME);
+                ArrayNode fields = JSON_NODE_FACTORY.arrayNode();
                 for (Field field : schema.fields()) {
                     ObjectNode fieldJsonSchema = asJsonSchema(field.schema()).deepCopy();
                     fieldJsonSchema.put(JsonSchema.STRUCT_FIELD_NAME_FIELD_NAME, field.name());
@@ -443,7 +446,7 @@ public class JsonConverter implements Converter, HeaderConverter {
         if (schema.doc() != null)
             jsonSchema.put(JsonSchema.SCHEMA_DOC_FIELD_NAME, schema.doc());
         if (schema.parameters() != null) {
-            ObjectNode jsonSchemaParams = JsonNodeFactory.instance.objectNode();
+            ObjectNode jsonSchemaParams = JSON_NODE_FACTORY.objectNode();
             for (Map.Entry<String, String> prop : schema.parameters().entrySet())
                 jsonSchemaParams.put(prop.getKey(), prop.getValue());
             jsonSchema.set(JsonSchema.SCHEMA_PARAMETERS_FIELD_NAME, jsonSchemaParams);
@@ -596,7 +599,7 @@ public class JsonConverter implements Converter, HeaderConverter {
             if (schema.defaultValue() != null)
                 return convertToJson(schema, schema.defaultValue());
             if (schema.isOptional())
-                return JsonNodeFactory.instance.nullNode();
+                return JSON_NODE_FACTORY.nullNode();
             throw new DataException("Conversion error: null value for field that is required and has no default value");
         }
 
@@ -617,32 +620,32 @@ public class JsonConverter implements Converter, HeaderConverter {
             }
             switch (schemaType) {
                 case INT8:
-                    return JsonNodeFactory.instance.numberNode((Byte) value);
+                    return JSON_NODE_FACTORY.numberNode((Byte) value);
                 case INT16:
-                    return JsonNodeFactory.instance.numberNode((Short) value);
+                    return JSON_NODE_FACTORY.numberNode((Short) value);
                 case INT32:
-                    return JsonNodeFactory.instance.numberNode((Integer) value);
+                    return JSON_NODE_FACTORY.numberNode((Integer) value);
                 case INT64:
-                    return JsonNodeFactory.instance.numberNode((Long) value);
+                    return JSON_NODE_FACTORY.numberNode((Long) value);
                 case FLOAT32:
-                    return JsonNodeFactory.instance.numberNode((Float) value);
+                    return JSON_NODE_FACTORY.numberNode((Float) value);
                 case FLOAT64:
-                    return JsonNodeFactory.instance.numberNode((Double) value);
+                    return JSON_NODE_FACTORY.numberNode((Double) value);
                 case BOOLEAN:
-                    return JsonNodeFactory.instance.booleanNode((Boolean) value);
+                    return JSON_NODE_FACTORY.booleanNode((Boolean) value);
                 case STRING:
                     CharSequence charSeq = (CharSequence) value;
-                    return JsonNodeFactory.instance.textNode(charSeq.toString());
+                    return JSON_NODE_FACTORY.textNode(charSeq.toString());
                 case BYTES:
                     if (value instanceof byte[])
-                        return JsonNodeFactory.instance.binaryNode((byte[]) value);
+                        return JSON_NODE_FACTORY.binaryNode((byte[]) value);
                     else if (value instanceof ByteBuffer)
-                        return JsonNodeFactory.instance.binaryNode(((ByteBuffer) value).array());
+                        return JSON_NODE_FACTORY.binaryNode(((ByteBuffer) value).array());
                     else
                         throw new DataException("Invalid type for bytes type: " + value.getClass());
                 case ARRAY: {
                     Collection collection = (Collection) value;
-                    ArrayNode list = JsonNodeFactory.instance.arrayNode();
+                    ArrayNode list = JSON_NODE_FACTORY.arrayNode();
                     for (Object elem : collection) {
                         Schema valueSchema = schema == null ? null : schema.valueSchema();
                         JsonNode fieldValue = convertToJson(valueSchema, elem);
@@ -668,9 +671,9 @@ public class JsonConverter implements Converter, HeaderConverter {
                     ObjectNode obj = null;
                     ArrayNode list = null;
                     if (objectMode)
-                        obj = JsonNodeFactory.instance.objectNode();
+                        obj = JSON_NODE_FACTORY.objectNode();
                     else
-                        list = JsonNodeFactory.instance.arrayNode();
+                        list = JSON_NODE_FACTORY.arrayNode();
                     for (Map.Entry<?, ?> entry : map.entrySet()) {
                         Schema keySchema = schema == null ? null : schema.keySchema();
                         Schema valueSchema = schema == null ? null : schema.valueSchema();
@@ -680,7 +683,7 @@ public class JsonConverter implements Converter, HeaderConverter {
                         if (objectMode)
                             obj.set(mapKey.asText(), mapValue);
                         else
-                            list.add(JsonNodeFactory.instance.arrayNode().add(mapKey).add(mapValue));
+                            list.add(JSON_NODE_FACTORY.arrayNode().add(mapKey).add(mapValue));
                     }
                     return objectMode ? obj : list;
                 }
@@ -688,7 +691,7 @@ public class JsonConverter implements Converter, HeaderConverter {
                     Struct struct = (Struct) value;
                     if (!struct.schema().equals(schema))
                         throw new DataException("Mismatching schema.");
-                    ObjectNode obj = JsonNodeFactory.instance.objectNode();
+                    ObjectNode obj = JSON_NODE_FACTORY.objectNode();
                     for (Field field : schema.fields()) {
                         obj.set(field.name(), convertToJson(field.schema(), struct.get(field)));
                     }
