@@ -276,6 +276,45 @@ public abstract class AbstractResetIntegrationTest {
         Assert.assertEquals(1, exitCode);
     }
 
+    public void testResetWhenLongSessionTimeoutConfiguredWithForceOption() throws Exception {
+        appID = testId + "-with-force-option";
+        streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, appID);
+        streamsConfig.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, "" + STREAMS_CONSUMER_TIMEOUT * 100);
+
+        // Run
+        streams = new KafkaStreams(setupTopologyWithoutIntermediateUserTopic(), streamsConfig);
+        streams.start();
+        final List<KeyValue<Long, Long>> result = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(resultConsumerConfig, OUTPUT_TOPIC, 10);
+
+        streams.close();
+
+        // RESET
+        streams = new KafkaStreams(setupTopologyWithoutIntermediateUserTopic(), streamsConfig);
+        streams.cleanUp();
+
+        // Reset would fail since long session timeout has been configured
+        int exitCode = tryCleanGlobal(false, null, null);
+        Assert.assertEquals(1, exitCode);
+
+        // Reset will success with --force, it will force delete active members on broker side
+        exitCode = tryCleanGlobal(false, "--force", null);
+        Assert.assertEquals(0, exitCode);
+
+        TestUtils.waitForCondition(new ConsumerGroupInactiveCondition(), TIMEOUT_MULTIPLIER * CLEANUP_CONSUMER_TIMEOUT,
+                "Reset Tool consumer group " + appID + " did not time out after " + (TIMEOUT_MULTIPLIER * CLEANUP_CONSUMER_TIMEOUT) + " ms.");
+
+        assertInternalTopicsGotDeleted(null);
+
+        // RE-RUN
+        streams.start();
+        final List<KeyValue<Long, Long>> resultRerun = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(resultConsumerConfig, OUTPUT_TOPIC, 10);
+        streams.close();
+
+        assertThat(resultRerun, equalTo(result));
+        tryCleanGlobal(false, "--force", null);
+    }
+
+
     void testReprocessingFromScratchAfterResetWithoutIntermediateUserTopic() throws Exception {
         appID = testId + "-from-scratch";
         streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, appID);
@@ -537,15 +576,15 @@ public abstract class AbstractResetIntegrationTest {
         return builder.build();
     }
 
-    private void cleanGlobal(final boolean withIntermediateTopics,
-                             final String resetScenario,
-                             final String resetScenarioArg) throws Exception {
+    private int tryCleanGlobal(final boolean withIntermediateTopics,
+                               final String resetScenario,
+                               final String resetScenarioArg) throws Exception {
         // leaving --zookeeper arg here to ensure tool works if users add it
         final List<String> parameterList = new ArrayList<>(
-            Arrays.asList("--application-id", appID,
-                    "--bootstrap-servers", cluster.bootstrapServers(),
-                    "--input-topics", INPUT_TOPIC,
-                    "--execute"));
+                Arrays.asList("--application-id", appID,
+                        "--bootstrap-servers", cluster.bootstrapServers(),
+                        "--input-topics", INPUT_TOPIC,
+                        "--execute"));
         if (withIntermediateTopics) {
             parameterList.add("--intermediate-topics");
             parameterList.add(INTERMEDIATE_USER_TOPIC);
@@ -577,6 +616,13 @@ public abstract class AbstractResetIntegrationTest {
         cleanUpConfig.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, "" + CLEANUP_CONSUMER_TIMEOUT);
 
         final int exitCode = new StreamsResetter().run(parameters, cleanUpConfig);
+        return exitCode;
+    }
+
+    private void cleanGlobal(final boolean withIntermediateTopics,
+                             final String resetScenario,
+                             final String resetScenarioArg) throws Exception {
+        int exitCode = tryCleanGlobal(withIntermediateTopics, resetScenario, resetScenarioArg);
         Assert.assertEquals(0, exitCode);
     }
 
