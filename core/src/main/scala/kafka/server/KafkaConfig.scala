@@ -107,6 +107,9 @@ object Defaults {
   val LogCleanerDeleteRetentionMs = 24 * 60 * 60 * 1000L
   val LogCleanerMinCompactionLagMs = 0L
   val LogCleanerMaxCompactionLagMs = Long.MaxValue
+  val LogCleanerCompactionStrategy = "offset"
+  val LogCleanerCompactionStrategyTimestamp = "timestamp"
+  val LogCleanerCompactionStrategyHeader = "header"
   val LogIndexSizeMaxBytes = 10 * 1024 * 1024
   val LogIndexIntervalBytes = 4096
   val LogFlushIntervalMessages = Long.MaxValue
@@ -331,6 +334,8 @@ object KafkaConfig {
   val LogCleanerDeleteRetentionMsProp = "log.cleaner.delete.retention.ms"
   val LogCleanerMinCompactionLagMsProp = "log.cleaner.min.compaction.lag.ms"
   val LogCleanerMaxCompactionLagMsProp = "log.cleaner.max.compaction.lag.ms"
+  val LogCleanerCompactionStrategyProp = "log.cleaner.compaction.strategy"
+  val LogCleanerCompactionStrategyHeaderKeyProp = "log.cleaner.compaction.strategy.header"
   val LogIndexSizeMaxBytesProp = "log.index.size.max.bytes"
   val LogIndexIntervalBytesProp = "log.index.interval.bytes"
   val LogFlushIntervalMessagesProp = "log.flush.interval.messages"
@@ -628,6 +633,11 @@ object KafkaConfig {
   val LogCleanerDeleteRetentionMsDoc = "How long are delete records retained?"
   val LogCleanerMinCompactionLagMsDoc = "The minimum time a message will remain uncompacted in the log. Only applicable for logs that are being compacted."
   val LogCleanerMaxCompactionLagMsDoc = "The maximum time a message will remain ineligible for compaction in the log. Only applicable for logs that are being compacted."
+  val LogCleanerCompactionStrategyDoc  = "The retention strategy to use when compacting the log. " + 
+    "Only applicable for logs that are being compacted. Setting the strategy to anything other than \"offset\" " + 
+    "will replace the offset when calculating which records to retain for the value (i.e. provided by the producer) matching " + 
+    "the given strategy name (case-insensitive). The valid strategies are \"offset\", \"timestamp\" and \"header\".";
+  val LogCleanerCompactionStrategyHeaderKeyDoc = "The header key for the compaction. Only applicable for compaction strategy header."
   val LogIndexSizeMaxBytesDoc = "The maximum size in bytes of the offset index"
   val LogIndexIntervalBytesDoc = "The interval with which we add an entry to the offset index"
   val LogFlushIntervalMessagesDoc = "The number of messages accumulated on a log partition before messages are flushed to disk "
@@ -930,6 +940,9 @@ object KafkaConfig {
       .define(LogCleanerDeleteRetentionMsProp, LONG, Defaults.LogCleanerDeleteRetentionMs, MEDIUM, LogCleanerDeleteRetentionMsDoc)
       .define(LogCleanerMinCompactionLagMsProp, LONG, Defaults.LogCleanerMinCompactionLagMs, MEDIUM, LogCleanerMinCompactionLagMsDoc)
       .define(LogCleanerMaxCompactionLagMsProp, LONG, Defaults.LogCleanerMaxCompactionLagMs, MEDIUM, LogCleanerMaxCompactionLagMsDoc)
+      .define(LogCleanerCompactionStrategyProp, STRING, Defaults.LogCleanerCompactionStrategy,
+        in(Defaults.LogCleanerCompactionStrategy, Defaults.LogCleanerCompactionStrategyTimestamp, Defaults.LogCleanerCompactionStrategyHeader), MEDIUM, LogCleanerCompactionStrategyDoc)
+      .define(LogCleanerCompactionStrategyHeaderKeyProp, STRING, "", MEDIUM, LogCleanerCompactionStrategyHeaderKeyDoc)
       .define(LogIndexSizeMaxBytesProp, INT, Defaults.LogIndexSizeMaxBytes, atLeast(4), MEDIUM, LogIndexSizeMaxBytesDoc)
       .define(LogIndexIntervalBytesProp, INT, Defaults.LogIndexIntervalBytes, atLeast(0), MEDIUM, LogIndexIntervalBytesDoc)
       .define(LogFlushIntervalMessagesProp, LONG, Defaults.LogFlushIntervalMessages, atLeast(1), HIGH, LogFlushIntervalMessagesDoc)
@@ -1231,6 +1244,8 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
   def logCleanerDeleteRetentionMs = getLong(KafkaConfig.LogCleanerDeleteRetentionMsProp)
   def logCleanerMinCompactionLagMs = getLong(KafkaConfig.LogCleanerMinCompactionLagMsProp)
   def logCleanerMaxCompactionLagMs = getLong(KafkaConfig.LogCleanerMaxCompactionLagMsProp)
+  def logCleanerCompactionStrategy = getString(KafkaConfig.LogCleanerCompactionStrategyProp)
+  def logCleanerCompactionStrategyHeaderKey = getString(KafkaConfig.LogCleanerCompactionStrategyHeaderKeyProp)
   val logCleanerBackoffMs = getLong(KafkaConfig.LogCleanerBackoffMsProp)
   def logCleanerMinCleanRatio = getDouble(KafkaConfig.LogCleanerMinCleanRatioProp)
   val logCleanerEnable = getBoolean(KafkaConfig.LogCleanerEnableProp)
@@ -1488,6 +1503,9 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
     require(logRetentionTimeMillis >= 1 || logRetentionTimeMillis == -1, "log.retention.ms must be unlimited (-1) or, equal or greater than 1")
     require(logDirs.nonEmpty, "At least one log directory must be defined via log.dirs or log.dir.")
     require(logCleanerDedupeBufferSize / logCleanerThreads > 1024 * 1024, "log.cleaner.dedupe.buffer.size must be at least 1MB per cleaner thread.")
+    if (Defaults.LogCleanerCompactionStrategyHeader.equalsIgnoreCase(logCleanerCompactionStrategy)) {
+      require(logCleanerCompactionStrategyHeaderKey.trim().isEmpty(), KafkaConfig.LogCleanerCompactionStrategyHeaderKeyProp + " must be specified.")
+    }
     require(replicaFetchWaitMaxMs <= replicaSocketTimeoutMs, "replica.socket.timeout.ms should always be at least replica.fetch.wait.max.ms" +
       " to prevent unnecessary socket timeouts")
     require(replicaFetchWaitMaxMs <= replicaLagTimeMaxMs, "replica.fetch.wait.max.ms should always be less than or equal to replica.lag.time.max.ms" +
