@@ -1027,32 +1027,32 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       val testClientId = "test_client_id"
       val testInstanceId = "test_instance_id"
       val fakeGroupId = "fake_group_id"
-      val newConsumerConfig = new Properties(consumerConfig)
-      newConsumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, testGroupId)
-      newConsumerConfig.setProperty(ConsumerConfig.CLIENT_ID_CONFIG, testClientId)
-      newConsumerConfig.setProperty(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG, testInstanceId)
+      val newStaticConsumerConfig = new Properties(consumerConfig)
+      newStaticConsumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, testGroupId)
+      newStaticConsumerConfig.setProperty(ConsumerConfig.CLIENT_ID_CONFIG, testClientId)
+      newStaticConsumerConfig.setProperty(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG, testInstanceId)
+      val staticConsumer = createConsumer(configOverrides = newStaticConsumerConfig)
 
       val newDynamicConsumerConfig = new Properties(consumerConfig)
       newDynamicConsumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, testGroupId)
       newDynamicConsumerConfig.setProperty(ConsumerConfig.CLIENT_ID_CONFIG, testClientId)
       val dynamicConsumer = createConsumer(configOverrides = newDynamicConsumerConfig)
 
-      val consumer = createConsumer(configOverrides = newConsumerConfig)
       val latch = new CountDownLatch(2)
       try {
         // Start a consumer in a thread that will subscribe to a new group.
         val consumerThread = new Thread {
           override def run : Unit = {
-            consumer.subscribe(Collections.singleton(testTopicName))
+            staticConsumer.subscribe(Collections.singleton(testTopicName))
             dynamicConsumer.subscribe(Collections.singleton(testTopicName))
 
             try {
               while (true) {
-                consumer.poll(JDuration.ofSeconds(5))
+                staticConsumer.poll(JDuration.ofSeconds(5))
                 dynamicConsumer.poll(JDuration.ofSeconds(5))
-                if (!consumer.assignment.isEmpty && latch.getCount > 0L)
+                if (!staticConsumer.assignment.isEmpty && latch.getCount > 0L)
                   latch.countDown()
-                consumer.commitSync()
+                staticConsumer.commitSync()
                 dynamicConsumer.commitSync()
               }
             } catch {
@@ -1198,7 +1198,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
           consumerThread.join()
         }
       } finally {
-        Utils.closeQuietly(consumer, "consumer")
+        Utils.closeQuietly(staticConsumer, "consumer")
       }
     } finally {
       Utils.closeQuietly(client, "adminClient")
