@@ -1020,6 +1020,17 @@ class ReplicaManager(val config: KafkaConfig,
             exception = None)
         }
       } catch {
+        case e@ (_: OffsetOutOfRangeExceptionWithOffsetValues) =>
+          LogReadResult(info = FetchDataInfo(LogOffsetMetadata.UnknownOffsetMetadata, MemoryRecords.EMPTY),
+              highWatermark = Log.UnknownOffset,
+              leaderLogStartOffset = e.getLogStartOffset,
+              leaderLogEndOffset = Log.UnknownOffset,
+              followerLogStartOffset = Log.UnknownOffset,
+              fetchTimeMs = -1L,
+              readSize = 0,
+              lastStableOffset = Some(e.getLastStableOffset),
+              exception = Some(e))
+
         // NOTE: Failed fetch requests metric is not incremented for known exceptions since it
         // is supposed to indicate un-expected failure of a broker in handling a fetch request
         case e@ (_: UnknownTopicOrPartitionException |
