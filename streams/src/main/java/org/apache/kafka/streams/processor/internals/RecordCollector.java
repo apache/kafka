@@ -25,7 +25,7 @@ import org.apache.kafka.streams.processor.StreamPartitioner;
 
 import java.util.Map;
 
-public interface RecordCollector extends AutoCloseable {
+public interface RecordCollector {
 
     <K, V> void send(final String topic,
                      final K key,
