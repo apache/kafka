@@ -28,7 +28,7 @@ import kafka.utils.{CommandDefaultOptions, CommandLineUtils, Exit, PasswordEncod
 import kafka.utils.Implicits._
 import kafka.zk.{AdminZkClient, KafkaZkClient}
 import org.apache.kafka.clients.CommonClientConfigs
-import org.apache.kafka.clients.admin.{Admin, AlterConfigOp, AlterConfigsOptions, ConfigEntry, DescribeClusterOptions, ListTopicsOptions, Config => JConfig}
+import org.apache.kafka.clients.admin.{Admin, AlterConfigOp, AlterConfigsOptions, ConfigEntry, DescribeClusterOptions, DescribeConfigsOptions, ListTopicsOptions, Config => JConfig}
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.config.types.Password
 import org.apache.kafka.common.errors.InvalidConfigurationException
@@ -367,7 +367,7 @@ object ConfigCommand extends Config {
       println(s"Completed updating default config for $entityType in the cluster.")
   }
 
-  private def describeConfig(adminClient: Admin, opts: ConfigCommandOptions): Unit = {
+  private[admin] def describeConfig(adminClient: Admin, opts: ConfigCommandOptions): Unit = {
     val entityType = opts.entityTypes.head
     val entityName = opts.entityNames.headOption
     val describeAll = opts.options.has(opts.allOpt)
@@ -426,7 +426,9 @@ object ConfigCommand extends Config {
       dynamicConfigSource
 
     val configResource = new ConfigResource(configResourceType, entityName)
-    val configs = adminClient.describeConfigs(Collections.singleton(configResource)).all.get(30, TimeUnit.SECONDS)
+    val describeOptions = new DescribeConfigsOptions().includeSynonyms(includeSynonyms)
+    val configs = adminClient.describeConfigs(Collections.singleton(configResource), describeOptions)
+      .all.get(30, TimeUnit.SECONDS)
     configs.get(configResource).entries.asScala
       .filter(entry => configSourceFilter match {
         case Some(configSource) => entry.source == configSource
