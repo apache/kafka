@@ -841,11 +841,10 @@ public class StreamThreadTest {
 
         final StreamsMetricsImpl streamsMetrics =
             new StreamsMetricsImpl(metrics, CLIENT_ID, StreamsConfig.METRICS_LATEST);
+
         final StreamThread thread = new StreamThread(
             mockTime,
             config,
-            null,
-            null,
             null,
             consumer,
             consumer,
