@@ -153,6 +153,10 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         }
     }
 
+    // keep track of any future consumers in a "dummy" Client since we can't decipher their subscription
+    private static final UUID FUTURE_ID = randomUUID();
+    private static final ClientMetadata CLIENT_METADATA = new ClientMetadata(null);
+
     protected static final Comparator<TopicPartition> PARTITION_COMPARATOR =
         Comparator.comparing(TopicPartition::topic).thenComparingInt(TopicPartition::partition);
 
@@ -170,10 +174,6 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
     private InternalTopicManager internalTopicManager;
     private CopartitionedTopicsEnforcer copartitionedTopicsEnforcer;
     private RebalanceProtocol rebalanceProtocol;
-
-    // keep track of any future consumers in a "dummy" Client since we can't decipher their subscription
-    private static final UUID futureId = randomUUID();
-    private static final ClientMetadata futureClient = new ClientMetadata(null);
 
     /**
      * We need to have the PartitionAssignor and its StreamThread to be mutually accessible since the former needs
@@ -299,9 +299,9 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             final UUID processId;
             if (usedVersion > LATEST_SUPPORTED_VERSION) {
                 futureMetadataVersion = usedVersion;
-                processId = futureId;
-                if (!clientMetadataMap.containsKey(futureId)) {
-                    clientMetadataMap.put(futureId, futureClient);
+                processId = FUTURE_ID;
+                if (!clientMetadataMap.containsKey(FUTURE_ID)) {
+                    clientMetadataMap.put(FUTURE_ID, CLIENT_METADATA);
                 }
             } else {
                 processId = info.processId();
@@ -322,7 +322,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         }
 
         final boolean versionProbing =
-            checkMetadataVersions(minReceivedMetadataVersion, minSupportedMetadataVersion,futureMetadataVersion);
+            checkMetadataVersions(minReceivedMetadataVersion, minSupportedMetadataVersion, futureMetadataVersion);
 
         log.debug("Constructed client metadata {} from the member subscriptions.", clientMetadataMap);
 
@@ -685,7 +685,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                                       final Map<TaskId, Set<TopicPartition>> partitionsForTask,
                                       final Map<Integer, InternalTopologyBuilder.TopicsInfo> topicGroups,
                                       final Map<UUID, ClientMetadata> clientMetadataMap,
-                                      final Cluster fullMetadata){
+                                      final Cluster fullMetadata) {
         final Map<TopicPartition, TaskId> taskForPartition = new HashMap<>();
         final Map<Integer, Set<TaskId>> tasksForTopicGroup = new HashMap<>();
         populateTasksForMaps(taskForPartition, tasksForTopicGroup, allSourceTopics, partitionsForTask, fullMetadata);
@@ -701,7 +701,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             // there are two cases where we need to construct the prevTasks from the ownedPartitions:
             // 1) COOPERATIVE clients on version 2.4-2.5 do not encode active tasks and rely on ownedPartitions instead
             // 2) future client during version probing, when we can't decode the future subscription info's prev tasks
-            if (!state.ownedPartitions().isEmpty() && (uuid == futureId || state.prevActiveTasks().isEmpty())) {
+            if (!state.ownedPartitions().isEmpty() && (uuid == FUTURE_ID || state.prevActiveTasks().isEmpty())) {
                 final Set<TaskId> previousActiveTasks = new HashSet<>();
                 for (final Map.Entry<TopicPartition, String> partitionEntry : state.ownedPartitions().entrySet()) {
                     final TopicPartition tp = partitionEntry.getKey();
