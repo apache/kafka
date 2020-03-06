@@ -217,49 +217,17 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
     public ByteBuffer subscriptionUserData(final Set<String> topics) {
         // Adds the following information to subscription
         // 1. Client UUID (a unique id assigned to an instance of KafkaStreams)
-        // 2. Task ids of previously running tasks
-        // 3. Task ids of valid local states on the client's state directory.
-        final Set<TaskId> standbyTasks = taskManager.tasksOnLocalStorage();
-        final Set<TaskId> activeTasks = prepareForSubscription(taskManager,
-            topics,
-            standbyTasks,
-            rebalanceProtocol);
+        // 2. Map from task id to its overall lag
+
+        handleRebalanceStart(topics);
+
         return new SubscriptionInfo(
             usedSubscriptionMetadataVersion,
             LATEST_SUPPORTED_VERSION,
             taskManager.processId(),
-            activeTasks,
-            standbyTasks,
-            userEndPoint)
-            .encode();
-    }
-
-    protected static Set<TaskId> prepareForSubscription(final TaskManager taskManager,
-                                                        final Set<String> topics,
-                                                        final Set<TaskId> standbyTasks,
-                                                        final RebalanceProtocol rebalanceProtocol) {
-        // Any tasks that are not yet running are counted as standby tasks for assignment purposes,
-        // along with any old tasks for which we still found state on disk
-        final Set<TaskId> activeTasks;
-
-        switch (rebalanceProtocol) {
-            case EAGER:
-                // In eager, onPartitionsRevoked is called first and we must get the previously saved running task ids
-                activeTasks = taskManager.activeTaskIds();
-                standbyTasks.removeAll(activeTasks);
-                break;
-            case COOPERATIVE:
-                // In cooperative, we will use the encoded ownedPartitions to determine the running tasks
-                activeTasks = Collections.emptySet();
-                standbyTasks.removeAll(taskManager.activeTaskIds());
-                break;
-            default:
-                throw new IllegalStateException("Streams partition assignor's rebalance protocol is unknown");
-        }
-
-        taskManager.handleRebalanceStart(topics);
-
-        return activeTasks;
+            userEndPoint,
+            taskManager.getTaskOffsetSums())
+                .encode();
     }
 
     private Map<String, Assignment> errorAssignment(final Map<UUID, ClientMetadata> clientsMetadata,
@@ -314,7 +282,6 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         // keep track of any future consumers in a "dummy" Client since we can't decipher their subscription
         final UUID futureId = randomUUID();
         final ClientMetadata futureClient = new ClientMetadata(null);
-        clientMetadataMap.put(futureId, futureClient);
 
         int minReceivedMetadataVersion = LATEST_SUPPORTED_VERSION;
         int minSupportedMetadataVersion = LATEST_SUPPORTED_VERSION;
@@ -333,6 +300,9 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             if (usedVersion > LATEST_SUPPORTED_VERSION) {
                 futureMetadataVersion = usedVersion;
                 processId = futureId;
+                if (!clientMetadataMap.containsKey(futureId)) {
+                    clientMetadataMap.put(futureId, futureClient);
+                }
             } else {
                 processId = info.processId();
             }
@@ -345,7 +315,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                 clientMetadataMap.put(info.processId(), clientMetadata);
             }
 
-            // add the consumer and any info its its subscription to the client
+            // add the consumer and any info in its subscription to the client
             clientMetadata.addConsumer(consumerId, subscription.ownedPartitions());
             allOwnedPartitions.addAll(subscription.ownedPartitions());
             clientMetadata.addPreviousTasks(info);
@@ -354,7 +324,6 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         final boolean versionProbing;
         if (futureMetadataVersion == UNKNOWN) {
             versionProbing = false;
-            clientMetadataMap.remove(futureId);
         } else if (minReceivedMetadataVersion >= EARLIEST_PROBEABLE_VERSION) {
             versionProbing = true;
             log.info("Received a future (version probing) subscription (version: {})."
@@ -589,12 +558,14 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
 
         final Map<UUID, ClientState> states = new HashMap<>();
         for (final Map.Entry<UUID, ClientMetadata> entry : clientMetadataMap.entrySet()) {
+            final UUID uuid = entry.getKey();
             final ClientState state = entry.getValue().state;
-            states.put(entry.getKey(), state);
+            states.put(uuid, state);
 
-            // Either the active tasks (eager) OR the owned partitions (cooperative) were encoded in the subscription
-            // according to the rebalancing protocol, so convert any partitions in a client to tasks where necessary
-            if (!state.ownedPartitions().isEmpty()) {
+            // there are two cases where we need to construct the prevTasks from the ownedPartitions:
+            // 1) COOPERATIVE clients on version 2.4-2.5 do not encode active tasks and rely on ownedPartitions instead
+            // 2) future client during version probing, when we can't decode the future subscription info's prev tasks
+            if (!state.ownedPartitions().isEmpty() && (uuid == futureId || state.prevActiveTasks().isEmpty())) {
                 final Set<TaskId> previousActiveTasks = new HashSet<>();
                 for (final Map.Entry<TopicPartition, String> partitionEntry : state.ownedPartitions().entrySet()) {
                     final TopicPartition tp = partitionEntry.getKey();
@@ -1154,6 +1125,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                 topicToPartitionInfo = getTopicPartitionInfo(partitionsByHost);
                 break;
             case 6:
+            case 7:
                 validateActiveTaskEncoding(partitions, info, logPrefix);
 
                 activeTasks = getActiveTasks(partitions, info);
@@ -1293,7 +1265,12 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         return userEndPoint;
     }
 
-    protected TaskManager taskManger() {
+    protected TaskManager taskManager() {
         return taskManager;
     }
+
+    protected void handleRebalanceStart(final Set<String> topics) {
+        taskManager.handleRebalanceStart(topics);
+    }
+
 }

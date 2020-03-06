@@ -157,7 +157,7 @@ public class TaskManagerTest {
     }
 
     @Test
-    public void shouldReturnCachedTaskIdsFromDirectory() throws IOException {
+    public void shouldReturnOffsetsForAllCachedTaskIdsFromDirectory() throws IOException {
         final File[] taskFolders = asList(testFolder.newFolder("0_1"),
                                           testFolder.newFolder("0_2"),
                                           testFolder.newFolder("0_3"),
@@ -172,15 +172,15 @@ public class TaskManagerTest {
 
         replay(activeTaskCreator, stateDirectory);
 
-        final Set<TaskId> tasks = taskManager.tasksOnLocalStorage();
+        final Map<TaskId, Long> taskOffsetSums = taskManager.getTaskOffsetSums();
 
         verify(activeTaskCreator, stateDirectory);
 
-        assertThat(tasks, equalTo(mkSet(taskId01, taskId02, new TaskId(1, 1))));
+        assertThat(taskOffsetSums.keySet(), equalTo(mkSet(taskId01, taskId02, new TaskId(1, 1))));
     }
 
     @Test
-    public void shouldCloseActiveUnAssignedSuspendedTasksWhenClosingRevokedTasks() {
+    public void shouldCloseActiveUnassignedSuspendedTasksWhenClosingRevokedTasks() {
         final Task task00 = new StateMachineTask(taskId00, taskId00Partitions, true);
 
         expectRestoreToBeCompleted(consumer, changeLogReader);

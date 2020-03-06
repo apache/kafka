@@ -52,6 +52,7 @@ import java.util.stream.Stream;
 
 import static org.apache.kafka.streams.processor.internals.Task.State.CREATED;
 import static org.apache.kafka.streams.processor.internals.Task.State.RESTORING;
+import static org.apache.kafka.streams.processor.internals.Task.State.RUNNING;
 
 public class TaskManager {
     // initialize the task list
@@ -373,10 +374,26 @@ public class TaskManager {
     }
 
     /**
+     * @return Map from task id to its total offset summed across all state stores
+     */
+    public Map<TaskId, Long> getTaskOffsetSums() {
+        final Map<TaskId, Long> taskOffsetSums = new HashMap<>();
+
+        for (final TaskId id : tasksOnLocalStorage()) {
+            if (isRunning(id)) {
+                taskOffsetSums.put(id, Task.LATEST_OFFSET);
+            } else {
+                taskOffsetSums.put(id, 0L);
+            }
+        }
+        return taskOffsetSums;
+    }
+
+    /**
      * Returns ids of tasks whose states are kept on the local storage. This includes active, standby, and previously
      * assigned but not yet cleaned up tasks
      */
-    public Set<TaskId> tasksOnLocalStorage() {
+    private Set<TaskId> tasksOnLocalStorage() {
         // A client could contain some inactive tasks whose states are still kept on the local storage in the following scenarios:
         // 1) the client is actively maintaining standby tasks by maintaining their states from the change log.
         // 2) the client has just got some tasks migrated out of itself to other clients while these task states
@@ -509,6 +526,11 @@ public class TaskManager {
 
     private Stream<Task> standbyTaskStream() {
         return tasks.values().stream().filter(t -> !t.isActive());
+    }
+
+    private boolean isRunning(final TaskId id) {
+        final Task task = tasks.get(id);
+        return task != null && task.isActive() && task.state() == RUNNING;
     }
 
     /**
