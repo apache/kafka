@@ -111,9 +111,6 @@ final class StateManagerUtil {
         log.trace("Closing state manager for {}", id);
 
         try {
-            final Map<TopicPartition, Long> emptyOffsets = stateMgr.changelogPartitions().stream()
-                .collect(Collectors.toMap(Function.identity(), entry -> ListOffsetResponse.UNKNOWN_OFFSET));
-
             stateMgr.close();
 
             if (wipeStateStore) {
