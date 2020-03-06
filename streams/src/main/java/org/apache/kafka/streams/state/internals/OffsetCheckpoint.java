@@ -18,7 +18,6 @@ package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -77,15 +76,6 @@ public class OffsetCheckpoint {
         }
 
         synchronized (lock) {
-            final File taskDir = file.getParentFile();
-
-            // the state directory could be wiped out and hence not exist any more;
-            // in this case we still need to re-create it.
-            if (!taskDir.exists() && !taskDir.mkdir()) {
-                throw new ProcessorStateException(
-                    String.format("Task directory [%s] doesn't exist and couldn't be created", taskDir.getPath()));
-            }
-
             // write to temp file and then swap with the existing file
             final File temp = new File(file.getAbsolutePath() + ".tmp");
             LOG.trace("Writing tmp checkpoint file {}", temp.getAbsolutePath());

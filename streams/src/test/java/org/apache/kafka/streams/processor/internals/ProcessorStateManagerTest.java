@@ -320,7 +320,7 @@ public class ProcessorStateManagerTest {
             stateMgr.registerStore(persistentStore, persistentStore.stateRestoreCallback);
             stateMgr.registerStore(persistentStoreTwo, persistentStoreTwo.stateRestoreCallback);
             stateMgr.registerStore(nonPersistentStore, nonPersistentStore.stateRestoreCallback);
-            stateMgr.initializeStoreOffsetsFromCheckpoint();
+            stateMgr.initializeStoreOffsetsFromCheckpoint(true);
 
             assertFalse(checkpointFile.exists());
             assertEquals(mkSet(
@@ -408,7 +408,7 @@ public class ProcessorStateManagerTest {
         final ProcessorStateManager stateMgr = getStateManager(Task.TaskType.ACTIVE);
         try {
             stateMgr.registerStore(persistentStore, persistentStore.stateRestoreCallback);
-            stateMgr.initializeStoreOffsetsFromCheckpoint();
+            stateMgr.initializeStoreOffsetsFromCheckpoint(true);
 
             final StateStoreMetadata storeMetadata = stateMgr.storeMetadata(persistentStorePartition);
             assertThat(storeMetadata, notNullValue());
@@ -437,7 +437,7 @@ public class ProcessorStateManagerTest {
 
         try {
             stateMgr.registerStore(persistentStore, persistentStore.stateRestoreCallback);
-            stateMgr.initializeStoreOffsetsFromCheckpoint();
+            stateMgr.initializeStoreOffsetsFromCheckpoint(true);
 
             final StateStoreMetadata storeMetadata = stateMgr.storeMetadata(persistentStorePartition);
             assertThat(storeMetadata, notNullValue());
@@ -459,7 +459,7 @@ public class ProcessorStateManagerTest {
 
         try {
             stateMgr.registerStore(nonPersistentStore, nonPersistentStore.stateRestoreCallback);
-            stateMgr.initializeStoreOffsetsFromCheckpoint();
+            stateMgr.initializeStoreOffsetsFromCheckpoint(true);
 
             final StateStoreMetadata storeMetadata = stateMgr.storeMetadata(nonPersistentStorePartition);
             assertThat(storeMetadata, notNullValue());
@@ -624,7 +624,7 @@ public class ProcessorStateManagerTest {
         writer.close();
 
         try {
-            stateMgr.initializeStoreOffsetsFromCheckpoint();
+            stateMgr.initializeStoreOffsetsFromCheckpoint(true);
             fail("should have thrown processor state exception when IO exception happens");
         } catch (final ProcessorStateException e) {
             // pass

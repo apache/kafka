@@ -18,7 +18,6 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.requests.ListOffsetResponse;
 import org.apache.kafka.common.utils.FixedOrderMap;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.errors.ProcessorStateException;
@@ -199,7 +198,7 @@ public class ProcessorStateManager implements StateManager {
     }
 
     // package-private for test only
-    void initializeStoreOffsetsFromCheckpoint() {
+    void initializeStoreOffsetsFromCheckpoint(final boolean storeDirIsEmpty) {
         try {
             final Map<TopicPartition, Long> loadedCheckpoints = checkpointFile.read();
 
@@ -210,9 +209,7 @@ public class ProcessorStateManager implements StateManager {
                     log.info("State store {} is not logged and hence would not be restored", store.stateStore.name());
                 } else {
                     if (loadedCheckpoints.containsKey(store.changelogPartition)) {
-                        final long offset = loadedCheckpoints.remove(store.changelogPartition);
-                        if (offset != ListOffsetResponse.UNKNOWN_OFFSET)
-                            store.setOffset(offset);
+                        store.setOffset(loadedCheckpoints.remove(store.changelogPartition));
 
                         log.debug("State store {} initialized from checkpoint with offset {} at changelog {}",
                             store.stateStore.name(), store.offset, store.changelogPartition);
@@ -220,8 +217,9 @@ public class ProcessorStateManager implements StateManager {
                         // with EOS, if the previous run did not shutdown gracefully, we may lost the checkpoint file
                         // and hence we are uncertain the the current local state only contains committed data;
                         // in that case we need to treat it as a task-corrupted exception
-                        if (eosEnabled) {
-                            log.warn("State store {} did not find checkpoint offset with EOS enabled, would " +
+                        if (eosEnabled && !storeDirIsEmpty) {
+                            log.warn("State store {} did not find checkpoint offsets while stores are not empty, " +
+                                "since under EOS it has the risk of getting uncommitted data in stores we have to " +
                                 "treat it as a task corruption error and wipe out the local state of task {} " +
                                 "before re-bootstrapping", store.stateStore.name(), taskId);
 
@@ -240,18 +238,14 @@ public class ProcessorStateManager implements StateManager {
             }
 
             checkpointFile.delete();
+        } catch (final TaskCorruptedException e) {
+            throw e;
         } catch (final IOException | RuntimeException e) {
             // both IOException or runtime exception like number parsing can throw
             throw new ProcessorStateException(format("%sError loading and deleting checkpoint file when creating the state manager",
                 logPrefix), e);
         }
     }
-
-    void writeStoreOffsetsToCheckpoint(final Map<TopicPartition, Long> checkpointingOffsets) throws IOException {
-        log.debug("Writing checkpoint: {}", checkpointingOffsets);
-        checkpointFile.write(checkpointingOffsets);
-    }
-
 
     @Override
     public File baseDir() {
@@ -484,14 +478,15 @@ public class ProcessorStateManager implements StateManager {
             // store is logged, persistent, not corrupted, and has a valid current offset
             if (storeMetadata.changelogPartition != null &&
                 storeMetadata.stateStore.persistent() &&
-                storeMetadata.offset != null) {
-                checkpointingOffsets.put(storeMetadata.changelogPartition,
-                    storeMetadata.corrupted ? Long.valueOf(ListOffsetResponse.UNKNOWN_OFFSET) : storeMetadata.offset);
+                storeMetadata.offset != null &&
+                !storeMetadata.corrupted) {
+                checkpointingOffsets.put(storeMetadata.changelogPartition, storeMetadata.offset);
             }
         }
 
+        log.debug("Writing checkpoint: {}", checkpointingOffsets);
         try {
-            writeStoreOffsetsToCheckpoint(checkpointingOffsets);
+            checkpointFile.write(checkpointingOffsets);
         } catch (final IOException e) {
             log.warn("Failed to write offset checkpoint file to [{}]", checkpointFile, e);
         }
