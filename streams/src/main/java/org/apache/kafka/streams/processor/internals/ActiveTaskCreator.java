@@ -132,11 +132,7 @@ class ActiveTaskCreator {
             );
 
             if (threadProducer == null) {
-                final String taskProducerClientId = getTaskProducerClientId(threadId, taskId);
-                final Map<String, Object> producerConfigs = config.getProducerConfigs(taskProducerClientId);
-                producerConfigs.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, applicationId + "-" + taskId);
-                log.info("Creating producer client for task {}", taskId);
-                taskProducers.put(taskId, clientSupplier.getProducer(producerConfigs));
+                createTaskProducer(taskId);
             }
 
             final RecordCollector recordCollector = new RecordCollectorImpl(
@@ -170,6 +166,14 @@ class ActiveTaskCreator {
             createTaskSensor.record();
         }
         return createdTasks;
+    }
+
+    void createTaskProducer(final TaskId taskId) {
+        final String taskProducerClientId = getTaskProducerClientId(threadId, taskId);
+        final Map<String, Object> producerConfigs = config.getProducerConfigs(taskProducerClientId);
+        producerConfigs.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, applicationId + "-" + taskId);
+        log.info("Creating producer client for task {}", taskId);
+        taskProducers.put(taskId, clientSupplier.getProducer(producerConfigs));
     }
 
     void closeThreadProducerIfNeeded() {

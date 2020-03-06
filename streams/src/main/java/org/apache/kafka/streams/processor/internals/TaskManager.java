@@ -133,6 +133,8 @@ public class TaskManager {
     }
 
     void handleCorruption(final Map<TaskId, Set<TopicPartition>> taskWithChangelogs) {
+        final LinkedHashMap<TaskId, RuntimeException> producerCloseExceptions = new LinkedHashMap<>();
+
         for (final Map.Entry<TaskId, Set<TopicPartition>> entry : taskWithChangelogs.entrySet()) {
             final TaskId taskId = entry.getKey();
             final Task task = tasks.get(taskId);
@@ -149,9 +151,38 @@ public class TaskManager {
             } catch (final RuntimeException e) {
                 log.error("Failed to close task {} cleanly while handling corrupted tasks. Attempting to re-close it as dirty.", task.id());
                 task.closeDirty();
+
+                // We need to recreate the producer as it could potentially be in illegal state.
+                if (task.isActive()) {
+                    try {
+                        activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(task.id());
+                        activeTaskCreator.createTaskProducer(taskId);
+                    } catch (final RuntimeException producerException) {
+                        final String uncleanMessage = String.format("Failed to close task %s producer cleanly. " +
+                            "Attempting to close remaining task producers before re-throwing:", task.id());
+                        log.error(uncleanMessage, producerException);
+                        producerCloseExceptions.putIfAbsent(task.id(), producerException);
+                    }
+                }
             }
 
             task.revive();
+        }
+
+        if (!producerCloseExceptions.isEmpty()) {
+            final Map.Entry<TaskId, RuntimeException> firstEntry =
+                producerCloseExceptions.entrySet().iterator().next();
+
+            if (firstEntry.getValue() instanceof KafkaException) {
+                log.error("Hit Kafka exception while closing first task {} producer", firstEntry.getKey());
+                throw firstEntry.getValue();
+            } else {
+                throw new RuntimeException(
+                    "Unexpected failure to close " + producerCloseExceptions.size() +
+                        " task(s) producers [" + producerCloseExceptions.keySet() + "]. " +
+                        "First unexpected exception (for task " + firstEntry.getKey() + ") follows.", firstEntry.getValue()
+                );
+            }
         }
     }
 
