@@ -616,7 +616,10 @@ class AdminManager(val config: KafkaConfig,
           val oldValueList = configProps.getProperty(alterConfigOp.configEntry().name(),
             ConfigDef.convertToString(configKeys(configPropName).defaultValue, ConfigDef.Type.LIST)).split(",").toList
           val newValueList = oldValueList.diff(alterConfigOp.configEntry().value().split(",").toList)
-          configProps.setProperty(alterConfigOp.configEntry().name(), newValueList.mkString(","))
+          newValueList match {
+            case Nil => configProps.remove(alterConfigOp.configEntry().name())
+            case _ => configProps.setProperty(alterConfigOp.configEntry().name(), newValueList.mkString(","))
+          }
         }
       }
     }

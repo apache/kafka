@@ -1688,7 +1688,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       new AlterConfigOp(new ConfigEntry(LogConfig.LeaderReplicationThrottledReplicasProp, "0"), AlterConfigOp.OpType.SUBTRACT)
     ).asJava
 
-    // subtract all from this list property
+    // subtract all from this list property -- should revert to default
     topic2AlterConfigs = Seq(
       new AlterConfigOp(new ConfigEntry(LogConfig.CleanupPolicyProp, LogConfig.Compact + "," + LogConfig.Delete), AlterConfigOp.OpType.SUBTRACT)
     ).asJavaCollection
@@ -1709,7 +1709,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     assertEquals("delete", configs.get(topic1Resource).get(LogConfig.CleanupPolicyProp).value)
     assertEquals("1000", configs.get(topic1Resource).get(LogConfig.FlushMsProp).value) // verify previous change is still intact
     assertEquals("", configs.get(topic1Resource).get(LogConfig.LeaderReplicationThrottledReplicasProp).value)
-    assertEquals("", configs.get(topic2Resource).get(LogConfig.CleanupPolicyProp).value )
+    assertEquals("delete", configs.get(topic2Resource).get(LogConfig.CleanupPolicyProp).value )
 
     // Alter topics with validateOnly=true
     topic1AlterConfigs = Seq(
