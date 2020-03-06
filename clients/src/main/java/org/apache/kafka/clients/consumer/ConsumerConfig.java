@@ -24,6 +24,7 @@ import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.common.config.SecurityConfig;
+import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.requests.JoinGroupRequest;
 import org.apache.kafka.common.serialization.Deserializer;
@@ -32,6 +33,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -563,6 +565,19 @@ public class ConsumerConfig extends AbstractConfig {
         if (valueDeserializer != null)
             newProperties.put(VALUE_DESERIALIZER_CLASS_CONFIG, valueDeserializer.getClass().getName());
         return newProperties;
+    }
+
+    boolean maybeOverrideEnableAutoCommit() {
+        Optional<String> groupId = Optional.ofNullable(getString(CommonClientConfigs.GROUP_ID_CONFIG));
+        boolean enableAutoCommit = getBoolean(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG);
+        if (!groupId.isPresent()) { // overwrite in case of default group id where the config is not explicitly provided
+            if (!originals().containsKey(ENABLE_AUTO_COMMIT_CONFIG)) {
+                enableAutoCommit = false;
+            } else if (enableAutoCommit) {
+                throw new InvalidConfigurationException(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG + " cannot be set to true when default group id (null) is used.");
+            }
+        }
+        return enableAutoCommit;
     }
 
     public ConsumerConfig(Properties props) {
