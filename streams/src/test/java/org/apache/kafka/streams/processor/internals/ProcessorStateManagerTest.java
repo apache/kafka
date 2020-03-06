@@ -25,6 +25,7 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.errors.TaskCorruptedException;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
@@ -708,19 +709,57 @@ public class ProcessorStateManagerTest {
         Assert.assertTrue(closedStore.get());
     }
 
-    private ProcessorStateManager getStateManager(final Task.TaskType taskType) {
+    @Test
+    public void shouldThrowTaskCorruptedWithoutCheckpointNonEmptyDir() throws IOException {
+        final long checkpointOffset = 10L;
+
+        final Map<TopicPartition, Long> offsets = mkMap(
+            mkEntry(persistentStorePartition, checkpointOffset),
+            mkEntry(nonPersistentStorePartition, checkpointOffset),
+            mkEntry(irrelevantPartition, 999L)
+        );
+        checkpoint.write(offsets);
+
+        final ProcessorStateManager stateMgr = getStateManager(Task.TaskType.ACTIVE, true);
+
+        try {
+            stateMgr.registerStore(persistentStore, persistentStore.stateRestoreCallback);
+            stateMgr.registerStore(persistentStoreTwo, persistentStoreTwo.stateRestoreCallback);
+            stateMgr.registerStore(nonPersistentStore, nonPersistentStore.stateRestoreCallback);
+
+            final TaskCorruptedException exception = assertThrows(TaskCorruptedException.class,
+                () -> stateMgr.initializeStoreOffsetsFromCheckpoint(false));
+
+            assertEquals(Collections.singletonMap(taskId, stateMgr.changelogPartitions()), exception.corruptedTaskWithChangelogs());
+        } finally {
+            stateMgr.close();
+        }
+    }
+
+    @Test
+    public void shouldBeAbleToCloseWithoutRegisteringAnyStores() {
+        final ProcessorStateManager stateMgr = getStateManager(Task.TaskType.ACTIVE, true);
+
+        stateMgr.close();
+    }
+
+    private ProcessorStateManager getStateManager(final Task.TaskType taskType, final boolean eosEnabled) {
         return new ProcessorStateManager(
             taskId,
             taskType,
-            false,
+            eosEnabled,
             logContext,
             stateDirectory,
             changelogReader, mkMap(
-                mkEntry(persistentStoreName, persistentStoreTopicName),
-                mkEntry(persistentStoreTwoName, persistentStoreTwoTopicName),
-                mkEntry(nonPersistentStoreName, nonPersistentStoreTopicName)
-            ),
+            mkEntry(persistentStoreName, persistentStoreTopicName),
+            mkEntry(persistentStoreTwoName, persistentStoreTwoTopicName),
+            mkEntry(nonPersistentStoreName, nonPersistentStoreTopicName)
+        ),
             emptySet());
+    }
+
+    private ProcessorStateManager getStateManager(final Task.TaskType taskType) {
+        return getStateManager(taskType, false);
     }
 
     private MockKeyValueStore getConverterStore() {

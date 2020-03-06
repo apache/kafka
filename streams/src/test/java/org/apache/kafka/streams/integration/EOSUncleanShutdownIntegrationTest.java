@@ -118,10 +118,9 @@ public class EOSUncleanShutdownIntegrationTest {
         ));
         final KafkaStreams driver = IntegrationTestUtils.getStartedStreams(STREAMS_CONFIG, builder, true);
 
-        final File stateDir = new File(
-            String.join("/", TEST_FOLDER.getRoot().getPath(), appId, "0_0"));
-        try {
+        final File stateDir = new File(String.join("/", TEST_FOLDER.getRoot().getPath(), appId, "0_0"));
 
+        try {
             IntegrationTestUtils.produceSynchronously(producerConfig, false, input, Optional.empty(),
                 singletonList(new KeyValueTimestamp<>("k1", "v1", 0L)));
 
