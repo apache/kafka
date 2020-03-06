@@ -750,11 +750,12 @@ public class ProcessorStateManagerTest {
             eosEnabled,
             logContext,
             stateDirectory,
-            changelogReader, mkMap(
-            mkEntry(persistentStoreName, persistentStoreTopicName),
-            mkEntry(persistentStoreTwoName, persistentStoreTwoTopicName),
-            mkEntry(nonPersistentStoreName, nonPersistentStoreTopicName)
-        ),
+            changelogReader,
+            mkMap(
+                mkEntry(persistentStoreName, persistentStoreTopicName),
+                mkEntry(persistentStoreTwoName, persistentStoreTwoTopicName),
+                mkEntry(nonPersistentStoreName, nonPersistentStoreTopicName)
+            ),
             emptySet());
     }
 
