@@ -155,7 +155,6 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
 
     // keep track of any future consumers in a "dummy" Client since we can't decipher their subscription
     private static final UUID FUTURE_ID = randomUUID();
-    private static final ClientMetadata CLIENT_METADATA = new ClientMetadata(null);
 
     protected static final Comparator<TopicPartition> PARTITION_COMPARATOR =
         Comparator.comparing(TopicPartition::topic).thenComparingInt(TopicPartition::partition);
@@ -301,7 +300,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                 futureMetadataVersion = usedVersion;
                 processId = FUTURE_ID;
                 if (!clientMetadataMap.containsKey(FUTURE_ID)) {
-                    clientMetadataMap.put(FUTURE_ID, CLIENT_METADATA);
+                    clientMetadataMap.put(FUTURE_ID, new ClientMetadata(null));
                 }
             } else {
                 processId = info.processId();
