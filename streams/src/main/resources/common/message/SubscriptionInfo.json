@@ -15,7 +15,7 @@
 
 {
   "name": "SubscriptionInfo",
-  "validVersions": "1-6",
+  "validVersions": "1-7",
   "fields": [
     {
       "name": "version",
@@ -35,18 +35,23 @@
     },
     {
       "name": "prevTasks",
-      "versions": "1+",
+      "versions": "1-6",
       "type": "[]TaskId"
     },
     {
       "name": "standbyTasks",
-      "versions": "1+",
+      "versions": "1-6",
       "type": "[]TaskId"
     },
     {
       "name": "userEndPoint",
       "versions": "2+",
       "type": "bytes"
+    },
+    {
+      "name": "taskOffsetSums",
+      "versions": "7+",
+      "type": "[]TaskOffsetSum"
     }
   ],
   "commonStructs": [
@@ -63,6 +68,38 @@
           "name": "partition",
           "versions": "1+",
           "type": "int32"
+        }
+      ]
+    },
+    {
+      "name": "TaskOffsetSum",
+      "versions": "7+",
+      "fields": [
+        {
+          "name": "topicGroupId",
+          "versions": "7+",
+          "type": "int32"
+        },
+        {
+          "name": "partitionToOffsetSum",
+          "versions": "7+",
+          "type": "[]PartitionToOffsetSum"
+        }
+      ]
+    },
+    {
+      "name": "PartitionToOffsetSum",
+      "versions": "7+",
+      "fields": [
+        {
+          "name": "partition",
+          "versions": "7+",
+          "type": "int32"
+        },
+        {
+          "name": "offsetSum",
+          "versions": "7+",
+          "type": "int64"
         }
       ]
     }
