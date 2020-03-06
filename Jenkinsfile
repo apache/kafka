@@ -14,6 +14,7 @@ def retryFlagsString(jobConfig) {
     else ""
 }
 
+def downstreamBuildFailureOutput = ""
 def job = {
     // https://github.com/confluentinc/common-tools/blob/master/confluent/config/dev/versions.json
     def kafkaMuckrakeVersionMap = [
