@@ -32,7 +32,9 @@ import java.util.Map;
 import java.util.Set;
 
 public interface Task {
-    // this must be negative to distinguish a running active task from other kinds tasks which may be caught up to the same offsets
+
+    // this must be negative to distinguish a running active task from other kinds of tasks
+    // which may be caught up to the same offsets
     long LATEST_OFFSET = -2L;
 
     /*
