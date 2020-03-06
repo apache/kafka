@@ -21,8 +21,6 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import java.util.HashSet;
-import java.util.Set;
 import org.apache.kafka.common.cache.Cache;
 import org.apache.kafka.common.cache.LRUCache;
 import org.apache.kafka.common.cache.SynchronizedCache;
@@ -53,6 +51,8 @@ import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
+
+import static org.apache.kafka.common.utils.Utils.mkSet;
 
 /**
  * Implementation of Converter that uses JSON to store schemas and objects. By default this converter will serialize Connect keys, values,
@@ -280,15 +280,23 @@ public class JsonConverter implements Converter, HeaderConverter {
     private Cache<Schema, ObjectNode> fromConnectSchemaCache;
     private Cache<JsonNode, Schema> toConnectSchemaCache;
 
-    private final JsonSerializer serializer = new JsonSerializer();
+    private final JsonSerializer serializer;
     private final JsonDeserializer deserializer;
 
     public JsonConverter() {
-        // this ensures that the JsonDeserializer maintains full precision on
-        // floating point numbers that cannot fit into float64
-        final Set<DeserializationFeature> deserializationFeatures = new HashSet<>();
-        deserializationFeatures.add(DeserializationFeature.USE_BIG_DECIMAL_FOR_FLOATS);
-        deserializer = new JsonDeserializer(deserializationFeatures, true);
+        serializer = new JsonSerializer(
+            mkSet(),
+            JSON_NODE_FACTORY
+        );
+
+        deserializer = new JsonDeserializer(
+            mkSet(
+                // this ensures that the JsonDeserializer maintains full precision on
+                // floating point numbers that cannot fit into float64
+                DeserializationFeature.USE_BIG_DECIMAL_FOR_FLOATS
+            ),
+            JSON_NODE_FACTORY
+        );
     }
 
     @Override

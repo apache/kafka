@@ -30,13 +30,13 @@ import org.apache.kafka.common.serialization.Deserializer;
  * structured data without having associated Java classes. This deserializer also supports Connect schemas.
  */
 public class JsonDeserializer implements Deserializer<JsonNode> {
-    private ObjectMapper objectMapper = new ObjectMapper();
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     /**
      * Default constructor needed by Kafka
      */
     public JsonDeserializer() {
-        this(Collections.emptySet(), false);
+        this(Collections.emptySet(), JsonNodeFactory.withExactBigDecimals(true));
     }
 
     /**
@@ -44,14 +44,14 @@ public class JsonDeserializer implements Deserializer<JsonNode> {
      * for the deserializer
      *
      * @param deserializationFeatures the specified deserialization features
-     * @param exactDecimals {@code true} if trailing zeros on decimals should be maintained.
+     * @param jsonNodeFactory the json node factory to use.
      */
     JsonDeserializer(
         final Set<DeserializationFeature> deserializationFeatures,
-        final boolean exactDecimals
+        final JsonNodeFactory jsonNodeFactory
     ) {
         deserializationFeatures.forEach(objectMapper::enable);
-        objectMapper.setNodeFactory(JsonNodeFactory.withExactBigDecimals(exactDecimals));
+        objectMapper.setNodeFactory(jsonNodeFactory);
     }
 
     @Override
