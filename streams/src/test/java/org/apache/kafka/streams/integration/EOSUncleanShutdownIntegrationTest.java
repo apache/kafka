@@ -56,6 +56,7 @@ import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.cl
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.cleanStateBeforeTest;
 import static org.junit.Assert.assertFalse;
 
+
 /**
  * Test the unclean shutdown behavior around state store cleanup.
  */
@@ -101,8 +102,8 @@ public class EOSUncleanShutdownIntegrationTest {
         final AtomicInteger recordCount = new AtomicInteger(0);
 
         final KTable<String, String> valueCounts = inputStream
-                                                       .groupByKey()
-                                                       .aggregate(() -> "()", (key, value, aggregate) -> aggregate + ",(" + key + ": " + value + ")", Materialized.as("aggregated_value"));
+            .groupByKey()
+            .aggregate(() -> "()", (key, value, aggregate) -> aggregate + ",(" + key + ": " + value + ")", Materialized.as("aggregated_value"));
         valueCounts.toStream().peek((key, value) -> {
             if (recordCount.incrementAndGet() >= RECORD_TOTAL) {
                 throw new IllegalStateException("Crash on the " + RECORD_TOTAL + " record");
@@ -117,10 +118,9 @@ public class EOSUncleanShutdownIntegrationTest {
         ));
         final KafkaStreams driver = IntegrationTestUtils.getStartedStreams(STREAMS_CONFIG, builder, true);
 
-        final File stateDir = new File(
-            String.join("/", TEST_FOLDER.getRoot().getPath(), appId, "0_0"));
-        try {
+        final File stateDir = new File(String.join("/", TEST_FOLDER.getRoot().getPath(), appId, "0_0"));
 
+        try {
             IntegrationTestUtils.produceSynchronously(producerConfig, false, input, Optional.empty(),
                 singletonList(new KeyValueTimestamp<>("k1", "v1", 0L)));
 
@@ -139,6 +139,7 @@ public class EOSUncleanShutdownIntegrationTest {
 
             driver.close();
 
+            // the state directory should still exist with the empty checkpoint file
             assertFalse(stateDir.exists());
 
             cleanStateAfterTest(CLUSTER, driver);

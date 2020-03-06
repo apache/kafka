@@ -71,6 +71,8 @@ final class StateManagerUtil {
         }
         log.debug("Acquired state directory lock");
 
+        final boolean storeDirsEmpty = stateDirectory.directoryForTaskIsEmpty(id);
+
         // We should only load checkpoint AFTER the corresponding state directory lock has been acquired and
         // the state stores have been registered; we should not try to load at the state manager construction time.
         // See https://issues.apache.org/jira/browse/KAFKA-8574
@@ -79,7 +81,8 @@ final class StateManagerUtil {
             store.init(processorContext, store);
             log.trace("Registered state store {}", store.name());
         }
-        stateMgr.initializeStoreOffsetsFromCheckpoint();
+
+        stateMgr.initializeStoreOffsetsFromCheckpoint(storeDirsEmpty);
         log.debug("Initialized state stores");
     }
 
@@ -106,7 +109,9 @@ final class StateManagerUtil {
             stateMgr.close();
 
             if (wipeStateStore) {
-                // we can just delete the whole dir of the task, including the state store images and the checkpoint files
+                // we can just delete the whole dir of the task, including the state store images and the checkpoint files,
+                // and then we write an empty checkpoint file indicating that the previous close is graceful and we just
+                // need to re-bootstrap the restoration from the beginning
                 Utils.delete(stateMgr.baseDir());
             }
         } catch (final ProcessorStateException e) {

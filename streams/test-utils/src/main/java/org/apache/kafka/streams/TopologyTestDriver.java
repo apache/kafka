@@ -428,17 +428,18 @@ public class TopologyTestDriver implements Closeable {
 
             final ProcessorStateManager stateManager = new ProcessorStateManager(
                 TASK_ID,
-                new HashSet<>(partitionsByInputTopic.values()),
                 Task.TaskType.ACTIVE,
+                EXACTLY_ONCE.equals(streamsConfig.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG)),
+                logContext,
                 stateDirectory,
-                processorTopology.storeToChangelogTopic(),
                 new StoreChangelogReader(
                     mockWallClockTime,
                     streamsConfig,
                     logContext,
                     createRestoreConsumer(processorTopology.storeToChangelogTopic()),
                     stateRestoreListener),
-                logContext);
+                processorTopology.storeToChangelogTopic(),
+                new HashSet<>(partitionsByInputTopic.values()));
             final RecordCollector recordCollector = new RecordCollectorImpl(
                 logContext,
                 TASK_ID,

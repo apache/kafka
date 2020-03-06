@@ -39,6 +39,7 @@ import org.slf4j.Logger;
 import java.io.File;
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 
 import static java.util.Collections.emptyList;
@@ -149,6 +150,7 @@ public class StateManagerUtilTest {
         expect(stateManager.taskId()).andReturn(taskId);
 
         expect(stateDirectory.lock(taskId)).andReturn(true);
+        expect(stateDirectory.directoryForTaskIsEmpty(taskId)).andReturn(true);
 
         final MockKeyValueStore store1 = new MockKeyValueStore("store1", false);
         final MockKeyValueStore store2 = new MockKeyValueStore("store2", false);
@@ -165,7 +167,7 @@ public class StateManagerUtilTest {
         processorContext.register(store2, store2.stateRestoreCallback);
         expectLastCall();
 
-        stateManager.initializeStoreOffsetsFromCheckpoint();
+        stateManager.initializeStoreOffsetsFromCheckpoint(true);
         expectLastCall();
 
         ctrl.checkOrder(true);
@@ -187,6 +189,8 @@ public class StateManagerUtilTest {
     public void testCloseStateManagerClean() throws IOException {
         expect(stateManager.taskId()).andReturn(taskId);
 
+        expect(stateManager.changelogPartitions()).andReturn(Collections.emptySet());
+
         stateManager.close();
         expectLastCall();
 
@@ -205,7 +209,7 @@ public class StateManagerUtilTest {
     @Test
     public void testCloseStateManagerThrowsExceptionWhenClean() throws IOException {
         expect(stateManager.taskId()).andReturn(taskId);
-
+        expect(stateManager.changelogPartitions()).andReturn(Collections.emptySet());
         stateManager.close();
         expectLastCall();
 
@@ -228,7 +232,7 @@ public class StateManagerUtilTest {
     @Test
     public void testCloseStateManagerOnlyThrowsFirstExceptionWhenClean() throws IOException {
         expect(stateManager.taskId()).andReturn(taskId);
-
+        expect(stateManager.changelogPartitions()).andReturn(Collections.emptySet());
         stateManager.close();
         expectLastCall().andThrow(new ProcessorStateException("state manager failed to close"));
 
@@ -254,7 +258,7 @@ public class StateManagerUtilTest {
         final LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
 
         expect(stateManager.taskId()).andReturn(taskId);
-
+        expect(stateManager.changelogPartitions()).andReturn(Collections.emptySet());
         stateManager.close();
         expectLastCall().andThrow(new ProcessorStateException("state manager failed to close"));
 
@@ -277,7 +281,7 @@ public class StateManagerUtilTest {
     @Test
     public void testCloseStateManagerWithStateStoreWipeOut() throws IOException {
         expect(stateManager.taskId()).andReturn(taskId);
-
+        expect(stateManager.changelogPartitions()).andReturn(Collections.emptySet());
         stateManager.close();
         expectLastCall();
 
@@ -302,7 +306,7 @@ public class StateManagerUtilTest {
         mockStatic(Utils.class);
 
         expect(stateManager.taskId()).andReturn(taskId);
-
+        expect(stateManager.changelogPartitions()).andReturn(Collections.emptySet());
         stateManager.close();
         expectLastCall();
 

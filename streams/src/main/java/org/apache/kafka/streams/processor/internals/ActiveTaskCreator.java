@@ -123,12 +123,13 @@ class ActiveTaskCreator {
 
             final ProcessorStateManager stateManager = new ProcessorStateManager(
                 taskId,
-                partitions,
                 Task.TaskType.ACTIVE,
+                EXACTLY_ONCE.equals(config.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG)),
+                logContext,
                 stateDirectory,
-                topology.storeToChangelogTopic(),
                 storeChangelogReader,
-                logContext
+                topology.storeToChangelogTopic(),
+                partitions
             );
 
             if (threadProducer == null) {

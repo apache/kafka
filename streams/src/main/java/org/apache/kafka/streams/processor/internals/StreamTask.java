@@ -413,48 +413,50 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
      */
     private void close(final boolean clean) {
         if (state() == State.CREATED) {
-            // the task is created and not initialized, do nothing
+            // the task is created and not initialized, just re-write the checkpoint file
+            executeAndMaybeSwallow(clean, () -> {
+                stateMgr.checkpoint(Collections.emptyMap());
+            }, "state manager checkpoint");
+
             transitionTo(State.CLOSING);
-        } else {
-            if (state() == State.RUNNING) {
-                closeTopology(clean);
+        } else if (state() == State.RUNNING) {
+            closeTopology(clean);
 
-                if (clean) {
-                    commitState();
-                    // whenever we have successfully committed state, it is safe to checkpoint
-                    // the state as well no matter if EOS is enabled or not
-                    stateMgr.checkpoint(checkpointableOffsets());
-                } else {
-                    executeAndMaybeSwallow(false, stateMgr::flush, "state manager flush");
-                }
-
-                transitionTo(State.CLOSING);
-            } else if (state() == State.RESTORING) {
-                executeAndMaybeSwallow(clean, () -> {
-                    stateMgr.flush();
-                    stateMgr.checkpoint(Collections.emptyMap());
-                }, "state manager flush and checkpoint");
-
-                transitionTo(State.CLOSING);
-            } else if (state() == State.SUSPENDED) {
-                // do not need to commit / checkpoint, since when suspending we've already committed the state
-                transitionTo(State.CLOSING);
-            }
-
-            if (state() == State.CLOSING) {
-                // if EOS is enabled, we wipe out the whole state store for unclean close
-                // since they are invalid to use anymore
-                final boolean wipeStateStore = !clean && !eosDisabled;
-
-                // first close state manager (which is idempotent) then close the record collector (which could throw),
-                // if the latter throws and we re-close dirty which would close the state manager again.
-                StateManagerUtil.closeStateManager(log, logPrefix, clean,
-                    wipeStateStore, stateMgr, stateDirectory, TaskType.ACTIVE);
-
-                executeAndMaybeSwallow(clean, recordCollector::close, "record collector close");
+            if (clean) {
+                commitState();
+                // whenever we have successfully committed state, it is safe to checkpoint
+                // the state as well no matter if EOS is enabled or not
+                stateMgr.checkpoint(checkpointableOffsets());
             } else {
-                throw new IllegalStateException("Illegal state " + state() + " while closing active task " + id);
+                executeAndMaybeSwallow(false, stateMgr::flush, "state manager flush");
             }
+
+            transitionTo(State.CLOSING);
+        } else if (state() == State.RESTORING) {
+            executeAndMaybeSwallow(clean, () -> {
+                stateMgr.flush();
+                stateMgr.checkpoint(Collections.emptyMap());
+            }, "state manager flush and checkpoint");
+
+            transitionTo(State.CLOSING);
+        } else if (state() == State.SUSPENDED) {
+            // do not need to commit / checkpoint, since when suspending we've already committed the state
+            transitionTo(State.CLOSING);
+        }
+
+        if (state() == State.CLOSING) {
+            // if EOS is enabled, we wipe out the whole state store for unclean close
+            // since they are invalid to use anymore
+            final boolean wipeStateStore = !clean && !eosDisabled;
+
+            // first close state manager (which is idempotent) then close the record collector (which could throw),
+            // if the latter throws and we re-close dirty which would close the state manager again.
+            StateManagerUtil.closeStateManager(log, logPrefix, clean,
+                wipeStateStore, stateMgr, stateDirectory, TaskType.ACTIVE);
+
+            executeAndMaybeSwallow(clean, recordCollector::close, "record collector close");
+        } else {
+            throw new IllegalStateException("Illegal state " + state() + " while closing active task " + id);
         }
 
         partitionGroup.close();

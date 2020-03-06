@@ -132,8 +132,8 @@ public class TaskManager {
         rebalanceInProgress = false;
     }
 
-    void handleCorruption(final Map<TaskId, Set<TopicPartition>> taskWithChangelogs) {
-        for (final Map.Entry<TaskId, Set<TopicPartition>> entry : taskWithChangelogs.entrySet()) {
+    void handleCorruption(final Map<TaskId, Collection<TopicPartition>> taskWithChangelogs) {
+        for (final Map.Entry<TaskId, Collection<TopicPartition>> entry : taskWithChangelogs.entrySet()) {
             final TaskId taskId = entry.getKey();
             final Task task = tasks.get(taskId);
 
@@ -141,16 +141,10 @@ public class TaskManager {
             changelogReader.remove(task.changelogPartitions());
 
             // mark corrupted partitions to not be checkpointed, and then close the task as dirty
-            final Set<TopicPartition> corruptedPartitions = entry.getValue();
+            final Collection<TopicPartition> corruptedPartitions = entry.getValue();
             task.markChangelogAsCorrupted(corruptedPartitions);
 
-            try {
-                task.closeClean();
-            } catch (final RuntimeException e) {
-                log.error("Failed to close task {} cleanly while handling corrupted tasks. Attempting to re-close it as dirty.", task.id());
-                task.closeDirty();
-            }
-
+            task.closeDirty();
             task.revive();
         }
     }

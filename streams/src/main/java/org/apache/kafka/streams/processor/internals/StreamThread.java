@@ -240,6 +240,7 @@ public class StreamThread extends Thread {
         return assignmentErrorCode.get();
     }
 
+
     private final Time time;
     private final Logger log;
     private final String logPrefix;

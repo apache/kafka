@@ -36,6 +36,8 @@ import java.nio.file.StandardOpenOption;
 import java.util.HashMap;
 import java.util.regex.Pattern;
 
+import static org.apache.kafka.streams.processor.internals.StateManagerUtil.CHECKPOINT_FILE_NAME;
+
 /**
  * Manages the directories where the state of Tasks owned by a {@link StreamThread} are
  * stored. Handles creation/locking/unlocking/cleaning of the Task Directories. This class is not
@@ -103,6 +105,20 @@ public class StateDirectory {
                 String.format("task directory [%s] doesn't exist and couldn't be created", taskDir.getPath()));
         }
         return taskDir;
+    }
+
+    /**
+     * Decide if the directory of the task is empty or not
+     */
+    boolean directoryForTaskIsEmpty(final TaskId taskId) {
+        final File taskDir = directoryForTask(taskId);
+
+        final File[] storeDirs = taskDir.listFiles(pathname ->
+            !pathname.getName().equals(LOCK_FILE_NAME) &&
+            !pathname.getName().equals(CHECKPOINT_FILE_NAME));
+
+        // if the task is stateless, storeDirs would be null
+        return storeDirs == null || storeDirs.length == 0;
     }
 
     /**
