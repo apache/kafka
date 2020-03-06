@@ -428,7 +428,8 @@ public class TopologyTestDriver implements Closeable {
 
             final ProcessorStateManager stateManager = new ProcessorStateManager(
                 TASK_ID,
-                Task.TaskType.ACTIVE, ,
+                Task.TaskType.ACTIVE,
+                EXACTLY_ONCE.equals(streamsConfig.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG)),
                 logContext,
                 stateDirectory,
                 new StoreChangelogReader(
@@ -443,11 +444,7 @@ public class TopologyTestDriver implements Closeable {
                 logContext,
                 TASK_ID,
                 consumer,
-                new StreamsProducer(
-                    logContext,
-                    producer,
-                    eosEnabled ? streamsConfig.getString(StreamsConfig.APPLICATION_ID_CONFIG) : null,
-                    eosEnabled ? TASK_ID : null),
+                new StreamsProducer(producer, eosEnabled, logContext, streamsConfig.getString(StreamsConfig.APPLICATION_ID_CONFIG)),
                 streamsConfig.defaultProductionExceptionHandler(),
                 eosEnabled,
                 streamsMetrics);

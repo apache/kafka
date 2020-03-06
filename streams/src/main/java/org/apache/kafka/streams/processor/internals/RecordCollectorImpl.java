@@ -262,7 +262,6 @@ public class RecordCollectorImpl implements RecordCollector {
         if (eosEnabled) {
             streamsProducer.abortTransaction();
         }
-        streamsProducer.close();
 
         checkForException();
     }

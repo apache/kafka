@@ -486,7 +486,7 @@ public class ProcessorStateManager implements StateManager {
                 storeMetadata.stateStore.persistent() &&
                 storeMetadata.offset != null) {
                 checkpointingOffsets.put(storeMetadata.changelogPartition,
-                    storeMetadata.corrupted ? ListOffsetResponse.UNKNOWN_OFFSET : storeMetadata.offset);
+                    storeMetadata.corrupted ? Long.valueOf(ListOffsetResponse.UNKNOWN_OFFSET) : storeMetadata.offset);
             }
         }
 
