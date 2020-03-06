@@ -1964,7 +1964,8 @@ public class StreamThreadTest {
         final Node broker2 = new Node(1, "dummyHost-2", 1234);
         final List<Node> cluster = Arrays.asList(broker1, broker2);
 
-        final MockAdminClient adminClient = new MockAdminClient(cluster, broker1, null);
+        final MockAdminClient adminClient = new MockAdminClient.Builder().
+            brokers(cluster).clusterId(null).build();
 
         final Consumer<byte[], byte[]> consumer = EasyMock.createNiceMock(Consumer.class);
         final TaskManager taskManager = EasyMock.createNiceMock(TaskManager.class);

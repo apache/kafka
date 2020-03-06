@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.admin;
 
+import org.apache.kafka.clients.admin.DescribeReplicaLogDirsResult.ReplicaLogDirInfo;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
@@ -29,10 +30,14 @@ import org.apache.kafka.common.acl.AclBinding;
 import org.apache.kafka.common.acl.AclBindingFilter;
 import org.apache.kafka.common.acl.AclOperation;
 import org.apache.kafka.common.config.ConfigResource;
+import org.apache.kafka.common.errors.InvalidRequestException;
+import org.apache.kafka.common.errors.KafkaStorageException;
+import org.apache.kafka.common.errors.ReplicaNotAvailableException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicExistsException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
+import org.apache.kafka.common.requests.DescribeLogDirsResponse;
 import org.apache.kafka.common.quota.ClientQuotaAlteration;
 import org.apache.kafka.common.quota.ClientQuotaFilter;
 
@@ -49,51 +54,109 @@ import java.util.Set;
 public class MockAdminClient extends AdminClient {
     public static final String DEFAULT_CLUSTER_ID = "I4ZmrWqfT2e-upky_4fdPA";
 
+    public static final List<String> DEFAULT_LOG_DIRS =
+        Collections.singletonList("/tmp/kafka-logs");
+
     private final List<Node> brokers;
     private final Map<String, TopicMetadata> allTopics = new HashMap<>();
+    private final Map<TopicPartition, NewPartitionReassignment> reassignments =
+        new HashMap<>();
+    private final Map<TopicPartitionReplica, ReplicaLogDirInfo> replicaMoves =
+        new HashMap<>();
     private final String clusterId;
+    private final List<List<String>> brokerLogDirs;
+    private final List<Map<String, String>> brokerConfigs;
 
     private Node controller;
     private int timeoutNextRequests = 0;
 
     private Map<MetricName, Metric> mockMetrics = new HashMap<>();
 
-    /**
-     * Creates MockAdminClient for a cluster with the given brokers. The Kafka cluster ID uses the default value from
-     * DEFAULT_CLUSTER_ID.
-     *
-     * @param brokers list of brokers in the cluster
-     * @param controller node that should start as the controller
-     */
-    public MockAdminClient(List<Node> brokers, Node controller) {
-        this(brokers, controller, DEFAULT_CLUSTER_ID);
+    public static class Builder {
+        private String clusterId = DEFAULT_CLUSTER_ID;
+        private List<Node> brokers = new ArrayList<>();
+        private Node controller = null;
+        private List<List<String>> brokerLogDirs = new ArrayList<>();
+
+        public Builder() {
+            numBrokers(1);
+        }
+
+        public Builder clusterId(String clusterId) {
+            this.clusterId = clusterId;
+            return this;
+        }
+
+        public Builder brokers(List<Node> brokers) {
+            numBrokers(brokers.size());
+            this.brokers = brokers;
+            return this;
+        }
+
+        public Builder numBrokers(int numBrokers) {
+            if (brokers.size() >= numBrokers) {
+                brokers = brokers.subList(0, numBrokers);
+                brokerLogDirs = brokerLogDirs.subList(0, numBrokers);
+            } else {
+                for (int id = brokers.size(); id < numBrokers; id++) {
+                    brokers.add(new Node(id, "localhost", 1000 + id));
+                    brokerLogDirs.add(DEFAULT_LOG_DIRS);
+                }
+            }
+            return this;
+        }
+
+        public Builder controller(int index) {
+            this.controller = brokers.get(index);
+            return this;
+        }
+
+        public Builder brokerLogDirs(List<List<String>> brokerLogDirs) {
+            this.brokerLogDirs = brokerLogDirs;
+            return this;
+        }
+
+        public MockAdminClient build() {
+            return new MockAdminClient(brokers,
+                controller == null ? brokers.get(0) : controller,
+                clusterId,
+                brokerLogDirs);
+        }
     }
 
-    /**
-     * Creates MockAdminClient for a cluster with the given brokers.
-     * @param brokers list of brokers in the cluster
-     * @param controller node that should start as the controller
-     */
-    public MockAdminClient(List<Node> brokers, Node controller, String clusterId) {
+    public MockAdminClient(List<Node> brokers,
+                           Node controller) {
+        this(brokers, controller, DEFAULT_CLUSTER_ID,
+            Collections.nCopies(brokers.size(), DEFAULT_LOG_DIRS));
+    }
+
+    private MockAdminClient(List<Node> brokers,
+                            Node controller,
+                            String clusterId,
+                            List<List<String>> brokerLogDirs) {
         this.brokers = brokers;
         controller(controller);
         this.clusterId = clusterId;
+        this.brokerLogDirs = brokerLogDirs;
+        this.brokerConfigs = new ArrayList<>();
+        for (int i = 0; i < brokers.size(); i++) {
+            this.brokerConfigs.add(new HashMap<>());
+        }
     }
 
-    public void controller(Node controller) {
+    synchronized public void controller(Node controller) {
         if (!brokers.contains(controller))
             throw new IllegalArgumentException("The controller node must be in the list of brokers");
         this.controller = controller;
     }
 
-    public void addTopic(boolean internal,
+    synchronized public void addTopic(boolean internal,
                          String name,
                          List<TopicPartitionInfo> partitions,
                          Map<String, String> configs) {
         if (allTopics.containsKey(name)) {
             throw new IllegalArgumentException(String.format("Topic %s was already added.", name));
         }
-        List<Node> replicas = null;
         for (TopicPartitionInfo partition : partitions) {
             if (!brokers.contains(partition.leader())) {
                 throw new IllegalArgumentException("Leader broker unknown");
@@ -104,18 +167,15 @@ public class MockAdminClient extends AdminClient {
             if (!brokers.containsAll(partition.isr())) {
                 throw new IllegalArgumentException("Unknown brokers in isr list");
             }
-
-            if (replicas == null) {
-                replicas = partition.replicas();
-            } else if (!replicas.equals(partition.replicas())) {
-                throw new IllegalArgumentException("All partitions need to have the same replica nodes.");
-            }
         }
-
-        allTopics.put(name, new TopicMetadata(internal, partitions, configs));
+        ArrayList<String> logDirs = new ArrayList<>();
+        for (int i = 0; i < partitions.size(); i++) {
+            logDirs.add(brokerLogDirs.get(partitions.get(i).leader().id()).get(0));
+        }
+        allTopics.put(name, new TopicMetadata(internal, partitions, logDirs, configs));
     }
 
-    public void markTopicForDeletion(final String name) {
+    synchronized public void markTopicForDeletion(final String name) {
         if (!allTopics.containsKey(name)) {
             throw new IllegalArgumentException(String.format("Topic %s did not exist.", name));
         }
@@ -123,12 +183,12 @@ public class MockAdminClient extends AdminClient {
         allTopics.get(name).markedForDeletion = true;
     }
 
-    public void timeoutNextRequest(int numberOfRequest) {
+    synchronized public void timeoutNextRequest(int numberOfRequest) {
         timeoutNextRequests = numberOfRequest;
     }
 
     @Override
-    public DescribeClusterResult describeCluster(DescribeClusterOptions options) {
+    synchronized public DescribeClusterResult describeCluster(DescribeClusterOptions options) {
         KafkaFutureImpl<Collection<Node>> nodesFuture = new KafkaFutureImpl<>();
         KafkaFutureImpl<Node> controllerFuture = new KafkaFutureImpl<>();
         KafkaFutureImpl<String> brokerIdFuture = new KafkaFutureImpl<>();
@@ -151,7 +211,7 @@ public class MockAdminClient extends AdminClient {
     }
 
     @Override
-    public CreateTopicsResult createTopics(Collection<NewTopic> newTopics, CreateTopicsOptions options) {
+    synchronized public CreateTopicsResult createTopics(Collection<NewTopic> newTopics, CreateTopicsOptions options) {
         Map<String, KafkaFuture<CreateTopicsResult.TopicMetadataAndConfig>> createTopicResult = new HashMap<>();
 
         if (timeoutNextRequests > 0) {
@@ -189,10 +249,13 @@ public class MockAdminClient extends AdminClient {
 
             int numberOfPartitions = newTopic.numPartitions();
             List<TopicPartitionInfo> partitions = new ArrayList<>(numberOfPartitions);
-            for (int p = 0; p < numberOfPartitions; ++p) {
-                partitions.add(new TopicPartitionInfo(p, brokers.get(0), replicas, Collections.emptyList()));
+            // Partitions start off on the first log directory of each broker, for now.
+            List<String> logDirs = new ArrayList<>(numberOfPartitions);
+            for (int i = 0; i < numberOfPartitions; i++) {
+                partitions.add(new TopicPartitionInfo(i, brokers.get(0), replicas, Collections.emptyList()));
+                logDirs.add(brokerLogDirs.get(partitions.get(i).leader().id()).get(0));
             }
-            allTopics.put(topicName, new TopicMetadata(false, partitions, newTopic.configs()));
+            allTopics.put(topicName, new TopicMetadata(false, partitions, logDirs, newTopic.configs()));
             future.complete(null);
             createTopicResult.put(topicName, future);
         }
@@ -201,7 +264,7 @@ public class MockAdminClient extends AdminClient {
     }
 
     @Override
-    public ListTopicsResult listTopics(ListTopicsOptions options) {
+    synchronized public ListTopicsResult listTopics(ListTopicsOptions options) {
         Map<String, TopicListing> topicListings = new HashMap<>();
 
         if (timeoutNextRequests > 0) {
@@ -227,7 +290,7 @@ public class MockAdminClient extends AdminClient {
     }
 
     @Override
-    public DescribeTopicsResult describeTopics(Collection<String> topicNames, DescribeTopicsOptions options) {
+    synchronized public DescribeTopicsResult describeTopics(Collection<String> topicNames, DescribeTopicsOptions options) {
         Map<String, KafkaFuture<TopicDescription>> topicDescriptions = new HashMap<>();
 
         if (timeoutNextRequests > 0) {
@@ -268,7 +331,7 @@ public class MockAdminClient extends AdminClient {
     }
 
     @Override
-    public DeleteTopicsResult deleteTopics(Collection<String> topicsToDelete, DeleteTopicsOptions options) {
+    synchronized public DeleteTopicsResult deleteTopics(Collection<String> topicsToDelete, DeleteTopicsOptions options) {
         Map<String, KafkaFuture<Void>> deleteTopicsResult = new HashMap<>();
 
         if (timeoutNextRequests > 0) {
@@ -297,12 +360,12 @@ public class MockAdminClient extends AdminClient {
     }
 
     @Override
-    public CreatePartitionsResult createPartitions(Map<String, NewPartitions> newPartitions, CreatePartitionsOptions options) {
+    synchronized public CreatePartitionsResult createPartitions(Map<String, NewPartitions> newPartitions, CreatePartitionsOptions options) {
         throw new UnsupportedOperationException("Not implemented yet");
     }
 
     @Override
-    public DeleteRecordsResult deleteRecords(Map<TopicPartition, RecordsToDelete> recordsToDelete, DeleteRecordsOptions options) {
+    synchronized public DeleteRecordsResult deleteRecords(Map<TopicPartition, RecordsToDelete> recordsToDelete, DeleteRecordsOptions options) {
         Map<TopicPartition, KafkaFuture<DeletedRecords>> deletedRecordsResult = new HashMap<>();
         if (recordsToDelete.isEmpty()) {
             return new DeleteRecordsResult(deletedRecordsResult);
@@ -312,58 +375,58 @@ public class MockAdminClient extends AdminClient {
     }
 
     @Override
-    public CreateDelegationTokenResult createDelegationToken(CreateDelegationTokenOptions options) {
+    synchronized public CreateDelegationTokenResult createDelegationToken(CreateDelegationTokenOptions options) {
         throw new UnsupportedOperationException("Not implemented yet");
     }
 
     @Override
-    public RenewDelegationTokenResult renewDelegationToken(byte[] hmac, RenewDelegationTokenOptions options) {
+    synchronized public RenewDelegationTokenResult renewDelegationToken(byte[] hmac, RenewDelegationTokenOptions options) {
         throw new UnsupportedOperationException("Not implemented yet");
     }
 
     @Override
-    public ExpireDelegationTokenResult expireDelegationToken(byte[] hmac, ExpireDelegationTokenOptions options) {
+    synchronized public ExpireDelegationTokenResult expireDelegationToken(byte[] hmac, ExpireDelegationTokenOptions options) {
         throw new UnsupportedOperationException("Not implemented yet");
     }
 
     @Override
-    public DescribeDelegationTokenResult describeDelegationToken(DescribeDelegationTokenOptions options) {
+    synchronized public DescribeDelegationTokenResult describeDelegationToken(DescribeDelegationTokenOptions options) {
         throw new UnsupportedOperationException("Not implemented yet");
     }
 
     @Override
-    public DescribeConsumerGroupsResult describeConsumerGroups(Collection<String> groupIds, DescribeConsumerGroupsOptions options) {
+    synchronized public DescribeConsumerGroupsResult describeConsumerGroups(Collection<String> groupIds, DescribeConsumerGroupsOptions options) {
         throw new UnsupportedOperationException("Not implemented yet");
     }
 
     @Override
-    public ListConsumerGroupsResult listConsumerGroups(ListConsumerGroupsOptions options) {
+    synchronized public ListConsumerGroupsResult listConsumerGroups(ListConsumerGroupsOptions options) {
         throw new UnsupportedOperationException("Not implemented yet");
     }
 
     @Override
-    public ListConsumerGroupOffsetsResult listConsumerGroupOffsets(String groupId, ListConsumerGroupOffsetsOptions options) {
+    synchronized public ListConsumerGroupOffsetsResult listConsumerGroupOffsets(String groupId, ListConsumerGroupOffsetsOptions options) {
         throw new UnsupportedOperationException("Not implemented yet");
     }
 
     @Override
-    public DeleteConsumerGroupsResult deleteConsumerGroups(Collection<String> groupIds, DeleteConsumerGroupsOptions options) {
+    synchronized public DeleteConsumerGroupsResult deleteConsumerGroups(Collection<String> groupIds, DeleteConsumerGroupsOptions options) {
         throw new UnsupportedOperationException("Not implemented yet");
     }
 
     @Override
-    public DeleteConsumerGroupOffsetsResult deleteConsumerGroupOffsets(String groupId, Set<TopicPartition> partitions, DeleteConsumerGroupOffsetsOptions options) {
+    synchronized public DeleteConsumerGroupOffsetsResult deleteConsumerGroupOffsets(String groupId, Set<TopicPartition> partitions, DeleteConsumerGroupOffsetsOptions options) {
         throw new UnsupportedOperationException("Not implemented yet");
     }
 
     @Deprecated
     @Override
-    public ElectPreferredLeadersResult electPreferredLeaders(Collection<TopicPartition> partitions, ElectPreferredLeadersOptions options) {
+    synchronized public ElectPreferredLeadersResult electPreferredLeaders(Collection<TopicPartition> partitions, ElectPreferredLeadersOptions options) {
         throw new UnsupportedOperationException("Not implemented yet");
     }
 
     @Override
-    public ElectLeadersResult electLeaders(
+    synchronized public ElectLeadersResult electLeaders(
             ElectionType electionType,
             Set<TopicPartition> partitions,
             ElectLeadersOptions options) {
@@ -371,142 +434,372 @@ public class MockAdminClient extends AdminClient {
     }
 
     @Override
-    public RemoveMembersFromConsumerGroupResult removeMembersFromConsumerGroup(String groupId, RemoveMembersFromConsumerGroupOptions options) {
+    synchronized public RemoveMembersFromConsumerGroupResult removeMembersFromConsumerGroup(String groupId, RemoveMembersFromConsumerGroupOptions options) {
         throw new UnsupportedOperationException("Not implemented yet");
     }
 
     @Override
-    public CreateAclsResult createAcls(Collection<AclBinding> acls, CreateAclsOptions options) {
+    synchronized public CreateAclsResult createAcls(Collection<AclBinding> acls, CreateAclsOptions options) {
         throw new UnsupportedOperationException("Not implemented yet");
     }
 
     @Override
-    public DescribeAclsResult describeAcls(AclBindingFilter filter, DescribeAclsOptions options) {
+    synchronized public DescribeAclsResult describeAcls(AclBindingFilter filter, DescribeAclsOptions options) {
         throw new UnsupportedOperationException("Not implemented yet");
     }
 
     @Override
-    public DeleteAclsResult deleteAcls(Collection<AclBindingFilter> filters, DeleteAclsOptions options) {
+    synchronized public DeleteAclsResult deleteAcls(Collection<AclBindingFilter> filters, DeleteAclsOptions options) {
         throw new UnsupportedOperationException("Not implemented yet");
     }
 
     @Override
-    public DescribeConfigsResult describeConfigs(Collection<ConfigResource> resources, DescribeConfigsOptions options) {
-        Map<ConfigResource, KafkaFuture<Config>> configescriptions = new HashMap<>();
-
+    synchronized public DescribeConfigsResult describeConfigs(Collection<ConfigResource> resources, DescribeConfigsOptions options) {
+        Map<ConfigResource, KafkaFuture<Config>> results = new HashMap<>();
         for (ConfigResource resource : resources) {
-            if (resource.type() == ConfigResource.Type.TOPIC) {
-                Map<String, String> configs = allTopics.get(resource.name()).configs;
-                List<ConfigEntry> configEntries = new ArrayList<>();
-                for (Map.Entry<String, String> entry : configs.entrySet()) {
-                    configEntries.add(new ConfigEntry(entry.getKey(), entry.getValue()));
-                }
-                KafkaFutureImpl<Config> future = new KafkaFutureImpl<>();
-                future.complete(new Config(configEntries));
-                configescriptions.put(resource, future);
-            } else {
-                throw new UnsupportedOperationException("Not implemented yet");
+            KafkaFutureImpl<Config> future = new KafkaFutureImpl<>();
+            results.put(resource, future);
+            try {
+                future.complete(getResourceDescription(resource));
+            } catch (Throwable e) {
+                future.completeExceptionally(e);
             }
         }
+        return new DescribeConfigsResult(results);
+    }
 
-        return new DescribeConfigsResult(configescriptions);
+    synchronized private Config getResourceDescription(ConfigResource resource) {
+        switch (resource.type()) {
+            case BROKER: {
+                Map<String, String> map =
+                    brokerConfigs.get(Integer.valueOf(resource.name()));
+                if (map == null) {
+                    throw new InvalidRequestException("Broker " + resource.name() +
+                        " not found.");
+                }
+                return toConfigObject(map);
+            }
+            case TOPIC: {
+                TopicMetadata topicMetadata = allTopics.get(resource.name());
+                if (topicMetadata == null) {
+                    throw new UnknownTopicOrPartitionException();
+                }
+                return toConfigObject(topicMetadata.configs);
+            }
+            default:
+                throw new UnsupportedOperationException("Not implemented yet");
+        }
+    }
+
+    private static Config toConfigObject(Map<String, String> map) {
+        List<ConfigEntry> configEntries = new ArrayList<>();
+        for (Map.Entry<String, String> entry : map.entrySet()) {
+            configEntries.add(new ConfigEntry(entry.getKey(), entry.getValue()));
+        }
+        return new Config(configEntries);
     }
 
     @Override
     @Deprecated
-    public AlterConfigsResult alterConfigs(Map<ConfigResource, Config> configs, AlterConfigsOptions options) {
+    synchronized public AlterConfigsResult alterConfigs(Map<ConfigResource, Config> configs, AlterConfigsOptions options) {
         throw new UnsupportedOperationException("Not implemented yet");
     }
 
     @Override
-    public AlterConfigsResult incrementalAlterConfigs(Map<ConfigResource, Collection<AlterConfigOp>> configs,
-                                                      AlterConfigsOptions options) {
+    synchronized public AlterConfigsResult incrementalAlterConfigs(
+            Map<ConfigResource, Collection<AlterConfigOp>> configs,
+            AlterConfigsOptions options) {
+        Map<ConfigResource, KafkaFuture<Void>> futures = new HashMap<>();
+        for (Map.Entry<ConfigResource, Collection<AlterConfigOp>> entry :
+                configs.entrySet()) {
+            ConfigResource resource = entry.getKey();
+            KafkaFutureImpl<Void> future = new KafkaFutureImpl<>();
+            futures.put(resource, future);
+            Throwable throwable =
+                handleIncrementalResourceAlteration(resource, entry.getValue());
+            if (throwable == null) {
+                future.complete(null);
+            } else {
+                future.completeExceptionally(throwable);
+            }
+        }
+        return new AlterConfigsResult(futures);
+    }
+
+    synchronized private Throwable handleIncrementalResourceAlteration(
+            ConfigResource resource, Collection<AlterConfigOp> ops) {
+        switch (resource.type()) {
+            case BROKER: {
+                int brokerId;
+                try {
+                    brokerId = Integer.valueOf(resource.name());
+                } catch (NumberFormatException e) {
+                    return e;
+                }
+                Map<String, String> map = brokerConfigs.get(brokerId);
+                if (map == null) {
+                    return new InvalidRequestException("no such broker as " + brokerId);
+                }
+                HashMap<String, String> newMap = new HashMap<>(map);
+                for (AlterConfigOp op : ops) {
+                    switch (op.opType()) {
+                        case SET:
+                            newMap.put(op.configEntry().name(), op.configEntry().value());
+                            break;
+                        case DELETE:
+                            newMap.remove(op.configEntry().name());
+                            break;
+                        default:
+                            return new InvalidRequestException(
+                                "Unsupported op type " + op.opType());
+                    }
+                }
+                brokerConfigs.set(brokerId, newMap);
+                return null;
+            }
+            case TOPIC: {
+                TopicMetadata topicMetadata = allTopics.get(resource.name());
+                if (topicMetadata == null) {
+                    return new UnknownTopicOrPartitionException("No such topic as " +
+                        resource.name());
+                }
+                HashMap<String, String> newMap = new HashMap<>(topicMetadata.configs);
+                for (AlterConfigOp op : ops) {
+                    switch (op.opType()) {
+                        case SET:
+                            newMap.put(op.configEntry().name(), op.configEntry().value());
+                            break;
+                        case DELETE:
+                            newMap.remove(op.configEntry().name());
+                            break;
+                        default:
+                            return new InvalidRequestException(
+                                "Unsupported op type " + op.opType());
+                    }
+                }
+                topicMetadata.configs = newMap;
+                return null;
+            }
+            default:
+                return new UnsupportedOperationException();
+        }
+    }
+
+    @Override
+    synchronized public AlterReplicaLogDirsResult alterReplicaLogDirs(
+            Map<TopicPartitionReplica, String> replicaAssignment,
+            AlterReplicaLogDirsOptions options) {
+        Map<TopicPartitionReplica, KafkaFuture<Void>> results = new HashMap<>();
+        for (Map.Entry<TopicPartitionReplica, String> entry : replicaAssignment.entrySet()) {
+            TopicPartitionReplica replica = entry.getKey();
+            String newLogDir = entry.getValue();
+            KafkaFutureImpl<Void> future = new KafkaFutureImpl<>();
+            results.put(replica, future);
+            List<String> dirs = brokerLogDirs.get(replica.brokerId());
+            if (dirs == null) {
+                future.completeExceptionally(
+                    new ReplicaNotAvailableException("Can't find " + replica));
+            } else if (!dirs.contains(newLogDir)) {
+                future.completeExceptionally(
+                    new KafkaStorageException("Log directory " + newLogDir + " is offline"));
+            } else {
+                TopicMetadata metadata = allTopics.get(replica.topic());
+                if (metadata == null || metadata.partitions.size() <= replica.partition()) {
+                    future.completeExceptionally(
+                        new ReplicaNotAvailableException("Can't find " + replica));
+                } else {
+                    String currentLogDir = metadata.partitionLogDirs.get(replica.partition());
+                    replicaMoves.put(replica,
+                        new ReplicaLogDirInfo(currentLogDir, 0, newLogDir, 0));
+                    future.complete(null);
+                }
+            }
+        }
+        return new AlterReplicaLogDirsResult(results);
+    }
+
+    @Override
+    synchronized public DescribeLogDirsResult describeLogDirs(Collection<Integer> brokers,
+                                                              DescribeLogDirsOptions options) {
         throw new UnsupportedOperationException("Not implemented yet");
     }
 
     @Override
-    public AlterReplicaLogDirsResult alterReplicaLogDirs(Map<TopicPartitionReplica, String> replicaAssignment, AlterReplicaLogDirsOptions options) {
-        throw new UnsupportedOperationException("Not implemented yet");
+    synchronized public DescribeReplicaLogDirsResult describeReplicaLogDirs(
+            Collection<TopicPartitionReplica> replicas, DescribeReplicaLogDirsOptions options) {
+        Map<TopicPartitionReplica, KafkaFuture<ReplicaLogDirInfo>> results = new HashMap<>();
+        for (TopicPartitionReplica replica : replicas) {
+            TopicMetadata topicMetadata = allTopics.get(replica.topic());
+            if (topicMetadata != null) {
+                KafkaFutureImpl<ReplicaLogDirInfo> future = new KafkaFutureImpl<>();
+                results.put(replica, future);
+                String currentLogDir = currentLogDir(replica);
+                if (currentLogDir == null) {
+                    future.complete(new ReplicaLogDirInfo(null,
+                        DescribeLogDirsResponse.INVALID_OFFSET_LAG,
+                        null,
+                        DescribeLogDirsResponse.INVALID_OFFSET_LAG));
+                } else {
+                    ReplicaLogDirInfo info = replicaMoves.get(replica);
+                    if (info == null) {
+                        future.complete(new ReplicaLogDirInfo(currentLogDir, 0, null, 0));
+                    } else {
+                        future.complete(info);
+                    }
+                }
+            }
+        }
+        return new DescribeReplicaLogDirsResult(results);
+    }
+
+    private synchronized String currentLogDir(TopicPartitionReplica replica) {
+        TopicMetadata topicMetadata = allTopics.get(replica.topic());
+        if (topicMetadata == null) {
+            return null;
+        }
+        if (topicMetadata.partitionLogDirs.size() <= replica.partition()) {
+            return null;
+        }
+        return topicMetadata.partitionLogDirs.get(replica.partition());
     }
 
     @Override
-    public DescribeLogDirsResult describeLogDirs(Collection<Integer> brokers, DescribeLogDirsOptions options) {
-        throw new UnsupportedOperationException("Not implemented yet");
+    synchronized public AlterPartitionReassignmentsResult alterPartitionReassignments(
+            Map<TopicPartition, Optional<NewPartitionReassignment>> newReassignments,
+            AlterPartitionReassignmentsOptions options) {
+        Map<TopicPartition, KafkaFuture<Void>> futures = new HashMap<>();
+        for (Map.Entry<TopicPartition, Optional<NewPartitionReassignment>> entry :
+                newReassignments.entrySet()) {
+            TopicPartition partition = entry.getKey();
+            Optional<NewPartitionReassignment> newReassignment = entry.getValue();
+            KafkaFutureImpl<Void> future = new KafkaFutureImpl<Void>();
+            futures.put(partition, future);
+            TopicMetadata topicMetadata = allTopics.get(partition.topic());
+            if (partition.partition() < 0 ||
+                    topicMetadata == null ||
+                    topicMetadata.partitions.size() <= partition.partition()) {
+                future.completeExceptionally(new UnknownTopicOrPartitionException());
+            } else if (newReassignment.isPresent()) {
+                reassignments.put(partition, newReassignment.get());
+                future.complete(null);
+            } else {
+                reassignments.remove(partition);
+                future.complete(null);
+            }
+        }
+        return new AlterPartitionReassignmentsResult(futures);
     }
 
     @Override
-    public DescribeReplicaLogDirsResult describeReplicaLogDirs(Collection<TopicPartitionReplica> replicas, DescribeReplicaLogDirsOptions options) {
-        throw new UnsupportedOperationException("Not implemented yet");
+    synchronized public ListPartitionReassignmentsResult listPartitionReassignments(
+            Optional<Set<TopicPartition>> partitions,
+            ListPartitionReassignmentsOptions options) {
+        Map<TopicPartition, PartitionReassignment> map = new HashMap<>();
+        for (TopicPartition partition : partitions.isPresent() ?
+                partitions.get() : reassignments.keySet()) {
+            PartitionReassignment reassignment = findPartitionReassignment(partition);
+            if (reassignment != null) {
+                map.put(partition, reassignment);
+            }
+        }
+        return new ListPartitionReassignmentsResult(KafkaFutureImpl.completedFuture(map));
+    }
+
+    synchronized private PartitionReassignment findPartitionReassignment(TopicPartition partition) {
+        NewPartitionReassignment reassignment = reassignments.get(partition);
+        if (reassignment == null) {
+            return null;
+        }
+        TopicMetadata metadata = allTopics.get(partition.topic());
+        if (metadata == null) {
+            throw new RuntimeException("Internal MockAdminClient logic error: found " +
+                "reassignment for " + partition + ", but no TopicMetadata");
+        }
+        TopicPartitionInfo info = metadata.partitions.get(partition.partition());
+        if (info == null) {
+            throw new RuntimeException("Internal MockAdminClient logic error: found " +
+                "reassignment for " + partition + ", but no TopicPartitionInfo");
+        }
+        List<Integer> replicas = new ArrayList<>();
+        List<Integer> removingReplicas = new ArrayList<>();
+        List<Integer> addingReplicas = new ArrayList<>(reassignment.targetReplicas());
+        for (Node node : info.replicas()) {
+            replicas.add(node.id());
+            if (!reassignment.targetReplicas().contains(node.id())) {
+                removingReplicas.add(node.id());
+            }
+            addingReplicas.remove(Integer.valueOf(node.id()));
+        }
+        return new PartitionReassignment(replicas, addingReplicas, removingReplicas);
     }
 
     @Override
-    public AlterPartitionReassignmentsResult alterPartitionReassignments(Map<TopicPartition, Optional<NewPartitionReassignment>> reassignments,
-                                                                         AlterPartitionReassignmentsOptions options) {
-        throw new UnsupportedOperationException("Not implemented yet");
-    }
-
-    @Override
-    public ListPartitionReassignmentsResult listPartitionReassignments(Optional<Set<TopicPartition>> partitions, ListPartitionReassignmentsOptions options) {
-        throw new UnsupportedOperationException("Not implemented yet");
-    }
-
-    @Override
-    public AlterConsumerGroupOffsetsResult alterConsumerGroupOffsets(String groupId, Map<TopicPartition, OffsetAndMetadata> offsets, AlterConsumerGroupOffsetsOptions options) {
+    synchronized public AlterConsumerGroupOffsetsResult alterConsumerGroupOffsets(String groupId, Map<TopicPartition, OffsetAndMetadata> offsets, AlterConsumerGroupOffsetsOptions options) {
         throw new UnsupportedOperationException("Not implement yet");
     }
 
     @Override
-    public ListOffsetsResult listOffsets(Map<TopicPartition, OffsetSpec> topicPartitionOffsets, ListOffsetsOptions options) {
+    synchronized public ListOffsetsResult listOffsets(Map<TopicPartition, OffsetSpec> topicPartitionOffsets, ListOffsetsOptions options) {
         throw new UnsupportedOperationException("Not implement yet");
     }
 
     @Override
     public DescribeClientQuotasResult describeClientQuotas(ClientQuotaFilter filter, DescribeClientQuotasOptions options) {
-        throw new UnsupportedOperationException("Not implemented yet");
+        throw new UnsupportedOperationException("Not implement yet");
     }
 
     @Override
     public AlterClientQuotasResult alterClientQuotas(Collection<ClientQuotaAlteration> entries, AlterClientQuotasOptions options) {
-        throw new UnsupportedOperationException("Not implemented yet");
+        throw new UnsupportedOperationException("Not implement yet");
     }
 
     @Override
-    public void close(Duration timeout) {}
-
+    synchronized public void close(Duration timeout) {}
 
     private final static class TopicMetadata {
         final boolean isInternalTopic;
         final List<TopicPartitionInfo> partitions;
-        final Map<String, String> configs;
+        final List<String> partitionLogDirs;
+        Map<String, String> configs;
         int fetchesRemainingUntilVisible;
 
         public boolean markedForDeletion;
 
         TopicMetadata(boolean isInternalTopic,
                       List<TopicPartitionInfo> partitions,
+                      List<String> partitionLogDirs,
                       Map<String, String> configs) {
             this.isInternalTopic = isInternalTopic;
             this.partitions = partitions;
+            this.partitionLogDirs = partitionLogDirs;
             this.configs = configs != null ? configs : Collections.emptyMap();
             this.markedForDeletion = false;
             this.fetchesRemainingUntilVisible = 0;
         }
     }
 
-    public void setMockMetrics(MetricName name, Metric metric) {
+    synchronized public void setMockMetrics(MetricName name, Metric metric) {
         mockMetrics.put(name, metric);
     }
 
     @Override
-    public Map<MetricName, ? extends Metric> metrics() {
+    synchronized public Map<MetricName, ? extends Metric> metrics() {
         return mockMetrics;
     }
 
-    public void setFetchesRemainingUntilVisible(String topicName, int fetchesRemainingUntilVisible) {
+    synchronized public void setFetchesRemainingUntilVisible(String topicName, int fetchesRemainingUntilVisible) {
         TopicMetadata metadata = allTopics.get(topicName);
         if (metadata == null) {
             throw new RuntimeException("No such topic as " + topicName);
         }
         metadata.fetchesRemainingUntilVisible = fetchesRemainingUntilVisible;
+    }
+
+    synchronized public List<Node> brokers() {
+        return new ArrayList<>(brokers);
+    }
+
+    synchronized public Node broker(int index) {
+        return brokers.get(index);
     }
 }

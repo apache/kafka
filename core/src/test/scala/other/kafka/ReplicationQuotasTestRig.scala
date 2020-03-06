@@ -20,16 +20,19 @@ package kafka
 import java.io.{File, PrintWriter}
 import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, StandardOpenOption}
-import javax.imageio.ImageIO
 
+import javax.imageio.ImageIO
 import kafka.admin.ReassignPartitionsCommand
-import kafka.admin.ReassignPartitionsCommand.Throttle
 import kafka.server.{KafkaConfig, KafkaServer, QuotaType}
 import kafka.utils.TestUtils._
 import kafka.utils.{Exit, Logging, TestUtils}
 import kafka.zk.{ReassignPartitionsZNode, ZooKeeperTestHarness}
+import org.apache.kafka.clients.admin.{Admin, AdminClientConfig}
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.network.ListenerName
+import org.apache.kafka.common.security.auth.SecurityProtocol
+import org.apache.kafka.common.utils.Utils
 import org.jfree.chart.plot.PlotOrientation
 import org.jfree.chart.{ChartFactory, ChartFrame, JFreeChart}
 import org.jfree.data.xy.{XYSeries, XYSeriesCollection}
@@ -100,14 +103,23 @@ object ReplicationQuotasTestRig {
     var servers: Seq[KafkaServer] = null
     val leaderRates = mutable.Map[Int, Array[Double]]()
     val followerRates = mutable.Map[Int, Array[Double]]()
+    var adminClient: Admin = null
 
     def startBrokers(brokerIds: Seq[Int]): Unit = {
       println("Starting Brokers")
       servers = brokerIds.map(i => createBrokerConfig(i, zkConnect))
         .map(c => createServer(KafkaConfig.fromProps(c)))
+
+      TestUtils.waitUntilBrokerMetadataIsPropagated(servers)
+      val brokerList = TestUtils.bootstrapServers(servers,
+        ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT))
+      adminClient = Admin.create(Map[String, Object](
+        AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG -> brokerList
+      ).asJava)
     }
 
     override def tearDown(): Unit = {
+      Utils.closeQuietly(adminClient, "adminClient")
       TestUtils.shutdownServers(servers)
       super.tearDown()
     }
@@ -135,12 +147,15 @@ object ReplicationQuotasTestRig {
         }
       }
 
-      println("Starting Reassignment")
-      val newAssignment = ReassignPartitionsCommand.generateAssignment(zkClient, brokers, json(topicName), true)._1
+      println("Generating Reassignment")
+      val (newAssignment, _) = ReassignPartitionsCommand.generateAssignment(adminClient,
+        json(topicName), brokers.mkString(","), true)
 
+      println("Starting Reassignment")
       val start = System.currentTimeMillis()
-      ReassignPartitionsCommand.executeAssignment(zkClient, None,
-        new String(ReassignPartitionsZNode.encode(newAssignment), StandardCharsets.UTF_8), Throttle(config.throttle))
+      ReassignPartitionsCommand.executeAssignment(adminClient, false,
+        new String(ReassignPartitionsZNode.encode(newAssignment), StandardCharsets.UTF_8),
+        config.throttle)
 
       //Await completion
       waitForReassignmentToComplete()
@@ -190,8 +205,8 @@ object ReplicationQuotasTestRig {
     def waitForReassignmentToComplete(): Unit = {
       waitUntilTrue(() => {
         printRateMetrics()
-        !zkClient.reassignPartitionsInProgress()
-      }, s"Znode ${ReassignPartitionsZNode.path} wasn't deleted", 60 * 60 * 1000, pause = 1000L)
+        adminClient.listPartitionReassignments().reassignments().get().isEmpty
+      }, s"Partition reassignments didn't complete.", 60 * 60 * 1000, pause = 1000L)
     }
 
     def renderChart(data: mutable.Map[Int, Array[Double]], name: String, journal: Journal, displayChartsOnScreen: Boolean): Unit = {
