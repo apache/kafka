@@ -598,20 +598,23 @@ class AdminManager(val config: KafkaConfig,
     }
 
     alterConfigOps.foreach { alterConfigOp =>
+      val configPropName = alterConfigOp.configEntry().name()
       alterConfigOp.opType() match {
         case OpType.SET => configProps.setProperty(alterConfigOp.configEntry().name(), alterConfigOp.configEntry().value())
         case OpType.DELETE => configProps.remove(alterConfigOp.configEntry().name())
         case OpType.APPEND => {
           if (!listType(alterConfigOp.configEntry().name(), configKeys))
             throw new InvalidRequestException(s"Config value append is not allowed for config key: ${alterConfigOp.configEntry().name()}")
-          val oldValueList = configProps.getProperty(alterConfigOp.configEntry().name(), "").split(",").toList.filter(_.trim.length > 0)
+          val oldValueList = configProps.getProperty(configPropName,
+            ConfigDef.convertToString(configKeys(configPropName).defaultValue, ConfigDef.Type.LIST)).split(",").toList
           val newValueList = oldValueList ::: alterConfigOp.configEntry().value().split(",").toList
           configProps.setProperty(alterConfigOp.configEntry().name(), newValueList.mkString(","))
         }
         case OpType.SUBTRACT => {
           if (!listType(alterConfigOp.configEntry().name(), configKeys))
             throw new InvalidRequestException(s"Config value subtract is not allowed for config key: ${alterConfigOp.configEntry().name()}")
-          val oldValueList = configProps.getProperty(alterConfigOp.configEntry().name(), "").split(",").toList.filter(_.trim.length > 0)
+          val oldValueList = configProps.getProperty(alterConfigOp.configEntry().name(),
+            ConfigDef.convertToString(configKeys(configPropName).defaultValue, ConfigDef.Type.LIST)).split(",").toList
           val newValueList = oldValueList.diff(alterConfigOp.configEntry().value().split(",").toList)
           configProps.setProperty(alterConfigOp.configEntry().name(), newValueList.mkString(","))
         }
