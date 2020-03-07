@@ -33,7 +33,6 @@ import org.apache.kafka.streams.errors.LockException;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.processor.Cancellable;
-import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.TaskId;
@@ -118,9 +117,13 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                       final ThreadCache cache,
                       final Time time,
                       final ProcessorStateManager stateMgr,
-                      final RecordCollector recordCollector) {
+                      final RecordCollector recordCollector,
+                      final InternalProcessorContext processorContext) {
         super(id, topology, stateDirectory, stateMgr, partitions);
         this.mainConsumer = mainConsumer;
+
+        this.processorContext = processorContext;
+        processorContext.transitionToActive(this, recordCollector, cache);
 
         final String threadIdPrefix = String.format("stream-thread [%s] ", Thread.currentThread().getName());
         logPrefix = threadIdPrefix + String.format("%s [%s] ", "task", id);
@@ -169,8 +172,27 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         consumedOffsets = new HashMap<>();
 
         recordQueueCreator = new RecordQueueCreator(logContext, config.defaultTimestampExtractor(), config.defaultDeserializationExceptionHandler());
-        // initialize the topology with its own context
-        processorContext = new ProcessorContextImpl(id, this, config, this.recordCollector, stateMgr, streamsMetrics, cache);
+
+        // create queues for each assigned partition and associate them
+        // to corresponding source nodes in the processor topology
+        final Map<TopicPartition, RecordQueue> partitionQueues = new HashMap<>();
+
+        final TimestampExtractor defaultTimestampExtractor = config.defaultTimestampExtractor();
+        final DeserializationExceptionHandler defaultDeserializationExceptionHandler = config.defaultDeserializationExceptionHandler();
+        for (final TopicPartition partition : partitions) {
+            final SourceNode<?, ?> source = topology.source(partition.topic());
+            final TimestampExtractor sourceTimestampExtractor = source.getTimestampExtractor();
+            final TimestampExtractor timestampExtractor = sourceTimestampExtractor != null ? sourceTimestampExtractor : defaultTimestampExtractor;
+            final RecordQueue queue = new RecordQueue(
+                partition,
+                source,
+                timestampExtractor,
+                defaultDeserializationExceptionHandler,
+                processorContext,
+                logContext
+            );
+            partitionQueues.put(partition, queue);
+        }
 
         recordInfo = new PartitionGroup.RecordInfo();
         partitionGroup = new PartitionGroup(createPartitionQueues(),
@@ -450,6 +472,33 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         }
     }
 
+    @Override
+    public void closeAndRecycleState() {
+        final Map<TopicPartition, Long> checkpoint = prepareClose(true);
+
+        if (checkpoint != null) {
+            stateMgr.checkpoint(checkpoint);
+        }
+        switch (state()) {
+            case CREATED:
+            case RUNNING:
+            case RESTORING:
+            case SUSPENDED:
+                stateMgr.recycle();
+                recordCollector.close();
+                break;
+            default:
+                throw new IllegalStateException("Illegal state " + state() + " while closing active task " + id);
+        }
+
+        partitionGroup.close();
+        closeTaskSensor.record();
+
+        transitionTo(State.CLOSED);
+
+        log.info("Closed clean and recycled state");
+    }
+
     /**
      * <pre>
      * the following order must be followed:
@@ -500,8 +549,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
      *  3. finally release the state manager lock
      * </pre>
      */
-    private void close(final boolean clean,
-                       final Map<TopicPartition, Long> checkpoint) {
+    private void close(final boolean clean, final Map<TopicPartition, Long> checkpoint) {
         if (clean && checkpoint != null) {
             executeAndMaybeSwallow(clean, () -> stateMgr.checkpoint(checkpoint), "state manager checkpoint", log);
         }
@@ -970,7 +1018,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         }
     }
 
-    public ProcessorContext context() {
+    public InternalProcessorContext processorContext() {
         return processorContext;
     }
 
@@ -1037,15 +1085,11 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         return numBuffered() > 0;
     }
 
-    // below are visible for testing only
     RecordCollector recordCollector() {
         return recordCollector;
     }
 
-    InternalProcessorContext processorContext() {
-        return processorContext;
-    }
-
+    // below are visible for testing only
     int numBuffered() {
         return partitionGroup.numBuffered();
     }

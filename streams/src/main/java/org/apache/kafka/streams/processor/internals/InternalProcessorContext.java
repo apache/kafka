@@ -91,6 +91,16 @@ public interface InternalProcessorContext extends ProcessorContext {
     TaskType taskType();
 
     /**
+     * Transition to active task and register a new task and cache to this processor context
+     */
+    void transitionToActive(final StreamTask streamTask, final RecordCollector recordCollector, final ThreadCache newCache);
+
+    /**
+     * Transition to standby task and register a dummy cache to this processor context
+     */
+    void transitionToStandby(final ThreadCache newCache);
+
+    /**
      * Get a correctly typed state store, given a handle on the original builder.
      */
     @SuppressWarnings("unchecked")

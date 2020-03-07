@@ -117,4 +117,14 @@ public class GlobalProcessorContextImpl extends AbstractProcessorContext {
                           final long timestamp) {
         throw new UnsupportedOperationException("this should not happen: logChange() not supported in global processor context.");
     }
+
+    @Override
+    public void transitionToActive(final StreamTask streamTask, final RecordCollector recordCollector, final ThreadCache newCache) {
+        throw new UnsupportedOperationException("this should not happen: transitionToActive() not supported in global processor context.");
+    }
+
+    @Override
+    public void transitionToStandby(final ThreadCache newCache) {
+        throw new UnsupportedOperationException("this should not happen: transitionToStandby() not supported in global processor context.");
+    }
 }

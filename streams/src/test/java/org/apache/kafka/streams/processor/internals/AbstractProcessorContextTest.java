@@ -241,5 +241,13 @@ public class AbstractProcessorContextTest {
                               final byte[] value,
                               final long timestamp) {
         }
+
+        @Override
+        public void transitionToActive(final StreamTask streamTask, final RecordCollector recordCollector, final ThreadCache newCache) {
+        }
+
+        @Override
+        public void transitionToStandby(final ThreadCache newCache) {
+        }
     }
 }

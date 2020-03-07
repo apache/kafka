@@ -19,7 +19,6 @@ package org.apache.kafka.streams.processor.internals;
 import java.util.HashMap;
 import java.util.Map;
 import org.apache.kafka.common.utils.Bytes;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.internals.ApiUtils;
@@ -42,48 +41,43 @@ import static org.apache.kafka.streams.processor.internals.AbstractReadOnlyDecor
 import static org.apache.kafka.streams.processor.internals.AbstractReadWriteDecorator.getReadWriteStore;
 
 public class ProcessorContextImpl extends AbstractProcessorContext implements RecordCollector.Supplier {
-    // The below are both null for standby tasks
-    private final StreamTask streamTask;
-    private final RecordCollector collector;
+    // the below are null for standby tasks
+    private StreamTask streamTask;
+    private RecordCollector collector;
 
     private final ToInternal toInternal = new ToInternal();
     private final static To SEND_TO_ALL = To.all();
 
     final Map<String, String> storeToChangelogTopic = new HashMap<>();
 
-    ProcessorContextImpl(final TaskId id,
-                         final StreamTask streamTask,
-                         final StreamsConfig config,
-                         final RecordCollector collector,
-                         final ProcessorStateManager stateMgr,
-                         final StreamsMetricsImpl metrics,
-                         final ThreadCache cache) {
+    public ProcessorContextImpl(final TaskId id,
+                                final StreamsConfig config,
+                                final ProcessorStateManager stateMgr,
+                                final StreamsMetricsImpl metrics,
+                                final ThreadCache cache) {
         super(id, config, metrics, stateMgr, cache);
-        this.streamTask = streamTask;
-        this.collector = collector;
+    }
 
-        if (streamTask == null && taskType() == TaskType.ACTIVE) {
-            throw new IllegalStateException("Tried to create context for active task but the streamtask was null");
+    @Override
+    public void transitionToActive(final StreamTask streamTask, final RecordCollector recordCollector, final ThreadCache newCache) {
+        this.cache = newCache;
+        this.streamTask = streamTask;
+        this.collector = recordCollector;
+        if (stateManager.taskType() != TaskType.ACTIVE) {
+            throw new IllegalStateException("Tried to transition processor context to active but the state manager's " +
+                                                "type was " + stateManager.taskType());
         }
     }
 
-    ProcessorContextImpl(final TaskId id,
-                         final StreamsConfig config,
-                         final ProcessorStateManager stateMgr,
-                         final StreamsMetricsImpl metrics) {
-        this(
-            id,
-            null,
-            config,
-            null,
-            stateMgr,
-            metrics,
-            new ThreadCache(
-                new LogContext(String.format("stream-thread [%s] ", Thread.currentThread().getName())),
-                0,
-                metrics
-            )
-        );
+    @Override
+    public void transitionToStandby(final ThreadCache newCache) {
+        this.cache = newCache;
+        this.streamTask = null;
+        this.collector = null;
+        if (stateManager.taskType() != TaskType.STANDBY) {
+            throw new IllegalStateException("Tried to transition processor context to standby but the state manager's " +
+                                                "type was " + stateManager.taskType());
+        }
     }
 
     public ProcessorStateManager stateManager() {
