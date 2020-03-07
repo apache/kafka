@@ -124,7 +124,7 @@
     </module>
     <module name="CyclomaticComplexity">
       <!-- default is 10-->
-      <property name="max" value="17"/>
+      <property name="max" value="18"/>
     </module>
     <module name="JavaNCSS">
       <!-- default is 50 -->
