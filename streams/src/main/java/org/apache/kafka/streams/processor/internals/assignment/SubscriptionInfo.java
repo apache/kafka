@@ -45,7 +45,7 @@ public class SubscriptionInfo {
     private static final Logger LOG = LoggerFactory.getLogger(SubscriptionInfo.class);
 
     static final int UNKNOWN = -1;
-    private static int MIN_VERSION_OFFSET_SUM_SUBSCRIPTION = 7;
+    private static final int MIN_VERSION_OFFSET_SUM_SUBSCRIPTION = 7;
 
     private final SubscriptionInfoData data;
     private Set<TaskId> prevTasksCache = null;
