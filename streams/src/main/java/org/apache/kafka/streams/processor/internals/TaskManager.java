@@ -390,7 +390,7 @@ public class TaskManager {
                     final TaskId id = TaskId.parse(dir.getName());
                     final Task task = tasks.get(id);
                     if (task != null) {
-                        if (task.isActive() && task.state() == RUNNING){
+                        if (task.isActive() && task.state() == RUNNING) {
                             taskOffsetSums.put(id, Task.LATEST_OFFSET);
                         } else {
                             taskOffsetSums.put(id, computeOffsetSum(task.changelogOffsets()));

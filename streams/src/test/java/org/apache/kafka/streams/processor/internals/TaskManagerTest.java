@@ -1591,7 +1591,7 @@ public class TaskManagerTest {
             return purgeableOffsets;
         }
 
-        public void setChangelogOffsets(Map<TopicPartition, Long> changelogOffsets) {
+        void setChangelogOffsets(final Map<TopicPartition, Long> changelogOffsets) {
             this.changelogOffsets = changelogOffsets;
         }
 
