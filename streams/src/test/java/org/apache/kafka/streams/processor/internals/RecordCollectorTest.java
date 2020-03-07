@@ -42,6 +42,8 @@ import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
+import org.apache.kafka.common.serialization.LongSerializer;
+import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Utils;
@@ -71,6 +73,7 @@ import static org.easymock.EasyMock.replay;
 import static org.easymock.EasyMock.verify;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.IsEqual.equalTo;
+import static org.hamcrest.core.IsInstanceOf.instanceOf;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertThrows;
@@ -340,6 +343,118 @@ public class RecordCollectorTest {
         collector.close();
 
         verify(streamsProducer);
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void shouldThrowInformativeStreamsExceptionOnKeyClassCastException() {
+        final StreamsException expected = assertThrows(
+            StreamsException.class,
+            () -> this.collector.send(
+                "topic",
+                "key",
+                "value",
+                new RecordHeaders(),
+                0,
+                0L,
+                (Serializer) new LongSerializer(), // need to add cast to trigger `ClassCastException`
+                new StringSerializer())
+        );
+
+        assertThat(expected.getCause(), instanceOf(ClassCastException.class));
+        assertThat(
+            expected.getMessage(),
+            equalTo(
+                "ClassCastException while producing data to topic topic. " +
+                    "A serializer (key: org.apache.kafka.common.serialization.LongSerializer / value: org.apache.kafka.common.serialization.StringSerializer) " +
+                    "is not compatible to the actual key or value type (key type: java.lang.String / value type: java.lang.String). " +
+                    "Change the default Serdes in StreamConfig or provide correct Serdes via method parameters " +
+                    "(for example if using the DSL, `#to(String topic, Produced<K, V> produced)` with `Produced.keySerde(WindowedSerdes.timeWindowedSerdeFrom(String.class))`).")
+        );
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void shouldThrowInformativeStreamsExceptionOnKeyAndNullValueClassCastException() {
+        final StreamsException expected = assertThrows(
+            StreamsException.class,
+            () -> this.collector.send(
+                "topic",
+                "key",
+                null,
+                new RecordHeaders(),
+                0,
+                0L,
+                (Serializer) new LongSerializer(), // need to add cast to trigger `ClassCastException`
+                new StringSerializer())
+        );
+
+        assertThat(expected.getCause(), instanceOf(ClassCastException.class));
+        assertThat(
+            expected.getMessage(),
+            equalTo(
+                "ClassCastException while producing data to topic topic. " +
+                    "A serializer (key: org.apache.kafka.common.serialization.LongSerializer / value: org.apache.kafka.common.serialization.StringSerializer) " +
+                    "is not compatible to the actual key or value type (key type: java.lang.String / value type: unknown because value is null). " +
+                    "Change the default Serdes in StreamConfig or provide correct Serdes via method parameters " +
+                    "(for example if using the DSL, `#to(String topic, Produced<K, V> produced)` with `Produced.keySerde(WindowedSerdes.timeWindowedSerdeFrom(String.class))`).")
+        );
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void shouldThrowInformativeStreamsExceptionOnValueClassCastException() {
+        final StreamsException expected = assertThrows(
+            StreamsException.class,
+            () -> this.collector.send(
+                "topic",
+                "key",
+                "value",
+                new RecordHeaders(),
+                0,
+                0L,
+                new StringSerializer(),
+                (Serializer) new LongSerializer()) // need to add cast to trigger `ClassCastException`
+        );
+
+        assertThat(expected.getCause(), instanceOf(ClassCastException.class));
+        assertThat(
+            expected.getMessage(),
+            equalTo(
+                "ClassCastException while producing data to topic topic. " +
+                    "A serializer (key: org.apache.kafka.common.serialization.StringSerializer / value: org.apache.kafka.common.serialization.LongSerializer) " +
+                    "is not compatible to the actual key or value type (key type: java.lang.String / value type: java.lang.String). " +
+                    "Change the default Serdes in StreamConfig or provide correct Serdes via method parameters " +
+                    "(for example if using the DSL, `#to(String topic, Produced<K, V> produced)` with `Produced.keySerde(WindowedSerdes.timeWindowedSerdeFrom(String.class))`).")
+        );
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void shouldThrowInformativeStreamsExceptionOnValueAndNullKeyClassCastException() {
+        final StreamsException expected = assertThrows(
+            StreamsException.class,
+            () -> this.collector.send(
+                "topic",
+                null,
+                "value",
+                new RecordHeaders(),
+                0,
+                0L,
+                new StringSerializer(),
+                (Serializer) new LongSerializer()) // need to add cast to trigger `ClassCastException`
+        );
+
+        assertThat(expected.getCause(), instanceOf(ClassCastException.class));
+        assertThat(
+            expected.getMessage(),
+            equalTo(
+                "ClassCastException while producing data to topic topic. " +
+                    "A serializer (key: org.apache.kafka.common.serialization.StringSerializer / value: org.apache.kafka.common.serialization.LongSerializer) " +
+                    "is not compatible to the actual key or value type (key type: unknown because key is null / value type: java.lang.String). " +
+                    "Change the default Serdes in StreamConfig or provide correct Serdes via method parameters " +
+                    "(for example if using the DSL, `#to(String topic, Produced<K, V> produced)` with `Produced.keySerde(WindowedSerdes.timeWindowedSerdeFrom(String.class))`).")
+        );
     }
 
     @Test
