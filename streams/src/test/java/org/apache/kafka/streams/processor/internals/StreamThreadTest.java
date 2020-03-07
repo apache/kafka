@@ -23,6 +23,7 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.InvalidOffsetException;
 import org.apache.kafka.clients.consumer.MockConsumer;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
+import org.apache.kafka.clients.consumer.internals.MockRebalanceListener;
 import org.apache.kafka.clients.producer.MockProducer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.common.Cluster;
@@ -805,6 +806,66 @@ public class StreamThreadTest {
             });
         thread.run();
         EasyMock.verify(taskManager);
+    }
+
+    @Test
+    public void shouldNotReturnDataAfterTaskMigrated() {
+        final TaskManager taskManager = EasyMock.createNiceMock(TaskManager.class);
+
+        internalTopologyBuilder = EasyMock.createNiceMock(InternalTopologyBuilder.class);
+
+        EasyMock.expect(internalTopologyBuilder.sourceTopicCollection()).andReturn(Collections.singletonList(topic1)).times(2);
+
+        final MockConsumer<byte[], byte[]> consumer = new MockConsumer<>(OffsetResetStrategy.LATEST);
+
+        consumer.subscribe(Collections.singletonList(topic1), new MockRebalanceListener());
+        consumer.rebalance(Collections.singletonList(t1p1));
+        consumer.updateEndOffsets(Collections.singletonMap(t1p1, 10L));
+        consumer.seekToEnd(Collections.singletonList(t1p1));
+
+        final ChangelogReader changelogReader = new MockChangelogReader() {
+
+            @Override
+            public void restore() {
+                consumer.addRecord(new ConsumerRecord<>(topic1, 1, 11, new byte[0], new byte[0]));
+                consumer.addRecord(new ConsumerRecord<>(topic1, 1, 12, new byte[1], new byte[0]));
+
+                throw new TaskMigratedException(
+                    "Changelog restore found task migrated", new RuntimeException("restore task migrated"));
+            }
+        };
+
+        taskManager.handleLostAll();
+
+        EasyMock.replay(taskManager, internalTopologyBuilder);
+
+        final StreamsMetricsImpl streamsMetrics =
+            new StreamsMetricsImpl(metrics, CLIENT_ID, StreamsConfig.METRICS_LATEST);
+
+        final StreamThread thread = new StreamThread(
+            mockTime,
+            config,
+            null,
+            consumer,
+            consumer,
+            changelogReader,
+            null,
+            taskManager,
+            streamsMetrics,
+            internalTopologyBuilder,
+            CLIENT_ID,
+            new LogContext(""),
+            new AtomicInteger()
+        ).updateThreadMetadata(getSharedAdminClientId(CLIENT_ID));
+
+        final IllegalStateException thrown = assertThrows(
+            IllegalStateException.class, thread::run);
+
+        EasyMock.verify(taskManager);
+
+        // The Mock consumer shall throw as the assignment has been wiped out, but records are assigned.
+        assertEquals("No current assignment for partition topic1-1", thrown.getMessage());
+        assertFalse(consumer.shouldRebalance());
     }
 
     @Test
