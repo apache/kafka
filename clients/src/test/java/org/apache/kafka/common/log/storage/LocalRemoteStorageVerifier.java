@@ -93,7 +93,7 @@ public final class LocalRemoteStorageVerifier {
      */
     public void verifyFetchedLogSegment(final RemoteLogSegmentId id, final long startPosition, final byte[] expected) {
         try {
-            final InputStream in = remoteStorage.fetchLogSegmentData(newMetadata(id), startPosition, empty());
+            final InputStream in = remoteStorage.fetchLogSegmentData(newMetadata(id), startPosition, null);
             assertArrayEquals(expected, readFully(in));
 
         } catch (RemoteStorageException | IOException e) {

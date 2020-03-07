@@ -135,11 +135,12 @@ public final class LocalRemoteStorageManager implements RemoteStorageManager  {
     @Override
     public InputStream fetchLogSegmentData(final RemoteLogSegmentMetadata metadata,
                                            final Long startPosition,
-                                           final Optional<Long> endPosition) throws RemoteStorageException {
+                                           final Long endPosition) throws RemoteStorageException {
         checkArgument(startPosition >= 0, "Start position must be positive", startPosition);
-        endPosition.ifPresent(pos ->
-                checkArgument(pos >= startPosition,
-                        "End position cannot be less than startPosition", startPosition, pos));
+        if (endPosition != null) {
+            checkArgument(endPosition >= startPosition,
+                    "End position cannot be less than startPosition", startPosition, endPosition);
+        }
 
         return wrap(() -> {
             final RemoteLogSegmentFiles remote = new RemoteLogSegmentFiles(metadata.remoteLogSegmentId(), true);
