@@ -87,7 +87,6 @@ import static org.easymock.EasyMock.anyInt;
 import static org.easymock.EasyMock.anyLong;
 import static org.easymock.EasyMock.anyObject;
 import static org.easymock.EasyMock.anyString;
-import static org.easymock.EasyMock.capture;
 import static org.hamcrest.CoreMatchers.hasItem;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
@@ -168,8 +167,8 @@ public class KafkaStreamsTest {
         // setup metrics
         PowerMock.expectNew(Metrics.class,
             anyObject(MetricConfig.class),
-            capture(metricsReportersCapture),
-            anyObject(Time.class)
+            EasyMock.capture(metricsReportersCapture),
+            EasyMock.anyObject(Time.class)
         ).andAnswer(() -> {
             for (final MetricsReporter reporter : metricsReportersCapture.getValue()) {
                 reporter.init(Collections.emptyList());
@@ -233,7 +232,7 @@ public class KafkaStreamsTest {
             anyObject(StateRestoreListener.class)
         ).andReturn(globalStreamThread).anyTimes();
         EasyMock.expect(globalStreamThread.state()).andAnswer(globalThreadState::get).anyTimes();
-        globalStreamThread.setStateListener(capture(threadStatelistenerCapture));
+        globalStreamThread.setStateListener(EasyMock.capture(threadStatelistenerCapture));
         EasyMock.expectLastCall().anyTimes();
 
         globalStreamThread.start();
@@ -279,7 +278,7 @@ public class KafkaStreamsTest {
         final AtomicReference<StreamThread.State> state = new AtomicReference<>(StreamThread.State.CREATED);
         EasyMock.expect(thread.state()).andAnswer(state::get).anyTimes();
 
-        thread.setStateListener(capture(threadStatelistenerCapture));
+        thread.setStateListener(EasyMock.capture(threadStatelistenerCapture));
         EasyMock.expectLastCall().anyTimes();
 
         thread.start();

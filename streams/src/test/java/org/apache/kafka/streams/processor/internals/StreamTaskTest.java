@@ -83,6 +83,8 @@ import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.streams.processor.internals.StreamTask.encodeTimestamp;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.THREAD_ID_TAG;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.THREAD_ID_TAG_0100_TO_24;
+import static org.easymock.EasyMock.createStrictControl;
+import static org.easymock.EasyMock.verify;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -144,6 +146,7 @@ public class StreamTaskTest {
 
     @Mock(type = MockType.NICE)
     private ProcessorStateManager stateManager;
+
     @Mock(type = MockType.NICE)
     private RecordCollector recordCollector;
 
@@ -154,8 +157,8 @@ public class StreamTaskTest {
         }
     };
 
-    private static ProcessorTopology withRepartitionTopics(final List<ProcessorNode<?, ?>> processorNodes,
-                                                           final Map<String, SourceNode<?, ?>> sourcesByTopic,
+    private static ProcessorTopology withRepartitionTopics(final List<ProcessorNode> processorNodes,
+                                                           final Map<String, SourceNode> sourcesByTopic,
                                                            final Set<String> repartitionTopics) {
         return new ProcessorTopology(processorNodes,
                                      sourcesByTopic,
@@ -166,8 +169,8 @@ public class StreamTaskTest {
                                      repartitionTopics);
     }
 
-    private static ProcessorTopology withSources(final List<ProcessorNode<?, ?>> processorNodes,
-                                                 final Map<String, SourceNode<?, ?>> sourcesByTopic) {
+    private static ProcessorTopology withSources(final List<ProcessorNode> processorNodes,
+                                                 final Map<String, SourceNode> sourcesByTopic) {
         return new ProcessorTopology(processorNodes,
                                      sourcesByTopic,
                                      Collections.emptyMap(),
@@ -237,12 +240,12 @@ public class StreamTaskTest {
         task.initializeIfNeeded();
 
         // should fail if lock is called
-        EasyMock.verify(stateDirectory);
+        verify(stateDirectory);
     }
 
     @Test
     public void shouldAttemptToDeleteStateDirectoryWhenCloseDirtyAndEosEnabled() throws IOException {
-        final IMocksControl ctrl = EasyMock.createStrictControl();
+        final IMocksControl ctrl = createStrictControl();
         final ProcessorStateManager stateManager = ctrl.createMock(ProcessorStateManager.class);
         stateDirectory = ctrl.createMock(StateDirectory.class);
 
@@ -319,7 +322,7 @@ public class StreamTaskTest {
         assertTrue(source1.initialized);
         assertTrue(source2.initialized);
 
-        EasyMock.verify(stateDirectory);
+        verify(stateDirectory);
     }
 
     @Test
@@ -744,7 +747,7 @@ public class StreamTaskTest {
         task.process(0L);
         task.commit();
 
-        EasyMock.verify(recordCollector);
+        verify(recordCollector);
     }
 
     @Test
@@ -765,7 +768,7 @@ public class StreamTaskTest {
         task.process(0L);
         task.commit();
 
-        EasyMock.verify(recordCollector);
+        verify(recordCollector);
     }
 
     @Test
@@ -1059,7 +1062,7 @@ public class StreamTaskTest {
         assertTrue(source1.closed);
         assertTrue(source2.closed);
 
-        EasyMock.verify(stateManager);
+        verify(stateManager);
     }
 
     @Test
@@ -1135,7 +1138,7 @@ public class StreamTaskTest {
         task.completeRestoration();
         task.commit();
 
-        EasyMock.verify(recordCollector);
+        verify(recordCollector);
     }
 
     @Test
@@ -1222,7 +1225,7 @@ public class StreamTaskTest {
 
         task.closeDirty();
 
-        EasyMock.verify(stateManager);
+        verify(stateManager);
     }
 
     @Test
@@ -1363,7 +1366,7 @@ public class StreamTaskTest {
         final double expectedCloseTaskMetric = 1.0;
         verifyCloseTaskMetric(expectedCloseTaskMetric, streamsMetrics, metricName);
 
-        EasyMock.verify(stateManager);
+        verify(stateManager);
     }
 
     @Test
@@ -1384,7 +1387,7 @@ public class StreamTaskTest {
 
         assertEquals(Task.State.SUSPENDED, task.state());
 
-        EasyMock.verify(stateManager);
+        verify(stateManager);
     }
 
     @Test
@@ -1405,7 +1408,7 @@ public class StreamTaskTest {
 
         assertEquals(Task.State.CLOSED, task.state());
 
-        EasyMock.verify(stateManager);
+        verify(stateManager);
     }
 
     @Test
@@ -1435,7 +1438,7 @@ public class StreamTaskTest {
         final double expectedCloseTaskMetric = 1.0;
         verifyCloseTaskMetric(expectedCloseTaskMetric, streamsMetrics, metricName);
 
-        EasyMock.verify(stateManager);
+        verify(stateManager);
     }
 
     @Test
@@ -1464,7 +1467,7 @@ public class StreamTaskTest {
         final double expectedCloseTaskMetric = 0.0;
         verifyCloseTaskMetric(expectedCloseTaskMetric, streamsMetrics, metricName);
 
-        EasyMock.verify(stateManager);
+        verify(stateManager);
         EasyMock.reset(stateManager);
         EasyMock.expect(stateManager.changelogPartitions()).andReturn(Collections.singleton(changelogPartition)).anyTimes();
         EasyMock.replay(stateManager);
@@ -1497,7 +1500,7 @@ public class StreamTaskTest {
         final double expectedCloseTaskMetric = 0.0;
         verifyCloseTaskMetric(expectedCloseTaskMetric, streamsMetrics, metricName);
 
-        EasyMock.verify(stateManager);
+        verify(stateManager);
         EasyMock.reset(stateManager);
         EasyMock.expect(stateManager.changelogPartitions()).andReturn(Collections.emptySet()).anyTimes();
         EasyMock.replay(stateManager);
@@ -1531,7 +1534,7 @@ public class StreamTaskTest {
         final double expectedCloseTaskMetric = 0.0;
         verifyCloseTaskMetric(expectedCloseTaskMetric, streamsMetrics, metricName);
 
-        EasyMock.verify(stateManager);
+        verify(stateManager);
         EasyMock.reset(stateManager);
         EasyMock.expect(stateManager.changelogPartitions()).andReturn(Collections.emptySet()).anyTimes();
         EasyMock.replay(stateManager);
@@ -1549,9 +1552,6 @@ public class StreamTaskTest {
         // close call are not idempotent since we are already in closed
         assertThrows(IllegalStateException.class, task::closeClean);
         assertThrows(IllegalStateException.class, task::closeDirty);
-
-        EasyMock.reset(stateManager);
-        EasyMock.replay(stateManager);
     }
 
     private StreamTask createOptimizedStatefulTask(final StreamsConfig config, final Consumer<byte[], byte[]> consumer) {

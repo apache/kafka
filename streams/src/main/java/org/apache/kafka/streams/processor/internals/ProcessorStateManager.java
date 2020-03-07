@@ -480,7 +480,6 @@ public class ProcessorStateManager implements StateManager {
                 storeMetadata.stateStore.persistent() &&
                 storeMetadata.offset != null &&
                 !storeMetadata.corrupted) {
-
                 checkpointingOffsets.put(storeMetadata.changelogPartition, storeMetadata.offset);
             }
         }

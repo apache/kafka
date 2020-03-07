@@ -531,8 +531,9 @@ public class StreamsBuilderTest {
     }
 
     @Test
+    @SuppressWarnings("unchecked")
     public void shouldUseSpecifiedNameForTransformValues() {
-        builder.stream(STREAM_TOPIC).transformValues(() -> (ValueTransformer<Object, Object>) null, Named.as(STREAM_OPERATION_NAME));
+        builder.stream(STREAM_TOPIC).transformValues(() -> (ValueTransformer) null, Named.as(STREAM_OPERATION_NAME));
         builder.build();
         final ProcessorTopology topology = builder.internalTopologyBuilder.rewriteTopology(new StreamsConfig(props)).buildTopology();
         assertNamesForOperation(topology, "KSTREAM-SOURCE-0000000000", STREAM_OPERATION_NAME);
@@ -548,7 +549,7 @@ public class StreamsBuilderTest {
     }
 
     @Test
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings({"unchecked", "rawtypes"})
     public void shouldUseSpecifiedNameForBranchOperation() {
         builder.stream(STREAM_TOPIC)
                 .branch(Named.as("branch-processor"), (k, v) -> true, (k, v) -> false);
@@ -782,6 +783,7 @@ public class StreamsBuilderTest {
     }
 
     @Test
+    @SuppressWarnings("unchecked")
     public void shouldUseSpecifiedNameForToStream() {
         builder.table(STREAM_TOPIC)
                 .toStream(Named.as("to-stream"));
@@ -795,6 +797,7 @@ public class StreamsBuilderTest {
     }
 
     @Test
+    @SuppressWarnings("unchecked")
     public void shouldUseSpecifiedNameForToStreamWithMapper() {
         builder.table(STREAM_TOPIC)
                 .toStream(KeyValue::pair, Named.as("to-stream"));
@@ -829,7 +832,7 @@ public class StreamsBuilderTest {
     }
 
     private static void assertNamesForOperation(final ProcessorTopology topology, final String... expected) {
-        final List<ProcessorNode<?, ?>> processors = topology.processors();
+        final List<ProcessorNode> processors = topology.processors();
         assertEquals("Invalid number of expected processors", expected.length, processors.size());
         for (int i = 0; i < expected.length; i++) {
             assertEquals(expected[i], processors.get(i).name());
