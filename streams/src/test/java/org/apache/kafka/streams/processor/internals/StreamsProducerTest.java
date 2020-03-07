@@ -56,6 +56,7 @@ import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.sameInstance;
 import static org.hamcrest.core.IsEqual.equalTo;
 import static org.junit.Assert.assertThrows;
+import static org.junit.Assert.assertTrue;
 
 public class StreamsProducerTest {
 
@@ -180,16 +181,8 @@ public class StreamsProducerTest {
 
     @Test
     public void shouldCloseKafkaProducerOnClose() {
-        final Producer<byte[], byte[]> mockedProducer = mock(Producer.class);
-
-        mockedProducer.close();
-        expectLastCall();
-        replay(mockedProducer);
-
-        final StreamsProducer streamsProducer = new StreamsProducer(mockedProducer, null, new LogContext());
-        streamsProducer.close();
-
-        verify(mockedProducer);
+        nonEosStreamsProducer.close();
+        assertTrue(mockProducer.closed());
     }
 
     // error handling tests
