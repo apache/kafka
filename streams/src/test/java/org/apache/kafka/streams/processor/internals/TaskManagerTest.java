@@ -39,6 +39,7 @@ import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
+import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
 import org.easymock.EasyMock;
 import org.easymock.EasyMockRunner;
 import org.easymock.Mock;
@@ -186,9 +187,15 @@ public class TaskManagerTest {
             mkEntry(t1p0, 5L),
             mkEntry(t1p1, 10L)
         );
+        final Map<TopicPartition, Long> task10ChangelogOffsets = mkMap(
+            mkEntry(t1p0, 20L),
+            mkEntry(t1p1, 30L)
+        );
+
         final Long task00OffsetSum = Task.LATEST_OFFSET;
         final Long task01OffsetSum = 3L;
         final Long task02OffsetSum = 15L;
+        final Long task10OffsetSum = 50L;
 
         final Map<TaskId, Set<TopicPartition>> activeTaskAssignment = new HashMap<>(taskId00Assignment);
         final StateMachineTask task00 = new StateMachineTask(taskId00, taskId00Partitions, true);
@@ -204,13 +211,17 @@ public class TaskManagerTest {
         expect(activeTaskCreator.createTasks(anyObject(), eq(taskId01Assignment)))
             .andReturn(singletonList(task01)).once();
 
-        assertThat((new File(taskFolders[3], StateManagerUtil.CHECKPOINT_FILE_NAME)).createNewFile(), is(true));
-        assertThat((new File(taskFolders[5], StateManagerUtil.CHECKPOINT_FILE_NAME)).createNewFile(), is(true));
-
         expect(stateDirectory.listTaskDirectories()).andReturn(taskFolders).once();
 
         expect(stateDirectory.lock(taskId10)).andReturn(true).once();
         expect(stateDirectory.lock(taskId12)).andReturn(false).once();
+
+
+        final File task10CheckpointFile = new File(taskFolders[3], StateManagerUtil.CHECKPOINT_FILE_NAME);
+        final File task12CheckpointFile = new File(taskFolders[5], StateManagerUtil.CHECKPOINT_FILE_NAME);
+        assertThat(task10CheckpointFile.createNewFile(), is(true));
+        assertThat(task12CheckpointFile.createNewFile(), is(true));
+        new OffsetCheckpoint(task10CheckpointFile).write(task10ChangelogOffsets);
 
         replay(activeTaskCreator, standbyTaskCreator, consumer, changeLogReader, stateDirectory);
 
@@ -231,6 +242,7 @@ public class TaskManagerTest {
         assertEquals(task00OffsetSum, taskOffsetSums.get(taskId00));
         assertEquals(task01OffsetSum, taskOffsetSums.get(taskId01));
         assertEquals(task02OffsetSum, taskOffsetSums.get(taskId02));
+        assertEquals(task10OffsetSum, taskOffsetSums.get(taskId10));
     }
 
     @Test
