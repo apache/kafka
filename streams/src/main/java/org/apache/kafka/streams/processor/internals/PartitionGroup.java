@@ -220,15 +220,14 @@ public class PartitionGroup {
 
     void close() {
         clear();
-
-        streamTime = RecordQueue.UNKNOWN;
     }
 
     void clear() {
-        nonEmptyQueuesByTime.clear();
-        totalBuffered = 0;
         for (final RecordQueue queue : partitionQueues.values()) {
             queue.clear();
         }
+        nonEmptyQueuesByTime.clear();
+        totalBuffered = 0;
+        streamTime = RecordQueue.UNKNOWN;
     }
 }

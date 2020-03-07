@@ -392,7 +392,7 @@ public class PartitionGroupTest {
         group.clear();
 
         assertThat(group.numBuffered(), equalTo(0));
-        assertThat(group.streamTime(), equalTo(3L));
+        assertThat(group.streamTime(), equalTo(RecordQueue.UNKNOWN));
         assertThat(group.nextRecord(new PartitionGroup.RecordInfo()), equalTo(null));
         assertThat(group.partitionTimestamp(partition1), equalTo(RecordQueue.UNKNOWN));
 
