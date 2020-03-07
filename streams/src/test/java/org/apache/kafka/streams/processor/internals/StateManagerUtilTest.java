@@ -189,8 +189,6 @@ public class StateManagerUtilTest {
     public void testCloseStateManagerClean() throws IOException {
         expect(stateManager.taskId()).andReturn(taskId);
 
-        expect(stateManager.changelogPartitions()).andReturn(Collections.emptySet());
-
         stateManager.close();
         expectLastCall();
 
@@ -209,7 +207,6 @@ public class StateManagerUtilTest {
     @Test
     public void testCloseStateManagerThrowsExceptionWhenClean() throws IOException {
         expect(stateManager.taskId()).andReturn(taskId);
-        expect(stateManager.changelogPartitions()).andReturn(Collections.emptySet());
         stateManager.close();
         expectLastCall();
 
@@ -232,7 +229,6 @@ public class StateManagerUtilTest {
     @Test
     public void testCloseStateManagerOnlyThrowsFirstExceptionWhenClean() throws IOException {
         expect(stateManager.taskId()).andReturn(taskId);
-        expect(stateManager.changelogPartitions()).andReturn(Collections.emptySet());
         stateManager.close();
         expectLastCall().andThrow(new ProcessorStateException("state manager failed to close"));
 
@@ -258,7 +254,6 @@ public class StateManagerUtilTest {
         final LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
 
         expect(stateManager.taskId()).andReturn(taskId);
-        expect(stateManager.changelogPartitions()).andReturn(Collections.emptySet());
         stateManager.close();
         expectLastCall().andThrow(new ProcessorStateException("state manager failed to close"));
 
@@ -281,7 +276,6 @@ public class StateManagerUtilTest {
     @Test
     public void testCloseStateManagerWithStateStoreWipeOut() throws IOException {
         expect(stateManager.taskId()).andReturn(taskId);
-        expect(stateManager.changelogPartitions()).andReturn(Collections.emptySet());
         stateManager.close();
         expectLastCall();
 
@@ -306,7 +300,6 @@ public class StateManagerUtilTest {
         mockStatic(Utils.class);
 
         expect(stateManager.taskId()).andReturn(taskId);
-        expect(stateManager.changelogPartitions()).andReturn(Collections.emptySet());
         stateManager.close();
         expectLastCall();
 
