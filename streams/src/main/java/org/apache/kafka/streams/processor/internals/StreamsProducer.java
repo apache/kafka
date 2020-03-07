@@ -71,7 +71,7 @@ public class StreamsProducer {
     }
 
     private String formatException(final String message) {
-        return message + " [" + logPrefix + ", " + (eosEnabled ? "eos" : "alo") + "]";
+        return message + " [" + logPrefix + "]";
     }
 
     /**
@@ -89,7 +89,7 @@ public class StreamsProducer {
                 transactionInitialized = true;
             } catch (final TimeoutException exception) {
                 log.warn(
-                    "Timeout exception caught when initializing transactions. " +
+                    "Timeout exception caught trying to initialize transactions. " +
                         "The broker is either slow or in bad state (like not having enough replicas) in " +
                         "responding to the request, or the connection to broker was interrupted sending " +
                         "the request or receiving the response. " +
@@ -101,7 +101,7 @@ public class StreamsProducer {
                 throw exception;
             } catch (final KafkaException exception) {
                 throw new StreamsException(
-                    formatException("Error encountered while initializing transactions"),
+                    formatException("Error encountered trying to initialize transactions"),
                     exception
                 );
             }
@@ -115,12 +115,12 @@ public class StreamsProducer {
                 transactionInFlight = true;
             } catch (final ProducerFencedException error) {
                 throw new TaskMigratedException(
-                    formatException("Producer get fenced trying to begin a new transaction"),
+                    formatException("Producer got fenced trying to begin a new transaction"),
                     error
                 );
             } catch (final KafkaException error) {
                 throw new StreamsException(
-                    formatException("Producer encounter unexpected error trying to begin a new transaction"),
+                    formatException("Error encountered trying to begin a new transaction"),
                     error
                 );
             }
@@ -138,12 +138,12 @@ public class StreamsProducer {
                 // in this case we should throw its wrapped inner cause so that it can be
                 // captured and re-wrapped as TaskMigrationException
                 throw new TaskMigratedException(
-                    formatException("Producer cannot send records anymore since it got fenced"),
+                    formatException("Producer got fenced trying to send a record"),
                     uncaughtException.getCause()
                 );
             } else {
                 throw new StreamsException(
-                    formatException(String.format("Error encountered sending record to topic %s", record.topic())),
+                    formatException(String.format("Error encountered trying to send record to topic %s", record.topic())),
                     uncaughtException
                 );
             }
@@ -170,15 +170,15 @@ public class StreamsProducer {
             transactionInFlight = false;
         } catch (final ProducerFencedException error) {
             throw new TaskMigratedException(
-                formatException("Producer get fenced trying to commit a transaction"),
+                formatException("Producer got fenced trying to commit a transaction"),
                 error
             );
         } catch (final TimeoutException error) {
             // TODO KIP-447: we can consider treating it as non-fatal and retry on the thread level
-            throw new StreamsException(formatException("Timed out while committing a transaction"), error);
+            throw new StreamsException(formatException("Timed out trying to commit a transaction"), error);
         } catch (final KafkaException error) {
             throw new StreamsException(
-                formatException("Producer encounter unexpected error trying to commit a transaction"),
+                formatException("Error encountered trying to commit a transaction"),
                 error
             );
         }
@@ -205,7 +205,7 @@ public class StreamsProducer {
                 // can be ignored: transaction got already aborted by brokers/transactional-coordinator if this happens
             } catch (final KafkaException error) {
                 throw new StreamsException(
-                    formatException("Producer encounter unexpected error trying to abort a transaction"),
+                    formatException("Error encounter trying to abort a transaction"),
                     error
                 );
             }
@@ -213,24 +213,24 @@ public class StreamsProducer {
         }
     }
 
+    public void flush() {
+        producer.flush();
+    }
+
     public List<PartitionInfo> partitionsFor(final String topic) throws TimeoutException {
         return producer.partitionsFor(topic);
     }
 
-    public void flush() {
-        producer.flush();
+    public Map<MetricName, ? extends Metric> metrics() {
+        return producer.metrics();
     }
 
     public void close() {
         try {
             producer.close();
         } catch (final KafkaException error) {
-            throw new StreamsException(formatException("Producer encounter unexpected error trying to close"), error);
+            throw new StreamsException(formatException("Error encountered trying to close the producer"), error);
         }
-    }
-
-    public Map<MetricName, ? extends Metric> metrics() {
-        return producer.metrics();
     }
 
     // for testing only
