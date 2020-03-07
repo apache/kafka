@@ -22,7 +22,6 @@ import org.apache.kafka.common.annotation.InterfaceStability;
 import java.io.Closeable;
 import java.io.IOException;
 import java.io.InputStream;
-import java.util.Optional;
 
 /**
  * RemoteStorageManager provides the lifecycle of remote log segments which includes copy, fetch, and delete operations.
@@ -68,7 +67,7 @@ public interface RemoteStorageManager extends Configurable, Closeable {
      * @throws IOException
      */
     InputStream fetchLogSegmentData(RemoteLogSegmentMetadata remoteLogSegmentMetadata,
-                                    Long startPosition, Optional<Long> endPosition) throws RemoteStorageException;
+                                    Long startPosition, Long endPosition) throws RemoteStorageException;
 
     /**
      * Returns the offset index for the respective log segment of {@link RemoteLogSegmentMetadata}.

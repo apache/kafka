@@ -29,7 +29,6 @@ import java.time.format.*;
 import java.util.*;
 
 import static java.lang.String.*;
-import static java.util.Optional.*;
 import static org.apache.kafka.common.log.storage.LocalRemoteStorageManager.*;
 import static org.junit.Assert.*;
 
@@ -130,7 +129,7 @@ public final class LocalRemoteStorageManagerTest {
     public void fetchThrowsIfDataDoesNotExist() {
         final RemoteLogSegmentMetadata metadata = newRemoteLogSegmentMetadata(newRemoteLogSegmentId());
 
-        assertThrows(RemoteResourceNotFoundException.class, () -> remoteStorage.fetchLogSegmentData(metadata, 0L, empty()));
+        assertThrows(RemoteResourceNotFoundException.class, () -> remoteStorage.fetchLogSegmentData(metadata, 0L, null));
         assertThrows(RemoteResourceNotFoundException.class, () -> remoteStorage.fetchOffsetIndex(metadata));
         assertThrows(RemoteResourceNotFoundException.class, () -> remoteStorage.fetchTimestampIndex(metadata));
     }
@@ -139,9 +138,9 @@ public final class LocalRemoteStorageManagerTest {
     public void assertStartAndEndPositionConsistency() {
         final RemoteLogSegmentMetadata metadata = newRemoteLogSegmentMetadata(newRemoteLogSegmentId());
 
-        assertThrows(IllegalArgumentException.class, () -> remoteStorage.fetchLogSegmentData(metadata, -1L, empty()));
-        assertThrows(IllegalArgumentException.class, () -> remoteStorage.fetchLogSegmentData(metadata, 1L, of(-1L)));
-        assertThrows(IllegalArgumentException.class, () -> remoteStorage.fetchLogSegmentData(metadata, 2L, of(1L)));
+        assertThrows(IllegalArgumentException.class, () -> remoteStorage.fetchLogSegmentData(metadata, -1L, null));
+        assertThrows(IllegalArgumentException.class, () -> remoteStorage.fetchLogSegmentData(metadata, 1L, -1L));
+        assertThrows(IllegalArgumentException.class, () -> remoteStorage.fetchLogSegmentData(metadata, 2L, 1L));
     }
 
     private RemoteLogSegmentMetadata newRemoteLogSegmentMetadata(final RemoteLogSegmentId id) {
