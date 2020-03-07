@@ -653,7 +653,7 @@ public class TaskManager {
 
             final Map<TopicPartition, RecordsToDelete> recordsToDelete = new HashMap<>();
             for (final Task task : activeTaskIterable()) {
-                for (final Map.Entry<TopicPartition, Long> entry : task.purgableOffsets().entrySet()) {
+                for (final Map.Entry<TopicPartition, Long> entry : task.purgeableOffsets().entrySet()) {
                     recordsToDelete.put(entry.getKey(), RecordsToDelete.beforeOffset(entry.getValue()));
                 }
             }

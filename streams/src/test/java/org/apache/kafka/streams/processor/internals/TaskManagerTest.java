@@ -1039,7 +1039,7 @@ public class TaskManagerTest {
         final Map<TopicPartition, Long> purgableOffsets = new HashMap<>();
         final StateMachineTask task00 = new StateMachineTask(taskId00, taskId00Partitions, true) {
             @Override
-            public Map<TopicPartition, Long> purgableOffsets() {
+            public Map<TopicPartition, Long> purgeableOffsets() {
                 return purgableOffsets;
             }
         };
@@ -1075,7 +1075,7 @@ public class TaskManagerTest {
         final Map<TopicPartition, Long> purgableOffsets = new HashMap<>();
         final StateMachineTask task00 = new StateMachineTask(taskId00, taskId00Partitions, true) {
             @Override
-            public Map<TopicPartition, Long> purgableOffsets() {
+            public Map<TopicPartition, Long> purgeableOffsets() {
                 return purgableOffsets;
             }
         };
@@ -1587,7 +1587,7 @@ public class TaskManagerTest {
         }
 
         @Override
-        public Map<TopicPartition, Long> purgableOffsets() {
+        public Map<TopicPartition, Long> purgeableOffsets() {
             return purgeableOffsets;
         }
 
