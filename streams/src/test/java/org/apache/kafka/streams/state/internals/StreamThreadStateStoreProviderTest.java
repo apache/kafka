@@ -370,14 +370,12 @@ public class StreamThreadStateStoreProviderTest {
                 clientSupplier.restoreConsumer,
                 new MockStateRestoreListener()),
             topology.storeToChangelogTopic(), partitions);
-        final boolean eosEnabled = StreamsConfig.EXACTLY_ONCE.equals(streamsConfig.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG));
         final RecordCollector recordCollector = new RecordCollectorImpl(
             logContext,
             taskId,
             clientSupplier.consumer,
-            new StreamsProducer(clientSupplier.getProducer(new HashMap<>()), eosEnabled ? streamsConfig.getString(StreamsConfig.APPLICATION_ID_CONFIG) : null, logContext),
+            new StreamsProducer(clientSupplier, Collections.emptyMap(), null, logContext),
             streamsConfig.defaultProductionExceptionHandler(),
-            eosEnabled,
             new MockStreamsMetrics(metrics));
         return new StreamTask(
             taskId,

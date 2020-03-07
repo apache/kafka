@@ -45,6 +45,8 @@ import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.streams.KafkaClientSupplier;
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.AlwaysContinueProductionExceptionHandler;
 import org.apache.kafka.streams.errors.DefaultProductionExceptionHandler;
 import org.apache.kafka.streams.errors.ProductionExceptionHandler;
@@ -54,6 +56,7 @@ import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
+import org.apache.kafka.test.MockClientSupplier;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -65,6 +68,9 @@ import java.util.Map;
 import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
+import static org.easymock.EasyMock.expect;
 import static org.easymock.EasyMock.expectLastCall;
 import static org.easymock.EasyMock.mock;
 import static org.easymock.EasyMock.replay;
@@ -101,23 +107,27 @@ public class RecordCollectorTest {
 
     private final StreamPartitioner<String, Object> streamPartitioner = (topic, key, value, numPartitions) -> Integer.parseInt(key) % numPartitions;
 
+    private final Map<String, Object> producerEosConfig = mkMap(mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, "appId"));
+    private final MockClientSupplier mockClientSupplier = new MockClientSupplier();
     private final MockConsumer<byte[], byte[]> mockConsumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST);
-    private final MockProducer<byte[], byte[]> mockProducer = new MockProducer<>(
-        cluster, true, new DefaultPartitioner(), byteArraySerializer, byteArraySerializer);
-    private final StreamsProducer streamsProducer = new StreamsProducer(mockProducer, null, logContext);
+    private StreamsProducer streamsProducer;
 
+    private MockProducer<byte[], byte[]> mockProducer;
     private RecordCollectorImpl collector;
 
     @Before
     public void setup() {
+        mockClientSupplier.setCluster(cluster);
+        streamsProducer = new StreamsProducer(mockClientSupplier, Collections.emptyMap(), null, logContext);
+        mockProducer = mockClientSupplier.producers.get(0);
         collector = new RecordCollectorImpl(
             logContext,
             taskId,
             mockConsumer,
             streamsProducer,
             productionExceptionHandler,
-            false,
-            streamsMetrics);
+            streamsMetrics
+        );
     }
 
     @After
@@ -252,8 +262,8 @@ public class RecordCollectorTest {
             consumer,
             streamsProducer,
             productionExceptionHandler,
-            false,
-            streamsMetrics);
+            streamsMetrics
+        );
 
         collector.commit(null);
 
@@ -264,6 +274,7 @@ public class RecordCollectorTest {
     @Test
     public void shouldCommitViaProducerIfEosEnabled() {
         final StreamsProducer streamsProducer = mock(StreamsProducer.class);
+        expect(streamsProducer.eosEnabled()).andReturn(true);
         streamsProducer.commitTransaction(null);
         expectLastCall();
         replay(streamsProducer);
@@ -274,8 +285,8 @@ public class RecordCollectorTest {
             mockConsumer,
             streamsProducer,
             productionExceptionHandler,
-            true,
-            streamsMetrics);
+            streamsMetrics
+        );
 
         collector.commit(null);
 
@@ -283,8 +294,9 @@ public class RecordCollectorTest {
     }
 
     @Test
-    public void shouldForwardFlushToTransactionManager() {
+    public void shouldForwardFlushToProducer() {
         final StreamsProducer streamsProducer = mock(StreamsProducer.class);
+        expect(streamsProducer.eosEnabled()).andReturn(false);
         streamsProducer.flush();
         expectLastCall();
         replay(streamsProducer);
@@ -295,8 +307,8 @@ public class RecordCollectorTest {
             mockConsumer,
             streamsProducer,
             productionExceptionHandler,
-            true,
-            streamsMetrics);
+            streamsMetrics
+        );
 
         collector.flush();
 
@@ -304,8 +316,9 @@ public class RecordCollectorTest {
     }
 
     @Test
-    public void shouldForwardCloseToTransactionManager() {
+    public void shouldForwardCloseToProducer() {
         final StreamsProducer streamsProducer = mock(StreamsProducer.class);
+        expect(streamsProducer.eosEnabled()).andReturn(false);
         replay(streamsProducer);
 
         final RecordCollector collector = new RecordCollectorImpl(
@@ -314,8 +327,8 @@ public class RecordCollectorTest {
             mockConsumer,
             streamsProducer,
             productionExceptionHandler,
-            false,
-            streamsMetrics);
+            streamsMetrics
+        );
 
         collector.close();
 
@@ -323,8 +336,9 @@ public class RecordCollectorTest {
     }
 
     @Test
-    public void shouldAbortTxIfEosEnabled() {
+    public void shouldAbortTxOnCloseIfEosEnabled() {
         final StreamsProducer streamsProducer = mock(StreamsProducer.class);
+        expect(streamsProducer.eosEnabled()).andReturn(true);
         streamsProducer.abortTransaction();
         replay(streamsProducer);
 
@@ -334,8 +348,8 @@ public class RecordCollectorTest {
             mockConsumer,
             streamsProducer,
             productionExceptionHandler,
-            true,
-            streamsMetrics);
+            streamsMetrics
+        );
 
         collector.close();
 
@@ -345,23 +359,26 @@ public class RecordCollectorTest {
     @Test
     public void shouldThrowTaskMigratedExceptionOnSubsequentCallWhenProducerFencedInCallback() {
         final KafkaException exception = new ProducerFencedException("KABOOM!");
-        final RecordCollector collector = new RecordCollectorImpl(
-            logContext,
-            taskId,
-            mockConsumer,
-            new StreamsProducer(
+
+        final KafkaClientSupplier mockedClientSupplier = mock(KafkaClientSupplier.class);
+        expect(mockedClientSupplier.getProducer(producerEosConfig))
+            .andReturn(
                 new MockProducer<byte[], byte[]>(cluster, true, new DefaultPartitioner(), byteArraySerializer, byteArraySerializer) {
                     @Override
                     public synchronized Future<RecordMetadata> send(final ProducerRecord<byte[], byte[]> record, final Callback callback) {
                         callback.onCompletion(null, exception);
                         return null;
                     }
-                },
-                "appId",
-                logContext
-            ),
+                }
+            );
+        replay(mockedClientSupplier);
+
+        final RecordCollector collector = new RecordCollectorImpl(
+            logContext,
+            taskId,
+            mockConsumer,
+            new StreamsProducer(mockedClientSupplier, producerEosConfig, "appId", logContext),
             productionExceptionHandler,
-            true,
             streamsMetrics
         );
         collector.initialize();
@@ -387,23 +404,26 @@ public class RecordCollectorTest {
     @Test
     public void shouldThrowStreamsExceptionOnSubsequentCallIfASendFailsWithDefaultExceptionHandler() {
         final KafkaException exception = new KafkaException("KABOOM!");
-        final RecordCollector collector = new RecordCollectorImpl(
-            logContext,
-            taskId,
-            mockConsumer,
-            new StreamsProducer(
+
+        final KafkaClientSupplier mockedClientSupplier = mock(KafkaClientSupplier.class);
+        expect(mockedClientSupplier.getProducer(Collections.emptyMap()))
+            .andReturn(
                 new MockProducer<byte[], byte[]>(cluster, true, new DefaultPartitioner(), byteArraySerializer, byteArraySerializer) {
                     @Override
                     public synchronized Future<RecordMetadata> send(final ProducerRecord<byte[], byte[]> record, final Callback callback) {
                         callback.onCompletion(null, exception);
                         return null;
                     }
-                },
-                null,
-                logContext
-            ),
+                }
+            );
+        replay(mockedClientSupplier);
+
+        final RecordCollector collector = new RecordCollectorImpl(
+            logContext,
+            taskId,
+            mockConsumer,
+            new StreamsProducer(mockedClientSupplier, Collections.emptyMap(), null, logContext),
             productionExceptionHandler,
-            false,
             streamsMetrics
         );
 
@@ -428,23 +448,26 @@ public class RecordCollectorTest {
     @Test
     public void shouldNotThrowStreamsExceptionOnSubsequentCallIfASendFailsWithContinueExceptionHandler() {
         final LogCaptureAppender logCaptureAppender = LogCaptureAppender.createAndRegister();
-        final RecordCollector collector = new RecordCollectorImpl(
-            logContext,
-            taskId,
-            mockConsumer,
-            new StreamsProducer(
+
+        final KafkaClientSupplier mockedClientSupplier = mock(KafkaClientSupplier.class);
+        expect(mockedClientSupplier.getProducer(Collections.emptyMap()))
+            .andReturn(
                 new MockProducer<byte[], byte[]>(cluster, true, new DefaultPartitioner(), byteArraySerializer, byteArraySerializer) {
                     @Override
                     public synchronized Future<RecordMetadata> send(final ProducerRecord<byte[], byte[]> record, final Callback callback) {
                         callback.onCompletion(null, new Exception());
                         return null;
                     }
-                },
-                null,
-                logContext
-            ),
+                }
+            );
+        replay(mockedClientSupplier);
+
+        final RecordCollector collector = new RecordCollectorImpl(
+            logContext,
+            taskId,
+            mockConsumer,
+            new StreamsProducer(mockedClientSupplier, Collections.emptyMap(), null, logContext),
             new AlwaysContinueProductionExceptionHandler(),
-            false,
             streamsMetrics
         );
 
@@ -470,23 +493,26 @@ public class RecordCollectorTest {
     @Test
     public void shouldThrowStreamsExceptionOnSubsequentCallIfFatalEvenWithContinueExceptionHandler() {
         final KafkaException exception = new AuthenticationException("KABOOM!");
-        final RecordCollector collector = new RecordCollectorImpl(
-            logContext,
-            taskId,
-            mockConsumer,
-            new StreamsProducer(
+
+        final KafkaClientSupplier mockedClientSupplier = mock(KafkaClientSupplier.class);
+        expect(mockedClientSupplier.getProducer(Collections.emptyMap()))
+            .andReturn(
                 new MockProducer<byte[], byte[]>(cluster, true, new DefaultPartitioner(), byteArraySerializer, byteArraySerializer) {
                     @Override
                     public synchronized Future<RecordMetadata> send(final ProducerRecord<byte[], byte[]> record, final Callback callback) {
                         callback.onCompletion(null, exception);
                         return null;
                     }
-                },
-                null,
-                logContext
-            ),
+                }
+            );
+        replay(mockedClientSupplier);
+
+        final RecordCollector collector = new RecordCollectorImpl(
+            logContext,
+            taskId,
+            mockConsumer,
+            new StreamsProducer(mockedClientSupplier, Collections.emptyMap(), null, logContext),
             new AlwaysContinueProductionExceptionHandler(),
-            false,
             streamsMetrics
         );
 
@@ -521,7 +547,6 @@ public class RecordCollectorTest {
             },
             streamsProducer,
             productionExceptionHandler,
-            false,
             streamsMetrics
         );
 
@@ -543,7 +568,6 @@ public class RecordCollectorTest {
             },
             streamsProducer,
             productionExceptionHandler,
-            false,
             streamsMetrics
         );
 
@@ -565,7 +589,6 @@ public class RecordCollectorTest {
             },
             streamsProducer,
             productionExceptionHandler,
-            false,
             streamsMetrics
         );
         collector.initialize();
@@ -588,7 +611,6 @@ public class RecordCollectorTest {
             },
             streamsProducer,
             productionExceptionHandler,
-            false,
             streamsMetrics
         );
         collector.initialize();
@@ -601,22 +623,25 @@ public class RecordCollectorTest {
     @Test
     public void shouldNotAbortTxnOnEOSCloseIfNothingSent() {
         final AtomicBoolean functionCalled = new AtomicBoolean(false);
-        final RecordCollector collector = new RecordCollectorImpl(
-            logContext,
-            taskId,
-            mockConsumer,
-            new StreamsProducer(
+
+        final KafkaClientSupplier mockedClientSupplier = mock(KafkaClientSupplier.class);
+        expect(mockedClientSupplier.getProducer(producerEosConfig))
+            .andReturn(
                 new MockProducer<byte[], byte[]>(cluster, true, new DefaultPartitioner(), byteArraySerializer, byteArraySerializer) {
                     @Override
                     public void abortTransaction() {
                         functionCalled.set(true);
                     }
-                },
-                "appId",
-                logContext
-            ),
+                }
+            );
+        replay(mockedClientSupplier);
+
+        final RecordCollector collector = new RecordCollectorImpl(
+            logContext,
+            taskId,
+            mockConsumer,
+            new StreamsProducer(mockedClientSupplier, producerEosConfig, null, logContext),
             productionExceptionHandler,
-            true,
             streamsMetrics
         );
 
@@ -626,22 +651,24 @@ public class RecordCollectorTest {
 
     @Test
     public void shouldThrowIfTopicIsUnknownOnSendWithPartitioner() {
-        final RecordCollector collector = new RecordCollectorImpl(
-            logContext,
-            taskId,
-            mockConsumer,
-            new StreamsProducer(
+        final KafkaClientSupplier mockedClientSupplier = mock(KafkaClientSupplier.class);
+        expect(mockedClientSupplier.getProducer(Collections.emptyMap()))
+            .andReturn(
                 new MockProducer<byte[], byte[]>(cluster, true, new DefaultPartitioner(), byteArraySerializer, byteArraySerializer) {
                     @Override
                     public List<PartitionInfo> partitionsFor(final String topic) {
                         return Collections.emptyList();
                     }
-                },
-                null,
-                logContext
-            ),
+                }
+            );
+        replay(mockedClientSupplier);
+
+        final RecordCollector collector = new RecordCollectorImpl(
+            logContext,
+            taskId,
+            mockConsumer,
+            new StreamsProducer(mockedClientSupplier, Collections.emptyMap(), null, logContext),
             productionExceptionHandler,
-            false,
             streamsMetrics
         );
         collector.initialize();
@@ -654,25 +681,7 @@ public class RecordCollectorTest {
     }
 
     @Test
-    public void shouldNotCloseInternalProducerForEOS() {
-        final RecordCollector collector = new RecordCollectorImpl(
-            logContext,
-            taskId,
-            mockConsumer,
-            new StreamsProducer(mockProducer, "appId", logContext),
-            productionExceptionHandler,
-            true,
-            streamsMetrics
-        );
-
-        collector.close();
-
-        // Flush should not throw as producer is still alive.
-        streamsProducer.flush();
-    }
-
-    @Test
-    public void shouldNotCloseInternalProducerForNonEOS() {
+    public void shouldNotCloseInternalProducer() {
         collector.close();
 
         // Flush should not throw as producer is still alive.

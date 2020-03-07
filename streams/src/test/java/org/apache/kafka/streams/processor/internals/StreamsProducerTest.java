@@ -19,23 +19,22 @@ package org.apache.kafka.streams.processor.internals;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.producer.MockProducer;
 import org.apache.kafka.clients.producer.Producer;
+import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
-import org.apache.kafka.clients.producer.internals.DefaultPartitioner;
-import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
-import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.UnknownProducerIdException;
 import org.apache.kafka.common.header.internals.RecordHeaders;
-import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.streams.KafkaClientSupplier;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
+import org.apache.kafka.test.MockClientSupplier;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -62,83 +61,51 @@ public class StreamsProducerTest {
 
     private final LogContext logContext = new LogContext("test ");
     private final String topic = "topic";
-    private final Cluster cluster = new Cluster(
-        "cluster",
-        Collections.singletonList(Node.noNode()),
-        Collections.singletonList(new PartitionInfo(topic, 0, Node.noNode(), new Node[0], new Node[0])),
-        Collections.emptySet(),
-        Collections.emptySet()
-    );
 
-    private final ByteArraySerializer byteArraySerializer = new ByteArraySerializer();
     private final Map<TopicPartition, OffsetAndMetadata> offsetsAndMetadata = mkMap(
         mkEntry(new TopicPartition(topic, 0), new OffsetAndMetadata(0L, null))
     );
 
-    private final MockProducer<byte[], byte[]> mockProducer = new MockProducer<>(
-        cluster, true, new DefaultPartitioner(), byteArraySerializer, byteArraySerializer);
-    private final StreamsProducer nonEosStreamsProducer = new StreamsProducer(mockProducer, null, logContext);
+    private final MockClientSupplier nonEosMockClientSupplier = new MockClientSupplier();
+    private final MockClientSupplier eosMockClientSupplier = new MockClientSupplier();
+    private final Map<String, Object> eosProducerConfig = mkMap(mkEntry(ProducerConfig.TRANSACTIONAL_ID_CONFIG, "appId-TX"));
 
-    private final MockProducer<byte[], byte[]> eosMockProducer = new MockProducer<>(
-        cluster, true, new DefaultPartitioner(), byteArraySerializer, byteArraySerializer);
-    private final StreamsProducer eosStreamsProducer = new StreamsProducer(eosMockProducer, "appId", logContext);
+    private StreamsProducer nonEosStreamsProducer;
+    private StreamsProducer eosStreamsProducer;
+    private MockProducer<byte[], byte[]> nonEosMockProducer;
+    private MockProducer<byte[], byte[]> eosMockProducer;
 
     private final ProducerRecord<byte[], byte[]> record =
         new ProducerRecord<>(topic, 0, 0L, new byte[0], new byte[0], new RecordHeaders());
 
     @Before
     public void before() {
+        nonEosStreamsProducer =
+            new StreamsProducer(nonEosMockClientSupplier, Collections.emptyMap(), null, logContext);
+        eosMockClientSupplier.setApplicationIdForProducer("appId");
+        eosStreamsProducer =
+            new StreamsProducer(eosMockClientSupplier, eosProducerConfig, "appId", logContext);
+
+        nonEosMockProducer = nonEosMockClientSupplier.producers.get(0);
+        eosMockProducer = eosMockClientSupplier.producers.get(0);
+
         eosStreamsProducer.initTransaction();
     }
 
-    @Test
-    public void shouldFailIfProducerIsNull() {
-        {
-            final NullPointerException thrown = assertThrows(
-                NullPointerException.class,
-                () -> new StreamsProducer(null, null, logContext)
-            );
-
-            assertThat(thrown.getMessage(), is("producer cannot be null"));
-        }
-
-        {
-            final NullPointerException thrown = assertThrows(
-                NullPointerException.class,
-                () -> new StreamsProducer(null, "appId", logContext)
-            );
-
-            assertThat(thrown.getMessage(), is("producer cannot be null"));
-        }
-    }
-
-    @Test
-    public void shouldNotInitTxIfEosDisable() {
-        assertThat(mockProducer.transactionInitialized(), is(false));
-    }
-
-    @Test
-    public void shouldNotBeginTxOnSendIfEosDisable() {
-        nonEosStreamsProducer.send(record, null);
-        assertThat(mockProducer.transactionInFlight(), is(false));
-    }
-
-    @Test
-    public void shouldForwardRecordOnSend() {
-        nonEosStreamsProducer.send(record, null);
-        assertThat(mockProducer.history().size(), is(1));
-        assertThat(mockProducer.history().get(0), is(record));
-    }
+    // generic tests (non-EOS and EOS)
 
     @Test
     public void shouldForwardCallToPartitionsFor() {
+        final KafkaClientSupplier mockedSupplier = mock(KafkaClientSupplier.class);
         final Producer<byte[], byte[]> mockedProducer = mock(Producer.class);
 
+        expect(mockedSupplier.getProducer(Collections.emptyMap())).andReturn(mockedProducer);
         final List<PartitionInfo> expectedPartitionInfo = Collections.emptyList();
         expect(mockedProducer.partitionsFor("topic")).andReturn(expectedPartitionInfo);
-        replay(mockedProducer);
+        replay(mockedSupplier, mockedProducer);
 
-        final StreamsProducer streamsProducer = new StreamsProducer(mockedProducer, null, logContext);
+        final StreamsProducer streamsProducer =
+            new StreamsProducer(mockedSupplier, Collections.emptyMap(), null, logContext);
 
         final List<PartitionInfo> partitionInfo = streamsProducer.partitionsFor(topic);
 
@@ -148,13 +115,16 @@ public class StreamsProducerTest {
 
     @Test
     public void shouldForwardCallToFlush() {
+        final KafkaClientSupplier mockedSupplier = mock(KafkaClientSupplier.class);
         final Producer<byte[], byte[]> mockedProducer = mock(Producer.class);
 
+        expect(mockedSupplier.getProducer(Collections.emptyMap())).andReturn(mockedProducer);
         mockedProducer.flush();
         expectLastCall();
-        replay(mockedProducer);
+        replay(mockedSupplier, mockedProducer);
 
-        final StreamsProducer streamsProducer = new StreamsProducer(mockedProducer, null, logContext);
+        final StreamsProducer streamsProducer =
+            new StreamsProducer(mockedSupplier, Collections.emptyMap(), null, logContext);
 
         streamsProducer.flush();
 
@@ -164,13 +134,16 @@ public class StreamsProducerTest {
     @SuppressWarnings({"unchecked", "rawtypes"})
     @Test
     public void shouldForwardCallToMetrics() {
+        final KafkaClientSupplier mockedSupplier = mock(KafkaClientSupplier.class);
         final Producer<byte[], byte[]> mockedProducer = mock(Producer.class);
 
+        expect(mockedSupplier.getProducer(Collections.emptyMap())).andReturn(mockedProducer);
         final Map expected = new HashMap<>();
         expect(mockedProducer.metrics()).andReturn(expected);
-        replay(mockedProducer);
+        replay(mockedSupplier, mockedProducer);
 
-        final StreamsProducer streamsProducer = new StreamsProducer(mockedProducer, null, new LogContext());
+        final StreamsProducer streamsProducer =
+            new StreamsProducer(mockedSupplier, Collections.emptyMap(), null, new LogContext());
 
         final Map<MetricName, ? extends Metric> metrics = streamsProducer.metrics();
 
@@ -182,7 +155,89 @@ public class StreamsProducerTest {
     @Test
     public void shouldCloseKafkaProducerOnClose() {
         nonEosStreamsProducer.close();
-        assertTrue(mockProducer.closed());
+        assertTrue(nonEosMockProducer.closed());
+
+        eosStreamsProducer.close();
+        assertTrue(eosMockProducer.closed());
+    }
+
+    // error handling tests
+
+    @Test
+    public void shouldFailIfClientSupplierIsNull() {
+        final NullPointerException thrown = assertThrows(
+            NullPointerException.class,
+            () -> new StreamsProducer(null, Collections.emptyMap(), null, logContext)
+        );
+
+        assertThat(thrown.getMessage(), is("clientSupplier cannot be null"));
+    }
+
+    @Test
+    public void shouldFailIfProducerConfigIsNull() {
+        final NullPointerException thrown = assertThrows(
+            NullPointerException.class,
+            () -> new StreamsProducer(nonEosMockClientSupplier, null, null, logContext)
+        );
+
+        assertThat(thrown.getMessage(), is("producerConfig cannot be null"));
+    }
+
+    @Test
+    public void shouldFailIfLogContextIsNull() {
+        final NullPointerException thrown = assertThrows(
+            NullPointerException.class,
+            () -> new StreamsProducer(nonEosMockClientSupplier, Collections.emptyMap(), null, null)
+        );
+
+        assertThat(thrown.getMessage(), is("logContext cannot be null"));
+    }
+
+    @Test
+    public void shouldThrowStreamsExceptionOnCloseError() {
+        nonEosMockProducer.closeException = new KafkaException("KABOOM!");
+
+        final StreamsException thrown = assertThrows(
+            StreamsException.class,
+            nonEosStreamsProducer::close
+        );
+
+        assertThat(thrown.getCause(), is(nonEosMockProducer.closeException));
+        assertThat(thrown.getMessage(), is("Error encountered trying to close the producer [test]"));
+    }
+
+    @Test
+    public void shouldFailOnCloseFatal() {
+        nonEosMockProducer.closeException = new RuntimeException("KABOOM!");
+
+        final RuntimeException thrown = assertThrows(
+            RuntimeException.class,
+            nonEosStreamsProducer::close
+        );
+
+        assertThat(thrown.getMessage(), is("KABOOM!"));
+    }
+
+    // non-EOS tests
+
+    // functional tests
+
+    @Test
+    public void shouldNotInitTxIfEosDisable() {
+        assertThat(nonEosMockProducer.transactionInitialized(), is(false));
+    }
+
+    @Test
+    public void shouldNotBeginTxOnSendIfEosDisable() {
+        nonEosStreamsProducer.send(record, null);
+        assertThat(nonEosMockProducer.transactionInFlight(), is(false));
+    }
+
+    @Test
+    public void shouldForwardRecordOnSend() {
+        nonEosStreamsProducer.send(record, null);
+        assertThat(nonEosMockProducer.history().size(), is(1));
+        assertThat(nonEosMockProducer.history().get(0), is(record));
     }
 
     // error handling tests
@@ -199,33 +254,20 @@ public class StreamsProducerTest {
 
     @Test
     public void shouldThrowStreamsExceptionOnSendError() {
-        mockProducer.sendException  = new KafkaException("KABOOM!");
+        nonEosMockProducer.sendException  = new KafkaException("KABOOM!");
 
         final StreamsException thrown = assertThrows(
             StreamsException.class,
             () -> nonEosStreamsProducer.send(record, null)
         );
 
-        assertThat(thrown.getCause(), is(mockProducer.sendException));
+        assertThat(thrown.getCause(), is(nonEosMockProducer.sendException));
         assertThat(thrown.getMessage(), is("Error encountered trying to send record to topic topic [test]"));
     }
 
     @Test
-    public void shouldThrowStreamsExceptionOnCloseError() {
-        mockProducer.closeException = new KafkaException("KABOOM!");
-
-        final StreamsException thrown = assertThrows(
-            StreamsException.class,
-            nonEosStreamsProducer::close
-        );
-
-        assertThat(thrown.getCause(), is(mockProducer.closeException));
-        assertThat(thrown.getMessage(), is("Error encountered trying to close the producer [test]"));
-    }
-
-    @Test
     public void shouldFailOnSendFatal() {
-        mockProducer.sendException = new RuntimeException("KABOOM!");
+        nonEosMockProducer.sendException = new RuntimeException("KABOOM!");
 
         final RuntimeException thrown = assertThrows(
             RuntimeException.class,
@@ -253,18 +295,6 @@ public class StreamsProducerTest {
         );
 
         assertThat(thrown.getMessage(), is("EOS is disabled [test]"));
-    }
-
-    @Test
-    public void shouldFailOnCloseFatal() {
-        mockProducer.closeException = new RuntimeException("KABOOM!");
-
-        final RuntimeException thrown = assertThrows(
-            RuntimeException.class,
-            nonEosStreamsProducer::close
-        );
-
-        assertThat(thrown.getMessage(), is("KABOOM!"));
     }
 
     // EOS tests
@@ -301,16 +331,19 @@ public class StreamsProducerTest {
 
     @Test
     public void shouldBeginTxOnEosCommit() {
+        final KafkaClientSupplier mockedSupplier = mock(KafkaClientSupplier.class);
         final Producer<byte[], byte[]> mockedProducer = mock(Producer.class);
 
+        expect(mockedSupplier.getProducer(eosProducerConfig)).andReturn(mockedProducer);
         mockedProducer.initTransactions();
         mockedProducer.beginTransaction();
         mockedProducer.sendOffsetsToTransaction(offsetsAndMetadata, "appId");
         mockedProducer.commitTransaction();
         expectLastCall();
-        replay(mockedProducer);
+        replay(mockedSupplier, mockedProducer);
 
-        final StreamsProducer streamsProducer = new StreamsProducer(mockedProducer, "appId", logContext);
+        final StreamsProducer streamsProducer =
+            new StreamsProducer(mockedSupplier, eosProducerConfig, "appId", logContext);
         streamsProducer.initTransaction();
 
         streamsProducer.commitTransaction(offsetsAndMetadata);
@@ -359,13 +392,16 @@ public class StreamsProducerTest {
 
     @Test
     public void shouldSkipAbortTxOnEosAbortIfNotTxInFlight() {
+        final KafkaClientSupplier mockedSupplier = mock(KafkaClientSupplier.class);
         final Producer<byte[], byte[]> mockedProducer = mock(Producer.class);
 
+        expect(mockedSupplier.getProducer(eosProducerConfig)).andReturn(mockedProducer);
         mockedProducer.initTransactions();
         expectLastCall();
-        replay(mockedProducer);
+        replay(mockedSupplier, mockedProducer);
 
-        final StreamsProducer streamsProducer = new StreamsProducer(mockedProducer, "appId", logContext);
+        final StreamsProducer streamsProducer =
+            new StreamsProducer(mockedSupplier, eosProducerConfig, "appId", logContext);
         streamsProducer.initTransaction();
 
         streamsProducer.abortTransaction();
@@ -376,10 +412,23 @@ public class StreamsProducerTest {
     // error handling tests
 
     @Test
+    public void shouldFailIfApplicationIdIsNull() {
+        final IllegalArgumentException thrown = assertThrows(
+            IllegalArgumentException.class,
+            () -> new StreamsProducer(eosMockClientSupplier, eosProducerConfig, null, null)
+        );
+
+        assertThat(
+            thrown.getMessage(),
+            is("producerConfig contains `transactional.id`, hence, applicationId cannot be null")
+        );
+    }
+
+    @Test
     public void shouldThrowTimeoutExceptionOnEosInitTxTimeout() {
-        // use `mockProducer` instead of `eosMockProducer` to avoid double Tx-Init
-        mockProducer.initTransactionException = new TimeoutException("KABOOM!");
-        final StreamsProducer streamsProducer = new StreamsProducer(mockProducer, "appId", logContext);
+        final StreamsProducer streamsProducer =
+            new StreamsProducer(eosMockClientSupplier, eosProducerConfig, "appId", logContext);
+        eosMockClientSupplier.producers.get(1).initTransactionException = new TimeoutException("KABOOM!");
 
         final TimeoutException thrown = assertThrows(
             TimeoutException.class,
@@ -391,24 +440,25 @@ public class StreamsProducerTest {
 
     @Test
     public void shouldThrowStreamsExceptionOnEosInitError() {
-        // use `mockProducer` instead of `eosMockProducer` to avoid double Tx-Init
-        mockProducer.initTransactionException = new KafkaException("KABOOM!");
-        final StreamsProducer streamsProducer = new StreamsProducer(mockProducer, "appId", logContext);
+        final StreamsProducer streamsProducer =
+            new StreamsProducer(eosMockClientSupplier, eosProducerConfig, "appId", logContext);
+        final KafkaException exception = new KafkaException("KABOOM!");
+        eosMockClientSupplier.producers.get(1).initTransactionException = exception;
 
         final StreamsException thrown = assertThrows(
             StreamsException.class,
             streamsProducer::initTransaction
         );
 
-        assertThat(thrown.getCause(), is(mockProducer.initTransactionException));
+        assertThat(thrown.getCause(), is(exception));
         assertThat(thrown.getMessage(), is("Error encountered trying to initialize transactions [test]"));
     }
 
     @Test
     public void shouldFailOnEosInitFatal() {
-        // use `mockProducer` instead of `eosMockProducer` to avoid double Tx-Init
-        mockProducer.initTransactionException = new RuntimeException("KABOOM!");
-        final StreamsProducer streamsProducer = new StreamsProducer(mockProducer, "appId", logContext);
+        final StreamsProducer streamsProducer =
+            new StreamsProducer(eosMockClientSupplier, eosProducerConfig, "appId", logContext);
+        eosMockClientSupplier.producers.get(1).initTransactionException = new RuntimeException("KABOOM!");
 
         final RuntimeException thrown = assertThrows(
             RuntimeException.class,
@@ -619,16 +669,19 @@ public class StreamsProducerTest {
 
     @Test
     public void shouldSwallowExceptionOnEosAbortTxFenced() {
+        final KafkaClientSupplier mockedSupplier = mock(KafkaClientSupplier.class);
         final Producer<byte[], byte[]> mockedProducer = mock(Producer.class);
 
+        expect(mockedSupplier.getProducer(eosProducerConfig)).andReturn(mockedProducer);
         mockedProducer.initTransactions();
         mockedProducer.beginTransaction();
         expect(mockedProducer.send(record, null)).andReturn(null);
         mockedProducer.abortTransaction();
         expectLastCall().andThrow(new ProducerFencedException("KABOOM!"));
-        replay(mockedProducer);
+        replay(mockedSupplier, mockedProducer);
 
-        final StreamsProducer streamsProducer = new StreamsProducer(mockedProducer, "appId", logContext);
+        final StreamsProducer streamsProducer =
+            new StreamsProducer(mockedSupplier, eosProducerConfig, "appId", logContext);
         streamsProducer.initTransaction();
         // call `send()` to start a transaction
         streamsProducer.send(record, null);

@@ -31,6 +31,7 @@ import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.UnknownProducerIdException;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.streams.KafkaClientSupplier;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.slf4j.Logger;
@@ -59,15 +60,24 @@ public class StreamsProducer {
     private boolean transactionInFlight = false;
     private boolean transactionInitialized = false;
 
-    public StreamsProducer(final Producer<byte[], byte[]> producer,
+    public StreamsProducer(final KafkaClientSupplier clientSupplier,
+                           final Map<String, Object> producerConfig,
                            final String applicationId,
                            final LogContext logContext) {
-        log = Objects.requireNonNull(logContext.logger(getClass()), "logContext cannot be null");
+        Objects.requireNonNull(clientSupplier, "clientSupplier cannot be null");
+        Objects.requireNonNull(producerConfig, "producerConfig cannot be null");
+        this.applicationId = applicationId;
+
+        eosEnabled = producerConfig.containsKey(ProducerConfig.TRANSACTIONAL_ID_CONFIG);
+        if (eosEnabled && applicationId == null) {
+            throw new IllegalArgumentException("producerConfig contains `transactional.id`, " +
+                "hence, applicationId cannot be null");
+        }
+
+        log = Objects.requireNonNull(logContext, "logContext cannot be null").logger(getClass());
         logPrefix = logContext.logPrefix().trim();
 
-        this.producer = Objects.requireNonNull(producer, "producer cannot be null");
-        this.applicationId = applicationId;
-        this.eosEnabled = applicationId != null;
+        producer = clientSupplier.getProducer(producerConfig);
     }
 
     private String formatException(final String message) {
@@ -213,12 +223,12 @@ public class StreamsProducer {
         }
     }
 
-    public void flush() {
-        producer.flush();
-    }
-
     public List<PartitionInfo> partitionsFor(final String topic) throws TimeoutException {
         return producer.partitionsFor(topic);
+    }
+
+    public void flush() {
+        producer.flush();
     }
 
     public Map<MetricName, ? extends Metric> metrics() {
@@ -231,6 +241,10 @@ public class StreamsProducer {
         } catch (final KafkaException error) {
             throw new StreamsException(formatException("Error encountered trying to close the producer"), error);
         }
+    }
+
+    boolean eosEnabled() {
+        return eosEnabled;
     }
 
     // for testing only

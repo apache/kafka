@@ -19,8 +19,6 @@ package org.apache.kafka.streams.state;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.MockConsumer;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
-import org.apache.kafka.clients.producer.MockProducer;
-import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
@@ -44,10 +42,12 @@ import org.apache.kafka.streams.state.internals.MeteredKeyValueStore;
 import org.apache.kafka.streams.state.internals.RocksDBKeyValueStoreTest;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 import org.apache.kafka.test.InternalMockProcessorContext;
+import org.apache.kafka.test.MockClientSupplier;
 import org.apache.kafka.test.MockTimestampExtractor;
 import org.apache.kafka.test.TestUtils;
 
 import java.io.File;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedList;
@@ -193,7 +193,6 @@ public class KeyValueStoreTestDriver<K, V> {
 
     private KeyValueStoreTestDriver(final StateSerdes<K, V> serdes) {
         final ByteArraySerializer rawSerializer = new ByteArraySerializer();
-        final Producer<byte[], byte[]> producer = new MockProducer<>(true, rawSerializer, rawSerializer);
         final Consumer<byte[], byte[]> consumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST);
 
         final LogContext logContext = new LogContext("KeyValueStoreTestDriver ");
@@ -201,9 +200,8 @@ public class KeyValueStoreTestDriver<K, V> {
             logContext,
             new TaskId(0, 0),
             consumer,
-            new StreamsProducer(producer, null, logContext),
+            new StreamsProducer(new MockClientSupplier(), Collections.emptyMap(), null, logContext),
             new DefaultProductionExceptionHandler(),
-            false,
             new MockStreamsMetrics(new Metrics())
         ) {
             @Override

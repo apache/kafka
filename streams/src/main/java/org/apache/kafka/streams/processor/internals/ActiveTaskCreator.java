@@ -56,7 +56,6 @@ class ActiveTaskCreator {
     private final String threadId;
     private final Logger log;
     private final Sensor createTaskSensor;
-    private final String applicationId;
     private final StreamsProducer threadProducer;
     private final Map<TaskId, StreamsProducer> taskProducers;
 
@@ -90,7 +89,6 @@ class ActiveTaskCreator {
         this.log = log;
 
         createTaskSensor = ThreadMetrics.createTaskSensor(threadId, streamsMetrics);
-        applicationId = config.getString(StreamsConfig.APPLICATION_ID_CONFIG);
 
         if (EXACTLY_ONCE.equals(config.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG))) {
             threadProducer = null;
@@ -104,7 +102,7 @@ class ActiveTaskCreator {
             final String logPrefix = String.format("stream-thread [%s] ", Thread.currentThread().getName());
             final LogContext logContext = new LogContext(logPrefix);
 
-            threadProducer = new StreamsProducer(clientSupplier.getProducer(producerConfigs), null, logContext);
+            threadProducer = new StreamsProducer(clientSupplier, producerConfigs, null, logContext);
             taskProducers = Collections.emptyMap();
         }
     }
@@ -135,14 +133,22 @@ class ActiveTaskCreator {
 
             final StreamsProducer streamsProducer;
             if (threadProducer == null) {
+                log.info("Creating producer client for task {}", taskId);
+
+                final String applicationId = config.getString(StreamsConfig.APPLICATION_ID_CONFIG);
+
                 final String taskProducerClientId = getTaskProducerClientId(threadId, taskId);
                 final Map<String, Object> producerConfigs = config.getProducerConfigs(taskProducerClientId);
-                producerConfigs.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, applicationId + "-" + taskId);
-                log.info("Creating producer client for task {}", taskId);
+                producerConfigs.put(
+                    ProducerConfig.TRANSACTIONAL_ID_CONFIG,
+                    applicationId + "-" + taskId
+                );
                 streamsProducer = new StreamsProducer(
-                    clientSupplier.getProducer(producerConfigs),
+                    clientSupplier,
+                    producerConfigs,
                     applicationId,
-                    logContext);
+                    logContext
+                );
                 taskProducers.put(taskId, streamsProducer);
             } else {
                 streamsProducer = threadProducer;
@@ -154,7 +160,6 @@ class ActiveTaskCreator {
                 consumer,
                 streamsProducer,
                 config.defaultProductionExceptionHandler(),
-                threadProducer == null,
                 streamsMetrics
             );
 

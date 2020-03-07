@@ -148,7 +148,7 @@ public class KafkaStreamsTest {
     public void before() throws Exception {
         time = new MockTime();
         supplier = new MockClientSupplier();
-        supplier.setClusterForAdminClient(Cluster.bootstrap(singletonList(new InetSocketAddress("localhost", 9999))));
+        supplier.setCluster(Cluster.bootstrap(singletonList(new InetSocketAddress("localhost", 9999))));
         streamsStateListener = new StateListenerStub();
         threadStatelistenerCapture = EasyMock.newCapture();
         metricsReportersCapture = EasyMock.newCapture();

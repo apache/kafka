@@ -187,7 +187,7 @@ public class StreamThreadTest {
             clientSupplier.setApplicationIdForProducer(APPLICATION_ID);
         }
 
-        clientSupplier.setClusterForAdminClient(createCluster());
+        clientSupplier.setCluster(createCluster());
 
         final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(
             metrics,
@@ -1090,7 +1090,7 @@ public class StreamThreadTest {
     public void shouldReturnActiveTaskMetadataWhileRunningState() {
         internalTopologyBuilder.addSource(null, "source", null, null, null, topic1);
 
-        clientSupplier.setClusterForAdminClient(createCluster());
+        clientSupplier.setCluster(createCluster());
 
         final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(
             metrics,

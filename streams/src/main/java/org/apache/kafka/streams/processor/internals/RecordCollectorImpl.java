@@ -76,14 +76,13 @@ public class RecordCollectorImpl implements RecordCollector {
                                final Consumer<byte[], byte[]> mainConsumer,
                                final StreamsProducer streamsProducer,
                                final ProductionExceptionHandler productionExceptionHandler,
-                               final boolean eosEnabled,
                                final StreamsMetricsImpl streamsMetrics) {
         this.log = logContext.logger(getClass());
         this.taskId = taskId;
         this.mainConsumer = mainConsumer;
         this.streamsProducer = streamsProducer;
         this.productionExceptionHandler = productionExceptionHandler;
-        this.eosEnabled = eosEnabled;
+        this.eosEnabled = streamsProducer.eosEnabled();
 
         final String threadId = Thread.currentThread().getName();
         this.droppedRecordsSensor = TaskMetrics.droppedRecordsSensorOrSkippedRecordsSensor(threadId, taskId.toString(), streamsMetrics);
