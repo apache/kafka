@@ -45,6 +45,7 @@ public class SubscriptionInfo {
     private static final Logger LOG = LoggerFactory.getLogger(SubscriptionInfo.class);
 
     static final int UNKNOWN = -1;
+    private static int MIN_VERSION_OFFSET_SUM_SUBSCRIPTION = 7;
 
     private final SubscriptionInfoData data;
     private Set<TaskId> prevTasksCache = null;
@@ -96,7 +97,7 @@ public class SubscriptionInfo {
 
         this.data = data;
 
-        if (version >= 7) {
+        if (version >= MIN_VERSION_OFFSET_SUM_SUBSCRIPTION) {
             setTaskOffsetSumDataFromTaskOffsetSumMap(taskOffsetSums);
         } else {
             setPrevAndStandbySetsFromParsedTaskOffsetSumMap(taskOffsetSums);
@@ -115,8 +116,8 @@ public class SubscriptionInfo {
             topicGroupIdToPartitionOffsetSum.putIfAbsent(task.topicGroupId, new ArrayList<>());
             topicGroupIdToPartitionOffsetSum.get(task.topicGroupId).add(
                 new SubscriptionInfoData.PartitionToOffsetSum()
-                         .setPartition(task.partition)
-                         .setOffsetSum(taskEntry.getValue()));
+                    .setPartition(task.partition)
+                    .setOffsetSum(taskEntry.getValue()));
         }
 
         data.setTaskOffsetSums(topicGroupIdToPartitionOffsetSum.entrySet().stream().map(t -> {
@@ -167,7 +168,7 @@ public class SubscriptionInfo {
 
     public Set<TaskId> prevTasks() {
         if (prevTasksCache == null) {
-            if (data.version() >= 7) {
+            if (data.version() >= MIN_VERSION_OFFSET_SUM_SUBSCRIPTION) {
                 prevTasksCache = getActiveTasksFromTaskOffsetSumMap(taskOffsetSums());
             } else {
                 prevTasksCache = Collections.unmodifiableSet(
@@ -183,7 +184,7 @@ public class SubscriptionInfo {
 
     public Set<TaskId> standbyTasks() {
         if (standbyTasksCache == null) {
-            if (data.version() >= 7) {
+            if (data.version() >= MIN_VERSION_OFFSET_SUM_SUBSCRIPTION) {
                 standbyTasksCache = getStandbyTasksFromTaskOffsetSumMap(taskOffsetSums());
             } else {
                 standbyTasksCache = Collections.unmodifiableSet(
@@ -200,10 +201,19 @@ public class SubscriptionInfo {
     public Map<TaskId, Long> taskOffsetSums() {
         if (taskOffsetSumsCache == null) {
             taskOffsetSumsCache = new HashMap<>();
-            for (final TaskOffsetSum topicGroup : data.taskOffsetSums()) {
-                for (final PartitionToOffsetSum partitionOffsetSum : topicGroup.partitionToOffsetSum()) {
-                    taskOffsetSumsCache.put(new TaskId(topicGroup.topicGroupId(), partitionOffsetSum.partition()),
-                                            partitionOffsetSum.offsetSum());
+            if (data.version() >= MIN_VERSION_OFFSET_SUM_SUBSCRIPTION) {
+                for (final TaskOffsetSum topicGroup : data.taskOffsetSums()) {
+                    for (final PartitionToOffsetSum partitionOffsetSum : topicGroup.partitionToOffsetSum()) {
+                        taskOffsetSumsCache.put(new TaskId(topicGroup.topicGroupId(), partitionOffsetSum.partition()),
+                            partitionOffsetSum.offsetSum());
+                    }
+                }
+            } else {
+                for (final TaskId task : prevTasks()) {
+                    taskOffsetSumsCache.put(task, Task.LATEST_OFFSET);
+                }
+                for (final TaskId task : standbyTasks()) {
+                    taskOffsetSumsCache.put(task, 0L);
                 }
             }
         }
@@ -266,7 +276,7 @@ public class SubscriptionInfo {
             subscriptionInfoData.setVersion(version);
             subscriptionInfoData.setLatestSupportedVersion(latestSupportedVersion);
             LOG.info("Unable to decode subscription data: used version: {}; latest supported version: {}",
-                     version, latestSupportedVersion);
+                version, latestSupportedVersion);
             return new SubscriptionInfo(subscriptionInfoData);
         } else {
             data.rewind();
