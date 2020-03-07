@@ -510,6 +510,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
      * @throws TaskMigratedException if the task producer got fenced (EOS only)
      */
     @SuppressWarnings("unchecked")
+    @Override
     public boolean process(final long wallClockTime) {
         if (!isProcessable(wallClockTime)) {
             return false;
