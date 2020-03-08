@@ -16,9 +16,12 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.maybeMeasureLatency;
+
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.state.KeyValueStore;
@@ -52,5 +55,37 @@ public class MeteredTimestampedKeyValueStore<K, V>
             ProcessorStateManager.storeChangelogTopic(context.applicationId(), name()),
             keySerde == null ? (Serde<K>) context.keySerde() : keySerde,
             valueSerde == null ? new ValueAndTimestampSerde<>((Serde<V>) context.valueSerde()) : valueSerde);
+    }
+
+    public RawAndDeserializedValue getWithBinary(final K key) {
+        try {
+            final byte[] serializedValue = wrapped().get(keyBytes(key));
+            return new RawAndDeserializedValue(serializedValue,
+                maybeMeasureLatency(() -> outerValue(serializedValue), time, getSensor));
+        } catch (final ProcessorStateException e) {
+            final String message = String.format(e.getMessage(), key);
+            throw new ProcessorStateException(message, e);
+        }
+    }
+
+    public boolean putIfDifferent(final K key,
+                                  final ValueAndTimestamp<V> newValue,
+                                  final byte[] oldSerializedValue) {
+        final Bytes serializedNewValueBytes = Bytes.wrap(serdes.rawValue(newValue));
+        final Bytes serializedOldValueBytes = Bytes.wrap(oldSerializedValue);
+        if (!serializedNewValueBytes.equals(serializedOldValueBytes)) {
+            super.put(key, newValue);
+            return true;
+        }
+        return false;
+    }
+
+    public class RawAndDeserializedValue {
+        public final byte[] serializedValue;
+        public final ValueAndTimestamp<V> value;
+        public RawAndDeserializedValue(final byte[] serializedValue, final ValueAndTimestamp<V> value) {
+            this.serializedValue = serializedValue;
+            this.value = value;
+        }
     }
 }

@@ -56,7 +56,7 @@ public class MeteredKeyValueStore<K, V>
     protected final Time time;
     private Sensor putSensor;
     private Sensor putIfAbsentSensor;
-    private Sensor getSensor;
+    protected Sensor getSensor;
     private Sensor deleteSensor;
     private Sensor putAllSensor;
     private Sensor allSensor;
@@ -203,11 +203,11 @@ public class MeteredKeyValueStore<K, V>
         streamsMetrics.removeAllStoreLevelSensors(threadId, taskId, name());
     }
 
-    private V outerValue(final byte[] value) {
+    protected V outerValue(final byte[] value) {
         return value != null ? serdes.valueFrom(value) : null;
     }
 
-    private Bytes keyBytes(final K key) {
+    protected Bytes keyBytes(final K key) {
         return Bytes.wrap(serdes.rawKey(key));
     }
 
