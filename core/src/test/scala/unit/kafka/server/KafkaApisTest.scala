@@ -199,31 +199,47 @@ class KafkaApisTest {
   @Test
   def shouldReplaceCoordinatorNotAvailableWithLoadInProcessInTxnOffsetCommitWithOlderClient(): Unit = {
     val topic = "topic"
-    setupBasicMetadataCache(topic, numPartitions = 1)
+    setupBasicMetadataCache(topic, numPartitions = 2)
 
     EasyMock.reset(replicaManager, clientRequestQuotaManager, requestChannel, groupCoordinator)
 
     val topicPartition = new TopicPartition(topic, 1)
+    val capturedResponse: Capture[RequestChannel.Response] = EasyMock.newCapture()
+    val responseCallback: Capture[Map[TopicPartition, Errors] => Unit]  = EasyMock.newCapture()
+
     val partitionOffsetCommitData = new TxnOffsetCommitRequest.CommittedOffset(15L, "", Optional.empty())
+    val groupId = "groupId"
+
     val offsetCommitRequest = new TxnOffsetCommitRequest.Builder(
       "txnId",
-      "groupId",
+      groupId,
       15L,
       0.toShort,
       Map(topicPartition -> partitionOffsetCommitData).asJava
     ).build(1)
     val request = buildRequest(offsetCommitRequest)
 
-    val capturedResponse = expectNoThrottling()
-    EasyMock.replay(replicaManager, clientRequestQuotaManager, requestChannel, groupCoordinator)
+    EasyMock.expect(groupCoordinator.handleTxnCommitOffsets(
+      EasyMock.eq(groupId),
+      EasyMock.eq(15L),
+      EasyMock.eq(0),
+      EasyMock.anyString(),
+      EasyMock.eq(Option.empty),
+      EasyMock.anyInt(),
+      EasyMock.anyObject(),
+      EasyMock.capture(responseCallback)
+    )).andAnswer(
+      () => responseCallback.getValue.apply(Map(topicPartition -> Errors.COORDINATOR_LOAD_IN_PROGRESS)))
 
-    createKafkaApis().handleTxnOffsetCommitRequest(request)).andReturn((Errors.COORDINATOR_LOAD_IN_PROGRESS, ))
+      EasyMock.expect(requestChannel.sendResponse(EasyMock.capture(capturedResponse)))
+
+    EasyMock.replay(replicaManager, clientRequestQuotaManager, requestChannel, groupCoordinator)
 
     createKafkaApis().handleTxnOffsetCommitRequest(request)
 
     val response = readResponse(ApiKeys.TXN_OFFSET_COMMIT, offsetCommitRequest, capturedResponse)
       .asInstanceOf[TxnOffsetCommitResponse]
-    assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION, response.errors().get(topicPartition))
+    assertEquals(Errors.COORDINATOR_NOT_AVAILABLE, response.errors().get(topicPartition))
   }
 
   @Test
@@ -396,7 +412,7 @@ class KafkaApisTest {
     val expectedErrors = Map(tp1 -> Errors.UNKNOWN_TOPIC_OR_PARTITION, tp2 -> Errors.NONE).asJava
 
     val capturedResponse: Capture[RequestChannel.Response] = EasyMock.newCapture()
-    val responseCallback: Capture[Map[TopicPartition, PartitionResponse] => Unit]  = EasyMock.newCapture()
+    val responseCallback: Capture[Map[TopicPartition, PartitionResponse] => Unit] = EasyMock.newCapture()
 
     EasyMock.expect(replicaManager.getMagic(tp1))
       .andReturn(None)
@@ -660,7 +676,8 @@ class KafkaApisTest {
       anyObject[Option[ClientMetadata]])
     expectLastCall[Unit].andAnswer(new IAnswer[Unit] {
       def answer: Unit = {
-        val callback = getCurrentArguments.apply(7).asInstanceOf[(Seq[(TopicPartition, FetchPartitionData)] => Unit)]
+        val callback = getCurrentArguments.apply(7)
+          .asInstanceOf[Seq[(TopicPartition, FetchPartitionData)] => Unit]
         val records = MemoryRecords.withRecords(CompressionType.NONE,
           new SimpleRecord(timestamp, "foo".getBytes(StandardCharsets.UTF_8)))
         callback(Seq(tp -> FetchPartitionData(Errors.NONE, hw, 0, records,

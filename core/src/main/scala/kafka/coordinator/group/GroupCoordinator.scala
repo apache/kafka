@@ -677,9 +677,7 @@ class GroupCoordinator(val brokerId: Int,
                              offsetMetadata: immutable.Map[TopicPartition, OffsetAndMetadata],
                              responseCallback: immutable.Map[TopicPartition, Errors] => Unit): Unit = {
     validateGroupStatus(groupId, ApiKeys.TXN_OFFSET_COMMIT) match {
-      case Some(error) => {
-        responseCallback(offsetMetadata.map { case (k, _) => k -> error })
-      }
+      case Some(error) => responseCallback(offsetMetadata.map { case (k, _) => k -> error })
       case None =>
         val group = groupManager.getGroup(groupId).getOrElse {
           groupManager.addGroup(new GroupMetadata(groupId, Empty, time))
