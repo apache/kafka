@@ -379,7 +379,7 @@ public class MemoryRecords extends AbstractRecords {
             this.tombstoneRetentionMs = tombstoneRetentionMs;
         }
 
-        public class BatchRetentionResult {
+        public static class BatchRetentionResult {
             public final BatchRetention batchRetention;
             public final boolean containsMarkerForEmptyTxn;
             public BatchRetentionResult(final BatchRetention batchRetention,

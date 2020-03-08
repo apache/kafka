@@ -648,7 +648,7 @@ private[log] class Cleaner(val id: Int,
     val logCleanerFilter: RecordFilter = new RecordFilter(currentTime, tombstoneRetentionMs) {
       var discardBatchRecords: Boolean = _
 
-      override def checkBatchRetention(batch: RecordBatch): BatchRetentionResult = {
+      override def checkBatchRetention(batch: RecordBatch): RecordFilter.BatchRetentionResult = {
         // we piggy-back on the tombstone retention logic to delay deletion of transaction markers.
         // note that we will never delete a marker until all the records from that transaction are removed.
         val canDiscardBatch = shouldDiscardBatch(batch, transactionMetadata)
@@ -686,7 +686,7 @@ private[log] class Cleaner(val id: Int,
             BatchRetention.DELETE
           else
             BatchRetention.DELETE_EMPTY
-        new BatchRetentionResult(batchRetention, canDiscardBatch)
+        new RecordFilter.BatchRetentionResult(batchRetention, canDiscardBatch)
       }
 
       override def shouldRetainRecord(batch: RecordBatch, record: Record): Boolean = {
