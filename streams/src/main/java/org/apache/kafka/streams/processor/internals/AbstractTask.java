@@ -17,18 +17,24 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 
 import java.util.Collection;
 import java.util.Set;
+import org.slf4j.Logger;
 
+import static java.lang.String.format;
 import static org.apache.kafka.streams.processor.internals.Task.State.CLOSED;
 import static org.apache.kafka.streams.processor.internals.Task.State.CREATED;
 
 public abstract class AbstractTask implements Task {
     private Task.State state = CREATED;
 
+    protected final Logger log;
+    protected final LogContext logContext;
+    protected final String logPrefix;
     protected final TaskId id;
     protected final ProcessorTopology topology;
     protected final StateDirectory stateDirectory;
@@ -39,12 +45,18 @@ public abstract class AbstractTask implements Task {
                  final ProcessorTopology topology,
                  final StateDirectory stateDirectory,
                  final ProcessorStateManager stateMgr,
-                 final Set<TopicPartition> partitions) {
+                 final Set<TopicPartition> partitions,
+                 final String taskType) {
         this.id = id;
         this.stateMgr = stateMgr;
         this.topology = topology;
         this.partitions = partitions;
         this.stateDirectory = stateDirectory;
+
+        final String threadIdPrefix = format("stream-thread [%s] ", Thread.currentThread().getName());
+        logPrefix = threadIdPrefix + format("%s [%s] ", taskType, id);
+        logContext = new LogContext(logPrefix);
+        log = logContext.logger(getClass());
     }
 
     @Override
@@ -98,6 +110,18 @@ public abstract class AbstractTask implements Task {
             state = newState;
         } else {
             throw new IllegalStateException("Invalid transition from " + oldState + " to " + newState);
+        }
+    }
+
+    void executeAndMaybeSwallow(final boolean clean, final Runnable runnable, final String name) {
+        try {
+            runnable.run();
+        } catch (final RuntimeException e) {
+            if (clean) {
+                throw e;
+            } else {
+                log.debug("Ignoring error in unclean {}", name);
+            }
         }
     }
 }

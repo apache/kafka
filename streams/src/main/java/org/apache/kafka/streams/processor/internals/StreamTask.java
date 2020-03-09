@@ -72,8 +72,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     static final byte LATEST_MAGIC_BYTE = 1;
 
     private final Time time;
-    private final Logger log;
-    private final String logPrefix;
     private final Consumer<byte[], byte[]> mainConsumer;
 
     // we want to abstract eos logic out of StreamTask, however
@@ -112,13 +110,8 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                       final Time time,
                       final ProcessorStateManager stateMgr,
                       final RecordCollector recordCollector) {
-        super(id, topology, stateDirectory, stateMgr, partitions);
+        super(id, topology, stateDirectory, stateMgr, partitions, "standby-task");
         this.mainConsumer = mainConsumer;
-
-        final String threadIdPrefix = format("stream-thread [%s] ", Thread.currentThread().getName());
-        logPrefix = threadIdPrefix + format("%s [%s] ", "task", id);
-        final LogContext logContext = new LogContext(logPrefix);
-        log = logContext.logger(getClass());
 
         this.time = time;
         this.recordCollector = recordCollector;
@@ -455,8 +448,10 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
 
             // first close state manager (which is idempotent) then close the record collector (which could throw),
             // if the latter throws and we re-close dirty which would close the state manager again.
-            StateManagerUtil.closeStateManager(log, logPrefix, clean,
-                wipeStateStore, stateMgr, stateDirectory, TaskType.ACTIVE);
+            executeAndMaybeSwallow(clean, () -> {
+                StateManagerUtil.closeStateManager(log, logPrefix, clean,
+                        wipeStateStore, stateMgr, stateDirectory, TaskType.ACTIVE);
+                }, "state manager close");
 
             executeAndMaybeSwallow(clean, recordCollector::close, "record collector close");
         } else {
@@ -714,18 +709,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
 
         if (exception != null && clean) {
             throw exception;
-        }
-    }
-
-    private void executeAndMaybeSwallow(final boolean clean, final Runnable runnable, final String name) {
-        try {
-            runnable.run();
-        } catch (final RuntimeException e) {
-            if (clean) {
-                throw e;
-            } else {
-                log.debug("Ignoring error in unclean {}", name);
-            }
         }
     }
 

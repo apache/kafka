@@ -38,8 +38,6 @@ import java.util.Set;
  * A StandbyTask
  */
 public class StandbyTask extends AbstractTask implements Task {
-    private final Logger log;
-    private final String logPrefix;
     private final Sensor closeTaskSensor;
     private final InternalProcessorContext processorContext;
 
@@ -61,12 +59,7 @@ public class StandbyTask extends AbstractTask implements Task {
                 final StreamsMetricsImpl metrics,
                 final ProcessorStateManager stateMgr,
                 final StateDirectory stateDirectory) {
-        super(id, topology, stateDirectory, stateMgr, partitions);
-
-        final String threadIdPrefix = String.format("stream-thread [%s] ", Thread.currentThread().getName());
-        logPrefix = threadIdPrefix + String.format("%s [%s] ", "standby-task", id);
-        final LogContext logContext = new LogContext(logPrefix);
-        log = logContext.logger(getClass());
+        super(id, topology, stateDirectory, stateMgr, partitions, "standby-task");
 
         processorContext = new StandbyContextImpl(id, config, stateMgr, metrics);
         closeTaskSensor = ThreadMetrics.closeTaskSensor(Thread.currentThread().getName(), metrics);
@@ -184,8 +177,10 @@ public class StandbyTask extends AbstractTask implements Task {
             }
 
             if (state() == State.CLOSING) {
+                executeAndMaybeSwallow(clean, () -> {
                 StateManagerUtil.closeStateManager(log, logPrefix, clean,
                     false, stateMgr, stateDirectory, TaskType.STANDBY);
+                }, "state manager close");
 
                 // TODO: if EOS is enabled, we should wipe out the state stores like we did for StreamTask too
             } else {
