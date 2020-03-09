@@ -519,7 +519,7 @@ class Log(@volatile var dir: File,
     var minCleanedFileOffset = Long.MaxValue
 
     for (segDir <- dir.listFiles if segDir.isDirectory) {
-      val baseOffset = dir.getName.toLong
+      val baseOffset = segDir.getName.toLong
       if (!LogSegment.canReadSegment(dir, baseOffset))
         throw new IOException(s"Could not read file $segDir")
       val segmentStatus = LogSegment.getStatus(segDir)
@@ -545,7 +545,7 @@ class Log(@volatile var dir: File,
     // KAFKA-6264: Delete all .swap files whose base offset is greater than the minimum .cleaned segment offset. Such .swap
     // files could be part of an incomplete split operation that could not complete. See Log#splitOverflowedSegment
     // for more details about the split operation.
-    val (invalidSwapFiles, validSwapDirs) = swapFiles.partition(file => offsetFromFile(file) >= minCleanedFileOffset)
+    val (invalidSwapFiles, validSwapDirs) = swapFiles.partition(segDir => segDir.getName.toLong >= minCleanedFileOffset)
     invalidSwapFiles.foreach { segDir =>
       debug(s"Deleting invalid swap file ${segDir.getAbsoluteFile} minCleanedFileOffset: $minCleanedFileOffset")
       LogSegment.deleteIfExists(segDir)

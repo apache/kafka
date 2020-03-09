@@ -717,6 +717,10 @@ object LogSegment {
     new File(segDir, SegmentFile.SNAPSHOT.getName).exists()
   }
 
+  def getSnapshotFile(segDir: File): File = {
+    new File(segDir, SegmentFile.SNAPSHOT.getName)
+  }
+
   def getProducerSnapshotFile(dir: File, baseOffset: Long): File = {
     val segDir = new File(dir, String.valueOf(baseOffset))
     new File(segDir, SegmentFile.SNAPSHOT.getName)
