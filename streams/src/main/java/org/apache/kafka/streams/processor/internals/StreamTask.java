@@ -389,7 +389,11 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
 
     @Override
     public void closeDirty() {
-        close(false);
+        try {
+            close(false);
+        } catch (RuntimeException e) {
+            log.warn(String.format("Ignoring uncaught error in unclean close of active task %s", id), e);
+        }
 
         log.info("Closed dirty");
     }

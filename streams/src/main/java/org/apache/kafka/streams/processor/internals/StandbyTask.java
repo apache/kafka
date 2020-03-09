@@ -154,7 +154,11 @@ public class StandbyTask extends AbstractTask implements Task {
 
     @Override
     public void closeDirty() {
-        close(false);
+        try {
+            close(false);
+        } catch (RuntimeException e) {
+            log.warn(String.format("Ignoring uncaught error in unclean close of standby task %s", id), e);
+        }
 
         log.info("Closed dirty");
     }
@@ -172,8 +176,9 @@ public class StandbyTask extends AbstractTask implements Task {
             transitionTo(State.CLOSING);
         } else {
             if (state() == State.RUNNING) {
-                if (clean)
+                if (clean) {
                     commit();
+                }
 
                 transitionTo(State.CLOSING);
             }
