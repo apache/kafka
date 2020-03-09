@@ -439,13 +439,13 @@ object ProducerStateManager {
     finally fileChannel.close()
   }
 
-  private def isSnapshotFile(file: File): Boolean = file.getName.endsWith(Log.ProducerSnapshotFileSuffix)
+  private def hasSnapshot(segDir: File): Boolean = LogSegment.hasSnapshot(segDir)
 
   // visible for testing
   private[log] def listSnapshotFiles(dir: File): Seq[File] = {
     if (dir.exists && dir.isDirectory) {
       Option(dir.listFiles).map { files =>
-        files.filter(f => f.isFile && isSnapshotFile(f)).toSeq
+        files.filter(f => f.isDirectory && hasSnapshot(f)).toSeq
       }.getOrElse(Seq.empty)
     } else Seq.empty
   }
@@ -655,7 +655,7 @@ class ProducerStateManager(val topicPartition: TopicPartition,
   def takeSnapshot(): Unit = {
     // If not a new offset, then it is not worth taking another snapshot
     if (lastMapOffset > lastSnapOffset) {
-      val snapshotFile = Log.producerSnapshotFile(logDir, lastMapOffset)
+      val snapshotFile = LogSegment.getProducerSnapshotFile(logDir, lastMapOffset)
       info(s"Writing producer snapshot at offset $lastMapOffset")
       writeSnapshot(snapshotFile, producers)
 

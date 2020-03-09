@@ -30,11 +30,15 @@ object LogUtils {
                     logDir: File,
                     indexIntervalBytes: Int = 10,
                     time: Time = Time.SYSTEM): LogSegment = {
-    val ms = FileRecords.open(Log.logFile(logDir, offset))
-    val idx = LazyIndex.forOffset(Log.offsetIndexFile(logDir, offset), offset, maxIndexSize = 1000)
-    val timeIdx = LazyIndex.forTime(Log.timeIndexFile(logDir, offset), offset, maxIndexSize = 1500)
-    val txnIndex = new TransactionIndex(offset, Log.transactionIndexFile(logDir, offset))
+    val segDir = new File(logDir, String.valueOf(offset))
+    segDir.mkdirs()
+    val statusFile = new File(segDir, SegmentFile.STATUS.getName)
+    SegmentStatusHandler.setStatus(statusFile, SegmentStatus.HOT)
 
-    new LogSegment(ms, idx, timeIdx, txnIndex, offset, indexIntervalBytes, 0, time)
+    val ms = FileRecords.open(new File(segDir, SegmentFile.LOG.getName))
+    val idx = LazyIndex.forOffset(new File(segDir, SegmentFile.OFFSET_INDEX.getName), offset, maxIndexSize = 1000)
+    val timeIdx = LazyIndex.forTime(new File(segDir, SegmentFile.TIME_INDEX.getName), offset, maxIndexSize = 1500)
+    val txnIndex = new TransactionIndex(offset, new File(segDir, SegmentFile.TXN_INDEX.getName))
+    new LogSegment(ms, idx, timeIdx, txnIndex, offset, indexIntervalBytes, 0, time, statusFile)
   }
 }

@@ -282,6 +282,7 @@ class Log(@volatile var dir: File,
 
   /* the actual segments of the log */
   private val segments: ConcurrentNavigableMap[java.lang.Long, LogSegment] = new ConcurrentSkipListMap[java.lang.Long, LogSegment]
+  private val deletedSegments: ConcurrentNavigableMap[java.lang.Long, java.lang.Boolean] = new ConcurrentSkipListMap[java.lang.Long, java.lang.Boolean]
 
   // Visible for testing
   @volatile var leaderEpochCache: Option[LeaderEpochFileCache] = None
@@ -513,61 +514,49 @@ class Log(@volatile var dir: File,
    */
   private def removeTempFilesAndCollectSwapFiles(): Set[File] = {
 
-    def deleteIndicesIfExist(baseFile: File, suffix: String = ""): Unit = {
-      info(s"Deleting index files with suffix $suffix for baseFile $baseFile")
-      val offset = offsetFromFile(baseFile)
-      Files.deleteIfExists(Log.offsetIndexFile(dir, offset, suffix).toPath)
-      Files.deleteIfExists(Log.timeIndexFile(dir, offset, suffix).toPath)
-      Files.deleteIfExists(Log.transactionIndexFile(dir, offset, suffix).toPath)
-    }
-
     var swapFiles = Set[File]()
-    var cleanFiles = Set[File]()
+    var cleanDirs = Set[File]()
     var minCleanedFileOffset = Long.MaxValue
 
-    for (file <- dir.listFiles if file.isFile) {
-      if (!file.canRead)
-        throw new IOException(s"Could not read file $file")
-      val filename = file.getName
-      if (filename.endsWith(DeletedFileSuffix)) {
-        debug(s"Deleting stray temporary file ${file.getAbsolutePath}")
-        Files.deleteIfExists(file.toPath)
-      } else if (filename.endsWith(CleanedFileSuffix)) {
-        minCleanedFileOffset = Math.min(offsetFromFileName(filename), minCleanedFileOffset)
-        cleanFiles += file
-      } else if (filename.endsWith(SwapFileSuffix)) {
+    for (segDir <- dir.listFiles if segDir.isDirectory) {
+      val baseOffset = dir.getName.toLong
+      if (!LogSegment.canReadSegment(dir, baseOffset))
+        throw new IOException(s"Could not read file $segDir")
+      val segmentStatus = LogSegment.getStatus(segDir)
+      if (segmentStatus == SegmentStatus.DELETED) {
+        debug(s"Deleting stray temporary file ${segDir.getAbsolutePath}")
+        LogSegment.deleteIfExists(dir, baseOffset)
+      } else if (segmentStatus == SegmentStatus.CLEANED) {
+        minCleanedFileOffset = Math.min(baseOffset, minCleanedFileOffset)
+        cleanDirs += segDir
+      } else if (segmentStatus == SegmentStatus.SWAPPED) {
         // we crashed in the middle of a swap operation, to recover:
         // if a log, delete the index files, complete the swap operation later
         // if an index just delete the index files, they will be rebuilt
-        val baseFile = new File(CoreUtils.replaceSuffix(file.getPath, SwapFileSuffix, ""))
-        info(s"Found file ${file.getAbsolutePath} from interrupted swap operation.")
-        if (isIndexFile(baseFile)) {
-          deleteIndicesIfExist(baseFile)
-        } else if (isLogFile(baseFile)) {
-          deleteIndicesIfExist(baseFile)
-          swapFiles += file
+        info(s"Found file ${segDir.getAbsolutePath} from interrupted swap operation.")
+        LogSegment.changeStatus(segDir, SegmentStatus.SWAPPED, SegmentStatus.HOT)
+        info(s"Deleting index files from ${segDir.getAbsolutePath}")
+        LogSegment.deleteIndicesIfExist(segDir)
+        if(LogSegment.isSegmentFileExists(segDir, SegmentFile.LOG)){
+          swapFiles += segDir
         }
       }
     }
-
     // KAFKA-6264: Delete all .swap files whose base offset is greater than the minimum .cleaned segment offset. Such .swap
     // files could be part of an incomplete split operation that could not complete. See Log#splitOverflowedSegment
     // for more details about the split operation.
-    val (invalidSwapFiles, validSwapFiles) = swapFiles.partition(file => offsetFromFile(file) >= minCleanedFileOffset)
-    invalidSwapFiles.foreach { file =>
-      debug(s"Deleting invalid swap file ${file.getAbsoluteFile} minCleanedFileOffset: $minCleanedFileOffset")
-      val baseFile = new File(CoreUtils.replaceSuffix(file.getPath, SwapFileSuffix, ""))
-      deleteIndicesIfExist(baseFile, SwapFileSuffix)
-      Files.deleteIfExists(file.toPath)
+    val (invalidSwapFiles, validSwapDirs) = swapFiles.partition(file => offsetFromFile(file) >= minCleanedFileOffset)
+    invalidSwapFiles.foreach { segDir =>
+      debug(s"Deleting invalid swap file ${segDir.getAbsoluteFile} minCleanedFileOffset: $minCleanedFileOffset")
+      LogSegment.deleteIfExists(segDir)
     }
 
     // Now that we have deleted all .swap files that constitute an incomplete split operation, let's delete all .clean files
-    cleanFiles.foreach { file =>
-      debug(s"Deleting stray .clean file ${file.getAbsolutePath}")
-      Files.deleteIfExists(file.toPath)
+    cleanDirs.foreach { segDir =>
+      debug(s"Deleting stray .clean file ${segDir.getAbsolutePath}")
+      LogSegment.deleteIfExists(segDir)
     }
-
-    validSwapFiles
+    validSwapDirs
   }
 
   /**
@@ -580,25 +569,20 @@ class Log(@volatile var dir: File,
   private def loadSegmentFiles(): Unit = {
     // load segments in ascending order because transactional data from one segment may depend on the
     // segments that come before it
-    for (file <- dir.listFiles.sortBy(_.getName) if file.isFile) {
-      if (isIndexFile(file)) {
+    for (file <- dir.listFiles.sortBy(_.getName) if file.isDirectory) {
+      val baseOffset = file.getName.toLong
+      if (!LogSegment.isSegmentFileExists(dir, baseOffset, SegmentFile.LOG)) {
         // if it is an index file, make sure it has a corresponding .log file
-        val offset = offsetFromFile(file)
-        val logFile = Log.logFile(dir, offset)
-        if (!logFile.exists) {
-          warn(s"Found an orphaned index file ${file.getAbsolutePath}, with no corresponding log file.")
-          Files.deleteIfExists(file.toPath)
-        }
-      } else if (isLogFile(file)) {
+        warn(s"Found an orphaned index file ${file.getAbsolutePath}, with no corresponding log file.")
+        LogSegment.deleteIfExists(dir, baseOffset)
+      } else {
         // if it's a log file, load the corresponding log segment
-        val baseOffset = offsetFromFile(file)
-        val timeIndexFileNewlyCreated = !Log.timeIndexFile(dir, baseOffset).exists()
+        val timeIndexFileNewlyCreated = !LogSegment.isSegmentFileExists(dir, baseOffset, SegmentFile.TIME_INDEX)
         val segment = LogSegment.open(dir = dir,
           baseOffset = baseOffset,
           config,
           time = time,
           fileAlreadyExists = true)
-
         try segment.sanityCheck(timeIndexFileNewlyCreated)
         catch {
           case _: NoSuchFileException =>
@@ -643,16 +627,16 @@ class Log(@volatile var dir: File,
    *                                           this situation. This is expected to be an extremely rare scenario in practice,
    *                                           and manual intervention might be required to get out of it.
    */
-  private def completeSwapOperations(swapFiles: Set[File]): Unit = {
-    for (swapFile <- swapFiles) {
-      val logFile = new File(CoreUtils.replaceSuffix(swapFile.getPath, SwapFileSuffix, ""))
-      val baseOffset = offsetFromFile(logFile)
-      val swapSegment = LogSegment.open(swapFile.getParentFile,
+  private def completeSwapOperations(segDirs: Set[File]): Unit = {
+    for (segDir <- segDirs) {
+      val baseOffset = segDir.getName.toLong
+      val swapSegment = LogSegment.open(segDir,
         baseOffset = baseOffset,
         config,
-        time = time,
-        fileSuffix = SwapFileSuffix)
-      info(s"Found log file ${swapFile.getPath} from interrupted swap operation, repairing.")
+        time = time)
+      LogSegment.changeStatus(segDir, SegmentStatus.SWAPPED)
+
+      info(s"Found log file ${segDir.getPath} from interrupted swap operation, repairing.")
       recoverSegment(swapSegment)
 
       // We create swap files for two cases:
@@ -680,7 +664,7 @@ class Log(@volatile var dir: File,
   private def loadSegments(): Long = {
     // first do a pass through the files in the log directory and remove any temporary files
     // and find any interrupted swap operations
-    val swapFiles = removeTempFilesAndCollectSwapFiles()
+    val swapDirs = removeTempFilesAndCollectSwapFiles()
 
     // Now do a second pass and load all the log and index files.
     // We might encounter legacy log segments with offset overflow (KAFKA-6264). We need to split such segments. When
@@ -697,7 +681,7 @@ class Log(@volatile var dir: File,
     // Finally, complete any interrupted swap operations. To be crash-safe,
     // log files that are replaced by the swap segment should be renamed to .deleted
     // before the swap file is restored as the new segment file.
-    completeSwapOperations(swapFiles)
+    completeSwapOperations(swapDirs)
 
     if (!dir.getAbsolutePath.endsWith(Log.DeleteDirSuffix)) {
       val nextOffset = retryOnOffsetOverflow {
@@ -1864,7 +1848,6 @@ class Log(@volatile var dir: File,
       lock synchronized {
         checkIfMemoryMappedBufferClosed()
         val newOffset = math.max(expectedNextOffset.getOrElse(0L), logEndOffset)
-        val logFile = Log.logFile(dir, newOffset)
 
         if (segments.containsKey(newOffset)) {
           // segment with the same base offset already exists and loaded
@@ -1886,13 +1869,10 @@ class Log(@volatile var dir: File,
             s"Trying to roll a new log segment for topic partition $topicPartition with " +
             s"start offset $newOffset =max(provided offset = $expectedNextOffset, LEO = $logEndOffset) lower than start offset of the active segment $activeSegment")
         } else {
-          val offsetIdxFile = offsetIndexFile(dir, newOffset)
-          val timeIdxFile = timeIndexFile(dir, newOffset)
-          val txnIdxFile = transactionIndexFile(dir, newOffset)
-
-          for (file <- List(logFile, offsetIdxFile, timeIdxFile, txnIdxFile) if file.exists) {
-            warn(s"Newly rolled segment file ${file.getAbsolutePath} already exists; deleting it first")
-            Files.delete(file.toPath)
+          val newSegDir = new File(dir, String.valueOf(newOffset))
+          if (newSegDir.exists()) {
+            warn(s"Newly rolled segment  ${newSegDir.getAbsolutePath} already exists; deleting it first")
+            LogSegment.deleteIfExists(newSegDir)
           }
 
           Option(segments.lastEntry).foreach(_.getValue.onBecomeInactiveSegment())
@@ -2185,9 +2165,33 @@ class Log(@volatile var dir: File,
       // iteration remain valid and deterministic.
       val toDelete = segments.toList
       toDelete.foreach { segment =>
-        this.segments.remove(segment.baseOffset)
+        deleteSegment(segment, asyncDelete)
       }
-      deleteSegmentFiles(toDelete, asyncDelete)
+    }
+  }
+
+  private def deleteSegment(segment: LogSegment, asyncDelete: Boolean): Unit = {
+
+    def deleteSegments(): Unit = {
+      deletedSegments.keySet().forEach( offset =>{
+        info(s"Deleting segment ${topicPartition.toString} : $offset")
+        try {
+          LogSegment.deleteIfExists(dir, offset)
+          deletedSegments.remove(offset)
+        }catch{
+          case e: Throwable => (s"Unable to delete segment  ${topicPartition.toString} : $offset, Reason : ${e.getMessage}")
+        }
+      })
+    }
+
+    segment.changeSegmentStatus(SegmentStatus.DELETED)
+    segment.closeHandlers()
+    this.segments.remove(segment.baseOffset)
+    this.deletedSegments.put(segment.baseOffset, java.lang.Boolean.TRUE)
+    if(asyncDelete){
+        scheduler.schedule("delete-file", () => deleteSegments(), delay = config.fileDeleteDelayMs)
+    }else{
+      LogSegment.deleteIfExists(dir, segment.baseOffset)
     }
   }
 
@@ -2202,7 +2206,7 @@ class Log(@volatile var dir: File,
    * @throws IOException if the file can't be renamed and still exists
    */
   private def deleteSegmentFiles(segments: Iterable[LogSegment], asyncDelete: Boolean): Unit = {
-    segments.foreach(_.changeFileSuffixes("", Log.DeletedFileSuffix))
+    segments.foreach(_.changeSegmentStatus(SegmentStatus.DELETED))
 
     def deleteSegments(): Unit = {
       info(s"Deleting segments $segments")
@@ -2263,19 +2267,17 @@ class Log(@volatile var dir: File,
       // need to do this in two phases to be crash safe AND do the delete asynchronously
       // if we crash in the middle of this we complete the swap in loadSegments()
       if (!isRecoveredSwapFile)
-        sortedNewSegments.reverse.foreach(_.changeFileSuffixes(Log.CleanedFileSuffix, Log.SwapFileSuffix))
+        sortedNewSegments.reverse.foreach(_.changeSegmentStatus(SegmentStatus.CLEANED, SegmentStatus.SWAPPED))
       sortedNewSegments.reverse.foreach(addSegment(_))
 
       // delete the old files
       for (seg <- sortedOldSegments) {
         // remove the index entry
         if (seg.baseOffset != sortedNewSegments.head.baseOffset)
-          segments.remove(seg.baseOffset)
-        // delete segment files
-        deleteSegmentFiles(List(seg), asyncDelete = true)
+          deleteSegment(seg, asyncDelete = true)
       }
       // okay we are safe now, remove the swap suffix
-      sortedNewSegments.foreach(_.changeFileSuffixes(Log.SwapFileSuffix, ""))
+      sortedNewSegments.foreach(_.changeSegmentStatus(SegmentStatus.SWAPPED, SegmentStatus.HOT))
     }
   }
 
@@ -2347,7 +2349,7 @@ class Log(@volatile var dir: File,
    * @return List of new segments that replace the input segment
    */
   private[log] def splitOverflowedSegment(segment: LogSegment): List[LogSegment] = {
-    require(isLogFile(segment.log.file), s"Cannot split file ${segment.log.file.getAbsoluteFile}")
+    require(segment.getSegmentStatus() == SegmentStatus.HOT, s"Cannot split file ${segment.log.file.getAbsoluteFile}")
     require(segment.hasOverflow, "Split operation is only permitted for segments with overflow")
 
     info(s"Splitting overflowed segment $segment")
@@ -2614,15 +2616,6 @@ object Log {
 
     new TopicPartition(topic, partition)
   }
-
-  private def isIndexFile(file: File): Boolean = {
-    val filename = file.getName
-    filename.endsWith(IndexFileSuffix) || filename.endsWith(TimeIndexFileSuffix) || filename.endsWith(TxnIndexFileSuffix)
-  }
-
-  private def isLogFile(file: File): Boolean =
-    file.getPath.endsWith(LogFileSuffix)
-
 }
 
 object LogMetricNames {
