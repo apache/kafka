@@ -455,8 +455,9 @@ public class StoreChangelogReader implements ChangelogReader {
         if (state == ChangelogReaderState.STANDBY_UPDATING &&
             updateOffsetIntervalMs < time.milliseconds() - lastUpdateOffsetTime) {
 
-            // for standby changelogs, if the interval has elapsed and there are buffered records not applicable,
-            // we can try to update the limit offset as either committed offset for source changelog partitions;
+            // when the interval has elapsed we should try to update the limit offset for standbys reading from
+            // a source changelog with the new committed offset, unless there are no buffered records since 
+            // we only need the limit when processing new records
             // for other changelog partitions we do not need to update limit offset at all since we never need to
             // check when it completes based on limit offset anyways: the end offset would keep increasing and the
             // standby never need to stop
