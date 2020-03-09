@@ -108,7 +108,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                       final Time time,
                       final ProcessorStateManager stateMgr,
                       final RecordCollector recordCollector) {
-        super(id, topology, stateDirectory, stateMgr, partitions, "standby-task");
+        super(id, topology, stateDirectory, stateMgr, partitions, "task");
         this.mainConsumer = mainConsumer;
 
         this.time = time;
