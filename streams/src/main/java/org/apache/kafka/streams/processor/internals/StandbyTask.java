@@ -178,9 +178,9 @@ public class StandbyTask extends AbstractTask implements Task {
 
             if (state() == State.CLOSING) {
                 executeAndMaybeSwallow(clean, () -> {
-                StateManagerUtil.closeStateManager(log, logPrefix, clean,
-                    false, stateMgr, stateDirectory, TaskType.STANDBY);
-                }, "state manager close");
+                    StateManagerUtil.closeStateManager(log, logPrefix, clean,
+                        false, stateMgr, stateDirectory, TaskType.STANDBY);
+                    }, "state manager close");
 
                 // TODO: if EOS is enabled, we should wipe out the state stores like we did for StreamTask too
             } else {
