@@ -164,6 +164,7 @@ public class MemoryRecords extends AbstractRecords {
             long maxOffset = -1L;
 
             final BatchRetentionResult batchRetentionResult = filter.checkBatchRetention(batch);
+            System.out.println("Batch retention " + batchRetentionResult.batchRetention);
             final boolean containsMarkerForEmptyTxn = batchRetentionResult.containsMarkerForEmptyTxn;
             final BatchRetention batchRetention = batchRetentionResult.batchRetention;
 
@@ -263,6 +264,7 @@ public class MemoryRecords extends AbstractRecords {
                 filterResult.messagesRead += 1;
 
                 if (filter.shouldRetainRecord(batch, record)) {
+                    System.out.println("Retaining record " + record);
                     // Check for log corruption due to KAFKA-4298. If we find it, make sure that we overwrite
                     // the corrupted batch with correct data.
                     if (!record.hasMagic(batchMagic))
@@ -277,6 +279,7 @@ public class MemoryRecords extends AbstractRecords {
                         containsTombstones = true;
                     }
                 } else {
+                    System.out.println("Removing record " + record);
                     recordsFiltered = false;
                 }
             }
