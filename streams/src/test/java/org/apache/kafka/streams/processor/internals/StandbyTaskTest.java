@@ -383,14 +383,23 @@ public class StandbyTaskTest {
     }
 
     @Test
-    public void shouldThrowIfClosingOnIllegalState() {
+    public void shouldThrowIfClosingCleanOnIllegalState() {
         task = createStandbyTask();
 
         task.closeClean();
 
         // close call are not idempotent since we are already in closed
         assertThrows(IllegalStateException.class, task::closeClean);
-        assertThrows(IllegalStateException.class, task::closeDirty);
+    }
+
+    @Test
+    public void shouldNotThrowIfClosingDirtyOnIllegalState() {
+        task = createStandbyTask();
+
+        task.closeClean();
+
+        // close calls are not idempotent since we are already closed, however closeDirty should NEVER throw
+        task.closeDirty();
     }
 
     private StandbyTask createStandbyTask() {
