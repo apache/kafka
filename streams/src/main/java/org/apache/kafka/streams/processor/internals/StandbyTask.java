@@ -19,7 +19,6 @@ package org.apache.kafka.streams.processor.internals;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.Sensor;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.errors.StreamsException;
@@ -27,7 +26,6 @@ import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.metrics.ThreadMetrics;
-import org.slf4j.Logger;
 
 import java.util.Collections;
 import java.util.HashMap;
@@ -149,7 +147,7 @@ public class StandbyTask extends AbstractTask implements Task {
     public void closeDirty() {
         try {
             close(false);
-        } catch (RuntimeException e) {
+        } catch (final RuntimeException e) {
             log.warn(String.format("Ignoring uncaught error in unclean close of standby task %s", id), e);
         }
 
@@ -180,7 +178,7 @@ public class StandbyTask extends AbstractTask implements Task {
                 executeAndMaybeSwallow(clean, () -> {
                     StateManagerUtil.closeStateManager(log, logPrefix, clean,
                         false, stateMgr, stateDirectory, TaskType.STANDBY);
-                    }, "state manager close");
+                }, "state manager close");
 
                 // TODO: if EOS is enabled, we should wipe out the state stores like we did for StreamTask too
             } else {

@@ -24,7 +24,6 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.metrics.Sensor;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.DeserializationExceptionHandler;
@@ -42,7 +41,6 @@ import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.V
 import org.apache.kafka.streams.processor.internals.metrics.TaskMetrics;
 import org.apache.kafka.streams.processor.internals.metrics.ThreadMetrics;
 import org.apache.kafka.streams.state.internals.ThreadCache;
-import org.slf4j.Logger;
 
 import java.io.IOException;
 import java.io.PrintWriter;
@@ -384,7 +382,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     public void closeDirty() {
         try {
             close(false);
-        } catch (RuntimeException e) {
+        } catch (final RuntimeException e) {
             log.warn(String.format("Ignoring uncaught error in unclean close of active task %s", id), e);
         }
 
@@ -451,7 +449,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             executeAndMaybeSwallow(clean, () -> {
                 StateManagerUtil.closeStateManager(log, logPrefix, clean,
                         wipeStateStore, stateMgr, stateDirectory, TaskType.ACTIVE);
-                }, "state manager close");
+            }, "state manager close");
 
             executeAndMaybeSwallow(clean, recordCollector::close, "record collector close");
         } else {
