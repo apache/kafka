@@ -39,7 +39,7 @@ object GetOffsetShell {
       .withRequiredArg
       .describedAs("HOST1:PORT1,...,HOST3:PORT3")
       .ofType(classOf[String])
-    val bootstrapServerOpt = parser.accepts("bootstrap-server", "REQUIRED unless --broker-list(deprecated) is specified. The server(s) to connect to in the form HOST1:PORT1,HOST2:PORT2.")
+    val bootstrapServerOpt = parser.accepts("bootstrap-server", "REQUIRED. The server(s) to connect to in the form HOST1:PORT1,HOST2:PORT2.")
       .requiredUnless("broker-list")
       .withRequiredArg
       .describedAs("HOST1:PORT1,...,HOST3:PORT3")
@@ -71,7 +71,7 @@ object GetOffsetShell {
 
     options = parser.parse(args : _*)
 
-    def brokerList: String = {
+    def bootstrapServers: String = {
       val listOpt = if (options.has(bootstrapServerOpt))
         bootstrapServerOpt
       else
@@ -87,7 +87,7 @@ object GetOffsetShell {
 
     CommandLineUtils.checkRequiredArgs(opts.parser, opts.options, opts.topicOpt)
 
-    ToolsUtils.validatePortOrDie(opts.parser, opts.brokerList)
+    ToolsUtils.validatePortOrDie(opts.parser, opts.bootstrapServers)
     opts
   }
 
@@ -112,7 +112,7 @@ object GetOffsetShell {
     val listOffsetsTimestamp = options.valueOf(opts.timeOpt).longValue
 
     val config = new Properties
-    config.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, opts.brokerList)
+    config.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, opts.bootstrapServers)
     config.setProperty(ConsumerConfig.CLIENT_ID_CONFIG, clientId)
     val consumer = new KafkaConsumer(config, new ByteArrayDeserializer, new ByteArrayDeserializer)
 

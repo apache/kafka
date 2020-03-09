@@ -12,6 +12,6 @@ class GetOffsetShellTest {
       "--topic", "top"
     )
     val opts = GetOffsetShell.validateAndParseArgs(args)
-    assertEquals("localhost:9092", opts.brokerList)
+    assertEquals("localhost:9092", opts.bootstrapServers)
   }
 }

@@ -77,7 +77,7 @@ object ReplicaVerificationTool extends Logging {
       .withRequiredArg
       .describedAs("hostname:port,...,hostname:port")
       .ofType(classOf[String])
-    val bootstrapServerOpt = parser.accepts("bootstrap-server", "REQUIRED unless --broker-list(deprecated) is specified.")
+    val bootstrapServerOpt = parser.accepts("bootstrap-server", "REQUIRED. The server(s) to connect to.")
       .requiredUnless("broker-list")
       .withRequiredArg
       .describedAs("Server(s) to use for bootstrapping in the form HOST1:PORT1,HOST2:PORT2.")
@@ -110,7 +110,7 @@ object ReplicaVerificationTool extends Logging {
 
     options = parser.parse(args: _*)
 
-    def brokerList: String =
+    def bootstrapServers: String =
       if (options.has(bootstrapServerOpt)) {
         options.valueOf(bootstrapServerOpt)
       } else {
@@ -131,7 +131,7 @@ object ReplicaVerificationTool extends Logging {
         CommandLineUtils.printUsageAndDie(options.parser, s"Topic whitelist $topicWhitelistRegex is not a valid regex.")
     }
 
-    ToolsUtils.validatePortOrDie(options.parser, options.brokerList)
+    ToolsUtils.validatePortOrDie(options.parser, options.bootstrapServers)
 
     options
   }
@@ -146,7 +146,7 @@ object ReplicaVerificationTool extends Logging {
     val maxWaitMs = options.valueOf(opts.maxWaitMsOpt).intValue
     val initialOffsetTime = options.valueOf(opts.initialOffsetTimeOpt).longValue
     val reportInterval = options.valueOf(opts.reportIntervalOpt).longValue
-    val brokerList = opts.brokerList
+    val brokerList = opts.bootstrapServers
 
     info("Getting topic metadata...")
     val (topicsMetadata, brokerInfo) = {

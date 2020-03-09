@@ -206,7 +206,7 @@ object ConsumerPerformance extends LazyLogging {
       .withRequiredArg
       .describedAs("broker-list")
       .ofType(classOf[String])
-    val bootstrapServerOpt = parser.accepts("bootstrap-server", "REQUIRED unless --broker-list(deprecated) is specified. The server(s) to connect to.")
+    val bootstrapServerOpt = parser.accepts("bootstrap-server", "REQUIRED. The server(s) to connect to.")
       .requiredUnless("broker-list")
       .withRequiredArg
       .describedAs("server to connect to")

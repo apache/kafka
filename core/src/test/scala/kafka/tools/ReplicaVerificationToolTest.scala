@@ -83,7 +83,7 @@ class ReplicaVerificationToolTest {
     assertEquals(10L, opts.options.valueOf(opts.reportIntervalOpt))
     assertEquals(1000, opts.options.valueOf(opts.fetchSizeOpt))
     assertEquals(100, opts.options.valueOf(opts.maxWaitMsOpt))
-    assertEquals("localhost:9091", opts.brokerList)
+    assertEquals("localhost:9091", opts.bootstrapServers)
   }
 
   @Test
@@ -93,7 +93,7 @@ class ReplicaVerificationToolTest {
       "--bootstrap-server", "localhost:9092",
     )
     val opts = ReplicaVerificationTool.validateAndParseArgs(args)
-    assertEquals("localhost:9092", opts.brokerList)
+    assertEquals("localhost:9092", opts.bootstrapServers)
   }
 
   @Test
@@ -102,7 +102,7 @@ class ReplicaVerificationToolTest {
       "--bootstrap-server", "localhost:9092"
     )
     val opts = ReplicaVerificationTool.validateAndParseArgs(args)
-    assertEquals("localhost:9092", opts.brokerList)
+    assertEquals("localhost:9092", opts.bootstrapServers)
   }
 
   @Test
@@ -111,7 +111,7 @@ class ReplicaVerificationToolTest {
       "--broker-list", "localhost:9091"
     )
     val opts = ReplicaVerificationTool.validateAndParseArgs(args)
-    assertEquals("localhost:9091", opts.brokerList)
+    assertEquals("localhost:9091", opts.bootstrapServers)
   }
 
   @Test
