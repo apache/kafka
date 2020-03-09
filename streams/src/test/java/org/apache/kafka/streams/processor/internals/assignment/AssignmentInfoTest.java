@@ -130,8 +130,8 @@ public class AssignmentInfoTest {
 
     @Test
     public void shouldEncodeAndDecodeSmallerCommonlySupportedVersion() {
-        final int usedVersion = LATEST_SUPPORTED_VERSION - 1;
-        final int commonlySupportedVersion = LATEST_SUPPORTED_VERSION - 1;
+        final int usedVersion = 5;
+        final int commonlySupportedVersion = 5;
         final AssignmentInfo info = new AssignmentInfo(usedVersion, commonlySupportedVersion, activeTasks, standbyTasks,
             activeAssignment, standbyAssignment, 2);
         final AssignmentInfo expectedInfo = new AssignmentInfo(usedVersion, commonlySupportedVersion, activeTasks, standbyTasks,

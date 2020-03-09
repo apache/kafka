@@ -32,7 +32,7 @@ import java.util.Map;
 import java.util.Set;
 
 public interface Task {
-
+    // this must be negative to distinguish a running active task from other kinds tasks which may be caught up to the same offsets
     long LATEST_OFFSET = -2L;
 
     /*
@@ -174,7 +174,7 @@ public interface Task {
      */
     Map<TopicPartition, Long> changelogOffsets();
 
-    void markChangelogAsCorrupted(final Set<TopicPartition> partitions);
+    void markChangelogAsCorrupted(final Collection<TopicPartition> partitions);
 
     default Map<TopicPartition, Long> purgableOffsets() {
         return Collections.emptyMap();

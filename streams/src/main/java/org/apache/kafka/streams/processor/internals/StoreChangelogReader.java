@@ -421,9 +421,9 @@ public class StoreChangelogReader implements ChangelogReader {
                 log.warn("Encountered {} fetching records from restore consumer for partitions {}, it is likely that " +
                     "the consumer's position has fallen out of the topic partition offset range because the topic was " +
                     "truncated or compacted on the broker, marking the corresponding tasks as corrupted and re-initializing" +
-                    "it later.", e.getClass().getName(), e.partitions());
+                    " it later.", e.getClass().getName(), e.partitions());
 
-                final Map<TaskId, Set<TopicPartition>> taskWithCorruptedChangelogs = new HashMap<>();
+                final Map<TaskId, Collection<TopicPartition>> taskWithCorruptedChangelogs = new HashMap<>();
                 for (final TopicPartition partition : e.partitions()) {
                     final TaskId taskId = changelogs.get(partition).stateManager.taskId();
                     taskWithCorruptedChangelogs.computeIfAbsent(taskId, k -> new HashSet<>()).add(partition);

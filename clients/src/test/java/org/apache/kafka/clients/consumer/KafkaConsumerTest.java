@@ -28,6 +28,7 @@ import org.apache.kafka.clients.consumer.internals.ConsumerMetrics;
 import org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient;
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
 import org.apache.kafka.clients.consumer.internals.Fetcher;
+import org.apache.kafka.clients.consumer.internals.MockRebalanceListener;
 import org.apache.kafka.clients.consumer.internals.SubscriptionState;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.IsolationLevel;
@@ -1722,7 +1723,7 @@ public class KafkaConsumerTest {
     }
 
     @Test(expected = AuthenticationException.class)
-    public void testCommittedAuthenticationFaiure() {
+    public void testCommittedAuthenticationFailure() {
         final KafkaConsumer<String, String> consumer = consumerWithPendingAuthenticationError();
         consumer.committed(Collections.singleton(tp0)).get(tp0);
     }
@@ -2418,4 +2419,44 @@ public class KafkaConsumerTest {
         assertFalse(consumerMetricPresent(consumer, "time-between-poll-avg"));
         assertFalse(consumerMetricPresent(consumer, "time-between-poll-max"));
     }
+
+    @Test(expected = IllegalStateException.class)
+    public void testEnforceRebalanceWithManualAssignment() {
+        try (KafkaConsumer<byte[], byte[]> consumer = newConsumer((String) null)) {
+            consumer.assign(singleton(new TopicPartition("topic", 0)));
+            consumer.enforceRebalance();
+        }
+    }
+
+    @Test
+    public void testEnforceRebalanceTriggersRebalanceOnNextPoll() {
+        Time time = new MockTime(1L);
+        SubscriptionState subscription = new SubscriptionState(new LogContext(), OffsetResetStrategy.EARLIEST);
+        ConsumerMetadata metadata = createMetadata(subscription);
+        MockClient client = new MockClient(time, metadata);
+        ConsumerPartitionAssignor assignor = new RoundRobinAssignor();
+        KafkaConsumer<String, String> consumer = newConsumer(time, client, subscription, metadata, assignor, true, groupInstanceId);
+        MockRebalanceListener countingRebalanceListener = new MockRebalanceListener();
+        initMetadata(client, Utils.mkMap(Utils.mkEntry(topic, 1), Utils.mkEntry(topic2, 1), Utils.mkEntry(topic3, 1)));
+
+        consumer.subscribe(Arrays.asList(topic, topic2), countingRebalanceListener);
+        Node node = metadata.fetch().nodes().get(0);
+        prepareRebalance(client, node, assignor, Arrays.asList(tp0, t2p0), null);
+
+        // a first rebalance to get the assignment, we need two poll calls since we need two round trips to finish join / sync-group
+        consumer.poll(Duration.ZERO);
+        consumer.poll(Duration.ZERO);
+
+        // onPartitionsRevoked is not invoked when first joining the group
+        assertEquals(countingRebalanceListener.revokedCount, 0);
+        assertEquals(countingRebalanceListener.assignedCount, 1);
+
+        consumer.enforceRebalance();
+
+        // the next poll should trigger a rebalance
+        consumer.poll(Duration.ZERO);
+
+        assertEquals(countingRebalanceListener.revokedCount, 1);
+    }
+
 }

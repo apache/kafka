@@ -150,9 +150,8 @@ public class ThreadMetrics {
 
     public static Sensor processLatencySensor(final String threadId,
                                               final StreamsMetricsImpl streamsMetrics) {
-        final Sensor sensor = streamsMetrics.threadLevelSensor(threadId,
-                                                               PROCESS + LATENCY_SUFFIX,
-                                                               RecordingLevel.INFO);
+        final Sensor sensor =
+            streamsMetrics.threadLevelSensor(threadId, PROCESS + LATENCY_SUFFIX, RecordingLevel.INFO);
         final Map<String, String> tagMap = streamsMetrics.threadLevelTagMap(threadId);
         final String threadLevelGroup = threadLevelGroup(streamsMetrics);
         addAvgAndMaxToSensor(
@@ -167,10 +166,9 @@ public class ThreadMetrics {
     }
 
     public static Sensor processRateSensor(final String threadId,
-                                              final StreamsMetricsImpl streamsMetrics) {
-        final Sensor sensor = streamsMetrics.threadLevelSensor(threadId,
-                                                               PROCESS + RATE_SUFFIX,
-                                                               RecordingLevel.INFO);
+                                           final StreamsMetricsImpl streamsMetrics) {
+        final Sensor sensor =
+            streamsMetrics.threadLevelSensor(threadId, PROCESS + RATE_SUFFIX, RecordingLevel.INFO);
         final Map<String, String> tagMap = streamsMetrics.threadLevelTagMap(threadId);
         final String threadLevelGroup = threadLevelGroup(streamsMetrics);
         addRateOfSumAndSumMetricsToSensor(

@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.processor.internals.metrics;
 
-import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.Sensor.RecordingLevel;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.Version;
@@ -35,9 +34,9 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.Map;
 
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.LATENCY_SUFFIX;
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.RATE_SUFFIX;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.ROLLUP_VALUE;
-import static org.easymock.EasyMock.anyObject;
-import static org.easymock.EasyMock.eq;
 import static org.easymock.EasyMock.expect;
 import static org.easymock.EasyMock.mock;
 import static org.hamcrest.CoreMatchers.is;
@@ -78,6 +77,7 @@ public class ThreadMetricsTest {
     @Before
     public void setUp() {
         expect(streamsMetrics.version()).andReturn(builtInMetricsVersion).anyTimes();
+        mockStatic(StreamsMetricsImpl.class);
     }
 
     @Test
@@ -87,7 +87,6 @@ public class ThreadMetricsTest {
         final String rateDescription = "The average per-second number of newly created tasks";
         expect(streamsMetrics.threadLevelSensor(THREAD_ID, operation, RecordingLevel.INFO)).andReturn(expectedSensor);
         expect(streamsMetrics.threadLevelTagMap(THREAD_ID)).andReturn(tagMap);
-        mockStatic(StreamsMetricsImpl.class);
         StreamsMetricsImpl.addInvocationRateAndCountToSensor(
             expectedSensor,
             threadLevelGroup,
@@ -111,7 +110,6 @@ public class ThreadMetricsTest {
         final String rateDescription = "The average per-second number of closed tasks";
         expect(streamsMetrics.threadLevelSensor(THREAD_ID, operation, RecordingLevel.INFO)).andReturn(expectedSensor);
         expect(streamsMetrics.threadLevelTagMap(THREAD_ID)).andReturn(tagMap);
-        mockStatic(StreamsMetricsImpl.class);
         StreamsMetricsImpl.addInvocationRateAndCountToSensor(
             expectedSensor,
             threadLevelGroup,
@@ -138,7 +136,6 @@ public class ThreadMetricsTest {
         final String maxLatencyDescription = "The maximum commit latency";
         expect(streamsMetrics.threadLevelSensor(THREAD_ID, operation, RecordingLevel.INFO)).andReturn(expectedSensor);
         expect(streamsMetrics.threadLevelTagMap(THREAD_ID)).andReturn(tagMap);
-        mockStatic(StreamsMetricsImpl.class);
         StreamsMetricsImpl.addInvocationRateAndCountToSensor(
             expectedSensor,
             threadLevelGroup,
@@ -172,7 +169,6 @@ public class ThreadMetricsTest {
         final String maxLatencyDescription = "The maximum poll latency";
         expect(streamsMetrics.threadLevelSensor(THREAD_ID, operation, RecordingLevel.INFO)).andReturn(expectedSensor);
         expect(streamsMetrics.threadLevelTagMap(THREAD_ID)).andReturn(tagMap);
-        mockStatic(StreamsMetricsImpl.class);
         StreamsMetricsImpl.addInvocationRateAndCountToSensor(
             expectedSensor,
             threadLevelGroup,
@@ -199,22 +195,19 @@ public class ThreadMetricsTest {
 
     @Test
     public void shouldGetProcessLatencySensor() {
-        expect(streamsMetrics.threadLevelSensor(THREAD_ID, "process-latency", RecordingLevel.INFO))
-            .andReturn(expectedSensor);
+        final String operationLatency = "process" + LATENCY_SUFFIX;
+        final String avgLatencyDescription = "The average process latency";
+        final String maxLatencyDescription = "The maximum process latency";
+        expect(streamsMetrics.threadLevelSensor(THREAD_ID, operationLatency, RecordingLevel.INFO)).andReturn(expectedSensor);
         expect(streamsMetrics.threadLevelTagMap(THREAD_ID)).andReturn(tagMap);
-        expect(expectedSensor.add(eq(new MetricName(
-            "process-latency-avg",
+        StreamsMetricsImpl.addAvgAndMaxToSensor(
+            expectedSensor,
             threadLevelGroup,
-            "The average execution time in ms for processing, across all running tasks of this thread.",
-            tagMap
-        )), anyObject())).andReturn(true);
-
-        expect(expectedSensor.add(eq(new MetricName(
-            "process-latency-max",
-            threadLevelGroup,
-            "The maximum execution time in ms for processing across all running tasks of this thread.",
-            tagMap
-        )), anyObject())).andReturn(true);
+            tagMap,
+            operationLatency,
+            avgLatencyDescription,
+            maxLatencyDescription
+        );
         replay(StreamsMetricsImpl.class, streamsMetrics, expectedSensor);
 
         final Sensor sensor = ThreadMetrics.processLatencySensor(THREAD_ID, streamsMetrics);
@@ -225,22 +218,20 @@ public class ThreadMetricsTest {
 
     @Test
     public void shouldGetProcessRateSensor() {
-        expect(streamsMetrics.threadLevelSensor(THREAD_ID, "process-rate", RecordingLevel.INFO))
-            .andReturn(expectedSensor);
+        final String operation = "process";
+        final String operationRate = "process" + RATE_SUFFIX;
+        final String totalDescription = "The total number of calls to process";
+        final String rateDescription = "The average per-second number of calls to process";
+        expect(streamsMetrics.threadLevelSensor(THREAD_ID, operationRate, RecordingLevel.INFO)).andReturn(expectedSensor);
         expect(streamsMetrics.threadLevelTagMap(THREAD_ID)).andReturn(tagMap);
-        expect(expectedSensor.add(eq(new MetricName(
-            "process-rate",
+        StreamsMetricsImpl.addRateOfSumAndSumMetricsToSensor(
+            expectedSensor,
             threadLevelGroup,
-            "The average per-second number of calls to process",
-            tagMap
-        )), anyObject())).andReturn(true);
-
-        expect(expectedSensor.add(eq(new MetricName(
-            "process-total",
-            threadLevelGroup,
-            "The total number of calls to process",
-            tagMap
-        )), anyObject())).andReturn(true);
+            tagMap,
+            operation,
+            rateDescription,
+            totalDescription
+        );
         replay(StreamsMetricsImpl.class, streamsMetrics, expectedSensor);
 
         final Sensor sensor = ThreadMetrics.processRateSensor(THREAD_ID, streamsMetrics);
@@ -259,13 +250,13 @@ public class ThreadMetricsTest {
         final String maxLatencyDescription = "The maximum punctuate latency";
         expect(streamsMetrics.threadLevelSensor(THREAD_ID, operation, RecordingLevel.INFO)).andReturn(expectedSensor);
         expect(streamsMetrics.threadLevelTagMap(THREAD_ID)).andReturn(tagMap);
-        mockStatic(StreamsMetricsImpl.class);
         StreamsMetricsImpl.addInvocationRateAndCountToSensor(
             expectedSensor,
             threadLevelGroup,
             tagMap,
             operation,
-            rateDescription, totalDescription
+            rateDescription,
+            totalDescription
         );
         StreamsMetricsImpl.addAvgAndMaxToSensor(
             expectedSensor,
@@ -291,7 +282,6 @@ public class ThreadMetricsTest {
         expect(streamsMetrics.threadLevelSensor(THREAD_ID, operation, RecordingLevel.INFO))
             .andReturn(expectedSensor);
         expect(streamsMetrics.threadLevelTagMap(THREAD_ID)).andReturn(tagMap);
-        mockStatic(StreamsMetricsImpl.class);
         StreamsMetricsImpl.addInvocationRateAndCountToSensor(
             expectedSensor,
             threadLevelGroup,
@@ -322,7 +312,6 @@ public class ThreadMetricsTest {
             "The maximum commit latency over all tasks assigned to one stream thread";
         expect(streamsMetrics.threadLevelSensor(THREAD_ID, operation, RecordingLevel.DEBUG)).andReturn(expectedSensor);
         expect(streamsMetrics.taskLevelTagMap(THREAD_ID, ROLLUP_VALUE)).andReturn(tagMap);
-        mockStatic(StreamsMetricsImpl.class);
         StreamsMetricsImpl.addInvocationRateAndCountToSensor(
             expectedSensor,
             TASK_LEVEL_GROUP,

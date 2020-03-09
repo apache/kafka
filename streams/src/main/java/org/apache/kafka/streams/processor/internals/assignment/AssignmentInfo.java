@@ -163,6 +163,7 @@ public class AssignmentInfo {
                     out.writeInt(errCode);
                     break;
                 case 6:
+                case 7:
                     out.writeInt(usedVersion);
                     out.writeInt(commonlySupportedVersion);
                     encodeActiveAndStandbyTaskAssignment(out);
@@ -327,6 +328,7 @@ public class AssignmentInfo {
                     assignmentInfo.errCode = in.readInt();
                     break;
                 case 6:
+                case 7:
                     commonlySupportedVersion = in.readInt();
                     assignmentInfo = new AssignmentInfo(usedVersion, commonlySupportedVersion);
                     decodeActiveTasks(assignmentInfo, in);
