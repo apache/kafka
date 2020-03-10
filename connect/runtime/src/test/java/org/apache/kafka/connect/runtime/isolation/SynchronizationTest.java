@@ -73,7 +73,6 @@ public class SynchronizationTest {
         );
         dclBreakpoint = new Breakpoint<>();
         pclBreakpoint = new Breakpoint<>();
-        // This is a closure to give newDelegatingClassLoader the initialized breakpoints
         plugins = new Plugins(pluginProps) {
             @Override
             protected DelegatingClassLoader newDelegatingClassLoader(List<String> paths) {
@@ -83,28 +82,13 @@ public class SynchronizationTest {
                 );
             }
         };
-        // Keep an executor service with a custom name
-        // This is more informative than
         exec = new ThreadPoolExecutor(
             2,
             2,
             1000L,
             TimeUnit.MILLISECONDS,
             new LinkedBlockingDeque<>(),
-            r -> {
-                SecurityManager s = System.getSecurityManager();
-                Thread t = new Thread((s != null) ? s.getThreadGroup() :
-                    Thread.currentThread().getThreadGroup(), r,
-                    TEST_THREAD_PREFIX + THREAD_NUMBER.getAndIncrement(),
-                    0);
-                if (t.isDaemon()) {
-                    t.setDaemon(false);
-                }
-                if (t.getPriority() != Thread.NORM_PRIORITY) {
-                    t.setPriority(Thread.NORM_PRIORITY);
-                }
-                return t;
-            }
+            SynchronizationTest::namedThreadFactory
         );
 
     }
@@ -295,7 +279,7 @@ public class SynchronizationTest {
         // Step 3: Resume the first thread and try to lock the plugin classloader
         dclBreakpoint.testAwait();
         // d2p enters PluginClassLoader::loadClass
-        // d2p LOCKS PluginClassLoader (completing the deadlock
+        // d2p LOCKS PluginClassLoader (completing the deadlock)
         dumpThreads("d2p blocked trying to acquire the PluginClassLoader lock");
         assertNoDeadlocks();
     }
@@ -399,6 +383,23 @@ public class SynchronizationTest {
         //sb.append("\t...");
         //sb.append('\n');
         //}
+    }
+
+    private static Thread namedThreadFactory(Runnable r) {
+        // This is essentially Executors.defaultThreadFactory except with
+        // custom thread names so in order to filter by thread names when debugging
+        SecurityManager s = System.getSecurityManager();
+        Thread t = new Thread((s != null) ? s.getThreadGroup() :
+            Thread.currentThread().getThreadGroup(), r,
+            TEST_THREAD_PREFIX + THREAD_NUMBER.getAndIncrement(),
+            0);
+        if (t.isDaemon()) {
+            t.setDaemon(false);
+        }
+        if (t.getPriority() != Thread.NORM_PRIORITY) {
+            t.setPriority(Thread.NORM_PRIORITY);
+        }
+        return t;
     }
 
 }
