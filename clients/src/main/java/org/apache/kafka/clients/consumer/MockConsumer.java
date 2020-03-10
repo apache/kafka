@@ -56,7 +56,7 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
     private final Map<String, List<PartitionInfo>> partitions;
     private final SubscriptionState subscriptions;
     private final Map<TopicPartition, Long> beginningOffsets;
-    private final Map<TopicPartition, List<Long>> endOffsets;
+    private final Map<TopicPartition, Long> endOffsets;
     private final Map<TopicPartition, OffsetAndMetadata> committed;
     private final Queue<Runnable> pollTasks;
     private final Set<TopicPartition> paused;
@@ -359,14 +359,7 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
     }
 
     public synchronized void updateEndOffsets(final Map<TopicPartition, Long> newOffsets) {
-        for (final Map.Entry<TopicPartition, Long> entry : newOffsets.entrySet()) {
-            List<Long> offsets = endOffsets.get(entry.getKey());
-            if (offsets == null) {
-                offsets = new ArrayList<>();
-            }
-            offsets.add(entry.getValue());
-            endOffsets.put(entry.getKey(), offsets);
-        }
+        endOffsets.putAll(newOffsets);
     }
 
     @Override
@@ -439,7 +432,7 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
         }
         Map<TopicPartition, Long> result = new HashMap<>();
         for (TopicPartition tp : partitions) {
-            Long endOffset = getEndOffset(endOffsets.get(tp));
+            Long endOffset = endOffsets.get(tp);
             if (endOffset == null)
                 throw new IllegalStateException("The partition " + tp + " does not have an end offset.");
             result.put(tp, endOffset);
@@ -510,20 +503,13 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
             if (offset == null)
                 throw new IllegalStateException("MockConsumer didn't have beginning offset specified, but tried to seek to beginning");
         } else if (strategy == OffsetResetStrategy.LATEST) {
-            offset = getEndOffset(endOffsets.get(tp));
+            offset = endOffsets.get(tp);
             if (offset == null)
                 throw new IllegalStateException("MockConsumer didn't have end offset specified, but tried to seek to end");
         } else {
             throw new NoOffsetForPartitionException(tp);
         }
         seek(tp, offset);
-    }
-
-    private Long getEndOffset(List<Long> offsets) {
-        if (offsets == null || offsets.isEmpty()) {
-            return null;
-        }
-        return offsets.size() > 1 ? offsets.remove(0) : offsets.get(0);
     }
 
     @Override
