@@ -1541,7 +1541,7 @@ public class StreamTaskTest {
     }
 
     @Test
-    public void shouldThrowIfClosingCleanOnIllegalState() {
+    public void shouldThrowIfClosingOnIllegalState() {
         EasyMock.expect(stateManager.changelogPartitions()).andReturn(Collections.emptySet()).anyTimes();
         EasyMock.replay(stateManager);
 
@@ -1551,19 +1551,7 @@ public class StreamTaskTest {
 
         // close call are not idempotent since we are already in closed
         assertThrows(IllegalStateException.class, task::closeClean);
-    }
-
-    @Test
-    public void shouldNotThrowIfClosingDirtyOnIllegalState() {
-        EasyMock.expect(stateManager.changelogPartitions()).andReturn(Collections.emptySet()).anyTimes();
-        EasyMock.replay(stateManager);
-
-        task = createOptimizedStatefulTask(createConfig(false, "100"), consumer);
-
-        task.closeClean();
-
-        // close calls are not idempotent since we are already closed, however closeDirty should NEVER throw
-        task.closeDirty();
+        assertThrows(IllegalStateException.class, task::closeDirty);
     }
 
     private StreamTask createOptimizedStatefulTask(final StreamsConfig config, final Consumer<byte[], byte[]> consumer) {
