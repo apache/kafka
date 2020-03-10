@@ -35,6 +35,7 @@ import org.apache.kafka.common.utils.Time
 
 import scala.collection.JavaConverters._
 import scala.math._
+import scala.util.Random
 
 /**
  * A segment of the log. Each segment has two components: a log and an index. The log is a FileRecords containing
@@ -683,10 +684,11 @@ class LogSegment private[log] (val log: FileRecords,
 
 object LogSegment {
 
+  private val random = scala.util.Random
   def open(dir: File, baseOffset: Long, config: LogConfig, time: Time, fileAlreadyExists: Boolean = false,
-           initFileSize: Int = 0, preallocate: Boolean = false, fileSuffix: String = ""): LogSegment = {
+           initFileSize: Int = 0, preallocate: Boolean = false, randomDigits: Boolean = false): LogSegment = {
     val maxIndexSize = config.maxIndexSize
-    val segDir = new File(dir, String.valueOf(baseOffset))
+    val segDir = new File(dir, if(randomDigits) baseOffset+"-"+random.nextInt(1000) else String.valueOf(baseOffset))
     val statusFile = new File(segDir, SegmentFile.STATUS.getName)
     if(!fileAlreadyExists){
       segDir.mkdirs()
@@ -703,14 +705,33 @@ object LogSegment {
       time, statusFile)
   }
 
+  def getSegmentOffset(segDir: File): Long ={
+    val name = segDir.getName
+    val index = name.indexOf("-")
+    if(index > -1){
+      name.substring(0, index).toLong
+    }else{
+      name.toLong
+    }
+  }
   def deleteIfExists(dir: File, baseOffset: Long): Unit = {
     deleteIfExists(new File(dir, String.valueOf(baseOffset)))
   }
 
   def deleteIfExists(segDir: File): Unit = {
     if(segDir.exists()){
-      Files.walk(segDir.toPath).forEach( (path : Path) => Files.delete(path))
+      val files = segDir.listFiles()
+      if(files != null){
+        files.foreach( file => Files.delete(file.toPath))
+      }
+      Files.delete(segDir.toPath)
     }
+  }
+
+  def deleteIndicesIfExist(segDir: File): Unit = {
+    Files.deleteIfExists(new File(segDir, SegmentFile.OFFSET_INDEX.getName).toPath)
+    Files.deleteIfExists(new File(segDir, SegmentFile.TIME_INDEX.getName).toPath)
+    Files.deleteIfExists(new File(segDir, SegmentFile.TXN_INDEX.getName).toPath)
   }
 
   def hasSnapshot(segDir: File): Boolean = {
@@ -726,11 +747,6 @@ object LogSegment {
     new File(segDir, SegmentFile.SNAPSHOT.getName)
   }
 
-  def deleteIndicesIfExist(segDir: File): Unit = {
-    Files.deleteIfExists(new File(segDir, SegmentFile.OFFSET_INDEX.getName).toPath)
-    Files.deleteIfExists(new File(segDir, SegmentFile.TIME_INDEX.getName).toPath)
-    Files.deleteIfExists(new File(segDir, SegmentFile.TXN_INDEX.getName).toPath)
-  }
 
   def getStatus(dir: File, baseOffset: Long): SegmentStatus = {
     val segDir = new File(dir, String.valueOf(baseOffset))

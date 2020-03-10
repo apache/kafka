@@ -519,7 +519,7 @@ class Log(@volatile var dir: File,
     var minCleanedFileOffset = Long.MaxValue
 
     for (segDir <- dir.listFiles if segDir.isDirectory) {
-      val baseOffset = segDir.getName.toLong
+      val baseOffset = LogSegment.getSegmentOffset(segDir)
       if (!LogSegment.canReadSegment(dir, baseOffset))
         throw new IOException(s"Could not read file $segDir")
       val segmentStatus = LogSegment.getStatus(segDir)
@@ -534,7 +534,6 @@ class Log(@volatile var dir: File,
         // if a log, delete the index files, complete the swap operation later
         // if an index just delete the index files, they will be rebuilt
         info(s"Found file ${segDir.getAbsolutePath} from interrupted swap operation.")
-        LogSegment.changeStatus(segDir, SegmentStatus.SWAPPED, SegmentStatus.HOT)
         info(s"Deleting index files from ${segDir.getAbsolutePath}")
         LogSegment.deleteIndicesIfExist(segDir)
         if(LogSegment.isSegmentFileExists(segDir, SegmentFile.LOG)){
@@ -545,7 +544,7 @@ class Log(@volatile var dir: File,
     // KAFKA-6264: Delete all .swap files whose base offset is greater than the minimum .cleaned segment offset. Such .swap
     // files could be part of an incomplete split operation that could not complete. See Log#splitOverflowedSegment
     // for more details about the split operation.
-    val (invalidSwapFiles, validSwapDirs) = swapFiles.partition(segDir => segDir.getName.toLong >= minCleanedFileOffset)
+    val (invalidSwapFiles, validSwapDirs) = swapFiles.partition(segDir => LogSegment.getSegmentOffset(segDir) >= minCleanedFileOffset)
     invalidSwapFiles.foreach { segDir =>
       debug(s"Deleting invalid swap file ${segDir.getAbsoluteFile} minCleanedFileOffset: $minCleanedFileOffset")
       LogSegment.deleteIfExists(segDir)
@@ -569,32 +568,35 @@ class Log(@volatile var dir: File,
   private def loadSegmentFiles(): Unit = {
     // load segments in ascending order because transactional data from one segment may depend on the
     // segments that come before it
-    for (file <- dir.listFiles.sortBy(_.getName) if file.isDirectory) {
-      val baseOffset = file.getName.toLong
+    for (segDir <- dir.listFiles.sortBy(_.getName) if segDir.isDirectory) {
+      val baseOffset = LogSegment.getSegmentOffset(segDir)
       if (!LogSegment.isSegmentFileExists(dir, baseOffset, SegmentFile.LOG)) {
         // if it is an index file, make sure it has a corresponding .log file
-        warn(s"Found an orphaned index file ${file.getAbsolutePath}, with no corresponding log file.")
+        warn(s"Found an orphaned index file ${segDir.getAbsolutePath}, with no corresponding log file.")
         LogSegment.deleteIfExists(dir, baseOffset)
       } else {
-        // if it's a log file, load the corresponding log segment
-        val timeIndexFileNewlyCreated = !LogSegment.isSegmentFileExists(dir, baseOffset, SegmentFile.TIME_INDEX)
-        val segment = LogSegment.open(dir = dir,
-          baseOffset = baseOffset,
-          config,
-          time = time,
-          fileAlreadyExists = true)
-        try segment.sanityCheck(timeIndexFileNewlyCreated)
-        catch {
-          case _: NoSuchFileException =>
-            error(s"Could not find offset index file corresponding to log file ${segment.log.file.getAbsolutePath}, " +
-              "recovering segment and rebuilding index files...")
-            recoverSegment(segment)
-          case e: CorruptIndexException =>
-            warn(s"Found a corrupted index file corresponding to log file ${segment.log.file.getAbsolutePath} due " +
-              s"to ${e.getMessage}}, recovering segment and rebuilding index files...")
-            recoverSegment(segment)
+        val status = LogSegment.getStatus(dir, baseOffset);
+        if(status == SegmentStatus.HOT){
+          // if it's a log file, load the corresponding log segment
+          val timeIndexFileNewlyCreated = !LogSegment.isSegmentFileExists(dir, baseOffset, SegmentFile.TIME_INDEX)
+          val segment = LogSegment.open(dir = dir,
+            baseOffset = baseOffset,
+            config,
+            time = time,
+            fileAlreadyExists = true)
+          try segment.sanityCheck(timeIndexFileNewlyCreated)
+          catch {
+            case _: NoSuchFileException =>
+              error(s"Could not find offset index file corresponding to log file ${segment.log.file.getAbsolutePath}, " +
+                "recovering segment and rebuilding index files...")
+              recoverSegment(segment)
+            case e: CorruptIndexException =>
+              warn(s"Found a corrupted index file corresponding to log file ${segment.log.file.getAbsolutePath} due " +
+                s"to ${e.getMessage}}, recovering segment and rebuilding index files...")
+              recoverSegment(segment)
+          }
+          addSegment(segment)
         }
-        addSegment(segment)
       }
     }
   }
@@ -629,13 +631,11 @@ class Log(@volatile var dir: File,
    */
   private def completeSwapOperations(segDirs: Set[File]): Unit = {
     for (segDir <- segDirs) {
-      val baseOffset = segDir.getName.toLong
+      val baseOffset = LogSegment.getSegmentOffset(segDir)
       val swapSegment = LogSegment.open(segDir,
         baseOffset = baseOffset,
         config,
         time = time)
-      LogSegment.changeStatus(segDir, SegmentStatus.SWAPPED)
-
       info(s"Found log file ${segDir.getPath} from interrupted swap operation, repairing.")
       recoverSegment(swapSegment)
 
@@ -2170,6 +2170,16 @@ class Log(@volatile var dir: File,
     }
   }
 
+  /**
+   * Perform physical deletion for the given file. Allows the file to be deleted asynchronously or synchronously.
+   *
+   * This method assumes that the file exists and the method is not thread-safe.
+   *
+   * This method does not need to convert IOException (thrown from changeFileSuffixes) to KafkaStorageException because
+   * it is either called before all logs are loaded or the caller will catch and handle IOException
+   *
+   * @throws IOException if the file can't be renamed and still exists
+   */
   private def deleteSegment(segment: LogSegment, asyncDelete: Boolean): Unit = {
 
     def deleteSegments(): Unit = {
@@ -2192,34 +2202,6 @@ class Log(@volatile var dir: File,
         scheduler.schedule("delete-file", () => deleteSegments(), delay = config.fileDeleteDelayMs)
     }else{
       LogSegment.deleteIfExists(dir, segment.baseOffset)
-    }
-  }
-
-  /**
-   * Perform physical deletion for the given file. Allows the file to be deleted asynchronously or synchronously.
-   *
-   * This method assumes that the file exists and the method is not thread-safe.
-   *
-   * This method does not need to convert IOException (thrown from changeFileSuffixes) to KafkaStorageException because
-   * it is either called before all logs are loaded or the caller will catch and handle IOException
-   *
-   * @throws IOException if the file can't be renamed and still exists
-   */
-  private def deleteSegmentFiles(segments: Iterable[LogSegment], asyncDelete: Boolean): Unit = {
-    segments.foreach(_.changeSegmentStatus(SegmentStatus.DELETED))
-
-    def deleteSegments(): Unit = {
-      info(s"Deleting segments $segments")
-      maybeHandleIOException(s"Error while deleting segments for $topicPartition in dir ${dir.getParent}") {
-        segments.foreach(_.deleteIfExists())
-      }
-    }
-
-    if (asyncDelete) {
-      info(s"Scheduling segments for deletion $segments")
-      scheduler.schedule("delete-file", () => deleteSegments, delay = config.fileDeleteDelayMs)
-    } else {
-      deleteSegments()
     }
   }
 
