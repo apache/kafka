@@ -123,7 +123,7 @@ public class TaskManager {
 
     void handleRebalanceStart(final Set<String> subscribedTopics) {
         builder.addSubscribedTopicsFromMetadata(subscribedTopics, logPrefix);
-        
+
         rebalanceInProgress = true;
     }
 
@@ -393,7 +393,7 @@ public class TaskManager {
                         if (task.isActive() && task.state() == RUNNING) {
                             taskOffsetSums.put(id, Task.LATEST_OFFSET);
                         } else {
-                            taskOffsetSums.put(id, computeOffsetSum(task.changelogOffsets()));
+                            taskOffsetSums.put(id, sumOfChangelogOffsets(task.changelogOffsets()));
                         }
                     } else {
                         try {
@@ -401,11 +401,12 @@ public class TaskManager {
                             // responsible for encoding its offsets in our subscription
                             final File checkpointFile = new File(dir, StateManagerUtil.CHECKPOINT_FILE_NAME);
                             if (stateDirectory.lock(id) && checkpointFile.exists()) {
-                                taskOffsetSums.put(id, computeOffsetSum(new OffsetCheckpoint(checkpointFile).read()));
+                                taskOffsetSums.put(id, sumOfChangelogOffsets(new OffsetCheckpoint(checkpointFile).read()));
                                 lockedUnassignedTaskDirectories.add(id);
                             }
                         } catch (final IOException e) {
                             // if for any reason we can't lock this task dir and read its checkpoint file, just move on
+                            log.warn(String.format("Exception caught while trying to lock task %s:", id), e);
                         }
                     }
                 } catch (final TaskIdFormatException e) {
@@ -417,7 +418,7 @@ public class TaskManager {
         return taskOffsetSums;
     }
 
-    private long computeOffsetSum(final Map<TopicPartition, Long> changelogOffsets) {
+    private long sumOfChangelogOffsets(final Map<TopicPartition, Long> changelogOffsets) {
         long offsetSum = 0L;
         for (final Map.Entry<TopicPartition, Long> changelogEntry : changelogOffsets.entrySet()) {
             final TopicPartition changelog = changelogEntry.getKey();

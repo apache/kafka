@@ -180,20 +180,20 @@ public class TaskManagerTest {
                                        .toArray(new File[0]);
 
         final Map<TopicPartition, Long> task01ChangelogOffsets = mkMap(
-            mkEntry(t1p0, 1L),
-            mkEntry(t1p1, 2L)
+            mkEntry(new TopicPartition("changelog01", 0), 1L)
         );
         final Map<TopicPartition, Long> task02ChangelogOffsets = mkMap(
-            mkEntry(t1p0, 5L),
-            mkEntry(t1p1, 10L)
+            mkEntry(new TopicPartition("changelog02", 0), 5L),
+            mkEntry(new TopicPartition("changelog02", 1), 10L),
+            mkEntry(new TopicPartition("changelog02", 2), -1L)
         );
         final Map<TopicPartition, Long> task10ChangelogOffsets = mkMap(
-            mkEntry(t1p0, 20L),
-            mkEntry(t1p1, 30L)
+            mkEntry(new TopicPartition("changelog10", 0), 20L),
+            mkEntry(new TopicPartition("changelog10", 1), 30L)
         );
 
         final Long task00OffsetSum = Task.LATEST_OFFSET;
-        final Long task01OffsetSum = 3L;
+        final Long task01OffsetSum = 1L;
         final Long task02OffsetSum = 15L;
         final Long task10OffsetSum = 50L;
 
@@ -201,16 +201,16 @@ public class TaskManagerTest {
         final StateMachineTask task00 = new StateMachineTask(taskId00, taskId00Partitions, true);
         expectRestoreToBeCompleted(consumer, changeLogReader);
         expect(activeTaskCreator.createTasks(anyObject(), eq(taskId00Assignment)))
-            .andReturn(singletonList(task00)).once();
+            .andStubReturn(singletonList(task00));
         final StateMachineTask task01 = new StateMachineTask(taskId01, taskId01Partitions, false);
         task01.setChangelogOffsets(task01ChangelogOffsets);
         expect(standbyTaskCreator.createTasks(eq(taskId01Assignment)))
-            .andReturn(singletonList(task01)).once();
+            .andStubReturn(singletonList(task01));
 
         final StateMachineTask task02 = new StateMachineTask(taskId02, taskId02Partitions, true);
         task02.setChangelogOffsets(task02ChangelogOffsets);
         expect(activeTaskCreator.createTasks(anyObject(), eq(taskId02Assignment)))
-            .andReturn(singletonList(task02)).once();
+            .andStubReturn(singletonList(task02));
 
         expect(stateDirectory.listTaskDirectories()).andReturn(taskFolders).once();
 
@@ -238,12 +238,12 @@ public class TaskManagerTest {
 
         final Map<TaskId, Long> taskOffsetSums = taskManager.getTaskOffsetSums();
 
-        verify(activeTaskCreator, stateDirectory);
+        verify(stateDirectory);
         assertThat(taskOffsetSums.keySet(), equalTo(mkSet(taskId00, taskId01, taskId02, taskId10)));
-        assertEquals(task00OffsetSum, taskOffsetSums.get(taskId00));
-        assertEquals(task01OffsetSum, taskOffsetSums.get(taskId01));
-        assertEquals(task02OffsetSum, taskOffsetSums.get(taskId02));
-        assertEquals(task10OffsetSum, taskOffsetSums.get(taskId10));
+        assertThat(task00OffsetSum, is(taskOffsetSums.get(taskId00)));
+        assertThat(task01OffsetSum, is(taskOffsetSums.get(taskId01)));
+        assertThat(task02OffsetSum, is(taskOffsetSums.get(taskId02)));
+        assertThat(task10OffsetSum, is(taskOffsetSums.get(taskId10)));
     }
 
     @Test
