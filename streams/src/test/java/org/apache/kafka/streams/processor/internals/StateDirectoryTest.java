@@ -261,6 +261,9 @@ public class StateDirectoryTest {
             directory.cleanRemovedTasks(0);
 
             files = Arrays.asList(Objects.requireNonNull(appDir.listFiles()));
+            assertEquals(3, files.size());
+
+            files = Arrays.asList(Objects.requireNonNull(directory.listNonEmptyTaskDirectories()));
             assertEquals(2, files.size());
             assertTrue(files.contains(new File(appDir, task0.toString())));
             assertTrue(files.contains(new File(appDir, task1.toString())));

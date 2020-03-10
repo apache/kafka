@@ -734,16 +734,25 @@ public final class Utils {
     }
 
     /**
-     * Recursively delete the given file/directory and any subfiles (if any exist);
-     * if there are specified subfiles to keep, then maitain those files as well as the parent file
+     * Recursively delete the given file/directory and any subfiles (if any exist)
      *
      * @param rootFile The root file at which to begin deleting
-     * @param filesToKeep The subfiles to keep
      */
-    public static void delete(final File rootFile, final String... filesToKeep) throws IOException {
+    public static void delete(final File rootFile) throws IOException {
+        delete(rootFile, Collections.emptyList());
+    }
+
+    /**
+     * Recursively delete the subfiles (if any exist) of the passed in root file that are not included
+     * in the list to keep
+     *
+     * @param rootFile The root file at which to begin deleting
+     * @param filesToKeep The subfiles to keep (note that if a subfile is to be kept, so are all its parent
+     *                    files in its pat)h; if empty we would also delete the root file
+     */
+    public static void delete(final File rootFile, final List<File> filesToKeep) throws IOException {
         if (rootFile == null)
             return;
-        final List<String> files = Arrays.asList(filesToKeep);
         Files.walkFileTree(rootFile.toPath(), new SimpleFileVisitor<Path>() {
             @Override
             public FileVisitResult visitFileFailed(Path path, IOException exc) throws IOException {
@@ -755,7 +764,7 @@ public final class Utils {
 
             @Override
             public FileVisitResult visitFile(Path path, BasicFileAttributes attrs) throws IOException {
-                if (!files.contains(path.toFile().getName())) {
+                if (!filesToKeep.contains(path.toFile())) {
                     Files.delete(path);
                 }
                 return FileVisitResult.CONTINUE;
@@ -769,7 +778,7 @@ public final class Utils {
                 }
 
                 // only delete the parent directory if there's nothing to keep
-                if (files.isEmpty())
+                if (filesToKeep.isEmpty())
                     Files.delete(path);
 
                 return FileVisitResult.CONTINUE;
