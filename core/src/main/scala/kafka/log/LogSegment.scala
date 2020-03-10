@@ -726,9 +726,9 @@ object LogSegment {
     if(segDir.exists()){
       val files = segDir.listFiles()
       if(files != null){
-        files.foreach( file => Files.delete(file.toPath))
+        files.foreach( file => Files.deleteIfExists(file.toPath))
       }
-      Files.delete(segDir.toPath)
+      Files.deleteIfExists(segDir.toPath)
     }
   }
 

@@ -228,6 +228,11 @@ class Log(@volatile var dir: File,
 
   /* A lock that guards all modifications to the log */
   private val lock = new Object
+
+
+  /* A lock that guards all delete action to the log */
+  private val deleteLock = new Object
+
   // The memory mapped buffer for index files of this log will be closed with either delete() or closeHandlers()
   // After memory mapped buffer is closed, no disk IO operation should be performed for this log
   @volatile private var isMemoryMappedBufferClosed = false
@@ -2185,16 +2190,17 @@ class Log(@volatile var dir: File,
   private def deleteSegment(segment: LogSegment, asyncDelete: Boolean): Unit = {
 
     def deleteSegments(): Unit = {
-      deletedSegments.keySet().forEach( segDir =>{
-        info(s"Deleting segment ${topicPartition.toString} : $segDir")
-        try {
-          LogSegment.deleteIfExists(segDir)
-          deletedSegments.remove(segDir)
-        }catch{
-          case e: Throwable => warn(s"Unable to delete segment  ${topicPartition.toString} : $segDir, " +
-            s"Reason : ${if(e.getCause != null) e.getCause.getMessage else e.getMessage}")
-        }
-      })
+      deleteLock synchronized {
+        deletedSegments.keySet().forEach( segDir =>{
+          info(s"Deleting segment ${topicPartition.toString} : $segDir")
+          try {
+            LogSegment.deleteIfExists(segDir)
+            deletedSegments.remove(segDir)
+          }catch{
+            case e: Throwable => warn(s"Unable to delete segment  ${topicPartition.toString} : $segDir, Reason : ${e.getClass.getName}")
+          }
+        })
+      }
     }
 
     segment.changeSegmentStatus(SegmentStatus.DELETED)
