@@ -282,7 +282,7 @@ class Log(@volatile var dir: File,
 
   /* the actual segments of the log */
   private val segments: ConcurrentNavigableMap[java.lang.Long, LogSegment] = new ConcurrentSkipListMap[java.lang.Long, LogSegment]
-  private val deletedSegments: ConcurrentNavigableMap[java.lang.Long, java.lang.Boolean] = new ConcurrentSkipListMap[java.lang.Long, java.lang.Boolean]
+  private val deletedSegments: ConcurrentNavigableMap[File, java.lang.Boolean] = new ConcurrentSkipListMap[File, java.lang.Boolean]
 
   // Visible for testing
   @volatile var leaderEpochCache: Option[LeaderEpochFileCache] = None
@@ -573,13 +573,13 @@ class Log(@volatile var dir: File,
       if (!LogSegment.isSegmentFileExists(dir, baseOffset, SegmentFile.LOG)) {
         // if it is an index file, make sure it has a corresponding .log file
         warn(s"Found an orphaned index file ${segDir.getAbsolutePath}, with no corresponding log file.")
-        LogSegment.deleteIfExists(dir, baseOffset)
+        LogSegment.deleteIfExists(segDir)
       } else {
-        val status = LogSegment.getStatus(dir, baseOffset);
+        val status = LogSegment.getStatus(segDir)
         if(status == SegmentStatus.HOT){
           // if it's a log file, load the corresponding log segment
           val timeIndexFileNewlyCreated = !LogSegment.isSegmentFileExists(dir, baseOffset, SegmentFile.TIME_INDEX)
-          val segment = LogSegment.open(dir = dir,
+          val segment = LogSegment.open(segDir = segDir,
             baseOffset = baseOffset,
             config,
             time = time,
@@ -596,6 +596,8 @@ class Log(@volatile var dir: File,
               recoverSegment(segment)
           }
           addSegment(segment)
+        }else if(status == SegmentStatus.DELETED){
+          deletedSegments.put(segDir, java.lang.Boolean.TRUE)
         }
       }
     }
@@ -632,7 +634,7 @@ class Log(@volatile var dir: File,
   private def completeSwapOperations(segDirs: Set[File]): Unit = {
     for (segDir <- segDirs) {
       val baseOffset = LogSegment.getSegmentOffset(segDir)
-      val swapSegment = LogSegment.open(segDir,
+      val swapSegment = LogSegment.open(segDir = segDir,
         baseOffset = baseOffset,
         config,
         time = time)
@@ -693,7 +695,7 @@ class Log(@volatile var dir: File,
       nextOffset
     } else {
        if (logSegments.isEmpty) {
-          addSegment(LogSegment.open(dir = dir,
+          addSegment(LogSegment.open(segDir = LogSegment.getSegmentDir(dir, 0),
             baseOffset = 0,
             config,
             time = time,
@@ -777,7 +779,7 @@ class Log(@volatile var dir: File,
 
     if (logSegments.isEmpty) {
       // no existing segments, create a new mutable segment beginning at logStartOffset
-      addSegment(LogSegment.open(dir = dir,
+      addSegment(LogSegment.open(segDir = LogSegment.getSegmentDir(dir, logStartOffset),
         baseOffset = logStartOffset,
         config,
         time = time,
@@ -1886,7 +1888,7 @@ class Log(@volatile var dir: File,
         producerStateManager.updateMapEndOffset(newOffset)
         producerStateManager.takeSnapshot()
 
-        val segment = LogSegment.open(dir,
+        val segment = LogSegment.open(LogSegment.getSegmentDir(dir, newOffset),
           baseOffset = newOffset,
           config,
           time = time,
@@ -2063,7 +2065,7 @@ class Log(@volatile var dir: File,
       lock synchronized {
         checkIfMemoryMappedBufferClosed()
         removeAndDeleteSegments(logSegments, asyncDelete = true)
-        addSegment(LogSegment.open(dir,
+        addSegment(LogSegment.open(LogSegment.getSegmentDir(dir, newOffset),
           baseOffset = newOffset,
           config = config,
           time = time,
@@ -2183,13 +2185,13 @@ class Log(@volatile var dir: File,
   private def deleteSegment(segment: LogSegment, asyncDelete: Boolean): Unit = {
 
     def deleteSegments(): Unit = {
-      deletedSegments.keySet().forEach( offset =>{
-        info(s"Deleting segment ${topicPartition.toString} : $offset")
+      deletedSegments.keySet().forEach( segDir =>{
+        info(s"Deleting segment ${topicPartition.toString} : $segDir")
         try {
-          LogSegment.deleteIfExists(dir, offset)
-          deletedSegments.remove(offset)
+          LogSegment.deleteIfExists(dir)
+          deletedSegments.remove(segDir)
         }catch{
-          case e: Throwable => (s"Unable to delete segment  ${topicPartition.toString} : $offset, Reason : ${e.getMessage}")
+          case e: Throwable => (s"Unable to delete segment  ${topicPartition.toString} : $segDir, Reason : ${e.getMessage}")
         }
       })
     }
@@ -2197,7 +2199,7 @@ class Log(@volatile var dir: File,
     segment.changeSegmentStatus(SegmentStatus.DELETED)
     segment.closeHandlers()
     this.segments.remove(segment.baseOffset)
-    this.deletedSegments.put(segment.baseOffset, java.lang.Boolean.TRUE)
+    this.deletedSegments.put(segment.segDir, java.lang.Boolean.TRUE)
     if(asyncDelete){
         scheduler.schedule("delete-file", () => deleteSegments(), delay = config.fileDeleteDelayMs)
     }else{

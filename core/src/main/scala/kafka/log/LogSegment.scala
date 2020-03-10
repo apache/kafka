@@ -62,13 +62,13 @@ class LogSegment private[log] (val log: FileRecords,
                                val baseOffset: Long,
                                val indexIntervalBytes: Int,
                                val rollJitterMs: Long,
-                               val time: Time, stFile: File) extends Logging {
+                               val time: Time, dir: File) extends Logging {
 
   def offsetIndex: OffsetIndex = lazyOffsetIndex.get
 
   def timeIndex: TimeIndex = lazyTimeIndex.get
 
-  def statusFile: File = stFile
+  def segDir: File = dir
 
   def shouldRoll(rollParams: RollParams): Boolean = {
     val reachedRollMs = timeWaitedForRoll(rollParams.now, rollParams.maxTimestampInMessages) > rollParams.maxSegmentMs - rollJitterMs
@@ -496,7 +496,7 @@ class LogSegment private[log] (val log: FileRecords,
    * IOException from this method should be handled by the caller
    */
   def getSegmentStatus(): SegmentStatus = {
-    SegmentStatusHandler.getStatus(statusFile)
+    SegmentStatusHandler.getStatus(new File(segDir, SegmentFile.STATUS.getName))
   }
 
 
@@ -513,9 +513,10 @@ class LogSegment private[log] (val log: FileRecords,
    * IOException from this method should be handled by the caller
    */
   def changeSegmentStatus(oldStatus: SegmentStatus, newStatus: SegmentStatus): Unit = {
-    val segStatus = SegmentStatusHandler.getStatus(statusFile)
+    val file = new File(segDir, SegmentFile.STATUS.getName)
+    val segStatus = SegmentStatusHandler.getStatus(file)
     if(segStatus == oldStatus){
-      SegmentStatusHandler.setStatus(statusFile, newStatus)
+      SegmentStatusHandler.setStatus(file, newStatus)
     }else{
       throw new KafkaException(s"Invalid Segment Status $segStatus")
     }
@@ -685,14 +686,12 @@ class LogSegment private[log] (val log: FileRecords,
 object LogSegment {
 
   private val random = scala.util.Random
-  def open(dir: File, baseOffset: Long, config: LogConfig, time: Time, fileAlreadyExists: Boolean = false,
-           initFileSize: Int = 0, preallocate: Boolean = false, randomDigits: Boolean = false, segmentStatus: SegmentStatus = SegmentStatus.HOT): LogSegment = {
+  def open(segDir: File, baseOffset: Long, config: LogConfig, time: Time, fileAlreadyExists: Boolean = false,
+           initFileSize: Int = 0, preallocate: Boolean = false, segmentStatus: SegmentStatus = SegmentStatus.HOT): LogSegment = {
     val maxIndexSize = config.maxIndexSize
-    val segDir = new File(dir, if(randomDigits) baseOffset+"-"+random.nextInt(1000) else String.valueOf(baseOffset))
-    val statusFile = new File(segDir, SegmentFile.STATUS.getName)
     if(!fileAlreadyExists){
       segDir.mkdirs()
-      SegmentStatusHandler.setStatus(statusFile, segmentStatus)
+      SegmentStatusHandler.setStatus(new File(segDir, SegmentFile.STATUS.getName), segmentStatus)
     }
     new LogSegment(
       FileRecords.open(new File(segDir, SegmentFile.LOG.getName), fileAlreadyExists, initFileSize, preallocate),
@@ -702,7 +701,11 @@ object LogSegment {
       baseOffset,
       indexIntervalBytes = config.indexInterval,
       rollJitterMs = config.randomSegmentJitter,
-      time, statusFile)
+      time, segDir)
+  }
+
+  def getSegmentDir(logDir: File, baseOffset: Long, randomDigits: Boolean = false): File = {
+    new File(logDir, if(randomDigits) baseOffset+"-"+random.nextInt(1000) else String.valueOf(baseOffset))
   }
 
   def getSegmentOffset(segDir: File): Long ={
@@ -745,12 +748,6 @@ object LogSegment {
   def getProducerSnapshotFile(dir: File, baseOffset: Long): File = {
     val segDir = new File(dir, String.valueOf(baseOffset))
     new File(segDir, SegmentFile.SNAPSHOT.getName)
-  }
-
-
-  def getStatus(dir: File, baseOffset: Long): SegmentStatus = {
-    val segDir = new File(dir, String.valueOf(baseOffset))
-    getStatus(segDir)
   }
 
   def getStatus(segDir: File): SegmentStatus = {

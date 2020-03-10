@@ -8,8 +8,12 @@ import java.nio.file.Files;
 public class SegmentStatusHandler {
 
     public static SegmentStatus getStatus(File file) throws IOException {
-        final byte[] data = Files.readAllBytes(file.toPath());
-        return SegmentStatus.getStatus(ByteBuffer.wrap(data).getInt());
+        if(!file.exists()) {
+            return SegmentStatus.UNKNOWN;
+        }else{
+            final byte[] data = Files.readAllBytes(file.toPath());
+            return SegmentStatus.getStatus(ByteBuffer.wrap(data).getInt());
+        }
     }
 
     public static void setStatus(File file, SegmentStatus status) throws IOException {
