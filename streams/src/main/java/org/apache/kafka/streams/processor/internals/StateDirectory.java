@@ -318,12 +318,12 @@ public class StateDirectory {
                             log.info("{} Deleting obsolete state directory {} for task {} as {}ms has elapsed (cleanup delay is {}ms).",
                                 logPrefix(), dirName, id, now - lastModifiedMs, cleanupDelayMs);
 
-                            Utils.delete(taskDir);
+                            Utils.delete(taskDir, LOCK_FILE_NAME);
                         } else if (manualUserCall) {
                             log.info("{} Deleting state directory {} for task {} as user calling cleanup.",
                                 logPrefix(), dirName, id);
 
-                            Utils.delete(taskDir);
+                            Utils.delete(taskDir, LOCK_FILE_NAME);
                         }
                     }
                 } catch (final OverlappingFileLockException | IOException e) {
