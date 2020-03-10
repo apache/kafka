@@ -272,7 +272,6 @@ public class KafkaBasedLogTest {
         Capture<org.apache.kafka.clients.producer.Callback> callback1 = EasyMock.newCapture();
         EasyMock.expect(producer.send(EasyMock.eq(tp1Record), EasyMock.capture(callback1))).andReturn(tp1Future);
 
-        System.out.println("Executing next");
         // Producer flushes when read to log end is called
         producer.flush();
         PowerMock.expectLastCall();
