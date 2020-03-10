@@ -483,7 +483,7 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
       // Change the underlying metric config if the sensor has been created
       val metric = allMetrics.get(quotaMetricName)
       if (metric != null) {
-        Option(quotaCallback.quotaLimit(clientQuotaType, metricTags.asJava)).foreach { newQuota =>
+        Option(quotaLimit(metricTags.asJava)).foreach { newQuota =>
           info(s"Sensor for $quotaEntity already exists. Changing quota to $newQuota in MetricConfig")
           metric.config(getQuotaMetricConfig(newQuota))
         }
@@ -493,8 +493,7 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
       allMetrics.asScala.filterKeys(n => n.name == quotaMetricName.name && n.group == quotaMetricName.group).foreach {
         case (metricName, metric) =>
           val metricTags = metricName.tags
-          Option(quotaCallback.quotaLimit(clientQuotaType, metricTags)).foreach { quota =>
-            val newQuota = quota.asInstanceOf[Double]
+          Option(quotaLimit(metricTags)).foreach { newQuota =>
             if (newQuota != metric.config.quota.bound) {
               info(s"Sensor for quota-id $metricTags already exists. Setting quota to $newQuota in MetricConfig")
               metric.config(getQuotaMetricConfig(newQuota))
