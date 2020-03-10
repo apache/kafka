@@ -777,9 +777,14 @@ public final class Utils {
                     throw exc;
                 }
 
-                // only delete the parent directory if there's nothing to keep
-                if (filesToKeep.isEmpty())
+                if (rootFile.toPath().equals(path)) {
+                    // only delete the parent directory if there's nothing to keep
+                    if (filesToKeep.isEmpty()) {
+                        Files.delete(path);
+                    }
+                } else if (!filesToKeep.contains(path.toFile())) {
                     Files.delete(path);
+                }
 
                 return FileVisitResult.CONTINUE;
             }

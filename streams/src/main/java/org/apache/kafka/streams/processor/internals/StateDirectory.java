@@ -274,14 +274,6 @@ public class StateDirectory {
                 appId, logPrefix(), e);
             throw new StreamsException(e);
         }
-        // finally remove the parent state dir
-        try {
-            Utils.delete(stateDir);
-        }  catch (final IOException e) {
-            log.error("{} Failed to delete the state directory of {} due to an unexpected exception",
-                appId, logPrefix(), e);
-            throw new StreamsException(e);
-        }
     }
 
     /**
@@ -301,7 +293,7 @@ public class StateDirectory {
 
     private synchronized void cleanRemovedTasks(final long cleanupDelayMs,
                                                 final boolean manualUserCall) throws Exception {
-        final File[] taskDirs = listNonEmptyTaskDirectories();
+        final File[] taskDirs = lisAllTaskDirectories();
         if (taskDirs == null || taskDirs.length == 0) {
             return; // nothing to do
         }
@@ -332,6 +324,12 @@ public class StateDirectory {
                 } finally {
                     try {
                         unlock(id);
+
+                        // for manual user call, stream threads are not running so it is safe to delete
+                        // the whole directory
+                        if (manualUserCall) {
+                            Utils.delete(taskDir);
+                        }
                     } catch (final IOException e) {
                         exception = e;
                     }
@@ -347,7 +345,7 @@ public class StateDirectory {
 
     /**
      * List all of the task directories that are non-empty
-     * @return The list of all the existing local directories for stream tasks
+     * @return The list of all the non-empty local directories for stream tasks
      */
     File[] listNonEmptyTaskDirectories() {
         return !stateDir.exists() ? new File[0] :
@@ -358,6 +356,15 @@ public class StateDirectory {
                     return !taskDirEmpty(pathname);
                 }
             });
+    }
+
+    /**
+     * List all of the task directories
+     * @return The list of all the existing local directories for stream tasks
+     */
+    File[] lisAllTaskDirectories() {
+        return !stateDir.exists() ? new File[0] :
+            stateDir.listFiles(pathname -> pathname.isDirectory() && PATH_NAME.matcher(pathname.getName()).matches());
     }
 
     private FileChannel getOrCreateFileChannel(final TaskId taskId,
