@@ -189,7 +189,6 @@ public class SynchronizationTest {
         @Override
         public PluginClassLoader pluginClassLoader(String name) {
             dclBreakpoint.await(name);
-            dclBreakpoint.await(name);
             return super.pluginClassLoader(name);
         }
     }
@@ -253,12 +252,10 @@ public class SynchronizationTest {
         // d2p enters ConfigDef::parseType
         // d2p enters DelegatingClassLoader::loadClass
         dclBreakpoint.testAwait();
-        dclBreakpoint.testAwait();
         // d2p exits DelegatingClassLoader::loadClass
         // d2p enters Class::forName
         // d2p LOCKS DelegatingClassLoader
         // d2p enters DelegatingClassLoader::loadClass
-        dclBreakpoint.testAwait();
         // d2p waits in the delegating classloader while we set up the other thread
         dumpThreads("d2p waiting with DelegatingClassLoader locked");
 
