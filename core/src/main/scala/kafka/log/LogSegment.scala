@@ -686,13 +686,13 @@ object LogSegment {
 
   private val random = scala.util.Random
   def open(dir: File, baseOffset: Long, config: LogConfig, time: Time, fileAlreadyExists: Boolean = false,
-           initFileSize: Int = 0, preallocate: Boolean = false, randomDigits: Boolean = false): LogSegment = {
+           initFileSize: Int = 0, preallocate: Boolean = false, randomDigits: Boolean = false, segmentStatus: SegmentStatus = SegmentStatus.HOT): LogSegment = {
     val maxIndexSize = config.maxIndexSize
     val segDir = new File(dir, if(randomDigits) baseOffset+"-"+random.nextInt(1000) else String.valueOf(baseOffset))
     val statusFile = new File(segDir, SegmentFile.STATUS.getName)
     if(!fileAlreadyExists){
       segDir.mkdirs()
-      SegmentStatusHandler.setStatus(statusFile, SegmentStatus.HOT)
+      SegmentStatusHandler.setStatus(statusFile, segmentStatus)
     }
     new LogSegment(
       FileRecords.open(new File(segDir, SegmentFile.LOG.getName), fileAlreadyExists, initFileSize, preallocate),
