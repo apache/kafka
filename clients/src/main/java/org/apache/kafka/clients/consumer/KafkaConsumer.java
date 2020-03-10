@@ -781,7 +781,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                         this.time,
                         enableAutoCommit,
                         config.getInt(ConsumerConfig.AUTO_COMMIT_INTERVAL_MS_CONFIG),
-                        this.interceptors);
+                        this.interceptors,
+                        config.getBoolean(ConsumerConfig.THROW_ON_STABLE_FLAG_UNSUPPORTED));
             this.fetcher = new Fetcher<>(
                     logContext,
                     this.client,

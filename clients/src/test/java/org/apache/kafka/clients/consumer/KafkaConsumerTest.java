@@ -82,7 +82,6 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.MockConsumerInterceptor;
 import org.apache.kafka.test.MockMetricsReporter;
-import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
 import org.junit.Assert;
 import org.junit.Test;
@@ -1666,12 +1665,8 @@ public class KafkaConsumerTest {
             if (interrupt) {
                 assertTrue("Close terminated prematurely", future.cancel(true));
 
-                TestUtils.waitForCondition(new TestCondition() {
-                    @Override
-                    public boolean conditionMet() {
-                        return closeException.get() != null;
-                    }
-                }, "InterruptException did not occur within timeout.");
+                TestUtils.waitForCondition(
+                    () -> closeException.get() != null, "InterruptException did not occur within timeout.");
 
                 assertTrue("Expected exception not thrown " + closeException, closeException.get() instanceof InterruptException);
             } else {
@@ -2211,7 +2206,8 @@ public class KafkaConsumerTest {
                                                                           time,
                                                                           autoCommitEnabled,
                                                                           autoCommitIntervalMs,
-                                                                          interceptors);
+                                                                          interceptors,
+                                                                          false);
         Fetcher<String, String> fetcher = new Fetcher<>(
                 loggerFactory,
                 consumerClient,
@@ -2458,5 +2454,4 @@ public class KafkaConsumerTest {
 
         assertEquals(countingRebalanceListener.revokedCount, 1);
     }
-
 }

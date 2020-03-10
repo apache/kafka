@@ -43,10 +43,12 @@ public class OffsetFetchRequest extends AbstractRequest {
     public static class Builder extends AbstractRequest.Builder<OffsetFetchRequest> {
 
         public final OffsetFetchRequestData data;
+        private final boolean throwOnStableFlagNotSupported;
 
         public Builder(String groupId,
                        boolean requireStable,
-                       List<TopicPartition> partitions) {
+                       List<TopicPartition> partitions,
+                       boolean throwOnStableFlagUnsupported) {
             super(ApiKeys.OFFSET_FETCH);
 
             final List<OffsetFetchRequestTopic> topics;
@@ -69,6 +71,7 @@ public class OffsetFetchRequest extends AbstractRequest {
                             .setGroupId(groupId)
                             .setRequireStable(requireStable)
                             .setTopics(topics);
+            this.throwOnStableFlagNotSupported = throwOnStableFlagUnsupported;
         }
 
         boolean isAllTopicPartitions() {
@@ -83,6 +86,10 @@ public class OffsetFetchRequest extends AbstractRequest {
             }
 
             if (data.requireStable() && version < 7) {
+                if (throwOnStableFlagNotSupported) {
+                    throw new UnsupportedVersionException("Broker unexpectedly doesn't support requireStable flag " +
+                        "on version " + version);
+                }
                 log.trace("Fallback the requireStable flag to false as broker " +
                              "only supports OffsetFetchRequest version {}. Need " +
                              "v7 or newer to enable this feature", version);

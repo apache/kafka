@@ -29,6 +29,7 @@ import java.util.Properties;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.assertEquals;
+
 import static org.junit.Assert.fail;
 
 public class ConsumerConfigTest {
@@ -121,5 +122,13 @@ public class ConsumerConfigTest {
         newConfigs = ConsumerConfig.addDeserializerToConfig(configs, keyDeserializer, valueDeserializer);
         assertEquals(newConfigs.get(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG), keyDeserializerClass);
         assertEquals(newConfigs.get(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG), valueDeserializerClass);
+    }
+
+    @Test
+    public void ensureDefaultThrowOnUnsupportedStableFlagToFalse() {
+        Properties properties = new Properties();
+        properties.setProperty(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, keyDeserializerClassName);
+        properties.setProperty(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, valueDeserializerClassName);
+        assertFalse(new ConsumerConfig(properties).getBoolean(ConsumerConfig.THROW_ON_STABLE_FLAG_UNSUPPORTED));
     }
 }
