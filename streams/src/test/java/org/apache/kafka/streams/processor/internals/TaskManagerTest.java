@@ -168,7 +168,7 @@ public class TaskManagerTest {
         assertThat((new File(taskFolders[1], StateManagerUtil.CHECKPOINT_FILE_NAME)).createNewFile(), is(true));
         assertThat((new File(taskFolders[3], StateManagerUtil.CHECKPOINT_FILE_NAME)).createNewFile(), is(true));
 
-        expect(stateDirectory.listTaskDirectories()).andReturn(taskFolders).once();
+        expect(stateDirectory.listNonEmptyTaskDirectories()).andReturn(taskFolders).once();
 
         replay(activeTaskCreator, stateDirectory);
 

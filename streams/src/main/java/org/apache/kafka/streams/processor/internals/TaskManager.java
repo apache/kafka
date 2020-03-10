@@ -395,7 +395,7 @@ public class TaskManager {
 
         final Set<TaskId> locallyStoredTasks = new HashSet<>();
 
-        final File[] stateDirs = stateDirectory.listTaskDirectories();
+        final File[] stateDirs = stateDirectory.listNonEmptyTaskDirectories();
         if (stateDirs != null) {
             for (final File dir : stateDirs) {
                 try {

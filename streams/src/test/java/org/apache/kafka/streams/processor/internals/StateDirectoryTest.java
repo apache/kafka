@@ -290,15 +290,21 @@ public class StateDirectoryTest {
     }
 
     @Test
-    public void shouldListAllTaskDirectories() {
+    public void shouldNotListNonEmptyTaskDirectories() {
         TestUtils.tempDirectory(stateDir.toPath(), "foo");
         final File taskDir1 = directory.directoryForTask(new TaskId(0, 0));
         final File taskDir2 = directory.directoryForTask(new TaskId(0, 1));
 
-        final List<File> dirs = Arrays.asList(directory.listTaskDirectories());
-        assertEquals(2, dirs.size());
-        assertTrue(dirs.contains(taskDir1));
-        assertTrue(dirs.contains(taskDir2));
+        final File storeDir = new File(taskDir1, "store");
+        assertTrue(storeDir.mkdir());
+
+        List<File> dirs = Arrays.asList(directory.listNonEmptyTaskDirectories());
+        assertEquals(Collections.singletonList(taskDir1), dirs);
+
+        directory.cleanRemovedTasks(0L);
+
+        dirs = Arrays.asList(directory.listNonEmptyTaskDirectories());
+        assertEquals(Collections.emptyList(), dirs);
     }
 
     @Test

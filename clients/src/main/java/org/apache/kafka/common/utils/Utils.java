@@ -734,31 +734,44 @@ public final class Utils {
     }
 
     /**
-     * Recursively delete the given file/directory and any subfiles (if any exist)
+     * Recursively delete the given file/directory and any subfiles (if any exist);
+     * if there are specified subfiles to keep, then maitain those files as well as the parent file
      *
-     * @param file The root file at which to begin deleting
+     * @param rootFile The root file at which to begin deleting
+     * @param filesToKeep The subfiles to keep
      */
-    public static void delete(final File file) throws IOException {
-        if (file == null)
+    public static void delete(final File rootFile, final String... filesToKeep) throws IOException {
+        if (rootFile == null)
             return;
-        Files.walkFileTree(file.toPath(), new SimpleFileVisitor<Path>() {
+        final List<String> files = Arrays.asList(filesToKeep);
+        Files.walkFileTree(rootFile.toPath(), new SimpleFileVisitor<Path>() {
             @Override
             public FileVisitResult visitFileFailed(Path path, IOException exc) throws IOException {
                 // If the root path did not exist, ignore the error; otherwise throw it.
-                if (exc instanceof NoSuchFileException && path.toFile().equals(file))
+                if (exc instanceof NoSuchFileException && path.toFile().equals(rootFile))
                     return FileVisitResult.TERMINATE;
                 throw exc;
             }
 
             @Override
             public FileVisitResult visitFile(Path path, BasicFileAttributes attrs) throws IOException {
-                Files.delete(path);
+                if (!files.contains(path.toFile().getName())) {
+                    Files.delete(path);
+                }
                 return FileVisitResult.CONTINUE;
             }
 
             @Override
             public FileVisitResult postVisitDirectory(Path path, IOException exc) throws IOException {
-                Files.delete(path);
+                // KAFKA-8999: if there's an exception thrown previously already, we should throw it
+                if (exc != null) {
+                    throw exc;
+                }
+
+                // only delete the parent directory if there's nothing to keep
+                if (files.isEmpty())
+                    Files.delete(path);
+
                 return FileVisitResult.CONTINUE;
             }
         });
