@@ -704,6 +704,10 @@ object LogSegment {
       time, segDir)
   }
 
+  def isSegmentDir(file: File): Boolean = {
+    file.isDirectory && !file.getName.equals("snapshot")
+  }
+
   def getSegmentDir(logDir: File, baseOffset: Long, randomDigits: Boolean = false): File = {
     new File(logDir, if(randomDigits) baseOffset+"-"+random.nextInt(1000) else String.valueOf(baseOffset))
   }
@@ -716,9 +720,6 @@ object LogSegment {
     }else{
       name.toLong
     }
-  }
-  def deleteIfExists(dir: File, baseOffset: Long): Unit = {
-    deleteIfExists(new File(dir, String.valueOf(baseOffset)))
   }
 
   def deleteIfExists(segDir: File): Unit = {
@@ -737,17 +738,17 @@ object LogSegment {
     Files.deleteIfExists(new File(segDir, SegmentFile.TXN_INDEX.getName).toPath)
   }
 
-  def hasSnapshot(segDir: File): Boolean = {
-    new File(segDir, SegmentFile.SNAPSHOT.getName).exists()
+  def getSnapshotDir(logDir: File): File = {
+    new File(logDir, "snapshot")
   }
 
-  def getSnapshotFile(segDir: File): File = {
-    new File(segDir, SegmentFile.SNAPSHOT.getName)
+  def getSnapshotFile(logDir: File, baseOffset: Long): File = {
+    val segDir = new File(logDir, "snapshot")
+    new File(segDir, String.valueOf(baseOffset))
   }
 
-  def getProducerSnapshotFile(dir: File, baseOffset: Long): File = {
-    val segDir = new File(dir, String.valueOf(baseOffset))
-    new File(segDir, SegmentFile.SNAPSHOT.getName)
+  def getSnapshotOffset(snapshot : File): Long = {
+      snapshot.getName.toLong
   }
 
   def getStatus(segDir: File): SegmentStatus = {
@@ -759,35 +760,15 @@ object LogSegment {
     }
   }
 
-  def changeStatus(dir: File, baseOffset: Long, newStatus: SegmentStatus): Unit = {
-    val segDir = new File(dir, String.valueOf(baseOffset))
-    changeStatus(segDir, newStatus)
-  }
-
-  def changeStatus(segDir: File, newStatus: SegmentStatus): Unit = {
-    changeStatus(segDir, SegmentStatus.HOT, newStatus)
-  }
-
-  def changeStatus(segDir: File, oldStatus: SegmentStatus, newStatus: SegmentStatus): Unit = {
-    val statusFile = new File(segDir, SegmentFile.STATUS.getName)
-    val segStatus = SegmentStatusHandler.getStatus(statusFile)
-    if(segStatus == oldStatus){
-      SegmentStatusHandler.setStatus(statusFile, newStatus)
-    }else{
-      throw new KafkaException(s"Invalid Segment Status $segStatus")
-    }
-  }
-
   def isSegmentFileExists(dir: File, baseOffset: Long, segmentFile: SegmentFile): Boolean = {
     val segDir = new File(dir, String.valueOf(baseOffset))
     new File(segDir, segmentFile.getName).exists
   }
-
   def isSegmentFileExists(segDir: File, segmentFile: SegmentFile): Boolean = {
     new File(segDir, segmentFile.getName).exists
   }
 
-  def canReadSegment(segDir: File, baseOffset: Long): Boolean = {
+  def canReadSegment(segDir: File): Boolean = {
     val files = segDir.listFiles
     var status = true
     if(files != null){

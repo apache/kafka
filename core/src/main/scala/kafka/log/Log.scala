@@ -518,14 +518,14 @@ class Log(@volatile var dir: File,
     var cleanDirs = Set[File]()
     var minCleanedFileOffset = Long.MaxValue
 
-    for (segDir <- dir.listFiles if segDir.isDirectory) {
+    for (segDir <- dir.listFiles if LogSegment.isSegmentDir(segDir)) {
       val baseOffset = LogSegment.getSegmentOffset(segDir)
-      if (!LogSegment.canReadSegment(dir, baseOffset))
+      if (!LogSegment.canReadSegment(segDir))
         throw new IOException(s"Could not read file $segDir")
       val segmentStatus = LogSegment.getStatus(segDir)
       if (segmentStatus == SegmentStatus.DELETED) {
         debug(s"Deleting stray temporary file ${segDir.getAbsolutePath}")
-        LogSegment.deleteIfExists(dir, baseOffset)
+        LogSegment.deleteIfExists(segDir)
       } else if (segmentStatus == SegmentStatus.CLEANED) {
         minCleanedFileOffset = Math.min(baseOffset, minCleanedFileOffset)
         cleanDirs += segDir
@@ -568,9 +568,9 @@ class Log(@volatile var dir: File,
   private def loadSegmentFiles(): Unit = {
     // load segments in ascending order because transactional data from one segment may depend on the
     // segments that come before it
-    for (segDir <- dir.listFiles.sortBy(_.getName) if segDir.isDirectory) {
+    for (segDir <- dir.listFiles if LogSegment.isSegmentDir(segDir)) {
       val baseOffset = LogSegment.getSegmentOffset(segDir)
-      if (!LogSegment.isSegmentFileExists(dir, baseOffset, SegmentFile.LOG)) {
+      if (!LogSegment.isSegmentFileExists(segDir, SegmentFile.LOG)) {
         // if it is an index file, make sure it has a corresponding .log file
         warn(s"Found an orphaned index file ${segDir.getAbsolutePath}, with no corresponding log file.")
         LogSegment.deleteIfExists(segDir)
@@ -578,7 +578,7 @@ class Log(@volatile var dir: File,
         val status = LogSegment.getStatus(segDir)
         if(status == SegmentStatus.HOT){
           // if it's a log file, load the corresponding log segment
-          val timeIndexFileNewlyCreated = !LogSegment.isSegmentFileExists(dir, baseOffset, SegmentFile.TIME_INDEX)
+          val timeIndexFileNewlyCreated = !LogSegment.isSegmentFileExists(segDir, SegmentFile.TIME_INDEX)
           val segment = LogSegment.open(segDir = segDir,
             baseOffset = baseOffset,
             config,
@@ -2203,7 +2203,7 @@ class Log(@volatile var dir: File,
     if(asyncDelete){
         scheduler.schedule("delete-file", () => deleteSegments(), delay = config.fileDeleteDelayMs)
     }else{
-      LogSegment.deleteIfExists(dir, segment.baseOffset)
+      LogSegment.deleteIfExists(segment.segDir)
     }
   }
 

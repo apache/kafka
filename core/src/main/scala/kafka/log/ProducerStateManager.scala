@@ -439,13 +439,12 @@ object ProducerStateManager {
     finally fileChannel.close()
   }
 
-  private def hasSnapshot(segDir: File): Boolean = LogSegment.hasSnapshot(segDir)
-
   // visible for testing
   private[log] def listSnapshotFiles(dir: File): Seq[File] = {
-    if (dir.exists && dir.isDirectory) {
-      Option(dir.listFiles).map { files =>
-        files.filter(f => f.isDirectory && hasSnapshot(f)).map( dir => LogSegment.getSnapshotFile(dir)).toSeq
+    val snapshotDir = LogSegment.getSnapshotDir(dir)
+    if (snapshotDir.exists && snapshotDir.isDirectory) {
+      Option(snapshotDir.listFiles).map { files =>
+        files.filter(f => f.isFile).toSeq
       }.getOrElse(Seq.empty)
     } else Seq.empty
   }
@@ -454,7 +453,7 @@ object ProducerStateManager {
   private[log] def deleteSnapshotsBefore(dir: File, offset: Long): Unit = deleteSnapshotFiles(dir, _ < offset)
 
   private def deleteSnapshotFiles(dir: File, predicate: Long => Boolean = _ => true): Unit = {
-    listSnapshotFiles(dir).filter(file => predicate(file.getParentFile.getName.toLong)).foreach { file =>
+    listSnapshotFiles(dir).filter(file => predicate(LogSegment.getSegmentOffset(file))).foreach { file =>
       Files.deleteIfExists(file.toPath)
     }
   }
@@ -655,7 +654,7 @@ class ProducerStateManager(val topicPartition: TopicPartition,
   def takeSnapshot(): Unit = {
     // If not a new offset, then it is not worth taking another snapshot
     if (lastMapOffset > lastSnapOffset) {
-      val snapshotFile = LogSegment.getProducerSnapshotFile(logDir, lastMapOffset)
+      val snapshotFile = LogSegment.getSnapshotFile(logDir, lastMapOffset)
       val parentDir = snapshotFile.getParentFile
       if(!parentDir.exists()){
         parentDir.mkdirs()
@@ -760,7 +759,7 @@ class ProducerStateManager(val topicPartition: TopicPartition,
   private def listSnapshotFiles: Seq[File] = ProducerStateManager.listSnapshotFiles(logDir)
 
   def offsetFromSnapshotFile(file: File): Long = {
-    file.getParentFile.getName.toLong
+    LogSegment.getSegmentOffset(file.getParentFile)
   }
 
 }
