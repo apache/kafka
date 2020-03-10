@@ -433,6 +433,10 @@ object LogCleaner {
 
   def createNewCleanedSegment(log: Log, baseOffset: Long): LogSegment = {
     val segDir = LogSegment.getSegmentDir(log.dir, baseOffset, randomDigits = true)
+    val tobeRemoved = LogSegment.getCleanedSegmentFiles(log.dir, baseOffset)
+    if(tobeRemoved != null){
+      tobeRemoved.foreach( segDir => log.deleteSegment(segDir, asyncDelete = true))
+    }
     val segment = LogSegment.open(segDir, baseOffset, log.config, Time.SYSTEM, fileAlreadyExists = false,
       initFileSize = log.initFileSize, preallocate = log.config.preallocate, segmentStatus = SegmentStatus.CLEANED)
     segment

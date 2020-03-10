@@ -1,7 +1,7 @@
 package kafka.log;
 
 public enum SegmentStatus {
-    HOT(1), DELETED(2), CLEANED(3), SWAPPED(4), UNKNOWN(5);
+    HOT(1), DELETED(2), CLEANED(3), SWAP(4), UNKNOWN(5);
 
     private final int status;
     SegmentStatus(int status) {
@@ -21,7 +21,7 @@ public enum SegmentStatus {
             case 3:
                 return CLEANED;
             case 4:
-                return SWAPPED;
+                return SWAP;
             case 5:
                 return UNKNOWN;
             default:

@@ -19,6 +19,7 @@ package kafka.log
 import java.io.{File, IOException}
 import java.nio.file.{Files, NoSuchFileException, Path}
 import java.nio.file.attribute.FileTime
+import java.util
 import java.util.Comparator
 import java.util.concurrent.TimeUnit
 
@@ -518,7 +519,7 @@ class LogSegment private[log] (val log: FileRecords,
     if(segStatus == oldStatus){
       SegmentStatusHandler.setStatus(file, newStatus)
     }else{
-      throw new KafkaException(s"Invalid Segment Status $segStatus")
+      throw new KafkaException(s"Invalid Segment Status $segStatus, expected $oldStatus")
     }
   }
 
@@ -708,8 +709,14 @@ object LogSegment {
     file.isDirectory && !file.getName.equals("snapshot")
   }
 
+  def getCleanedSegmentFiles(logDir: File, offset: Long): Array[File] = {
+    val fNameDir = String.valueOf(offset)
+    val fNameDyn = fNameDir+"-"
+    logDir.listFiles( (segDir: File, name: String) => (name.startsWith(fNameDyn) || name.equals(fNameDir)) && getStatus(segDir) == SegmentStatus.CLEANED)
+  }
+
   def getSegmentDir(logDir: File, baseOffset: Long, randomDigits: Boolean = false): File = {
-    new File(logDir, if(randomDigits) baseOffset+"-"+random.nextInt(1000) else String.valueOf(baseOffset))
+    new File(logDir, if(randomDigits) baseOffset+"-"+random.nextInt(100000) else String.valueOf(baseOffset))
   }
 
   def getSegmentOffset(segDir: File): Long ={
@@ -759,6 +766,12 @@ object LogSegment {
       SegmentStatus.UNKNOWN;
     }
   }
+
+  def setStatus(segDir: File, status: SegmentStatus): Unit = {
+    val statusFile = new File(segDir, SegmentFile.STATUS.getName)
+    SegmentStatusHandler.setStatus(statusFile, status)
+  }
+
 
   def isSegmentFileExists(dir: File, baseOffset: Long, segmentFile: SegmentFile): Boolean = {
     val segDir = new File(dir, String.valueOf(baseOffset))

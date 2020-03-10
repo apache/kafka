@@ -534,7 +534,7 @@ class Log(@volatile var dir: File,
       } else if (segmentStatus == SegmentStatus.CLEANED) {
         minCleanedFileOffset = Math.min(baseOffset, minCleanedFileOffset)
         cleanDirs += segDir
-      } else if (segmentStatus == SegmentStatus.SWAPPED) {
+      } else if (segmentStatus == SegmentStatus.SWAP) {
         // we crashed in the middle of a swap operation, to recover:
         // if a log, delete the index files, complete the swap operation later
         // if an index just delete the index files, they will be rebuilt
@@ -2172,7 +2172,9 @@ class Log(@volatile var dir: File,
       // iteration remain valid and deterministic.
       val toDelete = segments.toList
       toDelete.foreach { segment =>
-        deleteSegment(segment, asyncDelete)
+        this.segments.remove(segment.baseOffset)
+        segment.closeHandlers()
+        deleteSegment(segment.segDir, asyncDelete)
       }
     }
   }
@@ -2187,8 +2189,7 @@ class Log(@volatile var dir: File,
    *
    * @throws IOException if the file can't be renamed and still exists
    */
-  private def deleteSegment(segment: LogSegment, asyncDelete: Boolean): Unit = {
-
+   def deleteSegment(segDir: File, asyncDelete: Boolean): Unit = {
     def deleteSegments(): Unit = {
       deleteLock synchronized {
         deletedSegments.keySet().forEach( segDir =>{
@@ -2202,19 +2203,15 @@ class Log(@volatile var dir: File,
         })
       }
     }
-
-    segment.changeSegmentStatus(SegmentStatus.DELETED)
-    segment.closeHandlers()
-    this.segments.remove(segment.baseOffset)
-    this.deletedSegments.put(segment.segDir, java.lang.Boolean.TRUE)
+    LogSegment.setStatus(segDir, SegmentStatus.DELETED)
+    this.deletedSegments.put(segDir, java.lang.Boolean.TRUE)
     if(asyncDelete){
-        scheduler.schedule("delete-file", () => deleteSegments(), delay = config.fileDeleteDelayMs)
+      scheduler.schedule("delete-file", () => deleteSegments(), delay = config.fileDeleteDelayMs)
     }else{
-      LogSegment.deleteIfExists(segment.segDir)
+      LogSegment.deleteIfExists(segDir)
     }
   }
-
-  /**
+    /**
    * Swap one or more new segment in place and delete one or more existing segments in a crash-safe manner. The old
    * segments will be asynchronously deleted.
    *
@@ -2258,17 +2255,21 @@ class Log(@volatile var dir: File,
       // need to do this in two phases to be crash safe AND do the delete asynchronously
       // if we crash in the middle of this we complete the swap in loadSegments()
       if (!isRecoveredSwapFile)
-        sortedNewSegments.reverse.foreach(_.changeSegmentStatus(SegmentStatus.CLEANED, SegmentStatus.SWAPPED))
+        sortedNewSegments.reverse.foreach(_.changeSegmentStatus(SegmentStatus.CLEANED, SegmentStatus.SWAP))
+
       sortedNewSegments.reverse.foreach(addSegment(_))
 
       // delete the old files
       for (seg <- sortedOldSegments) {
         // remove the index entry
         if (seg.baseOffset != sortedNewSegments.head.baseOffset)
-          deleteSegment(seg, asyncDelete = true)
+          segments.remove(seg.baseOffset)
+        // delete segment files
+        seg.closeHandlers()
+        deleteSegment(seg.segDir, asyncDelete = true)
       }
       // okay we are safe now, remove the swap suffix
-      sortedNewSegments.foreach(_.changeSegmentStatus(SegmentStatus.SWAPPED, SegmentStatus.HOT))
+      sortedNewSegments.foreach(_.changeSegmentStatus(SegmentStatus.SWAP, SegmentStatus.HOT))
     }
   }
 
