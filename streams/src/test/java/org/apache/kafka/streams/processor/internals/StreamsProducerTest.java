@@ -261,7 +261,7 @@ public class StreamsProducerTest {
         expectLastCall();
         replay(producer);
 
-        final StreamsProducer streamsProducer = 
+        final StreamsProducer streamsProducer =
             new StreamsProducer(producer, true, logContext, "appId");
         streamsProducer.initTransaction();
 
@@ -317,7 +317,7 @@ public class StreamsProducerTest {
         expectLastCall();
         replay(producer);
 
-        final StreamsProducer streamsProducer = 
+        final StreamsProducer streamsProducer =
             new StreamsProducer(producer, true, logContext, "appId");
         streamsProducer.initTransaction();
 
@@ -332,7 +332,7 @@ public class StreamsProducerTest {
     public void shouldThrowTimeoutExceptionOnEosInitTxTimeout() {
         // use `mockProducer` instead of `eosMockProducer` to avoid double Tx-Init
         mockProducer.initTransactionException = new TimeoutException("KABOOM!");
-        final StreamsProducer streamsProducer = 
+        final StreamsProducer streamsProducer =
             new StreamsProducer(mockProducer, true, logContext, "appId");
 
         final TimeoutException thrown = assertThrows(
@@ -347,7 +347,7 @@ public class StreamsProducerTest {
     public void shouldThrowStreamsExceptionOnEosInitError() {
         // use `mockProducer` instead of `eosMockProducer` to avoid double Tx-Init
         mockProducer.initTransactionException = new KafkaException("KABOOM!");
-        final StreamsProducer streamsProducer = 
+        final StreamsProducer streamsProducer =
             new StreamsProducer(mockProducer, true, logContext, "appId");
 
         final StreamsException thrown = assertThrows(

@@ -155,7 +155,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         final TimestampExtractor defaultTimestampExtractor = config.defaultTimestampExtractor();
         final DeserializationExceptionHandler defaultDeserializationExceptionHandler = config.defaultDeserializationExceptionHandler();
         for (final TopicPartition partition : partitions) {
-            final SourceNode source = topology.source(partition.topic());
+            final SourceNode<?, ?> source = topology.source(partition.topic());
             final TimestampExtractor sourceTimestampExtractor = source.getTimestampExtractor();
             final TimestampExtractor timestampExtractor = sourceTimestampExtractor != null ? sourceTimestampExtractor : defaultTimestampExtractor;
             final RecordQueue queue = new RecordQueue(
@@ -343,6 +343,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         // we need to preserve the original partitions times before calling commit
         // because all partition times are reset to -1 during close
         final Map<TopicPartition, Long> partitionTimes = extractPartitionTimes();
+
         final Map<TopicPartition, OffsetAndMetadata> consumedOffsetsAndMetadata = new HashMap<>(consumedOffsets.size());
         for (final Map.Entry<TopicPartition, Long> entry : consumedOffsets.entrySet()) {
             final TopicPartition partition = entry.getKey();
@@ -525,7 +526,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
 
         try {
             // process the record by passing to the source node of the topology
-            final ProcessorNode currNode = recordInfo.node();
+            final ProcessorNode<Object, Object> currNode = (ProcessorNode<Object, Object>) recordInfo.node();
             final TopicPartition partition = recordInfo.partition();
 
             log.trace("Start processing one record [{}]", record);
@@ -581,7 +582,10 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
      * @throws TaskMigratedException if the task producer got fenced (EOS only)
      */
     @Override
-    public void punctuate(final ProcessorNode node, final long timestamp, final PunctuationType type, final Punctuator punctuator) {
+    public void punctuate(final ProcessorNode<?, ?> node,
+                          final long timestamp,
+                          final PunctuationType type,
+                          final Punctuator punctuator) {
         if (processorContext.currentNode() != null) {
             throw new IllegalStateException(String.format("%sCurrent node is not null", logPrefix));
         }
@@ -603,7 +607,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         }
     }
 
-    private void updateProcessorContext(final StampedRecord record, final ProcessorNode currNode) {
+    private void updateProcessorContext(final StampedRecord record, final ProcessorNode<?, ?> currNode) {
         processorContext.setRecordContext(
             new ProcessorRecordContext(
                 record.timestamp,
@@ -682,7 +686,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     private void initializeTopology() {
         // initialize the task by initializing all its processor nodes in the topology
         log.trace("Initializing processor nodes of the topology");
-        for (final ProcessorNode node : topology.processors()) {
+        for (final ProcessorNode<?, ?> node : topology.processors()) {
             processorContext.setCurrentNode(node);
             try {
                 node.init(processorContext);
@@ -698,7 +702,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         // close the processors
         // make sure close() is called for each node even when there is a RuntimeException
         RuntimeException exception = null;
-        for (final ProcessorNode node : topology.processors()) {
+        for (final ProcessorNode<?, ?> node : topology.processors()) {
             processorContext.setCurrentNode(node);
             try {
                 node.close();
