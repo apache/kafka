@@ -66,6 +66,7 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
     private KafkaException offsetsException;
     private AtomicBoolean wakeup;
     private boolean closed;
+    private boolean shouldRebalance;
 
     public MockConsumer(OffsetResetStrategy offsetResetStrategy) {
         this.subscriptions = new SubscriptionState(new LogContext(), offsetResetStrategy);
@@ -79,6 +80,7 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
         this.pollException = null;
         this.wakeup = new AtomicBoolean(false);
         this.committed = new HashMap<>();
+        this.shouldRebalance = false;
     }
 
     @Override
@@ -356,21 +358,10 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
         subscriptions.requestOffsetReset(partitions, OffsetResetStrategy.LATEST);
     }
 
-    // needed for cases where you make a second call to endOffsets
-    public synchronized void addEndOffsets(final Map<TopicPartition, Long> newOffsets) {
-        innerUpdateEndOffsets(newOffsets, false);
-    }
-
     public synchronized void updateEndOffsets(final Map<TopicPartition, Long> newOffsets) {
-        innerUpdateEndOffsets(newOffsets, true);
-    }
-
-    private void innerUpdateEndOffsets(final Map<TopicPartition, Long> newOffsets,
-                                       final boolean replace) {
-
         for (final Map.Entry<TopicPartition, Long> entry : newOffsets.entrySet()) {
             List<Long> offsets = endOffsets.get(entry.getKey());
-            if (replace || offsets == null) {
+            if (offsets == null) {
                 offsets = new ArrayList<>();
             }
             offsets.add(entry.getValue());
@@ -568,6 +559,15 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
 
     @Override
     public void enforceRebalance() {
+        shouldRebalance = true;
+    }
+
+    public boolean shouldRebalance() {
+        return shouldRebalance;
+    }
+
+    public void resetShouldRebalance() {
+        shouldRebalance = false;
     }
 
     @Override

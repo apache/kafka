@@ -1083,7 +1083,8 @@ public class KafkaStreams implements AutoCloseable {
      * @param keySerializer serializer for the key
      * @param <K>           key type
      * @return {@link StreamsMetadata} for the {@code KafkaStreams} instance with the provided {@code storeName} and
-     * {@code key} of this application or {@link StreamsMetadata#NOT_AVAILABLE} if Kafka Streams is (re-)initializing
+     * {@code key} of this application or {@link StreamsMetadata#NOT_AVAILABLE} if Kafka Streams is (re-)initializing,
+     * or {@code null} if no matching metadata could be found.
      * @deprecated Since 2.5. Use {@link #queryMetadataForKey(String, Object, Serializer)} instead.
      */
     @Deprecated
@@ -1116,7 +1117,8 @@ public class KafkaStreams implements AutoCloseable {
      * @param partitioner the partitioner to be use to locate the host for the key
      * @param <K>         key type
      * @return {@link StreamsMetadata} for the {@code KafkaStreams} instance with the provided {@code storeName} and
-     * {@code key} of this application or {@link StreamsMetadata#NOT_AVAILABLE} if Kafka Streams is (re-)initializing
+     * {@code key} of this application or {@link StreamsMetadata#NOT_AVAILABLE} if Kafka Streams is (re-)initializing,
+     * or {@code null} if no matching metadata could be found.
      * @deprecated Since 2.5. Use {@link #queryMetadataForKey(String, Object, StreamPartitioner)} instead.
      */
     @Deprecated
@@ -1134,7 +1136,8 @@ public class KafkaStreams implements AutoCloseable {
      * @param key           the key to find metadata for
      * @param keySerializer serializer for the key
      * @param <K>           key type
-     * Returns {@link KeyQueryMetadata} containing all metadata about hosting the given key for the given store.
+     * Returns {@link KeyQueryMetadata} containing all metadata about hosting the given key for the given store,
+     * or {@code null} if no matching metadata could be found.
      */
     public <K> KeyQueryMetadata queryMetadataForKey(final String storeName,
                                                     final K key,
@@ -1151,7 +1154,7 @@ public class KafkaStreams implements AutoCloseable {
      * @param partitioner the partitioner to be use to locate the host for the key
      * @param <K>           key type
      * Returns {@link KeyQueryMetadata} containing all metadata about hosting the given key for the given store, using the
-     * the supplied partitioner
+     * the supplied partitioner, or {@code null} if no matching metadata could be found.
      */
     public <K> KeyQueryMetadata queryMetadataForKey(final String storeName,
                                                     final K key,
