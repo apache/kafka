@@ -150,12 +150,13 @@ public interface Task {
 
     /**
      * Close a task that we may not own. Discard any uncommitted progress and close the task.
-     * Never throws an exception, but just makes all attempts to release resources while closing.
+     * Catches all exceptions thrown from closing resources so it can make an attempt to release
+     * everything. Note, this does not mean that no exceptions are ever thrown from this method
      */
     void closeDirty();
 
     /**
-     * Revive a closed task to a created one; should never throw an exception
+     * Revive a closed task to a created one; should never throw an exception besides IllegalState
      */
     void revive();
 

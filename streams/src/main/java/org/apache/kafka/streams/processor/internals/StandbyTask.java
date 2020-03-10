@@ -16,9 +16,12 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import static java.lang.String.format;
+
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.errors.StreamsException;
@@ -31,11 +34,14 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
+import org.slf4j.Logger;
 
 /**
  * A StandbyTask
  */
 public class StandbyTask extends AbstractTask implements Task {
+    private final Logger log;
+    private final String logPrefix;
     private final Sensor closeTaskSensor;
     private final InternalProcessorContext processorContext;
 
@@ -57,7 +63,12 @@ public class StandbyTask extends AbstractTask implements Task {
                 final StreamsMetricsImpl metrics,
                 final ProcessorStateManager stateMgr,
                 final StateDirectory stateDirectory) {
-        super(id, topology, stateDirectory, stateMgr, partitions, "standby-task");
+        super(id, topology, stateDirectory, stateMgr, partitions);
+
+        final String threadIdPrefix = format("stream-thread [%s] ", Thread.currentThread().getName());
+        logPrefix = threadIdPrefix + format("%s [%s] ", "standby-task", id);
+        final LogContext logContext = new LogContext(logPrefix);
+        log = logContext.logger(getClass());
 
         processorContext = new StandbyContextImpl(id, config, stateMgr, metrics);
         closeTaskSensor = ThreadMetrics.closeTaskSensor(Thread.currentThread().getName(), metrics);
@@ -145,11 +156,7 @@ public class StandbyTask extends AbstractTask implements Task {
 
     @Override
     public void closeDirty() {
-        try {
-            close(false);
-        } catch (final RuntimeException e) {
-            log.warn(String.format("Ignoring uncaught error in unclean close of standby task %s", id), e);
-        }
+        close(false);
 
         log.info("Closed dirty");
     }
@@ -178,7 +185,7 @@ public class StandbyTask extends AbstractTask implements Task {
                 executeAndMaybeSwallow(clean, () -> {
                     StateManagerUtil.closeStateManager(log, logPrefix, clean,
                         false, stateMgr, stateDirectory, TaskType.STANDBY);
-                }, "state manager close");
+                }, "state manager close", log);
 
                 // TODO: if EOS is enabled, we should wipe out the state stores like we did for StreamTask too
             } else {

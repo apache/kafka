@@ -24,6 +24,7 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.DeserializationExceptionHandler;
@@ -54,6 +55,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import org.slf4j.Logger;
 
 import static java.lang.String.format;
 import static java.util.Collections.emptyMap;
@@ -70,6 +72,8 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     static final byte LATEST_MAGIC_BYTE = 1;
 
     private final Time time;
+    private final Logger log;
+    private final String logPrefix;
     private final Consumer<byte[], byte[]> mainConsumer;
 
     // we want to abstract eos logic out of StreamTask, however
@@ -108,8 +112,13 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                       final Time time,
                       final ProcessorStateManager stateMgr,
                       final RecordCollector recordCollector) {
-        super(id, topology, stateDirectory, stateMgr, partitions, "task");
+        super(id, topology, stateDirectory, stateMgr, partitions);
         this.mainConsumer = mainConsumer;
+
+        final String threadIdPrefix = format("stream-thread [%s] ", Thread.currentThread().getName());
+        logPrefix = threadIdPrefix + format("%s [%s] ", "task", id);
+        final LogContext logContext = new LogContext(logPrefix);
+        log = logContext.logger(getClass());
 
         this.time = time;
         this.recordCollector = recordCollector;
@@ -380,11 +389,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
 
     @Override
     public void closeDirty() {
-        try {
-            close(false);
-        } catch (final RuntimeException e) {
-            log.warn(String.format("Ignoring uncaught error in unclean close of active task %s", id), e);
-        }
+        close(false);
 
         log.info("Closed dirty");
     }
@@ -411,7 +416,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             // the task is created and not initialized, just re-write the checkpoint file
             executeAndMaybeSwallow(clean, () -> {
                 stateMgr.checkpoint(Collections.emptyMap());
-            }, "state manager checkpoint");
+            }, "state manager checkpoint", log);
 
             transitionTo(State.CLOSING);
         } else if (state() == State.RUNNING) {
@@ -423,7 +428,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                 // the state as well no matter if EOS is enabled or not
                 stateMgr.checkpoint(checkpointableOffsets());
             } else {
-                executeAndMaybeSwallow(false, stateMgr::flush, "state manager flush");
+                executeAndMaybeSwallow(false, stateMgr::flush, "state manager flush", log);
             }
 
             transitionTo(State.CLOSING);
@@ -431,7 +436,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             executeAndMaybeSwallow(clean, () -> {
                 stateMgr.flush();
                 stateMgr.checkpoint(Collections.emptyMap());
-            }, "state manager flush and checkpoint");
+            }, "state manager flush and checkpoint", log);
 
             transitionTo(State.CLOSING);
         } else if (state() == State.SUSPENDED) {
@@ -449,9 +454,9 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             executeAndMaybeSwallow(clean, () -> {
                 StateManagerUtil.closeStateManager(log, logPrefix, clean,
                         wipeStateStore, stateMgr, stateDirectory, TaskType.ACTIVE);
-            }, "state manager close");
+            }, "state manager close", log);
 
-            executeAndMaybeSwallow(clean, recordCollector::close, "record collector close");
+            executeAndMaybeSwallow(clean, recordCollector::close, "record collector close", log);
         } else {
             throw new IllegalStateException("Illegal state " + state() + " while closing active task " + id);
         }

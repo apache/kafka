@@ -32,9 +32,6 @@ import static org.apache.kafka.streams.processor.internals.Task.State.CREATED;
 public abstract class AbstractTask implements Task {
     private Task.State state = CREATED;
 
-    protected final Logger log;
-    protected final LogContext logContext;
-    protected final String logPrefix;
     protected final TaskId id;
     protected final ProcessorTopology topology;
     protected final StateDirectory stateDirectory;
@@ -45,18 +42,12 @@ public abstract class AbstractTask implements Task {
                  final ProcessorTopology topology,
                  final StateDirectory stateDirectory,
                  final ProcessorStateManager stateMgr,
-                 final Set<TopicPartition> partitions,
-                 final String taskType) {
+                 final Set<TopicPartition> partitions) {
         this.id = id;
         this.stateMgr = stateMgr;
         this.topology = topology;
         this.partitions = partitions;
         this.stateDirectory = stateDirectory;
-
-        final String threadIdPrefix = format("stream-thread [%s] ", Thread.currentThread().getName());
-        logPrefix = threadIdPrefix + format("%s [%s] ", taskType, id);
-        logContext = new LogContext(logPrefix);
-        log = logContext.logger(getClass());
     }
 
     @Override
@@ -113,7 +104,10 @@ public abstract class AbstractTask implements Task {
         }
     }
 
-    void executeAndMaybeSwallow(final boolean clean, final Runnable runnable, final String name) {
+    static void executeAndMaybeSwallow(final boolean clean,
+                                       final Runnable runnable,
+                                       final String name,
+                                       final Logger log) {
         try {
             runnable.run();
         } catch (final RuntimeException e) {

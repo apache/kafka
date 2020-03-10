@@ -133,6 +133,8 @@ public class TaskManager {
     }
 
     void handleCorruption(final Map<TaskId, Collection<TopicPartition>> taskWithChangelogs) {
+        final AtomicReference<RuntimeException> firstException = new AtomicReference<>(null);
+
         for (final Map.Entry<TaskId, Collection<TopicPartition>> entry : taskWithChangelogs.entrySet()) {
             final TaskId taskId = entry.getKey();
             final Task task = tasks.get(taskId);
@@ -144,8 +146,17 @@ public class TaskManager {
             final Collection<TopicPartition> corruptedPartitions = entry.getValue();
             task.markChangelogAsCorrupted(corruptedPartitions);
 
-            task.closeDirty();
-            task.revive();
+            firstException.compareAndSet(null, tryCloseDirty(task));
+        }
+
+        final RuntimeException fatalException = firstException.get();
+        if (fatalException != null) {
+            throw new RuntimeException("Unexpected exception while unclean closing corrupted task", fatalException);
+        } else {
+            for (final TaskId id : taskWithChangelogs.keySet()) {
+                final Task task = tasks.get(id);
+                task.revive();
+            }
         }
     }
 
@@ -189,7 +200,14 @@ public class TaskManager {
                     taskCloseExceptions.put(task.id(), e);
                     // We've already recorded the exception (which is the point of clean).
                     // Now, we should go ahead and complete the close because a half-closed task is no good to anyone.
-                    task.closeDirty();
+                    final RuntimeException closeDirtyException = tryCloseDirty(task);
+                    if (closeDirtyException != null) {
+                        final String dirtyCloseFailedMessage = String.format(
+                            "Failed to close task %s uncleanly. Attempting to close remaining tasks before re-throwing:",
+                            task.id());
+                        log.error(dirtyCloseFailedMessage, closeDirtyException);
+                        taskCloseExceptions.put(task.id(), closeDirtyException);
+                    }
                 } finally {
                     if (task.isActive()) {
                         try {
@@ -343,6 +361,7 @@ public class TaskManager {
      */
     void handleLostAll() {
         log.debug("Closing lost active tasks as zombies.");
+        final AtomicReference<RuntimeException> firstException = new AtomicReference<>(null);
 
         final Iterator<Task> iterator = tasks.values().iterator();
         while (iterator.hasNext()) {
@@ -352,7 +371,7 @@ public class TaskManager {
             // standby tasks while we rejoin.
             if (task.isActive()) {
                 cleanupTask(task);
-                task.closeDirty();
+                firstException.compareAndSet(null, tryCloseDirty(task));
                 iterator.remove();
                 try {
                     activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(task.id());
@@ -364,6 +383,10 @@ public class TaskManager {
             for (final TopicPartition inputPartition : inputPartitions) {
                 partitionToTask.remove(inputPartition);
             }
+        }
+        final RuntimeException fatalException = firstException.get();
+        if (fatalException != null) {
+            throw new RuntimeException("Unexpected exception while closing zombie task", fatalException);
         }
     }
 
@@ -442,13 +465,13 @@ public class TaskManager {
                     task.closeClean();
                 } catch (final TaskMigratedException e) {
                     // just ignore the exception as it doesn't matter during shutdown
-                    task.closeDirty();
+                    firstException.compareAndSet(null, tryCloseDirty(task));
                 } catch (final RuntimeException e) {
                     firstException.compareAndSet(null, e);
-                    task.closeDirty();
+                    tryCloseDirty(task);
                 }
             } else {
-                task.closeDirty();
+                firstException.compareAndSet(null, tryCloseDirty(task));
             }
             if (task.isActive()) {
                 try {
@@ -478,6 +501,15 @@ public class TaskManager {
         if (fatalException != null) {
             throw new RuntimeException("Unexpected exception while closing task", fatalException);
         }
+    }
+
+    private static RuntimeException tryCloseDirty(final Task task) {
+        try {
+            task.closeDirty();
+        } catch (final RuntimeException e) {
+            return e;
+        }
+        return null;
     }
 
     Set<TaskId> activeTaskIds() {
