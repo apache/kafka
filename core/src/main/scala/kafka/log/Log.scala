@@ -2191,7 +2191,7 @@ class Log(@volatile var dir: File,
           LogSegment.deleteIfExists(dir)
           deletedSegments.remove(segDir)
         }catch{
-          case e: Throwable => (s"Unable to delete segment  ${topicPartition.toString} : $segDir, Reason : ${e.getMessage}")
+          case e: Throwable => warn(s"Unable to delete segment  ${topicPartition.toString} : $segDir, Reason : ${e.getMessage}")
         }
       })
     }
