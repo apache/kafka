@@ -469,9 +469,13 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
       reconfigurable.reconfigure(newConfig)
   }
 
-  private def updatedConfigs(newProps: java.util.Map[String, _], currentProps: java.util.Map[_, _]): mutable.Map[String, _] = {
-    newProps.asScala.filter {
-      case (k, v) => v != currentProps.get(k)
+  private def updatedConfigs(newProps: java.util.Map[String, _], currentProps: java.util.Map[String, _]): mutable.Map[String, _] = {
+    if (newProps.keySet.asScala.subsetOf(currentProps.keySet.asScala)) {
+      newProps.asScala
+    } else {
+      newProps.asScala.filter {
+        case (k, v) => v != currentProps.get(k)
+      }
     }
   }
 
@@ -510,11 +514,6 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
   }
 
   private def processReconfiguration(newProps: Map[String, String], validateOnly: Boolean): (KafkaConfig, List[BrokerReconfigurable]) = {
-    try {
-      throw new RuntimeException("foo")
-    } catch {
-      case e: Throwable => logger.info("processReconfiguration(validateOnly=" + validateOnly + ")", e)
-    }
     val newConfig = new KafkaConfig(newProps.asJava, !validateOnly, None)
     val updatedMap = updatedConfigs(newConfig.originalsFromThisConfig, currentConfig.originals)
     if (updatedMap.nonEmpty) {
