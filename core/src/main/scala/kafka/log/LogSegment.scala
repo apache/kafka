@@ -712,7 +712,7 @@ object LogSegment {
   def getCleanedSegmentFiles(logDir: File, offset: Long): Array[File] = {
     val fNameDir = String.valueOf(offset)
     val fNameDyn = fNameDir+"-"
-    logDir.listFiles( (segDir: File, name: String) => (name.startsWith(fNameDyn) || name.equals(fNameDir)) && getStatus(segDir) == SegmentStatus.CLEANED)
+    logDir.listFiles( file => (file.getName.startsWith(fNameDyn) || file.getName.equals(fNameDir)) && getStatus(file) == SegmentStatus.CLEANED)
   }
 
   def getSegmentDir(logDir: File, baseOffset: Long, randomDigits: Boolean = false): File = {
