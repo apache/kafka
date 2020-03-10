@@ -14,24 +14,29 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.log.storage;
+package org.apache.kafka.common.log.remote.storage;
 
-import org.apache.kafka.common.*;
-import org.apache.kafka.common.errors.*;
-import org.apache.kafka.common.log.remote.storage.*;
-import org.slf4j.*;
+import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.InvalidConfigurationException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-import java.io.*;
-import java.nio.file.*;
-import java.util.*;
-import java.util.concurrent.*;
+import static java.lang.String.format;
+import static java.nio.file.Files.newInputStream;
+import static java.nio.file.StandardOpenOption.READ;
+import static java.util.Arrays.asList;
+import static java.util.Objects.requireNonNull;
+import static org.apache.kafka.common.log.remote.storage.RemoteLogSegmentContext.EMPTY_CONTEXT;
 
-import static java.lang.String.*;
-import static java.nio.file.Files.*;
-import static java.nio.file.StandardOpenOption.*;
-import static java.util.Arrays.*;
-import static java.util.Objects.*;
-import static org.apache.kafka.common.log.remote.storage.RemoteLogSegmentContext.*;
+import java.io.File;
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.file.Files;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.concurrent.Callable;
 
 /**
  * An implementation of {@link RemoteStorageManager} which relies on the local file system to store offloaded
@@ -97,17 +102,16 @@ public final class LocalRemoteStorageManager implements RemoteStorageManager  {
         }
 
         if (shouldDeleteOnClose != null) {
-            deleteOnClose = Boolean.valueOf(shouldDeleteOnClose);
+            deleteOnClose = Boolean.parseBoolean(shouldDeleteOnClose);
         }
 
         if (isDeleteEnabled != null) {
-            deleteEnabled = Boolean.valueOf(isDeleteEnabled);
+            deleteEnabled = Boolean.parseBoolean(isDeleteEnabled);
         }
 
         if (transfererClass != null) {
             try {
                 transferer = (Transferer) getClass().getClassLoader().loadClass(transfererClass).newInstance();
-
             } catch (InstantiationException | IllegalAccessException | ClassNotFoundException | ClassCastException e) {
                 throw new RuntimeException(format("Cannot create transferer from class '%s'", transfererClass), e);
             }
@@ -140,7 +144,6 @@ public final class LocalRemoteStorageManager implements RemoteStorageManager  {
                         data.logSegment().getName().split("\\.")[0]));
 
                 remote.copyAll(data);
-
             } catch (final Exception e) {
                 //
                 // Keep the storage in a consistent state, i.e. a segment stored should always have with its
@@ -352,8 +355,8 @@ public final class LocalRemoteStorageManager implements RemoteStorageManager  {
     private static boolean deleteQuietly(final File file) {
         try {
             LOGGER.trace("Deleting " + file.getAbsolutePath());
-            return file.delete();
 
+            return file.delete();
         } catch (final Exception e) {
             LOGGER.error(format("Encountered error while deleting %s", file.getAbsolutePath()));
         }

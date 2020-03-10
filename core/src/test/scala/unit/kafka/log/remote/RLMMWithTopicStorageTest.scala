@@ -23,6 +23,7 @@ import java.util.UUID
 import kafka.api.IntegrationTestHarness
 import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.log.remote.storage.{RLMMWithTopicStorage, RemoteLogMetadataManager, RemoteLogSegmentId, RemoteLogSegmentMetadata}
 import org.junit.{Assert, Test}
 
@@ -35,7 +36,7 @@ class RLMMWithTopicStorageTest extends IntegrationTestHarness {
   def testPutAndGetRemoteLogMetadata(): Unit = {
     val tmpLogDirPath = Files.createTempDirectory("kafka-").toString
 
-    createTopic(RLMMWithTopicStorage.REMOTE_LOG_METADATA_TOPIC, 5, 2)
+    createTopic(Topic.REMOTE_LOG_METADATA_TOPIC_NAME, 5, 2)
 
     // user topic partitions
     val tp0 = new TopicPartition("foo", 0)
@@ -45,20 +46,16 @@ class RLMMWithTopicStorageTest extends IntegrationTestHarness {
     val rlmmWithTopicStorage = createRLMMWithTopicStorage(tmpLogDirPath, 1)
 
     val rlSegIdTp0_0 = new RemoteLogSegmentId(tp0, UUID.randomUUID)
-    val rlSegMetTp0_0 = new RemoteLogSegmentMetadata(rlSegIdTp0_0, 0L,
-      100L, 1, tp0.toString.getBytes)
+    val rlSegMetTp0_0 = new RemoteLogSegmentMetadata(rlSegIdTp0_0, 0L, 100L, -1L, 1, tp0.toString.getBytes)
 
     val rlSegIdTp0_101 = new RemoteLogSegmentId(tp0, UUID.randomUUID)
-    val rlSegMetTp0_101 = new RemoteLogSegmentMetadata(rlSegIdTp0_101, 101L,
-      200L, 1, tp0.toString.getBytes)
+    val rlSegMetTp0_101 = new RemoteLogSegmentMetadata(rlSegIdTp0_101, 101L, 200L, -1L, 1, tp0.toString.getBytes)
 
     val rlSegIdTp1_101 = new RemoteLogSegmentId(tp1, UUID.randomUUID)
-    val rlSegMetTp1_101 = new RemoteLogSegmentMetadata(rlSegIdTp1_101, 101L,
-      200L, 1, tp1.toString.getBytes)
+    val rlSegMetTp1_101 = new RemoteLogSegmentMetadata(rlSegIdTp1_101, 101L, 200L, -1L, 1, tp1.toString.getBytes)
 
     val rlSegIdTp2_401 = new RemoteLogSegmentId(tp2, UUID.randomUUID)
-    val rlSegMetTp2_401 = new RemoteLogSegmentMetadata(rlSegIdTp2_401, 401L,
-      700L, 1, tp1.toString.getBytes)
+    val rlSegMetTp2_401 = new RemoteLogSegmentMetadata(rlSegIdTp2_401, 401L, 700L, -1L, 1, tp1.toString.getBytes)
 
     try {
 
@@ -92,7 +89,7 @@ class RLMMWithTopicStorageTest extends IntegrationTestHarness {
     val rlmmWithTopicStorage = new RLMMWithTopicStorage
     val configs = new util.HashMap[String, Any]
     configs.put("log.dir", tmpLogDirPath)
-    configs.put(RemoteLogMetadataManager.BROKER_ID_CONFIG, brokerId)
+    configs.put(RemoteLogMetadataManager.BROKER_ID, brokerId)
     configs.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, brokerList)
     rlmmWithTopicStorage.configure(configs)
 

@@ -17,7 +17,6 @@
 package org.apache.kafka.rsm.hdfs;
 
 import kafka.log.LogSegment;
-import kafka.log.remote.RemoteStorageManager;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FSDataOutputStream;
@@ -26,8 +25,14 @@ import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.log.remote.storage.LogSegmentData;
 import org.apache.kafka.common.log.remote.storage.RemoteLogIndexEntry;
+import org.apache.kafka.common.log.remote.storage.RemoteLogSegmentContext;
+import org.apache.kafka.common.log.remote.storage.RemoteLogSegmentId;
 import org.apache.kafka.common.log.remote.storage.RemoteLogSegmentInfo;
+import org.apache.kafka.common.log.remote.storage.RemoteLogSegmentMetadata;
+import org.apache.kafka.common.log.remote.storage.RemoteStorageException;
+import org.apache.kafka.common.log.remote.storage.RemoteStorageManager;
 import org.apache.kafka.common.record.FileLogInputStream;
 import org.apache.kafka.common.record.FileRecords;
 import org.apache.kafka.common.record.MemoryRecords;
@@ -78,14 +83,12 @@ public class HDFSRemoteStorageManager implements RemoteStorageManager {
     private int cacheLineSize;
     private LRUCache readCache;
 
-    @Override
     public long earliestLogOffset(TopicPartition tp) throws IOException {
         List<RemoteLogSegmentInfo> remoteLogSegmentInfos = listRemoteSegments(tp);
         //todo better to avoid it seeking from remote storage when it can be cached here especially incase of leader.
         return (remoteLogSegmentInfos.isEmpty()) ? -1L : remoteLogSegmentInfos.get(0).baseOffset;
     }
 
-    @Override
     public List<RemoteLogIndexEntry> copyLogSegment(TopicPartition topicPartition, LogSegment logSegment, int leaderEpoch)
             throws IOException {
         long baseOffset = logSegment.baseOffset();
@@ -148,7 +151,6 @@ public class HDFSRemoteStorageManager implements RemoteStorageManager {
         return listRemoteSegments(topicPartition, 0);
     }
 
-    @Override
     public List<RemoteLogSegmentInfo> listRemoteSegments(TopicPartition topicPartition, long minOffset) throws IOException {
         FileSystem fs = getFS();
         Path path = new Path(getTPRemoteDir(topicPartition));
@@ -184,7 +186,6 @@ public class HDFSRemoteStorageManager implements RemoteStorageManager {
         return segments;
     }
 
-    @Override
     public List<RemoteLogIndexEntry> getRemoteLogIndexEntries(RemoteLogSegmentInfo remoteLogSegment) throws IOException {
         FileSystem fs = getFS();
 
@@ -207,14 +208,12 @@ public class HDFSRemoteStorageManager implements RemoteStorageManager {
         }
     }
 
-    @Override
     public boolean deleteLogSegment(RemoteLogSegmentInfo remoteLogSegmentInfo) throws IOException {
         FileSystem fs = getFS();
         Path path = (Path) remoteLogSegmentInfo.props.get(FILE_PATH);
         return fs.delete(path, true);
     }
 
-    @Override
     public boolean deleteTopicPartition(TopicPartition tp) throws IOException {
         FileSystem fs = getFS();
         Path path = new Path(getTPRemoteDir(tp));
@@ -222,7 +221,6 @@ public class HDFSRemoteStorageManager implements RemoteStorageManager {
         return fs.delete(path, true);
     }
 
-    @Override
     public long cleanupLogUntil(TopicPartition topicPartition, long cleanUpTillMs) throws IOException {
         FileSystem fs = getFS();
         Path path = new Path(getTPRemoteDir(topicPartition));
@@ -249,6 +247,35 @@ public class HDFSRemoteStorageManager implements RemoteStorageManager {
         }
 
         return minStartOffset == Long.MAX_VALUE ? -1L : minStartOffset;
+    }
+
+    @Override
+    public RemoteLogSegmentContext copyLogSegment(RemoteLogSegmentId remoteLogSegmentId, LogSegmentData logSegmentData)
+            throws RemoteStorageException {
+        return null;
+    }
+
+    @Override
+    public InputStream fetchLogSegmentData(RemoteLogSegmentMetadata remoteLogSegmentMetadata, Long startPosition,
+                                           Long endPosition) throws RemoteStorageException {
+        return null;
+    }
+
+    @Override
+    public InputStream fetchOffsetIndex(RemoteLogSegmentMetadata remoteLogSegmentMetadata)
+            throws RemoteStorageException {
+        return null;
+    }
+
+    @Override
+    public InputStream fetchTimestampIndex(RemoteLogSegmentMetadata remoteLogSegmentMetadata)
+            throws RemoteStorageException {
+        return null;
+    }
+
+    @Override
+    public boolean deleteLogSegment(RemoteLogSegmentMetadata remoteLogSegmentMetadata) throws RemoteStorageException {
+        return false;
     }
 
     private class CachedInputStream implements Closeable {
@@ -313,7 +340,6 @@ public class HDFSRemoteStorageManager implements RemoteStorageManager {
     /**
      * Read remote log from startOffset.
      **/
-    @Override
     public Records read(RemoteLogIndexEntry remoteLogIndexEntry, int maxBytes, long startOffset, boolean minOneMessage) throws IOException {
         if (startOffset > remoteLogIndexEntry.lastOffset)
             throw new IllegalArgumentException("startOffset > remoteLogIndexEntry.lastOffset()");
@@ -361,7 +387,6 @@ public class HDFSRemoteStorageManager implements RemoteStorageManager {
         return MemoryRecords.readableRecords(is.read(pos, bytes));
     }
 
-    @Override
     public FileRecords.TimestampAndOffset findOffsetByTimestamp(RemoteLogIndexEntry remoteLogIndexEntry,
                                                                         long targetTimestamp,
                                                                         long startingOffset) throws IOException {

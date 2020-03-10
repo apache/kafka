@@ -30,11 +30,10 @@ import kafka.utils.CoreUtils
 import kafka.utils.Implicits._
 import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.common.Reconfigurable
-import org.apache.kafka.common.config.SecurityConfig
 import org.apache.kafka.common.config.ConfigDef.{ConfigKey, ValidList}
-import org.apache.kafka.common.config._
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
-import org.apache.kafka.common.config.{AbstractConfig, ConfigDef, ConfigException, SaslConfigs, SslClientAuth, SslConfigs, TopicConfig}
+import org.apache.kafka.common.config.{AbstractConfig, ConfigDef, ConfigException, SaslConfigs, SecurityConfig, SslClientAuth, SslConfigs, TopicConfig}
+import org.apache.kafka.common.log.remote.storage.RLMMWithTopicStorage
 import org.apache.kafka.common.metrics.Sensor
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.record.{LegacyRecord, Records, TimestampType}
@@ -128,6 +127,8 @@ object Defaults {
   val RemoteStorageManager = ""
   val RemoteStorageManagerClassPath = ""
   val RemoteLogMetadataManager = ""
+  val RemoteLogMetadataTopicReplicationFactor = RLMMWithTopicStorage.DEFAULT_REMOTE_LOG_METADATA_TOPIC_REPLICATION_FACTOR
+  val RemoteLogMetadataTopicPartitions = RLMMWithTopicStorage.DEFAULT_REMOTE_LOG_METADATA_TOPIC_PARTITIONS
   val RemoteLogMetadataManagerClassPath = ""
   val RemoteLogRetentionMinutes = 7 * 24 * 60L
   val RemoteLogRetentionBytes = 1024 * 1024 * 1024L
@@ -376,6 +377,8 @@ object KafkaConfig {
   val RemoteLogManagerTaskIntervalMsProp = "remote.log.manager.task.interval.ms"
   val RemoteLogReaderThreadsProp = "remote.log.reader.threads"
   val RemoteLogReaderMaxPendingTasksProp = "remote.log.reader.max.pending.tasks"
+  val RemoteLogMetadataTopicReplicationFactorProp = RLMMWithTopicStorage.REMOTE_LOG_METADATA_TOPIC_REPLICATION_FACTOR_PROP
+  val RemoteLogMetadataTopicPartitionsProp = RLMMWithTopicStorage.REMOTE_LOG_METADATA_TOPIC_PARTITIONS_PROP
 
   /** ********* Replication configuration ***********/
   val ControllerSocketTimeoutMsProp = "controller.socket.timeout.ms"
@@ -700,6 +703,8 @@ object KafkaConfig {
     "classloader which searches this class path before the Kafka broker class path. The syntax of this parameter is same" +
     "with the standard Java class path string."
   val RemoteLogMetadataManagerDoc = "Fully qualified classname of RemoteLogMetadataManager implementation."
+  val RemoteLogMetadataTopicReplicationFactorDoc = "Replication factor of remote log metadata Topic."
+  val RemoteLogMetadataTopicPartitionsDoc = "The number of partitions for remote log metadata Topic."
   val RemoteLogMetadataManagerClassPathDoc = "Class path of the RemoteLogStorageManager implementation." +
     "If specified, the RemoteLogStorageManager implementation and its dependent libraries will be loaded by a dedicated" +
     "classloader which searches this class path before the Kafka broker class path. The syntax of this parameter is same" +
@@ -998,6 +1003,8 @@ object KafkaConfig {
       .define(RemoteLogStorageManagerProp, STRING, Defaults.RemoteStorageManager, LOW, RemoteStorageManagerDoc)
       .define(RemoteLogStorageManagerClassPathProp, STRING, Defaults.RemoteStorageManagerClassPath, LOW, RemoteStorageManagerClassPathDoc)
       .define(RemoteLogMetadataManagerProp, STRING, Defaults.RemoteLogMetadataManager, LOW, RemoteLogMetadataManagerDoc)
+      .define(RemoteLogMetadataTopicReplicationFactorProp, INT, Defaults.RemoteLogMetadataTopicReplicationFactor, LOW, RemoteLogMetadataTopicReplicationFactorDoc)
+      .define(RemoteLogMetadataTopicPartitionsProp, INT, Defaults.RemoteLogMetadataTopicPartitions, LOW, RemoteLogMetadataTopicPartitionsDoc)
       .define(RemoteLogMetadataManagerClassPathProp, STRING, Defaults.RemoteLogMetadataManagerClassPath, LOW, RemoteLogMetadataManagerClassPathDoc)
       .define(RemoteLogRetentionMillisProp, LONG, null, LOW, RemoteLogRetentionMillisDoc)
       .define(RemoteLogRetentionMinutesProp, LONG, Defaults.RemoteLogRetentionMinutes, LOW, RemoteLogRetentionMinutesDoc)
@@ -1331,6 +1338,8 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
 
   def remoteLogManagerThreadPoolSize: Int = getInt(KafkaConfig.RemoteLogManagerThreadPoolSizeProp)
   def remoteLogManagerTaskIntervalMs: Long = getLong(KafkaConfig.RemoteLogManagerTaskIntervalMsProp)
+  def remoteLogMetadataTopicReplicationFactor:Int = getInt(KafkaConfig.RemoteLogMetadataTopicReplicationFactorProp)
+  def remoteLogMetadataTopicPartitions:Int = getInt(KafkaConfig.RemoteLogMetadataTopicPartitionsProp)
 
   /** ********* Replication configuration ***********/
   val controllerSocketTimeoutMs: Int = getInt(KafkaConfig.ControllerSocketTimeoutMsProp)

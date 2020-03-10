@@ -352,6 +352,9 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
         startupComplete.set(true)
         isStartingUp.set(false)
         AppInfoParser.registerAppInfo(jmxPrefix, config.brokerId.toString, metrics, time.milliseconds())
+
+        // todo-tier start RLMM by saying broker is ready
+        remoteLogManager.foreach(rlm => rlm.onServerStarted())
         info("started")
       }
     }
@@ -395,7 +398,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
         if (ep.host == null || ep.host.trim.isEmpty) InetAddress.getLocalHost.getCanonicalHostName + ":" + ep.port
         else ep.host + ":" + ep.port
       Some(new RemoteLogManager(fetchLog, updateRemoteLogStartOffset, remoteLogManagerConfig, time, serversStr,
-        config.brokerId, config.logDirs.head))
+        config.brokerId, clusterId, config.logDirs.head))
     } else {
       None
     }

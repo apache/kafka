@@ -14,19 +14,21 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.log.storage;
+package org.apache.kafka.common.log.remote.storage;
 
-import org.apache.kafka.common.*;
-import org.apache.kafka.common.log.remote.storage.*;
+import org.apache.kafka.common.TopicPartition;
 
-import java.io.*;
-import java.nio.file.*;
-import java.util.*;
+import static java.lang.String.format;
+import static java.util.Objects.requireNonNull;
+import static org.junit.Assert.assertArrayEquals;
 
-import static java.lang.String.*;
-import static java.util.Objects.*;
-import static java.util.Optional.*;
-import static org.junit.Assert.*;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.file.Files;
+import java.nio.file.Paths;
+import java.util.Arrays;
+import java.util.List;
 
 public final class LocalRemoteStorageVerifier {
     private final LocalRemoteStorageManager remoteStorage;
@@ -134,7 +136,7 @@ public final class LocalRemoteStorageVerifier {
     }
 
     private RemoteLogSegmentMetadata newMetadata(final RemoteLogSegmentId id) {
-        return new RemoteLogSegmentMetadata(id, 0, 0, -1, new byte[0]);
+        return new RemoteLogSegmentMetadata(id, 0, 0, -1L, -1, new byte[0]);
     }
 
     private String getStorageRootDirectory() {

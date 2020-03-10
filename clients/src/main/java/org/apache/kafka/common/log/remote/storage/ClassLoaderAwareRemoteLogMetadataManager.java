@@ -22,6 +22,7 @@ import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 public class ClassLoaderAwareRemoteLogMetadataManager implements RemoteLogMetadataManager {
     private final ClassLoader loader;
@@ -79,6 +80,16 @@ public class ClassLoaderAwareRemoteLogMetadataManager implements RemoteLogMetada
     }
 
     @Override
+    public Optional<Long> highestLogOffset(TopicPartition tp) throws IOException {
+        ClassLoader originalClassLoader = Thread.currentThread().getContextClassLoader();
+        Thread.currentThread().setContextClassLoader(loader);
+        try {
+            return delegate.highestLogOffset(tp);
+        } finally {
+            Thread.currentThread().setContextClassLoader(originalClassLoader);
+        }    }
+
+    @Override
     public void deleteRemoteLogSegmentMetadata(RemoteLogSegmentId remoteLogSegmentId) throws IOException {
         ClassLoader originalClassLoader = Thread.currentThread().getContextClassLoader();
         Thread.currentThread().setContextClassLoader(loader);
@@ -101,8 +112,8 @@ public class ClassLoaderAwareRemoteLogMetadataManager implements RemoteLogMetada
     }
 
     @Override
-    public void onPartitionLeadershipChanges(List<TopicPartition> leaderPartitions,
-                                             List<TopicPartition> followerPartitions) {
+    public void onPartitionLeadershipChanges(Set<TopicPartition> leaderPartitions,
+                                             Set<TopicPartition> followerPartitions) {
         ClassLoader originalClassLoader = Thread.currentThread().getContextClassLoader();
         Thread.currentThread().setContextClassLoader(loader);
         try {
@@ -113,11 +124,22 @@ public class ClassLoaderAwareRemoteLogMetadataManager implements RemoteLogMetada
     }
 
     @Override
-    public void onStopPartitions(List<TopicPartition> partitions) {
+    public void onStopPartitions(Set<TopicPartition> partitions) {
         ClassLoader originalClassLoader = Thread.currentThread().getContextClassLoader();
         Thread.currentThread().setContextClassLoader(loader);
         try {
             delegate.onStopPartitions(partitions);
+        } finally {
+            Thread.currentThread().setContextClassLoader(originalClassLoader);
+        }
+    }
+
+    @Override
+    public void onServerStarted() {
+        ClassLoader originalClassLoader = Thread.currentThread().getContextClassLoader();
+        Thread.currentThread().setContextClassLoader(loader);
+        try {
+            delegate.onServerStarted();
         } finally {
             Thread.currentThread().setContextClassLoader(originalClassLoader);
         }

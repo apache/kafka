@@ -38,6 +38,8 @@ import kafka.server.epoch.LeaderEpochFileCache
 import kafka.server.{BrokerTopicStats, FetchDataInfo, FetchHighWatermark, FetchIsolation, FetchLogEnd, FetchTxnCommitted, LogDirFailureChannel, LogOffsetMetadata, OffsetAndEpoch}
 import kafka.utils._
 import org.apache.kafka.common.errors._
+import org.apache.kafka.common.internals.Topic
+import org.apache.kafka.common.log.remote.storage.RLMMWithTopicStorage
 import org.apache.kafka.common.record.FileRecords.TimestampAndOffset
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests.FetchResponse.AbortedTransaction
@@ -294,8 +296,8 @@ class Log(@volatile var dir: File,
   @volatile private var highestOffsetWithRemoteIndex:Long = logStartOffset
 
   private def remoteLogEnabled() : Boolean = {
-    // remote logging is enabled only for non-compact topics
-    rlmEnabled && !config.compact
+    // remote logging is enabled only for non-compact and non-internal topics
+    rlmEnabled && !(config.compact || Topic.isInternal(topicPartition.topic()))
   }
 
   locally {
