@@ -213,7 +213,7 @@ public class SubscriptionInfo {
                     taskOffsetSumsCache.put(task, Task.LATEST_OFFSET);
                 }
                 for (final TaskId task : standbyTasks()) {
-                    taskOffsetSumsCache.put(task, 0L);
+                    taskOffsetSumsCache.put(task, Long.MAX_VALUE);
                 }
             }
         }

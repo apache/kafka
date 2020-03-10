@@ -170,8 +170,8 @@ public class TaskManagerTest {
     public void shouldReportOffsetSumsForValidLockedTasks() throws IOException {
         final File[] taskFolders = asList(/* SHOULD report offsets for the following cases: */
             testFolder.newFolder("0_0"),     // active running task
-            testFolder.newFolder("0_1"),     // active non-running task
-            testFolder.newFolder("0_2"),     // standby task
+            testFolder.newFolder("0_1"),     // standby task
+            testFolder.newFolder("0_2"),     // active non-running task
             testFolder.newFolder("1_0"),     // unowned (unlocked) task with valid checkpoint
                                           /* should NOT report offsets for the following: */
             testFolder.newFolder("1_1"),     // unowned (unlocked) task without checkpoint file
@@ -202,14 +202,15 @@ public class TaskManagerTest {
         expectRestoreToBeCompleted(consumer, changeLogReader);
         expect(activeTaskCreator.createTasks(anyObject(), eq(taskId00Assignment)))
             .andReturn(singletonList(task00)).once();
-        final StateMachineTask task02 = new StateMachineTask(taskId02, taskId02Partitions, false);
-        task02.setChangelogOffsets(task02ChangelogOffsets);
-        expect(standbyTaskCreator.createTasks(eq(taskId02Assignment)))
-            .andReturn(singletonList(task02)).once();
-        final StateMachineTask task01 = new StateMachineTask(taskId01, taskId01Partitions, true);
+        final StateMachineTask task01 = new StateMachineTask(taskId01, taskId01Partitions, false);
         task01.setChangelogOffsets(task01ChangelogOffsets);
-        expect(activeTaskCreator.createTasks(anyObject(), eq(taskId01Assignment)))
+        expect(standbyTaskCreator.createTasks(eq(taskId01Assignment)))
             .andReturn(singletonList(task01)).once();
+
+        final StateMachineTask task02 = new StateMachineTask(taskId02, taskId02Partitions, true);
+        task02.setChangelogOffsets(task02ChangelogOffsets);
+        expect(activeTaskCreator.createTasks(anyObject(), eq(taskId02Assignment)))
+            .andReturn(singletonList(task02)).once();
 
         expect(stateDirectory.listTaskDirectories()).andReturn(taskFolders).once();
 
@@ -225,15 +226,15 @@ public class TaskManagerTest {
 
         replay(activeTaskCreator, standbyTaskCreator, consumer, changeLogReader, stateDirectory);
 
-        taskManager.handleAssignment(activeTaskAssignment, taskId02Assignment);
+        taskManager.handleAssignment(activeTaskAssignment, taskId01Assignment);
         assertThat(taskManager.tryToCompleteRestoration(), is(true));
 
-        activeTaskAssignment.putAll(taskId01Assignment);
-        taskManager.handleAssignment(activeTaskAssignment, taskId02Assignment);
+        activeTaskAssignment.putAll(taskId02Assignment);
+        taskManager.handleAssignment(activeTaskAssignment, taskId01Assignment);
 
         assertThat(task00.state(), is(Task.State.RUNNING));
-        assertThat(task01.state(), not(Task.State.RUNNING));
-        assertThat(task02.state(), is(Task.State.RUNNING));
+        assertThat(task01.state(), is(Task.State.RUNNING));
+        assertThat(task02.state(), not(Task.State.RUNNING));
 
         final Map<TaskId, Long> taskOffsetSums = taskManager.getTaskOffsetSums();
 

@@ -123,7 +123,7 @@ public class TaskManager {
 
     void handleRebalanceStart(final Set<String> subscribedTopics) {
         builder.addSubscribedTopicsFromMetadata(subscribedTopics, logPrefix);
-
+        
         rebalanceInProgress = true;
     }
 
@@ -132,7 +132,7 @@ public class TaskManager {
         // before then the assignment has not been updated yet.
         mainConsumer.pause(mainConsumer.assignment());
 
-        releaseTemporarilyLockedTaskDirectories();
+        releaseLockedUnassignedTaskDirectories();
 
         rebalanceInProgress = false;
     }
@@ -418,23 +418,46 @@ public class TaskManager {
     }
 
     private long computeOffsetSum(final Map<TopicPartition, Long> changelogOffsets) {
-        long offsetSum = 0;
-        for (final long offset : changelogOffsets.values()) {
+        long offsetSum = 0L;
+        for (final Map.Entry<TopicPartition, Long> changelogEntry : changelogOffsets.entrySet()) {
+            final TopicPartition changelog = changelogEntry.getKey();
+            final long offset = changelogEntry.getValue();
+
+            if (offset < 0L) {
+                if (offset == -1L) {
+                    log.debug("Skipping unknown offset for changelog {}", changelog);
+                } else {
+                    log.warn("Unexpected negative offset {} for changelog {}", offset, changelog);
+                }
+                continue;
+            }
+
             offsetSum += offset;
+            if (offsetSum < 0) {
+                return Long.MAX_VALUE;
+            }
         }
         return offsetSum;
     }
 
-    private void releaseTemporarilyLockedTaskDirectories() {
+    private void releaseLockedUnassignedTaskDirectories() {
+        final AtomicReference<RuntimeException> firstException = new AtomicReference<>(null);
+
         for (final TaskId id : lockedUnassignedTaskDirectories) {
             try {
                 stateDirectory.unlock(id);
             } catch (final IOException e) {
                 log.error("Failed to release the state directory lock for task {}.", id);
-                throw new StreamsException("Unable to unlock task directory after rebalance.");
+                firstException.compareAndSet(null,
+                    new StreamsException(String.format("Unable to unlock task directory %s", id), e));
             }
         }
         lockedUnassignedTaskDirectories.clear();
+
+        final RuntimeException fatalException = firstException.get();
+        if (fatalException != null) {
+            throw fatalException;
+        }
     }
 
     private void cleanupTask(final Task task) {
@@ -498,7 +521,7 @@ public class TaskManager {
         }
 
         try {
-            releaseTemporarilyLockedTaskDirectories();
+            releaseLockedUnassignedTaskDirectories();
         } catch (final RuntimeException e) {
             firstException.compareAndSet(null, e);
         }

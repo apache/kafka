@@ -197,6 +197,4 @@ public interface Task {
     default boolean maybePunctuateSystemTime() {
         return false;
     }
-
-
 }
