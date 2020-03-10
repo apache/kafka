@@ -759,7 +759,7 @@ class ProducerStateManager(val topicPartition: TopicPartition,
   private def listSnapshotFiles: Seq[File] = ProducerStateManager.listSnapshotFiles(logDir)
 
   def offsetFromSnapshotFile(file: File): Long = {
-    LogSegment.getSegmentOffset(file.getParentFile)
+    LogSegment.getSnapshotOffset(file)
   }
 
 }
