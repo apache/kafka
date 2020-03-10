@@ -253,7 +253,6 @@ public class StreamTaskTest {
         EasyMock.expectLastCall();
 
         EasyMock.expect(stateManager.taskId()).andReturn(taskId);
-        EasyMock.expect(stateManager.changelogPartitions()).andReturn(Collections.emptySet());
 
         stateManager.close();
         EasyMock.expectLastCall();
@@ -1539,6 +1538,20 @@ public class StreamTaskTest {
         EasyMock.reset(stateManager);
         EasyMock.expect(stateManager.changelogPartitions()).andReturn(Collections.emptySet()).anyTimes();
         EasyMock.replay(stateManager);
+    }
+
+    @Test
+    public void shouldNotThrowFromStateManagerCloseInCloseDirty() {
+        stateManager.close();
+        EasyMock.expectLastCall().andThrow(new RuntimeException("KABOOM!")).anyTimes();
+        EasyMock.replay(stateManager);
+
+        task = createOptimizedStatefulTask(createConfig(false, "100"), consumer);
+        task.initializeIfNeeded();
+
+        task.closeDirty();
+
+        EasyMock.verify(stateManager);
     }
 
     @Test

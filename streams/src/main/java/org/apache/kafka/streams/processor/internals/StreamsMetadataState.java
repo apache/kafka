@@ -136,7 +136,7 @@ public class StreamsMetadataState {
      * @param keySerializer Serializer for the key
      * @param <K>           key type
      * @return The {@link StreamsMetadata} for the storeName and key or {@link StreamsMetadata#NOT_AVAILABLE}
-     * if streams is (re-)initializing
+     * if streams is (re-)initializing, or {@code null} if no matching metadata could be found.
      * @deprecated Use {@link #getKeyQueryMetadataForKey(String, Object, Serializer)} instead.
      */
     @Deprecated
@@ -184,7 +184,8 @@ public class StreamsMetadataState {
      * @param keySerializer Serializer for the key
      * @param <K>           key type
      * @return The {@link KeyQueryMetadata} for the storeName and key or {@link KeyQueryMetadata#NOT_AVAILABLE}
-     * if streams is (re-)initializing or null if the corresponding topic cannot be found
+     * if streams is (re-)initializing or {@code null} if the corresponding topic cannot be found,
+     * or null if no matching metadata could be found.
      */
     public synchronized <K> KeyQueryMetadata getKeyQueryMetadataForKey(final String storeName,
                                                                        final K key,
@@ -206,7 +207,7 @@ public class StreamsMetadataState {
      * @param partitioner partitioner to use to find correct partition for key
      * @param <K>         key type
      * @return The {@link KeyQueryMetadata} for the storeName and key or {@link KeyQueryMetadata#NOT_AVAILABLE}
-     * if streams is (re-)initializing
+     * if streams is (re-)initializing, or {@code null} if no matching metadata could be found.
      */
     public synchronized <K> KeyQueryMetadata getKeyQueryMetadataForKey(final String storeName,
                                                                        final K key,
@@ -246,7 +247,7 @@ public class StreamsMetadataState {
      * @param partitioner partitioner to use to find correct partition for key
      * @param <K>         key type
      * @return The {@link StreamsMetadata} for the storeName and key or {@link StreamsMetadata#NOT_AVAILABLE}
-     * if streams is (re-)initializing
+     * if streams is (re-)initializing, or {@code null} if no matching metadata could be found.
      * @deprecated Use {@link #getKeyQueryMetadataForKey(String, Object, StreamPartitioner)} instead.
      */
     @Deprecated
