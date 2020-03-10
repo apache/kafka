@@ -469,7 +469,7 @@ subprojects {
 
     configure(scalaCompileOptions.forkOptions) {
       memoryMaximumSize = '1g'
-      jvmArgs = ['-Xss2m']
+      jvmArgs = ['-Xss4m']
     }
   }
 
