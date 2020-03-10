@@ -57,7 +57,6 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import org.slf4j.Logger;
 
-import static java.lang.String.format;
 import static java.util.Collections.emptyMap;
 import static java.util.Collections.singleton;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.maybeMeasureLatency;
@@ -115,8 +114,8 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         super(id, topology, stateDirectory, stateMgr, partitions);
         this.mainConsumer = mainConsumer;
 
-        final String threadIdPrefix = format("stream-thread [%s] ", Thread.currentThread().getName());
-        logPrefix = threadIdPrefix + format("%s [%s] ", "task", id);
+        final String threadIdPrefix = String.format("stream-thread [%s] ", Thread.currentThread().getName());
+        logPrefix = threadIdPrefix + String.format("%s [%s] ", "task", id);
         final LogContext logContext = new LogContext(logPrefix);
         log = logContext.logger(getClass());
 
@@ -549,7 +548,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             throw e;
         } catch (final RuntimeException e) {
             final String stackTrace = getStacktraceString(e);
-            throw new StreamsException(format("Exception caught in process. taskId=%s, " +
+            throw new StreamsException(String.format("Exception caught in process. taskId=%s, " +
                                                   "processor=%s, topic=%s, partition=%d, offset=%d, stacktrace=%s",
                                               id(),
                                               processorContext.currentNode().name(),
@@ -584,7 +583,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     @Override
     public void punctuate(final ProcessorNode node, final long timestamp, final PunctuationType type, final Punctuator punctuator) {
         if (processorContext.currentNode() != null) {
-            throw new IllegalStateException(format("%sCurrent node is not null", logPrefix));
+            throw new IllegalStateException(String.format("%sCurrent node is not null", logPrefix));
         }
 
         updateProcessorContext(new StampedRecord(DUMMY_RECORD, timestamp), node);
@@ -598,7 +597,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         } catch (final StreamsException e) {
             throw e;
         } catch (final RuntimeException e) {
-            throw new StreamsException(format("%sException caught while punctuating processor '%s'", logPrefix, node.name()), e);
+            throw new StreamsException(String.format("%sException caught while punctuating processor '%s'", logPrefix, node.name()), e);
         } finally {
             processorContext.setCurrentNode(null);
         }
@@ -641,7 +640,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
 
             throw e;
         } catch (final KafkaException e) {
-            throw new StreamsException(format("task [%s] Failed to initialize offsets for %s", id, partitions), e);
+            throw new StreamsException(String.format("task [%s] Failed to initialize offsets for %s", id, partitions), e);
         }
     }
 
@@ -767,7 +766,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
      */
     private Cancellable schedule(final long startTime, final long interval, final PunctuationType type, final Punctuator punctuator) {
         if (processorContext.currentNode() == null) {
-            throw new IllegalStateException(format("%sCurrent node is null", logPrefix));
+            throw new IllegalStateException(String.format("%sCurrent node is null", logPrefix));
         }
 
         final PunctuationSchedule schedule = new PunctuationSchedule(processorContext.currentNode(), startTime, interval, punctuator);

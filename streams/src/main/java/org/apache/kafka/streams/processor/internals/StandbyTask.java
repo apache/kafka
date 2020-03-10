@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import static java.lang.String.format;
-
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.Sensor;
@@ -65,8 +63,8 @@ public class StandbyTask extends AbstractTask implements Task {
                 final StateDirectory stateDirectory) {
         super(id, topology, stateDirectory, stateMgr, partitions);
 
-        final String threadIdPrefix = format("stream-thread [%s] ", Thread.currentThread().getName());
-        logPrefix = threadIdPrefix + format("%s [%s] ", "standby-task", id);
+        final String threadIdPrefix = String.format("stream-thread [%s] ", Thread.currentThread().getName());
+        logPrefix = threadIdPrefix + String.format("%s [%s] ", "standby-task", id);
         final LogContext logContext = new LogContext(logPrefix);
         log = logContext.logger(getClass());
 
