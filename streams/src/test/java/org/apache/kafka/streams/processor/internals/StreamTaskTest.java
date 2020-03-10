@@ -1541,6 +1541,20 @@ public class StreamTaskTest {
     }
 
     @Test
+    public void shouldNotThrowFromStateManagerCloseInCloseDirty() {
+        stateManager.close();
+        EasyMock.expectLastCall().andThrow(new RuntimeException("KABOOM!")).anyTimes();
+        EasyMock.replay(stateManager);
+
+        task = createOptimizedStatefulTask(createConfig(false, "100"), consumer);
+        task.initializeIfNeeded();
+
+        task.closeDirty();
+
+        EasyMock.verify(stateManager);
+    }
+
+    @Test
     public void shouldThrowIfClosingOnIllegalState() {
         EasyMock.expect(stateManager.changelogPartitions()).andReturn(Collections.emptySet()).anyTimes();
         EasyMock.replay(stateManager);
