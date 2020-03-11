@@ -68,6 +68,7 @@ object AclAuthorizer {
     def find(p: AclEntry => Boolean): Option[AclEntry] = sets.flatMap(_.find(p)).headOption
     def isEmpty: Boolean = !sets.exists(_.nonEmpty)
   }
+
   val NoAcls = VersionedAcls(Set.empty, ZkVersion.UnknownVersion)
   val WildcardHost = "*"
 

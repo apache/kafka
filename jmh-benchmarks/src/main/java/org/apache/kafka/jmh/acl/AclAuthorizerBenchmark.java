@@ -53,6 +53,7 @@ import scala.collection.immutable.TreeMap;
 
 import java.lang.reflect.Field;
 import java.net.InetAddress;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -79,11 +80,18 @@ public class AclAuthorizerBenchmark {
 
     private AclAuthorizer aclAuthorizer = new AclAuthorizer();
     private KafkaPrincipal principal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "test-user");
+    private List<Action> actions = new ArrayList<>();
+    private RequestContext context;
 
     @Setup(Level.Trial)
     public void setup() throws Exception {
         setFieldValue(aclAuthorizer, AclAuthorizer.class.getDeclaredField("aclCache").getName(),
             prepareAclCache());
+        actions = Collections.singletonList(new Action(AclOperation.WRITE, new ResourcePattern(ResourceType.TOPIC, "resource-1", PatternType.LITERAL),
+                                                       1, true, true));
+        context = new RequestContext(new RequestHeader(ApiKeys.PRODUCE, Integer.valueOf(1).shortValue(), "someclient", 1),
+                                     "1", InetAddress.getLocalHost(), KafkaPrincipal.ANONYMOUS,
+                                     ListenerName.normalised("listener"), SecurityProtocol.PLAINTEXT, ClientInformation.EMPTY);
     }
 
     private void setFieldValue(Object obj, String fieldName, Object value) throws Exception {
@@ -111,12 +119,15 @@ public class AclAuthorizerBenchmark {
         }
 
         ResourcePattern resourceWildcard = new ResourcePattern(ResourceType.TOPIC, ResourcePattern.WILDCARD_RESOURCE, PatternType.LITERAL);
+        ResourcePattern resourcePrefix = new ResourcePattern(ResourceType.TOPIC, "resource-", PatternType.PREFIXED);
 
-        Set<AclEntry> entries = aclEntries.computeIfAbsent(resourceWildcard, k -> new HashSet<>());
+        Set<AclEntry> entriesWildcard = aclEntries.computeIfAbsent(resourceWildcard, k -> new HashSet<>());
+        Set<AclEntry> entriesPrefix = aclEntries.computeIfAbsent(resourceWildcard, k -> new HashSet<>());
 
         for (int hostId = 0; hostId < hostCount; hostId++) {
             AccessControlEntry ace = new AccessControlEntry(principal.toString(), "127.0.0." + hostId, AclOperation.READ, AclPermissionType.ALLOW);
-            entries.add(new AclEntry(ace));
+            entriesWildcard.add(new AclEntry(ace));
+            entriesPrefix.add(new AclEntry(ace));
         }
 
         TreeMap<ResourcePattern, VersionedAcls> aclCache = new TreeMap<>(new AclAuthorizer.ResourceOrdering());
@@ -140,11 +151,6 @@ public class AclAuthorizerBenchmark {
 
     @Benchmark
     public void testAuthorizer() throws Exception {
-        ResourcePattern resource = new ResourcePattern(ResourceType.TOPIC, "resource-1", PatternType.LITERAL);
-        List<Action> actions = Collections.singletonList(new Action(AclOperation.WRITE, resource, 1, true, true));
-        RequestHeader header = new RequestHeader(ApiKeys.PRODUCE, new Integer(1).shortValue(), "someclient", 1);
-        RequestContext context = new RequestContext(header, "1", InetAddress.getLocalHost(), KafkaPrincipal.ANONYMOUS,
-                                                    ListenerName.normalised("listener"), SecurityProtocol.PLAINTEXT, ClientInformation.EMPTY);
         aclAuthorizer.authorize(context, actions);
     }
 }
