@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.processor.internals;
 
 import java.io.IOException;
+import java.util.Collections;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.DeleteRecordsResult;
 import org.apache.kafka.clients.admin.RecordsToDelete;
@@ -470,7 +471,7 @@ public class TaskManager {
 
             if (!tasks.containsKey(id)) {
                 final RuntimeException unlockException = releaseTaskDirLock(id);
-                if (unlockException == null){
+                if (unlockException == null) {
                     taskIdIterator.remove();
                 } else {
                     firstException.compareAndSet(null, unlockException);
@@ -771,5 +772,9 @@ public class TaskManager {
 
     Set<String> producerClientIds() {
         return activeTaskCreator.producerClientIds();
+    }
+
+    Set<TaskId> lockedTaskDirectories() {
+        return Collections.unmodifiableSet(lockedTaskDirectories);
     }
 }

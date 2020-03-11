@@ -212,8 +212,8 @@ public class SubscriptionInfo {
                     }
                 }
             } else {
-                prevTasks().forEach((taskId) -> taskOffsetSumsCache.put(taskId, Task.LATEST_OFFSET));
-                standbyTasks().forEach((taskId) -> taskOffsetSumsCache.put(taskId, UNKNOWN_OFFSET_SUM));
+                prevTasks().forEach(taskId -> taskOffsetSumsCache.put(taskId, Task.LATEST_OFFSET));
+                standbyTasks().forEach(taskId -> taskOffsetSumsCache.put(taskId, UNKNOWN_OFFSET_SUM));
             }
         }
         return taskOffsetSumsCache;

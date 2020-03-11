@@ -322,7 +322,7 @@ public class SubscriptionInfoTest {
                 "localhost:80")
             .encode());
 
-       assertThat(info.taskOffsetSums(), is(expectedOffsetSumsMap));
+        assertThat(info.taskOffsetSums(), is(expectedOffsetSumsMap));
     }
 
     private static ByteBuffer encodeFutureVersion() {
