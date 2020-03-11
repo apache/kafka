@@ -28,5 +28,14 @@ if [ -z "$PIDS" ]; then
   echo "No kafka server to stop"
   exit 1
 else
+  count=$(echo $PIDS |wc -w)
+  if [ $count -gt 1 ]; then
+    echo "find $count kafka instances (" $PIDS ") are you sure to kill them all?"
+    read -p "(yes/no) " choice
+    if [ "Xyes" != "X$choice" ]; then
+      echo "stop canceled"
+      exit 1
+    fi
+  fi
   kill -s $SIGNAL $PIDS
 fi
