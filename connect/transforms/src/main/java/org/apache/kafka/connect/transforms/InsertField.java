@@ -137,7 +137,7 @@ public abstract class InsertField<R extends ConnectRecord<R>> implements Transfo
     }
 
     private boolean isTombstoneRecord(R record) {
-        return record.value() == null;
+        return operatingValue(record) == null;
     }
 
     private R applySchemaless(R record) {
