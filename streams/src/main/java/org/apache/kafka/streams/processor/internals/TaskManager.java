@@ -80,7 +80,9 @@ public class TaskManager {
     private DeleteRecordsResult deleteRecordsResult;
 
     private boolean rebalanceInProgress = false;  // if we are in the middle of a rebalance, it is not safe to commit
-    private Set<TaskId> lockedUnassignedTaskDirectories = new HashSet<>(); // temporarily locked during rebalance
+
+    // includes assigned & initialized tasks and unassigned tasks we locked temporarily during rebalance
+    private Set<TaskId> lockedTaskDirectories = new HashSet<>();
 
     TaskManager(final ChangelogReader changelogReader,
                 final UUID processId,
@@ -123,6 +125,8 @@ public class TaskManager {
 
     void handleRebalanceStart(final Set<String> subscribedTopics) {
         builder.addSubscribedTopicsFromMetadata(subscribedTopics, logPrefix);
+
+        tryLockForAllTaskDirectories();
 
         rebalanceInProgress = true;
     }
@@ -373,49 +377,112 @@ public class TaskManager {
     }
 
     /**
-     * Compute the offset total summed across all stores in a task. Includes offset sum for any active and standby
-     * tasks assigned to this thread. May also include the offset sum for some unassigned tasks that belong to no
-     * threads but are yet to be cleaned up (eg after rolling bounce). Each thread will make an uncommitted effort to
-     * lock any unlocked task directories it finds on disk, and will be responsible for including its offset sum in
-     * their subscription (and of course unlocking it again when rebalance completes).
+     * Compute the offset total summed across all stores in a task. Includes offset sum for any tasks we own the
+     * lock for, which includes assigned and unassigned tasks we locked in {@link #tryLockForAllTaskDirectories()}
      *
      * @return Map from task id to its total offset summed across all state stores
      */
     public Map<TaskId, Long> getTaskOffsetSums() {
         final Map<TaskId, Long> taskOffsetSums = new HashMap<>();
-        final File[] stateDirs = stateDirectory.listTaskDirectories();
-        if (stateDirs != null) {
-            for (final File dir : stateDirs) {
+
+        for (final TaskId id : lockedTaskDirectories) {
+            final Task task = tasks.get(id);
+            if (task != null) {
+                if (task.isActive() && task.state() == RUNNING) {
+                    taskOffsetSums.put(id, Task.LATEST_OFFSET);
+                } else {
+                    taskOffsetSums.put(id, sumOfChangelogOffsets(task.changelogOffsets()));
+                }
+            } else {
+                final File checkpointFile =
+                    new File(stateDirectory.directoryForTask(id),StateManagerUtil.CHECKPOINT_FILE_NAME);
                 try {
-                    final TaskId id = TaskId.parse(dir.getName());
-                    final Task task = tasks.get(id);
-                    if (task != null) {
-                        if (task.isActive() && task.state() == RUNNING) {
-                            taskOffsetSums.put(id, Task.LATEST_OFFSET);
-                        } else {
-                            taskOffsetSums.put(id, sumOfChangelogOffsets(task.changelogOffsets()));
-                        }
+                    // If we can't read the checkpoint file or it doesn't exist, release the task directory
+                    // so the background cleaner thread can do its thing
+                    if (checkpointFile.exists()) {
+                        taskOffsetSums.put(id, sumOfChangelogOffsets(new OffsetCheckpoint(checkpointFile).read()));
                     } else {
-                        try {
-                            // if we are able to lock this task dir and find a valid checkpoint file, we are
-                            // responsible for encoding its offsets in our subscription
-                            final File checkpointFile = new File(dir, StateManagerUtil.CHECKPOINT_FILE_NAME);
-                            if (stateDirectory.lock(id) && checkpointFile.exists()) {
-                                taskOffsetSums.put(id, sumOfChangelogOffsets(new OffsetCheckpoint(checkpointFile).read()));
-                                lockedUnassignedTaskDirectories.add(id);
-                            }
-                        } catch (final IOException e) {
-                            // if for any reason we can't lock this task dir and read its checkpoint file, just move on
-                            log.warn(String.format("Exception caught while trying to lock task %s:", id), e);
-                        }
+                        releaseTaskDirLock(id);
                     }
-                } catch (final TaskIdFormatException e) {
-                    // we should just ignore any unknown files that sit in the same directory
+                } catch (final IOException e) {
+                    log.warn(String.format("Exception caught while trying to read checkpoint for task %s:", id), e);
+                    releaseTaskDirLock(id);
                 }
             }
         }
 
         return taskOffsetSums;
+    }
+
+    /**
+     * Makes a weak attempt to lock all task directories in the state dir. We are responsible for computing and
+     * reporting the offset sum for any unassigned tasks we obtain the lock for in the upcoming rebalance. Tasks
+     * that we locked but didn't own will be released at the end of the rebalance (unless of course we were
+     * assigned the task as a result of the rebalance). This method should be idempotent.
+     */
+    private void tryLockForAllTaskDirectories() {
+        final File[] stateDirs = stateDirectory.listTaskDirectories();
+        if (stateDirs != null) {
+            for (final File dir : stateDirs) {
+                try {
+                    final TaskId id = TaskId.parse(dir.getName());
+                    try {
+                        if (stateDirectory.lock(id)) {
+                            lockedTaskDirectories.add(id);
+                            if (!tasks.containsKey(id)) {
+                                log.debug("Temporarily locked unassigned task {} for the upcoming rebalance", id);
+                            }
+                        }
+                    } catch (final IOException e) {
+                        // if for any reason we can't lock this task dir, just move on
+                        log.warn(String.format("Exception caught while attempting to lock task %s:", id), e);
+                    }
+                } catch (final TaskIdFormatException e) {
+                    // ignore any unknown files that sit in the same directory
+                }
+            }
+        }
+    }
+
+    /**
+     * Attempts to release the lock for the passed in task's directory. It does not remove the task from
+     * {@code lockedTaskDirectories} so it's safe to call during iteration, and should be idempotent.
+     */
+    private RuntimeException releaseTaskDirLock(final TaskId taskId) {
+        try {
+            stateDirectory.unlock(taskId);
+        } catch (final IOException e) {
+            log.error("Failed to release the lock for task directory {}.", taskId);
+            return new StreamsException(String.format("Unable to unlock task directory %s", taskId), e);
+        }
+        return null;
+    }
+
+    /**
+     * We must release the lock for any unassigned tasks that we temporarily locked in preparation for a
+     * rebalance in {@link #tryLockForAllTaskDirectories()}.
+     */
+    private void releaseLockedUnassignedTaskDirectories() {
+        final AtomicReference<RuntimeException> firstException = new AtomicReference<>(null);
+
+        final Iterator<TaskId> taskIdIterator = lockedTaskDirectories.iterator();
+        while (taskIdIterator.hasNext()) {
+            final TaskId id = taskIdIterator.next();
+
+            if (!tasks.containsKey(id)) {
+                final RuntimeException unlockException = releaseTaskDirLock(id);
+                if (unlockException == null){
+                    taskIdIterator.remove();
+                } else {
+                    firstException.compareAndSet(null, unlockException);
+                }
+            }
+        }
+
+        final RuntimeException fatalException = firstException.get();
+        if (fatalException != null) {
+            throw fatalException;
+        }
     }
 
     private long sumOfChangelogOffsets(final Map<TopicPartition, Long> changelogOffsets) {
@@ -439,26 +506,6 @@ public class TaskManager {
             }
         }
         return offsetSum;
-    }
-
-    private void releaseLockedUnassignedTaskDirectories() {
-        final AtomicReference<RuntimeException> firstException = new AtomicReference<>(null);
-
-        for (final TaskId id : lockedUnassignedTaskDirectories) {
-            try {
-                stateDirectory.unlock(id);
-            } catch (final IOException e) {
-                log.error("Failed to release the state directory lock for task {}.", id);
-                firstException.compareAndSet(null,
-                    new StreamsException(String.format("Unable to unlock task directory %s", id), e));
-            }
-        }
-        lockedUnassignedTaskDirectories.clear();
-
-        final RuntimeException fatalException = firstException.get();
-        if (fatalException != null) {
-            throw fatalException;
-        }
     }
 
     private void cleanupTask(final Task task) {
@@ -522,6 +569,8 @@ public class TaskManager {
         }
 
         try {
+            // this should be called after closing all tasks, to make sure we unlock the task dir for tasks that may
+            // have still been in CREATED at the time of shutdown, since Task#close will not do so
             releaseLockedUnassignedTaskDirectories();
         } catch (final RuntimeException e) {
             firstException.compareAndSet(null, e);
