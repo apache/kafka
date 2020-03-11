@@ -388,15 +388,15 @@ class TransactionStateManager(brokerId: Int,
       loadingPartitions.add(partitionAndLeaderEpoch)
     }
 
-    def loadTransactions(startTimeInMs: java.lang.Long): Unit = {
-      val schedulerTime = time.milliseconds() - startTimeInMs
+    def loadTransactions(startTimeMs: java.lang.Long): Unit = {
+      val schedulerTime = time.milliseconds() - startTimeMs
       info(s"Loading transaction metadata from $topicPartition at epoch $coordinatorEpoch")
       validateTransactionTopicPartitionCountIsStable()
 
       val loadedTransactions = loadTransactionMetadata(topicPartition, coordinatorEpoch)
-      val endTimeInMs = time.milliseconds()
-      val timeLapse = endTimeInMs - startTimeInMs
-      partitionLoadSensor.record(timeLapse, endTimeInMs, false)
+      val endTimeMs = time.milliseconds()
+      val timeLapse = endTimeMs - startTimeMs
+      partitionLoadSensor.record(timeLapse, endTimeMs, false)
       info(s"Finished loading ${loadedTransactions.size} transaction metadata from $topicPartition in $timeLapse milliseconds, of which $schedulerTime milliseconds was spent in the scheduler.")
 
       inWriteLock(stateLock) {
@@ -435,8 +435,8 @@ class TransactionStateManager(brokerId: Int,
       info(s"Completed loading transaction metadata from $topicPartition for coordinator epoch $coordinatorEpoch")
     }
 
-    val nowInMs = time.milliseconds()
-    scheduler.schedule(s"load-txns-for-partition-$topicPartition", () => loadTransactions(nowInMs))
+    val scheduleStartMs = time.milliseconds()
+    scheduler.schedule(s"load-txns-for-partition-$topicPartition", () => loadTransactions(scheduleStartMs))
   }
 
   def removeTransactionsForTxnTopicPartition(partitionId: Int): Unit = {

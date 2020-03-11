@@ -527,14 +527,16 @@ class GroupMetadataManager(brokerId: Int,
     }
   }
 
-  private[group] def loadGroupsAndOffsets(topicPartition: TopicPartition, onGroupLoaded: GroupMetadata => Unit, startTimeInMs: java.lang.Long): Unit = {
+  private[group] def loadGroupsAndOffsets(topicPartition: TopicPartition, onGroupLoaded: GroupMetadata => Unit, startTimeMs: java.lang.Long): Unit = {
     try {
-      val schedulerTimeInMs = time.milliseconds() - startTimeInMs
+      val schedulerTimeMs = time.milliseconds() - startTimeMs
       doLoadGroupsAndOffsets(topicPartition, onGroupLoaded)
-      val endTimeInMs = time.milliseconds()
-      val totalLoadingTimeInMs = time.milliseconds() - startTimeInMs
-      partitionLoadSensor.record(totalLoadingTimeInMs, endTimeInMs, false)
-      info(s"Finished loading offsets and group metadata from $topicPartition in $totalLoadingTimeInMs milliseconds, of which $schedulerTimeInMs milliseconds was spent in the scheduler.")
+      val endTimeMs = time.milliseconds()
+      val totalLoadingTimeMs = time.milliseconds() - startTimeMs
+      partitionLoadSensor.record(totalLoadingTimeMs, endTimeMs, false)
+      info(s"Finished loading offsets and group metadata from $topicPartition "
+        + s"in $totalLoadingTimeMs milliseconds, of which $schedulerTimeMs milliseconds"
+        + s" was spent in the scheduler.")
     } catch {
       case t: Throwable => error(s"Error loading offsets from $topicPartition", t)
     } finally {
