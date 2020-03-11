@@ -25,7 +25,7 @@
       { "name": "EntityType", "type": "string", "versions": "0+",
         "about": "The entity type that the filter applies to." },
       { "name": "MatchType", "type": "int8", "versions": "0+",
-        "about": "How to match the entity {0 = exact, 1 = specified}." },
+        "about": "How to match the entity {0 = exact, 1 = specified, 2 = none}." },
       { "name": "Match", "type": "string", "versions": "0+", "nullableVersions": "0+",
         "about": "The string to match against, or null if unused for the match type." }
     ]},

@@ -30,6 +30,7 @@ public class DescribeClientQuotasRequest extends AbstractRequest {
     // These values must not change.
     private static final byte MATCH_TYPE_EXACT = 0;
     private static final byte MATCH_TYPE_SPECIFIED = 1;
+    private static final byte MATCH_TYPE_NONE = 2;
 
     public static class Builder extends AbstractRequest.Builder<DescribeClientQuotasRequest> {
 
@@ -44,9 +45,12 @@ public class DescribeClientQuotasRequest extends AbstractRequest {
                 if (filter.isMatchSpecified()) {
                     fd.setMatchType(MATCH_TYPE_SPECIFIED);
                     fd.setMatch(null);
+                } else if (filter.isMatchNone()) {
+                    fd.setMatchType(MATCH_TYPE_NONE);
+                    fd.setMatch(null);
                 } else {
                     fd.setMatchType(MATCH_TYPE_EXACT);
-                    fd.setMatch(filter.match());
+                    fd.setMatch(filter.matchExact());
                 }
                 filterData.add(fd);
             }

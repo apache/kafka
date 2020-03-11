@@ -18,27 +18,27 @@
 package org.apache.kafka.common.quota;
 
 import java.util.Objects;
+import java.util.Optional;
 
 /**
  * Describes a quota entity filter.
  */
 public class QuotaFilter {
 
-    // Matches all entities with the entity type specified.
-    private static final String MATCH_SPECIFIED = "";
-
     private final String entityType;
-    private final String match;
+    private final Optional<String> match;
 
     /**
      * A filter to be applied.
      *
      * @param entityType the entity type the filter applies to
-     * @param match the string that's matched exactly
+     * @param if specified, match the name that's matched exactly
+     *        if empty, matches any specified name
+     *        if null, matches no specified name
      */
-    private QuotaFilter(String entityType, String match) {
+    private QuotaFilter(String entityType, Optional<String> match) {
         this.entityType = Objects.requireNonNull(entityType);
-        this.match = Objects.requireNonNull(match);
+        this.match = match;
     }
 
     /**
@@ -46,20 +46,30 @@ public class QuotaFilter {
      * name for the entity type exactly.
      *
      * @param entityType the entity type the filter applies to
-     * @param match the string that's matched exactly
+     * @param entityName the entity name that's matched exactly
      */
     public static QuotaFilter matchExact(String entityType, String entityName) {
-        return new QuotaFilter(entityType, entityName);
+        return new QuotaFilter(entityType, Optional.of(Objects.requireNonNull(entityName)));
     }
 
     /**
-     * Constructs and returns a quota filter that matches the any entity name
-     * that's specified for the entity type.
+     * Constructs and returns a quota filter that matches any specified name for
+     * the entity type.
      *
      * @param entityType the entity type the filter applies to
      */
     public static QuotaFilter matchSpecified(String entityType) {
-        return new QuotaFilter(entityType, MATCH_SPECIFIED);
+        return new QuotaFilter(entityType, Optional.empty());
+    }
+
+    /**
+     * Constructs and returns a quota filter that matches no entity name for the
+     * entity type exactly.
+     *
+     * @param entityType the entity type the filter applies to
+     */
+    public static QuotaFilter matchNone(String entityType) {
+        return new QuotaFilter(entityType, null);
     }
 
     /**
@@ -70,24 +80,31 @@ public class QuotaFilter {
     }
 
     /**
+     * @return whether to match the exact entity name
+     */
+    public boolean isMatchExact() {
+        return this.match != null && this.match.isPresent();
+    }
+
+    /**
      * @return the string that's matched exactly
      */
-    public String match() {
-        return this.match;
+    public String matchExact() {
+        return this.match.get();
     }
 
     /**
      * @return whether to match the exact entity name
      */
-    public boolean isMatchExact() {
-        return !isMatchSpecified();
+    public boolean isMatchSpecified() {
+        return this.match != null && !this.match.isPresent();
     }
 
     /**
      * @return whether to match all entities with the entity type specified
      */
-    public boolean isMatchSpecified() {
-        return this.match == MATCH_SPECIFIED;
+    public boolean isMatchNone() {
+        return this.match == null;
     }
 
     @Override

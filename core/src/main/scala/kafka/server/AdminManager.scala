@@ -29,7 +29,7 @@ import org.apache.kafka.clients.admin.AlterConfigOp
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType
 import org.apache.kafka.common.config.ConfigDef.ConfigKey
 import org.apache.kafka.common.config.{AbstractConfig, ConfigDef, ConfigException, ConfigResource, LogLevelConfig}
-import org.apache.kafka.common.errors.{ApiException, InvalidConfigurationException, InvalidPartitionsException, InvalidReplicaAssignmentException, InvalidRequestException, ReassignmentInProgressException, TopicExistsException, UnknownTopicOrPartitionException}
+import org.apache.kafka.common.errors.{ApiException, InvalidConfigurationException, InvalidPartitionsException, InvalidReplicaAssignmentException, InvalidRequestException, ReassignmentInProgressException, TopicExistsException, UnknownTopicOrPartitionException, UnsupportedVersionException}
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.message.CreatePartitionsRequestData.CreatePartitionsTopic
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopic
@@ -716,7 +716,7 @@ class AdminManager(val config: KafkaConfig,
         case QuotaEntity.CLIENT_ID => clientId = sanitizedEntityName
         case _ => throw new InvalidRequestException(s"Unhandled quota entity type: ${entityType}")
       }
-      if (entityName == "")
+      if (entityName.isEmpty)
         throw new InvalidRequestException(s"Empty ${entityType} not supported")
     }
     (user, clientId)
@@ -729,7 +729,6 @@ class AdminManager(val config: KafkaConfig,
   def describeClientQuotas(filters: Seq[QuotaFilter], includeUnspecifiedTypes: Boolean): Map[QuotaEntity, Map[String, Double]] = {
     var userFilter: Option[QuotaFilter] = None
     var clientIdFilter: Option[QuotaFilter] = None
-    var otherFilter: Boolean = false
     filters.foreach { filter =>
       filter.entityType() match {
         case QuotaEntity.USER =>
@@ -742,21 +741,18 @@ class AdminManager(val config: KafkaConfig,
           clientIdFilter = Some(filter)
         case "" =>
           throw new InvalidRequestException(s"Unexpected empty filter entity type")
-        case _ =>
+        case et =>
           // Supplying other entity types is not yet supported.
-          otherFilter = true
+          throw new UnsupportedVersionException(s"Custom entity type '${et}' not supported")
       }
     }
-    if (otherFilter)
-      Map.empty
-    else
-      handleDescribeClientQuotas(userFilter, clientIdFilter, includeUnspecifiedTypes)
+    handleDescribeClientQuotas(userFilter, clientIdFilter, includeUnspecifiedTypes)
   }
 
   def handleDescribeClientQuotas(userFilter: Option[QuotaFilter], clientIdFilter: Option[QuotaFilter], includeUnspecifiedTypes: Boolean) = {
     def wantExact(filter: Option[QuotaFilter]): Boolean = filter.map(_.isMatchExact).getOrElse(false)
     def wantExcluded(filter: Option[QuotaFilter]): Boolean = filter.map(_ => false).getOrElse(!includeUnspecifiedTypes)
-    def sanitized(filter: Option[QuotaFilter]): String = filter.map(f => Sanitizer.sanitize(f.`match`)).getOrElse("")
+    def sanitized(filter: Option[QuotaFilter]): String = filter.map(f => Sanitizer.sanitize(f.matchExact)).getOrElse("")
 
     val sanitizedUser = sanitized(userFilter)
     val exactUser = wantExact(userFilter)
@@ -767,7 +763,7 @@ class AdminManager(val config: KafkaConfig,
     val excludeClientId = wantExcluded(clientIdFilter)
 
     val userEntries = if (exactUser && excludeClientId)
-      Map(((Some(userFilter.get.`match`), None) -> adminZkClient.fetchEntityConfig(ConfigType.User, sanitizedUser)))
+      Map(((Some(userFilter.get.matchExact()), None) -> adminZkClient.fetchEntityConfig(ConfigType.User, sanitizedUser)))
     else if (!excludeUser && !exactClientId)
       adminZkClient.fetchAllEntityConfigs(ConfigType.User).map { case (name, props) =>
         ((Some(Sanitizer.desanitize(name)), None) -> props)
@@ -776,7 +772,7 @@ class AdminManager(val config: KafkaConfig,
       Map.empty
 
     val clientIdEntries = if (excludeUser && exactClientId)
-      Map(((None, Some(clientIdFilter.get.`match`)) -> adminZkClient.fetchEntityConfig(ConfigType.Client, sanitizedClientId)))
+      Map(((None, Some(clientIdFilter.get.matchExact())) -> adminZkClient.fetchEntityConfig(ConfigType.Client, sanitizedClientId)))
     else if (!exactUser && !excludeClientId)
       adminZkClient.fetchAllEntityConfigs(ConfigType.Client).map { case (name, props) =>
         ((None, Some(Sanitizer.desanitize(name))) -> props)
@@ -785,7 +781,7 @@ class AdminManager(val config: KafkaConfig,
       Map.empty
 
     val bothEntries = if (exactUser && exactClientId)
-      Map(((Some(userFilter.get.`match`), Some(clientIdFilter.get.`match`)) ->
+      Map(((Some(userFilter.get.matchExact()), Some(clientIdFilter.get.matchExact())) ->
         adminZkClient.fetchEntityConfig(ConfigType.User, s"${sanitizedUser}/clients/${sanitizedClientId}")))
     else if (!excludeUser && !excludeClientId)
       adminZkClient.fetchAllChildEntityConfigs(ConfigType.User, ConfigType.Client).map { case (name, props) =>
@@ -800,9 +796,11 @@ class AdminManager(val config: KafkaConfig,
     def matches(nameFilter: Option[QuotaFilter], name: Option[String]): Boolean = nameFilter match {
       case Some(filter) =>
         if (filter.isMatchExact())
-          name.map(_ == filter.`match`).getOrElse(false)
+          name.exists(_ == filter.matchExact())
         else if (filter.isMatchSpecified())
           name.isDefined
+        else if (filter.isMatchNone())
+          !name.isDefined
         else
           throw new IllegalStateException(s"Unexected quota filter type")
       case None =>

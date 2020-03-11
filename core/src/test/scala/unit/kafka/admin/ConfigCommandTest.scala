@@ -373,7 +373,7 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
         val filter = filters.asScala.head
         assertTrue(filter.isMatchExact)
         assertEquals(QuotaEntity.CLIENT_ID, filter.entityType)
-        assertEquals("my-client-id", filter.`match`)
+        assertEquals("my-client-id", filter.matchExact())
         assertFalse(options.includeUnspecifiedTypes)
         describedConfigs = true
         describeResult
