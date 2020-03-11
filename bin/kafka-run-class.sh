@@ -295,7 +295,7 @@ if [ "x$GC_LOG_ENABLED" = "xtrue" ]; then
   # 10 -> java version "10" 2018-03-20
   # 10.0.1 -> java version "10.0.1" 2018-04-17
   # We need to match to the end of the line to prevent sed from printing the characters that do not match
-  JAVA_MAJOR_VERSION=$("$JAVA" -version 2>&1 | sed -E -n 's/.* version "([0-9]*).*$/\1/p')
+  JAVA_MAJOR_VERSION=$("$JAVA" -version 2>&1 | sed -n 's/.* version "\([0-9]*\).*$/\1/p')
   if [[ "$JAVA_MAJOR_VERSION" -ge "9" ]] ; then
     KAFKA_GC_LOG_OPTS="-Xlog:gc*:file=$LOG_DIR/$GC_LOG_FILE_NAME:time,tags:filecount=10,filesize=100M"
   else
