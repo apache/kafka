@@ -58,7 +58,7 @@ public class QuotaFilter {
      *
      * @param entityType the entity type the filter applies to
      */
-    public static QuotaFilter matchSpecified(String entityType) {
+    public static QuotaFilter matchSome(String entityType) {
         return new QuotaFilter(entityType, Optional.empty());
     }
 
@@ -96,12 +96,12 @@ public class QuotaFilter {
     /**
      * @return whether to match the exact entity name
      */
-    public boolean isMatchSpecified() {
+    public boolean isMatchSome() {
         return this.match != null && !this.match.isPresent();
     }
 
     /**
-     * @return whether to match all entities with the entity type specified
+     * @return whether to match no entities with the entity type specified
      */
     public boolean isMatchNone() {
         return this.match == null;

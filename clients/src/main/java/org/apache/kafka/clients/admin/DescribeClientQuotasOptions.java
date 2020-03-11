@@ -26,21 +26,4 @@ import org.apache.kafka.common.annotation.InterfaceStability;
  */
 @InterfaceStability.Evolving
 public class DescribeClientQuotasOptions extends AbstractOptions<DescribeClientQuotasOptions> {
-
-    private boolean includeUnspecifiedTypes = false;
-
-    /**
-     * Returns whether the result should include unspecified entity types.
-     */
-    public boolean includeUnspecifiedTypes() {
-        return this.includeUnspecifiedTypes;
-    }
-
-    /**
-     * Sets whether the result should include unspecified entity types.
-     */
-    public DescribeClientQuotasOptions includeUnspecifiedTypes(boolean includeUnspecifiedTypes) {
-        this.includeUnspecifiedTypes = includeUnspecifiedTypes;
-        return this;
-    }
 }

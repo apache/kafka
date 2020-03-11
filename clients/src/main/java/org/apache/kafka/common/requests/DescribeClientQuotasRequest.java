@@ -29,21 +29,21 @@ import java.util.Collection;
 public class DescribeClientQuotasRequest extends AbstractRequest {
     // These values must not change.
     private static final byte MATCH_TYPE_EXACT = 0;
-    private static final byte MATCH_TYPE_SPECIFIED = 1;
+    private static final byte MATCH_TYPE_SOME = 1;
     private static final byte MATCH_TYPE_NONE = 2;
 
     public static class Builder extends AbstractRequest.Builder<DescribeClientQuotasRequest> {
 
         private final DescribeClientQuotasRequestData data;
 
-        public Builder(Collection<QuotaFilter> filters, boolean includeUnspecifiedTypes) {
+        public Builder(Collection<QuotaFilter> filters) {
             super(ApiKeys.DESCRIBE_CLIENT_QUOTAS);
 
             List<FilterData> filterData = new ArrayList<>(filters.size());
             for (QuotaFilter filter : filters) {
                 FilterData fd = new FilterData().setEntityType(filter.entityType());
-                if (filter.isMatchSpecified()) {
-                    fd.setMatchType(MATCH_TYPE_SPECIFIED);
+                if (filter.isMatchSome()) {
+                    fd.setMatchType(MATCH_TYPE_SOME);
                     fd.setMatch(null);
                 } else if (filter.isMatchNone()) {
                     fd.setMatchType(MATCH_TYPE_NONE);
@@ -55,8 +55,7 @@ public class DescribeClientQuotasRequest extends AbstractRequest {
                 filterData.add(fd);
             }
             this.data = new DescribeClientQuotasRequestData()
-                .setFilters(filterData)
-                .setIncludeUnspecifiedTypes(includeUnspecifiedTypes);
+                .setFilters(filterData);
         }
 
         @Override
@@ -90,8 +89,11 @@ public class DescribeClientQuotasRequest extends AbstractRequest {
                 case MATCH_TYPE_EXACT:
                     filter = QuotaFilter.matchExact(filterData.entityType(), filterData.match());
                     break;
-                case MATCH_TYPE_SPECIFIED:
-                    filter = QuotaFilter.matchSpecified(filterData.entityType());
+                case MATCH_TYPE_SOME:
+                    filter = QuotaFilter.matchSome(filterData.entityType());
+                    break;
+                case MATCH_TYPE_NONE:
+                    filter = QuotaFilter.matchNone(filterData.entityType());
                     break;
                 default:
                     throw new IllegalArgumentException("Unexpected match type: " + filterData.matchType());
@@ -99,10 +101,6 @@ public class DescribeClientQuotasRequest extends AbstractRequest {
             filters.add(filter);
         }
         return filters;
-    }
-
-    public boolean includeUnspecifiedTypes() {
-        return data.includeUnspecifiedTypes();
     }
 
     @Override

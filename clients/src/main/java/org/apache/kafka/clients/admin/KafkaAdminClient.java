@@ -3840,7 +3840,7 @@ public class KafkaAdminClient extends AdminClient {
 
                 @Override
                 DescribeClientQuotasRequest.Builder createRequest(int timeoutMs) {
-                    return new DescribeClientQuotasRequest.Builder(filters, options.includeUnspecifiedTypes());
+                    return new DescribeClientQuotasRequest.Builder(filters);
                 }
 
                 @Override

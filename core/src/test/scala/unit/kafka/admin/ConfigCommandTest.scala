@@ -369,12 +369,16 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
     val node = new Node(1, "localhost", 9092)
     val mockAdminClient = new MockAdminClient(util.Collections.singletonList(node), node) {
       override def describeClientQuotas(filters: util.Collection[QuotaFilter], options: DescribeClientQuotasOptions): DescribeClientQuotasResult = {
-        assertEquals(1, filters.size)
-        val filter = filters.asScala.head
-        assertTrue(filter.isMatchExact)
-        assertEquals(QuotaEntity.CLIENT_ID, filter.entityType)
-        assertEquals("my-client-id", filter.matchExact())
-        assertFalse(options.includeUnspecifiedTypes)
+        assertEquals(2, filters.size)
+        filters.asScala.foreach { filter =>
+          if (filter.entityType == QuotaEntity.USER) {
+            assertTrue(filter.isMatchNone)
+          } else {
+            assertEquals(QuotaEntity.CLIENT_ID, filter.entityType)
+            assertTrue(filter.isMatchExact)
+            assertEquals("my-client-id", filter.matchExact)
+          }
+        }
         describedConfigs = true
         describeResult
       }

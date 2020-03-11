@@ -726,7 +726,7 @@ class AdminManager(val config: KafkaConfig,
     new QuotaEntity((user.map(u => QuotaEntity.USER -> u) ++ clientId.map(c => QuotaEntity.CLIENT_ID -> c)).toMap.asJava)
   }
 
-  def describeClientQuotas(filters: Seq[QuotaFilter], includeUnspecifiedTypes: Boolean): Map[QuotaEntity, Map[String, Double]] = {
+  def describeClientQuotas(filters: Seq[QuotaFilter]): Map[QuotaEntity, Map[String, Double]] = {
     var userFilter: Option[QuotaFilter] = None
     var clientIdFilter: Option[QuotaFilter] = None
     filters.foreach { filter =>
@@ -746,13 +746,15 @@ class AdminManager(val config: KafkaConfig,
           throw new UnsupportedVersionException(s"Custom entity type '${et}' not supported")
       }
     }
-    handleDescribeClientQuotas(userFilter, clientIdFilter, includeUnspecifiedTypes)
+    handleDescribeClientQuotas(userFilter, clientIdFilter)
   }
 
-  def handleDescribeClientQuotas(userFilter: Option[QuotaFilter], clientIdFilter: Option[QuotaFilter], includeUnspecifiedTypes: Boolean) = {
-    def wantExact(filter: Option[QuotaFilter]): Boolean = filter.map(_.isMatchExact).getOrElse(false)
-    def wantExcluded(filter: Option[QuotaFilter]): Boolean = filter.map(_ => false).getOrElse(!includeUnspecifiedTypes)
-    def sanitized(filter: Option[QuotaFilter]): String = filter.map(f => Sanitizer.sanitize(f.matchExact)).getOrElse("")
+  def handleDescribeClientQuotas(userFilter: Option[QuotaFilter], clientIdFilter: Option[QuotaFilter]) = {
+    def wantExact(filter: Option[QuotaFilter]): Boolean = filter.exists(_.isMatchExact)
+    def wantExcluded(filter: Option[QuotaFilter]): Boolean = filter.exists(_.isMatchNone)
+    def sanitized(filter: Option[QuotaFilter]): String = {
+      filter.map(f => if (f.isMatchExact) Sanitizer.sanitize(f.matchExact) else "").getOrElse("")
+    }
 
     val sanitizedUser = sanitized(userFilter)
     val exactUser = wantExact(userFilter)
@@ -797,14 +799,14 @@ class AdminManager(val config: KafkaConfig,
       case Some(filter) =>
         if (filter.isMatchExact())
           name.exists(_ == filter.matchExact())
-        else if (filter.isMatchSpecified())
+        else if (filter.isMatchSome())
           name.isDefined
         else if (filter.isMatchNone())
           !name.isDefined
         else
           throw new IllegalStateException(s"Unexected quota filter type")
       case None =>
-        includeUnspecifiedTypes || !name.isDefined
+        true
     }
 
     def fromProps(props: Properties): Map[String, Double] = {

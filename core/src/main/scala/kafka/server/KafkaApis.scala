@@ -2791,8 +2791,8 @@ class KafkaApis(val requestChannel: RequestChannel,
     val describeClientQuotasRequest = request.body[DescribeClientQuotasRequest]
 
     if (authorize(request, DESCRIBE_CONFIGS, CLUSTER, CLUSTER_NAME)) {
-      val result = adminManager.describeClientQuotas(describeClientQuotasRequest.filters().asScala.toSeq,
-        describeClientQuotasRequest.includeUnspecifiedTypes()).mapValues(_.mapValues(Double.box).asJava).asJava
+      val result = adminManager.describeClientQuotas(
+        describeClientQuotasRequest.filters().asScala.toSeq).mapValues(_.mapValues(Double.box).asJava).asJava
       sendResponseMaybeThrottle(request, requestThrottleMs =>
         new DescribeClientQuotasResponse(result, requestThrottleMs))
     } else {

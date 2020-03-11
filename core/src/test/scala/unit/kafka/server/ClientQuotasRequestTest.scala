@@ -17,7 +17,7 @@
 
 package kafka.server
 
-import org.apache.kafka.common.errors.InvalidRequestException
+import org.apache.kafka.common.errors.{InvalidRequestException, UnsupportedVersionException}
 import org.apache.kafka.common.internals.KafkaFutureImpl
 import org.apache.kafka.common.quota.{QuotaAlteration, QuotaEntity, QuotaFilter}
 import org.apache.kafka.common.requests.{AlterClientQuotasRequest, AlterClientQuotasResponse, DescribeClientQuotasRequest, DescribeClientQuotasResponse}
@@ -228,8 +228,11 @@ class ClientQuotasRequestTest extends BaseRequestTest {
     setupDescribeClientQuotasMatchTest()
 
     def matchEntity(entity: QuotaEntity) = {
-      val filters = entity.entries.asScala.map(e => QuotaFilter.matchExact(e._1, e._2))
-      describeClientQuotas(filters, includeUnspecifiedTypes = false)
+      val entries = entity.entries.asScala
+      def toFilter(entityType: String) =
+        entries.get(entityType).map(entityName => QuotaFilter.matchExact(entityType, entityName)).getOrElse(QuotaFilter.matchNone(entityType))
+      val filters = List(toFilter(QuotaEntity.USER), toFilter(QuotaEntity.CLIENT_ID))
+      describeClientQuotas(filters)
     }
 
     // Test exact matches.
@@ -244,19 +247,16 @@ class ClientQuotasRequestTest extends BaseRequestTest {
 
     // Entities not contained in `matchEntityList`.
     val notMatchEntities = List(
-      (Some("user-1"), Some("client-id-1"), Some("user-1")),
-      (Some("user-1"), Some("client-id-2"), None),
-      (Some("user-3"), Some("client-id-1"), None),
-      (Some("user-2"), Some(QuotaEntity.CLIENT_ID_DEFAULT), None),
-      (Some("user-4"), None, None),
-      (Some(QuotaEntity.USER_DEFAULT), Some("client-id-2"), None),
-      (None, Some("client-id-1"), None),
-      (None, Some("client-id-3"), None),
-      (None, None, Some("user-1"))
-    ).map { case (u, c, o) =>
+      (Some("user-1"), Some("client-id-2")),
+      (Some("user-3"), Some("client-id-1")),
+      (Some("user-2"), Some(QuotaEntity.CLIENT_ID_DEFAULT)),
+      (Some("user-4"), None),
+      (Some(QuotaEntity.USER_DEFAULT), Some("client-id-2")),
+      (None, Some("client-id-1")),
+      (None, Some("client-id-3")),
+    ).map { case (u, c) =>
         new QuotaEntity((u.map((QuotaEntity.USER, _)) ++
-          c.map((QuotaEntity.CLIENT_ID, _)) ++
-          o.map(("other", _))).toMap.asJava)
+          c.map((QuotaEntity.CLIENT_ID, _))).toMap.asJava)
     }
 
     // Verify exact matches of the non-matches returns empty.
@@ -270,8 +270,8 @@ class ClientQuotasRequestTest extends BaseRequestTest {
   def testDescribeClientQuotasMatchPartial(): Unit = {
     setupDescribeClientQuotasMatchTest()
 
-    def testMatchEntities(filters: Iterable[QuotaFilter], includeUnspecifiedTypes: Boolean, expectedMatchSize: Int, partition: QuotaEntity => Boolean) {
-      val result = describeClientQuotas(filters, includeUnspecifiedTypes)
+    def testMatchEntities(filters: Iterable[QuotaFilter], expectedMatchSize: Int, partition: QuotaEntity => Boolean) {
+      val result = describeClientQuotas(filters)
       val (expectedMatches, expectedNonMatches) = matchEntities.partition(e => partition(e._1))
       assertEquals(expectedMatchSize, expectedMatches.size)  // for test verification
       assertEquals(expectedMatchSize, result.size)
@@ -289,84 +289,66 @@ class ClientQuotasRequestTest extends BaseRequestTest {
       }
     }
 
-    // Match open-ended existing user.
+    // Match existing user.
     testMatchEntities(
-      List(QuotaFilter.matchExact(QuotaEntity.USER, "user-1")), true, 3,
+      List(QuotaFilter.matchExact(QuotaEntity.USER, "user-1")), 3,
       entity => entity.entries.get(QuotaEntity.USER) == "user-1"
     )
 
-    // Match open-ended non-existent user.
+    // Match non-existent user.
     testMatchEntities(
-      List(QuotaFilter.matchExact(QuotaEntity.USER, "unknown")), true, 0,
+      List(QuotaFilter.matchExact(QuotaEntity.USER, "unknown")), 0,
       entity => false
     )
 
-    // Match open-ended existing client ID.
+    // Match existing client ID.
     testMatchEntities(
-      List(QuotaFilter.matchExact(QuotaEntity.CLIENT_ID, "client-id-2")), true, 2,
+      List(QuotaFilter.matchExact(QuotaEntity.CLIENT_ID, "client-id-2")), 2,
       entity => entity.entries.get(QuotaEntity.CLIENT_ID) == "client-id-2"
     )
 
-    // Match open-ended default user.
+    // Match default user.
     testMatchEntities(
-      List(QuotaFilter.matchExact(QuotaEntity.USER, QuotaEntity.USER_DEFAULT)), true, 2,
+      List(QuotaFilter.matchExact(QuotaEntity.USER, QuotaEntity.USER_DEFAULT)), 2,
       entity => entity.entries.get(QuotaEntity.USER) == QuotaEntity.USER_DEFAULT
     )
 
-    // Match close-ended existing user.
+    // Match against all entities with the user type in an match.
     testMatchEntities(
-      List(QuotaFilter.matchExact(QuotaEntity.USER, "user-2")), false, 1,
-      entity => entity.entries.get(QuotaEntity.USER) == "user-2" && entity.entries.get(QuotaEntity.CLIENT_ID) == null
-    )
-
-    // Match close-ended existing client ID that has no matching entity.
-    testMatchEntities(
-      List(QuotaFilter.matchExact(QuotaEntity.CLIENT_ID, "client-id-1")), false, 0,
-      entity => false
-    )
-
-    // Match an "other" entity type. This shouldn't match anything (but also shouldn't produce an error) because support for
-    // setting configurations of other entity types is not implemented yet.
-    testMatchEntities(
-      List(QuotaFilter.matchExact("other", "user-1")), true, 0,
-      entity => false,
-    )
-
-    // Match against all entities with the user type in a close-ended match.
-    testMatchEntities(
-      List(QuotaFilter.matchSpecified(QuotaEntity.USER)), false, 4,
-      entity => entity.entries.get(QuotaEntity.USER) != null && entity.entries.get(QuotaEntity.CLIENT_ID) == null
-    )
-
-    // Match against all entities with the user type in an open-ended match.
-    testMatchEntities(
-      List(QuotaFilter.matchSpecified(QuotaEntity.USER)), true, 10,
+      List(QuotaFilter.matchSome(QuotaEntity.USER)), 10,
       entity => entity.entries.get(QuotaEntity.USER) != null
     )
 
-    // Match against all entities with the client ID type in a close-ended match.
+    // Match against all entities with the client ID type in an match.
     testMatchEntities(
-      List(QuotaFilter.matchSpecified(QuotaEntity.CLIENT_ID)), false, 1,
-      entity => entity.entries.get(QuotaEntity.CLIENT_ID) != null && entity.entries.get(QuotaEntity.USER) == null
-    )
-
-    // Match against all entities with the client ID type in an open-ended match.
-    testMatchEntities(
-      List(QuotaFilter.matchSpecified(QuotaEntity.CLIENT_ID)), true, 7,
+      List(QuotaFilter.matchSome(QuotaEntity.CLIENT_ID)), 7,
       entity => entity.entries.get(QuotaEntity.CLIENT_ID) != null
     )
 
-    // Match against all entities with an unexpected type in an open-ended match.
+    // Match against no entities with the user type.
     testMatchEntities(
-      List(QuotaFilter.matchSpecified("other")), true, 0,
-      entity => false
+      List(QuotaFilter.matchNone(QuotaEntity.USER)), 1,
+      entity => entity.entries.get(QuotaEntity.USER) == null
     )
 
-    // Match open-ended empty filter list. This should match all entities.
-    testMatchEntities(List.empty, true, 11, entity => true)
+    // Match against no entities with the client ID type.
+    testMatchEntities(
+      List(QuotaFilter.matchNone(QuotaEntity.CLIENT_ID)), 4,
+      entity => entity.entries.get(QuotaEntity.CLIENT_ID) == null
+    )
 
-    // Match close-ended empty filter list. This should match no entities.
-    testMatchEntities(List.empty, false, 0, entity => false)
+    // Match empty filter list. This should match all entities.
+    testMatchEntities(List.empty, 11, entity => true)
+  }
+
+  @Test
+  def testClientQuotasUnsupportedEntityTypes() {
+    val entity = new QuotaEntity(Map(("other" -> "name")).asJava)
+    try {
+      verifyDescribeEntityQuotas(entity, Map())
+    } catch {
+      case e: ExecutionException => assertTrue(e.getCause.isInstanceOf[UnsupportedVersionException])
+    }
   }
 
   @Test
@@ -385,7 +367,7 @@ class ClientQuotasRequestTest extends BaseRequestTest {
 
   private def verifyDescribeEntityQuotas(entity: QuotaEntity, quotas: Map[String, Double]) = {
     val filters = entity.entries.asScala.map(e => QuotaFilter.matchExact(e._1, e._2))
-    val describe = describeClientQuotas(filters, includeUnspecifiedTypes = false)
+    val describe = describeClientQuotas(filters)
     if (quotas.isEmpty) {
       assertEquals(0, describe.size)
     } else {
@@ -404,14 +386,14 @@ class ClientQuotasRequestTest extends BaseRequestTest {
   private def toEntity(user: Option[String], clientId: Option[String]) =
     new QuotaEntity((user.map((QuotaEntity.USER, _)) ++ clientId.map((QuotaEntity.CLIENT_ID, _))).toMap.asJava)
 
-  private def describeClientQuotas(filters: Iterable[QuotaFilter], includeUnspecifiedTypes: Boolean) = {
+  private def describeClientQuotas(filters: Iterable[QuotaFilter]) = {
     val result = new KafkaFutureImpl[java.util.Map[QuotaEntity, java.util.Map[String, java.lang.Double]]]
-    sendDescribeClientQuotasRequest(filters, includeUnspecifiedTypes).complete(result)
+    sendDescribeClientQuotasRequest(filters).complete(result)
     result.get
   }
 
-  private def sendDescribeClientQuotasRequest(filters: Iterable[QuotaFilter], includeUnspecifiedTypes: Boolean): DescribeClientQuotasResponse = {
-    val request = new DescribeClientQuotasRequest.Builder(filters.asJavaCollection, includeUnspecifiedTypes).build()
+  private def sendDescribeClientQuotasRequest(filters: Iterable[QuotaFilter]): DescribeClientQuotasResponse = {
+    val request = new DescribeClientQuotasRequest.Builder(filters.asJavaCollection).build()
     connectAndReceive[DescribeClientQuotasResponse](request, destination = controllerSocketServer)
   }
 

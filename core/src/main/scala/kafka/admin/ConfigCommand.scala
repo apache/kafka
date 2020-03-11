@@ -394,15 +394,9 @@ object ConfigCommand extends Config {
       println(s"Completed updating default config for $entityTypeHead in the cluster.")
   }
 
-<<<<<<< HEAD
   private[admin] def describeConfig(adminClient: Admin, opts: ConfigCommandOptions): Unit = {
-    val entityType = opts.entityTypes.head
-    val entityName = opts.entityNames.headOption
-=======
-  private def describeConfig(adminClient: Admin, opts: ConfigCommandOptions): Unit = {
     val entityTypes = opts.entityTypes
     val entityNames = opts.entityNames
->>>>>>> KIP-546 (1/2): Implements describeClientQuotas() and alterClientQuotas().
     val describeAll = opts.options.has(opts.allOpt)
 
     entityTypes.head match {
@@ -495,18 +489,25 @@ object ConfigCommand extends Config {
   }
 
   private def getAllClientQuotasConfigs(adminClient: Admin, entityTypes: List[String], entityNames: List[String]) = {
-    val filters = entityTypes.map(Some(_)).zipAll(entityNames.map(Some(_)), None, None).map { case (entityTypeOpt, entityNameOpt) =>
-      val entityType = entityTypeOpt match {
-        case Some(ConfigType.User) => QuotaEntity.USER
-        case Some(ConfigType.Client) => QuotaEntity.CLIENT_ID
+    var userFilter: Option[QuotaFilter] = None
+    var clientIdFilter: Option[QuotaFilter] = None
+
+    def toFilter(entityType: String, entityName: Option[String]): QuotaFilter =
+      entityName.map(QuotaFilter.matchExact(entityType, _)).getOrElse(QuotaFilter.matchSome(entityType))
+
+    entityTypes.map(Some(_)).zipAll(entityNames.map(Some(_)), None, None).foreach { case (entityTypeOpt, entityNameOpt) =>
+      entityTypeOpt match {
+        case Some(ConfigType.User) => userFilter = Some(toFilter(QuotaEntity.USER, entityNameOpt))
+        case Some(ConfigType.Client) => clientIdFilter = Some(toFilter(QuotaEntity.CLIENT_ID, entityNameOpt))
         case Some(_) => throw new IllegalArgumentException(s"Unexpected entity type ${entityTypeOpt.get}")
         case None => throw new IllegalArgumentException("More entity names specified than entity types")
       }
-      entityNameOpt.map(QuotaFilter.matchExact(entityType, _)).getOrElse(QuotaFilter.matchSpecified(entityType))
     }
 
-    val options = new DescribeClientQuotasOptions().includeUnspecifiedTypes(false)
-    adminClient.describeClientQuotas(filters.asJavaCollection, options).entities.get(30, TimeUnit.SECONDS).asScala
+    val filters = List(userFilter.getOrElse(QuotaFilter.matchNone(QuotaEntity.USER)),
+      clientIdFilter.getOrElse(QuotaFilter.matchNone(QuotaEntity.CLIENT_ID)))
+
+    adminClient.describeClientQuotas(filters.asJavaCollection).entities.get(30, TimeUnit.SECONDS).asScala
   }
 
   case class Entity(entityType: String, sanitizedName: Option[String]) {
