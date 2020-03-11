@@ -27,12 +27,13 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.Optional;
 
+import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNull;
 
 public class MockConsumerTest {
     
@@ -89,7 +90,7 @@ public class MockConsumerTest {
         assertEquals(2L, consumer.position(tp));
         consumer.commitSync();
         assertEquals(2L, consumer.committed(Collections.singleton(tp)).get(tp).offset());
-        assertNull(consumer.groupMetadata());
+        assertThat(consumer.groupMetadata(), equalTo(new ConsumerGroupMetadata("dummy.group.id", 1, "1", Optional.empty())));
     }
 
     @Test
