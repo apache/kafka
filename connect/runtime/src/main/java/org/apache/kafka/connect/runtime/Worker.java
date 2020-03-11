@@ -246,13 +246,14 @@ public class Worker {
             final WorkerConnector workerConnector;
             ClassLoader savedLoader = plugins.currentThreadLoader();
             try {
+                String connClass = connProps.get(ConnectorConfig.CONNECTOR_CLASS_CONFIG);
+                ClassLoader connectorLoader = plugins.delegatingLoader().connectorLoader(connClass);
+                savedLoader = Plugins.compareAndSwapLoaders(connectorLoader);
                 final ConnectorConfig connConfig = new ConnectorConfig(plugins, connProps);
-                final String connClass = connConfig.getString(ConnectorConfig.CONNECTOR_CLASS_CONFIG);
                 log.info("Creating connector {} of type {}", connName, connClass);
                 final Connector connector = plugins.newConnector(connClass);
                 workerConnector = new WorkerConnector(connName, connector, ctx, metrics, statusListener);
                 log.info("Instantiated connector {} with version {} of type {}", connName, connector.version(), connector.getClass());
-                savedLoader = plugins.compareAndSwapLoaders(connector);
                 workerConnector.initialize(connConfig);
                 workerConnector.transitionTo(initialState);
                 Plugins.compareAndSwapLoaders(savedLoader);
