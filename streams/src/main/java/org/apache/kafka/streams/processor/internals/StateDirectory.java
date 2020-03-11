@@ -349,7 +349,7 @@ public class StateDirectory {
      * @return The list of all the existing local directories for stream tasks
      */
     File[] listTaskDirectories() {
-        File[] taskDirectories =
+        final File[] taskDirectories =
             stateDir.listFiles(pathname -> pathname.isDirectory() && PATH_NAME.matcher(pathname.getName()).matches());
 
         if (!stateDir.exists() || taskDirectories == null) {
