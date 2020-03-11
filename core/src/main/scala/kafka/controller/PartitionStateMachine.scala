@@ -347,7 +347,7 @@ class ZkPartitionStateMachine(config: KafkaConfig,
           if (e.isInstanceOf[StateChangeFailedException]) {
             logger.error(s"$failMsg: $reasonMsg")
           } else {
-            logger.error(failMsg, e)
+            logger.error(s"$failMsg: unknown exception: ", e)
           }
         case (_, Right(_)) => // Ignore; success so no need to log failed state change
       }
