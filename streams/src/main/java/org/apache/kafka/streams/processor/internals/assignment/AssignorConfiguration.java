@@ -45,6 +45,7 @@ public final class AssignorConfiguration {
     private final String userEndPoint;
     private final TaskManager taskManager;
     private final StreamsMetadataState streamsMetadataState;
+    private final Admin adminClient;
     private final InternalTopicManager internalTopicManager;
     private final CopartitionedTopicsEnforcer copartitionedTopicsEnforcer;
     private final StreamsConfig streamsConfig;
@@ -144,7 +145,8 @@ public final class AssignorConfiguration {
                 throw fatalException;
             }
 
-            internalTopicManager = new InternalTopicManager((Admin) o, streamsConfig);
+            adminClient = (Admin) o;
+            internalTopicManager = new InternalTopicManager(adminClient, streamsConfig);
         }
 
 
@@ -248,6 +250,10 @@ public final class AssignorConfiguration {
 
     public String getUserEndPoint() {
         return userEndPoint;
+    }
+
+    public Admin getAdminClient() {
+        return adminClient;
     }
 
     public InternalTopicManager getInternalTopicManager() {

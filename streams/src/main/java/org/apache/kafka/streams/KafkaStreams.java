@@ -1217,17 +1217,9 @@ public class KafkaStreams implements AutoCloseable {
         }
 
         log.debug("Current changelog positions: {}", allChangelogPositions);
-        final Map<TopicPartition, ListOffsetsResultInfo> allEndOffsets;
-        try {
-            allEndOffsets = adminClient.listOffsets(
-                allPartitions.stream()
-                    .collect(Collectors.toMap(Function.identity(), tp -> OffsetSpec.latest()))
-            ).all().get();
-        } catch (final RuntimeException | InterruptedException | ExecutionException e) {
-            throw new StreamsException("Unable to obtain end offsets from kafka", e);
-        }
-
+        final Map<TopicPartition, ListOffsetsResultInfo> allEndOffsets = fetchEndOffsets(allPartitions, adminClient);
         log.debug("Current end offsets :{}", allEndOffsets);
+
         for (final Map.Entry<TopicPartition, ListOffsetsResultInfo> entry : allEndOffsets.entrySet()) {
             // Avoiding an extra admin API lookup by computing lags for not-yet-started restorations
             // from zero instead of the real "earliest offset" for the changelog.
@@ -1243,5 +1235,16 @@ public class KafkaStreams implements AutoCloseable {
         }
 
         return Collections.unmodifiableMap(localStorePartitionLags);
+    }
+
+    public static Map<TopicPartition, ListOffsetsResultInfo> fetchEndOffsets(final Collection<TopicPartition> partitions,
+                                                                             final Admin adminClient) {
+        try {
+            return adminClient.listOffsets(
+                partitions.stream().collect(Collectors.toMap(Function.identity(), tp -> OffsetSpec.latest()))
+            ).all().get();
+        } catch (final RuntimeException | InterruptedException | ExecutionException e) {
+            throw new StreamsException("Unable to obtain end offsets from kafka", e);
+        }
     }
 }

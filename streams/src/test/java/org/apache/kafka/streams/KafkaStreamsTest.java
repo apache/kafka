@@ -16,13 +16,16 @@
  */
 package org.apache.kafka.streams;
 
+import java.util.concurrent.ExecutionException;
 import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.ListOffsetsResult;
 import org.apache.kafka.clients.admin.ListOffsetsResult.ListOffsetsResultInfo;
 import org.apache.kafka.clients.admin.MockAdminClient;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.producer.MockProducer;
 import org.apache.kafka.common.Cluster;
+import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.metrics.MetricConfig;
@@ -33,6 +36,7 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.internals.metrics.ClientMetrics;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.processor.AbstractProcessor;
@@ -83,16 +87,20 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import static java.util.Collections.emptyList;
 import static java.util.Collections.singletonList;
+import static org.apache.kafka.streams.KafkaStreams.fetchEndOffsets;
 import static org.easymock.EasyMock.anyInt;
 import static org.easymock.EasyMock.anyLong;
 import static org.easymock.EasyMock.anyObject;
 import static org.easymock.EasyMock.anyString;
 import static org.easymock.EasyMock.capture;
+import static org.easymock.EasyMock.replay;
+import static org.easymock.EasyMock.verify;
 import static org.hamcrest.CoreMatchers.hasItem;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -881,6 +889,45 @@ public class KafkaStreamsTest {
         final String globalStoreName = testName.getMethodName() + "-globalStore";
         final Topology topology = getStatefulTopology(inputTopic, outputTopic, globalTopicName, storeName, globalStoreName, true);
         startStreamsAndCheckDirExists(topology, true);
+    }
+
+    @Test
+    public void fetchEndOffsetsShouldRethrowRuntimeExceptionAsStreamsException() {
+        final Admin adminClient = EasyMock.createMock(AdminClient.class);
+        EasyMock.expect(adminClient.listOffsets(EasyMock.anyObject())).andThrow(new RuntimeException());
+        replay(adminClient);
+        assertThrows(StreamsException.class, () -> fetchEndOffsets(emptyList(), adminClient));
+        verify(adminClient);
+    }
+
+    @Test
+    public void fetchEndOffsetsShouldRethrowInterruptedExceptionAsStreamsException() throws InterruptedException, ExecutionException {
+        final Admin adminClient = EasyMock.createMock(AdminClient.class);
+        final ListOffsetsResult result = EasyMock.createNiceMock(ListOffsetsResult.class);
+        final KafkaFuture<Map<TopicPartition, ListOffsetsResultInfo>> allFuture = EasyMock.createMock(KafkaFuture.class);
+
+        EasyMock.expect(adminClient.listOffsets(EasyMock.anyObject())).andStubReturn(result);
+        EasyMock.expect(result.all()).andStubReturn(allFuture);
+        EasyMock.expect(allFuture.get()).andThrow(new InterruptedException());
+        replay(adminClient, result, allFuture);
+
+        assertThrows(StreamsException.class, () -> fetchEndOffsets(emptyList(), adminClient));
+        verify(adminClient);
+    }
+
+    @Test
+    public void fetchEndOffsetsShouldRethrowExecutionExceptionAsStreamsException() throws InterruptedException, ExecutionException {
+        final Admin adminClient = EasyMock.createMock(AdminClient.class);
+        final ListOffsetsResult result = EasyMock.createNiceMock(ListOffsetsResult.class);
+        final KafkaFuture<Map<TopicPartition, ListOffsetsResultInfo>> allFuture = EasyMock.createMock(KafkaFuture.class);
+
+        EasyMock.expect(adminClient.listOffsets(EasyMock.anyObject())).andStubReturn(result);
+        EasyMock.expect(result.all()).andStubReturn(allFuture);
+        EasyMock.expect(allFuture.get()).andThrow(new ExecutionException(new RuntimeException()));
+        replay(adminClient, result, allFuture);
+
+        assertThrows(StreamsException.class, () -> fetchEndOffsets(emptyList(), adminClient));
+        verify(adminClient);
     }
 
     @SuppressWarnings("unchecked")

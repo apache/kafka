@@ -1119,7 +1119,7 @@ public interface Admin extends AutoCloseable {
      * @param topicPartitionOffsets The mapping from partition to the OffsetSpec to look up.
      * @return The ListOffsetsResult.
      */
-    default ListOffsetsResult listOffsets(Map<TopicPartition, OffsetSpec> topicPartitionOffsets) {
+    default ListOffsetsResult  listOffsets(Map<TopicPartition, OffsetSpec> topicPartitionOffsets) {
         return listOffsets(topicPartitionOffsets, new ListOffsetsOptions());
     }
 
