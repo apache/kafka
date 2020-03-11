@@ -131,7 +131,7 @@ class ZkPartitionStateMachine(config: KafkaConfig,
   extends PartitionStateMachine(controllerContext) {
 
   private val controllerId = config.brokerId
-  this.logIdent = s"[PartitionStateMachine controllerId=$controllerId] "
+  this.logIdent = s"[PartitionStateMachine controllerId=$controllerId controllerEpoch=${controllerContext.epoch}] "
 
   /**
    * Try to change the state of the given partitions to the given targetState, using the given
@@ -343,9 +343,12 @@ class ZkPartitionStateMachine(config: KafkaConfig,
           } else {
             ""
           }
-          logger.error(s"Controller $controllerId epoch ${controllerContext.epoch} failed to "
-            + s" change state for partition $partition from ${partitionState(partition)} "
-            + s"to $OnlinePartition $reasonMsg", e)
+          val failMsg = s"Controller failed to change state for partition $partition from ${partitionState(partition)} to $OnlinePartition"
+          if (e.isInstanceOf[StateChangeFailedException]) {
+            logger.error(s"$failMsg: $reasonMsg")
+          } else {
+            logger.error(failMsg, e)
+          }
         case (_, Right(_)) => // Ignore; success so no need to log failed state change
       }
 
