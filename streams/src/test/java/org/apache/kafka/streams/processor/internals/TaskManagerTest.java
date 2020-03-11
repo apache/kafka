@@ -128,14 +128,17 @@ public class TaskManagerTest {
     @Before
     public void setUp() {
         final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(new Metrics(), "clientId", StreamsConfig.METRICS_LATEST);
-        taskManager = new TaskManager(changeLogReader,
-                                      UUID.randomUUID(),
-                                      "taskManagerTest",
-                                      streamsMetrics,
-                                      activeTaskCreator,
-                                      standbyTaskCreator,
-                                      topologyBuilder,
-                                      adminClient, stateDirectory);
+        taskManager = new TaskManager(
+            changeLogReader,
+            UUID.randomUUID(),
+            "taskManagerTest",
+            streamsMetrics,
+            activeTaskCreator,
+            standbyTaskCreator,
+            topologyBuilder,
+            adminClient,
+            stateDirectory
+        );
         taskManager.setMainConsumer(consumer);
     }
 
