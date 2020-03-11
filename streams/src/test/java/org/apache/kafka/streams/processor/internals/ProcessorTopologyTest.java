@@ -494,7 +494,7 @@ public class ProcessorTopologyTest {
         final StoreBuilder<KeyValueStore<String, String>> storeBuilder =
                 Stores.keyValueStoreBuilder(storeSupplier, Serdes.String(), Serdes.String());
         topology.addSource("source", STRING_DESERIALIZER, STRING_DESERIALIZER, "topic")
-                .addProcessor(processor, () -> new StatefulProcessor(storeSupplier.name()), "source")
+                .addProcessor(processor, (ProcessorSupplier<String, String>) () -> new StatefulProcessor(storeSupplier.name()), "source")
                 .addStateStore(storeBuilder, processor);
         return topology.getInternalBuilder("anyAppId").buildTopology();
     }

@@ -23,22 +23,22 @@ import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 
-public class GlobalStoreNode extends StateStoreNode {
+public class GlobalStoreNode<K, V> extends StateStoreNode {
 
 
     private final String sourceName;
     private final String topic;
-    private final ConsumedInternal consumed;
+    private final ConsumedInternal<K, V> consumed;
     private final String processorName;
-    private final ProcessorSupplier stateUpdateSupplier;
+    private final ProcessorSupplier<K, V> stateUpdateSupplier;
 
 
-    public GlobalStoreNode(final StoreBuilder<KeyValueStore> storeBuilder,
+    public GlobalStoreNode(final StoreBuilder<KeyValueStore<K, V>> storeBuilder,
                            final String sourceName,
                            final String topic,
-                           final ConsumedInternal consumed,
+                           final ConsumedInternal<K, V> consumed,
                            final String processorName,
-                           final ProcessorSupplier stateUpdateSupplier) {
+                           final ProcessorSupplier<K, V> stateUpdateSupplier) {
 
         super(storeBuilder);
         this.sourceName = sourceName;
@@ -48,9 +48,7 @@ public class GlobalStoreNode extends StateStoreNode {
         this.stateUpdateSupplier = stateUpdateSupplier;
     }
 
-
     @Override
-    @SuppressWarnings("unchecked")
     public void writeToTopology(final InternalTopologyBuilder topologyBuilder) {
         storeBuilder.withLoggingDisabled();
         topologyBuilder.addGlobalStore(storeBuilder,
@@ -63,7 +61,6 @@ public class GlobalStoreNode extends StateStoreNode {
                                        stateUpdateSupplier);
 
     }
-
 
     @Override
     public String toString() {

@@ -24,8 +24,8 @@ import java.util.regex.Pattern
 
 import org.apache.kafka.streams.kstream.GlobalKTable
 import org.apache.kafka.streams.processor.{ProcessorSupplier, StateStore}
-import org.apache.kafka.streams.state.StoreBuilder
-import org.apache.kafka.streams.{StreamsBuilder => StreamsBuilderJ, Topology}
+import org.apache.kafka.streams.state.{KeyValueStore, StoreBuilder}
+import org.apache.kafka.streams.{Topology, StreamsBuilder => StreamsBuilderJ}
 import org.apache.kafka.streams.scala.kstream.{Consumed, KStream, KTable, Materialized}
 
 import scala.collection.JavaConverters._
@@ -176,10 +176,10 @@ class StreamsBuilder(inner: StreamsBuilderJ = new StreamsBuilderJ) {
    *
    * @see `org.apache.kafka.streams.StreamsBuilder#addGlobalStore`
    */
-  def addGlobalStore(storeBuilder: StoreBuilder[_ <: StateStore],
-                     topic: String,
-                     consumed: Consumed[_, _],
-                     stateUpdateSupplier: ProcessorSupplier[_, _]): StreamsBuilderJ =
+  def addGlobalStore[K, V](storeBuilder: StoreBuilder[KeyValueStore[K, V]],
+                           topic: String,
+                           consumed: Consumed[K, V],
+                           stateUpdateSupplier: ProcessorSupplier[K, V]): StreamsBuilderJ =
     inner.addGlobalStore(storeBuilder, topic, consumed, stateUpdateSupplier)
 
   def build(): Topology = inner.build()
