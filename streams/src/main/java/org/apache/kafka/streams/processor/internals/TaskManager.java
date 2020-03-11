@@ -394,8 +394,7 @@ public class TaskManager {
                     taskOffsetSums.put(id, sumOfChangelogOffsets(task.changelogOffsets()));
                 }
             } else {
-                final File checkpointFile =
-                    new File(stateDirectory.directoryForTask(id),StateManagerUtil.CHECKPOINT_FILE_NAME);
+                final File checkpointFile = stateDirectory.checkpointFileFor(id);
                 try {
                     // If we can't read the checkpoint file or it doesn't exist, release the task directory
                     // so the background cleaner thread can do its thing

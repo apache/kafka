@@ -108,6 +108,13 @@ public class StateDirectory {
     }
 
     /**
+     * @return The File handle for the checkpoint in the given task's directory
+     */
+    public File checkpointFileFor(final TaskId taskId) {
+        return new File(directoryForTask(taskId), StateManagerUtil.CHECKPOINT_FILE_NAME);
+    }
+
+    /**
      * Decide if the directory of the task is empty or not
      */
     boolean directoryForTaskIsEmpty(final TaskId taskId) {
