@@ -576,7 +576,7 @@ public abstract class AbstractCoordinator implements Closeable {
             Errors error = joinResponse.error();
             if (error == Errors.NONE) {
                 if (isProtocolTypeInconsistent(joinResponse.data().protocolType())) {
-                    log.debug("JoinGroup failed due to inconsistent Protocol Type, received {} but expected {}",
+                    log.error("JoinGroup failed due to inconsistent Protocol Type, received {} but expected {}",
                         joinResponse.data().protocolType(), protocolType());
                     future.raise(Errors.INCONSISTENT_GROUP_PROTOCOL);
                 } else {
@@ -717,11 +717,11 @@ public abstract class AbstractCoordinator implements Closeable {
             Errors error = syncResponse.error();
             if (error == Errors.NONE) {
                 if (isProtocolTypeInconsistent(syncResponse.data.protocolType())) {
-                    log.debug("SyncGroup failed due to inconsistent Protocol Type, received {} but expected {}",
+                    log.error("SyncGroup failed due to inconsistent Protocol Type, received {} but expected {}",
                         syncResponse.data.protocolType(), protocolType());
                     future.raise(Errors.INCONSISTENT_GROUP_PROTOCOL);
                 } else if (isProtocolNameInconsistent(syncResponse.data.protocolName())) {
-                    log.debug("SyncGroup failed due to inconsistent Protocol Name, received {} but expected {}",
+                    log.error("SyncGroup failed due to inconsistent Protocol Name, received {} but expected {}",
                         syncResponse.data.protocolName(), generation().protocolName);
                     future.raise(Errors.INCONSISTENT_GROUP_PROTOCOL);
                 } else {
