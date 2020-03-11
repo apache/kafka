@@ -122,7 +122,7 @@ public class AclAuthorizerBenchmark {
         ResourcePattern resourcePrefix = new ResourcePattern(ResourceType.TOPIC, "resource-", PatternType.PREFIXED);
 
         Set<AclEntry> entriesWildcard = aclEntries.computeIfAbsent(resourceWildcard, k -> new HashSet<>());
-        Set<AclEntry> entriesPrefix = aclEntries.computeIfAbsent(resourceWildcard, k -> new HashSet<>());
+        Set<AclEntry> entriesPrefix = aclEntries.computeIfAbsent(resourcePrefix, k -> new HashSet<>());
 
         for (int hostId = 0; hostId < hostCount; hostId++) {
             AccessControlEntry ace = new AccessControlEntry(principal.toString(), "127.0.0." + hostId, AclOperation.READ, AclPermissionType.ALLOW);
