@@ -176,5 +176,6 @@ public class InsertFieldTest {
         assertEquals(0, ((Map<?, ?>) transformedRecord.key()).get("partition_field"));
         assertEquals(null, ((Map<?, ?>) transformedRecord.key()).get("timestamp_field"));
         assertEquals("my-instance-id", ((Map<?, ?>) transformedRecord.key()).get("instance_id"));
+        assertEquals(null, transformedRecord.value());
     }
 }
