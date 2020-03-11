@@ -535,14 +535,14 @@ public class InternalTopologyBuilder {
         nodeGroups = null;
     }
 
-    public final void addGlobalStore(final StoreBuilder<?> storeBuilder,
-                                     final String sourceName,
-                                     final TimestampExtractor timestampExtractor,
-                                     final Deserializer<?> keyDeserializer,
-                                     final Deserializer<?> valueDeserializer,
-                                     final String topic,
-                                     final String processorName,
-                                     final ProcessorSupplier<?, ?> stateUpdateSupplier) {
+    public final <K, V> void addGlobalStore(final StoreBuilder<?> storeBuilder,
+                                            final String sourceName,
+                                            final TimestampExtractor timestampExtractor,
+                                            final Deserializer<K> keyDeserializer,
+                                            final Deserializer<V> valueDeserializer,
+                                            final String topic,
+                                            final String processorName,
+                                            final ProcessorSupplier<K, V> stateUpdateSupplier) {
         Objects.requireNonNull(storeBuilder, "store builder must not be null");
         validateGlobalStoreArguments(sourceName,
                                      topic,

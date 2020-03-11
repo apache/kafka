@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.streams.kstream.internals.graph;
 
 import org.apache.kafka.streams.kstream.internals.ConsumedInternal;
@@ -25,7 +24,6 @@ import org.apache.kafka.streams.state.StoreBuilder;
 
 public class GlobalStoreNode<K, V> extends StateStoreNode {
 
-
     private final String sourceName;
     private final String topic;
     private final ConsumedInternal<K, V> consumed;
@@ -33,7 +31,7 @@ public class GlobalStoreNode<K, V> extends StateStoreNode {
     private final ProcessorSupplier<K, V> stateUpdateSupplier;
 
 
-    public GlobalStoreNode(final StoreBuilder<KeyValueStore<K, V>> storeBuilder,
+    public GlobalStoreNode(final StoreBuilder<?> storeBuilder,
                            final String sourceName,
                            final String topic,
                            final ConsumedInternal<K, V> consumed,

@@ -201,7 +201,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
         addGraphNode(root, new StateStoreNode(builder));
     }
 
-    public synchronized <K, V> void addGlobalStore(final StoreBuilder<KeyValueStore<K, V>> storeBuilder,
+    public synchronized <K, V> void addGlobalStore(final StoreBuilder<?> storeBuilder,
                                                    final String sourceName,
                                                    final String topic,
                                                    final ConsumedInternal<K, V> consumed,
@@ -209,18 +209,18 @@ public class InternalStreamsBuilder implements InternalNameProvider {
                                                    final ProcessorSupplier<K, V> stateUpdateSupplier) {
 
         final StreamsGraphNode globalStoreNode = new GlobalStoreNode<>(
-                storeBuilder,
-                sourceName,
-                topic,
-                consumed,
-                processorName,
-                stateUpdateSupplier
+            storeBuilder,
+            sourceName,
+            topic,
+            consumed,
+            processorName,
+            stateUpdateSupplier
         );
 
         addGraphNode(root, globalStoreNode);
     }
 
-    public synchronized <K, V> void addGlobalStore(final StoreBuilder<KeyValueStore<K, V>> storeBuilder,
+    public synchronized <K, V> void addGlobalStore(final StoreBuilder<?> storeBuilder,
                                                    final String topic,
                                                    final ConsumedInternal<K, V> consumed,
                                                    final ProcessorSupplier<K, V> stateUpdateSupplier) {
@@ -228,12 +228,14 @@ public class InternalStreamsBuilder implements InternalNameProvider {
         storeBuilder.withLoggingDisabled();
         final String sourceName = newProcessorName(KStreamImpl.SOURCE_NAME);
         final String processorName = newProcessorName(KTableImpl.SOURCE_NAME);
-        addGlobalStore(storeBuilder,
-                       sourceName,
-                       topic,
-                       consumed,
-                       processorName,
-                       stateUpdateSupplier);
+        addGlobalStore(
+            storeBuilder,
+            sourceName,
+            topic,
+            consumed,
+            processorName,
+            stateUpdateSupplier
+        );
     }
 
     void addGraphNode(final StreamsGraphNode parent,

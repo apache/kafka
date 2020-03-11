@@ -696,7 +696,7 @@ public class Topology {
      * @return itself
      * @throws TopologyException if the processor of state is already registered
      */
-    public synchronized <K, V> Topology addGlobalStore(final StoreBuilder<KeyValueStore<K, V>> storeBuilder,
+    public synchronized <K, V> Topology addGlobalStore(final StoreBuilder<?> storeBuilder,
                                                        final String sourceName,
                                                        final Deserializer<K> keyDeserializer,
                                                        final Deserializer<V> valueDeserializer,
@@ -740,7 +740,7 @@ public class Topology {
      * @return itself
      * @throws TopologyException if the processor of state is already registered
      */
-    public synchronized <K, V> Topology addGlobalStore(final StoreBuilder<KeyValueStore<K, V>> storeBuilder,
+    public synchronized <K, V> Topology addGlobalStore(final StoreBuilder<?> storeBuilder,
                                                        final String sourceName,
                                                        final TimestampExtractor timestampExtractor,
                                                        final Deserializer<K> keyDeserializer,

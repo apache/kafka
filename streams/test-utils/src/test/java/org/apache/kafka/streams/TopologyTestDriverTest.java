@@ -45,6 +45,7 @@ import org.apache.kafka.streams.processor.To;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.internals.KeyValueStoreBuilder;
 import org.apache.kafka.streams.test.TestRecord;
@@ -371,7 +372,7 @@ public class TopologyTestDriverTest {
 
         for (final String sourceTopicName : sourceTopicNames) {
             topology.addGlobalStore(
-                Stores.<Bytes, byte[]>keyValueStoreBuilder(
+                Stores.keyValueStoreBuilder(
                     Stores.inMemoryKeyValueStore(
                         sourceTopicName + "-globalStore"),
                     null,
@@ -1537,7 +1538,7 @@ public class TopologyTestDriverTest {
         topology.addSource("source", new StringDeserializer(), new StringDeserializer(), "input");
         topology.addProcessor(
             "recursiveProcessor",
-            () -> new AbstractProcessor<String, String>() {
+            (ProcessorSupplier<String, String>) () -> new AbstractProcessor<String, String>() {
                 @Override
                 public void process(final String key, final String value) {
                     if (!value.startsWith("recurse-")) {
@@ -1608,7 +1609,7 @@ public class TopologyTestDriverTest {
         );
         topology.addProcessor(
             "recursiveProcessor",
-            () -> new AbstractProcessor<String, String>() {
+            (ProcessorSupplier<String, String>) () -> new AbstractProcessor<String, String>() {
                 @Override
                 public void process(final String key, final String value) {
                     if (!value.startsWith("recurse-")) {

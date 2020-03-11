@@ -484,7 +484,7 @@ public class StreamsBuilder {
      * @deprecated use {@link #addGlobalStore(StoreBuilder, String, Consumed, ProcessorSupplier)} instead
      */
     @Deprecated
-    public synchronized <K, V>  StreamsBuilder addGlobalStore(final StoreBuilder<KeyValueStore<K, V>> storeBuilder,
+    public synchronized <K, V>  StreamsBuilder addGlobalStore(final StoreBuilder<?> storeBuilder,
                                                               final String topic,
                                                               final String sourceName,
                                                               final Consumed<K, V> consumed,
@@ -528,7 +528,7 @@ public class StreamsBuilder {
      * @return itself
      * @throws TopologyException if the processor of state is already registered
      */
-    public synchronized <K, V> StreamsBuilder addGlobalStore(final StoreBuilder<KeyValueStore<K, V>> storeBuilder,
+    public synchronized <K, V> StreamsBuilder addGlobalStore(final StoreBuilder<?> storeBuilder,
                                                              final String topic,
                                                              final Consumed<K, V> consumed,
                                                              final ProcessorSupplier<K, V> stateUpdateSupplier) {

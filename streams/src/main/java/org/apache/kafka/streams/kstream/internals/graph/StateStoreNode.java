@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.streams.kstream.internals.graph;
 
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
@@ -22,9 +21,9 @@ import org.apache.kafka.streams.state.StoreBuilder;
 
 public class StateStoreNode extends StreamsGraphNode {
 
-    protected final StoreBuilder storeBuilder;
+    protected final StoreBuilder<?> storeBuilder;
 
-    public StateStoreNode(final StoreBuilder storeBuilder) {
+    public StateStoreNode(final StoreBuilder<?> storeBuilder) {
         super(storeBuilder.name());
 
         this.storeBuilder = storeBuilder;
