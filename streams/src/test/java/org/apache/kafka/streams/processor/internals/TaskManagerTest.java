@@ -76,6 +76,7 @@ import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.easymock.EasyMock.anyObject;
 import static org.easymock.EasyMock.anyString;
+import static org.easymock.EasyMock.createNiceMock;
 import static org.easymock.EasyMock.eq;
 import static org.easymock.EasyMock.expect;
 import static org.easymock.EasyMock.expectLastCall;
@@ -314,6 +315,7 @@ public class TaskManagerTest {
     public void shouldNotReportOffsetSumsForUnassignedTaskWithoutCheckpoint() throws IOException {
         expectLockObtainedFor(taskId00);
         makeTaskFolders("0_0");
+        expect(stateDirectory.checkpointFileFor(taskId00)).andReturn(getCheckpointFile(taskId00));
         replay(stateDirectory);
         taskManager.handleRebalanceStart(singleton("topic"));
 
@@ -1676,11 +1678,14 @@ public class TaskManagerTest {
     }
 
     private void writeCheckpointFile(final TaskId task, final Map<TopicPartition, Long> offsets) throws IOException {
-        final File checkpointFile = new File(
-            new File(testFolder.getRoot(), task.toString()), StateManagerUtil.CHECKPOINT_FILE_NAME);
+        final File checkpointFile = getCheckpointFile(task);
         assertThat(checkpointFile.createNewFile(), is(true));
         new OffsetCheckpoint(checkpointFile).write(offsets);
         expect(stateDirectory.checkpointFileFor(task)).andReturn(checkpointFile);
+    }
+
+    private File getCheckpointFile(final TaskId task) {
+        return new File(new File(testFolder.getRoot(), task.toString()), StateManagerUtil.CHECKPOINT_FILE_NAME);
     }
 
     private static class StateMachineTask extends AbstractTask implements Task {
