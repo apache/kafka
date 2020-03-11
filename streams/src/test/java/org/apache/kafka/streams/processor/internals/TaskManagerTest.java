@@ -76,7 +76,6 @@ import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.easymock.EasyMock.anyObject;
 import static org.easymock.EasyMock.anyString;
-import static org.easymock.EasyMock.createNiceMock;
 import static org.easymock.EasyMock.eq;
 import static org.easymock.EasyMock.expect;
 import static org.easymock.EasyMock.expectLastCall;
@@ -110,15 +109,12 @@ public class TaskManagerTest {
     private final TaskId taskId02 = new TaskId(0, 2);
     private final TopicPartition t1p2 = new TopicPartition(topic1, 2);
     private final Set<TopicPartition> taskId02Partitions = mkSet(t1p2);
-    private final Map<TaskId, Set<TopicPartition>> taskId02Assignment = singletonMap(taskId02, taskId02Partitions);
 
     private final TaskId taskId10 = new TaskId(1, 0);
-    private final TaskId taskId11 = new TaskId(1, 1);
-    private final TaskId taskId12 = new TaskId(1, 2);
 
     @Mock(type = MockType.STRICT)
     private InternalTopologyBuilder topologyBuilder;
-    @Mock(type = MockType.NICE)
+    @Mock(type = MockType.DEFAULT)
     private StateDirectory stateDirectory;
     @Mock(type = MockType.NICE)
     private ChangelogReader changeLogReader;
@@ -171,10 +167,8 @@ public class TaskManagerTest {
     }
 
     @Test
-    public void tryLockForAllTaskDirectoriesShouldBeNoopIfStateDirIsEmpty() throws IOException {
+    public void shouldNotLockAnythingIfStateDirIsEmpty() {
         expect(stateDirectory.listTaskDirectories()).andReturn(new File[0]).once();
-        expect(stateDirectory.lock(anyObject()))
-            .andThrow(new RuntimeException("Should not try to lock anything")).anyTimes();
 
         replay(stateDirectory);
         taskManager.handleRebalanceStart(singleton("topic"));
@@ -189,8 +183,8 @@ public class TaskManagerTest {
         expectLockFailedFor(taskId10);
 
         makeTaskFolders(
-            "0_1",
-            "1_0",
+            taskId01.toString(),
+            taskId10.toString(),
             "dummy"
         );
         replay(stateDirectory);
@@ -203,11 +197,12 @@ public class TaskManagerTest {
     @Test
     public void shouldReleaseLockForUnassignedTasksAfterRebalance() throws IOException {
         expectLockObtainedFor(taskId00, taskId01, taskId02);
+        expectUnlockFor(taskId02);
 
         makeTaskFolders(
-                "0_0",  // active task
-                "0_1",  // standby task
-                "0_2"   // unassigned but able to lock
+            taskId00.toString(),  // active task
+            taskId01.toString(),  // standby task
+            taskId02.toString()   // unassigned but able to lock
         );
         replay(stateDirectory);
         taskManager.handleRebalanceStart(singleton("topic"));
@@ -221,14 +216,15 @@ public class TaskManagerTest {
 
         taskManager.handleRebalanceComplete();
         assertThat(taskManager.lockedTaskDirectories(), is(mkSet(taskId00, taskId01)));
+        verify(stateDirectory);
     }
 
     @Test
-    public void shouldReportLatestOffsetForRunningTask() throws IOException {
+    public void shouldReportLatestOffsetAsOffsetSumForRunningTask() throws IOException {
         final Map<TaskId, Long> expectedOffsetSums = mkMap(mkEntry(taskId00, Task.LATEST_OFFSET));
 
         expectLockObtainedFor(taskId00);
-        makeTaskFolders("0_0");
+        makeTaskFolders(taskId00.toString());
         replay(stateDirectory);
 
         taskManager.handleRebalanceStart(singleton("topic"));
@@ -246,7 +242,7 @@ public class TaskManagerTest {
         final Map<TaskId, Long> expectedOffsetSums = mkMap(mkEntry(taskId00, 15L));
 
         expectLockObtainedFor(taskId00);
-        makeTaskFolders("0_0");
+        makeTaskFolders(taskId00.toString());
         replay(stateDirectory);
 
         taskManager.handleRebalanceStart(singleton("topic"));
@@ -269,7 +265,7 @@ public class TaskManagerTest {
         final Map<TaskId, Long> expectedOffsetSums = mkMap(mkEntry(taskId00, 15L));
 
         expectLockObtainedFor(taskId00);
-        makeTaskFolders("0_0");
+        makeTaskFolders(taskId00.toString());
         replay(stateDirectory);
 
         taskManager.handleRebalanceStart(singleton("topic"));
@@ -284,7 +280,7 @@ public class TaskManagerTest {
     }
 
     @Test
-    public void shouldComputeOffsetSumForUnassignedLockableTask() throws IOException {
+    public void shouldComputeOffsetSumForUnassignedTaskWeCanLock() throws IOException {
         final Map<TopicPartition, Long> changelogOffsets = mkMap(
             mkEntry(new TopicPartition("changelog", 0), 5L),
             mkEntry(new TopicPartition("changelog", 1), 10L)
@@ -292,7 +288,7 @@ public class TaskManagerTest {
         final Map<TaskId, Long> expectedOffsetSums = mkMap(mkEntry(taskId00, 15L));
 
         expectLockObtainedFor(taskId00);
-        makeTaskFolders("0_0");
+        makeTaskFolders(taskId00.toString());
         writeCheckpointFile(taskId00, changelogOffsets);
 
         replay(stateDirectory);
@@ -302,24 +298,27 @@ public class TaskManagerTest {
     }
 
     @Test
-    public void shouldNotReportOffsetSumsForUnlockableTask() throws IOException {
+    public void shouldNotReportOffsetSumsForTaskWeCantLock() throws IOException {
         expectLockFailedFor(taskId00);
-        makeTaskFolders("0_0");
+        makeTaskFolders(taskId00.toString());
         replay(stateDirectory);
         taskManager.handleRebalanceStart(singleton("topic"));
+        assertTrue(taskManager.lockedTaskDirectories().isEmpty());
 
         assertTrue(taskManager.getTaskOffsetSums().isEmpty());
     }
 
     @Test
-    public void shouldNotReportOffsetSumsForUnassignedTaskWithoutCheckpoint() throws IOException {
+    public void shouldNotReportOffsetSumsAndReleaseLockForUnassignedTaskWithoutCheckpoint() throws IOException {
         expectLockObtainedFor(taskId00);
-        makeTaskFolders("0_0");
+        expectUnlockFor(taskId00);
+        makeTaskFolders(taskId00.toString());
         expect(stateDirectory.checkpointFileFor(taskId00)).andReturn(getCheckpointFile(taskId00));
         replay(stateDirectory);
         taskManager.handleRebalanceStart(singleton("topic"));
 
         assertTrue(taskManager.getTaskOffsetSums().isEmpty());
+        verify(stateDirectory);
     }
 
     @Test
@@ -330,7 +329,7 @@ public class TaskManagerTest {
         final Map<TaskId, Long> expectedOffsetSums = mkMap(mkEntry(taskId00, 0L));
 
         expectLockObtainedFor(taskId00);
-        makeTaskFolders("0_0");
+        makeTaskFolders(taskId00.toString());
         writeCheckpointFile(taskId00, changelogOffsets);
         replay(stateDirectory);
         taskManager.handleRebalanceStart(singleton("topic"));
@@ -339,7 +338,24 @@ public class TaskManagerTest {
     }
 
     @Test
-    public void shouldOffsetSumOverflowToLongMaxValue() throws IOException {
+    public void shouldSkipOtherNegativeOffsetsWhenComputingOffsetSum() throws IOException {
+        final Map<TopicPartition, Long> changelogOffsets = mkMap(
+            mkEntry(new TopicPartition("changelog", 1), 10L),
+            mkEntry(new TopicPartition("changelog", 2), -10L)
+        );
+        final Map<TaskId, Long> expectedOffsetSums = mkMap(mkEntry(taskId00, 10L));
+
+        expectLockObtainedFor(taskId00);
+        makeTaskFolders(taskId00.toString());
+        writeCheckpointFile(taskId00, changelogOffsets);
+        replay(stateDirectory);
+        taskManager.handleRebalanceStart(singleton("topic"));
+
+        assertThat(taskManager.getTaskOffsetSums(), is(expectedOffsetSums));
+    }
+
+    @Test
+    public void shouldPinOffsetSumToLongMaxValueInCaseOfOverflow() throws IOException {
         final long largeOffset = Long.MAX_VALUE / 2;
         final Map<TopicPartition, Long> changelogOffsets = mkMap(
             mkEntry(new TopicPartition("changelog", 1), largeOffset),
@@ -349,7 +365,7 @@ public class TaskManagerTest {
         final Map<TaskId, Long> expectedOffsetSums = mkMap(mkEntry(taskId00, Long.MAX_VALUE));
 
         expectLockObtainedFor(taskId00);
-        makeTaskFolders("0_0");
+        makeTaskFolders(taskId00.toString());
         writeCheckpointFile(taskId00, changelogOffsets);
         replay(stateDirectory);
         taskManager.handleRebalanceStart(singleton("topic"));
@@ -1017,7 +1033,8 @@ public class TaskManagerTest {
         expect(consumer.assignment()).andReturn(assignment);
         consumer.pause(assignment);
         expectLastCall();
-        replay(consumer);
+        expect(stateDirectory.listTaskDirectories()).andReturn(new File[0]);
+        replay(consumer, stateDirectory);
         assertThat(taskManager.isRebalanceInProgress(), is(false));
         taskManager.handleRebalanceStart(emptySet());
         assertThat(taskManager.isRebalanceInProgress(), is(true));
@@ -1051,17 +1068,19 @@ public class TaskManagerTest {
     }
 
     @Test
-    public void shouldNotCommitActiveAndStandbyTasksWhileRebalanceInProgress() {
+    public void shouldNotCommitActiveAndStandbyTasksWhileRebalanceInProgress() throws IOException {
         final StateMachineTask task00 = new StateMachineTask(taskId00, taskId00Partitions, true);
         final StateMachineTask task01 = new StateMachineTask(taskId01, taskId01Partitions, false);
 
+        makeTaskFolders(taskId00.toString(), task01.toString());
+        expectLockObtainedFor(taskId00, taskId01);
         expectRestoreToBeCompleted(consumer, changeLogReader);
         expect(activeTaskCreator.createTasks(anyObject(), eq(taskId00Assignment)))
             .andReturn(singletonList(task00)).anyTimes();
         expect(standbyTaskCreator.createTasks(eq(taskId01Assignment)))
             .andReturn(singletonList(task01)).anyTimes();
 
-        replay(activeTaskCreator, standbyTaskCreator, consumer, changeLogReader);
+        replay(activeTaskCreator, standbyTaskCreator, stateDirectory, consumer, changeLogReader);
 
         taskManager.handleAssignment(taskId00Assignment, taskId01Assignment);
         assertThat(taskManager.tryToCompleteRestoration(), is(true));
@@ -1647,11 +1666,17 @@ public class TaskManagerTest {
         }
     }
 
+    private void expectUnlockFor(final TaskId... tasks) throws IOException {
+        for (final TaskId task : tasks) {
+            stateDirectory.unlock(task);
+            expectLastCall();
+        }
+    }
+
     private static void expectConsumerAssignmentPaused(final Consumer<byte[], byte[]> consumer) {
         final Set<TopicPartition> assignment = singleton(new TopicPartition("assignment", 0));
         expect(consumer.assignment()).andReturn(assignment);
         consumer.pause(assignment);
-        expectLastCall();
     }
 
     private static void expectRestoreToBeCompleted(final Consumer<byte[], byte[]> consumer,

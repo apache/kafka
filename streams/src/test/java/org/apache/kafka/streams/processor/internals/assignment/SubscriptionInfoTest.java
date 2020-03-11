@@ -30,6 +30,7 @@ import java.util.UUID;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.streams.processor.internals.assignment.StreamsAssignmentProtocolVersions.LATEST_SUPPORTED_VERSION;
+import static org.apache.kafka.streams.processor.internals.assignment.SubscriptionInfo.MIN_VERSION_OFFSET_SUM_SUBSCRIPTION;
 import static org.apache.kafka.streams.processor.internals.assignment.SubscriptionInfo.UNKNOWN_OFFSET_SUM;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -300,6 +301,17 @@ public class SubscriptionInfoTest {
             new SubscriptionInfo(7, LATEST_SUPPORTED_VERSION, processId, "localhost:80", TASK_OFFSET_SUMS);
         assertThat(info.prevTasks(), is(ACTIVE_TASKS));
         assertThat(info.standbyTasks(), is(STANDBY_TASKS));
+    }
+
+    @Test
+    public void shouldReturnTaskOffsetSumsMapForDecodedSubscription() {
+        final SubscriptionInfo info = SubscriptionInfo.decode(
+            new SubscriptionInfo(MIN_VERSION_OFFSET_SUM_SUBSCRIPTION,
+                                 LATEST_SUPPORTED_VERSION, processId,
+                                 "localhost:80",
+                                 TASK_OFFSET_SUMS)
+                .encode());
+        assertThat(info.taskOffsetSums(), is(TASK_OFFSET_SUMS));
     }
 
     @Test

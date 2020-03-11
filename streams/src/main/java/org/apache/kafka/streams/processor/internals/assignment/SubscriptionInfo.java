@@ -198,15 +198,15 @@ public class SubscriptionInfo {
         return standbyTasksCache;
     }
 
-    public Map<TaskId, Long> taskOffsetSums() {
+    Map<TaskId, Long> taskOffsetSums() {
         if (taskOffsetSumsCache == null) {
             taskOffsetSumsCache = new HashMap<>();
             if (data.version() >= MIN_VERSION_OFFSET_SUM_SUBSCRIPTION) {
-                for (final TaskOffsetSum topicGroup : data.taskOffsetSums()) {
-                    for (final PartitionToOffsetSum partitionOffsetSum : topicGroup.partitionToOffsetSum()) {
+                for (final TaskOffsetSum taskOffsetSum : data.taskOffsetSums()) {
+                    for (final PartitionToOffsetSum partitionOffsetSum : taskOffsetSum.partitionToOffsetSum()) {
                         taskOffsetSumsCache.put(
-                            new TaskId(topicGroup.topicGroupId(),
-                                partitionOffsetSum.partition()),
+                            new TaskId(taskOffsetSum.topicGroupId(),
+                                       partitionOffsetSum.partition()),
                             partitionOffsetSum.offsetSum()
                         );
                     }

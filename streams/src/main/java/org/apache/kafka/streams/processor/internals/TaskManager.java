@@ -127,7 +127,7 @@ public class TaskManager {
     void handleRebalanceStart(final Set<String> subscribedTopics) {
         builder.addSubscribedTopicsFromMetadata(subscribedTopics, logPrefix);
 
-        tryLockForAllTaskDirectories();
+        tryToLockAllTaskDirectories();
 
         rebalanceInProgress = true;
     }
@@ -379,7 +379,7 @@ public class TaskManager {
 
     /**
      * Compute the offset total summed across all stores in a task. Includes offset sum for any tasks we own the
-     * lock for, which includes assigned and unassigned tasks we locked in {@link #tryLockForAllTaskDirectories()}
+     * lock for, which includes assigned and unassigned tasks we locked in {@link #tryToLockAllTaskDirectories()}
      *
      * @return Map from task id to its total offset summed across all state stores
      */
@@ -420,26 +420,23 @@ public class TaskManager {
      * that we locked but didn't own will be released at the end of the rebalance (unless of course we were
      * assigned the task as a result of the rebalance). This method should be idempotent.
      */
-    private void tryLockForAllTaskDirectories() {
-        final File[] stateDirs = stateDirectory.listTaskDirectories();
-        if (stateDirs != null) {
-            for (final File dir : stateDirs) {
+    private void tryToLockAllTaskDirectories() {
+        for (final File dir : stateDirectory.listTaskDirectories()) {
+            try {
+                final TaskId id = TaskId.parse(dir.getName());
                 try {
-                    final TaskId id = TaskId.parse(dir.getName());
-                    try {
-                        if (stateDirectory.lock(id)) {
-                            lockedTaskDirectories.add(id);
-                            if (!tasks.containsKey(id)) {
-                                log.debug("Temporarily locked unassigned task {} for the upcoming rebalance", id);
-                            }
+                    if (stateDirectory.lock(id)) {
+                        lockedTaskDirectories.add(id);
+                        if (!tasks.containsKey(id)) {
+                            log.debug("Temporarily locked unassigned task {} for the upcoming rebalance", id);
                         }
-                    } catch (final IOException e) {
-                        // if for any reason we can't lock this task dir, just move on
-                        log.warn(String.format("Exception caught while attempting to lock task %s:", id), e);
                     }
-                } catch (final TaskIdFormatException e) {
-                    // ignore any unknown files that sit in the same directory
+                } catch (final IOException e) {
+                    // if for any reason we can't lock this task dir, just move on
+                    log.warn(String.format("Exception caught while attempting to lock task %s:", id), e);
                 }
+            } catch (final TaskIdFormatException e) {
+                // ignore any unknown files that sit in the same directory
             }
         }
     }
@@ -452,7 +449,7 @@ public class TaskManager {
         try {
             stateDirectory.unlock(taskId);
         } catch (final IOException e) {
-            log.error("Failed to release the lock for task directory {}.", taskId);
+            log.warn(String.format("Caught the following exception while trying to unlock task %s", taskId), e);
             return new StreamsException(String.format("Unable to unlock task directory %s", taskId), e);
         }
         return null;
@@ -460,7 +457,7 @@ public class TaskManager {
 
     /**
      * We must release the lock for any unassigned tasks that we temporarily locked in preparation for a
-     * rebalance in {@link #tryLockForAllTaskDirectories()}.
+     * rebalance in {@link #tryToLockAllTaskDirectories()}.
      */
     private void releaseLockedUnassignedTaskDirectories() {
         final AtomicReference<RuntimeException> firstException = new AtomicReference<>(null);
@@ -474,6 +471,7 @@ public class TaskManager {
                 if (unlockException == null) {
                     taskIdIterator.remove();
                 } else {
+                    log.error("Failed to release the lock for task directory {}.", id);
                     firstException.compareAndSet(null, unlockException);
                 }
             }
@@ -498,13 +496,13 @@ public class TaskManager {
                     log.warn("Unexpected negative offset {} for changelog {}", offset, changelog);
                 }
                 continue;
+            } else if (offsetSum + offset < 0) {
+                return Long.MAX_VALUE;
             }
 
             offsetSum += offset;
-            if (offsetSum < 0) {
-                return Long.MAX_VALUE;
-            }
         }
+
         return offsetSum;
     }
 
