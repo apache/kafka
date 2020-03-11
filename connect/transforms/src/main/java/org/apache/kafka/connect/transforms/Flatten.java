@@ -69,11 +69,17 @@ public abstract class Flatten<R extends ConnectRecord<R>> implements Transformat
 
     @Override
     public R apply(R record) {
-        if (operatingSchema(record) == null) {
+        if (isTombstoneRecord(record)) {
+            return record;
+        } else if (operatingSchema(record) == null) {
             return applySchemaless(record);
         } else {
             return applyWithSchema(record);
         }
+    }
+
+    private boolean isTombstoneRecord(R record) {
+        return operatingValue(record) == null;
     }
 
     @Override
