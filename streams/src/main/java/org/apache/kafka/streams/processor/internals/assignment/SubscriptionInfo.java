@@ -114,7 +114,7 @@ public class SubscriptionInfo {
         final Map<Integer, List<SubscriptionInfoData.PartitionToOffsetSum>> topicGroupIdToPartitionOffsetSum = new HashMap<>();
         for (final Map.Entry<TaskId, Long> taskEntry : taskOffsetSums.entrySet()) {
             final TaskId task = taskEntry.getKey();
-            topicGroupIdToPartitionOffsetSum.putIfAbsent(task.topicGroupId, new ArrayList<>()).add(
+            topicGroupIdToPartitionOffsetSum.computeIfAbsent(task.topicGroupId, t -> new ArrayList<>()).add(
                 new SubscriptionInfoData.PartitionToOffsetSum()
                     .setPartition(task.partition)
                     .setOffsetSum(taskEntry.getValue()));
