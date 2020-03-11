@@ -265,6 +265,13 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
         // Before startup, callbacks are *not* invoked. You can grab a snapshot after starting -- just take care that
         // updates can continue to occur in the background
         configLog.start();
+
+        int partitionCount = configLog.getPartitionCount();
+        if (partitionCount > 1) {
+            throw new ConfigException("KafkaConfigBackingStore must have exactly 1 partition but found " + partitionCount + ", check topic set by " +
+                DistributedConfig.CONFIG_TOPIC_CONFIG);
+        }
+
         started = true;
         log.info("Started KafkaConfigBackingStore");
     }
