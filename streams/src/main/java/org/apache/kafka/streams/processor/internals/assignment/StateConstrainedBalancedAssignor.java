@@ -4,27 +4,28 @@ import org.apache.kafka.streams.processor.TaskId;
 
 import java.util.List;
 import java.util.Map;
+import java.util.SortedSet;
 
-public interface StateConstrainedBalancedAssignor {
+public interface StateConstrainedBalancedAssignor<ID> {
 
-    class ClientIdAndLag {
-        private final String clientId;
-        private final int lag;
+    class ClientIdAndLag<ID> {
+        private final ID clientId;
+        private final long lag;
 
-        public ClientIdAndLag(final String clientId, final int lag) {
+        public ClientIdAndLag(final ID clientId, final long lag) {
             this.clientId = clientId;
             this.lag = lag;
         }
 
-        public String clientId() {
+        public ID clientId() {
             return clientId;
         }
 
-        public int lag() {
+        public long lag() {
             return lag;
         }
     }
 
-    Map<String, List<TaskId>> assign(final Map<TaskId, List<ClientIdAndLag>> statefulTasksToRankedClients,
-                                     final int balanceFactor);
+    Map<ID, List<TaskId>> assign(final Map<TaskId, SortedSet<ClientIdAndLag<ID>>> statefulTasksToRankedClients,
+                                 final int balanceFactor);
 }
