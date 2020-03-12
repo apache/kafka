@@ -392,7 +392,7 @@ public class TaskManager {
                 if (task.isActive() && task.state() == RUNNING) {
                     taskOffsetSums.put(id, Task.LATEST_OFFSET);
                 } else {
-                    taskOffsetSums.put(id, sumOfChangelogOffsets(task.changelogOffsets()));
+                    taskOffsetSums.put(id, sumOfChangelogOffsets(id, task.changelogOffsets()));
                 }
             } else {
                 final File checkpointFile = stateDirectory.checkpointFileFor(id);
@@ -400,7 +400,7 @@ public class TaskManager {
                     // If we can't read the checkpoint file or it doesn't exist, release the task directory
                     // so the background cleaner thread can do its thing
                     if (checkpointFile.exists()) {
-                        taskOffsetSums.put(id, sumOfChangelogOffsets(new OffsetCheckpoint(checkpointFile).read()));
+                        taskOffsetSums.put(id, sumOfChangelogOffsets(id, new OffsetCheckpoint(checkpointFile).read()));
                     } else {
                         releaseTaskDirLock(id);
                     }
@@ -483,7 +483,7 @@ public class TaskManager {
         }
     }
 
-    private long sumOfChangelogOffsets(final Map<TopicPartition, Long> changelogOffsets) {
+    private long sumOfChangelogOffsets(final TaskId id, final Map<TopicPartition, Long> changelogOffsets) {
         long offsetSum = 0L;
         for (final Map.Entry<TopicPartition, Long> changelogEntry : changelogOffsets.entrySet()) {
             final TopicPartition changelog = changelogEntry.getKey();
@@ -496,11 +496,14 @@ public class TaskManager {
                     log.warn("Unexpected negative offset {} for changelog {}", offset, changelog);
                 }
                 continue;
-            } else if (offsetSum + offset < 0) {
-                return Long.MAX_VALUE;
             }
 
             offsetSum += offset;
+
+            if (offsetSum < 0) {
+                log.warn("Sum of changelog offsets for task {} overflowed, pinning to Long.MAX_VALUE", id);
+                return Long.MAX_VALUE;
+            }
         }
 
         return offsetSum;
