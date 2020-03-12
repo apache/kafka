@@ -17,14 +17,21 @@
 
 package org.apache.kafka.connect.runtime.isolation;
 
-import java.util.Collections;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.TemporaryFolder;
 
-import static org.junit.Assert.assertNotNull;
+import java.util.Collections;
+
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
 public class DelegatingClassLoaderTest {
+
+    @Rule
+    public TemporaryFolder pluginPath = new TemporaryFolder();
+
 
     @Test
     public void testWhiteListedManifestResources() {
@@ -60,5 +67,24 @@ public class DelegatingClassLoaderTest {
             assertNotNull(classLoader.loadClass(pluginClassName));
             assertNotNull(classLoader.pluginClassLoader(pluginClassName));
         }
+    }
+
+    @Test
+    public void testLoadingInvalidUberJar() throws Exception {
+        pluginPath.newFile("test.jar");
+
+        DelegatingClassLoader classLoader = new DelegatingClassLoader(
+            Collections.singletonList(pluginPath.getRoot().getAbsolutePath()));
+        classLoader.initLoaders();
+    }
+
+    @Test
+    public void testLoadingPluginDirContainsInvalidJarsOnly() throws Exception {
+        pluginPath.newFolder("my-plugin");
+        pluginPath.newFile("my-plugin/test.jar");
+
+        DelegatingClassLoader classLoader = new DelegatingClassLoader(
+            Collections.singletonList(pluginPath.getRoot().getAbsolutePath()));
+        classLoader.initLoaders();
     }
 }
