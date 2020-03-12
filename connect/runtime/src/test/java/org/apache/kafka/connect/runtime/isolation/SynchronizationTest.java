@@ -282,6 +282,60 @@ public class SynchronizationTest {
         assertNoDeadlocks();
     }
 
+    // This is an informative test that is supposed to fail, demonstrating that forName is
+    // locking the connectorLoader in this JVM implementation, when initialize is true.
+    @Test(expected = AssertionError.class)
+    public void forNameLocksClassloader()
+        throws InterruptedException, TimeoutException, BrokenBarrierException {
+        // It is not important here that we're using the PluginClassLoader.
+        // This behavior is specific to the JVM, not the classloader implementation
+        // It is just a convenient classloader instance that we can throw away after the test
+        ClassLoader connectorLoader = plugins.delegatingLoader()
+            .connectorLoader(TestPlugins.SAMPLING_CONVERTER);
+
+        Object monitor = new Object();
+        Breakpoint<Object> monitorBreakpoint = new Breakpoint<>();
+        Breakpoint<Object> progress = new Breakpoint<>();
+
+        Runnable executeForName = () -> {
+            synchronized (monitor) {
+                try {
+                    progress.await(null);
+                    Class.forName(TestPlugins.SAMPLING_CONVERTER, true, connectorLoader);
+                } catch (ClassNotFoundException e) {
+                    throw new RuntimeException("Failed to load test plugin", e);
+                }
+            }
+        };
+        progress.set(null);
+
+        Runnable holdsMonitorLock = () -> {
+            synchronized (connectorLoader) {
+                monitorBreakpoint.await(null);
+                monitorBreakpoint.await(null);
+                synchronized (monitor) {
+                }
+            }
+        };
+        monitorBreakpoint.set(null);
+
+        exec.submit(holdsMonitorLock);
+        // LOCK the classloader
+        // wait for test to progress
+        dumpThreads("locked the classloader");
+        monitorBreakpoint.testAwait();
+
+        exec.submit(executeForName);
+        progress.testAwait();
+        // LOCK the monitor
+        // LOCK the classloader (starting the deadlock)
+        dumpThreads("half-deadlocked");
+        monitorBreakpoint.testAwait();
+        // LOCK the monitor (completing the deadlock)
+
+        assertNoDeadlocks();
+    }
+
     private boolean threadFromCurrentTest(ThreadInfo threadInfo) {
         return threadInfo.getThreadName().startsWith(threadPrefix);
     }
