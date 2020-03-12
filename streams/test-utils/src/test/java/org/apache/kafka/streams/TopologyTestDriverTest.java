@@ -28,7 +28,6 @@ import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
-import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.kstream.Consumed;
@@ -45,7 +44,6 @@ import org.apache.kafka.streams.processor.To;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
-import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.internals.KeyValueStoreBuilder;
 import org.apache.kafka.streams.test.TestRecord;
@@ -1538,7 +1536,7 @@ public class TopologyTestDriverTest {
         topology.addSource("source", new StringDeserializer(), new StringDeserializer(), "input");
         topology.addProcessor(
             "recursiveProcessor",
-            (ProcessorSupplier<String, String>) () -> new AbstractProcessor<String, String>() {
+            () -> new AbstractProcessor<String, String>() {
                 @Override
                 public void process(final String key, final String value) {
                     if (!value.startsWith("recurse-")) {
@@ -1609,7 +1607,7 @@ public class TopologyTestDriverTest {
         );
         topology.addProcessor(
             "recursiveProcessor",
-            (ProcessorSupplier<String, String>) () -> new AbstractProcessor<String, String>() {
+            () -> new AbstractProcessor<String, String>() {
                 @Override
                 public void process(final String key, final String value) {
                     if (!value.startsWith("recurse-")) {

@@ -36,7 +36,6 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.internals.metrics.ClientMetrics;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.processor.AbstractProcessor;
-import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.internals.GlobalStreamThread;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
@@ -850,7 +849,7 @@ public class KafkaStreamsTest {
         final String outputTopic = testName.getMethodName() + "-output";
         final Topology topology = new Topology();
         topology.addSource("source", Serdes.String().deserializer(), Serdes.String().deserializer(), inputTopic)
-                .addProcessor("process", (ProcessorSupplier<String, String>) () -> new AbstractProcessor<String, String>() {
+                .addProcessor("process", () -> new AbstractProcessor<String, String>() {
                     @Override
                     public void process(final String key, final String value) {
                         if (value.length() % 2 == 0) {
@@ -899,7 +898,7 @@ public class KafkaStreamsTest {
             Serdes.Long());
         final Topology topology = new Topology();
         topology.addSource("source", Serdes.String().deserializer(), Serdes.String().deserializer(), inputTopic)
-            .addProcessor("process", (ProcessorSupplier<String, String>) () -> new AbstractProcessor<String, String>() {
+            .addProcessor("process", () -> new AbstractProcessor<String, String>() {
                 @Override
                 public void process(final String key, final String value) {
                     final KeyValueStore<String, Long> kvStore =

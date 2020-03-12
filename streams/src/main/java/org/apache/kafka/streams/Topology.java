@@ -32,7 +32,6 @@ import org.apache.kafka.streams.processor.internals.ProcessorNode;
 import org.apache.kafka.streams.processor.internals.ProcessorTopology;
 import org.apache.kafka.streams.processor.internals.SinkNode;
 import org.apache.kafka.streams.processor.internals.SourceNode;
-import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 
 import java.util.regex.Pattern;
@@ -652,8 +651,9 @@ public class Topology {
      * @return itself
      * @throws TopologyException if parent processor is not added yet, or if this processor's name is equal to the parent's name
      */
+    @SuppressWarnings("rawtypes")
     public synchronized Topology addProcessor(final String name,
-                                              final ProcessorSupplier<?, ?> supplier,
+                                              final ProcessorSupplier supplier,
                                               final String... parentNames) {
         internalTopologyBuilder.addProcessor(name, supplier, parentNames);
         return this;
