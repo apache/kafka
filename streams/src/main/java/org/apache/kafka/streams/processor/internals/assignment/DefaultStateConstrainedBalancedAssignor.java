@@ -126,7 +126,7 @@ public class DefaultStateConstrainedBalancedAssignor implements StateConstrained
                 unassignedTasksWithoutCaughtUpClients.add(taskId);
             }
         }
-        // If a task has not been assigned to a caught-up client, assign it to the caught-up client with the least tasks
+        // If a task's previous host client was not caught-up or no longer exists, assign it to the caught-up client with the least tasks
         for (final TaskId taskId : unassignedTasksWithCaughtUpClients) {
             final List<String> caughtUpClients = tasksToCaughtUpClients.get(taskId);
             String clientWithLeastTasks = null;
