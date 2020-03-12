@@ -53,7 +53,7 @@ public class GlobalProcessorContextImplTest {
 
     private GlobalProcessorContextImpl globalContext;
 
-    private ProcessorNode child;
+    private ProcessorNode<?, ?> child;
     private ProcessorRecordContext recordContext;
 
     @Before
@@ -80,7 +80,7 @@ public class GlobalProcessorContextImplTest {
             null,
             null);
 
-        final ProcessorNode processorNode = mock(ProcessorNode.class);
+        final ProcessorNode<?, ?> processorNode = mock(ProcessorNode.class);
         globalContext.setCurrentNode(processorNode);
 
         child = mock(ProcessorNode.class);
@@ -104,7 +104,6 @@ public class GlobalProcessorContextImplTest {
         assertNull(globalContext.getStateStore(UNKNOWN_STORE));
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     public void shouldForwardToSingleChild() {
         child.process(null, null);

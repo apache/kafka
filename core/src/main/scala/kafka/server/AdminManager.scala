@@ -93,6 +93,10 @@ class AdminManager(val config: KafkaConfig,
         if (metadataCache.contains(topic.name))
           throw new TopicExistsException(s"Topic '${topic.name}' already exists.")
 
+        val nullConfigs = topic.configs.asScala.filter(_.value == null).map(_.name)
+        if (nullConfigs.nonEmpty)
+          throw new InvalidRequestException(s"Null value not supported for topic configs : ${nullConfigs.mkString(",")}")
+
         val configs = new Properties()
         topic.configs.asScala.foreach { entry =>
           configs.setProperty(entry.name, entry.value)
@@ -142,7 +146,7 @@ class AdminManager(val config: KafkaConfig,
               }.asJava
             }
             val javaConfigs = new java.util.HashMap[String, String]
-            topic.configs().asScala.foreach(config => javaConfigs.put(config.name(), config.value()))
+            topic.configs.asScala.foreach(config => javaConfigs.put(config.name(), config.value()))
             policy.validate(new RequestMetadata(topic.name, numPartitions, replicationFactor,
               javaAssignments, javaConfigs))
 
@@ -412,10 +416,14 @@ class AdminManager(val config: KafkaConfig,
     configs.map { case (resource, config) =>
 
       try {
+        val nullUpdates = config.entries.asScala.filter(_.value == null).map(_.name)
+        if (nullUpdates.nonEmpty)
+          throw new InvalidRequestException(s"Null value not supported for : ${nullUpdates.mkString(",")}")
+
         val configEntriesMap = config.entries.asScala.map(entry => (entry.name, entry.value)).toMap
 
         val configProps = new Properties
-        config.entries.asScala.foreach { configEntry =>
+        config.entries.asScala.filter(_.value != null).foreach { configEntry =>
           configProps.setProperty(configEntry.name, configEntry.value)
         }
 
@@ -512,6 +520,11 @@ class AdminManager(val config: KafkaConfig,
           .mapValues(_.size).filter(_._2 > 1).keys.toSet
         if (duplicateKeys.nonEmpty)
           throw new InvalidRequestException(s"Error due to duplicate config keys : ${duplicateKeys.mkString(",")}")
+        val nullUpdates = alterConfigOps
+          .filter(entry => entry.configEntry.value == null && entry.opType() != OpType.DELETE)
+          .map(entry => s"${entry.opType}:${entry.configEntry.name}")
+        if (nullUpdates.nonEmpty)
+          throw new InvalidRequestException(s"Null value not supported for : ${nullUpdates.mkString(",")}")
 
         val configEntriesMap = alterConfigOps.map(entry => (entry.configEntry().name(), entry.configEntry().value())).toMap
 

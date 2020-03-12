@@ -47,12 +47,12 @@ public interface InternalProcessorContext extends ProcessorContext {
     /**
      * @param currentNode the current {@link ProcessorNode}
      */
-    void setCurrentNode(ProcessorNode currentNode);
+    void setCurrentNode(ProcessorNode<?, ?> currentNode);
 
     /**
      * Get the current {@link ProcessorNode}
      */
-    ProcessorNode currentNode();
+    ProcessorNode<?, ?> currentNode();
 
     /**
      * Get the thread-global cache
@@ -71,9 +71,6 @@ public interface InternalProcessorContext extends ProcessorContext {
 
     /**
      * Get a correctly typed state store, given a handle on the original builder.
-     * @param builder
-     * @param <T>
-     * @return
      */
     @SuppressWarnings("unchecked")
     default <T extends StateStore> T getStateStore(final StoreBuilder<T> builder) {

@@ -1865,6 +1865,44 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     client.close()
   }
 
+  // Verify that createTopics and alterConfigs fail with null values
+  @Test
+  def testNullConfigs(): Unit = {
+
+    def validateLogConfig(compressionType: String): Unit = {
+      val logConfig = zkClient.getLogConfigs(Set(topic), Collections.emptyMap[String, AnyRef])._1(topic)
+
+      assertEquals(compressionType, logConfig.originals.get(LogConfig.CompressionTypeProp))
+      assertNull(logConfig.originals.get(LogConfig.MessageFormatVersionProp))
+      assertEquals(ApiVersion.latestVersion, logConfig.messageFormatVersion)
+    }
+
+    client = Admin.create(createConfig())
+    val invalidConfigs = Map[String, String](LogConfig.MessageFormatVersionProp -> null,
+      LogConfig.CompressionTypeProp -> "producer").asJava
+    val newTopic = new NewTopic(topic, 2, brokerCount.toShort)
+    val e1 = intercept[ExecutionException] {
+      client.createTopics(Collections.singletonList(newTopic.configs(invalidConfigs))).all.get()
+    }
+    assertTrue(s"Unexpected exception ${e1.getCause.getClass}", e1.getCause.isInstanceOf[InvalidRequestException])
+
+    val validConfigs = Map[String, String](LogConfig.CompressionTypeProp -> "producer").asJava
+    client.createTopics(Collections.singletonList(newTopic.configs(validConfigs))).all.get()
+    waitForTopics(client, expectedPresent = Seq(topic), expectedMissing = List())
+    validateLogConfig(compressionType = "producer")
+
+    val topicResource = new ConfigResource(ConfigResource.Type.TOPIC, topic)
+    val alterOps = Seq(
+      new AlterConfigOp(new ConfigEntry(LogConfig.MessageFormatVersionProp, null), AlterConfigOp.OpType.SET),
+      new AlterConfigOp(new ConfigEntry(LogConfig.CompressionTypeProp, "lz4"), AlterConfigOp.OpType.SET)
+    )
+    val e2 = intercept[ExecutionException] {
+      client.incrementalAlterConfigs(Map(topicResource -> alterOps.asJavaCollection).asJava).all.get
+    }
+    assertTrue(s"Unexpected exception ${e2.getCause.getClass}", e2.getCause.isInstanceOf[InvalidRequestException])
+    validateLogConfig(compressionType = "producer")
+  }
+
   @Test
   def testDescribeConfigsForLog4jLogLevels(): Unit = {
     client = Admin.create(createConfig())
