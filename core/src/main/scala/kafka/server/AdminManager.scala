@@ -605,22 +605,20 @@ class AdminManager(val config: KafkaConfig,
         case OpType.APPEND => {
           if (!listType(alterConfigOp.configEntry().name(), configKeys))
             throw new InvalidRequestException(s"Config value append is not allowed for config key: ${alterConfigOp.configEntry().name()}")
-          val defaultValueList = ConfigDef.convertToString(configKeys(configPropName).defaultValue, ConfigDef.Type.LIST) match {
-            case null => ""
-            case d => d
-          }
-          val oldValueList = configProps.getProperty(configPropName, defaultValueList).split(",").toList
+          val oldValueList = Option(configProps.getProperty(alterConfigOp.configEntry().name()))
+            .orElse(Option(ConfigDef.convertToString(configKeys(configPropName).defaultValue, ConfigDef.Type.LIST)))
+            .getOrElse("")
+            .split(",").toList
           val newValueList = oldValueList ::: alterConfigOp.configEntry().value().split(",").toList
           configProps.setProperty(alterConfigOp.configEntry().name(), newValueList.mkString(","))
         }
         case OpType.SUBTRACT => {
           if (!listType(alterConfigOp.configEntry().name(), configKeys))
             throw new InvalidRequestException(s"Config value subtract is not allowed for config key: ${alterConfigOp.configEntry().name()}")
-          val defaultValueList = ConfigDef.convertToString(configKeys(configPropName).defaultValue, ConfigDef.Type.LIST) match {
-            case null => ""
-            case d => d
-          }
-          val oldValueList = configProps.getProperty(alterConfigOp.configEntry().name(), defaultValueList).split(",").toList
+          val oldValueList = Option(configProps.getProperty(alterConfigOp.configEntry().name()))
+            .orElse(Option(ConfigDef.convertToString(configKeys(configPropName).defaultValue, ConfigDef.Type.LIST)))
+            .getOrElse("")
+            .split(",").toList
           val newValueList = oldValueList.diff(alterConfigOp.configEntry().value().split(",").toList)
           configProps.setProperty(alterConfigOp.configEntry().name(), newValueList.mkString(","))
         }
