@@ -76,7 +76,7 @@ public class AclAuthorizerBenchmark {
     @Param({"5", "10", "15"})
     private int aclCount;
 
-    private int hostCount = 1000;
+    private int hostPreCount = 1000;
 
     private AclAuthorizer aclAuthorizer = new AclAuthorizer();
     private KafkaPrincipal principal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "test-user");
@@ -124,10 +124,15 @@ public class AclAuthorizerBenchmark {
         Set<AclEntry> entriesWildcard = aclEntries.computeIfAbsent(resourceWildcard, k -> new HashSet<>());
         Set<AclEntry> entriesPrefix = aclEntries.computeIfAbsent(resourcePrefix, k -> new HashSet<>());
 
-        for (int hostId = 0; hostId < hostCount; hostId++) {
+        for (int hostId = 0; hostId < hostPreCount; hostId++) {
+            AccessControlEntry ace = new AccessControlEntry(principal.toString(), "127.0.0." + hostId, AclOperation.READ, AclPermissionType.ALLOW);
+            entriesPrefix.add(new AclEntry(ace));
+        }
+
+        // get dynamic entries number for wildcard acl
+        for (int hostId = 0; hostId < resourceCount / 10; hostId++) {
             AccessControlEntry ace = new AccessControlEntry(principal.toString(), "127.0.0." + hostId, AclOperation.READ, AclPermissionType.ALLOW);
             entriesWildcard.add(new AclEntry(ace));
-            entriesPrefix.add(new AclEntry(ace));
         }
 
         TreeMap<ResourcePattern, VersionedAcls> aclCache = new TreeMap<>(new AclAuthorizer.ResourceOrdering());
