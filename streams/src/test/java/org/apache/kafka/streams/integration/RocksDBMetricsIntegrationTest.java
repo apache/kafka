@@ -131,7 +131,7 @@ public class RocksDBMetricsIntegrationTest {
         final StreamsBuilder builder = builderForNonSegmentedStateStore();
         final String metricsScope = "rocksdb-state-id";
 
-        cleanUpStateRunAndVerify(
+        cleanUpStateRunVerifyAndClose(
             builder,
             streamsConfiguration,
             IntegerDeserializer.class,
@@ -140,7 +140,9 @@ public class RocksDBMetricsIntegrationTest {
             metricsScope
         );
 
-        cleanUpStateRunAndVerify(
+        // simulated failure
+
+        cleanUpStateRunVerifyAndClose(
             builder,
             streamsConfiguration,
             IntegerDeserializer.class,
@@ -157,7 +159,7 @@ public class RocksDBMetricsIntegrationTest {
         final StreamsBuilder builder = builderForSegmentedStateStore();
         final String metricsScope = "rocksdb-window-state-id";
 
-        cleanUpStateRunAndVerify(
+        cleanUpStateRunVerifyAndClose(
             builder,
             streamsConfiguration,
             LongDeserializer.class,
@@ -166,7 +168,9 @@ public class RocksDBMetricsIntegrationTest {
             metricsScope
         );
 
-        cleanUpStateRunAndVerify(
+        // simulated failure
+
+        cleanUpStateRunVerifyAndClose(
             builder,
             streamsConfiguration,
             LongDeserializer.class,
@@ -183,7 +187,7 @@ public class RocksDBMetricsIntegrationTest {
         final StreamsBuilder builder = builderForNonSegmentedStateStore();
         final String metricsScope = "rocksdb-state-id";
 
-        cleanUpStateRunAndVerify(
+        cleanUpStateRunVerifyAndClose(
             builder,
             streamsConfiguration,
             IntegerDeserializer.class,
@@ -200,7 +204,7 @@ public class RocksDBMetricsIntegrationTest {
         final StreamsBuilder builder = builderForSegmentedStateStore();
         final String metricsScope = "rocksdb-window-state-id";
 
-        cleanUpStateRunAndVerify(
+        cleanUpStateRunVerifyAndClose(
             builder,
             streamsConfiguration,
             LongDeserializer.class,
@@ -247,13 +251,12 @@ public class RocksDBMetricsIntegrationTest {
         return builder;
     }
 
-    private void cleanUpStateRunAndVerify(final StreamsBuilder builder,
-                                          final Properties streamsConfiguration,
-                                          final Class outputKeyDeserializer,
-                                          final Class outputValueDeserializer,
-                                          final MetricsVerifier metricsVerifier,
-                                          final String metricsScope
-                                          ) throws Exception {
+    private void cleanUpStateRunVerifyAndClose(final StreamsBuilder builder,
+                                               final Properties streamsConfiguration,
+                                               final Class outputKeyDeserializer,
+                                               final Class outputValueDeserializer,
+                                               final MetricsVerifier metricsVerifier,
+                                               final String metricsScope) throws Exception {
         final KafkaStreams kafkaStreams = new KafkaStreams(builder.build(), streamsConfiguration);
         kafkaStreams.cleanUp();
         produceRecords();
