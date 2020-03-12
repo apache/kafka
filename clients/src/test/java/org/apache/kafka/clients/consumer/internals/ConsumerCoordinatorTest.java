@@ -158,7 +158,6 @@ public class ConsumerCoordinatorTest {
     private MockCommitCallback mockOffsetCommitCallback;
     private ConsumerCoordinator coordinator;
 
-
     public ConsumerCoordinatorTest(final ConsumerPartitionAssignor.RebalanceProtocol protocol) {
         this.protocol = protocol;
 
@@ -2567,7 +2566,7 @@ public class ConsumerCoordinatorTest {
         supportStableFlag((short) 7, false);
     }
 
-    private void supportStableFlag(final short upperVersion, final boolean shouldThrow) {
+    private void supportStableFlag(final short upperVersion, final boolean expectThrows) {
         ConsumerCoordinator coordinator = new ConsumerCoordinator(
             rebalanceConfig,
             new LogContext(),
@@ -2593,7 +2592,7 @@ public class ConsumerCoordinatorTest {
             metadata, Errors.NONE);
 
         client.prepareResponse(new OffsetFetchResponse(Errors.NONE, singletonMap(t1p, data)));
-        if (shouldThrow) {
+        if (expectThrows) {
             assertThrows(UnsupportedVersionException.class,
                 () -> coordinator.fetchCommittedOffsets(singleton(t1p), time.timer(Long.MAX_VALUE)));
         } else {

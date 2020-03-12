@@ -264,17 +264,18 @@ public class ConsumerConfig extends AbstractConfig {
     static final String LEAVE_GROUP_ON_CLOSE_CONFIG = "internal.leave.group.on.close";
 
     /**
-     * <code>internal.throw.on.stable.flag.unsupported</code>
-     * Whether or not the consumer should throw when the new stable flag is supported. If set to <code>true</code>
-     * then the client shall crash upon hitting it. The purpose of this flag is to prevent unexpected broker
-     * downgrade which makes the offset fetch protection against pending commit invalid. The safest approach
+     * <code>internal.throw.on.fetch.stable.offset.unsupported</code>
+     * Whether or not the consumer should throw when the new stable offset feature is supported.
+     * If set to <code>true</code> then the client shall crash upon hitting it.
+     * The purpose of this flag is to prevent unexpected broker downgrade which makes
+     * the offset fetch protection against pending commit invalid. The safest approach
      * is to fail fast to avoid introducing correctness issue.
      *
      * <p>
      * Note: this is an internal configuration and could be changed in the future in a backward incompatible way
      *
      */
-    static final String THROW_ON_STABLE_FLAG_UNSUPPORTED = "internal.throw.on.stable.flag.unsupported";
+    static final String THROW_ON_FETCH_STABLE_OFFSET_UNSUPPORTED = "internal.throw.on.fetch.stable.offset.unsupported";
 
     /** <code>isolation.level</code> */
     public static final String ISOLATION_LEVEL_CONFIG = "isolation.level";
@@ -510,7 +511,7 @@ public class ConsumerConfig extends AbstractConfig {
                                         Type.BOOLEAN,
                                         true,
                                         Importance.LOW)
-                                .defineInternal(THROW_ON_STABLE_FLAG_UNSUPPORTED,
+                                .defineInternal(THROW_ON_FETCH_STABLE_OFFSET_UNSUPPORTED,
                                         Type.BOOLEAN,
                                         false,
                                         Importance.LOW)

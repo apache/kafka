@@ -27,9 +27,7 @@ import java.util.Map;
 import java.util.Properties;
 
 import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.assertEquals;
-
 import static org.junit.Assert.fail;
 
 public class ConsumerConfigTest {
@@ -48,7 +46,7 @@ public class ConsumerConfigTest {
         properties.setProperty(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, valueDeserializerClassName);
         properties.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "test-group");
         ConsumerConfig config = new ConsumerConfig(properties);
-        assertTrue(!config.getString(ConsumerConfig.CLIENT_ID_CONFIG).isEmpty());
+        assertFalse(config.getString(ConsumerConfig.CLIENT_ID_CONFIG).isEmpty());
     }
 
     @Test
@@ -129,6 +127,6 @@ public class ConsumerConfigTest {
         Properties properties = new Properties();
         properties.setProperty(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, keyDeserializerClassName);
         properties.setProperty(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, valueDeserializerClassName);
-        assertFalse(new ConsumerConfig(properties).getBoolean(ConsumerConfig.THROW_ON_STABLE_FLAG_UNSUPPORTED));
+        assertFalse(new ConsumerConfig(properties).getBoolean(ConsumerConfig.THROW_ON_FETCH_STABLE_OFFSET_UNSUPPORTED));
     }
 }
