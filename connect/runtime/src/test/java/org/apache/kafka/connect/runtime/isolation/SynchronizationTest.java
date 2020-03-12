@@ -17,8 +17,6 @@
 
 package org.apache.kafka.connect.runtime.isolation;
 
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 import java.lang.management.LockInfo;
@@ -32,9 +30,11 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.BrokenBarrierException;
 import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.LinkedBlockingDeque;
+import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -48,7 +48,9 @@ import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.junit.After;
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.TestName;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -56,9 +58,10 @@ public class SynchronizationTest {
 
     public static final Logger log = LoggerFactory.getLogger(SynchronizationTest.class);
 
-    private static final String TEST_THREAD_PREFIX = SynchronizationTest.class.getSimpleName() + "-";
-    private static final AtomicInteger THREAD_NUMBER = new AtomicInteger(1);
+    @Rule
+    public final TestName testName = new TestName();
 
+    private String threadPrefix;
     private Plugins plugins;
     private ThreadPoolExecutor exec;
     private Breakpoint<String> dclBreakpoint;
@@ -71,6 +74,8 @@ public class SynchronizationTest {
             WorkerConfig.PLUGIN_PATH_CONFIG,
             String.join(",", TestPlugins.pluginPath())
         );
+        threadPrefix = SynchronizationTest.class.getSimpleName()
+            + "." + testName.getMethodName() + "-";
         dclBreakpoint = new Breakpoint<>();
         pclBreakpoint = new Breakpoint<>();
         plugins = new Plugins(pluginProps) {
@@ -88,7 +93,7 @@ public class SynchronizationTest {
             1000L,
             TimeUnit.MILLISECONDS,
             new LinkedBlockingDeque<>(),
-            SynchronizationTest::namedThreadFactory
+            threadFactoryWithNamedThreads(threadPrefix)
         );
 
     }
@@ -98,10 +103,7 @@ public class SynchronizationTest {
         dclBreakpoint.clear();
         pclBreakpoint.clear();
         exec.shutdown();
-        assertTrue(
-            "Could not shut down test executor cleanly",
-            exec.awaitTermination(1L, TimeUnit.SECONDS)
-        );
+        exec.awaitTermination(1L, TimeUnit.SECONDS);
     }
 
     private static class Breakpoint<T> {
@@ -117,15 +119,11 @@ public class SynchronizationTest {
             barrier = null;
         }
 
-        private synchronized void reset() {
-            // As soon as the barrier is tripped, the barrier will be reset for the next round.
-            barrier = new CyclicBarrier(2, this::reset);
-        }
-
         public synchronized void set(Predicate<T> predicate) {
             clear();
             this.predicate = predicate;
-            reset();
+            // As soon as the barrier is tripped, the barrier will be reset for the next round.
+            barrier = new CyclicBarrier(2);
         }
 
         /**
@@ -163,7 +161,7 @@ public class SynchronizationTest {
             synchronized (this) {
                 barrier = this.barrier;
             }
-            assertNotNull(barrier);
+            Objects.requireNonNull(barrier, "Barrier must be set up before awaiting");
             barrier.await(1L, TimeUnit.SECONDS);
         }
     }
@@ -281,26 +279,30 @@ public class SynchronizationTest {
         assertNoDeadlocks();
     }
 
-    private static void assertNoDeadlocks() {
+    private boolean threadFromCurrentTest(ThreadInfo threadInfo) {
+        return threadInfo.getThreadName().startsWith(threadPrefix);
+    }
+
+    private void assertNoDeadlocks() {
         long[] deadlockedThreads = ManagementFactory.getThreadMXBean().findDeadlockedThreads();
         if (deadlockedThreads != null && deadlockedThreads.length > 0) {
-            fail("Found deadlocked threads while classloading\n" +
-                Arrays.stream(ManagementFactory.getThreadMXBean().getThreadInfo(deadlockedThreads))
-                    .map(SynchronizationTest::threadInfoToString)
-                    .collect(Collectors.joining(""))
-            );
-
+            final String threads = Arrays
+                .stream(ManagementFactory.getThreadMXBean().getThreadInfo(deadlockedThreads))
+                .filter(this::threadFromCurrentTest)
+                .map(SynchronizationTest::threadInfoToString)
+                .collect(Collectors.joining(""));
+            if (!threads.isEmpty()) {
+                fail("Found deadlocked threads while classloading\n" + threads);
+            }
         }
     }
 
-    private static void dumpThreads(String msg) throws InterruptedException {
+    private void dumpThreads(String msg) throws InterruptedException {
         if (log.isDebugEnabled()) {
-            // Give the other threads a chance to settle their execution
-            Thread.sleep(100L);
             log.debug("{}:\n{}",
                 msg,
                 Arrays.stream(ManagementFactory.getThreadMXBean().dumpAllThreads(true, true))
-                    .filter(threadInfo -> threadInfo.getThreadName().startsWith(TEST_THREAD_PREFIX))
+                    .filter(this::threadFromCurrentTest)
                     .map(SynchronizationTest::threadInfoToString)
                     .collect(Collectors.joining("\n"))
             );
@@ -382,21 +384,24 @@ public class SynchronizationTest {
         //}
     }
 
-    private static Thread namedThreadFactory(Runnable r) {
-        // This is essentially Executors.defaultThreadFactory except with
-        // custom thread names so in order to filter by thread names when debugging
-        SecurityManager s = System.getSecurityManager();
-        Thread t = new Thread((s != null) ? s.getThreadGroup() :
-            Thread.currentThread().getThreadGroup(), r,
-            TEST_THREAD_PREFIX + THREAD_NUMBER.getAndIncrement(),
-            0);
-        if (t.isDaemon()) {
-            t.setDaemon(false);
-        }
-        if (t.getPriority() != Thread.NORM_PRIORITY) {
-            t.setPriority(Thread.NORM_PRIORITY);
-        }
-        return t;
+    private static ThreadFactory threadFactoryWithNamedThreads(String threadPrefix) {
+        AtomicInteger threadNumber = new AtomicInteger(1);
+        return r -> {
+            // This is essentially Executors.defaultThreadFactory except with
+            // custom thread names so in order to filter by thread names when debugging
+            SecurityManager s = System.getSecurityManager();
+            Thread t = new Thread((s != null) ? s.getThreadGroup() :
+                Thread.currentThread().getThreadGroup(), r,
+                threadPrefix + threadNumber.getAndIncrement(),
+                0);
+            if (t.isDaemon()) {
+                t.setDaemon(false);
+            }
+            if (t.getPriority() != Thread.NORM_PRIORITY) {
+                t.setPriority(Thread.NORM_PRIORITY);
+            }
+            return t;
+        };
     }
 
 }
