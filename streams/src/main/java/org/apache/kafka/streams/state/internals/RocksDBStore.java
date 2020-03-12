@@ -188,11 +188,12 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BulkLoadingSt
             throw new ProcessorStateException(fatal);
         }
 
+        // Setup metrics before the database is opened, otherwise the metrics are not updated
+        // with the measurements from Rocks DB
+        maybeSetUpMetricsRecorder(context, configs);
+
         openRocksDB(dbOptions, columnFamilyOptions);
         open = true;
-
-        // Do this last because the prior operations could throw exceptions.
-        maybeSetUpMetricsRecorder(context, configs);
     }
 
     private void maybeSetUpMetricsRecorder(final ProcessorContext context, final Map<String, Object> configs) {
