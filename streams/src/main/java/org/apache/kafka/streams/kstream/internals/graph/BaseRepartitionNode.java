@@ -29,12 +29,12 @@ public abstract class BaseRepartitionNode<K, V> extends StreamsGraphNode {
     protected final String sinkName;
     protected final String sourceName;
     protected final String repartitionTopic;
-    protected final ProcessorParameters processorParameters;
+    protected final ProcessorParameters<K, V> processorParameters;
     protected final StreamPartitioner<K, V> partitioner;
 
     BaseRepartitionNode(final String nodeName,
                         final String sourceName,
-                        final ProcessorParameters processorParameters,
+                        final ProcessorParameters<K, V> processorParameters,
                         final Serde<K> keySerde,
                         final Serde<V> valueSerde,
                         final String sinkName,

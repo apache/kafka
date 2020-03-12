@@ -375,7 +375,7 @@ public class TopologyTest {
     @Test
     public void sinkShouldReturnNullTopicWithDynamicRouting() {
         final TopologyDescription.Sink expectedSinkNode =
-            new InternalTopologyBuilder.Sink("sink", (key, value, record) -> record.topic() + "-" + key);
+            new InternalTopologyBuilder.Sink<>("sink", (key, value, record) -> record.topic() + "-" + key);
 
         assertThat(expectedSinkNode.topic(), equalTo(null));
     }
@@ -384,7 +384,7 @@ public class TopologyTest {
     public void sinkShouldReturnTopicNameExtractorWithDynamicRouting() {
         final TopicNameExtractor<?, ?> topicNameExtractor = (key, value, record) -> record.topic() + "-" + key;
         final TopologyDescription.Sink expectedSinkNode =
-            new InternalTopologyBuilder.Sink("sink", topicNameExtractor);
+            new InternalTopologyBuilder.Sink<>("sink", topicNameExtractor);
 
         assertThat(expectedSinkNode.topicNameExtractor(), equalTo(topicNameExtractor));
     }

@@ -32,6 +32,7 @@ import org.apache.kafka.streams.kstream.internals.graph.StreamSourceNode;
 import org.apache.kafka.streams.kstream.internals.graph.StreamsGraphNode;
 import org.apache.kafka.streams.kstream.internals.graph.TableSourceNode;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
+import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
@@ -198,7 +199,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
     }
 
     public synchronized void addStateStore(final StoreBuilder<?> builder) {
-        addGraphNode(root, new StateStoreNode(builder));
+        addGraphNode(root, new StateStoreNode<>(builder));
     }
 
     public synchronized <K, V> void addGlobalStore(final StoreBuilder<?> storeBuilder,
@@ -330,7 +331,8 @@ public class InternalStreamsBuilder implements InternalNameProvider {
 
     private void maybeOptimizeRepartitionOperations() {
         maybeUpdateKeyChangingRepartitionNodeMap();
-        final Iterator<Entry<StreamsGraphNode, LinkedHashSet<OptimizableRepartitionNode<?, ?>>>> entryIterator =  keyChangingOperationsToOptimizableRepartitionNodes.entrySet().iterator();
+        final Iterator<Entry<StreamsGraphNode, LinkedHashSet<OptimizableRepartitionNode<?, ?>>>> entryIterator =
+            keyChangingOperationsToOptimizableRepartitionNodes.entrySet().iterator();
 
         while (entryIterator.hasNext()) {
             final Map.Entry<StreamsGraphNode, LinkedHashSet<OptimizableRepartitionNode<?, ?>>> entry = entryIterator.next();
@@ -423,11 +425,12 @@ public class InternalStreamsBuilder implements InternalNameProvider {
         }
     }
 
-    private <K, V> OptimizableRepartitionNode<?, ?> createRepartitionNode(final String repartitionTopicName,
+    private <K, V> OptimizableRepartitionNode<K, V> createRepartitionNode(final String repartitionTopicName,
                                                                           final Serde<K> keySerde,
                                                                           final Serde<V> valueSerde) {
 
-        final OptimizableRepartitionNode.OptimizableRepartitionNodeBuilder<K, V> repartitionNodeBuilder = OptimizableRepartitionNode.optimizableRepartitionNodeBuilder();
+        final OptimizableRepartitionNode.OptimizableRepartitionNodeBuilder<K, V> repartitionNodeBuilder =
+            OptimizableRepartitionNode.optimizableRepartitionNodeBuilder();
         KStreamImpl.createRepartitionedSource(
                 this,
                 keySerde,
@@ -459,17 +462,18 @@ public class InternalStreamsBuilder implements InternalNameProvider {
         return repartitionNodes.iterator().next().repartitionTopic();
     }
 
-    private GroupedInternal<?, ?> getRepartitionSerdes(final Collection<OptimizableRepartitionNode<?, ?>> repartitionNodes) {
-        Serde<?> keySerde = null;
-        Serde<?> valueSerde = null;
+    @SuppressWarnings("unchecked")
+    private <K, V> GroupedInternal<K, V> getRepartitionSerdes(final Collection<OptimizableRepartitionNode<?, ?>> repartitionNodes) {
+        Serde<K> keySerde = null;
+        Serde<V> valueSerde = null;
 
         for (final OptimizableRepartitionNode<?, ?> repartitionNode : repartitionNodes) {
             if (keySerde == null && repartitionNode.keySerde() != null) {
-                keySerde = repartitionNode.keySerde();
+                keySerde = (Serde<K>) repartitionNode.keySerde();
             }
 
             if (valueSerde == null && repartitionNode.valueSerde() != null) {
-                valueSerde = repartitionNode.valueSerde();
+                valueSerde = (Serde<V>) repartitionNode.valueSerde();
             }
 
             if (keySerde != null && valueSerde != null) {

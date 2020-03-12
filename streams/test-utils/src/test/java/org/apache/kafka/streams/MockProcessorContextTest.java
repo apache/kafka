@@ -247,12 +247,12 @@ public class MockProcessorContextTest {
 
         final MockProcessorContext context = new MockProcessorContext();
 
-        final StoreBuilder storeBuilder = Stores.keyValueStoreBuilder(
+        final StoreBuilder<KeyValueStore<String, Long>> storeBuilder = Stores.keyValueStoreBuilder(
                 Stores.inMemoryKeyValueStore("my-state"),
                 Serdes.String(),
                 Serdes.Long()).withLoggingDisabled();
 
-        final KeyValueStore<String, Long> store = (KeyValueStore<String, Long>) storeBuilder.build();
+        final KeyValueStore<String, Long> store = storeBuilder.build();
 
         store.init(context, store);
 

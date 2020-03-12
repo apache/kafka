@@ -43,7 +43,7 @@ public class ProcessorGraphNode<K, V> extends StreamsGraphNode {
         this.processorParameters = processorParameters;
     }
 
-    public ProcessorParameters processorParameters() {
+    public ProcessorParameters<K, V> processorParameters() {
         return processorParameters;
     }
 

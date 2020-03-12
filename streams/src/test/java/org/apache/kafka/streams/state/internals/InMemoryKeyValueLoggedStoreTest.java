@@ -30,15 +30,15 @@ public class InMemoryKeyValueLoggedStoreTest extends AbstractKeyValueStoreTest {
     @SuppressWarnings("unchecked")
     @Override
     protected <K, V> KeyValueStore<K, V> createKeyValueStore(final ProcessorContext context) {
-        final StoreBuilder storeBuilder = Stores.keyValueStoreBuilder(
+        final StoreBuilder<KeyValueStore<K, V>> storeBuilder = Stores.keyValueStoreBuilder(
             Stores.inMemoryKeyValueStore("my-store"),
             (Serde<K>) context.keySerde(),
             (Serde<V>) context.valueSerde())
             .withLoggingEnabled(Collections.singletonMap("retention.ms", "1000"));
 
-        final StateStore store = storeBuilder.build();
+        final KeyValueStore<K, V> store = storeBuilder.build();
         store.init(context, store);
 
-        return (KeyValueStore<K, V>) store;
+        return store;
     }
 }
