@@ -37,6 +37,15 @@ class ReplicationQuotaManagerTest {
   }
 
   @Test
+  def shouldBrokerLevelThrottleAffectAllTopicPartition(): Unit = {
+    val quota = new ReplicationQuotaManager(ReplicationQuotaManagerConfig(), metrics, QuotaType.Fetch, time)
+    quota.markBrokerThrottled()
+    assertTrue(quota.isThrottled(tp1(1)))
+    assertTrue(quota.isThrottled(tp1(2)))
+    assertTrue(quota.isThrottled(tp1(3)))
+  }
+
+  @Test
   def shouldThrottleOnlyDefinedReplicas(): Unit = {
     val quota = new ReplicationQuotaManager(ReplicationQuotaManagerConfig(), metrics, QuotaType.Fetch, time)
     quota.markThrottled("topic1", Seq(1, 2, 3))

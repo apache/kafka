@@ -39,6 +39,8 @@ object DynamicConfig {
     val LeaderReplicationThrottledRateProp = "leader.replication.throttled.rate"
     val FollowerReplicationThrottledRateProp = "follower.replication.throttled.rate"
     val ReplicaAlterLogDirsIoMaxBytesPerSecondProp = "replica.alter.log.dirs.io.max.bytes.per.second"
+    val LeaderReplicationThrottledProp = "leader.replication.throttled"
+    val FollowerReplicationThrottledProp = "follower.replication.throttled"
 
     //Defaults
     val DefaultReplicationThrottledRate = ReplicationQuotaManagerConfig.QuotaBytesPerSecondDefault
@@ -52,6 +54,8 @@ object DynamicConfig {
       s"limit be kept above 1MB/s for accurate behaviour."
     val ReplicaAlterLogDirsIoMaxBytesPerSecondDoc = "A long representing the upper bound (bytes/sec) on disk IO used for moving replica between log directories on the same broker. " +
       s"This property can be only set dynamically. It is suggested that the limit be kept above 1MB/s for accurate behaviour."
+    val LeaderReplicationThrottledPropDoc = "A boolean representing if we should throttle all leaders on replication traffic. This property can be only set dynamically. "
+    val FollowerReplicationThrottledPropDoc = "A boolean representing if we should throttle all followers on replication traffic. This property can be only set dynamically. "
 
     //Definitions
     private val brokerConfigDef = new ConfigDef()
@@ -59,6 +63,9 @@ object DynamicConfig {
       .define(LeaderReplicationThrottledRateProp, LONG, DefaultReplicationThrottledRate, atLeast(0), MEDIUM, LeaderReplicationThrottledRateDoc)
       .define(FollowerReplicationThrottledRateProp, LONG, DefaultReplicationThrottledRate, atLeast(0), MEDIUM, FollowerReplicationThrottledRateDoc)
       .define(ReplicaAlterLogDirsIoMaxBytesPerSecondProp, LONG, DefaultReplicationThrottledRate, atLeast(0), MEDIUM, ReplicaAlterLogDirsIoMaxBytesPerSecondDoc)
+      .define(LeaderReplicationThrottledProp, BOOLEAN, false, MEDIUM, LeaderReplicationThrottledPropDoc)
+      .define(FollowerReplicationThrottledProp, BOOLEAN, false, MEDIUM, FollowerReplicationThrottledPropDoc)
+
     DynamicBrokerConfig.addDynamicConfigs(brokerConfigDef)
     val nonDynamicProps = KafkaConfig.configNames.toSet -- brokerConfigDef.names.asScala
 

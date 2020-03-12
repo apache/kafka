@@ -72,7 +72,9 @@ object ConfigCommand extends Config {
   val BrokerConfigsUpdatableUsingZooKeeperWhileBrokerRunning = Set(
     DynamicConfig.Broker.LeaderReplicationThrottledRateProp,
     DynamicConfig.Broker.FollowerReplicationThrottledRateProp,
-    DynamicConfig.Broker.ReplicaAlterLogDirsIoMaxBytesPerSecondProp)
+    DynamicConfig.Broker.ReplicaAlterLogDirsIoMaxBytesPerSecondProp,
+    DynamicConfig.Broker.LeaderReplicationThrottledProp,
+    DynamicConfig.Broker.FollowerReplicationThrottledProp)
 
   def main(args: Array[String]): Unit = {
     try {

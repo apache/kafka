@@ -138,7 +138,9 @@ object ReassignPartitionsCommand extends Logging {
         // bitwise OR as we don't want to short-circuit
         if (configs.remove(DynamicConfig.Broker.LeaderReplicationThrottledRateProp) != null
           | configs.remove(DynamicConfig.Broker.FollowerReplicationThrottledRateProp) != null
-          | configs.remove(DynamicConfig.Broker.ReplicaAlterLogDirsIoMaxBytesPerSecondProp) != null){
+          | configs.remove(DynamicConfig.Broker.ReplicaAlterLogDirsIoMaxBytesPerSecondProp) != null
+          | configs.remove(DynamicConfig.Broker.LeaderReplicationThrottledProp) != null
+          | configs.remove(DynamicConfig.Broker.FollowerReplicationThrottledProp) != null){
           adminZkClient.changeBrokerConfig(Seq(brokerId), configs)
           changed = true
         }
