@@ -397,16 +397,11 @@ public class TaskManager {
             } else {
                 final File checkpointFile = stateDirectory.checkpointFileFor(id);
                 try {
-                    // If we can't read the checkpoint file or it doesn't exist, release the task directory
-                    // so the background cleaner thread can do its thing
                     if (checkpointFile.exists()) {
                         taskOffsetSums.put(id, sumOfChangelogOffsets(id, new OffsetCheckpoint(checkpointFile).read()));
-                    } else {
-                        releaseTaskDirLock(id);
                     }
                 } catch (final IOException e) {
                     log.warn(String.format("Exception caught while trying to read checkpoint for task %s:", id), e);
-                    releaseTaskDirLock(id);
                 }
             }
         }
@@ -442,20 +437,6 @@ public class TaskManager {
     }
 
     /**
-     * Attempts to release the lock for the passed in task's directory. It does not remove the task from
-     * {@code lockedTaskDirectories} so it's safe to call during iteration, and should be idempotent.
-     */
-    private RuntimeException releaseTaskDirLock(final TaskId taskId) {
-        try {
-            stateDirectory.unlock(taskId);
-        } catch (final IOException e) {
-            log.warn(String.format("Caught the following exception while trying to unlock task %s", taskId), e);
-            return new StreamsException(String.format("Unable to unlock task directory %s", taskId), e);
-        }
-        return null;
-    }
-
-    /**
      * We must release the lock for any unassigned tasks that we temporarily locked in preparation for a
      * rebalance in {@link #tryToLockAllTaskDirectories()}.
      */
@@ -465,14 +446,14 @@ public class TaskManager {
         final Iterator<TaskId> taskIdIterator = lockedTaskDirectories.iterator();
         while (taskIdIterator.hasNext()) {
             final TaskId id = taskIdIterator.next();
-
             if (!tasks.containsKey(id)) {
-                final RuntimeException unlockException = releaseTaskDirLock(id);
-                if (unlockException == null) {
+                try {
+                    stateDirectory.unlock(id);
                     taskIdIterator.remove();
-                } else {
-                    log.error("Failed to release the lock for task directory {}.", id);
-                    firstException.compareAndSet(null, unlockException);
+                } catch (final IOException e) {
+                    log.error(String.format("Caught the following exception while trying to unlock task %s", id), e);
+                    firstException.compareAndSet(null,
+                        new StreamsException(String.format("Failed to unlock task directory %s", id), e));
                 }
             }
         }
