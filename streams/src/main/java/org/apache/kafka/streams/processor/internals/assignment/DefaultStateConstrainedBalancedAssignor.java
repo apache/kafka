@@ -65,7 +65,7 @@ public class DefaultStateConstrainedBalancedAssignor implements StateConstrained
      * Maps tasks to clients with caught-up states for the task.
      *
      * @param statefulTasksToRankedClients ranked clients map
-     * @return map from task IDs to lists of caught-up clients
+     * @return map from tasks with caught-up clients to the list of client candidates
      */
     private Map<TaskId, List<String>> tasksToCaughtUpClients(final Map<TaskId, List<ClientIdAndLag>> statefulTasksToRankedClients) {
         final Map<TaskId, List<String>> taskToCaughtUpClients = new HashMap<>();
@@ -215,4 +215,3 @@ public class DefaultStateConstrainedBalancedAssignor implements StateConstrained
         }
     }
 }
-
