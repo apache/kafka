@@ -109,8 +109,8 @@ public class OffsetCheckpoint {
     /**
      * @throws IOException if file write operations failed with any IO exception
      */
-    private void writeIntLine(final BufferedWriter writer,
-                              final int number) throws IOException {
+    static void writeIntLine(final BufferedWriter writer,
+                             final int number) throws IOException {
         writer.write(Integer.toString(number));
         writer.newLine();
     }
@@ -118,9 +118,9 @@ public class OffsetCheckpoint {
     /**
      * @throws IOException if file write operations failed with any IO exception
      */
-    private void writeEntry(final BufferedWriter writer,
-                            final TopicPartition part,
-                            final long offset) throws IOException {
+    static void writeEntry(final BufferedWriter writer,
+                           final TopicPartition part,
+                           final long offset) throws IOException {
         writer.write(part.topic());
         writer.write(' ');
         writer.write(Integer.toString(part.partition()));
