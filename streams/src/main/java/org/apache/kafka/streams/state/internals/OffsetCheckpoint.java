@@ -87,7 +87,14 @@ public class OffsetCheckpoint {
                 writeIntLine(writer, offsets.size());
 
                 for (final Map.Entry<TopicPartition, Long> entry : offsets.entrySet()) {
-                    writeEntry(writer, entry.getKey(), entry.getValue());
+                    final TopicPartition tp = entry.getKey();
+                    final Long offset = entry.getValue();
+                    if (offset >= 0L) {
+                        writeEntry(writer, tp, offset);
+                    } else {
+                        LOG.error("Received offset={} to write to checkpoint file for {}", offset, tp);
+                        throw new IllegalStateException("Attempted to write a negative offset to the checkpoint file");
+                    }
                 }
 
                 writer.flush();
@@ -145,8 +152,14 @@ public class OffsetCheckpoint {
 
                             final String topic = pieces[0];
                             final int partition = Integer.parseInt(pieces[1]);
+                            final TopicPartition tp = new TopicPartition(topic, partition);
                             final long offset = Long.parseLong(pieces[2]);
-                            offsets.put(new TopicPartition(topic, partition), offset);
+                            if (offset >= 0L) {
+                                offsets.put(tp, offset);
+                            } else {
+                                LOG.warn("Read offset={} from checkpoint file for {}", offset, tp);
+                            }
+
                             line = reader.readLine();
                         }
                         if (offsets.size() != expectedSize) {
