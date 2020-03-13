@@ -258,8 +258,9 @@ public class StateDirectoryTest {
             directory.lock(task0);
             directory.lock(task1);
 
-            List<File> files = Arrays.asList(Objects.requireNonNull(appDir.listFiles()));
+            List<File> files = Arrays.asList(Objects.requireNonNull(directory.lisAllTaskDirectories()));
             assertEquals(3, files.size());
+
 
             files = Arrays.asList(Objects.requireNonNull(directory.listNonEmptyTaskDirectories()));
             assertEquals(3, files.size());
@@ -267,7 +268,7 @@ public class StateDirectoryTest {
             time.sleep(5000);
             directory.cleanRemovedTasks(0);
 
-            files = Arrays.asList(Objects.requireNonNull(appDir.listFiles()));
+            files = Arrays.asList(Objects.requireNonNull(directory.lisAllTaskDirectories()));
             assertEquals(3, files.size());
 
             files = Arrays.asList(Objects.requireNonNull(directory.listNonEmptyTaskDirectories()));
@@ -288,11 +289,13 @@ public class StateDirectoryTest {
         final int cleanupDelayMs = 60000;
         directory.cleanRemovedTasks(cleanupDelayMs);
         assertTrue(dir.exists());
+        assertEquals(1, directory.lisAllTaskDirectories().length);
         assertEquals(1, directory.listNonEmptyTaskDirectories().length);
 
         time.sleep(cleanupDelayMs + 1000);
         directory.cleanRemovedTasks(cleanupDelayMs);
         assertTrue(dir.exists());
+        assertEquals(1, directory.lisAllTaskDirectories().length);
         assertEquals(0, directory.listNonEmptyTaskDirectories().length);
     }
 
@@ -312,13 +315,13 @@ public class StateDirectoryTest {
         final File storeDir = new File(taskDir1, "store");
         assertTrue(storeDir.mkdir());
 
-        List<File> dirs = Arrays.asList(directory.listNonEmptyTaskDirectories());
-        assertEquals(Collections.singletonList(taskDir1), dirs);
+        assertEquals(Arrays.asList(taskDir1, taskDir2), Arrays.asList(directory.lisAllTaskDirectories()));
+        assertEquals(Collections.singletonList(taskDir1), Arrays.asList(directory.listNonEmptyTaskDirectories()));
 
         directory.cleanRemovedTasks(0L);
 
-        dirs = Arrays.asList(directory.listNonEmptyTaskDirectories());
-        assertEquals(Collections.emptyList(), dirs);
+        assertEquals(Arrays.asList(taskDir1, taskDir2), Arrays.asList(directory.lisAllTaskDirectories()));
+        assertEquals(Collections.emptyList(), Arrays.asList(directory.listNonEmptyTaskDirectories()));
     }
 
     @Test
