@@ -346,7 +346,7 @@ public class DelegatingClassLoader extends URLClassLoader {
         } catch (ReflectionsException e) {
             log.debug("Reflection scanner could not find any classes for URLs {}",
                 reflections.getConfiguration().getUrls());
-            return result;
+            return Collections.emptyList();
         }
 
         for (Class<? extends T> plugin : plugins) {
