@@ -472,7 +472,7 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
   private def updatedConfigs(newProps: java.util.Map[String, _], currentProps: java.util.Map[String, _]):
   (mutable.Map[String, _], Set[String]) = {
     val deletedKeySet = currentProps.asScala.filter {
-      case (k, v) => v != newProps.get(k)
+      case (k, _) => !newProps.containsKey(k)
     }.keySet
     val changeMap = newProps.asScala.filter {
       case (k, v) => v != currentProps.get(k)
