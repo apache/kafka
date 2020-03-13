@@ -338,23 +338,6 @@ public class TaskManagerTest {
     }
 
     @Test
-    public void shouldSkipOtherNegativeOffsetsWhenComputingOffsetSum() throws IOException {
-        final Map<TopicPartition, Long> changelogOffsets = mkMap(
-            mkEntry(new TopicPartition("changelog", 1), 10L),
-            mkEntry(new TopicPartition("changelog", 2), -10L)
-        );
-        final Map<TaskId, Long> expectedOffsetSums = mkMap(mkEntry(taskId00, 10L));
-
-        expectLockObtainedFor(taskId00);
-        makeTaskFolders(taskId00.toString());
-        writeCheckpointFile(taskId00, changelogOffsets);
-        replay(stateDirectory);
-        taskManager.handleRebalanceStart(singleton("topic"));
-
-        assertThat(taskManager.getTaskOffsetSums(), is(expectedOffsetSums));
-    }
-
-    @Test
     public void shouldPinOffsetSumToLongMaxValueInCaseOfOverflow() throws IOException {
         final long largeOffset = Long.MAX_VALUE / 2;
         final Map<TopicPartition, Long> changelogOffsets = mkMap(

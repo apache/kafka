@@ -467,20 +467,9 @@ public class TaskManager {
     private long sumOfChangelogOffsets(final TaskId id, final Map<TopicPartition, Long> changelogOffsets) {
         long offsetSum = 0L;
         for (final Map.Entry<TopicPartition, Long> changelogEntry : changelogOffsets.entrySet()) {
-            final TopicPartition changelog = changelogEntry.getKey();
             final long offset = changelogEntry.getValue();
 
-            if (offset < 0L) {
-                if (offset == -1L) {
-                    log.debug("Skipping unknown offset for changelog {}", changelog);
-                } else {
-                    log.warn("Unexpected negative offset {} for changelog {}", offset, changelog);
-                }
-                continue;
-            }
-
             offsetSum += offset;
-
             if (offsetSum < 0) {
                 log.warn("Sum of changelog offsets for task {} overflowed, pinning to Long.MAX_VALUE", id);
                 return Long.MAX_VALUE;
