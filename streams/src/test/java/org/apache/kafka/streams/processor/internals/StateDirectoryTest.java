@@ -258,7 +258,7 @@ public class StateDirectoryTest {
             directory.lock(task0);
             directory.lock(task1);
 
-            List<File> files = Arrays.asList(Objects.requireNonNull(directory.lisAllTaskDirectories()));
+            List<File> files = Arrays.asList(Objects.requireNonNull(directory.listAllTaskDirectories()));
             assertEquals(3, files.size());
 
 
@@ -268,7 +268,7 @@ public class StateDirectoryTest {
             time.sleep(5000);
             directory.cleanRemovedTasks(0);
 
-            files = Arrays.asList(Objects.requireNonNull(directory.lisAllTaskDirectories()));
+            files = Arrays.asList(Objects.requireNonNull(directory.listAllTaskDirectories()));
             assertEquals(3, files.size());
 
             files = Arrays.asList(Objects.requireNonNull(directory.listNonEmptyTaskDirectories()));
@@ -289,13 +289,13 @@ public class StateDirectoryTest {
         final int cleanupDelayMs = 60000;
         directory.cleanRemovedTasks(cleanupDelayMs);
         assertTrue(dir.exists());
-        assertEquals(1, directory.lisAllTaskDirectories().length);
+        assertEquals(1, directory.listAllTaskDirectories().length);
         assertEquals(1, directory.listNonEmptyTaskDirectories().length);
 
         time.sleep(cleanupDelayMs + 1000);
         directory.cleanRemovedTasks(cleanupDelayMs);
         assertTrue(dir.exists());
-        assertEquals(1, directory.lisAllTaskDirectories().length);
+        assertEquals(1, directory.listAllTaskDirectories().length);
         assertEquals(0, directory.listNonEmptyTaskDirectories().length);
     }
 
@@ -307,7 +307,7 @@ public class StateDirectoryTest {
     }
 
     @Test
-    public void shouldNotListNonEmptyTaskDirectories() {
+    public void shouldOnlyListNonEmptyTaskDirectories() {
         TestUtils.tempDirectory(stateDir.toPath(), "foo");
         final File taskDir1 = directory.directoryForTask(new TaskId(0, 0));
         final File taskDir2 = directory.directoryForTask(new TaskId(0, 1));
@@ -315,12 +315,12 @@ public class StateDirectoryTest {
         final File storeDir = new File(taskDir1, "store");
         assertTrue(storeDir.mkdir());
 
-        assertEquals(Arrays.asList(taskDir1, taskDir2), Arrays.asList(directory.lisAllTaskDirectories()));
+        assertEquals(Arrays.asList(taskDir1, taskDir2), Arrays.asList(directory.listAllTaskDirectories()));
         assertEquals(Collections.singletonList(taskDir1), Arrays.asList(directory.listNonEmptyTaskDirectories()));
 
         directory.cleanRemovedTasks(0L);
 
-        assertEquals(Arrays.asList(taskDir1, taskDir2), Arrays.asList(directory.lisAllTaskDirectories()));
+        assertEquals(Arrays.asList(taskDir1, taskDir2), Arrays.asList(directory.listAllTaskDirectories()));
         assertEquals(Collections.emptyList(), Arrays.asList(directory.listNonEmptyTaskDirectories()));
     }
 

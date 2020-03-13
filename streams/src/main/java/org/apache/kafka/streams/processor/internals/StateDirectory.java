@@ -54,7 +54,7 @@ public class StateDirectory {
     private final Time time;
     private final String appId;
     private final File stateDir;
-    private final boolean createStateDirectory;
+    private final boolean hasPersistentStores;
     private final HashMap<TaskId, FileChannel> channels = new HashMap<>();
     private final HashMap<TaskId, LockAndOwner> locks = new HashMap<>();
 
@@ -74,21 +74,27 @@ public class StateDirectory {
     /**
      * Ensures that the state base directory as well as the application's sub-directory are created.
      *
+     * @param config              streams application configuration to read the root state directory path
+     * @param time                system timer used to execute periodic cleanup procedure
+     * @param hasPersistentStores only when the application's topology does have stores persisted on local file
+     *                            system, we would go ahead and auto-create the corresponding application / task / store
+     *                            directories whenever necessary; otherwise no directories would be created.
+     *
      * @throws ProcessorStateException if the base state directory or application state directory does not exist
-     *                                 and could not be created when createStateDirectory is enabled.
+     *                                 and could not be created when hasPersistentStores is enabled.
      */
-    public StateDirectory(final StreamsConfig config, final Time time, final boolean createStateDirectory) {
+    public StateDirectory(final StreamsConfig config, final Time time, final boolean hasPersistentStores) {
         this.time = time;
-        this.createStateDirectory = createStateDirectory;
+        this.hasPersistentStores = hasPersistentStores;
         this.appId = config.getString(StreamsConfig.APPLICATION_ID_CONFIG);
         final String stateDirName = config.getString(StreamsConfig.STATE_DIR_CONFIG);
         final File baseDir = new File(stateDirName);
-        if (this.createStateDirectory && !baseDir.exists() && !baseDir.mkdirs()) {
+        if (this.hasPersistentStores && !baseDir.exists() && !baseDir.mkdirs()) {
             throw new ProcessorStateException(
                 String.format("base state directory [%s] doesn't exist and couldn't be created", stateDirName));
         }
         stateDir = new File(baseDir, appId);
-        if (this.createStateDirectory && !stateDir.exists() && !stateDir.mkdir()) {
+        if (this.hasPersistentStores && !stateDir.exists() && !stateDir.mkdir()) {
             throw new ProcessorStateException(
                 String.format("state directory [%s] doesn't exist and couldn't be created", stateDir.getPath()));
         }
@@ -101,7 +107,7 @@ public class StateDirectory {
      */
     public File directoryForTask(final TaskId taskId) {
         final File taskDir = new File(stateDir, taskId.toString());
-        if (createStateDirectory && !taskDir.exists() && !taskDir.mkdir()) {
+        if (hasPersistentStores && !taskDir.exists() && !taskDir.mkdir()) {
             throw new ProcessorStateException(
                 String.format("task directory [%s] doesn't exist and couldn't be created", taskDir.getPath()));
         }
@@ -133,7 +139,7 @@ public class StateDirectory {
      */
     File globalStateDir() {
         final File dir = new File(stateDir, "global");
-        if (createStateDirectory && !dir.exists() && !dir.mkdir()) {
+        if (hasPersistentStores && !dir.exists() && !dir.mkdir()) {
             throw new ProcessorStateException(
                 String.format("global state directory [%s] doesn't exist and couldn't be created", dir.getPath()));
         }
@@ -146,12 +152,12 @@ public class StateDirectory {
 
     /**
      * Get the lock for the {@link TaskId}s directory if it is available
-     * @param taskId
+     * @param taskId task id
      * @return true if successful
-     * @throws IOException
+     * @throws IOException if the file cannot be created or file handle cannot be grabbed, should be considered as fatal
      */
     synchronized boolean lock(final TaskId taskId) throws IOException {
-        if (!createStateDirectory) {
+        if (!hasPersistentStores) {
             return true;
         }
 
@@ -195,7 +201,7 @@ public class StateDirectory {
     }
 
     synchronized boolean lockGlobalState() throws IOException {
-        if (!createStateDirectory) {
+        if (!hasPersistentStores) {
             return true;
         }
 
@@ -293,7 +299,7 @@ public class StateDirectory {
 
     private synchronized void cleanRemovedTasks(final long cleanupDelayMs,
                                                 final boolean manualUserCall) throws Exception {
-        final File[] taskDirs = lisAllTaskDirectories();
+        final File[] taskDirs = listAllTaskDirectories();
         if (taskDirs == null || taskDirs.length == 0) {
             return; // nothing to do
         }
@@ -362,7 +368,7 @@ public class StateDirectory {
      * List all of the task directories
      * @return The list of all the existing local directories for stream tasks
      */
-    File[] lisAllTaskDirectories() {
+    File[] listAllTaskDirectories() {
         return !stateDir.exists() ? new File[0] :
             stateDir.listFiles(pathname -> pathname.isDirectory() && PATH_NAME.matcher(pathname.getName()).matches());
     }
