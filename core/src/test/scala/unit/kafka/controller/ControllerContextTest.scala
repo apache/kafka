@@ -18,7 +18,6 @@
 package unit.kafka.controller
 
 import kafka.cluster.{Broker, EndPoint}
-import kafka.controller.PartitionAndReplica
 import kafka.controller.{ControllerContext, ReplicaAssignment}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.network.ListenerName
