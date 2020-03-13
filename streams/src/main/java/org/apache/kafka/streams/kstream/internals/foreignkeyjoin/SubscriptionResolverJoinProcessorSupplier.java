@@ -86,10 +86,9 @@ public class SubscriptionResolverJoinProcessorSupplier<K, V, VO, VR> implements 
                 }
                 final ValueAndTimestamp<V> currentValueWithTimestamp = valueGetter.get(key);
 
-                final byte[] serialize = runtimeValueSerializer.serialize(valueHashSerdePseudoTopic, currentValueWithTimestamp.value());
                 final long[] currentHash = currentValueWithTimestamp == null ?
                     null :
-                    Murmur3.hash128(serialize);
+                    Murmur3.hash128(runtimeValueSerializer.serialize(valueHashSerdePseudoTopic, currentValueWithTimestamp.value()));
 
                 final long[] messageHash = value.getOriginalValueHash();
 
