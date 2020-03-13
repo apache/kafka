@@ -340,7 +340,6 @@ public class DelegatingClassLoader extends URLClassLoader {
             Class<T> klass,
             ClassLoader loader
     ) throws InstantiationException, IllegalAccessException {
-        Collection<PluginDesc<T>> result = new ArrayList<>();
         Set<Class<? extends T>> plugins;
         try {
              plugins = reflections.getSubTypesOf(klass);
@@ -349,7 +348,8 @@ public class DelegatingClassLoader extends URLClassLoader {
                 reflections.getConfiguration().getUrls());
             return Collections.emptyList();
         }
-
+        
+        Collection<PluginDesc<T>> result = new ArrayList<>();
         for (Class<? extends T> plugin : plugins) {
             if (PluginUtils.isConcrete(plugin)) {
                 result.add(new PluginDesc<>(plugin, versionFor(plugin), loader));
