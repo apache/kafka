@@ -18,7 +18,6 @@ package kafka.coordinator.transaction
 
 import java.nio.ByteBuffer
 
-import kafka.api.KAFKA_2_4_IV1
 import kafka.coordinator.AbstractCoordinatorConcurrencyTest
 import kafka.coordinator.AbstractCoordinatorConcurrencyTest._
 import kafka.coordinator.transaction.TransactionCoordinatorConcurrencyTest._
@@ -73,7 +72,7 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
     EasyMock.replay(zkClient)
 
     txnStateManager = new TransactionStateManager(0, zkClient, scheduler, replicaManager, txnConfig, time,
-      new Metrics(), KAFKA_2_4_IV1)
+      new Metrics())
     for (i <- 0 until numPartitions)
       txnStateManager.addLoadedTransactionsToCache(i, coordinatorEpoch, new Pool[String, TransactionMetadata]())
 

@@ -67,7 +67,7 @@ class TransactionStateManagerTest {
 
   val txnConfig = TransactionConfig()
   val transactionManager: TransactionStateManager = new TransactionStateManager(0, zkClient, scheduler,
-    replicaManager, txnConfig, time, metrics, KAFKA_2_4_IV1)
+    replicaManager, txnConfig, time, metrics)
 
   val transactionalId1: String = "one"
   val transactionalId2: String = "two"
