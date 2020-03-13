@@ -656,14 +656,6 @@ class AdminManager(val config: KafkaConfig,
     DynamicBrokerConfig.brokerConfigSynonyms(name, matchListenerOverride = true)
   }
 
-  private def configType(name: String, synonyms: List[String]): ConfigDef.Type = {
-    val configType = config.typeOf(name)
-    if (configType != null)
-      configType
-    else
-      synonyms.iterator.map(config.typeOf).find(_ != null).orNull
-  }
-
   private def configSynonyms(name: String, synonyms: List[String], isSensitive: Boolean): List[DescribeConfigsResponse.ConfigSynonym] = {
     val dynamicConfig = config.dynamicConfig
     val allSynonyms = mutable.Buffer[DescribeConfigsResponse.ConfigSynonym]()
@@ -684,9 +676,9 @@ class AdminManager(val config: KafkaConfig,
 
   private def createTopicConfigEntry(logConfig: LogConfig, topicProps: Properties, includeSynonyms: Boolean)
                                     (name: String, value: Any): DescribeConfigsResponse.ConfigEntry = {
-    val configEntryType = logConfig.typeOf(name)
-    val isSensitive = configEntryType == ConfigDef.Type.PASSWORD
-    val valueAsString = if (isSensitive) null else ConfigDef.convertToString(value, configEntryType)
+    val configEntryType = LogConfig.configType(name)
+    val isSensitive = KafkaConfig.maybeSensitive(configEntryType)
+    val valueAsString = if (isSensitive) null else ConfigDef.convertToString(value, configEntryType.orNull)
     val allSynonyms = {
       val list = LogConfig.TopicConfigSynonyms.get(name)
         .map(s => configSynonyms(s, brokerSynonyms(s), isSensitive))
@@ -704,14 +696,13 @@ class AdminManager(val config: KafkaConfig,
   private def createBrokerConfigEntry(perBrokerConfig: Boolean, includeSynonyms: Boolean)
                                      (name: String, value: Any): DescribeConfigsResponse.ConfigEntry = {
     val allNames = brokerSynonyms(name)
-    val configEntryType = configType(name, allNames)
-    // If we can't determine the config entry type, treat it as a sensitive config to be safe
-    val isSensitive = configEntryType == ConfigDef.Type.PASSWORD || configEntryType == null
+    val configEntryType = KafkaConfig.configType(name)
+    val isSensitive = KafkaConfig.maybeSensitive(configEntryType)
     val valueAsString = if (isSensitive)
       null
     else value match {
       case v: String => v
-      case _ => ConfigDef.convertToString(value, configEntryType)
+      case _ => ConfigDef.convertToString(value, configEntryType.orNull)
     }
     val allSynonyms = configSynonyms(name, allNames, isSensitive)
         .filter(perBrokerConfig || _.source == ConfigSource.DYNAMIC_DEFAULT_BROKER_CONFIG)
