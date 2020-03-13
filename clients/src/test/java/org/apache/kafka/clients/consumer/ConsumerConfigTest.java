@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.consumer;
 
+import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
@@ -25,7 +26,9 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
 
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.fail;
 
 public class ConsumerConfigTest {
 
@@ -35,6 +38,35 @@ public class ConsumerConfigTest {
     private final String valueDeserializerClassName = valueDeserializer.getClass().getName();
     private final Object keyDeserializerClass = keyDeserializer.getClass();
     private final Object valueDeserializerClass = valueDeserializer.getClass();
+
+    @Test
+    public void testOverrideClientId() {
+        Properties properties = new Properties();
+        properties.setProperty(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, keyDeserializerClassName);
+        properties.setProperty(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, valueDeserializerClassName);
+        properties.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "test-group");
+        ConsumerConfig config = new ConsumerConfig(properties);
+        assertFalse(config.getString(ConsumerConfig.CLIENT_ID_CONFIG).isEmpty());
+    }
+
+    @Test
+    public void testOverrideEnableAutoCommit() {
+        Properties properties = new Properties();
+        properties.setProperty(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, keyDeserializerClassName);
+        properties.setProperty(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, valueDeserializerClassName);
+        ConsumerConfig config = new ConsumerConfig(properties);
+        boolean overrideEnableAutoCommit = config.maybeOverrideEnableAutoCommit();
+        assertFalse(overrideEnableAutoCommit);
+
+        properties.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "true");
+        config = new ConsumerConfig(properties);
+        try {
+            config.maybeOverrideEnableAutoCommit();
+            fail("Should have thrown an exception");
+        } catch (InvalidConfigurationException e) {
+            // expected
+        }
+    }
 
     @Test
     public void testDeserializerToPropertyConfig() {
@@ -88,5 +120,13 @@ public class ConsumerConfigTest {
         newConfigs = ConsumerConfig.addDeserializerToConfig(configs, keyDeserializer, valueDeserializer);
         assertEquals(newConfigs.get(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG), keyDeserializerClass);
         assertEquals(newConfigs.get(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG), valueDeserializerClass);
+    }
+
+    @Test
+    public void ensureDefaultThrowOnUnsupportedStableFlagToFalse() {
+        Properties properties = new Properties();
+        properties.setProperty(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, keyDeserializerClassName);
+        properties.setProperty(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, valueDeserializerClassName);
+        assertFalse(new ConsumerConfig(properties).getBoolean(ConsumerConfig.THROW_ON_FETCH_STABLE_OFFSET_UNSUPPORTED));
     }
 }

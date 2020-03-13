@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.admin.Admin;
@@ -128,14 +127,17 @@ public class TaskManagerTest {
     @Before
     public void setUp() {
         final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(new Metrics(), "clientId", StreamsConfig.METRICS_LATEST);
-        taskManager = new TaskManager(changeLogReader,
-                                      UUID.randomUUID(),
-                                      "taskManagerTest",
-                                      streamsMetrics,
-                                      activeTaskCreator,
-                                      standbyTaskCreator,
-                                      topologyBuilder,
-                                      adminClient, stateDirectory);
+        taskManager = new TaskManager(
+            changeLogReader,
+            UUID.randomUUID(),
+            "taskManagerTest",
+            streamsMetrics,
+            activeTaskCreator,
+            standbyTaskCreator,
+            topologyBuilder,
+            adminClient,
+            stateDirectory
+        );
         taskManager.setMainConsumer(consumer);
     }
 

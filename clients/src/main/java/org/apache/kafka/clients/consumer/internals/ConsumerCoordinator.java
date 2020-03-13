@@ -108,6 +108,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     private Timer nextAutoCommitTimer;
     private AtomicBoolean asyncCommitFenced;
     private ConsumerGroupMetadata groupMetadata;
+    private final boolean throwOnFetchStableOffsetsUnsupported;
 
     // hold onto request&future for committed offset requests to enable async calls.
     private PendingCommittedOffsetRequest pendingCommittedOffsetRequest = null;
@@ -146,7 +147,8 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                                Time time,
                                boolean autoCommitEnabled,
                                int autoCommitIntervalMs,
-                               ConsumerInterceptors<?, ?> interceptors) {
+                               ConsumerInterceptors<?, ?> interceptors,
+                               boolean throwOnFetchStableOffsetsUnsupported) {
         super(rebalanceConfig,
               logContext,
               client,
@@ -169,6 +171,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         this.asyncCommitFenced = new AtomicBoolean(false);
         this.groupMetadata = new ConsumerGroupMetadata(rebalanceConfig.groupId,
             JoinGroupRequest.UNKNOWN_GENERATION_ID, JoinGroupRequest.UNKNOWN_MEMBER_ID, rebalanceConfig.groupInstanceId);
+        this.throwOnFetchStableOffsetsUnsupported = throwOnFetchStableOffsetsUnsupported;
 
         if (autoCommitEnabled)
             this.nextAutoCommitTimer = time.timer(autoCommitIntervalMs);
@@ -1232,7 +1235,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         log.debug("Fetching committed offsets for partitions: {}", partitions);
         // construct the request
         OffsetFetchRequest.Builder requestBuilder =
-            new OffsetFetchRequest.Builder(this.rebalanceConfig.groupId, true, new ArrayList<>(partitions));
+            new OffsetFetchRequest.Builder(this.rebalanceConfig.groupId, true, new ArrayList<>(partitions), throwOnFetchStableOffsetsUnsupported);
 
         // send the request with a callback
         return client.send(coordinator, requestBuilder)

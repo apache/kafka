@@ -303,7 +303,8 @@ public class StreamThread extends Thread {
             config,
             logContext,
             restoreConsumer,
-            userStateRestoreListener);
+            userStateRestoreListener
+        );
 
         final ThreadCache cache = new ThreadCache(logContext, cacheSizeBytes, streamsMetrics);
 
@@ -317,7 +318,8 @@ public class StreamThread extends Thread {
             time,
             clientSupplier,
             threadId,
-            log);
+            log
+        );
         final StandbyTaskCreator standbyTaskCreator = new StandbyTaskCreator(
             builder,
             config,
@@ -325,7 +327,8 @@ public class StreamThread extends Thread {
             stateDirectory,
             changelogReader,
             threadId,
-            log);
+            log
+        );
         final TaskManager taskManager = new TaskManager(
             changelogReader,
             processId,
@@ -335,7 +338,8 @@ public class StreamThread extends Thread {
             standbyTaskCreator,
             builder,
             adminClient,
-            stateDirectory);
+            stateDirectory
+        );
 
         log.info("Creating consumer client");
         final String applicationId = config.getString(StreamsConfig.APPLICATION_ID_CONFIG);
@@ -368,7 +372,8 @@ public class StreamThread extends Thread {
             builder,
             threadId,
             logContext,
-            assignmentErrorCode);
+            assignmentErrorCode
+        );
 
         return streamThread.updateThreadMetadata(getSharedAdminClientId(clientId));
     }
@@ -866,10 +871,10 @@ public class StreamThread extends Thread {
     StreamThread updateThreadMetadata(final String adminClientId) {
 
         threadMetadata = new ThreadMetadata(
-            this.getName(),
-            this.state().name(),
-            getConsumerClientId(this.getName()),
-            getRestoreConsumerClientId(this.getName()),
+            getName(),
+            state().name(),
+            getConsumerClientId(getName()),
+            getRestoreConsumerClientId(getName()),
             taskManager.producerClientIds(),
             adminClientId,
             Collections.emptySet(),
@@ -891,10 +896,10 @@ public class StreamThread extends Thread {
 
         final String adminClientId = threadMetadata.adminClientId();
         threadMetadata = new ThreadMetadata(
-            this.getName(),
-            this.state().name(),
-            getConsumerClientId(this.getName()),
-            getRestoreConsumerClientId(this.getName()),
+            getName(),
+            state().name(),
+            getConsumerClientId(getName()),
+            getRestoreConsumerClientId(getName()),
             taskManager.producerClientIds(),
             adminClientId,
             activeTasksMetadata,

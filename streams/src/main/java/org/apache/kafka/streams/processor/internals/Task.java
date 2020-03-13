@@ -51,7 +51,7 @@ public interface Task {
      *          |            |                    |   |       |
      *          |            v                    v   |       |
      *          |      +-----+-------+       +----+---+----+  |
-     *          |      | Running (2) | ----> | Suspended(3)|  |    * //TODO Suspended(3) could be removed after we've stable on KIP-429
+     *          |      | Running (2) | ----> | Suspended(3)|  |    //TODO Suspended(3) could be removed after we've stable on KIP-429
      *          |      +-----+-------+       +------+------+  |
      *          |            |                      |         |
      *          |            |                      |         |

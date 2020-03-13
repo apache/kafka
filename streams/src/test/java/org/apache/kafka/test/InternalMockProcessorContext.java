@@ -177,7 +177,7 @@ public class InternalMockProcessorContext extends AbstractProcessorContext imple
             metrics,
             null,
             cache);
-        super.setCurrentNode(new ProcessorNode("TESTING_NODE"));
+        super.setCurrentNode(new ProcessorNode<>("TESTING_NODE"));
         this.stateDir = stateDir;
         this.keySerde = keySerde;
         this.valSerde = valSerde;
@@ -253,20 +253,17 @@ public class InternalMockProcessorContext extends AbstractProcessorContext imple
     @Override
     public void commit() {}
 
-    @SuppressWarnings("unchecked")
     @Override
     public <K, V> void forward(final K key, final V value) {
         forward(key, value, To.all());
     }
 
-    @SuppressWarnings("unchecked")
     @Override
     @Deprecated
     public <K, V> void forward(final K key, final V value, final int childIndex) {
-        forward(key, value, To.child(((List<ProcessorNode>) currentNode().children()).get(childIndex).name()));
+        forward(key, value, To.child((currentNode().children()).get(childIndex).name()));
     }
 
-    @SuppressWarnings("unchecked")
     @Override
     @Deprecated
     public <K, V> void forward(final K key, final V value, final String childName) {
@@ -280,12 +277,12 @@ public class InternalMockProcessorContext extends AbstractProcessorContext imple
         if (toInternal.hasTimestamp()) {
             setTime(toInternal.timestamp());
         }
-        final ProcessorNode thisNode = currentNode;
+        final ProcessorNode<?, ?> thisNode = currentNode;
         try {
-            for (final ProcessorNode childNode : (List<ProcessorNode<K, V>>) thisNode.children()) {
+            for (final ProcessorNode<?, ?> childNode : thisNode.children()) {
                 if (toInternal.child() == null || toInternal.child().equals(childNode.name())) {
                     currentNode = childNode;
-                    childNode.process(key, value);
+                    ((ProcessorNode<K, V>) childNode).process(key, value);
                     toInternal.update(to); // need to reset because MockProcessorContext is shared over multiple Processors and toInternal might have been modified
                 }
             }

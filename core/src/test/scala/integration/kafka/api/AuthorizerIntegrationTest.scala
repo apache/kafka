@@ -308,7 +308,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   }
 
   private def createOffsetFetchRequest = {
-    new requests.OffsetFetchRequest.Builder(group, false, List(tp).asJava).build()
+    new requests.OffsetFetchRequest.Builder(group, false, List(tp).asJava, false).build()
   }
 
   private def createFindCoordinatorRequest = {
@@ -1210,7 +1210,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     // note there's only one broker, so no need to lookup the group coordinator
 
     // without describe permission on the topic, we shouldn't be able to fetch offsets
-    val offsetFetchRequest = new requests.OffsetFetchRequest.Builder(group, false, null).build()
+    val offsetFetchRequest = new requests.OffsetFetchRequest.Builder(group, false, null, false).build()
     var offsetFetchResponse = connectAndReceive[OffsetFetchResponse](offsetFetchRequest)
     assertEquals(Errors.NONE, offsetFetchResponse.error)
     assertTrue(offsetFetchResponse.responseData.isEmpty)

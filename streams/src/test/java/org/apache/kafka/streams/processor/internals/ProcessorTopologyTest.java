@@ -79,7 +79,7 @@ public class ProcessorTopologyTest {
     private static final Headers HEADERS = new RecordHeaders(new Header[]{HEADER});
 
     private final TopologyWrapper topology = new TopologyWrapper();
-    private final MockProcessorSupplier mockProcessorSupplier = new MockProcessorSupplier();
+    private final MockProcessorSupplier<?, ?> mockProcessorSupplier = new MockProcessorSupplier<>();
 
     private TopologyTestDriver driver;
     private final Properties props = new Properties();
@@ -239,8 +239,18 @@ public class ProcessorTopologyTest {
         final String global = "global";
         final String topic = "topic";
 
-        topology.addGlobalStore(Stores.keyValueStoreBuilder(Stores.inMemoryKeyValueStore(storeName), Serdes.String(), Serdes.String()).withLoggingDisabled(),
-                global, STRING_DESERIALIZER, STRING_DESERIALIZER, topic, "processor", define(new StatefulProcessor(storeName)));
+        topology.addGlobalStore(
+            Stores.keyValueStoreBuilder(
+                Stores.inMemoryKeyValueStore(storeName),
+                Serdes.String(),
+                Serdes.String()
+            ).withLoggingDisabled(),
+            global,
+            STRING_DESERIALIZER,
+            STRING_DESERIALIZER,
+            topic,
+            "processor",
+            define(new StatefulProcessor(storeName)));
 
         driver = new TopologyTestDriver(topology, props);
         final TestInputTopic<String, String> inputTopic = driver.createInputTopic(topic, STRING_SERIALIZER, STRING_SERIALIZER);
@@ -424,9 +434,9 @@ public class ProcessorTopologyTest {
         final int partition = 10;
         driver = new TopologyTestDriver(createSimpleTopology(partition), props);
         final TestInputTopic<String, String> inputTopic = driver.createInputTopic(INPUT_TOPIC_1, STRING_SERIALIZER, STRING_SERIALIZER);
-        inputTopic.pipeInput(new TestRecord<String, String>("key1", "value1", HEADERS, 10L));
-        inputTopic.pipeInput(new TestRecord<String, String>("key2", "value2", HEADERS, 20L));
-        inputTopic.pipeInput(new TestRecord<String, String>("key3", "value3", HEADERS, 30L));
+        inputTopic.pipeInput(new TestRecord<>("key1", "value1", HEADERS, 10L));
+        inputTopic.pipeInput(new TestRecord<>("key2", "value2", HEADERS, 20L));
+        inputTopic.pipeInput(new TestRecord<>("key3", "value3", HEADERS, 30L));
         final TestOutputTopic<String, String> outputTopic1 = driver.createOutputTopic(OUTPUT_TOPIC_1, STRING_DESERIALIZER, STRING_DESERIALIZER);
         assertNextOutputRecord(outputTopic1.readRecord(), "key1", "value1", HEADERS, 10L);
         assertNextOutputRecord(outputTopic1.readRecord(), "key2", "value2", HEADERS, 20L);
