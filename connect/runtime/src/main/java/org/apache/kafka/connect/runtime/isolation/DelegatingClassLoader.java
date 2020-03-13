@@ -47,6 +47,7 @@ import java.sql.Driver;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -344,7 +345,7 @@ public class DelegatingClassLoader extends URLClassLoader {
         try {
              plugins = reflections.getSubTypesOf(klass);
         } catch (ReflectionsException e) {
-            log.debug("Reflection scanner could not find any classes for URLs {}",
+            log.debug("Reflections scanner could not find any classes for URLs {}",
                 reflections.getConfiguration().getUrls());
             return Collections.emptyList();
         }

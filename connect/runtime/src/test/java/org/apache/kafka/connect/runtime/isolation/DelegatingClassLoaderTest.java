@@ -17,10 +17,12 @@
 
 package org.apache.kafka.connect.runtime.isolation;
 
+import org.codehaus.plexus.util.FileUtils;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
 
+import java.io.File;
 import java.util.Collections;
 
 import static org.junit.Assert.assertFalse;
@@ -31,7 +33,6 @@ public class DelegatingClassLoaderTest {
 
     @Rule
     public TemporaryFolder pluginPath = new TemporaryFolder();
-
 
     @Test
     public void testWhiteListedManifestResources() {
@@ -71,7 +72,7 @@ public class DelegatingClassLoaderTest {
 
     @Test
     public void testLoadingInvalidUberJar() throws Exception {
-        pluginPath.newFile("test.jar");
+        pluginPath.newFile("invalid.jar");
 
         DelegatingClassLoader classLoader = new DelegatingClassLoader(
             Collections.singletonList(pluginPath.getRoot().getAbsolutePath()));
@@ -81,10 +82,46 @@ public class DelegatingClassLoaderTest {
     @Test
     public void testLoadingPluginDirContainsInvalidJarsOnly() throws Exception {
         pluginPath.newFolder("my-plugin");
-        pluginPath.newFile("my-plugin/test.jar");
+        pluginPath.newFile("my-plugin/invalid.jar");
 
         DelegatingClassLoader classLoader = new DelegatingClassLoader(
             Collections.singletonList(pluginPath.getRoot().getAbsolutePath()));
         classLoader.initLoaders();
+    }
+
+    @Test
+    public void testLoadingNoPlugins() throws Exception {
+        DelegatingClassLoader classLoader = new DelegatingClassLoader(
+            Collections.singletonList(pluginPath.getRoot().getAbsolutePath()));
+        classLoader.initLoaders();
+    }
+
+    @Test
+    public void testLoadingPluginDirEmpty() throws Exception {
+        pluginPath.newFolder("my-plugin");
+
+        DelegatingClassLoader classLoader = new DelegatingClassLoader(
+            Collections.singletonList(pluginPath.getRoot().getAbsolutePath()));
+        classLoader.initLoaders();
+    }
+
+    @Test
+    public void testLoadingMixOfValidAndInvalidPlugins() throws Exception {
+        TestPlugins.assertAvailable();
+
+        pluginPath.newFile("invalid.jar");
+        pluginPath.newFolder("my-plugin");
+        pluginPath.newFile("my-plugin/invalid.jar");
+        for (String fullPath : TestPlugins.pluginPath()) {
+            FileUtils.copyFileToDirectory(new File(fullPath), pluginPath.getRoot());
+        }
+
+        DelegatingClassLoader classLoader = new DelegatingClassLoader(
+            Collections.singletonList(pluginPath.getRoot().getAbsolutePath()));
+        classLoader.initLoaders();
+        for (String pluginClassName : TestPlugins.pluginClasses()) {
+            assertNotNull(classLoader.loadClass(pluginClassName));
+            assertNotNull(classLoader.pluginClassLoader(pluginClassName));
+        }
     }
 }
