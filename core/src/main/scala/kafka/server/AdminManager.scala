@@ -93,6 +93,10 @@ class AdminManager(val config: KafkaConfig,
         if (metadataCache.contains(topic.name))
           throw new TopicExistsException(s"Topic '${topic.name}' already exists.")
 
+        val nullConfigs = topic.configs.asScala.filter(_.value == null).map(_.name)
+        if (nullConfigs.nonEmpty)
+          throw new InvalidRequestException(s"Null value not supported for topic configs : ${nullConfigs.mkString(",")}")
+
         val configs = new Properties()
         topic.configs.asScala.foreach { entry =>
           configs.setProperty(entry.name, entry.value)
@@ -142,7 +146,7 @@ class AdminManager(val config: KafkaConfig,
               }.asJava
             }
             val javaConfigs = new java.util.HashMap[String, String]
-            topic.configs().asScala.foreach(config => javaConfigs.put(config.name(), config.value()))
+            topic.configs.asScala.foreach(config => javaConfigs.put(config.name(), config.value()))
             policy.validate(new RequestMetadata(topic.name, numPartitions, replicationFactor,
               javaAssignments, javaConfigs))
 
@@ -412,10 +416,14 @@ class AdminManager(val config: KafkaConfig,
     configs.map { case (resource, config) =>
 
       try {
+        val nullUpdates = config.entries.asScala.filter(_.value == null).map(_.name)
+        if (nullUpdates.nonEmpty)
+          throw new InvalidRequestException(s"Null value not supported for : ${nullUpdates.mkString(",")}")
+
         val configEntriesMap = config.entries.asScala.map(entry => (entry.name, entry.value)).toMap
 
         val configProps = new Properties
-        config.entries.asScala.foreach { configEntry =>
+        config.entries.asScala.filter(_.value != null).foreach { configEntry =>
           configProps.setProperty(configEntry.name, configEntry.value)
         }
 
@@ -512,6 +520,11 @@ class AdminManager(val config: KafkaConfig,
           .mapValues(_.size).filter(_._2 > 1).keys.toSet
         if (duplicateKeys.nonEmpty)
           throw new InvalidRequestException(s"Error due to duplicate config keys : ${duplicateKeys.mkString(",")}")
+        val nullUpdates = alterConfigOps
+          .filter(entry => entry.configEntry.value == null && entry.opType() != OpType.DELETE)
+          .map(entry => s"${entry.opType}:${entry.configEntry.name}")
+        if (nullUpdates.nonEmpty)
+          throw new InvalidRequestException(s"Null value not supported for : ${nullUpdates.mkString(",")}")
 
         val configEntriesMap = alterConfigOps.map(entry => (entry.configEntry().name(), entry.configEntry().value())).toMap
 
@@ -598,20 +611,27 @@ class AdminManager(val config: KafkaConfig,
     }
 
     alterConfigOps.foreach { alterConfigOp =>
+      val configPropName = alterConfigOp.configEntry().name()
       alterConfigOp.opType() match {
         case OpType.SET => configProps.setProperty(alterConfigOp.configEntry().name(), alterConfigOp.configEntry().value())
         case OpType.DELETE => configProps.remove(alterConfigOp.configEntry().name())
         case OpType.APPEND => {
           if (!listType(alterConfigOp.configEntry().name(), configKeys))
             throw new InvalidRequestException(s"Config value append is not allowed for config key: ${alterConfigOp.configEntry().name()}")
-          val oldValueList = configProps.getProperty(alterConfigOp.configEntry().name()).split(",").toList
+          val oldValueList = Option(configProps.getProperty(alterConfigOp.configEntry().name()))
+            .orElse(Option(ConfigDef.convertToString(configKeys(configPropName).defaultValue, ConfigDef.Type.LIST)))
+            .getOrElse("")
+            .split(",").toList
           val newValueList = oldValueList ::: alterConfigOp.configEntry().value().split(",").toList
           configProps.setProperty(alterConfigOp.configEntry().name(), newValueList.mkString(","))
         }
         case OpType.SUBTRACT => {
           if (!listType(alterConfigOp.configEntry().name(), configKeys))
             throw new InvalidRequestException(s"Config value subtract is not allowed for config key: ${alterConfigOp.configEntry().name()}")
-          val oldValueList = configProps.getProperty(alterConfigOp.configEntry().name()).split(",").toList
+          val oldValueList = Option(configProps.getProperty(alterConfigOp.configEntry().name()))
+            .orElse(Option(ConfigDef.convertToString(configKeys(configPropName).defaultValue, ConfigDef.Type.LIST)))
+            .getOrElse("")
+            .split(",").toList
           val newValueList = oldValueList.diff(alterConfigOp.configEntry().value().split(",").toList)
           configProps.setProperty(alterConfigOp.configEntry().name(), newValueList.mkString(","))
         }
