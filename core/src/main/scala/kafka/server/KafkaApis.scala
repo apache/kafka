@@ -1007,19 +1007,19 @@ class KafkaApis(val requestChannel: RequestChannel,
       adminZkClient.createTopic(topic, numPartitions, replicationFactor, properties, RackAwareMode.Safe)
       info("Auto creation of topic %s with %d partitions and replication factor %d is successful"
         .format(topic, numPartitions, replicationFactor))
-      metadataResponseTopic(Errors.LEADER_NOT_AVAILABLE.code(), topic, isInternal(topic), util.Collections.emptyList())
+      metadataResponseTopic(Errors.LEADER_NOT_AVAILABLE, topic, isInternal(topic), util.Collections.emptyList())
     } catch {
       case _: TopicExistsException => // let it go, possibly another broker created this topic
-        metadataResponseTopic(Errors.LEADER_NOT_AVAILABLE.code(), topic, isInternal(topic), util.Collections.emptyList())
+        metadataResponseTopic(Errors.LEADER_NOT_AVAILABLE, topic, isInternal(topic), util.Collections.emptyList())
       case ex: Throwable  => // Catch all to prevent unhandled errors
-        metadataResponseTopic(Errors.forException(ex).code(), topic, isInternal(topic), util.Collections.emptyList())
+        metadataResponseTopic(Errors.forException(ex), topic, isInternal(topic), util.Collections.emptyList())
     }
   }
 
-  private def metadataResponseTopic(errorCode: Short, topic: String, isInternal: Boolean,
+  private def metadataResponseTopic(error: Errors, topic: String, isInternal: Boolean,
                                     partitionData: util.List[MetadataResponsePartition]): MetadataResponseTopic = {
     new MetadataResponseTopic()
-      .setErrorCode(errorCode)
+      .setErrorCode(error.code)
       .setName(topic)
       .setIsInternal(isInternal)
       .setPartitions(partitionData)
@@ -1038,7 +1038,7 @@ class KafkaApis(val requestChannel: RequestChannel,
             s"'${config.offsetsTopicReplicationFactor}' for the offsets topic (configured via " +
             s"'${KafkaConfig.OffsetsTopicReplicationFactorProp}'). This error can be ignored if the cluster is starting up " +
             s"and not all brokers are up yet.")
-          metadataResponseTopic(Errors.COORDINATOR_NOT_AVAILABLE.code(), topic, true, util.Collections.emptyList())
+          metadataResponseTopic(Errors.COORDINATOR_NOT_AVAILABLE, topic, true, util.Collections.emptyList())
         } else {
           createTopic(topic, config.offsetsTopicPartitions, config.offsetsTopicReplicationFactor.toInt,
             groupCoordinator.offsetsTopicConfigs)
@@ -1049,7 +1049,7 @@ class KafkaApis(val requestChannel: RequestChannel,
             s"'${config.transactionTopicReplicationFactor}' for the transactions state topic (configured via " +
             s"'${KafkaConfig.TransactionsTopicReplicationFactorProp}'). This error can be ignored if the cluster is starting up " +
             s"and not all brokers are up yet.")
-          metadataResponseTopic(Errors.COORDINATOR_NOT_AVAILABLE.code(), topic, true, util.Collections.emptyList())
+          metadataResponseTopic(Errors.COORDINATOR_NOT_AVAILABLE, topic, true, util.Collections.emptyList())
         } else {
           createTopic(topic, config.transactionTopicPartitions, config.transactionTopicReplicationFactor.toInt,
             txnCoordinator.transactionTopicConfigs)
@@ -1075,14 +1075,14 @@ class KafkaApis(val requestChannel: RequestChannel,
       val responsesForNonExistentTopics = nonExistentTopics.map { topic =>
         if (isInternal(topic)) {
           val topicMetadata = createInternalTopic(topic)
-          if (topicMetadata.errorCode() == Errors.COORDINATOR_NOT_AVAILABLE.code())
-            metadataResponseTopic(Errors.INVALID_REPLICATION_FACTOR.code(), topic, true, util.Collections.emptyList())
+          if (topicMetadata.errorCode == Errors.COORDINATOR_NOT_AVAILABLE.code)
+            metadataResponseTopic(Errors.INVALID_REPLICATION_FACTOR, topic, true, util.Collections.emptyList())
           else
             topicMetadata
         } else if (allowAutoTopicCreation && config.autoCreateTopicsEnable) {
           createTopic(topic, config.numPartitions, config.defaultReplicationFactor)
         } else {
-          metadataResponseTopic(Errors.UNKNOWN_TOPIC_OR_PARTITION.code(), topic, false, util.Collections.emptyList())
+          metadataResponseTopic(Errors.UNKNOWN_TOPIC_OR_PARTITION, topic, false, util.Collections.emptyList())
         }
       }
       topicResponses ++ responsesForNonExistentTopics
@@ -1117,7 +1117,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
 
     val unauthorizedForCreateTopicMetadata = unauthorizedForCreateTopics.map(topic =>
-      metadataResponseTopic(Errors.TOPIC_AUTHORIZATION_FAILED.code(), topic, isInternal(topic), util.Collections.emptyList()))
+      metadataResponseTopic(Errors.TOPIC_AUTHORIZATION_FAILED, topic, isInternal(topic), util.Collections.emptyList()))
 
 
     // do not disclose the existence of topics unauthorized for Describe, so we've not even checked if they exist or not
@@ -1127,7 +1127,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         Set.empty[MetadataResponseTopic]
       else
         unauthorizedForDescribeTopics.map(topic =>
-          metadataResponseTopic(Errors.TOPIC_AUTHORIZATION_FAILED.code(), topic, false, util.Collections.emptyList()))
+          metadataResponseTopic(Errors.TOPIC_AUTHORIZATION_FAILED, topic, false, util.Collections.emptyList()))
 
     // In version 0, we returned an error when brokers with replicas were unavailable,
     // while in higher versions we simply don't include the broker in the returned broker list
@@ -1155,7 +1155,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       // get topic authorized operations
       if (metadataRequest.data.includeTopicAuthorizedOperations) {
         topicMetadata.foreach { topicData =>
-          topicData.setTopicAuthorizedOperations(authorizedOperations(request, new Resource(ResourceType.TOPIC, topicData.name())))
+          topicData.setTopicAuthorizedOperations(authorizedOperations(request, new Resource(ResourceType.TOPIC, topicData.name)))
         }
       }
     }
@@ -1293,12 +1293,12 @@ class KafkaApis(val requestChannel: RequestChannel,
                 .setPort(node.port)
                 .setThrottleTimeMs(requestThrottleMs))
         }
-        val responseBody = if (topicMetadata.errorCode() != Errors.NONE.code()) {
+        val responseBody = if (topicMetadata.errorCode != Errors.NONE.code) {
           createFindCoordinatorResponse(Errors.COORDINATOR_NOT_AVAILABLE, Node.noNode)
         } else {
-          val coordinatorEndpoint = topicMetadata.partitions().asScala
-            .find(_.partitionIndex() == partition)
-            .filter(_.leaderId() != MetadataResponse.NO_LEADER_ID)
+          val coordinatorEndpoint = topicMetadata.partitions.asScala
+            .find(_.partitionIndex == partition)
+            .filter(_.leaderId != MetadataResponse.NO_LEADER_ID)
             .flatMap(metadata => metadataCache.getAliveBroker(metadata.leaderId))
             .flatMap(_.getNode(request.context.listenerName))
             .filterNot(_.isEmpty)

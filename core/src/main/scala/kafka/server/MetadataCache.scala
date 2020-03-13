@@ -82,7 +82,7 @@ class MetadataCache(brokerId: Int) extends Logging {
   private def getPartitionMetadata(snapshot: MetadataSnapshot, topic: String, listenerName: ListenerName, errorUnavailableEndpoints: Boolean,
                                    errorUnavailableListeners: Boolean): Option[Iterable[MetadataResponsePartition]] = {
     snapshot.partitionStates.get(topic).map { partitions =>
-        partitions.map { case (partitionId, partitionState) =>
+      partitions.map { case (partitionId, partitionState) =>
         val topicPartition = new TopicPartition(topic, partitionId.toInt)
         val leaderBrokerId = partitionState.leader
         val leaderEpoch = partitionState.leaderEpoch
@@ -108,7 +108,7 @@ class MetadataCache(brokerId: Int) extends Logging {
             }
 
             new MetadataResponsePartition()
-              .setErrorCode(error.code())
+              .setErrorCode(error.code)
               .setPartitionIndex(partitionId.toInt)
               .setLeaderId(MetadataResponse.NO_LEADER_ID)
               .setLeaderEpoch(leaderEpoch)
@@ -130,7 +130,7 @@ class MetadataCache(brokerId: Int) extends Logging {
             }
 
             new MetadataResponsePartition()
-              .setErrorCode(error.code())
+              .setErrorCode(error.code)
               .setPartitionIndex(partitionId.toInt)
               .setLeaderId(maybeLeader.map(_.id()).getOrElse(MetadataResponse.NO_LEADER_ID))
               .setLeaderEpoch(leaderEpoch)
@@ -170,7 +170,7 @@ class MetadataCache(brokerId: Int) extends Logging {
     topics.toSeq.flatMap { topic =>
       getPartitionMetadata(snapshot, topic, listenerName, errorUnavailableEndpoints, errorUnavailableListeners).map { partitionMetadata =>
         new MetadataResponseTopic()
-          .setErrorCode(Errors.NONE.code())
+          .setErrorCode(Errors.NONE.code)
           .setName(topic)
           .setIsInternal(Topic.isInternal(topic))
           .setPartitions(partitionMetadata.toBuffer.asJava)
