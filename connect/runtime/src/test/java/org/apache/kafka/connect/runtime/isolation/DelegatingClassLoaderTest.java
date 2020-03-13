@@ -17,12 +17,13 @@
 
 package org.apache.kafka.connect.runtime.isolation;
 
-import org.codehaus.plexus.util.FileUtils;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
 
 import java.io.File;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.Collections;
 
 import static org.junit.Assert.assertFalse;
@@ -32,7 +33,7 @@ import static org.junit.Assert.assertTrue;
 public class DelegatingClassLoaderTest {
 
     @Rule
-    public TemporaryFolder pluginPath = new TemporaryFolder();
+    public TemporaryFolder pluginDir = new TemporaryFolder();
 
     @Test
     public void testWhiteListedManifestResources() {
@@ -72,36 +73,36 @@ public class DelegatingClassLoaderTest {
 
     @Test
     public void testLoadingInvalidUberJar() throws Exception {
-        pluginPath.newFile("invalid.jar");
+        pluginDir.newFile("invalid.jar");
 
         DelegatingClassLoader classLoader = new DelegatingClassLoader(
-            Collections.singletonList(pluginPath.getRoot().getAbsolutePath()));
+            Collections.singletonList(pluginDir.getRoot().getAbsolutePath()));
         classLoader.initLoaders();
     }
 
     @Test
     public void testLoadingPluginDirContainsInvalidJarsOnly() throws Exception {
-        pluginPath.newFolder("my-plugin");
-        pluginPath.newFile("my-plugin/invalid.jar");
+        pluginDir.newFolder("my-plugin");
+        pluginDir.newFile("my-plugin/invalid.jar");
 
         DelegatingClassLoader classLoader = new DelegatingClassLoader(
-            Collections.singletonList(pluginPath.getRoot().getAbsolutePath()));
+            Collections.singletonList(pluginDir.getRoot().getAbsolutePath()));
         classLoader.initLoaders();
     }
 
     @Test
     public void testLoadingNoPlugins() throws Exception {
         DelegatingClassLoader classLoader = new DelegatingClassLoader(
-            Collections.singletonList(pluginPath.getRoot().getAbsolutePath()));
+            Collections.singletonList(pluginDir.getRoot().getAbsolutePath()));
         classLoader.initLoaders();
     }
 
     @Test
     public void testLoadingPluginDirEmpty() throws Exception {
-        pluginPath.newFolder("my-plugin");
+        pluginDir.newFolder("my-plugin");
 
         DelegatingClassLoader classLoader = new DelegatingClassLoader(
-            Collections.singletonList(pluginPath.getRoot().getAbsolutePath()));
+            Collections.singletonList(pluginDir.getRoot().getAbsolutePath()));
         classLoader.initLoaders();
     }
 
@@ -109,15 +110,18 @@ public class DelegatingClassLoaderTest {
     public void testLoadingMixOfValidAndInvalidPlugins() throws Exception {
         TestPlugins.assertAvailable();
 
-        pluginPath.newFile("invalid.jar");
-        pluginPath.newFolder("my-plugin");
-        pluginPath.newFile("my-plugin/invalid.jar");
-        for (String fullPath : TestPlugins.pluginPath()) {
-            FileUtils.copyFileToDirectory(new File(fullPath), pluginPath.getRoot());
+        pluginDir.newFile("invalid.jar");
+        pluginDir.newFolder("my-plugin");
+        pluginDir.newFile("my-plugin/invalid.jar");
+        Path pluginPath = this.pluginDir.getRoot().toPath();
+
+        for (String sourceJar : TestPlugins.pluginPath()) {
+            Path source = new File(sourceJar).toPath();
+            Files.copy(source, pluginPath.resolve(source.getFileName()));
         }
 
         DelegatingClassLoader classLoader = new DelegatingClassLoader(
-            Collections.singletonList(pluginPath.getRoot().getAbsolutePath()));
+            Collections.singletonList(pluginDir.getRoot().getAbsolutePath()));
         classLoader.initLoaders();
         for (String pluginClassName : TestPlugins.pluginClasses()) {
             assertNotNull(classLoader.loadClass(pluginClassName));
