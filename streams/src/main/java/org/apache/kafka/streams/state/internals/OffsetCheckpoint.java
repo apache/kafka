@@ -67,6 +67,8 @@ public class OffsetCheckpoint {
     }
 
     /**
+     * Write the given offsets to the checkpoint file. All offsets should be non-negative.
+     *
      * @throws IOException if any file operation fails with an IO exception
      */
     public void write(final Map<TopicPartition, Long> offsets) throws IOException {
@@ -131,6 +133,8 @@ public class OffsetCheckpoint {
 
 
     /**
+     * Reads the offsets from the local checkpoint file, skipping any negative offsets it finds.
+     *
      * @throws IOException if any file operation fails with an IO exception
      * @throws IllegalArgumentException if the offset checkpoint version is unknown
      */
