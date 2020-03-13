@@ -1830,11 +1830,12 @@ class KafkaApis(val requestChannel: RequestChannel,
 
     val authorizedTopics = filterAuthorized(request, DELETE, TOPIC,
       deleteRecordsRequest.data.topics.asScala.map(_.name))
-    for ((topicPartition, offset) <- deleteRecordsRequest.data.topics.asScala.flatMap(deleteTopic => {
+    val deleteTopicPartitions = deleteRecordsRequest.data.topics.asScala.flatMap(deleteTopic => {
       deleteTopic.partitions.asScala.map(deletePartition => {
         new TopicPartition(deleteTopic.name, deletePartition.partitionIndex) -> deletePartition.offset
       })
-    })) {
+    })
+    for ((topicPartition, offset) <- deleteTopicPartitions) {
       if (!authorizedTopics.contains(topicPartition.topic))
         unauthorizedTopicResponses += topicPartition -> new DeleteRecordsPartitionResult()
           .setLowWatermark(DeleteRecordsResponse.INVALID_LOW_WATERMARK)

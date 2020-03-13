@@ -2486,9 +2486,8 @@ public class KafkaAdminClient extends AdminClient {
                     } else {
                         Node node = cluster.leaderFor(topicPartition);
                         if (node != null) {
-                            if (!leaders.containsKey(node))
-                                leaders.put(node, new HashMap<>());
-                            Map<String, DeleteRecordsTopic> deletionsForLeader = leaders.get(node);
+                            Map<String, DeleteRecordsTopic> deletionsForLeader = leaders.computeIfAbsent(
+                                    node, key -> new HashMap<>());
                             DeleteRecordsTopic deleteRecords = deletionsForLeader.get(topicPartition.topic());
                             if (deleteRecords == null) {
                                 deleteRecords = new DeleteRecordsTopic()
@@ -2539,11 +2538,9 @@ public class KafkaAdminClient extends AdminClient {
                         void handleFailure(Throwable throwable) {
                             Stream<KafkaFutureImpl<DeletedRecords>> callFutures =
                                     partitionDeleteOffsets.values().stream().flatMap(
-                                        recordsToDelete1 -> {
-                                            Stream<TopicPartition> topicPartitionStream = recordsToDelete1.partitions().stream().map(partitionsToDelete ->
-                                                    new TopicPartition(recordsToDelete1.name(), partitionsToDelete.partitionIndex()));
-                                            return topicPartitionStream;
-                                        }
+                                        recordsToDelete ->
+                                                recordsToDelete.partitions().stream().map(partitionsToDelete ->
+                                                    new TopicPartition(recordsToDelete.name(), partitionsToDelete.partitionIndex()))
                                     ).map(futures::get);
                             completeAllExceptionally(callFutures, throwable);
                         }

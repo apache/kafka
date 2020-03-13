@@ -28,7 +28,7 @@ import java.util.Map;
 
 public class DeleteRecordsResponse extends AbstractResponse {
 
-    public static final long INVALID_LOW_WATERMARK = -1;
+    public static final long INVALID_LOW_WATERMARK = -1L;
     private final DeleteRecordsResponseData data;
 
     /**
