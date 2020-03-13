@@ -123,7 +123,7 @@ public abstract class AbstractResponse implements AbstractRequestResponse {
             case DELETE_TOPICS:
                 return new DeleteTopicsResponse(struct, version);
             case DELETE_RECORDS:
-                return new DeleteRecordsResponse(struct);
+                return new DeleteRecordsResponse(struct, version);
             case INIT_PRODUCER_ID:
                 return new InitProducerIdResponse(struct, version);
             case OFFSET_FOR_LEADER_EPOCH:

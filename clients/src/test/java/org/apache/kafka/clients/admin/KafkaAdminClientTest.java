@@ -68,6 +68,7 @@ import org.apache.kafka.common.message.DeleteAclsResponseData;
 import org.apache.kafka.common.message.DeleteGroupsResponseData;
 import org.apache.kafka.common.message.DeleteGroupsResponseData.DeletableGroupResult;
 import org.apache.kafka.common.message.DeleteGroupsResponseData.DeletableGroupResultCollection;
+import org.apache.kafka.common.message.DeleteRecordsResponseData;
 import org.apache.kafka.common.message.DeleteTopicsResponseData;
 import org.apache.kafka.common.message.DeleteTopicsResponseData.DeletableTopicResult;
 import org.apache.kafka.common.message.DescribeAclsResponseData;
@@ -973,9 +974,13 @@ public class KafkaAdminClientTest {
             env.kafkaClient().prepareResponse(MetadataResponse.prepareResponse(env.cluster().nodes(),
                     env.cluster().clusterResource().clusterId(), env.cluster().controller().id(), topicMetadata));
 
-            Map<TopicPartition, DeleteRecordsResponse.PartitionResponse> deletedPartitions = new HashMap<>();
-            deletedPartitions.put(tp0, new DeleteRecordsResponse.PartitionResponse(3, Errors.NONE));
-            env.kafkaClient().prepareResponseFrom(new DeleteRecordsResponse(0, deletedPartitions), nodes.get(0));
+            env.kafkaClient().prepareResponseFrom(new DeleteRecordsResponse(new DeleteRecordsResponseData().setTopics(
+                    new DeleteRecordsResponseData.DeleteRecordsTopicResultCollection(singletonList(new DeleteRecordsResponseData.DeleteRecordsTopicResult()
+                            .setName(tp0.topic())
+                            .setPartitions(new DeleteRecordsResponseData.DeleteRecordsPartitionResultCollection(singletonList(new DeleteRecordsResponseData.DeleteRecordsPartitionResult()
+                                    .setPartitionIndex(tp0.partition())
+                                    .setErrorCode(Errors.NONE.code())
+                                    .setLowWatermark(3)).iterator()))).iterator()))), nodes.get(0));
 
             env.kafkaClient().disconnect(nodes.get(1).idString());
             env.kafkaClient().createPendingAuthenticationError(nodes.get(1), 100);
@@ -1013,15 +1018,26 @@ public class KafkaAdminClientTest {
         try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(cluster)) {
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
 
-            Map<TopicPartition, DeleteRecordsResponse.PartitionResponse> m = new HashMap<>();
-            m.put(myTopicPartition0,
-                    new DeleteRecordsResponse.PartitionResponse(3, Errors.NONE));
-            m.put(myTopicPartition1,
-                    new DeleteRecordsResponse.PartitionResponse(DeleteRecordsResponse.INVALID_LOW_WATERMARK, Errors.OFFSET_OUT_OF_RANGE));
-            m.put(myTopicPartition3,
-                    new DeleteRecordsResponse.PartitionResponse(DeleteRecordsResponse.INVALID_LOW_WATERMARK, Errors.NOT_LEADER_FOR_PARTITION));
-            m.put(myTopicPartition4,
-                    new DeleteRecordsResponse.PartitionResponse(DeleteRecordsResponse.INVALID_LOW_WATERMARK, Errors.UNKNOWN_TOPIC_OR_PARTITION));
+            DeleteRecordsResponseData m = new DeleteRecordsResponseData();
+            m.topics().add(new DeleteRecordsResponseData.DeleteRecordsTopicResult().setName(myTopicPartition0.topic())
+                    .setPartitions(new DeleteRecordsResponseData.DeleteRecordsPartitionResultCollection(asList(
+                        new DeleteRecordsResponseData.DeleteRecordsPartitionResult()
+                            .setPartitionIndex(myTopicPartition0.partition())
+                            .setLowWatermark(3)
+                            .setErrorCode(Errors.NONE.code()),
+                        new DeleteRecordsResponseData.DeleteRecordsPartitionResult()
+                            .setPartitionIndex(myTopicPartition1.partition())
+                            .setLowWatermark(DeleteRecordsResponse.INVALID_LOW_WATERMARK)
+                            .setErrorCode(Errors.OFFSET_OUT_OF_RANGE.code()),
+                        new DeleteRecordsResponseData.DeleteRecordsPartitionResult()
+                            .setPartitionIndex(myTopicPartition3.partition())
+                            .setLowWatermark(DeleteRecordsResponse.INVALID_LOW_WATERMARK)
+                            .setErrorCode(Errors.NOT_LEADER_FOR_PARTITION.code()),
+                        new DeleteRecordsResponseData.DeleteRecordsPartitionResult()
+                            .setPartitionIndex(myTopicPartition4.partition())
+                            .setLowWatermark(DeleteRecordsResponse.INVALID_LOW_WATERMARK)
+                            .setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code())
+                    ).iterator())));
 
             List<MetadataResponse.TopicMetadata> t = new ArrayList<>();
             List<MetadataResponse.PartitionMetadata> p = new ArrayList<>();
@@ -1044,7 +1060,7 @@ public class KafkaAdminClientTest {
             t.add(new MetadataResponse.TopicMetadata(Errors.NONE, "my_topic", false, p));
 
             env.kafkaClient().prepareResponse(MetadataResponse.prepareResponse(cluster.nodes(), cluster.clusterResource().clusterId(), cluster.controller().id(), t));
-            env.kafkaClient().prepareResponse(new DeleteRecordsResponse(0, m));
+            env.kafkaClient().prepareResponse(new DeleteRecordsResponse(m));
 
             Map<TopicPartition, RecordsToDelete> recordsToDelete = new HashMap<>();
             recordsToDelete.put(myTopicPartition0, RecordsToDelete.beforeOffset(3L));
