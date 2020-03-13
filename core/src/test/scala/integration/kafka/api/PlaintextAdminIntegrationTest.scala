@@ -1653,9 +1653,11 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       new AlterConfigOp(new ConfigEntry(LogConfig.RetentionMsProp, ""), AlterConfigOp.OpType.DELETE)
     ).asJavaCollection
 
-    val topic2AlterConfigs = Seq(
+    // Test SET and APPEND on previously unset properties
+    var topic2AlterConfigs = Seq(
       new AlterConfigOp(new ConfigEntry(LogConfig.MinCleanableDirtyRatioProp, "0.9"), AlterConfigOp.OpType.SET),
-      new AlterConfigOp(new ConfigEntry(LogConfig.CompressionTypeProp, "lz4"), AlterConfigOp.OpType.SET)
+      new AlterConfigOp(new ConfigEntry(LogConfig.CompressionTypeProp, "lz4"), AlterConfigOp.OpType.SET),
+      new AlterConfigOp(new ConfigEntry(LogConfig.CleanupPolicyProp, LogConfig.Compact), AlterConfigOp.OpType.APPEND)
     ).asJavaCollection
 
     var alterResult = client.incrementalAlterConfigs(Map(
@@ -1678,23 +1680,36 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
 
     assertEquals("0.9", configs.get(topic2Resource).get(LogConfig.MinCleanableDirtyRatioProp).value)
     assertEquals("lz4", configs.get(topic2Resource).get(LogConfig.CompressionTypeProp).value)
+    assertEquals("delete,compact", configs.get(topic2Resource).get(LogConfig.CleanupPolicyProp).value)
 
-    //verify subtract operation
+    //verify subtract operation, including from an empty property
     topic1AlterConfigs = Seq(
-      new AlterConfigOp(new ConfigEntry(LogConfig.CleanupPolicyProp, LogConfig.Compact), AlterConfigOp.OpType.SUBTRACT)
+      new AlterConfigOp(new ConfigEntry(LogConfig.CleanupPolicyProp, LogConfig.Compact), AlterConfigOp.OpType.SUBTRACT),
+      new AlterConfigOp(new ConfigEntry(LogConfig.LeaderReplicationThrottledReplicasProp, "0"), AlterConfigOp.OpType.SUBTRACT)
     ).asJava
 
-   alterResult = client.incrementalAlterConfigs(Map(
-      topic1Resource -> topic1AlterConfigs
+    // subtract all from this list property
+    topic2AlterConfigs = Seq(
+      new AlterConfigOp(new ConfigEntry(LogConfig.CleanupPolicyProp, LogConfig.Compact + "," + LogConfig.Delete), AlterConfigOp.OpType.SUBTRACT)
+    ).asJavaCollection
+
+    alterResult = client.incrementalAlterConfigs(Map(
+      topic1Resource -> topic1AlterConfigs,
+      topic2Resource -> topic2AlterConfigs
     ).asJava)
+    assertEquals(Set(topic1Resource, topic2Resource).asJava, alterResult.values.keySet)
     alterResult.all.get
 
     // Verify that topics were updated correctly
-    describeResult = client.describeConfigs(Seq(topic1Resource).asJava)
+    describeResult = client.describeConfigs(Seq(topic1Resource, topic2Resource).asJava)
     configs = describeResult.all.get
+
+    assertEquals(2, configs.size)
 
     assertEquals("delete", configs.get(topic1Resource).get(LogConfig.CleanupPolicyProp).value)
     assertEquals("1000", configs.get(topic1Resource).get(LogConfig.FlushMsProp).value) // verify previous change is still intact
+    assertEquals("", configs.get(topic1Resource).get(LogConfig.LeaderReplicationThrottledReplicasProp).value)
+    assertEquals("", configs.get(topic2Resource).get(LogConfig.CleanupPolicyProp).value )
 
     // Alter topics with validateOnly=true
     topic1AlterConfigs = Seq(
