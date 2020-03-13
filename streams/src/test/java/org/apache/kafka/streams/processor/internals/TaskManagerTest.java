@@ -311,7 +311,6 @@ public class TaskManagerTest {
     @Test
     public void shouldNotReportOffsetSumsAndReleaseLockForUnassignedTaskWithoutCheckpoint() throws IOException {
         expectLockObtainedFor(taskId00);
-        expectUnlockFor(taskId00);
         makeTaskFolders(taskId00.toString());
         expect(stateDirectory.checkpointFileFor(taskId00)).andReturn(getCheckpointFile(taskId00));
         replay(stateDirectory);
@@ -319,22 +318,6 @@ public class TaskManagerTest {
 
         assertTrue(taskManager.getTaskOffsetSums().isEmpty());
         verify(stateDirectory);
-    }
-
-    @Test
-    public void shouldSkipInvalidOffsetsWhenComputingOffsetSum() throws IOException {
-        final Map<TopicPartition, Long> changelogOffsets = mkMap(
-            mkEntry(new TopicPartition("changelog", 1), -1L)
-        );
-        final Map<TaskId, Long> expectedOffsetSums = mkMap(mkEntry(taskId00, 0L));
-
-        expectLockObtainedFor(taskId00);
-        makeTaskFolders(taskId00.toString());
-        writeCheckpointFile(taskId00, changelogOffsets);
-        replay(stateDirectory);
-        taskManager.handleRebalanceStart(singleton("topic"));
-
-        assertThat(taskManager.getTaskOffsetSums(), is(expectedOffsetSums));
     }
 
     @Test
