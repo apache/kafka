@@ -92,9 +92,11 @@ public class ForeignJoinSubscriptionSendProcessorSupplier<K, KO, V> implements P
 
         @Override
         public void process(final K key, final Change<V> change) {
+            final byte[] serialize = valueSerializer.serialize(valueSerdeTopic, change.newValue);
+
             final long[] currentHash = change.newValue == null ?
                 null :
-                Murmur3.hash128(valueSerializer.serialize(valueSerdeTopic, change.newValue));
+                Murmur3.hash128(serialize);
 
             if (change.oldValue != null) {
                 final KO oldForeignKey = foreignKeyExtractor.apply(change.oldValue);
