@@ -39,7 +39,7 @@ import org.apache.kafka.streams.state.ValueAndTimestamp;
  */
 public class MeteredTimestampedKeyValueStore<K, V>
     extends MeteredKeyValueStore<K, ValueAndTimestamp<V>>
-    implements TimestampedKeyValueStore<K, V> {
+    implements TimestampedSerializedKeyValueStore<K, V> {
 
     MeteredTimestampedKeyValueStore(final KeyValueStore<Bytes, byte[]> inner,
                                     final String metricScope,
@@ -57,10 +57,10 @@ public class MeteredTimestampedKeyValueStore<K, V>
             valueSerde == null ? new ValueAndTimestampSerde<>((Serde<V>) context.valueSerde()) : valueSerde);
     }
 
-    public RawAndDeserializedValue getWithBinary(final K key) {
+    public RawAndDeserializedValue<V> getWithBinary(final K key) {
         try {
             final byte[] serializedValue = wrapped().get(keyBytes(key));
-            return new RawAndDeserializedValue(serializedValue,
+            return new RawAndDeserializedValue<V>(serializedValue,
                 maybeMeasureLatency(() -> outerValue(serializedValue), time, getSensor));
         } catch (final ProcessorStateException e) {
             final String message = String.format(e.getMessage(), key);
@@ -73,19 +73,11 @@ public class MeteredTimestampedKeyValueStore<K, V>
                                   final byte[] oldSerializedValue) {
         final Bytes serializedNewValueBytes = Bytes.wrap(serdes.rawValue(newValue));
         final Bytes serializedOldValueBytes = Bytes.wrap(oldSerializedValue);
-        if (!serializedNewValueBytes.equals(serializedOldValueBytes)) {
+        if (serializedNewValueBytes == null ||
+            !serializedNewValueBytes.equals(serializedOldValueBytes)) {
             super.put(key, newValue);
             return true;
         }
         return false;
-    }
-
-    public class RawAndDeserializedValue {
-        public final byte[] serializedValue;
-        public final ValueAndTimestamp<V> value;
-        public RawAndDeserializedValue(final byte[] serializedValue, final ValueAndTimestamp<V> value) {
-            this.serializedValue = serializedValue;
-            this.value = value;
-        }
     }
 }

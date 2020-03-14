@@ -38,6 +38,7 @@ import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 import org.apache.kafka.streams.state.internals.ThreadCache;
+import org.apache.kafka.streams.state.internals.TimestampedSerializedKeyValueStore;
 import org.apache.kafka.streams.state.internals.WrappedStateStore;
 
 import java.time.Duration;
@@ -112,7 +113,7 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
 
         final StateStore store = stateManager.getStore(name);
         if (store instanceof TimestampedKeyValueStore) {
-            return new TimestampedKeyValueStoreReadWriteDecorator((TimestampedKeyValueStore) store);
+            return new TimestampedKeyValueStoreReadWriteDecorator((TimestampedSerializedKeyValueStore) store);
         } else if (store instanceof KeyValueStore) {
             return new KeyValueStoreReadWriteDecorator((KeyValueStore) store);
         } else if (store instanceof TimestampedWindowStore) {
@@ -506,10 +507,23 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
 
     static class TimestampedKeyValueStoreReadWriteDecorator<K, V>
         extends KeyValueStoreReadWriteDecorator<K, ValueAndTimestamp<V>>
-        implements TimestampedKeyValueStore<K, V> {
+        implements TimestampedSerializedKeyValueStore<K, V> {
 
-        TimestampedKeyValueStoreReadWriteDecorator(final TimestampedKeyValueStore<K, V> inner) {
+        TimestampedKeyValueStoreReadWriteDecorator(final TimestampedSerializedKeyValueStore<K, V> inner) {
             super(inner);
+        }
+
+        @Override
+        public RawAndDeserializedValue<V> getWithBinary(final K key) {
+            return ((TimestampedSerializedKeyValueStore<K, V>) wrapped()).getWithBinary(key);
+        }
+
+        @Override
+        public boolean putIfDifferent(final K key,
+                                      final ValueAndTimestamp<V> newValue,
+                                      final byte[] oldSerializedValue) {
+            return ((TimestampedSerializedKeyValueStore<K, V>) wrapped())
+                    .putIfDifferent(key, newValue, oldSerializedValue);
         }
     }
 

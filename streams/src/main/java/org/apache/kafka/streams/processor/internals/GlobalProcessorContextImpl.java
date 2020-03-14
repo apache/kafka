@@ -35,6 +35,7 @@ import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.TimestampedWindowStore;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.internals.ThreadCache;
+import org.apache.kafka.streams.state.internals.TimestampedSerializedKeyValueStore;
 
 import java.time.Duration;
 import java.util.List;
@@ -55,7 +56,7 @@ public class GlobalProcessorContextImpl extends AbstractProcessorContext {
         final StateStore store = stateManager.getGlobalStore(name);
 
         if (store instanceof TimestampedKeyValueStore) {
-            return new TimestampedKeyValueStoreReadWriteDecorator((TimestampedKeyValueStore) store);
+            return new TimestampedKeyValueStoreReadWriteDecorator((TimestampedSerializedKeyValueStore) store);
         } else if (store instanceof KeyValueStore) {
             return new KeyValueStoreReadWriteDecorator((KeyValueStore) store);
         } else if (store instanceof TimestampedWindowStore) {
