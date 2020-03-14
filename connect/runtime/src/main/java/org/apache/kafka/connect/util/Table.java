@@ -62,4 +62,7 @@ public class Table<R, C, V> {
         return Collections.unmodifiableMap(columns);
     }
 
+    public boolean isEmpty() {
+        return table.isEmpty();
+    }
 }

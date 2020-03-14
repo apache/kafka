@@ -17,11 +17,11 @@
 
 package org.apache.kafka.streams.integration;
 
-import kafka.utils.MockTime;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
@@ -38,6 +38,7 @@ import org.apache.kafka.streams.state.internals.KeyValueStoreBuilder;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.TestUtils;
+
 import org.junit.After;
 import org.junit.Before;
 import org.junit.ClassRule;
@@ -53,6 +54,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.Assert.assertEquals;
 
+
 /**
  * This test asserts that when Kafka Streams is closing and shuts
  * down a StreamThread the closing of the GlobalStreamThread happens
@@ -67,14 +69,14 @@ public class GlobalThreadShutDownOrderTest {
 
     private static final int NUM_BROKERS = 1;
     private static final Properties BROKER_CONFIG;
-    private final AtomicInteger closeCounter = new AtomicInteger(0);
-    private final int expectedCloseCount = 1;
 
     static {
         BROKER_CONFIG = new Properties();
         BROKER_CONFIG.put("transaction.state.log.replication.factor", (short) 1);
         BROKER_CONFIG.put("transaction.state.log.min.isr", 1);
     }
+
+    private final AtomicInteger closeCounter = new AtomicInteger(0);
 
     @ClassRule
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS, BROKER_CONFIG);
@@ -123,13 +125,12 @@ public class GlobalThreadShutDownOrderTest {
     }
 
     @After
-    public void whenShuttingDown() throws Exception {
+    public void after() throws Exception {
         if (kafkaStreams != null) {
             kafkaStreams.close();
         }
         IntegrationTestUtils.purgeLocalStreamsState(streamsConfiguration);
     }
-
 
     @Test
     public void shouldFinishGlobalStoreOperationOnShutDown() throws Exception {
@@ -148,7 +149,7 @@ public class GlobalThreadShutDownOrderTest {
 
         final List<Long> expectedRetrievedValues = Arrays.asList(1L, 2L, 3L, 4L);
         assertEquals(expectedRetrievedValues, retrievedValuesList);
-        assertEquals(expectedCloseCount, closeCounter.get());
+        assertEquals(1, closeCounter.get());
     }
 
 

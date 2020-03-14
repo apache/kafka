@@ -25,7 +25,6 @@ import org.apache.kafka.streams.KeyValue
 import org.apache.kafka.streams.kstream.{
   JoinWindows,
   Transformer,
-  TransformerSupplier,
   ValueTransformer,
   ValueTransformerSupplier,
   ValueTransformerWithKey,
@@ -37,8 +36,8 @@ import org.apache.kafka.streams.scala.Serdes._
 import org.apache.kafka.streams.scala.StreamsBuilder
 import org.apache.kafka.streams.scala.utils.TestDriver
 import org.junit.runner.RunWith
-import org.scalatest.junit.JUnitRunner
 import org.scalatest.{FlatSpec, Matchers}
+import org.scalatestplus.junit.JUnitRunner
 
 @RunWith(classOf[JUnitRunner])
 class KStreamTest extends FlatSpec with Matchers with TestDriver {
@@ -197,10 +196,7 @@ class KStreamTest extends FlatSpec with Matchers with TestDriver {
 
     val stream = builder.stream[String, String](sourceTopic)
     stream
-      .transform(new TransformerSupplier[String, String, KeyValue[String, String]] {
-        def get(): Transformer[String, String, KeyValue[String, String]] =
-          new TestTransformer
-      })
+      .transform(() => new TestTransformer)
       .to(sinkTopic)
 
     val now = Instant.now()
@@ -232,10 +228,7 @@ class KStreamTest extends FlatSpec with Matchers with TestDriver {
 
     val stream = builder.stream[String, String](sourceTopic)
     stream
-      .flatTransform(new TransformerSupplier[String, String, Iterable[KeyValue[String, String]]] {
-        def get(): Transformer[String, String, Iterable[KeyValue[String, String]]] =
-          new TestTransformer
-      })
+      .flatTransform(() => new TestTransformer)
       .to(sinkTopic)
 
     val now = Instant.now()
@@ -314,6 +307,31 @@ class KStreamTest extends FlatSpec with Matchers with TestDriver {
     testInput.pipeInput("1", "value", now)
 
     testOutput.readValue shouldBe "value-transformed-1"
+
+    testOutput.isEmpty shouldBe true
+
+    testDriver.close()
+  }
+
+  "join 2 KStreamToTables" should "join correctly records" in {
+    val builder = new StreamsBuilder()
+    val sourceTopic1 = "source1"
+    val sourceTopic2 = "source2"
+    val sinkTopic = "sink"
+
+    val table1 = builder.stream[String, String](sourceTopic1).toTable
+    val table2 = builder.stream[String, String](sourceTopic2).toTable
+    table1.join(table2)((a, b) => a + b).toStream.to(sinkTopic)
+
+    val testDriver = createTestDriver(builder)
+    val testInput1 = testDriver.createInput[String, String](sourceTopic1)
+    val testInput2 = testDriver.createInput[String, String](sourceTopic2)
+    val testOutput = testDriver.createOutput[String, String](sinkTopic)
+
+    testInput1.pipeInput("1", "topic1value1")
+    testInput2.pipeInput("1", "topic2value1")
+
+    testOutput.readValue shouldBe "topic1value1topic2value1"
 
     testOutput.isEmpty shouldBe true
 

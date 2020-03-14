@@ -16,11 +16,13 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Before;
@@ -30,8 +32,10 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.channels.FileChannel;
 import java.nio.channels.OverlappingFileLockException;
+import java.nio.file.Files;
 import java.nio.file.StandardOpenOption;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import java.util.Properties;
@@ -39,6 +43,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
+import static org.apache.kafka.streams.processor.internals.StateManagerUtil.CHECKPOINT_FILE_NAME;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
@@ -127,6 +132,46 @@ public class StateDirectoryTest {
         } finally {
             directory.unlock(taskId);
         }
+    }
+
+    @Test
+    public void shouldBeAbleToUnlockEvenWithoutLocking() throws Exception {
+        final TaskId taskId = new TaskId(0, 0);
+        directory.unlock(taskId);
+    }
+
+    @Test
+    public void shouldReportDirectoryEmpty() throws Exception {
+        final TaskId taskId = new TaskId(0, 0);
+
+        // when task dir first created, it should be empty
+        assertTrue(directory.directoryForTaskIsEmpty(taskId));
+
+        // after locking, it should still be empty
+        directory.lock(taskId);
+        assertTrue(directory.directoryForTaskIsEmpty(taskId));
+
+        // after writing checkpoint, it should still be empty
+        final OffsetCheckpoint checkpointFile = new OffsetCheckpoint(new File(directory.directoryForTask(taskId), CHECKPOINT_FILE_NAME));
+        assertTrue(directory.directoryForTaskIsEmpty(taskId));
+
+        checkpointFile.write(Collections.singletonMap(new TopicPartition("topic", 0), 0L));
+        assertTrue(directory.directoryForTaskIsEmpty(taskId));
+
+        // if some store dir is created, it should not be empty
+        final File dbDir = new File(new File(directory.directoryForTask(taskId), "db"), "store1");
+
+        Files.createDirectories(dbDir.getParentFile().toPath());
+        Files.createDirectories(dbDir.getAbsoluteFile().toPath());
+
+        assertFalse(directory.directoryForTaskIsEmpty(taskId));
+
+        // after wiping out the state dir, the dir should show as empty again
+        Utils.delete(dbDir.getParentFile());
+        assertTrue(directory.directoryForTaskIsEmpty(taskId));
+
+        directory.unlock(taskId);
+        assertTrue(directory.directoryForTaskIsEmpty(taskId));
     }
 
     @Test

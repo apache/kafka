@@ -18,7 +18,6 @@ package org.apache.kafka.streams.integration;
 
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.metrics.Sensor;
-import org.apache.kafka.common.metrics.Sensor.RecordingLevel;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.serialization.Serdes;
@@ -393,10 +392,6 @@ public class MetricsIntegrationTest {
             IN_MEMORY_LRUCACHE_TAG_KEY,
             builtInMetricsVersion
         );
-        checkRocksDBMetricsByTag(
-            "rocksdb-state-id",
-            RecordingLevel.valueOf(streamsConfiguration.getProperty(StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG))
-        );
         checkCacheMetrics(builtInMetricsVersion);
 
         closeApplication();
@@ -439,10 +434,6 @@ public class MetricsIntegrationTest {
         waitUntilAllRecordsAreConsumed(1);
 
         checkWindowStoreAndSuppressionBufferMetrics(builtInMetricsVersion);
-        checkRocksDBMetricsByTag(
-            "rocksdb-window-state-id",
-            RecordingLevel.valueOf(streamsConfiguration.getProperty(StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG))
-        );
 
         closeApplication();
 
@@ -485,36 +476,10 @@ public class MetricsIntegrationTest {
         waitUntilAllRecordsAreConsumed(2);
 
         checkSessionStoreMetrics(builtInMetricsVersion);
-        checkRocksDBMetricsByTag(
-            "rocksdb-session-state-id",
-            RecordingLevel.valueOf(streamsConfiguration.getProperty(StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG))
-        );
 
         closeApplication();
 
         checkMetricsDeregistration();
-    }
-
-    @Test
-    public void shouldNotAddRocksDBMetricsIfRecordingLevelIsInfo() throws Exception {
-        builder.table(
-            STREAM_INPUT,
-            Materialized.as(Stores.persistentKeyValueStore(MY_STORE_PERSISTENT_KEY_VALUE)).withCachingEnabled()
-        ).toStream().to(STREAM_OUTPUT_1);
-        streamsConfiguration.put(StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG, Sensor.RecordingLevel.INFO.name);
-        kafkaStreams = new KafkaStreams(builder.build(), streamsConfiguration);
-        kafkaStreams.start();
-        TestUtils.waitForCondition(
-            () -> kafkaStreams.state() == State.RUNNING,
-            timeout,
-            () -> "Kafka Streams application did not reach state RUNNING in " + timeout + " ms");
-
-        checkRocksDBMetricsByTag(
-            ROCKSDB_KVSTORE_TAG_KEY,
-            RecordingLevel.valueOf(streamsConfiguration.getProperty(StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG))
-        );
-
-        closeApplication();
     }
 
     private void verifyStateMetric(final State state) {
@@ -643,29 +608,6 @@ public class MetricsIntegrationTest {
         checkMetricByName(listMetricProcessor, DESTROY_TOTAL, numberOfRemovedMetrics);
         checkMetricByName(listMetricProcessor, FORWARD_TOTAL, numberOfModifiedForwardMetrics);
         checkMetricByName(listMetricProcessor, FORWARD_RATE, numberOfModifiedForwardMetrics);
-    }
-
-    private void checkRocksDBMetricsByTag(final String tag, final RecordingLevel recordingLevel) {
-        final List<Metric> listMetricStore = new ArrayList<Metric>(kafkaStreams.metrics().values()).stream()
-            .filter(m -> m.metricName().group().equals(STATE_STORE_LEVEL_GROUP) && m.metricName().tags().containsKey(tag))
-            .collect(Collectors.toList());
-        final int expectedNumberOfMetrics = recordingLevel == RecordingLevel.DEBUG ? 1 : 0;
-        checkMetricByName(listMetricStore, BYTES_WRITTEN_RATE, expectedNumberOfMetrics);
-        checkMetricByName(listMetricStore, BYTES_WRITTEN_TOTAL, expectedNumberOfMetrics);
-        checkMetricByName(listMetricStore, BYTES_READ_RATE, expectedNumberOfMetrics);
-        checkMetricByName(listMetricStore, BYTES_READ_TOTAL, expectedNumberOfMetrics);
-        checkMetricByName(listMetricStore, MEMTABLE_BYTES_FLUSHED_RATE, expectedNumberOfMetrics);
-        checkMetricByName(listMetricStore, MEMTABLE_BYTES_FLUSHED_TOTAL, expectedNumberOfMetrics);
-        checkMetricByName(listMetricStore, MEMTABLE_HIT_RATIO, expectedNumberOfMetrics);
-        checkMetricByName(listMetricStore, WRITE_STALL_DURATION_AVG, expectedNumberOfMetrics);
-        checkMetricByName(listMetricStore, WRITE_STALL_DURATION_TOTAL, expectedNumberOfMetrics);
-        checkMetricByName(listMetricStore, BLOCK_CACHE_DATA_HIT_RATIO, expectedNumberOfMetrics);
-        checkMetricByName(listMetricStore, BLOCK_CACHE_INDEX_HIT_RATIO, expectedNumberOfMetrics);
-        checkMetricByName(listMetricStore, BLOCK_CACHE_FILTER_HIT_RATIO, expectedNumberOfMetrics);
-        checkMetricByName(listMetricStore, BYTES_READ_DURING_COMPACTION_RATE, expectedNumberOfMetrics);
-        checkMetricByName(listMetricStore, BYTES_WRITTEN_DURING_COMPACTION_RATE, expectedNumberOfMetrics);
-        checkMetricByName(listMetricStore, NUMBER_OF_OPEN_FILES, expectedNumberOfMetrics);
-        checkMetricByName(listMetricStore, NUMBER_OF_FILE_ERRORS, expectedNumberOfMetrics);
     }
 
     private void checkKeyValueStoreMetrics(final String group0100To24,

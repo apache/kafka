@@ -18,7 +18,7 @@ package org.apache.kafka.streams.integration;
 
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.KafkaStreams;
-import org.apache.kafka.streams.KafkaStreams.State;
+import org.apache.kafka.streams.StoreQueryParameters;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
@@ -30,6 +30,7 @@ import org.apache.kafka.streams.state.QueryableStoreTypes;
 import org.apache.kafka.streams.test.TestRecord;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.MockMapper;
+
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
@@ -86,19 +87,19 @@ public class StreamStreamJoinIntegrationTest extends AbstractJoinIntegrationTest
 
         try (final KafkaStreams kafkaStreams = new KafkaStreams(builder.build(), STREAMS_CONFIG)) {
             kafkaStreams.setStateListener((newState, oldState) -> {
-                if (newState == State.RUNNING) {
+                if (newState == KafkaStreams.State.RUNNING) {
                     latch.countDown();
                 }
             });
 
             kafkaStreams.start();
             latch.await();
-            assertThrows(InvalidStateStoreException.class, () -> kafkaStreams.store("join-store", QueryableStoreTypes.keyValueStore()));
+            assertThrows(InvalidStateStoreException.class, () -> kafkaStreams.store(StoreQueryParameters.fromNameAndType("join-store", QueryableStoreTypes.keyValueStore())));
         }
     }
 
     @Test
-    public void testInner() throws Exception {
+    public void testInner() {
         STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appID + "-inner");
 
         final List<List<TestRecord<Long, String>>> expectedResult = Arrays.asList(
@@ -139,7 +140,7 @@ public class StreamStreamJoinIntegrationTest extends AbstractJoinIntegrationTest
     }
 
     @Test
-    public void testInnerRepartitioned() throws Exception {
+    public void testInnerRepartitioned() {
         STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appID + "-inner-repartitioned");
 
         final List<List<TestRecord<Long, String>>> expectedResult = Arrays.asList(
@@ -183,7 +184,7 @@ public class StreamStreamJoinIntegrationTest extends AbstractJoinIntegrationTest
     }
 
     @Test
-    public void testLeft() throws Exception {
+    public void testLeft() {
         STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appID + "-left");
 
         final List<List<TestRecord<Long, String>>> expectedResult = Arrays.asList(
@@ -224,7 +225,7 @@ public class StreamStreamJoinIntegrationTest extends AbstractJoinIntegrationTest
     }
 
     @Test
-    public void testLeftRepartitioned() throws Exception {
+    public void testLeftRepartitioned() {
         STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appID + "-left-repartitioned");
 
         final List<List<TestRecord<Long, String>>> expectedResult = Arrays.asList(
@@ -268,7 +269,7 @@ public class StreamStreamJoinIntegrationTest extends AbstractJoinIntegrationTest
     }
 
     @Test
-    public void testOuter() throws Exception {
+    public void testOuter() {
         STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appID + "-outer");
 
         final List<List<TestRecord<Long, String>>> expectedResult = Arrays.asList(
@@ -309,7 +310,7 @@ public class StreamStreamJoinIntegrationTest extends AbstractJoinIntegrationTest
     }
 
     @Test
-    public void testOuterRepartitioned() throws Exception {
+    public void testOuterRepartitioned() {
         STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appID + "-outer");
 
         final List<List<TestRecord<Long, String>>> expectedResult = Arrays.asList(
@@ -353,7 +354,7 @@ public class StreamStreamJoinIntegrationTest extends AbstractJoinIntegrationTest
     }
 
     @Test
-    public void testMultiInner() throws Exception {
+    public void testMultiInner() {
         STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appID + "-multi-inner");
 
         final List<List<TestRecord<Long, String>>> expectedResult = Arrays.asList(

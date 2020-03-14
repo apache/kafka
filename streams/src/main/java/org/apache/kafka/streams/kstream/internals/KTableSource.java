@@ -69,6 +69,10 @@ public class KTableSource<K, V> implements ProcessorSupplier<K, V> {
         this.queryableName = storeName;
     }
 
+    public boolean materialized() {
+        return queryableName != null;
+    }
+
     private class KTableSourceProcessor extends AbstractProcessor<K, V> {
 
         private TimestampedSerializedKeyValueStore<K, V> store;

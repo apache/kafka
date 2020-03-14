@@ -22,7 +22,7 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicLong}
 import java.util.concurrent.locks.Lock
 
-import com.yammer.metrics.core.{Gauge, Meter}
+import com.yammer.metrics.core.Meter
 import kafka.api._
 import kafka.cluster.{BrokerEndPoint, Partition}
 import kafka.common.RecordValidationException
@@ -40,6 +40,7 @@ import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState
 import org.apache.kafka.common.message.LeaderAndIsrResponseData
+import org.apache.kafka.common.message.DeleteRecordsResponseData.DeleteRecordsPartitionResult
 import org.apache.kafka.common.message.LeaderAndIsrResponseData.LeaderAndIsrPartitionError
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.ListenerName
@@ -231,50 +232,17 @@ class ReplicaManager(val config: KafkaConfig,
     }
   }
 
-  val replicaSelectorOpt: Option[ReplicaSelector] = createReplicaSelector()
+  // Visible for testing
+  private[server] val replicaSelectorOpt: Option[ReplicaSelector] = createReplicaSelector()
 
-  val leaderCount = newGauge(
-    "LeaderCount",
-    new Gauge[Int] {
-      def value = leaderPartitionsIterator.size
-    }
-  )
-  val partitionCount = newGauge(
-    "PartitionCount",
-    new Gauge[Int] {
-      def value = allPartitions.size
-    }
-  )
-  val offlineReplicaCount = newGauge(
-    "OfflineReplicaCount",
-    new Gauge[Int] {
-      def value = offlinePartitionCount
-    }
-  )
-  val underReplicatedPartitions = newGauge(
-    "UnderReplicatedPartitions",
-    new Gauge[Int] {
-      def value = underReplicatedPartitionCount
-    }
-  )
-  val underMinIsrPartitionCount = newGauge(
-    "UnderMinIsrPartitionCount",
-    new Gauge[Int] {
-      def value = leaderPartitionsIterator.count(_.isUnderMinIsr)
-    }
-  )
-  val atMinIsrPartitionCount = newGauge(
-    "AtMinIsrPartitionCount",
-    new Gauge[Int] {
-      def value = leaderPartitionsIterator.count(_.isAtMinIsr)
-    }
-  )
-  val reassigningPartitions = newGauge(
-    "ReassigningPartitions",
-    new Gauge[Int] {
-      def value = reassigningPartitionsCount
-    }
-  )
+  newGauge("LeaderCount", () => leaderPartitionsIterator.size)
+  // Visible for testing
+  private[kafka] val partitionCount = newGauge("PartitionCount", () => allPartitions.size)
+  newGauge("OfflineReplicaCount", () => offlinePartitionCount)
+  newGauge("UnderReplicatedPartitions", () => underReplicatedPartitionCount)
+  newGauge("UnderMinIsrPartitionCount", () => leaderPartitionsIterator.count(_.isUnderMinIsr))
+  newGauge("AtMinIsrPartitionCount", () => leaderPartitionsIterator.count(_.isAtMinIsr))
+  newGauge("ReassigningPartitions", () => reassigningPartitionsCount)
 
   def reassigningPartitionsCount: Int = leaderPartitionsIterator.count(_.isReassigning)
 
@@ -284,7 +252,7 @@ class ReplicaManager(val config: KafkaConfig,
 
   def underReplicatedPartitionCount: Int = leaderPartitionsIterator.count(_.isUnderReplicated)
 
-  def startHighWatermarkCheckPointThread() = {
+  def startHighWatermarkCheckPointThread(): Unit = {
     if (highWatermarkCheckPointThreadStarted.compareAndSet(false, true))
       scheduler.schedule("highwatermark-checkpoint", checkpointHighWatermarks _, period = config.replicaHighWatermarkCheckpointIntervalMs, unit = TimeUnit.MILLISECONDS)
   }
@@ -524,7 +492,7 @@ class ReplicaManager(val config: KafkaConfig,
   def appendRecords(timeout: Long,
                     requiredAcks: Short,
                     internalTopicsAllowed: Boolean,
-                    isFromClient: Boolean,
+                    origin: AppendOrigin,
                     entriesPerPartition: Map[TopicPartition, MemoryRecords],
                     responseCallback: Map[TopicPartition, PartitionResponse] => Unit,
                     delayedProduceLock: Option[Lock] = None,
@@ -532,7 +500,7 @@ class ReplicaManager(val config: KafkaConfig,
     if (isValidRequiredAcks(requiredAcks)) {
       val sTime = time.milliseconds
       val localProduceResults = appendToLocalLog(internalTopicsAllowed = internalTopicsAllowed,
-        isFromClient = isFromClient, entriesPerPartition, requiredAcks)
+        origin, entriesPerPartition, requiredAcks)
       debug("Produce to local log in %d ms".format(time.milliseconds - sTime))
 
       val produceStatus = localProduceResults.map { case (topicPartition, result) =>
@@ -740,7 +708,7 @@ class ReplicaManager(val config: KafkaConfig,
 
   def deleteRecords(timeout: Long,
                     offsetPerPartition: Map[TopicPartition, Long],
-                    responseCallback: Map[TopicPartition, DeleteRecordsResponse.PartitionResponse] => Unit): Unit = {
+                    responseCallback: Map[TopicPartition, DeleteRecordsPartitionResult] => Unit): Unit = {
     val timeBeforeLocalDeleteRecords = time.milliseconds
     val localDeleteRecordsResults = deleteRecordsOnLocalLog(offsetPerPartition)
     debug("Delete records on local log in %d ms".format(time.milliseconds - timeBeforeLocalDeleteRecords))
@@ -749,7 +717,10 @@ class ReplicaManager(val config: KafkaConfig,
       topicPartition ->
         DeleteRecordsPartitionStatus(
           result.requestedOffset, // requested offset
-          new DeleteRecordsResponse.PartitionResponse(result.lowWatermark, result.error)) // response status
+          new DeleteRecordsPartitionResult()
+            .setLowWatermark(result.lowWatermark)
+            .setErrorCode(result.error.code)
+            .setPartitionIndex(topicPartition.partition)) // response status
     }
 
     if (delayedDeleteRecordsRequired(localDeleteRecordsResults)) {
@@ -791,7 +762,7 @@ class ReplicaManager(val config: KafkaConfig,
    * Append the messages to the local replica logs
    */
   private def appendToLocalLog(internalTopicsAllowed: Boolean,
-                               isFromClient: Boolean,
+                               origin: AppendOrigin,
                                entriesPerPartition: Map[TopicPartition, MemoryRecords],
                                requiredAcks: Short): Map[TopicPartition, LogAppendResult] = {
 
@@ -820,7 +791,7 @@ class ReplicaManager(val config: KafkaConfig,
       } else {
         try {
           val partition = getPartitionOrException(topicPartition, expectLeader = true)
-          val info = partition.appendRecordsToLeader(records, isFromClient, requiredAcks)
+          val info = partition.appendRecordsToLeader(records, origin, requiredAcks)
           val numAppendedMessages = info.numMessages
 
           // update stats for successfully appended bytes and messages as bytesInRate and messageInRate

@@ -16,7 +16,14 @@
  */
 package org.apache.kafka.streams;
 
+import java.util.LinkedList;
+import java.util.TreeMap;
+import java.util.concurrent.ExecutionException;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.ListOffsetsResult.ListOffsetsResultInfo;
+import org.apache.kafka.clients.admin.OffsetSpec;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
@@ -53,6 +60,7 @@ import org.apache.kafka.streams.processor.internals.ProcessorTopology;
 import org.apache.kafka.streams.processor.internals.StateDirectory;
 import org.apache.kafka.streams.processor.internals.StreamThread;
 import org.apache.kafka.streams.processor.internals.StreamsMetadataState;
+import org.apache.kafka.streams.processor.internals.Task;
 import org.apache.kafka.streams.processor.internals.ThreadStateTransitionValidator;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.HostInfo;
@@ -61,7 +69,6 @@ import org.apache.kafka.streams.state.StreamsMetadata;
 import org.apache.kafka.streams.state.internals.GlobalStateStoreProvider;
 import org.apache.kafka.streams.state.internals.QueryableStoreProvider;
 import org.apache.kafka.streams.state.internals.RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter;
-import org.apache.kafka.streams.state.internals.StateStoreProvider;
 import org.apache.kafka.streams.state.internals.StreamThreadStateStoreProvider;
 import org.apache.kafka.streams.state.internals.metrics.RocksDBMetricsRecordingTrigger;
 import org.slf4j.Logger;
@@ -212,7 +219,7 @@ public class KafkaStreams implements AutoCloseable {
             this.validTransitions.addAll(Arrays.asList(validTransitions));
         }
 
-        public boolean isRunning() {
+        public boolean isRunningOrRebalancing() {
             return equals(RUNNING) || equals(REBALANCING);
         }
 
@@ -296,14 +303,14 @@ public class KafkaStreams implements AutoCloseable {
         return state;
     }
 
-    private boolean isRunning() {
+    private boolean isRunningOrRebalancing() {
         synchronized (stateLock) {
-            return state.isRunning();
+            return state.isRunningOrRebalancing();
         }
     }
 
-    private void validateIsRunning() {
-        if (!isRunning()) {
+    private void validateIsRunningOrRebalancing() {
+        if (!isRunningOrRebalancing()) {
             throw new IllegalStateException("KafkaStreams is not running. State is " + state + ".");
         }
     }
@@ -674,7 +681,9 @@ public class KafkaStreams implements AutoCloseable {
         final List<MetricsReporter> reporters = config.getConfiguredInstances(StreamsConfig.METRIC_REPORTER_CLASSES_CONFIG,
                 MetricsReporter.class,
                 Collections.singletonMap(StreamsConfig.CLIENT_ID_CONFIG, clientId));
-        reporters.add(new JmxReporter(JMX_PREFIX));
+        final JmxReporter jmxReporter = new JmxReporter(JMX_PREFIX);
+        jmxReporter.configure(config.originals());
+        reporters.add(jmxReporter);
         metrics = new Metrics(metricConfig, reporters, time);
         streamsMetrics =
             new StreamsMetricsImpl(metrics, clientId, config.getString(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG));
@@ -691,7 +700,7 @@ public class KafkaStreams implements AutoCloseable {
         internalTopologyBuilder.rewriteTopology(config);
 
         // sanity check to fail-fast in case we cannot build a ProcessorTopology due to an exception
-        final ProcessorTopology taskTopology = internalTopologyBuilder.build();
+        final ProcessorTopology taskTopology = internalTopologyBuilder.buildTopology();
 
         streamsMetadataState = new StreamsMetadataState(
                 internalTopologyBuilder,
@@ -738,7 +747,7 @@ public class KafkaStreams implements AutoCloseable {
         adminClient = clientSupplier.getAdmin(config.getAdminConfigs(StreamThread.getSharedAdminClientId(clientId)));
 
         final Map<Long, StreamThread.State> threadState = new HashMap<>(threads.length);
-        final ArrayList<StateStoreProvider> storeProviders = new ArrayList<>();
+        final ArrayList<StreamThreadStateStoreProvider> storeProviders = new ArrayList<>();
         for (int i = 0; i < threads.length; i++) {
             threads[i] = StreamThread.create(
                 internalTopologyBuilder,
@@ -755,7 +764,7 @@ public class KafkaStreams implements AutoCloseable {
                 delegatingStateRestoreListener,
                 i + 1);
             threadState.put(threads[i].getId(), threads[i].state());
-            storeProviders.add(new StreamThreadStateStoreProvider(threads[i]));
+            storeProviders.add(new StreamThreadStateStoreProvider(threads[i], internalTopologyBuilder));
         }
 
         final StreamStateListener streamStateListener = new StreamStateListener(threadState, globalThreadState);
@@ -1003,7 +1012,7 @@ public class KafkaStreams implements AutoCloseable {
      * @throws StreamsException if cleanup failed
      */
     public void cleanUp() {
-        if (isRunning()) {
+        if (isRunningOrRebalancing()) {
             throw new IllegalStateException("Cannot clean up while running.");
         }
         stateDirectory.clean();
@@ -1019,7 +1028,7 @@ public class KafkaStreams implements AutoCloseable {
      * @return {@link StreamsMetadata} for each {@code KafkaStreams} instances of this application
      */
     public Collection<StreamsMetadata> allMetadata() {
-        validateIsRunning();
+        validateIsRunningOrRebalancing();
         return streamsMetadataState.getAllMetadata();
     }
 
@@ -1039,7 +1048,7 @@ public class KafkaStreams implements AutoCloseable {
      * this application
      */
     public Collection<StreamsMetadata> allMetadataForStore(final String storeName) {
-        validateIsRunning();
+        validateIsRunningOrRebalancing();
         return streamsMetadataState.getAllMetadataForStore(storeName);
     }
 
@@ -1073,13 +1082,16 @@ public class KafkaStreams implements AutoCloseable {
      * @param key           the key to find metadata for
      * @param keySerializer serializer for the key
      * @param <K>           key type
-     * @return {@link StreamsMetadata} for the {@code KafkaStreams} instance with the provide {@code storeName} and
-     * {@code key} of this application or {@link StreamsMetadata#NOT_AVAILABLE} if Kafka Streams is (re-)initializing
+     * @return {@link StreamsMetadata} for the {@code KafkaStreams} instance with the provided {@code storeName} and
+     * {@code key} of this application or {@link StreamsMetadata#NOT_AVAILABLE} if Kafka Streams is (re-)initializing,
+     * or {@code null} if no matching metadata could be found.
+     * @deprecated Since 2.5. Use {@link #queryMetadataForKey(String, Object, Serializer)} instead.
      */
+    @Deprecated
     public <K> StreamsMetadata metadataForKey(final String storeName,
                                               final K key,
                                               final Serializer<K> keySerializer) {
-        validateIsRunning();
+        validateIsRunningOrRebalancing();
         return streamsMetadataState.getMetadataWithKey(storeName, key, keySerializer);
     }
 
@@ -1104,31 +1116,74 @@ public class KafkaStreams implements AutoCloseable {
      * @param key         the key to find metadata for
      * @param partitioner the partitioner to be use to locate the host for the key
      * @param <K>         key type
-     * @return {@link StreamsMetadata} for the {@code KafkaStreams} instance with the provide {@code storeName} and
-     * {@code key} of this application or {@link StreamsMetadata#NOT_AVAILABLE} if Kafka Streams is (re-)initializing
+     * @return {@link StreamsMetadata} for the {@code KafkaStreams} instance with the provided {@code storeName} and
+     * {@code key} of this application or {@link StreamsMetadata#NOT_AVAILABLE} if Kafka Streams is (re-)initializing,
+     * or {@code null} if no matching metadata could be found.
+     * @deprecated Since 2.5. Use {@link #queryMetadataForKey(String, Object, StreamPartitioner)} instead.
      */
+    @Deprecated
     public <K> StreamsMetadata metadataForKey(final String storeName,
                                               final K key,
                                               final StreamPartitioner<? super K, ?> partitioner) {
-        validateIsRunning();
+        validateIsRunningOrRebalancing();
         return streamsMetadataState.getMetadataWithKey(storeName, key, partitioner);
     }
 
     /**
-     * Get a facade wrapping the local {@link StateStore} instances with the provided {@code storeName} if the Store's
-     * type is accepted by the provided {@link QueryableStoreType#accepts(StateStore) queryableStoreType}.
+     * Finds the metadata containing the active hosts and standby hosts where the key being queried would reside.
+     *
+     * @param storeName     the {@code storeName} to find metadata for
+     * @param key           the key to find metadata for
+     * @param keySerializer serializer for the key
+     * @param <K>           key type
+     * Returns {@link KeyQueryMetadata} containing all metadata about hosting the given key for the given store,
+     * or {@code null} if no matching metadata could be found.
+     */
+    public <K> KeyQueryMetadata queryMetadataForKey(final String storeName,
+                                                    final K key,
+                                                    final Serializer<K> keySerializer) {
+        validateIsRunningOrRebalancing();
+        return streamsMetadataState.getKeyQueryMetadataForKey(storeName, key, keySerializer);
+    }
+
+    /**
+     * Finds the metadata containing the active hosts and standby hosts where the key being queried would reside.
+     *
+     * @param storeName     the {@code storeName} to find metadata for
+     * @param key           the key to find metadata for
+     * @param partitioner the partitioner to be use to locate the host for the key
+     * @param <K>           key type
+     * Returns {@link KeyQueryMetadata} containing all metadata about hosting the given key for the given store, using the
+     * the supplied partitioner, or {@code null} if no matching metadata could be found.
+     */
+    public <K> KeyQueryMetadata queryMetadataForKey(final String storeName,
+                                                    final K key,
+                                                    final StreamPartitioner<? super K, ?> partitioner) {
+        validateIsRunningOrRebalancing();
+        return streamsMetadataState.getKeyQueryMetadataForKey(storeName, key, partitioner);
+    }
+
+
+    /**
+     * @deprecated since 2.5 release; use {@link #store(StoreQueryParameters)}  instead
+     */
+    @Deprecated
+    public <T> T store(final String storeName, final QueryableStoreType<T> queryableStoreType) {
+        return store(StoreQueryParameters.fromNameAndType(storeName, queryableStoreType));
+    }
+
+    /**
+     * Get a facade wrapping the local {@link StateStore} instances with the provided {@link StoreQueryParameters}.
      * The returned object can be used to query the {@link StateStore} instances.
      *
-     * @param storeName           name of the store to find
-     * @param queryableStoreType  accept only stores that are accepted by {@link QueryableStoreType#accepts(StateStore)}
-     * @param <T>                 return type
+     * @param storeQueryParameters   the parameters used to fetch a queryable store
      * @return A facade wrapping the local {@link StateStore} instances
      * @throws InvalidStateStoreException if Kafka Streams is (re-)initializing or a store with {@code storeName} and
      * {@code queryableStoreType} doesn't exist
      */
-    public <T> T store(final String storeName, final QueryableStoreType<T> queryableStoreType) {
-        validateIsRunning();
-        return queryableStoreProvider.getStore(storeName, queryableStoreType);
+    public <T> T store(final StoreQueryParameters<T> storeQueryParameters) {
+        validateIsRunningOrRebalancing();
+        return queryableStoreProvider.getStore(storeQueryParameters);
     }
 
     /**
@@ -1137,11 +1192,64 @@ public class KafkaStreams implements AutoCloseable {
      * @return the set of {@link ThreadMetadata}.
      */
     public Set<ThreadMetadata> localThreadsMetadata() {
-        validateIsRunning();
+        validateIsRunningOrRebalancing();
         final Set<ThreadMetadata> threadMetadata = new HashSet<>();
         for (final StreamThread thread : threads) {
             threadMetadata.add(thread.threadMetadata());
         }
         return threadMetadata;
+    }
+
+    /**
+     * Returns {@link LagInfo}, for all store partitions (active or standby) local to this Streams instance. Note that the
+     * values returned are just estimates and meant to be used for making soft decisions on whether the data in the store
+     * partition is fresh enough for querying.
+     *
+     * Note: Each invocation of this method issues a call to the Kafka brokers. Thus its advisable to limit the frequency
+     * of invocation to once every few seconds.
+     *
+     * @return map of store names to another map of partition to {@link LagInfo}s
+     */
+    public Map<String, Map<Integer, LagInfo>> allLocalStorePartitionLags() {
+        final Map<String, Map<Integer, LagInfo>> localStorePartitionLags = new TreeMap<>();
+        final Collection<TopicPartition> allPartitions = new LinkedList<>();
+        final Map<TopicPartition, Long> allChangelogPositions = new HashMap<>();
+
+        // Obtain the current positions, of all the active-restoring and standby tasks
+        for (final StreamThread streamThread : threads) {
+            for (final Task task : streamThread.allTasks().values()) {
+                allPartitions.addAll(task.changelogPartitions());
+                // Note that not all changelog partitions, will have positions; since some may not have started
+                allChangelogPositions.putAll(task.changelogOffsets());
+            }
+        }
+
+        log.debug("Current changelog positions: {}", allChangelogPositions);
+        final Map<TopicPartition, ListOffsetsResultInfo> allEndOffsets;
+        try {
+            allEndOffsets = adminClient.listOffsets(
+                allPartitions.stream()
+                    .collect(Collectors.toMap(Function.identity(), tp -> OffsetSpec.latest()))
+            ).all().get();
+        } catch (final RuntimeException | InterruptedException | ExecutionException e) {
+            throw new StreamsException("Unable to obtain end offsets from kafka", e);
+        }
+
+        log.debug("Current end offsets :{}", allEndOffsets);
+        for (final Map.Entry<TopicPartition, ListOffsetsResultInfo> entry : allEndOffsets.entrySet()) {
+            // Avoiding an extra admin API lookup by computing lags for not-yet-started restorations
+            // from zero instead of the real "earliest offset" for the changelog.
+            // This will yield the correct relative order of lagginess for the tasks in the cluster,
+            // but it is an over-estimate of how much work remains to restore the task from scratch.
+            final long earliestOffset = 0L;
+            final long changelogPosition = allChangelogPositions.getOrDefault(entry.getKey(), earliestOffset);
+            final long latestOffset = entry.getValue().offset();
+            final LagInfo lagInfo = new LagInfo(changelogPosition == Task.LATEST_OFFSET ? latestOffset : changelogPosition, latestOffset);
+            final String storeName = streamsMetadataState.getStoreForChangelogTopic(entry.getKey().topic());
+            localStorePartitionLags.computeIfAbsent(storeName, ignored -> new TreeMap<>())
+                .put(entry.getKey().partition(), lagInfo);
+        }
+
+        return Collections.unmodifiableMap(localStorePartitionLags);
     }
 }

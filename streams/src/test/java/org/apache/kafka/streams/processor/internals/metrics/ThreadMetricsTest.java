@@ -34,6 +34,8 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.Map;
 
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.LATENCY_SUFFIX;
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.RATE_SUFFIX;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.ROLLUP_VALUE;
 import static org.easymock.EasyMock.expect;
 import static org.easymock.EasyMock.mock;
@@ -192,23 +194,12 @@ public class ThreadMetricsTest {
     }
 
     @Test
-    public void shouldGetProcessSensor() {
-        final String operation = "process";
-        final String operationLatency = operation + StreamsMetricsImpl.LATENCY_SUFFIX;
-        final String totalDescription = "The total number of calls to process";
-        final String rateDescription = "The average per-second number of calls to process";
+    public void shouldGetProcessLatencySensor() {
+        final String operationLatency = "process" + LATENCY_SUFFIX;
         final String avgLatencyDescription = "The average process latency";
         final String maxLatencyDescription = "The maximum process latency";
-        expect(streamsMetrics.threadLevelSensor(THREAD_ID, operation, RecordingLevel.INFO)).andReturn(expectedSensor);
+        expect(streamsMetrics.threadLevelSensor(THREAD_ID, operationLatency, RecordingLevel.INFO)).andReturn(expectedSensor);
         expect(streamsMetrics.threadLevelTagMap(THREAD_ID)).andReturn(tagMap);
-        StreamsMetricsImpl.addInvocationRateAndCountToSensor(
-            expectedSensor,
-            threadLevelGroup,
-            tagMap,
-            operation,
-            rateDescription,
-            totalDescription
-        );
         StreamsMetricsImpl.addAvgAndMaxToSensor(
             expectedSensor,
             threadLevelGroup,
@@ -217,9 +208,33 @@ public class ThreadMetricsTest {
             avgLatencyDescription,
             maxLatencyDescription
         );
-        replay(StreamsMetricsImpl.class, streamsMetrics);
+        replay(StreamsMetricsImpl.class, streamsMetrics, expectedSensor);
 
-        final Sensor sensor = ThreadMetrics.processSensor(THREAD_ID, streamsMetrics);
+        final Sensor sensor = ThreadMetrics.processLatencySensor(THREAD_ID, streamsMetrics);
+
+        verify(StreamsMetricsImpl.class, streamsMetrics);
+        assertThat(sensor, is(expectedSensor));
+    }
+
+    @Test
+    public void shouldGetProcessRateSensor() {
+        final String operation = "process";
+        final String operationRate = "process" + RATE_SUFFIX;
+        final String totalDescription = "The total number of calls to process";
+        final String rateDescription = "The average per-second number of calls to process";
+        expect(streamsMetrics.threadLevelSensor(THREAD_ID, operationRate, RecordingLevel.INFO)).andReturn(expectedSensor);
+        expect(streamsMetrics.threadLevelTagMap(THREAD_ID)).andReturn(tagMap);
+        StreamsMetricsImpl.addRateOfSumAndSumMetricsToSensor(
+            expectedSensor,
+            threadLevelGroup,
+            tagMap,
+            operation,
+            rateDescription,
+            totalDescription
+        );
+        replay(StreamsMetricsImpl.class, streamsMetrics, expectedSensor);
+
+        final Sensor sensor = ThreadMetrics.processRateSensor(THREAD_ID, streamsMetrics);
 
         verify(StreamsMetricsImpl.class, streamsMetrics);
         assertThat(sensor, is(expectedSensor));
@@ -240,7 +255,8 @@ public class ThreadMetricsTest {
             threadLevelGroup,
             tagMap,
             operation,
-            rateDescription, totalDescription
+            rateDescription,
+            totalDescription
         );
         StreamsMetricsImpl.addAvgAndMaxToSensor(
             expectedSensor,

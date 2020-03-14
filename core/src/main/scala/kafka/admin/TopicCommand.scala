@@ -28,7 +28,7 @@ import kafka.utils.Implicits._
 import kafka.utils._
 import kafka.zk.{AdminZkClient, KafkaZkClient}
 import org.apache.kafka.clients.CommonClientConfigs
-import org.apache.kafka.clients.admin.{Admin, ConfigEntry, ListPartitionReassignmentsOptions, ListTopicsOptions, NewPartitions, NewTopic, PartitionReassignment, AdminClient => JAdminClient, Config => JConfig}
+import org.apache.kafka.clients.admin.{Admin, ConfigEntry, ListPartitionReassignmentsOptions, ListTopicsOptions, NewPartitions, NewTopic, PartitionReassignment, Config => JConfig}
 import org.apache.kafka.common.{Node, TopicPartition, TopicPartitionInfo}
 import org.apache.kafka.common.config.ConfigResource.Type
 import org.apache.kafka.common.config.{ConfigResource, TopicConfig}
@@ -209,7 +209,7 @@ object TopicCommand extends Logging {
         case Some(serverList) => commandConfig.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, serverList)
         case None =>
       }
-      JAdminClient.create(commandConfig)
+      Admin.create(commandConfig)
     }
 
     def apply(commandConfig: Properties, bootstrapServer: Option[String]): AdminClientTopicService =
@@ -242,6 +242,7 @@ object TopicCommand extends Logging {
         newTopic.configs(configsMap)
         val createResult = adminClient.createTopics(Collections.singleton(newTopic))
         createResult.all().get()
+        println(s"Created topic ${topic.name}.")
       } else {
         throw new IllegalArgumentException(s"Topic ${topic.name} already exists")
       }
@@ -337,7 +338,7 @@ object TopicCommand extends Logging {
 
   object ZookeeperTopicService {
     def apply(zkConnect: Option[String]): ZookeeperTopicService =
-      new ZookeeperTopicService(KafkaZkClient(zkConnect.get, JaasUtils.isZkSecurityEnabled, 30000, 30000,
+      new ZookeeperTopicService(KafkaZkClient(zkConnect.get, JaasUtils.isZkSaslEnabled, 30000, 30000,
         Int.MaxValue, Time.SYSTEM))
   }
 
@@ -480,7 +481,7 @@ object TopicCommand extends Logging {
     }
 
     override def getTopics(topicWhitelist: Option[String], excludeInternalTopics: Boolean = false): Seq[String] = {
-      val allTopics = zkClient.getAllTopicsInCluster.toSeq.sorted
+      val allTopics = zkClient.getAllTopicsInCluster().toSeq.sorted
       doGetTopics(allTopics, topicWhitelist, excludeInternalTopics)
     }
 

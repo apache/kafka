@@ -141,6 +141,10 @@ public class CommonClientConfigs {
                                                            + "The value must be set lower than <code>session.timeout.ms</code>, but typically should be set no higher "
                                                            + "than 1/3 of that value. It can be adjusted even lower to control the expected time for normal rebalances.";
 
+    public static final String DEFAULT_API_TIMEOUT_MS_CONFIG = "default.api.timeout.ms";
+    public static final String DEFAULT_API_TIMEOUT_MS_DOC = "Specifies the timeout (in milliseconds) for client APIs. " +
+            "This configuration is used as the default timeout for all client operations that do not specify a <code>timeout</code> parameter.";
+
     /**
      * Postprocess the configuration so that exponential backoff is disabled when reconnect backoff
      * is explicitly configured but the maximum reconnect backoff is not explicitly configured.

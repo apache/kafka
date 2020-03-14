@@ -16,6 +16,9 @@
  */
 package org.apache.kafka.streams.state;
 
+import org.apache.kafka.clients.consumer.Consumer;
+import org.apache.kafka.clients.consumer.MockConsumer;
+import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.clients.producer.MockProducer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.common.header.Headers;
@@ -32,8 +35,11 @@ import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StreamPartitioner;
+import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.processor.internals.RecordCollector;
 import org.apache.kafka.streams.processor.internals.RecordCollectorImpl;
+import org.apache.kafka.streams.processor.internals.StreamsProducer;
 import org.apache.kafka.streams.state.internals.MeteredKeyValueStore;
 import org.apache.kafka.streams.state.internals.RocksDBKeyValueStoreTest;
 import org.apache.kafka.streams.state.internals.ThreadCache;
@@ -188,12 +194,17 @@ public class KeyValueStoreTestDriver<K, V> {
     private KeyValueStoreTestDriver(final StateSerdes<K, V> serdes) {
         final ByteArraySerializer rawSerializer = new ByteArraySerializer();
         final Producer<byte[], byte[]> producer = new MockProducer<>(true, rawSerializer, rawSerializer);
+        final Consumer<byte[], byte[]> consumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST);
 
+        final LogContext logContext = new LogContext("KeyValueStoreTestDriver ");
         final RecordCollector recordCollector = new RecordCollectorImpl(
-            "KeyValueStoreTestDriver",
-            new LogContext("KeyValueStoreTestDriver "),
+            logContext,
+            new TaskId(0, 0),
+            consumer,
+            new StreamsProducer(producer, false, logContext, null),
             new DefaultProductionExceptionHandler(),
-            new Metrics().sensor("dropped-records")
+            false,
+            new MockStreamsMetrics(new Metrics())
         ) {
             @Override
             public <K1, V1> void send(final String topic,
@@ -224,7 +235,6 @@ public class KeyValueStoreTestDriver<K, V> {
                 throw new UnsupportedOperationException();
             }
         };
-        recordCollector.init(producer);
 
         final File stateDir = TestUtils.tempDirectory();
         //noinspection ResultOfMethodCallIgnored

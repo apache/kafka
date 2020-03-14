@@ -38,12 +38,12 @@ public abstract class AbstractProcessorContext implements InternalProcessorConte
     private final String applicationId;
     private final StreamsConfig config;
     private final StreamsMetricsImpl metrics;
-    private final Serde keySerde;
+    private final Serde<?> keySerde;
     private final ThreadCache cache;
-    private final Serde valueSerde;
+    private final Serde<?> valueSerde;
     private boolean initialized;
     protected ProcessorRecordContext recordContext;
-    protected ProcessorNode currentNode;
+    protected ProcessorNode<?, ?> currentNode;
     final StateManager stateManager;
 
     public AbstractProcessorContext(final TaskId taskId,
@@ -98,7 +98,7 @@ public abstract class AbstractProcessorContext implements InternalProcessorConte
             throw new IllegalStateException("Can only create state stores during initialization.");
         }
         Objects.requireNonNull(store, "store must not be null");
-        stateManager.register(store, stateRestoreCallback);
+        stateManager.registerStore(store, stateRestoreCallback);
     }
 
     /**
@@ -184,12 +184,12 @@ public abstract class AbstractProcessorContext implements InternalProcessorConte
     }
 
     @Override
-    public void setCurrentNode(final ProcessorNode currentNode) {
+    public void setCurrentNode(final ProcessorNode<?, ?> currentNode) {
         this.currentNode = currentNode;
     }
 
     @Override
-    public ProcessorNode currentNode() {
+    public ProcessorNode<?, ?> currentNode() {
         return currentNode;
     }
 

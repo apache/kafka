@@ -359,6 +359,7 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
     val node = new Node(1, "localhost", 9092)
     val mockAdminClient = new MockAdminClient(util.Collections.singletonList(node), node) {
       override def describeConfigs(resources: util.Collection[ConfigResource], options: DescribeConfigsOptions): DescribeConfigsResult = {
+        assertFalse("Config synonyms requested unnecessarily", options.includeSynonyms())
         assertEquals(1, resources.size)
         val resource = resources.iterator.next
         assertEquals(resource.`type`, ConfigResource.Type.TOPIC)
@@ -388,6 +389,34 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
     ConfigCommand.alterConfig(mockAdminClient, alterOpts)
     assertTrue(alteredConfigs)
     EasyMock.reset(alterResult, describeResult)
+  }
+
+  @Test
+  def shouldDescribeConfigSynonyms(): Unit = {
+    val resourceName = "my-topic"
+    val describeOpts = new ConfigCommandOptions(Array("--bootstrap-server", "localhost:9092",
+      "--entity-name", resourceName,
+      "--entity-type", "topics",
+      "--describe",
+      "--all"))
+
+    val resource = new ConfigResource(ConfigResource.Type.TOPIC, resourceName)
+    val future = new KafkaFutureImpl[util.Map[ConfigResource, Config]]
+    future.complete(util.Collections.singletonMap(resource, new Config(util.Collections.emptyList[ConfigEntry])))
+    val describeResult: DescribeConfigsResult = EasyMock.createNiceMock(classOf[DescribeConfigsResult])
+    EasyMock.expect(describeResult.all()).andReturn(future).once()
+
+    val node = new Node(1, "localhost", 9092)
+    val mockAdminClient = new MockAdminClient(util.Collections.singletonList(node), node) {
+      override def describeConfigs(resources: util.Collection[ConfigResource], options: DescribeConfigsOptions): DescribeConfigsResult = {
+        assertTrue("Synonyms not requested", options.includeSynonyms())
+        assertEquals(Set(resource), resources.asScala.toSet)
+        describeResult
+      }
+    }
+    EasyMock.replay(describeResult)
+    ConfigCommand.describeConfig(mockAdminClient, describeOpts)
+    EasyMock.reset(describeResult)
   }
 
   @Test
@@ -441,6 +470,39 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
       "--entity-type", ConfigType.Broker,
       "--describe"
     )
+
+    new ConfigCommandOptions(optsList.toArray).checkArgs()
+  }
+
+  @Test
+  def testDescribeAllBrokerConfig(): Unit = {
+    val optsList = List("--bootstrap-server", "localhost:9092",
+      "--entity-type", ConfigType.Broker,
+      "--entity-name", "1",
+      "--describe",
+      "--all")
+
+    new ConfigCommandOptions(optsList.toArray).checkArgs()
+  }
+
+  @Test
+  def testDescribeAllTopicConfig(): Unit = {
+    val optsList = List("--bootstrap-server", "localhost:9092",
+      "--entity-type", ConfigType.Topic,
+      "--entity-name", "foo",
+      "--describe",
+      "--all")
+
+    new ConfigCommandOptions(optsList.toArray).checkArgs()
+  }
+
+  @Test(expected = classOf[IllegalArgumentException])
+  def testDescribeAllBrokerConfigBootstrapServerRequired(): Unit = {
+    val optsList = List("--zookeeper", zkConnect,
+      "--entity-type", ConfigType.Broker,
+      "--entity-name", "1",
+      "--describe",
+      "--all")
 
     new ConfigCommandOptions(optsList.toArray).checkArgs()
   }
@@ -506,6 +568,7 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
 
     val mockAdminClient = new MockAdminClient(util.Collections.singletonList(node), node) {
       override def describeConfigs(resources: util.Collection[ConfigResource], options: DescribeConfigsOptions): DescribeConfigsResult = {
+        assertFalse("Config synonyms requested unnecessarily", options.includeSynonyms())
         assertEquals(1, resources.size)
         val resource = resources.iterator.next
         assertEquals(ConfigResource.Type.BROKER, resource.`type`)
@@ -524,10 +587,6 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
       }
     }
     EasyMock.replay(alterResult, describeResult)
-    val alterResourceName = if (resourceName.nonEmpty)
-      resourceName
-    else
-      ConfigEntityName.Default
     ConfigCommand.alterConfig(mockAdminClient, alterOpts)
     assertEquals(Map("message.max.bytes" -> "10", "num.io.threads" -> "5"), brokerConfigs.toMap)
     EasyMock.reset(alterResult, describeResult)
@@ -556,7 +615,7 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
     EasyMock.expect(alterResult.all()).andReturn(alterFuture)
 
     val mockAdminClient = new MockAdminClient(util.Collections.singletonList(node), node) {
-      override def describeConfigs(resources: util.Collection[ConfigResource]): DescribeConfigsResult = {
+      override def describeConfigs(resources: util.Collection[ConfigResource], options: DescribeConfigsOptions): DescribeConfigsResult = {
         assertEquals(1, resources.size)
         val resource = resources.iterator.next
         assertEquals(ConfigResource.Type.BROKER_LOGGER, resource.`type`)
@@ -1069,7 +1128,7 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
   }
 
   class DummyAdminClient(node: Node) extends MockAdminClient(util.Collections.singletonList(node), node) {
-    override def describeConfigs(resources: util.Collection[ConfigResource]): DescribeConfigsResult =
+    override def describeConfigs(resources: util.Collection[ConfigResource], options: DescribeConfigsOptions): DescribeConfigsResult =
       EasyMock.createNiceMock(classOf[DescribeConfigsResult])
     override def incrementalAlterConfigs(configs: util.Map[ConfigResource, util.Collection[AlterConfigOp]],
       options: AlterConfigsOptions): AlterConfigsResult = EasyMock.createNiceMock(classOf[AlterConfigsResult])

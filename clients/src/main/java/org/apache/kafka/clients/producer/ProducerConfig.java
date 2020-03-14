@@ -62,6 +62,13 @@ public class ProducerConfig extends AbstractConfig {
     public static final String METADATA_MAX_AGE_CONFIG = CommonClientConfigs.METADATA_MAX_AGE_CONFIG;
     private static final String METADATA_MAX_AGE_DOC = CommonClientConfigs.METADATA_MAX_AGE_DOC;
 
+    /** <code>metadata.max.idle.ms</code> */
+    public static final String METADATA_MAX_IDLE_CONFIG = "metadata.max.idle.ms";
+    private static final String METADATA_MAX_IDLE_DOC =
+            "Controls how long the producer will cache metadata for a topic that's idle. If the elapsed " +
+            "time since a topic was last produced to exceeds the metadata idle duration, then the topic's " +
+            "metadata is forgotten and the next access to it will force a metadata fetch request.";
+
     /** <code>batch.size</code> */
     public static final String BATCH_SIZE_CONFIG = "batch.size";
     private static final String BATCH_SIZE_DOC = "The producer will attempt to batch records together into fewer requests whenever multiple records are being sent"
@@ -241,8 +248,8 @@ public class ProducerConfig extends AbstractConfig {
     /** <code> transactional.id </code> */
     public static final String TRANSACTIONAL_ID_CONFIG = "transactional.id";
     public static final String TRANSACTIONAL_ID_DOC = "The TransactionalId to use for transactional delivery. This enables reliability semantics which span multiple producer sessions since it allows the client to guarantee that transactions using the same TransactionalId have been completed prior to starting any new transactions. If no TransactionalId is provided, then the producer is limited to idempotent delivery. " +
-            "Note that <code>enable.idempotence</code> must be enabled if a TransactionalId is configured. " +
-            "The default is <code>null</code>, which means transactions cannot be used. " +
+            "If a TransactionalId is configured, <code>enable.idempotence</code> is implied. " +
+            "By default the TransactionId is not configured, which means transactions cannot be used. " +
             "Note that, by default, transactions require a cluster of at least three brokers which is the recommended setting for production; for development you can change this, by adjusting broker setting <code>transaction.state.log.replication.factor</code>.";
 
     /**
@@ -280,7 +287,7 @@ public class ProducerConfig extends AbstractConfig {
                                 .define(RECEIVE_BUFFER_CONFIG, Type.INT, 32 * 1024, atLeast(CommonClientConfigs.RECEIVE_BUFFER_LOWER_BOUND), Importance.MEDIUM, CommonClientConfigs.RECEIVE_BUFFER_DOC)
                                 .define(MAX_REQUEST_SIZE_CONFIG,
                                         Type.INT,
-                                        1 * 1024 * 1024,
+                                        1024 * 1024,
                                         atLeast(0),
                                         Importance.MEDIUM,
                                         MAX_REQUEST_SIZE_DOC)
@@ -300,6 +307,12 @@ public class ProducerConfig extends AbstractConfig {
                                         Importance.MEDIUM,
                                         REQUEST_TIMEOUT_MS_DOC)
                                 .define(METADATA_MAX_AGE_CONFIG, Type.LONG, 5 * 60 * 1000, atLeast(0), Importance.LOW, METADATA_MAX_AGE_DOC)
+                                .define(METADATA_MAX_IDLE_CONFIG,
+                                        Type.LONG,
+                                        5 * 60 * 1000,
+                                        atLeast(5000),
+                                        Importance.LOW,
+                                        METADATA_MAX_IDLE_DOC)
                                 .define(METRICS_SAMPLE_WINDOW_MS_CONFIG,
                                         Type.LONG,
                                         30000,

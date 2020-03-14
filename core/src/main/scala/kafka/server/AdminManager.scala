@@ -31,12 +31,12 @@ import org.apache.kafka.common.config.ConfigDef.ConfigKey
 import org.apache.kafka.common.config.{AbstractConfig, ConfigDef, ConfigException, ConfigResource, LogLevelConfig}
 import org.apache.kafka.common.errors.{ApiException, InvalidConfigurationException, InvalidPartitionsException, InvalidReplicaAssignmentException, InvalidRequestException, ReassignmentInProgressException, TopicExistsException, UnknownTopicOrPartitionException}
 import org.apache.kafka.common.internals.Topic
+import org.apache.kafka.common.message.CreatePartitionsRequestData.CreatePartitionsTopic
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopic
 import org.apache.kafka.common.message.CreateTopicsResponseData.{CreatableTopicConfigs, CreatableTopicResult}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.requests.CreatePartitionsRequest.PartitionDetails
 import org.apache.kafka.common.requests.CreateTopicsRequest._
 import org.apache.kafka.common.requests.DescribeConfigsResponse.ConfigSource
 import org.apache.kafka.common.requests.{AlterConfigsRequest, ApiError, DescribeConfigsResponse}
@@ -93,6 +93,10 @@ class AdminManager(val config: KafkaConfig,
         if (metadataCache.contains(topic.name))
           throw new TopicExistsException(s"Topic '${topic.name}' already exists.")
 
+        val nullConfigs = topic.configs.asScala.filter(_.value == null).map(_.name)
+        if (nullConfigs.nonEmpty)
+          throw new InvalidRequestException(s"Null value not supported for topic configs : ${nullConfigs.mkString(",")}")
+
         val configs = new Properties()
         topic.configs.asScala.foreach { entry =>
           configs.setProperty(entry.name, entry.value)
@@ -142,7 +146,7 @@ class AdminManager(val config: KafkaConfig,
               }.asJava
             }
             val javaConfigs = new java.util.HashMap[String, String]
-            topic.configs().asScala.foreach(config => javaConfigs.put(config.name(), config.value()))
+            topic.configs.asScala.foreach(config => javaConfigs.put(config.name(), config.value()))
             policy.validate(new RequestMetadata(topic.name, numPartitions, replicationFactor,
               javaAssignments, javaConfigs))
 
@@ -176,21 +180,21 @@ class AdminManager(val config: KafkaConfig,
           result.setNumPartitions(assignments.size)
           result.setReplicationFactor(assignments(0).size.toShort)
         }
-        CreatePartitionsMetadata(topic.name, assignments, ApiError.NONE)
+        CreatePartitionsMetadata(topic.name, assignments.keySet, ApiError.NONE)
       } catch {
         // Log client errors at a lower level than unexpected exceptions
         case e: TopicExistsException =>
           debug(s"Topic creation failed since topic '${topic.name}' already exists.", e)
-          CreatePartitionsMetadata(topic.name, Map(), ApiError.fromThrowable(e))
+          CreatePartitionsMetadata(topic.name, Set.empty, ApiError.fromThrowable(e))
         case e: ApiException =>
           info(s"Error processing create topic request $topic", e)
-          CreatePartitionsMetadata(topic.name, Map(), ApiError.fromThrowable(e))
+          CreatePartitionsMetadata(topic.name, Set.empty, ApiError.fromThrowable(e))
         case e: ConfigException =>
           info(s"Error processing create topic request $topic", e)
-          CreatePartitionsMetadata(topic.name, Map(), ApiError.fromThrowable(new InvalidConfigurationException(e.getMessage, e.getCause)))
+          CreatePartitionsMetadata(topic.name, Set.empty, ApiError.fromThrowable(new InvalidConfigurationException(e.getMessage, e.getCause)))
         case e: Throwable =>
           error(s"Error processing create topic request $topic", e)
-          CreatePartitionsMetadata(topic.name, Map(), ApiError.fromThrowable(e))
+          CreatePartitionsMetadata(topic.name, Set.empty, ApiError.fromThrowable(e))
       }).toBuffer
 
     // 2. if timeout <= 0, validateOnly or no topics can proceed return immediately
@@ -257,7 +261,7 @@ class AdminManager(val config: KafkaConfig,
   }
 
   def createPartitions(timeout: Int,
-                       newPartitions: Map[String, PartitionDetails],
+                       newPartitions: Seq[CreatePartitionsTopic],
                        validateOnly: Boolean,
                        listenerName: ListenerName,
                        callback: Map[String, ApiError] => Unit): Unit = {
@@ -266,7 +270,8 @@ class AdminManager(val config: KafkaConfig,
     val allBrokerIds = allBrokers.map(_.id)
 
     // 1. map over topics creating assignment and calling AdminUtils
-    val metadata = newPartitions.map { case (topic, newPartition) =>
+    val metadata = newPartitions.map { newPartition =>
+      val topic = newPartition.name
       try {
         val existingAssignment = zkClient.getFullReplicaAssignmentForTopics(immutable.Set(topic)).map {
           case (topicPartition, assignment) =>
@@ -281,7 +286,7 @@ class AdminManager(val config: KafkaConfig,
           throw new UnknownTopicOrPartitionException(s"The topic '$topic' does not exist.")
 
         val oldNumPartitions = existingAssignment.size
-        val newNumPartitions = newPartition.totalCount
+        val newNumPartitions = newPartition.count
         val numPartitionsIncrement = newNumPartitions - oldNumPartitions
         if (numPartitionsIncrement < 0) {
           throw new InvalidPartitionsException(
@@ -290,30 +295,34 @@ class AdminManager(val config: KafkaConfig,
           throw new InvalidPartitionsException(s"Topic already has $oldNumPartitions partitions.")
         }
 
-        val newPartitionsAssignment = Option(newPartition.newAssignments).map(_.asScala.map(_.asScala.map(_.toInt))).map { assignments =>
-          val unknownBrokers = assignments.flatten.toSet -- allBrokerIds
-          if (unknownBrokers.nonEmpty)
-            throw new InvalidReplicaAssignmentException(
-              s"Unknown broker(s) in replica assignment: ${unknownBrokers.mkString(", ")}.")
+        val newPartitionsAssignment = Option(newPartition.assignments)
+          .map { assignmentMap =>
+            val assignments = assignmentMap.asScala.map {
+              createPartitionAssignment => createPartitionAssignment.brokerIds.asScala.map(_.toInt)
+            }
+            val unknownBrokers = assignments.flatten.toSet -- allBrokerIds
+            if (unknownBrokers.nonEmpty)
+              throw new InvalidReplicaAssignmentException(
+                s"Unknown broker(s) in replica assignment: ${unknownBrokers.mkString(", ")}.")
 
-          if (assignments.size != numPartitionsIncrement)
-            throw new InvalidReplicaAssignmentException(
-              s"Increasing the number of partitions by $numPartitionsIncrement " +
-                s"but ${assignments.size} assignments provided.")
+            if (assignments.size != numPartitionsIncrement)
+              throw new InvalidReplicaAssignmentException(
+                s"Increasing the number of partitions by $numPartitionsIncrement " +
+                  s"but ${assignments.size} assignments provided.")
 
-          assignments.zipWithIndex.map { case (replicas, index) =>
-            existingAssignment.size + index -> replicas
-          }.toMap
+            assignments.zipWithIndex.map { case (replicas, index) =>
+              existingAssignment.size + index -> replicas
+            }.toMap
         }
 
         val updatedReplicaAssignment = adminZkClient.addPartitions(topic, existingAssignment, allBrokers,
-          newPartition.totalCount, newPartitionsAssignment, validateOnly = validateOnly)
-        CreatePartitionsMetadata(topic, updatedReplicaAssignment, ApiError.NONE)
+          newPartition.count, newPartitionsAssignment, validateOnly = validateOnly)
+        CreatePartitionsMetadata(topic, updatedReplicaAssignment.keySet, ApiError.NONE)
       } catch {
         case e: AdminOperationException =>
-          CreatePartitionsMetadata(topic, Map.empty, ApiError.fromThrowable(e))
+          CreatePartitionsMetadata(topic, Set.empty, ApiError.fromThrowable(e))
         case e: ApiException =>
-          CreatePartitionsMetadata(topic, Map.empty, ApiError.fromThrowable(e))
+          CreatePartitionsMetadata(topic, Set.empty, ApiError.fromThrowable(e))
       }
     }
 
@@ -321,7 +330,7 @@ class AdminManager(val config: KafkaConfig,
     if (timeout <= 0 || validateOnly || !metadata.exists(_.error.is(Errors.NONE))) {
       val results = metadata.map { createPartitionMetadata =>
         // ignore topics that already have errors
-        if (createPartitionMetadata.error.isSuccess() && !validateOnly) {
+        if (createPartitionMetadata.error.isSuccess && !validateOnly) {
           (createPartitionMetadata.topic, new ApiError(Errors.REQUEST_TIMED_OUT, null))
         } else {
           (createPartitionMetadata.topic, createPartitionMetadata.error)
@@ -330,8 +339,8 @@ class AdminManager(val config: KafkaConfig,
       callback(results)
     } else {
       // 3. else pass the assignments and errors to the delayed operation and set the keys
-      val delayedCreate = new DelayedCreatePartitions(timeout, metadata.toSeq, this, callback)
-      val delayedCreateKeys = newPartitions.keySet.map(new TopicKey(_)).toSeq
+      val delayedCreate = new DelayedCreatePartitions(timeout, metadata, this, callback)
+      val delayedCreateKeys = newPartitions.map(createPartitionTopic => TopicKey(createPartitionTopic.name))
       // try to complete the request immediately, otherwise put it into the purgatory
       topicPurgatory.tryCompleteElseWatch(delayedCreate, delayedCreateKeys)
     }
@@ -407,10 +416,14 @@ class AdminManager(val config: KafkaConfig,
     configs.map { case (resource, config) =>
 
       try {
+        val nullUpdates = config.entries.asScala.filter(_.value == null).map(_.name)
+        if (nullUpdates.nonEmpty)
+          throw new InvalidRequestException(s"Null value not supported for : ${nullUpdates.mkString(",")}")
+
         val configEntriesMap = config.entries.asScala.map(entry => (entry.name, entry.value)).toMap
 
         val configProps = new Properties
-        config.entries.asScala.foreach { configEntry =>
+        config.entries.asScala.filter(_.value != null).foreach { configEntry =>
           configProps.setProperty(configEntry.name, configEntry.value)
         }
 
@@ -473,7 +486,8 @@ class AdminManager(val config: KafkaConfig,
       alterConfigOp.opType() match {
         case OpType.SET => Log4jController.logLevel(loggerName, logLevel)
         case OpType.DELETE => Log4jController.unsetLogLevel(loggerName)
-        case OpType.APPEND | OpType.SUBTRACT => // ignore
+        case _ => throw new IllegalArgumentException(
+          s"Log level cannot be changed for OpType: ${alterConfigOp.opType()}")
       }
     }
   }
@@ -506,6 +520,11 @@ class AdminManager(val config: KafkaConfig,
           .mapValues(_.size).filter(_._2 > 1).keys.toSet
         if (duplicateKeys.nonEmpty)
           throw new InvalidRequestException(s"Error due to duplicate config keys : ${duplicateKeys.mkString(",")}")
+        val nullUpdates = alterConfigOps
+          .filter(entry => entry.configEntry.value == null && entry.opType() != OpType.DELETE)
+          .map(entry => s"${entry.opType}:${entry.configEntry.name}")
+        if (nullUpdates.nonEmpty)
+          throw new InvalidRequestException(s"Null value not supported for : ${nullUpdates.mkString(",")}")
 
         val configEntriesMap = alterConfigOps.map(entry => (entry.configEntry().name(), entry.configEntry().value())).toMap
 
@@ -592,20 +611,27 @@ class AdminManager(val config: KafkaConfig,
     }
 
     alterConfigOps.foreach { alterConfigOp =>
+      val configPropName = alterConfigOp.configEntry().name()
       alterConfigOp.opType() match {
         case OpType.SET => configProps.setProperty(alterConfigOp.configEntry().name(), alterConfigOp.configEntry().value())
         case OpType.DELETE => configProps.remove(alterConfigOp.configEntry().name())
         case OpType.APPEND => {
           if (!listType(alterConfigOp.configEntry().name(), configKeys))
             throw new InvalidRequestException(s"Config value append is not allowed for config key: ${alterConfigOp.configEntry().name()}")
-          val oldValueList = configProps.getProperty(alterConfigOp.configEntry().name()).split(",").toList
+          val oldValueList = Option(configProps.getProperty(alterConfigOp.configEntry().name()))
+            .orElse(Option(ConfigDef.convertToString(configKeys(configPropName).defaultValue, ConfigDef.Type.LIST)))
+            .getOrElse("")
+            .split(",").toList
           val newValueList = oldValueList ::: alterConfigOp.configEntry().value().split(",").toList
           configProps.setProperty(alterConfigOp.configEntry().name(), newValueList.mkString(","))
         }
         case OpType.SUBTRACT => {
           if (!listType(alterConfigOp.configEntry().name(), configKeys))
             throw new InvalidRequestException(s"Config value subtract is not allowed for config key: ${alterConfigOp.configEntry().name()}")
-          val oldValueList = configProps.getProperty(alterConfigOp.configEntry().name()).split(",").toList
+          val oldValueList = Option(configProps.getProperty(alterConfigOp.configEntry().name()))
+            .orElse(Option(ConfigDef.convertToString(configKeys(configPropName).defaultValue, ConfigDef.Type.LIST)))
+            .getOrElse("")
+            .split(",").toList
           val newValueList = oldValueList.diff(alterConfigOp.configEntry().value().split(",").toList)
           configProps.setProperty(alterConfigOp.configEntry().name(), newValueList.mkString(","))
         }
@@ -630,14 +656,6 @@ class AdminManager(val config: KafkaConfig,
     DynamicBrokerConfig.brokerConfigSynonyms(name, matchListenerOverride = true)
   }
 
-  private def configType(name: String, synonyms: List[String]): ConfigDef.Type = {
-    val configType = config.typeOf(name)
-    if (configType != null)
-      configType
-    else
-      synonyms.iterator.map(config.typeOf).find(_ != null).orNull
-  }
-
   private def configSynonyms(name: String, synonyms: List[String], isSensitive: Boolean): List[DescribeConfigsResponse.ConfigSynonym] = {
     val dynamicConfig = config.dynamicConfig
     val allSynonyms = mutable.Buffer[DescribeConfigsResponse.ConfigSynonym]()
@@ -658,9 +676,9 @@ class AdminManager(val config: KafkaConfig,
 
   private def createTopicConfigEntry(logConfig: LogConfig, topicProps: Properties, includeSynonyms: Boolean)
                                     (name: String, value: Any): DescribeConfigsResponse.ConfigEntry = {
-    val configEntryType = logConfig.typeOf(name)
-    val isSensitive = configEntryType == ConfigDef.Type.PASSWORD
-    val valueAsString = if (isSensitive) null else ConfigDef.convertToString(value, configEntryType)
+    val configEntryType = LogConfig.configType(name)
+    val isSensitive = KafkaConfig.maybeSensitive(configEntryType)
+    val valueAsString = if (isSensitive) null else ConfigDef.convertToString(value, configEntryType.orNull)
     val allSynonyms = {
       val list = LogConfig.TopicConfigSynonyms.get(name)
         .map(s => configSynonyms(s, brokerSynonyms(s), isSensitive))
@@ -678,14 +696,13 @@ class AdminManager(val config: KafkaConfig,
   private def createBrokerConfigEntry(perBrokerConfig: Boolean, includeSynonyms: Boolean)
                                      (name: String, value: Any): DescribeConfigsResponse.ConfigEntry = {
     val allNames = brokerSynonyms(name)
-    val configEntryType = configType(name, allNames)
-    // If we can't determine the config entry type, treat it as a sensitive config to be safe
-    val isSensitive = configEntryType == ConfigDef.Type.PASSWORD || configEntryType == null
+    val configEntryType = KafkaConfig.configType(name)
+    val isSensitive = KafkaConfig.maybeSensitive(configEntryType)
     val valueAsString = if (isSensitive)
       null
     else value match {
       case v: String => v
-      case _ => ConfigDef.convertToString(value, configEntryType)
+      case _ => ConfigDef.convertToString(value, configEntryType.orNull)
     }
     val allSynonyms = configSynonyms(name, allNames, isSensitive)
         .filter(perBrokerConfig || _.source == ConfigSource.DYNAMIC_DEFAULT_BROKER_CONFIG)

@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.test;
 
-import org.apache.kafka.clients.producer.Producer;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.header.Headers;
@@ -35,6 +35,9 @@ public class MockRecordCollector implements RecordCollector {
 
     // remember all records that are collected so far
     private final List<ProducerRecord<Object, Object>> collected = new LinkedList<>();
+
+    // remember all commits that are submitted so far
+    private final List<Map<TopicPartition, OffsetAndMetadata>> committed = new LinkedList<>();
 
     // remember if flushed is called
     private boolean flushed = false;
@@ -74,7 +77,12 @@ public class MockRecordCollector implements RecordCollector {
     }
 
     @Override
-    public void init(final Producer<byte[], byte[]> producer) {}
+    public void initialize() {}
+
+    @Override
+    public void commit(final Map<TopicPartition, OffsetAndMetadata> offsets) {
+        committed.add(offsets);
+    }
 
     @Override
     public void flush() {
@@ -91,6 +99,10 @@ public class MockRecordCollector implements RecordCollector {
 
     public List<ProducerRecord<Object, Object>> collected() {
         return unmodifiableList(collected);
+    }
+
+    public List<Map<TopicPartition, OffsetAndMetadata>> committed() {
+        return unmodifiableList(committed);
     }
 
     public boolean flushed() {

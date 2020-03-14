@@ -38,7 +38,6 @@ import org.apache.kafka.streams.state.internals.ThreadCache;
 import org.apache.kafka.streams.state.internals.TimestampedSerializedKeyValueStore;
 
 import java.time.Duration;
-import java.util.List;
 
 public class GlobalProcessorContextImpl extends AbstractProcessorContext {
 
@@ -50,21 +49,20 @@ public class GlobalProcessorContextImpl extends AbstractProcessorContext {
         super(new TaskId(-1, -1), config, metrics, stateMgr, cache);
     }
 
-    @SuppressWarnings("unchecked")
     @Override
     public StateStore getStateStore(final String name) {
         final StateStore store = stateManager.getGlobalStore(name);
 
         if (store instanceof TimestampedKeyValueStore) {
-            return new TimestampedKeyValueStoreReadWriteDecorator((TimestampedSerializedKeyValueStore) store);
+            return new TimestampedKeyValueStoreReadWriteDecorator((TimestampedSerializedKeyValueStore<?, ?>) store);
         } else if (store instanceof KeyValueStore) {
-            return new KeyValueStoreReadWriteDecorator((KeyValueStore) store);
+            return new KeyValueStoreReadWriteDecorator<>((KeyValueStore<?, ?>) store);
         } else if (store instanceof TimestampedWindowStore) {
-            return new TimestampedWindowStoreReadWriteDecorator((TimestampedWindowStore) store);
+            return new TimestampedWindowStoreReadWriteDecorator<>((TimestampedWindowStore<?, ?>) store);
         } else if (store instanceof WindowStore) {
-            return new WindowStoreReadWriteDecorator((WindowStore) store);
+            return new WindowStoreReadWriteDecorator<>((WindowStore<?, ?>) store);
         } else if (store instanceof SessionStore) {
-            return new SessionStoreReadWriteDecorator((SessionStore) store);
+            return new SessionStoreReadWriteDecorator<>((SessionStore<?, ?>) store);
         }
 
         return store;
@@ -73,11 +71,11 @@ public class GlobalProcessorContextImpl extends AbstractProcessorContext {
     @SuppressWarnings("unchecked")
     @Override
     public <K, V> void forward(final K key, final V value) {
-        final ProcessorNode previousNode = currentNode();
+        final ProcessorNode<?, ?> previousNode = currentNode();
         try {
-            for (final ProcessorNode child : (List<ProcessorNode<K, V>>) currentNode().children()) {
+            for (final ProcessorNode<?, ?> child :  currentNode().children()) {
                 setCurrentNode(child);
-                child.process(key, value);
+                ((ProcessorNode<K, V>) child).process(key, value);
             }
         } finally {
             setCurrentNode(previousNode);

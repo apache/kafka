@@ -27,7 +27,6 @@ import java.util.concurrent.atomic._
 import java.util.concurrent.{ConcurrentNavigableMap, ConcurrentSkipListMap, TimeUnit}
 import java.util.regex.Pattern
 
-import com.yammer.metrics.core.Gauge
 import kafka.api.{ApiVersion, KAFKA_0_10_0_IV0}
 import kafka.common.{LogSegmentOffsetOverflowException, LongRef, OffsetsOutOfOrderException, UnexpectedAppendOffsetException}
 import kafka.message.{BrokerCompressionCodec, CompressionCodec, NoCompressionCodec}
@@ -302,7 +301,7 @@ class Log(@volatile var dir: File,
 
     leaderEpochCache.foreach(_.truncateFromEnd(nextOffsetMetadata.messageOffset))
 
-    logStartOffset = math.max(logStartOffset, segments.firstEntry.getValue.baseOffset)
+    updateLogStartOffset(math.max(logStartOffset, segments.firstEntry.getValue.baseOffset))
 
     // The earliest leader epoch may not be flushed during a hard failure. Recover it here.
     leaderEpochCache.foreach(_.truncateFromStart(logStartOffset))
@@ -465,29 +464,10 @@ class Log(@volatile var dir: File,
     Map("topic" -> topicPartition.topic, "partition" -> topicPartition.partition.toString) ++ maybeFutureTag
   }
 
-  newGauge(LogMetricNames.NumLogSegments,
-    new Gauge[Int] {
-      def value = numberOfSegments
-    },
-    tags)
-
-  newGauge(LogMetricNames.LogStartOffset,
-    new Gauge[Long] {
-      def value = logStartOffset
-    },
-    tags)
-
-  newGauge(LogMetricNames.LogEndOffset,
-    new Gauge[Long] {
-      def value = logEndOffset
-    },
-    tags)
-
-  newGauge(LogMetricNames.Size,
-    new Gauge[Long] {
-      def value = size
-    },
-    tags)
+  newGauge(LogMetricNames.NumLogSegments, () => numberOfSegments, tags)
+  newGauge(LogMetricNames.LogStartOffset, () => logStartOffset, tags)
+  newGauge(LogMetricNames.LogEndOffset, () => logEndOffset, tags)
+  newGauge(LogMetricNames.Size, () => size, tags)
 
   val producerExpireCheck = scheduler.schedule(name = "PeriodicProducerExpirationCheck", fun = () => {
     lock synchronized {
@@ -741,13 +721,29 @@ class Log(@volatile var dir: File,
     }
   }
 
-  private def updateLogEndOffset(messageOffset: Long): Unit = {
-    nextOffsetMetadata = LogOffsetMetadata(messageOffset, activeSegment.baseOffset, activeSegment.size)
+  private def updateLogEndOffset(offset: Long): Unit = {
+    nextOffsetMetadata = LogOffsetMetadata(offset, activeSegment.baseOffset, activeSegment.size)
 
     // Update the high watermark in case it has gotten ahead of the log end offset following a truncation
     // or if a new segment has been rolled and the offset metadata needs to be updated.
-    if (highWatermark >= messageOffset) {
+    if (highWatermark >= offset) {
       updateHighWatermarkMetadata(nextOffsetMetadata)
+    }
+
+    if (this.recoveryPoint > offset) {
+      this.recoveryPoint = offset
+    }
+  }
+
+  private def updateLogStartOffset(offset: Long): Unit = {
+    logStartOffset = offset
+
+    if (highWatermark < offset) {
+      updateHighWatermark(offset)
+    }
+
+    if (this.recoveryPoint < offset) {
+      this.recoveryPoint = offset
     }
   }
 
@@ -902,7 +898,7 @@ class Log(@volatile var dir: File,
         val maybeCompletedTxn = updateProducers(batch,
           loadedProducers,
           firstOffsetMetadata = None,
-          isFromClient = false)
+          origin = AppendOrigin.Replication)
         maybeCompletedTxn.foreach(completedTxns += _)
       }
     }
@@ -991,14 +987,16 @@ class Log(@volatile var dir: File,
    * Append this message set to the active segment of the log, assigning offsets and Partition Leader Epochs
    *
    * @param records The records to append
-   * @param isFromClient Whether or not this append is from a producer
+   * @param origin Declares the origin of the append which affects required validations
    * @param interBrokerProtocolVersion Inter-broker message protocol version
    * @throws KafkaStorageException If the append fails due to an I/O error.
    * @return Information about the appended messages including the first and last offset.
    */
-  def appendAsLeader(records: MemoryRecords, leaderEpoch: Int, isFromClient: Boolean = true,
+  def appendAsLeader(records: MemoryRecords,
+                     leaderEpoch: Int,
+                     origin: AppendOrigin = AppendOrigin.Client,
                      interBrokerProtocolVersion: ApiVersion = ApiVersion.latestVersion): LogAppendInfo = {
-    append(records, isFromClient, interBrokerProtocolVersion, assignOffsets = true, leaderEpoch)
+    append(records, origin, interBrokerProtocolVersion, assignOffsets = true, leaderEpoch)
   }
 
   /**
@@ -1009,7 +1007,11 @@ class Log(@volatile var dir: File,
    * @return Information about the appended messages including the first and last offset.
    */
   def appendAsFollower(records: MemoryRecords): LogAppendInfo = {
-    append(records, isFromClient = false, interBrokerProtocolVersion = ApiVersion.latestVersion, assignOffsets = false, leaderEpoch = -1)
+    append(records,
+      origin = AppendOrigin.Replication,
+      interBrokerProtocolVersion = ApiVersion.latestVersion,
+      assignOffsets = false,
+      leaderEpoch = -1)
   }
 
   /**
@@ -1019,7 +1021,7 @@ class Log(@volatile var dir: File,
    * however if the assignOffsets=false flag is passed we will only check that the existing offsets are valid.
    *
    * @param records The log records to append
-   * @param isFromClient Whether or not this append is from a producer
+   * @param origin Declares the origin of the append which affects required validations
    * @param interBrokerProtocolVersion Inter-broker message protocol version
    * @param assignOffsets Should the log assign offsets to this message set or blindly apply what it is given
    * @param leaderEpoch The partition's leader epoch which will be applied to messages when offsets are assigned on the leader
@@ -1028,9 +1030,13 @@ class Log(@volatile var dir: File,
    * @throws UnexpectedAppendOffsetException If the first or last offset in append is less than next offset
    * @return Information about the appended messages including the first and last offset.
    */
-  private def append(records: MemoryRecords, isFromClient: Boolean, interBrokerProtocolVersion: ApiVersion, assignOffsets: Boolean, leaderEpoch: Int): LogAppendInfo = {
+  private def append(records: MemoryRecords,
+                     origin: AppendOrigin,
+                     interBrokerProtocolVersion: ApiVersion,
+                     assignOffsets: Boolean,
+                     leaderEpoch: Int): LogAppendInfo = {
     maybeHandleIOException(s"Error while appending records to $topicPartition in dir ${dir.getParent}") {
-      val appendInfo = analyzeAndValidateRecords(records, isFromClient = isFromClient)
+      val appendInfo = analyzeAndValidateRecords(records, origin)
 
       // return if we have no valid messages or if this is a duplicate of the last appended entry
       if (appendInfo.shallowCount == 0)
@@ -1060,7 +1066,7 @@ class Log(@volatile var dir: File,
               config.messageTimestampType,
               config.messageTimestampDifferenceMaxMs,
               leaderEpoch,
-              isFromClient,
+              origin,
               interBrokerProtocolVersion,
               brokerTopicStats)
           } catch {
@@ -1146,7 +1152,7 @@ class Log(@volatile var dir: File,
         // now that we have valid records, offsets assigned, and timestamps updated, we need to
         // validate the idempotent/transactional state of the producers and collect some metadata
         val (updatedProducers, completedTxns, maybeDuplicate) = analyzeAndValidateProducerState(
-          logOffsetMetadata, validRecords, isFromClient)
+          logOffsetMetadata, validRecords, origin)
 
         maybeDuplicate.foreach { duplicate =>
           appendInfo.firstOffset = Some(duplicate.firstOffset)
@@ -1252,7 +1258,7 @@ class Log(@volatile var dir: File,
         checkIfMemoryMappedBufferClosed()
         if (newLogStartOffset > logStartOffset) {
           info(s"Incrementing log start offset to $newLogStartOffset")
-          logStartOffset = newLogStartOffset
+          updateLogStartOffset(newLogStartOffset)
           leaderEpochCache.foreach(_.truncateFromStart(logStartOffset))
           producerStateManager.truncateHead(newLogStartOffset)
           maybeIncrementFirstUnstableOffset()
@@ -1263,7 +1269,7 @@ class Log(@volatile var dir: File,
 
   private def analyzeAndValidateProducerState(appendOffsetMetadata: LogOffsetMetadata,
                                               records: MemoryRecords,
-                                              isFromClient: Boolean):
+                                              origin: AppendOrigin):
   (mutable.Map[Long, ProducerAppendInfo], List[CompletedTxn], Option[BatchMetadata]) = {
     val updatedProducers = mutable.Map.empty[Long, ProducerAppendInfo]
     val completedTxns = ListBuffer.empty[CompletedTxn]
@@ -1275,7 +1281,7 @@ class Log(@volatile var dir: File,
 
         // if this is a client produce request, there will be up to 5 batches which could have been duplicated.
         // If we find a duplicate, we return the metadata of the appended batch to the client.
-        if (isFromClient) {
+        if (origin == AppendOrigin.Client) {
           maybeLastEntry.flatMap(_.findDuplicateBatch(batch)).foreach { duplicate =>
             return (updatedProducers, completedTxns.toList, Some(duplicate))
           }
@@ -1288,11 +1294,7 @@ class Log(@volatile var dir: File,
         else
           None
 
-        val maybeCompletedTxn = updateProducers(batch,
-          updatedProducers,
-          firstOffsetMetadata = firstOffsetMetadata,
-          isFromClient = isFromClient)
-
+        val maybeCompletedTxn = updateProducers(batch, updatedProducers, firstOffsetMetadata, origin)
         maybeCompletedTxn.foreach(completedTxns += _)
       }
 
@@ -1319,7 +1321,7 @@ class Log(@volatile var dir: File,
    * <li> Whether any compression codec is used (if many are used, then the last one is given)
    * </ol>
    */
-  private def analyzeAndValidateRecords(records: MemoryRecords, isFromClient: Boolean): LogAppendInfo = {
+  private def analyzeAndValidateRecords(records: MemoryRecords, origin: AppendOrigin): LogAppendInfo = {
     var shallowMessageCount = 0
     var validBytesCount = 0
     var firstOffset: Option[Long] = None
@@ -1333,7 +1335,7 @@ class Log(@volatile var dir: File,
 
     for (batch <- records.batches.asScala) {
       // we only validate V2 and higher to avoid potential compatibility issues with older clients
-      if (batch.magic >= RecordBatch.MAGIC_VALUE_V2 && isFromClient && batch.baseOffset != 0)
+      if (batch.magic >= RecordBatch.MAGIC_VALUE_V2 && origin == AppendOrigin.Client && batch.baseOffset != 0)
         throw new InvalidRecordException(s"The baseOffset of the record batch in the append to $topicPartition should " +
           s"be 0, but it is ${batch.baseOffset}")
 
@@ -1394,9 +1396,9 @@ class Log(@volatile var dir: File,
   private def updateProducers(batch: RecordBatch,
                               producers: mutable.Map[Long, ProducerAppendInfo],
                               firstOffsetMetadata: Option[LogOffsetMetadata],
-                              isFromClient: Boolean): Option[CompletedTxn] = {
+                              origin: AppendOrigin): Option[CompletedTxn] = {
     val producerId = batch.producerId
-    val appendInfo = producers.getOrElseUpdate(producerId, producerStateManager.prepareUpdate(producerId, isFromClient))
+    val appendInfo = producers.getOrElseUpdate(producerId, producerStateManager.prepareUpdate(producerId, origin))
     appendInfo.append(batch, firstOffsetMetadata)
   }
 
@@ -2060,8 +2062,7 @@ class Log(@volatile var dir: File,
             removeAndDeleteSegments(deletable, asyncDelete = true)
             activeSegment.truncateTo(targetOffset)
             updateLogEndOffset(targetOffset)
-            this.recoveryPoint = math.min(targetOffset, this.recoveryPoint)
-            this.logStartOffset = math.min(targetOffset, this.logStartOffset)
+            updateLogStartOffset(math.min(targetOffset, this.logStartOffset))
             leaderEpochCache.foreach(_.truncateFromEnd(targetOffset))
             loadProducerState(targetOffset, reloadFromCleanShutdown = false)
           }
@@ -2095,9 +2096,7 @@ class Log(@volatile var dir: File,
         producerStateManager.truncate()
         producerStateManager.updateMapEndOffset(newOffset)
         maybeIncrementFirstUnstableOffset()
-
-        this.recoveryPoint = math.min(newOffset, this.recoveryPoint)
-        this.logStartOffset = newOffset
+        updateLogStartOffset(newOffset)
       }
     }
   }
