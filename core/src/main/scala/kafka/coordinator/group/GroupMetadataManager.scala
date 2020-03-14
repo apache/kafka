@@ -533,7 +533,7 @@ class GroupMetadataManager(brokerId: Int,
       val schedulerTimeMs = time.milliseconds() - startTimeMs
       doLoadGroupsAndOffsets(topicPartition, onGroupLoaded)
       val endTimeMs = time.milliseconds()
-      val totalLoadingTimeMs = time.milliseconds() - startTimeMs
+      val totalLoadingTimeMs = endTimeMs - startTimeMs
       partitionLoadSensor.record(totalLoadingTimeMs, endTimeMs, false)
       info(s"Finished loading offsets and group metadata from $topicPartition "
         + s"in $totalLoadingTimeMs milliseconds, of which $schedulerTimeMs milliseconds"

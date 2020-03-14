@@ -389,15 +389,15 @@ class TransactionStateManager(brokerId: Int,
     }
 
     def loadTransactions(startTimeMs: java.lang.Long): Unit = {
-      val schedulerTime = time.milliseconds() - startTimeMs
+      val schedulerTimeMs = time.milliseconds() - startTimeMs
       info(s"Loading transaction metadata from $topicPartition at epoch $coordinatorEpoch")
       validateTransactionTopicPartitionCountIsStable()
 
       val loadedTransactions = loadTransactionMetadata(topicPartition, coordinatorEpoch)
       val endTimeMs = time.milliseconds()
-      val timeLapse = endTimeMs - startTimeMs
-      partitionLoadSensor.record(timeLapse, endTimeMs, false)
-      info(s"Finished loading ${loadedTransactions.size} transaction metadata from $topicPartition in $timeLapse milliseconds, of which $schedulerTime milliseconds was spent in the scheduler.")
+      val totalLoadingTimeMs = endTimeMs - startTimeMs
+      partitionLoadSensor.record(totalLoadingTimeMs, endTimeMs, false)
+      info(s"Finished loading ${loadedTransactions.size} transaction metadata from $topicPartition in $totalLoadingTimeMs milliseconds, of which $schedulerTimeMs milliseconds was spent in the scheduler.")
 
       inWriteLock(stateLock) {
         if (loadingPartitions.contains(partitionAndLeaderEpoch)) {
