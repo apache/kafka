@@ -86,6 +86,33 @@ public class KTableSourceTest {
     }
 
     @Test
+    public void testKTableEmitOnChange() {
+        final StreamsBuilder builder = new StreamsBuilder();
+        final String topic1 = "topic1";
+
+        final KTable<String, Integer> table1 =
+            builder.table(topic1, Consumed.with(Serdes.String(), Serdes.Integer()), Materialized.as("store"));
+
+        final MockProcessorSupplier<String, Integer> supplier = new MockProcessorSupplier<>();
+        table1.toStream().process(supplier);
+
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+            final TestInputTopic<String, Integer> inputTopic =
+                    driver.createInputTopic(topic1, new StringSerializer(), new IntegerSerializer());
+            inputTopic.pipeInput("A", 1, 10L);
+            inputTopic.pipeInput("B", 2, 11L);
+            inputTopic.pipeInput("A", 1, 10L);
+            inputTopic.pipeInput("B", 3, 13L);
+        }
+
+        assertEquals(
+            asList(new KeyValueTimestamp<>("A", 1, 10L),
+                new KeyValueTimestamp<>("B", 2, 11L),
+                new KeyValueTimestamp<>("B", 3, 13L)),
+            supplier.theCapturedProcessor().processed);
+    }
+
+    @Test
     public void kTableShouldLogAndMeterOnSkippedRecordsWithBuiltInMetrics0100To24() {
         kTableShouldLogAndMeterOnSkippedRecords(StreamsConfig.METRICS_0100_TO_24);
     }
