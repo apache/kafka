@@ -1305,7 +1305,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         return activeTasks;
     }
 
-    private static Map<TopicPartition, PartitionInfo> getTopicPartitionInfo(final Map<HostInfo, Set<TopicPartition>> partitionsByHost) {
+    static Map<TopicPartition, PartitionInfo> getTopicPartitionInfo(final Map<HostInfo, Set<TopicPartition>> partitionsByHost) {
         final Map<TopicPartition, PartitionInfo> topicToPartitionInfo = new HashMap<>();
         for (final Set<TopicPartition> value : partitionsByHost.values()) {
             for (final TopicPartition topicPartition : value) {
@@ -1396,6 +1396,10 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
 
     protected void setAssignmentErrorCode(final Integer errorCode) {
         assignmentErrorCode.set(errorCode);
+    }
+
+    Integer assignmentErrorCode(){
+        return assignmentErrorCode.get();
     }
 
     // following functions are for test only
