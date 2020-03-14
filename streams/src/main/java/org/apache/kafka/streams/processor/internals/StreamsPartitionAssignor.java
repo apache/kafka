@@ -1248,8 +1248,6 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                 partitionsByHost = info.partitionsByHost();
                 standbyPartitionsByHost = Collections.emptyMap();
                 topicToPartitionInfo = getTopicPartitionInfo(partitionsByHost);
-
-                verifyHostInfo(partitionsByHost.keySet());
                 break;
             case 6:
             case 7:
@@ -1259,8 +1257,6 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                 partitionsByHost = info.partitionsByHost();
                 standbyPartitionsByHost = info.standbyPartitionByHost();
                 topicToPartitionInfo = getTopicPartitionInfo(partitionsByHost);
-
-                verifyHostInfo(partitionsByHost.keySet());
                 break;
             default:
                 throw new IllegalStateException(
@@ -1268,6 +1264,8 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                         + " Please file a bug report at https://issues.apache.org/jira/projects/KAFKA/"
                 );
         }
+
+        verifyHostInfo(partitionsByHost.keySet());
 
         final Cluster fakeCluster = Cluster.empty().withPartitions(topicToPartitionInfo);
         streamsMetadataState.onChange(partitionsByHost, standbyPartitionsByHost, fakeCluster);
