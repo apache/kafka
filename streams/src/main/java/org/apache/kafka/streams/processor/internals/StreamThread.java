@@ -496,7 +496,7 @@ public class StreamThread extends Thread {
         while (isRunning() || taskManager.isRebalanceInProgress()) {
             try {
                 runOnce();
-                if (assignmentErrorCode.get() == AssignorError.VERSION_PROBING.code()) {
+                if (assignmentErrorCode.get() == AssignorError.REBALANCE_NEEDED.code()) {
                     log.info("Version probing detected. Rejoining the consumer group to trigger a new rebalance.");
 
                     assignmentErrorCode.set(AssignorError.NONE.code());

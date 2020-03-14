@@ -24,7 +24,6 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.errors.StreamsException;
@@ -59,8 +58,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
 import static java.util.UUID.randomUUID;
-import static org.apache.kafka.common.utils.Utils.getHost;
-import static org.apache.kafka.common.utils.Utils.getPort;
 import static org.apache.kafka.streams.processor.internals.assignment.StreamsAssignmentProtocolVersions.EARLIEST_PROBEABLE_VERSION;
 import static org.apache.kafka.streams.processor.internals.assignment.StreamsAssignmentProtocolVersions.LATEST_SUPPORTED_VERSION;
 import static org.apache.kafka.streams.processor.internals.assignment.StreamsAssignmentProtocolVersions.UNKNOWN;
@@ -1221,7 +1218,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
 
         // Check if this was a version probing rebalance and check the error code to trigger another rebalance if so
         if (maybeUpdateSubscriptionVersion(receivedAssignmentMetadataVersion, latestCommonlySupportedVersion)) {
-            setAssignmentErrorCode(AssignorError.VERSION_PROBING.code());
+            setAssignmentErrorCode(AssignorError.REBALANCE_NEEDED.code());
         }
 
         // version 1 field
@@ -1287,13 +1284,13 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
      *
      * @param groupHostInfo the HostInfo of all clients in the group
      */
-    protected void verifyHostInfo(final Set<HostInfo> groupHostInfo) {
+    private void verifyHostInfo(final Set<HostInfo> groupHostInfo) {
         if (userEndPoint != null && !groupHostInfo.isEmpty()) {
             final HostInfo myHostInfo = HostInfo.buildFromEndpoint(userEndPoint);
 
             if (!groupHostInfo.contains(myHostInfo)) {
                 log.info("Triggering a rebalance to update group with new endpoint = {}", userEndPoint);
-                setAssignmentErrorCode(AssignorError.VERSION_PROBING.code());
+                setAssignmentErrorCode(AssignorError.REBALANCE_NEEDED.code());
             }
         }
     }
