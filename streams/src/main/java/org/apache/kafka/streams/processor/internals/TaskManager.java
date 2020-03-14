@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import java.io.IOException;
+import java.util.Collections;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.DeleteRecordsResult;
 import org.apache.kafka.clients.admin.RecordsToDelete;
@@ -32,6 +34,7 @@ import org.apache.kafka.streams.errors.TaskIdFormatException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
+import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
 import org.slf4j.Logger;
 
 import java.io.File;
@@ -79,6 +82,9 @@ public class TaskManager {
 
     private boolean rebalanceInProgress = false;  // if we are in the middle of a rebalance, it is not safe to commit
 
+    // includes assigned & initialized tasks and unassigned tasks we locked temporarily during rebalance
+    private Set<TaskId> lockedTaskDirectories = new HashSet<>();
+
     TaskManager(final ChangelogReader changelogReader,
                 final UUID processId,
                 final String logPrefix,
@@ -121,6 +127,8 @@ public class TaskManager {
     void handleRebalanceStart(final Set<String> subscribedTopics) {
         builder.addSubscribedTopicsFromMetadata(subscribedTopics, logPrefix);
 
+        tryToLockAllTaskDirectories();
+
         rebalanceInProgress = true;
     }
 
@@ -128,6 +136,8 @@ public class TaskManager {
         // we should pause consumer only within the listener since
         // before then the assignment has not been updated yet.
         mainConsumer.pause(mainConsumer.assignment());
+
+        releaseLockedUnassignedTaskDirectories();
 
         rebalanceInProgress = false;
     }
@@ -368,50 +378,105 @@ public class TaskManager {
     }
 
     /**
+     * Compute the offset total summed across all stores in a task. Includes offset sum for any tasks we own the
+     * lock for, which includes assigned and unassigned tasks we locked in {@link #tryToLockAllTaskDirectories()}
+     *
      * @return Map from task id to its total offset summed across all state stores
      */
     public Map<TaskId, Long> getTaskOffsetSums() {
         final Map<TaskId, Long> taskOffsetSums = new HashMap<>();
 
-        for (final TaskId id : tasksOnLocalStorage()) {
-            if (isRunning(id)) {
-                taskOffsetSums.put(id, Task.LATEST_OFFSET);
+        for (final TaskId id : lockedTaskDirectories) {
+            final Task task = tasks.get(id);
+            if (task != null) {
+                if (task.isActive() && task.state() == RUNNING) {
+                    taskOffsetSums.put(id, Task.LATEST_OFFSET);
+                } else {
+                    taskOffsetSums.put(id, sumOfChangelogOffsets(id, task.changelogOffsets()));
+                }
             } else {
-                taskOffsetSums.put(id, 0L);
-            }
-        }
-        return taskOffsetSums;
-    }
-
-    /**
-     * Returns ids of tasks whose states are kept on the local storage. This includes active, standby, and previously
-     * assigned but not yet cleaned up tasks
-     */
-    private Set<TaskId> tasksOnLocalStorage() {
-        // A client could contain some inactive tasks whose states are still kept on the local storage in the following scenarios:
-        // 1) the client is actively maintaining standby tasks by maintaining their states from the change log.
-        // 2) the client has just got some tasks migrated out of itself to other clients while these task states
-        //    have not been cleaned up yet (this can happen in a rolling bounce upgrade, for example).
-
-        final Set<TaskId> locallyStoredTasks = new HashSet<>();
-
-        final File[] stateDirs = stateDirectory.listTaskDirectories();
-        if (stateDirs != null) {
-            for (final File dir : stateDirs) {
+                final File checkpointFile = stateDirectory.checkpointFileFor(id);
                 try {
-                    final TaskId id = TaskId.parse(dir.getName());
-                    // if the checkpoint file exists, the state is valid.
-                    if (new File(dir, StateManagerUtil.CHECKPOINT_FILE_NAME).exists()) {
-                        locallyStoredTasks.add(id);
+                    if (checkpointFile.exists()) {
+                        taskOffsetSums.put(id, sumOfChangelogOffsets(id, new OffsetCheckpoint(checkpointFile).read()));
                     }
-                } catch (final TaskIdFormatException e) {
-                    // there may be some unknown files that sits in the same directory,
-                    // we should ignore these files instead trying to delete them as well
+                } catch (final IOException e) {
+                    log.warn(String.format("Exception caught while trying to read checkpoint for task %s:", id), e);
                 }
             }
         }
 
-        return locallyStoredTasks;
+        return taskOffsetSums;
+    }
+
+    /**
+     * Makes a weak attempt to lock all task directories in the state dir. We are responsible for computing and
+     * reporting the offset sum for any unassigned tasks we obtain the lock for in the upcoming rebalance. Tasks
+     * that we locked but didn't own will be released at the end of the rebalance (unless of course we were
+     * assigned the task as a result of the rebalance). This method should be idempotent.
+     */
+    private void tryToLockAllTaskDirectories() {
+        for (final File dir : stateDirectory.listTaskDirectories()) {
+            try {
+                final TaskId id = TaskId.parse(dir.getName());
+                try {
+                    if (stateDirectory.lock(id)) {
+                        lockedTaskDirectories.add(id);
+                        if (!tasks.containsKey(id)) {
+                            log.debug("Temporarily locked unassigned task {} for the upcoming rebalance", id);
+                        }
+                    }
+                } catch (final IOException e) {
+                    // if for any reason we can't lock this task dir, just move on
+                    log.warn(String.format("Exception caught while attempting to lock task %s:", id), e);
+                }
+            } catch (final TaskIdFormatException e) {
+                // ignore any unknown files that sit in the same directory
+            }
+        }
+    }
+
+    /**
+     * We must release the lock for any unassigned tasks that we temporarily locked in preparation for a
+     * rebalance in {@link #tryToLockAllTaskDirectories()}.
+     */
+    private void releaseLockedUnassignedTaskDirectories() {
+        final AtomicReference<RuntimeException> firstException = new AtomicReference<>(null);
+
+        final Iterator<TaskId> taskIdIterator = lockedTaskDirectories.iterator();
+        while (taskIdIterator.hasNext()) {
+            final TaskId id = taskIdIterator.next();
+            if (!tasks.containsKey(id)) {
+                try {
+                    stateDirectory.unlock(id);
+                    taskIdIterator.remove();
+                } catch (final IOException e) {
+                    log.error(String.format("Caught the following exception while trying to unlock task %s", id), e);
+                    firstException.compareAndSet(null,
+                        new StreamsException(String.format("Failed to unlock task directory %s", id), e));
+                }
+            }
+        }
+
+        final RuntimeException fatalException = firstException.get();
+        if (fatalException != null) {
+            throw fatalException;
+        }
+    }
+
+    private long sumOfChangelogOffsets(final TaskId id, final Map<TopicPartition, Long> changelogOffsets) {
+        long offsetSum = 0L;
+        for (final Map.Entry<TopicPartition, Long> changelogEntry : changelogOffsets.entrySet()) {
+            final long offset = changelogEntry.getValue();
+
+            offsetSum += offset;
+            if (offsetSum < 0) {
+                log.warn("Sum of changelog offsets for task {} overflowed, pinning to Long.MAX_VALUE", id);
+                return Long.MAX_VALUE;
+            }
+        }
+
+        return offsetSum;
     }
 
     private void cleanupTask(final Task task) {
@@ -474,6 +539,14 @@ public class TaskManager {
             }
         }
 
+        try {
+            // this should be called after closing all tasks, to make sure we unlock the task dir for tasks that may
+            // have still been in CREATED at the time of shutdown, since Task#close will not do so
+            releaseLockedUnassignedTaskDirectories();
+        } catch (final RuntimeException e) {
+            firstException.compareAndSet(null, e);
+        }
+
         final RuntimeException fatalException = firstException.get();
         if (fatalException != null) {
             throw new RuntimeException("Unexpected exception while closing task", fatalException);
@@ -520,11 +593,6 @@ public class TaskManager {
 
     private Stream<Task> standbyTaskStream() {
         return tasks.values().stream().filter(t -> !t.isActive());
-    }
-
-    private boolean isRunning(final TaskId id) {
-        final Task task = tasks.get(id);
-        return task != null && task.isActive() && task.state() == RUNNING;
     }
 
     /**
@@ -629,7 +697,7 @@ public class TaskManager {
 
             final Map<TopicPartition, RecordsToDelete> recordsToDelete = new HashMap<>();
             for (final Task task : activeTaskIterable()) {
-                for (final Map.Entry<TopicPartition, Long> entry : task.purgableOffsets().entrySet()) {
+                for (final Map.Entry<TopicPartition, Long> entry : task.purgeableOffsets().entrySet()) {
                     recordsToDelete.put(entry.getKey(), RecordsToDelete.beforeOffset(entry.getValue()));
                 }
             }
@@ -675,5 +743,9 @@ public class TaskManager {
 
     Set<String> producerClientIds() {
         return activeTaskCreator.producerClientIds();
+    }
+
+    Set<TaskId> lockedTaskDirectories() {
+        return Collections.unmodifiableSet(lockedTaskDirectories);
     }
 }

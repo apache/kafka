@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import java.util.HashSet;
+import java.util.stream.Collectors;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.DeleteRecordsResult;
 import org.apache.kafka.clients.admin.DeletedRecords;
@@ -39,6 +41,7 @@ import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
+import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
 import org.easymock.EasyMock;
 import org.easymock.EasyMockRunner;
 import org.easymock.Mock;
@@ -77,13 +80,16 @@ import static org.easymock.EasyMock.eq;
 import static org.easymock.EasyMock.expect;
 import static org.easymock.EasyMock.expectLastCall;
 import static org.easymock.EasyMock.replay;
+import static org.easymock.EasyMock.reset;
 import static org.easymock.EasyMock.resetToStrict;
 import static org.easymock.EasyMock.verify;
 import static org.hamcrest.CoreMatchers.hasItem;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.is;
+import static org.hamcrest.Matchers.not;
 import static org.hamcrest.core.IsEqual.equalTo;
 import static org.junit.Assert.assertThrows;
+import static org.junit.Assert.assertTrue;
 
 @RunWith(EasyMockRunner.class)
 public class TaskManagerTest {
@@ -104,9 +110,11 @@ public class TaskManagerTest {
     private final TopicPartition t1p2 = new TopicPartition(topic1, 2);
     private final Set<TopicPartition> taskId02Partitions = mkSet(t1p2);
 
+    private final TaskId taskId10 = new TaskId(1, 0);
+
     @Mock(type = MockType.STRICT)
     private InternalTopologyBuilder topologyBuilder;
-    @Mock(type = MockType.NICE)
+    @Mock(type = MockType.DEFAULT)
     private StateDirectory stateDirectory;
     @Mock(type = MockType.NICE)
     private ChangelogReader changeLogReader;
@@ -159,26 +167,176 @@ public class TaskManagerTest {
     }
 
     @Test
-    public void shouldReturnOffsetsForAllCachedTaskIdsFromDirectory() throws IOException {
-        final File[] taskFolders = asList(testFolder.newFolder("0_1"),
-                                          testFolder.newFolder("0_2"),
-                                          testFolder.newFolder("0_3"),
-                                          testFolder.newFolder("1_1"),
-                                          testFolder.newFolder("dummy")).toArray(new File[0]);
+    public void shouldNotLockAnythingIfStateDirIsEmpty() {
+        expect(stateDirectory.listTaskDirectories()).andReturn(new File[0]).once();
 
-        assertThat((new File(taskFolders[0], StateManagerUtil.CHECKPOINT_FILE_NAME)).createNewFile(), is(true));
-        assertThat((new File(taskFolders[1], StateManagerUtil.CHECKPOINT_FILE_NAME)).createNewFile(), is(true));
-        assertThat((new File(taskFolders[3], StateManagerUtil.CHECKPOINT_FILE_NAME)).createNewFile(), is(true));
+        replay(stateDirectory);
+        taskManager.handleRebalanceStart(singleton("topic"));
 
-        expect(stateDirectory.listTaskDirectories()).andReturn(taskFolders).once();
+        verify(stateDirectory);
+        assertTrue(taskManager.lockedTaskDirectories().isEmpty());
+    }
 
-        replay(activeTaskCreator, stateDirectory);
+    @Test
+    public void shouldTryToLockValidTaskDirsAtRebalanceStart() throws IOException {
+        expectLockObtainedFor(taskId01);
+        expectLockFailedFor(taskId10);
 
-        final Map<TaskId, Long> taskOffsetSums = taskManager.getTaskOffsetSums();
+        makeTaskFolders(
+            taskId01.toString(),
+            taskId10.toString(),
+            "dummy"
+        );
+        replay(stateDirectory);
+        taskManager.handleRebalanceStart(singleton("topic"));
 
-        verify(activeTaskCreator, stateDirectory);
+        verify(stateDirectory);
+        assertThat(taskManager.lockedTaskDirectories(), is(singleton(taskId01)));
+    }
 
-        assertThat(taskOffsetSums.keySet(), equalTo(mkSet(taskId01, taskId02, new TaskId(1, 1))));
+    @Test
+    public void shouldReleaseLockForUnassignedTasksAfterRebalance() throws IOException {
+        expectLockObtainedFor(taskId00, taskId01, taskId02);
+        expectUnlockFor(taskId02);
+
+        makeTaskFolders(
+            taskId00.toString(),  // active task
+            taskId01.toString(),  // standby task
+            taskId02.toString()   // unassigned but able to lock
+        );
+        replay(stateDirectory);
+        taskManager.handleRebalanceStart(singleton("topic"));
+
+        assertThat(taskManager.lockedTaskDirectories(), is(mkSet(taskId00, taskId01, taskId02)));
+
+        handleAssignment(taskId00Assignment, taskId01Assignment, emptyMap());
+        reset(consumer);
+        expectConsumerAssignmentPaused(consumer);
+        replay(consumer);
+
+        taskManager.handleRebalanceComplete();
+        assertThat(taskManager.lockedTaskDirectories(), is(mkSet(taskId00, taskId01)));
+        verify(stateDirectory);
+    }
+
+    @Test
+    public void shouldReportLatestOffsetAsOffsetSumForRunningTask() throws IOException {
+        final Map<TaskId, Long> expectedOffsetSums = mkMap(mkEntry(taskId00, Task.LATEST_OFFSET));
+
+        expectLockObtainedFor(taskId00);
+        makeTaskFolders(taskId00.toString());
+        replay(stateDirectory);
+
+        taskManager.handleRebalanceStart(singleton("topic"));
+        handleAssignment(taskId00Assignment, emptyMap(), emptyMap());
+
+        assertThat(taskManager.getTaskOffsetSums(), is(expectedOffsetSums));
+    }
+
+    @Test
+    public void shouldComputeOffsetSumForNonRunningActiveTask() throws IOException {
+        final Map<TopicPartition, Long> changelogOffsets = mkMap(
+            mkEntry(new TopicPartition("changelog", 0), 5L),
+            mkEntry(new TopicPartition("changelog", 1), 10L)
+        );
+        final Map<TaskId, Long> expectedOffsetSums = mkMap(mkEntry(taskId00, 15L));
+
+        expectLockObtainedFor(taskId00);
+        makeTaskFolders(taskId00.toString());
+        replay(stateDirectory);
+
+        taskManager.handleRebalanceStart(singleton("topic"));
+        final StateMachineTask restoringTask = handleAssignment(
+            emptyMap(),
+            emptyMap(),
+            taskId00Assignment
+        ).get(taskId00);
+        restoringTask.setChangelogOffsets(changelogOffsets);
+
+        assertThat(taskManager.getTaskOffsetSums(), is(expectedOffsetSums));
+    }
+
+    @Test
+    public void shouldComputeOffsetSumForStandbyTask() throws IOException {
+        final Map<TopicPartition, Long> changelogOffsets = mkMap(
+            mkEntry(new TopicPartition("changelog", 0), 5L),
+            mkEntry(new TopicPartition("changelog", 1), 10L)
+        );
+        final Map<TaskId, Long> expectedOffsetSums = mkMap(mkEntry(taskId00, 15L));
+
+        expectLockObtainedFor(taskId00);
+        makeTaskFolders(taskId00.toString());
+        replay(stateDirectory);
+
+        taskManager.handleRebalanceStart(singleton("topic"));
+        final StateMachineTask restoringTask = handleAssignment(
+            emptyMap(),
+            taskId00Assignment,
+            emptyMap()
+        ).get(taskId00);
+        restoringTask.setChangelogOffsets(changelogOffsets);
+
+        assertThat(taskManager.getTaskOffsetSums(), is(expectedOffsetSums));
+    }
+
+    @Test
+    public void shouldComputeOffsetSumForUnassignedTaskWeCanLock() throws IOException {
+        final Map<TopicPartition, Long> changelogOffsets = mkMap(
+            mkEntry(new TopicPartition("changelog", 0), 5L),
+            mkEntry(new TopicPartition("changelog", 1), 10L)
+        );
+        final Map<TaskId, Long> expectedOffsetSums = mkMap(mkEntry(taskId00, 15L));
+
+        expectLockObtainedFor(taskId00);
+        makeTaskFolders(taskId00.toString());
+        writeCheckpointFile(taskId00, changelogOffsets);
+
+        replay(stateDirectory);
+        taskManager.handleRebalanceStart(singleton("topic"));
+
+        assertThat(taskManager.getTaskOffsetSums(), is(expectedOffsetSums));
+    }
+
+    @Test
+    public void shouldNotReportOffsetSumsForTaskWeCantLock() throws IOException {
+        expectLockFailedFor(taskId00);
+        makeTaskFolders(taskId00.toString());
+        replay(stateDirectory);
+        taskManager.handleRebalanceStart(singleton("topic"));
+        assertTrue(taskManager.lockedTaskDirectories().isEmpty());
+
+        assertTrue(taskManager.getTaskOffsetSums().isEmpty());
+    }
+
+    @Test
+    public void shouldNotReportOffsetSumsAndReleaseLockForUnassignedTaskWithoutCheckpoint() throws IOException {
+        expectLockObtainedFor(taskId00);
+        makeTaskFolders(taskId00.toString());
+        expect(stateDirectory.checkpointFileFor(taskId00)).andReturn(getCheckpointFile(taskId00));
+        replay(stateDirectory);
+        taskManager.handleRebalanceStart(singleton("topic"));
+
+        assertTrue(taskManager.getTaskOffsetSums().isEmpty());
+        verify(stateDirectory);
+    }
+
+    @Test
+    public void shouldPinOffsetSumToLongMaxValueInCaseOfOverflow() throws IOException {
+        final long largeOffset = Long.MAX_VALUE / 2;
+        final Map<TopicPartition, Long> changelogOffsets = mkMap(
+            mkEntry(new TopicPartition("changelog", 1), largeOffset),
+            mkEntry(new TopicPartition("changelog", 2), largeOffset),
+            mkEntry(new TopicPartition("changelog", 3), largeOffset)
+        );
+        final Map<TaskId, Long> expectedOffsetSums = mkMap(mkEntry(taskId00, Long.MAX_VALUE));
+
+        expectLockObtainedFor(taskId00);
+        makeTaskFolders(taskId00.toString());
+        writeCheckpointFile(taskId00, changelogOffsets);
+        replay(stateDirectory);
+        taskManager.handleRebalanceStart(singleton("topic"));
+
+        assertThat(taskManager.getTaskOffsetSums(), is(expectedOffsetSums));
     }
 
     @Test
@@ -346,7 +504,7 @@ public class TaskManagerTest {
 
     @Test
     public void shouldAddNewActiveTasks() {
-        final Map<TaskId, Set<TopicPartition>> assignment = singletonMap(taskId00, taskId00Partitions);
+        final Map<TaskId, Set<TopicPartition>> assignment = taskId00Assignment;
         final Task task00 = new StateMachineTask(taskId00, taskId00Partitions, true);
 
         expect(changeLogReader.completedChangelogs()).andReturn(emptySet());
@@ -492,7 +650,7 @@ public class TaskManagerTest {
     }
 
     @Test
-    public void shouldCloseActiveTasksAndPropogateExceptionsOnCleanShutdown() {
+    public void shouldCloseActiveTasksAndPropagateExceptionsOnCleanShutdown() {
         final TopicPartition changelog = new TopicPartition("changelog", 0);
         final Map<TaskId, Set<TopicPartition>> assignment = mkMap(
             mkEntry(taskId00, taskId00Partitions),
@@ -841,7 +999,8 @@ public class TaskManagerTest {
         expect(consumer.assignment()).andReturn(assignment);
         consumer.pause(assignment);
         expectLastCall();
-        replay(consumer);
+        expect(stateDirectory.listTaskDirectories()).andReturn(new File[0]);
+        replay(consumer, stateDirectory);
         assertThat(taskManager.isRebalanceInProgress(), is(false));
         taskManager.handleRebalanceStart(emptySet());
         assertThat(taskManager.isRebalanceInProgress(), is(true));
@@ -875,17 +1034,19 @@ public class TaskManagerTest {
     }
 
     @Test
-    public void shouldNotCommitActiveAndStandbyTasksWhileRebalanceInProgress() {
+    public void shouldNotCommitActiveAndStandbyTasksWhileRebalanceInProgress() throws IOException {
         final StateMachineTask task00 = new StateMachineTask(taskId00, taskId00Partitions, true);
         final StateMachineTask task01 = new StateMachineTask(taskId01, taskId01Partitions, false);
 
+        makeTaskFolders(taskId00.toString(), task01.toString());
+        expectLockObtainedFor(taskId00, taskId01);
         expectRestoreToBeCompleted(consumer, changeLogReader);
         expect(activeTaskCreator.createTasks(anyObject(), eq(taskId00Assignment)))
             .andReturn(singletonList(task00)).anyTimes();
         expect(standbyTaskCreator.createTasks(eq(taskId01Assignment)))
             .andReturn(singletonList(task01)).anyTimes();
 
-        replay(activeTaskCreator, standbyTaskCreator, consumer, changeLogReader);
+        replay(activeTaskCreator, standbyTaskCreator, stateDirectory, consumer, changeLogReader);
 
         taskManager.handleAssignment(taskId00Assignment, taskId01Assignment);
         assertThat(taskManager.tryToCompleteRestoration(), is(true));
@@ -975,7 +1136,7 @@ public class TaskManagerTest {
         final Map<TopicPartition, Long> purgableOffsets = new HashMap<>();
         final StateMachineTask task00 = new StateMachineTask(taskId00, taskId00Partitions, true) {
             @Override
-            public Map<TopicPartition, Long> purgableOffsets() {
+            public Map<TopicPartition, Long> purgeableOffsets() {
                 return purgableOffsets;
             }
         };
@@ -1011,7 +1172,7 @@ public class TaskManagerTest {
         final Map<TopicPartition, Long> purgableOffsets = new HashMap<>();
         final StateMachineTask task00 = new StateMachineTask(taskId00, taskId00Partitions, true) {
             @Override
-            public Map<TopicPartition, Long> purgableOffsets() {
+            public Map<TopicPartition, Long> purgeableOffsets() {
                 return purgableOffsets;
             }
         };
@@ -1410,6 +1571,80 @@ public class TaskManagerTest {
         assertThat(taskManager.producerMetrics(), is(dummyProducerMetrics));
     }
 
+    private Map<TaskId, StateMachineTask> handleAssignment(final Map<TaskId, Set<TopicPartition>> runningActiveAssignment,
+                                                           final Map<TaskId, Set<TopicPartition>> standbyAssignment,
+                                                           final Map<TaskId, Set<TopicPartition>> restoringActiveAssignment) {
+        final Set<Task> runningTasks = runningActiveAssignment.entrySet().stream()
+                                           .map(t -> new StateMachineTask(t.getKey(), t.getValue(), true))
+                                           .collect(Collectors.toSet());
+        final Set<Task> standbyTasks = standbyAssignment.entrySet().stream()
+                                           .map(t -> new StateMachineTask(t.getKey(), t.getValue(), false))
+                                           .collect(Collectors.toSet());
+        final Set<Task> restoringTasks = restoringActiveAssignment.entrySet().stream()
+                                             .map(t -> new StateMachineTask(t.getKey(), t.getValue(), true))
+                                             .collect(Collectors.toSet());
+
+        // Initially assign only the active tasks we want to complete restoration
+        final Map<TaskId, Set<TopicPartition>> allActiveTasksAssignment = new HashMap<>(runningActiveAssignment);
+        allActiveTasksAssignment.putAll(restoringActiveAssignment);
+        final Set<Task> allActiveTasks = new HashSet<>(runningTasks);
+        allActiveTasks.addAll(restoringTasks);
+
+        expect(activeTaskCreator.createTasks(anyObject(), eq(runningActiveAssignment))).andStubReturn(runningTasks);
+        expect(standbyTaskCreator.createTasks(eq(standbyAssignment))).andStubReturn(standbyTasks);
+        expect(activeTaskCreator.createTasks(anyObject(), eq(allActiveTasksAssignment))).andStubReturn(allActiveTasks);
+
+        expectRestoreToBeCompleted(consumer, changeLogReader);
+        replay(activeTaskCreator, standbyTaskCreator, consumer, changeLogReader);
+
+        taskManager.handleAssignment(runningActiveAssignment, standbyAssignment);
+        assertThat(taskManager.tryToCompleteRestoration(), is(true));
+
+        taskManager.handleAssignment(allActiveTasksAssignment, standbyAssignment);
+
+        final Map<TaskId, StateMachineTask> allTasks = new HashMap<>();
+
+        // Just make sure all tasks ended up in the expected state
+        for (final Task task : runningTasks) {
+            assertThat(task.state(), is(Task.State.RUNNING));
+            allTasks.put(task.id(), (StateMachineTask) task);
+        }
+        for (final Task task : restoringTasks) {
+            assertThat(task.state(), not(Task.State.RUNNING));
+            allTasks.put(task.id(), (StateMachineTask) task);
+        }
+        for (final Task task : standbyTasks) {
+            assertThat(task.state(), is(Task.State.RUNNING));
+            allTasks.put(task.id(), (StateMachineTask) task);
+        }
+        return allTasks;
+    }
+
+    private void expectLockObtainedFor(final TaskId... tasks) throws IOException {
+        for (final TaskId task : tasks) {
+            expect(stateDirectory.lock(task)).andReturn(true).once();
+        }
+    }
+
+    private void expectLockFailedFor(final TaskId... tasks) throws IOException {
+        for (final TaskId task : tasks) {
+            expect(stateDirectory.lock(task)).andReturn(false).once();
+        }
+    }
+
+    private void expectUnlockFor(final TaskId... tasks) throws IOException {
+        for (final TaskId task : tasks) {
+            stateDirectory.unlock(task);
+            expectLastCall();
+        }
+    }
+
+    private static void expectConsumerAssignmentPaused(final Consumer<byte[], byte[]> consumer) {
+        final Set<TopicPartition> assignment = singleton(new TopicPartition("assignment", 0));
+        expect(consumer.assignment()).andReturn(assignment);
+        consumer.pause(assignment);
+    }
+
     private static void expectRestoreToBeCompleted(final Consumer<byte[], byte[]> consumer,
                                                    final ChangelogReader changeLogReader) {
         final Set<TopicPartition> assignment = singleton(new TopicPartition("assignment", 0));
@@ -1425,11 +1660,31 @@ public class TaskManagerTest {
         return futureDeletedRecords;
     }
 
+    private void makeTaskFolders(final String... names) throws IOException {
+        final File[] taskFolders = new File[names.length];
+        for (int i = 0; i < names.length; ++i) {
+            taskFolders[i] = testFolder.newFolder(names[i]);
+        }
+        expect(stateDirectory.listTaskDirectories()).andReturn(taskFolders).once();
+    }
+
+    private void writeCheckpointFile(final TaskId task, final Map<TopicPartition, Long> offsets) throws IOException {
+        final File checkpointFile = getCheckpointFile(task);
+        assertThat(checkpointFile.createNewFile(), is(true));
+        new OffsetCheckpoint(checkpointFile).write(offsets);
+        expect(stateDirectory.checkpointFileFor(task)).andReturn(checkpointFile);
+    }
+
+    private File getCheckpointFile(final TaskId task) {
+        return new File(new File(testFolder.getRoot(), task.toString()), StateManagerUtil.CHECKPOINT_FILE_NAME);
+    }
+
     private static class StateMachineTask extends AbstractTask implements Task {
         private final boolean active;
         private boolean commitNeeded = false;
         private boolean commitRequested = false;
         private Map<TopicPartition, Long> purgeableOffsets;
+        private Map<TopicPartition, Long> changelogOffsets;
         private Map<TopicPartition, LinkedList<ConsumerRecord<byte[], byte[]>>> queue = new HashMap<>();
 
         StateMachineTask(final TaskId id,
@@ -1522,13 +1777,17 @@ public class TaskManagerTest {
         }
 
         @Override
-        public Map<TopicPartition, Long> purgableOffsets() {
+        public Map<TopicPartition, Long> purgeableOffsets() {
             return purgeableOffsets;
+        }
+
+        void setChangelogOffsets(final Map<TopicPartition, Long> changelogOffsets) {
+            this.changelogOffsets = changelogOffsets;
         }
 
         @Override
         public Map<TopicPartition, Long> changelogOffsets() {
-            return null;
+            return changelogOffsets;
         }
 
         @Override

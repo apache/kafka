@@ -671,16 +671,16 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     }
 
     @Override
-    public Map<TopicPartition, Long> purgableOffsets() {
-        final Map<TopicPartition, Long> purgableConsumedOffsets = new HashMap<>();
+    public Map<TopicPartition, Long> purgeableOffsets() {
+        final Map<TopicPartition, Long> purgeableConsumedOffsets = new HashMap<>();
         for (final Map.Entry<TopicPartition, Long> entry : consumedOffsets.entrySet()) {
             final TopicPartition tp = entry.getKey();
             if (topology.isRepartitionTopic(tp.topic())) {
-                purgableConsumedOffsets.put(tp, entry.getValue() + 1);
+                purgeableConsumedOffsets.put(tp, entry.getValue() + 1);
             }
         }
 
-        return purgableConsumedOffsets;
+        return purgeableConsumedOffsets;
     }
 
     private void initializeTopology() {

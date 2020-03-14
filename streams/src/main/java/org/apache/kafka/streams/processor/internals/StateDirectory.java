@@ -108,6 +108,13 @@ public class StateDirectory {
     }
 
     /**
+     * @return The File handle for the checkpoint in the given task's directory
+     */
+    File checkpointFileFor(final TaskId taskId) {
+        return new File(directoryForTask(taskId), StateManagerUtil.CHECKPOINT_FILE_NAME);
+    }
+
+    /**
      * Decide if the directory of the task is empty or not
      */
     boolean directoryForTaskIsEmpty(final TaskId taskId) {
@@ -285,12 +292,7 @@ public class StateDirectory {
 
     private synchronized void cleanRemovedTasks(final long cleanupDelayMs,
                                                 final boolean manualUserCall) throws Exception {
-        final File[] taskDirs = listTaskDirectories();
-        if (taskDirs == null || taskDirs.length == 0) {
-            return; // nothing to do
-        }
-
-        for (final File taskDir : taskDirs) {
+        for (final File taskDir : listTaskDirectories()) {
             final String dirName = taskDir.getName();
             final TaskId id = TaskId.parse(dirName);
             if (!locks.containsKey(id)) {
@@ -347,8 +349,14 @@ public class StateDirectory {
      * @return The list of all the existing local directories for stream tasks
      */
     File[] listTaskDirectories() {
-        return !stateDir.exists() ? new File[0] :
-                stateDir.listFiles(pathname -> pathname.isDirectory() && PATH_NAME.matcher(pathname.getName()).matches());
+        final File[] taskDirectories =
+            stateDir.listFiles(pathname -> pathname.isDirectory() && PATH_NAME.matcher(pathname.getName()).matches());
+
+        if (!stateDir.exists() || taskDirectories == null) {
+            return new File[0];
+        } else {
+            return taskDirectories;
+        }
     }
 
     private FileChannel getOrCreateFileChannel(final TaskId taskId,
