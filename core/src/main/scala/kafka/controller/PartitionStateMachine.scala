@@ -338,16 +338,10 @@ class ZkPartitionStateMachine(config: KafkaConfig,
       finished.foreach {
         case (partition, Left(e)) =>
           // Extract failure message, if present, to append to error log.
-          val reasonMsg = if (e.isInstanceOf[StateChangeFailedException]) {
-            s", reason: ${e.getMessage}"
-          } else {
-            ""
-          }
-          val failMsg = s"Controller failed to change state for partition $partition from ${partitionState(partition)} to $OnlinePartition"
-          if (e.isInstanceOf[StateChangeFailedException]) {
-            logger.error(s"$failMsg: $reasonMsg")
-          } else {
-            logger.error(s"$failMsg: unknown exception: ", e)
+          val failMsg = s"Failed to change state for partition $partition from ${partitionState(partition)} to $OnlinePartition"
+          e match {
+            case _:StateChangeFailedException => logger.error(s"$failMsg, reason: ${e.getMessage}")
+            case _ => logger.error(s"$failMsg: unknown exception: ", e)
           }
         case (_, Right(_)) => // Ignore; success so no need to log failed state change
       }
