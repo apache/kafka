@@ -23,7 +23,7 @@ import org.apache.kafka.common.message.DescribeClientQuotasResponseData.EntryDat
 import org.apache.kafka.common.message.DescribeClientQuotasResponseData.ValueData;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
-import org.apache.kafka.common.quota.QuotaEntity;
+import org.apache.kafka.common.quota.ClientQuotaEntity;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -35,10 +35,10 @@ public class DescribeClientQuotasResponse extends AbstractResponse {
 
     private final DescribeClientQuotasResponseData data;
 
-    public DescribeClientQuotasResponse(Map<QuotaEntity, Map<String, Double>> entities, int throttleTimeMs) {
+    public DescribeClientQuotasResponse(Map<ClientQuotaEntity, Map<String, Double>> entities, int throttleTimeMs) {
         List<EntryData> entries = new ArrayList<>(entities.size());
-        for (Map.Entry<QuotaEntity, Map<String, Double>> entry : entities.entrySet()) {
-            QuotaEntity quotaEntity = entry.getKey();
+        for (Map.Entry<ClientQuotaEntity, Map<String, Double>> entry : entities.entrySet()) {
+            ClientQuotaEntity quotaEntity = entry.getKey();
             List<EntityData> entityData = new ArrayList<>(quotaEntity.entries().size());
             for (Map.Entry<String, String> entityEntry : quotaEntity.entries().entrySet()) {
                 entityData.add(new EntityData()
@@ -78,14 +78,14 @@ public class DescribeClientQuotasResponse extends AbstractResponse {
         this.data = new DescribeClientQuotasResponseData(struct, version);
     }
 
-    public void complete(KafkaFutureImpl<Map<QuotaEntity, Map<String, Double>>> future) {
+    public void complete(KafkaFutureImpl<Map<ClientQuotaEntity, Map<String, Double>>> future) {
         Errors error = Errors.forCode(data.errorCode());
         if (error != Errors.NONE) {
             future.completeExceptionally(error.exception(data.errorMessage()));
             return;
         }
 
-        Map<QuotaEntity, Map<String, Double>> result = new HashMap<>(data.entries().size());
+        Map<ClientQuotaEntity, Map<String, Double>> result = new HashMap<>(data.entries().size());
         for (EntryData entries : data.entries()) {
             Map<String, String> entity = new HashMap<>(entries.entity().size());
             for (EntityData entityData : entries.entity()) {
@@ -97,7 +97,7 @@ public class DescribeClientQuotasResponse extends AbstractResponse {
                 values.put(valueData.key(), valueData.value());
             }
 
-            result.put(new QuotaEntity(entity), values);
+            result.put(new ClientQuotaEntity(entity), values);
         }
         future.complete(result);
     }

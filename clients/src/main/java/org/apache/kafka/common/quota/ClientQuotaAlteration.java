@@ -21,9 +21,9 @@ import java.util.Collection;
 import java.util.Objects;
 
 /**
- * Describes a configuration alteration to be made to a quota entity.
+ * Describes a configuration alteration to be made to a client quota entity.
  */
-public class QuotaAlteration {
+public class ClientQuotaAlteration {
 
     public static class Op {
         private final String key;
@@ -69,18 +69,18 @@ public class QuotaAlteration {
 
         @Override
         public String toString() {
-            return "QuotaAlteration.Op(key=" + key + ", value=" + value + ")";
+            return "ClientQuotaAlteration.Op(key=" + key + ", value=" + value + ")";
         }
     }
 
-    private final QuotaEntity entity;
+    private final ClientQuotaEntity entity;
     private final Collection<Op> ops;
 
     /**
      * @param entity the entity whose config will be modified
      * @param ops the alteration to perform
      */
-    public QuotaAlteration(QuotaEntity entity, Collection<Op> ops) {
+    public ClientQuotaAlteration(ClientQuotaEntity entity, Collection<Op> ops) {
         this.entity = entity;
         this.ops = ops;
     }
@@ -88,7 +88,7 @@ public class QuotaAlteration {
     /**
      * @return the entity whose config will be modified
      */
-    public QuotaEntity entity() {
+    public ClientQuotaEntity entity() {
         return this.entity;
     }
 
@@ -97,5 +97,10 @@ public class QuotaAlteration {
      */
     public Collection<Op> ops() {
         return this.ops;
+    }
+
+    @Override
+    public String toString() {
+        return "ClientQuotaAlteration(entity=" + entity + ", ops=" + ops + ")";
     }
 }

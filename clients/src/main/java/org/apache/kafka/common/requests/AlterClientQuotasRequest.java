@@ -22,8 +22,8 @@ import org.apache.kafka.common.message.AlterClientQuotasRequestData.EntryData;
 import org.apache.kafka.common.message.AlterClientQuotasRequestData.OpData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.types.Struct;
-import org.apache.kafka.common.quota.QuotaAlteration;
-import org.apache.kafka.common.quota.QuotaEntity;
+import org.apache.kafka.common.quota.ClientQuotaAlteration;
+import org.apache.kafka.common.quota.ClientQuotaEntity;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -37,11 +37,11 @@ public class AlterClientQuotasRequest extends AbstractRequest {
 
         private final AlterClientQuotasRequestData data;
 
-        public Builder(Collection<QuotaAlteration> entries, boolean validateOnly) {
+        public Builder(Collection<ClientQuotaAlteration> entries, boolean validateOnly) {
             super(ApiKeys.ALTER_CLIENT_QUOTAS);
 
             List<EntryData> entryData = new ArrayList<>(entries.size());
-            for (QuotaAlteration entry : entries) {
+            for (ClientQuotaAlteration entry : entries) {
                 List<EntityData> entityData = new ArrayList<>(entry.entity().entries().size());
                 for (Map.Entry<String, String> entityEntries : entry.entity().entries().entrySet()) {
                     entityData.add(new EntityData()
@@ -50,7 +50,7 @@ public class AlterClientQuotasRequest extends AbstractRequest {
                 }
 
                 List<OpData> opData = new ArrayList<>(entry.ops().size());
-                for (QuotaAlteration.Op op : entry.ops()) {
+                for (ClientQuotaAlteration.Op op : entry.ops()) {
                     opData.add(new OpData()
                             .setKey(op.key())
                             .setValue(op.value() == null ? 0.0 : op.value())
@@ -90,21 +90,21 @@ public class AlterClientQuotasRequest extends AbstractRequest {
         this.data = new AlterClientQuotasRequestData(struct, version);
     }
 
-    public Collection<QuotaAlteration> entries() {
-        List<QuotaAlteration> entries = new ArrayList<>(data.entries().size());
+    public Collection<ClientQuotaAlteration> entries() {
+        List<ClientQuotaAlteration> entries = new ArrayList<>(data.entries().size());
         for (EntryData entryData : data.entries()) {
             Map<String, String> entity = new HashMap<>(entryData.entity().size());
             for (EntityData entityData : entryData.entity()) {
                 entity.put(entityData.entityType(), entityData.entityName());
             }
 
-            List<QuotaAlteration.Op> ops = new ArrayList<>(entryData.ops().size());
+            List<ClientQuotaAlteration.Op> ops = new ArrayList<>(entryData.ops().size());
             for (OpData opData : entryData.ops()) {
                 Double value = opData.remove() ? null : opData.value();
-                ops.add(new QuotaAlteration.Op(opData.key(), value));
+                ops.add(new ClientQuotaAlteration.Op(opData.key(), value));
             }
 
-            entries.add(new QuotaAlteration(new QuotaEntity(entity), ops));
+            entries.add(new ClientQuotaAlteration(new ClientQuotaEntity(entity), ops));
         }
         return entries;
     }
@@ -115,13 +115,13 @@ public class AlterClientQuotasRequest extends AbstractRequest {
 
     @Override
     public AlterClientQuotasResponse getErrorResponse(int throttleTimeMs, Throwable e) {
-        ArrayList<QuotaEntity> entities = new ArrayList<>(data.entries().size());
+        ArrayList<ClientQuotaEntity> entities = new ArrayList<>(data.entries().size());
         for (EntryData entryData : data.entries()) {
             Map<String, String> entity = new HashMap<>(entryData.entity().size());
             for (EntityData entityData : entryData.entity()) {
                 entity.put(entityData.entityType(), entityData.entityName());
             }
-            entities.add(new QuotaEntity(entity));
+            entities.add(new ClientQuotaEntity(entity));
         }
         return new AlterClientQuotasResponse(entities, throttleTimeMs, e);
     }

@@ -19,7 +19,7 @@ package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.annotation.InterfaceStability;
-import org.apache.kafka.common.quota.QuotaEntity;
+import org.apache.kafka.common.quota.ClientQuotaEntity;
 
 import java.util.Map;
 
@@ -31,21 +31,21 @@ import java.util.Map;
 @InterfaceStability.Evolving
 public class AlterClientQuotasResult {
 
-    private final Map<QuotaEntity, KafkaFuture<Void>> futures;
+    private final Map<ClientQuotaEntity, KafkaFuture<Void>> futures;
 
     /**
      * Maps an entity to its alteration result.
      *
      * @param futures maps entity to its alteration result
      */
-    public AlterClientQuotasResult(Map<QuotaEntity, KafkaFuture<Void>> futures) {
+    public AlterClientQuotasResult(Map<ClientQuotaEntity, KafkaFuture<Void>> futures) {
         this.futures = futures;
     }
 
     /**
      * Returns a map from quota entity to a future which can be used to check the status of the operation.
      */
-    public Map<QuotaEntity, KafkaFuture<Void>> values() {
+    public Map<ClientQuotaEntity, KafkaFuture<Void>> values() {
         return futures;
     }
 

@@ -39,7 +39,7 @@ import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.server.policy.{AlterConfigPolicy, CreateTopicPolicy}
 import org.apache.kafka.server.policy.CreateTopicPolicy.RequestMetadata
 import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.quota.{QuotaAlteration, QuotaEntity, QuotaFilter}
+import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity, ClientQuotaFilter, ClientQuotaFilterComponent}
 import org.apache.kafka.common.requests.CreateTopicsRequest._
 import org.apache.kafka.common.requests.DescribeConfigsResponse.ConfigSource
 import org.apache.kafka.common.requests.{AlterConfigsRequest, ApiError, DescribeConfigsResponse}
@@ -703,137 +703,156 @@ class AdminManager(val config: KafkaConfig,
     new DescribeConfigsResponse.ConfigEntry(name, valueAsString, source, isSensitive, readOnly, synonyms.asJava)
   }
 
-  private def entityToSanitizedUserClientId(entity: QuotaEntity): (Option[String], Option[String]) = {
+  private def sanitizeEntityName(entityName: String): String = {
+    if (entityName == ConfigEntityName.Default)
+      throw new InvalidRequestException(s"Entity name '${ConfigEntityName.Default}' is reserved")
+    Sanitizer.sanitize(Option(entityName).getOrElse(ConfigEntityName.Default))
+  }
+
+  private def desanitizeEntityName(sanitizedEntityName: String): String =
+    Sanitizer.desanitize(sanitizedEntityName) match {
+      case ConfigEntityName.Default => null
+      case name => name
+    }
+
+  private def entityToSanitizedUserClientId(entity: ClientQuotaEntity): (Option[String], Option[String]) = {
     if (entity.entries.isEmpty)
-      throw new InvalidRequestException("Invalid empty quota entity")
+      throw new InvalidRequestException("Invalid empty client quota entity")
 
     var user: Option[String] = None
     var clientId: Option[String] = None
-    entity.entries().asScala.foreach { case (entityType, entityName) =>
-      val sanitizedEntityName = Some(Sanitizer.sanitize(entityName))
+    entity.entries.asScala.foreach { case (entityType, entityName) =>
+      val sanitizedEntityName = Some(sanitizeEntityName(entityName))
       entityType match {
-        case QuotaEntity.USER => user = sanitizedEntityName
-        case QuotaEntity.CLIENT_ID => clientId = sanitizedEntityName
-        case _ => throw new InvalidRequestException(s"Unhandled quota entity type: ${entityType}")
+        case ClientQuotaEntity.USER => user = sanitizedEntityName
+        case ClientQuotaEntity.CLIENT_ID => clientId = sanitizedEntityName
+        case _ => throw new InvalidRequestException(s"Unhandled client quota entity type: ${entityType}")
       }
-      if (entityName.isEmpty)
+      if (entityName != null && entityName.isEmpty)
         throw new InvalidRequestException(s"Empty ${entityType} not supported")
     }
     (user, clientId)
   }
 
-  private def userClientIdToEntity(user: Option[String], clientId: Option[String]): QuotaEntity = {
-    new QuotaEntity((user.map(u => QuotaEntity.USER -> u) ++ clientId.map(c => QuotaEntity.CLIENT_ID -> c)).toMap.asJava)
+  private def userClientIdToEntity(user: Option[String], clientId: Option[String]): ClientQuotaEntity = {
+    new ClientQuotaEntity((user.map(u => ClientQuotaEntity.USER -> u) ++ clientId.map(c => ClientQuotaEntity.CLIENT_ID -> c)).toMap.asJava)
   }
 
-  def describeClientQuotas(filters: Seq[QuotaFilter]): Map[QuotaEntity, Map[String, Double]] = {
-    var userFilter: Option[QuotaFilter] = None
-    var clientIdFilter: Option[QuotaFilter] = None
-    filters.foreach { filter =>
-      filter.entityType() match {
-        case QuotaEntity.USER =>
-          if (userFilter.isDefined)
-            throw new InvalidRequestException(s"Duplicate user filter entity type");
-          userFilter = Some(filter)
-        case QuotaEntity.CLIENT_ID =>
-          if (clientIdFilter.isDefined)
-            throw new InvalidRequestException(s"Duplicate client filter entity type");
-          clientIdFilter = Some(filter)
+  def describeClientQuotas(filter: ClientQuotaFilter): Map[ClientQuotaEntity, Map[String, Double]] = {
+    var userComponent: Option[ClientQuotaFilterComponent] = None
+    var clientIdComponent: Option[ClientQuotaFilterComponent] = None
+    filter.components.asScala.foreach { component =>
+      component.entityType match {
+        case ClientQuotaEntity.USER =>
+          if (userComponent.isDefined)
+            throw new InvalidRequestException(s"Duplicate user filter component entity type");
+          userComponent = Some(component)
+        case ClientQuotaEntity.CLIENT_ID =>
+          if (clientIdComponent.isDefined)
+            throw new InvalidRequestException(s"Duplicate client filter component entity type");
+          clientIdComponent = Some(component)
         case "" =>
-          throw new InvalidRequestException(s"Unexpected empty filter entity type")
+          throw new InvalidRequestException(s"Unexpected empty filter component entity type")
         case et =>
           // Supplying other entity types is not yet supported.
           throw new UnsupportedVersionException(s"Custom entity type '${et}' not supported")
       }
     }
-    handleDescribeClientQuotas(userFilter, clientIdFilter)
+    handleDescribeClientQuotas(userComponent, clientIdComponent, filter.strict)
   }
 
-  def handleDescribeClientQuotas(userFilter: Option[QuotaFilter], clientIdFilter: Option[QuotaFilter]) = {
-    def wantExact(filter: Option[QuotaFilter]): Boolean = filter.exists(_.isMatchExact)
-    def wantExcluded(filter: Option[QuotaFilter]): Boolean = filter.exists(_.isMatchNone)
-    def sanitized(filter: Option[QuotaFilter]): String = {
-      filter.map(f => if (f.isMatchExact) Sanitizer.sanitize(f.matchExact) else "").getOrElse("")
-    }
+  def handleDescribeClientQuotas(userComponent: Option[ClientQuotaFilterComponent],
+    clientIdComponent: Option[ClientQuotaFilterComponent], strict: Boolean) = {
 
-    val sanitizedUser = sanitized(userFilter)
-    val exactUser = wantExact(userFilter)
-    val excludeUser = wantExcluded(userFilter)
+    def toOption(opt: java.util.Optional[String]): Option[String] =
+      if (opt == null)
+        None
+      else if (opt.isPresent)
+        Some(opt.get)
+      else
+        Some(null)
 
-    val sanitizedClientId = sanitized(clientIdFilter)
-    val exactClientId = wantExact(clientIdFilter)
-    val excludeClientId = wantExcluded(clientIdFilter)
+    val user = userComponent.flatMap(c => toOption(c.`match`))
+    val clientId = clientIdComponent.flatMap(c => toOption(c.`match`))
+
+    def sanitized(name: Option[String]): String = name.map(n => sanitizeEntityName(n)).getOrElse("")
+    val sanitizedUser = sanitized(user)
+    val sanitizedClientId = sanitized(clientId)
+
+    def wantExact(component: Option[ClientQuotaFilterComponent]): Boolean = component.exists(_.`match` != null)
+    val exactUser = wantExact(userComponent)
+    val exactClientId = wantExact(clientIdComponent)
+
+    def wantExcluded(component: Option[ClientQuotaFilterComponent]): Boolean = strict && !component.isDefined
+    val excludeUser = wantExcluded(userComponent)
+    val excludeClientId = wantExcluded(clientIdComponent)
 
     val userEntries = if (exactUser && excludeClientId)
-      Map(((Some(userFilter.get.matchExact()), None) -> adminZkClient.fetchEntityConfig(ConfigType.User, sanitizedUser)))
+      Map(((Some(user.get), None) -> adminZkClient.fetchEntityConfig(ConfigType.User, sanitizedUser)))
     else if (!excludeUser && !exactClientId)
       adminZkClient.fetchAllEntityConfigs(ConfigType.User).map { case (name, props) =>
-        ((Some(Sanitizer.desanitize(name)), None) -> props)
+        ((Some(desanitizeEntityName(name)), None) -> props)
       }
     else
       Map.empty
 
     val clientIdEntries = if (excludeUser && exactClientId)
-      Map(((None, Some(clientIdFilter.get.matchExact())) -> adminZkClient.fetchEntityConfig(ConfigType.Client, sanitizedClientId)))
+      Map(((None, Some(clientId.get)) -> adminZkClient.fetchEntityConfig(ConfigType.Client, sanitizedClientId)))
     else if (!exactUser && !excludeClientId)
       adminZkClient.fetchAllEntityConfigs(ConfigType.Client).map { case (name, props) =>
-        ((None, Some(Sanitizer.desanitize(name))) -> props)
+        ((None, Some(desanitizeEntityName(name))) -> props)
       }
     else
       Map.empty
 
     val bothEntries = if (exactUser && exactClientId)
-      Map(((Some(userFilter.get.matchExact()), Some(clientIdFilter.get.matchExact())) ->
+      Map(((Some(user.get), Some(clientId.get)) ->
         adminZkClient.fetchEntityConfig(ConfigType.User, s"${sanitizedUser}/clients/${sanitizedClientId}")))
     else if (!excludeUser && !excludeClientId)
       adminZkClient.fetchAllChildEntityConfigs(ConfigType.User, ConfigType.Client).map { case (name, props) =>
         val components = name.split("/")
         if (components.size != 3 || components(1) != "clients")
           throw new IllegalArgumentException(s"Unexpected config path: ${name}")
-        ((Some(Sanitizer.desanitize(components(0))), Some(Sanitizer.desanitize(components(2)))) -> props)
+        ((Some(desanitizeEntityName(components(0))), Some(desanitizeEntityName(components(2)))) -> props)
       }
     else
       Map.empty
 
-    def matches(nameFilter: Option[QuotaFilter], name: Option[String]): Boolean = nameFilter match {
-      case Some(filter) =>
-        if (filter.isMatchExact())
-          name.exists(_ == filter.matchExact())
-        else if (filter.isMatchSome())
-          name.isDefined
-        else if (filter.isMatchNone())
-          !name.isDefined
-        else
-          throw new IllegalStateException(s"Unexected quota filter type")
+    def matches(nameComponent: Option[ClientQuotaFilterComponent], name: Option[String]): Boolean = nameComponent match {
+      case Some(component) =>
+        toOption(component.`match`) match {
+          case Some(n) => name.exists(_ == n)
+          case None => name.isDefined
+        }
       case None =>
-        true
+        !name.isDefined || !strict
     }
 
     def fromProps(props: Properties): Map[String, Double] = {
       props.asScala.map { case (key, value) =>
         val doubleValue = try value.toDouble catch {
           case _: NumberFormatException =>
-            throw new IllegalStateException(s"Unexpected quota configuration value: ${key} -> ${value}")
+            throw new IllegalStateException(s"Unexpected client quota configuration value: ${key} -> ${value}")
         }
         (key -> doubleValue)
       }
     }
 
     (userEntries ++ clientIdEntries ++ bothEntries).map { case ((u, c), p) =>
-      if (!p.isEmpty && matches(userFilter, u) && matches(clientIdFilter, c))
+      if (!p.isEmpty && matches(userComponent, u) && matches(clientIdComponent, c))
         Some((userClientIdToEntity(u, c) -> fromProps(p)))
       else
         None
     }.flatten.toMap
   }
 
-  def alterClientQuotas(entries: Seq[QuotaAlteration], validateOnly: Boolean): Map[QuotaEntity, ApiError] = {
-    def alterEntityQuotas(entity: QuotaEntity, ops: Iterable[QuotaAlteration.Op]): Unit = {
+  def alterClientQuotas(entries: Seq[ClientQuotaAlteration], validateOnly: Boolean): Map[ClientQuotaEntity, ApiError] = {
+    def alterEntityQuotas(entity: ClientQuotaEntity, ops: Iterable[ClientQuotaAlteration.Op]): Unit = {
       val (path, configType, configKeys) = entityToSanitizedUserClientId(entity) match {
         case (Some(user), Some(clientId)) => (user + "/clients/" + clientId, ConfigType.User, DynamicConfig.User.configKeys)
         case (Some(user), None) => (user, ConfigType.User, DynamicConfig.User.configKeys)
         case (None, Some(clientId)) => (clientId, ConfigType.Client, DynamicConfig.Client.configKeys)
-        case _ => throw new InvalidRequestException("Invalid empty quota entity")
+        case _ => throw new InvalidRequestException("Invalid empty client quota entity")
       }
 
       val props = adminZkClient.fetchEntityConfig(configType, path)

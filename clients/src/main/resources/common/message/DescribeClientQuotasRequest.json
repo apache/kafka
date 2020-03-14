@@ -20,14 +20,16 @@
   "validVersions": "0",
   "flexibleVersions": "none",
   "fields": [
-    { "name": "Filters", "type": "[]FilterData", "versions": "0+",
-      "about": "Filters to apply to quota entities.", "fields": [
+    { "name": "Components", "type": "[]ComponentData", "versions": "0+",
+      "about": "Filter components to apply to quota entities.", "fields": [
       { "name": "EntityType", "type": "string", "versions": "0+",
-        "about": "The entity type that the filter applies to." },
+        "about": "The entity type that the filter component applies to." },
       { "name": "MatchType", "type": "int8", "versions": "0+",
-        "about": "How to match the entity {0 = exact, 1 = some, 2 = none}." },
+        "about": "How to match the entity {0 = exact name, 1 = default name, 2 = any specified name}." },
       { "name": "Match", "type": "string", "versions": "0+", "nullableVersions": "0+",
         "about": "The string to match against, or null if unused for the match type." }
-    ]}
+    ]},
+    { "name": "Strict", "type": "bool", "versions": "0+",
+      "about": "Whether the match is strict, i.e. should exclude entities with unspecified entity types." }
   ]
 }

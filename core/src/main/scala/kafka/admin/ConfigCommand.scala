@@ -33,7 +33,7 @@ import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.config.types.Password
 import org.apache.kafka.common.errors.InvalidConfigurationException
 import org.apache.kafka.common.internals.Topic
-import org.apache.kafka.common.quota.{QuotaAlteration, QuotaEntity, QuotaFilter}
+import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity, ClientQuotaFilter, ClientQuotaFilterComponent}
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.security.scram.internals.{ScramCredentialUtils, ScramFormatter, ScramMechanism}
 import org.apache.kafka.common.utils.{Sanitizer, Time, Utils}
@@ -365,10 +365,10 @@ object ConfigCommand extends Config {
         if (invalidConfigs.nonEmpty)
           throw new InvalidConfigurationException(s"Invalid config(s): ${invalidConfigs.mkString(",")}")
 
-        val entity = new QuotaEntity(opts.entityTypes.map { entType =>
+        val entity = new ClientQuotaEntity(opts.entityTypes.map { entType =>
           entType match {
-            case ConfigType.User => QuotaEntity.USER
-            case ConfigType.Client => QuotaEntity.CLIENT_ID
+            case ConfigType.User => ClientQuotaEntity.USER
+            case ConfigType.Client => ClientQuotaEntity.CLIENT_ID
             case _ => throw new IllegalArgumentException(s"Unexpected entity type: ${entType}")
           }
         }.zip(opts.entityNames).toMap.asJava)
@@ -379,10 +379,10 @@ object ConfigCommand extends Config {
             case _: NumberFormatException =>
               throw new IllegalArgumentException(s"Cannot parse quota configuration value for ${key}: ${value}")
           }
-          new QuotaAlteration.Op(key, doubleValue)
-        } ++ configsToBeDeleted.map(key => new QuotaAlteration.Op(key, null))).asJavaCollection
+          new ClientQuotaAlteration.Op(key, doubleValue)
+        } ++ configsToBeDeleted.map(key => new ClientQuotaAlteration.Op(key, null))).asJavaCollection
 
-        adminClient.alterClientQuotas(Collections.singleton(new QuotaAlteration(entity, alterOps)), alterOptions)
+        adminClient.alterClientQuotas(Collections.singleton(new ClientQuotaAlteration(entity, alterOps)), alterOptions)
           .all().get(60, TimeUnit.SECONDS)
 
       case _ => throw new IllegalArgumentException(s"Unsupported entity type: $entityTypeHead")
@@ -475,8 +475,8 @@ object ConfigCommand extends Config {
   private def describeClientQuotasConfig(adminClient: Admin, entityTypes: List[String], entityNames: List[String]) = {
     getAllClientQuotasConfigs(adminClient, entityTypes, entityNames).foreach { case (entity, entries) =>
       val entityEntries = entity.entries.asScala
-      val entityStr = (entityEntries.get(QuotaEntity.USER).map(u => s"user-principal '${u}'") ++
-        entityEntries.get(QuotaEntity.CLIENT_ID).map(c => s"client-id '${c}'")).mkString(", ")
+      val entityStr = (entityEntries.get(ClientQuotaEntity.USER).map(u => s"user-principal '${u}'") ++
+        entityEntries.get(ClientQuotaEntity.CLIENT_ID).map(c => s"client-id '${c}'")).mkString(", ")
       val entriesStr = entries.asScala.map(e => s"${e._1}=${e._2}").mkString(", ")
       println(s"Configs for ${entityStr} are ${entriesStr}")
     }
@@ -489,25 +489,17 @@ object ConfigCommand extends Config {
   }
 
   private def getAllClientQuotasConfigs(adminClient: Admin, entityTypes: List[String], entityNames: List[String]) = {
-    var userFilter: Option[QuotaFilter] = None
-    var clientIdFilter: Option[QuotaFilter] = None
-
-    def toFilter(entityType: String, entityName: Option[String]): QuotaFilter =
-      entityName.map(QuotaFilter.matchExact(entityType, _)).getOrElse(QuotaFilter.matchSome(entityType))
-
-    entityTypes.map(Some(_)).zipAll(entityNames.map(Some(_)), None, None).foreach { case (entityTypeOpt, entityNameOpt) =>
-      entityTypeOpt match {
-        case Some(ConfigType.User) => userFilter = Some(toFilter(QuotaEntity.USER, entityNameOpt))
-        case Some(ConfigType.Client) => clientIdFilter = Some(toFilter(QuotaEntity.CLIENT_ID, entityNameOpt))
+    val components = entityTypes.map(Some(_)).zipAll(entityNames.map(Some(_)), None, None).map { case (entityTypeOpt, entityNameOpt) =>
+      val entityType = entityTypeOpt match {
+        case Some(ConfigType.User) => ClientQuotaEntity.USER
+        case Some(ConfigType.Client) => ClientQuotaEntity.CLIENT_ID
         case Some(_) => throw new IllegalArgumentException(s"Unexpected entity type ${entityTypeOpt.get}")
         case None => throw new IllegalArgumentException("More entity names specified than entity types")
       }
+      entityNameOpt.map(ClientQuotaFilterComponent.ofEntity(entityType, _)).getOrElse(ClientQuotaFilterComponent.ofEntityType(entityType))
     }
 
-    val filters = List(userFilter.getOrElse(QuotaFilter.matchNone(QuotaEntity.USER)),
-      clientIdFilter.getOrElse(QuotaFilter.matchNone(QuotaEntity.CLIENT_ID)))
-
-    adminClient.describeClientQuotas(filters.asJavaCollection).entities.get(30, TimeUnit.SECONDS).asScala
+    adminClient.describeClientQuotas(ClientQuotaFilter.containsOnly(components.asJava)).entities.get(30, TimeUnit.SECONDS).asScala
   }
 
   case class Entity(entityType: String, sanitizedName: Option[String]) {
@@ -580,7 +572,7 @@ object ConfigCommand extends Config {
     val entityTypes = opts.entityTypes
     val entityNames = opts.entityNames
     if (entityTypes.head == ConfigType.User || entityTypes.head == ConfigType.Client)
-      parseQuotaEntity(opts, entityTypes, entityNames)
+      parseClientQuotaEntity(opts, entityTypes, entityNames)
     else {
       // Exactly one entity type and at-most one entity name expected for other entities
       val name = entityNames.headOption match {
@@ -591,7 +583,7 @@ object ConfigCommand extends Config {
     }
   }
 
-  private def parseQuotaEntity(opts: ConfigCommandOptions, types: List[String], names: List[String]): ConfigEntity = {
+  private def parseClientQuotaEntity(opts: ConfigCommandOptions, types: List[String], names: List[String]): ConfigEntity = {
     if (opts.options.has(opts.alterOpt) && names.size != types.size)
       throw new IllegalArgumentException("--entity-name or --entity-default must be specified with each --entity-type for --alter")
 

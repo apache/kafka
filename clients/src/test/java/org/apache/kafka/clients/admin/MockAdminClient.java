@@ -33,8 +33,8 @@ import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicExistsException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
-import org.apache.kafka.common.quota.QuotaAlteration;
-import org.apache.kafka.common.quota.QuotaFilter;
+import org.apache.kafka.common.quota.ClientQuotaAlteration;
+import org.apache.kafka.common.quota.ClientQuotaFilter;
 
 import java.time.Duration;
 import java.util.ArrayList;
@@ -461,12 +461,12 @@ public class MockAdminClient extends AdminClient {
     }
 
     @Override
-    public DescribeClientQuotasResult describeClientQuotas(Collection<QuotaFilter> filters, DescribeClientQuotasOptions options) {
+    public DescribeClientQuotasResult describeClientQuotas(ClientQuotaFilter filter, DescribeClientQuotasOptions options) {
         throw new UnsupportedOperationException("Not implemented yet");
     }
 
     @Override
-    public AlterClientQuotasResult alterClientQuotas(Collection<QuotaAlteration> entries, AlterClientQuotasOptions options) {
+    public AlterClientQuotasResult alterClientQuotas(Collection<ClientQuotaAlteration> entries, AlterClientQuotasOptions options) {
         throw new UnsupportedOperationException("Not implemented yet");
     }
 

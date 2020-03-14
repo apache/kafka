@@ -19,19 +19,19 @@ package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.annotation.InterfaceStability;
-import org.apache.kafka.common.quota.QuotaEntity;
+import org.apache.kafka.common.quota.ClientQuotaEntity;
 
 import java.util.Map;
 
 /**
- * The result of the {@link Admin#describeClientQuotas(Collection, DescribeClientQuotasOptions)} call.
+ * The result of the {@link Admin#describeClientQuotas(ClientQuotaFilter, DescribeClientQuotasOptions)} call.
  *
  * The API of this class is evolving, see {@link Admin} for details.
  */
 @InterfaceStability.Evolving
 public class DescribeClientQuotasResult {
 
-    private final KafkaFuture<Map<QuotaEntity, Map<String, Double>>> entities;
+    private final KafkaFuture<Map<ClientQuotaEntity, Map<String, Double>>> entities;
 
     /**
      * Maps an entity to its configured quota value(s). Note if no value is defined for a quota
@@ -39,14 +39,14 @@ public class DescribeClientQuotasResult {
      *
      * @param entities future for the collection of entities that matched the filter
      */
-    public DescribeClientQuotasResult(KafkaFuture<Map<QuotaEntity, Map<String, Double>>> entities) {
+    public DescribeClientQuotasResult(KafkaFuture<Map<ClientQuotaEntity, Map<String, Double>>> entities) {
         this.entities = entities;
     }
 
     /**
      * Returns a map from quota entity to a future which can be used to check the status of the operation.
      */
-    public KafkaFuture<Map<QuotaEntity, Map<String, Double>>> entities() {
+    public KafkaFuture<Map<ClientQuotaEntity, Map<String, Double>>> entities() {
         return entities;
     }
 }

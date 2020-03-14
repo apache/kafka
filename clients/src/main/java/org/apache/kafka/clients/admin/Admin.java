@@ -36,8 +36,8 @@ import org.apache.kafka.common.acl.AclBinding;
 import org.apache.kafka.common.acl.AclBindingFilter;
 import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.config.ConfigResource;
-import org.apache.kafka.common.quota.QuotaAlteration;
-import org.apache.kafka.common.quota.QuotaFilter;
+import org.apache.kafka.common.quota.ClientQuotaAlteration;
+import org.apache.kafka.common.quota.ClientQuotaFilter;
 import org.apache.kafka.common.requests.LeaveGroupResponse;
 
 /**
@@ -1134,24 +1134,24 @@ public interface Admin extends AutoCloseable {
     ListOffsetsResult listOffsets(Map<TopicPartition, OffsetSpec> topicPartitionOffsets, ListOffsetsOptions options);
 
     /**
-     * Describes all entities matching all provided filters (logical AND) that have at least one quota
-     * configuration value defined.
+     * Describes all entities matching the provided filter that have at least one client quota configuration
+     * value defined.
      * <p>
-     * This is a convenience method for {@link #describeClientQuotas(Collection, DescribeClientQuotasOptions)}
+     * This is a convenience method for {@link #describeClientQuotas(ClientQuotaFilter, DescribeClientQuotasOptions)}
      * with default options. See the overload for more details.
      * <p>
      * This operation is supported by brokers with version 2.6.0 or higher.
      *
-     * @param filters filtering rules to apply to matching entities
+     * @param filter the filter to apply to match entities
      * @return the DescribeClientQuotasResult containing the result
      */
-    default DescribeClientQuotasResult describeClientQuotas(Collection<QuotaFilter> filters) {
-        return describeClientQuotas(filters, new DescribeClientQuotasOptions());
+    default DescribeClientQuotasResult describeClientQuotas(ClientQuotaFilter filter) {
+        return describeClientQuotas(filter, new DescribeClientQuotasOptions());
     }
 
     /**
-     * Describes all entities matching all provided filters (logical AND) that have at least one quota
-     * configuration value defined.
+     * Describes all entities matching the provided filter that have at least one client quota configuration
+     * value defined.
      * <p>
      * The following exceptions can be anticipated when calling {@code get()} on the future from the
      * returned {@link DescribeClientQuotasResult}:
@@ -1166,11 +1166,11 @@ public interface Admin extends AutoCloseable {
      * <p>
      * This operation is supported by brokers with version 2.6.0 or higher.
      *
-     * @param filters filtering rules to apply to matching entities
+     * @param filter the filter to apply to match entities
      * @param options the options to use
      * @return the DescribeClientQuotasResult containing the result
      */
-    DescribeClientQuotasResult describeClientQuotas(Collection<QuotaFilter> filters, DescribeClientQuotasOptions options);
+    DescribeClientQuotasResult describeClientQuotas(ClientQuotaFilter filter, DescribeClientQuotasOptions options);
 
     /**
      * Alters client quota configurations with the specified alterations.
@@ -1183,7 +1183,7 @@ public interface Admin extends AutoCloseable {
      * @param entries the alterations to perform
      * @return the AlterClientQuotasResult containing the result
      */
-    default AlterClientQuotasResult alterClientQuotas(Collection<QuotaAlteration> entries) {
+    default AlterClientQuotasResult alterClientQuotas(Collection<ClientQuotaAlteration> entries) {
         return alterClientQuotas(entries, new AlterClientQuotasOptions());
     }
 
@@ -1210,7 +1210,7 @@ public interface Admin extends AutoCloseable {
      * @param entries the alterations to perform
      * @return the AlterClientQuotasResult containing the result
      */
-    AlterClientQuotasResult alterClientQuotas(Collection<QuotaAlteration> entries, AlterClientQuotasOptions options);
+    AlterClientQuotasResult alterClientQuotas(Collection<ClientQuotaAlteration> entries, AlterClientQuotasOptions options);
 
     /**
      * Get the metrics kept by the adminClient

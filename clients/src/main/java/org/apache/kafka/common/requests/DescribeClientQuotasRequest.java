@@ -17,10 +17,11 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.message.DescribeClientQuotasRequestData;
-import org.apache.kafka.common.message.DescribeClientQuotasRequestData.FilterData;
+import org.apache.kafka.common.message.DescribeClientQuotasRequestData.ComponentData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.types.Struct;
-import org.apache.kafka.common.quota.QuotaFilter;
+import org.apache.kafka.common.quota.ClientQuotaFilter;
+import org.apache.kafka.common.quota.ClientQuotaFilterComponent;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -29,33 +30,34 @@ import java.util.Collection;
 public class DescribeClientQuotasRequest extends AbstractRequest {
     // These values must not change.
     private static final byte MATCH_TYPE_EXACT = 0;
-    private static final byte MATCH_TYPE_SOME = 1;
-    private static final byte MATCH_TYPE_NONE = 2;
+    private static final byte MATCH_TYPE_DEFAULT = 1;
+    private static final byte MATCH_TYPE_SPECIFIED = 2;
 
     public static class Builder extends AbstractRequest.Builder<DescribeClientQuotasRequest> {
 
         private final DescribeClientQuotasRequestData data;
 
-        public Builder(Collection<QuotaFilter> filters) {
+        public Builder(ClientQuotaFilter filter) {
             super(ApiKeys.DESCRIBE_CLIENT_QUOTAS);
 
-            List<FilterData> filterData = new ArrayList<>(filters.size());
-            for (QuotaFilter filter : filters) {
-                FilterData fd = new FilterData().setEntityType(filter.entityType());
-                if (filter.isMatchSome()) {
-                    fd.setMatchType(MATCH_TYPE_SOME);
+            List<ComponentData> componentData = new ArrayList<>(filter.components().size());
+            for (ClientQuotaFilterComponent component : filter.components()) {
+                ComponentData fd = new ComponentData().setEntityType(component.entityType());
+                if (component.match() == null) {
+                    fd.setMatchType(MATCH_TYPE_SPECIFIED);
                     fd.setMatch(null);
-                } else if (filter.isMatchNone()) {
-                    fd.setMatchType(MATCH_TYPE_NONE);
-                    fd.setMatch(null);
-                } else {
+                } else if (component.match().isPresent()) {
                     fd.setMatchType(MATCH_TYPE_EXACT);
-                    fd.setMatch(filter.matchExact());
+                    fd.setMatch(component.match().get());
+                } else {
+                    fd.setMatchType(MATCH_TYPE_DEFAULT);
+                    fd.setMatch(null);
                 }
-                filterData.add(fd);
+                componentData.add(fd);
             }
             this.data = new DescribeClientQuotasRequestData()
-                .setFilters(filterData);
+                .setComponents(componentData)
+                .setStrict(filter.strict());
         }
 
         @Override
@@ -81,26 +83,30 @@ public class DescribeClientQuotasRequest extends AbstractRequest {
         this.data = new DescribeClientQuotasRequestData(struct, version);
     }
 
-    public Collection<QuotaFilter> filters() {
-        List<QuotaFilter> filters = new ArrayList<>(data.filters().size());
-        for (FilterData filterData : data.filters()) {
-            QuotaFilter filter;
-            switch (filterData.matchType()) {
+    public ClientQuotaFilter filter() {
+        List<ClientQuotaFilterComponent> components = new ArrayList<>(data.components().size());
+        for (ComponentData componentData : data.components()) {
+            ClientQuotaFilterComponent component;
+            switch (componentData.matchType()) {
                 case MATCH_TYPE_EXACT:
-                    filter = QuotaFilter.matchExact(filterData.entityType(), filterData.match());
+                    component = ClientQuotaFilterComponent.ofEntity(componentData.entityType(), componentData.match());
                     break;
-                case MATCH_TYPE_SOME:
-                    filter = QuotaFilter.matchSome(filterData.entityType());
+                case MATCH_TYPE_DEFAULT:
+                    component = ClientQuotaFilterComponent.ofDefaultEntity(componentData.entityType());
                     break;
-                case MATCH_TYPE_NONE:
-                    filter = QuotaFilter.matchNone(filterData.entityType());
+                case MATCH_TYPE_SPECIFIED:
+                    component = ClientQuotaFilterComponent.ofEntityType(componentData.entityType());
                     break;
                 default:
-                    throw new IllegalArgumentException("Unexpected match type: " + filterData.matchType());
+                    throw new IllegalArgumentException("Unexpected match type: " + componentData.matchType());
             }
-            filters.add(filter);
+            components.add(component);
         }
-        return filters;
+        if (data.strict()) {
+            return ClientQuotaFilter.containsOnly(components);
+        } else {
+            return ClientQuotaFilter.contains(components);
+        }
     }
 
     @Override

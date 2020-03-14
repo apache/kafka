@@ -22,7 +22,7 @@ import org.apache.kafka.common.message.AlterClientQuotasResponseData.EntityData;
 import org.apache.kafka.common.message.AlterClientQuotasResponseData.EntryData;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
-import org.apache.kafka.common.quota.QuotaEntity;
+import org.apache.kafka.common.quota.ClientQuotaEntity;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -34,9 +34,9 @@ public class AlterClientQuotasResponse extends AbstractResponse {
 
     private final AlterClientQuotasResponseData data;
 
-    public AlterClientQuotasResponse(Map<QuotaEntity, ApiError> result, int throttleTimeMs) {
+    public AlterClientQuotasResponse(Map<ClientQuotaEntity, ApiError> result, int throttleTimeMs) {
         List<EntryData> entries = new ArrayList<>(result.size());
-        for (Map.Entry<QuotaEntity, ApiError> entry : result.entrySet()) {
+        for (Map.Entry<ClientQuotaEntity, ApiError> entry : result.entrySet()) {
             ApiError e = entry.getValue();
             entries.add(new EntryData()
                     .setErrorCode(e.error().code())
@@ -49,12 +49,12 @@ public class AlterClientQuotasResponse extends AbstractResponse {
             .setEntries(entries);
     }
 
-    public AlterClientQuotasResponse(Collection<QuotaEntity> entities, int throttleTimeMs, Throwable e) {
+    public AlterClientQuotasResponse(Collection<ClientQuotaEntity> entities, int throttleTimeMs, Throwable e) {
         short errorCode = Errors.forException(e).code();
         String errorMessage = e.getMessage();
 
         List<EntryData> entries = new ArrayList<>(entities.size());
-        for (QuotaEntity entity : entities) {
+        for (ClientQuotaEntity entity : entities) {
             entries.add(new EntryData()
                     .setErrorCode(errorCode)
                     .setErrorMessage(errorMessage)
@@ -70,13 +70,13 @@ public class AlterClientQuotasResponse extends AbstractResponse {
         this.data = new AlterClientQuotasResponseData(struct, version);
     }
 
-    public void complete(Map<QuotaEntity, KafkaFutureImpl<Void>> futures) {
+    public void complete(Map<ClientQuotaEntity, KafkaFutureImpl<Void>> futures) {
         for (EntryData entryData : data.entries()) {
             Map<String, String> entityEntries = new HashMap<>(entryData.entity().size());
             for (EntityData entityData : entryData.entity()) {
                 entityEntries.put(entityData.entityType(), entityData.entityName());
             }
-            QuotaEntity entity = new QuotaEntity(entityEntries);
+            ClientQuotaEntity entity = new ClientQuotaEntity(entityEntries);
 
             KafkaFutureImpl<Void> future = futures.get(entity);
             if (future == null) {
@@ -112,7 +112,7 @@ public class AlterClientQuotasResponse extends AbstractResponse {
         return data.toStruct(version);
     }
 
-    private static List<EntityData> toEntityData(QuotaEntity entity) {
+    private static List<EntityData> toEntityData(ClientQuotaEntity entity) {
         List<AlterClientQuotasResponseData.EntityData> entityData = new ArrayList<>(entity.entries().size());
         for (Map.Entry<String, String> entry : entity.entries().entrySet()) {
             entityData.add(new AlterClientQuotasResponseData.EntityData()

@@ -31,7 +31,7 @@ import org.apache.kafka.common.internals.KafkaFutureImpl
 import org.apache.kafka.common.Node
 import org.apache.kafka.common.errors.InvalidConfigurationException
 import org.apache.kafka.common.network.ListenerName
-import org.apache.kafka.common.quota.{QuotaAlteration, QuotaEntity, QuotaFilter}
+import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity, ClientQuotaFilter}
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.security.scram.internals.ScramCredentialUtils
 import org.apache.kafka.common.utils.Sanitizer
@@ -352,10 +352,10 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
       "--add-config", "consumer_byte_rate=20000,producer_byte_rate=10000",
       "--delete-config", "request_percentage"))
 
-    val entity = new QuotaEntity(Map((QuotaEntity.CLIENT_ID -> "my-client-id")).asJava)
+    val entity = new ClientQuotaEntity(Map((ClientQuotaEntity.CLIENT_ID -> "my-client-id")).asJava)
 
     var describedConfigs = false
-    val describeFuture = new KafkaFutureImpl[util.Map[QuotaEntity, util.Map[String, java.lang.Double]]]
+    val describeFuture = new KafkaFutureImpl[util.Map[ClientQuotaEntity, util.Map[String, java.lang.Double]]]
     describeFuture.complete(Map((entity -> Map(("request_percentage" -> Double.box(50.0))).asJava)).asJava)
     val describeResult: DescribeClientQuotasResult = EasyMock.createNiceMock(classOf[DescribeClientQuotasResult])
     EasyMock.expect(describeResult.entities()).andReturn(describeFuture)
@@ -368,22 +368,18 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
 
     val node = new Node(1, "localhost", 9092)
     val mockAdminClient = new MockAdminClient(util.Collections.singletonList(node), node) {
-      override def describeClientQuotas(filters: util.Collection[QuotaFilter], options: DescribeClientQuotasOptions): DescribeClientQuotasResult = {
-        assertEquals(2, filters.size)
-        filters.asScala.foreach { filter =>
-          if (filter.entityType == QuotaEntity.USER) {
-            assertTrue(filter.isMatchNone)
-          } else {
-            assertEquals(QuotaEntity.CLIENT_ID, filter.entityType)
-            assertTrue(filter.isMatchExact)
-            assertEquals("my-client-id", filter.matchExact)
-          }
-        }
+      override def describeClientQuotas(filter: ClientQuotaFilter, options: DescribeClientQuotasOptions): DescribeClientQuotasResult = {
+        assertEquals(1, filter.components.size)
+        assertTrue(filter.strict)
+        val component = filter.components.asScala.head
+        assertEquals(ClientQuotaEntity.CLIENT_ID, component.entityType)
+        assertTrue(component.`match`.isPresent)
+        assertEquals("my-client-id", component.`match`.get)
         describedConfigs = true
         describeResult
       }
 
-      override def alterClientQuotas(entries: util.Collection[QuotaAlteration], options: AlterClientQuotasOptions): AlterClientQuotasResult = {
+      override def alterClientQuotas(entries: util.Collection[ClientQuotaAlteration], options: AlterClientQuotasOptions): AlterClientQuotasResult = {
         assertFalse(options.validateOnly)
         assertEquals(1, entries.size)
         val alteration = entries.asScala.head
@@ -391,9 +387,9 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
         val ops = alteration.ops.asScala
         assertEquals(3, ops.size)
         val expectedOps = Set(
-          new QuotaAlteration.Op("consumer_byte_rate", Double.box(20000)),
-          new QuotaAlteration.Op("producer_byte_rate", Double.box(10000)),
-          new QuotaAlteration.Op("request_percentage", null)
+          new ClientQuotaAlteration.Op("consumer_byte_rate", Double.box(20000)),
+          new ClientQuotaAlteration.Op("producer_byte_rate", Double.box(10000)),
+          new ClientQuotaAlteration.Op("request_percentage", null)
         )
         assertEquals(expectedOps, ops.toSet)
         alteredConfigs = true
@@ -1255,10 +1251,9 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
       options: AlterConfigsOptions): AlterConfigsResult = EasyMock.createNiceMock(classOf[AlterConfigsResult])
     override def alterConfigs(configs: util.Map[ConfigResource, Config], options: AlterConfigsOptions): AlterConfigsResult =
       EasyMock.createNiceMock(classOf[AlterConfigsResult])
-    override def describeClientQuotas(filters: util.Collection[QuotaFilter],
-      options: DescribeClientQuotasOptions): DescribeClientQuotasResult =
+    override def describeClientQuotas(filter: ClientQuotaFilter, options: DescribeClientQuotasOptions): DescribeClientQuotasResult =
       EasyMock.createNiceMock(classOf[DescribeClientQuotasResult])
-    override def alterClientQuotas(entries: util.Collection[QuotaAlteration],
+    override def alterClientQuotas(entries: util.Collection[ClientQuotaAlteration],
       options: AlterClientQuotasOptions): AlterClientQuotasResult =
       EasyMock.createNiceMock(classOf[AlterClientQuotasResult])
   }

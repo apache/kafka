@@ -32,8 +32,8 @@
         "about": "The quota entity description.", "fields": [
         { "name": "EntityType", "type": "string", "versions": "0+",
           "about": "The entity type." },
-        { "name": "EntityName", "type": "string", "versions": "0+",
-          "about": "The entity name." }
+        { "name": "EntityName", "type": "string", "versions": "0+", "nullableVersions": "0+",
+          "about": "The entity name, or null if the default." }
       ]},
       { "name": "Values", "type": "[]ValueData", "versions": "0+",
 	"about": "The quota values for the entity.", "fields": [

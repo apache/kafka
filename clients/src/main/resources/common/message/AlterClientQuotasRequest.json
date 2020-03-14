@@ -26,8 +26,8 @@
         "about": "The quota entity to alter.", "fields": [
         { "name": "EntityType", "type": "string", "versions": "0+",
           "about": "The entity type." },
-        { "name": "EntityName", "type": "string", "versions": "0+",
-          "about": "The name of the entity." }
+        { "name": "EntityName", "type": "string", "versions": "0+", "nullableVersions": "0+",
+          "about": "The name of the entity, or null if the default." }
       ]},
       { "name": "Ops", "type": "[]OpData", "versions": "0+",
         "about": "An individual quota configuration entry to alter.", "fields": [

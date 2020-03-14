@@ -21,31 +21,25 @@ import java.util.Map;
 import java.util.Objects;
 
 /**
- * Describes a quota entity, which is a mapping of entity types to their names.
+ * Describes a client quota entity, which is a mapping of entity types to their names.
  */
-public class QuotaEntity {
+public class ClientQuotaEntity {
 
     private final Map<String, String> entries;
 
     /**
-     * Type of an entity entry.
+     * The type of an entity entry.
      */
     public static final String USER = "user";
     public static final String CLIENT_ID = "client-id";
 
     /**
-     * Represents the default name for an user/client ID, i.e. the name that's resolved
-     * when an exact match isn't found.
-     */
-    public final static String USER_DEFAULT = "<default>";
-    public final static String CLIENT_ID_DEFAULT = "<default>";
-
-    /**
-     * Constructs a quota entity for the given types and names.
+     * Constructs a quota entity for the given types and names. If a name is null,
+     * then it is mapped to the built-in default entity name.
      *
      * @param entries maps entity type to its name
      */
-    public QuotaEntity(Map<String, String> entries) {
+    public ClientQuotaEntity(Map<String, String> entries) {
         this.entries = entries;
     }
 
@@ -60,7 +54,7 @@ public class QuotaEntity {
     public boolean equals(Object o) {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
-        QuotaEntity that = (QuotaEntity) o;
+        ClientQuotaEntity that = (ClientQuotaEntity) o;
         return Objects.equals(entries, that.entries);
     }
 
@@ -71,6 +65,6 @@ public class QuotaEntity {
 
     @Override
     public String toString() {
-        return "QuotaEntity(entries=" + entries + ")";
+        return "ClientQuotaEntity(entries=" + entries + ")";
     }
 }

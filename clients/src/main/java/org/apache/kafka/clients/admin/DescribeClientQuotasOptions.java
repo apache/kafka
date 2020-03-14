@@ -20,7 +20,7 @@ package org.apache.kafka.clients.admin;
 import org.apache.kafka.common.annotation.InterfaceStability;
 
 /**
- * Options for {@link Admin#describeClientQuotas(Collection, DescribeClientQuotasOptions)}.
+ * Options for {@link Admin#describeClientQuotas(ClientQuotaFilter, DescribeClientQuotasOptions)}.
  *
  * The API of this class is evolving, see {@link Admin} for details.
  */

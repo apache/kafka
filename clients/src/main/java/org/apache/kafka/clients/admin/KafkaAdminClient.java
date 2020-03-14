@@ -124,9 +124,9 @@ import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.network.ChannelBuilder;
 import org.apache.kafka.common.network.Selector;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.quota.QuotaAlteration;
-import org.apache.kafka.common.quota.QuotaEntity;
-import org.apache.kafka.common.quota.QuotaFilter;
+import org.apache.kafka.common.quota.ClientQuotaAlteration;
+import org.apache.kafka.common.quota.ClientQuotaEntity;
+import org.apache.kafka.common.quota.ClientQuotaFilter;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.AbstractResponse;
 import org.apache.kafka.common.requests.AlterClientQuotasRequest;
@@ -3831,8 +3831,8 @@ public class KafkaAdminClient extends AdminClient {
     }
 
     @Override
-    public DescribeClientQuotasResult describeClientQuotas(Collection<QuotaFilter> filters, DescribeClientQuotasOptions options) {
-        KafkaFutureImpl<Map<QuotaEntity, Map<String, Double>>> future = new KafkaFutureImpl<>();
+    public DescribeClientQuotasResult describeClientQuotas(ClientQuotaFilter filter, DescribeClientQuotasOptions options) {
+        KafkaFutureImpl<Map<ClientQuotaEntity, Map<String, Double>>> future = new KafkaFutureImpl<>();
 
         final long now = time.milliseconds();
         runnable.call(new Call("describeClientQuotas", calcDeadlineMs(now, options.timeoutMs()),
@@ -3840,7 +3840,7 @@ public class KafkaAdminClient extends AdminClient {
 
                 @Override
                 DescribeClientQuotasRequest.Builder createRequest(int timeoutMs) {
-                    return new DescribeClientQuotasRequest.Builder(filters);
+                    return new DescribeClientQuotasRequest.Builder(filter);
                 }
 
                 @Override
@@ -3859,9 +3859,9 @@ public class KafkaAdminClient extends AdminClient {
     }
 
     @Override
-    public AlterClientQuotasResult alterClientQuotas(Collection<QuotaAlteration> entries, AlterClientQuotasOptions options) {
-        Map<QuotaEntity, KafkaFutureImpl<Void>> futures = new HashMap<>(entries.size());
-        for (QuotaAlteration entry : entries) {
+    public AlterClientQuotasResult alterClientQuotas(Collection<ClientQuotaAlteration> entries, AlterClientQuotasOptions options) {
+        Map<ClientQuotaEntity, KafkaFutureImpl<Void>> futures = new HashMap<>(entries.size());
+        for (ClientQuotaAlteration entry : entries) {
             futures.put(entry.entity(), new KafkaFutureImpl<>());
         }
 
