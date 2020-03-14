@@ -496,9 +496,7 @@ public class StreamThread extends Thread {
         while (isRunning() || taskManager.isRebalanceInProgress()) {
             try {
                 runOnce();
-                if (assignmentErrorCode.get() == AssignorError.REBALANCE_NEEDED.code()) {
-                    log.info("Version probing detected. Rejoining the consumer group to trigger a new rebalance.");
-
+                if (rebalanceNeeded()) {
                     assignmentErrorCode.set(AssignorError.NONE.code());
                     mainConsumer.enforceRebalance();
                 }
@@ -517,6 +515,17 @@ public class StreamThread extends Thread {
                 subscribeConsumer();
             }
         }
+    }
+
+    private boolean rebalanceNeeded() {
+        if (assignmentErrorCode.get() == AssignorError.VERSION_PROBING.code()) {
+            log.info("Version probing detected. Rejoining the consumer group to trigger a new rebalance.");
+            return true;
+        } else if (assignmentErrorCode.get() == AssignorError.USER_ENDPOINT_CHANGED.code()) {
+            log.info("Client rejoined with new endpoint. Rejoining the consumer group to trigger a new rebalance.");
+            return true;
+        }
+        return false;
     }
 
     private void subscribeConsumer() {

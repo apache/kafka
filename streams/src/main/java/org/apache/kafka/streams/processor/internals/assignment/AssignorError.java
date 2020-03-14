@@ -19,7 +19,8 @@ package org.apache.kafka.streams.processor.internals.assignment;
 public enum AssignorError {
     NONE(0),
     INCOMPLETE_SOURCE_TOPIC_METADATA(1),
-    REBALANCE_NEEDED(2);
+    VERSION_PROBING(2),
+    USER_ENDPOINT_CHANGED(3);
 
     private final int code;
 
