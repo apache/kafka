@@ -1085,6 +1085,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         final SubscriptionResolverJoinProcessorSupplier<K, V, VO, VR> resolverProcessorSupplier = new SubscriptionResolverJoinProcessorSupplier<>(
             primaryKeyValueGetter,
             valSerde == null ? null : valSerde.serializer(),
+            valueHashSerdePseudoTopic,
             joiner,
             leftJoin
         );
