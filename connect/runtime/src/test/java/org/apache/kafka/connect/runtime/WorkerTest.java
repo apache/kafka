@@ -55,6 +55,7 @@ import org.apache.kafka.connect.storage.HeaderConverter;
 import org.apache.kafka.connect.storage.OffsetBackingStore;
 import org.apache.kafka.connect.storage.OffsetStorageReader;
 import org.apache.kafka.connect.storage.OffsetStorageWriter;
+import org.apache.kafka.connect.storage.StatusBackingStore;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.apache.kafka.connect.util.ThreadedTest;
 import org.easymock.Capture;
@@ -121,6 +122,7 @@ public class WorkerTest extends ThreadedTest {
     private ConnectorStatus.Listener connectorStatusListener;
 
     @Mock private Herder herder;
+    @Mock private StatusBackingStore statusBackingStore;
     @Mock private Connector connector;
     @Mock private ConnectorContext ctx;
     @Mock private TestSourceTask task;
@@ -213,6 +215,7 @@ public class WorkerTest extends ThreadedTest {
         PowerMock.replayAll();
 
         worker = new Worker(WORKER_ID, new MockTime(), plugins, config, offsetBackingStore, noneConnectorClientConfigOverridePolicy);
+        worker.herder = herder;
         worker.start();
 
         assertEquals(Collections.emptySet(), worker.connectorNames());
@@ -264,6 +267,7 @@ public class WorkerTest extends ThreadedTest {
         PowerMock.replayAll();
 
         worker = new Worker(WORKER_ID, new MockTime(), plugins, config, offsetBackingStore, noneConnectorClientConfigOverridePolicy);
+        worker.herder = herder;
         worker.start();
 
         assertStatistics(worker, 0, 0);
@@ -324,6 +328,7 @@ public class WorkerTest extends ThreadedTest {
         PowerMock.replayAll();
 
         worker = new Worker(WORKER_ID, new MockTime(), plugins, config, offsetBackingStore, noneConnectorClientConfigOverridePolicy);
+        worker.herder = herder;
         worker.start();
 
         assertStatistics(worker, 0, 0);
@@ -388,6 +393,7 @@ public class WorkerTest extends ThreadedTest {
         PowerMock.replayAll();
 
         worker = new Worker(WORKER_ID, new MockTime(), plugins, config, offsetBackingStore, noneConnectorClientConfigOverridePolicy);
+        worker.herder = herder;
         worker.start();
 
         assertStatistics(worker, 0, 0);
@@ -414,6 +420,7 @@ public class WorkerTest extends ThreadedTest {
         PowerMock.replayAll();
 
         worker = new Worker(WORKER_ID, new MockTime(), plugins, config, offsetBackingStore, noneConnectorClientConfigOverridePolicy);
+        worker.herder = herder;
         worker.start();
 
         worker.stopConnector(CONNECTOR_ID);
@@ -471,6 +478,7 @@ public class WorkerTest extends ThreadedTest {
         PowerMock.replayAll();
 
         worker = new Worker(WORKER_ID, new MockTime(), plugins, config, offsetBackingStore, noneConnectorClientConfigOverridePolicy);
+        worker.herder = herder;
         worker.start();
 
         assertStatistics(worker, 0, 0);
@@ -534,7 +542,8 @@ public class WorkerTest extends ThreadedTest {
                 anyObject(ConnectMetrics.class),
                 anyObject(ClassLoader.class),
                 anyObject(Time.class),
-                anyObject(RetryWithToleranceOperator.class))
+                anyObject(RetryWithToleranceOperator.class),
+                anyObject(StatusBackingStore.class))
                 .andReturn(workerTask);
         Map<String, String> origProps = new HashMap<>();
         origProps.put(TaskConfig.TASK_CLASS_CONFIG, TestSourceTask.class.getName());
@@ -583,6 +592,7 @@ public class WorkerTest extends ThreadedTest {
 
         worker = new Worker(WORKER_ID, new MockTime(), plugins, config, offsetBackingStore, executorService,
                             noneConnectorClientConfigOverridePolicy);
+        worker.herder = herder;
         worker.start();
         assertStatistics(worker, 0, 0);
         assertStartupStatistics(worker, 0, 0, 0, 0);
@@ -627,7 +637,8 @@ public class WorkerTest extends ThreadedTest {
             anyObject(ConnectMetrics.class),
             anyObject(ClassLoader.class),
             anyObject(Time.class),
-            anyObject(RetryWithToleranceOperator.class)).andReturn(workerTask);
+            anyObject(RetryWithToleranceOperator.class),
+            anyObject(StatusBackingStore.class)).andReturn(workerTask);
         Map<String, String> origProps = new HashMap<>();
         origProps.put(TaskConfig.TASK_CLASS_CONFIG, TestSourceTask.class.getName());
 
@@ -759,6 +770,7 @@ public class WorkerTest extends ThreadedTest {
             config,
             offsetBackingStore,
             noneConnectorClientConfigOverridePolicy);
+        worker.herder = herder;
 
         Worker.ConnectorStatusMetricsGroup metricGroup = new Worker.ConnectorStatusMetricsGroup(
             worker.metrics(), tasks, herder
@@ -799,6 +811,7 @@ public class WorkerTest extends ThreadedTest {
         PowerMock.replayAll();
 
         worker = new Worker(WORKER_ID, new MockTime(), plugins, config, offsetBackingStore, noneConnectorClientConfigOverridePolicy);
+        worker.herder = herder;
         worker.start();
         assertStatistics(worker, 0, 0);
         assertStartupStatistics(worker, 0, 0, 0, 0);
@@ -838,7 +851,8 @@ public class WorkerTest extends ThreadedTest {
                 anyObject(ConnectMetrics.class),
                 EasyMock.eq(pluginLoader),
                 anyObject(Time.class),
-                anyObject(RetryWithToleranceOperator.class))
+                anyObject(RetryWithToleranceOperator.class),
+                anyObject(StatusBackingStore.class))
                 .andReturn(workerTask);
         Map<String, String> origProps = new HashMap<>();
         origProps.put(TaskConfig.TASK_CLASS_CONFIG, TestSourceTask.class.getName());
@@ -893,6 +907,7 @@ public class WorkerTest extends ThreadedTest {
 
         worker = new Worker(WORKER_ID, new MockTime(), plugins, config, offsetBackingStore, executorService,
                             noneConnectorClientConfigOverridePolicy);
+        worker.herder = herder;
         worker.start();
         assertStatistics(worker, 0, 0);
         worker.startTask(TASK_ID, ClusterConfigState.EMPTY, anyConnectorConfigMap(), origProps, taskStatusListener, TargetState.STARTED);
@@ -932,7 +947,8 @@ public class WorkerTest extends ThreadedTest {
                 anyObject(ConnectMetrics.class),
                 EasyMock.eq(pluginLoader),
                 anyObject(Time.class),
-                anyObject(RetryWithToleranceOperator.class))
+                anyObject(RetryWithToleranceOperator.class),
+                anyObject(StatusBackingStore.class))
                 .andReturn(workerTask);
         Map<String, String> origProps = new HashMap<>();
         origProps.put(TaskConfig.TASK_CLASS_CONFIG, TestSourceTask.class.getName());
@@ -986,6 +1002,7 @@ public class WorkerTest extends ThreadedTest {
 
         worker = new Worker(WORKER_ID, new MockTime(), plugins, config, offsetBackingStore, executorService,
                             noneConnectorClientConfigOverridePolicy);
+        worker.herder = herder;
         worker.start();
         assertStatistics(worker, 0, 0);
         assertEquals(Collections.emptySet(), worker.taskIds());
@@ -1225,6 +1242,8 @@ public class WorkerTest extends ThreadedTest {
         EasyMock.expectLastCall();
         offsetBackingStore.start();
         EasyMock.expectLastCall();
+        EasyMock.expect(herder.statusBackingStore())
+                .andReturn(statusBackingStore).anyTimes();
     }
 
     private void expectStopStorage() {

@@ -21,7 +21,6 @@ import java.util
 import java.util.Optional
 import java.util.concurrent.{ThreadLocalRandom, TimeUnit}
 
-import com.yammer.metrics.core.Gauge
 import kafka.metrics.KafkaMetricsGroup
 import kafka.utils.Logging
 import org.apache.kafka.common.TopicPartition
@@ -77,6 +76,7 @@ class CachedPartition(val topic: String,
                       var maxBytes: Int,
                       var fetchOffset: Long,
                       var highWatermark: Long,
+                      var leaderEpoch: Optional[Integer],
                       var fetcherLogStartOffset: Long,
                       var localLogStartOffset: Long)
     extends ImplicitLinkedHashCollection.Element {
@@ -84,37 +84,34 @@ class CachedPartition(val topic: String,
   var cachedNext: Int = ImplicitLinkedHashCollection.INVALID_INDEX
   var cachedPrev: Int = ImplicitLinkedHashCollection.INVALID_INDEX
 
-  override def next = cachedNext
-  override def setNext(next: Int) = this.cachedNext = next
-  override def prev = cachedPrev
-  override def setPrev(prev: Int) = this.cachedPrev = prev
+  override def next: Int = cachedNext
+  override def setNext(next: Int): Unit = this.cachedNext = next
+  override def prev: Int = cachedPrev
+  override def setPrev(prev: Int): Unit = this.cachedPrev = prev
 
   def this(topic: String, partition: Int) =
-    this(topic, partition, -1, -1, -1, -1, -1)
+    this(topic, partition, -1, -1, -1, Optional.empty(), -1, -1)
 
   def this(part: TopicPartition) =
     this(part.topic, part.partition)
 
   def this(part: TopicPartition, reqData: FetchRequest.PartitionData) =
-    this(part.topic, part.partition,
-      reqData.maxBytes, reqData.fetchOffset, -1,
-      reqData.logStartOffset, -1)
+    this(part.topic, part.partition, reqData.maxBytes, reqData.fetchOffset, -1,
+      reqData.currentLeaderEpoch, reqData.logStartOffset, -1)
 
   def this(part: TopicPartition, reqData: FetchRequest.PartitionData,
            respData: FetchResponse.PartitionData[Records]) =
-    this(part.topic, part.partition,
-      reqData.maxBytes, reqData.fetchOffset, respData.highWatermark,
-      reqData.logStartOffset, respData.logStartOffset)
+    this(part.topic, part.partition, reqData.maxBytes, reqData.fetchOffset, respData.highWatermark,
+      reqData.currentLeaderEpoch, reqData.logStartOffset, respData.logStartOffset)
 
-  def topicPartition = new TopicPartition(topic, partition)
-
-  def reqData = new FetchRequest.PartitionData(fetchOffset, fetcherLogStartOffset, maxBytes, Optional.empty())
+  def reqData = new FetchRequest.PartitionData(fetchOffset, fetcherLogStartOffset, maxBytes, leaderEpoch)
 
   def updateRequestParams(reqData: FetchRequest.PartitionData): Unit = {
     // Update our cached request parameters.
     maxBytes = reqData.maxBytes
     fetchOffset = reqData.fetchOffset
     fetcherLogStartOffset = reqData.logStartOffset
+    leaderEpoch = reqData.currentLeaderEpoch
   }
 
   /**
@@ -159,19 +156,21 @@ class CachedPartition(val topic: String,
     mustRespond
   }
 
-  override def hashCode = (31 * partition) + topic.hashCode
+  override def hashCode: Int = (31 * partition) + topic.hashCode
 
   def canEqual(that: Any) = that.isInstanceOf[CachedPartition]
 
   override def equals(that: Any): Boolean =
     that match {
-      case that: CachedPartition => that.canEqual(this) &&
-        this.topic.equals(that.topic) &&
-        this.partition.equals(that.partition)
+      case that: CachedPartition =>
+        this.eq(that) ||
+          (that.canEqual(this) &&
+            this.partition.equals(that.partition) &&
+            this.topic.equals(that.topic))
       case _ => false
     }
 
-  override def toString = synchronized {
+  override def toString: String = synchronized {
     "CachedPartition(topic=" + topic +
       ", partition=" + partition +
       ", maxBytes=" + maxBytes +
@@ -198,12 +197,12 @@ class CachedPartition(val topic: String,
   *                     FetchSessionCache#touch.
   * @param epoch        The fetch session sequence number.
   */
-case class FetchSession(val id: Int,
-                        val privileged: Boolean,
-                        val partitionMap: FetchSession.CACHE_MAP,
-                        val creationMs: Long,
-                        var lastUsedMs: Long,
-                        var epoch: Int) {
+class FetchSession(val id: Int,
+                   val privileged: Boolean,
+                   val partitionMap: FetchSession.CACHE_MAP,
+                   val creationMs: Long,
+                   var lastUsedMs: Long,
+                   var epoch: Int) {
   // This is used by the FetchSessionCache to store the last known size of this session.
   // If this is -1, the Session is not in the cache.
   var cachedSize = -1
@@ -406,9 +405,9 @@ class IncrementalFetchContext(private val time: Time,
   override def foreachPartition(fun: (TopicPartition, FetchRequest.PartitionData) => Unit): Unit = {
     // Take the session lock and iterate over all the cached partitions.
     session.synchronized {
-      session.partitionMap.iterator.asScala.foreach(part => {
+      session.partitionMap.iterator.asScala.foreach { part =>
         fun(new TopicPartition(part.topic, part.partition), part.reqData)
-      })
+      }
     }
   }
 
@@ -502,15 +501,12 @@ class IncrementalFetchContext(private val time: Time,
   }
 }
 
-case class LastUsedKey(val lastUsedMs: Long,
-                       val id: Int) extends Comparable[LastUsedKey] {
+case class LastUsedKey(lastUsedMs: Long, id: Int) extends Comparable[LastUsedKey] {
   override def compareTo(other: LastUsedKey): Int =
     (lastUsedMs, id) compare (other.lastUsedMs, other.id)
 }
 
-case class EvictableKey(val privileged: Boolean,
-                        val size: Int,
-                        val id: Int) extends Comparable[EvictableKey] {
+case class EvictableKey(privileged: Boolean, size: Int, id: Int) extends Comparable[EvictableKey] {
   override def compareTo(other: EvictableKey): Int =
     (privileged, size, id) compare (other.privileged, other.size, other.id)
 }
@@ -547,19 +543,11 @@ class FetchSessionCache(private val maxEntries: Int,
 
   // Set up metrics.
   removeMetric(FetchSession.NUM_INCREMENTAL_FETCH_SESSISONS)
-  newGauge(FetchSession.NUM_INCREMENTAL_FETCH_SESSISONS,
-    new Gauge[Int] {
-      def value = FetchSessionCache.this.size
-    }
-  )
+  newGauge(FetchSession.NUM_INCREMENTAL_FETCH_SESSISONS, () => FetchSessionCache.this.size)
   removeMetric(FetchSession.NUM_INCREMENTAL_FETCH_PARTITIONS_CACHED)
-  newGauge(FetchSession.NUM_INCREMENTAL_FETCH_PARTITIONS_CACHED,
-    new Gauge[Long] {
-      def value = FetchSessionCache.this.totalPartitions
-    }
-  )
+  newGauge(FetchSession.NUM_INCREMENTAL_FETCH_PARTITIONS_CACHED, () => FetchSessionCache.this.totalPartitions)
   removeMetric(FetchSession.INCREMENTAL_FETCH_SESSIONS_EVICTIONS_PER_SEC)
-  val evictionsMeter = newMeter(FetchSession.INCREMENTAL_FETCH_SESSIONS_EVICTIONS_PER_SEC,
+  private[server] val evictionsMeter = newMeter(FetchSession.INCREMENTAL_FETCH_SESSIONS_EVICTIONS_PER_SEC,
     FetchSession.EVICTIONS, TimeUnit.SECONDS, Map.empty)
 
   /**

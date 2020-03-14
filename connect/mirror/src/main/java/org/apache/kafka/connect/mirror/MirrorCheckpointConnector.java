@@ -51,6 +51,16 @@ public class MirrorCheckpointConnector extends SourceConnector {
     private String connectorName;
     private List<String> knownConsumerGroups = Collections.emptyList();
 
+    public MirrorCheckpointConnector() {
+        // nop
+    }
+
+    // visible for testing
+    MirrorCheckpointConnector(List<String> knownConsumerGroups, MirrorConnectorConfig config) {
+        this.knownConsumerGroups = knownConsumerGroups;
+        this.config = config;
+    }
+
     @Override
     public void start(Map<String, String> props) {
         config = new MirrorConnectorConfig(props);
@@ -88,7 +98,11 @@ public class MirrorCheckpointConnector extends SourceConnector {
     // divide consumer groups among tasks
     @Override
     public List<Map<String, String>> taskConfigs(int maxTasks) {
-        if (!config.enabled() || knownConsumerGroups.isEmpty()) {
+        // if the replication is disabled, known consumer group is empty, or checkpoint emission is
+        // disabled by setting 'emit.checkpoints.enabled' to false, the interval of checkpoint emission
+        // will be negative and no 'MirrorHeartbeatTask' will be created
+        if (!config.enabled() || knownConsumerGroups.isEmpty()
+                || config.emitCheckpointsInterval().isNegative()) {
             return Collections.emptyList();
         }
         int numTasks = Math.min(maxTasks, knownConsumerGroups.size());

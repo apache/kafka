@@ -24,6 +24,7 @@ import kafka.security.authorizer.AclAuthorizer
 import kafka.utils.TestUtils
 import org.apache.kafka.common.acl._
 import org.apache.kafka.common.config.ConfigResource
+import org.apache.kafka.common.message.CreatePartitionsRequestData.CreatePartitionsTopic
 import org.apache.kafka.common.message.CreateTopicsRequestData.{CreatableTopic, CreatableTopicCollection}
 import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocolCollection
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState
@@ -34,9 +35,8 @@ import org.apache.kafka.common.metrics.{KafkaMetric, Quota, Sensor}
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.record._
-import org.apache.kafka.common.requests.CreateAclsRequest.AclCreation
 import org.apache.kafka.common.requests._
-import org.apache.kafka.common.resource.{PatternType, ResourcePattern, ResourcePatternFilter, ResourceType => AdminResourceType}
+import org.apache.kafka.common.resource.{PatternType, ResourceType => AdminResourceType}
 import org.apache.kafka.common.security.auth.{AuthenticationContext, KafkaPrincipal, KafkaPrincipalBuilder, SecurityProtocol}
 import org.apache.kafka.common.utils.{Sanitizer, SecurityUtils}
 import org.apache.kafka.common.{ElectionType, IsolationLevel, Node, TopicPartition}
@@ -291,7 +291,7 @@ class RequestQuotaTest extends BaseRequestTest {
               )
           )
         case ApiKeys.OFFSET_FETCH =>
-          new OffsetFetchRequest.Builder("test-group", List(tp).asJava)
+          new OffsetFetchRequest.Builder("test-group", false, List(tp).asJava, false)
 
         case ApiKeys.FIND_COORDINATOR =>
           new FindCoordinatorRequest.Builder(
@@ -372,7 +372,14 @@ class RequestQuotaTest extends BaseRequestTest {
               .setTimeoutMs(5000))
 
         case ApiKeys.DELETE_RECORDS =>
-          new DeleteRecordsRequest.Builder(5000, Map(tp -> (0L: java.lang.Long)).asJava)
+          new DeleteRecordsRequest.Builder(
+            new DeleteRecordsRequestData()
+              .setTimeoutMs(5000)
+              .setTopics(Collections.singletonList(new DeleteRecordsRequestData.DeleteRecordsTopic()
+                .setName(tp.topic())
+                .setPartitions(Collections.singletonList(new DeleteRecordsRequestData.DeleteRecordsPartition()
+                  .setPartitionIndex(tp.partition())
+                  .setOffset(0L))))))
 
         case ApiKeys.INIT_PRODUCER_ID =>
           val requestData = new InitProducerIdRequestData()
@@ -391,36 +398,47 @@ class RequestQuotaTest extends BaseRequestTest {
           new AddOffsetsToTxnRequest.Builder("test-transactional-id", 1, 0, "test-txn-group")
 
         case ApiKeys.END_TXN =>
-          new EndTxnRequest.Builder("test-transactional-id", 1, 0, TransactionResult.forId(false))
+          new EndTxnRequest.Builder(new EndTxnRequestData()
+            .setTransactionalId("test-transactional-id")
+            .setProducerId(1)
+            .setProducerEpoch(0)
+            .setCommitted(false)
+          )
 
         case ApiKeys.WRITE_TXN_MARKERS =>
           new WriteTxnMarkersRequest.Builder(List.empty.asJava)
 
         case ApiKeys.TXN_OFFSET_COMMIT =>
           new TxnOffsetCommitRequest.Builder(
-            new TxnOffsetCommitRequestData()
-              .setTransactionalId("test-transactional-id")
-              .setGroupId("test-txn-group")
-              .setProducerId(2)
-              .setProducerEpoch(0)
-              .setTopics(TxnOffsetCommitRequest.getTopics(
-                Map.empty[TopicPartition, TxnOffsetCommitRequest.CommittedOffset].asJava
-              ))
-          )
+            "test-transactional-id",
+            "test-txn-group",
+            2,
+            0,
+            Map.empty[TopicPartition, TxnOffsetCommitRequest.CommittedOffset].asJava)
 
         case ApiKeys.DESCRIBE_ACLS =>
           new DescribeAclsRequest.Builder(AclBindingFilter.ANY)
 
         case ApiKeys.CREATE_ACLS =>
-          new CreateAclsRequest.Builder(Collections.singletonList(new AclCreation(new AclBinding(
-            new ResourcePattern(AdminResourceType.TOPIC, "mytopic", PatternType.LITERAL),
-            new AccessControlEntry("User:ANONYMOUS", "*", AclOperation.WRITE, AclPermissionType.DENY)))))
-
+          new CreateAclsRequest.Builder(new CreateAclsRequestData().setCreations(Collections.singletonList(
+            new CreateAclsRequestData.AclCreation()
+              .setResourceType(AdminResourceType.TOPIC.code)
+              .setResourceName("mytopic")
+              .setResourcePatternType(PatternType.LITERAL.code)
+              .setPrincipal("User:ANONYMOUS")
+              .setHost("*")
+              .setOperation(AclOperation.WRITE.code)
+              .setPermissionType(AclPermissionType.DENY.code))))
         case ApiKeys.DELETE_ACLS =>
-          new DeleteAclsRequest.Builder(Collections.singletonList(new AclBindingFilter(
-            new ResourcePatternFilter(AdminResourceType.TOPIC, null, PatternType.LITERAL),
-            new AccessControlEntryFilter("User:ANONYMOUS", "*", AclOperation.ANY, AclPermissionType.DENY))))
-
+          new DeleteAclsRequest.Builder(new DeleteAclsRequestData().setFilters(Collections.singletonList(
+            new DeleteAclsRequestData.DeleteAclsFilter()
+              .setResourceTypeFilter(AdminResourceType.TOPIC.code)
+              .setResourceNameFilter(null)
+              .setPatternTypeFilter(PatternType.LITERAL.code)
+              .setPrincipalFilter("User:ANONYMOUS")
+              .setHostFilter("*")
+              .setOperation(AclOperation.ANY.code)
+              .setPermissionType(AclPermissionType.DENY.code))))
         case ApiKeys.DESCRIBE_CONFIGS =>
           new DescribeConfigsRequest.Builder(Collections.singleton(new ConfigResource(ConfigResource.Type.TOPIC, tp.topic)))
 
@@ -438,9 +456,11 @@ class RequestQuotaTest extends BaseRequestTest {
           new DescribeLogDirsRequest.Builder(Collections.singleton(tp))
 
         case ApiKeys.CREATE_PARTITIONS =>
-          new CreatePartitionsRequest.Builder(
-            Collections.singletonMap("topic-2", new CreatePartitionsRequest.PartitionDetails(1)), 0, false
-          )
+          val data = new CreatePartitionsRequestData()
+            .setTimeoutMs(0)
+            .setValidateOnly(false)
+            .setTopics(Collections.singletonList(new CreatePartitionsTopic().setName("topic-2").setCount(1)))
+          new CreatePartitionsRequest.Builder(data)
 
         case ApiKeys.CREATE_DELEGATION_TOKEN =>
           new CreateDelegationTokenRequest.Builder(

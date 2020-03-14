@@ -51,7 +51,6 @@ public class RocksDBMetricsRecorder {
     private final String threadId;
     private TaskId taskId;
     private StreamsMetricsImpl streamsMetrics;
-    private boolean isInitialized = false;
 
     public RocksDBMetricsRecorder(final String metricsScope,
                                   final String threadId,
@@ -71,20 +70,26 @@ public class RocksDBMetricsRecorder {
         return taskId;
     }
 
+    /**
+     * The initialisation of the metrics recorder is idempotent.
+     */
+    public void init(final StreamsMetricsImpl streamsMetrics,
+                     final TaskId taskId) {
+        if (this.taskId != null && !this.taskId.equals(taskId)) {
+            throw new IllegalStateException("Metrics recorder is re-initialised with different task: previous task is " +
+                this.taskId + " whereas current task is " + taskId + ". This is a bug in Kafka Streams.");
+        }
+        if (this.streamsMetrics != null && this.streamsMetrics != streamsMetrics) {
+            throw new IllegalStateException("Metrics recorder is re-initialised with different Streams metrics. "
+                + "This is a bug in Kafka Streams.");
+        }
+        initSensors(streamsMetrics, taskId);
+        this.taskId = taskId;
+        this.streamsMetrics = streamsMetrics;
+    }
+
     public void addStatistics(final String segmentName,
-                              final Statistics statistics,
-                              final StreamsMetricsImpl streamsMetrics,
-                              final TaskId taskId) {
-        if (!isInitialized) {
-            initSensors(streamsMetrics, taskId);
-            this.taskId = taskId;
-            this.streamsMetrics = streamsMetrics;
-            isInitialized = true;
-        }
-        if (this.taskId != taskId) {
-            throw new IllegalStateException("Statistics of store \"" + segmentName + "\" for task " + taskId
-                + " cannot be added to metrics recorder for task " + this.taskId + ". This is a bug in Kafka Streams.");
-        }
+                              final Statistics statistics) {
         if (statisticsToRecord.isEmpty()) {
             logger.debug(
                 "Adding metrics recorder of task {} to metrics recording trigger",

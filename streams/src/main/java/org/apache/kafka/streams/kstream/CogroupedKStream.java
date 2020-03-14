@@ -14,16 +14,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.streams.kstream;
 
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.StoreQueryParameters;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.state.KeyValueStore;
-import org.apache.kafka.streams.state.QueryableStoreType;
 
 /**
  * {@code CogroupedKStream} is an abstraction of multiple <i>grouped</i> record streams of {@link KeyValue} pairs.
@@ -81,7 +80,7 @@ public interface CogroupedKStream<K, VOut> {
      * {@link StreamsConfig#COMMIT_INTERVAL_MS_CONFIG commit intervall}.
      * <p>
      * To query the local {@link KeyValueStore} it must be obtained via
-     * {@link KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}:
+     * {@link KafkaStreams#store(StoreQueryParameters) KafkaStreams#store(...)}:
      * <pre>{@code
      * KafkaStreams streams = ... // some aggregation on value type double
      * String queryableStoreName = "storeName" // the store name should be the name of the store as defined by the Materialized instance
@@ -130,7 +129,7 @@ public interface CogroupedKStream<K, VOut> {
      * {@link StreamsConfig#COMMIT_INTERVAL_MS_CONFIG commit intervall}.
      * <p>
      * To query the local {@link KeyValueStore} it must be obtained via
-     * {@link KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}:
+     * {@link KafkaStreams#store(StoreQueryParameters) KafkaStreams#store(...)}:
      * <pre>{@code
      * KafkaStreams streams = ... // some aggregation on value type double
      * String queryableStoreName = "storeName" // the store name should be the name of the store as defined by the Materialized instance
@@ -180,7 +179,7 @@ public interface CogroupedKStream<K, VOut> {
      * {@link StreamsConfig#COMMIT_INTERVAL_MS_CONFIG commit intervall}.
      * <p>
      * To query the local {@link KeyValueStore} it must be obtained via
-     * {@link KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}:
+     * {@link KafkaStreams#store(StoreQueryParameters) KafkaStreams#store(...)}:
      * <pre>
      * KafkaStreams streams = ... // some aggregation on value type double
      * String queryableStoreName = "storeName" // the store name should be the name of the store as defined by the Materialized instance
@@ -232,7 +231,7 @@ public interface CogroupedKStream<K, VOut> {
      * {@link StreamsConfig#COMMIT_INTERVAL_MS_CONFIG commit intervall}.
      * <p>
      * To query the local {@link KeyValueStore} it must be obtained via
-     * {@link KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}:
+     * {@link KafkaStreams#store(StoreQueryParameters)} KafkaStreams#store(...)}:
      * <pre>
      * KafkaStreams streams = ... // some aggregation on value type double
      * String queryableStoreName = "storeName" // the store name should be the name of the store as defined by the Materialized instance
@@ -266,15 +265,6 @@ public interface CogroupedKStream<K, VOut> {
                               final Materialized<K, VOut, KeyValueStore<Bytes, byte[]>> materialized);
 
     /**
-     * Create a new {@link SessionWindowedCogroupedKStream} instance that can be used to perform session
-     * windowed aggregations.
-     *
-     * @param sessionWindows the specification of the aggregation {@link SessionWindows}
-     * @return an instance of {@link SessionWindowedCogroupedKStream}
-     */
-    SessionWindowedCogroupedKStream<K, VOut> windowedBy(final SessionWindows sessionWindows);
-
-    /**
      * Create a new {@link TimeWindowedCogroupedKStream} instance that can be used to perform windowed
      * aggregations.
      *
@@ -283,4 +273,14 @@ public interface CogroupedKStream<K, VOut> {
      * @return an instance of {@link TimeWindowedCogroupedKStream}
      */
     <W extends Window> TimeWindowedCogroupedKStream<K, VOut> windowedBy(final Windows<W> windows);
+
+    /**
+     * Create a new {@link SessionWindowedCogroupedKStream} instance that can be used to perform session
+     * windowed aggregations.
+     *
+     * @param windows the specification of the aggregation {@link SessionWindows}
+     * @return an instance of {@link SessionWindowedCogroupedKStream}
+     */
+    SessionWindowedCogroupedKStream<K, VOut> windowedBy(final SessionWindows windows);
+
 }

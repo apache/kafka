@@ -54,13 +54,13 @@ public class TopologyTestDriverWrapper extends TopologyTestDriver {
      * @param name the name to search for
      * @return the processor matching the search name
      */
-    public ProcessorNode getProcessor(final String name) {
-        for (final ProcessorNode node : processorTopology.processors()) {
+    public ProcessorNode<?, ?> getProcessor(final String name) {
+        for (final ProcessorNode<?, ?> node : processorTopology.processors()) {
             if (node.name().equals(name)) {
                 return node;
             }
         }
-        for (final ProcessorNode node : globalTopology.processors()) {
+        for (final ProcessorNode<?, ?> node : globalTopology.processors()) {
             if (node.name().equals(name)) {
                 return node;
             }

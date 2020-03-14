@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.streams.processor.internals.assignment;
 
+import static org.apache.kafka.streams.processor.internals.assignment.StreamsAssignmentProtocolVersions.LATEST_SUPPORTED_VERSION;
+
 import org.apache.kafka.streams.errors.TaskAssignmentException;
 import org.apache.kafka.streams.processor.TaskId;
 import org.slf4j.Logger;
@@ -32,7 +34,6 @@ public class LegacySubscriptionInfoSerde {
 
     private static final Logger log = LoggerFactory.getLogger(LegacySubscriptionInfoSerde.class);
 
-    public static final int LATEST_SUPPORTED_VERSION = 5;
     static final int UNKNOWN = -1;
 
     private final int usedVersion;
@@ -95,7 +96,7 @@ public class LegacySubscriptionInfoSerde {
      * @throws TaskAssignmentException if method fails to encode the data
      */
     public ByteBuffer encode() {
-        if (usedVersion == 3 || usedVersion == 4 || usedVersion == 5) {
+        if (usedVersion == 3 || usedVersion == 4 || usedVersion == 5 || usedVersion == 6) {
             final byte[] endPointBytes = prepareUserEndPoint(this.userEndPoint);
 
             final ByteBuffer buf = ByteBuffer.allocate(
@@ -171,7 +172,7 @@ public class LegacySubscriptionInfoSerde {
     }
 
     public static void encodeUserEndPoint(final ByteBuffer buf,
-                                             final byte[] endPointBytes) {
+                                          final byte[] endPointBytes) {
         if (endPointBytes != null) {
             buf.putInt(endPointBytes.length);
             buf.put(endPointBytes);
@@ -195,7 +196,7 @@ public class LegacySubscriptionInfoSerde {
         data.rewind();
 
         final int usedVersion = data.getInt();
-        if (usedVersion == 4 || usedVersion == 3) {
+        if (usedVersion > 2 && usedVersion < 7) {
             final int latestSupportedVersion = data.getInt();
             final UUID processId = decodeProcessId(data);
             final Set<TaskId> prevTasks = decodeTasks(data);

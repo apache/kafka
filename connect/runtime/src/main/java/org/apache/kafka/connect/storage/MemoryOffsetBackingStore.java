@@ -19,6 +19,7 @@ package org.apache.kafka.connect.storage;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.util.Callback;
+import org.apache.kafka.common.utils.ThreadUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -53,7 +54,8 @@ public class MemoryOffsetBackingStore implements OffsetBackingStore {
 
     @Override
     public void start() {
-        executor = Executors.newSingleThreadExecutor();
+        executor = Executors.newFixedThreadPool(1, ThreadUtils.createThreadFactory(
+                this.getClass().getSimpleName() + "-%d", false));
     }
 
     @Override

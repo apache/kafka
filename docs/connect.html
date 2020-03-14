@@ -239,6 +239,8 @@
         <li><code>POST /connectors/{name}/restart</code> - restart a connector (typically because it has failed)</li>
         <li><code>POST /connectors/{name}/tasks/{taskId}/restart</code> - restart an individual task (typically because it has failed)</li>
         <li><code>DELETE /connectors/{name}</code> - delete a connector, halting all tasks and deleting its configuration</li>
+        <li><code>GET /connectors/{name}/topics</code> - get the set of topics that a specific connector is using since the connector was created or since a request to reset its set of active topics was issued</li>
+        <li><code>PUT /connectors/{name}/topics/reset</code> - send a request to empty the set of active topics of a connector</li>
     </ul>
 
     <p>Kafka Connect also provides a REST API for getting information about connector plugins:</p>
@@ -574,6 +576,10 @@
 
     <p>
     In most cases, connector and task states will match, though they may be different for short periods of time when changes are occurring or if tasks have failed. For example, when a connector is first started, there may be a noticeable delay before the connector and its tasks have all transitioned to the RUNNING state. States will also diverge when tasks fail since Connect does not automatically restart failed tasks. To restart a connector/task manually, you can use the restart APIs listed above. Note that if you try to restart a task while a rebalance is taking place, Connect will return a 409 (Conflict) status code. You can retry after the rebalance completes, but it might not be necessary since rebalances effectively restart all the connectors and tasks in the cluster.
+    </p>
+
+    <p>
+    Starting with 2.5.0, Kafka Connect uses the <code>status.storage.topic</code> to also store information related to the topics that each connector is using. Connect Workers use these per-connector topic status updates to respond to requests to the REST endpoint <code>GET /connectors/{name}/topics</code> by returning the set of topic names that a connector is using. A request to the REST endpoint <code>PUT /connectors/{name}/topics/reset</code> resets the set of active topics for a connector and allows a new set to be populated, based on the connector's latest pattern of topic usage. Upon connector deletion, the set of the connector's active topics is also deleted. Topic tracking is enabled by default but can be disabled by setting <code>topic.tracking.enable=false</code>. If you want to disallow requests to reset the active topics of connectors during runtime, set the Worker property <code>topic.tracking.allow.reset=false</code>.
     </p>
 
     <p>

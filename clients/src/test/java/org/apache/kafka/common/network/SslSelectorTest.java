@@ -44,6 +44,7 @@ import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
 import java.security.Security;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -73,10 +74,11 @@ public class SslSelectorTest extends SelectorTest {
         this.server.start();
         this.time = new MockTime();
         sslClientConfigs = TestSslUtils.createSslConfig(false, false, Mode.CLIENT, trustStoreFile, "client");
-        this.channelBuilder = new SslChannelBuilder(Mode.CLIENT, null, false);
+        LogContext logContext = new LogContext();
+        this.channelBuilder = new SslChannelBuilder(Mode.CLIENT, null, false, logContext);
         this.channelBuilder.configure(sslClientConfigs);
         this.metrics = new Metrics();
-        this.selector = new Selector(5000, metrics, time, "MetricGroup", channelBuilder, new LogContext());
+        this.selector = new Selector(5000, metrics, time, "MetricGroup", channelBuilder, logContext);
     }
 
     @After
@@ -89,6 +91,11 @@ public class SslSelectorTest extends SelectorTest {
     @Override
     public SecurityProtocol securityProtocol() {
         return SecurityProtocol.PLAINTEXT;
+    }
+
+    @Override
+    protected Map<String, Object> clientConfigs() {
+        return sslClientConfigs;
     }
 
     @Test
@@ -283,7 +290,7 @@ public class SslSelectorTest extends SelectorTest {
                 .tlsProtocol(tlsProtocol)
                 .createNewTrustStore(trustStoreFile)
                 .build();
-        channelBuilder = new SslChannelBuilder(Mode.SERVER, null, false);
+        channelBuilder = new SslChannelBuilder(Mode.SERVER, null, false, new LogContext());
         channelBuilder.configure(sslServerConfigs);
         selector = new Selector(NetworkReceive.UNLIMITED, 5000, metrics, time, "MetricGroup",
                 new HashMap<String, String>(), true, false, channelBuilder, pool, new LogContext());
@@ -314,11 +321,11 @@ public class SslSelectorTest extends SelectorTest {
             while (System.currentTimeMillis() < deadline) {
                 selector.poll(10);
 
-                List<NetworkReceive> completed = selector.completedReceives();
+                Collection<NetworkReceive> completed = selector.completedReceives();
                 if (firstReceive == null) {
                     if (!completed.isEmpty()) {
                         assertEquals("expecting a single request", 1, completed.size());
-                        firstReceive = completed.get(0);
+                        firstReceive = completed.iterator().next();
                         assertTrue(selector.isMadeReadProgressLastPoll());
                         assertEquals(0, pool.availableMemory());
                     }
@@ -342,7 +349,7 @@ public class SslSelectorTest extends SelectorTest {
             firstReceive.close();
             assertEquals(900, pool.availableMemory()); //memory has been released back to pool
 
-            List<NetworkReceive> completed = Collections.emptyList();
+            Collection<NetworkReceive> completed = Collections.emptyList();
             deadline = System.currentTimeMillis() + 5000;
             while (System.currentTimeMillis() < deadline && completed.isEmpty()) {
                 selector.poll(1000);
@@ -370,7 +377,7 @@ public class SslSelectorTest extends SelectorTest {
     private static class TestSslChannelBuilder extends SslChannelBuilder {
 
         public TestSslChannelBuilder(Mode mode) {
-            super(mode, null, false);
+            super(mode, null, false, new LogContext());
         }
 
         @Override

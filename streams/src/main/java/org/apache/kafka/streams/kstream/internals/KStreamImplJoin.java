@@ -77,8 +77,8 @@ class KStreamImplJoin {
         final String joinMergeName = renamed.suffixWithOrElseGet(
             "-merge", builder, KStreamImpl.MERGE_NAME);
 
-        final StreamsGraphNode thisStreamsGraphNode = ((AbstractStream) lhs).streamsGraphNode;
-        final StreamsGraphNode otherStreamsGraphNode = ((AbstractStream) other).streamsGraphNode;
+        final StreamsGraphNode thisStreamsGraphNode = ((AbstractStream<?, ?>) lhs).streamsGraphNode;
+        final StreamsGraphNode otherStreamsGraphNode = ((AbstractStream<?, ?>) other).streamsGraphNode;
 
         final StoreBuilder<WindowStore<K1, V1>> thisWindowStore;
         final StoreBuilder<WindowStore<K1, V2>> otherWindowStore;
@@ -155,8 +155,8 @@ class KStreamImplJoin {
 
         builder.addGraphNode(Arrays.asList(thisStreamsGraphNode, otherStreamsGraphNode), joinGraphNode);
 
-        final Set<String> allSourceNodes = new HashSet<>(((KStreamImpl<K1, V1>) lhs).sourceNodes);
-        allSourceNodes.addAll(((KStreamImpl<K1, V2>) other).sourceNodes);
+        final Set<String> allSourceNodes = new HashSet<>(((KStreamImpl<K1, V1>) lhs).subTopologySourceNodes);
+        allSourceNodes.addAll(((KStreamImpl<K1, V2>) other).subTopologySourceNodes);
 
         // do not have serde for joined result;
         // also for key serde we do not inherit from either since we cannot tell if these two serdes are different
@@ -184,7 +184,6 @@ class KStreamImplJoin {
         }
     }
 
-    @SuppressWarnings("deprecation") // continuing to support Windows#maintainMs/segmentInterval in fallback mode
     private static <K, V> StoreBuilder<WindowStore<K, V>> joinWindowStoreBuilder(final String storeName,
                                                                                  final JoinWindows windows,
                                                                                  final Serde<K> keySerde,
@@ -201,7 +200,6 @@ class KStreamImplJoin {
         );
     }
 
-    @SuppressWarnings("deprecation") // continuing to support Windows#maintainMs/segmentInterval in fallback mode
     private static <K, V> StoreBuilder<WindowStore<K, V>> joinWindowStoreBuilderFromSupplier(final WindowBytesStoreSupplier storeSupplier,
                                                                                              final Serde<K> keySerde,
                                                                                              final Serde<V> valueSerde) {

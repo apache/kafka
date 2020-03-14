@@ -21,10 +21,10 @@ import java.nio.ByteBuffer
 import java.util.Optional
 import java.util.concurrent.atomic.AtomicInteger
 
-import com.yammer.metrics.Metrics
 import kafka.cluster.BrokerEndPoint
 import kafka.log.LogAppendInfo
 import kafka.message.NoCompressionCodec
+import kafka.metrics.KafkaYammerMetrics
 import kafka.server.AbstractFetcherThread.ReplicaFetch
 import kafka.server.AbstractFetcherThread.ResultWithPartitions
 import kafka.utils.TestUtils
@@ -56,7 +56,7 @@ class AbstractFetcherThreadTest {
     TestUtils.clearYammerMetrics()
   }
 
-  private def allMetricsNames: Set[String] = Metrics.defaultRegistry().allMetrics().asScala.keySet.map(_.getName)
+  private def allMetricsNames: Set[String] = KafkaYammerMetrics.defaultRegistry().allMetrics().asScala.keySet.map(_.getName)
 
   private def mkBatch(baseOffset: Long, leaderEpoch: Int, records: SimpleRecord*): RecordBatch = {
     MemoryRecords.withRecords(baseOffset, CompressionType.NONE, leaderEpoch, records: _*)
@@ -89,7 +89,7 @@ class AbstractFetcherThreadTest {
     fetcher.shutdown()
 
     // verify that all the fetcher metrics are removed and only brokerTopicStats left
-    val metricNames = Metrics.defaultRegistry().allMetrics().asScala.keySet.map(_.getName).toSet
+    val metricNames = KafkaYammerMetrics.defaultRegistry().allMetrics().asScala.keySet.map(_.getName).toSet
     assertTrue(metricNames.intersect(fetcherMetrics).isEmpty)
     assertEquals(brokerTopicStatsMetrics, metricNames.intersect(brokerTopicStatsMetrics))
   }

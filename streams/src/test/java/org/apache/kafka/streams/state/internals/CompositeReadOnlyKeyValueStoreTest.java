@@ -18,13 +18,16 @@ package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.StoreQueryParameters;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
-import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
-import org.apache.kafka.streams.state.QueryableStoreTypes;
-import org.apache.kafka.streams.state.StateSerdes;
+import org.apache.kafka.streams.state.QueryableStoreType;
 import org.apache.kafka.streams.state.Stores;
+import org.apache.kafka.streams.state.StateSerdes;
+import org.apache.kafka.streams.state.KeyValueIterator;
+import org.apache.kafka.streams.state.QueryableStoreTypes;
+import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.NoOpReadOnlyStore;
 import org.apache.kafka.test.MockRecordCollector;
@@ -32,11 +35,11 @@ import org.apache.kafka.test.StateStoreProviderStub;
 import org.junit.Before;
 import org.junit.Test;
 
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 import java.util.NoSuchElementException;
 
+import static java.util.Arrays.asList;
+import static java.util.Collections.singletonList;
 import static org.apache.kafka.test.StreamsTestUtils.toList;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
@@ -61,11 +64,12 @@ public class CompositeReadOnlyKeyValueStoreTest {
         stubProviderOne.addStore(storeName, stubOneUnderlying);
         otherUnderlyingStore = newStoreInstance();
         stubProviderOne.addStore("other-store", otherUnderlyingStore);
-
+        final QueryableStoreType<ReadOnlyKeyValueStore<Object, Object>> queryableStoreType = QueryableStoreTypes.keyValueStore();
         theStore = new CompositeReadOnlyKeyValueStore<>(
-            new WrappingStoreProvider(Arrays.<StateStoreProvider>asList(stubProviderOne, stubProviderTwo)),
-                                        QueryableStoreTypes.<String, String>keyValueStore(),
-                                        storeName);
+            new WrappingStoreProvider(asList(stubProviderOne, stubProviderTwo), StoreQueryParameters.fromNameAndType(storeName, QueryableStoreTypes.keyValueStore())),
+            QueryableStoreTypes.keyValueStore(),
+            storeName
+        );
     }
 
     private KeyValueStore<String, String> newStoreInstance() {
@@ -293,8 +297,12 @@ public class CompositeReadOnlyKeyValueStoreTest {
     }
 
     private CompositeReadOnlyKeyValueStore<Object, Object> rebalancing() {
-        return new CompositeReadOnlyKeyValueStore<>(new WrappingStoreProvider(Collections.<StateStoreProvider>singletonList(new StateStoreProviderStub(true))),
-                QueryableStoreTypes.keyValueStore(), storeName);
+        final QueryableStoreType<ReadOnlyKeyValueStore<Object, Object>> queryableStoreType = QueryableStoreTypes.keyValueStore();
+        return new CompositeReadOnlyKeyValueStore<>(
+            new WrappingStoreProvider(singletonList(new StateStoreProviderStub(true)), StoreQueryParameters.fromNameAndType(storeName, QueryableStoreTypes.keyValueStore())),
+            QueryableStoreTypes.keyValueStore(),
+            storeName
+        );
     }
 
 }

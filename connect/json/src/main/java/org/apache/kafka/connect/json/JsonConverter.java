@@ -708,7 +708,7 @@ public class JsonConverter implements Converter, HeaderConverter {
         final Schema.Type schemaType;
         if (schema != null) {
             schemaType = schema.type();
-            if (jsonValue.isNull()) {
+            if (jsonValue == null || jsonValue.isNull()) {
                 if (schema.defaultValue() != null)
                     return schema.defaultValue(); // any logical type conversions should already have been applied
                 if (schema.isOptional())
@@ -750,7 +750,7 @@ public class JsonConverter implements Converter, HeaderConverter {
 
         final JsonToConnectTypeConverter typeConverter = TO_CONNECT_CONVERTERS.get(schemaType);
         if (typeConverter == null)
-            throw new DataException("Unknown schema type: " + String.valueOf(schemaType));
+            throw new DataException("Unknown schema type: " + schemaType);
 
         if (schema != null && schema.name() != null) {
             LogicalTypeConverter logicalConverter = LOGICAL_CONVERTERS.get(schema.name());

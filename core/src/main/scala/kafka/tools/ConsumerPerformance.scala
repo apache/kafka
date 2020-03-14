@@ -202,9 +202,14 @@ object ConsumerPerformance extends LazyLogging {
   }
 
   class ConsumerPerfConfig(args: Array[String]) extends PerfConfig(args) {
-    val bootstrapServersOpt = parser.accepts("broker-list", "REQUIRED: The server(s) to connect to.")
-      .withRequiredArg()
-      .describedAs("host")
+    val brokerListOpt = parser.accepts("broker-list", "DEPRECATED, use --bootstrap-server instead; ignored if --bootstrap-server is specified.  The broker list string in the form HOST1:PORT1,HOST2:PORT2.")
+      .withRequiredArg
+      .describedAs("broker-list")
+      .ofType(classOf[String])
+    val bootstrapServerOpt = parser.accepts("bootstrap-server", "REQUIRED unless --broker-list(deprecated) is specified. The server(s) to connect to.")
+      .requiredUnless("broker-list")
+      .withRequiredArg
+      .describedAs("server to connect to")
       .ofType(classOf[String])
     val topicOpt = parser.accepts("topic", "REQUIRED: The topic to consume from.")
       .withRequiredArg
@@ -251,10 +256,9 @@ object ConsumerPerformance extends LazyLogging {
       .defaultsTo(10000)
 
     options = parser.parse(args: _*)
-
     CommandLineUtils.printHelpAndExitIfNeeded(this, "This tool helps in performance test for the full zookeeper consumer")
 
-    CommandLineUtils.checkRequiredArgs(parser, options, topicOpt, numMessagesOpt, bootstrapServersOpt)
+    CommandLineUtils.checkRequiredArgs(parser, options, topicOpt, numMessagesOpt)
 
     val printMetrics = options.has(printMetricsOpt)
 
@@ -264,7 +268,9 @@ object ConsumerPerformance extends LazyLogging {
       new Properties
 
     import org.apache.kafka.clients.consumer.ConsumerConfig
-    props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, options.valueOf(bootstrapServersOpt))
+
+    val brokerHostsAndPorts = options.valueOf(if (options.has(bootstrapServerOpt)) bootstrapServerOpt else brokerListOpt)
+    props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerHostsAndPorts)
     props.put(ConsumerConfig.GROUP_ID_CONFIG, options.valueOf(groupIdOpt))
     props.put(ConsumerConfig.RECEIVE_BUFFER_CONFIG, options.valueOf(socketBufferSizeOpt).toString)
     props.put(ConsumerConfig.MAX_PARTITION_FETCH_BYTES_CONFIG, options.valueOf(fetchSizeOpt).toString)
@@ -284,4 +290,5 @@ object ConsumerPerformance extends LazyLogging {
     val hideHeader = options.has(hideHeaderOpt)
     val recordFetchTimeoutMs = options.valueOf(recordFetchTimeoutOpt).longValue()
   }
+
 }

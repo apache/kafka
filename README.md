@@ -48,6 +48,13 @@ Change the log4j setting in either `clients/src/test/resources/log4j.properties`
 
     ./gradlew clients:test --tests RequestResponseTest
 
+### Specifying test retries ###
+By default, each failed test is retried once up to a maximum of five retries per test run. Tests are retried at the end of the test task. Adjust these parameters in the following way:
+
+    ./gradlew test -PmaxTestRetries=1 -PmaxTestRetryFailures=5
+    
+See [Test Retry Gradle Plugin](https://github.com/gradle/test-retry-gradle-plugin) for more details.
+
 ### Generating test coverage reports ###
 Generate coverage reports for the whole project:
 
@@ -69,7 +76,7 @@ The release file can be found inside `./core/build/distributions/`.
 ### Cleaning the build ###
     ./gradlew clean
 
-### Running a task with one of the Scala versions available (2.11.x, 2.12.x or 2.13.x) ###
+### Running a task with one of the Scala versions available (2.12.x or 2.13.x) ###
 *Note that if building the jars with a version other than 2.12.x, you need to set the `SCALA_VERSION` variable or change it in `bin/kafka-run-class.sh` to run the quick start.*
 
 You can pass either the major version (eg 2.12) or the full version (eg 2.12.7):
@@ -191,6 +198,8 @@ The following options should be set with a `-P` switch, for example `./gradlew -
 * `skipSigning`: skips signing of artifacts.
 * `testLoggingEvents`: unit test events to be logged, separated by comma. For example `./gradlew -PtestLoggingEvents=started,passed,skipped,failed test`.
 * `xmlSpotBugsReport`: enable XML reports for spotBugs. This also disables HTML reports as only one can be enabled at a time.
+* `maxTestRetries`: the maximum number of retries for a failing test case.
+* `maxTestRetryFailures`: maximum number of test failures before retrying is disabled for subsequent tests.
 
 ### Dependency Analysis ###
 

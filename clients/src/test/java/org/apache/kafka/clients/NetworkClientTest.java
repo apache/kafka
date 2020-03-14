@@ -397,7 +397,7 @@ public class NetworkClientTest {
 
         // ApiVersionsRequest has been sent
         assertEquals(1, selector.completedSends().size());
-        
+
         buffer = selector.completedSendBuffers().get(0).buffer();
         header = parseHeader(buffer);
         assertEquals(ApiKeys.API_VERSIONS, header.apiKey());
@@ -608,7 +608,7 @@ public class NetworkClientTest {
 
         MetadataResponse metadataResponse = TestUtils.metadataUpdateWith(2, Collections.emptyMap());
         Metadata metadata = new Metadata(refreshBackoffMs, 5000, new LogContext(), new ClusterResourceListeners());
-        metadata.update(metadataResponse, time.milliseconds());
+        metadata.updateWithCurrentRequestVersion(metadataResponse, false, time.milliseconds());
 
         Cluster cluster = metadata.fetch();
         Node node1 = cluster.nodes().get(0);

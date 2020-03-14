@@ -24,8 +24,6 @@ import org.apache.kafka.connect.runtime.ConnectMetrics;
 import org.apache.kafka.connect.runtime.ConnectMetricsRegistry;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 
-import java.util.ArrayList;
-
 /**
  * Contains various sensors used for monitoring errors.
  */
@@ -44,13 +42,6 @@ public class ErrorHandlingMetrics {
     private final Sensor dlqProduceRequests;
     private final Sensor dlqProduceFailures;
     private long lastErrorTime = 0;
-
-    // for testing only
-    public ErrorHandlingMetrics() {
-        this(new ConnectorTaskId("noop-connector", -1),
-                new ConnectMetrics("noop-worker", new SystemTime(), 2, 3000, Sensor.RecordingLevel.INFO.toString(),
-                        new ArrayList<>()));
-    }
 
     public ErrorHandlingMetrics(ConnectorTaskId id, ConnectMetrics connectMetrics) {
 

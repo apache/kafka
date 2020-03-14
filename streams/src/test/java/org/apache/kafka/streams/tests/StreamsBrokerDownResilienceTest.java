@@ -22,6 +22,7 @@ import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.KafkaStreams;
@@ -114,12 +115,11 @@ public class StreamsBrokerDownResilienceTest {
         System.out.println("Start Kafka Streams");
         streams.start();
 
-        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+        Exit.addShutdownHook("streams-shutdown-hook", () -> {
             streams.close(Duration.ofSeconds(30));
             System.out.println("Complete shutdown of streams resilience test app now");
             System.out.flush();
-        }
-        ));
+        });
     }
 
     private static boolean confirmCorrectConfigs(final Properties properties) {
