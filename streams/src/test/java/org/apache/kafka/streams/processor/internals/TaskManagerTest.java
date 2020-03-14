@@ -222,7 +222,7 @@ public class TaskManagerTest {
         assertTrue((new File(taskFolders[3], StateManagerUtil.CHECKPOINT_FILE_NAME)).createNewFile());
 
         expect(activeTaskCreator.stateDirectory()).andReturn(stateDirectory).once();
-        expect(stateDirectory.listTaskDirectories()).andReturn(taskFolders).once();
+        expect(stateDirectory.listNonEmptyTaskDirectories()).andReturn(taskFolders).once();
 
         EasyMock.replay(activeTaskCreator, stateDirectory);
 
@@ -672,7 +672,6 @@ public class TaskManagerTest {
         expect(activeTaskCreator.createTasks(EasyMock.anyObject(),
                                                   EasyMock.eq(taskId0Assignment)))
                 .andReturn(Collections.singletonList(streamTask));
-
     }
 
     private void mockTopologyBuilder() {
