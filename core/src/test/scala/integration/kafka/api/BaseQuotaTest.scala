@@ -15,6 +15,7 @@
 package kafka.api
 
 import java.time.Duration
+import java.util.concurrent.TimeUnit
 import java.util.{Collections, HashMap, Properties}
 
 import kafka.api.QuotaTestClients._
@@ -83,7 +84,7 @@ abstract class BaseQuotaTest extends IntegrationTestHarness {
     quotaTestClients.verifyProduceThrottle(expectThrottle = true)
 
     // Consumer should read in a bursty manner and get throttled immediately
-    quotaTestClients.consumeUntilThrottled(produced)
+    assertTrue("Should have consumed at least one record", quotaTestClients.consumeUntilThrottled(produced) > 0)
     quotaTestClients.verifyConsumeThrottle(expectThrottle = true)
   }
 
@@ -104,6 +105,23 @@ abstract class BaseQuotaTest extends IntegrationTestHarness {
     // The "client" consumer does not get throttled.
     assertEquals(numRecords, quotaTestClients.consumeUntilThrottled(numRecords))
     quotaTestClients.verifyConsumeThrottle(expectThrottle = false)
+  }
+
+  @Test
+  def testProducerConsumerOverrideLowerQuota(): Unit = {
+    // consumer quota is set such that consumer quota * default quota window (10 seconds) is less than
+    // MAX_PARTITION_FETCH_BYTES_CONFIG, so that we can test consumer ability to fetch in this case
+    // In this case, 250 * 10 < 4096
+    quotaTestClients.overrideQuotas(2000, 250, Int.MaxValue)
+    quotaTestClients.waitForQuotaUpdate(2000, 250, Int.MaxValue)
+
+    val numRecords = 1000
+    val produced = quotaTestClients.produceUntilThrottled(numRecords)
+    quotaTestClients.verifyProduceThrottle(expectThrottle = true)
+
+    // Consumer should be able to consume at least one record, even when throttled
+    assertTrue("Should have consumed at least one record", quotaTestClients.consumeUntilThrottled(produced) > 0)
+    quotaTestClients.verifyConsumeThrottle(expectThrottle = true)
   }
 
   @Test
@@ -194,19 +212,23 @@ abstract class QuotaTestClients(topic: String,
   }
 
   def consumeUntilThrottled(maxRecords: Int, waitForRequestCompletion: Boolean = true): Int = {
+    val timeoutMs = TimeUnit.MINUTES.toMillis(1)
+
     consumer.subscribe(Collections.singleton(topic))
     var numConsumed = 0
     var throttled = false
+    val startMs = System.currentTimeMillis
     do {
       numConsumed += consumer.poll(Duration.ofMillis(100L)).count
       val metric = throttleMetric(QuotaType.Fetch, consumerClientId)
       throttled = metric != null && metricValue(metric) > 0
-    }  while (numConsumed < maxRecords && !throttled)
+    }  while (numConsumed < maxRecords && !throttled && System.currentTimeMillis < startMs + timeoutMs)
 
     // If throttled, wait for the records from the last fetch to be received
     if (throttled && numConsumed < maxRecords && waitForRequestCompletion) {
       val minRecords = numConsumed + 1
-      while (numConsumed < minRecords)
+      val startMs = System.currentTimeMillis
+      while (numConsumed < minRecords && System.currentTimeMillis < startMs + timeoutMs)
         numConsumed += consumer.poll(Duration.ofMillis(100L)).count
     }
     numConsumed
