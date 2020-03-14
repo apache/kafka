@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import java.io.File;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.MockConsumer;
@@ -116,10 +117,11 @@ public class ActiveTaskCreatorTest {
         expect(config.getInt(anyString())).andReturn(0);
         expect(config.getProducerConfigs(anyString())).andReturn(new HashMap<>());
         expect(builder.buildSubtopology(taskId.topicGroupId)).andReturn(topology);
+        expect(stateDirectory.directoryForTask(taskId)).andReturn(new File(taskId.toString()));
         expect(topology.storeToChangelogTopic()).andReturn(Collections.emptyMap());
         expect(topology.source("topic")).andReturn(mock(SourceNode.class));
         expect(topology.globalStateStores()).andReturn(Collections.emptyList());
-        replay(config, builder, topology);
+        replay(config, builder, stateDirectory, topology);
 
         mockClientSupplier.setApplicationIdForProducer("appId");
 

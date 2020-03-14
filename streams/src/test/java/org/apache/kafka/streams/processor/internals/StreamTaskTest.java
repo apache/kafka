@@ -1264,7 +1264,7 @@ public class StreamTaskTest {
 
         task.commit();
 
-        final Map<TopicPartition, Long> map = task.purgableOffsets();
+        final Map<TopicPartition, Long> map = task.purgeableOffsets();
 
         assertThat(map, equalTo(Collections.singletonMap(repartition, 11L)));
     }
