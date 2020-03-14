@@ -127,7 +127,7 @@ public class TaskManager {
     void handleRebalanceStart(final Set<String> subscribedTopics) {
         builder.addSubscribedTopicsFromMetadata(subscribedTopics, logPrefix);
 
-        tryToLockAllTaskDirectories();
+        tryToLockAllNonEmptyTaskDirectories();
 
         rebalanceInProgress = true;
     }
@@ -379,7 +379,7 @@ public class TaskManager {
 
     /**
      * Compute the offset total summed across all stores in a task. Includes offset sum for any tasks we own the
-     * lock for, which includes assigned and unassigned tasks we locked in {@link #tryToLockAllTaskDirectories()}
+     * lock for, which includes assigned and unassigned tasks we locked in {@link #tryToLockAllNonEmptyTaskDirectories()}
      *
      * @return Map from task id to its total offset summed across all state stores
      */
@@ -410,13 +410,13 @@ public class TaskManager {
     }
 
     /**
-     * Makes a weak attempt to lock all task directories in the state dir. We are responsible for computing and
+     * Makes a weak attempt to lock all non-empty task directories in the state dir. We are responsible for computing and
      * reporting the offset sum for any unassigned tasks we obtain the lock for in the upcoming rebalance. Tasks
      * that we locked but didn't own will be released at the end of the rebalance (unless of course we were
      * assigned the task as a result of the rebalance). This method should be idempotent.
      */
-    private void tryToLockAllTaskDirectories() {
-        for (final File dir : stateDirectory.listTaskDirectories()) {
+    private void tryToLockAllNonEmptyTaskDirectories() {
+        for (final File dir : stateDirectory.listNonEmptyTaskDirectories()) {
             try {
                 final TaskId id = TaskId.parse(dir.getName());
                 try {
@@ -438,7 +438,7 @@ public class TaskManager {
 
     /**
      * We must release the lock for any unassigned tasks that we temporarily locked in preparation for a
-     * rebalance in {@link #tryToLockAllTaskDirectories()}.
+     * rebalance in {@link #tryToLockAllNonEmptyTaskDirectories()}.
      */
     private void releaseLockedUnassignedTaskDirectories() {
         final AtomicReference<RuntimeException> firstException = new AtomicReference<>(null);

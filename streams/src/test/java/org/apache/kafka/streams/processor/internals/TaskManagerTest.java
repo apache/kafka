@@ -168,7 +168,7 @@ public class TaskManagerTest {
 
     @Test
     public void shouldNotLockAnythingIfStateDirIsEmpty() {
-        expect(stateDirectory.listTaskDirectories()).andReturn(new File[0]).once();
+        expect(stateDirectory.listNonEmptyTaskDirectories()).andReturn(new File[0]).once();
 
         replay(stateDirectory);
         taskManager.handleRebalanceStart(singleton("topic"));
@@ -999,7 +999,7 @@ public class TaskManagerTest {
         expect(consumer.assignment()).andReturn(assignment);
         consumer.pause(assignment);
         expectLastCall();
-        expect(stateDirectory.listTaskDirectories()).andReturn(new File[0]);
+        expect(stateDirectory.listNonEmptyTaskDirectories()).andReturn(new File[0]);
         replay(consumer, stateDirectory);
         assertThat(taskManager.isRebalanceInProgress(), is(false));
         taskManager.handleRebalanceStart(emptySet());
@@ -1665,7 +1665,7 @@ public class TaskManagerTest {
         for (int i = 0; i < names.length; ++i) {
             taskFolders[i] = testFolder.newFolder(names[i]);
         }
-        expect(stateDirectory.listTaskDirectories()).andReturn(taskFolders).once();
+        expect(stateDirectory.listNonEmptyTaskDirectories()).andReturn(taskFolders).once();
     }
 
     private void writeCheckpointFile(final TaskId task, final Map<TopicPartition, Long> offsets) throws IOException {

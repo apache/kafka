@@ -249,18 +249,29 @@ public class StateDirectoryTest {
     public void shouldCleanUpTaskStateDirectoriesThatAreNotCurrentlyLocked() throws Exception {
         final TaskId task0 = new TaskId(0, 0);
         final TaskId task1 = new TaskId(1, 0);
+        final TaskId task2 = new TaskId(2, 0);
         try {
+            assertTrue(new File(directory.directoryForTask(task0), "store").mkdir());
+            assertTrue(new File(directory.directoryForTask(task1), "store").mkdir());
+            assertTrue(new File(directory.directoryForTask(task2), "store").mkdir());
+
             directory.lock(task0);
             directory.lock(task1);
-            directory.directoryForTask(new TaskId(2, 0));
 
-            List<File> files = Arrays.asList(Objects.requireNonNull(appDir.listFiles()));
+            List<File> files = Arrays.asList(Objects.requireNonNull(directory.listAllTaskDirectories()));
             assertEquals(3, files.size());
 
-            time.sleep(1000);
+
+            files = Arrays.asList(Objects.requireNonNull(directory.listNonEmptyTaskDirectories()));
+            assertEquals(3, files.size());
+
+            time.sleep(5000);
             directory.cleanRemovedTasks(0);
 
-            files = Arrays.asList(Objects.requireNonNull(appDir.listFiles()));
+            files = Arrays.asList(Objects.requireNonNull(directory.listAllTaskDirectories()));
+            assertEquals(3, files.size());
+
+            files = Arrays.asList(Objects.requireNonNull(directory.listNonEmptyTaskDirectories()));
             assertEquals(2, files.size());
             assertTrue(files.contains(new File(appDir, task0.toString())));
             assertTrue(files.contains(new File(appDir, task1.toString())));
@@ -273,13 +284,19 @@ public class StateDirectoryTest {
     @Test
     public void shouldCleanupStateDirectoriesWhenLastModifiedIsLessThanNowMinusCleanupDelay() {
         final File dir = directory.directoryForTask(new TaskId(2, 0));
+        assertTrue(new File(dir, "store").mkdir());
+
         final int cleanupDelayMs = 60000;
         directory.cleanRemovedTasks(cleanupDelayMs);
         assertTrue(dir.exists());
+        assertEquals(1, directory.listAllTaskDirectories().length);
+        assertEquals(1, directory.listNonEmptyTaskDirectories().length);
 
         time.sleep(cleanupDelayMs + 1000);
         directory.cleanRemovedTasks(cleanupDelayMs);
-        assertFalse(dir.exists());
+        assertTrue(dir.exists());
+        assertEquals(1, directory.listAllTaskDirectories().length);
+        assertEquals(0, directory.listNonEmptyTaskDirectories().length);
     }
 
     @Test
@@ -290,15 +307,21 @@ public class StateDirectoryTest {
     }
 
     @Test
-    public void shouldListAllTaskDirectories() {
+    public void shouldOnlyListNonEmptyTaskDirectories() {
         TestUtils.tempDirectory(stateDir.toPath(), "foo");
         final File taskDir1 = directory.directoryForTask(new TaskId(0, 0));
         final File taskDir2 = directory.directoryForTask(new TaskId(0, 1));
 
-        final List<File> dirs = Arrays.asList(directory.listTaskDirectories());
-        assertEquals(2, dirs.size());
-        assertTrue(dirs.contains(taskDir1));
-        assertTrue(dirs.contains(taskDir2));
+        final File storeDir = new File(taskDir1, "store");
+        assertTrue(storeDir.mkdir());
+
+        assertEquals(Arrays.asList(taskDir1, taskDir2), Arrays.asList(directory.listAllTaskDirectories()));
+        assertEquals(Collections.singletonList(taskDir1), Arrays.asList(directory.listNonEmptyTaskDirectories()));
+
+        directory.cleanRemovedTasks(0L);
+
+        assertEquals(Arrays.asList(taskDir1, taskDir2), Arrays.asList(directory.listAllTaskDirectories()));
+        assertEquals(Collections.emptyList(), Arrays.asList(directory.listNonEmptyTaskDirectories()));
     }
 
     @Test
