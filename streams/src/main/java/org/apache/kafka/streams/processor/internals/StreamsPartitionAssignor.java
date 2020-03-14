@@ -110,20 +110,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         ClientMetadata(final String endPoint) {
 
             // get the host info if possible
-            if (endPoint != null) {
-                final String host = getHost(endPoint);
-                final Integer port = getPort(endPoint);
-
-                if (host == null || port == null) {
-                    throw new ConfigException(
-                        String.format("Error parsing host address %s. Expected format host:port.", endPoint)
-                    );
-                }
-
-                hostInfo = new HostInfo(host, port);
-            } else {
-                hostInfo = null;
-            }
+            hostInfo = endPoint != null ? HostInfo.buildFromEndpoint(endPoint) : null;
 
             // initialize the consumer memberIds
             consumers = new HashSet<>();
@@ -1263,6 +1250,8 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                 partitionsByHost = info.partitionsByHost();
                 standbyPartitionsByHost = Collections.emptyMap();
                 topicToPartitionInfo = getTopicPartitionInfo(partitionsByHost);
+
+                verifyHostInfo(partitionsByHost.keySet());
                 break;
             case 6:
             case 7:
@@ -1272,6 +1261,8 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                 partitionsByHost = info.partitionsByHost();
                 standbyPartitionsByHost = info.standbyPartitionByHost();
                 topicToPartitionInfo = getTopicPartitionInfo(partitionsByHost);
+
+                verifyHostInfo(partitionsByHost.keySet());
                 break;
             default:
                 throw new IllegalStateException(
@@ -1286,6 +1277,25 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         // we do not capture any exceptions but just let the exception thrown from consumer.poll directly
         // since when stream thread captures it, either we close all tasks as dirty or we close thread
         taskManager.handleAssignment(activeTasks, info.standbyTasks());
+    }
+
+    /**
+     * Verify that this client's host info was included in the map returned in the assignment, and trigger a
+     * rebalance if not. This may be necessary when using static membership, as a rejoining client will be handed
+     * back its original assignment to avoid an unnecessary rebalance. If the client's endpoint has changed, we need
+     * to force a rebalance for the other members in the group to get the updated host info for this client.
+     *
+     * @param groupHostInfo the HostInfo of all clients in the group
+     */
+    protected void verifyHostInfo(final Set<HostInfo> groupHostInfo) {
+        if (userEndPoint != null && !groupHostInfo.isEmpty()) {
+            final HostInfo myHostInfo = HostInfo.buildFromEndpoint(userEndPoint);
+
+            if (!groupHostInfo.contains(myHostInfo)) {
+                log.info("Triggering a rebalance to update group with new endpoint = {}", userEndPoint);
+                setAssignmentErrorCode(AssignorError.VERSION_PROBING.code());
+            }
+        }
     }
 
     // protected for upgrade test
