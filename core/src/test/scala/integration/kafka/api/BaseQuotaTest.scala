@@ -212,8 +212,7 @@ abstract class QuotaTestClients(topic: String,
   }
 
   def consumeUntilThrottled(maxRecords: Int, waitForRequestCompletion: Boolean = true): Int = {
-    val longTimeoutMs = TimeUnit.MINUTES.toMillis(10)
-    val shortTimeoutMs = TimeUnit.MINUTES.toMillis(1)
+    val timeoutMs = TimeUnit.MINUTES.toMillis(1)
 
     consumer.subscribe(Collections.singleton(topic))
     var numConsumed = 0
@@ -223,13 +222,13 @@ abstract class QuotaTestClients(topic: String,
       numConsumed += consumer.poll(Duration.ofMillis(100L)).count
       val metric = throttleMetric(QuotaType.Fetch, consumerClientId)
       throttled = metric != null && metricValue(metric) > 0
-    }  while (numConsumed < maxRecords && !throttled && System.currentTimeMillis < startMs + longTimeoutMs)
+    }  while (numConsumed < maxRecords && !throttled && System.currentTimeMillis < startMs + timeoutMs)
 
     // If throttled, wait for the records from the last fetch to be received
     if (throttled && numConsumed < maxRecords && waitForRequestCompletion) {
       val minRecords = numConsumed + 1
       val startMs = System.currentTimeMillis
-      while (numConsumed < minRecords && System.currentTimeMillis < startMs + shortTimeoutMs)
+      while (numConsumed < minRecords && System.currentTimeMillis < startMs + timeoutMs)
         numConsumed += consumer.poll(Duration.ofMillis(100L)).count
     }
     numConsumed
