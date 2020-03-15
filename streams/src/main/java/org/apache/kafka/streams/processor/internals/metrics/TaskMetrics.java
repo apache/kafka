@@ -73,12 +73,6 @@ public class TaskMetrics {
     private static final String DROPPED_RECORDS_RATE_DESCRIPTION =
         RATE_DESCRIPTION_PREFIX + DROPPED_RECORDS_DESCRIPTION + RATE_DESCRIPTION_SUFFIX;
 
-    private static final String IDEMPOTENT_UPDATE_SKIP = "idempotent-update-skip";
-    private static final String IDEMPOTENT_UPDATE_SKIP_DESCRIPTION = "skipped idempotent updates";
-    private static final String IDEMPOTENT_UPDATE_SKIP_TOTAL_DESCRIPTION = TOTAL_DESCRIPTION + IDEMPOTENT_UPDATE_SKIP_DESCRIPTION;
-    private static final String IDEMPOTENT_UPDATE_SKIP_RATE_DESCRIPTION =
-            RATE_DESCRIPTION_PREFIX + DROPPED_RECORDS_DESCRIPTION + RATE_DESCRIPTION_SUFFIX;
-
     private static final String PROCESS = "process";
     private static final String PROCESS_LATENCY = PROCESS + LATENCY_SUFFIX;
     private static final String PROCESS_DESCRIPTION = "calls to process";
@@ -179,20 +173,6 @@ public class TaskMetrics {
             DROPPED_RECORDS_RATE_DESCRIPTION,
             DROPPED_RECORDS_TOTAL_DESCRIPTION,
             RecordingLevel.INFO,
-            streamsMetrics
-        );
-    }
-
-    public static Sensor skippedIdempotentUpdatesSensor(final String threadId,
-                                                        final String taskId,
-                                                        final StreamsMetricsImpl streamsMetrics) {
-        return invocationRateAndCountSensor(
-            threadId,
-            taskId,
-            IDEMPOTENT_UPDATE_SKIP,
-            IDEMPOTENT_UPDATE_SKIP_RATE_DESCRIPTION,
-            IDEMPOTENT_UPDATE_SKIP_TOTAL_DESCRIPTION,
-            RecordingLevel.DEBUG,
             streamsMetrics
         );
     }

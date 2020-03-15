@@ -21,6 +21,7 @@ import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
+import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.internals.TimestampedSerializedKeyValueStore;
@@ -31,7 +32,7 @@ import org.slf4j.LoggerFactory;
 import java.util.Objects;
 
 import static org.apache.kafka.streams.processor.internals.metrics.TaskMetrics.droppedRecordsSensorOrSkippedRecordsSensor;
-import static org.apache.kafka.streams.processor.internals.metrics.TaskMetrics.skippedIdempotentUpdatesSensor;
+import static org.apache.kafka.streams.processor.internals.metrics.ProcessorNodeMetrics.skippedIdempotentUpdatesSensor;
 
 public class KTableSource<K, V> implements ProcessorSupplier<K, V> {
     private static final Logger LOG = LoggerFactory.getLogger(KTableSource.class);
@@ -95,7 +96,10 @@ public class KTableSource<K, V> implements ProcessorSupplier<K, V> {
                     context,
                     new TimestampedCacheFlushListener<>(context),
                     sendOldValues);
-                skippedIdempotentUpdatesSensor = skippedIdempotentUpdatesSensor(Thread.currentThread().getName(), context.taskId().toString(), metrics);
+                skippedIdempotentUpdatesSensor = skippedIdempotentUpdatesSensor(Thread.currentThread().getName(),
+                                                                                context.taskId().toString(),
+                                                                                ((InternalProcessorContext) context).currentNode().name(),
+                                                                                metrics);
             }
         }
 
