@@ -104,7 +104,8 @@ public class KTableSourceTest {
             inputTopic.pipeInput("A", 1, 10L);
             inputTopic.pipeInput("B", 3, 13L);
 
-            //assertEquals(1.0, getMetricByName(driver.metrics(), "idempotent-update-skip", "stream-metrics").metricValue());
+            assertEquals(1.0,
+                getMetricByName(driver.metrics(), "idempotent-update-skip-total", "stream-task-metrics").metricValue());
         }
 
         assertEquals(
