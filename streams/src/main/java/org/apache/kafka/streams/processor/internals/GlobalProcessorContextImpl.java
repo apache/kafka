@@ -54,7 +54,7 @@ public class GlobalProcessorContextImpl extends AbstractProcessorContext {
         final StateStore store = stateManager.getGlobalStore(name);
 
         if (store instanceof TimestampedKeyValueStore) {
-            return new TimestampedKeyValueStoreReadWriteDecorator((TimestampedSerializedKeyValueStore<?, ?>) store);
+            return new TimestampedKeyValueStoreReadWriteDecorator<>((TimestampedSerializedKeyValueStore<?, ?>) store);
         } else if (store instanceof KeyValueStore) {
             return new KeyValueStoreReadWriteDecorator<>((KeyValueStore<?, ?>) store);
         } else if (store instanceof TimestampedWindowStore) {

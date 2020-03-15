@@ -112,7 +112,7 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
 
         final StateStore store = stateManager.getStore(name);
         if (store instanceof TimestampedKeyValueStore) {
-            return new TimestampedKeyValueStoreReadWriteDecorator((TimestampedSerializedKeyValueStore<?, ?>) store);
+            return new TimestampedKeyValueStoreReadWriteDecorator<>((TimestampedSerializedKeyValueStore<?, ?>) store);
         } else if (store instanceof KeyValueStore) {
             return new KeyValueStoreReadWriteDecorator<>((KeyValueStore<?, ?>) store);
         } else if (store instanceof TimestampedWindowStore) {

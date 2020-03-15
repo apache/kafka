@@ -31,6 +31,7 @@ import org.slf4j.LoggerFactory;
 import java.util.Objects;
 
 import static org.apache.kafka.streams.processor.internals.metrics.TaskMetrics.droppedRecordsSensorOrSkippedRecordsSensor;
+import static org.apache.kafka.streams.processor.internals.metrics.TaskMetrics.skippedIdempotentUpdatesSensor;
 
 public class KTableSource<K, V> implements ProcessorSupplier<K, V> {
     private static final Logger LOG = LoggerFactory.getLogger(KTableSource.class);
@@ -79,6 +80,7 @@ public class KTableSource<K, V> implements ProcessorSupplier<K, V> {
         private TimestampedTupleForwarder<K, V> tupleForwarder;
         private StreamsMetricsImpl metrics;
         private Sensor droppedRecordsSensor;
+        private Sensor skippedIdempotentUpdatesSensor = null;
 
         @SuppressWarnings("unchecked")
         @Override
@@ -93,6 +95,7 @@ public class KTableSource<K, V> implements ProcessorSupplier<K, V> {
                     context,
                     new TimestampedCacheFlushListener<>(context),
                     sendOldValues);
+                skippedIdempotentUpdatesSensor = skippedIdempotentUpdatesSensor(Thread.currentThread().getName(), context.taskId().toString(), metrics);
             }
         }
 
@@ -125,6 +128,8 @@ public class KTableSource<K, V> implements ProcessorSupplier<K, V> {
                     store.putIfDifferent(key, ValueAndTimestamp.make(value, context().timestamp()), tuple.serializedValue);
                 if (isDifferentValue) {
                     tupleForwarder.maybeForward(key, value, oldValue);
+                }  else {
+                    skippedIdempotentUpdatesSensor.record();
                 }
             } else {
                 context().forward(key, new Change<>(value, null));
