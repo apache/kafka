@@ -184,7 +184,11 @@ public class RecordCollectorImpl implements RecordCollector {
 
             if (exception == null) {
                 final TopicPartition tp = new TopicPartition(metadata.topic(), metadata.partition());
-                offsets.put(tp, metadata.offset());
+                if (metadata.offset() >= 0L) {
+                    offsets.put(tp, metadata.offset());
+                } else {
+                    log.warn("Received offset={} in produce response for {}", metadata.offset(), tp);
+                }
             } else {
                 recordSendError(topic, exception, serializedRecord);
 
