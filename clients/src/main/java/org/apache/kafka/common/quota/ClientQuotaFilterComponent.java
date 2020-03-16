@@ -94,7 +94,7 @@ public class ClientQuotaFilterComponent {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
         ClientQuotaFilterComponent that = (ClientQuotaFilterComponent) o;
-        return Objects.equals(entityType, match);
+        return Objects.equals(that.entityType, entityType) && Objects.equals(that.match, match);
     }
 
     @Override
