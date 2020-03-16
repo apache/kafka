@@ -342,13 +342,13 @@ public class DelegatingClassLoader extends URLClassLoader {
     ) throws InstantiationException, IllegalAccessException {
         Set<Class<? extends T>> plugins;
         try {
-             plugins = reflections.getSubTypesOf(klass);
+            plugins = reflections.getSubTypesOf(klass);
         } catch (ReflectionsException e) {
             log.debug("Reflections scanner could not find any classes for URLs: " +
-                reflections.getConfiguration().getUrls(), e);
+                    reflections.getConfiguration().getUrls(), e);
             return Collections.emptyList();
         }
-        
+
         Collection<PluginDesc<T>> result = new ArrayList<>();
         for (Class<? extends T> plugin : plugins) {
             if (PluginUtils.isConcrete(plugin)) {
