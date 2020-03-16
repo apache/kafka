@@ -29,19 +29,21 @@ import org.apache.kafka.clients.admin.AlterConfigOp
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType
 import org.apache.kafka.common.config.ConfigDef.ConfigKey
 import org.apache.kafka.common.config.{AbstractConfig, ConfigDef, ConfigException, ConfigResource, LogLevelConfig}
-import org.apache.kafka.common.errors.{ApiException, InvalidConfigurationException, InvalidPartitionsException, InvalidReplicaAssignmentException, InvalidRequestException, ReassignmentInProgressException, TopicExistsException, UnknownTopicOrPartitionException}
+import org.apache.kafka.common.errors.{ApiException, InvalidConfigurationException, InvalidPartitionsException, InvalidReplicaAssignmentException, InvalidRequestException, ReassignmentInProgressException, TopicExistsException, UnknownTopicOrPartitionException, UnsupportedVersionException}
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.message.CreatePartitionsRequestData.CreatePartitionsTopic
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopic
 import org.apache.kafka.common.message.CreateTopicsResponseData.{CreatableTopicConfigs, CreatableTopicResult}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.ListenerName
+import org.apache.kafka.server.policy.{AlterConfigPolicy, CreateTopicPolicy}
+import org.apache.kafka.server.policy.CreateTopicPolicy.RequestMetadata
 import org.apache.kafka.common.protocol.Errors
+import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity, ClientQuotaFilter, ClientQuotaFilterComponent}
 import org.apache.kafka.common.requests.CreateTopicsRequest._
 import org.apache.kafka.common.requests.DescribeConfigsResponse.ConfigSource
 import org.apache.kafka.common.requests.{AlterConfigsRequest, ApiError, DescribeConfigsResponse}
-import org.apache.kafka.server.policy.{AlterConfigPolicy, CreateTopicPolicy}
-import org.apache.kafka.server.policy.CreateTopicPolicy.RequestMetadata
+import org.apache.kafka.common.utils.Sanitizer
 
 import scala.collection.{Map, mutable, _}
 import scala.collection.JavaConverters._
@@ -93,6 +95,10 @@ class AdminManager(val config: KafkaConfig,
         if (metadataCache.contains(topic.name))
           throw new TopicExistsException(s"Topic '${topic.name}' already exists.")
 
+        val nullConfigs = topic.configs.asScala.filter(_.value == null).map(_.name)
+        if (nullConfigs.nonEmpty)
+          throw new InvalidRequestException(s"Null value not supported for topic configs : ${nullConfigs.mkString(",")}")
+
         val configs = new Properties()
         topic.configs.asScala.foreach { entry =>
           configs.setProperty(entry.name, entry.value)
@@ -142,7 +148,7 @@ class AdminManager(val config: KafkaConfig,
               }.asJava
             }
             val javaConfigs = new java.util.HashMap[String, String]
-            topic.configs().asScala.foreach(config => javaConfigs.put(config.name(), config.value()))
+            topic.configs.asScala.foreach(config => javaConfigs.put(config.name(), config.value()))
             policy.validate(new RequestMetadata(topic.name, numPartitions, replicationFactor,
               javaAssignments, javaConfigs))
 
@@ -412,10 +418,14 @@ class AdminManager(val config: KafkaConfig,
     configs.map { case (resource, config) =>
 
       try {
+        val nullUpdates = config.entries.asScala.filter(_.value == null).map(_.name)
+        if (nullUpdates.nonEmpty)
+          throw new InvalidRequestException(s"Null value not supported for : ${nullUpdates.mkString(",")}")
+
         val configEntriesMap = config.entries.asScala.map(entry => (entry.name, entry.value)).toMap
 
         val configProps = new Properties
-        config.entries.asScala.foreach { configEntry =>
+        config.entries.asScala.filter(_.value != null).foreach { configEntry =>
           configProps.setProperty(configEntry.name, configEntry.value)
         }
 
@@ -512,6 +522,11 @@ class AdminManager(val config: KafkaConfig,
           .mapValues(_.size).filter(_._2 > 1).keys.toSet
         if (duplicateKeys.nonEmpty)
           throw new InvalidRequestException(s"Error due to duplicate config keys : ${duplicateKeys.mkString(",")}")
+        val nullUpdates = alterConfigOps
+          .filter(entry => entry.configEntry.value == null && entry.opType() != OpType.DELETE)
+          .map(entry => s"${entry.opType}:${entry.configEntry.name}")
+        if (nullUpdates.nonEmpty)
+          throw new InvalidRequestException(s"Null value not supported for : ${nullUpdates.mkString(",")}")
 
         val configEntriesMap = alterConfigOps.map(entry => (entry.configEntry().name(), entry.configEntry().value())).toMap
 
@@ -598,20 +613,27 @@ class AdminManager(val config: KafkaConfig,
     }
 
     alterConfigOps.foreach { alterConfigOp =>
+      val configPropName = alterConfigOp.configEntry().name()
       alterConfigOp.opType() match {
         case OpType.SET => configProps.setProperty(alterConfigOp.configEntry().name(), alterConfigOp.configEntry().value())
         case OpType.DELETE => configProps.remove(alterConfigOp.configEntry().name())
         case OpType.APPEND => {
           if (!listType(alterConfigOp.configEntry().name(), configKeys))
             throw new InvalidRequestException(s"Config value append is not allowed for config key: ${alterConfigOp.configEntry().name()}")
-          val oldValueList = configProps.getProperty(alterConfigOp.configEntry().name()).split(",").toList
+          val oldValueList = Option(configProps.getProperty(alterConfigOp.configEntry().name()))
+            .orElse(Option(ConfigDef.convertToString(configKeys(configPropName).defaultValue, ConfigDef.Type.LIST)))
+            .getOrElse("")
+            .split(",").toList
           val newValueList = oldValueList ::: alterConfigOp.configEntry().value().split(",").toList
           configProps.setProperty(alterConfigOp.configEntry().name(), newValueList.mkString(","))
         }
         case OpType.SUBTRACT => {
           if (!listType(alterConfigOp.configEntry().name(), configKeys))
             throw new InvalidRequestException(s"Config value subtract is not allowed for config key: ${alterConfigOp.configEntry().name()}")
-          val oldValueList = configProps.getProperty(alterConfigOp.configEntry().name()).split(",").toList
+          val oldValueList = Option(configProps.getProperty(alterConfigOp.configEntry().name()))
+            .orElse(Option(ConfigDef.convertToString(configKeys(configPropName).defaultValue, ConfigDef.Type.LIST)))
+            .getOrElse("")
+            .split(",").toList
           val newValueList = oldValueList.diff(alterConfigOp.configEntry().value().split(",").toList)
           configProps.setProperty(alterConfigOp.configEntry().name(), newValueList.mkString(","))
         }
@@ -636,14 +658,6 @@ class AdminManager(val config: KafkaConfig,
     DynamicBrokerConfig.brokerConfigSynonyms(name, matchListenerOverride = true)
   }
 
-  private def configType(name: String, synonyms: List[String]): ConfigDef.Type = {
-    val configType = config.typeOf(name)
-    if (configType != null)
-      configType
-    else
-      synonyms.iterator.map(config.typeOf).find(_ != null).orNull
-  }
-
   private def configSynonyms(name: String, synonyms: List[String], isSensitive: Boolean): List[DescribeConfigsResponse.ConfigSynonym] = {
     val dynamicConfig = config.dynamicConfig
     val allSynonyms = mutable.Buffer[DescribeConfigsResponse.ConfigSynonym]()
@@ -664,9 +678,9 @@ class AdminManager(val config: KafkaConfig,
 
   private def createTopicConfigEntry(logConfig: LogConfig, topicProps: Properties, includeSynonyms: Boolean)
                                     (name: String, value: Any): DescribeConfigsResponse.ConfigEntry = {
-    val configEntryType = logConfig.typeOf(name)
-    val isSensitive = configEntryType == ConfigDef.Type.PASSWORD
-    val valueAsString = if (isSensitive) null else ConfigDef.convertToString(value, configEntryType)
+    val configEntryType = LogConfig.configType(name)
+    val isSensitive = KafkaConfig.maybeSensitive(configEntryType)
+    val valueAsString = if (isSensitive) null else ConfigDef.convertToString(value, configEntryType.orNull)
     val allSynonyms = {
       val list = LogConfig.TopicConfigSynonyms.get(name)
         .map(s => configSynonyms(s, brokerSynonyms(s), isSensitive))
@@ -684,14 +698,13 @@ class AdminManager(val config: KafkaConfig,
   private def createBrokerConfigEntry(perBrokerConfig: Boolean, includeSynonyms: Boolean)
                                      (name: String, value: Any): DescribeConfigsResponse.ConfigEntry = {
     val allNames = brokerSynonyms(name)
-    val configEntryType = configType(name, allNames)
-    // If we can't determine the config entry type, treat it as a sensitive config to be safe
-    val isSensitive = configEntryType == ConfigDef.Type.PASSWORD || configEntryType == null
+    val configEntryType = KafkaConfig.configType(name)
+    val isSensitive = KafkaConfig.maybeSensitive(configEntryType)
     val valueAsString = if (isSensitive)
       null
     else value match {
       case v: String => v
-      case _ => ConfigDef.convertToString(value, configEntryType)
+      case _ => ConfigDef.convertToString(value, configEntryType.orNull)
     }
     val allSynonyms = configSynonyms(name, allNames, isSensitive)
         .filter(perBrokerConfig || _.source == ConfigSource.DYNAMIC_DEFAULT_BROKER_CONFIG)
@@ -699,5 +712,196 @@ class AdminManager(val config: KafkaConfig,
     val source = if (allSynonyms.isEmpty) ConfigSource.DEFAULT_CONFIG else allSynonyms.head.source
     val readOnly = !DynamicBrokerConfig.AllDynamicConfigs.contains(name)
     new DescribeConfigsResponse.ConfigEntry(name, valueAsString, source, isSensitive, readOnly, synonyms.asJava)
+  }
+
+  private def sanitizeEntityName(entityName: String): String = {
+    if (entityName == ConfigEntityName.Default)
+      throw new InvalidRequestException(s"Entity name '${ConfigEntityName.Default}' is reserved")
+    Sanitizer.sanitize(Option(entityName).getOrElse(ConfigEntityName.Default))
+  }
+
+  private def desanitizeEntityName(sanitizedEntityName: String): String =
+    Sanitizer.desanitize(sanitizedEntityName) match {
+      case ConfigEntityName.Default => null
+      case name => name
+    }
+
+  private def entityToSanitizedUserClientId(entity: ClientQuotaEntity): (Option[String], Option[String]) = {
+    if (entity.entries.isEmpty)
+      throw new InvalidRequestException("Invalid empty client quota entity")
+
+    var user: Option[String] = None
+    var clientId: Option[String] = None
+    entity.entries.asScala.foreach { case (entityType, entityName) =>
+      val sanitizedEntityName = Some(sanitizeEntityName(entityName))
+      entityType match {
+        case ClientQuotaEntity.USER => user = sanitizedEntityName
+        case ClientQuotaEntity.CLIENT_ID => clientId = sanitizedEntityName
+        case _ => throw new InvalidRequestException(s"Unhandled client quota entity type: ${entityType}")
+      }
+      if (entityName != null && entityName.isEmpty)
+        throw new InvalidRequestException(s"Empty ${entityType} not supported")
+    }
+    (user, clientId)
+  }
+
+  private def userClientIdToEntity(user: Option[String], clientId: Option[String]): ClientQuotaEntity = {
+    new ClientQuotaEntity((user.map(u => ClientQuotaEntity.USER -> u) ++ clientId.map(c => ClientQuotaEntity.CLIENT_ID -> c)).toMap.asJava)
+  }
+
+  def describeClientQuotas(filter: ClientQuotaFilter): Map[ClientQuotaEntity, Map[String, Double]] = {
+    var userComponent: Option[ClientQuotaFilterComponent] = None
+    var clientIdComponent: Option[ClientQuotaFilterComponent] = None
+    filter.components.asScala.foreach { component =>
+      component.entityType match {
+        case ClientQuotaEntity.USER =>
+          if (userComponent.isDefined)
+            throw new InvalidRequestException(s"Duplicate user filter component entity type");
+          userComponent = Some(component)
+        case ClientQuotaEntity.CLIENT_ID =>
+          if (clientIdComponent.isDefined)
+            throw new InvalidRequestException(s"Duplicate client filter component entity type");
+          clientIdComponent = Some(component)
+        case "" =>
+          throw new InvalidRequestException(s"Unexpected empty filter component entity type")
+        case et =>
+          // Supplying other entity types is not yet supported.
+          throw new UnsupportedVersionException(s"Custom entity type '${et}' not supported")
+      }
+    }
+    handleDescribeClientQuotas(userComponent, clientIdComponent, filter.strict)
+  }
+
+  def handleDescribeClientQuotas(userComponent: Option[ClientQuotaFilterComponent],
+    clientIdComponent: Option[ClientQuotaFilterComponent], strict: Boolean) = {
+
+    def toOption(opt: java.util.Optional[String]): Option[String] =
+      if (opt == null)
+        None
+      else if (opt.isPresent)
+        Some(opt.get)
+      else
+        Some(null)
+
+    val user = userComponent.flatMap(c => toOption(c.`match`))
+    val clientId = clientIdComponent.flatMap(c => toOption(c.`match`))
+
+    def sanitized(name: Option[String]): String = name.map(n => sanitizeEntityName(n)).getOrElse("")
+    val sanitizedUser = sanitized(user)
+    val sanitizedClientId = sanitized(clientId)
+
+    def wantExact(component: Option[ClientQuotaFilterComponent]): Boolean = component.exists(_.`match` != null)
+    val exactUser = wantExact(userComponent)
+    val exactClientId = wantExact(clientIdComponent)
+
+    def wantExcluded(component: Option[ClientQuotaFilterComponent]): Boolean = strict && !component.isDefined
+    val excludeUser = wantExcluded(userComponent)
+    val excludeClientId = wantExcluded(clientIdComponent)
+
+    val userEntries = if (exactUser && excludeClientId)
+      Map(((Some(user.get), None) -> adminZkClient.fetchEntityConfig(ConfigType.User, sanitizedUser)))
+    else if (!excludeUser && !exactClientId)
+      adminZkClient.fetchAllEntityConfigs(ConfigType.User).map { case (name, props) =>
+        ((Some(desanitizeEntityName(name)), None) -> props)
+      }
+    else
+      Map.empty
+
+    val clientIdEntries = if (excludeUser && exactClientId)
+      Map(((None, Some(clientId.get)) -> adminZkClient.fetchEntityConfig(ConfigType.Client, sanitizedClientId)))
+    else if (!exactUser && !excludeClientId)
+      adminZkClient.fetchAllEntityConfigs(ConfigType.Client).map { case (name, props) =>
+        ((None, Some(desanitizeEntityName(name))) -> props)
+      }
+    else
+      Map.empty
+
+    val bothEntries = if (exactUser && exactClientId)
+      Map(((Some(user.get), Some(clientId.get)) ->
+        adminZkClient.fetchEntityConfig(ConfigType.User, s"${sanitizedUser}/clients/${sanitizedClientId}")))
+    else if (!excludeUser && !excludeClientId)
+      adminZkClient.fetchAllChildEntityConfigs(ConfigType.User, ConfigType.Client).map { case (name, props) =>
+        val components = name.split("/")
+        if (components.size != 3 || components(1) != "clients")
+          throw new IllegalArgumentException(s"Unexpected config path: ${name}")
+        ((Some(desanitizeEntityName(components(0))), Some(desanitizeEntityName(components(2)))) -> props)
+      }
+    else
+      Map.empty
+
+    def matches(nameComponent: Option[ClientQuotaFilterComponent], name: Option[String]): Boolean = nameComponent match {
+      case Some(component) =>
+        toOption(component.`match`) match {
+          case Some(n) => name.exists(_ == n)
+          case None => name.isDefined
+        }
+      case None =>
+        !name.isDefined || !strict
+    }
+
+    def fromProps(props: Properties): Map[String, Double] = {
+      props.asScala.map { case (key, value) =>
+        val doubleValue = try value.toDouble catch {
+          case _: NumberFormatException =>
+            throw new IllegalStateException(s"Unexpected client quota configuration value: ${key} -> ${value}")
+        }
+        (key -> doubleValue)
+      }
+    }
+
+    (userEntries ++ clientIdEntries ++ bothEntries).map { case ((u, c), p) =>
+      if (!p.isEmpty && matches(userComponent, u) && matches(clientIdComponent, c))
+        Some((userClientIdToEntity(u, c) -> fromProps(p)))
+      else
+        None
+    }.flatten.toMap
+  }
+
+  def alterClientQuotas(entries: Seq[ClientQuotaAlteration], validateOnly: Boolean): Map[ClientQuotaEntity, ApiError] = {
+    def alterEntityQuotas(entity: ClientQuotaEntity, ops: Iterable[ClientQuotaAlteration.Op]): Unit = {
+      val (path, configType, configKeys) = entityToSanitizedUserClientId(entity) match {
+        case (Some(user), Some(clientId)) => (user + "/clients/" + clientId, ConfigType.User, DynamicConfig.User.configKeys)
+        case (Some(user), None) => (user, ConfigType.User, DynamicConfig.User.configKeys)
+        case (None, Some(clientId)) => (clientId, ConfigType.Client, DynamicConfig.Client.configKeys)
+        case _ => throw new InvalidRequestException("Invalid empty client quota entity")
+      }
+
+      val props = adminZkClient.fetchEntityConfig(configType, path)
+      ops.foreach { op =>
+        op.value match {
+          case null =>
+            props.remove(op.key)
+          case value => configKeys.get(op.key) match {
+            case null =>
+              throw new InvalidRequestException(s"Invalid configuration key ${op.key}")
+            case key => key.`type` match {
+              case ConfigDef.Type.DOUBLE =>
+                props.setProperty(op.key, value.toString)
+              case ConfigDef.Type.LONG =>
+                val epsilon = 1e-6
+                val longValue = (value + epsilon).toLong
+                if ((longValue.toDouble - value).abs > epsilon)
+                  throw new InvalidRequestException(s"Configuration ${op.key} must be a Long value")
+                props.setProperty(op.key, longValue.toString)
+              case _ =>
+                throw new IllegalStateException(s"Unexpected config type ${key.`type`}")
+            }
+          }
+        }
+      }
+      if (!validateOnly)
+        adminZkClient.changeConfigs(configType, path, props)
+    }
+    entries.map { entry =>
+      val apiError = try {
+        alterEntityQuotas(entry.entity, entry.ops.asScala)
+        ApiError.NONE
+      } catch {
+        case e: Throwable =>
+          info(s"Error encountered while updating client quotas", e)
+          ApiError.fromThrowable(e)
+      }
+      (entry.entity -> apiError)
+    }.toMap
   }
 }

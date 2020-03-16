@@ -107,7 +107,7 @@ class AdminZkClient(zkClient: KafkaZkClient) extends Logging {
     if (zkClient.topicExists(topic))
       throw new TopicExistsException(s"Topic '$topic' already exists.")
     else if (Topic.hasCollisionChars(topic)) {
-      val allTopics = zkClient.getAllTopicsInCluster
+      val allTopics = zkClient.getAllTopicsInCluster()
       // check again in case the topic was created in the meantime, otherwise the
       // topic could potentially collide with itself
       if (allTopics.contains(topic))
@@ -400,7 +400,7 @@ class AdminZkClient(zkClient: KafkaZkClient) extends Logging {
    * @return
    */
   def getAllTopicConfigs(): Map[String, Properties] =
-    zkClient.getAllTopicsInCluster.map(topic => (topic, fetchEntityConfig(ConfigType.Topic, topic))).toMap
+    zkClient.getAllTopicsInCluster().map(topic => (topic, fetchEntityConfig(ConfigType.Topic, topic))).toMap
 
   /**
    * Gets all the entity configs for a given entityType

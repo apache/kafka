@@ -22,6 +22,7 @@ import org.apache.kafka.common.utils.FixedOrderMap;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.errors.TaskCorruptedException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.processor.internals.Task.TaskType;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
@@ -34,6 +35,7 @@ import org.slf4j.Logger;
 import java.io.File;
 import java.io.IOException;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -84,11 +86,15 @@ public class ProcessorStateManager implements StateManager {
         //      update blindly with the given offset
         private Long offset;
 
+        // corrupted state store should not be included in checkpointing
+        private boolean corrupted;
+
         private StateStoreMetadata(final StateStore stateStore) {
             this.stateStore = stateStore;
             this.restoreCallback = null;
             this.recordConverter = null;
             this.changelogPartition = null;
+            this.corrupted = false;
             this.offset = null;
         }
 
@@ -136,6 +142,7 @@ public class ProcessorStateManager implements StateManager {
     private final TaskId taskId;
     private final String logPrefix;
     private final TaskType taskType;
+    private final boolean eosEnabled;
     private final ChangelogRegister changelogReader;
     private final Map<String, String> storeToChangelogTopic;
     private final Collection<TopicPartition> sourcePartitions;
@@ -147,8 +154,7 @@ public class ProcessorStateManager implements StateManager {
     private final File baseDir;
     private final OffsetCheckpoint checkpointFile;
 
-    public static String storeChangelogTopic(final String applicationId,
-                                             final String storeName) {
+    public static String storeChangelogTopic(final String applicationId, final String storeName) {
         return applicationId + "-" + storeName + STATE_CHANGELOG_TOPIC_SUFFIX;
     }
 
@@ -156,23 +162,25 @@ public class ProcessorStateManager implements StateManager {
      * @throws ProcessorStateException if the task directory does not exist and could not be created
      */
     public ProcessorStateManager(final TaskId taskId,
-                                 final Collection<TopicPartition> sources,
                                  final TaskType taskType,
+                                 final boolean eosEnabled,
+                                 final LogContext logContext,
                                  final StateDirectory stateDirectory,
-                                 final Map<String, String> storeToChangelogTopic,
                                  final ChangelogRegister changelogReader,
-                                 final LogContext logContext) throws ProcessorStateException {
-        this.logPrefix = format("task [%s] ", taskId);
-        this.log = logContext.logger(ProcessorStateManager.class);
+                                 final Map<String, String> storeToChangelogTopic,
+                                 final Collection<TopicPartition> sourcePartitions) throws ProcessorStateException {
 
+        this.log = logContext.logger(ProcessorStateManager.class);
+        this.logPrefix = logContext.logPrefix();
         this.taskId = taskId;
         this.taskType = taskType;
-        this.sourcePartitions = sources;
+        this.eosEnabled = eosEnabled;
         this.changelogReader = changelogReader;
+        this.sourcePartitions = sourcePartitions;
         this.storeToChangelogTopic = storeToChangelogTopic;
 
         this.baseDir = stateDirectory.directoryForTask(taskId);
-        this.checkpointFile = new OffsetCheckpoint(new File(baseDir, CHECKPOINT_FILE_NAME));
+        this.checkpointFile = new OffsetCheckpoint(stateDirectory.checkpointFileFor(taskId));
 
         log.debug("Created state store manager for task {}", taskId);
     }
@@ -190,7 +198,7 @@ public class ProcessorStateManager implements StateManager {
     }
 
     // package-private for test only
-    void initializeStoreOffsetsFromCheckpoint() {
+    void initializeStoreOffsetsFromCheckpoint(final boolean storeDirIsEmpty) {
         try {
             final Map<TopicPartition, Long> loadedCheckpoints = checkpointFile.read();
 
@@ -206,11 +214,21 @@ public class ProcessorStateManager implements StateManager {
                         log.debug("State store {} initialized from checkpoint with offset {} at changelog {}",
                             store.stateStore.name(), store.offset, store.changelogPartition);
                     } else {
-                        // TODO K9113: for EOS when there's no checkpointed offset, we should treat it as TaskCorrupted
+                        // with EOS, if the previous run did not shutdown gracefully, we may lost the checkpoint file
+                        // and hence we are uncertain the the current local state only contains committed data;
+                        // in that case we need to treat it as a task-corrupted exception
+                        if (eosEnabled && !storeDirIsEmpty) {
+                            log.warn("State store {} did not find checkpoint offsets while stores are not empty, " +
+                                "since under EOS it has the risk of getting uncommitted data in stores we have to " +
+                                "treat it as a task corruption error and wipe out the local state of task {} " +
+                                "before re-bootstrapping", store.stateStore.name(), taskId);
 
-                        log.info("State store {} did not find checkpoint offset, hence would " +
+                            throw new TaskCorruptedException(Collections.singletonMap(taskId, changelogPartitions()));
+                        } else {
+                            log.info("State store {} did not find checkpoint offset, hence would " +
                                 "default to the starting offset at changelog {}",
-                            store.stateStore.name(), store.changelogPartition);
+                                store.stateStore.name(), store.changelogPartition);
+                        }
                     }
                 }
             }
@@ -220,6 +238,8 @@ public class ProcessorStateManager implements StateManager {
             }
 
             checkpointFile.delete();
+        } catch (final TaskCorruptedException e) {
+            throw e;
         } catch (final IOException | RuntimeException e) {
             // both IOException or runtime exception like number parsing can throw
             throw new ProcessorStateException(format("%sError loading and deleting checkpoint file when creating the state manager",
@@ -251,7 +271,7 @@ public class ProcessorStateManager implements StateManager {
         // is not log enabled (including global stores), and hence it does not need to be restored
         if (topic != null) {
             // NOTE we assume the partition of the topic can always be inferred from the task id;
-            // if user ever use a default partition grouper (deprecated in KIP-528) this would break and
+            // if user ever use a custom partition grouper (deprecated in KIP-528) this would break and
             // it is not a regression (it would always break anyways)
             final TopicPartition storePartition = new TopicPartition(topic, taskId.partition);
             final StateStoreMetadata storeMetadata = new StateStoreMetadata(
@@ -280,6 +300,20 @@ public class ProcessorStateManager implements StateManager {
 
     Collection<TopicPartition> changelogPartitions() {
         return changelogOffsets().keySet();
+    }
+
+    void markChangelogAsCorrupted(final Collection<TopicPartition> partitions) {
+        for (final StateStoreMetadata storeMetadata : stores.values()) {
+            if (partitions.contains(storeMetadata.changelogPartition)) {
+                storeMetadata.corrupted = true;
+                partitions.remove(storeMetadata.changelogPartition);
+            }
+        }
+
+        if (!partitions.isEmpty()) {
+            throw new IllegalStateException("Some partitions " + partitions + " are not contained in the store list of task " +
+                taskId + " marking as corrupted, this is not expected");
+        }
     }
 
     @Override
@@ -415,6 +449,8 @@ public class ProcessorStateManager implements StateManager {
                     log.error("Failed to close state store {}: ", store.name(), exception);
                 }
             }
+
+            stores.clear();
         }
 
         if (firstException != null) {
@@ -439,10 +475,12 @@ public class ProcessorStateManager implements StateManager {
 
         final Map<TopicPartition, Long> checkpointingOffsets = new HashMap<>();
         for (final StateStoreMetadata storeMetadata : stores.values()) {
-            // store is logged, persistent, and has a valid current offset
+            // store is logged, persistent, not corrupted, and has a valid current offset
             if (storeMetadata.changelogPartition != null &&
                 storeMetadata.stateStore.persistent() &&
-                storeMetadata.offset != null) {
+                storeMetadata.offset != null &&
+                !storeMetadata.corrupted) {
+
                 checkpointingOffsets.put(storeMetadata.changelogPartition, storeMetadata.offset);
             }
         }

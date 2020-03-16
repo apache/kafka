@@ -40,6 +40,7 @@ import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState
 import org.apache.kafka.common.message.LeaderAndIsrResponseData
+import org.apache.kafka.common.message.DeleteRecordsResponseData.DeleteRecordsPartitionResult
 import org.apache.kafka.common.message.LeaderAndIsrResponseData.LeaderAndIsrPartitionError
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.ListenerName
@@ -707,7 +708,7 @@ class ReplicaManager(val config: KafkaConfig,
 
   def deleteRecords(timeout: Long,
                     offsetPerPartition: Map[TopicPartition, Long],
-                    responseCallback: Map[TopicPartition, DeleteRecordsResponse.PartitionResponse] => Unit): Unit = {
+                    responseCallback: Map[TopicPartition, DeleteRecordsPartitionResult] => Unit): Unit = {
     val timeBeforeLocalDeleteRecords = time.milliseconds
     val localDeleteRecordsResults = deleteRecordsOnLocalLog(offsetPerPartition)
     debug("Delete records on local log in %d ms".format(time.milliseconds - timeBeforeLocalDeleteRecords))
@@ -716,7 +717,10 @@ class ReplicaManager(val config: KafkaConfig,
       topicPartition ->
         DeleteRecordsPartitionStatus(
           result.requestedOffset, // requested offset
-          new DeleteRecordsResponse.PartitionResponse(result.lowWatermark, result.error)) // response status
+          new DeleteRecordsPartitionResult()
+            .setLowWatermark(result.lowWatermark)
+            .setErrorCode(result.error.code)
+            .setPartitionIndex(topicPartition.partition)) // response status
     }
 
     if (delayedDeleteRecordsRequired(localDeleteRecordsResults)) {

@@ -65,6 +65,7 @@ import org.apache.kafka.streams.processor.internals.StateDirectory;
 import org.apache.kafka.streams.processor.internals.StoreChangelogReader;
 import org.apache.kafka.streams.processor.internals.StreamTask;
 import org.apache.kafka.streams.processor.internals.Task;
+import org.apache.kafka.streams.processor.internals.StreamsProducer;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.metrics.TaskMetrics;
 import org.apache.kafka.streams.state.KeyValueStore;
@@ -98,11 +99,12 @@ import java.util.NoSuchElementException;
 import java.util.Objects;
 import java.util.Properties;
 import java.util.Queue;
-import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Supplier;
 import java.util.regex.Pattern;
+
+import static org.apache.kafka.streams.StreamsConfig.EXACTLY_ONCE;
 
 /**
  * This class makes it easier to write tests to verify the behavior of topologies created with {@link Topology} or
@@ -196,23 +198,23 @@ public class TopologyTestDriver implements Closeable {
 
     private static final Logger log = LoggerFactory.getLogger(TopologyTestDriver.class);
 
+    private final LogContext logContext;
     private final Time mockWallClockTime;
-    private final InternalTopologyBuilder internalTopologyBuilder;
+    private InternalTopologyBuilder internalTopologyBuilder;
 
     private final static int PARTITION_ID = 0;
     private final static TaskId TASK_ID = new TaskId(0, PARTITION_ID);
-    final StreamTask task;
-    private final GlobalStateUpdateTask globalStateTask;
-    private final GlobalStateManager globalStateManager;
+    StreamTask task;
+    private GlobalStateUpdateTask globalStateTask;
+    private GlobalStateManager globalStateManager;
 
-    private final StateDirectory stateDirectory;
-    private final Metrics metrics;
-    final ProcessorTopology processorTopology;
-    final ProcessorTopology globalTopology;
+    private StateDirectory stateDirectory;
+    private Metrics metrics;
+    ProcessorTopology processorTopology;
+    ProcessorTopology globalTopology;
 
     private final MockProducer<byte[], byte[]> producer;
 
-    private final Set<String> internalTopics = new HashSet<>();
     private final Map<String, TopicPartition> partitionsByInputTopic = new HashMap<>();
     private final Map<String, TopicPartition> globalPartitionsByInputTopic = new HashMap<>();
     private final Map<TopicPartition, AtomicLong> offsetsByTopicOrPatternPartition = new HashMap<>();
@@ -275,7 +277,6 @@ public class TopologyTestDriver implements Closeable {
             initialWallClockTime == null ? System.currentTimeMillis() : initialWallClockTime.toEpochMilli());
     }
 
-
     /**
      * Create a new test diver instance.
      *
@@ -288,15 +289,18 @@ public class TopologyTestDriver implements Closeable {
                                final long initialWallClockTimeMs) {
         final StreamsConfig streamsConfig = new QuietStreamsConfig(config);
         logIfTaskIdleEnabled(streamsConfig);
+
+        logContext = new LogContext("topology-test-driver ");
         mockWallClockTime = new MockTime(initialWallClockTimeMs);
+        eosEnabled = EXACTLY_ONCE.equals(streamsConfig.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG));
 
-        internalTopologyBuilder = builder;
-        internalTopologyBuilder.rewriteTopology(streamsConfig);
+        final StreamsMetricsImpl streamsMetrics = setupMetrics(streamsConfig);
+        setupTopology(builder, streamsConfig);
 
-        processorTopology = internalTopologyBuilder.build();
-        globalTopology = internalTopologyBuilder.buildGlobalStateTopology();
-        final boolean createStateDirectory = processorTopology.hasPersistentLocalStore() ||
-            (globalTopology != null && globalTopology.hasPersistentGlobalStore());
+        final ThreadCache cache = new ThreadCache(
+            logContext,
+            Math.max(0, streamsConfig.getLong(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG)),
+            streamsMetrics);
 
         final Serializer<byte[]> bytesSerializer = new ByteArraySerializer();
         producer = new MockProducer<byte[], byte[]>(true, bytesSerializer, bytesSerializer) {
@@ -306,17 +310,33 @@ public class TopologyTestDriver implements Closeable {
             }
         };
 
-        final MockConsumer<byte[], byte[]> consumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST);
-        stateDirectory = new StateDirectory(streamsConfig, mockWallClockTime, createStateDirectory);
+        setupGlobalTask(streamsConfig, streamsMetrics, cache);
+        setupTask(streamsConfig, streamsMetrics, cache);
+    }
+
+    private static void logIfTaskIdleEnabled(final StreamsConfig streamsConfig) {
+        final Long taskIdleTime = streamsConfig.getLong(StreamsConfig.MAX_TASK_IDLE_MS_CONFIG);
+        if (taskIdleTime > 0) {
+            log.info("Detected {} config in use with TopologyTestDriver (set to {}ms)." +
+                         " This means you might need to use TopologyTestDriver#advanceWallClockTime()" +
+                         " or enqueue records on all partitions to allow Steams to make progress." +
+                         " TopologyTestDriver will log a message each time it cannot process enqueued" +
+                         " records due to {}.",
+                     StreamsConfig.MAX_TASK_IDLE_MS_CONFIG,
+                     taskIdleTime,
+                     StreamsConfig.MAX_TASK_IDLE_MS_CONFIG);
+        }
+    }
+
+    private StreamsMetricsImpl setupMetrics(final StreamsConfig streamsConfig) {
+        final String threadId = Thread.currentThread().getName();
 
         final MetricConfig metricConfig = new MetricConfig()
             .samples(streamsConfig.getInt(StreamsConfig.METRICS_NUM_SAMPLES_CONFIG))
             .recordLevel(Sensor.RecordingLevel.forName(streamsConfig.getString(StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG)))
             .timeWindow(streamsConfig.getLong(StreamsConfig.METRICS_SAMPLE_WINDOW_MS_CONFIG), TimeUnit.MILLISECONDS);
-
         metrics = new Metrics(metricConfig, mockWallClockTime);
 
-        final String threadId = Thread.currentThread().getName();
         final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(
             metrics,
             "test-client",
@@ -324,27 +344,32 @@ public class TopologyTestDriver implements Closeable {
         );
         streamsMetrics.setRocksDBMetricsRecordingTrigger(new RocksDBMetricsRecordingTrigger());
         TaskMetrics.droppedRecordsSensorOrSkippedRecordsSensor(threadId, TASK_ID.toString(), streamsMetrics);
-        final ThreadCache cache = new ThreadCache(
-            new LogContext("topology-test-driver "),
-            Math.max(0, streamsConfig.getLong(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG)),
-            streamsMetrics);
 
-        for (final InternalTopologyBuilder.TopicsInfo topicsInfo : internalTopologyBuilder.topicGroups().values()) {
-            internalTopics.addAll(topicsInfo.repartitionSourceTopics.keySet());
-        }
+        return streamsMetrics;
+    }
+
+    private void setupTopology(final InternalTopologyBuilder builder,
+                               final StreamsConfig streamsConfig) {
+        internalTopologyBuilder = builder;
+        internalTopologyBuilder.rewriteTopology(streamsConfig);
+
+        processorTopology = internalTopologyBuilder.buildTopology();
+        globalTopology = internalTopologyBuilder.buildGlobalStateTopology();
 
         for (final String topic : processorTopology.sourceTopics()) {
             final TopicPartition tp = new TopicPartition(topic, PARTITION_ID);
             partitionsByInputTopic.put(topic, tp);
             offsetsByTopicOrPatternPartition.put(tp, new AtomicLong());
         }
-        consumer.assign(partitionsByInputTopic.values());
-        final Map<TopicPartition, Long> startOffsets = new HashMap<>();
-        for (final TopicPartition topicPartition : partitionsByInputTopic.values()) {
-            startOffsets.put(topicPartition, 0L);
-        }
-        consumer.updateBeginningOffsets(startOffsets);
 
+        final boolean createStateDirectory = processorTopology.hasPersistentLocalStore() ||
+            (globalTopology != null && globalTopology.hasPersistentGlobalStore());
+        stateDirectory = new StateDirectory(streamsConfig, mockWallClockTime, createStateDirectory);
+    }
+
+    private void setupGlobalTask(final StreamsConfig streamsConfig,
+                                 final StreamsMetricsImpl streamsMetrics,
+                                 final ThreadCache cache) {
         if (globalTopology != null) {
             final MockConsumer<byte[], byte[]> globalConsumer = new MockConsumer<>(OffsetResetStrategy.NONE);
             for (final String topicName : globalTopology.sourceTopics()) {
@@ -358,7 +383,7 @@ public class TopologyTestDriver implements Closeable {
             }
 
             globalStateManager = new GlobalStateManagerImpl(
-                new LogContext("mock "),
+                logContext,
                 globalTopology,
                 globalConsumer,
                 stateDirectory,
@@ -374,7 +399,7 @@ public class TopologyTestDriver implements Closeable {
                 globalProcessorContext,
                 globalStateManager,
                 new LogAndContinueExceptionHandler(),
-                new LogContext()
+                logContext
             );
             globalStateTask.initialize();
             globalProcessorContext.setRecordContext(new ProcessorRecordContext(
@@ -387,29 +412,42 @@ public class TopologyTestDriver implements Closeable {
             globalStateManager = null;
             globalStateTask = null;
         }
+    }
 
+    private void setupTask(final StreamsConfig streamsConfig,
+                           final StreamsMetricsImpl streamsMetrics,
+                           final ThreadCache cache) {
         if (!partitionsByInputTopic.isEmpty()) {
-            final LogContext logContext = new LogContext("topology-test-driver ");
+            final MockConsumer<byte[], byte[]> consumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST);
+            consumer.assign(partitionsByInputTopic.values());
+            final Map<TopicPartition, Long> startOffsets = new HashMap<>();
+            for (final TopicPartition topicPartition : partitionsByInputTopic.values()) {
+                startOffsets.put(topicPartition, 0L);
+            }
+            consumer.updateBeginningOffsets(startOffsets);
+
             final ProcessorStateManager stateManager = new ProcessorStateManager(
                 TASK_ID,
-                new HashSet<>(partitionsByInputTopic.values()),
                 Task.TaskType.ACTIVE,
+                EXACTLY_ONCE.equals(streamsConfig.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG)),
+                logContext,
                 stateDirectory,
-                processorTopology.storeToChangelogTopic(),
                 new StoreChangelogReader(
                     mockWallClockTime,
                     streamsConfig,
                     logContext,
                     createRestoreConsumer(processorTopology.storeToChangelogTopic()),
                     stateRestoreListener),
-                logContext);
+                processorTopology.storeToChangelogTopic(),
+                new HashSet<>(partitionsByInputTopic.values()));
             final RecordCollector recordCollector = new RecordCollectorImpl(
-                TASK_ID,
-                streamsConfig,
                 logContext,
-                streamsMetrics,
+                TASK_ID,
                 consumer,
-                taskId -> producer);
+                new StreamsProducer(producer, eosEnabled, logContext, streamsConfig.getString(StreamsConfig.APPLICATION_ID_CONFIG)),
+                streamsConfig.defaultProductionExceptionHandler(),
+                eosEnabled,
+                streamsMetrics);
             task = new StreamTask(
                 TASK_ID,
                 new HashSet<>(partitionsByInputTopic.values()),
@@ -432,21 +470,6 @@ public class TopologyTestDriver implements Closeable {
                 new RecordHeaders()));
         } else {
             task = null;
-        }
-        eosEnabled = streamsConfig.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG).equals(StreamsConfig.EXACTLY_ONCE);
-    }
-
-    private static void logIfTaskIdleEnabled(final StreamsConfig streamsConfig) {
-        final Long taskIdleTime = streamsConfig.getLong(StreamsConfig.MAX_TASK_IDLE_MS_CONFIG);
-        if (taskIdleTime > 0) {
-            log.info("Detected {} config in use with TopologyTestDriver (set to {}ms)." +
-                         " This means you might need to use TopologyTestDriver#advanceWallClockTime()" +
-                         " or enqueue records on all partitions to allow Steams to make progress." +
-                         " TopologyTestDriver will log a message each time it cannot process enqueued" +
-                         " records due to {}.",
-                     StreamsConfig.MAX_TASK_IDLE_MS_CONFIG,
-                     taskIdleTime,
-                     StreamsConfig.MAX_TASK_IDLE_MS_CONFIG);
         }
     }
 
@@ -597,10 +620,7 @@ public class TopologyTestDriver implements Closeable {
         // Capture all the records sent to the producer ...
         final List<ProducerRecord<byte[], byte[]>> output = producer.history();
         producer.clear();
-        if (eosEnabled && !producer.closed()) {
-            producer.initTransactions();
-            producer.beginTransaction();
-        }
+
         for (final ProducerRecord<byte[], byte[]> record : output) {
             outputRecordsByTopic.computeIfAbsent(record.topic(), k -> new LinkedList<>()).add(record);
 

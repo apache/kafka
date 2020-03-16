@@ -87,6 +87,7 @@ import static org.easymock.EasyMock.anyInt;
 import static org.easymock.EasyMock.anyLong;
 import static org.easymock.EasyMock.anyObject;
 import static org.easymock.EasyMock.anyString;
+import static org.easymock.EasyMock.capture;
 import static org.hamcrest.CoreMatchers.hasItem;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
@@ -167,8 +168,8 @@ public class KafkaStreamsTest {
         // setup metrics
         PowerMock.expectNew(Metrics.class,
             anyObject(MetricConfig.class),
-            EasyMock.capture(metricsReportersCapture),
-            EasyMock.anyObject(Time.class)
+            capture(metricsReportersCapture),
+            anyObject(Time.class)
         ).andAnswer(() -> {
             for (final MetricsReporter reporter : metricsReportersCapture.getValue()) {
                 reporter.init(Collections.emptyList());
@@ -232,7 +233,7 @@ public class KafkaStreamsTest {
             anyObject(StateRestoreListener.class)
         ).andReturn(globalStreamThread).anyTimes();
         EasyMock.expect(globalStreamThread.state()).andAnswer(globalThreadState::get).anyTimes();
-        globalStreamThread.setStateListener(EasyMock.capture(threadStatelistenerCapture));
+        globalStreamThread.setStateListener(capture(threadStatelistenerCapture));
         EasyMock.expectLastCall().anyTimes();
 
         globalStreamThread.start();
@@ -246,7 +247,7 @@ public class KafkaStreamsTest {
         globalStreamThread.shutdown();
         EasyMock.expectLastCall().andAnswer(() -> {
             supplier.restoreConsumer.close();
-            for (final MockProducer producer : supplier.producers) {
+            for (final MockProducer<byte[], byte[]> producer : supplier.producers) {
                 producer.close();
             }
             globalThreadState.set(GlobalStreamThread.State.DEAD);
@@ -278,7 +279,7 @@ public class KafkaStreamsTest {
         final AtomicReference<StreamThread.State> state = new AtomicReference<>(StreamThread.State.CREATED);
         EasyMock.expect(thread.state()).andAnswer(state::get).anyTimes();
 
-        thread.setStateListener(EasyMock.capture(threadStatelistenerCapture));
+        thread.setStateListener(capture(threadStatelistenerCapture));
         EasyMock.expectLastCall().anyTimes();
 
         thread.start();
@@ -302,7 +303,7 @@ public class KafkaStreamsTest {
         EasyMock.expectLastCall().andAnswer(() -> {
             supplier.consumer.close();
             supplier.restoreConsumer.close();
-            for (final MockProducer producer : supplier.producers) {
+            for (final MockProducer<byte[], byte[]> producer : supplier.producers) {
                 producer.close();
             }
             state.set(StreamThread.State.DEAD);
@@ -478,7 +479,7 @@ public class KafkaStreamsTest {
 
         assertTrue(supplier.consumer.closed());
         assertTrue(supplier.restoreConsumer.closed());
-        for (final MockProducer p : supplier.producers) {
+        for (final MockProducer<byte[], byte[]> p : supplier.producers) {
             assertTrue(p.closed());
         }
     }
@@ -920,7 +921,7 @@ public class KafkaStreamsTest {
             Serdes.String().deserializer(),
             globalTopicName,
             globalTopicName + "-processor",
-            new MockProcessorSupplier());
+            new MockProcessorSupplier<byte[], byte[]>());
         return topology;
     }
 

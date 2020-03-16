@@ -16,12 +16,10 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
-import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.test.MockInternalProcessorContext;
 import org.apache.kafka.test.MockRecordCollector;
 import org.apache.kafka.test.StreamsTestUtils;
@@ -30,28 +28,12 @@ import org.junit.Test;
 
 import java.util.Properties;
 
-import static org.hamcrest.CoreMatchers.containsString;
-import static org.hamcrest.CoreMatchers.instanceOf;
-import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.fail;
 
 public class SinkNodeTest {
     private final Serializer<byte[]> anySerializer = Serdes.ByteArray().serializer();
-    private final RecordCollector recordCollector = new MockRecordCollector() {
-        @Override
-        public <K, V> void send(final String topic,
-                                final K key,
-                                final V value,
-                                final Headers headers,
-                                final Long timestamp,
-                                final Serializer<K> keySerializer,
-                                final Serializer<V> valueSerializer,
-                                final StreamPartitioner<? super K, ? super V> partitioner) {
-            throw new ClassCastException("boom");
-        }
-    };
-
     private MockInternalProcessorContext context;
+    private final RecordCollector recordCollector = new MockRecordCollector();
     private final SinkNode<byte[], byte[]> sink = new SinkNode<>("anyNodeName",
             new StaticTopicNameExtractor<>("any-output-topic"), anySerializer, anySerializer, null);
 
@@ -80,43 +62,4 @@ public class SinkNodeTest {
             // expected
         }
     }
-
-    @Test
-    public void shouldThrowStreamsExceptionWithClassCastFromRecordCollector() {
-        // When/Then
-        context.setTimestamp(0);
-        try {
-            illTypedSink.process("key", "value");
-            fail("Should have thrown StreamsException");
-        } catch (final StreamsException e) {
-            assertThat(e.getCause(), instanceOf(ClassCastException.class));
-        }
-    }
-
-    @Test
-    public void shouldThrowStreamsExceptionNullKeyWithClassCastFromRecordCollector() {
-        // When/Then
-        context.setTimestamp(1);
-        try {
-            illTypedSink.process(null, "");
-            fail("Should have thrown StreamsException");
-        } catch (final StreamsException e) {
-            assertThat(e.getCause(), instanceOf(ClassCastException.class));
-            assertThat(e.getMessage(), containsString("unknown because key is null"));
-        }
-    }
-
-    @Test
-    public void shouldThrowStreamsExceptionNullValueWithClassCastFromRecordCollector() {
-        // When/Then
-        context.setTimestamp(1);
-        try {
-            illTypedSink.process("", null);
-            fail("Should have thrown StreamsException");
-        } catch (final StreamsException e) {
-            assertThat(e.getCause(), instanceOf(ClassCastException.class));
-            assertThat(e.getMessage(), containsString("unknown because value is null"));
-        }
-    }
-
 }

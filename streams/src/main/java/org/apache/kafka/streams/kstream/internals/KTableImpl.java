@@ -72,6 +72,7 @@ import org.slf4j.LoggerFactory;
 import java.time.Duration;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.function.Function;
@@ -529,10 +530,27 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
             this
         );
 
+        final StoreBuilder<InMemoryTimeOrderedKeyValueBuffer<K, V>> storeBuilder;
+
+        if (suppressedInternal.bufferConfig().isLoggingEnabled()) {
+            final Map<String, String> topicConfig = suppressedInternal.bufferConfig().getLogConfig();
+            storeBuilder = new InMemoryTimeOrderedKeyValueBuffer.Builder<>(
+                storeName,
+                keySerde,
+                valSerde)
+                .withLoggingEnabled(topicConfig);
+        } else {
+            storeBuilder = new InMemoryTimeOrderedKeyValueBuffer.Builder<>(
+                storeName,
+                keySerde,
+                valSerde)
+                .withLoggingDisabled();
+        }
+
         final ProcessorGraphNode<K, Change<V>> node = new StatefulProcessorNode<>(
             name,
             new ProcessorParameters<>(suppressionSupplier, name),
-            new InMemoryTimeOrderedKeyValueBuffer.Builder<>(storeName, keySerde, valSerde)
+            storeBuilder
         );
 
         builder.addGraphNode(streamsGraphNode, node);
@@ -1085,6 +1103,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         final SubscriptionResolverJoinProcessorSupplier<K, V, VO, VR> resolverProcessorSupplier = new SubscriptionResolverJoinProcessorSupplier<>(
             primaryKeyValueGetter,
             valSerde == null ? null : valSerde.serializer(),
+            valueHashSerdePseudoTopic,
             joiner,
             leftJoin
         );

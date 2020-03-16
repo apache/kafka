@@ -134,7 +134,6 @@ import static org.junit.Assert.fail;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.spy;
 
-@SuppressWarnings("deprecation")
 public class FetcherTest {
     private static final double EPSILON = 0.0001;
 
@@ -2011,7 +2010,7 @@ public class FetcherTest {
             ClientRequest request = client.newClientRequest(node.idString(), builder, time.milliseconds(), true);
             client.send(request, time.milliseconds());
             client.poll(1, time.milliseconds());
-            FetchResponse response = fullFetchResponse(tp0, nextRecords, Errors.NONE, i, throttleTimeMs);
+            FetchResponse<MemoryRecords> response = fullFetchResponse(tp0, nextRecords, Errors.NONE, i, throttleTimeMs);
             buffer = response.serialize(ApiKeys.FETCH,
                     ApiKeys.FETCH.latestVersion(),
                     request.correlationId());
@@ -3104,7 +3103,7 @@ public class FetcherTest {
                 2, 0L, null, this.records));
         partitions1.put(tp1, new FetchResponse.PartitionData<>(Errors.NONE, 100L,
                 FetchResponse.INVALID_LAST_STABLE_OFFSET, 0L, null, emptyRecords));
-        FetchResponse resp1 = new FetchResponse<>(Errors.NONE, partitions1, 0, 123);
+        FetchResponse<MemoryRecords> resp1 = new FetchResponse<>(Errors.NONE, partitions1, 0, 123);
         client.prepareResponse(resp1);
         assertEquals(1, fetcher.sendFetches());
         assertFalse(fetcher.hasCompletedFetches());
@@ -3130,7 +3129,7 @@ public class FetcherTest {
 
         // The second response contains no new records.
         LinkedHashMap<TopicPartition, FetchResponse.PartitionData<MemoryRecords>> partitions2 = new LinkedHashMap<>();
-        FetchResponse resp2 = new FetchResponse<>(Errors.NONE, partitions2, 0, 123);
+        FetchResponse<MemoryRecords> resp2 = new FetchResponse<>(Errors.NONE, partitions2, 0, 123);
         client.prepareResponse(resp2);
         assertEquals(1, fetcher.sendFetches());
         consumerClient.poll(time.timer(0));
@@ -3143,7 +3142,7 @@ public class FetcherTest {
         LinkedHashMap<TopicPartition, FetchResponse.PartitionData<MemoryRecords>> partitions3 = new LinkedHashMap<>();
         partitions3.put(tp0, new FetchResponse.PartitionData<>(Errors.NONE, 100L,
                 4, 0L, null, this.nextRecords));
-        FetchResponse resp3 = new FetchResponse<>(Errors.NONE, partitions3, 0, 123);
+        FetchResponse<MemoryRecords> resp3 = new FetchResponse<>(Errors.NONE, partitions3, 0, 123);
         client.prepareResponse(resp3);
         assertEquals(1, fetcher.sendFetches());
         consumerClient.poll(time.timer(0));
@@ -3202,7 +3201,7 @@ public class FetcherTest {
                         }
 
                         @Override
-                        public boolean handleResponse(FetchResponse response) {
+                        public boolean handleResponse(FetchResponse<?> response) {
                             verifySessionPartitions();
                             return handler.handleResponse(response);
                         }
@@ -3907,6 +3906,30 @@ public class FetcherTest {
         consumerClient.poll(time.timer(0));
 
         assertEquals(1, fetcher.sendFetches());
+    }
+
+    @Test
+    public void testCorruptMessageError() {
+        buildFetcher();
+        assignFromUser(singleton(tp0));
+        subscriptions.seek(tp0, 0);
+
+        assertEquals(1, fetcher.sendFetches());
+        assertFalse(fetcher.hasCompletedFetches());
+
+        // Prepare a response with the CORRUPT_MESSAGE error.
+        client.prepareResponse(fullFetchResponse(
+                tp0,
+                buildRecords(1L, 1, 1),
+                Errors.CORRUPT_MESSAGE,
+                100L, 0));
+        consumerClient.poll(time.timer(0));
+        assertTrue(fetcher.hasCompletedFetches());
+
+        // Trigger the exception.
+        assertThrows(KafkaException.class, () -> {
+            fetchedRecords();
+        });
     }
 
     private MockClient.RequestMatcher listOffsetRequestMatcher(final long timestamp) {

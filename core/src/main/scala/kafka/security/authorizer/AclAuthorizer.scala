@@ -22,7 +22,7 @@ import java.util.concurrent.locks.ReentrantReadWriteLock
 
 import com.typesafe.scalalogging.Logger
 import kafka.api.KAFKA_2_0_IV1
-import kafka.security.authorizer.AclAuthorizer.VersionedAcls
+import kafka.security.authorizer.AclAuthorizer.{AclSets, ResourceOrdering, VersionedAcls}
 import kafka.security.authorizer.AclEntry.ResourceSeparator
 import kafka.server.{KafkaConfig, KafkaServer}
 import kafka.utils.CoreUtils.{inReadLock, inWriteLock}
@@ -36,7 +36,7 @@ import org.apache.kafka.common.errors.{ApiException, InvalidRequestException, Un
 import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.resource._
 import org.apache.kafka.common.security.auth.KafkaPrincipal
-import org.apache.kafka.common.utils.{Time, SecurityUtils}
+import org.apache.kafka.common.utils.{SecurityUtils, Time}
 import org.apache.kafka.server.authorizer.AclDeleteResult.AclBindingDeleteResult
 import org.apache.kafka.server.authorizer._
 import org.apache.zookeeper.client.ZKClientConfig
@@ -63,11 +63,17 @@ object AclAuthorizer {
   case class VersionedAcls(acls: Set[AclEntry], zkVersion: Int) {
     def exists: Boolean = zkVersion != ZkVersion.UnknownVersion
   }
+
+  class AclSets(sets: Set[AclEntry]*) {
+    def find(p: AclEntry => Boolean): Option[AclEntry] = sets.flatMap(_.find(p)).headOption
+    def isEmpty: Boolean = !sets.exists(_.nonEmpty)
+  }
+
   val NoAcls = VersionedAcls(Set.empty, ZkVersion.UnknownVersion)
   val WildcardHost = "*"
 
   // Orders by resource type, then resource pattern type and finally reverse ordering by name.
-  private object ResourceOrdering extends Ordering[ResourcePattern] {
+  class ResourceOrdering extends Ordering[ResourcePattern] {
 
     def compare(a: ResourcePattern, b: ResourcePattern): Int = {
       val rt = a.resourceType.compareTo(b.resourceType)
@@ -116,7 +122,7 @@ class AclAuthorizer extends Authorizer with Logging {
   private var extendedAclSupport: Boolean = _
 
   @volatile
-  private var aclCache = new scala.collection.immutable.TreeMap[ResourcePattern, VersionedAcls]()(AclAuthorizer.ResourceOrdering)
+  private var aclCache = new scala.collection.immutable.TreeMap[ResourcePattern, VersionedAcls]()(new ResourceOrdering)
   private val lock = new ReentrantReadWriteLock()
 
   // The maximum number of times we should try to update the resource acls in zookeeper before failing;
@@ -252,7 +258,7 @@ class AclAuthorizer extends Authorizer with Logging {
       }
     }
     val deletedResult = deletedBindings.groupBy(_._2)
-      .mapValues(_.map{ case (binding, _) => new AclBindingDeleteResult(binding, deleteExceptions.getOrElse(binding, null)) })
+      .mapValues(_.map { case (binding, _) => new AclBindingDeleteResult(binding, deleteExceptions.getOrElse(binding, null)) })
     (0 until aclBindingFilters.size).map { i =>
       new AclDeleteResult(deletedResult.getOrElse(i, Set.empty[AclBindingDeleteResult]).toSet.asJava)
     }.map(CompletableFuture.completedFuture[AclDeleteResult]).asJava
@@ -260,10 +266,15 @@ class AclAuthorizer extends Authorizer with Logging {
 
   override def acls(filter: AclBindingFilter): lang.Iterable[AclBinding] = {
     inReadLock(lock) {
-      unorderedAcls.flatMap { case (resource, versionedAcls) =>
-        versionedAcls.acls.map(acl => new AclBinding(resource, acl.ace))
-            .filter(filter.matches)
-      }.asJava
+      val aclBindings = new util.ArrayList[AclBinding]()
+      unorderedAcls.foreach { case (resource, versionedAcls) =>
+        versionedAcls.acls.foreach { acl =>
+          val binding = new AclBinding(resource, acl.ace)
+          if (filter.matches(binding))
+            aclBindings.add(binding)
+        }
+      }
+      aclBindings
     }
   }
 
@@ -288,7 +299,7 @@ class AclAuthorizer extends Authorizer with Logging {
     val host = requestContext.clientAddress.getHostAddress
     val operation = action.operation
 
-    def isEmptyAclAndAuthorized(acls: Set[AclEntry]): Boolean = {
+    def isEmptyAclAndAuthorized(acls: AclSets): Boolean = {
       if (acls.isEmpty) {
         // No ACLs found for this resource, permission is determined by value of config allow.everyone.if.no.acl.found
         authorizerLogger.debug(s"No acl found for resource $resource, authorized = $shouldAllowEveryoneIfNoAclIsFound")
@@ -296,12 +307,12 @@ class AclAuthorizer extends Authorizer with Logging {
       } else false
     }
 
-    def denyAclExists(acls: Set[AclEntry]): Boolean = {
+    def denyAclExists(acls: AclSets): Boolean = {
       // Check if there are any Deny ACLs which would forbid this operation.
       matchingAclExists(operation, resource, principal, host, DENY, acls)
     }
 
-    def allowAclExists(acls: Set[AclEntry]): Boolean = {
+    def allowAclExists(acls: AclSets): Boolean = {
       // Check if there are any Allow ACLs which would allow this operation.
       // Allowing read, write, delete, or alter implies allowing describe.
       // See #{org.apache.kafka.common.acl.AclOperation} for more details about ACL inheritance.
@@ -334,7 +345,7 @@ class AclAuthorizer extends Authorizer with Logging {
     } else false
   }
 
-  private def matchingAcls(resourceType: ResourceType, resourceName: String): Set[AclEntry] = {
+  private def matchingAcls(resourceType: ResourceType, resourceName: String): AclSets = {
     inReadLock(lock) {
       val wildcard = aclCache.get(new ResourcePattern(resourceType, ResourcePattern.WILDCARD_RESOURCE, PatternType.LITERAL))
         .map(_.acls)
@@ -352,7 +363,7 @@ class AclAuthorizer extends Authorizer with Logging {
         .flatMap { _.acls }
         .toSet
 
-      prefixed ++ wildcard ++ literal
+      new AclSets(prefixed, wildcard, literal)
     }
   }
 
@@ -361,7 +372,7 @@ class AclAuthorizer extends Authorizer with Logging {
                                 principal: KafkaPrincipal,
                                 host: String,
                                 permissionType: AclPermissionType,
-                                acls: Set[AclEntry]): Boolean = {
+                                acls: AclSets): Boolean = {
     acls.find { acl =>
       acl.permissionType == permissionType &&
         (acl.kafkaPrincipal == principal || acl.kafkaPrincipal == AclEntry.WildcardPrincipal) &&

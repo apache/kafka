@@ -40,7 +40,8 @@
     <allow class="kafka.utils.KafkaScheduler"/>
     <allow class="org.apache.kafka.clients.FetchSessionHandler"/>
     <allow pkg="org.mockito"/>
-
+    <allow pkg="kafka.security.authorizer"/>
+    <allow pkg="org.apache.kafka.server"/>
 
     <subpackage name="cache">
     </subpackage>

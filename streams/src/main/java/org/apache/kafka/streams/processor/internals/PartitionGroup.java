@@ -62,7 +62,7 @@ public class PartitionGroup {
     static class RecordInfo {
         RecordQueue queue;
 
-        ProcessorNode node() {
+        ProcessorNode<?, ?> node() {
             return queue.source();
         }
 
@@ -220,15 +220,14 @@ public class PartitionGroup {
 
     void close() {
         clear();
-        partitionQueues.clear();
-        streamTime = RecordQueue.UNKNOWN;
     }
 
     void clear() {
-        nonEmptyQueuesByTime.clear();
-        totalBuffered = 0;
         for (final RecordQueue queue : partitionQueues.values()) {
             queue.clear();
         }
+        nonEmptyQueuesByTime.clear();
+        totalBuffered = 0;
+        streamTime = RecordQueue.UNKNOWN;
     }
 }

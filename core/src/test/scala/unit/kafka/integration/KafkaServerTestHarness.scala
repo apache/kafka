@@ -23,7 +23,7 @@ import java.util.Arrays
 import kafka.server._
 import kafka.utils.TestUtils
 import kafka.zk.ZooKeeperTestHarness
-import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
+import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.junit.{After, Before}
 
 import scala.collection.Seq
@@ -42,7 +42,6 @@ abstract class KafkaServerTestHarness extends ZooKeeperTestHarness {
   var servers: Buffer[KafkaServer] = new ArrayBuffer
   var brokerList: String = null
   var alive: Array[Boolean] = null
-  val kafkaPrincipalType = KafkaPrincipal.USER_TYPE
 
   /**
    * Implementations must override this method to return a set of KafkaConfigs. This method will be invoked for every

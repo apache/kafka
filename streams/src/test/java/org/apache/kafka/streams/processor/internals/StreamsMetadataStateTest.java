@@ -35,6 +35,7 @@ import org.junit.Before;
 import org.junit.Test;
 
 import java.util.Arrays;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -49,6 +50,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.assertFalse;
 
 public class StreamsMetadataStateTest {
 
@@ -338,5 +340,29 @@ public class StreamsMetadataStateTest {
         final StreamsMetadataState streamsMetadataState = new StreamsMetadataState(TopologyWrapper.getInternalTopologyBuilder(builder.build()), StreamsMetadataState.UNKNOWN_HOST);
         streamsMetadataState.onChange(hostToActivePartitions, hostToStandbyPartitions, cluster);
         assertNotNull(streamsMetadataState.getKeyQueryMetadataForKey(globalTable, "key", partitioner));
+    }
+
+    @Test
+    public void shouldReturnAllMetadataThatRemainsValidAfterChange() {
+        final Collection<StreamsMetadata> allMetadata = metadataState.getAllMetadata();
+        final Collection<StreamsMetadata> copy = new ArrayList<>(allMetadata);
+        assertFalse("invalid test", allMetadata.isEmpty());
+        metadataState.onChange(Collections.emptyMap(), Collections.emptyMap(), cluster);
+        assertEquals("encapsulation broken", allMetadata, copy);
+    }
+
+    @Test
+    public void shouldNotReturnMutableReferenceToInternalAllMetadataCollection() {
+        final Collection<StreamsMetadata> allMetadata = metadataState.getAllMetadata();
+        assertFalse("invalid test", allMetadata.isEmpty());
+
+        try {
+            // Either this should not affect internal state of 'metadataState'
+            allMetadata.clear();
+        } catch (final UnsupportedOperationException e) {
+            // Or should fail.
+        }
+
+        assertFalse("encapsulation broken", metadataState.getAllMetadata().isEmpty());
     }
 }

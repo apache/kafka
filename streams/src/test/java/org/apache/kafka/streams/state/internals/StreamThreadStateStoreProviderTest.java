@@ -29,6 +29,7 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.TopologyWrapper;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.processor.internals.ProcessorTopology;
@@ -36,9 +37,9 @@ import org.apache.kafka.streams.processor.internals.RecordCollector;
 import org.apache.kafka.streams.processor.internals.RecordCollectorImpl;
 import org.apache.kafka.streams.processor.internals.StateDirectory;
 import org.apache.kafka.streams.processor.internals.StoreChangelogReader;
-import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.processor.internals.StreamTask;
 import org.apache.kafka.streams.processor.internals.StreamThread;
+import org.apache.kafka.streams.processor.internals.StreamsProducer;
 import org.apache.kafka.streams.processor.internals.Task;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
@@ -59,6 +60,7 @@ import org.junit.Test;
 import java.io.File;
 import java.io.IOException;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
@@ -66,12 +68,14 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
-import java.util.stream.Collectors;
 
+import static org.apache.kafka.streams.StreamsConfig.EXACTLY_ONCE;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.instanceOf;
 import static org.hamcrest.Matchers.not;
+import static org.hamcrest.core.IsEqual.equalTo;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertThrows;
 
 public class StreamThreadStateStoreProviderTest {
 
@@ -87,7 +91,7 @@ public class StreamThreadStateStoreProviderTest {
     public void before() {
         final TopologyWrapper topology = new TopologyWrapper();
         topology.addSource("the-source", topicName);
-        topology.addProcessor("the-processor", new MockProcessorSupplier(), "the-source");
+        topology.addProcessor("the-processor", new MockProcessorSupplier<>(), "the-source");
         topology.addStateStore(
             Stores.keyValueStoreBuilder(
                 Stores.inMemoryKeyValueStore("kv-store"),
@@ -134,7 +138,7 @@ public class StreamThreadStateStoreProviderTest {
         configureRestoreConsumer(clientSupplier, "applicationId-window-store-changelog");
 
         final InternalTopologyBuilder internalTopologyBuilder = topology.getInternalBuilder(applicationId);
-        final ProcessorTopology processorTopology = internalTopologyBuilder.build();
+        final ProcessorTopology processorTopology = internalTopologyBuilder.buildTopology();
 
         tasks = new HashMap<>();
         stateDirectory = new StateDirectory(streamsConfig, new MockTime(), true);
@@ -290,6 +294,48 @@ public class StreamThreadStateStoreProviderTest {
     }
 
     @Test
+    public void shouldReturnSingleStoreForPartition() {
+        mockThread(true);
+        {
+            final List<ReadOnlyKeyValueStore<String, String>> kvStores =
+                provider.stores(
+                    StoreQueryParameters
+                        .fromNameAndType("kv-store", QueryableStoreTypes.keyValueStore())
+                        .withPartition(0));
+            assertEquals(1, kvStores.size());
+            for (final ReadOnlyKeyValueStore<String, String> store : kvStores) {
+                assertThat(store, instanceOf(ReadOnlyKeyValueStore.class));
+                assertThat(store, not(instanceOf(TimestampedKeyValueStore.class)));
+            }
+        }
+        {
+            final List<ReadOnlyKeyValueStore<String, String>> kvStores =
+                provider.stores(
+                    StoreQueryParameters
+                        .fromNameAndType("kv-store", QueryableStoreTypes.keyValueStore())
+                        .withPartition(1));
+            assertEquals(1, kvStores.size());
+            for (final ReadOnlyKeyValueStore<String, String> store : kvStores) {
+                assertThat(store, instanceOf(ReadOnlyKeyValueStore.class));
+                assertThat(store, not(instanceOf(TimestampedKeyValueStore.class)));
+            }
+        }
+    }
+
+    @Test
+    public void shouldThrowForInvalidPartitions() {
+        mockThread(true);
+        final InvalidStateStoreException thrown = assertThrows(
+            InvalidStateStoreException.class,
+            () -> provider.stores(
+                StoreQueryParameters
+                    .fromNameAndType("kv-store", QueryableStoreTypes.keyValueStore())
+                    .withPartition(2))
+        );
+        assertThat(thrown.getMessage(), equalTo("The specified partition 2 for store kv-store does not exist."));
+    }
+
+    @Test
     public void shouldReturnEmptyListIfStoreExistsButIsNotOfTypeValueStore() {
         mockThread(true);
         assertEquals(
@@ -313,24 +359,26 @@ public class StreamThreadStateStoreProviderTest {
         final Set<TopicPartition> partitions = Collections.singleton(new TopicPartition(topicName, taskId.partition));
         final ProcessorStateManager stateManager = new ProcessorStateManager(
             taskId,
-            partitions,
             Task.TaskType.ACTIVE,
+            EXACTLY_ONCE.equals(streamsConfig.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG)),
+            logContext,
             stateDirectory,
-            topology.storeToChangelogTopic(),
             new StoreChangelogReader(
                 new MockTime(),
                 streamsConfig,
                 logContext,
                 clientSupplier.restoreConsumer,
                 new MockStateRestoreListener()),
-            logContext);
+            topology.storeToChangelogTopic(), partitions);
+        final boolean eosEnabled = StreamsConfig.EXACTLY_ONCE.equals(streamsConfig.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG));
         final RecordCollector recordCollector = new RecordCollectorImpl(
-            taskId,
-            streamsConfig,
             logContext,
-            new MockStreamsMetrics(metrics),
+            taskId,
             clientSupplier.consumer,
-            id -> clientSupplier.getProducer(new HashMap<>()));
+            new StreamsProducer(clientSupplier.getProducer(new HashMap<>()), eosEnabled, logContext, streamsConfig.getString(StreamsConfig.APPLICATION_ID_CONFIG)),
+            streamsConfig.defaultProductionExceptionHandler(),
+            eosEnabled,
+            new MockStreamsMetrics(metrics));
         return new StreamTask(
             taskId,
             partitions,
@@ -349,7 +397,7 @@ public class StreamThreadStateStoreProviderTest {
         EasyMock.expect(threadMock.isRunning()).andReturn(initialized);
         EasyMock.expect(threadMock.allTasks()).andStubReturn(tasks);
         EasyMock.expect(threadMock.activeTaskMap()).andStubReturn(tasks);
-        EasyMock.expect(threadMock.activeTasks()).andStubReturn(tasks.values().stream().collect(Collectors.toList()));
+        EasyMock.expect(threadMock.activeTasks()).andStubReturn(new ArrayList<>(tasks.values()));
         EasyMock.expect(threadMock.state()).andReturn(
             initialized ? StreamThread.State.RUNNING : StreamThread.State.PARTITIONS_ASSIGNED
         ).anyTimes();

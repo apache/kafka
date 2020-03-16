@@ -20,8 +20,11 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 
+import java.util.Collection;
 import java.util.Set;
+import org.slf4j.Logger;
 
+import static org.apache.kafka.streams.processor.internals.Task.State.CLOSED;
 import static org.apache.kafka.streams.processor.internals.Task.State.CREATED;
 
 public abstract class AbstractTask implements Task {
@@ -56,6 +59,16 @@ public abstract class AbstractTask implements Task {
     }
 
     @Override
+    public Collection<TopicPartition> changelogPartitions() {
+        return stateMgr.changelogPartitions();
+    }
+
+    @Override
+    public void markChangelogAsCorrupted(final Collection<TopicPartition> partitions) {
+        stateMgr.markChangelogAsCorrupted(partitions);
+    }
+
+    @Override
     public StateStore getStore(final String name) {
         return stateMgr.getStore(name);
     }
@@ -70,6 +83,15 @@ public abstract class AbstractTask implements Task {
         return state;
     }
 
+    @Override
+    public void revive() {
+        if (state == CLOSED) {
+            transitionTo(CREATED);
+        } else {
+            throw new IllegalStateException("Illegal state " + state() + " while reviving task " + id);
+        }
+    }
+
     final void transitionTo(final Task.State newState) {
         final State oldState = state();
 
@@ -77,6 +99,21 @@ public abstract class AbstractTask implements Task {
             state = newState;
         } else {
             throw new IllegalStateException("Invalid transition from " + oldState + " to " + newState);
+        }
+    }
+
+    static void executeAndMaybeSwallow(final boolean clean,
+                                       final Runnable runnable,
+                                       final String name,
+                                       final Logger log) {
+        try {
+            runnable.run();
+        } catch (final RuntimeException e) {
+            if (clean) {
+                throw e;
+            } else {
+                log.debug("Ignoring error in unclean {}", name);
+            }
         }
     }
 }

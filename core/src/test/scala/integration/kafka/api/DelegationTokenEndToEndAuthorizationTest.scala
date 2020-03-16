@@ -23,7 +23,7 @@ import kafka.utils.{JaasTestUtils, TestUtils}
 import kafka.zk.ConfigEntityChangeNotificationZNode
 import org.apache.kafka.clients.admin.{Admin, AdminClientConfig}
 import org.apache.kafka.common.config.SaslConfigs
-import org.apache.kafka.common.security.auth.SecurityProtocol
+import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.common.security.scram.ScramCredential
 import org.apache.kafka.common.security.scram.internals.ScramMechanism
 import org.apache.kafka.common.security.token.delegation.DelegationToken
@@ -39,10 +39,10 @@ class DelegationTokenEndToEndAuthorizationTest extends EndToEndAuthorizationTest
   override protected val serverSaslProperties = Some(kafkaServerSaslProperties(kafkaServerSaslMechanisms, kafkaClientSaslMechanism))
   override protected val clientSaslProperties = Some(kafkaClientSaslProperties(kafkaClientSaslMechanism))
 
-  override val clientPrincipal = JaasTestUtils.KafkaScramUser
+  override val clientPrincipal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, JaasTestUtils.KafkaScramUser)
   private val clientPassword = JaasTestUtils.KafkaScramPassword
 
-  override val kafkaPrincipal = JaasTestUtils.KafkaScramAdmin
+  override val kafkaPrincipal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, JaasTestUtils.KafkaScramAdmin)
   private val kafkaPassword = JaasTestUtils.KafkaScramAdminPassword
 
   this.serverConfig.setProperty(KafkaConfig.DelegationTokenMasterKeyProp, "testKey")
@@ -51,15 +51,15 @@ class DelegationTokenEndToEndAuthorizationTest extends EndToEndAuthorizationTest
     super.configureSecurityBeforeServersStart()
     zkClient.makeSurePersistentPathExists(ConfigEntityChangeNotificationZNode.path)
     // Create broker admin credentials before starting brokers
-    createScramCredentials(zkConnect, kafkaPrincipal, kafkaPassword)
+    createScramCredentials(zkConnect, kafkaPrincipal.getName, kafkaPassword)
   }
 
   override def configureSecurityAfterServersStart(): Unit = {
     super.configureSecurityAfterServersStart()
 
     // create scram credential for user "scram-user"
-    createScramCredentials(zkConnect, clientPrincipal, clientPassword)
-    waitForScramCredentials(clientPrincipal)
+    createScramCredentials(zkConnect, clientPrincipal.getName, clientPassword)
+    waitForScramCredentials(clientPrincipal.getName)
 
     //create a token with "scram-user" credentials
     val token = createDelegationToken()

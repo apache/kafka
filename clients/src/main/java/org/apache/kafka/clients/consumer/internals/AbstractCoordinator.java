@@ -426,7 +426,7 @@ public abstract class AbstractCoordinator implements Closeable {
 
                 // Generation data maybe concurrently cleared by Heartbeat thread.
                 // Can't use synchronized for {@code onJoinComplete}, because it can be long enough
-                // and  shouldn't block hearbeat thread.
+                // and  shouldn't block heartbeat thread.
                 // See {@link PlaintextConsumerTest#testMaxPollIntervalMsDelayInAssignment
                 synchronized (AbstractCoordinator.this) {
                     generationSnapshot = this.generation;
@@ -576,7 +576,7 @@ public abstract class AbstractCoordinator implements Closeable {
             Errors error = joinResponse.error();
             if (error == Errors.NONE) {
                 if (isProtocolTypeInconsistent(joinResponse.data().protocolType())) {
-                    log.debug("JoinGroup failed due to inconsistent Protocol Type, received {} but expected {}",
+                    log.error("JoinGroup failed due to inconsistent Protocol Type, received {} but expected {}",
                         joinResponse.data().protocolType(), protocolType());
                     future.raise(Errors.INCONSISTENT_GROUP_PROTOCOL);
                 } else {
@@ -717,11 +717,11 @@ public abstract class AbstractCoordinator implements Closeable {
             Errors error = syncResponse.error();
             if (error == Errors.NONE) {
                 if (isProtocolTypeInconsistent(syncResponse.data.protocolType())) {
-                    log.debug("SyncGroup failed due to inconsistent Protocol Type, received {} but expected {}",
+                    log.error("SyncGroup failed due to inconsistent Protocol Type, received {} but expected {}",
                         syncResponse.data.protocolType(), protocolType());
                     future.raise(Errors.INCONSISTENT_GROUP_PROTOCOL);
                 } else if (isProtocolNameInconsistent(syncResponse.data.protocolName())) {
-                    log.debug("SyncGroup failed due to inconsistent Protocol Name, received {} but expected {}",
+                    log.error("SyncGroup failed due to inconsistent Protocol Name, received {} but expected {}",
                         syncResponse.data.protocolName(), generation().protocolName);
                     future.raise(Errors.INCONSISTENT_GROUP_PROTOCOL);
                 } else {
@@ -904,7 +904,7 @@ public abstract class AbstractCoordinator implements Closeable {
         resetGeneration();
     }
 
-    protected synchronized void requestRejoin() {
+    public synchronized void requestRejoin() {
         this.rejoinNeeded = true;
     }
 

@@ -678,6 +678,7 @@ public class StickyTaskAssignorTest {
         final List<TaskId> taskIds = Arrays.asList(tasks);
         Collections.shuffle(taskIds);
         return new StickyTaskAssignor<>(clients,
+                                        new HashSet<>(taskIds),
                                         new HashSet<>(taskIds));
     }
 

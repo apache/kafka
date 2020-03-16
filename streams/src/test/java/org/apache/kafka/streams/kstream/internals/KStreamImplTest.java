@@ -366,7 +366,7 @@ public class KStreamImplTest {
     public void shouldNotAllowNullNamedOnFlatMap() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
-            () -> testStream.flatMap((k, v) -> Collections.emptyList(), null));
+            () -> testStream.flatMap((k, v) -> Collections.singleton(new KeyValue<>(k, v)), null));
         assertThat(exception.getMessage(), equalTo("named can't be null"));
     }
 
@@ -1340,7 +1340,7 @@ public class KStreamImplTest {
                 1 + // to
                 2 + // through
                 1, // process
-            TopologyWrapper.getInternalTopologyBuilder(builder.build()).setApplicationId("X").build().processors().size());
+            TopologyWrapper.getInternalTopologyBuilder(builder.build()).setApplicationId("X").buildTopology().processors().size());
     }
 
     @SuppressWarnings("rawtypes")
@@ -1444,7 +1444,7 @@ public class KStreamImplTest {
         stream1.to("topic-5");
         stream2.through("topic-6");
 
-        final ProcessorTopology processorTopology = TopologyWrapper.getInternalTopologyBuilder(builder.build()).setApplicationId("X").build();
+        final ProcessorTopology processorTopology = TopologyWrapper.getInternalTopologyBuilder(builder.build()).setApplicationId("X").buildTopology();
         assertThat(processorTopology.source("topic-6").getTimestampExtractor(), instanceOf(FailOnInvalidTimestamp.class));
         assertNull(processorTopology.source("topic-4").getTimestampExtractor());
         assertNull(processorTopology.source("topic-3").getTimestampExtractor());
@@ -1506,7 +1506,7 @@ public class KStreamImplTest {
         assertThat(mockProcessors.get(1).processed, equalTo(Collections.singletonList(new KeyValueTimestamp<>("b", "v1", 0))));
     }
 
-    @SuppressWarnings({"rawtypes", "deprecation"}) // specifically testing the deprecated variant
+    @SuppressWarnings("deprecation") // specifically testing the deprecated variant
     @Test
     public void shouldUseRecordMetadataTimestampExtractorWhenInternalRepartitioningTopicCreatedWithRetention() {
         final StreamsBuilder builder = new StreamsBuilder();
@@ -1523,11 +1523,11 @@ public class KStreamImplTest {
                 Serdes.String()))
             .to("output-topic", Produced.with(Serdes.String(), Serdes.String()));
 
-        final ProcessorTopology topology = TopologyWrapper.getInternalTopologyBuilder(builder.build()).setApplicationId("X").build();
+        final ProcessorTopology topology = TopologyWrapper.getInternalTopologyBuilder(builder.build()).setApplicationId("X").buildTopology();
 
-        final SourceNode originalSourceNode = topology.source("topic-1");
+        final SourceNode<?, ?> originalSourceNode = topology.source("topic-1");
 
-        for (final SourceNode sourceNode : topology.sources()) {
+        for (final SourceNode<?, ?> sourceNode : topology.sources()) {
             if (sourceNode.name().equals(originalSourceNode.name())) {
                 assertNull(sourceNode.getTimestampExtractor());
             } else {
@@ -1536,7 +1536,6 @@ public class KStreamImplTest {
         }
     }
 
-    @SuppressWarnings("rawtypes")
     @Test
     public void shouldUseRecordMetadataTimestampExtractorWhenInternalRepartitioningTopicCreated() {
         final StreamsBuilder builder = new StreamsBuilder();
@@ -1553,11 +1552,11 @@ public class KStreamImplTest {
         )
             .to("output-topic", Produced.with(Serdes.String(), Serdes.String()));
 
-        final ProcessorTopology topology = TopologyWrapper.getInternalTopologyBuilder(builder.build()).setApplicationId("X").build();
+        final ProcessorTopology topology = TopologyWrapper.getInternalTopologyBuilder(builder.build()).setApplicationId("X").buildTopology();
 
-        final SourceNode originalSourceNode = topology.source("topic-1");
+        final SourceNode<?, ?> originalSourceNode = topology.source("topic-1");
 
-        for (final SourceNode sourceNode : topology.sources()) {
+        for (final SourceNode<?, ?> sourceNode : topology.sources()) {
             if (sourceNode.name().equals(originalSourceNode.name())) {
                 assertNull(sourceNode.getTimestampExtractor());
             } else {

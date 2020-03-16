@@ -68,6 +68,7 @@ import org.apache.kafka.common.message.DeleteAclsResponseData;
 import org.apache.kafka.common.message.DeleteGroupsResponseData;
 import org.apache.kafka.common.message.DeleteGroupsResponseData.DeletableGroupResult;
 import org.apache.kafka.common.message.DeleteGroupsResponseData.DeletableGroupResultCollection;
+import org.apache.kafka.common.message.DeleteRecordsResponseData;
 import org.apache.kafka.common.message.DeleteTopicsResponseData;
 import org.apache.kafka.common.message.DeleteTopicsResponseData.DeletableTopicResult;
 import org.apache.kafka.common.message.DescribeAclsResponseData;
@@ -88,6 +89,11 @@ import org.apache.kafka.common.message.OffsetDeleteResponseData.OffsetDeleteResp
 import org.apache.kafka.common.message.OffsetDeleteResponseData.OffsetDeleteResponseTopic;
 import org.apache.kafka.common.message.OffsetDeleteResponseData.OffsetDeleteResponseTopicCollection;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.quota.ClientQuotaAlteration;
+import org.apache.kafka.common.quota.ClientQuotaEntity;
+import org.apache.kafka.common.quota.ClientQuotaFilter;
+import org.apache.kafka.common.quota.ClientQuotaFilterComponent;
+import org.apache.kafka.common.requests.AlterClientQuotasResponse;
 import org.apache.kafka.common.requests.AlterPartitionReassignmentsResponse;
 import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.common.requests.CreateAclsResponse;
@@ -100,6 +106,7 @@ import org.apache.kafka.common.requests.DeleteRecordsResponse;
 import org.apache.kafka.common.requests.DeleteTopicsRequest;
 import org.apache.kafka.common.requests.DeleteTopicsResponse;
 import org.apache.kafka.common.requests.DescribeAclsResponse;
+import org.apache.kafka.common.requests.DescribeClientQuotasResponse;
 import org.apache.kafka.common.requests.DescribeConfigsResponse;
 import org.apache.kafka.common.requests.DescribeGroupsResponse;
 import org.apache.kafka.common.requests.ElectLeadersResponse;
@@ -637,6 +644,7 @@ public class KafkaAdminClientTest {
             env.kafkaClient().createPendingAuthenticationError(cluster.nodes().get(0),
                     TimeUnit.DAYS.toMillis(1));
             callAdminClientApisAndExpectAnAuthenticationError(env);
+            callClientQuotasApisAndExpectAnAuthenticationError(env);
         }
     }
 
@@ -688,6 +696,26 @@ public class KafkaAdminClientTest {
 
         try {
             env.adminClient().describeConfigs(Collections.singleton(new ConfigResource(ConfigResource.Type.BROKER, "0"))).all().get();
+            fail("Expected an authentication error.");
+        } catch (ExecutionException e) {
+            assertTrue("Expected an authentication error, but got " + Utils.stackTrace(e),
+                e.getCause() instanceof AuthenticationException);
+        }
+    }
+
+    private void callClientQuotasApisAndExpectAnAuthenticationError(AdminClientUnitTestEnv env) throws InterruptedException {
+        try {
+            env.adminClient().describeClientQuotas(ClientQuotaFilter.all()).entities().get();
+            fail("Expected an authentication error.");
+        } catch (ExecutionException e) {
+            assertTrue("Expected an authentication error, but got " + Utils.stackTrace(e),
+                e.getCause() instanceof AuthenticationException);
+        }
+
+        try {
+            ClientQuotaEntity entity = new ClientQuotaEntity(Collections.singletonMap(ClientQuotaEntity.USER, "user"));
+            ClientQuotaAlteration alteration = new ClientQuotaAlteration(entity, asList(new ClientQuotaAlteration.Op("consumer_byte_rate", 1000.0)));
+            env.adminClient().alterClientQuotas(asList(alteration)).all().get();
             fail("Expected an authentication error.");
         } catch (ExecutionException e) {
             assertTrue("Expected an authentication error, but got " + Utils.stackTrace(e),
@@ -973,9 +1001,13 @@ public class KafkaAdminClientTest {
             env.kafkaClient().prepareResponse(MetadataResponse.prepareResponse(env.cluster().nodes(),
                     env.cluster().clusterResource().clusterId(), env.cluster().controller().id(), topicMetadata));
 
-            Map<TopicPartition, DeleteRecordsResponse.PartitionResponse> deletedPartitions = new HashMap<>();
-            deletedPartitions.put(tp0, new DeleteRecordsResponse.PartitionResponse(3, Errors.NONE));
-            env.kafkaClient().prepareResponseFrom(new DeleteRecordsResponse(0, deletedPartitions), nodes.get(0));
+            env.kafkaClient().prepareResponseFrom(new DeleteRecordsResponse(new DeleteRecordsResponseData().setTopics(
+                    new DeleteRecordsResponseData.DeleteRecordsTopicResultCollection(singletonList(new DeleteRecordsResponseData.DeleteRecordsTopicResult()
+                            .setName(tp0.topic())
+                            .setPartitions(new DeleteRecordsResponseData.DeleteRecordsPartitionResultCollection(singletonList(new DeleteRecordsResponseData.DeleteRecordsPartitionResult()
+                                    .setPartitionIndex(tp0.partition())
+                                    .setErrorCode(Errors.NONE.code())
+                                    .setLowWatermark(3)).iterator()))).iterator()))), nodes.get(0));
 
             env.kafkaClient().disconnect(nodes.get(1).idString());
             env.kafkaClient().createPendingAuthenticationError(nodes.get(1), 100);
@@ -1013,15 +1045,26 @@ public class KafkaAdminClientTest {
         try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(cluster)) {
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
 
-            Map<TopicPartition, DeleteRecordsResponse.PartitionResponse> m = new HashMap<>();
-            m.put(myTopicPartition0,
-                    new DeleteRecordsResponse.PartitionResponse(3, Errors.NONE));
-            m.put(myTopicPartition1,
-                    new DeleteRecordsResponse.PartitionResponse(DeleteRecordsResponse.INVALID_LOW_WATERMARK, Errors.OFFSET_OUT_OF_RANGE));
-            m.put(myTopicPartition3,
-                    new DeleteRecordsResponse.PartitionResponse(DeleteRecordsResponse.INVALID_LOW_WATERMARK, Errors.NOT_LEADER_FOR_PARTITION));
-            m.put(myTopicPartition4,
-                    new DeleteRecordsResponse.PartitionResponse(DeleteRecordsResponse.INVALID_LOW_WATERMARK, Errors.UNKNOWN_TOPIC_OR_PARTITION));
+            DeleteRecordsResponseData m = new DeleteRecordsResponseData();
+            m.topics().add(new DeleteRecordsResponseData.DeleteRecordsTopicResult().setName(myTopicPartition0.topic())
+                    .setPartitions(new DeleteRecordsResponseData.DeleteRecordsPartitionResultCollection(asList(
+                        new DeleteRecordsResponseData.DeleteRecordsPartitionResult()
+                            .setPartitionIndex(myTopicPartition0.partition())
+                            .setLowWatermark(3)
+                            .setErrorCode(Errors.NONE.code()),
+                        new DeleteRecordsResponseData.DeleteRecordsPartitionResult()
+                            .setPartitionIndex(myTopicPartition1.partition())
+                            .setLowWatermark(DeleteRecordsResponse.INVALID_LOW_WATERMARK)
+                            .setErrorCode(Errors.OFFSET_OUT_OF_RANGE.code()),
+                        new DeleteRecordsResponseData.DeleteRecordsPartitionResult()
+                            .setPartitionIndex(myTopicPartition3.partition())
+                            .setLowWatermark(DeleteRecordsResponse.INVALID_LOW_WATERMARK)
+                            .setErrorCode(Errors.NOT_LEADER_FOR_PARTITION.code()),
+                        new DeleteRecordsResponseData.DeleteRecordsPartitionResult()
+                            .setPartitionIndex(myTopicPartition4.partition())
+                            .setLowWatermark(DeleteRecordsResponse.INVALID_LOW_WATERMARK)
+                            .setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code())
+                    ).iterator())));
 
             List<MetadataResponse.TopicMetadata> t = new ArrayList<>();
             List<MetadataResponse.PartitionMetadata> p = new ArrayList<>();
@@ -1044,7 +1087,7 @@ public class KafkaAdminClientTest {
             t.add(new MetadataResponse.TopicMetadata(Errors.NONE, "my_topic", false, p));
 
             env.kafkaClient().prepareResponse(MetadataResponse.prepareResponse(cluster.nodes(), cluster.clusterResource().clusterId(), cluster.controller().id(), t));
-            env.kafkaClient().prepareResponse(new DeleteRecordsResponse(0, m));
+            env.kafkaClient().prepareResponse(new DeleteRecordsResponse(m));
 
             Map<TopicPartition, RecordsToDelete> recordsToDelete = new HashMap<>();
             recordsToDelete.put(myTopicPartition0, RecordsToDelete.beforeOffset(3L));
@@ -2791,6 +2834,74 @@ public class KafkaAdminClientTest {
             // Now sleep the remaining time for the request timeout to expire
             time.sleep(60000);
             TestUtils.assertFutureThrows(result.future, TimeoutException.class);
+        }
+    }
+
+    private ClientQuotaEntity newClientQuotaEntity(String... args) {
+        assertTrue(args.length % 2 == 0);
+
+        Map<String, String> entityMap = new HashMap<>(args.length / 2);
+        for (int index = 0; index < args.length; index += 2) {
+            entityMap.put(args[index], args[index + 1]);
+        }
+        return new ClientQuotaEntity(entityMap);
+    }
+
+    @Test
+    public void testDescribeClientQuotas() throws Exception {
+        try (AdminClientUnitTestEnv env = mockClientEnv()) {
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+
+            final String value = "value";
+
+            Map<ClientQuotaEntity, Map<String, Double>> responseData = new HashMap<>();
+            ClientQuotaEntity entity1 = newClientQuotaEntity(ClientQuotaEntity.USER, "user-1", ClientQuotaEntity.CLIENT_ID, value);
+            ClientQuotaEntity entity2 = newClientQuotaEntity(ClientQuotaEntity.USER, "user-2", ClientQuotaEntity.CLIENT_ID, value);
+            responseData.put(entity1, Collections.singletonMap("consumer_byte_rate", 10000.0));
+            responseData.put(entity2, Collections.singletonMap("producer_byte_rate", 20000.0));
+
+            env.kafkaClient().prepareResponse(new DescribeClientQuotasResponse(responseData, 0));
+
+            ClientQuotaFilter filter = ClientQuotaFilter.contains(asList(ClientQuotaFilterComponent.ofEntity(ClientQuotaEntity.USER, value)));
+
+            DescribeClientQuotasResult result = env.adminClient().describeClientQuotas(filter);
+            Map<ClientQuotaEntity, Map<String, Double>> resultData = result.entities().get();
+            assertEquals(resultData.size(), 2);
+            assertTrue(resultData.containsKey(entity1));
+            Map<String, Double> config1 = resultData.get(entity1);
+            assertEquals(config1.size(), 1);
+            assertEquals(config1.get("consumer_byte_rate"), 10000.0, 1e-6);
+            assertTrue(resultData.containsKey(entity2));
+            Map<String, Double> config2 = resultData.get(entity2);
+            assertEquals(config2.size(), 1);
+            assertEquals(config2.get("producer_byte_rate"), 20000.0, 1e-6);
+        }
+    }
+
+    public void testAlterClientQuotas() throws Exception {
+        try (AdminClientUnitTestEnv env = mockClientEnv()) {
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+
+            ClientQuotaEntity goodEntity = newClientQuotaEntity(ClientQuotaEntity.USER, "user-1");
+            ClientQuotaEntity unauthorizedEntity = newClientQuotaEntity(ClientQuotaEntity.USER, "user-0");
+            ClientQuotaEntity invalidEntity = newClientQuotaEntity("", "user-0");
+
+            Map<ClientQuotaEntity, ApiError> responseData = new HashMap<>(2);
+            responseData.put(goodEntity, new ApiError(Errors.CLUSTER_AUTHORIZATION_FAILED, "Authorization failed"));
+            responseData.put(unauthorizedEntity, new ApiError(Errors.CLUSTER_AUTHORIZATION_FAILED, "Authorization failed"));
+            responseData.put(invalidEntity, new ApiError(Errors.INVALID_REQUEST, "Invalid quota entity"));
+
+            env.kafkaClient().prepareResponse(new AlterClientQuotasResponse(responseData, 0));
+
+            List<ClientQuotaAlteration> entries = new ArrayList<>(3);
+            entries.add(new ClientQuotaAlteration(goodEntity, Collections.singleton(new ClientQuotaAlteration.Op("consumer_byte_rate", 10000.0))));
+            entries.add(new ClientQuotaAlteration(unauthorizedEntity, Collections.singleton(new ClientQuotaAlteration.Op("producer_byte_rate", 10000.0))));
+            entries.add(new ClientQuotaAlteration(invalidEntity, Collections.singleton(new ClientQuotaAlteration.Op("producer_byte_rate", 100.0))));
+
+            AlterClientQuotasResult result = env.adminClient().alterClientQuotas(entries);
+            result.values().get(goodEntity);
+            TestUtils.assertFutureError(result.values().get(unauthorizedEntity), ClusterAuthorizationException.class);
+            TestUtils.assertFutureError(result.values().get(invalidEntity), InvalidRequestException.class);
         }
     }
 

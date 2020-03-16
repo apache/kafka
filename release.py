@@ -550,8 +550,6 @@ regexReplace("streams/quickstart/java/src/main/resources/archetype-resources/pom
 print("updating ducktape version.py")
 regexReplace("./tests/kafkatest/version.py", "^DEV_VERSION =.*",
     "DEV_VERSION = KafkaVersion(\"%s-SNAPSHOT\")" % release_version)
-print("updating ducktape __init__.py")
-regexReplace("./tests/kafkatest/__init__.py", ".dev.*", "")
 # Command in explicit list due to messages with spaces
 cmd("Committing version number updates", ["git", "commit", "-a", "-m", "Bump version to %s" % release_version])
 # Command in explicit list due to messages with spaces

@@ -376,15 +376,6 @@ public class SslFactoryTest {
         );
     }
 
-    private SslEngineBuilder.SecurityStore sslTrustStore(Map<String, Object> sslConfig) {
-        return new SslEngineBuilder.SecurityStore(
-                (String) sslConfig.get(SslConfigs.SSL_TRUSTSTORE_TYPE_CONFIG),
-                (String) sslConfig.get(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG),
-                (Password) sslConfig.get(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG),
-                null
-        );
-    }
-
     private TestSslUtils.SslConfigsBuilder sslConfigsBuilder(Mode mode) {
         return new TestSslUtils.SslConfigsBuilder(mode).tlsProtocol(tlsProtocol);
     }

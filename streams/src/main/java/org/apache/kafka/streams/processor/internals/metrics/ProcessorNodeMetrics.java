@@ -137,7 +137,7 @@ public class ProcessorNodeMetrics {
         addInvocationRateAndCountToSensor(
             parentSensor,
             TASK_LEVEL_GROUP,
-            streamsMetrics.nodeLevelTagMap(threadId, taskId, ROLLUP_VALUE),
+            streamsMetrics.taskLevelTagMap(threadId, taskId),
             PROCESS,
             PROCESS_RATE_DESCRIPTION,
             PROCESS_TOTAL_DESCRIPTION

@@ -40,7 +40,6 @@ import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.InterruptException;
-import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.errors.InvalidGroupIdException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
@@ -560,7 +559,6 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
 
     private static final String CLIENT_ID_METRIC_TAG = "client-id";
     private static final long NO_CURRENT_THREAD = -1L;
-    private static final AtomicInteger CONSUMER_CLIENT_ID_SEQUENCE = new AtomicInteger(1);
     private static final String JMX_PREFIX = "kafka.consumer";
     static final long DEFAULT_CLOSE_TIMEOUT_MS = 30 * 1000;
 
@@ -674,7 +672,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     GroupRebalanceConfig.ProtocolType.CONSUMER);
 
             this.groupId = Optional.ofNullable(groupRebalanceConfig.groupId);
-            this.clientId = buildClientId(config.getString(CommonClientConfigs.CLIENT_ID_CONFIG), groupRebalanceConfig);
+            this.clientId = config.getString(CommonClientConfigs.CLIENT_ID_CONFIG);
 
             LogContext logContext;
 
@@ -687,16 +685,12 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             }
 
             this.log = logContext.logger(getClass());
-            boolean enableAutoCommit = config.getBoolean(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG);
-            if (!groupId.isPresent()) { // overwrite in case of default group id where the config is not explicitly provided
-                if (!config.originals().containsKey(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG)) {
-                    enableAutoCommit = false;
-                } else if (enableAutoCommit) {
-                    throw new InvalidConfigurationException(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG + " cannot be set to true when default group id (null) is used.");
+            boolean enableAutoCommit = config.maybeOverrideEnableAutoCommit();
+            groupId.ifPresent(groupIdStr -> {
+                if (groupIdStr.isEmpty()) {
+                    log.warn("Support for using the empty group id by consumers is deprecated and will be removed in the next major release.");
                 }
-            } else if (groupId.get().isEmpty()) {
-                log.warn("Support for using the empty group id by consumers is deprecated and will be removed in the next major release.");
-            }
+            });
 
             log.debug("Initializing the Kafka consumer");
             this.requestTimeoutMs = config.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG);
@@ -787,7 +781,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                         this.time,
                         enableAutoCommit,
                         config.getInt(ConsumerConfig.AUTO_COMMIT_INTERVAL_MS_CONFIG),
-                        this.interceptors);
+                        this.interceptors,
+                        config.getBoolean(ConsumerConfig.THROW_ON_FETCH_STABLE_OFFSET_UNSUPPORTED));
             this.fetcher = new Fetcher<>(
                     logContext,
                     this.client,
@@ -862,17 +857,6 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         this.assignors = assignors;
         this.groupId = Optional.ofNullable(groupId);
         this.kafkaConsumerMetrics = new KafkaConsumerMetrics(metrics, "consumer");
-    }
-
-    private static String buildClientId(String configuredClientId, GroupRebalanceConfig rebalanceConfig) {
-        if (!configuredClientId.isEmpty())
-            return configuredClientId;
-
-        if (rebalanceConfig.groupId != null && !rebalanceConfig.groupId.isEmpty())
-            return "consumer-" + rebalanceConfig.groupId + "-" + rebalanceConfig.groupInstanceId.orElseGet(() ->
-                    CONSUMER_CLIENT_ID_SEQUENCE.getAndIncrement() + "");
-
-        return "consumer-" + CONSUMER_CLIENT_ID_SEQUENCE.getAndIncrement();
     }
 
     private static Metrics buildMetrics(ConsumerConfig config, Time time, String clientId) {
@@ -1211,6 +1195,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * @throws java.lang.ArithmeticException if the timeout is greater than {@link Long#MAX_VALUE} milliseconds.
      * @throws org.apache.kafka.common.errors.InvalidTopicException if the current subscription contains any invalid
      *             topic (per {@link org.apache.kafka.common.internals.Topic#validate(String)})
+     * @throws org.apache.kafka.common.errors.UnsupportedVersionException if the consumer attempts to fetch stable offsets
+     *             when the broker doesn't support this feature
      * @throws org.apache.kafka.common.errors.FencedInstanceIdException if this consumer instance gets fenced by broker.
      */
     @Override
@@ -1716,6 +1702,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * @throws org.apache.kafka.common.errors.AuthenticationException if authentication fails. See the exception for more details
      * @throws org.apache.kafka.common.errors.AuthorizationException if not authorized to the topic or to the
      *             configured groupId. See the exception for more details
+     * @throws org.apache.kafka.common.errors.UnsupportedVersionException if the consumer attempts to fetch stable offsets
+     *             when the broker doesn't support this feature
      * @throws org.apache.kafka.common.KafkaException for any other unrecoverable errors
      * @throws org.apache.kafka.common.errors.TimeoutException if the position cannot be determined before the
      *             timeout specified by {@code default.api.timeout.ms} expires
@@ -1854,6 +1842,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * @throws org.apache.kafka.common.errors.AuthenticationException if authentication fails. See the exception for more details
      * @throws org.apache.kafka.common.errors.AuthorizationException if not authorized to the topic or to the
      *             configured groupId. See the exception for more details
+     * @throws org.apache.kafka.common.errors.UnsupportedVersionException if the consumer attempts to fetch stable offsets
+     *             when the broker doesn't support this feature
      * @throws org.apache.kafka.common.KafkaException for any other unrecoverable errors
      * @throws org.apache.kafka.common.errors.TimeoutException if the committed offset cannot be found before
      *             the timeout specified by {@code default.api.timeout.ms} expires.
@@ -2245,6 +2235,39 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     @Override
     public ConsumerGroupMetadata groupMetadata() {
         return coordinator.groupMetadata();
+    }
+
+    /**
+     * Alert the consumer to trigger a new rebalance by rejoining the group. This is a nonblocking call that forces
+     * the consumer to trigger a new rebalance on the next {@link #poll(Duration)} call. Note that this API does not
+     * itself initiate the rebalance, so you must still call {@link #poll(Duration)}. If a rebalance is already in
+     * progress this call will be a no-op. If you wish to force an additional rebalance you must complete the current
+     * one by calling poll before retrying this API.
+     * <p>
+     * You do not need to call this during normal processing, as the consumer group will manage itself
+     * automatically and rebalance when necessary. However there may be situations where the application wishes to
+     * trigger a rebalance that would otherwise not occur. For example, if some condition external and invisible to
+     * the Consumer and its group changes in a way that would affect the userdata encoded in the
+     * {@link org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.Subscription Subscription}, the Consumer
+     * will not be notified and no rebalance will occur. This API can be used to force the group to rebalance so that
+     * the assignor can perform a partition reassignment based on the latest userdata. If your assignor does not use
+     * this userdata, or you do not use a custom
+     * {@link org.apache.kafka.clients.consumer.ConsumerPartitionAssignor ConsumerPartitionAssignor}, you should not
+     * use this API.
+     *
+     * @throws java.lang.IllegalStateException if the consumer does not use group subscription
+     */
+    @Override
+    public void enforceRebalance() {
+        acquireAndEnsureOpen();
+        try {
+            if (coordinator == null) {
+                throw new IllegalStateException("Tried to force a rebalance but consumer does not have a group.");
+            }
+            coordinator.requestRejoin();
+        } finally {
+            release();
+        }
     }
 
     /**

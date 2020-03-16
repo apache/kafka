@@ -642,7 +642,7 @@ public class RequestResponseTest {
                 6, FetchResponse.INVALID_LOG_START_OFFSET, Optional.empty(), emptyList(), records));
 
         FetchResponse<MemoryRecords> response = new FetchResponse<>(Errors.NONE, responseData, 10, INVALID_SESSION_ID);
-        FetchResponse deserialized = FetchResponse.parse(toBuffer(response.toStruct((short) 4)), (short) 4);
+        FetchResponse<MemoryRecords> deserialized = FetchResponse.parse(toBuffer(response.toStruct((short) 4)), (short) 4);
         assertEquals(responseData, deserialized.responseData());
     }
 
@@ -656,7 +656,7 @@ public class RequestResponseTest {
         }
     }
 
-    private void verifyFetchResponseFullWrite(short apiVersion, FetchResponse fetchResponse) throws Exception {
+    private void verifyFetchResponseFullWrite(short apiVersion, FetchResponse<MemoryRecords> fetchResponse) throws Exception {
         int correlationId = 15;
 
         short responseHeaderVersion = FETCH.responseHeaderVersion(apiVersion);
@@ -766,12 +766,12 @@ public class RequestResponseTest {
     public void testOffsetFetchRequestBuilderToString() {
         List<Boolean> stableFlags = Arrays.asList(true, false);
         for (Boolean requireStable : stableFlags) {
-            String allTopicPartitionsString = new OffsetFetchRequest.Builder("someGroup", requireStable, null).toString();
+            String allTopicPartitionsString = new OffsetFetchRequest.Builder("someGroup", requireStable, null, false).toString();
 
             assertTrue(allTopicPartitionsString.contains("groupId='someGroup', topics=null, requireStable="
                                                              + requireStable.toString()));
             String string = new OffsetFetchRequest.Builder("group1",
-                requireStable, Collections.singletonList(new TopicPartition("test11", 1))).toString();
+                requireStable, Collections.singletonList(new TopicPartition("test11", 1)), false).toString();
             assertTrue(string.contains("test11"));
             assertTrue(string.contains("group1"));
             assertTrue(string.contains("requireStable=" + requireStable.toString()));
@@ -1038,14 +1038,6 @@ public class RequestResponseTest {
             .setProtocolName("range")    // Added in v5 but ignorable
             .setAssignments(assignments);
 
-        JoinGroupRequestData.JoinGroupRequestProtocolCollection protocols =
-            new JoinGroupRequestData.JoinGroupRequestProtocolCollection(
-                Collections.singleton(
-                    new JoinGroupRequestData.JoinGroupRequestProtocol()
-                        .setName("consumer-range")
-                        .setMetadata(new byte[0])).iterator()
-            );
-
         // v3 and above could set group instance id
         if (version >= 3)
             data.setGroupInstanceId("groupInstanceId");
@@ -1247,12 +1239,12 @@ public class RequestResponseTest {
     }
 
     private OffsetFetchRequest createOffsetFetchRequest(int version, boolean requireStable) {
-        return new OffsetFetchRequest.Builder("group1", requireStable, Collections.singletonList(new TopicPartition("test11", 1)))
+        return new OffsetFetchRequest.Builder("group1", requireStable, Collections.singletonList(new TopicPartition("test11", 1)), false)
                 .build((short) version);
     }
 
     private OffsetFetchRequest createOffsetFetchRequestForAllPartition(String groupId, boolean requireStable) {
-        return new OffsetFetchRequest.Builder(groupId, requireStable, null).build();
+        return new OffsetFetchRequest.Builder(groupId, requireStable, null, false).build();
     }
 
     private OffsetFetchResponse createOffsetFetchResponse() {

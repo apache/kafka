@@ -27,12 +27,12 @@ import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.metrics.ThreadMetrics;
-import org.slf4j.Logger;
 
-import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
+import org.slf4j.Logger;
 
 /**
  * A StandbyTask
@@ -42,6 +42,8 @@ public class StandbyTask extends AbstractTask implements Task {
     private final String logPrefix;
     private final Sensor closeTaskSensor;
     private final InternalProcessorContext processorContext;
+
+    private Map<TopicPartition, Long> offsetSnapshotSinceLastCommit;
 
     /**
      * @param id             the ID of this task
@@ -126,6 +128,8 @@ public class StandbyTask extends AbstractTask implements Task {
                 // and the state current offset would be used to checkpoint
                 stateMgr.checkpoint(Collections.emptyMap());
 
+                offsetSnapshotSinceLastCommit = new HashMap<>(stateMgr.changelogOffsets());
+
                 log.info("Committed");
                 break;
 
@@ -168,14 +172,18 @@ public class StandbyTask extends AbstractTask implements Task {
             transitionTo(State.CLOSING);
         } else {
             if (state() == State.RUNNING) {
-                if (clean)
+                if (clean) {
                     commit();
+                }
 
                 transitionTo(State.CLOSING);
             }
 
             if (state() == State.CLOSING) {
-                StateManagerUtil.closeStateManager(log, logPrefix, clean, stateMgr, stateDirectory);
+                executeAndMaybeSwallow(clean, () -> {
+                    StateManagerUtil.closeStateManager(log, logPrefix, clean,
+                        false, stateMgr, stateDirectory, TaskType.STANDBY);
+                }, "state manager close", log);
 
                 // TODO: if EOS is enabled, we should wipe out the state stores like we did for StreamTask too
             } else {
@@ -185,6 +193,17 @@ public class StandbyTask extends AbstractTask implements Task {
 
         closeTaskSensor.record();
         transitionTo(State.CLOSED);
+    }
+
+    @Override
+    public boolean commitNeeded() {
+        // we can commit if the store's offset has changed since last commit
+        return offsetSnapshotSinceLastCommit == null || !offsetSnapshotSinceLastCommit.equals(stateMgr.changelogOffsets());
+    }
+
+    @Override
+    public Map<TopicPartition, Long> changelogOffsets() {
+        return Collections.unmodifiableMap(stateMgr.changelogOffsets());
     }
 
     @Override
@@ -222,17 +241,5 @@ public class StandbyTask extends AbstractTask implements Task {
         }
 
         return sb.toString();
-    }
-
-    public boolean commitNeeded() {
-        return false;
-    }
-
-    public Collection<TopicPartition> changelogPartitions() {
-        return stateMgr.changelogPartitions();
-    }
-
-    public Map<TopicPartition, Long> changelogOffsets() {
-        return Collections.unmodifiableMap(stateMgr.changelogOffsets());
     }
 }
