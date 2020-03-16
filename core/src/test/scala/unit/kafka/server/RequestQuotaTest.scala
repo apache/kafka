@@ -34,6 +34,7 @@ import org.apache.kafka.common.message._
 import org.apache.kafka.common.metrics.{KafkaMetric, Quota, Sensor}
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.ApiKeys
+import org.apache.kafka.common.quota.ClientQuotaFilter
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.resource.{PatternType, ResourceType => AdminResourceType}
@@ -521,6 +522,12 @@ class RequestQuotaTest extends BaseRequestTest {
                   .setPartitions(Collections.singletonList(
                     new OffsetDeleteRequestData.OffsetDeleteRequestPartition()
                       .setPartitionIndex(0)))).iterator())))
+
+        case ApiKeys.DESCRIBE_CLIENT_QUOTAS =>
+          new DescribeClientQuotasRequest.Builder(ClientQuotaFilter.all())
+
+        case ApiKeys.ALTER_CLIENT_QUOTAS =>
+          new AlterClientQuotasRequest.Builder(List.empty.asJava, false)
 
         case _ =>
           throw new IllegalArgumentException("Unsupported API key " + apiKey)
