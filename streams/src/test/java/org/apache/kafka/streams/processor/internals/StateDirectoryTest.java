@@ -47,6 +47,7 @@ import static org.apache.kafka.streams.processor.internals.StateManagerUtil.CHEC
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -113,10 +114,7 @@ public class StateDirectoryTest {
                 new File(taskDirectory, StateDirectory.LOCK_FILE_NAME).toPath(),
                 StandardOpenOption.CREATE, StandardOpenOption.WRITE)
         ) {
-            channel.tryLock();
-            fail("shouldn't be able to lock already locked directory");
-        } catch (final OverlappingFileLockException e) {
-            // swallow
+            assertThrows(OverlappingFileLockException.class, channel::tryLock);
         } finally {
             directory.unlock(taskId);
         }
@@ -180,12 +178,7 @@ public class StateDirectoryTest {
 
         Utils.delete(stateDir);
 
-        try {
-            directory.directoryForTask(taskId);
-            fail("Should have thrown ProcessorStateException");
-        } catch (final ProcessorStateException expected) {
-            // swallow
-        }
+        assertThrows(ProcessorStateException.class, () -> directory.directoryForTask(taskId));
     }
 
     @Test
@@ -216,11 +209,8 @@ public class StateDirectoryTest {
             directory.lock(taskId);
             directory.lock(taskId2);
 
-            channel1.tryLock();
-            channel2.tryLock();
-            fail("shouldn't be able to lock already locked directory");
-        } catch (final OverlappingFileLockException e) {
-            // swallow
+            assertThrows(OverlappingFileLockException.class, channel1::tryLock);
+            assertThrows(OverlappingFileLockException.class, channel2::tryLock);
         } finally {
             directory.unlock(taskId);
             directory.unlock(taskId2);
@@ -376,18 +366,14 @@ public class StateDirectoryTest {
 
     @Test
     public void shouldLockGlobalStateDirectory() throws IOException {
-        directory.lockGlobalState();
-
         try (
             final FileChannel channel = FileChannel.open(
                 new File(directory.globalStateDir(), StateDirectory.LOCK_FILE_NAME).toPath(),
                 StandardOpenOption.CREATE,
                 StandardOpenOption.WRITE)
         ) {
-            channel.lock();
-            fail("Should have thrown OverlappingFileLockException");
-        } catch (final OverlappingFileLockException expcted) {
-            // swallow
+            directory.lockGlobalState();
+            assertThrows(OverlappingFileLockException.class, channel::lock);
         } finally {
             directory.unlockGlobalState();
         }
