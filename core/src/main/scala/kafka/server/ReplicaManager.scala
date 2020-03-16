@@ -695,11 +695,13 @@ class ReplicaManager(val config: KafkaConfig,
 
       } catch {
         case _: KafkaStorageException =>
-          new DescribeLogDirsResponseData.DescribeLogDirsResult().setLogDir(absolutePath)
+          new DescribeLogDirsResponseData.DescribeLogDirsResult()
+            .setLogDir(absolutePath)
             .setErrorCode(Errors.KAFKA_STORAGE_ERROR.code)
         case t: Throwable =>
           error(s"Error while describing replica in dir $absolutePath", t)
-          new DescribeLogDirsResponseData.DescribeLogDirsResult().setLogDir(absolutePath)
+          new DescribeLogDirsResponseData.DescribeLogDirsResult()
+            .setLogDir(absolutePath)
             .setErrorCode(Errors.forException(t).code)
       }
     }.toList

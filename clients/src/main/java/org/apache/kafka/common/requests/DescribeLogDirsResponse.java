@@ -41,9 +41,6 @@ public class DescribeLogDirsResponse extends AbstractResponse {
         this.data = new DescribeLogDirsResponseData(struct, version);
     }
 
-    /**
-     * Constructor for version 0.
-     */
     public DescribeLogDirsResponse(DescribeLogDirsResponseData data) {
         this.data = data;
     }
