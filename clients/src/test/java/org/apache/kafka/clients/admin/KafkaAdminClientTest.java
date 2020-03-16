@@ -83,6 +83,8 @@ import org.apache.kafka.common.message.LeaveGroupResponseData;
 import org.apache.kafka.common.message.LeaveGroupResponseData.MemberResponse;
 import org.apache.kafka.common.message.ListGroupsResponseData;
 import org.apache.kafka.common.message.ListPartitionReassignmentsResponseData;
+import org.apache.kafka.common.message.MetadataResponseData.MetadataResponseTopic;
+import org.apache.kafka.common.message.MetadataResponseData.MetadataResponsePartition;
 import org.apache.kafka.common.message.OffsetDeleteResponseData;
 import org.apache.kafka.common.message.OffsetDeleteResponseData.OffsetDeleteResponsePartition;
 import org.apache.kafka.common.message.OffsetDeleteResponseData.OffsetDeleteResponsePartitionCollection;
@@ -119,8 +121,6 @@ import org.apache.kafka.common.requests.ListOffsetResponse.PartitionData;
 import org.apache.kafka.common.requests.ListPartitionReassignmentsResponse;
 import org.apache.kafka.common.requests.MetadataRequest;
 import org.apache.kafka.common.requests.MetadataResponse;
-import org.apache.kafka.common.requests.MetadataResponse.PartitionMetadata;
-import org.apache.kafka.common.requests.MetadataResponse.TopicMetadata;
 import org.apache.kafka.common.requests.OffsetCommitResponse;
 import org.apache.kafka.common.requests.OffsetDeleteResponse;
 import org.apache.kafka.common.requests.OffsetFetchResponse;
@@ -350,28 +350,33 @@ public class KafkaAdminClientTest {
     }
 
     private static MetadataResponse prepareMetadataResponse(Cluster cluster, Errors error) {
-        List<TopicMetadata> metadata = new ArrayList<>();
+        List<MetadataResponseTopic> metadata = new ArrayList<>();
         for (String topic : cluster.topics()) {
-            List<PartitionMetadata> pms = new ArrayList<>();
+            List<MetadataResponsePartition> pms = new ArrayList<>();
             for (PartitionInfo pInfo : cluster.availablePartitionsForTopic(topic)) {
-                PartitionMetadata pm = new PartitionMetadata(error,
-                        new TopicPartition(topic, pInfo.partition()),
-                        Optional.of(pInfo.leader().id()),
-                        Optional.of(234),
-                        Arrays.stream(pInfo.replicas()).map(Node::id).collect(Collectors.toList()),
-                        Arrays.stream(pInfo.inSyncReplicas()).map(Node::id).collect(Collectors.toList()),
-                        Arrays.stream(pInfo.offlineReplicas()).map(Node::id).collect(Collectors.toList()));
+                MetadataResponsePartition pm  = new MetadataResponsePartition()
+                    .setErrorCode(error.code())
+                    .setPartitionIndex(pInfo.partition())
+                    .setLeaderId(pInfo.leader().id())
+                    .setLeaderEpoch(234)
+                    .setReplicaNodes(Arrays.stream(pInfo.replicas()).map(Node::id).collect(Collectors.toList()))
+                    .setIsrNodes(Arrays.stream(pInfo.inSyncReplicas()).map(Node::id).collect(Collectors.toList()))
+                    .setOfflineReplicas(Arrays.stream(pInfo.offlineReplicas()).map(Node::id).collect(Collectors.toList()));
                 pms.add(pm);
             }
-            TopicMetadata tm = new TopicMetadata(error, topic, false, pms);
+            MetadataResponseTopic tm = new MetadataResponseTopic()
+                .setErrorCode(error.code())
+                .setName(topic)
+                .setIsInternal(false)
+                .setPartitions(pms);
             metadata.add(tm);
         }
         return MetadataResponse.prepareResponse(0,
-                cluster.nodes(),
-                cluster.clusterResource().clusterId(),
-                cluster.controller().id(),
-                metadata,
-                MetadataResponse.AUTHORIZED_OPERATIONS_OMITTED);
+            metadata,
+            cluster.nodes(),
+            cluster.clusterResource().clusterId(),
+            cluster.controller().id(),
+            MetadataResponse.AUTHORIZED_OPERATIONS_OMITTED);
     }
 
     /**
@@ -1151,19 +1156,19 @@ public class KafkaAdminClientTest {
 
             // Prepare the metadata response used for the first describe cluster
             MetadataResponse response = MetadataResponse.prepareResponse(0,
+                    Collections.emptyList(),
                     env.cluster().nodes(),
                     env.cluster().clusterResource().clusterId(),
                     2,
-                    Collections.emptyList(),
                     MetadataResponse.AUTHORIZED_OPERATIONS_OMITTED);
             env.kafkaClient().prepareResponse(response);
 
             // Prepare the metadata response used for the second describe cluster
             MetadataResponse response2 = MetadataResponse.prepareResponse(0,
+                    Collections.emptyList(),
                     env.cluster().nodes(),
                     env.cluster().clusterResource().clusterId(),
                     3,
-                    Collections.emptyList(),
                     1 << AclOperation.DESCRIBE.code() | 1 << AclOperation.ALTER.code());
             env.kafkaClient().prepareResponse(response2);
 
