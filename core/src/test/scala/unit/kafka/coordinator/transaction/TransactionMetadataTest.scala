@@ -157,10 +157,10 @@ class TransactionMetadataTest {
       txnTimeoutMs = 30000,
       state = Empty,
       topicPartitions = mutable.Set.empty,
-      txnStartTimestamp = 1L,
+      txnStartTimestamp = time.milliseconds(),
       txnLastUpdateTimestamp = time.milliseconds())
 
-    // let new time be smaller
+    // let new time be smaller; when transting from Empty the start time would be updated to the update-time
     var transitMetadata = txnMetadata.prepareAddPartitions(Set[TopicPartition](new TopicPartition("topic1", 0)), time.milliseconds() - 1)
     txnMetadata.completeTransitionTo(transitMetadata)
     assertEquals(Set[TopicPartition](new TopicPartition("topic1", 0)), txnMetadata.topicPartitions)
@@ -170,7 +170,7 @@ class TransactionMetadataTest {
     assertEquals(time.milliseconds() - 1, txnMetadata.txnStartTimestamp)
     assertEquals(time.milliseconds() - 1, txnMetadata.txnLastUpdateTimestamp)
 
-    // add another partition, check that this time the start timestamp would not change
+    // add another partition, check that in Ongoing state the start timestamp would not change to update time
     transitMetadata = txnMetadata.prepareAddPartitions(Set[TopicPartition](new TopicPartition("topic2", 0)), time.milliseconds() - 2)
     txnMetadata.completeTransitionTo(transitMetadata)
     assertEquals(Set[TopicPartition](new TopicPartition("topic1", 0), new TopicPartition("topic2", 0)), txnMetadata.topicPartitions)
