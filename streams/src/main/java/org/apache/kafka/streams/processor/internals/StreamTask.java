@@ -485,16 +485,15 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                 // if the latter throws and we re-close dirty which would close the state manager again.
                 executeAndMaybeSwallow(
                     clean,
-                    () -> {
-                        StateManagerUtil.closeStateManager(
-                            log,
-                            logPrefix,
-                            clean,
-                            wipeStateStore,
-                            stateMgr,
-                            stateDirectory,
-                            TaskType.ACTIVE);
-                    },
+                    () -> StateManagerUtil.closeStateManager(
+                        log,
+                        logPrefix,
+                        clean,
+                        wipeStateStore,
+                        stateMgr,
+                        stateDirectory,
+                        TaskType.ACTIVE
+                    ),
                     "state manager close",
                     log);
 
