@@ -36,13 +36,15 @@ import java.nio.file.Files;
 import java.nio.file.StandardOpenOption;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.List;
 import java.util.Objects;
 import java.util.Properties;
+import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.stream.Collectors;
 
+import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.streams.processor.internals.StateManagerUtil.CHECKPOINT_FILE_NAME;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -258,23 +260,28 @@ public class StateDirectoryTest {
             directory.lock(task0);
             directory.lock(task1);
 
-            List<File> files = Arrays.asList(Objects.requireNonNull(directory.listAllTaskDirectories()));
-            assertEquals(3, files.size());
+            final File dir0 = new File(appDir, task0.toString());
+            final File dir1 = new File(appDir, task1.toString());
+            final File dir2 = new File(appDir, task2.toString());
 
+            Set<File> files = Arrays.stream(
+                Objects.requireNonNull(directory.listAllTaskDirectories())).collect(Collectors.toSet());
+            assertEquals(mkSet(dir0, dir1, dir2), files);
 
-            files = Arrays.asList(Objects.requireNonNull(directory.listNonEmptyTaskDirectories()));
-            assertEquals(3, files.size());
+            files = Arrays.stream(
+                Objects.requireNonNull(directory.listNonEmptyTaskDirectories())).collect(Collectors.toSet());
+            assertEquals(mkSet(dir0, dir1, dir2), files);
 
             time.sleep(5000);
             directory.cleanRemovedTasks(0);
 
-            files = Arrays.asList(Objects.requireNonNull(directory.listAllTaskDirectories()));
-            assertEquals(3, files.size());
+            files = Arrays.stream(
+                Objects.requireNonNull(directory.listAllTaskDirectories())).collect(Collectors.toSet());
+            assertEquals(mkSet(dir0, dir1, dir2), files);
 
-            files = Arrays.asList(Objects.requireNonNull(directory.listNonEmptyTaskDirectories()));
-            assertEquals(2, files.size());
-            assertTrue(files.contains(new File(appDir, task0.toString())));
-            assertTrue(files.contains(new File(appDir, task1.toString())));
+            files = Arrays.stream(
+                Objects.requireNonNull(directory.listNonEmptyTaskDirectories())).collect(Collectors.toSet());
+            assertEquals(mkSet(dir0, dir1), files);
         } finally {
             directory.unlock(task0);
             directory.unlock(task1);
@@ -315,13 +322,17 @@ public class StateDirectoryTest {
         final File storeDir = new File(taskDir1, "store");
         assertTrue(storeDir.mkdir());
 
-        assertEquals(Arrays.asList(taskDir1, taskDir2), Arrays.asList(directory.listAllTaskDirectories()));
-        assertEquals(Collections.singletonList(taskDir1), Arrays.asList(directory.listNonEmptyTaskDirectories()));
+        assertEquals(mkSet(taskDir1, taskDir2), Arrays.stream(
+            directory.listAllTaskDirectories()).collect(Collectors.toSet()));
+        assertEquals(mkSet(taskDir1), Arrays.stream(
+            directory.listNonEmptyTaskDirectories()).collect(Collectors.toSet()));
 
         directory.cleanRemovedTasks(0L);
 
-        assertEquals(Arrays.asList(taskDir1, taskDir2), Arrays.asList(directory.listAllTaskDirectories()));
-        assertEquals(Collections.emptyList(), Arrays.asList(directory.listNonEmptyTaskDirectories()));
+        assertEquals(mkSet(taskDir1, taskDir2), Arrays.stream(
+            directory.listAllTaskDirectories()).collect(Collectors.toSet()));
+        assertEquals(Collections.emptySet(), Arrays.stream(
+            directory.listNonEmptyTaskDirectories()).collect(Collectors.toSet()));
     }
 
     @Test
@@ -426,16 +437,19 @@ public class StateDirectoryTest {
 
     @Test
     public void shouldCleanupAllTaskDirectoriesIncludingGlobalOne() {
-        directory.directoryForTask(new TaskId(1, 0));
+        final TaskId id = new TaskId(1, 0);
+        directory.directoryForTask(id);
         directory.globalStateDir();
 
-        List<File> files = Arrays.asList(Objects.requireNonNull(appDir.listFiles()));
-        assertEquals(2, files.size());
+        final File dir0 = new File(appDir, id.toString());
+        final File globalDir = new File(appDir, "global");
+        assertEquals(mkSet(dir0, globalDir), Arrays.stream(
+            Objects.requireNonNull(appDir.listFiles())).collect(Collectors.toSet()));
 
         directory.clean();
 
-        files = Arrays.asList(Objects.requireNonNull(appDir.listFiles()));
-        assertEquals(0, files.size());
+        assertEquals(Collections.emptySet(), Arrays.stream(
+            Objects.requireNonNull(appDir.listFiles())).collect(Collectors.toSet()));
     }
 
     @Test
