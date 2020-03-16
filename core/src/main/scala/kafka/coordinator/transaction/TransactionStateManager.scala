@@ -22,7 +22,6 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.locks.ReentrantReadWriteLock
 
-import kafka.api.ApiVersion
 import kafka.log.{AppendOrigin, LogConfig}
 import kafka.message.UncompressedCodec
 import kafka.server.{Defaults, FetchLogEnd, ReplicaManager}
@@ -74,8 +73,7 @@ class TransactionStateManager(brokerId: Int,
                               replicaManager: ReplicaManager,
                               config: TransactionConfig,
                               time: Time,
-                              metrics: Metrics,
-                              interBrokerProtocolVersion: ApiVersion) extends Logging {
+                              metrics: Metrics) extends Logging {
 
   this.logIdent = "[Transaction State Manager " + brokerId + "]: "
 

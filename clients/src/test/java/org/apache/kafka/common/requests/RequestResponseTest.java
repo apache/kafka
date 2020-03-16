@@ -766,12 +766,12 @@ public class RequestResponseTest {
     public void testOffsetFetchRequestBuilderToString() {
         List<Boolean> stableFlags = Arrays.asList(true, false);
         for (Boolean requireStable : stableFlags) {
-            String allTopicPartitionsString = new OffsetFetchRequest.Builder("someGroup", requireStable, null).toString();
+            String allTopicPartitionsString = new OffsetFetchRequest.Builder("someGroup", requireStable, null, false).toString();
 
             assertTrue(allTopicPartitionsString.contains("groupId='someGroup', topics=null, requireStable="
                                                              + requireStable.toString()));
             String string = new OffsetFetchRequest.Builder("group1",
-                requireStable, Collections.singletonList(new TopicPartition("test11", 1))).toString();
+                requireStable, Collections.singletonList(new TopicPartition("test11", 1)), false).toString();
             assertTrue(string.contains("test11"));
             assertTrue(string.contains("group1"));
             assertTrue(string.contains("requireStable=" + requireStable.toString()));
@@ -1239,12 +1239,12 @@ public class RequestResponseTest {
     }
 
     private OffsetFetchRequest createOffsetFetchRequest(int version, boolean requireStable) {
-        return new OffsetFetchRequest.Builder("group1", requireStable, Collections.singletonList(new TopicPartition("test11", 1)))
+        return new OffsetFetchRequest.Builder("group1", requireStable, Collections.singletonList(new TopicPartition("test11", 1)), false)
                 .build((short) version);
     }
 
     private OffsetFetchRequest createOffsetFetchRequestForAllPartition(String groupId, boolean requireStable) {
-        return new OffsetFetchRequest.Builder(groupId, requireStable, null).build();
+        return new OffsetFetchRequest.Builder(groupId, requireStable, null, false).build();
     }
 
     private OffsetFetchResponse createOffsetFetchResponse() {

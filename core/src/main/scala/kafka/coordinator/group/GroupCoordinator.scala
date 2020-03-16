@@ -203,8 +203,8 @@ class GroupCoordinator(val brokerId: Int,
 
         if (group.hasStaticMember(groupInstanceId)) {
           val oldMemberId = group.getStaticMemberId(groupInstanceId)
-          info(s"Static member $groupInstanceId with unknown member id rejoins, assigning new member id $newMemberId, while " +
-            s"old member $oldMemberId will be removed.")
+          info(s"Static member $groupInstanceId of group ${group.groupId} with unknown member id rejoins, assigning new member id $newMemberId, while " +
+            s"old member id $oldMemberId will be removed.")
 
           val currentLeader = group.leaderOrNull
           val member = group.replaceGroupInstance(oldMemberId, newMemberId, groupInstanceId)
@@ -246,7 +246,7 @@ class GroupCoordinator(val brokerId: Int,
           addPendingMemberExpiration(group, newMemberId, sessionTimeoutMs)
           responseCallback(JoinGroupResult(newMemberId, Errors.MEMBER_ID_REQUIRED))
         } else {
-          debug(s"Dynamic member with unknown member id joins group ${group.groupId} in " +
+          debug(s"${if (groupInstanceId.isDefined) "Static" else "Dynamic"} Member with unknown member id joins group ${group.groupId} in " +
             s"${group.currentState} state. Created a new member id $newMemberId for this member and add to the group.")
           addMemberAndRebalance(rebalanceTimeoutMs, sessionTimeoutMs, newMemberId, groupInstanceId,
             clientId, clientHost, protocolType, protocols, group, responseCallback)
@@ -280,6 +280,8 @@ class GroupCoordinator(val brokerId: Int,
           throw new IllegalStateException(s"the static member $groupInstanceId was not expected to be assigned " +
             s"into pending member bucket with member id $memberId")
         } else {
+          debug(s"Dynamic Member with specific member id $memberId joins group ${group.groupId} in " +
+            s"${group.currentState} state. Adding to the group now.")
           addMemberAndRebalance(rebalanceTimeoutMs, sessionTimeoutMs, memberId, groupInstanceId,
             clientId, clientHost, protocolType, protocols, group, responseCallback)
         }
@@ -1009,10 +1011,12 @@ class GroupCoordinator(val brokerId: Int,
     // for new members. If the new member is still there, we expect it to retry.
     completeAndScheduleNextExpiration(group, member, NewMemberJoinTimeoutMs)
 
-    if (member.isStaticMember)
+    if (member.isStaticMember) {
+      info(s"Adding new static member $groupInstanceId to group ${group.groupId} with member id $memberId.")
       group.addStaticMember(groupInstanceId, memberId)
-    else
+    } else {
       group.removePendingMember(memberId)
+    }
     maybePrepareRebalance(group, s"Adding new member $memberId with group instanceid $groupInstanceId")
   }
 

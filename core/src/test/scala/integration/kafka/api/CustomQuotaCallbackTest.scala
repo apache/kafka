@@ -100,9 +100,11 @@ class CustomQuotaCallbackTest extends IntegrationTestHarness with SaslSetup {
     quotaLimitCalls.values.foreach(_.set(0))
     user.produceConsume(expectProduceThrottle = false, expectConsumeThrottle = false)
 
-    // ClientQuotaCallback#quotaLimit is invoked by each quota manager once for each new client
+    // ClientQuotaCallback#quotaLimit is invoked by each quota manager once per throttled produce request for each client
     assertEquals(1, quotaLimitCalls(ClientQuotaType.PRODUCE).get)
-    assertEquals(1, quotaLimitCalls(ClientQuotaType.FETCH).get)
+    // ClientQuotaCallback#quotaLimit is invoked once per each unthrottled and two for each throttled request
+    // since we don't know the total number of requests, we verify it was called at least twice (at least one throttled request)
+    assertTrue("quotaLimit must be called at least twice", quotaLimitCalls(ClientQuotaType.FETCH).get > 2)
     assertTrue(s"Too many quotaLimit calls $quotaLimitCalls", quotaLimitCalls(ClientQuotaType.REQUEST).get <= 10) // sanity check
     // Large quota updated to small quota, should throttle
     user.configureAndWaitForQuota(9000, 3000)

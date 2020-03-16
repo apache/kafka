@@ -445,7 +445,7 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
         close(KafkaConsumer.DEFAULT_CLOSE_TIMEOUT_MS, TimeUnit.MILLISECONDS);
     }
 
-    @SuppressWarnings("deprecation")
+    @Deprecated
     @Override
     public synchronized void close(long timeout, TimeUnit unit) {
         this.closed = true;
@@ -540,7 +540,7 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
 
     @Override
     public ConsumerGroupMetadata groupMetadata() {
-        return null;
+        return new ConsumerGroupMetadata("dummy.group.id", 1, "1", Optional.empty());
     }
 
     @Override
