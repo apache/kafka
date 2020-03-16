@@ -423,7 +423,7 @@ public class StoreChangelogReader implements ChangelogReader {
                     "truncated or compacted on the broker, marking the corresponding tasks as corrupted and re-initializing" +
                     " it later.", e.getClass().getName(), e.partitions());
 
-                final Map<TaskId, Set<TopicPartition>> taskWithCorruptedChangelogs = new HashMap<>();
+                final Map<TaskId, Collection<TopicPartition>> taskWithCorruptedChangelogs = new HashMap<>();
                 for (final TopicPartition partition : e.partitions()) {
                     final TaskId taskId = changelogs.get(partition).stateManager.taskId();
                     taskWithCorruptedChangelogs.computeIfAbsent(taskId, k -> new HashSet<>()).add(partition);
@@ -451,15 +451,24 @@ public class StoreChangelogReader implements ChangelogReader {
     }
 
     private void maybeUpdateLimitOffsetsForStandbyChangelogs() {
-        // for standby changelogs, if the interval has elapsed and there are buffered records not applicable,
-        // we can try to update the limit offset next time.
-        if (updateOffsetIntervalMs < time.milliseconds() - lastUpdateOffsetTime) {
-            final Set<ChangelogMetadata> standbyChangelogs = changelogs.values().stream()
-                .filter(metadata -> metadata.stateManager.taskType() == Task.TaskType.STANDBY)
-                .collect(Collectors.toSet());
-            for (final ChangelogMetadata metadata : standbyChangelogs) {
-                if (!metadata.bufferedRecords().isEmpty()) {
-                    updateLimitOffsets();
+        // we only consider updating the limit offset for standbys if we are not restoring active tasks
+        if (state == ChangelogReaderState.STANDBY_UPDATING &&
+            updateOffsetIntervalMs < time.milliseconds() - lastUpdateOffsetTime) {
+
+            // when the interval has elapsed we should try to update the limit offset for standbys reading from
+            // a source changelog with the new committed offset, unless there are no buffered records since 
+            // we only need the limit when processing new records
+            // for other changelog partitions we do not need to update limit offset at all since we never need to
+            // check when it completes based on limit offset anyways: the end offset would keep increasing and the
+            // standby never need to stop
+            final Set<TopicPartition> changelogsWithLimitOffsets = changelogs.entrySet().stream()
+                .filter(entry -> entry.getValue().stateManager.taskType() == Task.TaskType.STANDBY &&
+                    entry.getValue().stateManager.changelogAsSource(entry.getKey()))
+                .map(Map.Entry::getKey).collect(Collectors.toSet());
+
+            for (final TopicPartition partition : changelogsWithLimitOffsets) {
+                if (!changelogs.get(partition).bufferedRecords().isEmpty()) {
+                    updateLimitOffsetsForStandbyChangelogs(committedOffsetForChangelogs(changelogsWithLimitOffsets));
                     break;
                 }
             }
@@ -573,23 +582,6 @@ public class StoreChangelogReader implements ChangelogReader {
         } catch (final KafkaException e) {
             throw new StreamsException(String.format("Failed to retrieve end offsets for %s", partitions), e);
         }
-    }
-
-    /**
-     * Update offset limit of a given changelog partition
-     */
-    private void updateLimitOffsets() {
-        if (state != ChangelogReaderState.STANDBY_UPDATING) {
-            throw new IllegalStateException("We should not try to update standby tasks limit offsets if there are still" +
-                " active tasks for restoring");
-        }
-
-        final Set<TopicPartition> changelogsWithLimitOffsets = changelogs.entrySet().stream()
-            .filter(entry -> entry.getValue().stateManager.taskType() == Task.TaskType.STANDBY &&
-                entry.getValue().stateManager.changelogAsSource(entry.getKey()))
-            .map(Map.Entry::getKey).collect(Collectors.toSet());
-
-        updateLimitOffsetsForStandbyChangelogs(committedOffsetForChangelogs(changelogsWithLimitOffsets));
     }
 
     private void updateLimitOffsetsForStandbyChangelogs(final Map<TopicPartition, Long> committedOffsets) {

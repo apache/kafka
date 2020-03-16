@@ -27,12 +27,12 @@ import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.metrics.ThreadMetrics;
-import org.slf4j.Logger;
 
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
+import org.slf4j.Logger;
 
 /**
  * A StandbyTask
@@ -172,14 +172,18 @@ public class StandbyTask extends AbstractTask implements Task {
             transitionTo(State.CLOSING);
         } else {
             if (state() == State.RUNNING) {
-                if (clean)
+                if (clean) {
                     commit();
+                }
 
                 transitionTo(State.CLOSING);
             }
 
             if (state() == State.CLOSING) {
-                StateManagerUtil.closeStateManager(log, logPrefix, clean, stateMgr, stateDirectory);
+                executeAndMaybeSwallow(clean, () -> {
+                    StateManagerUtil.closeStateManager(log, logPrefix, clean,
+                        false, stateMgr, stateDirectory, TaskType.STANDBY);
+                }, "state manager close", log);
 
                 // TODO: if EOS is enabled, we should wipe out the state stores like we did for StreamTask too
             } else {

@@ -31,7 +31,6 @@ import org.apache.kafka.common.errors.UnknownProducerIdException;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
-import org.apache.kafka.streams.processor.TaskId;
 import org.slf4j.Logger;
 
 import java.util.List;
@@ -49,42 +48,29 @@ import java.util.concurrent.Future;
  */
 public class StreamsProducer {
     private final Logger log;
+    private final String logPrefix;
 
     private final Producer<byte[], byte[]> producer;
     private final String applicationId;
-    private final TaskId taskId;
-    private final String logMessage;
     private final boolean eosEnabled;
 
     private boolean transactionInFlight = false;
     private boolean transactionInitialized = false;
 
-    public StreamsProducer(final LogContext logContext,
-                           final Producer<byte[], byte[]> producer) {
-        this(logContext, producer, null, null);
-    }
-
-    public StreamsProducer(final LogContext logContext,
-                           final Producer<byte[], byte[]> producer,
-                           final String applicationId,
-                           final TaskId taskId) {
-        if ((applicationId != null && taskId == null) ||
-            (applicationId == null && taskId != null)) {
-            throw new IllegalArgumentException("applicationId and taskId must either be both null or both be not null");
-        }
-
-        this.log = logContext.logger(getClass());
+    public StreamsProducer(final Producer<byte[], byte[]> producer,
+                           final boolean eosEnabled,
+                           final LogContext logContext,
+                           final String applicationId) {
+        log = logContext.logger(getClass());
+        logPrefix = logContext.logPrefix().trim();
 
         this.producer = Objects.requireNonNull(producer, "producer cannot be null");
         this.applicationId = applicationId;
-        this.taskId = taskId;
-        if (taskId != null) {
-            logMessage = "task " + taskId.toString();
-            eosEnabled = true;
-        } else {
-            logMessage = "all owned active tasks";
-            eosEnabled = false;
-        }
+        this.eosEnabled = eosEnabled;
+    }
+
+    private String formatException(final String message) {
+        return message + " [" + logPrefix + ", " + (eosEnabled ? "eos" : "alo") + "]";
     }
 
     /**
@@ -92,7 +78,7 @@ public class StreamsProducer {
      */
     public void initTransaction() {
         if (!eosEnabled) {
-            throw new IllegalStateException("EOS is disabled");
+            throw new IllegalStateException(formatException("EOS is disabled"));
         }
         if (!transactionInitialized) {
             // initialize transactions if eos is turned on, which will block if the previous transaction has not
@@ -101,17 +87,22 @@ public class StreamsProducer {
                 producer.initTransactions();
                 transactionInitialized = true;
             } catch (final TimeoutException exception) {
-                log.warn("Timeout exception caught when initializing transactions for {}. " +
-                    "\nThe broker is either slow or in bad state (like not having enough replicas) in responding to the request, " +
-                    "or the connection to broker was interrupted sending the request or receiving the response. " +
-                    "Will retry initializing the task in the next loop. " +
-                    "\nConsider overwriting {} to a larger value to avoid timeout errors",
-                    logMessage,
-                    ProducerConfig.MAX_BLOCK_MS_CONFIG);
+                log.warn(
+                    "Timeout exception caught when initializing transactions. " +
+                        "The broker is either slow or in bad state (like not having enough replicas) in " +
+                        "responding to the request, or the connection to broker was interrupted sending " +
+                        "the request or receiving the response. " +
+                        "Will retry initializing the task in the next loop. " +
+                        "Consider overwriting {} to a larger value to avoid timeout errors",
+                    ProducerConfig.MAX_BLOCK_MS_CONFIG
+                );
 
                 throw exception;
             } catch (final KafkaException exception) {
-                throw new StreamsException("Error encountered while initializing transactions for " + logMessage, exception);
+                throw new StreamsException(
+                    formatException("Error encountered while initializing transactions"),
+                    exception
+                );
             }
         }
     }
@@ -122,9 +113,15 @@ public class StreamsProducer {
                 producer.beginTransaction();
                 transactionInFlight = true;
             } catch (final ProducerFencedException error) {
-                throw new TaskMigratedException("Producer get fenced trying to begin a new transaction", error);
+                throw new TaskMigratedException(
+                    formatException("Producer get fenced trying to begin a new transaction"),
+                    error
+                );
             } catch (final KafkaException error) {
-                throw new StreamsException("Producer encounter unexpected error trying to begin a new transaction for " + logMessage, error);
+                throw new StreamsException(
+                    formatException("Producer encounter unexpected error trying to begin a new transaction"),
+                    error
+                );
             }
         }
     }
@@ -137,15 +134,17 @@ public class StreamsProducer {
         } catch (final KafkaException uncaughtException) {
             if (isRecoverable(uncaughtException)) {
                 // producer.send() call may throw a KafkaException which wraps a FencedException,
-                // in this case we should throw its wrapped inner cause so that it can be captured and re-wrapped as TaskMigrationException
-                throw new TaskMigratedException("Producer cannot send records anymore since it got fenced", uncaughtException.getCause());
+                // in this case we should throw its wrapped inner cause so that it can be
+                // captured and re-wrapped as TaskMigrationException
+                throw new TaskMigratedException(
+                    formatException("Producer cannot send records anymore since it got fenced"),
+                    uncaughtException.getCause()
+                );
             } else {
-                final String errorMessage = String.format(
-                    "Error encountered sending record to topic %s%s due to:%n%s",
-                    record.topic(),
-                    taskId == null ? "" : " " + logMessage,
-                    uncaughtException.toString());
-                throw new StreamsException(errorMessage, uncaughtException);
+                throw new StreamsException(
+                    formatException(String.format("Error encountered sending record to topic %s", record.topic())),
+                    uncaughtException
+                );
             }
         }
     }
@@ -161,7 +160,7 @@ public class StreamsProducer {
      */
     public void commitTransaction(final Map<TopicPartition, OffsetAndMetadata> offsets) throws ProducerFencedException {
         if (!eosEnabled) {
-            throw new IllegalStateException("EOS is disabled");
+            throw new IllegalStateException(formatException("EOS is disabled"));
         }
         maybeBeginTransaction();
         try {
@@ -169,12 +168,18 @@ public class StreamsProducer {
             producer.commitTransaction();
             transactionInFlight = false;
         } catch (final ProducerFencedException error) {
-            throw new TaskMigratedException("Producer get fenced trying to commit a transaction", error);
+            throw new TaskMigratedException(
+                formatException("Producer get fenced trying to commit a transaction"),
+                error
+            );
         } catch (final TimeoutException error) {
             // TODO KIP-447: we can consider treating it as non-fatal and retry on the thread level
-            throw new StreamsException("Timed out while committing a transaction for " + logMessage, error);
+            throw new StreamsException(formatException("Timed out while committing a transaction"), error);
         } catch (final KafkaException error) {
-            throw new StreamsException("Producer encounter unexpected error trying to commit a transaction for " + logMessage, error);
+            throw new StreamsException(
+                formatException("Producer encounter unexpected error trying to commit a transaction"),
+                error
+            );
         }
     }
 
@@ -183,7 +188,7 @@ public class StreamsProducer {
      */
     public void abortTransaction() throws ProducerFencedException {
         if (!eosEnabled) {
-            throw new IllegalStateException("EOS is disabled");
+            throw new IllegalStateException(formatException("EOS is disabled"));
         }
         if (transactionInFlight) {
             try {
@@ -198,7 +203,10 @@ public class StreamsProducer {
 
                 // can be ignored: transaction got already aborted by brokers/transactional-coordinator if this happens
             } catch (final KafkaException error) {
-                throw new StreamsException("Producer encounter unexpected error trying to abort a transaction for " + logMessage, error);
+                throw new StreamsException(
+                    formatException("Producer encounter unexpected error trying to abort a transaction"),
+                    error
+                );
             }
             transactionInFlight = false;
         }
@@ -210,17 +218,6 @@ public class StreamsProducer {
 
     public void flush() {
         producer.flush();
-    }
-
-    public void close() {
-        if (eosEnabled) {
-            try {
-                producer.close();
-            } catch (final KafkaException error) {
-                throw new StreamsException("Producer encounter unexpected " +
-                    "error trying to close" + (taskId == null ? "" : " " + logMessage), error);
-            }
-        }
     }
 
     // for testing only

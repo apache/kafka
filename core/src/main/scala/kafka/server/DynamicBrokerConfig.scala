@@ -87,7 +87,11 @@ object DynamicBrokerConfig {
   private val ClusterLevelListenerConfigs = Set(KafkaConfig.MaxConnectionsProp)
   private val PerBrokerConfigs = DynamicSecurityConfigs  ++
     DynamicListenerConfig.ReconfigurableConfigs -- ClusterLevelListenerConfigs
-  private val ListenerMechanismConfigs = Set(KafkaConfig.SaslJaasConfigProp)
+  private val ListenerMechanismConfigs = Set(KafkaConfig.SaslJaasConfigProp,
+    KafkaConfig.SaslLoginCallbackHandlerClassProp,
+    KafkaConfig.SaslLoginClassProp,
+    KafkaConfig.SaslServerCallbackHandlerClassProp,
+    KafkaConfig.ConnectionsMaxReauthMsProp)
 
   private val ReloadableFileConfigs = Set(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG, SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG)
 

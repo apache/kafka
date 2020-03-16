@@ -19,8 +19,8 @@ package org.apache.kafka.streams.errors;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.streams.processor.TaskId;
 
+import java.util.Collection;
 import java.util.Map;
-import java.util.Set;
 
 /**
  * Indicates a specific task is corrupted and need to be re-initialized. It can be thrown when
@@ -32,15 +32,15 @@ import java.util.Set;
  */
 public class TaskCorruptedException extends StreamsException {
 
-    private final Map<TaskId, Set<TopicPartition>> taskWithChangelogs;
+    private final Map<TaskId, Collection<TopicPartition>> taskWithChangelogs;
 
-    public TaskCorruptedException(final Map<TaskId, Set<TopicPartition>> taskWithChangelogs) {
+    public TaskCorruptedException(final Map<TaskId, Collection<TopicPartition>> taskWithChangelogs) {
         super("Tasks with changelogs " + taskWithChangelogs + " are corrupted and hence needs to be re-initialized");
 
         this.taskWithChangelogs = taskWithChangelogs;
     }
 
-    public Map<TaskId, Set<TopicPartition>> corruptedTaskWithChangelogs() {
+    public Map<TaskId, Collection<TopicPartition>> corruptedTaskWithChangelogs() {
         return taskWithChangelogs;
     }
 }

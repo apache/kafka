@@ -427,4 +427,14 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
         <Bug pattern="RV_RETURN_VALUE_IGNORED_NO_SIDE_EFFECT"/>
     </Match>
 
+    <Match>
+        <!-- Suppress warnings related to jmh generated code -->
+        <Package name="org.apache.kafka.jmh.acl.generated"/>
+    </Match>
+
+    <Match>
+        <!-- Suppress warnings related to jmh generated code -->
+        <Package name="org.apache.kafka.jmh.metadata.generated"/>
+    </Match>
+
 </FindBugsFilter>

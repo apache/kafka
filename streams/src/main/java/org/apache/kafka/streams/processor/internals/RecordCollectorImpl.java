@@ -152,6 +152,23 @@ public class RecordCollectorImpl implements RecordCollector {
         try {
             keyBytes = keySerializer.serialize(topic, headers, key);
             valBytes = valueSerializer.serialize(topic, headers, value);
+        } catch (final ClassCastException exception) {
+            final String keyClass = key == null ? "unknown because key is null" : key.getClass().getName();
+            final String valueClass = value == null ? "unknown because value is null" : value.getClass().getName();
+            throw new StreamsException(
+                String.format(
+                    "ClassCastException while producing data to topic %s. " +
+                        "A serializer (key: %s / value: %s) is not compatible to the actual key or value type " +
+                        "(key type: %s / value type: %s). " +
+                        "Change the default Serdes in StreamConfig or provide correct Serdes via method parameters " +
+                        "(for example if using the DSL, `#to(String topic, Produced<K, V> produced)` with " +
+                        "`Produced.keySerde(WindowedSerdes.timeWindowedSerdeFrom(String.class))`).",
+                    topic,
+                    keySerializer.getClass().getName(),
+                    valueSerializer.getClass().getName(),
+                    keyClass,
+                    valueClass),
+                exception);
         } catch (final RuntimeException exception) {
             final String errorMessage = String.format(SEND_EXCEPTION_MESSAGE, topic, taskId, exception.toString());
             throw new StreamsException(errorMessage, exception);
@@ -167,7 +184,11 @@ public class RecordCollectorImpl implements RecordCollector {
 
             if (exception == null) {
                 final TopicPartition tp = new TopicPartition(metadata.topic(), metadata.partition());
-                offsets.put(tp, metadata.offset());
+                if (metadata.offset() >= 0L) {
+                    offsets.put(tp, metadata.offset());
+                } else {
+                    log.warn("Received offset={} in produce response for {}", metadata.offset(), tp);
+                }
             } else {
                 recordSendError(topic, exception, serializedRecord);
 
@@ -262,7 +283,6 @@ public class RecordCollectorImpl implements RecordCollector {
         if (eosEnabled) {
             streamsProducer.abortTransaction();
         }
-        streamsProducer.close();
 
         checkForException();
     }

@@ -291,7 +291,7 @@ class RequestQuotaTest extends BaseRequestTest {
               )
           )
         case ApiKeys.OFFSET_FETCH =>
-          new OffsetFetchRequest.Builder("test-group", false, List(tp).asJava)
+          new OffsetFetchRequest.Builder("test-group", false, List(tp).asJava, false)
 
         case ApiKeys.FIND_COORDINATOR =>
           new FindCoordinatorRequest.Builder(
@@ -372,7 +372,14 @@ class RequestQuotaTest extends BaseRequestTest {
               .setTimeoutMs(5000))
 
         case ApiKeys.DELETE_RECORDS =>
-          new DeleteRecordsRequest.Builder(5000, Map(tp -> (0L: java.lang.Long)).asJava)
+          new DeleteRecordsRequest.Builder(
+            new DeleteRecordsRequestData()
+              .setTimeoutMs(5000)
+              .setTopics(Collections.singletonList(new DeleteRecordsRequestData.DeleteRecordsTopic()
+                .setName(tp.topic())
+                .setPartitions(Collections.singletonList(new DeleteRecordsRequestData.DeleteRecordsPartition()
+                  .setPartitionIndex(tp.partition())
+                  .setOffset(0L))))))
 
         case ApiKeys.INIT_PRODUCER_ID =>
           val requestData = new InitProducerIdRequestData()

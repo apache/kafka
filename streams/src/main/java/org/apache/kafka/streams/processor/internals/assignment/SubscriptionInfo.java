@@ -16,11 +16,19 @@
  */
 package org.apache.kafka.streams.processor.internals.assignment;
 
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.ObjectSerializationCache;
 import org.apache.kafka.streams.errors.TaskAssignmentException;
 import org.apache.kafka.streams.internals.generated.SubscriptionInfoData;
+import org.apache.kafka.streams.internals.generated.SubscriptionInfoData.PartitionToOffsetSum;
+import org.apache.kafka.streams.internals.generated.SubscriptionInfoData.TaskOffsetSum;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.internals.Task;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -37,10 +45,13 @@ public class SubscriptionInfo {
     private static final Logger LOG = LoggerFactory.getLogger(SubscriptionInfo.class);
 
     static final int UNKNOWN = -1;
+    static final int MIN_VERSION_OFFSET_SUM_SUBSCRIPTION = 7;
+    static final long UNKNOWN_OFFSET_SUM = -3L;
 
     private final SubscriptionInfoData data;
     private Set<TaskId> prevTasksCache = null;
     private Set<TaskId> standbyTasksCache = null;
+    private Map<TaskId, Long> taskOffsetSumsCache = null;
 
     static {
         // Just statically check to make sure that the generated code always stays in sync with the overall protocol
@@ -69,12 +80,13 @@ public class SubscriptionInfo {
     public SubscriptionInfo(final int version,
                             final int latestSupportedVersion,
                             final UUID processId,
-                            final Set<TaskId> prevTasks,
-                            final Set<TaskId> standbyTasks,
-                            final String userEndPoint) {
+                            final String userEndPoint,
+                            final Map<TaskId, Long> taskOffsetSums) {
         validateVersions(version, latestSupportedVersion);
         final SubscriptionInfoData data = new SubscriptionInfoData();
         data.setVersion(version);
+        data.setProcessId(processId);
+
         if (version >= 2) {
             data.setUserEndPoint(userEndPoint == null
                                      ? new byte[0]
@@ -83,7 +95,51 @@ public class SubscriptionInfo {
         if (version >= 3) {
             data.setLatestSupportedVersion(latestSupportedVersion);
         }
-        data.setProcessId(processId);
+
+        this.data = data;
+
+        if (version >= MIN_VERSION_OFFSET_SUM_SUBSCRIPTION) {
+            setTaskOffsetSumDataFromTaskOffsetSumMap(taskOffsetSums);
+        } else {
+            setPrevAndStandbySetsFromParsedTaskOffsetSumMap(taskOffsetSums);
+        }
+    }
+
+    private SubscriptionInfo(final SubscriptionInfoData subscriptionInfoData) {
+        validateVersions(subscriptionInfoData.version(), subscriptionInfoData.latestSupportedVersion());
+        this.data = subscriptionInfoData;
+    }
+
+    private void setTaskOffsetSumDataFromTaskOffsetSumMap(final Map<TaskId, Long> taskOffsetSums) {
+        final Map<Integer, List<SubscriptionInfoData.PartitionToOffsetSum>> topicGroupIdToPartitionOffsetSum = new HashMap<>();
+        for (final Map.Entry<TaskId, Long> taskEntry : taskOffsetSums.entrySet()) {
+            final TaskId task = taskEntry.getKey();
+            topicGroupIdToPartitionOffsetSum.computeIfAbsent(task.topicGroupId, t -> new ArrayList<>()).add(
+                new SubscriptionInfoData.PartitionToOffsetSum()
+                    .setPartition(task.partition)
+                    .setOffsetSum(taskEntry.getValue()));
+        }
+
+        data.setTaskOffsetSums(topicGroupIdToPartitionOffsetSum.entrySet().stream().map(t -> {
+            final SubscriptionInfoData.TaskOffsetSum taskOffsetSum = new SubscriptionInfoData.TaskOffsetSum();
+            taskOffsetSum.setTopicGroupId(t.getKey());
+            taskOffsetSum.setPartitionToOffsetSum(t.getValue());
+            return taskOffsetSum;
+        }).collect(Collectors.toList()));
+    }
+
+    private void setPrevAndStandbySetsFromParsedTaskOffsetSumMap(final Map<TaskId, Long> taskOffsetSums) {
+        final Set<TaskId> prevTasks = new HashSet<>();
+        final Set<TaskId> standbyTasks = new HashSet<>();
+
+        for (final Map.Entry<TaskId, Long> taskOffsetSum : taskOffsetSums.entrySet()) {
+            if (taskOffsetSum.getValue() == Task.LATEST_OFFSET) {
+                prevTasks.add(taskOffsetSum.getKey());
+            } else {
+                standbyTasks.add(taskOffsetSum.getKey());
+            }
+        }
+
         data.setPrevTasks(prevTasks.stream().map(t -> {
             final SubscriptionInfoData.TaskId taskId = new SubscriptionInfoData.TaskId();
             taskId.setTopicGroupId(t.topicGroupId);
@@ -96,13 +152,6 @@ public class SubscriptionInfo {
             taskId.setPartition(t.partition);
             return taskId;
         }).collect(Collectors.toList()));
-
-        this.data = data;
-    }
-
-    private SubscriptionInfo(final SubscriptionInfoData subscriptionInfoData) {
-        validateVersions(subscriptionInfoData.version(), subscriptionInfoData.latestSupportedVersion());
-        this.data = subscriptionInfoData;
     }
 
     public int version() {
@@ -119,32 +168,77 @@ public class SubscriptionInfo {
 
     public Set<TaskId> prevTasks() {
         if (prevTasksCache == null) {
-            prevTasksCache = Collections.unmodifiableSet(
-                data.prevTasks()
-                    .stream()
-                    .map(t -> new TaskId(t.topicGroupId(), t.partition()))
-                    .collect(Collectors.toSet())
-            );
+            if (data.version() >= MIN_VERSION_OFFSET_SUM_SUBSCRIPTION) {
+                prevTasksCache = getActiveTasksFromTaskOffsetSumMap(taskOffsetSums());
+            } else {
+                prevTasksCache = Collections.unmodifiableSet(
+                    data.prevTasks()
+                        .stream()
+                        .map(t -> new TaskId(t.topicGroupId(), t.partition()))
+                        .collect(Collectors.toSet())
+                );
+            }
         }
         return prevTasksCache;
     }
 
     public Set<TaskId> standbyTasks() {
         if (standbyTasksCache == null) {
-            standbyTasksCache = Collections.unmodifiableSet(
-                data.standbyTasks()
-                    .stream()
-                    .map(t -> new TaskId(t.topicGroupId(), t.partition()))
-                    .collect(Collectors.toSet())
-            );
+            if (data.version() >= MIN_VERSION_OFFSET_SUM_SUBSCRIPTION) {
+                standbyTasksCache = getStandbyTasksFromTaskOffsetSumMap(taskOffsetSums());
+            } else {
+                standbyTasksCache = Collections.unmodifiableSet(
+                    data.standbyTasks()
+                        .stream()
+                        .map(t -> new TaskId(t.topicGroupId(), t.partition()))
+                        .collect(Collectors.toSet())
+                );
+            }
         }
         return standbyTasksCache;
+    }
+
+    Map<TaskId, Long> taskOffsetSums() {
+        if (taskOffsetSumsCache == null) {
+            taskOffsetSumsCache = new HashMap<>();
+            if (data.version() >= MIN_VERSION_OFFSET_SUM_SUBSCRIPTION) {
+                for (final TaskOffsetSum taskOffsetSum : data.taskOffsetSums()) {
+                    for (final PartitionToOffsetSum partitionOffsetSum : taskOffsetSum.partitionToOffsetSum()) {
+                        taskOffsetSumsCache.put(
+                            new TaskId(taskOffsetSum.topicGroupId(),
+                                       partitionOffsetSum.partition()),
+                            partitionOffsetSum.offsetSum()
+                        );
+                    }
+                }
+            } else {
+                prevTasks().forEach(taskId -> taskOffsetSumsCache.put(taskId, Task.LATEST_OFFSET));
+                standbyTasks().forEach(taskId -> taskOffsetSumsCache.put(taskId, UNKNOWN_OFFSET_SUM));
+            }
+        }
+        return taskOffsetSumsCache;
     }
 
     public String userEndPoint() {
         return data.userEndPoint() == null || data.userEndPoint().length == 0
             ? null
             : new String(data.userEndPoint(), StandardCharsets.UTF_8);
+    }
+
+    public static Set<TaskId> getActiveTasksFromTaskOffsetSumMap(final Map<TaskId, Long> taskOffsetSums) {
+        return taskOffsetSumMapToTaskSet(taskOffsetSums, true);
+    }
+
+    public static Set<TaskId> getStandbyTasksFromTaskOffsetSumMap(final Map<TaskId, Long> taskOffsetSums) {
+        return taskOffsetSumMapToTaskSet(taskOffsetSums, false);
+    }
+
+    private static Set<TaskId> taskOffsetSumMapToTaskSet(final Map<TaskId, Long> taskOffsetSums,
+                                                         final boolean getActiveTasks) {
+        return taskOffsetSums.entrySet().stream()
+                   .filter(t -> getActiveTasks == (t.getValue() == Task.LATEST_OFFSET))
+                   .map(Map.Entry::getKey)
+                   .collect(Collectors.toSet());
     }
 
     /**
@@ -181,7 +275,9 @@ public class SubscriptionInfo {
             subscriptionInfoData.setVersion(version);
             subscriptionInfoData.setLatestSupportedVersion(latestSupportedVersion);
             LOG.info("Unable to decode subscription data: used version: {}; latest supported version: {}",
-                     version, latestSupportedVersion);
+                version,
+                latestSupportedVersion
+            );
             return new SubscriptionInfo(subscriptionInfoData);
         } else {
             data.rewind();

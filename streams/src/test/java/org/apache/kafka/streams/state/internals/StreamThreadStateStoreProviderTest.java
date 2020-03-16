@@ -69,6 +69,7 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 
+import static org.apache.kafka.streams.StreamsConfig.EXACTLY_ONCE;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.instanceOf;
 import static org.hamcrest.Matchers.not;
@@ -90,7 +91,7 @@ public class StreamThreadStateStoreProviderTest {
     public void before() {
         final TopologyWrapper topology = new TopologyWrapper();
         topology.addSource("the-source", topicName);
-        topology.addProcessor("the-processor", new MockProcessorSupplier(), "the-source");
+        topology.addProcessor("the-processor", new MockProcessorSupplier<>(), "the-source");
         topology.addStateStore(
             Stores.keyValueStoreBuilder(
                 Stores.inMemoryKeyValueStore("kv-store"),
@@ -358,29 +359,23 @@ public class StreamThreadStateStoreProviderTest {
         final Set<TopicPartition> partitions = Collections.singleton(new TopicPartition(topicName, taskId.partition));
         final ProcessorStateManager stateManager = new ProcessorStateManager(
             taskId,
-            partitions,
             Task.TaskType.ACTIVE,
+            EXACTLY_ONCE.equals(streamsConfig.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG)),
+            logContext,
             stateDirectory,
-            topology.storeToChangelogTopic(),
             new StoreChangelogReader(
                 new MockTime(),
                 streamsConfig,
                 logContext,
                 clientSupplier.restoreConsumer,
                 new MockStateRestoreListener()),
-            logContext);
+            topology.storeToChangelogTopic(), partitions);
         final boolean eosEnabled = StreamsConfig.EXACTLY_ONCE.equals(streamsConfig.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG));
         final RecordCollector recordCollector = new RecordCollectorImpl(
             logContext,
             taskId,
             clientSupplier.consumer,
-            eosEnabled ?
-                new StreamsProducer(
-                    logContext,
-                    clientSupplier.getProducer(new HashMap<>()),
-                    streamsConfig.getString(StreamsConfig.APPLICATION_ID_CONFIG),
-                    taskId) :
-                new StreamsProducer(logContext, clientSupplier.getProducer(new HashMap<>())),
+            new StreamsProducer(clientSupplier.getProducer(new HashMap<>()), eosEnabled, logContext, streamsConfig.getString(StreamsConfig.APPLICATION_ID_CONFIG)),
             streamsConfig.defaultProductionExceptionHandler(),
             eosEnabled,
             new MockStreamsMetrics(metrics));

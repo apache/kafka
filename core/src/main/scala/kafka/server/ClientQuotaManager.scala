@@ -233,6 +233,22 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
     }
   }
 
+  /**
+   * Returns maximum value (produced/consume bytes or request processing time) that could be recorded without guaranteed throttling.
+   * Recording any larger value will always be throttled, even if no other values were recorded in the quota window.
+   * This is used for deciding the maximum bytes that can be fetched at once
+   */
+  def getMaxValueInQuotaWindow(session: Session, clientId: String): Double = {
+    if (quotasEnabled) {
+      val clientSensors = getOrCreateQuotaSensors(session, clientId)
+      Option(quotaCallback.quotaLimit(clientQuotaType, clientSensors.metricTags.asJava))
+        .map(_.toDouble * (config.numQuotaSamples - 1) * config.quotaWindowSizeSeconds)
+        .getOrElse(Double.MaxValue)
+    } else {
+      Double.MaxValue
+    }
+  }
+
   def recordAndGetThrottleTimeMs(session: Session, clientId: String, value: Double, timeMs: Long): Int = {
     var throttleTimeMs = 0
     val clientSensors = getOrCreateQuotaSensors(session, clientId)
@@ -483,7 +499,7 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
       // Change the underlying metric config if the sensor has been created
       val metric = allMetrics.get(quotaMetricName)
       if (metric != null) {
-        Option(quotaCallback.quotaLimit(clientQuotaType, metricTags.asJava)).foreach { newQuota =>
+        Option(quotaLimit(metricTags.asJava)).foreach { newQuota =>
           info(s"Sensor for $quotaEntity already exists. Changing quota to $newQuota in MetricConfig")
           metric.config(getQuotaMetricConfig(newQuota))
         }
@@ -493,8 +509,7 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
       allMetrics.asScala.filterKeys(n => n.name == quotaMetricName.name && n.group == quotaMetricName.group).foreach {
         case (metricName, metric) =>
           val metricTags = metricName.tags
-          Option(quotaCallback.quotaLimit(clientQuotaType, metricTags)).foreach { quota =>
-            val newQuota = quota.asInstanceOf[Double]
+          Option(quotaLimit(metricTags)).foreach { newQuota =>
             if (newQuota != metric.config.quota.bound) {
               info(s"Sensor for quota-id $metricTags already exists. Setting quota to $newQuota in MetricConfig")
               metric.config(getQuotaMetricConfig(newQuota))

@@ -1089,6 +1089,21 @@
         <td>kafka.server:type=transaction-coordinator-metrics,name=partition-load-time-avg</td>
         <td>average time, in milliseconds, it took to load transaction metadata from the consumer offset partitions loaded in the last 30 seconds</td>
       </tr>
+      <tr>
+        <td>Consumer Group Offset Count</td>
+        <td>kafka.server:type=GroupMetadataManager,name=NumOffsets</td>
+        <td>Total number of committed offsets for Consumer Groups</td>
+      </tr>
+      <tr>
+        <td>Consumer Group Count</td>
+        <td>kafka.server:type=GroupMetadataManager,name=NumGroups</td>
+        <td>Total number of Consumer Groups</td>
+      </tr>
+      <tr>
+        <td>Consumer Group Count, per State</td>
+        <td>kafka.server:type=GroupMetadataManager,name=NumGroups[PreparingRebalance,CompletingRebalance,Empty,Stable,Dead]</td>
+        <td>The number of Consumer Groups in each state: PreparingRebalance, CompletingRebalance, Empty, Stable, Dead</td>
+      </tr>
   </tbody></table>
 
   <h4><a id="selector_monitoring" href="#selector_monitoring">Common monitoring metrics for producer/consumer/connect/streams</a></h4>

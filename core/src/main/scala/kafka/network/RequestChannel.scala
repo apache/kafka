@@ -23,9 +23,15 @@ import java.util.concurrent._
 
 import com.typesafe.scalalogging.Logger
 import com.yammer.metrics.core.Meter
+import kafka.log.LogConfig
 import kafka.metrics.KafkaMetricsGroup
+import kafka.server.KafkaConfig
 import kafka.utils.{Logging, NotNothing, Pool}
+import org.apache.kafka.common.config.types.Password
+import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.memory.MemoryPool
+import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData
+import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData._
 import org.apache.kafka.common.network.Send
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests._
@@ -98,13 +104,59 @@ object RequestChannel extends Logging {
       releaseBuffer()
     }
 
-    def requestDesc(details: Boolean): String = s"$header -- ${body[AbstractRequest].toString(details)}"
+    def requestDesc(details: Boolean): String = s"$header -- ${loggableRequest.toString(details)}"
 
     def body[T <: AbstractRequest](implicit classTag: ClassTag[T], nn: NotNothing[T]): T = {
       bodyAndSize.request match {
         case r: T => r
         case r =>
           throw new ClassCastException(s"Expected request with type ${classTag.runtimeClass}, but found ${r.getClass}")
+      }
+    }
+
+    def loggableRequest: AbstractRequest = {
+
+      def loggableValue(resourceType: ConfigResource.Type, name: String, value: String): String = {
+        val maybeSensitive = resourceType match {
+          case ConfigResource.Type.BROKER => KafkaConfig.maybeSensitive(KafkaConfig.configType(name))
+          case ConfigResource.Type.TOPIC => KafkaConfig.maybeSensitive(LogConfig.configType(name))
+          case ConfigResource.Type.BROKER_LOGGER => false
+          case _ => true
+        }
+        if (maybeSensitive) Password.HIDDEN else value
+      }
+
+      bodyAndSize.request match {
+        case alterConfigs: AlterConfigsRequest =>
+          val loggableConfigs = alterConfigs.configs().asScala.map { case (resource, config) =>
+            val loggableEntries = new AlterConfigsRequest.Config(config.entries.asScala.map { entry =>
+                new AlterConfigsRequest.ConfigEntry(entry.name, loggableValue(resource.`type`, entry.name, entry.value))
+            }.asJavaCollection)
+            (resource, loggableEntries)
+          }.asJava
+          new AlterConfigsRequest.Builder(loggableConfigs, alterConfigs.validateOnly).build(alterConfigs.version())
+
+        case alterConfigs: IncrementalAlterConfigsRequest =>
+          val resources = new AlterConfigsResourceCollection(alterConfigs.data.resources.size)
+          alterConfigs.data().resources().asScala.foreach { resource =>
+            val newResource = new AlterConfigsResource()
+              .setResourceName(resource.resourceName)
+              .setResourceType(resource.resourceType)
+            resource.configs.asScala.foreach { config =>
+              newResource.configs.add(new AlterableConfig()
+                .setName(config.name)
+                .setValue(loggableValue(ConfigResource.Type.forId(resource.resourceType), config.name, config.value))
+                .setConfigOperation(config.configOperation))
+            }
+            resources.add(newResource)
+          }
+          val data = new IncrementalAlterConfigsRequestData()
+            .setValidateOnly(alterConfigs.data().validateOnly())
+            .setResources(resources)
+          new IncrementalAlterConfigsRequest.Builder(data).build(alterConfigs.version)
+
+        case _ =>
+          bodyAndSize.request
       }
     }
 

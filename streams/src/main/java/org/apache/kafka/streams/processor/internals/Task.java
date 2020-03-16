@@ -33,6 +33,8 @@ import java.util.Set;
 
 public interface Task {
 
+    // this must be negative to distinguish a running active task from other kinds of tasks
+    // which may be caught up to the same offsets
     long LATEST_OFFSET = -2L;
 
     /*
@@ -51,7 +53,7 @@ public interface Task {
      *          |            |                    |   |       |
      *          |            v                    v   |       |
      *          |      +-----+-------+       +----+---+----+  |
-     *          |      | Running (2) | ----> | Suspended(3)|  |    * //TODO Suspended(3) could be removed after we've stable on KIP-429
+     *          |      | Running (2) | ----> | Suspended(3)|  |    //TODO Suspended(3) could be removed after we've stable on KIP-429
      *          |      +-----+-------+       +------+------+  |
      *          |            |                      |         |
      *          |            |                      |         |
@@ -174,9 +176,9 @@ public interface Task {
      */
     Map<TopicPartition, Long> changelogOffsets();
 
-    void markChangelogAsCorrupted(final Set<TopicPartition> partitions);
+    void markChangelogAsCorrupted(final Collection<TopicPartition> partitions);
 
-    default Map<TopicPartition, Long> purgableOffsets() {
+    default Map<TopicPartition, Long> purgeableOffsets() {
         return Collections.emptyMap();
     }
 
@@ -195,6 +197,4 @@ public interface Task {
     default boolean maybePunctuateSystemTime() {
         return false;
     }
-
-
 }

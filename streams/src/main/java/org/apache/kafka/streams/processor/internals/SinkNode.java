@@ -85,21 +85,7 @@ public class SinkNode<K, V> extends ProcessorNode<K, V> {
 
         final String topic = topicExtractor.extract(key, value, this.context.recordContext());
 
-        try {
-            collector.send(topic, key, value, context.headers(), timestamp, keySerializer, valSerializer, partitioner);
-        } catch (final ClassCastException e) {
-            final String keyClass = key == null ? "unknown because key is null" : key.getClass().getName();
-            final String valueClass = value == null ? "unknown because value is null" : value.getClass().getName();
-            throw new StreamsException(
-                    String.format("ClassCastException while producing data to a sink topic. A serializer (key: %s / value: %s) is not compatible to the actual key or value type " +
-                                    "(key type: %s / value type: %s). Change the default Serdes in StreamConfig or " +
-                                    "provide correct Serdes via method parameters (for example if using the DSL, `#to(String topic, Produced<K, V> produced)` with `Produced.keySerde(WindowedSerdes.timeWindowedSerdeFrom(String.class))`).",
-                                    keySerializer.getClass().getName(),
-                                    valSerializer.getClass().getName(),
-                                    keyClass,
-                                    valueClass),
-                    e);
-        }
+        collector.send(topic, key, value, context.headers(), timestamp, keySerializer, valSerializer, partitioner);
     }
 
     /**
