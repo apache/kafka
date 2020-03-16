@@ -58,7 +58,7 @@ public class StateDirectoryTest {
     private StateDirectory directory;
     private File appDir;
 
-    private void initializeStateDirectory(final boolean createStateDirectory) throws Exception {
+    private void initializeStateDirectory(final boolean createStateDirectory) throws IOException {
         stateDir = new File(TestUtils.IO_TMP_DIR, "kafka-" + TestUtils.randomString(5));
         if (!createStateDirectory) {
             cleanup();
@@ -76,12 +76,12 @@ public class StateDirectoryTest {
     }
 
     @Before
-    public void before() throws Exception {
+    public void before() throws IOException {
         initializeStateDirectory(true);
     }
 
     @After
-    public void cleanup() throws Exception {
+    public void cleanup() throws IOException {
         Utils.delete(stateDir);
     }
 
@@ -102,7 +102,7 @@ public class StateDirectoryTest {
     }
 
     @Test
-    public void shouldLockTaskStateDirectory() throws Exception {
+    public void shouldLockTaskStateDirectory() throws IOException {
         final TaskId taskId = new TaskId(0, 0);
         final File taskDirectory = directory.directoryForTask(taskId);
 
@@ -123,7 +123,7 @@ public class StateDirectoryTest {
     }
 
     @Test
-    public void shouldBeTrueIfAlreadyHoldsLock() throws Exception {
+    public void shouldBeTrueIfAlreadyHoldsLock() throws IOException {
         final TaskId taskId = new TaskId(0, 0);
         directory.directoryForTask(taskId);
         directory.lock(taskId);
@@ -135,13 +135,13 @@ public class StateDirectoryTest {
     }
 
     @Test
-    public void shouldBeAbleToUnlockEvenWithoutLocking() throws Exception {
+    public void shouldBeAbleToUnlockEvenWithoutLocking() throws IOException {
         final TaskId taskId = new TaskId(0, 0);
         directory.unlock(taskId);
     }
 
     @Test
-    public void shouldReportDirectoryEmpty() throws Exception {
+    public void shouldReportDirectoryEmpty() throws IOException {
         final TaskId taskId = new TaskId(0, 0);
 
         // when task dir first created, it should be empty
@@ -175,7 +175,7 @@ public class StateDirectoryTest {
     }
 
     @Test
-    public void shouldThrowProcessorStateException() throws Exception {
+    public void shouldThrowProcessorStateException() throws IOException {
         final TaskId taskId = new TaskId(0, 0);
 
         Utils.delete(stateDir);
@@ -189,7 +189,7 @@ public class StateDirectoryTest {
     }
 
     @Test
-    public void shouldNotLockDeletedDirectory() throws Exception {
+    public void shouldNotLockDeletedDirectory() throws IOException {
         final TaskId taskId = new TaskId(0, 0);
 
         Utils.delete(stateDir);
@@ -197,7 +197,7 @@ public class StateDirectoryTest {
     }
     
     @Test
-    public void shouldLockMultipleTaskDirectories() throws Exception {
+    public void shouldLockMultipleTaskDirectories() throws IOException {
         final TaskId taskId = new TaskId(0, 0);
         final File task1Dir = directory.directoryForTask(taskId);
         final TaskId taskId2 = new TaskId(1, 0);
@@ -228,7 +228,7 @@ public class StateDirectoryTest {
     }
 
     @Test
-    public void shouldReleaseTaskStateDirectoryLock() throws Exception {
+    public void shouldReleaseTaskStateDirectoryLock() throws IOException {
         final TaskId taskId = new TaskId(0, 0);
         final File taskDirectory = directory.directoryForTask(taskId);
 
@@ -246,7 +246,7 @@ public class StateDirectoryTest {
     }
 
     @Test
-    public void shouldCleanUpTaskStateDirectoriesThatAreNotCurrentlyLocked() throws Exception {
+    public void shouldCleanUpTaskStateDirectoriesThatAreNotCurrentlyLocked() throws IOException {
         final TaskId task0 = new TaskId(0, 0);
         final TaskId task1 = new TaskId(1, 0);
         final TaskId task2 = new TaskId(2, 0);
@@ -307,6 +307,38 @@ public class StateDirectoryTest {
     }
 
     @Test
+    public void shouldReturnEmptyArrayForNonPersistentApp() throws IOException {
+        initializeStateDirectory(false);
+        assertTrue(Arrays.asList(directory.listAllTaskDirectories()).isEmpty());
+    }
+
+    @Test
+    public void shouldReturnEmptyArrayIfStateDirDoesntExist() throws IOException {
+        cleanup();
+        assertFalse(stateDir.exists());
+        assertTrue(Arrays.asList(directory.listAllTaskDirectories()).isEmpty());
+    }
+
+    @Test
+    public void shouldReturnEmptyArrayIfListFilesReturnsNull() {
+        stateDir = new File(TestUtils.IO_TMP_DIR, "kafka-" + TestUtils.randomString(5));
+        directory = new StateDirectory(
+            new StreamsConfig(new Properties() {
+                {
+                    put(StreamsConfig.APPLICATION_ID_CONFIG, applicationId);
+                    put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy:1234");
+                    put(StreamsConfig.STATE_DIR_CONFIG, stateDir.getPath());
+                }
+            }),
+            time, true);
+        appDir = new File(stateDir, applicationId);
+
+        assertTrue(stateDir.renameTo(new File(TestUtils.IO_TMP_DIR, "state-renamed")));
+
+        assertTrue(Arrays.asList(directory.listAllTaskDirectories()).isEmpty());
+    }
+
+    @Test
     public void shouldOnlyListNonEmptyTaskDirectories() {
         TestUtils.tempDirectory(stateDir.toPath(), "foo");
         final File taskDir1 = directory.directoryForTask(new TaskId(0, 0));
@@ -343,7 +375,7 @@ public class StateDirectoryTest {
     }
 
     @Test
-    public void shouldLockGlobalStateDirectory() throws Exception {
+    public void shouldLockGlobalStateDirectory() throws IOException {
         directory.lockGlobalState();
 
         try (
@@ -362,7 +394,7 @@ public class StateDirectoryTest {
     }
 
     @Test
-    public void shouldUnlockGlobalStateDirectory() throws Exception {
+    public void shouldUnlockGlobalStateDirectory() throws IOException {
         directory.lockGlobalState();
         directory.unlockGlobalState();
 
@@ -439,14 +471,14 @@ public class StateDirectoryTest {
     }
 
     @Test
-    public void shouldNotCreateBaseDirectory() throws Exception {
+    public void shouldNotCreateBaseDirectory() throws IOException {
         initializeStateDirectory(false);
         assertFalse(stateDir.exists());
         assertFalse(appDir.exists());
     }
 
     @Test
-    public void shouldNotCreateTaskStateDirectory() throws Exception {
+    public void shouldNotCreateTaskStateDirectory() throws IOException {
         initializeStateDirectory(false);
         final TaskId taskId = new TaskId(0, 0);
         final File taskDirectory = directory.directoryForTask(taskId);
@@ -454,21 +486,21 @@ public class StateDirectoryTest {
     }
 
     @Test
-    public void shouldNotCreateGlobalStateDirectory() throws Exception {
+    public void shouldNotCreateGlobalStateDirectory() throws IOException {
         initializeStateDirectory(false);
         final File globalStateDir = directory.globalStateDir();
         assertFalse(globalStateDir.exists());
     }
 
     @Test
-    public void shouldLockTaskStateDirectoryWhenDirectoryCreationDisabled() throws Exception {
+    public void shouldLockTaskStateDirectoryWhenDirectoryCreationDisabled() throws IOException {
         initializeStateDirectory(false);
         final TaskId taskId = new TaskId(0, 0);
         assertTrue(directory.lock(taskId));
     }
 
     @Test
-    public void shouldLockGlobalStateDirectoryWhenDirectoryCreationDisabled() throws Exception {
+    public void shouldLockGlobalStateDirectoryWhenDirectoryCreationDisabled() throws IOException {
         initializeStateDirectory(false);
         assertTrue(directory.lockGlobalState());
     }
