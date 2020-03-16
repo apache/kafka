@@ -25,7 +25,6 @@ import org.apache.kafka.common.quota.ClientQuotaFilterComponent;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Collection;
 
 public class DescribeClientQuotasRequest extends AbstractRequest {
     // These values must not change.

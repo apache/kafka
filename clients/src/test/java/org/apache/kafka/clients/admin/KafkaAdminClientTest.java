@@ -168,6 +168,7 @@ import static org.apache.kafka.common.message.ListPartitionReassignmentsResponse
 import static org.apache.kafka.common.message.ListPartitionReassignmentsResponseData.OngoingTopicReassignment;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
@@ -2876,6 +2877,28 @@ public class KafkaAdminClientTest {
             assertEquals(config2.size(), 1);
             assertEquals(config2.get("producer_byte_rate"), 20000.0, 1e-6);
         }
+    }
+
+    @Test
+    public void testEqualsOfClientQuotaFilterComponent() {
+        assertEquals(ClientQuotaFilterComponent.ofDefaultEntity(ClientQuotaEntity.USER),
+            ClientQuotaFilterComponent.ofDefaultEntity(ClientQuotaEntity.USER));
+
+        assertEquals(ClientQuotaFilterComponent.ofEntityType(ClientQuotaEntity.USER),
+            ClientQuotaFilterComponent.ofEntityType(ClientQuotaEntity.USER));
+
+        // match = null is different from match = Empty
+        assertNotEquals(ClientQuotaFilterComponent.ofDefaultEntity(ClientQuotaEntity.USER),
+            ClientQuotaFilterComponent.ofEntityType(ClientQuotaEntity.USER));
+
+        assertEquals(ClientQuotaFilterComponent.ofEntity(ClientQuotaEntity.USER, "user"),
+            ClientQuotaFilterComponent.ofEntity(ClientQuotaEntity.USER, "user"));
+
+        assertNotEquals(ClientQuotaFilterComponent.ofEntity(ClientQuotaEntity.USER, "user"),
+            ClientQuotaFilterComponent.ofDefaultEntity(ClientQuotaEntity.USER));
+
+        assertNotEquals(ClientQuotaFilterComponent.ofEntity(ClientQuotaEntity.USER, "user"),
+            ClientQuotaFilterComponent.ofEntityType(ClientQuotaEntity.USER));
     }
 
     public void testAlterClientQuotas() throws Exception {

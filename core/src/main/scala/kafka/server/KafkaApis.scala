@@ -2820,7 +2820,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 
     if (authorize(request, DESCRIBE_CONFIGS, CLUSTER, CLUSTER_NAME)) {
       val result = adminManager.describeClientQuotas(
-        describeClientQuotasRequest.filter).mapValues(_.mapValues(Double.box).asJava).asJava
+        describeClientQuotasRequest.filter).mapValues(_.mapValues(Double.box).toMap.asJava).toMap.asJava
       sendResponseMaybeThrottle(request, requestThrottleMs =>
         new DescribeClientQuotasResponse(result, requestThrottleMs))
     } else {
