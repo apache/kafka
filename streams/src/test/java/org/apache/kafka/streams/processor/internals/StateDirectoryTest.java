@@ -36,6 +36,7 @@ import java.nio.file.Files;
 import java.nio.file.StandardOpenOption;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Properties;
@@ -315,12 +316,12 @@ public class StateDirectoryTest {
         final File storeDir = new File(taskDir1, "store");
         assertTrue(storeDir.mkdir());
 
-        assertEquals(Arrays.asList(taskDir1, taskDir2), Arrays.asList(directory.listAllTaskDirectories()));
+        assertEquals(new HashSet<>(Arrays.asList(taskDir1, taskDir2)), new HashSet<>(Arrays.asList(directory.listAllTaskDirectories())));
         assertEquals(Collections.singletonList(taskDir1), Arrays.asList(directory.listNonEmptyTaskDirectories()));
 
         directory.cleanRemovedTasks(0L);
 
-        assertEquals(Arrays.asList(taskDir1, taskDir2), Arrays.asList(directory.listAllTaskDirectories()));
+        assertEquals(new HashSet<>(Arrays.asList(taskDir1, taskDir2)), new HashSet<>(Arrays.asList(directory.listAllTaskDirectories())));
         assertEquals(Collections.emptyList(), Arrays.asList(directory.listNonEmptyTaskDirectories()));
     }
 
