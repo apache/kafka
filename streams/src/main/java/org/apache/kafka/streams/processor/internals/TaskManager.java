@@ -333,7 +333,7 @@ public class TaskManager {
                     // it is possible that if there are multiple threads within the instance that one thread
                     // trying to grab the task from the other, while the other has not released the lock since
                     // it did not participate in the rebalance. In this case we can just retry in the next iteration
-                    log.debug("Could not initialize {} due to {}; will retry", task.id(), e);
+                    log.debug("Could not initialize {} due to the following exception; will retry", task.id(), e);
                     allRunning = false;
                 }
             }
