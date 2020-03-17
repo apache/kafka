@@ -2304,11 +2304,8 @@ public class KafkaAdminClient extends AdminClient {
         Map<Integer, DescribeLogDirsRequestData> partitionsByBroker = new HashMap<>();
 
         for (TopicPartitionReplica replica: replicas) {
-            DescribeLogDirsRequestData requestData = partitionsByBroker.get(replica.brokerId());
-            if (requestData == null) {
-                requestData = new DescribeLogDirsRequestData();
-                partitionsByBroker.put(replica.brokerId(), requestData);
-            }
+            DescribeLogDirsRequestData requestData = partitionsByBroker.computeIfAbsent(replica.brokerId(),
+                brokerId -> new DescribeLogDirsRequestData());
             DescribableLogDirTopic describableLogDirTopic = requestData.topics().find(replica.topic());
             if (describableLogDirTopic == null) {
                 List<Integer> partitionIndex = new ArrayList<>();

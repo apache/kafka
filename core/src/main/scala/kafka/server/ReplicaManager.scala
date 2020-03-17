@@ -678,10 +678,10 @@ class ReplicaManager(val config: KafkaConfig,
                 logs.filter { log =>
                   partitions.contains(log.topicPartition)
                 }.map { log =>
-                  new DescribeLogDirsResponseData.DescribeLogDirsPartition().
-                    setPartitionSize(log.size).
-                    setPartitionIndex(log.topicPartition.partition).
-                    setOffsetLag(getLogEndOffsetLag(log.topicPartition, log.logEndOffset, log.isFuture))
+                  new DescribeLogDirsResponseData.DescribeLogDirsPartition()
+                    .setPartitionSize(log.size)
+                    .setPartitionIndex(log.topicPartition.partition)
+                    .setOffsetLag(getLogEndOffsetLag(log.topicPartition, log.logEndOffset, log.isFuture))
                     .setIsFutureKey(log.isFuture)
                 }.toList.asJava)
             }.toList.asJava
