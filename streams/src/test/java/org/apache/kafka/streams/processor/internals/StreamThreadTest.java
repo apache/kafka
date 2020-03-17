@@ -23,6 +23,7 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.InvalidOffsetException;
 import org.apache.kafka.clients.consumer.MockConsumer;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
+import org.apache.kafka.clients.consumer.internals.MockRebalanceListener;
 import org.apache.kafka.clients.producer.MockProducer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.common.Cluster;
@@ -456,8 +457,16 @@ public class StreamThreadTest {
     public void shouldRespectNumIterationsInMainLoop() {
         final MockProcessor<byte[], byte[]> mockProcessor = new MockProcessor<>(PunctuationType.WALL_CLOCK_TIME, 10L);
         internalTopologyBuilder.addSource(null, "source1", null, null, null, topic1);
-        internalTopologyBuilder.addProcessor("processor1", () -> mockProcessor, "source1");
-        internalTopologyBuilder.addProcessor("processor2", () -> new MockProcessor<byte[], byte[]>(PunctuationType.STREAM_TIME, 10L), "source1");
+        internalTopologyBuilder.addProcessor(
+            "processor1",
+            (ProcessorSupplier<byte[], byte[]>) () -> mockProcessor,
+            "source1"
+        );
+        internalTopologyBuilder.addProcessor(
+            "processor2",
+            (ProcessorSupplier<byte[], byte[]>) () -> new MockProcessor<>(PunctuationType.STREAM_TIME, 10L),
+            "source1"
+        );
 
         final Properties properties = new Properties();
         properties.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100L);
@@ -805,6 +814,66 @@ public class StreamThreadTest {
             });
         thread.run();
         EasyMock.verify(taskManager);
+    }
+
+    @Test
+    public void shouldNotReturnDataAfterTaskMigrated() {
+        final TaskManager taskManager = EasyMock.createNiceMock(TaskManager.class);
+
+        internalTopologyBuilder = EasyMock.createNiceMock(InternalTopologyBuilder.class);
+
+        EasyMock.expect(internalTopologyBuilder.sourceTopicCollection()).andReturn(Collections.singletonList(topic1)).times(2);
+
+        final MockConsumer<byte[], byte[]> consumer = new MockConsumer<>(OffsetResetStrategy.LATEST);
+
+        consumer.subscribe(Collections.singletonList(topic1), new MockRebalanceListener());
+        consumer.rebalance(Collections.singletonList(t1p1));
+        consumer.updateEndOffsets(Collections.singletonMap(t1p1, 10L));
+        consumer.seekToEnd(Collections.singletonList(t1p1));
+
+        final ChangelogReader changelogReader = new MockChangelogReader() {
+
+            @Override
+            public void restore() {
+                consumer.addRecord(new ConsumerRecord<>(topic1, 1, 11, new byte[0], new byte[0]));
+                consumer.addRecord(new ConsumerRecord<>(topic1, 1, 12, new byte[1], new byte[0]));
+
+                throw new TaskMigratedException(
+                    "Changelog restore found task migrated", new RuntimeException("restore task migrated"));
+            }
+        };
+
+        taskManager.handleLostAll();
+
+        EasyMock.replay(taskManager, internalTopologyBuilder);
+
+        final StreamsMetricsImpl streamsMetrics =
+            new StreamsMetricsImpl(metrics, CLIENT_ID, StreamsConfig.METRICS_LATEST);
+
+        final StreamThread thread = new StreamThread(
+            mockTime,
+            config,
+            null,
+            consumer,
+            consumer,
+            changelogReader,
+            null,
+            taskManager,
+            streamsMetrics,
+            internalTopologyBuilder,
+            CLIENT_ID,
+            new LogContext(""),
+            new AtomicInteger()
+        ).updateThreadMetadata(getSharedAdminClientId(CLIENT_ID));
+
+        final IllegalStateException thrown = assertThrows(
+            IllegalStateException.class, thread::run);
+
+        EasyMock.verify(taskManager);
+
+        // The Mock consumer shall throw as the assignment has been wiped out, but records are assigned.
+        assertEquals("No current assignment for partition topic1-1", thrown.getMessage());
+        assertFalse(consumer.shouldRebalance());
     }
 
     @Test
@@ -1602,7 +1671,8 @@ public class StreamThreadTest {
         mockConsumer.addRecord(new ConsumerRecord<>(
             t1p1.topic(),
             t1p1.partition(),
-            ++offset, -1,
+            ++offset,
+            -1,
             TimestampType.CREATE_TIME,
             ConsumerRecord.NULL_CHECKSUM,
             -1,
@@ -1934,7 +2004,11 @@ public class StreamThreadTest {
     private void setupInternalTopologyWithoutState() {
         final MockProcessor<byte[], byte[]> mockProcessor = new MockProcessor<>();
         internalTopologyBuilder.addSource(null, "source1", null, null, null, topic1);
-        internalTopologyBuilder.addProcessor("processor1", () -> mockProcessor, "source1");
+        internalTopologyBuilder.addProcessor(
+            "processor1",
+            (ProcessorSupplier<byte[], byte[]>) () -> mockProcessor,
+            "source1"
+        );
     }
 
     private Collection<Task> createStandbyTask() {

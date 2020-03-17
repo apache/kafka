@@ -1229,6 +1229,20 @@ object KafkaConfig {
 
   def apply(props: java.util.Map[_, _]): KafkaConfig = new KafkaConfig(props, true)
 
+  def configType(configName: String): Option[ConfigDef.Type] = {
+    def typeOf(name: String): Option[ConfigDef.Type] = Option(configDef.configKeys.get(name)).map(_.`type`)
+
+    typeOf(configName) match {
+      case Some(t) => Some(t)
+      case None =>
+        DynamicBrokerConfig.brokerConfigSynonyms(configName, matchListenerOverride = true).flatMap(typeOf).headOption
+    }
+  }
+
+  def maybeSensitive(configType: Option[ConfigDef.Type]): Boolean = {
+    // If we can't determine the config entry type, treat it as a sensitive config to be safe
+    configType.isEmpty || configType.contains(ConfigDef.Type.PASSWORD)
+  }
 }
 
 class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigOverride: Option[DynamicBrokerConfig])

@@ -34,6 +34,7 @@ import org.apache.kafka.common.message._
 import org.apache.kafka.common.metrics.{KafkaMetric, Quota, Sensor}
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.ApiKeys
+import org.apache.kafka.common.quota.ClientQuotaFilter
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.resource.{PatternType, ResourceType => AdminResourceType}
@@ -291,7 +292,7 @@ class RequestQuotaTest extends BaseRequestTest {
               )
           )
         case ApiKeys.OFFSET_FETCH =>
-          new OffsetFetchRequest.Builder("test-group", false, List(tp).asJava)
+          new OffsetFetchRequest.Builder("test-group", false, List(tp).asJava, false)
 
         case ApiKeys.FIND_COORDINATOR =>
           new FindCoordinatorRequest.Builder(
@@ -372,7 +373,14 @@ class RequestQuotaTest extends BaseRequestTest {
               .setTimeoutMs(5000))
 
         case ApiKeys.DELETE_RECORDS =>
-          new DeleteRecordsRequest.Builder(5000, Map(tp -> (0L: java.lang.Long)).asJava)
+          new DeleteRecordsRequest.Builder(
+            new DeleteRecordsRequestData()
+              .setTimeoutMs(5000)
+              .setTopics(Collections.singletonList(new DeleteRecordsRequestData.DeleteRecordsTopic()
+                .setName(tp.topic())
+                .setPartitions(Collections.singletonList(new DeleteRecordsRequestData.DeleteRecordsPartition()
+                  .setPartitionIndex(tp.partition())
+                  .setOffset(0L))))))
 
         case ApiKeys.INIT_PRODUCER_ID =>
           val requestData = new InitProducerIdRequestData()
@@ -514,6 +522,12 @@ class RequestQuotaTest extends BaseRequestTest {
                   .setPartitions(Collections.singletonList(
                     new OffsetDeleteRequestData.OffsetDeleteRequestPartition()
                       .setPartitionIndex(0)))).iterator())))
+
+        case ApiKeys.DESCRIBE_CLIENT_QUOTAS =>
+          new DescribeClientQuotasRequest.Builder(ClientQuotaFilter.all())
+
+        case ApiKeys.ALTER_CLIENT_QUOTAS =>
+          new AlterClientQuotasRequest.Builder(List.empty.asJava, false)
 
         case _ =>
           throw new IllegalArgumentException("Unsupported API key " + apiKey)

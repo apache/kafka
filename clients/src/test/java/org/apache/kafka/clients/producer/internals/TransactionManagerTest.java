@@ -2660,6 +2660,30 @@ public class TransactionManagerTest {
     }
 
     @Test
+    public void testNoFailedBatchHandlingWhenTxnManagerIsInFatalError() {
+        initializeTransactionManager(Optional.empty());
+        long producerId = 15L;
+        short epoch = 5;
+        initializeIdempotentProducerId(producerId, epoch);
+
+        TopicPartition tp0 = new TopicPartition("foo", 0);
+        ProducerBatch b1 = writeIdempotentBatchWithValue(transactionManager, tp0, "1");
+        // Handling b1 should bump the epoch after OutOfOrderSequenceException
+        transactionManager.handleFailedBatch(b1, new OutOfOrderSequenceException("out of sequence"), false);
+        transactionManager.bumpIdempotentEpochAndResetIdIfNeeded();
+        ProducerIdAndEpoch idAndEpochAfterFirstBatch = new ProducerIdAndEpoch(producerId, (short) (epoch + 1));
+        assertEquals(idAndEpochAfterFirstBatch, transactionManager.producerIdAndEpoch());
+
+        transactionManager.transitionToFatalError(new KafkaException());
+
+        // The second batch should not bump the epoch as txn manager is already in fatal error state
+        ProducerBatch b2 = writeIdempotentBatchWithValue(transactionManager, tp0, "2");
+        transactionManager.handleFailedBatch(b2, new TimeoutException(), true);
+        transactionManager.bumpIdempotentEpochAndResetIdIfNeeded();
+        assertEquals(idAndEpochAfterFirstBatch, transactionManager.producerIdAndEpoch());
+    }
+
+    @Test
     public void testAbortTransactionAndReuseSequenceNumberOnError() throws InterruptedException {
         final long pid = 13131L;
         final short epoch = 1;

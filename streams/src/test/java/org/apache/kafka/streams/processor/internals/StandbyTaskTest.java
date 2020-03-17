@@ -257,6 +257,20 @@ public class StandbyTaskTest {
     }
 
     @Test
+    public void shouldNotThrowFromStateManagerCloseInCloseDirty() {
+        stateManager.close();
+        EasyMock.expectLastCall().andThrow(new RuntimeException("KABOOM!")).anyTimes();
+        EasyMock.replay(stateManager);
+
+        task = createStandbyTask();
+        task.initializeIfNeeded();
+
+        task.closeDirty();
+
+        EasyMock.verify(stateManager);
+    }
+
+    @Test
     public void shouldCommitOnCloseClean() {
         stateManager.close();
         EasyMock.expectLastCall();

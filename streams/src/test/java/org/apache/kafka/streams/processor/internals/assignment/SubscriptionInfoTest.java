@@ -30,6 +30,8 @@ import java.util.UUID;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.streams.processor.internals.assignment.StreamsAssignmentProtocolVersions.LATEST_SUPPORTED_VERSION;
+import static org.apache.kafka.streams.processor.internals.assignment.SubscriptionInfo.MIN_VERSION_OFFSET_SUM_SUBSCRIPTION;
+import static org.apache.kafka.streams.processor.internals.assignment.SubscriptionInfo.UNKNOWN_OFFSET_SUM;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
@@ -294,11 +296,45 @@ public class SubscriptionInfoTest {
     }
 
     @Test
-    public void shouldConvertTaskOffsetSumMapToTaskSetsForOlderVersion() {
+    public void shouldConvertTaskOffsetSumMapToTaskSets() {
         final SubscriptionInfo info =
             new SubscriptionInfo(7, LATEST_SUPPORTED_VERSION, processId, "localhost:80", TASK_OFFSET_SUMS);
         assertThat(info.prevTasks(), is(ACTIVE_TASKS));
         assertThat(info.standbyTasks(), is(STANDBY_TASKS));
+    }
+
+    @Test
+    public void shouldReturnTaskOffsetSumsMapForDecodedSubscription() {
+        final SubscriptionInfo info = SubscriptionInfo.decode(
+            new SubscriptionInfo(MIN_VERSION_OFFSET_SUM_SUBSCRIPTION,
+                                 LATEST_SUPPORTED_VERSION, processId,
+                                 "localhost:80",
+                                 TASK_OFFSET_SUMS)
+                .encode());
+        assertThat(info.taskOffsetSums(), is(TASK_OFFSET_SUMS));
+    }
+
+    @Test
+    public void shouldConvertTaskSetsToTaskOffsetSumMapWithOlderSubscription() {
+        final Map<TaskId, Long> expectedOffsetSumsMap = mkMap(
+            mkEntry(new TaskId(0, 0), Task.LATEST_OFFSET),
+            mkEntry(new TaskId(0, 1), Task.LATEST_OFFSET),
+            mkEntry(new TaskId(1, 0), Task.LATEST_OFFSET),
+            mkEntry(new TaskId(1, 1), UNKNOWN_OFFSET_SUM),
+            mkEntry(new TaskId(2, 0), UNKNOWN_OFFSET_SUM)
+        );
+
+        final SubscriptionInfo info = SubscriptionInfo.decode(
+            new LegacySubscriptionInfoSerde(
+                SubscriptionInfo.MIN_VERSION_OFFSET_SUM_SUBSCRIPTION - 1,
+                LATEST_SUPPORTED_VERSION,
+                processId,
+                ACTIVE_TASKS,
+                STANDBY_TASKS,
+                "localhost:80")
+            .encode());
+
+        assertThat(info.taskOffsetSums(), is(expectedOffsetSumsMap));
     }
 
     private static ByteBuffer encodeFutureVersion() {

@@ -26,9 +26,9 @@ import java.util.Set;
 
 public class ProcessorTopology {
 
-    private final List<ProcessorNode> processorNodes;
-    private final Map<String, SourceNode> sourcesByTopic;
-    private final Map<String, SinkNode> sinksByTopic;
+    private final List<ProcessorNode<?, ?>> processorNodes;
+    private final Map<String, SourceNode<?, ?>> sourcesByTopic;
+    private final Map<String, SinkNode<?, ?>> sinksByTopic;
     private final List<StateStore> stateStores;
     private final Set<String> repartitionTopics;
 
@@ -36,9 +36,9 @@ public class ProcessorTopology {
     private final List<StateStore> globalStateStores;
     private final Map<String, String> storeToChangelogTopic;
 
-    public ProcessorTopology(final List<ProcessorNode> processorNodes,
-                             final Map<String, SourceNode> sourcesByTopic,
-                             final Map<String, SinkNode> sinksByTopic,
+    public ProcessorTopology(final List<ProcessorNode<?, ?>> processorNodes,
+                             final Map<String, SourceNode<?, ?>> sourcesByTopic,
+                             final Map<String, SinkNode<?, ?>> sinksByTopic,
                              final List<StateStore> stateStores,
                              final List<StateStore> globalStateStores,
                              final Map<String, String> storeToChangelogTopic,
@@ -56,11 +56,11 @@ public class ProcessorTopology {
         return sourcesByTopic.keySet();
     }
 
-    public SourceNode source(final String topic) {
+    public SourceNode<?, ?> source(final String topic) {
         return sourcesByTopic.get(topic);
     }
 
-    public Set<SourceNode> sources() {
+    public Set<SourceNode<?, ?>> sources() {
         return new HashSet<>(sourcesByTopic.values());
     }
 
@@ -68,11 +68,11 @@ public class ProcessorTopology {
         return sinksByTopic.keySet();
     }
 
-    public SinkNode sink(final String topic) {
+    public SinkNode<?, ?> sink(final String topic) {
         return sinksByTopic.get(topic);
     }
 
-    public List<ProcessorNode> processors() {
+    public List<ProcessorNode<?, ?>> processors() {
         return processorNodes;
     }
 
@@ -125,7 +125,7 @@ public class ProcessorTopology {
         }
 
         final StringBuilder sb = new StringBuilder(indent + "\tchildren:\t[");
-        for (final ProcessorNode child : children) {
+        for (final ProcessorNode<?, ?> child : children) {
             sb.append(child.name());
             sb.append(", ");
         }

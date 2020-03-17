@@ -580,11 +580,11 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
             (result, server) => {
               val topicMetadatas = server.dataPlaneRequestProcessor.metadataCache
                 .getTopicMetadata(Set(testTopicName), ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT))
-              val testPartitionMetadata = topicMetadatas.find(_.topic().equals(testTopicName)).get.partitionMetadata().asScala.find(_.partition() == partitionOnBroker0)
+              val testPartitionMetadata = topicMetadatas.find(_.name.equals(testTopicName)).get.partitions.asScala.find(_.partitionIndex == partitionOnBroker0)
               testPartitionMetadata match {
                 case None => fail(s"Partition metadata is not found in metadata cache")
                 case Some(metadata) => {
-                  result && metadata.error == Errors.LEADER_NOT_AVAILABLE
+                  result && metadata.errorCode == Errors.LEADER_NOT_AVAILABLE.code
                 }
               }
             }

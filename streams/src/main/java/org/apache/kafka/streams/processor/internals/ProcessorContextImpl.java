@@ -76,7 +76,6 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
     /**
      * @throws StreamsException if an attempt is made to access this state store from an unknown node
      */
-    @SuppressWarnings("unchecked")
     @Override
     public StateStore getStateStore(final String name) {
         if (currentNode() == null) {
@@ -86,15 +85,15 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
         final StateStore global = stateManager.getGlobalStore(name);
         if (global != null) {
             if (global instanceof TimestampedKeyValueStore) {
-                return new TimestampedKeyValueStoreReadOnlyDecorator((TimestampedKeyValueStore) global);
+                return new TimestampedKeyValueStoreReadOnlyDecorator<>((TimestampedKeyValueStore<?, ?>) global);
             } else if (global instanceof KeyValueStore) {
-                return new KeyValueStoreReadOnlyDecorator((KeyValueStore) global);
+                return new KeyValueStoreReadOnlyDecorator<>((KeyValueStore<?, ?>) global);
             } else if (global instanceof TimestampedWindowStore) {
-                return new TimestampedWindowStoreReadOnlyDecorator((TimestampedWindowStore) global);
+                return new TimestampedWindowStoreReadOnlyDecorator<>((TimestampedWindowStore<?, ?>) global);
             } else if (global instanceof WindowStore) {
-                return new WindowStoreReadOnlyDecorator((WindowStore) global);
+                return new WindowStoreReadOnlyDecorator<>((WindowStore<?, ?>) global);
             } else if (global instanceof SessionStore) {
-                return new SessionStoreReadOnlyDecorator((SessionStore) global);
+                return new SessionStoreReadOnlyDecorator<>((SessionStore<?, ?>) global);
             }
 
             return global;
@@ -112,28 +111,26 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
 
         final StateStore store = stateManager.getStore(name);
         if (store instanceof TimestampedKeyValueStore) {
-            return new TimestampedKeyValueStoreReadWriteDecorator((TimestampedKeyValueStore) store);
+            return new TimestampedKeyValueStoreReadWriteDecorator<>((TimestampedKeyValueStore<?, ?>) store);
         } else if (store instanceof KeyValueStore) {
-            return new KeyValueStoreReadWriteDecorator((KeyValueStore) store);
+            return new KeyValueStoreReadWriteDecorator<>((KeyValueStore<?, ?>) store);
         } else if (store instanceof TimestampedWindowStore) {
-            return new TimestampedWindowStoreReadWriteDecorator((TimestampedWindowStore) store);
+            return new TimestampedWindowStoreReadWriteDecorator<>((TimestampedWindowStore<?, ?>) store);
         } else if (store instanceof WindowStore) {
-            return new WindowStoreReadWriteDecorator((WindowStore) store);
+            return new WindowStoreReadWriteDecorator<>((WindowStore<?, ?>) store);
         } else if (store instanceof SessionStore) {
-            return new SessionStoreReadWriteDecorator((SessionStore) store);
+            return new SessionStoreReadWriteDecorator<>((SessionStore<?, ?>) store);
         }
 
         return store;
     }
 
-    @SuppressWarnings("unchecked")
     @Override
     public <K, V> void forward(final K key,
                                final V value) {
         forward(key, value, SEND_TO_ALL);
     }
 
-    @SuppressWarnings("unchecked")
     @Override
     @Deprecated
     public <K, V> void forward(final K key,
@@ -142,10 +139,9 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
         forward(
             key,
             value,
-            To.child(((List<ProcessorNode>) currentNode().children()).get(childIndex).name()));
+            To.child((currentNode().children()).get(childIndex).name()));
     }
 
-    @SuppressWarnings("unchecked")
     @Override
     @Deprecated
     public <K, V> void forward(final K key,
@@ -159,7 +155,7 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
     public <K, V> void forward(final K key,
                                final V value,
                                final To to) {
-        final ProcessorNode previousNode = currentNode();
+        final ProcessorNode<?, ?> previousNode = currentNode();
         final ProcessorRecordContext previousContext = recordContext;
 
         try {
@@ -175,12 +171,12 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
 
             final String sendTo = toInternal.child();
             if (sendTo == null) {
-                final List<ProcessorNode<K, V>> children = (List<ProcessorNode<K, V>>) currentNode().children();
-                for (final ProcessorNode child : children) {
-                    forward(child, key, value);
+                final List<ProcessorNode<?, ?>> children = currentNode().children();
+                for (final ProcessorNode<?, ?> child : children) {
+                    forward((ProcessorNode<K, V>) child, key, value);
                 }
             } else {
-                final ProcessorNode child = currentNode().getChild(sendTo);
+                final ProcessorNode<K, V> child = currentNode().getChild(sendTo);
                 if (child == null) {
                     throw new StreamsException("Unknown downstream node: " + sendTo
                         + " either does not exist or is not connected to this processor.");
@@ -193,8 +189,7 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
         }
     }
 
-    @SuppressWarnings("unchecked")
-    private <K, V> void forward(final ProcessorNode child,
+    private <K, V> void forward(final ProcessorNode<K, V> child,
                                 final K key,
                                 final V value) {
         setCurrentNode(child);
@@ -294,7 +289,7 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
         }
 
         @Override
-        public void putAll(final List entries) {
+        public void putAll(final List<KeyValue<K, V>> entries) {
             throw new UnsupportedOperationException(ERROR_MESSAGE);
         }
 
@@ -404,7 +399,7 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
         }
 
         @Override
-        public void remove(final Windowed sessionKey) {
+        public void remove(final Windowed<K> sessionKey) {
             throw new UnsupportedOperationException(ERROR_MESSAGE);
         }
 

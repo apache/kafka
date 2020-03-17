@@ -24,15 +24,19 @@ import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.common.config.SecurityConfig;
+import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.requests.JoinGroupRequest;
 import org.apache.kafka.common.serialization.Deserializer;
 
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
 import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
@@ -259,6 +263,20 @@ public class ConsumerConfig extends AbstractConfig {
      */
     static final String LEAVE_GROUP_ON_CLOSE_CONFIG = "internal.leave.group.on.close";
 
+    /**
+     * <code>internal.throw.on.fetch.stable.offset.unsupported</code>
+     * Whether or not the consumer should throw when the new stable offset feature is supported.
+     * If set to <code>true</code> then the client shall crash upon hitting it.
+     * The purpose of this flag is to prevent unexpected broker downgrade which makes
+     * the offset fetch protection against pending commit invalid. The safest approach
+     * is to fail fast to avoid introducing correctness issue.
+     *
+     * <p>
+     * Note: this is an internal configuration and could be changed in the future in a backward incompatible way
+     *
+     */
+    static final String THROW_ON_FETCH_STABLE_OFFSET_UNSUPPORTED = "internal.throw.on.fetch.stable.offset.unsupported";
+
     /** <code>isolation.level</code> */
     public static final String ISOLATION_LEVEL_CONFIG = "isolation.level";
     public static final String ISOLATION_LEVEL_DOC = "Controls how to read messages written transactionally. If set to <code>read_committed</code>, consumer.poll() will only return" +
@@ -284,6 +302,8 @@ public class ConsumerConfig extends AbstractConfig {
      */
     public static final String SECURITY_PROVIDERS_CONFIG = SecurityConfig.SECURITY_PROVIDERS_CONFIG;
     private static final String SECURITY_PROVIDERS_DOC = SecurityConfig.SECURITY_PROVIDERS_DOC;
+
+    private static final AtomicInteger CONSUMER_CLIENT_ID_SEQUENCE = new AtomicInteger(1);
 
     static {
         CONFIG = new ConfigDef().define(BOOTSTRAP_SERVERS_CONFIG,
@@ -491,6 +511,10 @@ public class ConsumerConfig extends AbstractConfig {
                                         Type.BOOLEAN,
                                         true,
                                         Importance.LOW)
+                                .defineInternal(THROW_ON_FETCH_STABLE_OFFSET_UNSUPPORTED,
+                                        Type.BOOLEAN,
+                                        false,
+                                        Importance.LOW)
                                 .define(ISOLATION_LEVEL_CONFIG,
                                         Type.STRING,
                                         DEFAULT_ISOLATION_LEVEL,
@@ -519,7 +543,23 @@ public class ConsumerConfig extends AbstractConfig {
 
     @Override
     protected Map<String, Object> postProcessParsedConfig(final Map<String, Object> parsedValues) {
-        return CommonClientConfigs.postProcessReconnectBackoffConfigs(this, parsedValues);
+        Map<String, Object> refinedConfigs = CommonClientConfigs.postProcessReconnectBackoffConfigs(this, parsedValues);
+        maybeOverrideClientId(refinedConfigs);
+        return refinedConfigs;
+    }
+
+    private void maybeOverrideClientId(Map<String, Object> configs) {
+        final String clientId = this.getString(CLIENT_ID_CONFIG);
+        if (clientId == null || clientId.isEmpty()) {
+            final String groupId = this.getString(GROUP_ID_CONFIG);
+            String groupInstanceId = this.getString(GROUP_INSTANCE_ID_CONFIG);
+            if (groupInstanceId != null)
+                JoinGroupRequest.validateGroupInstanceId(groupInstanceId);
+
+            String groupInstanceIdPart = groupInstanceId != null ? groupInstanceId : CONSUMER_CLIENT_ID_SEQUENCE.getAndIncrement() + "";
+            String generatedClientId = String.format("consumer-%s-%s", groupId, groupInstanceIdPart);
+            configs.put(CLIENT_ID_CONFIG, generatedClientId);
+        }
     }
 
     public static Map<String, Object> addDeserializerToConfig(Map<String, Object> configs,
@@ -545,6 +585,19 @@ public class ConsumerConfig extends AbstractConfig {
         return newProperties;
     }
 
+    boolean maybeOverrideEnableAutoCommit() {
+        Optional<String> groupId = Optional.ofNullable(getString(CommonClientConfigs.GROUP_ID_CONFIG));
+        boolean enableAutoCommit = getBoolean(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG);
+        if (!groupId.isPresent()) { // overwrite in case of default group id where the config is not explicitly provided
+            if (!originals().containsKey(ENABLE_AUTO_COMMIT_CONFIG)) {
+                enableAutoCommit = false;
+            } else if (enableAutoCommit) {
+                throw new InvalidConfigurationException(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG + " cannot be set to true when default group id (null) is used.");
+            }
+        }
+        return enableAutoCommit;
+    }
+
     public ConsumerConfig(Properties props) {
         super(CONFIG, props);
     }
@@ -562,7 +615,7 @@ public class ConsumerConfig extends AbstractConfig {
     }
 
     public static ConfigDef configDef() {
-        return  new ConfigDef(CONFIG);
+        return new ConfigDef(CONFIG);
     }
 
     public static void main(String[] args) {
