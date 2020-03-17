@@ -1,13 +1,13 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- * <p>
- * http://www.apache.org/licenses/LICENSE-2.0
- * <p>
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -23,30 +23,36 @@ import org.apache.kafka.common.annotation.InterfaceStability;
 import java.io.Closeable;
 import java.io.IOException;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * This interface provides storing and fetching remote log segment metadata with strongly consistent semantics.
+ *
+ * When {@link #configure(Map)} is invoked on this instance, {@link #BROKER_ID}, {@link #CLUSTER_ID} properties are
+ * passed which can be used by this instance if needed. These props can be used if there is a single storage used for
+ * different clusters. For ex: MySQL storage can be used as metadata store for all the clusters across the org.
+ *
+ * todo-tier cleanup the abstractions in this interface.
  */
 @InterfaceStability.Unstable
 public interface RemoteLogMetadataManager extends Configurable, Closeable {
-    /**
-     *
-     */
-    String BROKER_ID_CONFIG = "broker.id";
 
     /**
      *
      */
-    String CLUSTER_ID_CONFIG = "cluster.id";
+    String BROKER_ID = "broker.id";
 
     /**
      *
      */
-    String LOCAL_BOOTSTRAP_SERVER = "local.bootstrap.server";
+    String CLUSTER_ID = "cluster.id";
 
     /**
-     * Stores RemoteLogSegmentMetadata for the given RemoteLogSegmentMetadata.
+     * Stores RemoteLogSegmentMetadata for the given RemoteLogSegmentId.
+     * todo-tier we may not need to pass RemoteLogSegmentId here as RemoteLogSegmentMetadata already contains that.
+     * we can cleanup this interface later with the right abstractions.
      *
      * @param remoteLogSegmentId
      * @param remoteLogSegmentMetadata
@@ -83,6 +89,14 @@ public interface RemoteLogMetadataManager extends Configurable, Closeable {
     Optional<Long> earliestLogOffset(TopicPartition tp) throws IOException;
 
     /**
+     *
+     * @param tp
+     * @return
+     * @throws IOException
+     */
+    Optional<Long> highestLogOffset(TopicPartition tp) throws IOException;
+
+    /**
      * Deletes the log segment metadata for the given remoteLogSegmentId.
      *
      * @param remoteLogSegmentId
@@ -103,7 +117,7 @@ public interface RemoteLogMetadataManager extends Configurable, Closeable {
     /**
      * @param topicPartition
      * @param minOffset
-     * @return
+     * @return List of remote segments, sorted by baseOffset in ascending order.
      */
     List<RemoteLogSegmentMetadata> listRemoteLogSegments(TopicPartition topicPartition, long minOffset);
 
@@ -114,7 +128,7 @@ public interface RemoteLogMetadataManager extends Configurable, Closeable {
      * @param leaderPartitions   partitions that have become leaders on this broker.
      * @param followerPartitions partitions that have become followers on this broker.
      */
-    void onPartitionLeadershipChanges(List<TopicPartition> leaderPartitions, List<TopicPartition> followerPartitions);
+    void onPartitionLeadershipChanges(Set<TopicPartition> leaderPartitions, Set<TopicPartition> followerPartitions);
 
     /**
      * This method is invoked only when the given topic partitions are stopped on this broker. This can happen when a
@@ -122,6 +136,11 @@ public interface RemoteLogMetadataManager extends Configurable, Closeable {
      *
      * @param partitions
      */
-    void onStopPartitions(List<TopicPartition> partitions);
+    void onStopPartitions(Set<TopicPartition> partitions);
 
+    /**
+     * Callback to receive once server is started so that this class can run tasks which should be run only when the
+     * server is started.
+     */
+    void onServerStarted();
 }

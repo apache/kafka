@@ -16,21 +16,21 @@
  */
 package kafka.log.remote
 
-import java.io.File
-import java.util
+import java.io.{ByteArrayInputStream, File, InputStream}
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.function.Consumer
 import java.util.{Collections, Optional, Properties}
+import java.{lang, util}
 
 import kafka.log.remote.RemoteLogManager.REMOTE_STORAGE_MANAGER_CONFIG_PREFIX
-import kafka.log.{CleanerConfig, Log, LogConfig, LogManager, LogSegment}
+import kafka.log.{CleanerConfig, Log, LogConfig, LogManager}
 import kafka.server.QuotaFactory.UnboundedQuota
 import kafka.server._
 import kafka.server.checkpoints.LazyOffsetCheckpoints
 import kafka.utils.{MockScheduler, MockTime, TestUtils}
 import kafka.zk.KafkaZkClient
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.log.remote.storage.{RemoteLogIndexEntry, RemoteLogSegmentInfo}
+import org.apache.kafka.common.log.remote.storage.{LogSegmentData, RemoteLogSegmentContext, RemoteLogSegmentId, RemoteLogSegmentMetadata, RemoteStorageManager}
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.record._
@@ -119,7 +119,7 @@ class RemoteLogManagerTest {
     def lsoUpdater(tp: TopicPartition, los: Long): Unit = {}
 
     // this should initialize RSM
-    new RemoteLogManager(logFetcher, lsoUpdater, rlmConfig, time, "localhost:9092", 1, "/tmp/logs")
+    new RemoteLogManager(logFetcher, lsoUpdater, rlmConfig, time, "localhost:9092", 1, "", "/tmp/logs")
 
     assertTrue(rsmConfig.count { case (k, v) => MockRemoteStorageManager.configs.get(k) == v } == rsmConfig.size)
     assertEquals(MockRemoteStorageManager.configs.get(KafkaConfig.RemoteLogRetentionBytesProp),
@@ -196,23 +196,6 @@ object MockRemoteStorageManager {
 
 class MockRemoteStorageManager extends RemoteStorageManager {
 
-  override def copyLogSegment(topicPartition: TopicPartition, logSegment: LogSegment,
-                              leaderEpoch: Int): util.List[RemoteLogIndexEntry] = Collections.emptyList()
-
-  override def listRemoteSegments(topicPartition: TopicPartition,
-                                  minBaseOffset: Long): util.List[RemoteLogSegmentInfo] = Collections.emptyList()
-
-  override def getRemoteLogIndexEntries(remoteLogSegment: RemoteLogSegmentInfo): util.List[RemoteLogIndexEntry] = Collections.emptyList()
-
-  override def deleteLogSegment(remoteLogSegment: RemoteLogSegmentInfo): Boolean = true
-
-  override def deleteTopicPartition(topicPartition: TopicPartition): Boolean = true
-
-  override def read(remoteLogIndexEntry: RemoteLogIndexEntry, maxBytes: Int, startOffset: Long,
-                    minOneMessage: Boolean): Records = MemoryRecords.EMPTY
-
-  override def findOffsetByTimestamp(remoteLogIndexEntry: RemoteLogIndexEntry,
-                                     targetTimestamp: Long, startingOffset: Long): FileRecords.TimestampAndOffset = null
 
   override def close(): Unit = {}
 
@@ -220,7 +203,24 @@ class MockRemoteStorageManager extends RemoteStorageManager {
     MockRemoteStorageManager.configs = configs
   }
 
-  override def cleanupLogUntil(topicPartition: TopicPartition, cleanUpTillMs: Long): Long = 0L
+  override def copyLogSegment(remoteLogSegmentId: RemoteLogSegmentId,
+                              logSegmentData: LogSegmentData): RemoteLogSegmentContext = {
+    new RemoteLogSegmentContext {
+      override def asBytes(): Array[Byte] = {
+        Array.emptyByteArray
+      }
+    }
+  }
 
-  override def earliestLogOffset(tp: TopicPartition): Long = 0L
+  override def fetchLogSegmentData(remoteLogSegmentMetadata: RemoteLogSegmentMetadata,
+                                   startPosition: lang.Long,
+                                   endPosition: lang.Long): InputStream = new ByteArrayInputStream(Array.emptyByteArray)
+
+  override def fetchOffsetIndex(remoteLogSegmentMetadata: RemoteLogSegmentMetadata): InputStream = new ByteArrayInputStream(
+    Array.emptyByteArray)
+
+  override def fetchTimestampIndex(remoteLogSegmentMetadata: RemoteLogSegmentMetadata): InputStream = new ByteArrayInputStream(
+    Array.emptyByteArray)
+
+  override def deleteLogSegment(remoteLogSegmentMetadata: RemoteLogSegmentMetadata): Boolean = true
 }

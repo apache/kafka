@@ -17,16 +17,15 @@
 package kafka.log.remote
 
 import java.io.InputStream
-import java.util.Optional
 import java.{lang, util}
 
-import org.apache.kafka.common.log.remote.storage.{LogSegmentData, RemoteLogSegmentContext, RemoteLogSegmentId, RemoteLogSegmentMetadata, RemoteLogStorageManager}
+import org.apache.kafka.common.log.remote.storage.{LogSegmentData, RemoteLogSegmentContext, RemoteLogSegmentId, RemoteLogSegmentMetadata, RemoteStorageManager}
 
 /**
  * A wrapper class of RemoteStorageManager that sets the context class loader when calling RSM methods.
  */
-class ClassLoaderAwareRemoteStorageManager(val rsm: RemoteLogStorageManager,
-                                           val rsmClassLoader: ClassLoader) extends RemoteLogStorageManager {
+class ClassLoaderAwareRemoteStorageManager(val rsm: RemoteStorageManager,
+                                           val rsmClassLoader: ClassLoader) extends RemoteStorageManager {
 
   def withClassLoader[T](fun: => T): T = {
     val originalClassLoader = Thread.currentThread.getContextClassLoader
@@ -60,7 +59,7 @@ class ClassLoaderAwareRemoteStorageManager(val rsm: RemoteLogStorageManager,
 
   override def fetchLogSegmentData(remoteLogSegmentMetadata: RemoteLogSegmentMetadata,
                                    startPosition: lang.Long,
-                                   endPosition: Optional[lang.Long]): InputStream = {
+                                   endPosition: lang.Long): InputStream = {
     withClassLoader {
       rsm.fetchLogSegmentData(remoteLogSegmentMetadata, startPosition, endPosition)
     }

@@ -1,32 +1,34 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- * <p>
- * http://www.apache.org/licenses/LICENSE-2.0
- * <p>
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.log.storage;
+package org.apache.kafka.common.log.remote.storage;
 
-import org.apache.kafka.common.*;
-import org.apache.kafka.common.log.remote.storage.*;
+import org.apache.kafka.common.TopicPartition;
 
-import java.io.*;
-import java.nio.file.*;
-import java.util.*;
+import static java.lang.String.format;
+import static java.util.Objects.requireNonNull;
+import static org.junit.Assert.assertArrayEquals;
 
-import static java.lang.String.*;
-import static java.util.Objects.*;
-import static java.util.Optional.*;
-import static org.junit.Assert.*;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.file.Files;
+import java.nio.file.Paths;
+import java.util.Arrays;
+import java.util.List;
 
 public final class LocalRemoteStorageVerifier {
     private final LocalRemoteStorageManager remoteStorage;
@@ -134,7 +136,7 @@ public final class LocalRemoteStorageVerifier {
     }
 
     private RemoteLogSegmentMetadata newMetadata(final RemoteLogSegmentId id) {
-        return new RemoteLogSegmentMetadata(id, 0, 0, -1, new byte[0]);
+        return new RemoteLogSegmentMetadata(id, 0, 0, -1L, -1, new byte[0]);
     }
 
     private String getStorageRootDirectory() {

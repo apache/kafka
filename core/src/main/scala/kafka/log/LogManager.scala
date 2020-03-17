@@ -22,7 +22,7 @@ import java.nio.file.Files
 import java.util.concurrent._
 
 import com.yammer.metrics.core.Gauge
-import kafka.log.remote.{RemoteLogManager, RemoteLogManagerConfig}
+import kafka.log.remote.{RemoteIndexCache, RemoteLogManager, RemoteLogManagerConfig}
 import kafka.metrics.KafkaMetricsGroup
 import kafka.server.checkpoints.OffsetCheckpointFile
 import kafka.server.{BrokerState, RecoveringFromUncleanShutdown, _}
@@ -350,7 +350,8 @@ class LogManager(logDirs: Seq[File],
 
         val jobsForDir = for {
           dirContent <- Option(dir.listFiles).toList
-          logDir <- dirContent if logDir.isDirectory
+          // ignore remote-log-index-cache directory as that is index cache but not any topic-partition dir
+          logDir <- dirContent if logDir.isDirectory && !logDir.getName.equals(RemoteIndexCache.DirName)
         } yield {
           CoreUtils.runnable {
             try {

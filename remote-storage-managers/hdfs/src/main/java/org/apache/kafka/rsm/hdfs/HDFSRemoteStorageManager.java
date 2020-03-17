@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.rsm.hdfs;
 
+
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FileSystem;
@@ -99,6 +100,7 @@ public class HDFSRemoteStorageManager implements RemoteLogStorageManager {
     @Override
     public boolean deleteLogSegment(RemoteLogSegmentMetadata remoteLogSegmentMetadata) throws IOException {
         String path = getSegmentRemoteDir(remoteLogSegmentMetadata.remoteLogSegmentId());
+
         FileSystem fs = getFS();
         return fs.delete(new Path(path), true);
     }

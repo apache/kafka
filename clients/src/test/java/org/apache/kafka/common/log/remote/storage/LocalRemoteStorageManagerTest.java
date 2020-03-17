@@ -1,36 +1,45 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- * <p>
- * http://www.apache.org/licenses/LICENSE-2.0
- * <p>
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.log.storage;
+package org.apache.kafka.common.log.remote.storage;
 
-import org.apache.kafka.common.*;
-import org.apache.kafka.common.log.remote.storage.*;
-import org.junit.*;
-import org.junit.rules.*;
+import org.apache.kafka.common.TopicPartition;
+import org.junit.After;
+import org.junit.Before;
+import org.junit.Rule;
+import org.junit.Test;
+import org.junit.rules.TestName;
 
-import java.io.*;
-import java.nio.file.*;
-import java.text.*;
-import java.time.*;
-import java.time.format.*;
-import java.util.*;
+import static java.lang.String.format;
+import static org.apache.kafka.common.log.remote.storage.LocalRemoteStorageManager.DELETE_ON_CLOSE_PROP;
+import static org.apache.kafka.common.log.remote.storage.LocalRemoteStorageManager.ENABLE_DELETE_API_PROP;
+import static org.apache.kafka.common.log.remote.storage.LocalRemoteStorageManager.STORAGE_ID_PROP;
+import static org.junit.Assert.assertThrows;
 
-import static java.lang.String.*;
-import static org.apache.kafka.common.log.storage.LocalRemoteStorageManager.*;
-import static org.junit.Assert.*;
+import java.io.File;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.text.NumberFormat;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.UUID;
 
 public final class LocalRemoteStorageManagerTest {
     @Rule
@@ -42,16 +51,21 @@ public final class LocalRemoteStorageManagerTest {
     private LocalRemoteStorageManager remoteStorage;
     private LocalRemoteStorageVerifier remoteStorageVerifier;
 
-    @Before
-    public void before() {
+    private void init(Map<String, Object> extraConfig) {
         remoteStorage = new LocalRemoteStorageManager();
         remoteStorageVerifier = new LocalRemoteStorageVerifier(remoteStorage, topicPartition);
 
         Map<String, Object> config = new HashMap<>();
         config.put(STORAGE_ID_PROP, generateStorageId());
-        config.put(DELETE_ON_CLOSE_PROP, true);
+        config.put(DELETE_ON_CLOSE_PROP, "true");
+        config.putAll(extraConfig);
 
         remoteStorage.configure(config);
+    }
+
+    @Before
+    public void before() {
+        init(Collections.emptyMap());
     }
 
     @After
@@ -72,7 +86,7 @@ public final class LocalRemoteStorageManagerTest {
 
     @Test
     public void copyDataFromLogSegment() throws RemoteStorageException {
-        final byte[] data = new byte[] { 0, 1, 2 };
+        final byte[] data = new byte[]{0, 1, 2};
         final RemoteLogSegmentId id = newRemoteLogSegmentId();
         final LogSegmentData segment = localLogSegments.nextSegment(data);
 
@@ -84,13 +98,13 @@ public final class LocalRemoteStorageManagerTest {
     @Test
     public void fetchLogSegment() throws RemoteStorageException {
         final RemoteLogSegmentId id = newRemoteLogSegmentId();
-        final LogSegmentData segment = localLogSegments.nextSegment(new byte[] { 0, 1, 2 });
+        final LogSegmentData segment = localLogSegments.nextSegment(new byte[]{0, 1, 2});
 
         remoteStorage.copyLogSegment(id, segment);
 
-        remoteStorageVerifier.verifyFetchedLogSegment(id, 0, new byte[] { 0, 1, 2 });
-        remoteStorageVerifier.verifyFetchedLogSegment(id, 1, new byte[] { 1, 2 });
-        remoteStorageVerifier.verifyFetchedLogSegment(id, 2, new byte[] { 2 });
+        remoteStorageVerifier.verifyFetchedLogSegment(id, 0, new byte[]{0, 1, 2});
+        remoteStorageVerifier.verifyFetchedLogSegment(id, 1, new byte[]{1, 2});
+        remoteStorageVerifier.verifyFetchedLogSegment(id, 2, new byte[]{2});
     }
 
     @Test
@@ -126,10 +140,25 @@ public final class LocalRemoteStorageManagerTest {
     }
 
     @Test
+    public void segmentsAreNotDeletedIfDeleteApiIsDisabled() throws RemoteStorageException {
+        init(Collections.singletonMap(ENABLE_DELETE_API_PROP, "false"));
+
+        final RemoteLogSegmentId id = newRemoteLogSegmentId();
+        final LogSegmentData segment = localLogSegments.nextSegment();
+
+        remoteStorage.copyLogSegment(id, segment);
+        remoteStorageVerifier.verifyContainsLogSegmentFiles(id, segment);
+
+        remoteStorage.deleteLogSegment(newRemoteLogSegmentMetadata(id));
+        remoteStorageVerifier.verifyContainsLogSegmentFiles(id, segment);
+    }
+
+    @Test
     public void fetchThrowsIfDataDoesNotExist() {
         final RemoteLogSegmentMetadata metadata = newRemoteLogSegmentMetadata(newRemoteLogSegmentId());
 
-        assertThrows(RemoteResourceNotFoundException.class, () -> remoteStorage.fetchLogSegmentData(metadata, 0L, null));
+        assertThrows(RemoteResourceNotFoundException.class,
+                () -> remoteStorage.fetchLogSegmentData(metadata, 0L, null));
         assertThrows(RemoteResourceNotFoundException.class, () -> remoteStorage.fetchOffsetIndex(metadata));
         assertThrows(RemoteResourceNotFoundException.class, () -> remoteStorage.fetchTimestampIndex(metadata));
     }
@@ -144,7 +173,7 @@ public final class LocalRemoteStorageManagerTest {
     }
 
     private RemoteLogSegmentMetadata newRemoteLogSegmentMetadata(final RemoteLogSegmentId id) {
-        return new RemoteLogSegmentMetadata(id, 0, 0, -1, new byte[0]);
+        return new RemoteLogSegmentMetadata(id, 0, 0, -1L, -1, new byte[0]);
     }
 
     private RemoteLogSegmentId newRemoteLogSegmentId() {
@@ -163,6 +192,7 @@ public final class LocalRemoteStorageManagerTest {
         private static final byte[] TIME_FILE_BYTES = "time".getBytes();
 
         private static final NumberFormat OFFSET_FORMAT = NumberFormat.getInstance();
+
         static {
             OFFSET_FORMAT.setMaximumIntegerDigits(20);
             OFFSET_FORMAT.setMaximumFractionDigits(0);
@@ -185,7 +215,7 @@ public final class LocalRemoteStorageManagerTest {
         LogSegmentData nextSegment(final byte[] data) {
             final String offset = OFFSET_FORMAT.format(baseOffset);
 
-            final File segment = new File(segmentDir, offset+ ".log");
+            final File segment = new File(segmentDir, offset + ".log");
             final File offsetIndex = new File(segmentDir, offset + ".index");
             final File timeIndex = new File(segmentDir, offset + ".time");
 
