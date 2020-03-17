@@ -54,6 +54,7 @@ import org.hamcrest.Matchers;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
+import org.junit.function.ThrowingRunnable;
 import org.junit.rules.TemporaryFolder;
 import org.junit.runner.RunWith;
 
@@ -1912,6 +1913,7 @@ public class TaskManagerTest {
 
         assertThat(thrown.getCause(), instanceOf(CommitFailedException.class));
         assertThat(thrown.getMessage(), equalTo("Consumer committing offsets failed, indicating the corresponding thread is no longer part of the group; it means all tasks belonging to this thread should be migrated."));
+        assertThat(task01.state(), is(Task.State.CREATED));
     }
 
     @Test
@@ -1931,6 +1933,7 @@ public class TaskManagerTest {
 
         assertThat(thrown.getCause(), instanceOf(TimeoutException.class));
         assertThat(thrown.getMessage(), equalTo("Timed out while committing offsets via consumer"));
+        assertThat(task01.state(), is(Task.State.CREATED));
     }
 
     @Test
@@ -1950,6 +1953,7 @@ public class TaskManagerTest {
 
         assertThat(thrown.getCause(), instanceOf(KafkaException.class));
         assertThat(thrown.getMessage(), equalTo("Error encountered committing offsets via consumer"));
+        assertThat(task01.state(), is(Task.State.CREATED));
     }
 
     @Test
@@ -1968,10 +1972,49 @@ public class TaskManagerTest {
         );
 
         assertThat(thrown.getMessage(), equalTo("KABOOM"));
+        assertThat(task01.state(), is(Task.State.CREATED));
+    }
+
+    @Test
+    public void shouldNotCloseTasksIfCommittingFailsDuringAssignment() {
+        shouldNotCloseTaskIfCommitFailsDuringAction(() -> taskManager.handleAssignment(Collections.emptyMap(), Collections.emptyMap()));
+    }
+
+    @Test
+    public void shouldNotCloseTasksIfCommittingFailsDuringRevocation() {
+        shouldNotCloseTaskIfCommitFailsDuringAction(() -> taskManager.handleRevocation(singletonList(t1p0)));
+    }
+
+    @Test
+    public void shouldNotCloseTasksIfCommittingFailsDuringShutdown() {
+        shouldNotCloseTaskIfCommitFailsDuringAction(() -> taskManager.shutdown(true));
+    }
+
+    private void shouldNotCloseTaskIfCommitFailsDuringAction(final ThrowingRunnable action) {
+        final Map<TopicPartition, OffsetAndMetadata> offsets = singletonMap(t1p0, new OffsetAndMetadata(0L, null));
+        final StateMachineTask task00 = new StateMachineTask(taskId00, taskId00Partitions, true) {
+            @Override
+            public Map<TopicPartition, OffsetAndMetadata> committableOffsetsAndMetadata() {
+                return offsets;
+            }
+        };
+
+        expect(activeTaskCreator.createTasks(anyObject(), eq(taskId00Assignment)))
+            .andReturn(singletonList(task00));
+        consumer.commitSync(offsets);
+        expectLastCall().andThrow(new RuntimeException("KABOOM!"));
+        replay(activeTaskCreator, consumer);
+
+        taskManager.handleAssignment(taskId00Assignment, Collections.emptyMap());
+
+        final RuntimeException thrown =  assertThrows(RuntimeException.class, action);
+
+        assertThat(thrown.getMessage(), is("KABOOM!"));
+        assertThat(task00.state(), is(Task.State.CREATED));
     }
 
     private static void expectRestoreToBeCompleted(final Consumer<byte[], byte[]> consumer,
-                                                   final ChangelogReader changeLogReader) {
+                                                             final ChangelogReader changeLogReader) {
         final Set<TopicPartition> assignment = singleton(new TopicPartition("assignment", 0));
         expect(consumer.assignment()).andReturn(assignment);
         consumer.resume(assignment);

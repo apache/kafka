@@ -266,9 +266,6 @@ public class StreamTaskTest {
         ctrl.replay();
 
         task = createStatefulTask(createConfig(true, "100"), true, stateManager);
-        task.transitionTo(Task.State.RESTORING);
-        task.transitionTo(Task.State.RUNNING);
-        task.transitionTo(Task.State.SUSPENDED);
         task.prepareCloseDirty();
         task.closeDirty();
         task = null;
@@ -1320,14 +1317,18 @@ public class StreamTaskTest {
     @Test
     public void shouldThrowIfCommittingOnIllegalState() {
         task = createStatelessTask(createConfig(false, "100"), StreamsConfig.METRICS_LATEST);
+        assertThrows(IllegalStateException.class, task::prepareCommit);
 
+        task.transitionTo(Task.State.CLOSED);
         assertThrows(IllegalStateException.class, task::prepareCommit);
     }
 
     @Test
     public void shouldThrowIfPostCommittingOnIllegalState() {
         task = createStatelessTask(createConfig(false, "100"), StreamsConfig.METRICS_LATEST);
+        assertThrows(IllegalStateException.class, task::postCommit);
 
+        task.transitionTo(Task.State.CLOSED);
         assertThrows(IllegalStateException.class, task::postCommit);
     }
 
