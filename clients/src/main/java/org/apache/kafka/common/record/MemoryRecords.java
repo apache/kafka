@@ -177,14 +177,12 @@ public class MemoryRecords extends AbstractRecords {
             // with a magic value not matching the magic of the records (magic < 2). This will be fixed as we
             // recopy the messages to the destination buffer.
             byte batchMagic = batch.magic();
-            boolean writeOriginalBatch = true;
-            boolean containsTombstones = false;
             List<Record> retainedRecords = new ArrayList<>();
 
-            final BatchIterationResult iterationResult = iterateOverBatch(batch, decompressionBufferSupplier, filterResult, filter,
-                                                                          batchMagic, writeOriginalBatch, maxOffset, retainedRecords);
-            containsTombstones = iterationResult.containsTombstones();
-            writeOriginalBatch = iterationResult.shouldWriteOriginalBatch();
+            final BatchFilterResult iterationResult = filterBatch(batch, decompressionBufferSupplier, filterResult, filter,
+                                                                          batchMagic, true, maxOffset, retainedRecords);
+            boolean containsTombstones = iterationResult.containsTombstones();
+            boolean writeOriginalBatch = iterationResult.shouldWriteOriginalBatch();
             maxOffset = iterationResult.maxOffset();
 
             if (!retainedRecords.isEmpty()) {
@@ -193,7 +191,7 @@ public class MemoryRecords extends AbstractRecords {
                 // if the batch does not contain tombstones, then we don't need to overwrite batch
                 boolean needToSetDeleteHorizon = batch.magic() >= 2 && (containsTombstones || containsMarkerForEmptyTxn)
                     && !batch.deleteHorizonSet();
-                if (writeOriginalBatch && (!needToSetDeleteHorizon)) {
+                if (writeOriginalBatch && !needToSetDeleteHorizon) {
                     if (batch.deleteHorizonMs() > filterResult.latestDeleteHorizon()) 
                         filterResult.updateLatestDeleteHorizon(batch.deleteHorizonMs());
                     batch.writeTo(bufferOutputStream);
@@ -248,12 +246,12 @@ public class MemoryRecords extends AbstractRecords {
         return filterResult;
     }
 
-    private static BatchIterationResult iterateOverBatch(RecordBatch batch,
+    private static BatchFilterResult filterBatch(RecordBatch batch,
                                                          BufferSupplier decompressionBufferSupplier,
                                                          FilterResult filterResult,
                                                          RecordFilter filter,
                                                          byte batchMagic,
-                                                         boolean recordsFiltered,
+                                                         boolean writeOriginalBatch,
                                                          long maxOffset,
                                                          List<Record> retainedRecords) {
         boolean containsTombstones = false;
@@ -266,7 +264,7 @@ public class MemoryRecords extends AbstractRecords {
                     // Check for log corruption due to KAFKA-4298. If we find it, make sure that we overwrite
                     // the corrupted batch with correct data.
                     if (!record.hasMagic(batchMagic))
-                        recordsFiltered = false;
+                        writeOriginalBatch = false;
 
                     if (record.offset() > maxOffset)
                         maxOffset = record.offset();
@@ -277,20 +275,20 @@ public class MemoryRecords extends AbstractRecords {
                         containsTombstones = true;
                     }
                 } else {
-                    recordsFiltered = false;
+                    writeOriginalBatch = false;
                 }
             }
-            return new BatchIterationResult(recordsFiltered, containsTombstones, maxOffset);
+            return new BatchFilterResult(writeOriginalBatch, containsTombstones, maxOffset);
         }
     }
 
-    private static class BatchIterationResult {
+    private static class BatchFilterResult {
         private final boolean writeOriginalBatch;
         private final boolean containsTombstones;
         private final long maxOffset;
-        public BatchIterationResult(final boolean writeOriginalBatch,
-                                    final boolean containsTombstones,
-                                    final long maxOffset) {
+        public BatchFilterResult(final boolean writeOriginalBatch,
+                                 final boolean containsTombstones,
+                                 final long maxOffset) {
             this.writeOriginalBatch = writeOriginalBatch;
             this.containsTombstones = containsTombstones;
             this.maxOffset = maxOffset;

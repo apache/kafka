@@ -131,6 +131,10 @@ public class MemoryRecordsBuilder implements AutoCloseable {
         bufferStream.position(initialPosition + batchHeaderSizeInBytes);
         this.bufferStream = bufferStream;
         this.appendStream = new DataOutputStream(compressionType.wrapForOutput(this.bufferStream, magic));
+
+        if (deleteHorizonSet()) {
+            this.firstTimestamp = deleteHorizonMs;
+        }
     }
 
     public MemoryRecordsBuilder(ByteBufferOutputStream bufferStream,
@@ -214,7 +218,7 @@ public class MemoryRecordsBuilder implements AutoCloseable {
     }
 
     public boolean deleteHorizonSet() {
-        return deleteHorizonMs >= 0L;
+        return magic >= RecordBatch.MAGIC_VALUE_V2 && deleteHorizonMs >= 0L;
     }
 
     /**
@@ -436,12 +440,8 @@ public class MemoryRecordsBuilder implements AutoCloseable {
             if (magic < RecordBatch.MAGIC_VALUE_V2 && headers != null && headers.length > 0)
                 throw new IllegalArgumentException("Magic v" + magic + " does not support record headers");
 
-            if (firstTimestamp == null) {
-                if (deleteHorizonSet())
-                    firstTimestamp = deleteHorizonMs;
-                else
-                    firstTimestamp = timestamp;
-            }
+            if (firstTimestamp == null)
+                firstTimestamp = timestamp;
 
             if (magic > RecordBatch.MAGIC_VALUE_V1) {
                 appendDefaultRecord(offset, timestamp, key, value, headers);
