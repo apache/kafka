@@ -2211,8 +2211,11 @@ class KafkaApis(val requestChannel: RequestChannel,
             }
           }
 
-        // For KAFKA-9656, we need to replace COORDINATOR_LOAD_IN_PROGRESS with COORDINATOR_NOT_AVAILABLE
-        // for older producer client which could potentially fail due to a later bug fix in KAFKA-7296.
+        // We need to replace COORDINATOR_LOAD_IN_PROGRESS with COORDINATOR_NOT_AVAILABLE
+        // for older producer client from 0.11 to prior 2.0, which could potentially crash due
+        // to unexpected loading error. This bug is fixed later by KAFKA-7296 in version 2.0.
+        // Clients using txn commit protocol >= 2 (version 2.3 and on onwards)
+        // are guaranteed to have the fix to check for the loading error.
         if (txnOffsetCommitRequest.version < 2) {
           combinedCommitStatus.foreach { case (topicPartition, error) =>
             if (error == Errors.COORDINATOR_LOAD_IN_PROGRESS) {
