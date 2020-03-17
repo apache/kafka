@@ -351,7 +351,11 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
 
     @Override
     public Map<TopicPartition, OffsetAndMetadata> committableOffsetsAndMetadata() {
-        if (state() == State.CREATED || state() == State.RESTORING || state() == State.SUSPENDED) {
+        if (state() == State.CLOSED) {
+            throw new IllegalStateException("Task " + id + " is closed.");
+        }
+
+        if (state() != State.RUNNING) {
             return Collections.emptyMap();
         }
 

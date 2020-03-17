@@ -203,8 +203,10 @@ public class TaskManager {
                 cleanupTask(task);
 
                 try {
-                    checkpointPerTask.put(task, task.prepareCloseClean());
+                    final Map<TopicPartition, Long> checkpoint = task.prepareCloseClean();
                     final Map<TopicPartition, OffsetAndMetadata> committableOffsets = task.committableOffsetsAndMetadata();
+
+                    checkpointPerTask.put(task, checkpoint);
                     if (!committableOffsets.isEmpty()) {
                         consumedOffsetsAndMetadataPerTask.put(task.id(), committableOffsets);
                     }
@@ -566,8 +568,10 @@ public class TaskManager {
 
             if (clean) {
                 try {
-                    checkpointPerTask.put(task, task.prepareCloseClean());
+                    final Map<TopicPartition, Long> checkpoint = task.prepareCloseClean();
                     final Map<TopicPartition, OffsetAndMetadata> committableOffsets = task.committableOffsetsAndMetadata();
+
+                    checkpointPerTask.put(task, checkpoint);
                     if (!committableOffsets.isEmpty()) {
                         consumedOffsetsAndMetadataPerTask.put(task.id(), committableOffsets);
                     }

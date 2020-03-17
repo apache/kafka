@@ -86,6 +86,7 @@ import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetric
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.is;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
@@ -750,6 +751,51 @@ public class StreamTaskTest {
         final Map<TopicPartition, OffsetAndMetadata> offsetsAndMetadata = task.committableOffsetsAndMetadata();
 
         assertThat(offsetsAndMetadata, equalTo(mkMap(mkEntry(partition1, new OffsetAndMetadata(3L, encodeTimestamp(0L))))));
+    }
+
+    @Test
+    public void shouldFailOnCommitIfTaskIsClosed() {
+        task = createStatelessTask(createConfig(false, "0"), StreamsConfig.METRICS_LATEST);
+        task.transitionTo(Task.State.CLOSED);
+
+        final IllegalStateException thrown = assertThrows(
+            IllegalStateException.class,
+            task::committableOffsetsAndMetadata
+        );
+
+        assertThat(thrown.getMessage(), is("Task 0_0 is closed."));
+    }
+
+    @Test
+    public void shouldOnlyCommitConsumerPositionTaskIfRunning() {
+        task = createStatelessTask(createConfig(false, "0"), StreamsConfig.METRICS_LATEST);
+        task.initializeIfNeeded();
+        task.completeRestoration();
+
+        consumer.addRecord(getConsumerRecord(partition1, 0L));
+        consumer.addRecord(getConsumerRecord(partition1, 1L));
+        consumer.addRecord(getConsumerRecord(partition1, 2L));
+        consumer.poll(Duration.ZERO);
+
+        task.addRecords(partition1, singletonList(getConsumerRecord(partition1, 0L)));
+        task.process(0L);
+        task.prepareCommit();
+        task.postCommit();
+
+        final Map<TopicPartition, OffsetAndMetadata> offsetsAndMetadata = task.committableOffsetsAndMetadata();
+
+        assertThat(offsetsAndMetadata, equalTo(mkMap(mkEntry(partition1, new OffsetAndMetadata(3L, encodeTimestamp(0L))))));
+
+        task.transitionTo(Task.State.SUSPENDED);
+        assertTrue(task.committableOffsetsAndMetadata().isEmpty());
+
+        task.transitionTo(Task.State.CLOSED);
+        task.transitionTo(Task.State.CREATED);
+        assertTrue(task.committableOffsetsAndMetadata().isEmpty());
+
+        task.transitionTo(Task.State.RESTORING);
+        assertTrue(task.committableOffsetsAndMetadata().isEmpty());
+
     }
 
     @Test

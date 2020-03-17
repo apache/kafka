@@ -389,6 +389,39 @@ public class TaskManagerTest {
     }
 
     @Test
+    public void shouldCloseDirtyActiveUnassignedSuspendedTasksWhenErrorCommittingRevokedTask() {
+        final StateMachineTask task00 = new StateMachineTask(taskId00, taskId00Partitions, true) {
+            @Override
+            public Map<TopicPartition, OffsetAndMetadata> committableOffsetsAndMetadata() {
+                throw new RuntimeException("KABOOM!");
+            }
+        };
+
+        // first `handleAssignment`
+        expectRestoreToBeCompleted(consumer, changeLogReader);
+        expect(activeTaskCreator.createTasks(anyObject(), eq(taskId00Assignment))).andReturn(singletonList(task00)).anyTimes();
+        expect(activeTaskCreator.createTasks(anyObject(), eq(emptyMap()))).andReturn(emptyList()).anyTimes();
+        activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(taskId00);
+        expectLastCall();
+        expect(standbyTaskCreator.createTasks(anyObject())).andReturn(emptyList()).anyTimes();
+        topologyBuilder.addSubscribedTopicsFromAssignment(anyObject(), anyString());
+        expectLastCall().anyTimes();
+
+        replay(activeTaskCreator, standbyTaskCreator, topologyBuilder, consumer, changeLogReader);
+
+        taskManager.handleAssignment(taskId00Assignment, emptyMap());
+
+        final RuntimeException thrown = assertThrows(
+            RuntimeException.class,
+            () -> taskManager.handleAssignment(emptyMap(), emptyMap())
+        );
+
+        assertThat(task00.state(), is(Task.State.CLOSED));
+        assertThat(thrown.getMessage(), is("Unexpected failure to close 1 task(s) [[0_0]]. First unexpected exception (for task 0_0) follows."));
+        assertThat(thrown.getCause().getMessage(), is("KABOOM!"));
+    }
+
+    @Test
     public void shouldCloseActiveTasksWhenHandlingLostTasks() {
         final Task task00 = new StateMachineTask(taskId00, taskId00Partitions, true);
         final Task task01 = new StateMachineTask(taskId01, taskId01Partitions, false);
@@ -736,7 +769,8 @@ public class TaskManagerTest {
         final Map<TaskId, Set<TopicPartition>> assignment = mkMap(
             mkEntry(taskId00, taskId00Partitions),
             mkEntry(taskId01, taskId01Partitions),
-            mkEntry(taskId02, taskId02Partitions)
+            mkEntry(taskId02, taskId02Partitions),
+            mkEntry(taskId03, taskId03Partitions)
         );
         final Task task00 = new StateMachineTask(taskId00, taskId00Partitions, true) {
             @Override
@@ -746,8 +780,10 @@ public class TaskManagerTest {
         };
         final AtomicBoolean prepareClosedDirtyTask01 = new AtomicBoolean(false);
         final AtomicBoolean prepareClosedDirtyTask02 = new AtomicBoolean(false);
+        final AtomicBoolean prepareClosedDirtyTask03 = new AtomicBoolean(false);
         final AtomicBoolean closedDirtyTask01 = new AtomicBoolean(false);
         final AtomicBoolean closedDirtyTask02 = new AtomicBoolean(false);
+        final AtomicBoolean closedDirtyTask03 = new AtomicBoolean(false);
         final Task task01 = new StateMachineTask(taskId01, taskId01Partitions, true) {
             @Override
             public Map<TopicPartition, Long> prepareCloseClean() {
@@ -784,6 +820,24 @@ public class TaskManagerTest {
                 closedDirtyTask02.set(true);
             }
         };
+        final Task task03 = new StateMachineTask(taskId03, taskId03Partitions, true) {
+            @Override
+            public Map<TopicPartition, OffsetAndMetadata> committableOffsetsAndMetadata() {
+                throw new RuntimeException("oops");
+            }
+
+            @Override
+            public void prepareCloseDirty() {
+                super.prepareCloseDirty();
+                prepareClosedDirtyTask03.set(true);
+            }
+
+            @Override
+            public void closeDirty() {
+                super.closeDirty();
+                closedDirtyTask03.set(true);
+            }
+        };
 
         resetToStrict(changeLogReader);
         changeLogReader.transitToRestoreActive();
@@ -793,12 +847,14 @@ public class TaskManagerTest {
         changeLogReader.remove(eq(singletonList(changelog)));
         expectLastCall();
         expect(activeTaskCreator.createTasks(anyObject(), eq(assignment)))
-            .andReturn(asList(task00, task01, task02)).anyTimes();
+            .andReturn(asList(task00, task01, task02, task03)).anyTimes();
         activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(eq(taskId00));
         expectLastCall();
         activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(eq(taskId01));
         expectLastCall();
         activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(eq(taskId02));
+        expectLastCall();
+        activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(eq(taskId03));
         expectLastCall();
         activeTaskCreator.closeThreadProducerIfNeeded();
         expectLastCall();
@@ -810,19 +866,22 @@ public class TaskManagerTest {
         assertThat(task00.state(), is(Task.State.CREATED));
         assertThat(task01.state(), is(Task.State.CREATED));
         assertThat(task02.state(), is(Task.State.CREATED));
+        assertThat(task03.state(), is(Task.State.CREATED));
 
         taskManager.tryToCompleteRestoration();
 
         assertThat(task00.state(), is(Task.State.RESTORING));
         assertThat(task01.state(), is(Task.State.RUNNING));
         assertThat(task02.state(), is(Task.State.RUNNING));
+        assertThat(task03.state(), is(Task.State.RUNNING));
         assertThat(
             taskManager.activeTaskMap(),
             Matchers.equalTo(
                 mkMap(
                     mkEntry(taskId00, task00),
                     mkEntry(taskId01, task01),
-                    mkEntry(taskId02, task02)
+                    mkEntry(taskId02, task02),
+                    mkEntry(taskId03, task03)
                 )
             )
         );
@@ -837,9 +896,12 @@ public class TaskManagerTest {
         assertThat(closedDirtyTask01.get(), is(true));
         assertThat(prepareClosedDirtyTask02.get(), is(true));
         assertThat(closedDirtyTask02.get(), is(true));
+        assertThat(prepareClosedDirtyTask03.get(), is(true));
+        assertThat(closedDirtyTask03.get(), is(true));
         assertThat(task00.state(), is(Task.State.CLOSED));
         assertThat(task01.state(), is(Task.State.CLOSED));
         assertThat(task02.state(), is(Task.State.CLOSED));
+        assertThat(task03.state(), is(Task.State.CLOSED));
         assertThat(exception.getMessage(), is("Unexpected exception while closing task"));
         assertThat(exception.getCause().getMessage(), is("oops"));
         assertThat(taskManager.activeTaskMap(), Matchers.anEmptyMap());

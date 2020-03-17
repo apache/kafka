@@ -74,7 +74,7 @@ public interface Task {
         RESTORING(2, 3, 4),    // 1
         RUNNING(3, 4),         // 2
         SUSPENDED(1, 4),       // 3
-        CLOSED(0);             // 5, we allow CLOSED to transit to CREATED to handle corrupted tasks
+        CLOSED(0);             // 4, we allow CLOSED to transit to CREATED to handle corrupted tasks
 
         private final Set<Integer> validTransitions = new HashSet<>();
 
