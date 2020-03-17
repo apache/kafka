@@ -690,20 +690,6 @@ public class KafkaAdminClient extends AdminClient {
             this(false, callName, deadlineMs, nodeProvider);
         }
 
-        Call(String callName, long deadlineMs, NodeProvider nodeProvider,
-             int numTries, long nextAllowedTryMs) {
-            this(false, callName, deadlineMs, nodeProvider);
-            if (numTries < 0) {
-                throw new IllegalArgumentException("Number of tries for a call cannot be negative");
-            }
-            if (nextAllowedTryMs < 0) {
-                throw new IllegalArgumentException("Next allowed time for a try for a call cannot"
-                    + " be negative");
-            }
-            this.tries = numTries;
-            this.nextAllowedTryMs = nextAllowedTryMs;
-        }
-
         protected Node curNode() {
             return curNode;
         }
@@ -819,10 +805,6 @@ public class KafkaAdminClient extends AdminClient {
 
         public boolean isInternal() {
             return internal;
-        }
-
-        public int tries() {
-            return tries;
         }
     }
 
