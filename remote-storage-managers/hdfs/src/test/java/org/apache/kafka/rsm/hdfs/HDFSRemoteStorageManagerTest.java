@@ -24,37 +24,34 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hdfs.MiniDFSCluster;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.log.remote.storage.RemoteLogSegmentInfo;
+import org.apache.kafka.common.log.remote.storage.LogSegmentData;
+import org.apache.kafka.common.log.remote.storage.RemoteLogSegmentId;
+import org.apache.kafka.common.log.remote.storage.RemoteLogSegmentMetadata;
 import org.apache.kafka.common.record.CompressionType;
-import org.apache.kafka.common.record.FileRecords;
 import org.apache.kafka.common.record.MemoryRecords;
-import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.record.RecordBatch;
-import org.apache.kafka.common.record.Records;
 import org.apache.kafka.common.record.SimpleRecord;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.common.log.remote.storage.RemoteLogIndexEntry;
 
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.net.URI;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Optional;
-import java.util.concurrent.CyclicBarrier;
-import java.util.concurrent.atomic.AtomicInteger;
+import java.util.UUID;
 
+import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
@@ -127,423 +124,83 @@ public class HDFSRemoteStorageManagerTest {
         rsm.close();
     }
 
+    private LogSegmentData getLogSegmentData(LogSegment seg) {
+        return new LogSegmentData(seg.log().file(), seg.offsetIndex().file(), seg.timeIndex().file());
+    }
+
+    private void assertFileEquals(InputStream is, File f) throws Exception {
+        byte[] b0 = new byte[1000000];
+        byte[] b1 = new byte[1000000];
+
+        try (InputStream is1 = new FileInputStream(f)) {
+            long p = 0;
+            while (p < f.length()) {
+                long a = is.read(b0);
+                long b = is1.read(b1);
+                assertEquals(a, b);
+                assertArrayEquals(b0, b1);
+                p += a;
+            }
+        }
+    }
+
     @Test
     public void testCopyReadAndDelete() throws Exception {
         HDFSRemoteStorageManager rsm = new HDFSRemoteStorageManager();
         rsm.configure(config);
 
         TopicPartition tp = new TopicPartition("test", 1);
-        List<RemoteLogIndexEntry> indexEntries = rsm.copyLogSegment(tp, segments.get(0), leaderEpoch);
 
-        assertEquals(0L, indexEntries.get(0).firstOffset);
-        assertEquals(0L, indexEntries.get(0).firstTimeStamp);
-        assertEquals(299, indexEntries.get(indexEntries.size() - 1).lastOffset);
-        assertEquals(1099, indexEntries.get(indexEntries.size() - 1).lastTimeStamp);
+        UUID uuid0 = UUID.randomUUID();
+        RemoteLogSegmentId id0 = new RemoteLogSegmentId(tp, uuid0);
+        LogSegmentData seg0 = getLogSegmentData(segments.get(0));
+        rsm.copyLogSegment(id0, seg0);
+
         assertTrue(hdfs.exists(new Path(baseDir + "/test-1")));
-        assertTrue(hdfs.exists(new Path(baseDir + "/test-1/00000000000000000000-00000000000000000299/log")));
+        assertTrue(hdfs.exists(new Path(baseDir + "/test-1/" + uuid0 + "/log")));
+        assertTrue(hdfs.exists(new Path(baseDir + "/test-1/" + uuid0 + "/index")));
+        assertTrue(hdfs.exists(new Path(baseDir + "/test-1/" + uuid0 + "/timeindex")));
 
-        indexEntries = rsm.copyLogSegment(tp, segments.get(1), leaderEpoch);
-        assertEquals(1, indexEntries.size());
-        assertEquals(2000, indexEntries.get(0).firstTimeStamp);
-        assertEquals(400, indexEntries.get(0).firstOffset);
-        assertEquals(2099, indexEntries.get(0).lastTimeStamp);
-        assertEquals(499, indexEntries.get(0).lastOffset);
-        assertTrue(hdfs.exists(new Path(baseDir + "/test-1/00000000000000000300-00000000000000000499/index")));
+        UUID uuid1 = UUID.randomUUID();
+        RemoteLogSegmentId id1 = new RemoteLogSegmentId(tp, uuid1);
+        LogSegmentData seg1 = getLogSegmentData(segments.get(1));
+        rsm.copyLogSegment(id1, seg1);
+        assertTrue(hdfs.exists(new Path(baseDir + "/test-1/" + uuid1 + "/index")));
 
-        List<RemoteLogSegmentInfo> remoteSegments = rsm.listRemoteSegments(tp);
-        assertEquals(2, remoteSegments.size());
-
-        indexEntries = rsm.getRemoteLogIndexEntries(remoteSegments.get(0));
-        Records records = rsm.read(indexEntries.get(0), 100000, 0, true);
-        int count = 0;
-        for (Record r : records.records()) {
-            assertFalse(r.hasKey());
-            assertEquals(100, r.valueSize());
-            count++;
+        RemoteLogSegmentMetadata seg0metadata = new RemoteLogSegmentMetadata(id0, 0, 299, 0, new byte[]{});
+        try (InputStream is = rsm.fetchLogSegmentData(seg0metadata, 0L, Optional.empty())) {
+            assertFileEquals(is, segments.get(0).log().file());
         }
-        assertEquals(200, count);
-
-        records = rsm.read(indexEntries.get(0), 100000, 200, true);
-        count = 0;
-        for (Record r : records.records()) {
-            assertFalse(r.hasKey());
-            assertEquals(100, r.valueSize());
-            count++;
+        try (InputStream is = rsm.fetchOffsetIndex(seg0metadata)) {
+            assertFileEquals(is, segments.get(0).offsetIndex().file());
         }
-        assertEquals(100, count);
-
-        records = rsm.read(indexEntries.get(0), 100, 0, true);
-        count = 0;
-        for (Record r : records.records()) {
-            assertFalse(r.hasKey());
-            assertEquals(100, r.valueSize());
-            count++;
+        try (InputStream is = rsm.fetchTimestampIndex(seg0metadata)) {
+            assertFileEquals(is, segments.get(0).timeIndex().file());
         }
-        assertEquals(100, count);
 
-        assertTrue(hdfs.exists(new Path(baseDir + "/test-1/00000000000000000000-00000000000000000299")));
-        assertTrue(hdfs.exists(new Path(baseDir + "/test-1/00000000000000000300-00000000000000000499")));
-        for (RemoteLogSegmentInfo segment : remoteSegments) {
-            rsm.deleteLogSegment(segment);
+        RemoteLogSegmentMetadata seg1metadata = new RemoteLogSegmentMetadata(id1, 300, 499, 0, new byte[]{});
+        try (InputStream is = rsm.fetchLogSegmentData(seg1metadata, 0L, Optional.empty())) {
+            assertFileEquals(is, segments.get(1).log().file());
         }
-        assertFalse(hdfs.exists(new Path(baseDir + "/test-1/00000000000000000000-00000000000000000299")));
-        assertFalse(hdfs.exists(new Path(baseDir + "/test-1/00000000000000000300-00000000000000000499")));
-    }
-
-    @Test
-    public void testReadAfterDelete() throws Exception {
-        HDFSRemoteStorageManager rsm = new HDFSRemoteStorageManager();
-        rsm.configure(config);
-
-        TopicPartition tp = new TopicPartition("test", 1);
-        rsm.copyLogSegment(tp, segments.get(0), leaderEpoch);
-
-        List<RemoteLogSegmentInfo> remoteSegments = rsm.listRemoteSegments(tp);
-        List<RemoteLogIndexEntry> indexEntries = rsm.getRemoteLogIndexEntries(remoteSegments.get(0));
-
-        Records records = rsm.read(indexEntries.get(0), 100000, 0, true);
-        int count = 0;
-        for (Record r : records.records()) {
-            assertFalse(r.hasKey());
-            assertEquals(100, r.valueSize());
-            count++;
+        try (InputStream is = rsm.fetchOffsetIndex(seg1metadata)) {
+            assertFileEquals(is, segments.get(1).offsetIndex().file());
         }
-        assertEquals(200, count);
+        try (InputStream is = rsm.fetchTimestampIndex(seg1metadata)) {
+            assertFileEquals(is, segments.get(1).timeIndex().file());
+        }
 
-        rsm.deleteLogSegment(remoteSegments.get(0));
+        assertTrue(hdfs.exists(new Path(baseDir + "/test-1/" + uuid0)));
+        assertTrue(hdfs.exists(new Path(baseDir + "/test-1/" + uuid1)));
+        rsm.deleteLogSegment(seg0metadata);
+        rsm.deleteLogSegment(seg1metadata);
+        assertFalse(hdfs.exists(new Path(baseDir + "/test-1/" + uuid0)));
+        assertFalse(hdfs.exists(new Path(baseDir + "/test-1/" + uuid1)));
 
         assertThrows(IOException.class, () -> {
-            rsm.read(indexEntries.get(0), 100000, 0, true);
+            rsm.fetchLogSegmentData(seg0metadata, 0L, Optional.empty());
         });
-
         assertThrows(IOException.class, () -> {
-            rsm.getRemoteLogIndexEntries(remoteSegments.get(0));
+            rsm.fetchOffsetIndex(seg1metadata);
         });
-    }
-
-    @Test
-    public void testCopyTwice() throws Exception {
-        HDFSRemoteStorageManager rsm = new HDFSRemoteStorageManager();
-        rsm.configure(config);
-        TopicPartition tp = new TopicPartition("test", 1);
-        rsm.copyLogSegment(tp, segments.get(0), leaderEpoch);
-
-        HDFSRemoteStorageManager rsm2 = new HDFSRemoteStorageManager();
-        rsm2.configure(config);
-        assertThrows(IOException.class, () -> {
-            rsm2.copyLogSegment(tp, segments.get(0), leaderEpoch);
-        });
-
-        assertEquals(1, rsm2.listRemoteSegments(tp).size());
-        rsm2.deleteLogSegment(rsm2.listRemoteSegments(tp).get(0));
-    }
-
-    @Test
-    public void testEarliesLogOffset() throws Exception {
-        HDFSRemoteStorageManager rsm = new HDFSRemoteStorageManager();
-        rsm.configure(config);
-
-        TopicPartition tp = new TopicPartition("test", 1);
-        segments.forEach(segment -> {
-            try {
-                rsm.copyLogSegment(tp, segment, leaderEpoch);
-            } catch (IOException e) {
-                throw new RuntimeException(e);
-            }
-        });
-
-        List<RemoteLogSegmentInfo> remoteSegments = rsm.listRemoteSegments(tp);
-
-        long earliestLogOffset = rsm.earliestLogOffset(tp);
-        assertEquals(remoteSegments.get(0).baseOffset, earliestLogOffset);
-    }
-
-    class ConcurrentWriteThread extends Thread {
-        private AtomicInteger successCount;
-        LogSegment segment;
-        private CyclicBarrier barrier;
-
-        ConcurrentWriteThread(AtomicInteger successCount, LogSegment segment, CyclicBarrier barrier) {
-            this.successCount = successCount;
-            this.segment = segment;
-            this.barrier = barrier;
-        }
-
-        @Override
-        public void run() {
-            HDFSRemoteStorageManager rsm = new HDFSRemoteStorageManager();
-            rsm.configure(config);
-            TopicPartition tp = new TopicPartition("test", 2);
-
-            try {
-                barrier.await();
-            } catch (Exception e) {
-                e.printStackTrace();
-                return;
-            }
-
-            try {
-                List<RemoteLogIndexEntry> indexEntries = rsm.copyLogSegment(tp, segment, leaderEpoch);
-                if (!indexEntries.isEmpty()) {
-                    successCount.incrementAndGet();
-                }
-            } catch (IOException e) {
-            }
-        }
-    }
-
-    @Test
-    public void testConcurrentWrite() throws Exception {
-        File logDir1 = TestUtils.tempDir();
-        File logDir2 = TestUtils.tempDir();
-        // segment 100-299
-        LogSegment seg1 = LogUtils.createSegment(100, logDir1, 4096, Time.SYSTEM);
-        appendRecords(seg1, 100, 100);
-        appendRecords(seg1, 200, 100);
-        seg1.onBecomeInactiveSegment();
-
-        // segment 100-399
-        LogSegment seg2 = LogUtils.createSegment(100, logDir2, 4096, Time.SYSTEM);
-        appendRecords(seg2, 100, 100);
-        appendRecords(seg2, 200, 200);
-        seg2.onBecomeInactiveSegment();
-
-        AtomicInteger successCount1 = new AtomicInteger();
-        AtomicInteger successCount2 = new AtomicInteger();
-
-        int numThreads = 10;
-        CyclicBarrier barrier = new CyclicBarrier(numThreads);
-        Thread[] threads = new Thread[numThreads];
-        for (int i = 0; i < numThreads; i++) {
-            if (i < numThreads / 2) {
-                threads[i] = new ConcurrentWriteThread(successCount1, seg1, barrier);
-            } else {
-                threads[i] = new ConcurrentWriteThread(successCount2, seg2, barrier);
-            }
-
-            threads[i].start();
-        }
-
-        for (Thread t : threads)
-            t.join();
-
-        assertEquals(1, successCount1.get());
-        assertEquals(1, successCount2.get());
-
-        HDFSRemoteStorageManager rsm = new HDFSRemoteStorageManager();
-        rsm.configure(config);
-        TopicPartition tp = new TopicPartition("test", 2);
-        List<RemoteLogSegmentInfo> segments = rsm.listRemoteSegments(tp);
-        assertEquals(2, segments.size());
-    }
-
-    @Test
-    public void testReturnSortedList() throws Exception {
-        File logDir = TestUtils.tempDir();
-
-        // generate segments with offset overlaps
-        ArrayList<LogSegment> segments = new ArrayList<>();
-        for (int i = 0; i < 10; i++) {
-            LogSegment seg = LogUtils.createSegment(20 * i, logDir, 4096, Time.SYSTEM);
-            appendRecords(seg, 20 * i, 20);
-            seg.onBecomeInactiveSegment();
-            segments.add(seg);
-        }
-        for (int i = 0; i < 10; i++) {
-            LogSegment seg = LogUtils.createSegment(20 * i + 5, logDir, 4096, Time.SYSTEM);
-            appendRecords(seg, 20 * i + 5, 10);
-            seg.onBecomeInactiveSegment();
-            segments.add(seg);
-        }
-
-        // copy segments to remote storage in random oder
-        Collections.shuffle(segments);
-        HDFSRemoteStorageManager rsm = new HDFSRemoteStorageManager();
-        rsm.configure(config);
-
-        TopicPartition tp = new TopicPartition("test", 3);
-        for (LogSegment seg : segments) {
-            rsm.copyLogSegment(tp, seg, leaderEpoch);
-        }
-
-        // remote segments list returned by RSM should be sorted by base offset
-        List<RemoteLogSegmentInfo> remoteSegments = rsm.listRemoteSegments(tp);
-        for (int i = 0; i < 20; i++) {
-            if (i % 2 == 0) {
-                assertEquals((i / 2) * 20, remoteSegments.get(i).baseOffset);
-                assertEquals((i / 2) * 20 + 19, remoteSegments.get(i).lastOffset);
-            } else {
-                assertEquals((i / 2) * 20 + 5, remoteSegments.get(i).baseOffset);
-                assertEquals((i / 2) * 20 + 5 + 9, remoteSegments.get(i).lastOffset);
-            }
-        }
-    }
-
-    @Test
-    public void testIndexInterval() throws Exception {
-        LogSegment seg = LogUtils.createSegment(10000, logDir, 4096, Time.SYSTEM);
-        for (int i = 0; i < 100; i++) {
-            appendRecords(seg, 10000 + i * 100, 100);
-        }
-        seg.onBecomeInactiveSegment();
-
-        // default 256KB
-        HDFSRemoteStorageManager rsm1 = new HDFSRemoteStorageManager();
-        rsm1.configure(config);
-        TopicPartition tp1 = new TopicPartition("test", 10);
-        List<RemoteLogIndexEntry> indexEntries = rsm1.copyLogSegment(tp1, seg, leaderEpoch);
-        assertEquals(5, indexEntries.size());
-
-        // 1 byte
-        HDFSRemoteStorageManager rsm2 = new HDFSRemoteStorageManager();
-        config.put(HDFSRemoteStorageManagerConfig.HDFS_REMOTE_INDEX_INTERVAL_BYTES_PROP, "1");
-        rsm1.configure(config);
-        TopicPartition tp2 = new TopicPartition("test", 20);
-        indexEntries = rsm1.copyLogSegment(tp2, seg, leaderEpoch);
-        assertEquals(100, indexEntries.size());
-
-        // 1,000,000 bytes
-        HDFSRemoteStorageManager rsm3 = new HDFSRemoteStorageManager();
-        config.put(HDFSRemoteStorageManagerConfig.HDFS_REMOTE_INDEX_INTERVAL_BYTES_PROP, "1000000");
-        rsm1.configure(config);
-        TopicPartition tp3 = new TopicPartition("test", 30);
-        indexEntries = rsm1.copyLogSegment(tp3, seg, leaderEpoch);
-        assertEquals(2, indexEntries.size());
-
-        // 500,001 bytes
-        HDFSRemoteStorageManager rsm4 = new HDFSRemoteStorageManager();
-        config.put(HDFSRemoteStorageManagerConfig.HDFS_REMOTE_INDEX_INTERVAL_BYTES_PROP, "500001");
-        rsm1.configure(config);
-        TopicPartition tp4 = new TopicPartition("test", 40);
-        indexEntries = rsm1.copyLogSegment(tp4, seg, leaderEpoch);
-        assertEquals(3, indexEntries.size());
-    }
-
-    @Test
-    public void testListRemoteSegmentsWithMinOffset() throws Exception {
-        HDFSRemoteStorageManager rsm = new HDFSRemoteStorageManager();
-        rsm.configure(config);
-
-        TopicPartition tp = new TopicPartition("test", 1);
-        int segmentSize = 20;
-        for (int i = 0; i < 10; i++) {
-            LogSegment seg = LogUtils.createSegment(segmentSize * i, logDir, 4096, Time.SYSTEM);
-            appendRecords(seg, segmentSize * i, segmentSize);
-            seg.onBecomeInactiveSegment();
-            rsm.copyLogSegment(tp, seg, leaderEpoch);
-        }
-
-        int numSegments = 4;
-        List<RemoteLogSegmentInfo> remoteSegments = rsm.listRemoteSegments(tp, (10 - numSegments) * segmentSize);
-        assertEquals(numSegments, remoteSegments.size());
-        for (int i = 10 - numSegments, j = 0; i < 10; i++, j++) {
-            RemoteLogSegmentInfo segment = remoteSegments.get(j);
-            assertEquals(segmentSize * i, segment.baseOffset);
-            assertEquals(segmentSize * (i + 1) - 1, segment.lastOffset);
-        }
-
-        remoteSegments = rsm.listRemoteSegments(tp, (10 - numSegments) * segmentSize + segmentSize - 1);
-        assertEquals(numSegments, remoteSegments.size());
-        for (int i = 10 - numSegments, j = 0; i < 10; i++, j++) {
-            RemoteLogSegmentInfo segment = remoteSegments.get(j);
-            assertEquals(segmentSize * i, segment.baseOffset);
-            assertEquals(segmentSize * (i + 1) - 1, segment.lastOffset);
-        }
-
-        remoteSegments = rsm.listRemoteSegments(tp, (10 - numSegments) * segmentSize + segmentSize);
-        assertEquals(numSegments  - 1, remoteSegments.size());
-        for (int i = 10 - numSegments  + 1, j = 0; i < 10; i++, j++) {
-            RemoteLogSegmentInfo segment = remoteSegments.get(j);
-            assertEquals(segmentSize * i, segment.baseOffset);
-            assertEquals(segmentSize * (i + 1) - 1, segment.lastOffset);
-        }
-    }
-
-    @Test
-    public void testDeleteTP() throws Exception {
-        HDFSRemoteStorageManager rsm = new HDFSRemoteStorageManager();
-        rsm.configure(config);
-
-        TopicPartition tp = new TopicPartition("test", 3);
-        int segmentSize = 20;
-        for (int i = 0; i < 5; i++) {
-            LogSegment seg = LogUtils.createSegment(segmentSize * i, logDir, 4096, Time.SYSTEM);
-            appendRecords(seg, segmentSize * i, segmentSize);
-            seg.onBecomeInactiveSegment();
-            rsm.copyLogSegment(tp, seg, leaderEpoch);
-        }
-
-        List<RemoteLogSegmentInfo> remoteSegments = rsm.listRemoteSegments(tp, 0);
-        assertEquals(5, remoteSegments.size());
-
-        rsm.deleteTopicPartition(tp);
-
-        assertEquals(0, rsm.listRemoteSegments(tp, 0).size());
-    }
-
-    @Test
-    public void testDeleteUntil() throws Exception {
-        HDFSRemoteStorageManager rsm = new HDFSRemoteStorageManager();
-        rsm.configure(config);
-
-        TopicPartition tp = new TopicPartition("test", 3);
-        long timestamp = 0;
-        int segmentSize = 20;
-        ArrayList<LogSegment> segments = new ArrayList<>();
-        for (int i = 0; i < 5; i++) {
-            LogSegment seg = LogUtils.createSegment(segmentSize * i, logDir, 4096, Time.SYSTEM);
-            appendRecords(seg, segmentSize * i, segmentSize);
-            seg.onBecomeInactiveSegment();
-            segments.add(seg);
-
-            if (i == 2) {
-                timestamp = System.currentTimeMillis();
-                Thread.sleep(2000);
-            }
-        }
-
-        Thread.sleep(2000);
-
-        for (LogSegment s : segments) {
-            rsm.copyLogSegment(tp, s, leaderEpoch);
-        }
-
-        List<RemoteLogSegmentInfo> remoteSegments = rsm.listRemoteSegments(tp, 0);
-        assertEquals(5, remoteSegments.size());
-
-        rsm.cleanupLogUntil(tp, timestamp);
-
-        assertEquals(2, rsm.listRemoteSegments(tp, 0).size());
-    }
-
-    @Test
-    public void testFindOffsetByTimestamp() throws Exception {
-        HDFSRemoteStorageManager rsm = new HDFSRemoteStorageManager();
-        config.put(HDFSRemoteStorageManagerConfig.HDFS_REMOTE_INDEX_INTERVAL_BYTES_PROP, "1"); // one index entry for each record batch
-        rsm.configure(config);
-
-        TopicPartition tp = new TopicPartition("test", 5);
-
-        File logDir = TestUtils.tempDir();
-
-        LogSegment seg = LogUtils.createSegment(1000000, logDir, 2048, Time.SYSTEM);
-
-        for (int j = 0; j < 2; j++) {
-            appendRecords(seg, 1000000 + j * 5, 5, j * 1000);
-        }
-
-        seg.onBecomeInactiveSegment();
-        rsm.copyLogSegment(tp, seg, 2);
-
-        List<RemoteLogIndexEntry> indexEntries = rsm.getRemoteLogIndexEntries(rsm.listRemoteSegments(tp).get(0));
-
-        assertEquals(new FileRecords.TimestampAndOffset(3, 1000003, Optional.empty()), rsm.findOffsetByTimestamp(indexEntries.get(0), 3, 0));
-        assertEquals(new FileRecords.TimestampAndOffset(3, 1000003, Optional.empty()), rsm.findOffsetByTimestamp(indexEntries.get(0), 3, 1000003));
-        assertEquals(new FileRecords.TimestampAndOffset(4, 1000004, Optional.empty()), rsm.findOffsetByTimestamp(indexEntries.get(0), 3, 1000004));
-        assertNull(rsm.findOffsetByTimestamp(indexEntries.get(0), 5, 0));
-
-        assertEquals(new FileRecords.TimestampAndOffset(1000, 1000005, Optional.empty()), rsm.findOffsetByTimestamp(indexEntries.get(1), 1000, 0));
-        assertEquals(new FileRecords.TimestampAndOffset(1002, 1000007, Optional.empty()), rsm.findOffsetByTimestamp(indexEntries.get(1), 1000, 1000007));
-        assertEquals(new FileRecords.TimestampAndOffset(1004, 1000009, Optional.empty()), rsm.findOffsetByTimestamp(indexEntries.get(1), 1004, 1000000));
     }
 }

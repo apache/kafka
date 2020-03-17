@@ -35,9 +35,6 @@ class HDFSRemoteStorageManagerConfig extends AbstractConfig {
     public static final String HDFS_BASE_DIR_PROP = REMOTE_STORAGE_MANAGER_CONFIG_PREFIX() + "hdfs.base.dir";
     public static final String HDFS_BASE_DIR_DOC = "The HDFS directory in which the remote data is stored.";
 
-    public static final String HDFS_REMOTE_INDEX_INTERVAL_BYTES_PROP = REMOTE_STORAGE_MANAGER_CONFIG_PREFIX() + "hdfs.remote.index.interval.bytes";
-    public static final String HDFS_REMOTE_INDEX_INTERVAL_BYTES_DOC = "The interval with which we add an entry to the remote index.";
-
     public static final String HDFS_REMOTE_READ_MB_PROP = REMOTE_STORAGE_MANAGER_CONFIG_PREFIX() + "hdfs.remote.read.bytes.mb";
     public static final String HDFS_REMOTE_READ_MB_DOC = "HDFS read buffer size in MB.";
 
@@ -51,7 +48,6 @@ class HDFSRemoteStorageManagerConfig extends AbstractConfig {
         CONFIG = new ConfigDef()
             .define(HDFS_URI_PROP, STRING, HIGH, HDFS_URI_DOC)
             .define(HDFS_BASE_DIR_PROP, STRING, HIGH, HDFS_BASE_DIR_DOC)
-            .define(HDFS_REMOTE_INDEX_INTERVAL_BYTES_PROP, INT, 262144, atLeast(1), MEDIUM, HDFS_REMOTE_INDEX_INTERVAL_BYTES_DOC)
             .define(HDFS_REMOTE_READ_MB_PROP, INT, 16, atLeast(1), MEDIUM, HDFS_REMOTE_READ_MB_DOC)
             .define(HDFS_REMOTE_READ_CACHE_MB_PROP, INT, 1024, atLeast(1), MEDIUM, HDFS_REMOTE_READ_CACHE_MB_DOC);
     }
