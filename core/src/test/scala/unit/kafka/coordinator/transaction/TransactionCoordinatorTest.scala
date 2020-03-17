@@ -500,53 +500,24 @@ class TransactionCoordinatorTest {
   }
 
   @Test
-  def shouldReturnInvalidEpochWhenEndTxnIsFromClientAndEpochIsLarger(): Unit = {
+  def shouldReturnInvalidEpochOnEndTxnWhenEpochIsLarger(): Unit = {
     val serverProducerEpoch = 1.toShort
-    EasyMock.expect(transactionManager.getTransactionState(EasyMock.eq(transactionalId)))
-      .andReturn(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch,
-        new TransactionMetadata(transactionalId, producerId, producerId, serverProducerEpoch, 0, 1, CompleteCommit, collection.mutable.Set.empty[TopicPartition], 0, time.milliseconds())))))
-    EasyMock.replay(transactionManager)
-
-    coordinator.handleEndTransaction(transactionalId, producerId, (serverProducerEpoch + 1).toShort, TransactionResult.COMMIT, errorsCallback)
-    assertEquals(Errors.INVALID_PRODUCER_EPOCH, error)
-    EasyMock.verify(transactionManager)
+    verifyEndTxnEpoch(serverProducerEpoch, (serverProducerEpoch + 1).toShort)
   }
 
   @Test
-  def shouldReturnInvalidEpochWhenEndTxnIsFromClientAndEpochIsSmaller(): Unit = {
+  def shouldReturnInvalidEpochOnEndTxnWhenEpochIsSmaller(): Unit = {
     val serverProducerEpoch = 1.toShort
-    EasyMock.expect(transactionManager.getTransactionState(EasyMock.eq(transactionalId)))
-      .andReturn(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch,
-        new TransactionMetadata(transactionalId, producerId, producerId, serverProducerEpoch, 0, 1, CompleteCommit, collection.mutable.Set.empty[TopicPartition], 0, time.milliseconds())))))
-    EasyMock.replay(transactionManager)
-
-    coordinator.handleEndTransaction(transactionalId, producerId, (serverProducerEpoch - 1).toShort, TransactionResult.COMMIT, errorsCallback)
-    assertEquals(Errors.INVALID_PRODUCER_EPOCH, error)
-    EasyMock.verify(transactionManager)
+    verifyEndTxnEpoch(serverProducerEpoch, (serverProducerEpoch - 1).toShort)
   }
 
-  @Test
-  def shouldReturnSuccessWhenEndTxnIsFromInternalAndEpochIsLarger(): Unit = {
-    val serverProducerEpoch = 1.toShort
+  private def verifyEndTxnEpoch(metadataEpoch: Short, requestEpoch: Short): Unit = {
     EasyMock.expect(transactionManager.getTransactionState(EasyMock.eq(transactionalId)))
       .andReturn(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch,
-        new TransactionMetadata(transactionalId, producerId, producerId, serverProducerEpoch, 0, 1, CompleteCommit, collection.mutable.Set.empty[TopicPartition], 0, time.milliseconds())))))
+        new TransactionMetadata(transactionalId, producerId, producerId, metadataEpoch, 0, 1, CompleteCommit, collection.mutable.Set.empty[TopicPartition], 0, time.milliseconds())))))
     EasyMock.replay(transactionManager)
 
-    coordinator.handleEndTransaction(transactionalId, producerId, (serverProducerEpoch + 2).toShort, TransactionResult.COMMIT, errorsCallback)
-    assertEquals(Errors.NONE, error)
-    EasyMock.verify(transactionManager)
-  }
-
-  @Test
-  def shouldReturnInvalidEpochWhenEndTxnIsFromInternalAndEpochIsSmaller(): Unit = {
-    val serverProducerEpoch = 1.toShort
-    EasyMock.expect(transactionManager.getTransactionState(EasyMock.eq(transactionalId)))
-      .andReturn(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch,
-        new TransactionMetadata(transactionalId, producerId, producerId, serverProducerEpoch, 0, 1, CompleteCommit, collection.mutable.Set.empty[TopicPartition], 0, time.milliseconds())))))
-    EasyMock.replay(transactionManager)
-
-    coordinator.handleEndTransaction(transactionalId, producerId, (serverProducerEpoch - 1).toShort, TransactionResult.COMMIT, errorsCallback)
+    coordinator.handleEndTransaction(transactionalId, producerId, requestEpoch, TransactionResult.COMMIT, errorsCallback)
     assertEquals(Errors.INVALID_PRODUCER_EPOCH, error)
     EasyMock.verify(transactionManager)
   }

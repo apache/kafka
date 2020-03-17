@@ -362,12 +362,12 @@ class TransactionCoordinator(brokerId: Int,
       responseCallback)
   }
 
-  def endTransaction(transactionalId: String,
-                     producerId: Long,
-                     producerEpoch: Short,
-                     txnMarkerResult: TransactionResult,
-                     validateEpoch: (Short, TransactionMetadata) => Boolean,
-                     responseCallback: EndTxnCallback): Unit = {
+  private def endTransaction(transactionalId: String,
+                             producerId: Long,
+                             producerEpoch: Short,
+                             txnMarkerResult: TransactionResult,
+                             validateEpoch: (Short, TransactionMetadata) => Boolean,
+                             responseCallback: EndTxnCallback): Unit = {
     if (transactionalId == null || transactionalId.isEmpty)
       responseCallback(Errors.INVALID_REQUEST)
     else {
