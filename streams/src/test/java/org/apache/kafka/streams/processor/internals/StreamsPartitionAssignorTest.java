@@ -225,29 +225,6 @@ public class StreamsPartitionAssignorTest {
         streamsMetadataState = EasyMock.createNiceMock(StreamsMetadataState.class);
     }
 
-    private static SubscriptionInfo getInfo(final UUID processId,
-                                            final Map<TaskId, Long> taskOffsetSums,
-                                            final String userEndPoint) {
-        return new SubscriptionInfo(
-            LATEST_SUPPORTED_VERSION, LATEST_SUPPORTED_VERSION, processId, userEndPoint, taskOffsetSums);
-    }
-
-    private static SubscriptionInfo getInfo(final int version,
-                                            final UUID processId,
-                                            final Set<TaskId> prevTasks,
-                                            final Set<TaskId> standbyTasks,
-                                            final String userEndPoint) {
-        return new SubscriptionInfo(
-            version, LATEST_SUPPORTED_VERSION, processId, userEndPoint, getTaskOffsetSums(prevTasks, standbyTasks));
-    }
-
-    private static SubscriptionInfo getInfo(final UUID processId,
-                                            final Set<TaskId> prevTasks,
-                                            final Set<TaskId> standbyTasks) {
-        return new SubscriptionInfo(
-            LATEST_SUPPORTED_VERSION, LATEST_SUPPORTED_VERSION, processId, USER_END_POINT, getTaskOffsetSums(prevTasks, standbyTasks));
-    }
-
     @Test
     public void shouldUseEagerRebalancingProtocol() {
         createDefaultMockTaskManager();
@@ -1941,6 +1918,29 @@ public class StreamsPartitionAssignorTest {
 
             assertThat(thisTaskList, equalTo(otherTaskList));
         }
+    }
+
+    private static SubscriptionInfo getInfo(final UUID processId,
+                                            final Map<TaskId, Long> taskOffsetSums,
+                                            final String userEndPoint) {
+        return new SubscriptionInfo(
+            LATEST_SUPPORTED_VERSION, LATEST_SUPPORTED_VERSION, processId, userEndPoint, taskOffsetSums);
+    }
+
+    private static SubscriptionInfo getInfo(final int version,
+                                            final UUID processId,
+                                            final Set<TaskId> prevTasks,
+                                            final Set<TaskId> standbyTasks,
+                                            final String userEndPoint) {
+        return new SubscriptionInfo(
+            version, LATEST_SUPPORTED_VERSION, processId, userEndPoint, getTaskOffsetSums(prevTasks, standbyTasks));
+    }
+
+    private static SubscriptionInfo getInfo(final UUID processId,
+                                            final Set<TaskId> prevTasks,
+                                            final Set<TaskId> standbyTasks) {
+        return new SubscriptionInfo(
+            LATEST_SUPPORTED_VERSION, LATEST_SUPPORTED_VERSION, processId, USER_END_POINT, getTaskOffsetSums(prevTasks, standbyTasks));
     }
 
     static Map<TaskId, Long> getTaskOffsetSums(final Set<TaskId> activeTasks, final Set<TaskId> standbyTasks) {
