@@ -147,19 +147,27 @@ public interface Task {
     /**
      * Prepare to close a task that we still own and prepare it for committing
      * Throws an exception if this couldn't be done.
+     * Must be idempotent.
      *
      * @throws StreamsException fatal error, should close the thread
      */
     Map<TopicPartition, Long> prepareCloseClean();
 
+    /**
+     * Must be idempotent.
+     */
     void closeClean(final Map<TopicPartition, Long> checkpoint);
 
     /**
      * Prepare to close a task that we may not own. Discard any uncommitted progress and close the task.
      * Never throws an exception, but just makes all attempts to release resources while closing.
+     * Must be idempotent.
      */
     void prepareCloseDirty();
 
+    /**
+     * Must be idempotent.
+     */
     void closeDirty();
 
     /**

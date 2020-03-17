@@ -351,6 +351,10 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
 
     @Override
     public Map<TopicPartition, OffsetAndMetadata> committableOffsetsAndMetadata() {
+        if (state() == State.CREATED || state() == State.RESTORING || state() == State.SUSPENDED) {
+            return Collections.emptyMap();
+        }
+
         final Map<TopicPartition, Long> partitionTimes = extractPartitionTimes();
 
         final Map<TopicPartition, OffsetAndMetadata> consumedOffsetsAndMetadata = new HashMap<>(consumedOffsets.size());

@@ -188,7 +188,7 @@ public class ActiveTaskCreatorTest {
                     mkEntry(task00, Collections.singleton(new TopicPartition("topic", 0))),
                     mkEntry(task01, Collections.singleton(new TopicPartition("topic", 1)))
                 )
-            ).stream().map(Task::id). collect(Collectors.toSet()),
+            ).stream().map(Task::id).collect(Collectors.toSet()),
             equalTo(mkSet(task00, task01))
         );
 

@@ -26,6 +26,7 @@ import org.apache.kafka.clients.admin.RecordsToDelete;
 import org.apache.kafka.clients.consumer.CommitFailedException;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
@@ -350,7 +351,9 @@ public class TaskManagerTest {
 
     @Test
     public void shouldCloseActiveUnassignedSuspendedTasksWhenClosingRevokedTasks() {
-        final Task task00 = new StateMachineTask(taskId00, taskId00Partitions, true);
+        final StateMachineTask task00 = new StateMachineTask(taskId00, taskId00Partitions, true);
+        final Map<TopicPartition, OffsetAndMetadata> offsets = singletonMap(t1p0, new OffsetAndMetadata(0L, null));
+        task00.setCommittableOffsetsAndMetadata(offsets);
 
         // first `handleAssignment`
         expectRestoreToBeCompleted(consumer, changeLogReader);
@@ -363,11 +366,11 @@ public class TaskManagerTest {
         expectLastCall().anyTimes();
 
         // `handleRevocation`
-        consumer.commitSync(Collections.emptyMap());
+        consumer.commitSync(offsets);
         expectLastCall();
 
         // second `handleAssignment`
-        consumer.commitSync(Collections.emptyMap());
+        consumer.commitSync(offsets);
         expectLastCall();
 
         replay(activeTaskCreator, standbyTaskCreator, topologyBuilder, consumer, changeLogReader);
@@ -417,7 +420,9 @@ public class TaskManagerTest {
 
     @Test
     public void shouldThrowWhenHandlingClosingTasksOnProducerCloseError() {
-        final Task task00 = new StateMachineTask(taskId00, taskId00Partitions, true);
+        final StateMachineTask task00 = new StateMachineTask(taskId00, taskId00Partitions, true);
+        final Map<TopicPartition, OffsetAndMetadata> offsets = singletonMap(t1p0, new OffsetAndMetadata(0L, null));
+        task00.setCommittableOffsetsAndMetadata(offsets);
 
         // `handleAssignment`
         expectRestoreToBeCompleted(consumer, changeLogReader);
@@ -427,7 +432,7 @@ public class TaskManagerTest {
         expectLastCall().anyTimes();
 
         // `handleAssignment`
-        consumer.commitSync(Collections.emptyMap());
+        consumer.commitSync(offsets);
         expectLastCall();
         activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(taskId00);
         expectLastCall().andThrow(new RuntimeException("KABOOM!"));
@@ -669,11 +674,13 @@ public class TaskManagerTest {
 
     @Test
     public void shouldSuspendActiveTasks() {
-        final Task task00 = new StateMachineTask(taskId00, taskId00Partitions, true);
+        final StateMachineTask task00 = new StateMachineTask(taskId00, taskId00Partitions, true);
+        final Map<TopicPartition, OffsetAndMetadata> offsets = singletonMap(t1p0, new OffsetAndMetadata(0L, null));
+        task00.setCommittableOffsetsAndMetadata(offsets);
 
         expectRestoreToBeCompleted(consumer, changeLogReader);
         expect(activeTaskCreator.createTasks(anyObject(), eq(taskId00Assignment))).andReturn(singletonList(task00));
-        consumer.commitSync(new HashMap<>());
+        consumer.commitSync(offsets);
         expectLastCall();
 
         replay(activeTaskCreator, consumer, changeLogReader);
@@ -688,7 +695,7 @@ public class TaskManagerTest {
 
     @Test
     public void shouldNotCommitCreatedTasksOnSuspend() {
-        final Task task00 = new StateMachineTask(taskId00, taskId00Partitions, true);
+        final StateMachineTask task00 = new StateMachineTask(taskId00, taskId00Partitions, true);
 
         expect(activeTaskCreator.createTasks(anyObject(), eq(taskId00Assignment))).andReturn(singletonList(task00));
         replay(activeTaskCreator, consumer, changeLogReader);
@@ -847,12 +854,14 @@ public class TaskManagerTest {
         final Map<TaskId, Set<TopicPartition>> assignment = mkMap(
             mkEntry(taskId00, taskId00Partitions)
         );
-        final Task task00 = new StateMachineTask(taskId00, taskId00Partitions, true) {
+        final StateMachineTask task00 = new StateMachineTask(taskId00, taskId00Partitions, true) {
             @Override
             public Collection<TopicPartition> changelogPartitions() {
                 return singletonList(changelog);
             }
         };
+        final Map<TopicPartition, OffsetAndMetadata> offsets = singletonMap(t1p0, new OffsetAndMetadata(0L, null));
+        task00.setCommittableOffsetsAndMetadata(offsets);
 
         resetToStrict(changeLogReader);
         changeLogReader.transitToRestoreActive();
@@ -1132,7 +1141,7 @@ public class TaskManagerTest {
             .andReturn(singletonList(task00)).anyTimes();
         expect(standbyTaskCreator.createTasks(eq(taskId01Assignment)))
             .andReturn(singletonList(task01)).anyTimes();
-        consumer.commitSync(new HashMap<>());
+        consumer.commitSync(Collections.emptyMap());
         expectLastCall();
 
         replay(activeTaskCreator, standbyTaskCreator, consumer, changeLogReader);
@@ -1189,10 +1198,12 @@ public class TaskManagerTest {
     @Test
     public void shouldCommitViaConsumerIfEosDisabled() {
         final StateMachineTask task01 = new StateMachineTask(taskId01, taskId01Partitions, true);
+        final Map<TopicPartition, OffsetAndMetadata> offsets = singletonMap(t1p1, new OffsetAndMetadata(0L, null));
+        task01.setCommittableOffsetsAndMetadata(offsets);
         task01.setCommitNeeded();
         taskManager.tasks().put(taskId01, task01);
 
-        consumer.commitSync(new HashMap<>());
+        consumer.commitSync(offsets);
         expectLastCall();
         replay(consumer);
 
@@ -1220,11 +1231,13 @@ public class TaskManagerTest {
         taskManager.setMainConsumer(consumer);
 
         final StateMachineTask task01 = new StateMachineTask(taskId01, taskId01Partitions, true);
+        final Map<TopicPartition, OffsetAndMetadata> offsets = singletonMap(t1p1, new OffsetAndMetadata(0L, null));
+        task01.setCommittableOffsetsAndMetadata(offsets);
         task01.setCommitNeeded();
         taskManager.tasks().put(taskId01, task01);
 
         expect(activeTaskCreator.streamsProducerForTask(taskId01)).andReturn(producer);
-        producer.commitTransaction(new HashMap<>());
+        producer.commitTransaction(offsets);
         expectLastCall();
         replay(activeTaskCreator, producer);
 
@@ -1394,8 +1407,14 @@ public class TaskManagerTest {
     @Test
     public void shouldMaybeCommitActiveTasks() {
         final StateMachineTask task00 = new StateMachineTask(taskId00, taskId00Partitions, true);
+        final Map<TopicPartition, OffsetAndMetadata> offsets0 = singletonMap(t1p0, new OffsetAndMetadata(0L, null));
+        task00.setCommittableOffsetsAndMetadata(offsets0);
         final StateMachineTask task01 = new StateMachineTask(taskId01, taskId01Partitions, true);
+        final Map<TopicPartition, OffsetAndMetadata> offsets1 = singletonMap(t1p1, new OffsetAndMetadata(0L, null));
+        task01.setCommittableOffsetsAndMetadata(offsets1);
         final StateMachineTask task02 = new StateMachineTask(taskId02, taskId02Partitions, true);
+        final Map<TopicPartition, OffsetAndMetadata> offsets2 = singletonMap(t1p2, new OffsetAndMetadata(0L, null));
+        task02.setCommittableOffsetsAndMetadata(offsets2);
 
         final Map<TaskId, Set<TopicPartition>> assignment = mkMap(
             mkEntry(taskId00, taskId00Partitions),
@@ -1406,7 +1425,7 @@ public class TaskManagerTest {
         expectRestoreToBeCompleted(consumer, changeLogReader);
         expect(activeTaskCreator.createTasks(anyObject(), eq(assignment)))
             .andReturn(asList(task00, task01, task02)).anyTimes();
-        consumer.commitSync(new HashMap<>());
+        consumer.commitSync(offsets0);
         expectLastCall();
 
         replay(activeTaskCreator, standbyTaskCreator, consumer, changeLogReader);
@@ -1615,10 +1634,12 @@ public class TaskManagerTest {
         final LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
 
         final StateMachineTask task00 = new StateMachineTask(taskId00, taskId00Partitions, true);
+        final Map<TopicPartition, OffsetAndMetadata> offsets = singletonMap(t1p0, new OffsetAndMetadata(0L, null));
+        task00.setCommittableOffsetsAndMetadata(offsets);
 
         expectRestoreToBeCompleted(consumer, changeLogReader);
         expect(activeTaskCreator.createTasks(anyObject(), eq(taskId00Assignment))).andReturn(singletonList(task00));
-        consumer.commitSync(Collections.emptyMap());
+        consumer.commitSync(offsets);
         expectLastCall();
 
         replay(activeTaskCreator, consumer, changeLogReader);
@@ -1818,7 +1839,7 @@ public class TaskManagerTest {
         task01.setCommitNeeded();
         taskManager.tasks().put(taskId01, task01);
 
-        consumer.commitSync(new HashMap<>());
+        consumer.commitSync(Collections.emptyMap());
         expectLastCall().andThrow(new CommitFailedException());
         replay(consumer);
 
@@ -1837,7 +1858,7 @@ public class TaskManagerTest {
         task01.setCommitNeeded();
         taskManager.tasks().put(taskId01, task01);
 
-        consumer.commitSync(new HashMap<>());
+        consumer.commitSync(Collections.emptyMap());
         expectLastCall().andThrow(new TimeoutException());
         replay(consumer);
 
@@ -1856,7 +1877,7 @@ public class TaskManagerTest {
         task01.setCommitNeeded();
         taskManager.tasks().put(taskId01, task01);
 
-        consumer.commitSync(new HashMap<>());
+        consumer.commitSync(Collections.emptyMap());
         expectLastCall().andThrow(new KafkaException());
         replay(consumer);
 
@@ -1875,7 +1896,7 @@ public class TaskManagerTest {
         task01.setCommitNeeded();
         taskManager.tasks().put(taskId01, task01);
 
-        consumer.commitSync(new HashMap<>());
+        consumer.commitSync(Collections.emptyMap());
         expectLastCall().andThrow(new RuntimeException("KABOOM"));
         replay(consumer);
 
@@ -1925,6 +1946,7 @@ public class TaskManagerTest {
         private final boolean active;
         private boolean commitNeeded = false;
         private boolean commitRequested = false;
+        private Map<TopicPartition, OffsetAndMetadata> committableOffsets = Collections.emptyMap();
         private Map<TopicPartition, Long> purgeableOffsets;
         private Map<TopicPartition, Long> changelogOffsets;
         private Map<TopicPartition, LinkedList<ConsumerRecord<byte[], byte[]>>> queue = new HashMap<>();
@@ -2010,6 +2032,15 @@ public class TaskManagerTest {
         @Override
         public void closeDirty() {
             transitionTo(State.CLOSED);
+        }
+
+        void setCommittableOffsetsAndMetadata(final Map<TopicPartition, OffsetAndMetadata> committableOffsets) {
+            this.committableOffsets = committableOffsets;
+        }
+
+        @Override
+        public Map<TopicPartition, OffsetAndMetadata> committableOffsetsAndMetadata() {
+            return committableOffsets;
         }
 
         @Override

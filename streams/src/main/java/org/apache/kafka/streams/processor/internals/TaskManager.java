@@ -204,8 +204,9 @@ public class TaskManager {
 
                 try {
                     checkpointPerTask.put(task, task.prepareCloseClean());
-                    if (task.state() != CREATED) {
-                        consumedOffsetsAndMetadataPerTask.put(task.id(), task.committableOffsetsAndMetadata());
+                    final Map<TopicPartition, OffsetAndMetadata> committableOffsets = task.committableOffsetsAndMetadata();
+                    if (!committableOffsets.isEmpty()) {
+                        consumedOffsetsAndMetadataPerTask.put(task.id(), committableOffsets);
                     }
                 } catch (final RuntimeException e) {
                     final String uncleanMessage = String.format("Failed to close task %s cleanly. Attempting to close remaining tasks before re-throwing:", task.id());
@@ -377,8 +378,9 @@ public class TaskManager {
         for (final Task task : tasks.values()) {
             if (remainingPartitions.containsAll(task.inputPartitions())) {
                 task.prepareSuspend();
-                if (task.state() != CREATED) {
-                    consumedOffsetsAndMetadataPerTask.put(task.id(), task.committableOffsetsAndMetadata());
+                final Map<TopicPartition, OffsetAndMetadata> committableOffsets = task.committableOffsetsAndMetadata();
+                if (!committableOffsets.isEmpty()) {
+                    consumedOffsetsAndMetadataPerTask.put(task.id(), committableOffsets);
                 }
             }
             remainingPartitions.removeAll(task.inputPartitions());
@@ -565,8 +567,9 @@ public class TaskManager {
             if (clean) {
                 try {
                     checkpointPerTask.put(task, task.prepareCloseClean());
-                    if (task.state() != CREATED) {
-                        consumedOffsetsAndMetadataPerTask.put(task.id(), task.committableOffsetsAndMetadata());
+                    final Map<TopicPartition, OffsetAndMetadata> committableOffsets = task.committableOffsetsAndMetadata();
+                    if (!committableOffsets.isEmpty()) {
+                        consumedOffsetsAndMetadataPerTask.put(task.id(), committableOffsets);
                     }
                 } catch (final TaskMigratedException e) {
                     // just ignore the exception as it doesn't matter during shutdown
