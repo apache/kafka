@@ -608,6 +608,29 @@ class FetchRequestTest extends BaseRequestTest {
     assertEquals(3, records(data4).size)
   }
 
+  @Test
+    def testOffsetOutOfRangeExceptionWithOffsetValues(): Unit = {
+
+    initProducer()
+    val topic = "topic"
+    val topicPartition = new TopicPartition(topic, 0)
+    val partitionToLeader = TestUtils.createTopic(zkClient, topic, numPartitions = 1, replicationFactor = 3, servers)
+    val firstLeaderId = partitionToLeader(topicPartition.partition)
+    val partitionMap = new util.LinkedHashMap[TopicPartition, FetchRequest.PartitionData]
+
+    producer.send(new ProducerRecord(topicPartition.topic, topicPartition.partition,
+      "key", new String(new Array[Byte](1024 + 1)))).get
+
+    partitionMap.put(topicPartition, new FetchRequest.PartitionData(222L, 0L, 1024, Optional.empty()))
+    val fetchRequest = FetchRequest.Builder.forConsumer(0, 1, partitionMap).build()
+    val fetchResponse = sendFetchRequest(firstLeaderId, fetchRequest)
+    val partitionData = fetchResponse.responseData.get(topicPartition)
+    assertEquals(Errors.OFFSET_OUT_OF_RANGE, partitionData.error)
+    assertEquals(0, partitionData.logStartOffset)
+    assertEquals(1, partitionData.highWatermark)
+    assertEquals(1, partitionData.lastStableOffset)
+  }
+
   private def records(partitionData: FetchResponse.PartitionData[MemoryRecords]): Seq[Record] = {
     partitionData.records.records.asScala.toBuffer
   }
