@@ -24,6 +24,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.SortedMap;
 import java.util.SortedSet;
 import java.util.TreeSet;
@@ -40,9 +41,13 @@ public class DefaultStateConstrainedBalancedAssignor<ID extends Comparable<? sup
      * @return assignment
      */
     @Override
-    public Map<ID, List<TaskId>> assign(final SortedMap<TaskId, SortedSet<ClientIdAndLag<ID>>> statefulTasksToRankedClients,
-                                        final int balanceFactor) {
-        final Map<ID, List<TaskId>> assignment = initAssignment(statefulTasksToRankedClients);
+    public Map<ID, List<TaskId>> assign(final SortedMap<TaskId, SortedSet<ClientIdAndRank<ID>>> statefulTasksToRankedClients,
+                                        final int balanceFactor,
+                                        final Set<ID> clients) {
+        if (clients.isEmpty()) {
+            throw new IllegalStateException("Set of clients must not be empty");
+        }
+        final Map<ID, List<TaskId>> assignment = initAssignment(clients);
         final Map<TaskId, List<ID>> tasksToCaughtUpClients = tasksToCaughtUpClients(statefulTasksToRankedClients);
         assignTasksWithCaughtUpClients(assignment, tasksToCaughtUpClients, statefulTasksToRankedClients);
         assignTasksWithoutCaughtUpClients(assignment, tasksToCaughtUpClients, statefulTasksToRankedClients);
@@ -51,21 +56,14 @@ public class DefaultStateConstrainedBalancedAssignor<ID extends Comparable<? sup
     }
 
     /**
-     * Initialises the assignment with the clients in the ranked clients map and assigns to each client an empty list.
+     * Initialises the assignment with an empty list for each client.
      *
-     * @param statefulTasksToRankedClients ranked clients map
+     * @param clients list of clients
      * @return initialised assignment with empty lists
      */
-    private Map<ID, List<TaskId>> initAssignment(final SortedMap<TaskId, SortedSet<ClientIdAndLag<ID>>> statefulTasksToRankedClients) {
+    private Map<ID, List<TaskId>> initAssignment(final Set<ID> clients) {
         final Map<ID, List<TaskId>> assignment = new HashMap<>();
-        final SortedSet<ClientIdAndLag<ID>> clientIdAndLags = statefulTasksToRankedClients.values().stream()
-            .findFirst().orElseThrow(() -> new IllegalStateException("The list of clients and lags must not be empty"));
-        for (final ClientIdAndLag<ID> clientIdAndLag : clientIdAndLags) {
-            assignment.put(clientIdAndLag.clientId(), new ArrayList<>());
-        }
-        if (assignment.isEmpty()) {
-            throw new IllegalStateException("Clients within an assignment must not be empty");
-        }
+        clients.forEach(client -> assignment.put(client, new ArrayList<>()));
         return assignment;
     }
 
@@ -75,14 +73,14 @@ public class DefaultStateConstrainedBalancedAssignor<ID extends Comparable<? sup
      * @param statefulTasksToRankedClients ranked clients map
      * @return map from tasks with caught-up clients to the list of client candidates
      */
-    private Map<TaskId, List<ID>> tasksToCaughtUpClients(final SortedMap<TaskId, SortedSet<ClientIdAndLag<ID>>> statefulTasksToRankedClients) {
+    private Map<TaskId, List<ID>> tasksToCaughtUpClients(final SortedMap<TaskId, SortedSet<ClientIdAndRank<ID>>> statefulTasksToRankedClients) {
         final Map<TaskId, List<ID>> taskToCaughtUpClients = new HashMap<>();
-        for (final SortedMap.Entry<TaskId, SortedSet<ClientIdAndLag<ID>>> taskToRankedClient : statefulTasksToRankedClients.entrySet()) {
-            final SortedSet<ClientIdAndLag<ID>> rankedClients = taskToRankedClient.getValue();
-            for (final ClientIdAndLag<ID> clientIdAndLag : rankedClients) {
-                if (clientIdAndLag.lag() == Task.LATEST_OFFSET || clientIdAndLag.lag() == 0) {
+        for (final SortedMap.Entry<TaskId, SortedSet<ClientIdAndRank<ID>>> taskToRankedClient : statefulTasksToRankedClients.entrySet()) {
+            final SortedSet<ClientIdAndRank<ID>> rankedClients = taskToRankedClient.getValue();
+            for (final ClientIdAndRank<ID> clientIdAndRank : rankedClients) {
+                if (clientIdAndRank.rank() == Task.LATEST_OFFSET || clientIdAndRank.rank() == 0) {
                     final TaskId taskId = taskToRankedClient.getKey();
-                    taskToCaughtUpClients.computeIfAbsent(taskId, ignored -> new ArrayList<>()).add(clientIdAndLag.clientId());
+                    taskToCaughtUpClients.computeIfAbsent(taskId, ignored -> new ArrayList<>()).add(clientIdAndRank.clientId());
                 } else {
                     break;
                 }
@@ -96,11 +94,11 @@ public class DefaultStateConstrainedBalancedAssignor<ID extends Comparable<? sup
      *
      * @return map from task IDs to clients hosting the corresponding task
      */
-    private Map<TaskId, ID> tasksToPreviousClients(final Map<TaskId, SortedSet<ClientIdAndLag<ID>>> statefulTasksToRankedClients) {
+    private Map<TaskId, ID> previouslyRunningTasksToPreviousClients(final Map<TaskId, SortedSet<ClientIdAndRank<ID>>> statefulTasksToRankedClients) {
         final Map<TaskId, ID> tasksToPreviousClients = new HashMap<>();
-        for (final Map.Entry<TaskId, SortedSet<ClientIdAndLag<ID>>> taskToRankedClients : statefulTasksToRankedClients.entrySet()) {
-            final ClientIdAndLag<ID> topRankedClient = taskToRankedClients.getValue().first();
-            if (topRankedClient.lag() == Task.LATEST_OFFSET) {
+        for (final Map.Entry<TaskId, SortedSet<ClientIdAndRank<ID>>> taskToRankedClients : statefulTasksToRankedClients.entrySet()) {
+            final ClientIdAndRank<ID> topRankedClient = taskToRankedClients.getValue().first();
+            if (topRankedClient.rank() == Task.LATEST_OFFSET) {
                 tasksToPreviousClients.put(taskToRankedClients.getKey(), topRankedClient.clientId());
             }
         }
@@ -108,28 +106,23 @@ public class DefaultStateConstrainedBalancedAssignor<ID extends Comparable<? sup
     }
 
     /**
-     * Assigns task for which one or more caught-up clients exist to one of the caught-up clients.
+     * Assigns tasks for which one or more caught-up clients exist to one of the caught-up clients.
      *
      * @param assignment assignment
      * @param tasksToCaughtUpClients map from task IDs to lists of caught-up clients
      */
     private void assignTasksWithCaughtUpClients(final Map<ID, List<TaskId>> assignment,
                                                 final Map<TaskId, List<ID>> tasksToCaughtUpClients,
-                                                final Map<TaskId, SortedSet<ClientIdAndLag<ID>>> statefulTasksToRankedClients) {
+                                                final Map<TaskId, SortedSet<ClientIdAndRank<ID>>> statefulTasksToRankedClients) {
         // If a task was previously assigned to a client that is caught-up and still exists, give it back to the client
-        final Map<TaskId, ID> tasksToPreviousClients = tasksToPreviousClients(statefulTasksToRankedClients);
-        final List<TaskId> unassignedTasksWithCaughtUpClients = new ArrayList<>();
-        for (final Map.Entry<TaskId, List<ID>> taskToCaughtUpClients : tasksToCaughtUpClients.entrySet()) {
-            final TaskId taskId = taskToCaughtUpClients.getKey();
-            final List<ID> caughtUpClients = taskToCaughtUpClients.getValue();
-            final ID previousHostingClients = tasksToPreviousClients.get(taskId);
-            if (previousHostingClients != null && caughtUpClients.contains(previousHostingClients)) {
-                assignment.get(previousHostingClients).add(taskId);
-            } else {
-                unassignedTasksWithCaughtUpClients.add(taskId);
-            }
-        }
-        // If a task's previous host client was not caught-up or no longer exists, assign it to the caught-up client with the least tasks
+        final Map<TaskId, ID> previouslyRunningTasksToPreviousClients =
+            previouslyRunningTasksToPreviousClients(statefulTasksToRankedClients);
+        previouslyRunningTasksToPreviousClients.forEach((task, client) -> assignment.get(client).add(task));
+        final List<TaskId> unassignedTasksWithCaughtUpClients = new ArrayList<>(tasksToCaughtUpClients.keySet());
+        unassignedTasksWithCaughtUpClients.removeAll(previouslyRunningTasksToPreviousClients.keySet());
+
+        // If a task's previous host client was not caught-up or no longer exists, assign it to the caught-up client
+        // with the least tasks
         for (final TaskId taskId : unassignedTasksWithCaughtUpClients) {
             final List<ID> caughtUpClients = tasksToCaughtUpClients.get(taskId);
             ID clientWithLeastTasks = null;
@@ -147,7 +140,7 @@ public class DefaultStateConstrainedBalancedAssignor<ID extends Comparable<? sup
 
     /**
      * Assigns tasks for which no caught-up clients exist.
-     * A task is assigned to one of the clients with the least lag and the least tasks assigned.
+     * A task is assigned to one of the clients with the highest rank and the least tasks assigned.
      *
      * @param assignment assignment
      * @param tasksToCaughtUpClients map from task IDs to lists of caught-up clients
@@ -155,17 +148,17 @@ public class DefaultStateConstrainedBalancedAssignor<ID extends Comparable<? sup
      */
     private void assignTasksWithoutCaughtUpClients(final Map<ID, List<TaskId>> assignment,
                                                    final Map<TaskId, List<ID>> tasksToCaughtUpClients,
-                                                   final Map<TaskId, SortedSet<ClientIdAndLag<ID>>> statefulTasksToRankedClients) {
+                                                   final Map<TaskId, SortedSet<ClientIdAndRank<ID>>> statefulTasksToRankedClients) {
         final SortedSet<TaskId> unassignedTasksWithoutCaughtUpClients = new TreeSet<>(statefulTasksToRankedClients.keySet());
         unassignedTasksWithoutCaughtUpClients.removeAll(tasksToCaughtUpClients.keySet());
         for (final TaskId taskId : unassignedTasksWithoutCaughtUpClients) {
-            final SortedSet<ClientIdAndLag<ID>> rankedClients = statefulTasksToRankedClients.get(taskId);
-            final long minLag = rankedClients.first().lag();
+            final SortedSet<ClientIdAndRank<ID>> rankedClients = statefulTasksToRankedClients.get(taskId);
+            final long topRank = rankedClients.first().rank();
             int minTasksCount = Integer.MAX_VALUE;
             ID clientWithLeastTasks = rankedClients.first().clientId();
-            for (final ClientIdAndLag<ID> clientIdAndLag : rankedClients) {
-                if (clientIdAndLag.lag() == minLag) {
-                    final ID clientId = clientIdAndLag.clientId();
+            for (final ClientIdAndRank<ID> clientIdAndRank : rankedClients) {
+                if (clientIdAndRank.rank() == topRank) {
+                    final ID clientId = clientIdAndRank.clientId();
                     final int assignedTasksCount = assignment.get(clientId).size();
                     if (minTasksCount > assignedTasksCount) {
                         clientWithLeastTasks = clientId;
@@ -189,27 +182,29 @@ public class DefaultStateConstrainedBalancedAssignor<ID extends Comparable<? sup
      */
     private void balance(final Map<ID, List<TaskId>> assignment,
                          final int balanceFactor,
-                         final Map<TaskId, SortedSet<ClientIdAndLag<ID>>> statefulTasksToRankedClients,
+                         final Map<TaskId, SortedSet<ClientIdAndRank<ID>>> statefulTasksToRankedClients,
                          final Map<TaskId, List<ID>> tasksToCaughtUpClients) {
         final List<ID> clients = new ArrayList<>(assignment.keySet());
         Collections.sort(clients);
         for (final ID client : clients) {
             final List<TaskId> source = assignment.get(client);
-            for (final TaskId task : assignedTasksWithoutCaughtUpClients(source, tasksToCaughtUpClients)) {
-                for (final ClientIdAndLag<ID> clientAndLag : statefulTasksToRankedClients.get(task)) {
-                    final List<TaskId> destination = assignment.get(clientAndLag.clientId());
+            for (final TaskId task : assignedTasksWithoutCaughtUpClientsThatMightBeMoved(source, tasksToCaughtUpClients)) {
+                for (final ClientIdAndRank<ID> clientAndRank : statefulTasksToRankedClients.get(task)) {
+                    final List<TaskId> destination = assignment.get(clientAndRank.clientId());
                     if (source.size() - destination.size() > balanceFactor) {
                         source.remove(task);
                         destination.add(task);
+                        break;
                     }
                 }
             }
-            for (final TaskId task : assignedTasksWithCaughtUpClients(source, tasksToCaughtUpClients)) {
+            for (final TaskId task : assignedTasksWithCaughtUpClientsThatMightBeMoved(source, tasksToCaughtUpClients)) {
                 for (final ID caughtUpClient : tasksToCaughtUpClients.get(task)) {
                     final List<TaskId> destination = assignment.get(caughtUpClient);
                     if (source.size() - destination.size() > balanceFactor) {
                         source.remove(task);
                         destination.add(task);
+                        break;
                     }
                 }
             }
@@ -223,30 +218,34 @@ public class DefaultStateConstrainedBalancedAssignor<ID extends Comparable<? sup
      * @param tasksToCaughtUpClients map from task IDs to lists of caught-up clients
      * @return a list of task IDs that does not have a caught-up client
      */
-    private List<TaskId> assignedTasksWithoutCaughtUpClients(final List<TaskId> tasks,
-                                                             final Map<TaskId, List<ID>> tasksToCaughtUpClients) {
-        final List<TaskId> tasksWithoutCaughtUpClients = new ArrayList<>();
-        for (int i = tasks.size() - 1; i >= 0; --i) {
-            final TaskId task = tasks.get(i);
-            if (!tasksToCaughtUpClients.containsKey(task)) {
-                tasksWithoutCaughtUpClients.add(task);
-            } else {
-                break;
-            }
-        }
-        return Collections.unmodifiableList(tasksWithoutCaughtUpClients);
+    private List<TaskId> assignedTasksWithoutCaughtUpClientsThatMightBeMoved(final List<TaskId> tasks,
+                                                                             final Map<TaskId, List<ID>> tasksToCaughtUpClients) {
+        return assignedTasksThatMightBeMoved(tasks, tasksToCaughtUpClients, false);
     }
-    private List<TaskId> assignedTasksWithCaughtUpClients(final List<TaskId> tasks,
-                                                          final Map<TaskId, List<ID>> tasksToCaughtUpClients) {
+
+    /**
+     * Returns a sublist of tasks in the given list that have a caught-up client.
+     *
+     * @param tasks list of task IDs
+     * @param tasksToCaughtUpClients map from task IDs to lists of caught-up clients
+     * @return a list of task IDs that have a caught-up client
+     */
+    private List<TaskId> assignedTasksWithCaughtUpClientsThatMightBeMoved(final List<TaskId> tasks,
+                                                                          final Map<TaskId, List<ID>> tasksToCaughtUpClients) {
+        return assignedTasksThatMightBeMoved(tasks, tasksToCaughtUpClients, true);
+    }
+
+    private List<TaskId> assignedTasksThatMightBeMoved(final List<TaskId> tasks,
+                                                       final Map<TaskId, List<ID>> tasksToCaughtUpClients,
+                                                       final boolean isCaughtUp) {
         final List<TaskId> tasksWithCaughtUpClients = new ArrayList<>();
         for (int i = tasks.size() - 1; i >= 0; --i) {
             final TaskId task = tasks.get(i);
-            if (tasksToCaughtUpClients.containsKey(task)) {
+            if (isCaughtUp == tasksToCaughtUpClients.containsKey(task)) {
                 tasksWithCaughtUpClients.add(task);
-            } else {
-                break;
             }
         }
         return Collections.unmodifiableList(tasksWithCaughtUpClients);
     }
+
 }

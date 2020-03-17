@@ -20,44 +20,46 @@ import org.apache.kafka.streams.processor.TaskId;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.SortedMap;
 import java.util.SortedSet;
 
 public interface StateConstrainedBalancedAssignor<ID extends Comparable<? super ID>> {
 
-    class ClientIdAndLag<ID extends Comparable<? super ID>> implements Comparable<ClientIdAndLag<ID>> {
+    class ClientIdAndRank<ID extends Comparable<? super ID>> implements Comparable<ClientIdAndRank<ID>> {
         private final ID clientId;
-        private final long lag;
+        private final long rank;
 
-        public ClientIdAndLag(final ID clientId, final long lag) {
+        public ClientIdAndRank(final ID clientId, final long rank) {
             this.clientId = clientId;
-            this.lag = lag;
+            this.rank = rank;
         }
 
-        public static <ID extends Comparable<? super ID>> ClientIdAndLag<ID> make(final ID clientId, final long lag) {
-            return new ClientIdAndLag<>(clientId, lag);
+        public static <ID extends Comparable<? super ID>> ClientIdAndRank<ID> make(final ID clientId, final long rank) {
+            return new ClientIdAndRank<>(clientId, rank);
         }
 
         public ID clientId() {
             return clientId;
         }
 
-        public long lag() {
-            return lag;
+        public long rank() {
+            return rank;
         }
 
         @Override
-        public int compareTo(final ClientIdAndLag<ID> clientIdAndLag) {
-            if (lag < clientIdAndLag.lag) {
+        public int compareTo(final ClientIdAndRank<ID> clientIdAndRank) {
+            if (rank < clientIdAndRank.rank) {
                 return -1;
-            } else if (lag > clientIdAndLag.lag) {
+            } else if (rank > clientIdAndRank.rank) {
                 return 1;
             } else {
-                return clientId.compareTo(clientIdAndLag.clientId);
+                return clientId.compareTo(clientIdAndRank.clientId);
             }
         }
     }
 
-    Map<ID, List<TaskId>> assign(final SortedMap<TaskId, SortedSet<ClientIdAndLag<ID>>> statefulTasksToRankedClients,
-                                 final int balanceFactor);
+    Map<ID, List<TaskId>> assign(final SortedMap<TaskId, SortedSet<ClientIdAndRank<ID>>> statefulTasksToRankedClients,
+                                 final int balanceFactor,
+                                 final Set<ID> clients);
 }
