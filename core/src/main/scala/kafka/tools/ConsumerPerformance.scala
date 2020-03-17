@@ -22,6 +22,7 @@ import java.time.Duration
 import java.util
 import java.util.concurrent.atomic.AtomicLong
 import java.util.{Properties, Random}
+import kafka.utils.CommandDefaultOptions
 
 import com.typesafe.scalalogging.LazyLogging
 import kafka.utils.{CommandLineUtils, ToolsUtils}
@@ -201,7 +202,7 @@ object ConsumerPerformance extends LazyLogging {
     print(", %d, %d, %.4f, %.4f".format(periodicJoinTimeInMs, fetchTimeMs, intervalMbPerSec, intervalMessagesPerSec))
   }
 
-  class ConsumerPerfConfig(args: Array[String]) extends PerfConfig(args) {
+  class ConsumerPerfConfig(args: Array[String]) extends CommandDefaultOptions(args) {
     val brokerListOpt = parser.accepts("broker-list", "DEPRECATED, use --bootstrap-server instead; ignored if --bootstrap-server is specified.  The broker list string in the form HOST1:PORT1,HOST2:PORT2.")
       .withRequiredArg
       .describedAs("broker-list")
@@ -248,12 +249,28 @@ object ConsumerPerformance extends LazyLogging {
       .ofType(classOf[String])
     val printMetricsOpt = parser.accepts("print-metrics", "Print out the metrics.")
     val showDetailedStatsOpt = parser.accepts("show-detailed-stats", "If set, stats are reported for each reporting " +
-      "interval as configured by reporting-interval")
+      "interval as configured by reporting-interval.")
     val recordFetchTimeoutOpt = parser.accepts("timeout", "The maximum allowed time in milliseconds between returned records.")
       .withOptionalArg()
       .describedAs("milliseconds")
       .ofType(classOf[Long])
       .defaultsTo(10000)
+    val numMessagesOpt = parser.accepts("messages", "REQUIRED: The number of messages to send or consume.")
+      .withRequiredArg
+      .describedAs("count")
+      .ofType(classOf[java.lang.Long])
+    val reportingIntervalOpt = parser.accepts("reporting-interval", "Interval in milliseconds at which to print progress info.")
+      .withRequiredArg
+      .describedAs("interval_ms")
+      .ofType(classOf[java.lang.Integer])
+      .defaultsTo(5000)
+    val dateFormatOpt = parser.accepts("date-format", "The date format to use for formatting the time field. " +
+      "See java.text.SimpleDateFormat for options.")
+      .withRequiredArg
+      .describedAs("date format")
+      .ofType(classOf[String])
+      .defaultsTo("yyyy-MM-dd HH:mm:ss:SSS")
+    val hideHeaderOpt = parser.accepts("hide-header", "If set, skips printing the header for the stats.")
 
     options = parser.parse(args: _*)
     CommandLineUtils.printHelpAndExitIfNeeded(this, "This tool helps in performance test for the full zookeeper consumer")
