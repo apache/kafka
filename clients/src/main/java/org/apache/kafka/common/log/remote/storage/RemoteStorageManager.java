@@ -57,8 +57,8 @@ public interface RemoteStorageManager extends Configurable, Closeable {
 
     /**
      * Returns the remote log segment data file/object as InputStream for the given RemoteLogSegmentMetadata starting
-     * from the given startPosition. If endPosition is given then the stream will end at that position else it will be
-     * given till the end of the remote log segment data file/object.
+     * from the given startPosition. The stream will end at the smaller of endPosition and the end of the remote log
+     * segment data file/object.
      *
      * @param remoteLogSegmentMetadata
      * @param startPosition

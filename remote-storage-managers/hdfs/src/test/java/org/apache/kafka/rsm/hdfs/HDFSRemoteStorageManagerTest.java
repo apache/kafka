@@ -27,6 +27,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.log.remote.storage.LogSegmentData;
 import org.apache.kafka.common.log.remote.storage.RemoteLogSegmentId;
 import org.apache.kafka.common.log.remote.storage.RemoteLogSegmentMetadata;
+import org.apache.kafka.common.log.remote.storage.RemoteStorageException;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.RecordBatch;
@@ -167,8 +168,8 @@ public class HDFSRemoteStorageManagerTest {
         rsm.copyLogSegment(id1, seg1);
         assertTrue(hdfs.exists(new Path(baseDir + "/test-1/" + uuid1 + "/index")));
 
-        RemoteLogSegmentMetadata seg0metadata = new RemoteLogSegmentMetadata(id0, 0, 299, 0, new byte[]{});
-        try (InputStream is = rsm.fetchLogSegmentData(seg0metadata, 0L, Optional.empty())) {
+        RemoteLogSegmentMetadata seg0metadata = new RemoteLogSegmentMetadata(id0, 0, 299, 0, 0, new byte[]{});
+        try (InputStream is = rsm.fetchLogSegmentData(seg0metadata, 0L, Long.MAX_VALUE)) {
             assertFileEquals(is, segments.get(0).log().file());
         }
         try (InputStream is = rsm.fetchOffsetIndex(seg0metadata)) {
@@ -178,8 +179,8 @@ public class HDFSRemoteStorageManagerTest {
             assertFileEquals(is, segments.get(0).timeIndex().file());
         }
 
-        RemoteLogSegmentMetadata seg1metadata = new RemoteLogSegmentMetadata(id1, 300, 499, 0, new byte[]{});
-        try (InputStream is = rsm.fetchLogSegmentData(seg1metadata, 0L, Optional.empty())) {
+        RemoteLogSegmentMetadata seg1metadata = new RemoteLogSegmentMetadata(id1, 300, 499, 0, 0, new byte[]{});
+        try (InputStream is = rsm.fetchLogSegmentData(seg1metadata, 0L, Long.MAX_VALUE)) {
             assertFileEquals(is, segments.get(1).log().file());
         }
         try (InputStream is = rsm.fetchOffsetIndex(seg1metadata)) {
@@ -196,10 +197,10 @@ public class HDFSRemoteStorageManagerTest {
         assertFalse(hdfs.exists(new Path(baseDir + "/test-1/" + uuid0)));
         assertFalse(hdfs.exists(new Path(baseDir + "/test-1/" + uuid1)));
 
-        assertThrows(IOException.class, () -> {
-            rsm.fetchLogSegmentData(seg0metadata, 0L, Optional.empty());
+        assertThrows(RemoteStorageException.class, () -> {
+            rsm.fetchLogSegmentData(seg0metadata, 0L, Long.MAX_VALUE);
         });
-        assertThrows(IOException.class, () -> {
+        assertThrows(RemoteStorageException.class, () -> {
             rsm.fetchOffsetIndex(seg1metadata);
         });
     }

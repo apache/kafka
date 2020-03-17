@@ -25,7 +25,8 @@ import org.apache.kafka.common.log.remote.storage.LogSegmentData;
 import org.apache.kafka.common.log.remote.storage.RemoteLogSegmentContext;
 import org.apache.kafka.common.log.remote.storage.RemoteLogSegmentId;
 import org.apache.kafka.common.log.remote.storage.RemoteLogSegmentMetadata;
-import org.apache.kafka.common.log.remote.storage.RemoteLogStorageManager;
+import org.apache.kafka.common.log.remote.storage.RemoteStorageException;
+import org.apache.kafka.common.log.remote.storage.RemoteStorageManager;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -37,7 +38,7 @@ import java.net.URI;
 import java.util.Map;
 import java.util.Optional;
 
-public class HDFSRemoteStorageManager implements RemoteLogStorageManager {
+public class HDFSRemoteStorageManager implements RemoteStorageManager {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(HDFSRemoteStorageManager.class);
     private static final String LOG_FILE_NAME = "log";
@@ -52,22 +53,26 @@ public class HDFSRemoteStorageManager implements RemoteLogStorageManager {
     private LRUCache readCache;
 
     @Override
-    public RemoteLogSegmentContext copyLogSegment(RemoteLogSegmentId remoteLogSegmentId, LogSegmentData logSegmentData) throws IOException {
-        String desDir = getSegmentRemoteDir(remoteLogSegmentId);
+    public RemoteLogSegmentContext copyLogSegment(RemoteLogSegmentId remoteLogSegmentId, LogSegmentData logSegmentData) throws RemoteStorageException {
+        try {
+            String desDir = getSegmentRemoteDir(remoteLogSegmentId);
 
-        File logFile = logSegmentData.logSegment();
-        File offsetIdxFile = logSegmentData.offsetIndex();
-        File tsIdxFile = logSegmentData.timeIndex();
+            File logFile = logSegmentData.logSegment();
+            File offsetIdxFile = logSegmentData.offsetIndex();
+            File tsIdxFile = logSegmentData.timeIndex();
 
-        FileSystem fs = getFS();
-        fs.mkdirs(new Path(desDir));
+            FileSystem fs = getFS();
+            fs.mkdirs(new Path(desDir));
 
-        // copy local files to remote temporary directory
-        copyFile(fs, logFile, getPath(desDir, LOG_FILE_NAME));
-        copyFile(fs, offsetIdxFile, getPath(desDir, OFFSET_INDEX_FILE_NAME));
-        copyFile(fs, tsIdxFile, getPath(desDir, TIME_INDEX_FILE_NAME));
+            // copy local files to remote temporary directory
+            copyFile(fs, logFile, getPath(desDir, LOG_FILE_NAME));
+            copyFile(fs, offsetIdxFile, getPath(desDir, OFFSET_INDEX_FILE_NAME));
+            copyFile(fs, tsIdxFile, getPath(desDir, TIME_INDEX_FILE_NAME));
 
-        return RemoteLogSegmentContext.EMPTY_CONTEXT;
+            return RemoteLogSegmentContext.EMPTY_CONTEXT;
+        } catch (Exception e) {
+            throw new RemoteStorageException("Failed to copy log segment to remote storage", e);
+        }
     }
 
     private void copyFile(FileSystem fs, File localFile, Path path) throws IOException {
@@ -77,32 +82,48 @@ public class HDFSRemoteStorageManager implements RemoteLogStorageManager {
     }
 
     @Override
-    public InputStream fetchLogSegmentData(RemoteLogSegmentMetadata remoteLogSegmentMetadata, Long startPosition, Optional<Long> endPosition) throws IOException {
-        String path = getSegmentRemoteDir(remoteLogSegmentMetadata.remoteLogSegmentId());
-        Path logFile = getPath(path, LOG_FILE_NAME);
-        return new CachedInputStream(logFile, startPosition, endPosition.orElse(Long.MAX_VALUE));
+    public InputStream fetchLogSegmentData(RemoteLogSegmentMetadata remoteLogSegmentMetadata, Long startPosition, Long endPosition) throws RemoteStorageException {
+        try {
+            String path = getSegmentRemoteDir(remoteLogSegmentMetadata.remoteLogSegmentId());
+            Path logFile = getPath(path, LOG_FILE_NAME);
+            return new CachedInputStream(logFile, startPosition, endPosition);
+        } catch (Exception e) {
+            throw new RemoteStorageException("Failed to fetch remote log segment", e);
+        }
     }
 
     @Override
-    public InputStream fetchOffsetIndex(RemoteLogSegmentMetadata remoteLogSegmentMetadata) throws IOException {
-        String path = getSegmentRemoteDir(remoteLogSegmentMetadata.remoteLogSegmentId());
-        Path indexFile = getPath(path, OFFSET_INDEX_FILE_NAME);
-        return new CachedInputStream(indexFile, 0, Long.MAX_VALUE);
+    public InputStream fetchOffsetIndex(RemoteLogSegmentMetadata remoteLogSegmentMetadata) throws RemoteStorageException {
+        try {
+            String path = getSegmentRemoteDir(remoteLogSegmentMetadata.remoteLogSegmentId());
+            Path indexFile = getPath(path, OFFSET_INDEX_FILE_NAME);
+            return new CachedInputStream(indexFile, 0, Long.MAX_VALUE);
+        } catch (Exception e) {
+            throw new RemoteStorageException("Failed to fetch offset index from remote storage", e);
+        }
     }
 
     @Override
-    public InputStream fetchTimestampIndex(RemoteLogSegmentMetadata remoteLogSegmentMetadata) throws IOException {
-        String path = getSegmentRemoteDir(remoteLogSegmentMetadata.remoteLogSegmentId());
-        Path timeindexFile = getPath(path, TIME_INDEX_FILE_NAME);
-        return new CachedInputStream(timeindexFile, 0, Long.MAX_VALUE);
+    public InputStream fetchTimestampIndex(RemoteLogSegmentMetadata remoteLogSegmentMetadata) throws RemoteStorageException {
+        try {
+            String path = getSegmentRemoteDir(remoteLogSegmentMetadata.remoteLogSegmentId());
+            Path timeindexFile = getPath(path, TIME_INDEX_FILE_NAME);
+            return new CachedInputStream(timeindexFile, 0, Long.MAX_VALUE);
+        } catch (Exception e) {
+            throw new RemoteStorageException("Failed to fetch timestamp index from remote storage", e);
+        }
     }
 
     @Override
-    public boolean deleteLogSegment(RemoteLogSegmentMetadata remoteLogSegmentMetadata) throws IOException {
-        String path = getSegmentRemoteDir(remoteLogSegmentMetadata.remoteLogSegmentId());
+    public boolean deleteLogSegment(RemoteLogSegmentMetadata remoteLogSegmentMetadata) throws RemoteStorageException {
+        try {
+            String path = getSegmentRemoteDir(remoteLogSegmentMetadata.remoteLogSegmentId());
 
-        FileSystem fs = getFS();
-        return fs.delete(new Path(path), true);
+            FileSystem fs = getFS();
+            return fs.delete(new Path(path), true);
+        } catch (Exception e) {
+            throw new RemoteStorageException("Failed to delete remote log segment", e);
+        }
     }
 
     private class CachedInputStream extends InputStream {
