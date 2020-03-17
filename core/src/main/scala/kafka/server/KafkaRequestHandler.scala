@@ -24,6 +24,7 @@ import java.util.concurrent.{CountDownLatch, TimeUnit}
 import java.util.concurrent.atomic.AtomicInteger
 
 import com.yammer.metrics.core.Meter
+import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.internals.FatalExitError
 import org.apache.kafka.common.utils.{KafkaThread, Time}
 
@@ -141,10 +142,10 @@ class KafkaRequestHandlerPool(val brokerId: Int,
   }
 }
 
-class BrokerTopicMetrics(name: Option[String]) extends KafkaMetricsGroup {
+class BrokerTopicMetrics(name: Option[TopicPartition]) extends KafkaMetricsGroup {
   val tags: scala.collection.Map[String, String] = name match {
     case None => Map.empty
-    case Some(topic) => Map("topic" -> topic)
+    case Some(topic) => Map("topic" -> topic.topic(), "partition" -> topic.partition().toString)
   }
 
   case class MeterWrapper(metricType: String, eventType: String) {
@@ -279,16 +280,16 @@ object BrokerTopicStats {
   val InvalidMessageCrcRecordsPerSec = "InvalidMessageCrcRecordsPerSec"
   val InvalidOffsetOrSequenceRecordsPerSec = "InvalidOffsetOrSequenceRecordsPerSec"
 
-  private val valueFactory = (k: String) => new BrokerTopicMetrics(Some(k))
+  private val valueFactory = (k: TopicPartition) => new BrokerTopicMetrics(Some(k))
 }
 
 class BrokerTopicStats {
   import BrokerTopicStats._
 
-  private val stats = new Pool[String, BrokerTopicMetrics](Some(valueFactory))
+  private val stats = new Pool[TopicPartition, BrokerTopicMetrics](Some(valueFactory))
   val allTopicsStats = new BrokerTopicMetrics(None)
 
-  def topicStats(topic: String): BrokerTopicMetrics =
+  def topicStats(topic: TopicPartition): BrokerTopicMetrics =
     stats.getAndMaybePut(topic)
 
   def updateReplicationBytesIn(value: Long): Unit = {
@@ -316,7 +317,7 @@ class BrokerTopicStats {
   }
 
   // This method only removes metrics only used for leader
-  def removeOldLeaderMetrics(topic: String): Unit = {
+  def removeOldLeaderMetrics(topic: TopicPartition): Unit = {
     val topicMetrics = topicStats(topic)
     if (topicMetrics != null) {
       topicMetrics.closeMetric(BrokerTopicStats.MessagesInPerSec)
@@ -331,7 +332,7 @@ class BrokerTopicStats {
   }
 
   // This method only removes metrics only used for follower
-  def removeOldFollowerMetrics(topic: String): Unit = {
+  def removeOldFollowerMetrics(topic: TopicPartition): Unit = {
     val topicMetrics = topicStats(topic)
     if (topicMetrics != null) {
       topicMetrics.closeMetric(BrokerTopicStats.ReplicationBytesInPerSec)
@@ -339,13 +340,13 @@ class BrokerTopicStats {
     }
   }
 
-  def removeMetrics(topic: String): Unit = {
+  def removeMetrics(topic: TopicPartition): Unit = {
     val metrics = stats.remove(topic)
     if (metrics != null)
       metrics.close()
   }
 
-  def updateBytesOut(topic: String, isFollower: Boolean, isReassignment: Boolean, value: Long): Unit = {
+  def updateBytesOut(topic: TopicPartition, isFollower: Boolean, isReassignment: Boolean, value: Long): Unit = {
     if (isFollower) {
       if (isReassignment)
         updateReassignmentBytesOut(value)

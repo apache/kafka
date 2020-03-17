@@ -1508,17 +1508,18 @@ class ReplicaManagerTest {
     val mockTopicStats1: BrokerTopicStats = EasyMock.mock(classOf[BrokerTopicStats])
     val (rm0, rm1) = prepareDifferentReplicaManagers(EasyMock.mock(classOf[BrokerTopicStats]), mockTopicStats1)
 
-    EasyMock.expect(mockTopicStats1.removeOldLeaderMetrics(topic)).andVoid.once
+    // make broker 0 the leader of partition 0 and
+    // make broker 1 the leader of partition 1
+    val tp0 = new TopicPartition(topic, 0)
+    val tp1 = new TopicPartition(topic, 1)
+    EasyMock.expect(mockTopicStats1.removeOldLeaderMetrics(tp0)).andVoid.times(2)
+    EasyMock.expect(mockTopicStats1.removeOldLeaderMetrics(tp1)).andVoid.once
+    EasyMock.expect(mockTopicStats1.removeOldFollowerMetrics(tp1)).andVoid.once
     EasyMock.replay(mockTopicStats1)
 
     try {
-      // make broker 0 the leader of partition 0 and
-      // make broker 1 the leader of partition 1
-      val tp0 = new TopicPartition(topic, 0)
-      val tp1 = new TopicPartition(topic, 1)
       val partition0Replicas = Seq[Integer](0, 1).asJava
       val partition1Replicas = Seq[Integer](1, 0).asJava
-
       val leaderAndIsrRequest1 = new LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion,
         controllerId, 0, brokerEpoch,
         Seq(
@@ -1596,15 +1597,17 @@ class ReplicaManagerTest {
     val mockTopicStats1: BrokerTopicStats = EasyMock.mock(classOf[BrokerTopicStats])
     val (rm0, rm1) = prepareDifferentReplicaManagers(EasyMock.mock(classOf[BrokerTopicStats]), mockTopicStats1)
 
-    EasyMock.expect(mockTopicStats1.removeOldLeaderMetrics(topic)).andVoid.once
-    EasyMock.expect(mockTopicStats1.removeOldFollowerMetrics(topic)).andVoid.once
+    // make broker 0 the leader of partition 0 and
+    // make broker 1 the leader of partition 1
+    val tp0 = new TopicPartition(topic, 0)
+    val tp1 = new TopicPartition(topic, 1)
+    EasyMock.expect(mockTopicStats1.removeOldFollowerMetrics(tp0)).andVoid.once
+    EasyMock.expect(mockTopicStats1.removeOldFollowerMetrics(tp1)).andVoid.once
+    EasyMock.expect(mockTopicStats1.removeOldLeaderMetrics(tp0)).andVoid.once
+    EasyMock.expect(mockTopicStats1.removeOldLeaderMetrics(tp1)).andVoid.once
     EasyMock.replay(mockTopicStats1)
 
     try {
-      // make broker 0 the leader of partition 0 and
-      // make broker 1 the leader of partition 1
-      val tp0 = new TopicPartition(topic, 0)
-      val tp1 = new TopicPartition(topic, 1)
       val partition0Replicas = Seq[Integer](1, 0).asJava
       val partition1Replicas = Seq[Integer](1, 0).asJava
 

@@ -64,7 +64,7 @@ class MetricsTest extends KafkaServerTestHarness with Logging {
     // Don't consume messages as it may cause metrics to be re-created causing the test to fail, see KAFKA-5238
     TestUtils.generateAndProduceMessages(servers, topic, nMessages)
     assertTrue("Topic metrics don't exist", topicMetricGroups(topic).nonEmpty)
-    servers.foreach(s => assertNotNull(s.brokerTopicStats.topicStats(topic)))
+    servers.foreach(s => assertNotNull(s.brokerTopicStats.topicStats(new TopicPartition(topic, 0))))
     adminZkClient.deleteTopic(topic)
     TestUtils.verifyTopicDeletion(zkClient, topic, 1, servers)
     assertEquals("Topic metrics exists after deleteTopic", Set.empty, topicMetricGroups(topic))
@@ -126,8 +126,8 @@ class MetricsTest extends KafkaServerTestHarness with Logging {
     val topic = "test-bytes-in-out"
     val replicationBytesIn = BrokerTopicStats.ReplicationBytesInPerSec
     val replicationBytesOut = BrokerTopicStats.ReplicationBytesOutPerSec
-    val bytesIn = s"${BrokerTopicStats.BytesInPerSec},topic=$topic"
-    val bytesOut = s"${BrokerTopicStats.BytesOutPerSec},topic=$topic"
+    val bytesIn = s"${BrokerTopicStats.BytesInPerSec},topic=$topic,partition=0"
+    val bytesOut = s"${BrokerTopicStats.BytesOutPerSec},topic=$topic,partition=0"
 
     val topicConfig = new Properties
     topicConfig.setProperty(LogConfig.MinInSyncReplicasProp, "2")
