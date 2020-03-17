@@ -16,12 +16,12 @@
 import os.path
 
 from collections import namedtuple
-from kafkatest.version import DEV_BRANCH, LATEST_0_8_2, LATEST_0_9, LATEST_0_10_0, LATEST_0_10_1, LATEST_0_10_2, LATEST_0_11, LATEST_1_0
+from kafkatest.version import DEV_BRANCH, LATEST_0_8_2, LATEST_0_9, LATEST_0_10_0, LATEST_0_10_1, LATEST_0_10_2, LATEST_0_11_0, LATEST_1_0
 from kafkatest.directory_layout.kafka_path import create_path_resolver
 
 TopicPartition = namedtuple('TopicPartition', ['topic', 'partition'])
 
-new_jdk_not_supported = frozenset(LATEST_0_8_2, LATEST_0_9, LATEST_0_10_0, LATEST_0_10_1, LATEST_0_10_2, LATEST_0_11_0, LATEST_1_0)
+new_jdk_not_supported = frozenset([str(LATEST_0_8_2), str(LATEST_0_9), str(LATEST_0_10_0), str(LATEST_0_10_1), str(LATEST_0_10_2), str(LATEST_0_11), str(LATEST_1_0)])
 
 def fix_opts_for_new_jvm(node):
     # Startup scripts for early versions of Kafka contains options
