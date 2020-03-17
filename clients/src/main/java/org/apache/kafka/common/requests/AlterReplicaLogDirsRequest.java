@@ -26,6 +26,7 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -72,7 +73,7 @@ public class AlterReplicaLogDirsRequest extends AbstractRequest {
     }
 
     @Override
-    public AbstractResponse getErrorResponse(int throttleTimeMs, Throwable e) {
+    public AlterReplicaLogDirsResponse getErrorResponse(int throttleTimeMs, Throwable e) {
         AlterReplicaLogDirsResponseData data = new AlterReplicaLogDirsResponseData();
 
         data.setResults(this.data.dirs().stream().flatMap(x -> {
@@ -92,7 +93,15 @@ public class AlterReplicaLogDirsRequest extends AbstractRequest {
     }
 
     public Map<TopicPartition, String> partitionDirs() {
-        return partitionDirs;
+        Map<TopicPartition, String> result = new HashMap<>();
+        for (AlterReplicaLogDirsRequestData.AlterReplicaLogDir alter : data.dirs()) {
+            alter.topics().stream().flatMap(t -> {
+                Stream<TopicPartition> objectStream = t.partitions().stream().map(
+                    p -> new TopicPartition(t.name(), p.intValue()));
+                return objectStream;
+            }).forEach(tp -> result.put(tp, alter.path()));
+        }
+        return result;
     }
 
     public static AlterReplicaLogDirsRequest parse(ByteBuffer buffer, short version) {
