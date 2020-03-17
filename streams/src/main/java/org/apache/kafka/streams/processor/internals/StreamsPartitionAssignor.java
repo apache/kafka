@@ -106,8 +106,8 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
 
         ClientMetadata(final String endPoint) {
 
-            // get the host info if possible
-            hostInfo = endPoint != null ? HostInfo.buildFromEndpoint(endPoint) : null;
+            // get the host info, or null if no endpoint is configured (ie endPoint == null)
+            hostInfo = HostInfo.buildFromEndpoint(endPoint);
 
             // initialize the consumer memberIds
             consumers = new HashSet<>();
@@ -1398,7 +1398,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         assignmentErrorCode.set(errorCode);
     }
 
-    Integer assignmentErrorCode(){
+    Integer assignmentErrorCode() {
         return assignmentErrorCode.get();
     }
 

@@ -81,6 +81,7 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
@@ -1298,8 +1299,8 @@ public class StreamsPartitionAssignorTest {
         createDefaultMockTaskManager();
         configureDefaultPartitionAssignor();
 
-        streamsMetadataState.onChange(EasyMock.anyObject(), EasyMock.anyObject(), EasyMock.anyObject());
-        streamsMetadataState.onChange(EasyMock.anyObject(), EasyMock.anyObject(), EasyMock.anyObject());
+        streamsMetadataState.onChange(EasyMock.eq(initialHostState), EasyMock.anyObject(), EasyMock.anyObject());
+        streamsMetadataState.onChange(EasyMock.eq(newHostState), EasyMock.anyObject(), EasyMock.anyObject());
 
         EasyMock.replay(taskManager, streamsMetadataState);
 
@@ -1310,7 +1311,7 @@ public class StreamsPartitionAssignorTest {
     }
 
     @Test
-    public void shouldTriggerRebalanceOnHostInfoChangeOnly() {
+    public void shouldTriggerRebalanceOnHostInfoChange() {
         final Map<HostInfo, Set<TopicPartition>> oldHostState = mkMap(
             mkEntry(new HostInfo("localhost", 9090), mkSet(t1p0, t1p1)),
             mkEntry(new HostInfo("otherhost", 9090), mkSet(t2p0, t2p1))
@@ -1331,9 +1332,33 @@ public class StreamsPartitionAssignorTest {
         partitionAssignor.setAssignmentErrorCode(AssignorError.NONE.code());
         partitionAssignor.onAssignment(createAssignment(newHostState), null);
 
-        assertThat(partitionAssignor.assignmentErrorCode(), not(AssignorError.REBALANCE_NEEDED.code()));
+        assertThat(partitionAssignor.assignmentErrorCode(), is(AssignorError.NONE.code()));
 
         EasyMock.verify(taskManager);
+    }
+
+    @Test
+    public void shouldCreateHostInfo() {
+        final String endPoint = "host:9090";
+        final HostInfo hostInfo = HostInfo.buildFromEndpoint(endPoint);
+
+        assertThat(hostInfo.host(), is("host"));
+        assertThat(hostInfo.port(), is(9090));
+    }
+
+    @Test
+    public void shouldReturnNullHostInfoForNullEndPoint() {
+        assertNull(HostInfo.buildFromEndpoint(null));
+    }
+
+    @Test
+    public void shouldReturnNullHostInfoForEmptyEndPoint() {
+        assertNull(HostInfo.buildFromEndpoint("  "));
+    }
+
+    @Test
+    public void shouldThrowConfigExceptionForNonsenseEndPoint() {
+        assertThrows(ConfigException.class, () -> HostInfo.buildFromEndpoint("nonsense"));
     }
 
     @Test
