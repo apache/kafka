@@ -1338,30 +1338,6 @@ public class StreamsPartitionAssignorTest {
     }
 
     @Test
-    public void shouldCreateHostInfo() {
-        final String endPoint = "host:9090";
-        final HostInfo hostInfo = HostInfo.buildFromEndpoint(endPoint);
-
-        assertThat(hostInfo.host(), is("host"));
-        assertThat(hostInfo.port(), is(9090));
-    }
-
-    @Test
-    public void shouldReturnNullHostInfoForNullEndPoint() {
-        assertNull(HostInfo.buildFromEndpoint(null));
-    }
-
-    @Test
-    public void shouldReturnNullHostInfoForEmptyEndPoint() {
-        assertNull(HostInfo.buildFromEndpoint("  "));
-    }
-
-    @Test
-    public void shouldThrowConfigExceptionForNonsenseEndPoint() {
-        assertThrows(ConfigException.class, () -> HostInfo.buildFromEndpoint("nonsense"));
-    }
-
-    @Test
     public void shouldNotAddStandbyTaskPartitionsToPartitionsForHost() {
         final StreamsBuilder streamsBuilder = new StreamsBuilder();
         streamsBuilder.stream("topic1").groupByKey().count();
