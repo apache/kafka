@@ -527,7 +527,6 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
           txnMetadata.producerId,
           txnMetadata.producerEpoch,
           transactionResult(txn),
-          true,
           resultCallback)
       }
     }

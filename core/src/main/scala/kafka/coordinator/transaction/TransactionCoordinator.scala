@@ -164,11 +164,11 @@ class TransactionCoordinator(brokerId: Int,
               }
             }
 
-            handleEndTransaction(transactionalId,
+            endTransaction(transactionalId,
               newMetadata.producerId,
               newMetadata.producerEpoch,
               TransactionResult.ABORT,
-              fromClient = false,
+              (producerEpoch, txnMetadata) => producerEpoch < txnMetadata.producerEpoch,
               sendRetriableErrorCallback)
           } else {
             def sendPidResponseCallback(error: Errors): Unit = {
@@ -352,8 +352,22 @@ class TransactionCoordinator(brokerId: Int,
                            producerId: Long,
                            producerEpoch: Short,
                            txnMarkerResult: TransactionResult,
-                           fromClient: Boolean,
                            responseCallback: EndTxnCallback): Unit = {
+    endTransaction(transactionalId,
+      producerId,
+      producerEpoch,
+      txnMarkerResult,
+      // Strict equality is enforced on the client side requests, as they shouldn't bump the producer epoch.
+      (producerEpoch, txnMetadata) => producerEpoch != txnMetadata.producerEpoch,
+      responseCallback)
+  }
+
+  def endTransaction(transactionalId: String,
+                     producerId: Long,
+                     producerEpoch: Short,
+                     txnMarkerResult: TransactionResult,
+                     validateEpoch: (Short, TransactionMetadata) => Boolean,
+                     responseCallback: EndTxnCallback): Unit = {
     if (transactionalId == null || transactionalId.isEmpty)
       responseCallback(Errors.INVALID_REQUEST)
     else {
@@ -368,8 +382,7 @@ class TransactionCoordinator(brokerId: Int,
           txnMetadata.inLock {
             if (txnMetadata.producerId != producerId)
               Left(Errors.INVALID_PRODUCER_ID_MAPPING)
-            else if ((fromClient && producerEpoch != txnMetadata.producerEpoch) || producerEpoch < txnMetadata.producerEpoch)
-              // Strict equality is enforced on the client side requests, as they shouldn't bump the producer epoch.
+            else if (validateEpoch(producerEpoch, txnMetadata))
               Left(Errors.INVALID_PRODUCER_EPOCH)
             else if (txnMetadata.pendingTransitionInProgress && txnMetadata.pendingState.get != PrepareEpochFence)
               Left(Errors.CONCURRENT_TRANSACTIONS)
@@ -545,11 +558,11 @@ class TransactionCoordinator(brokerId: Int,
           }
 
           transitMetadataOpt.foreach { txnTransitMetadata =>
-            handleEndTransaction(txnMetadata.transactionalId,
+            endTransaction(txnMetadata.transactionalId,
               txnTransitMetadata.producerId,
               txnTransitMetadata.producerEpoch,
               TransactionResult.ABORT,
-              fromClient = false,
+              (producerEpoch, txnMetadata) => producerEpoch < txnMetadata.producerEpoch,
               onComplete(txnIdAndPidEpoch))
           }
       }

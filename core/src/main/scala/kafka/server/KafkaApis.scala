@@ -1965,12 +1965,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         sendResponseMaybeThrottle(request, createResponse)
       }
 
-      txnCoordinator.handleEndTransaction(endTxnRequest.data.transactionalId,
-        endTxnRequest.data.producerId,
-        endTxnRequest.data.producerEpoch,
-        endTxnRequest.result(),
-        fromClient = true,
-        sendResponseCallback)
+      txnCoordinator.handleEndTransaction(endTxnRequest.data.transactionalId, endTxnRequest.data.producerId, endTxnRequest.data.producerEpoch, endTxnRequest.result(), sendResponseCallback)
     } else
       sendResponseMaybeThrottle(request, requestThrottleMs =>
         new EndTxnResponse(new EndTxnResponseData()
