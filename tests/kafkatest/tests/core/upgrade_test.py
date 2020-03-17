@@ -124,11 +124,8 @@ class TestUpgrade(ProduceConsumeValidateTest):
             to_message_format_version, otherwise remove log.message.format.version config
         - Finally, validate that every message acked by the producer was consumed by the consumer
         """
-
-        kafka_version = KafkaVersion(from_kafka_version)
-
         self.kafka = KafkaService(self.test_context, num_nodes=3, zk=self.zk,
-                                  version=kafka_version,
+                                  version=KafkaVersion(from_kafka_version),
                                   topics={self.topic: {"partitions": self.partitions,
                       "replication-factor": self.replication_factor,
                       'configs': {"min.insync.replicas": 2}}})
