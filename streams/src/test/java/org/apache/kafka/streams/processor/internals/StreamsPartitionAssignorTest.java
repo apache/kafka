@@ -81,7 +81,6 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
-import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
@@ -1296,13 +1295,13 @@ public class StreamsPartitionAssignorTest {
         );
 
         streamsMetadataState = EasyMock.createStrictMock(StreamsMetadataState.class);
-        createDefaultMockTaskManager();
-        configureDefaultPartitionAssignor();
 
         streamsMetadataState.onChange(EasyMock.eq(initialHostState), EasyMock.anyObject(), EasyMock.anyObject());
         streamsMetadataState.onChange(EasyMock.eq(newHostState), EasyMock.anyObject(), EasyMock.anyObject());
+        EasyMock.replay(streamsMetadataState);
 
-        EasyMock.replay(taskManager, streamsMetadataState);
+        createDefaultMockTaskManager();
+        configureDefaultPartitionAssignor();
 
         partitionAssignor.onAssignment(createAssignment(initialHostState), null);
         partitionAssignor.onAssignment(createAssignment(newHostState), null);
