@@ -193,15 +193,16 @@ public class StreamsProducer {
         if (transactionInFlight) {
             try {
                 producer.abortTransaction();
-            } catch (final ProducerFencedException ignore) {
-                /* TODO
-                 * this should actually never happen atm as we guard the call to #abortTransaction
-                 * -> the reason for the guard is a "bug" in the Producer -- it throws IllegalStateException
-                 * instead of ProducerFencedException atm. We can remove the isZombie flag after KAFKA-5604 got
-                 * fixed and fall-back to this catch-and-swallow code
-                 */
-
-                // can be ignored: transaction got already aborted by brokers/transactional-coordinator if this happens
+            } catch (final ProducerFencedException error) {
+                // The producer is aborting the txn when there's still an ongoing one,
+                // which means that we did not commit the task while closing it, which
+                // means that it is a dirty close. Therefore it is possible that the dirty
+                // close is due to an fenced exception already thrown previously, and hence
+                // when calling abortTxn here the same exception would be thrown again.
+                // Even if the dirty close was not due to an observed fencing exception but
+                // something else (e.g. task corrupted) we can still ignore the exception here
+                // since transaction already got aborted by brokers/transactional-coordinator if this happens
+                log.debug("Encountered {} while aborting the transaction; this is expected and hence swallowed", error.getMessage());
             } catch (final KafkaException error) {
                 throw new StreamsException(
                     formatException("Producer encounter unexpected error trying to abort a transaction"),
