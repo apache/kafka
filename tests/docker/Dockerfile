@@ -15,7 +15,6 @@
 
 ARG jdk_version=openjdk:8
 FROM $jdk_version
-ARG jdk_version
 
 MAINTAINER Apache Kafka dev@kafka.apache.org
 VOLUME ["/opt/kafka-dev"]
