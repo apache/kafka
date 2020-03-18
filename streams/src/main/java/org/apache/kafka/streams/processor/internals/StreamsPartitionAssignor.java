@@ -1393,12 +1393,12 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
     }
 
     // following functions are for test only
-    void setRebalanceProtocol(final RebalanceProtocol rebalanceProtocol) {
-        this.rebalanceProtocol = rebalanceProtocol;
-    }
-
     void setInternalTopicManager(final InternalTopicManager internalTopicManager) {
         this.internalTopicManager = internalTopicManager;
+    }
+
+    RebalanceProtocol rebalanceProtocol() {
+        return rebalanceProtocol;
     }
 
     protected String userEndPoint() {
