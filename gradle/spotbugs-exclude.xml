@@ -431,4 +431,10 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
         <!-- Suppress warnings related to jmh generated code -->
         <Package name="org.apache.kafka.jmh.acl.generated"/>
     </Match>
+
+    <Match>
+        <!-- Suppress warnings related to jmh generated code -->
+        <Package name="org.apache.kafka.jmh.metadata.generated"/>
+    </Match>
+
 </FindBugsFilter>

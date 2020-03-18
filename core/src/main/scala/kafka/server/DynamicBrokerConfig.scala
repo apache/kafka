@@ -87,7 +87,11 @@ object DynamicBrokerConfig {
   private val ClusterLevelListenerConfigs = Set(KafkaConfig.MaxConnectionsProp)
   private val PerBrokerConfigs = DynamicSecurityConfigs  ++
     DynamicListenerConfig.ReconfigurableConfigs -- ClusterLevelListenerConfigs
-  private val ListenerMechanismConfigs = Set(KafkaConfig.SaslJaasConfigProp)
+  private val ListenerMechanismConfigs = Set(KafkaConfig.SaslJaasConfigProp,
+    KafkaConfig.SaslLoginCallbackHandlerClassProp,
+    KafkaConfig.SaslLoginClassProp,
+    KafkaConfig.SaslServerCallbackHandlerClassProp,
+    KafkaConfig.ConnectionsMaxReauthMsProp)
 
   private val ReloadableFileConfigs = Set(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG, SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG)
 
@@ -465,10 +469,19 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
       reconfigurable.reconfigure(newConfig)
   }
 
-  private def updatedConfigs(newProps: java.util.Map[String, _], currentProps: java.util.Map[_, _]): mutable.Map[String, _] = {
-    newProps.asScala.filter {
+  /**
+   * Returns the change in configurations between the new props and current props by returning a
+   * map of the changed configs, as well as the set of deleted keys
+   */
+  private def updatedConfigs(newProps: java.util.Map[String, _], currentProps: java.util.Map[String, _]):
+  (mutable.Map[String, _], Set[String]) = {
+    val changeMap = newProps.asScala.filter {
       case (k, v) => v != currentProps.get(k)
     }
+    val deletedKeySet = currentProps.asScala.filter {
+      case (k, _) => !newProps.containsKey(k)
+    }.keySet
+    (changeMap, deletedKeySet)
   }
 
   /**
@@ -507,8 +520,8 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
 
   private def processReconfiguration(newProps: Map[String, String], validateOnly: Boolean): (KafkaConfig, List[BrokerReconfigurable]) = {
     val newConfig = new KafkaConfig(newProps.asJava, !validateOnly, None)
-    val updatedMap = updatedConfigs(newConfig.originalsFromThisConfig, currentConfig.originals)
-    if (updatedMap.nonEmpty) {
+    val (changeMap, deletedKeySet) = updatedConfigs(newConfig.originalsFromThisConfig, currentConfig.originals)
+    if (changeMap.nonEmpty || deletedKeySet.nonEmpty) {
       try {
         val customConfigs = new util.HashMap[String, Object](newConfig.originalsFromThisConfig) // non-Kafka configs
         newConfig.valuesFromThisConfig.keySet.asScala.foreach(customConfigs.remove)
@@ -516,14 +529,14 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
           case listenerReconfigurable: ListenerReconfigurable =>
             processListenerReconfigurable(listenerReconfigurable, newConfig, customConfigs, validateOnly, reloadOnly = false)
           case reconfigurable =>
-            if (needsReconfiguration(reconfigurable.reconfigurableConfigs, updatedMap.keySet))
-              processReconfigurable(reconfigurable, updatedMap.keySet, newConfig.valuesFromThisConfig, customConfigs, validateOnly)
+            if (needsReconfiguration(reconfigurable.reconfigurableConfigs, changeMap.keySet, deletedKeySet))
+              processReconfigurable(reconfigurable, changeMap.keySet, newConfig.valuesFromThisConfig, customConfigs, validateOnly)
         }
 
         // BrokerReconfigurable updates are processed after config is updated. Only do the validation here.
         val brokerReconfigurablesToUpdate = mutable.Buffer[BrokerReconfigurable]()
         brokerReconfigurables.foreach { reconfigurable =>
-          if (needsReconfiguration(reconfigurable.reconfigurableConfigs.asJava, updatedMap.keySet)) {
+          if (needsReconfiguration(reconfigurable.reconfigurableConfigs.asJava, changeMap.keySet, deletedKeySet)) {
             reconfigurable.validateReconfiguration(newConfig)
             if (!validateOnly)
               brokerReconfigurablesToUpdate += reconfigurable
@@ -541,8 +554,9 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
       (currentConfig, List.empty)
   }
 
-  private def needsReconfiguration(reconfigurableConfigs: util.Set[String], updatedKeys: Set[String]): Boolean = {
-    reconfigurableConfigs.asScala.intersect(updatedKeys).nonEmpty
+  private def needsReconfiguration(reconfigurableConfigs: util.Set[String], updatedKeys: Set[String], deletedKeys: Set[String]): Boolean = {
+    reconfigurableConfigs.asScala.intersect(updatedKeys).nonEmpty ||
+      reconfigurableConfigs.asScala.intersect(deletedKeys).nonEmpty
   }
 
   private def processListenerReconfigurable(listenerReconfigurable: ListenerReconfigurable,
@@ -553,8 +567,9 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
     val listenerName = listenerReconfigurable.listenerName
     val oldValues = currentConfig.valuesWithPrefixOverride(listenerName.configPrefix)
     val newValues = newConfig.valuesFromThisConfigWithPrefixOverride(listenerName.configPrefix)
-    val updatedKeys = updatedConfigs(newValues, oldValues).keySet
-    val configsChanged = needsReconfiguration(listenerReconfigurable.reconfigurableConfigs, updatedKeys)
+    val (changeMap, deletedKeys) = updatedConfigs(newValues, oldValues)
+    val updatedKeys = changeMap.keySet
+    val configsChanged = needsReconfiguration(listenerReconfigurable.reconfigurableConfigs, updatedKeys, deletedKeys)
     // if `reloadOnly`, reconfigure if configs haven't changed. Otherwise reconfigure if configs have changed
     if (reloadOnly != configsChanged)
       processReconfigurable(listenerReconfigurable, updatedKeys, newValues, customConfigs, validateOnly)

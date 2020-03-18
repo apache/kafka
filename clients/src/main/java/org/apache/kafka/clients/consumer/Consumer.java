@@ -249,7 +249,7 @@ public interface Consumer<K, V> extends Closeable {
     ConsumerGroupMetadata groupMetadata();
 
     /**
-     * @see KafkaConsumer#enforceRebalance)
+     * @see KafkaConsumer#enforceRebalance()
      */
     void enforceRebalance();
 

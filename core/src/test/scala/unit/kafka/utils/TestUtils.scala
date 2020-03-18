@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package kafka.utils
 
 import java.io._
@@ -27,17 +26,13 @@ import java.time.Duration
 import java.util.{Arrays, Collections, Properties}
 import java.util.concurrent.{Callable, ExecutionException, Executors, TimeUnit}
 
-import com.yammer.metrics.Metrics
-import com.yammer.metrics.core.Meter
 import javax.net.ssl.X509TrustManager
 import kafka.api._
 import kafka.cluster.{Broker, EndPoint}
-import kafka.controller.LeaderIsrAndControllerEpoch
 import kafka.log._
 import kafka.security.auth.{Acl, Authorizer => LegacyAuthorizer, Resource}
 import kafka.server._
 import kafka.server.checkpoints.OffsetCheckpointFile
-import Implicits._
 import com.yammer.metrics.core.Meter
 import kafka.controller.LeaderIsrAndControllerEpoch
 import kafka.metrics.KafkaYammerMetrics

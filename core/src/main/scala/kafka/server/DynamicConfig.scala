@@ -54,7 +54,7 @@ object DynamicConfig {
       s"This property can be only set dynamically. It is suggested that the limit be kept above 1MB/s for accurate behaviour."
 
     //Definitions
-    private val brokerConfigDef = new ConfigDef()
+    val brokerConfigDef = new ConfigDef()
       //round minimum value down, to make it easier for users.
       .define(LeaderReplicationThrottledRateProp, LONG, DefaultReplicationThrottledRate, atLeast(0), MEDIUM, LeaderReplicationThrottledRateDoc)
       .define(FollowerReplicationThrottledRateProp, LONG, DefaultReplicationThrottledRate, atLeast(0), MEDIUM, FollowerReplicationThrottledRateDoc)
@@ -89,6 +89,8 @@ object DynamicConfig {
       .define(ConsumerByteRateOverrideProp, LONG, DefaultConsumerOverride, MEDIUM, ConsumerOverrideDoc)
       .define(RequestPercentageOverrideProp, DOUBLE, DefaultRequestOverride, MEDIUM, RequestOverrideDoc)
 
+    def configKeys = clientConfigs.configKeys
+
     def names = clientConfigs.names
 
     def validate(props: Properties) = DynamicConfig.validate(clientConfigs, props, customPropsAllowed = false)
@@ -101,6 +103,8 @@ object DynamicConfig {
       .define(Client.ProducerByteRateOverrideProp, LONG, Client.DefaultProducerOverride, MEDIUM, Client.ProducerOverrideDoc)
       .define(Client.ConsumerByteRateOverrideProp, LONG, Client.DefaultConsumerOverride, MEDIUM, Client.ConsumerOverrideDoc)
       .define(Client.RequestPercentageOverrideProp, DOUBLE, Client.DefaultRequestOverride, MEDIUM, Client.RequestOverrideDoc)
+
+    def configKeys = userConfigs.configKeys
 
     def names = userConfigs.names
 

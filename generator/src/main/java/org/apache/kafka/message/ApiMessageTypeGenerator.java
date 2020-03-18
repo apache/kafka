@@ -256,19 +256,21 @@ public final class ApiMessageTypeGenerator {
         buffer.incrementIndent();
         for (Map.Entry<Short, ApiData> entry : apis.entrySet()) {
             short apiKey = entry.getKey();
-            buffer.printf("case %d:%n", apiKey);
+            ApiData apiData = entry.getValue();
+            String name = apiData.name();
+            buffer.printf("case %d: // %s%n", apiKey, MessageGenerator.capitalizeFirst(name));
             buffer.incrementIndent();
             if (type.equals("response") && apiKey == 18) {
-                // ApiVersionsResponse always includes a v0 header.
-                // See KIP-511 for details.
+                buffer.printf("// ApiVersionsResponse always includes a v0 header.%n");
+                buffer.printf("// See KIP-511 for details.%n");
                 buffer.printf("return (short) 0;%n");
                 buffer.decrementIndent();
                 continue;
             }
             if (type.equals("request") && apiKey == 7) {
-                // Version 0 of ControlledShutdownRequest has a non-standard request header
-                // which does not include clientId.  Version 1 of ControlledShutdownRequest
-                // and later use the standard request header.
+                buffer.printf("// Version 0 of ControlledShutdownRequest has a non-standard request header%n");
+                buffer.printf("// which does not include clientId.  Version 1 of ControlledShutdownRequest%n");
+                buffer.printf("// and later use the standard request header.%n");
                 buffer.printf("if (_version == 0) {%n");
                 buffer.incrementIndent();
                 buffer.printf("return (short) 0;%n");
