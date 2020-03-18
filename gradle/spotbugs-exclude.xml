@@ -149,6 +149,12 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
     </Match>
 
     <Match>
+        <!-- offsets is a lazy val and it confuses spotBugs with its locking scheme -->
+        <Class name="kafka.server.checkpoints.LazyOffsetCheckpointMap"/>
+        <Bug pattern="IS2_INCONSISTENT_SYNC"/>
+    </Match>
+
+    <Match>
         <!-- Uncallable anonymous methods are left behind after inlining by scalac 2.12, fixed in 2.13 -->
         <Source name="LogManager.scala"/>
         <Package name="kafka.log"/>
