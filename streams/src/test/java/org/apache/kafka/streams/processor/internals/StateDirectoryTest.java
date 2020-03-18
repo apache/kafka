@@ -316,7 +316,7 @@ public class StateDirectoryTest {
     }
 
     @Test
-    public void shouldReturnEmptyArrayIfListFilesReturnsNull() {
+    public void shouldReturnEmptyArrayIfListFilesReturnsNull() throws IOException {
         stateDir = new File(TestUtils.IO_TMP_DIR, "kafka-" + TestUtils.randomString(5));
         directory = new StateDirectory(
             new StreamsConfig(new Properties() {
@@ -329,9 +329,12 @@ public class StateDirectoryTest {
             time, true);
         appDir = new File(stateDir, applicationId);
 
-        assertTrue(stateDir.renameTo(new File(TestUtils.IO_TMP_DIR, "state-renamed")));
-
-        assertTrue(Arrays.asList(directory.listAllTaskDirectories()).isEmpty());
+        // make sure the File#listFiles returns null and StateDirectory#listAllTaskDirectories is able to handle null
+        Utils.delete(appDir);
+        assertTrue(appDir.createNewFile());
+        assertTrue(appDir.exists());
+        assertNull(appDir.listFiles());
+        assertEquals(0, directory.listAllTaskDirectories().length);
     }
 
     @Test
