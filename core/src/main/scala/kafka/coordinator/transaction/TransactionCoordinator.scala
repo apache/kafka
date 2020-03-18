@@ -168,7 +168,7 @@ class TransactionCoordinator(brokerId: Int,
               newMetadata.producerId,
               newMetadata.producerEpoch,
               TransactionResult.ABORT,
-              (producerEpoch, txnMetadata) => producerEpoch < txnMetadata.producerEpoch,
+              isFromClient = false,
               sendRetriableErrorCallback)
           } else {
             def sendPidResponseCallback(error: Errors): Unit = {
@@ -357,8 +357,7 @@ class TransactionCoordinator(brokerId: Int,
       producerId,
       producerEpoch,
       txnMarkerResult,
-      // Strict equality is enforced on the client side requests, as they shouldn't bump the producer epoch.
-      (producerEpoch, txnMetadata) => producerEpoch != txnMetadata.producerEpoch,
+      isFromClient = true,
       responseCallback)
   }
 
@@ -366,7 +365,7 @@ class TransactionCoordinator(brokerId: Int,
                              producerId: Long,
                              producerEpoch: Short,
                              txnMarkerResult: TransactionResult,
-                             validateEpoch: (Short, TransactionMetadata) => Boolean,
+                             isFromClient: Boolean,
                              responseCallback: EndTxnCallback): Unit = {
     if (transactionalId == null || transactionalId.isEmpty)
       responseCallback(Errors.INVALID_REQUEST)
@@ -382,7 +381,8 @@ class TransactionCoordinator(brokerId: Int,
           txnMetadata.inLock {
             if (txnMetadata.producerId != producerId)
               Left(Errors.INVALID_PRODUCER_ID_MAPPING)
-            else if (validateEpoch(producerEpoch, txnMetadata))
+            // Strict equality is enforced on the client side requests, as they shouldn't bump the producer epoch.
+            else if ((isFromClient && producerEpoch != txnMetadata.producerEpoch) || producerEpoch < txnMetadata.producerEpoch)
               Left(Errors.INVALID_PRODUCER_EPOCH)
             else if (txnMetadata.pendingTransitionInProgress && txnMetadata.pendingState.get != PrepareEpochFence)
               Left(Errors.CONCURRENT_TRANSACTIONS)
@@ -562,7 +562,7 @@ class TransactionCoordinator(brokerId: Int,
               txnTransitMetadata.producerId,
               txnTransitMetadata.producerEpoch,
               TransactionResult.ABORT,
-              (producerEpoch, txnMetadata) => producerEpoch < txnMetadata.producerEpoch,
+              isFromClient = false,
               onComplete(txnIdAndPidEpoch))
           }
       }
