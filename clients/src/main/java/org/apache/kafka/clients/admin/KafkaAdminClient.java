@@ -2218,11 +2218,8 @@ public class KafkaAdminClient extends AdminClient {
             String logDir = entry.getValue();
             int brokerId = replica.brokerId();
             TopicPartition topicPartition = new TopicPartition(replica.topic(), replica.partition());
-            AlterReplicaLogDirsRequestData value = replicaAssignmentByBroker.get(brokerId);
-            if (value == null) {
-                value = new AlterReplicaLogDirsRequestData();
-                replicaAssignmentByBroker.put(brokerId, value);
-            }
+            AlterReplicaLogDirsRequestData value = replicaAssignmentByBroker.computeIfAbsent(brokerId,
+                key -> new AlterReplicaLogDirsRequestData());
             AlterReplicaLogDir alterReplicaLogDir = value.dirs().find(logDir);
             if (alterReplicaLogDir == null) {
                 alterReplicaLogDir = new AlterReplicaLogDir();

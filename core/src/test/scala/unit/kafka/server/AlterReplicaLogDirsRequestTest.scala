@@ -121,10 +121,12 @@ class AlterReplicaLogDirsRequestTest extends BaseRequestTest {
     val x = partitionDirs.groupBy{case (tp, dir) => dir}.map{ case(dir, tps) =>
       new AlterReplicaLogDirsRequestData.AlterReplicaLogDir()
         .setPath(dir)
-        .setTopics(new AlterReplicaLogDirsRequestData.AlterReplicaLogDirTopicCollection(tps.groupBy(tp => tp._1.topic).map{case (topic, tpPartitions) =>
+        .setTopics(new AlterReplicaLogDirsRequestData.AlterReplicaLogDirTopicCollection(
+          tps.groupBy { case (tp, _) => tp.topic }
+            .map { case (topic, tpPartitions) =>
           new AlterReplicaLogDirsRequestData.AlterReplicaLogDirTopic()
             .setName(topic)
-            .setPartitions(tpPartitions.map(tp => tp._1.partition.asInstanceOf[Integer]).toList.asJava)
+            .setPartitions(tpPartitions.map{case (tp, _) => tp.partition.asInstanceOf[Integer]}.toList.asJava)
         }.toList.asJava.iterator))
     }
     val data = new AlterReplicaLogDirsRequestData()

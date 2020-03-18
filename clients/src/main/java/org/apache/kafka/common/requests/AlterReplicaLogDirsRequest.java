@@ -34,7 +34,6 @@ import java.util.stream.Stream;
 public class AlterReplicaLogDirsRequest extends AbstractRequest {
 
     private final AlterReplicaLogDirsRequestData data;
-    private final short version;
 
     public static class Builder extends AbstractRequest.Builder<AlterReplicaLogDirsRequest> {
         private final AlterReplicaLogDirsRequestData data;
@@ -58,18 +57,16 @@ public class AlterReplicaLogDirsRequest extends AbstractRequest {
     public AlterReplicaLogDirsRequest(Struct struct, short version) {
         super(ApiKeys.ALTER_REPLICA_LOG_DIRS, version);
         this.data = new AlterReplicaLogDirsRequestData(struct, version);
-        this.version = version;
     }
 
     public AlterReplicaLogDirsRequest(AlterReplicaLogDirsRequestData data, short version) {
         super(ApiKeys.ALTER_REPLICA_LOG_DIRS, version);
         this.data = data;
-        this.version = version;
     }
 
     @Override
     protected Struct toStruct() {
-        return data.toStruct(version);
+        return data.toStruct(version());
     }
 
     @Override

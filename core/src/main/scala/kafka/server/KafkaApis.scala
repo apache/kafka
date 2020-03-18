@@ -2594,18 +2594,20 @@ class KafkaApis(val requestChannel: RequestChannel,
       if (authorize(request.context, ALTER, CLUSTER, CLUSTER_NAME))
         new AlterReplicaLogDirsResponse(
           new AlterReplicaLogDirsResponseData().setResults(
-            replicaManager.alterReplicaLogDirs(alterReplicaDirsRequest.partitionDirs.asScala).groupBy(x => x._1.topic).map { case (topic, foo) =>
-              new AlterReplicaLogDirsResponseData.AlterReplicaLogDirTopicResult().setTopicName(topic)
-                .setPartitions(foo.map {
-                  case (tp, error) => new AlterReplicaLogDirsResponseData.AlterReplicaLogDirPartitionResult()
-                    .setPartitionIndex(tp.partition)
-                    .setErrorCode(error.code)
-                }.toList.asJava)
+            replicaManager.alterReplicaLogDirs(alterReplicaDirsRequest.partitionDirs.asScala)
+              .groupBy {case (tp, errors) => tp.topic}
+              .map { case (topic, errors) =>
+                new AlterReplicaLogDirsResponseData.AlterReplicaLogDirTopicResult()
+                  .setTopicName(topic)
+                  .setPartitions(errors.map {
+                    case (tp, error) => new AlterReplicaLogDirsResponseData.AlterReplicaLogDirPartitionResult()
+                      .setPartitionIndex(tp.partition)
+                      .setErrorCode(error.code)
+                  }.toList.asJava)
             }.toList.asJava).setThrottleTimeMs(requestThrottleMs)
         )
-      else {
-        alterReplicaDirsRequest.getErrorResponse(requestThrottleMs, Errors.CLUSTER_AUTHORIZATION_FAILED.exception())
-      }
+      else
+        alterReplicaDirsRequest.getErrorResponse(requestThrottleMs, Errors.CLUSTER_AUTHORIZATION_FAILED.exception)
     }
     sendResponseMaybeThrottle(request, sendResponseCallback)
   }
