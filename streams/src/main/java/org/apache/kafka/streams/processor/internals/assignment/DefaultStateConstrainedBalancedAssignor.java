@@ -247,5 +247,4 @@ public class DefaultStateConstrainedBalancedAssignor<ID extends Comparable<? sup
         }
         return Collections.unmodifiableList(tasksWithCaughtUpClients);
     }
-
 }

@@ -54,12 +54,12 @@ public class DefaultStateConstrainedBalancedAssignorTest {
 
     @Test
     public void shouldAssignTaskToCaughtUpClient() {
-        final long lagOfClient1 = 0;
-        final long lagOfClient2 = Long.MAX_VALUE;
+        final long rankOfClient1 = 0;
+        final long rankOfClient2 = Long.MAX_VALUE;
         final int balanceFactor = 1;
 
         final Map<String, List<TaskId>> assignment = new DefaultStateConstrainedBalancedAssignor<String>().assign(
-            oneStatefulTasksToTwoRankedClients(lagOfClient1, lagOfClient2),
+            oneStatefulTasksToTwoRankedClients(rankOfClient1, rankOfClient2),
             balanceFactor,
             TWO_CLIENTS
         );
@@ -71,12 +71,12 @@ public class DefaultStateConstrainedBalancedAssignorTest {
 
     @Test
     public void shouldAssignTaskToPreviouslyHostingClient() {
-        final long lagOfClient1 = Long.MAX_VALUE;
-        final long lagOfClient2 = Task.LATEST_OFFSET;
+        final long rankOfClient1 = Long.MAX_VALUE;
+        final long rankOfClient2 = Task.LATEST_OFFSET;
         final int balanceFactor = 1;
 
         final Map<String, List<TaskId>> assignment = new DefaultStateConstrainedBalancedAssignor<String>().assign(
-            oneStatefulTasksToTwoRankedClients(lagOfClient1, lagOfClient2),
+            oneStatefulTasksToTwoRankedClients(rankOfClient1, rankOfClient2),
             balanceFactor,
             TWO_CLIENTS
         );
@@ -88,12 +88,12 @@ public class DefaultStateConstrainedBalancedAssignorTest {
 
     @Test
     public void shouldAssignTaskToPreviouslyHostingClientWhenOtherCaughtUpClientExists() {
-        final long lagOfClient1 = 0;
-        final long lagOfClient2 = Task.LATEST_OFFSET;
+        final long rankOfClient1 = 0;
+        final long rankOfClient2 = Task.LATEST_OFFSET;
         final int balanceFactor = 1;
 
         final Map<String, List<TaskId>> assignment = new DefaultStateConstrainedBalancedAssignor<String>().assign(
-            oneStatefulTasksToTwoRankedClients(lagOfClient1, lagOfClient2),
+            oneStatefulTasksToTwoRankedClients(rankOfClient1, rankOfClient2),
             balanceFactor,
             TWO_CLIENTS
         );
@@ -105,12 +105,12 @@ public class DefaultStateConstrainedBalancedAssignorTest {
 
     @Test
     public void shouldAssignTaskToCaughtUpClientThatIsFirstInSortOrder() {
-        final long lagOfClient1 = 0;
-        final long lagOfClient2 = 0;
+        final long rankOfClient1 = 0;
+        final long rankOfClient2 = 0;
         final int balanceFactor = 1;
 
         final Map<String, List<TaskId>> assignment = new DefaultStateConstrainedBalancedAssignor<String>().assign(
-            oneStatefulTasksToTwoRankedClients(lagOfClient1, lagOfClient2),
+            oneStatefulTasksToTwoRankedClients(rankOfClient1, rankOfClient2),
             balanceFactor,
             TWO_CLIENTS
         );
@@ -122,12 +122,12 @@ public class DefaultStateConstrainedBalancedAssignorTest {
 
     @Test
     public void shouldAssignTaskToMostCaughtUpClient() {
-        final long lagOfClient1 = 3;
-        final long lagOfClient2 = 5;
+        final long rankOfClient1 = 3;
+        final long rankOfClient2 = 5;
         final int balanceFactor = 1;
 
         final Map<String, List<TaskId>> assignment = new DefaultStateConstrainedBalancedAssignor<String>().assign(
-            oneStatefulTasksToTwoRankedClients(lagOfClient1, lagOfClient2),
+            oneStatefulTasksToTwoRankedClients(rankOfClient1, rankOfClient2),
             balanceFactor,
             TWO_CLIENTS
         );
@@ -139,18 +139,18 @@ public class DefaultStateConstrainedBalancedAssignorTest {
 
     @Test
     public void shouldEvenlyDistributeTasksToCaughtUpClientsThatAreNotPreviousHosts() {
-        final long lagForTask01OnClient1 = 0;
-        final long lagForTask01OnClient2 = 0;
-        final long lagForTask12OnClient1 = 0;
-        final long lagForTask12OnClient2 = 0;
+        final long rankForTask01OnClient1 = 0;
+        final long rankForTask01OnClient2 = 0;
+        final long rankForTask12OnClient1 = 0;
+        final long rankForTask12OnClient2 = 0;
         final int balanceFactor = 1;
 
         final Map<String, List<TaskId>> assignment = new DefaultStateConstrainedBalancedAssignor<String>().assign(
             twoStatefulTasksToTwoRankedClients(
-                lagForTask01OnClient1, 
-                lagForTask01OnClient2, 
-                lagForTask12OnClient1, 
-                lagForTask12OnClient2
+                rankForTask01OnClient1,
+                rankForTask01OnClient2,
+                rankForTask12OnClient1,
+                rankForTask12OnClient2
             ),
             balanceFactor,
             TWO_CLIENTS
@@ -163,18 +163,18 @@ public class DefaultStateConstrainedBalancedAssignorTest {
 
     @Test
     public void shouldEvenlyDistributeTasksToCaughtUpClientsThatAreNotPreviousHostsEvenIfNotRequiredByBalanceFactor() {
-        final long lagForTask01OnClient1 = 0;
-        final long lagForTask01OnClient2 = 0;
-        final long lagForTask12OnClient1 = 0;
-        final long lagForTask12OnClient2 = 0;
+        final long rankForTask01OnClient1 = 0;
+        final long rankForTask01OnClient2 = 0;
+        final long rankForTask12OnClient1 = 0;
+        final long rankForTask12OnClient2 = 0;
         final int balanceFactor = 2;
 
         final Map<String, List<TaskId>> assignment = new DefaultStateConstrainedBalancedAssignor<String>().assign(
             twoStatefulTasksToTwoRankedClients(
-                lagForTask01OnClient1,
-                lagForTask01OnClient2,
-                lagForTask12OnClient1,
-                lagForTask12OnClient2
+                rankForTask01OnClient1,
+                rankForTask01OnClient2,
+                rankForTask12OnClient1,
+                rankForTask12OnClient2
             ),
             balanceFactor,
             TWO_CLIENTS
@@ -187,28 +187,28 @@ public class DefaultStateConstrainedBalancedAssignorTest {
 
     @Test
     public void shouldEvenlyDistributeTasksToCaughtUpClientsEvenIfOneClientIsPreviousHostOfAll() {
-        final long lagForTask01OnClient1 = Task.LATEST_OFFSET;
-        final long lagForTask01OnClient2 = 0;
-        final long lagForTask01OnClient3 = 0;
-        final long lagForTask12OnClient1 = Task.LATEST_OFFSET;
-        final long lagForTask12OnClient2 = 0;
-        final long lagForTask12OnClient3 = 0;
-        final long lagForTask23OnClient1 = Task.LATEST_OFFSET;
-        final long lagForTask23OnClient2 = 0;
-        final long lagForTask23OnClient3 = 0;
+        final long rankForTask01OnClient1 = Task.LATEST_OFFSET;
+        final long rankForTask01OnClient2 = 0;
+        final long rankForTask01OnClient3 = 0;
+        final long rankForTask12OnClient1 = Task.LATEST_OFFSET;
+        final long rankForTask12OnClient2 = 0;
+        final long rankForTask12OnClient3 = 0;
+        final long rankForTask23OnClient1 = Task.LATEST_OFFSET;
+        final long rankForTask23OnClient2 = 0;
+        final long rankForTask23OnClient3 = 0;
         final int balanceFactor = 1;
 
         final Map<String, List<TaskId>> assignment = new DefaultStateConstrainedBalancedAssignor<String>().assign(
             threeStatefulTasksToThreeRankedClients(
-                lagForTask01OnClient1,
-                lagForTask01OnClient2,
-                lagForTask01OnClient3,
-                lagForTask12OnClient1,
-                lagForTask12OnClient2,
-                lagForTask12OnClient3,
-                lagForTask23OnClient1,
-                lagForTask23OnClient2,
-                lagForTask23OnClient3
+                rankForTask01OnClient1,
+                rankForTask01OnClient2,
+                rankForTask01OnClient3,
+                rankForTask12OnClient1,
+                rankForTask12OnClient2,
+                rankForTask12OnClient3,
+                rankForTask23OnClient1,
+                rankForTask23OnClient2,
+                rankForTask23OnClient3
             ),
             balanceFactor,
             THREE_CLIENTS
@@ -224,19 +224,19 @@ public class DefaultStateConstrainedBalancedAssignorTest {
     }
 
     @Test
-    public void shouldEvenlyDistributeTasksToCaughtUpClientsEvenIfOneClientIsPreviousHostOfBoth1() {
-        final long lagForTask01OnClient1 = Task.LATEST_OFFSET;
-        final long lagForTask01OnClient2 = 0;
-        final long lagForTask12OnClient1 = Task.LATEST_OFFSET;
-        final long lagForTask12OnClient2 = 100;
+    public void shouldMoveTask01FromClient1ToEvenlyDistributeTasksToCaughtUpClientsEvenIfOneClientIsPreviousHostOfBoth() {
+        final long rankForTask01OnClient1 = Task.LATEST_OFFSET;
+        final long rankForTask01OnClient2 = 0;
+        final long rankForTask12OnClient1 = Task.LATEST_OFFSET;
+        final long rankForTask12OnClient2 = 100;
         final int balanceFactor = 1;
 
         final Map<String, List<TaskId>> assignment = new DefaultStateConstrainedBalancedAssignor<String>().assign(
             twoStatefulTasksToTwoRankedClients(
-                lagForTask01OnClient1,
-                lagForTask01OnClient2,
-                lagForTask12OnClient1,
-                lagForTask12OnClient2
+                rankForTask01OnClient1,
+                rankForTask01OnClient2,
+                rankForTask12OnClient1,
+                rankForTask12OnClient2
             ),
             balanceFactor,
             TWO_CLIENTS
@@ -248,43 +248,43 @@ public class DefaultStateConstrainedBalancedAssignorTest {
     }
 
     @Test
-    public void shouldEvenlyDistributeTasksToCaughtUpClientsEvenIfOneClientIsPreviousHostOfBoth2() {
-        final long lagForTask01OnClient1 = Task.LATEST_OFFSET;
-        final long lagForTask01OnClient2 = 100;
-        final long lagForTask12OnClient1 = Task.LATEST_OFFSET;
-        final long lagForTask12OnClient2 = 0;
+    public void shouldMoveTask12FromClient2ToEvenlyDistributeTasksToCaughtUpClientsEvenIfOneClientIsPreviousHostOfBoth() {
+        final long rankForTask01OnClient1 = 100;
+        final long rankForTask01OnClient2 = Task.LATEST_OFFSET;
+        final long rankForTask12OnClient1 = 0;
+        final long rankForTask12OnClient2 = Task.LATEST_OFFSET;
         final int balanceFactor = 1;
 
         final Map<String, List<TaskId>> assignment = new DefaultStateConstrainedBalancedAssignor<String>().assign(
             twoStatefulTasksToTwoRankedClients(
-                lagForTask01OnClient1,
-                lagForTask01OnClient2,
-                lagForTask12OnClient1,
-                lagForTask12OnClient2
+                rankForTask01OnClient1,
+                rankForTask01OnClient2,
+                rankForTask12OnClient1,
+                rankForTask12OnClient2
             ),
             balanceFactor,
             TWO_CLIENTS
         );
 
-        final List<TaskId> assignedTasksForClient1 = Collections.singletonList(TASK_01);
-        final List<TaskId> assignedTasksForClient2 = Collections.singletonList(TASK_12);
+        final List<TaskId> assignedTasksForClient1 = Collections.singletonList(TASK_12);
+        final List<TaskId> assignedTasksForClient2 = Collections.singletonList(TASK_01);
         assertThat(assignment, is(expectedAssignmentForTwoClients(assignedTasksForClient1, assignedTasksForClient2)));
     }
 
     @Test
     public void shouldAssignBothTasksToPreviousHostSinceBalanceFactorSatisfied() {
-        final long lagForTask01OnClient1 = Task.LATEST_OFFSET;
-        final long lagForTask01OnClient2 = 0;
-        final long lagForTask12OnClient1 = Task.LATEST_OFFSET;
-        final long lagForTask12OnClient2 = 0;
+        final long rankForTask01OnClient1 = Task.LATEST_OFFSET;
+        final long rankForTask01OnClient2 = 0;
+        final long rankForTask12OnClient1 = Task.LATEST_OFFSET;
+        final long rankForTask12OnClient2 = 0;
         final int balanceFactor = 2;
 
         final Map<String, List<TaskId>> assignment = new DefaultStateConstrainedBalancedAssignor<String>().assign(
             twoStatefulTasksToTwoRankedClients(
-                lagForTask01OnClient1,
-                lagForTask01OnClient2,
-                lagForTask12OnClient1,
-                lagForTask12OnClient2
+                rankForTask01OnClient1,
+                rankForTask01OnClient2,
+                rankForTask12OnClient1,
+                rankForTask12OnClient2
             ),
             balanceFactor,
             TWO_CLIENTS
@@ -297,18 +297,18 @@ public class DefaultStateConstrainedBalancedAssignorTest {
 
     @Test
     public void shouldAssignOneTaskToPreviousHostAndOtherTaskToMostCaughtUpClient() {
-        final long lagForTask01OnClient1 = Task.LATEST_OFFSET;
-        final long lagForTask01OnClient2 = 0;
-        final long lagForTask12OnClient1 = 20;
-        final long lagForTask12OnClient2 = 10;
+        final long rankForTask01OnClient1 = Task.LATEST_OFFSET;
+        final long rankForTask01OnClient2 = 0;
+        final long rankForTask12OnClient1 = 20;
+        final long rankForTask12OnClient2 = 10;
         final int balanceFactor = 1;
 
         final Map<String, List<TaskId>> assignment = new DefaultStateConstrainedBalancedAssignor<String>().assign(
             twoStatefulTasksToTwoRankedClients(
-                lagForTask01OnClient1,
-                lagForTask01OnClient2,
-                lagForTask12OnClient1,
-                lagForTask12OnClient2
+                rankForTask01OnClient1,
+                rankForTask01OnClient2,
+                rankForTask12OnClient1,
+                rankForTask12OnClient2
             ),
             balanceFactor,
             TWO_CLIENTS
@@ -320,43 +320,43 @@ public class DefaultStateConstrainedBalancedAssignorTest {
     }
 
     @Test
-    public void shouldAssignOneTaskToPreviousHostAndOtherTaskToNotMostCaughtUpClientDueToBalanceFactor() {
-        final long lagForTask01OnClient1 = Task.LATEST_OFFSET;
-        final long lagForTask01OnClient2 = 0;
-        final long lagForTask12OnClient1 = 10;
-        final long lagForTask12OnClient2 = 20;
+    public void shouldAssignOneTaskToPreviousHostAndOtherTaskToLessCaughtUpClientDueToBalanceFactor() {
+        final long rankForTask01OnClient1 = 0;
+        final long rankForTask01OnClient2 = Task.LATEST_OFFSET;
+        final long rankForTask12OnClient1 = 20;
+        final long rankForTask12OnClient2 = 10;
         final int balanceFactor = 1;
 
         final Map<String, List<TaskId>> assignment = new DefaultStateConstrainedBalancedAssignor<String>().assign(
             twoStatefulTasksToTwoRankedClients(
-                lagForTask01OnClient1,
-                lagForTask01OnClient2,
-                lagForTask12OnClient1,
-                lagForTask12OnClient2
+                rankForTask01OnClient1,
+                rankForTask01OnClient2,
+                rankForTask12OnClient1,
+                rankForTask12OnClient2
             ),
             balanceFactor,
             TWO_CLIENTS
         );
 
-        final List<TaskId> assignedTasksForClient1 = Collections.singletonList(TASK_01);
-        final List<TaskId> assignedTasksForClient2 = Collections.singletonList(TASK_12);
+        final List<TaskId> assignedTasksForClient1 = Collections.singletonList(TASK_12);
+        final List<TaskId> assignedTasksForClient2 = Collections.singletonList(TASK_01);
         assertThat(assignment, is(expectedAssignmentForTwoClients(assignedTasksForClient1, assignedTasksForClient2)));
     }
 
     @Test
     public void shouldAssignBothTasksToSameClientSincePreviousHostAndMostCaughtUpAndBalanceFactorSatisfied() {
-        final long lagForTask01OnClient1 = Task.LATEST_OFFSET;
-        final long lagForTask01OnClient2 = 0;
-        final long lagForTask12OnClient1 = 10;
-        final long lagForTask12OnClient2 = 20;
+        final long rankForTask01OnClient1 = Task.LATEST_OFFSET;
+        final long rankForTask01OnClient2 = 0;
+        final long rankForTask12OnClient1 = 10;
+        final long rankForTask12OnClient2 = 20;
         final int balanceFactor = 2;
 
         final Map<String, List<TaskId>> assignment = new DefaultStateConstrainedBalancedAssignor<String>().assign(
             twoStatefulTasksToTwoRankedClients(
-                lagForTask01OnClient1,
-                lagForTask01OnClient2,
-                lagForTask12OnClient1,
-                lagForTask12OnClient2
+                rankForTask01OnClient1,
+                rankForTask01OnClient2,
+                rankForTask12OnClient1,
+                rankForTask12OnClient2
             ),
             balanceFactor,
             TWO_CLIENTS
@@ -369,18 +369,18 @@ public class DefaultStateConstrainedBalancedAssignorTest {
 
     @Test
     public void shouldAssignTasksToMostCaughtUpClient() {
-        final long lagForTask01OnClient1 = 50;
-        final long lagForTask01OnClient2 = 20;
-        final long lagForTask12OnClient1 = 20;
-        final long lagForTask12OnClient2 = 50;
+        final long rankForTask01OnClient1 = 50;
+        final long rankForTask01OnClient2 = 20;
+        final long rankForTask12OnClient1 = 20;
+        final long rankForTask12OnClient2 = 50;
         final int balanceFactor = 1;
 
         final Map<String, List<TaskId>> assignment = new DefaultStateConstrainedBalancedAssignor<String>().assign(
             twoStatefulTasksToTwoRankedClients(
-                lagForTask01OnClient1,
-                lagForTask01OnClient2,
-                lagForTask12OnClient1,
-                lagForTask12OnClient2
+                rankForTask01OnClient1,
+                rankForTask01OnClient2,
+                rankForTask12OnClient1,
+                rankForTask12OnClient2
             ),
             balanceFactor,
             TWO_CLIENTS
@@ -393,28 +393,28 @@ public class DefaultStateConstrainedBalancedAssignorTest {
 
     @Test
     public void shouldEvenlyDistributeTasksEvenIfClientsAreNotMostCaughtUpDueToBalanceFactor() {
-        final long lagForTask01OnClient1 = 20;
-        final long lagForTask01OnClient2 = 50;
-        final long lagForTask01OnClient3 = 100;
-        final long lagForTask12OnClient1 = 20;
-        final long lagForTask12OnClient2 = 50;
-        final long lagForTask12OnClient3 = 100;
-        final long lagForTask23OnClient1 = 20;
-        final long lagForTask23OnClient2 = 50;
-        final long lagForTask23OnClient3 = 100;
+        final long rankForTask01OnClient1 = 20;
+        final long rankForTask01OnClient2 = 50;
+        final long rankForTask01OnClient3 = 100;
+        final long rankForTask12OnClient1 = 20;
+        final long rankForTask12OnClient2 = 50;
+        final long rankForTask12OnClient3 = 100;
+        final long rankForTask23OnClient1 = 20;
+        final long rankForTask23OnClient2 = 50;
+        final long rankForTask23OnClient3 = 100;
         final int balanceFactor = 1;
 
         final Map<String, List<TaskId>> assignment = new DefaultStateConstrainedBalancedAssignor<String>().assign(
             threeStatefulTasksToThreeRankedClients(
-                lagForTask01OnClient1,
-                lagForTask01OnClient2,
-                lagForTask01OnClient3,
-                lagForTask12OnClient1,
-                lagForTask12OnClient2,
-                lagForTask12OnClient3,
-                lagForTask23OnClient1,
-                lagForTask23OnClient2,
-                lagForTask23OnClient3
+                rankForTask01OnClient1,
+                rankForTask01OnClient2,
+                rankForTask01OnClient3,
+                rankForTask12OnClient1,
+                rankForTask12OnClient2,
+                rankForTask12OnClient3,
+                rankForTask23OnClient1,
+                rankForTask23OnClient2,
+                rankForTask23OnClient3
             ),
             balanceFactor,
             THREE_CLIENTS
@@ -431,18 +431,18 @@ public class DefaultStateConstrainedBalancedAssignorTest {
 
     @Test
     public void shouldAssignBothTasksToSameMostCaughtUpClientSinceBalanceFactorSatisfied() {
-        final long lagForTask01OnClient1 = 40;
-        final long lagForTask01OnClient2 = 30;
-        final long lagForTask12OnClient1 = 20;
-        final long lagForTask12OnClient2 = 10;
+        final long rankForTask01OnClient1 = 40;
+        final long rankForTask01OnClient2 = 30;
+        final long rankForTask12OnClient1 = 20;
+        final long rankForTask12OnClient2 = 10;
         final int balanceFactor = 2;
 
         final Map<String, List<TaskId>> assignment = new DefaultStateConstrainedBalancedAssignor<String>().assign(
             twoStatefulTasksToTwoRankedClients(
-                lagForTask01OnClient1,
-                lagForTask01OnClient2,
-                lagForTask12OnClient1,
-                lagForTask12OnClient2
+                rankForTask01OnClient1,
+                rankForTask01OnClient2,
+                rankForTask12OnClient1,
+                rankForTask12OnClient2
             ),
             balanceFactor,
             TWO_CLIENTS
@@ -455,18 +455,18 @@ public class DefaultStateConstrainedBalancedAssignorTest {
 
     @Test
     public void shouldEvenlyDistributeTasksOverClientsWithEqualRank() {
-        final long lagForTask01OnClient1 = 40;
-        final long lagForTask01OnClient2 = 40;
-        final long lagForTask12OnClient1 = 40;
-        final long lagForTask12OnClient2 = 40;
+        final long rankForTask01OnClient1 = 40;
+        final long rankForTask01OnClient2 = 40;
+        final long rankForTask12OnClient1 = 40;
+        final long rankForTask12OnClient2 = 40;
         final int balanceFactor = 2;
 
         final Map<String, List<TaskId>> assignment = new DefaultStateConstrainedBalancedAssignor<String>().assign(
             twoStatefulTasksToTwoRankedClients(
-                lagForTask01OnClient1,
-                lagForTask01OnClient2,
-                lagForTask12OnClient1,
-                lagForTask12OnClient2
+                rankForTask01OnClient1,
+                rankForTask01OnClient2,
+                rankForTask12OnClient1,
+                rankForTask12OnClient2
             ),
             balanceFactor,
             TWO_CLIENTS
@@ -485,34 +485,34 @@ public class DefaultStateConstrainedBalancedAssignorTest {
      */
     @Test
     public void shouldEvenlyDistributeTasksOrderOfCaughtUpAndNotCaughtUpTaskIsMixedUpInIntermediateResults() {
-        final long lagForTask01OnClient1 = Task.LATEST_OFFSET;
-        final long lagForTask01OnClient2 = 0;
-        final long lagForTask01OnClient3 = 100;
-        final long lagForTask12OnClient1 = Task.LATEST_OFFSET;
-        final long lagForTask12OnClient2 = 0;
-        final long lagForTask12OnClient3 = 100;
-        final long lagForTask23OnClient1 = Task.LATEST_OFFSET;
-        final long lagForTask23OnClient2 = 0;
-        final long lagForTask23OnClient3 = 100;
-        final long lagForTask34OnClient1 = 50;
-        final long lagForTask34OnClient2 = 20;
-        final long lagForTask34OnClient3 = 100;
+        final long rankForTask01OnClient1 = Task.LATEST_OFFSET;
+        final long rankForTask01OnClient2 = 0;
+        final long rankForTask01OnClient3 = 100;
+        final long rankForTask12OnClient1 = Task.LATEST_OFFSET;
+        final long rankForTask12OnClient2 = 0;
+        final long rankForTask12OnClient3 = 100;
+        final long rankForTask23OnClient1 = Task.LATEST_OFFSET;
+        final long rankForTask23OnClient2 = 0;
+        final long rankForTask23OnClient3 = 100;
+        final long rankForTask34OnClient1 = 50;
+        final long rankForTask34OnClient2 = 20;
+        final long rankForTask34OnClient3 = 100;
         final int balanceFactor = 1;
 
         final Map<String, List<TaskId>> assignment = new DefaultStateConstrainedBalancedAssignor<String>().assign(
             fourStatefulTasksToThreeRankedClients(
-                lagForTask01OnClient1,
-                lagForTask01OnClient2,
-                lagForTask01OnClient3,
-                lagForTask12OnClient1,
-                lagForTask12OnClient2,
-                lagForTask12OnClient3,
-                lagForTask23OnClient1,
-                lagForTask23OnClient2,
-                lagForTask23OnClient3,
-                lagForTask34OnClient1,
-                lagForTask34OnClient2,
-                lagForTask34OnClient3
+                rankForTask01OnClient1,
+                rankForTask01OnClient2,
+                rankForTask01OnClient3,
+                rankForTask12OnClient1,
+                rankForTask12OnClient2,
+                rankForTask12OnClient3,
+                rankForTask23OnClient1,
+                rankForTask23OnClient2,
+                rankForTask23OnClient3,
+                rankForTask34OnClient1,
+                rankForTask34OnClient2,
+                rankForTask34OnClient3
             ),
             balanceFactor,
             THREE_CLIENTS
@@ -527,26 +527,70 @@ public class DefaultStateConstrainedBalancedAssignorTest {
         );
     }
 
-    private static SortedMap<TaskId, SortedSet<ClientIdAndRank<String>>> oneStatefulTasksToTwoRankedClients(final long lagOfClient1,
-                                                                                                            final long lagOfClient2) {
+    @Test
+    public void shouldAssignTasksToTheCaughtUpClientEvenIfTheAssignmentIsUnbalanced() {
+        final long rankForTask01OnClient1 = 60;
+        final long rankForTask01OnClient2 = 50;
+        final long rankForTask01OnClient3 = Task.LATEST_OFFSET;
+        final long rankForTask12OnClient1 = 40;
+        final long rankForTask12OnClient2 = 30;
+        final long rankForTask12OnClient3 = 0;
+        final long rankForTask23OnClient1 = 10;
+        final long rankForTask23OnClient2 = 20;
+        final long rankForTask23OnClient3 = Task.LATEST_OFFSET;
+        final long rankForTask34OnClient1 = 70;
+        final long rankForTask34OnClient2 = 80;
+        final long rankForTask34OnClient3 = 90;
+        final int balanceFactor = 1;
+
+        final Map<String, List<TaskId>> assignment = new DefaultStateConstrainedBalancedAssignor<String>().assign(
+            fourStatefulTasksToThreeRankedClients(
+                rankForTask01OnClient1,
+                rankForTask01OnClient2,
+                rankForTask01OnClient3,
+                rankForTask12OnClient1,
+                rankForTask12OnClient2,
+                rankForTask12OnClient3,
+                rankForTask23OnClient1,
+                rankForTask23OnClient2,
+                rankForTask23OnClient3,
+                rankForTask34OnClient1,
+                rankForTask34OnClient2,
+                rankForTask34OnClient3
+            ),
+            balanceFactor,
+            THREE_CLIENTS
+        );
+
+        final List<TaskId> assignedTasksForClient1 = Collections.singletonList(TASK_34);
+        final List<TaskId> assignedTasksForClient2 = Collections.emptyList();
+        final List<TaskId> assignedTasksForClient3 = Arrays.asList(TASK_01, TASK_23, TASK_12);
+        assertThat(
+            assignment,
+            is(expectedAssignmentForThreeClients(assignedTasksForClient1, assignedTasksForClient2, assignedTasksForClient3))
+        );
+    }
+
+    private static SortedMap<TaskId, SortedSet<ClientIdAndRank<String>>> oneStatefulTasksToTwoRankedClients(final long rankOfClient1,
+                                                                                                            final long rankOfClient2) {
         final SortedSet<ClientIdAndRank<String>> rankedClients01 = new TreeSet<>();
-        rankedClients01.add(ClientIdAndRank.make(CLIENT_1, lagOfClient1));
-        rankedClients01.add(ClientIdAndRank.make(CLIENT_2, lagOfClient2));
+        rankedClients01.add(ClientIdAndRank.make(CLIENT_1, rankOfClient1));
+        rankedClients01.add(ClientIdAndRank.make(CLIENT_2, rankOfClient2));
         return new TreeMap<>(
             mkMap(mkEntry(TASK_01, rankedClients01))
         );
     }
 
-    private static SortedMap<TaskId, SortedSet<ClientIdAndRank<String>>> twoStatefulTasksToTwoRankedClients(final long lagForTask01OnClient1,
-                                                                                                            final long lagForTask01OnClient2,
-                                                                                                            final long lagForTask12OnClient1,
-                                                                                                            final long lagForTask12OnClient2) {
+    private static SortedMap<TaskId, SortedSet<ClientIdAndRank<String>>> twoStatefulTasksToTwoRankedClients(final long rankForTask01OnClient1,
+                                                                                                            final long rankForTask01OnClient2,
+                                                                                                            final long rankForTask12OnClient1,
+                                                                                                            final long rankForTask12OnClient2) {
         final SortedSet<ClientIdAndRank<String>> rankedClients01 = new TreeSet<>();
-        rankedClients01.add(ClientIdAndRank.make(CLIENT_1, lagForTask01OnClient1));
-        rankedClients01.add(ClientIdAndRank.make(CLIENT_2, lagForTask01OnClient2));
+        rankedClients01.add(ClientIdAndRank.make(CLIENT_1, rankForTask01OnClient1));
+        rankedClients01.add(ClientIdAndRank.make(CLIENT_2, rankForTask01OnClient2));
         final SortedSet<ClientIdAndRank<String>> rankedClients12 = new TreeSet<>();
-        rankedClients12.add(ClientIdAndRank.make(CLIENT_1, lagForTask12OnClient1));
-        rankedClients12.add(ClientIdAndRank.make(CLIENT_2, lagForTask12OnClient2));
+        rankedClients12.add(ClientIdAndRank.make(CLIENT_1, rankForTask12OnClient1));
+        rankedClients12.add(ClientIdAndRank.make(CLIENT_2, rankForTask12OnClient2));
         return new TreeMap<>(
             mkMap(
                 mkEntry(TASK_01, rankedClients01),
@@ -555,27 +599,27 @@ public class DefaultStateConstrainedBalancedAssignorTest {
         );
     }
 
-    private static SortedMap<TaskId, SortedSet<ClientIdAndRank<String>>> threeStatefulTasksToThreeRankedClients(final long lagForTask01OnClient1,
-                                                                                                                final long lagForTask01OnClient2,
-                                                                                                                final long lagForTask01OnClient3,
-                                                                                                                final long lagForTask12OnClient1,
-                                                                                                                final long lagForTask12OnClient2,
-                                                                                                                final long lagForTask12OnClient3,
-                                                                                                                final long lagForTask23OnClient1,
-                                                                                                                final long lagForTask23OnClient2,
-                                                                                                                final long lagForTask23OnClient3) {
+    private static SortedMap<TaskId, SortedSet<ClientIdAndRank<String>>> threeStatefulTasksToThreeRankedClients(final long rankForTask01OnClient1,
+                                                                                                                final long rankForTask01OnClient2,
+                                                                                                                final long rankForTask01OnClient3,
+                                                                                                                final long rankForTask12OnClient1,
+                                                                                                                final long rankForTask12OnClient2,
+                                                                                                                final long rankForTask12OnClient3,
+                                                                                                                final long rankForTask23OnClient1,
+                                                                                                                final long rankForTask23OnClient2,
+                                                                                                                final long rankForTask23OnClient3) {
         final SortedSet<ClientIdAndRank<String>> rankedClients01 = new TreeSet<>();
-        rankedClients01.add(ClientIdAndRank.make(CLIENT_1, lagForTask01OnClient1));
-        rankedClients01.add(ClientIdAndRank.make(CLIENT_2, lagForTask01OnClient2));
-        rankedClients01.add(ClientIdAndRank.make(CLIENT_3, lagForTask01OnClient3));
+        rankedClients01.add(ClientIdAndRank.make(CLIENT_1, rankForTask01OnClient1));
+        rankedClients01.add(ClientIdAndRank.make(CLIENT_2, rankForTask01OnClient2));
+        rankedClients01.add(ClientIdAndRank.make(CLIENT_3, rankForTask01OnClient3));
         final SortedSet<ClientIdAndRank<String>> rankedClients12 = new TreeSet<>();
-        rankedClients12.add(ClientIdAndRank.make(CLIENT_1, lagForTask12OnClient1));
-        rankedClients12.add(ClientIdAndRank.make(CLIENT_2, lagForTask12OnClient2));
-        rankedClients12.add(ClientIdAndRank.make(CLIENT_3, lagForTask12OnClient3));
+        rankedClients12.add(ClientIdAndRank.make(CLIENT_1, rankForTask12OnClient1));
+        rankedClients12.add(ClientIdAndRank.make(CLIENT_2, rankForTask12OnClient2));
+        rankedClients12.add(ClientIdAndRank.make(CLIENT_3, rankForTask12OnClient3));
         final SortedSet<ClientIdAndRank<String>> rankedClients23 = new TreeSet<>();
-        rankedClients23.add(ClientIdAndRank.make(CLIENT_1, lagForTask23OnClient1));
-        rankedClients23.add(ClientIdAndRank.make(CLIENT_2, lagForTask23OnClient2));
-        rankedClients23.add(ClientIdAndRank.make(CLIENT_3, lagForTask23OnClient3));
+        rankedClients23.add(ClientIdAndRank.make(CLIENT_1, rankForTask23OnClient1));
+        rankedClients23.add(ClientIdAndRank.make(CLIENT_2, rankForTask23OnClient2));
+        rankedClients23.add(ClientIdAndRank.make(CLIENT_3, rankForTask23OnClient3));
         return new TreeMap<>(
             mkMap(
                 mkEntry(TASK_01, rankedClients01),
@@ -585,34 +629,34 @@ public class DefaultStateConstrainedBalancedAssignorTest {
         );
     }
 
-    private static SortedMap<TaskId, SortedSet<ClientIdAndRank<String>>> fourStatefulTasksToThreeRankedClients(final long lagForTask01OnClient1,
-                                                                                                               final long lagForTask01OnClient2,
-                                                                                                               final long lagForTask01OnClient3,
-                                                                                                               final long lagForTask12OnClient1,
-                                                                                                               final long lagForTask12OnClient2,
-                                                                                                               final long lagForTask12OnClient3,
-                                                                                                               final long lagForTask23OnClient1,
-                                                                                                               final long lagForTask23OnClient2,
-                                                                                                               final long lagForTask23OnClient3,
-                                                                                                               final long lagForTask34OnClient1,
-                                                                                                               final long lagForTask34OnClient2,
-                                                                                                               final long lagForTask34OnClient3) {
+    private static SortedMap<TaskId, SortedSet<ClientIdAndRank<String>>> fourStatefulTasksToThreeRankedClients(final long rankForTask01OnClient1,
+                                                                                                               final long rankForTask01OnClient2,
+                                                                                                               final long rankForTask01OnClient3,
+                                                                                                               final long rankForTask12OnClient1,
+                                                                                                               final long rankForTask12OnClient2,
+                                                                                                               final long rankForTask12OnClient3,
+                                                                                                               final long rankForTask23OnClient1,
+                                                                                                               final long rankForTask23OnClient2,
+                                                                                                               final long rankForTask23OnClient3,
+                                                                                                               final long rankForTask34OnClient1,
+                                                                                                               final long rankForTask34OnClient2,
+                                                                                                               final long rankForTask34OnClient3) {
         final SortedSet<ClientIdAndRank<String>> rankedClients01 = new TreeSet<>();
-        rankedClients01.add(ClientIdAndRank.make(CLIENT_1, lagForTask01OnClient1));
-        rankedClients01.add(ClientIdAndRank.make(CLIENT_2, lagForTask01OnClient2));
-        rankedClients01.add(ClientIdAndRank.make(CLIENT_3, lagForTask01OnClient3));
+        rankedClients01.add(ClientIdAndRank.make(CLIENT_1, rankForTask01OnClient1));
+        rankedClients01.add(ClientIdAndRank.make(CLIENT_2, rankForTask01OnClient2));
+        rankedClients01.add(ClientIdAndRank.make(CLIENT_3, rankForTask01OnClient3));
         final SortedSet<ClientIdAndRank<String>> rankedClients12 = new TreeSet<>();
-        rankedClients12.add(ClientIdAndRank.make(CLIENT_1, lagForTask12OnClient1));
-        rankedClients12.add(ClientIdAndRank.make(CLIENT_2, lagForTask12OnClient2));
-        rankedClients12.add(ClientIdAndRank.make(CLIENT_3, lagForTask12OnClient3));
+        rankedClients12.add(ClientIdAndRank.make(CLIENT_1, rankForTask12OnClient1));
+        rankedClients12.add(ClientIdAndRank.make(CLIENT_2, rankForTask12OnClient2));
+        rankedClients12.add(ClientIdAndRank.make(CLIENT_3, rankForTask12OnClient3));
         final SortedSet<ClientIdAndRank<String>> rankedClients23 = new TreeSet<>();
-        rankedClients23.add(ClientIdAndRank.make(CLIENT_1, lagForTask23OnClient1));
-        rankedClients23.add(ClientIdAndRank.make(CLIENT_2, lagForTask23OnClient2));
-        rankedClients23.add(ClientIdAndRank.make(CLIENT_3, lagForTask23OnClient3));
+        rankedClients23.add(ClientIdAndRank.make(CLIENT_1, rankForTask23OnClient1));
+        rankedClients23.add(ClientIdAndRank.make(CLIENT_2, rankForTask23OnClient2));
+        rankedClients23.add(ClientIdAndRank.make(CLIENT_3, rankForTask23OnClient3));
         final SortedSet<ClientIdAndRank<String>> rankedClients34 = new TreeSet<>();
-        rankedClients34.add(ClientIdAndRank.make(CLIENT_1, lagForTask34OnClient1));
-        rankedClients34.add(ClientIdAndRank.make(CLIENT_2, lagForTask34OnClient2));
-        rankedClients34.add(ClientIdAndRank.make(CLIENT_3, lagForTask34OnClient3));
+        rankedClients34.add(ClientIdAndRank.make(CLIENT_1, rankForTask34OnClient1));
+        rankedClients34.add(ClientIdAndRank.make(CLIENT_2, rankForTask34OnClient2));
+        rankedClients34.add(ClientIdAndRank.make(CLIENT_3, rankForTask34OnClient3));
         return new TreeMap<>(
             mkMap(
                 mkEntry(TASK_01, rankedClients01),
