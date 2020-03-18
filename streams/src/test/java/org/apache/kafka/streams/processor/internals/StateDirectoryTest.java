@@ -45,6 +45,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.common.utils.Utils.mkSet;
+import static org.apache.kafka.streams.processor.internals.StateDirectory.LOCK_FILE_NAME;
 import static org.apache.kafka.streams.processor.internals.StateManagerUtil.CHECKPOINT_FILE_NAME;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -112,7 +113,7 @@ public class StateDirectoryTest {
 
         try (
             final FileChannel channel = FileChannel.open(
-                new File(taskDirectory, StateDirectory.LOCK_FILE_NAME).toPath(),
+                new File(taskDirectory, LOCK_FILE_NAME).toPath(),
                 StandardOpenOption.CREATE, StandardOpenOption.WRITE)
         ) {
             assertThrows(OverlappingFileLockException.class, channel::tryLock);
@@ -200,10 +201,10 @@ public class StateDirectoryTest {
 
         try (
             final FileChannel channel1 = FileChannel.open(
-                new File(task1Dir, StateDirectory.LOCK_FILE_NAME).toPath(),
+                new File(task1Dir, LOCK_FILE_NAME).toPath(),
                 StandardOpenOption.CREATE,
                 StandardOpenOption.WRITE);
-            final FileChannel channel2 = FileChannel.open(new File(task2Dir, StateDirectory.LOCK_FILE_NAME).toPath(),
+            final FileChannel channel2 = FileChannel.open(new File(task2Dir, LOCK_FILE_NAME).toPath(),
                 StandardOpenOption.CREATE,
                 StandardOpenOption.WRITE)
         ) {
@@ -228,7 +229,7 @@ public class StateDirectoryTest {
 
         try (
             final FileChannel channel = FileChannel.open(
-                new File(taskDirectory, StateDirectory.LOCK_FILE_NAME).toPath(),
+                new File(taskDirectory, LOCK_FILE_NAME).toPath(),
                 StandardOpenOption.CREATE,
                 StandardOpenOption.WRITE)
         ) {
@@ -338,7 +339,7 @@ public class StateDirectoryTest {
     }
 
     @Test
-    public void shouldOnlyListNonEmptyTaskDirectories() {
+    public void shouldOnlyListNonEmptyTaskDirectories() throws IOException {
         TestUtils.tempDirectory(stateDir.toPath(), "foo");
         final File taskDir1 = directory.directoryForTask(new TaskId(0, 0));
         final File taskDir2 = directory.directoryForTask(new TaskId(0, 1));
@@ -351,7 +352,7 @@ public class StateDirectoryTest {
         assertEquals(mkSet(taskDir1), Arrays.stream(
             directory.listNonEmptyTaskDirectories()).collect(Collectors.toSet()));
 
-        directory.cleanRemovedTasks(0L);
+        Utils.delete(taskDir1, Collections.singletonList(new File(taskDir1, LOCK_FILE_NAME)));
 
         assertEquals(mkSet(taskDir1, taskDir2), Arrays.stream(
             directory.listAllTaskDirectories()).collect(Collectors.toSet()));
@@ -381,7 +382,7 @@ public class StateDirectoryTest {
     public void shouldLockGlobalStateDirectory() throws IOException {
         try (
             final FileChannel channel = FileChannel.open(
-                new File(directory.globalStateDir(), StateDirectory.LOCK_FILE_NAME).toPath(),
+                new File(directory.globalStateDir(), LOCK_FILE_NAME).toPath(),
                 StandardOpenOption.CREATE,
                 StandardOpenOption.WRITE)
         ) {
@@ -399,7 +400,7 @@ public class StateDirectoryTest {
 
         try (
             final FileChannel channel = FileChannel.open(
-                new File(directory.globalStateDir(), StateDirectory.LOCK_FILE_NAME).toPath(),
+                new File(directory.globalStateDir(), LOCK_FILE_NAME).toPath(),
                 StandardOpenOption.CREATE,
                 StandardOpenOption.WRITE)
         ) {
