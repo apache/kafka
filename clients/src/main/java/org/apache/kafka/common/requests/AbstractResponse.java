@@ -135,7 +135,7 @@ public abstract class AbstractResponse implements AbstractRequestResponse {
             case END_TXN:
                 return new EndTxnResponse(struct, version);
             case WRITE_TXN_MARKERS:
-                return new WriteTxnMarkersResponse(struct);
+                return new WriteTxnMarkersResponse(struct, version);
             case TXN_OFFSET_COMMIT:
                 return new TxnOffsetCommitResponse(struct, version);
             case DESCRIBE_ACLS:
