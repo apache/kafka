@@ -695,23 +695,28 @@ public class TaskManager {
         if (rebalanceInProgress) {
             return -1;
         } else {
+            int committed = 0;
             final Map<TaskId, Map<TopicPartition, OffsetAndMetadata>> consumedOffsetsAndMetadataPerTask = new HashMap<>();
             for (final Task task : tasks.values()) {
                 if (task.commitNeeded()) {
                     task.prepareCommit();
-                    consumedOffsetsAndMetadataPerTask.put(task.id(), task.committableOffsetsAndMetadata());
+                    final Map<TopicPartition, OffsetAndMetadata> offsetAndMetadata = task.committableOffsetsAndMetadata();
+                    if (!offsetAndMetadata.isEmpty()) {
+                        consumedOffsetsAndMetadataPerTask.put(task.id(), offsetAndMetadata);
+                    }
                 }
             }
 
             commitOffsetsOrTransaction(consumedOffsetsAndMetadataPerTask);
 
             for (final Task task : tasks.values()) {
-                if (consumedOffsetsAndMetadataPerTask.containsKey(task.id())) {
+                if (task.commitNeeded()) {
+                    ++committed;
                     task.postCommit();
                 }
             }
 
-            return consumedOffsetsAndMetadataPerTask.size();
+            return committed;
         }
     }
 
@@ -727,7 +732,10 @@ public class TaskManager {
             for (final Task task : activeTaskIterable()) {
                 if (task.commitRequested() && task.commitNeeded()) {
                     task.prepareCommit();
-                    consumedOffsetsAndMetadataPerTask.put(task.id(), task.committableOffsetsAndMetadata());
+                    final Map<TopicPartition, OffsetAndMetadata> offsetAndMetadata = task.committableOffsetsAndMetadata();
+                    if (!offsetAndMetadata.isEmpty()) {
+                        consumedOffsetsAndMetadataPerTask.put(task.id(), offsetAndMetadata);
+                    }
                 }
             }
 

@@ -1197,6 +1197,8 @@ public class TaskManagerTest {
     @Test
     public void shouldCommitActiveAndStandbyTasks() {
         final StateMachineTask task00 = new StateMachineTask(taskId00, taskId00Partitions, true);
+        final Map<TopicPartition, OffsetAndMetadata> offsets = singletonMap(t1p0, new OffsetAndMetadata(0L, null));
+        task00.setCommittableOffsetsAndMetadata(offsets);
         final StateMachineTask task01 = new StateMachineTask(taskId01, taskId01Partitions, false);
 
         expectRestoreToBeCompleted(consumer, changeLogReader);
@@ -1204,7 +1206,7 @@ public class TaskManagerTest {
             .andReturn(singletonList(task00)).anyTimes();
         expect(standbyTaskCreator.createTasks(eq(taskId01Assignment)))
             .andReturn(singletonList(task01)).anyTimes();
-        consumer.commitSync(Collections.emptyMap());
+        consumer.commitSync(offsets);
         expectLastCall();
 
         replay(activeTaskCreator, standbyTaskCreator, consumer, changeLogReader);
@@ -1219,6 +1221,8 @@ public class TaskManagerTest {
         task01.setCommitNeeded();
 
         assertThat(taskManager.commitAll(), equalTo(2));
+        assertThat(task00.commitNeeded, is(false));
+        assertThat(task01.commitNeeded, is(false));
     }
 
     @Test
@@ -1473,33 +1477,43 @@ public class TaskManagerTest {
         final Map<TopicPartition, OffsetAndMetadata> offsets0 = singletonMap(t1p0, new OffsetAndMetadata(0L, null));
         task00.setCommittableOffsetsAndMetadata(offsets0);
         final StateMachineTask task01 = new StateMachineTask(taskId01, taskId01Partitions, true);
-        final Map<TopicPartition, OffsetAndMetadata> offsets1 = singletonMap(t1p1, new OffsetAndMetadata(0L, null));
+        final Map<TopicPartition, OffsetAndMetadata> offsets1 = singletonMap(t1p1, new OffsetAndMetadata(1L, null));
         task01.setCommittableOffsetsAndMetadata(offsets1);
         final StateMachineTask task02 = new StateMachineTask(taskId02, taskId02Partitions, true);
-        final Map<TopicPartition, OffsetAndMetadata> offsets2 = singletonMap(t1p2, new OffsetAndMetadata(0L, null));
+        final Map<TopicPartition, OffsetAndMetadata> offsets2 = singletonMap(t1p2, new OffsetAndMetadata(2L, null));
         task02.setCommittableOffsetsAndMetadata(offsets2);
+        final StateMachineTask task03 = new StateMachineTask(taskId03, taskId03Partitions, false);
+        final Map<TopicPartition, OffsetAndMetadata> offsets3 = singletonMap(t1p3, new OffsetAndMetadata(3L, null));
+        task03.setCommittableOffsetsAndMetadata(offsets3);
 
-        final Map<TaskId, Set<TopicPartition>> assignment = mkMap(
+        final Map<TaskId, Set<TopicPartition>> assignmentActive = mkMap(
             mkEntry(taskId00, taskId00Partitions),
             mkEntry(taskId01, taskId01Partitions),
             mkEntry(taskId02, taskId02Partitions)
         );
 
+        final Map<TaskId, Set<TopicPartition>> assignmentStandby = mkMap(
+            mkEntry(taskId03, taskId03Partitions)
+        );
+
         expectRestoreToBeCompleted(consumer, changeLogReader);
-        expect(activeTaskCreator.createTasks(anyObject(), eq(assignment)))
+        expect(activeTaskCreator.createTasks(anyObject(), eq(assignmentActive)))
             .andReturn(asList(task00, task01, task02)).anyTimes();
+        expect(standbyTaskCreator.createTasks(eq(assignmentStandby)))
+            .andReturn(singletonList(task03)).anyTimes();
         consumer.commitSync(offsets0);
         expectLastCall();
 
         replay(activeTaskCreator, standbyTaskCreator, consumer, changeLogReader);
 
 
-        taskManager.handleAssignment(assignment, emptyMap());
+        taskManager.handleAssignment(assignmentActive, assignmentStandby);
         assertThat(taskManager.tryToCompleteRestoration(), is(true));
 
         assertThat(task00.state(), is(Task.State.RUNNING));
         assertThat(task01.state(), is(Task.State.RUNNING));
         assertThat(task02.state(), is(Task.State.RUNNING));
+        assertThat(task03.state(), is(Task.State.RUNNING));
 
         task00.setCommitNeeded();
         task00.setCommitRequested();
@@ -1507,6 +1521,9 @@ public class TaskManagerTest {
         task01.setCommitNeeded();
 
         task02.setCommitRequested();
+
+        task03.setCommitNeeded();
+        task03.setCommitRequested();
 
         assertThat(taskManager.maybeCommitActiveTasksPerUserRequested(), equalTo(1));
     }
@@ -2104,7 +2121,9 @@ public class TaskManagerTest {
         public void prepareCommit(){}
 
         @Override
-        public void postCommit() {}
+        public void postCommit() {
+            commitNeeded = false;
+        }
 
         @Override
         public void prepareSuspend() {}
