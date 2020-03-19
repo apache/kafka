@@ -1040,14 +1040,10 @@ class ReplicaManager(val config: KafkaConfig,
 
         // First check partition's leader epoch
         val partitionState = new mutable.HashMap[Partition, LeaderAndIsrRequest.PartitionState]()
-        val newPartitions = new mutable.HashSet[Partition]
+        val updatedPartitions = new mutable.HashSet[Partition]
 
         leaderAndIsrRequest.partitionStates.asScala.foreach { case (topicPartition, stateInfo) =>
-          val partition = getPartition(topicPartition).getOrElse {
-            val createdPartition = getOrCreatePartition(topicPartition)
-            newPartitions.add(createdPartition)
-            createdPartition
-          }
+          val partition = getOrCreatePartition(topicPartition)
           val currentLeaderEpoch = partition.getLeaderEpoch
           val requestLeaderEpoch = stateInfo.basePartitionState.leaderEpoch
           if (partition eq ReplicaManager.OfflinePartition) {
@@ -1059,9 +1055,10 @@ class ReplicaManager(val config: KafkaConfig,
           } else if (requestLeaderEpoch > currentLeaderEpoch) {
             // If the leader epoch is valid record the epoch of the controller that made the leadership decision.
             // This is useful while updating the isr to maintain the decision maker controller's epoch in the zookeeper path
-            if(stateInfo.basePartitionState.replicas.contains(localBrokerId))
+            if (stateInfo.basePartitionState.replicas.contains(localBrokerId)) {
+              updatedPartitions.add(partition)
               partitionState.put(partition, stateInfo)
-            else {
+            } else {
               stateChangeLogger.warn(s"Ignoring LeaderAndIsr request from controller $controllerId with " +
                 s"correlation id $correlationId epoch $controllerEpoch for partition $topicPartition as itself is not " +
                 s"in assigned replica list ${stateInfo.basePartitionState.replicas.asScala.mkString(",")}")
@@ -1111,7 +1108,7 @@ class ReplicaManager(val config: KafkaConfig,
         }
 
         val futureReplicasAndInitialOffset = new mutable.HashMap[TopicPartition, InitialFetchState]
-        for (partition <- newPartitions) {
+        for (partition <- updatedPartitions) {
           val topicPartition = partition.topicPartition
           if (logManager.getLog(topicPartition, isFuture = true).isDefined) {
             partition.localReplica.foreach { replica =>
