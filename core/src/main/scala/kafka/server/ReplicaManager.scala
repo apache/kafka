@@ -1194,7 +1194,7 @@ class ReplicaManager(val config: KafkaConfig,
 
         // First check partition's leader epoch
         val partitionStates = new mutable.HashMap[Partition, LeaderAndIsrPartitionState]()
-        val newPartitions = new mutable.HashSet[Partition]
+        val updatedPartitions = new mutable.HashSet[Partition]
 
         leaderAndIsrRequest.partitionStates.asScala.foreach { partitionState =>
           val topicPartition = new TopicPartition(partitionState.topicName, partitionState.partitionIndex)
@@ -1207,12 +1207,14 @@ class ReplicaManager(val config: KafkaConfig,
               responseMap.put(topicPartition, Errors.KAFKA_STORAGE_ERROR)
               None
 
-            case HostedPartition.Online(partition) => Some(partition)
+            case HostedPartition.Online(partition) =>
+              updatedPartitions.add(partition)
+              Some(partition)
 
             case HostedPartition.None =>
               val partition = Partition(topicPartition, time, this)
               allPartitions.putIfNotExists(topicPartition, HostedPartition.Online(partition))
-              newPartitions.add(partition)
+              updatedPartitions.add(partition)
               Some(partition)
           }
 
@@ -1294,7 +1296,7 @@ class ReplicaManager(val config: KafkaConfig,
         startHighWatermarkCheckPointThread()
 
         val futureReplicasAndInitialOffset = new mutable.HashMap[TopicPartition, InitialFetchState]
-        for (partition <- newPartitions) {
+        for (partition <- updatedPartitions) {
           val topicPartition = partition.topicPartition
           if (logManager.getLog(topicPartition, isFuture = true).isDefined) {
             partition.log.foreach { log =>

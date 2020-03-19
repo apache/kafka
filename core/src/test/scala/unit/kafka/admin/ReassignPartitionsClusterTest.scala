@@ -71,9 +71,9 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
     Admin.create(props)
   }
 
-  def getRandomLogDirAssignment(brokerId: Int): String = {
+  def getRandomLogDirAssignment(brokerId: Int, excluded: Option[String] = None): String = {
     val server = servers.find(_.config.brokerId == brokerId).get
-    val logDirs = server.config.logDirs
+    val logDirs = server.config.logDirs.filterNot(excluded.contains)
     new File(logDirs(Random.nextInt(logDirs.size))).getAbsolutePath
   }
 
@@ -161,19 +161,31 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
   }
 
   @Test
-  def shouldMoveSinglePartitionWithinBroker(): Unit = {
+  def shouldMoveSinglePartitionToSameFolderWithinBroker(): Unit = shouldMoveSinglePartitionWithinBroker(true)
+
+  @Test
+  def shouldMoveSinglePartitionToDifferentFolderWithinBroker(): Unit = shouldMoveSinglePartitionWithinBroker(false)
+
+  private[this] def shouldMoveSinglePartitionWithinBroker(moveToSameFolder: Boolean): Unit = {
     // Given a single replica on server 100
     startBrokers(Seq(100, 101))
     adminClient = createAdminClient(servers)
-    val expectedLogDir = getRandomLogDirAssignment(100)
     createTopic(zkClient, topicName, Map(tp0.partition() -> Seq(100)), servers = servers)
+
+    val replica = new TopicPartitionReplica(topicName, 0, 100)
+    val currentLogDir = adminClient.describeReplicaLogDirs(java.util.Collections.singleton(replica))
+      .all()
+      .get()
+      .get(replica)
+      .getCurrentReplicaLogDir
+
+    val expectedLogDir = if (moveToSameFolder) currentLogDir else getRandomLogDirAssignment(100, excluded = Some(currentLogDir))
 
     // When we execute an assignment that moves an existing replica to another log directory on the same broker
     val topicJson = executeAssignmentJson(Seq(
       PartitionAssignmentJson(tp0, replicas = Seq(100), logDirectories = Some(Seq(expectedLogDir)))
     ))
     ReassignPartitionsCommand.executeAssignment(zkClient, Some(adminClient), topicJson, NoThrottle)
-    val replica = new TopicPartitionReplica(topicName, 0, 100)
     waitUntilTrue(() => {
       expectedLogDir == adminClient.describeReplicaLogDirs(Collections.singleton(replica)).all().get.get(replica).getCurrentReplicaLogDir
     }, "Partition should have been moved to the expected log directory", 1000)
