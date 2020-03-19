@@ -677,8 +677,6 @@ public class TaskManagerTest {
         };
 
         resetToStrict(changeLogReader);
-        changeLogReader.enforceRestoreActive();
-        expectLastCall();
         expect(changeLogReader.completedChangelogs()).andReturn(emptySet());
         // make sure we also remove the changelog partitions from the changelog reader
         changeLogReader.remove(eq(singletonList(changelog)));
@@ -745,8 +743,6 @@ public class TaskManagerTest {
         };
 
         resetToStrict(changeLogReader);
-        changeLogReader.enforceRestoreActive();
-        expectLastCall();
         expect(changeLogReader.completedChangelogs()).andReturn(emptySet());
         // make sure we also remove the changelog partitions from the changelog reader
         changeLogReader.remove(eq(singletonList(changelog)));
@@ -801,8 +797,6 @@ public class TaskManagerTest {
         };
 
         resetToStrict(changeLogReader);
-        changeLogReader.enforceRestoreActive();
-        expectLastCall();
         expect(changeLogReader.completedChangelogs()).andReturn(emptySet());
         // make sure we also remove the changelog partitions from the changelog reader
         changeLogReader.remove(eq(singletonList(changelog)));
@@ -871,8 +865,6 @@ public class TaskManagerTest {
         };
 
         resetToStrict(changeLogReader);
-        changeLogReader.enforceRestoreActive();
-        expectLastCall();
         expect(changeLogReader.completedChangelogs()).andReturn(emptySet());
         // make sure we also remove the changelog partitions from the changelog reader
         changeLogReader.remove(eq(singletonList(changelog)));
