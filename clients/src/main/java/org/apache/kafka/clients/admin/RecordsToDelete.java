@@ -23,10 +23,7 @@ import java.util.Map;
 
 /**
  * Describe records to delete in a call to {@link Admin#deleteRecords(Map)}
- *
- * The API of this class is evolving, see {@link Admin} for details.
  */
-@InterfaceStability.Evolving
 public class RecordsToDelete {
 
     private long offset;

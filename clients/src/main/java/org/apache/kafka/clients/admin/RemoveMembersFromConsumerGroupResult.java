@@ -26,8 +26,6 @@ import java.util.Set;
 
 /**
  * The result of the {@link Admin#removeMembersFromConsumerGroup(String, RemoveMembersFromConsumerGroupOptions)} call.
- *
- * The API of this class is evolving, see {@link Admin} for details.
  */
 public class RemoveMembersFromConsumerGroupResult {
 

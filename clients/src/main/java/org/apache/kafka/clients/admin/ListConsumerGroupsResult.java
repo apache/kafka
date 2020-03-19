@@ -26,10 +26,7 @@ import java.util.Collection;
 
 /**
  * The result of the {@link Admin#listConsumerGroups()} call.
- * <p>
- * The API of this class is evolving, see {@link Admin} for details.
  */
-@InterfaceStability.Evolving
 public class ListConsumerGroupsResult {
     private final KafkaFutureImpl<Collection<ConsumerGroupListing>> all;
     private final KafkaFutureImpl<Collection<ConsumerGroupListing>> valid;

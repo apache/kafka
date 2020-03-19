@@ -27,10 +27,7 @@ import org.apache.kafka.common.annotation.InterfaceStability;
 
 /**
  * The result of the {@link AdminClient#listOffsets(Map)} call.
- *
- * The API of this class is evolving, see {@link AdminClient} for details.
  */
-@InterfaceStability.Evolving
 public class ListOffsetsResult {
 
     private final Map<TopicPartition, KafkaFuture<ListOffsetsResultInfo>> futures;

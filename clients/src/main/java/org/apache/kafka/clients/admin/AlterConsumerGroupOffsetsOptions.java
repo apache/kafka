@@ -20,9 +20,6 @@ import org.apache.kafka.common.annotation.InterfaceStability;
 
 /**
  * Options for the {@link AdminClient#alterConsumerGroupOffsets(String, Map)} call.
- *
- * The API of this class is evolving, see {@link AdminClient} for details.
  */
-@InterfaceStability.Evolving
 public class AlterConsumerGroupOffsetsOptions extends AbstractOptions<AlterConsumerGroupOffsetsOptions> {
 }

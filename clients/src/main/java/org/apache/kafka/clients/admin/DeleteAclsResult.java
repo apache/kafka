@@ -31,10 +31,7 @@ import java.util.Map;
 
 /**
  * The result of the {@link Admin#deleteAcls(Collection)} call.
- *
- * The API of this class is evolving, see {@link Admin} for details.
  */
-@InterfaceStability.Evolving
 public class DeleteAclsResult {
 
     /**

@@ -29,10 +29,7 @@ import java.util.concurrent.ExecutionException;
 
 /**
  * The result of {@link Admin#describeReplicaLogDirs(Collection)}.
- *
- * The API of this class is evolving, see {@link Admin} for details.
  */
-@InterfaceStability.Evolving
 public class DescribeReplicaLogDirsResult {
     private final Map<TopicPartitionReplica, KafkaFuture<ReplicaLogDirInfo>> futures;
 

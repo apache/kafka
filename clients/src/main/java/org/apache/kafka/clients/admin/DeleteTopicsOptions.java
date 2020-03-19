@@ -23,10 +23,7 @@ import java.util.Collection;
 
 /**
  * Options for {@link Admin#deleteTopics(Collection)}.
- *
- * The API of this class is evolving, see {@link Admin} for details.
  */
-@InterfaceStability.Evolving
 public class DeleteTopicsOptions extends AbstractOptions<DeleteTopicsOptions> {
 
     /**

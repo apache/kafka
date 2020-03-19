@@ -26,10 +26,7 @@ import java.util.stream.Collectors;
 
 /**
  * The result of {@link Admin#createTopics(Collection)}.
- *
- * The API of this class is evolving, see {@link Admin} for details.
  */
-@InterfaceStability.Evolving
 public class CreateTopicsResult {
     final static int UNKNOWN = -1;
 

@@ -27,10 +27,7 @@ import org.apache.kafka.common.internals.KafkaFutureImpl;
 
 /**
  * The result of {@link Admin#electLeaders(ElectionType, Set, ElectLeadersOptions)}
- *
- * The API of this class is evolving, see {@link Admin} for details.
  */
-@InterfaceStability.Evolving
 final public class ElectLeadersResult {
     private final KafkaFutureImpl<Map<TopicPartition, Optional<Throwable>>> electionFuture;
 

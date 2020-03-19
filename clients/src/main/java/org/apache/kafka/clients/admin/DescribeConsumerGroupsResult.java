@@ -28,10 +28,7 @@ import java.util.concurrent.ExecutionException;
 
 /**
  * The result of the {@link KafkaAdminClient#describeConsumerGroups(Collection, DescribeConsumerGroupsOptions)}} call.
- *
- * The API of this class is evolving, see {@link Admin} for details.
  */
-@InterfaceStability.Evolving
 public class DescribeConsumerGroupsResult {
 
     private final Map<String, KafkaFuture<ConsumerGroupDescription>> futures;

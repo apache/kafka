@@ -22,10 +22,7 @@ import org.apache.kafka.common.annotation.InterfaceStability;
 
 /**
  * The result of the {@link KafkaAdminClient#expireDelegationToken(byte[], ExpireDelegationTokenOptions)} call.
- *
- * The API of this class is evolving, see {@link Admin} for details.
  */
-@InterfaceStability.Evolving
 public class RenewDelegationTokenResult {
     private final KafkaFuture<Long> expiryTimestamp;
 
