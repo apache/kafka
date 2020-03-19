@@ -2101,7 +2101,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   def handleAddPartitionToTxnRequest(request: RequestChannel.Request): Unit = {
     ensureInterBrokerVersion(KAFKA_0_11_0_IV0)
     val addPartitionsToTxnRequest = request.body[AddPartitionsToTxnRequest]
-    val transactionalId = addPartitionsToTxnRequest.transactionalId
+    val transactionalId = addPartitionsToTxnRequest.data.transactionalId
     val partitionsToAdd = addPartitionsToTxnRequest.partitions.asScala
     if (!authorize(request.context, WRITE, TRANSACTIONAL_ID, transactionalId))
       sendResponseMaybeThrottle(request, requestThrottleMs =>
@@ -2143,8 +2143,8 @@ class KafkaApis(val requestChannel: RequestChannel,
         }
 
         txnCoordinator.handleAddPartitionsToTransaction(transactionalId,
-          addPartitionsToTxnRequest.producerId,
-          addPartitionsToTxnRequest.producerEpoch,
+          addPartitionsToTxnRequest.data.producerId,
+          addPartitionsToTxnRequest.data.producerEpoch,
           authorizedPartitions,
           sendResponseCallback)
       }
