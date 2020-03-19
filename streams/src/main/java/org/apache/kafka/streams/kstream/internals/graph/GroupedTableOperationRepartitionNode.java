@@ -34,7 +34,7 @@ public class GroupedTableOperationRepartitionNode<K, V> extends BaseRepartitionN
                                                  final String sinkName,
                                                  final String sourceName,
                                                  final String repartitionTopic,
-                                                 final ProcessorParameters processorParameters) {
+                                                 final ProcessorParameters<K, V> processorParameters) {
 
         super(
             nodeName,
@@ -115,7 +115,7 @@ public class GroupedTableOperationRepartitionNode<K, V> extends BaseRepartitionN
         private String nodeName;
         private String sourceName;
         private String repartitionTopic;
-        private ProcessorParameters processorParameters;
+        private ProcessorParameters<K, V> processorParameters;
 
         private GroupedTableOperationRepartitionNodeBuilder() {
         }
@@ -150,7 +150,7 @@ public class GroupedTableOperationRepartitionNode<K, V> extends BaseRepartitionN
             return this;
         }
 
-        public GroupedTableOperationRepartitionNodeBuilder<K, V> withProcessorParameters(final ProcessorParameters processorParameters) {
+        public GroupedTableOperationRepartitionNodeBuilder<K, V> withProcessorParameters(final ProcessorParameters<K, V> processorParameters) {
             this.processorParameters = processorParameters;
             return this;
         }

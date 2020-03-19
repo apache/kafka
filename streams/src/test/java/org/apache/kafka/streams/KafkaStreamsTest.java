@@ -915,13 +915,14 @@ public class KafkaStreamsTest {
         final StoreBuilder<KeyValueStore<String, String>> globalStoreBuilder = Stores.keyValueStoreBuilder(
             isPersistentStore ? Stores.persistentKeyValueStore(globalStoreName) : Stores.inMemoryKeyValueStore(globalStoreName),
             Serdes.String(), Serdes.String()).withLoggingDisabled();
-        topology.addGlobalStore(globalStoreBuilder,
+        topology.addGlobalStore(
+            globalStoreBuilder,
             "global",
             Serdes.String().deserializer(),
             Serdes.String().deserializer(),
             globalTopicName,
             globalTopicName + "-processor",
-            new MockProcessorSupplier<byte[], byte[]>());
+            new MockProcessorSupplier<>());
         return topology;
     }
 

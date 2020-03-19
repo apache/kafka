@@ -29,7 +29,7 @@ public class OptimizableRepartitionNode<K, V> extends BaseRepartitionNode<K, V> 
 
     OptimizableRepartitionNode(final String nodeName,
                                final String sourceName,
-                               final ProcessorParameters processorParameters,
+                               final ProcessorParameters<K, V> processorParameters,
                                final Serde<K> keySerde,
                                final Serde<V> valueSerde,
                                final String sinkName,
@@ -116,7 +116,7 @@ public class OptimizableRepartitionNode<K, V> extends BaseRepartitionNode<K, V> 
     public static final class OptimizableRepartitionNodeBuilder<K, V> {
 
         private String nodeName;
-        private ProcessorParameters processorParameters;
+        private ProcessorParameters<K, V> processorParameters;
         private Serde<K> keySerde;
         private Serde<V> valueSerde;
         private String sinkName;
@@ -127,7 +127,7 @@ public class OptimizableRepartitionNode<K, V> extends BaseRepartitionNode<K, V> 
         private OptimizableRepartitionNodeBuilder() {
         }
 
-        public OptimizableRepartitionNodeBuilder<K, V> withProcessorParameters(final ProcessorParameters processorParameters) {
+        public OptimizableRepartitionNodeBuilder<K, V> withProcessorParameters(final ProcessorParameters<K, V> processorParameters) {
             this.processorParameters = processorParameters;
             return this;
         }

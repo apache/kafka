@@ -28,7 +28,6 @@ import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
-import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.kstream.Consumed;
@@ -371,7 +370,7 @@ public class TopologyTestDriverTest {
 
         for (final String sourceTopicName : sourceTopicNames) {
             topology.addGlobalStore(
-                Stores.<Bytes, byte[]>keyValueStoreBuilder(
+                Stores.keyValueStoreBuilder(
                     Stores.inMemoryKeyValueStore(
                         sourceTopicName + "-globalStore"),
                     null,
