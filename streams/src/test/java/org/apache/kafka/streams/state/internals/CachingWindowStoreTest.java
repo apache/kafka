@@ -335,7 +335,7 @@ public class CachingWindowStoreTest {
     @Test
     public void shouldFlushEvictedItemsIntoUnderlyingStore() {
         final int added = addItemsToCache();
-        // all dirty entries should have been flushed
+        // only the evicted entry should have been flushed
         final KeyValueIterator<Bytes, byte[]> iter = underlying.fetch(
             Bytes.wrap("0".getBytes(StandardCharsets.UTF_8)),
             DEFAULT_TIMESTAMP,
@@ -421,9 +421,9 @@ public class CachingWindowStoreTest {
     }
 
     @Test
-    public void shouldForwardDirtyItemToListenerWhenEvicted() {
-        final int numRecords = addItemsToCache();
-        assertEquals(numRecords, cacheListener.forwarded.size());
+    public void shouldForwardDirtyEvictedItemToListenerWhenEvicted() {
+        addItemsToCache();
+        assertEquals(1, cacheListener.forwarded.size());
     }
 
     @Test
