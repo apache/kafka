@@ -29,7 +29,14 @@
       { "name": "ResourceName", "type": "string", "versions": "0+",
         "about": "The resource name for the ACL." },
       { "name": "ResourcePatternType", "type": "int8", "versions": "1+", "default": "3",
-        "about": "The pattern type for the ACL." },
+        "about": "The pattern type for the ACL.",
+        "domain": {
+          "name": "PatternTypeCodes",
+          "values": [
+            {"name": "LITERAL", "validVersions": "0+"},
+            {"name": "MATCH", "validVersions": "0+"},
+            {"name": "PREFIXED", "validVersions": "0+"}
+          ] } },
       { "name": "Principal", "type": "string", "versions": "0+",
         "about": "The principal for the ACL." },
       { "name": "Host", "type": "string", "versions": "0+",

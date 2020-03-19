@@ -20,9 +20,12 @@ package org.apache.kafka.message;
 import java.io.Writer;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
+import java.util.TreeSet;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -36,9 +39,11 @@ public final class MessageDataGenerator {
     private final HeaderGenerator headerGenerator;
     private final SchemaGenerator schemaGenerator;
     private final CodeBuffer buffer;
+    private final Map<String, CodesSpec> codesRegistry;
     private Versions messageFlexibleVersions;
 
-    MessageDataGenerator(String packageName) {
+    MessageDataGenerator(String packageName, Map<String, CodesSpec> codesRegistry) {
+        this.codesRegistry = codesRegistry;
         this.structRegistry = new StructRegistry();
         this.headerGenerator = new HeaderGenerator(packageName);
         this.schemaGenerator = new SchemaGenerator(headerGenerator, structRegistry);
@@ -109,6 +114,7 @@ public final class MessageDataGenerator {
         buffer.printf("%n");
         generateUnknownTaggedFieldsAccessor(struct);
         generateFieldMutators(struct, className, isSetElement);
+        generateFieldValidation(struct, parentVersions);
 
         if (!isTopLevel) {
             buffer.decrementIndent();
@@ -125,6 +131,69 @@ public final class MessageDataGenerator {
             }
             buffer.decrementIndent();
             buffer.printf("}%n");
+        }
+    }
+
+    private void generateFieldValidation(StructSpec struct, Versions parentVersions) {
+        for (FieldSpec field : struct.fields()) {
+            DomainSpec domain = field.domain();
+            if (domain != null) {
+                CodesSpec codes = codesRegistry.get(domain.name());
+                buffer.printf("%n");
+                buffer.printf("@SuppressWarnings(\"checkstyle:BooleanExpressionComplexity\")%n");
+                buffer.printf("public static boolean is%sValid(%s v, short version) {%n", field.capitalizedCamelCaseName(), fieldAbstractJavaType(field));
+                buffer.incrementIndent();
+                if (domain.values() == null || domain.values().isEmpty()) {
+                    buffer.printf("return %s.isValid(v);", domain.name());
+                } else {
+                    buffer.printf("switch (version) {%n");
+                    buffer.incrementIndent();
+                    Map<Set<String>, Set<Short>> grouped = new LinkedHashMap<>();
+                    for (short version = parentVersions.lowest(); version <= parentVersions.highest(); version++) {
+                        final short v = version;
+                        Set<String> collect = domain.values().stream()
+                                .filter(x -> x.validVersions().contains(v))
+                                .map(x -> x.name())
+                                .collect(Collectors.toSet());
+                        Set<Short> shorts = grouped.get(collect);
+                        if (shorts == null) {
+                            shorts = new TreeSet<>();
+                            grouped.put(collect, shorts);
+                        }
+                        shorts.add(v);
+                    }
+                    for (Map.Entry<Set<String>, Set<Short>> e : grouped.entrySet()) {
+                        for (Short version : e.getValue()) {
+                            buffer.printf("case %d:%n", version);
+                        }
+                        buffer.incrementIndent();
+                        String expr = CodesDataGenerator.validExpr(domain.name(), e.getKey().stream()
+                                .map(name -> {
+                                    CodeSpec codeSpec = codes.codeForName(name);
+                                    if (codeSpec == null) {
+                                        throw new RuntimeException("Unknown code " + name + " in " + domain.name());
+                                    }
+                                    return codeSpec;
+                                })
+                                .collect(Collectors.toMap(c -> c.value(),
+                                    c -> c.name(),
+                                    (x, y) -> {
+                                        throw new RuntimeException("Duplicate key");
+                                    },
+                                    TreeMap::new)));
+                        buffer.printf("return %s;%n", expr);
+                        buffer.decrementIndent();
+                    }
+                    buffer.printf("default:%n");
+                    buffer.incrementIndent();
+                    buffer.printf("return false;%n");
+                    buffer.decrementIndent();
+                    buffer.decrementIndent();
+                    buffer.printf("}%n");
+                }
+                buffer.decrementIndent();
+                buffer.printf("}%n");
+            }
         }
     }
 
@@ -496,6 +565,7 @@ public final class MessageDataGenerator {
                     } else {
                         buffer.printf("this.%s = %s;%n", field.camelCaseName(),
                             primitiveReadExpression(field.type()));
+                        domainCheck(field);
                     }
                 }).
                 generate(buffer);
@@ -727,6 +797,7 @@ public final class MessageDataGenerator {
                                 buffer.printf("this.%s = %s;%n",
                                     field.camelCaseName(),
                                     readFieldFromStruct(field.type(), field.snakeCaseName(), field.zeroCopy()));
+                                domainCheck(field);
                             }
                         }).
                         ifMember(presentAndTaggedVersions -> {
@@ -929,6 +1000,7 @@ public final class MessageDataGenerator {
                                     callGenerateVariableLengthWriter.generate(presentAndUntaggedVersions);
                                 }
                             } else {
+                                domainCheck(field);
                                 buffer.printf("%s;%n",
                                     primitiveWriteExpression(field.type(), field.camelCaseName()));
                             }
@@ -1035,6 +1107,19 @@ public final class MessageDataGenerator {
             generate(buffer);
         buffer.decrementIndent();
         buffer.printf("}%n");
+    }
+
+    private void domainCheck(FieldSpec field) {
+        if (field.domain() != null) {
+            buffer.printf("if (!is%sValid(this.%s, _version)) {%n",
+                    field.capitalizedCamelCaseName(), field.camelCaseName());
+            buffer.incrementIndent();
+            buffer.printf("throw new IllegalArgumentException(\"%s cannot have value \" + this.%s + \" (\" + %s.name(this.%s) + \") at version \" + _version);%n",
+                    field.snakeCaseName(), field.camelCaseName(),
+                    field.domain().name(), field.camelCaseName());
+            buffer.decrementIndent();
+            buffer.printf("}%n");
+        }
     }
 
     private void generateCheckForUnsupportedNumTaggedFields(String conditional) {
@@ -1290,6 +1375,7 @@ public final class MessageDataGenerator {
                 (field.type() instanceof FieldType.UUIDFieldType) ||
                 (field.type() instanceof FieldType.Float64FieldType) ||
                 (field.type() instanceof FieldType.StringFieldType)) {
+            domainCheck(field);
             buffer.printf("struct.set(\"%s\", this.%s);%n",
                 field.snakeCaseName(), field.camelCaseName());
         } else if (field.type().isBytes()) {

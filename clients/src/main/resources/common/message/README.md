@@ -109,6 +109,18 @@ If a field is declared as non-nullable, and it is present in the message
 version you are using, you should set it to a non-null value before serializing
 the message.  Otherwise, you will get a runtime error.
 
+Coded Fields
+------------
+
+Integer-typed fields are often used to encode enumerated values rather than to 
+represent quantities. Error codes are a good example. Such coded values
+can be specified directly as a different type of declaration from requests and 
+responses specifications and can then referred to in the message specifications
+via the field "domain".
+
+The field domain must refer to the declaration of the coded values by name,
+and may also list the valid values which may be used on a per-version basis.
+
 Tagged Fields
 -------------
 Tagged fields are an extension to the Kafka protocol which allows optional data
@@ -127,7 +139,7 @@ version.
 You can remove support for a tagged field from a specific version of a message,
 but you can't reuse a tag once it has been used for something else.  Once tags
 have been used for something, they can't be used for anything else, without
-breaking compatibilty.
+breaking compatibility.
 
 Note that tagged fields can only be added to "flexible" message versions.
 

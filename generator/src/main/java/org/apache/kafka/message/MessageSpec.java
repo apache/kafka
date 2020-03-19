@@ -26,7 +26,8 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 
-public final class MessageSpec {
+public final class MessageSpec extends DeclarationSpec {
+
     private final StructSpec struct;
 
     private final Optional<Short> apiKey;
@@ -106,6 +107,7 @@ public final class MessageSpec {
         return flexibleVersions.toString();
     }
 
+    @Override
     public String generatedClassName() {
         return struct.name() + "Data";
     }

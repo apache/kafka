@@ -22,6 +22,7 @@ import org.junit.Test;
 import org.junit.rules.Timeout;
 
 import java.util.Arrays;
+import java.util.Collections;
 
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
@@ -48,7 +49,7 @@ public class MessageDataGeneratorTest {
                 "      \"nullableVersions\": \"2+\", \"default\": \"null\" }",
                 "  ]",
                 "}")), MessageSpec.class);
-        new MessageDataGenerator("org.apache.kafka.common.message").generate(testMessageSpec);
+        new MessageDataGenerator("org.apache.kafka.common.message", Collections.emptyMap()).generate(testMessageSpec);
     }
 
     private void assertStringContains(String substring, String value) {
@@ -69,7 +70,7 @@ public class MessageDataGeneratorTest {
             "}")), MessageSpec.class);
         assertStringContains("Invalid default for int32",
             assertThrows(RuntimeException.class, () -> {
-                new MessageDataGenerator("org.apache.kafka.common.message").generate(testMessageSpec);
+                new MessageDataGenerator("org.apache.kafka.common.message", Collections.emptyMap()).generate(testMessageSpec);
             }).getMessage());
     }
 
@@ -88,7 +89,7 @@ public class MessageDataGeneratorTest {
 
         assertStringContains("not all versions of this field are nullable",
             assertThrows(RuntimeException.class, () -> {
-                new MessageDataGenerator("org.apache.kafka.common.message").generate(testMessageSpec);
+                new MessageDataGenerator("org.apache.kafka.common.message", Collections.emptyMap()).generate(testMessageSpec);
             }).getMessage());
     }
 

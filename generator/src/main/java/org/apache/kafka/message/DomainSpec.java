@@ -14,24 +14,29 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.message;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 
-public enum MessageSpecType {
-    @JsonProperty("request")
-    REQUEST,
+import java.util.List;
 
-    @JsonProperty("response")
-    RESPONSE,
+public class DomainSpec {
+    private final String name;
+    private final List<DomainValueSpec> values;
 
-    @JsonProperty("header")
-    HEADER,
+    public DomainSpec(@JsonProperty("name") String name,
+                      @JsonProperty("values") List<DomainValueSpec> values) {
+        this.name = name;
+        this.values = values;
+    }
 
-    @JsonProperty("data")
-    DATA,
+    @JsonProperty("name")
+    public String name() {
+        return name;
+    }
 
-    @JsonProperty("codes")
-    CODES;
+    @JsonProperty("values")
+    public List<DomainValueSpec> values() {
+        return values;
+    }
 }
