@@ -48,7 +48,6 @@ public class DescribeLogDirsRequest extends AbstractRequest {
     public static class Builder extends AbstractRequest.Builder<DescribeLogDirsRequest> {
         private final DescribeLogDirsRequestData data;
 
-        // topicPartitions == null indicates requesting all partitions, and an empty list indicates requesting no partitions.
         public Builder(DescribeLogDirsRequestData data) {
             super(ApiKeys.DESCRIBE_LOG_DIRS);
             this.data = data;
