@@ -33,7 +33,7 @@ public interface ChangelogReader extends ChangelogRegister {
     /**
      * Transit to restore active changelogs mode
      */
-    void transitToRestoreActive();
+    void enforceRestoreActive();
 
     /**
      * Transit to update standby changelogs mode

@@ -279,13 +279,13 @@ public class StoreChangelogReader implements ChangelogReader {
     // NOTE: even if the newly created tasks do not need any restoring, we still first transit to this state and then
     // immediately transit back -- there's no overhead of transiting back and forth but simplifies the logic a lot.
     @Override
-    public void transitToRestoreActive() {
+    public void enforceRestoreActive() {
         if (state != ChangelogReaderState.ACTIVE_RESTORING) {
             log.debug("Transiting to restore active tasks: {}", changelogs);
-        }
 
-        // pause all partitions that are for standby tasks from the restore consumer
-        pauseChangelogsFromRestoreConsumer(standbyRestoringChangelogs());
+            // pause all partitions that are for standby tasks from the restore consumer
+            pauseChangelogsFromRestoreConsumer(standbyRestoringChangelogs());
+        }
 
         state = ChangelogReaderState.ACTIVE_RESTORING;
     }
