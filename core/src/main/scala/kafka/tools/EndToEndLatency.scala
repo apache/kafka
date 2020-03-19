@@ -50,8 +50,8 @@ object EndToEndLatency {
   private val defaultNumPartitions: Int = 1
 
   def main(args: Array[String]): Unit = {
-    if (args.length != 5 && args.length != 6) {
-      System.err.println("USAGE: java " + getClass.getName + " broker_list topic num_messages producer_acks message_size_bytes [optional] properties_file")
+    if (args.length != 5 && args.length != 6 && args.length != 7) {
+      System.err.println("USAGE: java " + getClass.getName + " broker_list topic num_messages producer_acks message_size_bytes [optional] latencies_csv properties_file")
       Exit.exit(1)
     }
 
@@ -60,7 +60,11 @@ object EndToEndLatency {
     val numMessages = args(2).toInt
     val producerAcks = args(3)
     val messageLen = args(4).toInt
-    val propsFile = if (args.length > 5) Some(args(5)).filter(_.nonEmpty) else None
+    val latenciesCSV = if (args.length > 5) args(5) else "0"
+    val propsFile = if (args.length > 6) Some(args(6)).filter(_.nonEmpty) else None
+
+    if (!List("0", "1").contains(latenciesCSV))
+      throw new IllegalArgumentException("Invalid value for latencies_csv. Please use 0 or 1")
 
     if (!List("1", "all").contains(producerAcks))
       throw new IllegalArgumentException("Latency testing requires synchronous acknowledgement. Please use 1 or all")
@@ -112,7 +116,7 @@ object EndToEndLatency {
     consumer.assignment().asScala.foreach(consumer.position)
 
     var totalTime = 0.0
-    val latencies = new Array[Long](numMessages)
+    val latencies = new Array[Double](numMessages)
     val random = new Random(0)
 
     for (i <- 0 until numMessages) {
@@ -147,18 +151,26 @@ object EndToEndLatency {
 
       //Report progress
       if (i % 1000 == 0)
-        println(i + "\t" + elapsed / 1000.0 / 1000.0)
+        System.err.println(i + "\t" + elapsed / 1000.0 / 1000.0)
       totalTime += elapsed
-      latencies(i) = elapsed / 1000 / 1000
+      latencies(i) = elapsed / 1000.0 / 1000.0
     }
 
     //Results
-    println("Avg latency: %.4f ms\n".format(totalTime / numMessages / 1000.0 / 1000.0))
-    Arrays.sort(latencies)
-    val p50 = latencies((latencies.length * 0.5).toInt)
-    val p99 = latencies((latencies.length * 0.99).toInt)
-    val p999 = latencies((latencies.length * 0.999).toInt)
-    println("Percentiles: 50th = %d, 99th = %d, 99.9th = %d".format(p50, p99, p999))
+    if ("1" == latenciesCSV) {
+      println("msg.id,lat.ms")
+
+      for (i <- 0 until numMessages) {
+        println((i + 1) + ",%.4f".format(latencies(i)))
+      }
+    } else {
+      println("Avg latency: %.4f ms\n".format(totalTime / numMessages / 1000.0 / 1000.0))
+      Arrays.sort(latencies)
+      val p50 = latencies((latencies.length * 0.5).toInt)
+      val p99 = latencies((latencies.length * 0.99).toInt)
+      val p999 = latencies((latencies.length * 0.999).toInt)
+      println("Percentiles: 50th = %.4f, 99th = %.4f, 99.9th = %.4f".format(p50, p99, p999))
+    }
 
     finalise()
   }
