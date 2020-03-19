@@ -183,6 +183,10 @@ private[transaction] class TransactionMetadata(val transactionalId: String,
   // initialized as the same as the current state
   var pendingState: Option[TransactionState] = None
 
+  // Previous value for the producer epoch. This is populated when fencing a producer so that if the fencing
+  // transition fails to append to the log, the epoch bump can be rolled back
+  var previousEpoch: Option[Short] = None
+
   private[transaction] val lock = new ReentrantLock
 
   def inLock[T](fun: => T): T = CoreUtils.inLock(lock)(fun)
@@ -284,6 +288,9 @@ private[transaction] class TransactionMetadata(val transactionalId: String,
 
   def prepareComplete(updateTimestamp: Long): TxnTransitMetadata = {
     val newState = if (state == PrepareCommit) CompleteCommit else CompleteAbort
+
+    // Since the state change was successfully written to the log, clear the previous epoch
+    previousEpoch = None
     prepareTransitionTo(newState, producerId, producerEpoch, lastProducerEpoch, txnTimeoutMs, Set.empty[TopicPartition],
       txnStartTimestamp, updateTimestamp)
   }
@@ -468,6 +475,7 @@ private[transaction] class TransactionMetadata(val transactionalId: String,
       transactionalId == other.transactionalId &&
       producerId == other.producerId &&
       producerEpoch == other.producerEpoch &&
+      lastProducerEpoch == other.lastProducerEpoch &&
       txnTimeoutMs == other.txnTimeoutMs &&
       state.equals(other.state) &&
       topicPartitions.equals(other.topicPartitions) &&

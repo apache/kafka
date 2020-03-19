@@ -381,7 +381,7 @@ class TransactionCoordinator(brokerId: Int,
                   // We should clear the pending state to make way for the transition to PrepareAbort and also bump
                   // the epoch in the transaction metadata we are about to append.
                   txnMetadata.pendingState = None
-                  txnMetadata.lastProducerEpoch = txnMetadata.producerEpoch
+                  txnMetadata.previousEpoch = Some(txnMetadata.producerEpoch)
                   txnMetadata.producerEpoch = producerEpoch
                 }
 
@@ -486,6 +486,33 @@ class TransactionCoordinator(brokerId: Int,
             } else {
               info(s"Aborting sending of transaction markers and returning $error error to client for $transactionalId's EndTransaction request of $txnMarkerResult, " +
                 s"since appending $newMetadata to transaction log with coordinator epoch $coordinatorEpoch failed")
+
+              txnManager.getTransactionState(transactionalId).right.foreach {
+                case None =>
+                  warn(s"The coordinator still owns the transaction partition for $transactionalId, but there is " +
+                    s"no metadata in the cache; this is not expected")
+
+                case Some(epochAndMetadata) =>
+                  if (epochAndMetadata.coordinatorEpoch == coordinatorEpoch) {
+                    val txnMetadata = epochAndMetadata.transactionMetadata
+                    txnMetadata.inLock {
+                      // If we attempted to fence a producer but failed to write the transition to the transaction log,
+                      // we need to roll back the epoch bump on the in-memory transaction metadata object. If we didn't,
+                      // it would be possible for the metadata object to eventually hit the max epoch and require
+                      // re-initialization of the producer (since we won't even be able to fence once the epoch is maxed).
+                      // We check producer ID and epoch before doing this but don't change the error that we return, so
+                      // that the clients get back the underlying error that caused the append to fail
+                      if (txnMetadata.producerId == producerId && txnMetadata.producerEpoch == producerEpoch &&
+                          !txnMetadata.pendingTransitionInProgress && txnMetadata.previousEpoch.isDefined) {
+                        info(s"Rolling back attempt to fence $transactionalId since appending $newMetadata to " +
+                          s"transaction log with coordinator epoch $coordinatorEpoch failed")
+
+                        txnMetadata.producerEpoch = txnMetadata.previousEpoch.get
+                        txnMetadata.previousEpoch = None
+                      }
+                    }
+                  }
+              }
 
               responseCallback(error)
             }
