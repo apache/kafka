@@ -39,8 +39,8 @@ import org.apache.kafka.common.{ElectionType, IsolationLevel, Node, TopicPartiti
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState
-import org.apache.kafka.common.message.LeaderAndIsrResponseData
 import org.apache.kafka.common.message.DeleteRecordsResponseData.DeleteRecordsPartitionResult
+import org.apache.kafka.common.message.{DescribeLogDirsResponseData, LeaderAndIsrResponseData}
 import org.apache.kafka.common.message.LeaderAndIsrResponseData.LeaderAndIsrPartitionError
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.ListenerName
@@ -50,7 +50,6 @@ import org.apache.kafka.common.record._
 import org.apache.kafka.common.replica.PartitionView.DefaultPartitionView
 import org.apache.kafka.common.replica.ReplicaView.DefaultReplicaView
 import org.apache.kafka.common.replica.{ClientMetadata, _}
-import org.apache.kafka.common.requests.DescribeLogDirsResponse.{LogDirInfo, ReplicaInfo}
 import org.apache.kafka.common.requests.EpochEndOffset._
 import org.apache.kafka.common.requests.FetchRequest.PartitionData
 import org.apache.kafka.common.requests.FetchResponse.AbortedTransaction
@@ -661,7 +660,7 @@ class ReplicaManager(val config: KafkaConfig,
    * 2) size and lag of current and future logs for each partition in the given log directory. Only logs of the queried partitions
    *    are included. There may be future logs (which will replace the current logs of the partition in the future) on the broker after KIP-113 is implemented.
    */
-  def describeLogDirs(partitions: Set[TopicPartition]): Map[String, LogDirInfo] = {
+  def describeLogDirs(partitions: Set[TopicPartition]): List[DescribeLogDirsResponseData.DescribeLogDirsResult] = {
     val logsByDir = logManager.allLogs.groupBy(log => log.dir.getParent)
 
     config.logDirs.toSet.map { logDir: String =>
@@ -672,25 +671,38 @@ class ReplicaManager(val config: KafkaConfig,
 
         logsByDir.get(absolutePath) match {
           case Some(logs) =>
-            val replicaInfos = logs.filter { log =>
-              partitions.contains(log.topicPartition)
-            }.map { log =>
-              log.topicPartition -> new ReplicaInfo(log.size, getLogEndOffsetLag(log.topicPartition, log.logEndOffset, log.isFuture), log.isFuture)
-            }.toMap
+            val topicInfos = logs.groupBy(_.topicPartition.topic).map{case (topic, logs) =>
+              new DescribeLogDirsResponseData.DescribeLogDirsTopic().setName(topic).setPartitions(
+                logs.filter { log =>
+                  partitions.contains(log.topicPartition)
+                }.map { log =>
+                  new DescribeLogDirsResponseData.DescribeLogDirsPartition()
+                    .setPartitionSize(log.size)
+                    .setPartitionIndex(log.topicPartition.partition)
+                    .setOffsetLag(getLogEndOffsetLag(log.topicPartition, log.logEndOffset, log.isFuture))
+                    .setIsFutureKey(log.isFuture)
+                }.toList.asJava)
+            }.toList.asJava
 
-            (absolutePath, new LogDirInfo(Errors.NONE, replicaInfos.asJava))
+            new DescribeLogDirsResponseData.DescribeLogDirsResult().setLogDir(absolutePath)
+              .setErrorCode(Errors.NONE.code).setTopics(topicInfos)
           case None =>
-            (absolutePath, new LogDirInfo(Errors.NONE, Map.empty[TopicPartition, ReplicaInfo].asJava))
+            new DescribeLogDirsResponseData.DescribeLogDirsResult().setLogDir(absolutePath)
+              .setErrorCode(Errors.NONE.code)
         }
 
       } catch {
         case _: KafkaStorageException =>
-          (absolutePath, new LogDirInfo(Errors.KAFKA_STORAGE_ERROR, Map.empty[TopicPartition, ReplicaInfo].asJava))
+          new DescribeLogDirsResponseData.DescribeLogDirsResult()
+            .setLogDir(absolutePath)
+            .setErrorCode(Errors.KAFKA_STORAGE_ERROR.code)
         case t: Throwable =>
           error(s"Error while describing replica in dir $absolutePath", t)
-          (absolutePath, new LogDirInfo(Errors.forException(t), Map.empty[TopicPartition, ReplicaInfo].asJava))
+          new DescribeLogDirsResponseData.DescribeLogDirsResult()
+            .setLogDir(absolutePath)
+            .setErrorCode(Errors.forException(t).code)
       }
-    }.toMap
+    }.toList
   }
 
   def getLogEndOffsetLag(topicPartition: TopicPartition, logEndOffset: Long, isFuture: Boolean): Long = {

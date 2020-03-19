@@ -454,7 +454,11 @@ class RequestQuotaTest extends BaseRequestTest {
           new AlterReplicaLogDirsRequest.Builder(Collections.singletonMap(tp, logDir))
 
         case ApiKeys.DESCRIBE_LOG_DIRS =>
-          new DescribeLogDirsRequest.Builder(Collections.singleton(tp))
+          val data = new DescribeLogDirsRequestData()
+          data.topics.add(new DescribeLogDirsRequestData.DescribableLogDirTopic()
+            .setTopic(tp.topic)
+            .setPartitionIndex(Collections.singletonList(tp.partition)))
+          new DescribeLogDirsRequest.Builder(data)
 
         case ApiKeys.CREATE_PARTITIONS =>
           val data = new CreatePartitionsRequestData()

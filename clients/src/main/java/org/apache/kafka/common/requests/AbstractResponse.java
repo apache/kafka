@@ -151,7 +151,7 @@ public abstract class AbstractResponse implements AbstractRequestResponse {
             case ALTER_REPLICA_LOG_DIRS:
                 return new AlterReplicaLogDirsResponse(struct);
             case DESCRIBE_LOG_DIRS:
-                return new DescribeLogDirsResponse(struct);
+                return new DescribeLogDirsResponse(struct, version);
             case SASL_AUTHENTICATE:
                 return new SaslAuthenticateResponse(struct, version);
             case CREATE_PARTITIONS:
