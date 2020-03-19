@@ -270,7 +270,6 @@ public class StateDirectoryTest {
 
             files = Arrays.stream(
                 Objects.requireNonNull(directory.listNonEmptyTaskDirectories())).collect(Collectors.toSet());
-
             assertEquals(mkSet(dir0, dir1), files);
         } finally {
             directory.unlock(task0);
