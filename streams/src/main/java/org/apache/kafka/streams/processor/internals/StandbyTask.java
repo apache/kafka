@@ -189,20 +189,19 @@ public class StandbyTask extends AbstractTask implements Task {
     @Override
     public void closeClean(final Map<TopicPartition, Long> checkpoint) {
         Objects.requireNonNull(checkpoint);
-        close(true, checkpoint);
+        close(true);
 
         log.info("Closed clean");
     }
 
     @Override
     public void closeDirty() {
-        close(false, null);
+        close(false);
 
         log.info("Closed dirty");
     }
 
-    private void close(final boolean clean,
-                       final Map<TopicPartition, Long> checkpoint) {
+    private void close(final boolean clean) {
         if (state() == State.CREATED || state() == State.RUNNING) {
             if (clean) {
                 // since there's no written offsets we can checkpoint with empty map,
@@ -212,18 +211,18 @@ public class StandbyTask extends AbstractTask implements Task {
             }
             final boolean wipeStateStore = !clean && eosEnabled;
 
-            executeAndMaybeSwallow(clean,
-                    () -> StateManagerUtil.closeStateManager(
-                        log,
-                        logPrefix,
-                        wipeStateStore,
-                        false,
+            executeAndMaybeSwallow(clean, () ->
+                StateManagerUtil.closeStateManager(
+                    log,
+                    logPrefix,
+                    wipeStateStore,
+                    false,
                     stateMgr,
                     stateDirectory,
                     TaskType.STANDBY),
-                    "state manager close",
-                    log
-                );
+                "state manager close",
+                log
+            );
         } else {
             throw new IllegalStateException("Illegal state " + state() + " while closing standby task " + id);
         }
