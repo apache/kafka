@@ -269,11 +269,11 @@ public final class AssignorConfiguration {
     }
 
     public static class AssignmentConfigs {
-        public final long acceptableRecoveryLag;
-        public final int balanceFactor;
-        public final int maxWarmupReplicas;
-        public final int numStandbyReplicas;
-        public final long probingRebalanceIntervalMs;
+        public final Long acceptableRecoveryLag;
+        public final Integer balanceFactor;
+        public final Integer maxWarmupReplicas;
+        public final Integer numStandbyReplicas;
+        public final Long probingRebalanceIntervalMs;
 
         AssignmentConfigs(final StreamsConfig configs) {
             acceptableRecoveryLag = configs.getLong(StreamsConfig.ACCEPTABLE_RECOVERY_LAG_CONFIG);

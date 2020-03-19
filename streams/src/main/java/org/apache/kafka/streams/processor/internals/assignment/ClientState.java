@@ -95,14 +95,24 @@ public class ClientState {
             capacity);
     }
 
-    public void assign(final TaskId taskId, final boolean active) {
-        if (active) {
-            activeTasks.add(taskId);
-        } else {
-            standbyTasks.add(taskId);
-        }
+    void assignActive(final TaskId task) {
+        activeTasks.add(task);
+        assignedTasks.add(task);
+    }
 
-        assignedTasks.add(taskId);
+    void assignStandby(final TaskId task) {
+        standbyTasks.add(task);
+        assignedTasks.add(task);
+    }
+
+    public void assignActiveTasks(final Collection<TaskId> tasks) {
+        activeTasks.addAll(tasks);
+        assignedTasks.addAll(tasks);
+    }
+
+    void assignStandbyTasks(final Collection<TaskId> tasks) {
+        standbyTasks.addAll(tasks);
+        assignedTasks.addAll(tasks);
     }
 
     public Set<TaskId> activeTasks() {
@@ -113,7 +123,7 @@ public class ClientState {
         return standbyTasks;
     }
 
-    public Set<TaskId> prevActiveTasks() {
+    Set<TaskId> prevActiveTasks() {
         return prevActiveTasks;
     }
 
@@ -142,6 +152,7 @@ public class ClientState {
     public void addPreviousActiveTasks(final Set<TaskId> prevTasks) {
         prevActiveTasks.addAll(prevTasks);
         prevAssignedTasks.addAll(prevTasks);
+        prevStandbyTasks.removeAll(prevTasks);
     }
 
     void addPreviousStandbyTasks(final Set<TaskId> standbyTasks) {
@@ -219,22 +230,16 @@ public class ClientState {
         assignedTasks.remove(task);
     }
 
-    @Override
-    public String toString() {
-        return "[activeTasks: (" + activeTasks +
-                ") standbyTasks: (" + standbyTasks +
-                ") assignedTasks: (" + assignedTasks +
-                ") prevActiveTasks: (" + prevActiveTasks +
-                ") prevStandbyTasks: (" + prevStandbyTasks +
-                ") prevAssignedTasks: (" + prevAssignedTasks +
-                ") prevOwnedPartitionsByConsumerId: (" + ownedPartitions.keySet() +
-                ") changelogOffsetTotalsByTask: (" + taskOffsetSums.entrySet() +
-                ") capacity: " + capacity +
-                "]";
-    }
-
     boolean reachedCapacity() {
         return assignedTasks.size() >= capacity;
+    }
+
+    int capacity() {
+        return capacity;
+    }
+
+    boolean hasUnfulfilledQuota(final int tasksPerThread) {
+        return activeTasks.size() < capacity * tasksPerThread;
     }
 
     boolean hasMoreAvailableCapacityThan(final ClientState other) {
@@ -262,6 +267,20 @@ public class ClientState {
         return assignedTasks.contains(taskId);
     }
 
+    @Override
+    public String toString() {
+        return "[activeTasks: (" + activeTasks +
+                   ") standbyTasks: (" + standbyTasks +
+                   ") assignedTasks: (" + assignedTasks +
+                   ") prevActiveTasks: (" + prevActiveTasks +
+                   ") prevStandbyTasks: (" + prevStandbyTasks +
+                   ") prevAssignedTasks: (" + prevAssignedTasks +
+                   ") prevOwnedPartitionsByConsumerId: (" + ownedPartitions.keySet() +
+                   ") changelogOffsetTotalsByTask: (" + taskOffsetSums.entrySet() +
+                   ") capacity: " + capacity +
+                   "]";
+    }
+
     // Visible for testing
     Set<TaskId> assignedTasks() {
         return assignedTasks;
@@ -271,16 +290,4 @@ public class ClientState {
         return prevAssignedTasks;
     }
 
-    int capacity() {
-        return capacity;
-    }
-
-    boolean hasUnfulfilledQuota(final int tasksPerThread) {
-        return activeTasks.size() < capacity * tasksPerThread;
-    }
-
-    // the following methods are used for testing only
-    public void assignActiveTasks(final Collection<TaskId> tasks) {
-        activeTasks.addAll(tasks);
-    }
 }

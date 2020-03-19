@@ -402,7 +402,6 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         final Map<TaskId, Set<TopicPartition>> partitionsForTask =
             partitionGrouper.partitionGroups(sourceTopicsByGroup, fullMetadata);
 
-
         assignTasksToClients(allSourceTopics, partitionsForTask, topicGroups, clientMetadataMap, fullMetadata);
 
         // ---------------- Step Three ---------------- //
@@ -747,21 +746,23 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             populateClientStatesMap(clientStates, clientMetadataMap, taskForPartition, changelogsByStatefulTask);
 
         // assign tasks to clients
+        final Set<TaskId> allTasks = partitionsForTask.keySet();
+        final Set<TaskId> standbyTasks = changelogsByStatefulTask.keySet();
+
         if (lagComputationSuccessful) {
             final Map<TaskId, SortedSet<RankedClient<UUID>>> statefulTasksToRankedCandidates =
-                buildClientRankingsByTask(changelogsByStatefulTask.keySet(), clientStates, assignmentConfigs.acceptableRecoveryLag);
-
-            log.debug("Assigning tasks {} to clients {} with number of replicas {}",
-                partitionsForTask.keySet(), clientStates, assignmentConfigs.numStandbyReplicas);
-
-            final StickyTaskAssignor<UUID> taskAssignor =
-                new StickyTaskAssignor<>(clientStates, partitionsForTask.keySet(), statefulTasksToRankedCandidates.keySet());
-            taskAssignor.assign(assignmentConfigs.numStandbyReplicas);
-        } else {
-            log.debug("Failed to fetch end offsets and compute task lags, will return tasks to previous owners then retry");
-            // give tasks back to previous owners (based on prevActiveTasks and prevStandbyTasks), distribute any "unowned" tasks
-            //TODO-soph
+                buildClientRankingsByTask(standbyTasks, clientStates, acceptableRecoveryLag());
+            log.trace("Computed statefulTasksToRankedCandidates map as {}", statefulTasksToRankedCandidates);
         }
+
+        log.debug("Assigning tasks {} to clients {} with number of replicas {}",
+            allTasks, clientStates, numStandbyReplicas());
+
+        final StickyTaskAssignor<UUID> taskAssignor = new StickyTaskAssignor<>(clientStates, allTasks, standbyTasks);
+        if (!lagComputationSuccessful) {
+            taskAssignor.preservePreviousTaskAssignment();
+        }
+        taskAssignor.assign(numStandbyReplicas());
 
         log.info("Assigned tasks to clients as {}{}.",
             Utils.NL, clientStates.entrySet().stream().map(Map.Entry::toString).collect(Collectors.joining(Utils.NL)));
@@ -790,11 +791,11 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                                                                           .collect(Collectors.toList());
             final Map<TopicPartition, ListOffsetsResultInfo> endOffsets = fetchEndOffsets(allChangelogPartitions, adminClient);
             allTaskEndOffsetSums = computeEndOffsetSumsByTask(endOffsets, changelogsByStatefulTask);
-
             fetchEndOffsetsSuccessful = true;
         } catch (final StreamsException e) {
             allTaskEndOffsetSums = null;
             fetchEndOffsetsSuccessful = false;
+            setAssignmentErrorCode(AssignorError.REBALANCE_NEEDED.code());
         }
 
         for (final Map.Entry<UUID, ClientMetadata> entry : clientMetadataMap.entrySet()) {
@@ -1601,23 +1602,23 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         taskManager.handleRebalanceStart(topics);
     }
 
-    long acceptableRecoveryLag() {
+    Long acceptableRecoveryLag() {
         return assignmentConfigs.acceptableRecoveryLag;
     }
 
-    int balanceFactor() {
+    Integer balanceFactor() {
         return assignmentConfigs.balanceFactor;
     }
 
-    int maxWarmupReplicas() {
+    Integer maxWarmupReplicas() {
         return assignmentConfigs.maxWarmupReplicas;
     }
 
-    int numStandbyReplicas() {
+    Integer numStandbyReplicas() {
         return assignmentConfigs.numStandbyReplicas;
     }
 
-    long probingRebalanceIntervalMs() {
+    Long probingRebalanceIntervalMs() {
         return assignmentConfigs.probingRebalanceIntervalMs;
     }
 

@@ -37,6 +37,7 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.TopologyWrapper;
+import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.kstream.JoinWindows;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
@@ -1988,8 +1989,40 @@ public class StreamsPartitionAssignorTest {
     }
 
     @Test
-    public void shouldReturnPreviousAssignmentIfEndOffsetFetchFails() {
-        //TODO-soph
+    public void shouldReturnAllActiveTasksToPreviousOwnerRegardlessOfBalanceIfEndOffsetFetchFails() {
+        builder.addSource(null, "source1", null, null, null, "topic1");
+        builder.addProcessor("processor1", new MockProcessorSupplier(), "source1");
+        builder.addStateStore(new MockKeyValueStoreBuilder("store1", false), "processor1");
+        final Set<TaskId> allTasks = mkSet(task0_0, task0_1, task0_2);
+
+        createMockTaskManager(allTasks, emptyTasks);
+        adminClient = EasyMock.createMock(AdminClient.class);
+        expect(adminClient.listOffsets(anyObject())).andThrow(new StreamsException("Should be handled"));
+        configureDefaultPartitionAssignor();
+
+        final String firstConsumer = "consumer1";
+        final String newConsumer = "consumer2";
+
+        subscriptions.put(firstConsumer,
+                          new Subscription(
+                              singletonList("source1"),
+                              getInfo(uuid1, allTasks, emptyTasks).encode()
+                          ));
+        subscriptions.put(newConsumer,
+                          new Subscription(
+                              singletonList("source1"),
+                              getInfo(uuid2, emptyTasks, emptyTasks).encode()
+                          ));
+
+        final Map<String, Assignment> assignments = partitionAssignor.assign(metadata, new GroupSubscription(subscriptions)).groupAssignment();
+
+        final List<TaskId> firstConsumerActiveTasks =
+            AssignmentInfo.decode(assignments.get(firstConsumer).userData()).activeTasks();
+        final List<TaskId> newConsumerActiveTasks =
+            AssignmentInfo.decode(assignments.get(newConsumer).userData()).activeTasks();
+
+        assertThat(firstConsumerActiveTasks, equalTo(new ArrayList<>(allTasks)));
+        assertTrue(newConsumerActiveTasks.isEmpty());
     }
 
     private static ByteBuffer encodeFutureSubscription() {
