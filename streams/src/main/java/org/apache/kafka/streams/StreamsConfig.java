@@ -297,6 +297,11 @@ public class StreamsConfig extends AbstractConfig {
      */
     public static final String METRICS_LATEST = "latest";
 
+    /** {@code acceptable.recovery.lag} */
+    public static final String ACCEPTABLE_RECOVERY_LAG_CONFIG = "acceptable.recovery.lag";
+    private static final String ACCEPTABLE_RECOVERY_LAG_DOC = "The maximum acceptable lag (number of offsets to catch up) for a client to be considered caught-up for an active task." +
+                                                                  "Should correspond to a recovery time of well under a minute for a given workload. Must be at least 0.";
+
     /** {@code application.id} */
     @SuppressWarnings("WeakerAccess")
     public static final String APPLICATION_ID_CONFIG = "application.id";
@@ -306,6 +311,10 @@ public class StreamsConfig extends AbstractConfig {
     @SuppressWarnings("WeakerAccess")
     public static final String APPLICATION_SERVER_CONFIG = "application.server";
     private static final String APPLICATION_SERVER_DOC = "A host:port pair pointing to a user-defined endpoint that can be used for state store discovery and interactive queries on this KafkaStreams instance.";
+
+    /** {@code balance.factor} */
+    public static final String BALANCE_FACTOR_CONFIG = "balance.factor";
+    private static final String BALANCE_FACTOR_DOC = "Maximum difference in the number of active tasks assigned to the stream thread with the most tasks and the stream thread with the least in a steady-state assignment. Must be at least 1.";
 
     /** {@code bootstrap.servers} */
     @SuppressWarnings("WeakerAccess")
@@ -392,6 +401,12 @@ public class StreamsConfig extends AbstractConfig {
     public static final String DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG = "default.timestamp.extractor";
     private static final String DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_DOC = "Default timestamp extractor class that implements the <code>org.apache.kafka.streams.processor.TimestampExtractor</code> interface.";
 
+    /** {@code max.warmup.replicas} */
+    public static final String MAX_WARMUP_REPLICAS_CONFIG = "max.warmup.replicas";
+    private static final String MAX_WARMUP_REPLICAS_DOC = "The maximum number of warmup replicas (extra standbys beyond the configured num.standbys) that can be assigned at once for the purpose of keeping " +
+                                                              " the task available on one instance while it is warming up on another instance it has been reassigned to. Used to throttle how much extra broker " +
+                                                              " traffic and cluster state can be used for high availability. Must be at least 1.";
+
     /** {@code metadata.max.age.ms} */
     @SuppressWarnings("WeakerAccess")
     public static final String METADATA_MAX_AGE_CONFIG = CommonClientConfigs.METADATA_MAX_AGE_CONFIG;
@@ -426,6 +441,11 @@ public class StreamsConfig extends AbstractConfig {
     @SuppressWarnings("WeakerAccess")
     public static final String POLL_MS_CONFIG = "poll.ms";
     private static final String POLL_MS_DOC = "The amount of time in milliseconds to block waiting for input.";
+
+    /** {@code probing.rebalance.interval.ms} */
+    public static final String PROBING_REBALANCE_INTERVAL_MS_CONFIG = "probing.rebalance.interval.ms";
+    private static final String PROBING_REBALANCE_INTERVAL_MS_DOC = "The maximum time to wait before triggering a rebalance to probe for warmup replicas that have finished warming up and are ready to become active. Probing rebalances " +
+                                                                        "will continue to be triggered until the assignment is balanced according to the " + BALANCE_FACTOR_CONFIG + ". Must be at least 1 minute.";
 
     /** {@code processing.guarantee} */
     @SuppressWarnings("WeakerAccess")
@@ -544,6 +564,12 @@ public class StreamsConfig extends AbstractConfig {
 
             // MEDIUM
 
+            .define(ACCEPTABLE_RECOVERY_LAG_CONFIG,
+                    Type.LONG,
+                    10_000L,
+                    atLeast(0),
+                    Importance.MEDIUM,
+                    ACCEPTABLE_RECOVERY_LAG_DOC)
             .define(CACHE_MAX_BYTES_BUFFERING_CONFIG,
                     Type.LONG,
                     10 * 1024 * 1024L,
@@ -595,6 +621,12 @@ public class StreamsConfig extends AbstractConfig {
                     0L,
                     Importance.MEDIUM,
                     MAX_TASK_IDLE_MS_DOC)
+            .define(MAX_WARMUP_REPLICAS_CONFIG,
+                    Type.INT,
+                    2,
+                    atLeast(1),
+                    Importance.MEDIUM,
+                    MAX_WARMUP_REPLICAS_DOC)
             .define(PROCESSING_GUARANTEE_CONFIG,
                     Type.STRING,
                     AT_LEAST_ONCE,
@@ -620,6 +652,12 @@ public class StreamsConfig extends AbstractConfig {
                     "",
                     Importance.LOW,
                     APPLICATION_SERVER_DOC)
+            .define(BALANCE_FACTOR_CONFIG,
+                    Type.INT,
+                    1,
+                    atLeast(1),
+                    Importance.LOW,
+                    BALANCE_FACTOR_DOC)
             .define(BUFFERED_RECORDS_PER_PARTITION_CONFIG,
                     Type.INT,
                     1000,
@@ -684,6 +722,12 @@ public class StreamsConfig extends AbstractConfig {
                     100L,
                     Importance.LOW,
                     POLL_MS_DOC)
+            .define(PROBING_REBALANCE_INTERVAL_MS_CONFIG,
+                    Type.LONG,
+                    10 * 60 * 1000L,
+                    atLeast(60 * 1000L),
+                    Importance.LOW,
+                    PROBING_REBALANCE_INTERVAL_MS_DOC)
             .define(RECEIVE_BUFFER_CONFIG,
                     Type.INT,
                     32 * 1024,

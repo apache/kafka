@@ -1775,6 +1775,26 @@ public class StreamsPartitionAssignorTest {
         partitionAssignor.assign(metadata, new GroupSubscription(subscriptions));
     }
 
+    @Test
+    public void shouldGetAssignmentConfigs() {
+        createDefaultMockTaskManager();
+
+        final Map<String, Object> props = configProps();
+        props.put(StreamsConfig.ACCEPTABLE_RECOVERY_LAG_CONFIG, 11);
+        props.put(StreamsConfig.BALANCE_FACTOR_CONFIG, 22);
+        props.put(StreamsConfig.MAX_WARMUP_REPLICAS_CONFIG, 33);
+        props.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 44);
+        props.put(StreamsConfig.PROBING_REBALANCE_INTERVAL_MS_CONFIG, 55 * 60 * 1000L);
+
+        partitionAssignor.configure(props);
+
+        assertThat(partitionAssignor.acceptableRecoveryLag(), equalTo(11L));
+        assertThat(partitionAssignor.balanceFactor(), equalTo(22));
+        assertThat(partitionAssignor.maxWarmupReplicas(), equalTo(33));
+        assertThat(partitionAssignor.numStandbyReplicas(), equalTo(44));
+        assertThat(partitionAssignor.probingRebalanceIntervalMs(), equalTo(55 * 60 * 1000L));
+    }
+
     private static ByteBuffer encodeFutureSubscription() {
         final ByteBuffer buf = ByteBuffer.allocate(4 /* used version */ + 4 /* supported version */);
         buf.putInt(LATEST_SUPPORTED_VERSION + 1);

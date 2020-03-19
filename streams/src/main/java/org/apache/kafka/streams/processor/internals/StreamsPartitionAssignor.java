@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import java.util.Objects;
 import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor;
 import org.apache.kafka.common.Cluster;
@@ -31,6 +32,7 @@ import org.apache.kafka.streams.errors.TaskAssignmentException;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.assignment.AssignmentInfo;
 import org.apache.kafka.streams.processor.internals.assignment.AssignorConfiguration;
+import org.apache.kafka.streams.processor.internals.assignment.AssignorConfiguration.AssignmentConfigs;
 import org.apache.kafka.streams.processor.internals.assignment.AssignorError;
 import org.apache.kafka.streams.processor.internals.assignment.ClientState;
 import org.apache.kafka.streams.processor.internals.assignment.CopartitionedTopicsEnforcer;
@@ -137,6 +139,53 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         }
     }
 
+    public static class RankedClient<ID extends Comparable<? super ID>> implements Comparable<RankedClient<ID>> {
+
+        private final ID clientId;
+        private final long rank;
+
+        public RankedClient(final ID clientId, final long rank) {
+            this.clientId = clientId;
+            this.rank = rank;
+        }
+
+        public ID clientId() {
+            return clientId;
+        }
+
+        public long rank() {
+            return rank;
+        }
+
+        @Override
+        public int compareTo(final RankedClient<ID> clientIdAndLag) {
+            if (rank < clientIdAndLag.rank) {
+                return -1;
+            } else if (rank > clientIdAndLag.rank) {
+                return 1;
+            } else {
+                return clientId.compareTo(clientIdAndLag.clientId);
+            }
+        }
+
+        @Override
+        public boolean equals(final Object o) {
+            if (this == o) {
+                return true;
+            }
+            if (o == null || getClass() != o.getClass()) {
+                return false;
+            }
+            final RankedClient other = (RankedClient) o;
+            return clientId == other.clientId() && rank == other.rank();
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(clientId, rank);
+        }
+    }
+
     // keep track of any future consumers in a "dummy" Client since we can't decipher their subscription
     private static final UUID FUTURE_ID = randomUUID();
 
@@ -144,7 +193,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         Comparator.comparing(TopicPartition::topic).thenComparingInt(TopicPartition::partition);
 
     private String userEndPoint;
-    private int numStandbyReplicas;
+    private AssignmentConfigs assignmentConfigs;
 
     private TaskManager taskManager;
     private StreamsMetadataState streamsMetadataState;
@@ -176,7 +225,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         taskManager = assignorConfiguration.getTaskManager();
         streamsMetadataState = assignorConfiguration.getStreamsMetadataState();
         assignmentErrorCode = assignorConfiguration.getAssignmentErrorCode(configs);
-        numStandbyReplicas = assignorConfiguration.getNumStandbyReplicas();
+        assignmentConfigs = assignorConfiguration.getAssignmentConfigs();
         partitionGrouper = assignorConfiguration.getPartitionGrouper();
         userEndPoint = assignorConfiguration.getUserEndPoint();
         internalTopicManager = assignorConfiguration.getInternalTopicManager();
@@ -700,12 +749,12 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         }
 
         log.debug("Assigning tasks {} to clients {} with number of replicas {}",
-            partitionsForTask.keySet(), states, numStandbyReplicas);
+            partitionsForTask.keySet(), states, assignmentConfigs.numStandbyReplicas);
 
         // assign tasks to clients
         final StickyTaskAssignor<UUID> taskAssignor =
             new StickyTaskAssignor<>(states, partitionsForTask.keySet(), standbyTaskIds);
-        taskAssignor.assign(numStandbyReplicas);
+        taskAssignor.assign(assignmentConfigs.numStandbyReplicas);
 
         log.info("Assigned tasks to clients as {}{}.", Utils.NL, states.entrySet().stream()
                                                                      .map(Map.Entry::toString).collect(Collectors.joining(Utils.NL)));
@@ -1421,6 +1470,26 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
 
     protected void handleRebalanceStart(final Set<String> topics) {
         taskManager.handleRebalanceStart(topics);
+    }
+
+    long acceptableRecoveryLag() {
+        return assignmentConfigs.acceptableRecoveryLag;
+    }
+
+    int balanceFactor() {
+        return assignmentConfigs.balanceFactor;
+    }
+
+    int maxWarmupReplicas() {
+        return assignmentConfigs.maxWarmupReplicas;
+    }
+
+    int numStandbyReplicas() {
+        return assignmentConfigs.numStandbyReplicas;
+    }
+
+    long probingRebalanceIntervalMs() {
+        return assignmentConfigs.probingRebalanceIntervalMs;
     }
 
 }

@@ -39,7 +39,7 @@ import static org.apache.kafka.streams.processor.internals.assignment.StreamsAss
 public final class AssignorConfiguration {
     private final String logPrefix;
     private final Logger log;
-    private final Integer numStandbyReplicas;
+    private final AssignmentConfigs assignmentConfigs;
     @SuppressWarnings("deprecation")
     private final org.apache.kafka.streams.processor.PartitionGrouper partitionGrouper;
     private final String userEndPoint;
@@ -58,7 +58,7 @@ public final class AssignorConfiguration {
         final LogContext logContext = new LogContext(logPrefix);
         log = logContext.logger(getClass());
 
-        numStandbyReplicas = streamsConfig.getInt(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG);
+        assignmentConfigs = new AssignmentConfigs(streamsConfig);
 
         partitionGrouper = streamsConfig.getConfiguredInstance(
             StreamsConfig.PARTITION_GROUPER_CLASS_CONFIG,
@@ -241,10 +241,6 @@ public final class AssignorConfiguration {
         return priorVersion;
     }
 
-    public int getNumStandbyReplicas() {
-        return numStandbyReplicas;
-    }
-
     @SuppressWarnings("deprecation")
     public org.apache.kafka.streams.processor.PartitionGrouper getPartitionGrouper() {
         return partitionGrouper;
@@ -260,5 +256,25 @@ public final class AssignorConfiguration {
 
     public CopartitionedTopicsEnforcer getCopartitionedTopicsEnforcer() {
         return copartitionedTopicsEnforcer;
+    }
+
+    public AssignmentConfigs getAssignmentConfigs() {
+        return assignmentConfigs;
+    }
+
+    public static class AssignmentConfigs {
+        public final long acceptableRecoveryLag;
+        public final int balanceFactor;
+        public final int maxWarmupReplicas;
+        public final int numStandbyReplicas;
+        public final long probingRebalanceIntervalMs;
+
+        AssignmentConfigs(final StreamsConfig configs) {
+            acceptableRecoveryLag = configs.getLong(StreamsConfig.ACCEPTABLE_RECOVERY_LAG_CONFIG);
+            balanceFactor = configs.getInt(StreamsConfig.BALANCE_FACTOR_CONFIG);
+            maxWarmupReplicas = configs.getInt(StreamsConfig.MAX_WARMUP_REPLICAS_CONFIG);
+            numStandbyReplicas = configs.getInt(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG);
+            probingRebalanceIntervalMs = configs.getLong(StreamsConfig.PROBING_REBALANCE_INTERVAL_MS_CONFIG);
+        }
     }
 }

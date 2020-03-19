@@ -720,6 +720,66 @@ public class StreamsConfigTest {
             hasItem("Configuration parameter `" + StreamsConfig.PARTITION_GROUPER_CLASS_CONFIG + "` is deprecated and will be removed in 3.0.0 release."));
     }
 
+    @Test
+    public void shouldSetDefaultAcceptableRecoveryLag() {
+        final StreamsConfig config = new StreamsConfig(props);
+        assertThat(config.getLong(StreamsConfig.ACCEPTABLE_RECOVERY_LAG_CONFIG), is(10000L));
+    }
+
+    @Test
+    public void shouldThrowConfigExceptionIfAcceptableRecoveryLagIsOutsideBounds() {
+        props.put(StreamsConfig.ACCEPTABLE_RECOVERY_LAG_CONFIG, -1L);
+        assertThrows(ConfigException.class, () -> new StreamsConfig(props));
+    }
+
+    @Test
+    public void shouldSetDefaultBalanceFactor() {
+        final StreamsConfig config = new StreamsConfig(props);
+        assertThat(config.getInt(StreamsConfig.BALANCE_FACTOR_CONFIG), is(1));
+    }
+
+    @Test
+    public void shouldThrowConfigExceptionIfBalanceFactorIsOutsideBounds() {
+        props.put(StreamsConfig.BALANCE_FACTOR_CONFIG, 0);
+        assertThrows(ConfigException.class, () -> new StreamsConfig(props));
+    }
+
+    @Test
+    public void shouldSetDefaultNumStandbyReplicas() {
+        final StreamsConfig config = new StreamsConfig(props);
+        assertThat(config.getInt(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG), is(0));
+    }
+
+    @Test
+    public void shouldThrowConfigExceptionIfNumStandbyReplicasIsOutsideBounds() {
+        props.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, -1L);
+        assertThrows(ConfigException.class, () -> new StreamsConfig(props));
+    }
+
+    @Test
+    public void shouldSetDefaultMaxWarmupReplicas() {
+        final StreamsConfig config = new StreamsConfig(props);
+        assertThat(config.getInt(StreamsConfig.MAX_WARMUP_REPLICAS_CONFIG), is(2));
+    }
+
+    @Test
+    public void shouldThrowConfigExceptionIfMaxWarmupReplicasIsOutsideBounds() {
+        props.put(StreamsConfig.MAX_WARMUP_REPLICAS_CONFIG, 0L);
+        assertThrows(ConfigException.class, () -> new StreamsConfig(props));
+    }
+
+    @Test
+    public void shouldSetDefaultProbingRebalanceInterval() {
+        final StreamsConfig config = new StreamsConfig(props);
+        assertThat(config.getLong(StreamsConfig.PROBING_REBALANCE_INTERVAL_MS_CONFIG), is(10 * 60 * 1000L));
+    }
+
+    @Test
+    public void shouldThrowConfigExceptionIfProbingRebalanceIntervalIsOutsideBounds() {
+        props.put(StreamsConfig.PROBING_REBALANCE_INTERVAL_MS_CONFIG, (60 * 1000L) - 1);
+        assertThrows(ConfigException.class, () -> new StreamsConfig(props));
+    }
+
     static class MisconfiguredSerde implements Serde {
         @Override
         public void configure(final Map configs, final boolean isKey) {
