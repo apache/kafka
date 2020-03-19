@@ -22,6 +22,7 @@ import org.apache.kafka.streams.processor.internals.Task;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -34,25 +35,58 @@ public class DefaultStateConstrainedBalancedAssignor<ID extends Comparable<? sup
     /**
      * This assignment algorithm guarantees that all task for which caught-up clients exist are assigned to one of the
      * caught-up clients. Tasks for which no caught-up client exist are assigned best-effort to satisfy the balance
-     * factor. There is not guarantee that the balance factor is satisfied.
+     * factor. There is no guarantee that the balance factor is satisfied.
      *
      * @param statefulTasksToRankedClients ranked clients map
      * @param balanceFactor balance factor (at least 1)
+     * @param clients set of clients to assign tasks to
+     * @param clientsToNumberOfStreamThreads map of clients to their number of stream threads
      * @return assignment
      */
     @Override
     public Map<ID, List<TaskId>> assign(final SortedMap<TaskId, SortedSet<ClientIdAndRank<ID>>> statefulTasksToRankedClients,
                                         final int balanceFactor,
-                                        final Set<ID> clients) {
+                                        final Set<ID> clients,
+                                        final Map<ID, Integer> clientsToNumberOfStreamThreads) {
+        checkClientsAndNumberOfStreamThreads(clientsToNumberOfStreamThreads, clients);
+        final Map<ID, List<TaskId>> assignment = initAssignment(clients);
+        final Map<TaskId, List<ID>> tasksToCaughtUpClients = tasksToCaughtUpClients(statefulTasksToRankedClients);
+        assignTasksWithCaughtUpClients(
+            assignment,
+            tasksToCaughtUpClients,
+            statefulTasksToRankedClients
+        );
+        assignTasksWithoutCaughtUpClients(
+            assignment,
+            tasksToCaughtUpClients,
+            statefulTasksToRankedClients
+        );
+        balance(
+            assignment,
+            balanceFactor,
+            statefulTasksToRankedClients,
+            tasksToCaughtUpClients,
+            clientsToNumberOfStreamThreads
+        );
+        return assignment;
+    }
+
+    private void checkClientsAndNumberOfStreamThreads(final Map<ID, Integer> clientsToNumberOfStreamThreads,
+                                                      final Set<ID> clients) {
         if (clients.isEmpty()) {
             throw new IllegalStateException("Set of clients must not be empty");
         }
-        final Map<ID, List<TaskId>> assignment = initAssignment(clients);
-        final Map<TaskId, List<ID>> tasksToCaughtUpClients = tasksToCaughtUpClients(statefulTasksToRankedClients);
-        assignTasksWithCaughtUpClients(assignment, tasksToCaughtUpClients, statefulTasksToRankedClients);
-        assignTasksWithoutCaughtUpClients(assignment, tasksToCaughtUpClients, statefulTasksToRankedClients);
-        balance(assignment, balanceFactor, statefulTasksToRankedClients, tasksToCaughtUpClients);
-        return assignment;
+        if (clientsToNumberOfStreamThreads.isEmpty()) {
+            throw new IllegalStateException("Map from clients to their number of stream threads must not be empty");
+        }
+        final Set<ID> copyOfClients = new HashSet<>(clients);
+        copyOfClients.removeAll(clientsToNumberOfStreamThreads.keySet());
+        if (!copyOfClients.isEmpty()) {
+            throw new IllegalStateException(
+                "Map from clients to their number of stream threads must contain an entry for each client involved in "
+                    + "the assignment."
+            );
+        }
     }
 
     /**
@@ -75,11 +109,11 @@ public class DefaultStateConstrainedBalancedAssignor<ID extends Comparable<? sup
      */
     private Map<TaskId, List<ID>> tasksToCaughtUpClients(final SortedMap<TaskId, SortedSet<ClientIdAndRank<ID>>> statefulTasksToRankedClients) {
         final Map<TaskId, List<ID>> taskToCaughtUpClients = new HashMap<>();
-        for (final SortedMap.Entry<TaskId, SortedSet<ClientIdAndRank<ID>>> taskToRankedClient : statefulTasksToRankedClients.entrySet()) {
-            final SortedSet<ClientIdAndRank<ID>> rankedClients = taskToRankedClient.getValue();
+        for (final SortedMap.Entry<TaskId, SortedSet<ClientIdAndRank<ID>>> taskToRankedClients : statefulTasksToRankedClients.entrySet()) {
+            final SortedSet<ClientIdAndRank<ID>> rankedClients = taskToRankedClients.getValue();
             for (final ClientIdAndRank<ID> clientIdAndRank : rankedClients) {
                 if (clientIdAndRank.rank() == Task.LATEST_OFFSET || clientIdAndRank.rank() == 0) {
-                    final TaskId taskId = taskToRankedClient.getKey();
+                    final TaskId taskId = taskToRankedClients.getKey();
                     taskToCaughtUpClients.computeIfAbsent(taskId, ignored -> new ArrayList<>()).add(clientIdAndRank.clientId());
                 } else {
                     break;
@@ -107,7 +141,6 @@ public class DefaultStateConstrainedBalancedAssignor<ID extends Comparable<? sup
 
     /**
      * Assigns tasks for which one or more caught-up clients exist to one of the caught-up clients.
-     *
      * @param assignment assignment
      * @param tasksToCaughtUpClients map from task IDs to lists of caught-up clients
      */
@@ -126,12 +159,12 @@ public class DefaultStateConstrainedBalancedAssignor<ID extends Comparable<? sup
         for (final TaskId taskId : unassignedTasksWithCaughtUpClients) {
             final List<ID> caughtUpClients = tasksToCaughtUpClients.get(taskId);
             ID clientWithLeastTasks = null;
-            int minTaskCount = Integer.MAX_VALUE;
+            int minTaskPerStreamThread = Integer.MAX_VALUE;
             for (final ID client : caughtUpClients) {
-                final int assignedTasksCount = assignment.get(client).size();
-                if (minTaskCount > assignedTasksCount) {
+                final int assignedTasks = assignment.get(client).size();
+                if (minTaskPerStreamThread > assignedTasks) {
                     clientWithLeastTasks = client;
-                    minTaskCount = assignedTasksCount;
+                    minTaskPerStreamThread = assignedTasks;
                 }
             }
             assignment.get(clientWithLeastTasks).add(taskId);
@@ -141,7 +174,6 @@ public class DefaultStateConstrainedBalancedAssignor<ID extends Comparable<? sup
     /**
      * Assigns tasks for which no caught-up clients exist.
      * A task is assigned to one of the clients with the highest rank and the least tasks assigned.
-     *
      * @param assignment assignment
      * @param tasksToCaughtUpClients map from task IDs to lists of caught-up clients
      * @param statefulTasksToRankedClients ranked clients map
@@ -154,15 +186,15 @@ public class DefaultStateConstrainedBalancedAssignor<ID extends Comparable<? sup
         for (final TaskId taskId : unassignedTasksWithoutCaughtUpClients) {
             final SortedSet<ClientIdAndRank<ID>> rankedClients = statefulTasksToRankedClients.get(taskId);
             final long topRank = rankedClients.first().rank();
-            int minTasksCount = Integer.MAX_VALUE;
+            int minTasksPerStreamThread = Integer.MAX_VALUE;
             ID clientWithLeastTasks = rankedClients.first().clientId();
             for (final ClientIdAndRank<ID> clientIdAndRank : rankedClients) {
                 if (clientIdAndRank.rank() == topRank) {
                     final ID clientId = clientIdAndRank.clientId();
-                    final int assignedTasksCount = assignment.get(clientId).size();
-                    if (minTasksCount > assignedTasksCount) {
+                    final int assignedTasks = assignment.get(clientId).size();
+                    if (minTasksPerStreamThread > assignedTasks) {
                         clientWithLeastTasks = clientId;
-                        minTasksCount = assignedTasksCount;
+                        minTasksPerStreamThread = assignedTasks;
                     }
                 } else {
                     break;
@@ -174,38 +206,82 @@ public class DefaultStateConstrainedBalancedAssignor<ID extends Comparable<? sup
 
     /**
      * Balance the assignment.
-     *
      * @param assignment assignment
      * @param balanceFactor balance factor
      * @param statefulTasksToRankedClients ranked clients map
      * @param tasksToCaughtUpClients map from task IDs to lists of caught-up clients
+     * @param clientsToNumberOfStreamThreads map from clients to their number of stream threads
      */
     private void balance(final Map<ID, List<TaskId>> assignment,
                          final int balanceFactor,
                          final Map<TaskId, SortedSet<ClientIdAndRank<ID>>> statefulTasksToRankedClients,
-                         final Map<TaskId, List<ID>> tasksToCaughtUpClients) {
+                         final Map<TaskId, List<ID>> tasksToCaughtUpClients,
+                         final Map<ID, Integer> clientsToNumberOfStreamThreads) {
         final List<ID> clients = new ArrayList<>(assignment.keySet());
         Collections.sort(clients);
-        for (final ID client : clients) {
-            final List<TaskId> source = assignment.get(client);
-            for (final TaskId task : assignedTasksWithoutCaughtUpClientsThatMightBeMoved(source, tasksToCaughtUpClients)) {
-                for (final ClientIdAndRank<ID> clientAndRank : statefulTasksToRankedClients.get(task)) {
-                    final List<TaskId> destination = assignment.get(clientAndRank.clientId());
-                    if (source.size() - destination.size() > balanceFactor) {
-                        source.remove(task);
-                        destination.add(task);
-                        break;
-                    }
+        for (final ID sourceClientId : clients) {
+            final List<TaskId> sourceTasks = assignment.get(sourceClientId);
+            maybeMoveSourceTasksWithoutCaughtUpClients(
+                assignment,
+                balanceFactor,
+                statefulTasksToRankedClients,
+                tasksToCaughtUpClients,
+                clientsToNumberOfStreamThreads,
+                sourceClientId,
+                sourceTasks
+            );
+            maybeMoveSourceTasksWithCaughtUpClients(
+                assignment,
+                balanceFactor,
+                tasksToCaughtUpClients,
+                clientsToNumberOfStreamThreads,
+                sourceClientId,
+                sourceTasks
+            );
+        }
+    }
+
+    private void maybeMoveSourceTasksWithoutCaughtUpClients(final Map<ID, List<TaskId>> assignment,
+                                                            final int balanceFactor,
+                                                            final Map<TaskId, SortedSet<ClientIdAndRank<ID>>> statefulTasksToRankedClients,
+                                                            final Map<TaskId, List<ID>> tasksToCaughtUpClients,
+                                                            final Map<ID, Integer> clientsToNumberOfStreamThreads,
+                                                            final ID sourceClientId,
+                                                            final List<TaskId> sourceTasks) {
+        for (final TaskId task : assignedTasksWithoutCaughtUpClientsThatMightBeMoved(sourceTasks, tasksToCaughtUpClients)) {
+            final int assignedTasksPerStreamThreadAtSource =
+                sourceTasks.size() / clientsToNumberOfStreamThreads.get(sourceClientId);
+            for (final ClientIdAndRank<ID> clientAndRank : statefulTasksToRankedClients.get(task)) {
+                final ID destinationClientId = clientAndRank.clientId();
+                final List<TaskId> destination = assignment.get(destinationClientId);
+                final int assignedTasksPerStreamThreadAtDestination =
+                    destination.size() / clientsToNumberOfStreamThreads.get(destinationClientId);
+                if (assignedTasksPerStreamThreadAtSource - assignedTasksPerStreamThreadAtDestination > balanceFactor) {
+                    sourceTasks.remove(task);
+                    destination.add(task);
+                    break;
                 }
             }
-            for (final TaskId task : assignedTasksWithCaughtUpClientsThatMightBeMoved(source, tasksToCaughtUpClients)) {
-                for (final ID caughtUpClient : tasksToCaughtUpClients.get(task)) {
-                    final List<TaskId> destination = assignment.get(caughtUpClient);
-                    if (source.size() - destination.size() > balanceFactor) {
-                        source.remove(task);
-                        destination.add(task);
-                        break;
-                    }
+        }
+    }
+
+    private void maybeMoveSourceTasksWithCaughtUpClients(final Map<ID, List<TaskId>> assignment,
+                                                         final int balanceFactor,
+                                                         final Map<TaskId, List<ID>> tasksToCaughtUpClients,
+                                                         final Map<ID, Integer> clientsToNumberOfStreamThreads,
+                                                         final ID sourceClientId,
+                                                         final List<TaskId> sourceTasks) {
+        for (final TaskId task : assignedTasksWithCaughtUpClientsThatMightBeMoved(sourceTasks, tasksToCaughtUpClients)) {
+            final int assignedTasksPerStreamThreadAtSource =
+                sourceTasks.size() / clientsToNumberOfStreamThreads.get(sourceClientId);
+            for (final ID destinationClientId : tasksToCaughtUpClients.get(task)) {
+                final List<TaskId> destination = assignment.get(destinationClientId);
+                final int assignedTasksPerStreamThreadAtDestination =
+                    destination.size() / clientsToNumberOfStreamThreads.get(destinationClientId);
+                if (assignedTasksPerStreamThreadAtSource - assignedTasksPerStreamThreadAtDestination > balanceFactor) {
+                    sourceTasks.remove(task);
+                    destination.add(task);
+                    break;
                 }
             }
         }

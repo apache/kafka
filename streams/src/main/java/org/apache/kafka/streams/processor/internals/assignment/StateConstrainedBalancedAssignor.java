@@ -61,5 +61,6 @@ public interface StateConstrainedBalancedAssignor<ID extends Comparable<? super 
 
     Map<ID, List<TaskId>> assign(final SortedMap<TaskId, SortedSet<ClientIdAndRank<ID>>> statefulTasksToRankedClients,
                                  final int balanceFactor,
-                                 final Set<ID> clients);
+                                 final Set<ID> clients,
+                                 final Map<ID, Integer> clientsToNumberOfStreamThreads);
 }
