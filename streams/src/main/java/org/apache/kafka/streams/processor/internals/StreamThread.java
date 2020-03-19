@@ -57,6 +57,8 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import static org.apache.kafka.streams.StreamsConfig.EXACTLY_ONCE;
+
 public class StreamThread extends Thread {
 
     private final Admin adminClient;
@@ -338,7 +340,8 @@ public class StreamThread extends Thread {
             standbyTaskCreator,
             builder,
             adminClient,
-            stateDirectory
+            stateDirectory,
+            EXACTLY_ONCE.equals(config.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG))
         );
 
         log.info("Creating consumer client");

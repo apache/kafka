@@ -49,6 +49,7 @@ import org.junit.runner.RunWith;
 import java.io.File;
 import java.io.IOException;
 import java.util.Collections;
+import java.util.Map;
 
 import static java.util.Arrays.asList;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
@@ -133,6 +134,7 @@ public class StandbyTaskTest {
     @After
     public void cleanup() throws IOException {
         if (task != null && !task.isClosed()) {
+            task.prepareCloseDirty();
             task.closeDirty();
             task = null;
         }
@@ -179,7 +181,7 @@ public class StandbyTaskTest {
     public void shouldThrowIfCommittingOnIllegalState() {
         task = createStandbyTask();
 
-        assertThrows(IllegalStateException.class, task::commit);
+        assertThrows(IllegalStateException.class, task::prepareCommit);
     }
 
     @Test
@@ -193,7 +195,8 @@ public class StandbyTaskTest {
 
         task = createStandbyTask();
         task.initializeIfNeeded();
-        task.commit();
+        task.prepareCommit();
+        task.postCommit();
 
         EasyMock.verify(stateManager);
     }
@@ -222,7 +225,8 @@ public class StandbyTaskTest {
         final MetricName metricName = setupCloseTaskMetric();
 
         task = createStandbyTask();
-        task.closeClean();
+        final Map<TopicPartition, Long> checkpoint = task.prepareCloseClean();
+        task.closeClean(checkpoint);
 
         assertEquals(Task.State.CLOSED, task.state());
 
@@ -246,6 +250,7 @@ public class StandbyTaskTest {
 
         task = createStandbyTask();
         task.initializeIfNeeded();
+        task.prepareCloseDirty();
         task.closeDirty();
 
         assertEquals(Task.State.CLOSED, task.state());
@@ -285,7 +290,8 @@ public class StandbyTaskTest {
 
         task = createStandbyTask();
         task.initializeIfNeeded();
-        task.closeClean();
+        final Map<TopicPartition, Long> checkpoint = task.prepareCloseClean();
+        task.closeClean(checkpoint);
 
         assertEquals(Task.State.CLOSED, task.state());
 
@@ -313,7 +319,8 @@ public class StandbyTaskTest {
 
         assertTrue(task.commitNeeded());
 
-        task.commit();
+        task.prepareCommit();
+        task.postCommit();
 
         // do not need to commit if there's no update
         assertFalse(task.commitNeeded());
@@ -336,9 +343,8 @@ public class StandbyTaskTest {
         task = createStandbyTask();
         task.initializeIfNeeded();
 
-        assertThrows(RuntimeException.class, task::closeClean);
-
-        assertEquals(Task.State.CLOSING, task.state());
+        final Map<TopicPartition, Long> checkpoint = task.prepareCloseClean();
+        assertThrows(RuntimeException.class, () -> task.closeClean(checkpoint));
 
         final double expectedCloseTaskMetric = 0.0;
         verifyCloseTaskMetric(expectedCloseTaskMetric, streamsMetrics, metricName);
@@ -360,7 +366,7 @@ public class StandbyTaskTest {
         task = createStandbyTask();
         task.initializeIfNeeded();
 
-        assertThrows(RuntimeException.class, task::closeClean);
+        assertThrows(RuntimeException.class, task::prepareCloseClean);
         assertEquals(Task.State.RUNNING, task.state());
 
         final double expectedCloseTaskMetric = 0.0;
@@ -383,7 +389,8 @@ public class StandbyTaskTest {
         task = createStandbyTask();
         task.initializeIfNeeded();
 
-        assertThrows(RuntimeException.class, task::closeClean);
+        task.prepareCommit();
+        assertThrows(RuntimeException.class, task::postCommit);
 
         assertEquals(Task.State.RUNNING, task.state());
 
@@ -400,11 +407,12 @@ public class StandbyTaskTest {
     public void shouldThrowIfClosingOnIllegalState() {
         task = createStandbyTask();
 
-        task.closeClean();
+        final Map<TopicPartition, Long> checkpoint = task.prepareCloseClean();
+        task.closeClean(checkpoint);
 
         // close call are not idempotent since we are already in closed
-        assertThrows(IllegalStateException.class, task::closeClean);
-        assertThrows(IllegalStateException.class, task::closeDirty);
+        assertThrows(IllegalStateException.class, task::prepareCloseClean);
+        assertThrows(IllegalStateException.class, task::prepareCloseDirty);
     }
 
     private StandbyTask createStandbyTask() {

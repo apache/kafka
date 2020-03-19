@@ -374,10 +374,13 @@ public class StreamThreadStateStoreProviderTest {
         final RecordCollector recordCollector = new RecordCollectorImpl(
             logContext,
             taskId,
-            clientSupplier.consumer,
-            new StreamsProducer(clientSupplier.getProducer(new HashMap<>()), eosEnabled, logContext, streamsConfig.getString(StreamsConfig.APPLICATION_ID_CONFIG)),
+            new StreamsProducer(
+                clientSupplier.getProducer(new HashMap<>()),
+                eosEnabled,
+                streamsConfig.getString(StreamsConfig.APPLICATION_ID_CONFIG),
+                logContext
+            ),
             streamsConfig.defaultProductionExceptionHandler(),
-            eosEnabled,
             new MockStreamsMetrics(metrics));
         return new StreamTask(
             taskId,

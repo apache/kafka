@@ -61,7 +61,6 @@ import java.util.stream.Collectors;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 
-@SuppressWarnings("unchecked")
 @Category({IntegrationTest.class})
 public class MetricsIntegrationTest {
 
@@ -261,7 +260,7 @@ public class MetricsIntegrationTest {
 
         verifyStateMetric(State.CREATED);
         verifyTopologyDescriptionMetric(topology.describe().toString());
-        verifyApplicationIdMetric(APPLICATION_ID_VALUE);
+        verifyApplicationIdMetric();
 
         kafkaStreams.start();
         TestUtils.waitForCondition(
@@ -501,13 +500,13 @@ public class MetricsIntegrationTest {
         assertThat(metricsList.get(0).metricValue(), is(topologyDescription));
     }
 
-    private void verifyApplicationIdMetric(final String applicationId) {
+    private void verifyApplicationIdMetric() {
         final List<Metric> metricsList = new ArrayList<Metric>(kafkaStreams.metrics().values()).stream()
             .filter(m -> m.metricName().name().equals(APPLICATION_ID) &&
                 m.metricName().group().equals(STREAM_CLIENT_NODE_METRICS))
             .collect(Collectors.toList());
         assertThat(metricsList.size(), is(1));
-        assertThat(metricsList.get(0).metricValue(), is(applicationId));
+        assertThat(metricsList.get(0).metricValue(), is(APPLICATION_ID_VALUE));
     }
 
     private void checkClientLevelMetrics() {
@@ -565,10 +564,6 @@ public class MetricsIntegrationTest {
             .collect(Collectors.toList());
         final int numberOfAddedMetrics = StreamsConfig.METRICS_0100_TO_24.equals(builtInMetricsVersion) ? 0 : 4;
         final int numberOfMetricsWithRemovedParent = StreamsConfig.METRICS_0100_TO_24.equals(builtInMetricsVersion) ? 5 : 4;
-        checkMetricByName(listMetricTask, COMMIT_LATENCY_AVG, numberOfMetricsWithRemovedParent);
-        checkMetricByName(listMetricTask, COMMIT_LATENCY_MAX, numberOfMetricsWithRemovedParent);
-        checkMetricByName(listMetricTask, COMMIT_RATE, numberOfMetricsWithRemovedParent);
-        checkMetricByName(listMetricTask, COMMIT_TOTAL, numberOfMetricsWithRemovedParent);
         checkMetricByName(listMetricTask, ENFORCED_PROCESSING_RATE, 4);
         checkMetricByName(listMetricTask, ENFORCED_PROCESSING_TOTAL, 4);
         checkMetricByName(listMetricTask, RECORD_LATENESS_AVG, 4);
