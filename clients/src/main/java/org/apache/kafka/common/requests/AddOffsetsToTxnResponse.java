@@ -24,19 +24,21 @@ import org.apache.kafka.common.protocol.types.Struct;
 import java.nio.ByteBuffer;
 import java.util.Map;
 
+/**
+ * Possible error codes:
+ *
+ *   - {@link Errors#NOT_COORDINATOR}
+ *   - {@link Errors#COORDINATOR_NOT_AVAILABLE}
+ *   - {@link Errors#COORDINATOR_LOAD_IN_PROGRESS}
+ *   - {@link Errors#INVALID_PRODUCER_ID_MAPPING}
+ *   - {@link Errors#INVALID_PRODUCER_EPOCH}
+ *   - {@link Errors#INVALID_TXN_STATE}
+ *   - {@link Errors#GROUP_AUTHORIZATION_FAILED}
+ *   - {@link Errors#TRANSACTIONAL_ID_AUTHORIZATION_FAILED}
+ */
 public class AddOffsetsToTxnResponse extends AbstractResponse {
 
     public AddOffsetsToTxnResponseData data;
-
-    // Possible error codes:
-    //   NotCoordinator
-    //   CoordinatorNotAvailable
-    //   CoordinatorLoadInProgress
-    //   InvalidProducerIdMapping
-    //   InvalidProducerEpoch
-    //   InvalidTxnState
-    //   GroupAuthorizationFailed
-    //   TransactionalIdAuthorizationFailed
 
     public AddOffsetsToTxnResponse(AddOffsetsToTxnResponseData data) {
         this.data = data;

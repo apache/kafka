@@ -72,5 +72,4 @@ public class AddOffsetsToTxnRequest extends AbstractRequest {
     public static AddOffsetsToTxnRequest parse(ByteBuffer buffer, short version) {
         return new AddOffsetsToTxnRequest(ApiKeys.ADD_OFFSETS_TO_TXN.parseRequest(version, buffer), version);
     }
-
 }
