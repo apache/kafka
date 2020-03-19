@@ -39,6 +39,7 @@ import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.assignment.AssignmentInfo;
+import org.apache.kafka.streams.processor.internals.assignment.AssignorError;
 import org.apache.kafka.streams.processor.internals.assignment.ClientState;
 import org.apache.kafka.streams.processor.internals.assignment.SubscriptionInfo;
 import org.apache.kafka.streams.state.HostInfo;
@@ -68,12 +69,14 @@ import static java.util.Arrays.asList;
 import static java.util.Collections.emptyList;
 import static java.util.Collections.emptyMap;
 import static java.util.Collections.emptySet;
+import static java.util.Collections.singletonMap;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.streams.processor.internals.assignment.StreamsAssignmentProtocolVersions.LATEST_SUPPORTED_VERSION;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.not;
+import static org.hamcrest.Matchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -1281,15 +1284,54 @@ public class StreamsPartitionAssignorTest {
 
     @Test
     public void shouldUpdateClusterMetadataAndHostInfoOnAssignment() {
-        final TopicPartition partitionOne = new TopicPartition("topic", 1);
-        final TopicPartition partitionTwo = new TopicPartition("topic", 2);
-        final Map<HostInfo, Set<TopicPartition>> hostState = Collections.singletonMap(
-            new HostInfo("localhost", 9090), mkSet(partitionOne, partitionTwo));
+        final Map<HostInfo, Set<TopicPartition>> initialHostState = mkMap(
+            mkEntry(new HostInfo("localhost", 9090), mkSet(t1p0, t1p1)),
+            mkEntry(new HostInfo("otherhost", 9090), mkSet(t2p0, t2p1))
+            );
+
+        final Map<HostInfo, Set<TopicPartition>> newHostState = mkMap(
+            mkEntry(new HostInfo("localhost", 9090), mkSet(t1p0, t1p1)),
+            mkEntry(new HostInfo("newotherhost", 9090), mkSet(t2p0, t2p1))
+        );
+
+        streamsMetadataState = EasyMock.createStrictMock(StreamsMetadataState.class);
+
+        streamsMetadataState.onChange(EasyMock.eq(initialHostState), EasyMock.anyObject(), EasyMock.anyObject());
+        streamsMetadataState.onChange(EasyMock.eq(newHostState), EasyMock.anyObject(), EasyMock.anyObject());
+        EasyMock.replay(streamsMetadataState);
 
         createDefaultMockTaskManager();
         configureDefaultPartitionAssignor();
 
-        partitionAssignor.onAssignment(createAssignment(hostState), null);
+        partitionAssignor.onAssignment(createAssignment(initialHostState), null);
+        partitionAssignor.onAssignment(createAssignment(newHostState), null);
+
+        EasyMock.verify(taskManager, streamsMetadataState);
+    }
+
+    @Test
+    public void shouldTriggerRebalanceOnHostInfoChange() {
+        final Map<HostInfo, Set<TopicPartition>> oldHostState = mkMap(
+            mkEntry(new HostInfo("localhost", 9090), mkSet(t1p0, t1p1)),
+            mkEntry(new HostInfo("otherhost", 9090), mkSet(t2p0, t2p1))
+        );
+
+        final Map<HostInfo, Set<TopicPartition>> newHostState = mkMap(
+            mkEntry(new HostInfo("newhost", 9090), mkSet(t1p0, t1p1)),
+            mkEntry(new HostInfo("otherhost", 9090), mkSet(t2p0, t2p1))
+        );
+
+        createDefaultMockTaskManager();
+        configurePartitionAssignorWith(singletonMap(StreamsConfig.APPLICATION_SERVER_CONFIG, "newhost:9090"));
+
+        partitionAssignor.onAssignment(createAssignment(oldHostState), null);
+
+        assertThat(partitionAssignor.assignmentErrorCode(), is(AssignorError.REBALANCE_NEEDED.code()));
+
+        partitionAssignor.setAssignmentErrorCode(AssignorError.NONE.code());
+        partitionAssignor.onAssignment(createAssignment(newHostState), null);
+
+        assertThat(partitionAssignor.assignmentErrorCode(), is(AssignorError.NONE.code()));
 
         EasyMock.verify(taskManager);
     }
