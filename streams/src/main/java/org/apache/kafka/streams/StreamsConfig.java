@@ -580,7 +580,7 @@ public class StreamsConfig extends AbstractConfig {
             ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG,
             ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION,
             ProducerConfig.TRANSACTIONAL_ID_CONFIG
-    };
+        };
 
     static {
         CONFIG = new ConfigDef()
@@ -1033,40 +1033,19 @@ public class StreamsConfig extends AbstractConfig {
         return consumerProps;
     }
 
-    private void checkIfUnexpectedUserSpecifiedConsumerConfig(final Map<String, Object> clientProvidedProps, final String[] nonConfigurableConfigs) {
+    private void checkIfUnexpectedUserSpecifiedConsumerConfig(final Map<String, Object> clientProvidedProps,
+                                                              final String[] nonConfigurableConfigs) {
         // Streams does not allow users to configure certain consumer/producer configurations, for example,
         // enable.auto.commit. In cases where user tries to override such non-configurable
         // consumer/producer configurations, log a warning and remove the user defined value from the Map.
         // Thus the default values for these consumer/producer configurations that are suitable for
         // Streams will be used instead.
 
-        if (eosEnabled) {
-            final Object maxInFlightRequests = clientProvidedProps.get(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION);
-
-            if (maxInFlightRequests != null) {
-                final int maxInFlightRequestsAsInteger;
-                if (maxInFlightRequests instanceof Integer) {
-                    maxInFlightRequestsAsInteger = (Integer) maxInFlightRequests;
-                } else if (maxInFlightRequests instanceof String) {
-                    try {
-                        maxInFlightRequestsAsInteger = Integer.parseInt(((String) maxInFlightRequests).trim());
-                    } catch (final NumberFormatException e) {
-                        throw new ConfigException(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, maxInFlightRequests, "String value could not be parsed as 32-bit integer");
-                    }
-                } else {
-                    throw new ConfigException(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, maxInFlightRequests, "Expected value to be a 32-bit integer, but it was a " + maxInFlightRequests.getClass().getName());
-                }
-
-                if (maxInFlightRequestsAsInteger > 5) {
-                    throw new ConfigException(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, maxInFlightRequestsAsInteger, "Can't exceed 5 when exactly-once processing is enabled");
-                }
-            }
-        }
+        final String nonConfigurableConfigMessage = "Unexpected user-specified %s config: %s found. %sUser setting (%s) will be ignored and the Streams default setting (%s) will be used ";
+        final String eosMessage =  PROCESSING_GUARANTEE_CONFIG + " is set to " + getString(PROCESSING_GUARANTEE_CONFIG) + ". Hence, ";
 
         for (final String config: nonConfigurableConfigs) {
             if (clientProvidedProps.containsKey(config)) {
-                final String eosMessage =  PROCESSING_GUARANTEE_CONFIG + " is set to " + getString(PROCESSING_GUARANTEE_CONFIG) + ". Hence, ";
-                final String nonConfigurableConfigMessage = "Unexpected user-specified %s config: %s found. %sUser setting (%s) will be ignored and the Streams default setting (%s) will be used ";
 
                 if (CONSUMER_DEFAULT_OVERRIDES.containsKey(config)) {
                     if (!clientProvidedProps.get(config).equals(CONSUMER_DEFAULT_OVERRIDES.get(config))) {
@@ -1093,7 +1072,31 @@ public class StreamsConfig extends AbstractConfig {
                     }
                 }
             }
+        }
 
+        if (eosEnabled) {
+            verifyMaxInFlightRequestPerConnection(clientProvidedProps.get(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION));
+        }
+    }
+
+    private void verifyMaxInFlightRequestPerConnection(final Object maxInFlightRequests) {
+        if (maxInFlightRequests != null) {
+            final int maxInFlightRequestsAsInteger;
+            if (maxInFlightRequests instanceof Integer) {
+                maxInFlightRequestsAsInteger = (Integer) maxInFlightRequests;
+            } else if (maxInFlightRequests instanceof String) {
+                try {
+                    maxInFlightRequestsAsInteger = Integer.parseInt(((String) maxInFlightRequests).trim());
+                } catch (final NumberFormatException e) {
+                    throw new ConfigException(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, maxInFlightRequests, "String value could not be parsed as 32-bit integer");
+                }
+            } else {
+                throw new ConfigException(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, maxInFlightRequests, "Expected value to be a 32-bit integer, but it was a " + maxInFlightRequests.getClass().getName());
+            }
+
+            if (maxInFlightRequestsAsInteger > 5) {
+                throw new ConfigException(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, maxInFlightRequestsAsInteger, "Can't exceed 5 when exactly-once processing is enabled");
+            }
         }
     }
 

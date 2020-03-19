@@ -110,9 +110,9 @@ class ActiveTaskCreator {
             if (StreamThread.eosBetaEnabled(config)) {
                 final String threadIdPrefix = String.format("stream-thread [%s] ", Thread.currentThread().getName());
                 final LogContext logContext = new LogContext(threadIdPrefix);
-                 eosBetaStreamsProducer = new StreamsProducer(threadProducer, true, logContext);
+                eosBetaStreamsProducer = new StreamsProducer(threadProducer, true, logContext);
             } else {
-                 eosBetaStreamsProducer = null;
+                eosBetaStreamsProducer = null;
             }
         }
     }
