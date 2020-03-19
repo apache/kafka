@@ -21,18 +21,18 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.InvalidOffsetException;
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.FencedInstanceIdException;
 import org.apache.kafka.common.errors.TimeoutException;
-import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskCorruptedException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
+import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager.StateStoreMetadata;
-import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.slf4j.Logger;
 
 import java.time.Duration;
@@ -300,8 +300,10 @@ public class StoreChangelogReader implements ChangelogReader {
     @Override
     public void transitToUpdateStandby() {
         if (state != ChangelogReaderState.ACTIVE_RESTORING) {
-            throw new IllegalStateException("The changelog reader is not restoring active tasks while trying to " +
-                "transit to update standby tasks: " + changelogs);
+            throw new IllegalStateException(
+                "The changelog reader is not restoring active tasks (is " + state + ") while trying to " +
+                    "transit to update standby tasks: " + changelogs
+            );
         }
 
         log.debug("Transiting to update standby tasks: {}", changelogs);

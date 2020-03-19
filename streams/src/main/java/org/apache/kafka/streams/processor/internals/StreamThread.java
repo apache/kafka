@@ -578,13 +578,13 @@ public class StreamThread extends Thread {
         // only try to initialize the assigned tasks
         // if the state is still in PARTITION_ASSIGNED after the poll call
         if (state == State.PARTITIONS_ASSIGNED) {
+            // transit to restore active is idempotent so we can call it multiple times
+            changelogReader.transitToRestoreActive();
+
             if (taskManager.tryToCompleteRestoration()) {
                 changelogReader.transitToUpdateStandby();
 
                 setState(State.RUNNING);
-            } else {
-                // transit to restore active is idempotent so we can call it multiple times
-                changelogReader.transitToRestoreActive();
             }
         }
 
