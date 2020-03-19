@@ -42,6 +42,7 @@ import static org.apache.kafka.clients.producer.ProducerConfig.VALUE_SERIALIZER_
 import static org.apache.kafka.clients.CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG;
 import static org.apache.kafka.clients.CommonClientConfigs.SECURITY_PROTOCOL_CONFIG;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_JAAS_CONFIG;
+import static org.apache.kafka.common.config.SaslConfigs.SASL_LOGIN_CALLBACK_HANDLER_CLASS;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_MECHANISM;
 import static org.apache.kafka.common.config.SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG;
 import static org.apache.kafka.common.config.SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG;
@@ -65,6 +66,7 @@ public class KafkaLog4jAppender extends AppenderSkeleton {
     private String sslKeystoreLocation;
     private String sslKeystorePassword;
     private String saslKerberosServiceName;
+    private String saslLoginCallbackHandler;
     private String saslMechanism;
     private String clientJaasConfPath;
     private String clientJaasConf;
@@ -186,6 +188,10 @@ public class KafkaLog4jAppender extends AppenderSkeleton {
         this.saslKerberosServiceName = saslKerberosServiceName;
     }
 
+    public void setSaslLoginCallbackHandler(String saslLoginCallbackHandler) {
+        this.saslLoginCallbackHandler = saslLoginCallbackHandler;
+    }
+
     public void setClientJaasConfPath(String clientJaasConfPath) {
         this.clientJaasConfPath = clientJaasConfPath;
     }
@@ -274,12 +280,17 @@ public class KafkaLog4jAppender extends AppenderSkeleton {
                 props.put(SSL_KEYSTORE_PASSWORD_CONFIG, sslKeystorePassword);
             }
         }
-        if (securityProtocol != null && securityProtocol.contains("SASL") && saslKerberosServiceName != null && clientJaasConfPath != null) {
+        if (securityProtocol != null && securityProtocol.contains("SASL") && saslKerberosServiceName != null) {
             props.put(SASL_KERBEROS_SERVICE_NAME, saslKerberosServiceName);
+        }
+        if (clientJaasConf != null) {
             System.setProperty("java.security.auth.login.config", clientJaasConfPath);
         }
         if (kerb5ConfPath != null) {
             System.setProperty("java.security.krb5.conf", kerb5ConfPath);
+        }
+        if (saslLoginCallbackHandler != null) {
+            props.put(SASL_LOGIN_CALLBACK_HANDLER_CLASS, saslLoginCallbackHandler);
         }
         if (saslMechanism != null) {
             props.put(SASL_MECHANISM, saslMechanism);
