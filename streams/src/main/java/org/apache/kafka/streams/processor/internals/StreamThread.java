@@ -394,21 +394,6 @@ public class StreamThread extends Thread {
         return eosAlphaEnabled(config) || eosBetaEnabled(config);
     }
 
-    public static boolean eosUpgradeModeEnabled(final StreamsConfig config) {
-        final Set<String> eosAlphaVersions = new HashSet<>();
-        eosAlphaVersions.add(StreamsConfig.UPGRADE_FROM_25);
-        eosAlphaVersions.add(StreamsConfig.UPGRADE_FROM_24);
-        eosAlphaVersions.add(StreamsConfig.UPGRADE_FROM_23);
-        eosAlphaVersions.add(StreamsConfig.UPGRADE_FROM_22);
-        eosAlphaVersions.add(StreamsConfig.UPGRADE_FROM_21);
-        eosAlphaVersions.add(StreamsConfig.UPGRADE_FROM_20);
-        eosAlphaVersions.add(StreamsConfig.UPGRADE_FROM_11);
-        eosAlphaVersions.add(StreamsConfig.UPGRADE_FROM_10);
-        eosAlphaVersions.add(StreamsConfig.UPGRADE_FROM_0110);
-
-        return eosBetaEnabled(config) && eosAlphaVersions.contains(config.getString(StreamsConfig.UPGRADE_FROM_CONFIG));
-    }
-
     public StreamThread(final Time time,
                         final StreamsConfig config,
                         final Admin adminClient,

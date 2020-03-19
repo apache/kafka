@@ -46,7 +46,6 @@ import java.util.Properties;
 
 import static org.apache.kafka.common.IsolationLevel.READ_COMMITTED;
 import static org.apache.kafka.common.IsolationLevel.READ_UNCOMMITTED;
-import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.streams.StreamsConfig.EXACTLY_ONCE;
 import static org.apache.kafka.streams.StreamsConfig.EXACTLY_ONCE_BETA;
 import static org.apache.kafka.streams.StreamsConfig.TOPOLOGY_OPTIMIZATION;
@@ -633,44 +632,6 @@ public class StreamsConfigTest {
         final Map<String, Object> producerConfigs = streamsConfig.getProducerConfigs(clientId);
 
         assertThat((String) producerConfigs.get(ProducerConfig.TRANSACTIONAL_ID_CONFIG), startsWith(applicationId + "-"));
-    }
-
-    @Test
-    public void shouldSetTransactionalIdIfEosBetaEnabledWhileUpgradingFromPreEosVersion() {
-        props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, EXACTLY_ONCE_BETA);
-
-        for (final String upgradeFrom : mkSet(
-            StreamsConfig.UPGRADE_FROM_0100,
-            StreamsConfig.UPGRADE_FROM_0101,
-            StreamsConfig.UPGRADE_FROM_0102)) {
-
-            props.put(StreamsConfig.UPGRADE_FROM_CONFIG, upgradeFrom);
-            final StreamsConfig streamsConfig = new StreamsConfig(props);
-
-            final Map<String, Object> producerConfigs = streamsConfig.getProducerConfigs(clientId);
-
-            assertThat((String) producerConfigs.get(ProducerConfig.TRANSACTIONAL_ID_CONFIG), startsWith(applicationId + "-"));
-        }
-    }
-
-    @Test
-    public void shouldNotSetTransactionalIdIfEosBetaEnabledWhenUpgradingFromEosAlphaVersion() {
-        props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, EXACTLY_ONCE_BETA);
-
-        for (final String upgradeFrom : mkSet(
-            StreamsConfig.UPGRADE_FROM_11,
-            StreamsConfig.UPGRADE_FROM_20,
-            StreamsConfig.UPGRADE_FROM_21,
-            StreamsConfig.UPGRADE_FROM_22,
-            StreamsConfig.UPGRADE_FROM_23,
-            StreamsConfig.UPGRADE_FROM_24,
-            StreamsConfig.UPGRADE_FROM_25)) {
-
-            props.put(StreamsConfig.UPGRADE_FROM_CONFIG, upgradeFrom);
-            final Map<String, Object> producerConfigs = streamsConfig.getProducerConfigs(clientId);
-
-            assertThat(producerConfigs.get(ProducerConfig.TRANSACTIONAL_ID_CONFIG), is(nullValue()));
-        }
     }
 
     @Test

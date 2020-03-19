@@ -93,9 +93,7 @@ class ActiveTaskCreator {
         createTaskSensor = ThreadMetrics.createTaskSensor(threadId, streamsMetrics);
         applicationId = config.getString(StreamsConfig.APPLICATION_ID_CONFIG);
 
-        if (StreamThread.eosAlphaEnabled(config) ||
-            (StreamThread.eosBetaEnabled(config) && StreamThread.eosUpgradeModeEnabled(config))) {
-
+        if (StreamThread.eosAlphaEnabled(config)) {
             threadProducer = null;
             eosBetaStreamsProducer = null;
             taskProducers = new HashMap<>();

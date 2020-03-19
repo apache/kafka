@@ -76,7 +76,6 @@ public class TaskManager {
     private final StateDirectory stateDirectory;
     private final boolean eosAlphaEnabled;
     private final boolean eosBetaEnabled;
-    private final boolean eosUpgradeModeEnabled;
 
     private final Map<TaskId, Task> tasks = new TreeMap<>();
     // materializing this relationship because the lookup is on the hot path
@@ -112,7 +111,6 @@ public class TaskManager {
         this.stateDirectory = stateDirectory;
         this.eosAlphaEnabled = StreamThread.eosAlphaEnabled(config);
         this.eosBetaEnabled = StreamThread.eosBetaEnabled(config);
-        this.eosUpgradeModeEnabled = StreamThread.eosUpgradeModeEnabled(config);
 
         final LogContext logContext = new LogContext(logPrefix);
         log = logContext.logger(getClass());
@@ -389,7 +387,7 @@ public class TaskManager {
                     consumedOffsetsAndMetadataPerTask.put(task.id(), committableOffsets);
                 }
                 suspended.add(task);
-            } else if (eosBetaEnabled && !eosUpgradeModeEnabled) {
+            } else if (eosBetaEnabled) {
                 task.prepareCommit();
                 final Map<TopicPartition, OffsetAndMetadata> committableOffsets = task.committableOffsetsAndMetadata();
                 if (!committableOffsets.isEmpty()) {
@@ -743,7 +741,7 @@ public class TaskManager {
         if (rebalanceInProgress) {
             return -1;
         } else {
-            if (eosBetaEnabled && !eosUpgradeModeEnabled) {
+            if (eosBetaEnabled) {
                 for (final Task task : activeTaskIterable()) {
                     if (task.commitRequested() && task.commitNeeded()) {
                         return commitAll();
@@ -781,34 +779,26 @@ public class TaskManager {
         if (eosAlphaEnabled) {
             for (final Map.Entry<TaskId, Map<TopicPartition, OffsetAndMetadata>> taskToCommit : offsetsPerTask.entrySet()) {
                 activeTaskCreator.streamsProducerForTask(taskToCommit.getKey())
-                    .commitTransaction(taskToCommit.getValue(), mainConsumer.groupMetadata().groupId());
-            }
-        } else if (eosBetaEnabled) {
-            if (eosUpgradeModeEnabled) {
-                for (final Map.Entry<TaskId, Map<TopicPartition, OffsetAndMetadata>> taskToCommit : offsetsPerTask.entrySet()) {
-                    activeTaskCreator.streamsProducerForTask(taskToCommit.getKey())
-                        .commitTransaction(taskToCommit.getValue(), mainConsumer.groupMetadata());
-                }
-            } else {
-                final Map<TopicPartition, OffsetAndMetadata> allOffsets = offsetsPerTask.values().stream()
-                    .flatMap(e -> e.entrySet().stream()).collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
-
-                activeTaskCreator.threadProducer().commitTransaction(allOffsets, mainConsumer.groupMetadata());
+                    .commitTransaction(taskToCommit.getValue(), mainConsumer.groupMetadata());
             }
         } else {
-            try {
-                final Map<TopicPartition, OffsetAndMetadata> allOffsets = offsetsPerTask.values().stream()
-                    .flatMap(e -> e.entrySet().stream()).collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+            final Map<TopicPartition, OffsetAndMetadata> allOffsets = offsetsPerTask.values().stream()
+                .flatMap(e -> e.entrySet().stream()).collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
 
-                mainConsumer.commitSync(allOffsets);
-            } catch (final CommitFailedException error) {
-                throw new TaskMigratedException("Consumer committing offsets failed, " +
-                    "indicating the corresponding thread is no longer part of the group", error);
-            } catch (final TimeoutException error) {
-                // TODO KIP-447: we can consider treating it as non-fatal and retry on the thread level
-                throw new StreamsException("Timed out while committing offsets via consumer", error);
-            } catch (final KafkaException error) {
-                throw new StreamsException("Error encountered committing offsets via consumer", error);
+            if (eosBetaEnabled) {
+                activeTaskCreator.threadProducer().commitTransaction(allOffsets, mainConsumer.groupMetadata());
+            } else {
+                try {
+                    mainConsumer.commitSync(allOffsets);
+                } catch (final CommitFailedException error) {
+                    throw new TaskMigratedException("Consumer committing offsets failed, " +
+                        "indicating the corresponding thread is no longer part of the group", error);
+                } catch (final TimeoutException error) {
+                    // TODO KIP-447: we can consider treating it as non-fatal and retry on the thread level
+                    throw new StreamsException("Timed out while committing offsets via consumer", error);
+                } catch (final KafkaException error) {
+                    throw new StreamsException("Error encountered committing offsets via consumer", error);
+                }
             }
         }
     }

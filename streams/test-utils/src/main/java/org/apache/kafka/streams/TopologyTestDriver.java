@@ -17,6 +17,7 @@
 package org.apache.kafka.streams;
 
 import org.apache.kafka.clients.consumer.Consumer;
+import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.MockConsumer;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
@@ -588,7 +589,7 @@ public class TopologyTestDriver implements Closeable {
 
     private void commit(final Map<TopicPartition, OffsetAndMetadata> offsets) {
         if (eosEnabled) {
-            testDriverProducer.commitTransaction(offsets, "dummy-app-id");
+            testDriverProducer.commitTransaction(offsets, new ConsumerGroupMetadata("dummy-app-id"));
         } else {
             consumer.commitSync(offsets);
         }

@@ -278,18 +278,6 @@ public class StreamsConfig extends AbstractConfig {
     public static final String UPGRADE_FROM_23 = "2.3";
 
     /**
-     * Config value for parameter {@link #UPGRADE_FROM_CONFIG "upgrade.from"} for upgrading an application from version {@code 2.4.x}.
-     */
-    @SuppressWarnings("WeakerAccess")
-    public static final String UPGRADE_FROM_24 = "2.4";
-
-    /**
-     * Config value for parameter {@link #UPGRADE_FROM_CONFIG "upgrade.from"} for upgrading an application from version {@code 2.5.x}.
-     */
-    @SuppressWarnings("WeakerAccess")
-    public static final String UPGRADE_FROM_25 = "2.5";
-
-    /**
      * Config value for parameter {@link #PROCESSING_GUARANTEE_CONFIG "processing.guarantee"} for at-least-once processing guarantees.
      */
     @SuppressWarnings("WeakerAccess")
@@ -310,7 +298,7 @@ public class StreamsConfig extends AbstractConfig {
     /**
      * Config value for parameter {@link #PROCESSING_GUARANTEE_CONFIG "processing.guarantee"} for exactly-once processing guarantees.
      * <p>
-     * Enabling exactly-once (beta) requires broker version 2.4 or higher.
+     * Enabling exactly-once (beta) requires broker version 2.5 or higher.
      * In contrast to {@link #EXACTLY_ONCE} Kafka Streams uses a producer per thread model,
      * similar to the {@link #AT_LEAST_ONCE} case.
      */
@@ -482,7 +470,7 @@ public class StreamsConfig extends AbstractConfig {
     public static final String PROCESSING_GUARANTEE_CONFIG = "processing.guarantee";
     private static final String PROCESSING_GUARANTEE_DOC = "The processing guarantee that should be used. " +
         "Possible values are <code>" + AT_LEAST_ONCE + "</code> (default), <code>" + EXACTLY_ONCE + "</code>, " +
-        "and <code>" + EXACTLY_ONCE_BETA + "</code> (requires brokers version 2.4 or higher). " +
+        "and <code>" + EXACTLY_ONCE_BETA + "</code> (requires brokers version 2.5 or higher). " +
         "Note that exactly-once processing requires a cluster of at least three brokers by default what is the " +
         "recommended setting for production; for development you can change this, by adjusting broker setting " +
         "<code>transaction.state.log.replication.factor</code> and <code>transaction.state.log.min.isr</code>.";
@@ -548,13 +536,11 @@ public class StreamsConfig extends AbstractConfig {
     public static final String UPGRADE_FROM_CONFIG = "upgrade.from";
     private static final String UPGRADE_FROM_DOC = "Allows upgrading in a backward compatible way. " +
         "This is needed when upgrading from [0.10.0, 1.1] to 2.0+, or when upgrading from [2.0, 2.3] to 2.4+. " +
-        "When upgrading from [0.11, 2.5] to a newer version it is only required to specify this config if you want to " +
-        "switch from <code>" + EXACTLY_ONCE + "</code> to <code>" + EXACTLY_ONCE_BETA + "</code>. Default is `null`. " +
+        "When upgrading from 2.4 to a newer version it is not required to specify this config. Default is `null`. " +
         "Accepted values are \"" + UPGRADE_FROM_0100 + "\", \"" + UPGRADE_FROM_0101 + "\", \"" +
         UPGRADE_FROM_0102 + "\", \"" + UPGRADE_FROM_0110 + "\", \"" + UPGRADE_FROM_10 + "\", \"" +
         UPGRADE_FROM_11 + "\", \"" + UPGRADE_FROM_20 + "\", \"" + UPGRADE_FROM_21 + "\", \"" +
-        UPGRADE_FROM_22 + "\", \"" + UPGRADE_FROM_23 + "\", \"" + UPGRADE_FROM_24 + "\", \"" +
-        UPGRADE_FROM_25 + "\" (for upgrading from the corresponding old version).";
+        UPGRADE_FROM_22 + "\", \"" + UPGRADE_FROM_23 + "\" (for upgrading from the corresponding old version).";
 
     /** {@code windowstore.changelog.additional.retention.ms} */
     @SuppressWarnings("WeakerAccess")
@@ -837,9 +823,7 @@ public class StreamsConfig extends AbstractConfig {
                        UPGRADE_FROM_20,
                        UPGRADE_FROM_21,
                        UPGRADE_FROM_22,
-                       UPGRADE_FROM_23,
-                       UPGRADE_FROM_24,
-                       UPGRADE_FROM_25),
+                       UPGRADE_FROM_23),
                     Importance.LOW,
                     UPGRADE_FROM_DOC)
             .define(WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_CONFIG,
@@ -1272,7 +1256,7 @@ public class StreamsConfig extends AbstractConfig {
 
         // generate producer configs from original properties and overridden maps
         final Map<String, Object> props = new HashMap<>(eosEnabled ? PRODUCER_EOS_OVERRIDES : PRODUCER_DEFAULT_OVERRIDES);
-        if (StreamThread.eosBetaEnabled(this) && !StreamThread.eosUpgradeModeEnabled(this)) {
+        if (StreamThread.eosBetaEnabled(this)) {
             props.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, getString(StreamsConfig.APPLICATION_ID_CONFIG) + "-" + UUID.randomUUID());
         }
         props.putAll(getClientCustomProps());

@@ -225,7 +225,7 @@ public class StreamsProducerTest {
     public void shouldFailOnCommitIfEosDisabled() {
         final IllegalStateException thrown = assertThrows(
             IllegalStateException.class,
-            () -> nonEosStreamsProducer.commitTransaction(null, "appId")
+            () -> nonEosStreamsProducer.commitTransaction(null, new ConsumerGroupMetadata("appId"))
         );
 
         assertThat(thrown.getMessage(), is("EOS is disabled [test]"));
@@ -280,7 +280,7 @@ public class StreamsProducerTest {
 
         producer.initTransactions();
         producer.beginTransaction();
-        producer.sendOffsetsToTransaction(offsetsAndMetadata, "appId");
+        producer.sendOffsetsToTransaction(offsetsAndMetadata, new ConsumerGroupMetadata("appId"));
         producer.commitTransaction();
         expectLastCall();
         replay(producer);
@@ -289,14 +289,14 @@ public class StreamsProducerTest {
             new StreamsProducer(producer, true, logContext);
         streamsProducer.initTransaction();
 
-        streamsProducer.commitTransaction(offsetsAndMetadata, "appId");
+        streamsProducer.commitTransaction(offsetsAndMetadata, new ConsumerGroupMetadata("appId"));
 
         verify(producer);
     }
 
     @Test
     public void shouldSendOffsetToTxOnEosCommit() {
-        eosStreamsProducer.commitTransaction(offsetsAndMetadata, "appId");
+        eosStreamsProducer.commitTransaction(offsetsAndMetadata, new ConsumerGroupMetadata("appId"));
         assertThat(eosMockProducer.sentOffsets(), is(true));
     }
 
@@ -305,7 +305,7 @@ public class StreamsProducerTest {
         eosStreamsProducer.send(record, null);
         assertThat(eosMockProducer.transactionInFlight(), is(true));
 
-        eosStreamsProducer.commitTransaction(offsetsAndMetadata, "appId");
+        eosStreamsProducer.commitTransaction(offsetsAndMetadata, new ConsumerGroupMetadata("appId"));
 
         assertThat(eosMockProducer.transactionInFlight(), is(false));
         assertThat(eosMockProducer.uncommittedRecords().isEmpty(), is(true));
@@ -325,7 +325,7 @@ public class StreamsProducerTest {
         producer.beginTransaction();
         expectLastCall();
         expect(producer.send(record, null)).andReturn(null);
-        producer.sendOffsetsToTransaction(null, "appId");
+        producer.sendOffsetsToTransaction(null, new ConsumerGroupMetadata("appId"));
         expectLastCall();
         producer.commitTransaction();
         expectLastCall();
@@ -337,7 +337,7 @@ public class StreamsProducerTest {
         // call `send()` to start a transaction
         streamsProducer.send(record, null);
 
-        streamsProducer.commitTransaction(null, "appId");
+        streamsProducer.commitTransaction(null, new ConsumerGroupMetadata("appId"));
 
         verify(producer);
     }
@@ -542,7 +542,7 @@ public class StreamsProducerTest {
             TaskMigratedException.class,
             // we pass in `null` to verify that `sendOffsetsToTransaction()` fails instead of `commitTransaction()`
             // `sendOffsetsToTransaction()` would throw an NPE on `null` offsets
-            () -> eosStreamsProducer.commitTransaction(null, "appId")
+            () -> eosStreamsProducer.commitTransaction(null, new ConsumerGroupMetadata("appId"))
         );
 
         assertThat(thrown.getCause(), is(eosMockProducer.sendOffsetsToTransactionException));
@@ -561,7 +561,7 @@ public class StreamsProducerTest {
             StreamsException.class,
             // we pass in `null` to verify that `sendOffsetsToTransaction()` fails instead of `commitTransaction()`
             // `sendOffsetsToTransaction()` would throw an NPE on `null` offsets
-            () -> eosStreamsProducer.commitTransaction(null, "appId")
+            () -> eosStreamsProducer.commitTransaction(null, new ConsumerGroupMetadata("appId"))
         );
 
         assertThat(thrown.getCause(), is(eosMockProducer.sendOffsetsToTransactionException));
@@ -579,7 +579,7 @@ public class StreamsProducerTest {
             RuntimeException.class,
             // we pass in `null` to verify that `sendOffsetsToTransaction()` fails instead of `commitTransaction()`
             // `sendOffsetsToTransaction()` would throw an NPE on `null` offsets
-            () -> eosStreamsProducer.commitTransaction(null, "appId")
+            () -> eosStreamsProducer.commitTransaction(null, new ConsumerGroupMetadata("appId"))
         );
 
         assertThat(thrown.getMessage(), is("KABOOM!"));
@@ -592,7 +592,7 @@ public class StreamsProducerTest {
 
         final TaskMigratedException thrown = assertThrows(
             TaskMigratedException.class,
-            () -> eosStreamsProducer.commitTransaction(offsetsAndMetadata, "appId")
+            () -> eosStreamsProducer.commitTransaction(offsetsAndMetadata, new ConsumerGroupMetadata("appId"))
         );
 
         assertThat(eosMockProducer.sentOffsets(), is(true));
@@ -611,7 +611,7 @@ public class StreamsProducerTest {
 
         final StreamsException thrown = assertThrows(
             StreamsException.class,
-            () -> eosStreamsProducer.commitTransaction(offsetsAndMetadata, "appId")
+            () -> eosStreamsProducer.commitTransaction(offsetsAndMetadata, new ConsumerGroupMetadata("appId"))
         );
 
         assertThat(eosMockProducer.sentOffsets(), is(true));
@@ -625,7 +625,7 @@ public class StreamsProducerTest {
 
         final StreamsException thrown = assertThrows(
             StreamsException.class,
-            () -> eosStreamsProducer.commitTransaction(offsetsAndMetadata, "appId")
+            () -> eosStreamsProducer.commitTransaction(offsetsAndMetadata, new ConsumerGroupMetadata("appId"))
         );
 
         assertThat(eosMockProducer.sentOffsets(), is(true));
@@ -642,7 +642,7 @@ public class StreamsProducerTest {
 
         final RuntimeException thrown = assertThrows(
             RuntimeException.class,
-            () -> eosStreamsProducer.commitTransaction(offsetsAndMetadata, "appId")
+            () -> eosStreamsProducer.commitTransaction(offsetsAndMetadata, new ConsumerGroupMetadata("appId"))
         );
 
         assertThat(eosMockProducer.sentOffsets(), is(true));

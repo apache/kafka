@@ -157,28 +157,13 @@ public class StreamsProducer {
      * @throws TaskMigratedException
      */
     void commitTransaction(final Map<TopicPartition, OffsetAndMetadata> offsets,
-                           final String applicationId) throws ProducerFencedException {
-        commitTransaction(offsets, applicationId, null);
-    }
-
-    void commitTransaction(final Map<TopicPartition, OffsetAndMetadata> offsets,
                            final ConsumerGroupMetadata consumerGroupMetadata) throws ProducerFencedException {
-        commitTransaction(offsets, null, consumerGroupMetadata);
-    }
-
-    private void commitTransaction(final Map<TopicPartition, OffsetAndMetadata> offsets,
-                                   final String applicationId,
-                                   final ConsumerGroupMetadata consumerGroupMetadata) throws ProducerFencedException {
         if (!eosEnabled) {
             throw new IllegalStateException(formatException("EOS is disabled"));
         }
         maybeBeginTransaction();
         try {
-            if (applicationId != null) {
-                producer.sendOffsetsToTransaction(offsets, applicationId);
-            } else {
-                producer.sendOffsetsToTransaction(offsets, consumerGroupMetadata);
-            }
+            producer.sendOffsetsToTransaction(offsets, consumerGroupMetadata);
             producer.commitTransaction();
             transactionInFlight = false;
         } catch (final ProducerFencedException error) {

@@ -311,48 +311,6 @@ public class ActiveTaskCreatorTest {
     }
 
     @Test
-    public void shouldCreateThreadProducerIfEosBetaEnabledAndUpgradingFromPreEosVersion() {
-        properties.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_BETA);
-        mockClientSupplier.setApplicationIdForProducer("appId");
-
-        for (final String upgradeFrom : mkSet(
-            StreamsConfig.UPGRADE_FROM_0100,
-            StreamsConfig.UPGRADE_FROM_0101,
-            StreamsConfig.UPGRADE_FROM_0102)) {
-
-            properties.put(StreamsConfig.UPGRADE_FROM_CONFIG, upgradeFrom);
-            createTasks();
-
-            assertThat(mockClientSupplier.producers.size(), is(1));
-            mockClientSupplier.producers.clear();
-        }
-    }
-
-    @Test
-    public void shouldCreateProducerPerTaskIfEosBetaEnabledAndUpgradingFromEosAlpha() {
-        properties.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_BETA);
-        mockClientSupplier.setApplicationIdForProducer("appId");
-
-        for (final String upgradeFrom : mkSet(
-            StreamsConfig.UPGRADE_FROM_0110,
-            StreamsConfig.UPGRADE_FROM_10,
-            StreamsConfig.UPGRADE_FROM_11,
-            StreamsConfig.UPGRADE_FROM_20,
-            StreamsConfig.UPGRADE_FROM_21,
-            StreamsConfig.UPGRADE_FROM_22,
-            StreamsConfig.UPGRADE_FROM_23,
-            StreamsConfig.UPGRADE_FROM_24,
-            StreamsConfig.UPGRADE_FROM_25)) {
-
-            properties.put(StreamsConfig.UPGRADE_FROM_CONFIG, upgradeFrom);
-            createTasks();
-
-            assertThat(mockClientSupplier.producers.size(), is(2));
-            mockClientSupplier.producers.clear();
-        }
-    }
-
-    @Test
     public void shouldReturnThreadProducerIfEosBetaEnabled() {
         properties.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_BETA);
         mockClientSupplier.setApplicationIdForProducer("appId");
@@ -366,92 +324,11 @@ public class ActiveTaskCreatorTest {
     }
 
     @Test
-    public void shouldReturnThreadProducerIfEosBetaEnabledAndUpgradingFromPreEosVersion() {
-        properties.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_BETA);
-        mockClientSupplier.setApplicationIdForProducer("appId");
-
-        for (final String upgradeFrom : mkSet(
-            StreamsConfig.UPGRADE_FROM_0100,
-            StreamsConfig.UPGRADE_FROM_0101,
-            StreamsConfig.UPGRADE_FROM_0102)) {
-
-            properties.put(StreamsConfig.UPGRADE_FROM_CONFIG, upgradeFrom);
-            createTasks();
-
-            final StreamsProducer threadProducer = activeTaskCreator.threadProducer();
-
-            assertThat(mockClientSupplier.producers.size(), is(1));
-            assertThat(threadProducer.kafkaProducer(), is(mockClientSupplier.producers.get(0)));
-            mockClientSupplier.producers.clear();
-        }
-    }
-
-    @Test
-    public void shouldReturnStreamsProducerPerTaskIfEosBetaEnabledAndUpgradingFromEosAlpha() {
-        properties.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_BETA);
-
-        for (final String upgradeFrom : mkSet(
-            StreamsConfig.UPGRADE_FROM_0110,
-            StreamsConfig.UPGRADE_FROM_10,
-            StreamsConfig.UPGRADE_FROM_11,
-            StreamsConfig.UPGRADE_FROM_20,
-            StreamsConfig.UPGRADE_FROM_21,
-            StreamsConfig.UPGRADE_FROM_22,
-            StreamsConfig.UPGRADE_FROM_23,
-            StreamsConfig.UPGRADE_FROM_24,
-            StreamsConfig.UPGRADE_FROM_25)) {
-
-            properties.put(StreamsConfig.UPGRADE_FROM_CONFIG, upgradeFrom);
-
-            shouldReturnStreamsProducerPerTask();
-        }
-    }
-
-    @Test
     public void shouldConstructProducerMetricsWithEosBetaEnabled() {
         properties.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_BETA);
         mockClientSupplier.setApplicationIdForProducer("appId");
 
         shouldConstructThreadProducerMetric();
-    }
-
-    @Test
-    public void shouldConstructProducerMetricsWithEosBetaEnabledAndUpgradingFromPreEosVersion() {
-        properties.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_BETA);
-        mockClientSupplier.setApplicationIdForProducer("appId");
-
-        for (final String upgradeFrom : mkSet(
-            StreamsConfig.UPGRADE_FROM_0100,
-            StreamsConfig.UPGRADE_FROM_0101,
-            StreamsConfig.UPGRADE_FROM_0102)) {
-
-            properties.put(StreamsConfig.UPGRADE_FROM_CONFIG, upgradeFrom);
-
-            shouldConstructThreadProducerMetric();
-            mockClientSupplier.producers.clear();
-        }
-    }
-
-    @Test
-    public void shouldConstructProducerMetricsWithEosBetaEnabledAndUpgradingFromEosAlpha() {
-        properties.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_BETA);
-
-        for (final String upgradeFrom : mkSet(
-            StreamsConfig.UPGRADE_FROM_0110,
-            StreamsConfig.UPGRADE_FROM_10,
-            StreamsConfig.UPGRADE_FROM_11,
-            StreamsConfig.UPGRADE_FROM_20,
-            StreamsConfig.UPGRADE_FROM_21,
-            StreamsConfig.UPGRADE_FROM_22,
-            StreamsConfig.UPGRADE_FROM_23,
-            StreamsConfig.UPGRADE_FROM_24,
-            StreamsConfig.UPGRADE_FROM_25)) {
-
-            properties.put(StreamsConfig.UPGRADE_FROM_CONFIG, upgradeFrom);
-
-            shouldConstructProducerMetricsPerTask();
-            mockClientSupplier.producers.clear();
-        }
     }
 
     @Test
@@ -466,52 +343,6 @@ public class ActiveTaskCreatorTest {
     }
 
     @Test
-    public void shouldConstructClientIdWithEosBetaEnabledAndUpgradingFromPreEosVerion() {
-        properties.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_BETA);
-        mockClientSupplier.setApplicationIdForProducer("appId");
-
-        for (final String upgradeFrom : mkSet(
-            StreamsConfig.UPGRADE_FROM_0100,
-            StreamsConfig.UPGRADE_FROM_0101,
-            StreamsConfig.UPGRADE_FROM_0102)) {
-
-            properties.put(StreamsConfig.UPGRADE_FROM_CONFIG, upgradeFrom);
-            createTasks();
-
-            final Set<String> clientIds = activeTaskCreator.producerClientIds();
-
-            assertThat(clientIds, is(Collections.singleton("threadId-producer")));
-            mockClientSupplier.producers.clear();
-        }
-    }
-
-    @Test
-    public void shouldConstructClientIdWithEosBetaEnabledAndUpgradingFromEosAlpha() {
-        properties.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_BETA);
-        mockClientSupplier.setApplicationIdForProducer("appId");
-
-        for (final String upgradeFrom : mkSet(
-            StreamsConfig.UPGRADE_FROM_0110,
-            StreamsConfig.UPGRADE_FROM_10,
-            StreamsConfig.UPGRADE_FROM_11,
-            StreamsConfig.UPGRADE_FROM_20,
-            StreamsConfig.UPGRADE_FROM_21,
-            StreamsConfig.UPGRADE_FROM_22,
-            StreamsConfig.UPGRADE_FROM_23,
-            StreamsConfig.UPGRADE_FROM_24,
-            StreamsConfig.UPGRADE_FROM_25)) {
-
-            properties.put(StreamsConfig.UPGRADE_FROM_CONFIG, upgradeFrom);
-            createTasks();
-
-            final Set<String> clientIds = activeTaskCreator.producerClientIds();
-
-            assertThat(clientIds, is(mkSet("threadId-0_0-producer", "threadId-0_1-producer")));
-            mockClientSupplier.producers.clear();
-        }
-    }
-
-    @Test
     public void shouldCloseThreadProducerIfEosBetaEnabled() {
         properties.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_BETA);
         mockClientSupplier.setApplicationIdForProducer("appId");
@@ -520,53 +351,6 @@ public class ActiveTaskCreatorTest {
         activeTaskCreator.closeThreadProducerIfNeeded();
 
         assertThat(mockClientSupplier.producers.get(0).closed(), is(true));
-    }
-
-    @Test
-    public void shouldCloseThreadProducerIfEosBetaEnabledAndUpgradingFromPreEosVersion() {
-        properties.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_BETA);
-        mockClientSupplier.setApplicationIdForProducer("appId");
-
-        for (final String upgradeFrom : mkSet(
-            StreamsConfig.UPGRADE_FROM_0100,
-            StreamsConfig.UPGRADE_FROM_0101,
-            StreamsConfig.UPGRADE_FROM_0102)) {
-
-            properties.put(StreamsConfig.UPGRADE_FROM_CONFIG, upgradeFrom);
-            createTasks();
-
-            activeTaskCreator.closeThreadProducerIfNeeded();
-
-            assertThat(mockClientSupplier.producers.get(0).closed(), is(true));
-            mockClientSupplier.producers.clear();
-        }
-    }
-
-    @Test
-    public void shouldNoOpCloseTaskProducerIfEosBetaEnabledAndUpgradingFromEosAlpha() {
-        properties.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_BETA);
-        mockClientSupplier.setApplicationIdForProducer("appId");
-
-        for (final String upgradeFrom : mkSet(
-            StreamsConfig.UPGRADE_FROM_0110,
-            StreamsConfig.UPGRADE_FROM_10,
-            StreamsConfig.UPGRADE_FROM_11,
-            StreamsConfig.UPGRADE_FROM_20,
-            StreamsConfig.UPGRADE_FROM_21,
-            StreamsConfig.UPGRADE_FROM_22,
-            StreamsConfig.UPGRADE_FROM_23,
-            StreamsConfig.UPGRADE_FROM_24,
-            StreamsConfig.UPGRADE_FROM_25)) {
-
-            properties.put(StreamsConfig.UPGRADE_FROM_CONFIG, upgradeFrom);
-            createTasks();
-
-            activeTaskCreator.closeThreadProducerIfNeeded();
-
-            assertThat(mockClientSupplier.producers.get(0).closed(), is(false));
-            assertThat(mockClientSupplier.producers.get(1).closed(), is(false));
-            mockClientSupplier.producers.clear();
-        }
     }
 
     @Test
@@ -580,62 +364,6 @@ public class ActiveTaskCreatorTest {
         activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(new TaskId(0, 1));
 
         assertThat(mockClientSupplier.producers.get(0).closed(), is(false));
-    }
-
-    @Test
-    public void shouldNoOpCloseTaskProducerIfEosBetaEnabledAndUpgradingFromPreEosVersion() {
-        properties.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_BETA);
-        mockClientSupplier.setApplicationIdForProducer("appId");
-
-        for (final String upgradeFrom : mkSet(
-            StreamsConfig.UPGRADE_FROM_0100,
-            StreamsConfig.UPGRADE_FROM_0101,
-            StreamsConfig.UPGRADE_FROM_0102)) {
-
-            properties.put(StreamsConfig.UPGRADE_FROM_CONFIG, upgradeFrom);
-            createTasks();
-
-            activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(new TaskId(0, 0));
-            activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(new TaskId(0, 1));
-
-            assertThat(mockClientSupplier.producers.get(0).closed(), is(false));
-            mockClientSupplier.producers.clear();
-        }
-    }
-
-    @Test
-    public void shouldCloseTaskProducerIfEosBetaEnabledAndUpgradingFromEosAlpha() {
-        properties.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_BETA);
-        mockClientSupplier.setApplicationIdForProducer("appId");
-
-        for (final String upgradeFrom : mkSet(
-            StreamsConfig.UPGRADE_FROM_0110,
-            StreamsConfig.UPGRADE_FROM_10,
-            StreamsConfig.UPGRADE_FROM_11,
-            StreamsConfig.UPGRADE_FROM_20,
-            StreamsConfig.UPGRADE_FROM_21,
-            StreamsConfig.UPGRADE_FROM_22,
-            StreamsConfig.UPGRADE_FROM_23,
-            StreamsConfig.UPGRADE_FROM_24,
-            StreamsConfig.UPGRADE_FROM_25)) {
-
-            properties.put(StreamsConfig.UPGRADE_FROM_CONFIG, upgradeFrom);
-            createTasks();
-
-            activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(new TaskId(0, 0));
-            activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(new TaskId(0, 1));
-            // should no-op unknown task
-            activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(new TaskId(0, 2));
-
-            assertThat(mockClientSupplier.producers.get(0).closed(), is(true));
-            assertThat(mockClientSupplier.producers.get(1).closed(), is(true));
-
-            // should not throw because producer should be removed
-            mockClientSupplier.producers.get(0).closeException = new RuntimeException("KABOOM!");
-            activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(new TaskId(0, 0));
-
-            mockClientSupplier.producers.clear();
-        }
     }
 
     // error handling
@@ -656,56 +384,6 @@ public class ActiveTaskCreatorTest {
     }
 
     @Test
-    public void shouldFailOnStreamsProducerPerTaskIfEosBetaEnabledAndUpgradingFromPreEosVersion() {
-        properties.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_BETA);
-        mockClientSupplier.setApplicationIdForProducer("appId");
-
-        for (final String upgradeFrom : mkSet(
-            StreamsConfig.UPGRADE_FROM_0100,
-            StreamsConfig.UPGRADE_FROM_0101,
-            StreamsConfig.UPGRADE_FROM_0102)) {
-
-            properties.put(StreamsConfig.UPGRADE_FROM_CONFIG, upgradeFrom);
-            createTasks();
-
-            final IllegalStateException thrown = assertThrows(
-                IllegalStateException.class,
-                () -> activeTaskCreator.streamsProducerForTask(null)
-            );
-
-            assertThat(thrown.getMessage(), is("Producer per thread is used"));
-        }
-    }
-
-    @Test
-    public void shouldFailOnGetThreadProducerIfEosBetaEnabledAndUpgradingFromEosAlpha() {
-        properties.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_BETA);
-        mockClientSupplier.setApplicationIdForProducer("appId");
-
-        for (final String upgradeFrom : mkSet(
-            StreamsConfig.UPGRADE_FROM_0110,
-            StreamsConfig.UPGRADE_FROM_10,
-            StreamsConfig.UPGRADE_FROM_11,
-            StreamsConfig.UPGRADE_FROM_20,
-            StreamsConfig.UPGRADE_FROM_21,
-            StreamsConfig.UPGRADE_FROM_22,
-            StreamsConfig.UPGRADE_FROM_23,
-            StreamsConfig.UPGRADE_FROM_24,
-            StreamsConfig.UPGRADE_FROM_25)) {
-
-            properties.put(StreamsConfig.UPGRADE_FROM_CONFIG, upgradeFrom);
-            createTasks();
-
-            final IllegalStateException thrown = assertThrows(
-                IllegalStateException.class,
-                activeTaskCreator::threadProducer
-            );
-
-            assertThat(thrown.getMessage(), is("Exactly-once beta is not enabled."));
-        }
-    }
-
-    @Test
     public void shouldThrowStreamsExceptionOnErrorCloseThreadProducerIfEosBetaEnabled() {
         properties.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_BETA);
         mockClientSupplier.setApplicationIdForProducer("appId");
@@ -719,66 +397,6 @@ public class ActiveTaskCreatorTest {
 
         assertThat(thrown.getMessage(), is("Thread producer encounter error trying to close."));
         assertThat(thrown.getCause().getMessage(), is("KABOOM!"));
-    }
-
-    @Test
-    public void shouldThrowStreamsExceptionOnErrorCloseThreadProducerIfEosBetaEnabledAndUpgradingFromPreEosVersion() {
-        properties.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_BETA);
-        mockClientSupplier.setApplicationIdForProducer("appId");
-
-        for (final String upgradeFrom : mkSet(
-            StreamsConfig.UPGRADE_FROM_0100,
-            StreamsConfig.UPGRADE_FROM_0101,
-            StreamsConfig.UPGRADE_FROM_0102)) {
-
-            properties.put(StreamsConfig.UPGRADE_FROM_CONFIG, upgradeFrom);
-            createTasks();
-            mockClientSupplier.producers.get(0).closeException = new RuntimeException("KABOOM!");
-
-            final StreamsException thrown = assertThrows(
-                StreamsException.class,
-                activeTaskCreator::closeThreadProducerIfNeeded
-            );
-
-            assertThat(thrown.getMessage(), is("Thread producer encounter error trying to close."));
-            assertThat(thrown.getCause().getMessage(), is("KABOOM!"));
-            mockClientSupplier.producers.clear();
-        }
-    }
-
-    @Test
-    public void shouldThrowStreamsExceptionOnErrorCloseTaskProducerIfEosBetaEnabledAndUpgradingFromEosAlpha() {
-        properties.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_BETA);
-        mockClientSupplier.setApplicationIdForProducer("appId");
-
-        for (final String upgradeFrom : mkSet(
-            StreamsConfig.UPGRADE_FROM_0110,
-            StreamsConfig.UPGRADE_FROM_10,
-            StreamsConfig.UPGRADE_FROM_11,
-            StreamsConfig.UPGRADE_FROM_20,
-            StreamsConfig.UPGRADE_FROM_21,
-            StreamsConfig.UPGRADE_FROM_22,
-            StreamsConfig.UPGRADE_FROM_23,
-            StreamsConfig.UPGRADE_FROM_24,
-            StreamsConfig.UPGRADE_FROM_25)) {
-
-            properties.put(StreamsConfig.UPGRADE_FROM_CONFIG, upgradeFrom);
-            createTasks();
-            mockClientSupplier.producers.get(0).closeException = new RuntimeException("KABOOM!");
-
-            final StreamsException thrown = assertThrows(
-                StreamsException.class,
-                () -> activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(new TaskId(0, 0))
-            );
-
-            assertThat(thrown.getMessage(), is("[0_0] task producer encounter error trying to close."));
-            assertThat(thrown.getCause().getMessage(), is("KABOOM!"));
-
-            // should not throw again because producer should be removed
-            activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(new TaskId(0, 0));
-
-            mockClientSupplier.producers.clear();
-        }
     }
 
     private void shouldReturnStreamsProducerPerTask() {

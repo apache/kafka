@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.common.TopicPartition;
@@ -34,7 +35,7 @@ public class TestDriverProducer extends StreamsProducer {
 
     @Override
     public void commitTransaction(final Map<TopicPartition, OffsetAndMetadata> offsets,
-                                  final String applicationId) throws ProducerFencedException {
-        super.commitTransaction(offsets, applicationId);
+                                  final ConsumerGroupMetadata consumerGroupMetadata) throws ProducerFencedException {
+        super.commitTransaction(offsets, consumerGroupMetadata);
     }
 }

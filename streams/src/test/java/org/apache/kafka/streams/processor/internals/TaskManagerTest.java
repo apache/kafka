@@ -1284,12 +1284,12 @@ public class TaskManagerTest {
         final Map<TopicPartition, OffsetAndMetadata> offsetsT01 = singletonMap(t1p1, new OffsetAndMetadata(0L, null));
         final Map<TopicPartition, OffsetAndMetadata> offsetsT02 = singletonMap(t1p2, new OffsetAndMetadata(1L, null));
 
-        producer.commitTransaction(offsetsT01, "appId");
+        producer.commitTransaction(offsetsT01, new ConsumerGroupMetadata("appId"));
         expectLastCall();
-        producer.commitTransaction(offsetsT02, "appId");
+        producer.commitTransaction(offsetsT02, new ConsumerGroupMetadata("appId"));
         expectLastCall();
 
-        shouldCommitViaProducerIfEosEnabled(StreamsConfig.EXACTLY_ONCE, null, producer, offsetsT01, offsetsT02);
+        shouldCommitViaProducerIfEosEnabled(StreamsConfig.EXACTLY_ONCE, producer, offsetsT01, offsetsT02);
     }
 
     @Test
@@ -1306,65 +1306,10 @@ public class TaskManagerTest {
         producer.commitTransaction(allOffsets, new ConsumerGroupMetadata("appId"));
         expectLastCall();
 
-        shouldCommitViaProducerIfEosEnabled(StreamsConfig.EXACTLY_ONCE_BETA, null, producer, offsetsT01, offsetsT02);
-    }
-
-    @Test
-    public void shouldCommitViaProducerIfEosBetaEnabledAndUpgradingFromPreEosVersion() {
-        for (final String upgradeFrom : mkSet(
-            StreamsConfig.UPGRADE_FROM_0100,
-            StreamsConfig.UPGRADE_FROM_0101,
-            StreamsConfig.UPGRADE_FROM_0102)) {
-
-            final StreamsProducer producer = mock(StreamsProducer.class);
-            reset(activeTaskCreator);
-            expect(activeTaskCreator.threadProducer()).andReturn(producer);
-
-            final Map<TopicPartition, OffsetAndMetadata> offsetsT01 = singletonMap(t1p1, new OffsetAndMetadata(0L, null));
-            final Map<TopicPartition, OffsetAndMetadata> offsetsT02 = singletonMap(t1p2, new OffsetAndMetadata(1L, null));
-            final Map<TopicPartition, OffsetAndMetadata> allOffsets = new HashMap<>();
-            allOffsets.putAll(offsetsT01);
-            allOffsets.putAll(offsetsT02);
-
-            producer.commitTransaction(allOffsets, new ConsumerGroupMetadata("appId"));
-            expectLastCall();
-
-            shouldCommitViaProducerIfEosEnabled(StreamsConfig.EXACTLY_ONCE_BETA, upgradeFrom, producer, offsetsT01, offsetsT02);
-        }
-    }
-
-    @Test
-    public void shouldCommitViaProducerIfEosBetaEnabledAndUpgradingFromEosAlpha() {
-        for (final String upgradeFrom : mkSet(
-            StreamsConfig.UPGRADE_FROM_0110,
-            StreamsConfig.UPGRADE_FROM_10,
-            StreamsConfig.UPGRADE_FROM_11,
-            StreamsConfig.UPGRADE_FROM_20,
-            StreamsConfig.UPGRADE_FROM_21,
-            StreamsConfig.UPGRADE_FROM_22,
-            StreamsConfig.UPGRADE_FROM_23,
-            StreamsConfig.UPGRADE_FROM_24,
-            StreamsConfig.UPGRADE_FROM_25)) {
-
-            final StreamsProducer producer = mock(StreamsProducer.class);
-            reset(activeTaskCreator);
-            expect(activeTaskCreator.streamsProducerForTask(taskId01)).andReturn(producer);
-            expect(activeTaskCreator.streamsProducerForTask(taskId02)).andReturn(producer);
-
-            final Map<TopicPartition, OffsetAndMetadata> offsetsT01 = singletonMap(t1p1, new OffsetAndMetadata(0L, null));
-            final Map<TopicPartition, OffsetAndMetadata> offsetsT02 = singletonMap(t1p2, new OffsetAndMetadata(1L, null));
-
-            producer.commitTransaction(offsetsT01, new ConsumerGroupMetadata("appId"));
-            expectLastCall();
-            producer.commitTransaction(offsetsT02, new ConsumerGroupMetadata("appId"));
-            expectLastCall();
-
-            shouldCommitViaProducerIfEosEnabled(StreamsConfig.EXACTLY_ONCE_BETA, upgradeFrom, producer, offsetsT01, offsetsT02);
-        }
+        shouldCommitViaProducerIfEosEnabled(StreamsConfig.EXACTLY_ONCE_BETA, producer, offsetsT01, offsetsT02);
     }
 
     private void shouldCommitViaProducerIfEosEnabled(final String eosConfig,
-                                                     final String upgradeFromConfig,
                                                      final StreamsProducer producer,
                                                      final Map<TopicPartition, OffsetAndMetadata> offsetsT01,
                                                      final Map<TopicPartition, OffsetAndMetadata> offsetsT02) {
@@ -1382,8 +1327,7 @@ public class TaskManagerTest {
             new StreamsConfig(mkMap(
                 mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, "appId"),
                 mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy:1234"),
-                mkEntry(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, eosConfig),
-                mkEntry(StreamsConfig.UPGRADE_FROM_CONFIG, upgradeFromConfig)
+                mkEntry(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, eosConfig)
             ))
         );
         taskManager.setMainConsumer(consumer);
