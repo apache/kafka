@@ -132,7 +132,7 @@ public class MemoryRecordsBuilder implements AutoCloseable {
         this.bufferStream = bufferStream;
         this.appendStream = new DataOutputStream(compressionType.wrapForOutput(this.bufferStream, magic));
 
-        if (deleteHorizonSet()) {
+        if (hasDeleteHorizonMs()) {
             this.firstTimestamp = deleteHorizonMs;
         }
     }
@@ -217,7 +217,7 @@ public class MemoryRecordsBuilder implements AutoCloseable {
         return isTransactional;
     }
 
-    public boolean deleteHorizonSet() {
+    public boolean hasDeleteHorizonMs() {
         return magic >= RecordBatch.MAGIC_VALUE_V2 && deleteHorizonMs >= 0L;
     }
 
@@ -393,8 +393,8 @@ public class MemoryRecordsBuilder implements AutoCloseable {
             maxTimestamp = this.maxTimestamp;
 
         DefaultRecordBatch.writeHeader(buffer, baseOffset, offsetDelta, size, magic, compressionType, timestampType,
-                firstTimestamp, maxTimestamp, producerId, producerEpoch, baseSequence, isTransactional, isControlBatch, deleteHorizonSet(),
-                partitionLeaderEpoch, numRecords);
+                firstTimestamp, maxTimestamp, producerId, producerEpoch, baseSequence, isTransactional, isControlBatch,
+                hasDeleteHorizonMs(), partitionLeaderEpoch, numRecords);
 
         buffer.position(pos);
         return writtenCompressed;

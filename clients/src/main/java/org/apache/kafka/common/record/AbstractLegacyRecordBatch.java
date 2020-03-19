@@ -223,7 +223,7 @@ public abstract class AbstractLegacyRecordBatch extends AbstractRecordBatch impl
     }
 
     @Override
-    public boolean deleteHorizonSet() {
+    public boolean hasDeleteHorizonMs() {
         return false;
     }
 
@@ -484,7 +484,7 @@ public abstract class AbstractLegacyRecordBatch extends AbstractRecordBatch impl
         }
 
         @Override
-        public boolean deleteHorizonSet() {
+        public boolean hasDeleteHorizonMs() {
             return false;
         }
 
@@ -583,7 +583,7 @@ public abstract class AbstractLegacyRecordBatch extends AbstractRecordBatch impl
         }
 
         @Override
-        public boolean deleteHorizonSet() {
+        public boolean hasDeleteHorizonMs() {
             return false;
         }
 

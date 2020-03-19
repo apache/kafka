@@ -160,18 +160,27 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
     }
 
     /**
-     * Get the timestamp of the first record in this batch. It is usually the create time of the record even if the
-     * timestamp type of the batch is log append time.
-     *
-     * There is the possibility that the first timestamp had been set to the delete horizon of the batch, 
-     * in which case, the delete horizon will be returned instead.
+     * Gets the base timestamp of the batch which is used to calculate the timestamp deltas.
      * 
-     * @return The first timestamp if the batch's delete horizon has not been set
-     *         The delete horizon if the batch's delete horizon has been set
+     * @return The base timestamp or
      *         {@link RecordBatch#NO_TIMESTAMP} if the batch is empty
      */
-    public long firstTimestamp() {
+    public long baseTimestamp() {
         return buffer.getLong(FIRST_TIMESTAMP_OFFSET);
+    }
+
+    /**
+     * Get the timestamp of the first record in this batch. It is usually the create time of the record even if the
+     * timestamp type of the batch is log append time.
+     * 
+     * @return The first timestamp if a record has been appended, unless the delete horizon has been set
+     *         {@link RecordBatch#NO_TIMESTAMP} if the batch is empty or if the delete horizon is set
+     */
+    public long firstTimestamp() {
+        final long baseTimestamp = baseTimestamp();
+        if (hasDeleteHorizonMs())
+            return RecordBatch.NO_TIMESTAMP;
+        return baseTimestamp;
     }
 
     @Override
@@ -256,14 +265,15 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
     }
 
     @Override
-    public boolean deleteHorizonSet() {
+    public boolean hasDeleteHorizonMs() {
         return (attributes() & DELETE_HORIZON_FLAG_MASK) > 0;
     }
 
     @Override
     public long deleteHorizonMs() {
-        if (deleteHorizonSet())
-            return firstTimestamp();
+        final long baseTimestamp = baseTimestamp();
+        if (hasDeleteHorizonMs())
+            return baseTimestamp;
         return RecordBatch.NO_TIMESTAMP;
     }
 
@@ -382,7 +392,7 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
         if (timestampType() == timestampType && currentMaxTimestamp == maxTimestamp)
             return;
 
-        byte attributes = computeAttributes(compressionType(), timestampType, isTransactional(), isControlBatch(), deleteHorizonSet());
+        byte attributes = computeAttributes(compressionType(), timestampType, isTransactional(), isControlBatch(), hasDeleteHorizonMs());
         buffer.putShort(ATTRIBUTES_OFFSET, attributes);
         buffer.putLong(MAX_TIMESTAMP_OFFSET, maxTimestamp);
         long crc = computeChecksum();
@@ -725,13 +735,13 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
         }
 
         @Override
-        public boolean deleteHorizonSet() {
-            return loadBatchHeader().deleteHorizonSet();
+        public boolean hasDeleteHorizonMs() {
+            return loadBatchHeader().hasDeleteHorizonMs();
         }
 
         @Override
         public long deleteHorizonMs() {
-            if (deleteHorizonSet())
+            if (hasDeleteHorizonMs())
                 return super.loadBatchHeader().deleteHorizonMs();
             return RecordBatch.NO_TIMESTAMP;
         }

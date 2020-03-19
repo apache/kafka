@@ -214,7 +214,7 @@ public interface RecordBatch extends Iterable<Record> {
      * Whether or not the base timestamp has been set to the delete horizon
      * @return true if it is, false otherwise
      */
-    boolean deleteHorizonSet();
+    boolean hasDeleteHorizonMs();
 
     /**
      * Get the delete horizon, returns -1L if the first timestamp is not the delete horizon

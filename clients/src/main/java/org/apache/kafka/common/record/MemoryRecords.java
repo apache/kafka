@@ -190,7 +190,7 @@ public class MemoryRecords extends AbstractRecords {
                 // in which case, we need to reset the base timestamp and overwrite the timestamp deltas
                 // if the batch does not contain tombstones, then we don't need to overwrite batch
                 boolean needToSetDeleteHorizon = batch.magic() >= 2 && (containsTombstones || containsMarkerForEmptyTxn)
-                    && !batch.deleteHorizonSet();
+                    && !batch.hasDeleteHorizonMs();
                 if (writeOriginalBatch && !needToSetDeleteHorizon) {
                     if (batch.deleteHorizonMs() > filterResult.latestDeleteHorizon()) 
                         filterResult.updateLatestDeleteHorizon(batch.deleteHorizonMs());
@@ -199,7 +199,7 @@ public class MemoryRecords extends AbstractRecords {
                 } else {
                     final MemoryRecordsBuilder builder;
                     if (needToSetDeleteHorizon) {
-                        long deleteHorizonMs = filter.currentTime + filter.tombstoneRetentionMs;
+                        long deleteHorizonMs = filter.currentTime + filter.deleteRetentionMs;
                         builder = buildRetainedRecordsInto(batch, retainedRecords, bufferOutputStream, deleteHorizonMs);
                         if (deleteHorizonMs > filterResult.latestDeleteHorizon()) {
                             filterResult.updateLatestDeleteHorizon(deleteHorizonMs);
@@ -370,18 +370,18 @@ public class MemoryRecords extends AbstractRecords {
 
     public static abstract class RecordFilter {
         public final long currentTime;
-        public final long tombstoneRetentionMs;
+        public final long deleteRetentionMs;
 
-        public RecordFilter(final long currentTime, final long tombstoneRetentionMs) {
+        public RecordFilter(final long currentTime, final long deleteRetentionMs) {
             this.currentTime = currentTime;
-            this.tombstoneRetentionMs = tombstoneRetentionMs;
+            this.deleteRetentionMs = deleteRetentionMs;
         }
 
         public static class BatchRetentionResult {
             public final BatchRetention batchRetention;
             public final boolean containsMarkerForEmptyTxn;
             public BatchRetentionResult(final BatchRetention batchRetention,
-                                                final boolean containsMarkerForEmptyTxn) {
+                                        final boolean containsMarkerForEmptyTxn) {
                 this.batchRetention = batchRetention;
                 this.containsMarkerForEmptyTxn = containsMarkerForEmptyTxn;
             }

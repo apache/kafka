@@ -627,7 +627,7 @@ private[log] class Cleaner(val id: Int,
    * @param dest The cleaned log segment
    * @param map The key=>offset mapping
    * @param retainLegacyDeletesAndTxnMarkers Should tombstones (lower than version 2) and markers be retained while cleaning this segment
-   * @param tombstoneRetentionMs Defines how long a tombstone should be kept as defined by log configuration
+   * @param deleteRetentionMs Defines how long a tombstone should be kept as defined by log configuration
    * @param maxLogMessageSize The maximum message size of the corresponding topic
    * @param stats Collector for cleaning statistics
    * @param currentTime The time at which the clean was initiated
@@ -637,7 +637,7 @@ private[log] class Cleaner(val id: Int,
                              dest: LogSegment,
                              map: OffsetMap,
                              retainLegacyDeletesAndTxnMarkers: Boolean,
-                             tombstoneRetentionMs: Long,
+                             deleteRetentionMs: Long,
                              maxLogMessageSize: Int,
                              transactionMetadata: CleanedTransactionMetadata,
                              lastRecordsOfActiveProducers: Map[Long, LastRecord],
@@ -645,7 +645,7 @@ private[log] class Cleaner(val id: Int,
                              currentTime: Long): Long = {
     var latestDeleteHorizon: Long = RecordBatch.NO_TIMESTAMP
 
-    val logCleanerFilter: RecordFilter = new RecordFilter(currentTime, tombstoneRetentionMs) {
+    val logCleanerFilter: RecordFilter = new RecordFilter(currentTime, deleteRetentionMs) {
       var discardBatchRecords: Boolean = _
 
       override def checkBatchRetention(batch: RecordBatch): RecordFilter.BatchRetentionResult = {
@@ -658,7 +658,7 @@ private[log] class Cleaner(val id: Int,
             discardBatchRecords = canDiscardBatch && !retainLegacyDeletesAndTxnMarkers
           } else {
             discardBatchRecords = canDiscardBatch && 
-              batch.deleteHorizonSet() && batch.deleteHorizonMs() <= currentTime
+              batch.hasDeleteHorizonMs() && batch.deleteHorizonMs() <= currentTime
           }
         } else {
           discardBatchRecords = canDiscardBatch
@@ -806,7 +806,7 @@ private[log] class Cleaner(val id: Int,
       val supportDeleteHorizon = batch.magic() >= RecordBatch.MAGIC_VALUE_V2
       val shouldRetainDeletes =
         if (supportDeleteHorizon)
-          !batch.deleteHorizonSet() || currentTime < batch.deleteHorizonMs()
+          !batch.hasDeleteHorizonMs() || currentTime < batch.deleteHorizonMs()
         else
           retainDeletesForLegacyRecords
       val isRetainedValue = record.hasValue || shouldRetainDeletes
