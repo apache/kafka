@@ -20,13 +20,6 @@ import org.junit.Assert._
 import org.junit.{Before, Test}
 
 class PartitionLeaderElectionAlgorithmsTest {
-  private var controllerContext: ControllerContext = null
-
-  @Before
-  def setUp(): Unit = {
-    controllerContext = new ControllerContext
-    controllerContext.stats.removeMetric("UncleanLeaderElectionsPerSec")
-  }
 
   @Test
   def testOfflinePartitionLeaderElection(): Unit = {
@@ -36,9 +29,8 @@ class PartitionLeaderElectionAlgorithmsTest {
     val leaderOpt = PartitionLeaderElectionAlgorithms.offlinePartitionLeaderElection(assignment,
       isr,
       liveReplicas,
-      uncleanLeaderElectionEnabled = false,
-      controllerContext)
-    assertEquals(Option(4), leaderOpt)
+      uncleanLeaderElectionEnabled = false)
+    assertEquals(Option(4, false), leaderOpt)
   }
 
   @Test
@@ -49,10 +41,8 @@ class PartitionLeaderElectionAlgorithmsTest {
     val leaderOpt = PartitionLeaderElectionAlgorithms.offlinePartitionLeaderElection(assignment,
       isr,
       liveReplicas,
-      uncleanLeaderElectionEnabled = false,
-      controllerContext)
+      uncleanLeaderElectionEnabled = false)
     assertEquals(None, leaderOpt)
-    assertEquals(0, controllerContext.stats.uncleanLeaderElectionRate.count())
   }
 
   @Test
@@ -63,10 +53,8 @@ class PartitionLeaderElectionAlgorithmsTest {
     val leaderOpt = PartitionLeaderElectionAlgorithms.offlinePartitionLeaderElection(assignment,
       isr,
       liveReplicas,
-      uncleanLeaderElectionEnabled = true,
-      controllerContext)
-    assertEquals(Option(4), leaderOpt)
-    assertEquals(1, controllerContext.stats.uncleanLeaderElectionRate.count())
+      uncleanLeaderElectionEnabled = true)
+    assertEquals(Option(4, true), leaderOpt)
   }
 
   @Test
