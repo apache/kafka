@@ -27,6 +27,7 @@ import java.util.Collections;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkSet;
+import static org.apache.kafka.streams.processor.internals.assignment.SubscriptionInfo.UNKNOWN_OFFSET_SUM;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertFalse;
@@ -220,6 +221,15 @@ public class ClientStateTest {
         client.addPreviousTasksAndOffsetSums(taskOffsetSums);
         client.computeTaskLags(allTaskEndOffsetSums);
         assertThat(client.lagFor(taskId01), equalTo(Task.LATEST_OFFSET));
+    }
+
+    @Test
+    public void shouldReturnUnknownOffsetSumForLagOfTaskWithUnknownOffset() {
+        final Map<TaskId, Long> taskOffsetSums = Collections.singletonMap(taskId01, UNKNOWN_OFFSET_SUM);
+        final Map<TaskId, Long> allTaskEndOffsetSums = Collections.singletonMap(taskId01, 500L);
+        client.addPreviousTasksAndOffsetSums(taskOffsetSums);
+        client.computeTaskLags(allTaskEndOffsetSums);
+        assertThat(client.lagFor(taskId01), equalTo(UNKNOWN_OFFSET_SUM));
     }
 
     @Test

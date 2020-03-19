@@ -69,6 +69,7 @@ import static org.apache.kafka.streams.KafkaStreams.fetchEndOffsets;
 import static org.apache.kafka.streams.processor.internals.assignment.StreamsAssignmentProtocolVersions.EARLIEST_PROBEABLE_VERSION;
 import static org.apache.kafka.streams.processor.internals.assignment.StreamsAssignmentProtocolVersions.LATEST_SUPPORTED_VERSION;
 import static org.apache.kafka.streams.processor.internals.assignment.StreamsAssignmentProtocolVersions.UNKNOWN;
+import static org.apache.kafka.streams.processor.internals.assignment.SubscriptionInfo.UNKNOWN_OFFSET_SUM;
 
 public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Configurable {
 
@@ -745,13 +746,14 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         final boolean lagComputationSuccessful =
             populateClientStatesMap(clientStates, clientMetadataMap, taskForPartition, changelogsByStatefulTask);
 
-        final Map<TaskId, SortedSet<RankedClient<UUID>>> statefulTasksToRankedCandidates =
-            buildClientRankingsByTask(changelogsByStatefulTask.keySet(), clientStates, assignmentConfigs.acceptableRecoveryLag);
-
         // assign tasks to clients
         if (lagComputationSuccessful) {
+            final Map<TaskId, SortedSet<RankedClient<UUID>>> statefulTasksToRankedCandidates =
+                buildClientRankingsByTask(changelogsByStatefulTask.keySet(), clientStates, assignmentConfigs.acceptableRecoveryLag);
+
             log.debug("Assigning tasks {} to clients {} with number of replicas {}",
                 partitionsForTask.keySet(), clientStates, assignmentConfigs.numStandbyReplicas);
+
             final StickyTaskAssignor<UUID> taskAssignor =
                 new StickyTaskAssignor<>(clientStates, partitionsForTask.keySet(), statefulTasksToRankedCandidates.keySet());
             taskAssignor.assign(assignmentConfigs.numStandbyReplicas);
@@ -790,7 +792,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             allTaskEndOffsetSums = computeEndOffsetSumsByTask(endOffsets, changelogsByStatefulTask);
 
             fetchEndOffsetsSuccessful = true;
-        } catch(final StreamsException e) {
+        } catch (final StreamsException e) {
             allTaskEndOffsetSums = null;
             fetchEndOffsetsSuccessful = false;
         }
@@ -845,14 +847,18 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                     log.debug("Fetched end offsets did not contain the changelog {} of task {}", changelog, task);
                     throw new IllegalStateException("Could not get end offset for " + changelog);
                 }
-                taskEndOffsetSums
-                    .computeIfPresent(task, (id, curOffsetSum) -> curOffsetSum + offsetResult.offset());
+                taskEndOffsetSums.computeIfPresent(task, (id, curOffsetSum) -> curOffsetSum + offsetResult.offset());
             }
         }
         return taskEndOffsetSums;
     }
 
     /**
+     * Rankings are computed as follows, with lower being more caught up:
+     *      Rank -1: active running task
+     *      Rank 0: standby or restoring task whose overall lag is within the acceptableRecoveryLag bounds
+     *      Rank 1: tasks whose lag is unknown, eg because it was not encoded in an older version subscription
+     *      Rank 1+: all other tasks are ranked according to their actual total lag
      * @return Sorted set of all client candidates for each stateful task, ranked by their overall lag
      */
     static Map<TaskId, SortedSet<RankedClient<UUID>>> buildClientRankingsByTask(final Set<TaskId> statefulTasks,
@@ -870,8 +876,10 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                 final long clientRank;
                 if (taskLag == Task.LATEST_OFFSET) {
                     clientRank = Task.LATEST_OFFSET;
+                } else if (taskLag == UNKNOWN_OFFSET_SUM) {
+                    clientRank = 1L;
                 } else if (taskLag <= acceptableRecoveryLag) {
-                    clientRank = 0;
+                    clientRank = 0L;
                 } else {
                     clientRank = taskLag;
                 }

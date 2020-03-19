@@ -169,6 +169,9 @@ public class ClientState {
         this.taskOffsetSums.putAll(taskOffsetSums);
     }
 
+    /**
+     * Compute the lag for each stateful task, including tasks this client did not previously have.
+     */
     public void computeTaskLags(final Map<TaskId, Long> allTaskEndOffsetSums) {
         if (!taskLagTotals.isEmpty()) {
             throw new IllegalStateException("Already computed task lags for this client.");
@@ -179,15 +182,15 @@ public class ClientState {
             final Long endOffsetSum = taskEntry.getValue();
             final Long offsetSum = taskOffsetSums.getOrDefault(task, 0L);
 
-            if (endOffsetSum == UNKNOWN_OFFSET_SUM) {
-
-            } else if (endOffsetSum < offsetSum) {
+            if (endOffsetSum < offsetSum) {
                 throw new IllegalStateException("Task " + task + " had endOffsetSum=" + endOffsetSum +
                                                     " smaller than offsetSum=" + offsetSum);
             }
 
             if (offsetSum == Task.LATEST_OFFSET) {
                 taskLagTotals.put(task, Task.LATEST_OFFSET);
+            } else if (offsetSum == UNKNOWN_OFFSET_SUM) {
+                taskLagTotals.put(task, UNKNOWN_OFFSET_SUM);
             } else {
                 taskLagTotals.put(task, endOffsetSum - offsetSum);
             }
