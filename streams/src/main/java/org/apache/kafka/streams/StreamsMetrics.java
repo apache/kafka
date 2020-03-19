@@ -19,7 +19,6 @@ package org.apache.kafka.streams;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.Sensor;
-import org.apache.kafka.common.metrics.Sensor.RecordingLevel;
 
 import java.util.Map;
 
