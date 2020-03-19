@@ -201,6 +201,18 @@ class BrokerConfigHandler(private val brokerConfig: KafkaConfig,
       quotaManagers.follower.updateQuota(upperBound(getOrDefault(FollowerReplicationThrottledRateProp)))
       quotaManagers.alterLogDirs.updateQuota(upperBound(getOrDefault(ReplicaAlterLogDirsIoMaxBytesPerSecondProp)))
     }
+
+    def updateBrokerThrottle(prop: String, quotaManager: ReplicationQuotaManager): Unit = {
+      if (properties.containsKey(prop) && properties.getProperty(prop).equals("true")) {
+        debug(s"Removing $prop on broker ${brokerConfig.brokerId}")
+        quotaManager.markBrokerThrottled()
+      } else {
+        quotaManager.removeBrokerThrottle()
+        debug(s"Removing $prop on broker ${brokerConfig.brokerId}")
+      }
+    }
+    updateBrokerThrottle(DynamicConfig.Broker.LeaderReplicationThrottledProp, quotaManagers.leader)
+    updateBrokerThrottle(DynamicConfig.Broker.FollowerReplicationThrottledProp, quotaManagers.follower)
   }
 }
 
