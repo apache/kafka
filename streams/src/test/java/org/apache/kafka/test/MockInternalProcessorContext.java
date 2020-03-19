@@ -16,6 +16,9 @@
  */
 package org.apache.kafka.test;
 
+import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.internals.QuietStreamsConfig;
 import org.apache.kafka.streams.processor.MockProcessorContext;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
@@ -26,6 +29,7 @@ import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.RecordCollector;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.internals.ThreadCache;
+import org.apache.kafka.streams.state.internals.metrics.RocksDBMetricsRecordingTrigger;
 
 import java.io.File;
 import java.util.LinkedHashMap;
@@ -35,14 +39,26 @@ import java.util.Properties;
 public class MockInternalProcessorContext extends MockProcessorContext implements InternalProcessorContext {
 
     private final Map<String, StateRestoreCallback> restoreCallbacks = new LinkedHashMap<>();
+    private final ThreadCache threadCache;
     private ProcessorNode currentNode;
     private RecordCollector recordCollector;
 
     public MockInternalProcessorContext() {
+        super();
+        this.threadCache = null;
     }
 
     public MockInternalProcessorContext(final Properties config, final TaskId taskId, final File stateDir) {
         super(config, taskId, stateDir);
+        this.threadCache = null;
+    }
+
+    public MockInternalProcessorContext(final Properties config, final TaskId taskId, final LogContext logContext, final long maxCacheSizeBytes) {
+        super(config,
+              taskId,
+              new File(new QuietStreamsConfig(config).getString(StreamsConfig.STATE_DIR_CONFIG)));
+        ((StreamsMetricsImpl) super.metrics()).setRocksDBMetricsRecordingTrigger(new RocksDBMetricsRecordingTrigger());
+        this.threadCache = new ThreadCache(logContext, maxCacheSizeBytes, (StreamsMetricsImpl) super.metrics());
     }
 
     @Override
@@ -78,7 +94,7 @@ public class MockInternalProcessorContext extends MockProcessorContext implement
 
     @Override
     public ThreadCache getCache() {
-        return null;
+        return threadCache;
     }
 
     @Override
