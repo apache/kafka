@@ -30,6 +30,7 @@ import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.LockException;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskIdFormatException;
@@ -73,7 +74,9 @@ public class TaskManager {
     private final InternalTopologyBuilder builder;
     private final Admin adminClient;
     private final StateDirectory stateDirectory;
-    private final boolean eosEnabled;
+    private final boolean eosAlphaEnabled;
+    private final boolean eosBetaEnabled;
+    private final boolean eosUpgradeModeEnabled;
 
     private final Map<TaskId, Task> tasks = new TreeMap<>();
     // materializing this relationship because the lookup is on the hot path
@@ -97,7 +100,7 @@ public class TaskManager {
                 final InternalTopologyBuilder builder,
                 final Admin adminClient,
                 final StateDirectory stateDirectory,
-                final boolean eosEnabled) {
+                final StreamsConfig config) {
         this.changelogReader = changelogReader;
         this.processId = processId;
         this.logPrefix = logPrefix;
@@ -107,7 +110,9 @@ public class TaskManager {
         this.builder = builder;
         this.adminClient = adminClient;
         this.stateDirectory = stateDirectory;
-        this.eosEnabled = eosEnabled;
+        this.eosAlphaEnabled = StreamThread.eosAlphaEnabled(config);
+        this.eosBetaEnabled = StreamThread.eosBetaEnabled(config);
+        this.eosUpgradeModeEnabled = StreamThread.eosUpgradeModeEnabled(config);
 
         final LogContext logContext = new LogContext(logPrefix);
         log = logContext.logger(getClass());
@@ -375,9 +380,17 @@ public class TaskManager {
         final Set<TopicPartition> remainingPartitions = new HashSet<>(revokedPartitions);
 
         final Map<TaskId, Map<TopicPartition, OffsetAndMetadata>> consumedOffsetsAndMetadataPerTask = new HashMap<>();
+        final Set<Task> suspended = new HashSet<>();
         for (final Task task : tasks.values()) {
             if (remainingPartitions.containsAll(task.inputPartitions())) {
                 task.prepareSuspend();
+                final Map<TopicPartition, OffsetAndMetadata> committableOffsets = task.committableOffsetsAndMetadata();
+                if (!committableOffsets.isEmpty()) {
+                    consumedOffsetsAndMetadataPerTask.put(task.id(), committableOffsets);
+                }
+                suspended.add(task);
+            } else if (eosBetaEnabled && !eosUpgradeModeEnabled) {
+                task.prepareCommit();
                 final Map<TopicPartition, OffsetAndMetadata> committableOffsets = task.committableOffsetsAndMetadata();
                 if (!committableOffsets.isEmpty()) {
                     consumedOffsetsAndMetadataPerTask.put(task.id(), committableOffsets);
@@ -392,7 +405,11 @@ public class TaskManager {
 
         for (final Task task : tasks.values()) {
             if (consumedOffsetsAndMetadataPerTask.containsKey(task.id())) {
-                task.suspend();
+                if (suspended.contains(task)) {
+                    task.suspend();
+                } else {
+                    task.postCommit();
+                }
             }
         }
 
@@ -726,33 +743,57 @@ public class TaskManager {
         if (rebalanceInProgress) {
             return -1;
         } else {
-            final Map<TaskId, Map<TopicPartition, OffsetAndMetadata>> consumedOffsetsAndMetadataPerTask = new HashMap<>();
-            for (final Task task : activeTaskIterable()) {
-                if (task.commitRequested() && task.commitNeeded()) {
-                    task.prepareCommit();
-                    final Map<TopicPartition, OffsetAndMetadata> offsetAndMetadata = task.committableOffsetsAndMetadata();
-                    if (!offsetAndMetadata.isEmpty()) {
-                        consumedOffsetsAndMetadataPerTask.put(task.id(), offsetAndMetadata);
+            if (eosBetaEnabled && !eosUpgradeModeEnabled) {
+                for (final Task task : activeTaskIterable()) {
+                    if (task.commitRequested() && task.commitNeeded()) {
+                        return commitAll();
                     }
                 }
-            }
 
-            commitOffsetsOrTransaction(consumedOffsetsAndMetadataPerTask);
+                return 0;
+            } else {
+                final Map<TaskId, Map<TopicPartition, OffsetAndMetadata>> consumedOffsetsAndMetadataPerTask = new HashMap<>();
 
-            for (final Task task : tasks.values()) {
-                if (consumedOffsetsAndMetadataPerTask.containsKey(task.id())) {
-                    task.postCommit();
+                for (final Task task : activeTaskIterable()) {
+                    if (task.commitRequested() && task.commitNeeded()) {
+                        task.prepareCommit();
+                        final Map<TopicPartition, OffsetAndMetadata> offsetAndMetadata = task.committableOffsetsAndMetadata();
+                        if (!offsetAndMetadata.isEmpty()) {
+                            consumedOffsetsAndMetadataPerTask.put(task.id(), offsetAndMetadata);
+                        }
+                    }
                 }
-            }
 
-            return consumedOffsetsAndMetadataPerTask.size();
+                commitOffsetsOrTransaction(consumedOffsetsAndMetadataPerTask);
+
+                for (final Task task : tasks.values()) {
+                    if (consumedOffsetsAndMetadataPerTask.containsKey(task.id())) {
+                        task.postCommit();
+                    }
+                }
+
+                return consumedOffsetsAndMetadataPerTask.size();
+            }
         }
     }
 
     private void commitOffsetsOrTransaction(final Map<TaskId, Map<TopicPartition, OffsetAndMetadata>> offsetsPerTask) {
-        if (eosEnabled) {
+        if (eosAlphaEnabled) {
             for (final Map.Entry<TaskId, Map<TopicPartition, OffsetAndMetadata>> taskToCommit : offsetsPerTask.entrySet()) {
-                activeTaskCreator.streamsProducerForTask(taskToCommit.getKey()).commitTransaction(taskToCommit.getValue());
+                activeTaskCreator.streamsProducerForTask(taskToCommit.getKey())
+                    .commitTransaction(taskToCommit.getValue(), mainConsumer.groupMetadata().groupId());
+            }
+        } else if (eosBetaEnabled) {
+            if (eosUpgradeModeEnabled) {
+                for (final Map.Entry<TaskId, Map<TopicPartition, OffsetAndMetadata>> taskToCommit : offsetsPerTask.entrySet()) {
+                    activeTaskCreator.streamsProducerForTask(taskToCommit.getKey())
+                        .commitTransaction(taskToCommit.getValue(), mainConsumer.groupMetadata());
+                }
+            } else {
+                final Map<TopicPartition, OffsetAndMetadata> allOffsets = offsetsPerTask.values().stream()
+                    .flatMap(e -> e.entrySet().stream()).collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+
+                activeTaskCreator.threadProducer().commitTransaction(allOffsets, mainConsumer.groupMetadata());
             }
         } else {
             try {

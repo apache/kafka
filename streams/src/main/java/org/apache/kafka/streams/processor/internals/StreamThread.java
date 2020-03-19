@@ -58,6 +58,7 @@ import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.apache.kafka.streams.StreamsConfig.EXACTLY_ONCE;
+import static org.apache.kafka.streams.StreamsConfig.EXACTLY_ONCE_BETA;
 
 public class StreamThread extends Thread {
 
@@ -341,7 +342,7 @@ public class StreamThread extends Thread {
             builder,
             adminClient,
             stateDirectory,
-            EXACTLY_ONCE.equals(config.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG))
+            config
         );
 
         log.info("Creating consumer client");
@@ -379,6 +380,33 @@ public class StreamThread extends Thread {
         );
 
         return streamThread.updateThreadMetadata(getSharedAdminClientId(clientId));
+    }
+
+    static boolean eosAlphaEnabled(final StreamsConfig config) {
+        return EXACTLY_ONCE.equals(config.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG));
+    }
+
+    public static boolean eosBetaEnabled(final StreamsConfig config) {
+        return EXACTLY_ONCE_BETA.equals(config.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG));
+    }
+
+    public static boolean eosEnabled(final StreamsConfig config) {
+        return eosAlphaEnabled(config) || eosBetaEnabled(config);
+    }
+
+    public static boolean eosUpgradeModeEnabled(final StreamsConfig config) {
+        final Set<String> eosAlphaVersions = new HashSet<>();
+        eosAlphaVersions.add(StreamsConfig.UPGRADE_FROM_25);
+        eosAlphaVersions.add(StreamsConfig.UPGRADE_FROM_24);
+        eosAlphaVersions.add(StreamsConfig.UPGRADE_FROM_23);
+        eosAlphaVersions.add(StreamsConfig.UPGRADE_FROM_22);
+        eosAlphaVersions.add(StreamsConfig.UPGRADE_FROM_21);
+        eosAlphaVersions.add(StreamsConfig.UPGRADE_FROM_20);
+        eosAlphaVersions.add(StreamsConfig.UPGRADE_FROM_11);
+        eosAlphaVersions.add(StreamsConfig.UPGRADE_FROM_10);
+        eosAlphaVersions.add(StreamsConfig.UPGRADE_FROM_0110);
+
+        return eosBetaEnabled(config) && eosAlphaVersions.contains(config.getString(StreamsConfig.UPGRADE_FROM_CONFIG));
     }
 
     public StreamThread(final Time time,

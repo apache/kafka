@@ -18,10 +18,6 @@ package org.apache.kafka.streams.processor.internals;
 
 import java.io.File;
 
-import org.apache.kafka.clients.admin.Admin;
-import org.apache.kafka.clients.consumer.Consumer;
-import org.apache.kafka.clients.consumer.MockConsumer;
-import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
@@ -31,7 +27,9 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.TimestampExtractor;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 import org.apache.kafka.test.MockClientSupplier;
@@ -44,21 +42,20 @@ import org.junit.runner.RunWith;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkSet;
-import static org.easymock.EasyMock.anyString;
 import static org.easymock.EasyMock.expect;
 import static org.easymock.EasyMock.mock;
 import static org.easymock.EasyMock.replay;
-import static org.easymock.EasyMock.same;
+import static org.easymock.EasyMock.reset;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.IsNot.not;
-import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertThrows;
 
 @RunWith(EasyMockRunner.class)
@@ -67,40 +64,70 @@ public class ActiveTaskCreatorTest {
     @Mock(type = MockType.NICE)
     private InternalTopologyBuilder builder;
     @Mock(type = MockType.NICE)
-    private StreamsConfig config;
-    @Mock(type = MockType.NICE)
     private StateDirectory stateDirectory;
     @Mock(type = MockType.NICE)
     private ChangelogReader changeLogReader;
-    @Mock(type = MockType.NICE)
-    private Consumer<byte[], byte[]> consumer;
-    @Mock(type = MockType.NICE)
-    private Admin adminClient;
 
     private final MockClientSupplier mockClientSupplier = new MockClientSupplier();
     final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(new Metrics(), "clientId", StreamsConfig.METRICS_LATEST);
+    final Map<String, Object> properties = mkMap(
+        mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, "appId"),
+        mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy:1234")
+    );
 
     private ActiveTaskCreator activeTaskCreator;
 
-    @Test
-    public void shouldFailForNonEosOnStreamsProducerPerTask() {
-        expect(config.getString(StreamsConfig.APPLICATION_ID_CONFIG)).andReturn("appId");
-        expect(config.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG)).andReturn(StreamsConfig.AT_LEAST_ONCE);
-        expect(config.getProducerConfigs(anyString())).andReturn(Collections.emptyMap());
-        replay(config);
 
-        activeTaskCreator = new ActiveTaskCreator(
-            builder,
-            config,
-            streamsMetrics,
-            stateDirectory,
-            changeLogReader,
-            new ThreadCache(new LogContext(), 0L, streamsMetrics),
-            new MockTime(),
-            mockClientSupplier,
-            "threadId",
-            new LogContext().logger(ActiveTaskCreator.class)
-        );
+
+    // non-EOS test
+
+    // functional test
+
+    @Test
+    public void shouldCreateThreadProducerIfEosDisabled() {
+        createTasks();
+
+        assertThat(mockClientSupplier.producers.size(), is(1));
+    }
+
+    @Test
+    public void shouldConstructProducerMetricsWithEosDisabled() {
+        shouldConstructThreadProducerMetric();
+    }
+
+    @Test
+    public void shouldConstructClientIdWithEosDisabled() {
+        createTasks();
+
+        final Set<String> clientIds = activeTaskCreator.producerClientIds();
+
+        assertThat(clientIds, is(Collections.singleton("threadId-producer")));
+    }
+
+    @Test
+    public void shouldCloseThreadProducerIfEosDisabled() {
+        createTasks();
+
+        activeTaskCreator.closeThreadProducerIfNeeded();
+
+        assertThat(mockClientSupplier.producers.get(0).closed(), is(true));
+    }
+
+    @Test
+    public void shouldNoOpCloseTaskProducerIfEosDisabled() {
+        createTasks();
+
+        activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(new TaskId(0, 0));
+        activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(new TaskId(0, 1));
+
+        assertThat(mockClientSupplier.producers.get(0).closed(), is(false));
+    }
+
+    // error handling
+
+    @Test
+    public void shouldFailOnStreamsProducerPerTaskIfEosDisabled() {
+        createTasks();
 
         final IllegalStateException thrown = assertThrows(
             IllegalStateException.class,
@@ -111,24 +138,110 @@ public class ActiveTaskCreatorTest {
     }
 
     @Test
-    public void shouldFailForUnknownTaskOnStreamsProducerPerTask() {
-        expect(config.getString(StreamsConfig.APPLICATION_ID_CONFIG)).andReturn("appId");
-        expect(config.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG)).andReturn(StreamsConfig.EXACTLY_ONCE);
-        expect(config.getProducerConfigs(anyString())).andReturn(Collections.emptyMap());
-        replay(config);
+    public void shouldFailOnGetThreadProducerIfEosDisabled() {
+        createTasks();
 
-        activeTaskCreator = new ActiveTaskCreator(
-            builder,
-            config,
-            streamsMetrics,
-            stateDirectory,
-            changeLogReader,
-            new ThreadCache(new LogContext(), 0L, streamsMetrics),
-            new MockTime(),
-            mockClientSupplier,
-            "threadId",
-            new LogContext().logger(ActiveTaskCreator.class)
+        final IllegalStateException thrown = assertThrows(
+            IllegalStateException.class,
+            activeTaskCreator::threadProducer
         );
+
+        assertThat(thrown.getMessage(), is("Exactly-once beta is not enabled."));
+    }
+
+    @Test
+    public void shouldThrowStreamsExceptionOnErrorCloseThreadProducerIfEosDisabled() {
+        createTasks();
+        mockClientSupplier.producers.get(0).closeException = new RuntimeException("KABOOM!");
+
+        final StreamsException thrown = assertThrows(
+            StreamsException.class,
+            activeTaskCreator::closeThreadProducerIfNeeded
+        );
+
+        assertThat(thrown.getMessage(), is("Thread producer encounter error trying to close."));
+        assertThat(thrown.getCause().getMessage(), is("KABOOM!"));
+    }
+
+
+
+    // eos-alpha test
+
+    // functional test
+
+    @Test
+    public void shouldCreateProducerPerTaskIfEosAlphaEnabled() {
+        properties.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE);
+        mockClientSupplier.setApplicationIdForProducer("appId");
+        createTasks();
+
+        assertThat(mockClientSupplier.producers.size(), is(2));
+    }
+
+    @Test
+    public void shouldReturnStreamsProducerPerTaskIfEosAlphaEnabled() {
+        properties.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE);
+
+        shouldReturnStreamsProducerPerTask();
+    }
+
+    @Test
+    public void shouldConstructProducerMetricsWithEosAlphaEnabled() {
+        properties.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE);
+
+        shouldConstructProducerMetricsPerTask();
+    }
+
+    @Test
+    public void shouldConstructClientIdWithEosAlphaEnabled() {
+        properties.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE);
+        mockClientSupplier.setApplicationIdForProducer("appId");
+        createTasks();
+
+        final Set<String> clientIds = activeTaskCreator.producerClientIds();
+
+        assertThat(clientIds, is(mkSet("threadId-0_0-producer", "threadId-0_1-producer")));
+    }
+
+    @Test
+    public void shouldNoOpCloseThreadProducerIfEosAlphaEnabled() {
+        properties.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE);
+        mockClientSupplier.setApplicationIdForProducer("appId");
+        createTasks();
+
+        activeTaskCreator.closeThreadProducerIfNeeded();
+
+        assertThat(mockClientSupplier.producers.get(0).closed(), is(false));
+        assertThat(mockClientSupplier.producers.get(1).closed(), is(false));
+    }
+
+    @Test
+    public void shouldCloseTaskProducersIfEosAlphaEnabled() {
+        properties.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE);
+        mockClientSupplier.setApplicationIdForProducer("appId");
+        createTasks();
+
+        activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(new TaskId(0, 0));
+        activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(new TaskId(0, 1));
+        // should no-op unknown task
+        activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(new TaskId(0, 2));
+
+        assertThat(mockClientSupplier.producers.get(0).closed(), is(true));
+        assertThat(mockClientSupplier.producers.get(1).closed(), is(true));
+
+        // should not throw because producer should be removed
+        mockClientSupplier.producers.get(0).closeException = new RuntimeException("KABOOM!");
+        activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(new TaskId(0, 0));
+    }
+
+    // error handling
+
+    @Test
+    public void shouldFailForUnknownTaskOnStreamsProducerPerTaskIfEosAlphaEnabled() {
+        properties.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE);
+        mockClientSupplier.setApplicationIdForProducer("appId");
+
+        createTasks();
 
         {
             final IllegalStateException thrown = assertThrows(
@@ -141,36 +254,613 @@ public class ActiveTaskCreatorTest {
         {
             final IllegalStateException thrown = assertThrows(
                 IllegalStateException.class,
-                () -> activeTaskCreator.streamsProducerForTask(new TaskId(0, 0))
+                () -> activeTaskCreator.streamsProducerForTask(new TaskId(0, 2))
             );
 
-            assertThat(thrown.getMessage(), is("Unknown TaskId: 0_0"));
+            assertThat(thrown.getMessage(), is("Unknown TaskId: 0_2"));
         }
     }
 
     @Test
-    public void shouldReturnStreamsProducerPerTask() {
+    public void shouldFailOnGetThreadProducerIfEosAlphaEnabled() {
+        properties.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE);
+        mockClientSupplier.setApplicationIdForProducer("appId");
+
+        createTasks();
+
+        final IllegalStateException thrown = assertThrows(
+            IllegalStateException.class,
+            activeTaskCreator::threadProducer
+        );
+
+        assertThat(thrown.getMessage(), is("Exactly-once beta is not enabled."));
+    }
+
+    @Test
+    public void shouldThrowStreamsExceptionOnErrorCloseTaskProducerIfEosAlphaEnabled() {
+        properties.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE);
+        mockClientSupplier.setApplicationIdForProducer("appId");
+        createTasks();
+        mockClientSupplier.producers.get(0).closeException = new RuntimeException("KABOOM!");
+
+        final StreamsException thrown = assertThrows(
+            StreamsException.class,
+            () -> activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(new TaskId(0, 0))
+        );
+
+        assertThat(thrown.getMessage(), is("[0_0] task producer encounter error trying to close."));
+        assertThat(thrown.getCause().getMessage(), is("KABOOM!"));
+
+        // should not throw again because producer should be removed
+        activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(new TaskId(0, 0));
+    }
+
+
+
+    // eos-beta test
+
+    // functional test
+
+    @Test
+    public void shouldCreateThreadProducerIfEosBetaEnabled() {
+        properties.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_BETA);
+        mockClientSupplier.setApplicationIdForProducer("appId");
+        createTasks();
+
+        assertThat(mockClientSupplier.producers.size(), is(1));
+    }
+
+    @Test
+    public void shouldCreateThreadProducerIfEosBetaEnabledAndUpgradingFromPreEosVersion() {
+        properties.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_BETA);
+        mockClientSupplier.setApplicationIdForProducer("appId");
+
+        for (final String upgradeFrom : mkSet(
+            StreamsConfig.UPGRADE_FROM_0100,
+            StreamsConfig.UPGRADE_FROM_0101,
+            StreamsConfig.UPGRADE_FROM_0102)) {
+
+            properties.put(StreamsConfig.UPGRADE_FROM_CONFIG, upgradeFrom);
+            createTasks();
+
+            assertThat(mockClientSupplier.producers.size(), is(1));
+            mockClientSupplier.producers.clear();
+        }
+    }
+
+    @Test
+    public void shouldCreateProducerPerTaskIfEosBetaEnabledAndUpgradingFromEosAlpha() {
+        properties.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_BETA);
+        mockClientSupplier.setApplicationIdForProducer("appId");
+
+        for (final String upgradeFrom : mkSet(
+            StreamsConfig.UPGRADE_FROM_0110,
+            StreamsConfig.UPGRADE_FROM_10,
+            StreamsConfig.UPGRADE_FROM_11,
+            StreamsConfig.UPGRADE_FROM_20,
+            StreamsConfig.UPGRADE_FROM_21,
+            StreamsConfig.UPGRADE_FROM_22,
+            StreamsConfig.UPGRADE_FROM_23,
+            StreamsConfig.UPGRADE_FROM_24,
+            StreamsConfig.UPGRADE_FROM_25)) {
+
+            properties.put(StreamsConfig.UPGRADE_FROM_CONFIG, upgradeFrom);
+            createTasks();
+
+            assertThat(mockClientSupplier.producers.size(), is(2));
+            mockClientSupplier.producers.clear();
+        }
+    }
+
+    @Test
+    public void shouldReturnThreadProducerIfEosBetaEnabled() {
+        properties.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_BETA);
+        mockClientSupplier.setApplicationIdForProducer("appId");
+
+        createTasks();
+
+        final StreamsProducer threadProducer = activeTaskCreator.threadProducer();
+
+        assertThat(mockClientSupplier.producers.size(), is(1));
+        assertThat(threadProducer.kafkaProducer(), is(mockClientSupplier.producers.get(0)));
+    }
+
+    @Test
+    public void shouldReturnThreadProducerIfEosBetaEnabledAndUpgradingFromPreEosVersion() {
+        properties.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_BETA);
+        mockClientSupplier.setApplicationIdForProducer("appId");
+
+        for (final String upgradeFrom : mkSet(
+            StreamsConfig.UPGRADE_FROM_0100,
+            StreamsConfig.UPGRADE_FROM_0101,
+            StreamsConfig.UPGRADE_FROM_0102)) {
+
+            properties.put(StreamsConfig.UPGRADE_FROM_CONFIG, upgradeFrom);
+            createTasks();
+
+            final StreamsProducer threadProducer = activeTaskCreator.threadProducer();
+
+            assertThat(mockClientSupplier.producers.size(), is(1));
+            assertThat(threadProducer.kafkaProducer(), is(mockClientSupplier.producers.get(0)));
+            mockClientSupplier.producers.clear();
+        }
+    }
+
+    @Test
+    public void shouldReturnStreamsProducerPerTaskIfEosBetaEnabledAndUpgradingFromEosAlpha() {
+        properties.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_BETA);
+
+        for (final String upgradeFrom : mkSet(
+            StreamsConfig.UPGRADE_FROM_0110,
+            StreamsConfig.UPGRADE_FROM_10,
+            StreamsConfig.UPGRADE_FROM_11,
+            StreamsConfig.UPGRADE_FROM_20,
+            StreamsConfig.UPGRADE_FROM_21,
+            StreamsConfig.UPGRADE_FROM_22,
+            StreamsConfig.UPGRADE_FROM_23,
+            StreamsConfig.UPGRADE_FROM_24,
+            StreamsConfig.UPGRADE_FROM_25)) {
+
+            properties.put(StreamsConfig.UPGRADE_FROM_CONFIG, upgradeFrom);
+
+            shouldReturnStreamsProducerPerTask();
+        }
+    }
+
+    @Test
+    public void shouldConstructProducerMetricsWithEosBetaEnabled() {
+        properties.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_BETA);
+        mockClientSupplier.setApplicationIdForProducer("appId");
+
+        shouldConstructThreadProducerMetric();
+    }
+
+    @Test
+    public void shouldConstructProducerMetricsWithEosBetaEnabledAndUpgradingFromPreEosVersion() {
+        properties.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_BETA);
+        mockClientSupplier.setApplicationIdForProducer("appId");
+
+        for (final String upgradeFrom : mkSet(
+            StreamsConfig.UPGRADE_FROM_0100,
+            StreamsConfig.UPGRADE_FROM_0101,
+            StreamsConfig.UPGRADE_FROM_0102)) {
+
+            properties.put(StreamsConfig.UPGRADE_FROM_CONFIG, upgradeFrom);
+
+            shouldConstructThreadProducerMetric();
+            mockClientSupplier.producers.clear();
+        }
+    }
+
+    @Test
+    public void shouldConstructProducerMetricsWithEosBetaEnabledAndUpgradingFromEosAlpha() {
+        properties.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_BETA);
+
+        for (final String upgradeFrom : mkSet(
+            StreamsConfig.UPGRADE_FROM_0110,
+            StreamsConfig.UPGRADE_FROM_10,
+            StreamsConfig.UPGRADE_FROM_11,
+            StreamsConfig.UPGRADE_FROM_20,
+            StreamsConfig.UPGRADE_FROM_21,
+            StreamsConfig.UPGRADE_FROM_22,
+            StreamsConfig.UPGRADE_FROM_23,
+            StreamsConfig.UPGRADE_FROM_24,
+            StreamsConfig.UPGRADE_FROM_25)) {
+
+            properties.put(StreamsConfig.UPGRADE_FROM_CONFIG, upgradeFrom);
+
+            shouldConstructProducerMetricsPerTask();
+            mockClientSupplier.producers.clear();
+        }
+    }
+
+    @Test
+    public void shouldConstructClientIdWithEosBetaEnabled() {
+        properties.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_BETA);
+        mockClientSupplier.setApplicationIdForProducer("appId");
+        createTasks();
+
+        final Set<String> clientIds = activeTaskCreator.producerClientIds();
+
+        assertThat(clientIds, is(Collections.singleton("threadId-producer")));
+    }
+
+    @Test
+    public void shouldConstructClientIdWithEosBetaEnabledAndUpgradingFromPreEosVerion() {
+        properties.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_BETA);
+        mockClientSupplier.setApplicationIdForProducer("appId");
+
+        for (final String upgradeFrom : mkSet(
+            StreamsConfig.UPGRADE_FROM_0100,
+            StreamsConfig.UPGRADE_FROM_0101,
+            StreamsConfig.UPGRADE_FROM_0102)) {
+
+            properties.put(StreamsConfig.UPGRADE_FROM_CONFIG, upgradeFrom);
+            createTasks();
+
+            final Set<String> clientIds = activeTaskCreator.producerClientIds();
+
+            assertThat(clientIds, is(Collections.singleton("threadId-producer")));
+            mockClientSupplier.producers.clear();
+        }
+    }
+
+    @Test
+    public void shouldConstructClientIdWithEosBetaEnabledAndUpgradingFromEosAlpha() {
+        properties.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_BETA);
+        mockClientSupplier.setApplicationIdForProducer("appId");
+
+        for (final String upgradeFrom : mkSet(
+            StreamsConfig.UPGRADE_FROM_0110,
+            StreamsConfig.UPGRADE_FROM_10,
+            StreamsConfig.UPGRADE_FROM_11,
+            StreamsConfig.UPGRADE_FROM_20,
+            StreamsConfig.UPGRADE_FROM_21,
+            StreamsConfig.UPGRADE_FROM_22,
+            StreamsConfig.UPGRADE_FROM_23,
+            StreamsConfig.UPGRADE_FROM_24,
+            StreamsConfig.UPGRADE_FROM_25)) {
+
+            properties.put(StreamsConfig.UPGRADE_FROM_CONFIG, upgradeFrom);
+            createTasks();
+
+            final Set<String> clientIds = activeTaskCreator.producerClientIds();
+
+            assertThat(clientIds, is(mkSet("threadId-0_0-producer", "threadId-0_1-producer")));
+            mockClientSupplier.producers.clear();
+        }
+    }
+
+    @Test
+    public void shouldCloseThreadProducerIfEosBetaEnabled() {
+        properties.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_BETA);
+        mockClientSupplier.setApplicationIdForProducer("appId");
+        createTasks();
+
+        activeTaskCreator.closeThreadProducerIfNeeded();
+
+        assertThat(mockClientSupplier.producers.get(0).closed(), is(true));
+    }
+
+    @Test
+    public void shouldCloseThreadProducerIfEosBetaEnabledAndUpgradingFromPreEosVersion() {
+        properties.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_BETA);
+        mockClientSupplier.setApplicationIdForProducer("appId");
+
+        for (final String upgradeFrom : mkSet(
+            StreamsConfig.UPGRADE_FROM_0100,
+            StreamsConfig.UPGRADE_FROM_0101,
+            StreamsConfig.UPGRADE_FROM_0102)) {
+
+            properties.put(StreamsConfig.UPGRADE_FROM_CONFIG, upgradeFrom);
+            createTasks();
+
+            activeTaskCreator.closeThreadProducerIfNeeded();
+
+            assertThat(mockClientSupplier.producers.get(0).closed(), is(true));
+            mockClientSupplier.producers.clear();
+        }
+    }
+
+    @Test
+    public void shouldNoOpCloseTaskProducerIfEosBetaEnabledAndUpgradingFromEosAlpha() {
+        properties.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_BETA);
+        mockClientSupplier.setApplicationIdForProducer("appId");
+
+        for (final String upgradeFrom : mkSet(
+            StreamsConfig.UPGRADE_FROM_0110,
+            StreamsConfig.UPGRADE_FROM_10,
+            StreamsConfig.UPGRADE_FROM_11,
+            StreamsConfig.UPGRADE_FROM_20,
+            StreamsConfig.UPGRADE_FROM_21,
+            StreamsConfig.UPGRADE_FROM_22,
+            StreamsConfig.UPGRADE_FROM_23,
+            StreamsConfig.UPGRADE_FROM_24,
+            StreamsConfig.UPGRADE_FROM_25)) {
+
+            properties.put(StreamsConfig.UPGRADE_FROM_CONFIG, upgradeFrom);
+            createTasks();
+
+            activeTaskCreator.closeThreadProducerIfNeeded();
+
+            assertThat(mockClientSupplier.producers.get(0).closed(), is(false));
+            assertThat(mockClientSupplier.producers.get(1).closed(), is(false));
+            mockClientSupplier.producers.clear();
+        }
+    }
+
+    @Test
+    public void shouldNoOpCloseTaskProducerIfEosBetaEnabled() {
+        properties.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_BETA);
+        mockClientSupplier.setApplicationIdForProducer("appId");
+
+        createTasks();
+
+        activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(new TaskId(0, 0));
+        activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(new TaskId(0, 1));
+
+        assertThat(mockClientSupplier.producers.get(0).closed(), is(false));
+    }
+
+    @Test
+    public void shouldNoOpCloseTaskProducerIfEosBetaEnabledAndUpgradingFromPreEosVersion() {
+        properties.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_BETA);
+        mockClientSupplier.setApplicationIdForProducer("appId");
+
+        for (final String upgradeFrom : mkSet(
+            StreamsConfig.UPGRADE_FROM_0100,
+            StreamsConfig.UPGRADE_FROM_0101,
+            StreamsConfig.UPGRADE_FROM_0102)) {
+
+            properties.put(StreamsConfig.UPGRADE_FROM_CONFIG, upgradeFrom);
+            createTasks();
+
+            activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(new TaskId(0, 0));
+            activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(new TaskId(0, 1));
+
+            assertThat(mockClientSupplier.producers.get(0).closed(), is(false));
+            mockClientSupplier.producers.clear();
+        }
+    }
+
+    @Test
+    public void shouldCloseTaskProducerIfEosBetaEnabledAndUpgradingFromEosAlpha() {
+        properties.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_BETA);
+        mockClientSupplier.setApplicationIdForProducer("appId");
+
+        for (final String upgradeFrom : mkSet(
+            StreamsConfig.UPGRADE_FROM_0110,
+            StreamsConfig.UPGRADE_FROM_10,
+            StreamsConfig.UPGRADE_FROM_11,
+            StreamsConfig.UPGRADE_FROM_20,
+            StreamsConfig.UPGRADE_FROM_21,
+            StreamsConfig.UPGRADE_FROM_22,
+            StreamsConfig.UPGRADE_FROM_23,
+            StreamsConfig.UPGRADE_FROM_24,
+            StreamsConfig.UPGRADE_FROM_25)) {
+
+            properties.put(StreamsConfig.UPGRADE_FROM_CONFIG, upgradeFrom);
+            createTasks();
+
+            activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(new TaskId(0, 0));
+            activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(new TaskId(0, 1));
+            // should no-op unknown task
+            activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(new TaskId(0, 2));
+
+            assertThat(mockClientSupplier.producers.get(0).closed(), is(true));
+            assertThat(mockClientSupplier.producers.get(1).closed(), is(true));
+
+            // should not throw because producer should be removed
+            mockClientSupplier.producers.get(0).closeException = new RuntimeException("KABOOM!");
+            activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(new TaskId(0, 0));
+
+            mockClientSupplier.producers.clear();
+        }
+    }
+
+    // error handling
+
+    @Test
+    public void shouldFailOnStreamsProducerPerTaskIfEosBetaEnabled() {
+        properties.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_BETA);
+        mockClientSupplier.setApplicationIdForProducer("appId");
+
+        createTasks();
+
+        final IllegalStateException thrown = assertThrows(
+            IllegalStateException.class,
+            () -> activeTaskCreator.streamsProducerForTask(null)
+        );
+
+        assertThat(thrown.getMessage(), is("Producer per thread is used"));
+    }
+
+    @Test
+    public void shouldFailOnStreamsProducerPerTaskIfEosBetaEnabledAndUpgradingFromPreEosVersion() {
+        properties.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_BETA);
+        mockClientSupplier.setApplicationIdForProducer("appId");
+
+        for (final String upgradeFrom : mkSet(
+            StreamsConfig.UPGRADE_FROM_0100,
+            StreamsConfig.UPGRADE_FROM_0101,
+            StreamsConfig.UPGRADE_FROM_0102)) {
+
+            properties.put(StreamsConfig.UPGRADE_FROM_CONFIG, upgradeFrom);
+            createTasks();
+
+            final IllegalStateException thrown = assertThrows(
+                IllegalStateException.class,
+                () -> activeTaskCreator.streamsProducerForTask(null)
+            );
+
+            assertThat(thrown.getMessage(), is("Producer per thread is used"));
+        }
+    }
+
+    @Test
+    public void shouldFailOnGetThreadProducerIfEosBetaEnabledAndUpgradingFromEosAlpha() {
+        properties.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_BETA);
+        mockClientSupplier.setApplicationIdForProducer("appId");
+
+        for (final String upgradeFrom : mkSet(
+            StreamsConfig.UPGRADE_FROM_0110,
+            StreamsConfig.UPGRADE_FROM_10,
+            StreamsConfig.UPGRADE_FROM_11,
+            StreamsConfig.UPGRADE_FROM_20,
+            StreamsConfig.UPGRADE_FROM_21,
+            StreamsConfig.UPGRADE_FROM_22,
+            StreamsConfig.UPGRADE_FROM_23,
+            StreamsConfig.UPGRADE_FROM_24,
+            StreamsConfig.UPGRADE_FROM_25)) {
+
+            properties.put(StreamsConfig.UPGRADE_FROM_CONFIG, upgradeFrom);
+            createTasks();
+
+            final IllegalStateException thrown = assertThrows(
+                IllegalStateException.class,
+                activeTaskCreator::threadProducer
+            );
+
+            assertThat(thrown.getMessage(), is("Exactly-once beta is not enabled."));
+        }
+    }
+
+    @Test
+    public void shouldThrowStreamsExceptionOnErrorCloseThreadProducerIfEosBetaEnabled() {
+        properties.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_BETA);
+        mockClientSupplier.setApplicationIdForProducer("appId");
+        createTasks();
+        mockClientSupplier.producers.get(0).closeException = new RuntimeException("KABOOM!");
+
+        final StreamsException thrown = assertThrows(
+            StreamsException.class,
+            activeTaskCreator::closeThreadProducerIfNeeded
+        );
+
+        assertThat(thrown.getMessage(), is("Thread producer encounter error trying to close."));
+        assertThat(thrown.getCause().getMessage(), is("KABOOM!"));
+    }
+
+    @Test
+    public void shouldThrowStreamsExceptionOnErrorCloseThreadProducerIfEosBetaEnabledAndUpgradingFromPreEosVersion() {
+        properties.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_BETA);
+        mockClientSupplier.setApplicationIdForProducer("appId");
+
+        for (final String upgradeFrom : mkSet(
+            StreamsConfig.UPGRADE_FROM_0100,
+            StreamsConfig.UPGRADE_FROM_0101,
+            StreamsConfig.UPGRADE_FROM_0102)) {
+
+            properties.put(StreamsConfig.UPGRADE_FROM_CONFIG, upgradeFrom);
+            createTasks();
+            mockClientSupplier.producers.get(0).closeException = new RuntimeException("KABOOM!");
+
+            final StreamsException thrown = assertThrows(
+                StreamsException.class,
+                activeTaskCreator::closeThreadProducerIfNeeded
+            );
+
+            assertThat(thrown.getMessage(), is("Thread producer encounter error trying to close."));
+            assertThat(thrown.getCause().getMessage(), is("KABOOM!"));
+            mockClientSupplier.producers.clear();
+        }
+    }
+
+    @Test
+    public void shouldThrowStreamsExceptionOnErrorCloseTaskProducerIfEosBetaEnabledAndUpgradingFromEosAlpha() {
+        properties.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_BETA);
+        mockClientSupplier.setApplicationIdForProducer("appId");
+
+        for (final String upgradeFrom : mkSet(
+            StreamsConfig.UPGRADE_FROM_0110,
+            StreamsConfig.UPGRADE_FROM_10,
+            StreamsConfig.UPGRADE_FROM_11,
+            StreamsConfig.UPGRADE_FROM_20,
+            StreamsConfig.UPGRADE_FROM_21,
+            StreamsConfig.UPGRADE_FROM_22,
+            StreamsConfig.UPGRADE_FROM_23,
+            StreamsConfig.UPGRADE_FROM_24,
+            StreamsConfig.UPGRADE_FROM_25)) {
+
+            properties.put(StreamsConfig.UPGRADE_FROM_CONFIG, upgradeFrom);
+            createTasks();
+            mockClientSupplier.producers.get(0).closeException = new RuntimeException("KABOOM!");
+
+            final StreamsException thrown = assertThrows(
+                StreamsException.class,
+                () -> activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(new TaskId(0, 0))
+            );
+
+            assertThat(thrown.getMessage(), is("[0_0] task producer encounter error trying to close."));
+            assertThat(thrown.getCause().getMessage(), is("KABOOM!"));
+
+            // should not throw again because producer should be removed
+            activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(new TaskId(0, 0));
+
+            mockClientSupplier.producers.clear();
+        }
+    }
+
+    private void shouldReturnStreamsProducerPerTask() {
+        mockClientSupplier.setApplicationIdForProducer("appId");
+
+        createTasks();
+
+        final StreamsProducer streamsProducer1 = activeTaskCreator.streamsProducerForTask(new TaskId(0, 0));
+        final StreamsProducer streamsProducer2 = activeTaskCreator.streamsProducerForTask(new TaskId(0, 1));
+
+        assertThat(streamsProducer1, not(is(streamsProducer2)));
+    }
+
+    private void shouldConstructProducerMetricsPerTask() {
+        mockClientSupplier.setApplicationIdForProducer("appId");
+
+        createTasks();
+
+        final MetricName testMetricName1 = new MetricName("test_metric_1", "", "", new HashMap<>());
+        final Metric testMetric1 = new KafkaMetric(
+            new Object(),
+            testMetricName1,
+            (Measurable) (config, now) -> 0,
+            null,
+            new MockTime());
+        mockClientSupplier.producers.get(0).setMockMetrics(testMetricName1, testMetric1);
+        final MetricName testMetricName2 = new MetricName("test_metric_2", "", "", new HashMap<>());
+        final Metric testMetric2 = new KafkaMetric(
+            new Object(),
+            testMetricName2,
+            (Measurable) (config, now) -> 0,
+            null,
+            new MockTime());
+        mockClientSupplier.producers.get(0).setMockMetrics(testMetricName2, testMetric2);
+
+        final Map<MetricName, Metric> producerMetrics = activeTaskCreator.producerMetrics();
+
+        assertThat(producerMetrics, is(mkMap(mkEntry(testMetricName1, testMetric1), mkEntry(testMetricName2, testMetric2))));
+    }
+
+    private void shouldConstructThreadProducerMetric() {
+        createTasks();
+
+        final MetricName testMetricName = new MetricName("test_metric", "", "", new HashMap<>());
+        final Metric testMetric = new KafkaMetric(
+            new Object(),
+            testMetricName,
+            (Measurable) (config, now) -> 0,
+            null,
+            new MockTime());
+        mockClientSupplier.producers.get(0).setMockMetrics(testMetricName, testMetric);
+        assertThat(mockClientSupplier.producers.size(), is(1));
+
+        final Map<MetricName, Metric> producerMetrics = activeTaskCreator.producerMetrics();
+
+        assertThat(producerMetrics.size(), is(1));
+        assertThat(producerMetrics.get(testMetricName), is(testMetric));
+    }
+
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private void createTasks() {
         final TaskId task00 = new TaskId(0, 0);
         final TaskId task01 = new TaskId(0, 1);
+
         final ProcessorTopology topology = mock(ProcessorTopology.class);
+        final SourceNode sourceNode = mock(SourceNode.class);
 
-        expect(config.getString(StreamsConfig.APPLICATION_ID_CONFIG)).andReturn("appId");
-        expect(config.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG)).andReturn(StreamsConfig.EXACTLY_ONCE);
-        expect(config.getProducerConfigs(anyString())).andReturn(new HashMap<>()).anyTimes();
-        expect(config.getLong(anyString())).andReturn(0L).anyTimes();
-        expect(config.getInt(anyString())).andReturn(0).anyTimes();
-        expect(builder.buildSubtopology(task00.topicGroupId)).andReturn(topology).anyTimes();
-        expect(stateDirectory.directoryForTask(task00)).andReturn(new File(task00.toString()));
-        expect(stateDirectory.directoryForTask(task01)).andReturn(new File(task01.toString()));
+        reset(builder, stateDirectory);
+        expect(builder.buildSubtopology(0)).andReturn(topology).anyTimes();
+        expect(stateDirectory.directoryForTask(task00)).andReturn(mock(File.class));
+        expect(stateDirectory.checkpointFileFor(task00)).andReturn(mock(File.class));
+        expect(stateDirectory.directoryForTask(task01)).andReturn(mock(File.class));
+        expect(stateDirectory.checkpointFileFor(task01)).andReturn(mock(File.class));
         expect(topology.storeToChangelogTopic()).andReturn(Collections.emptyMap()).anyTimes();
-        expect(topology.source("topic")).andReturn(mock(SourceNode.class)).andReturn(mock(SourceNode.class));
+        expect(topology.source("topic")).andReturn(sourceNode).anyTimes();
+        expect(sourceNode.getTimestampExtractor()).andReturn(mock(TimestampExtractor.class)).anyTimes();
         expect(topology.globalStateStores()).andReturn(Collections.emptyList()).anyTimes();
-        replay(config, builder, stateDirectory, topology);
+        replay(builder, stateDirectory, topology, sourceNode);
 
-        mockClientSupplier.setApplicationIdForProducer("appId");
         activeTaskCreator = new ActiveTaskCreator(
             builder,
-            config,
+            new StreamsConfig(properties),
             streamsMetrics,
             stateDirectory,
             changeLogReader,
@@ -191,92 +881,5 @@ public class ActiveTaskCreatorTest {
             ).stream().map(Task::id).collect(Collectors.toSet()),
             equalTo(mkSet(task00, task01))
         );
-
-        final StreamsProducer streamsProducer1 = activeTaskCreator.streamsProducerForTask(new TaskId(0, 0));
-        final StreamsProducer streamsProducer2 = activeTaskCreator.streamsProducerForTask(new TaskId(0, 1));
-
-        assertThat(streamsProducer1, not(same(streamsProducer2)));
-    }
-
-    @Test
-    public void shouldConstructProducerMetricsWithoutEOS() {
-        expect(config.getString(StreamsConfig.APPLICATION_ID_CONFIG)).andReturn("appId");
-        expect(config.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG)).andReturn(StreamsConfig.AT_LEAST_ONCE);
-        expect(config.getProducerConfigs(anyString())).andReturn(Collections.emptyMap());
-        replay(config);
-
-        activeTaskCreator = new ActiveTaskCreator(
-            builder,
-            config,
-            streamsMetrics,
-            stateDirectory,
-            changeLogReader,
-            new ThreadCache(new LogContext(), 0L, streamsMetrics),
-            new MockTime(),
-            mockClientSupplier,
-            "threadId",
-            new LogContext().logger(ActiveTaskCreator.class)
-        );
-
-        final MetricName testMetricName = new MetricName("test_metric", "", "", new HashMap<>());
-        final Metric testMetric = new KafkaMetric(
-            new Object(),
-            testMetricName,
-            (Measurable) (config, now) -> 0,
-            null,
-            new MockTime());
-
-        mockClientSupplier.producers.get(0).setMockMetrics(testMetricName, testMetric);
-        final Map<MetricName, Metric> producerMetrics = activeTaskCreator.producerMetrics();
-        assertEquals(testMetricName, producerMetrics.get(testMetricName).metricName());
-    }
-
-    @Test
-    public void shouldConstructProducerMetricsWithEOS() {
-        final TaskId taskId = new TaskId(0, 0);
-        final ProcessorTopology topology = mock(ProcessorTopology.class);
-
-        expect(config.getString(StreamsConfig.APPLICATION_ID_CONFIG)).andReturn("appId");
-        expect(config.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG)).andReturn(StreamsConfig.EXACTLY_ONCE);
-        expect(config.getLong(anyString())).andReturn(0L);
-        expect(config.getInt(anyString())).andReturn(0);
-        expect(config.getProducerConfigs(anyString())).andReturn(new HashMap<>());
-        expect(builder.buildSubtopology(taskId.topicGroupId)).andReturn(topology);
-        expect(stateDirectory.directoryForTask(taskId)).andReturn(new File(taskId.toString()));
-        expect(topology.storeToChangelogTopic()).andReturn(Collections.emptyMap());
-        expect(topology.source("topic")).andReturn(mock(SourceNode.class));
-        expect(topology.globalStateStores()).andReturn(Collections.emptyList());
-        replay(config, builder, stateDirectory, topology);
-
-        mockClientSupplier.setApplicationIdForProducer("appId");
-
-        activeTaskCreator = new ActiveTaskCreator(
-            builder,
-            config,
-            streamsMetrics,
-            stateDirectory,
-            changeLogReader,
-            new ThreadCache(new LogContext(), 0L, streamsMetrics),
-            new MockTime(),
-            mockClientSupplier,
-            "threadId",
-            new LogContext().logger(ActiveTaskCreator.class)
-        );
-
-        activeTaskCreator.createTasks(
-            new MockConsumer<>(OffsetResetStrategy.NONE),
-            mkMap(mkEntry(new TaskId(0, 0), Collections.singleton(new TopicPartition("topic", 0)))));
-
-        final MetricName testMetricName = new MetricName("test_metric", "", "", new HashMap<>());
-        final Metric testMetric = new KafkaMetric(
-            new Object(),
-            testMetricName,
-            (Measurable) (config, now) -> 0,
-            null,
-            new MockTime());
-
-        mockClientSupplier.producers.get(0).setMockMetrics(testMetricName, testMetric);
-        final Map<MetricName, Metric> producerMetrics = activeTaskCreator.producerMetrics();
-        assertEquals(testMetricName, producerMetrics.get(testMetricName).metricName());
     }
 }

@@ -25,6 +25,7 @@ import org.apache.kafka.clients.admin.DeletedRecords;
 import org.apache.kafka.clients.admin.RecordsToDelete;
 import org.apache.kafka.clients.consumer.CommitFailedException;
 import org.apache.kafka.clients.consumer.Consumer;
+import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.KafkaException;
@@ -157,7 +158,10 @@ public class TaskManagerTest {
             topologyBuilder,
             adminClient,
             stateDirectory,
-            false
+            new StreamsConfig(mkMap(
+                mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, "appId"),
+                mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy:1234")
+            ))
         );
         taskManager.setMainConsumer(consumer);
     }
@@ -1272,8 +1276,98 @@ public class TaskManagerTest {
     }
 
     @Test
-    public void shouldCommitViaProducerIfEosEnabled() {
+    public void shouldCommitViaProducerIfEosAlphaEnabled() {
         final StreamsProducer producer = mock(StreamsProducer.class);
+        expect(activeTaskCreator.streamsProducerForTask(taskId01)).andReturn(producer);
+        expect(activeTaskCreator.streamsProducerForTask(taskId02)).andReturn(producer);
+
+        final Map<TopicPartition, OffsetAndMetadata> offsetsT01 = singletonMap(t1p1, new OffsetAndMetadata(0L, null));
+        final Map<TopicPartition, OffsetAndMetadata> offsetsT02 = singletonMap(t1p2, new OffsetAndMetadata(1L, null));
+
+        producer.commitTransaction(offsetsT01, "appId");
+        expectLastCall();
+        producer.commitTransaction(offsetsT02, "appId");
+        expectLastCall();
+
+        shouldCommitViaProducerIfEosEnabled(StreamsConfig.EXACTLY_ONCE, null, producer, offsetsT01, offsetsT02);
+    }
+
+    @Test
+    public void shouldCommitViaProducerIfEosBetaEnabled() {
+        final StreamsProducer producer = mock(StreamsProducer.class);
+        expect(activeTaskCreator.threadProducer()).andReturn(producer);
+
+        final Map<TopicPartition, OffsetAndMetadata> offsetsT01 = singletonMap(t1p1, new OffsetAndMetadata(0L, null));
+        final Map<TopicPartition, OffsetAndMetadata> offsetsT02 = singletonMap(t1p2, new OffsetAndMetadata(1L, null));
+        final Map<TopicPartition, OffsetAndMetadata> allOffsets = new HashMap<>();
+        allOffsets.putAll(offsetsT01);
+        allOffsets.putAll(offsetsT02);
+
+        producer.commitTransaction(allOffsets, new ConsumerGroupMetadata("appId"));
+        expectLastCall();
+
+        shouldCommitViaProducerIfEosEnabled(StreamsConfig.EXACTLY_ONCE_BETA, null, producer, offsetsT01, offsetsT02);
+    }
+
+    @Test
+    public void shouldCommitViaProducerIfEosBetaEnabledAndUpgradingFromPreEosVersion() {
+        for (final String upgradeFrom : mkSet(
+            StreamsConfig.UPGRADE_FROM_0100,
+            StreamsConfig.UPGRADE_FROM_0101,
+            StreamsConfig.UPGRADE_FROM_0102)) {
+
+            final StreamsProducer producer = mock(StreamsProducer.class);
+            reset(activeTaskCreator);
+            expect(activeTaskCreator.threadProducer()).andReturn(producer);
+
+            final Map<TopicPartition, OffsetAndMetadata> offsetsT01 = singletonMap(t1p1, new OffsetAndMetadata(0L, null));
+            final Map<TopicPartition, OffsetAndMetadata> offsetsT02 = singletonMap(t1p2, new OffsetAndMetadata(1L, null));
+            final Map<TopicPartition, OffsetAndMetadata> allOffsets = new HashMap<>();
+            allOffsets.putAll(offsetsT01);
+            allOffsets.putAll(offsetsT02);
+
+            producer.commitTransaction(allOffsets, new ConsumerGroupMetadata("appId"));
+            expectLastCall();
+
+            shouldCommitViaProducerIfEosEnabled(StreamsConfig.EXACTLY_ONCE_BETA, upgradeFrom, producer, offsetsT01, offsetsT02);
+        }
+    }
+
+    @Test
+    public void shouldCommitViaProducerIfEosBetaEnabledAndUpgradingFromEosAlpha() {
+        for (final String upgradeFrom : mkSet(
+            StreamsConfig.UPGRADE_FROM_0110,
+            StreamsConfig.UPGRADE_FROM_10,
+            StreamsConfig.UPGRADE_FROM_11,
+            StreamsConfig.UPGRADE_FROM_20,
+            StreamsConfig.UPGRADE_FROM_21,
+            StreamsConfig.UPGRADE_FROM_22,
+            StreamsConfig.UPGRADE_FROM_23,
+            StreamsConfig.UPGRADE_FROM_24,
+            StreamsConfig.UPGRADE_FROM_25)) {
+
+            final StreamsProducer producer = mock(StreamsProducer.class);
+            reset(activeTaskCreator);
+            expect(activeTaskCreator.streamsProducerForTask(taskId01)).andReturn(producer);
+            expect(activeTaskCreator.streamsProducerForTask(taskId02)).andReturn(producer);
+
+            final Map<TopicPartition, OffsetAndMetadata> offsetsT01 = singletonMap(t1p1, new OffsetAndMetadata(0L, null));
+            final Map<TopicPartition, OffsetAndMetadata> offsetsT02 = singletonMap(t1p2, new OffsetAndMetadata(1L, null));
+
+            producer.commitTransaction(offsetsT01, new ConsumerGroupMetadata("appId"));
+            expectLastCall();
+            producer.commitTransaction(offsetsT02, new ConsumerGroupMetadata("appId"));
+            expectLastCall();
+
+            shouldCommitViaProducerIfEosEnabled(StreamsConfig.EXACTLY_ONCE_BETA, upgradeFrom, producer, offsetsT01, offsetsT02);
+        }
+    }
+
+    private void shouldCommitViaProducerIfEosEnabled(final String eosConfig,
+                                                     final String upgradeFromConfig,
+                                                     final StreamsProducer producer,
+                                                     final Map<TopicPartition, OffsetAndMetadata> offsetsT01,
+                                                     final Map<TopicPartition, OffsetAndMetadata> offsetsT02) {
         final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(new Metrics(), "clientId", StreamsConfig.METRICS_LATEST);
         taskManager = new TaskManager(
             changeLogReader,
@@ -1285,24 +1379,31 @@ public class TaskManagerTest {
             topologyBuilder,
             adminClient,
             stateDirectory,
-            true
+            new StreamsConfig(mkMap(
+                mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, "appId"),
+                mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy:1234"),
+                mkEntry(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, eosConfig),
+                mkEntry(StreamsConfig.UPGRADE_FROM_CONFIG, upgradeFromConfig)
+            ))
         );
         taskManager.setMainConsumer(consumer);
 
         final StateMachineTask task01 = new StateMachineTask(taskId01, taskId01Partitions, true);
-        final Map<TopicPartition, OffsetAndMetadata> offsets = singletonMap(t1p1, new OffsetAndMetadata(0L, null));
-        task01.setCommittableOffsetsAndMetadata(offsets);
+        task01.setCommittableOffsetsAndMetadata(offsetsT01);
         task01.setCommitNeeded();
         taskManager.tasks().put(taskId01, task01);
+        final StateMachineTask task02 = new StateMachineTask(taskId02, taskId02Partitions, true);
+        task02.setCommittableOffsetsAndMetadata(offsetsT02);
+        task02.setCommitNeeded();
+        taskManager.tasks().put(taskId02, task02);
 
-        expect(activeTaskCreator.streamsProducerForTask(taskId01)).andReturn(producer);
-        producer.commitTransaction(offsets);
-        expectLastCall();
-        replay(activeTaskCreator, producer);
+        reset(consumer);
+        expect(consumer.groupMetadata()).andReturn(new ConsumerGroupMetadata("appId")).anyTimes();
+        replay(activeTaskCreator, consumer, producer);
 
         taskManager.commitAll();
 
-        verify(producer);
+        verify(producer, consumer);
     }
 
     @Test

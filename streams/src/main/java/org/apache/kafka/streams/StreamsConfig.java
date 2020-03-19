@@ -39,6 +39,7 @@ import org.apache.kafka.streams.errors.ProductionExceptionHandler;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.FailOnInvalidTimestamp;
 import org.apache.kafka.streams.processor.TimestampExtractor;
+import org.apache.kafka.streams.processor.internals.StreamThread;
 import org.apache.kafka.streams.processor.internals.StreamsPartitionAssignor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -49,6 +50,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
+import java.util.UUID;
 
 import static org.apache.kafka.common.IsolationLevel.READ_COMMITTED;
 import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
@@ -276,6 +278,18 @@ public class StreamsConfig extends AbstractConfig {
     public static final String UPGRADE_FROM_23 = "2.3";
 
     /**
+     * Config value for parameter {@link #UPGRADE_FROM_CONFIG "upgrade.from"} for upgrading an application from version {@code 2.4.x}.
+     */
+    @SuppressWarnings("WeakerAccess")
+    public static final String UPGRADE_FROM_24 = "2.4";
+
+    /**
+     * Config value for parameter {@link #UPGRADE_FROM_CONFIG "upgrade.from"} for upgrading an application from version {@code 2.5.x}.
+     */
+    @SuppressWarnings("WeakerAccess")
+    public static final String UPGRADE_FROM_25 = "2.5";
+
+    /**
      * Config value for parameter {@link #PROCESSING_GUARANTEE_CONFIG "processing.guarantee"} for at-least-once processing guarantees.
      */
     @SuppressWarnings("WeakerAccess")
@@ -283,9 +297,25 @@ public class StreamsConfig extends AbstractConfig {
 
     /**
      * Config value for parameter {@link #PROCESSING_GUARANTEE_CONFIG "processing.guarantee"} for exactly-once processing guarantees.
+     * <p>
+     * Enabling exactly-once processing semantics requires broker version 0.11.0 or higher.
+     * If you enable this feature, Kafka Streams will use a producer per task
+     * (instead a producer per thread as for the {@link #AT_LEAST_ONCE} case).
+     *
+     * @see #EXACTLY_ONCE_BETA
      */
     @SuppressWarnings("WeakerAccess")
     public static final String EXACTLY_ONCE = "exactly_once";
+
+    /**
+     * Config value for parameter {@link #PROCESSING_GUARANTEE_CONFIG "processing.guarantee"} for exactly-once processing guarantees.
+     * <p>
+     * Enabling exactly-once (beta) requires broker version 2.4 or higher.
+     * In contrast to {@link #EXACTLY_ONCE} Kafka Streams uses a producer per thread model,
+     * similar to the {@link #AT_LEAST_ONCE} case.
+     */
+    @SuppressWarnings("WeakerAccess")
+    public static final String EXACTLY_ONCE_BETA = "exactly_once_beta";
 
     /**
      * Config value for parameter {@link #BUILT_IN_METRICS_VERSION_CONFIG "built.in.metrics.version"} for built-in metrics from version 0.10.0. to 2.4
@@ -450,8 +480,11 @@ public class StreamsConfig extends AbstractConfig {
     /** {@code processing.guarantee} */
     @SuppressWarnings("WeakerAccess")
     public static final String PROCESSING_GUARANTEE_CONFIG = "processing.guarantee";
-    private static final String PROCESSING_GUARANTEE_DOC = "The processing guarantee that should be used. Possible values are <code>" + AT_LEAST_ONCE + "</code> (default) and <code>" + EXACTLY_ONCE + "</code>. " +
-        "Note that exactly-once processing requires a cluster of at least three brokers by default what is the recommended setting for production; for development you can change this, by adjusting broker setting " +
+    private static final String PROCESSING_GUARANTEE_DOC = "The processing guarantee that should be used. " +
+        "Possible values are <code>" + AT_LEAST_ONCE + "</code> (default), <code>" + EXACTLY_ONCE + "</code>, " +
+        "and <code>" + EXACTLY_ONCE_BETA + "</code> (requires brokers version 2.4 or higher). " +
+        "Note that exactly-once processing requires a cluster of at least three brokers by default what is the " +
+        "recommended setting for production; for development you can change this, by adjusting broker setting " +
         "<code>transaction.state.log.replication.factor</code> and <code>transaction.state.log.min.isr</code>.";
 
     /** {@code receive.buffer.bytes} */
@@ -515,8 +548,13 @@ public class StreamsConfig extends AbstractConfig {
     public static final String UPGRADE_FROM_CONFIG = "upgrade.from";
     private static final String UPGRADE_FROM_DOC = "Allows upgrading in a backward compatible way. " +
         "This is needed when upgrading from [0.10.0, 1.1] to 2.0+, or when upgrading from [2.0, 2.3] to 2.4+. " +
-        "When upgrading from 2.4 to a newer version it is not required to specify this config. " +
-        "Default is null. Accepted values are \"" + UPGRADE_FROM_0100 + "\", \"" + UPGRADE_FROM_0101 + "\", \"" + UPGRADE_FROM_0102 + "\", \"" + UPGRADE_FROM_0110 + "\", \"" + UPGRADE_FROM_10 + "\", \"" + UPGRADE_FROM_11 + "\", \"" + UPGRADE_FROM_20 + "\", \"" + UPGRADE_FROM_21 + "\", \"" + UPGRADE_FROM_22 + "\", \"" + UPGRADE_FROM_23 + "\" (for upgrading from the corresponding old version).";
+        "When upgrading from [0.11, 2.5] to a newer version it is only required to specify this config if you want to " +
+        "switch from <code>" + EXACTLY_ONCE + "</code> to <code>" + EXACTLY_ONCE_BETA + "</code>. Default is `null`. " +
+        "Accepted values are \"" + UPGRADE_FROM_0100 + "\", \"" + UPGRADE_FROM_0101 + "\", \"" +
+        UPGRADE_FROM_0102 + "\", \"" + UPGRADE_FROM_0110 + "\", \"" + UPGRADE_FROM_10 + "\", \"" +
+        UPGRADE_FROM_11 + "\", \"" + UPGRADE_FROM_20 + "\", \"" + UPGRADE_FROM_21 + "\", \"" +
+        UPGRADE_FROM_22 + "\", \"" + UPGRADE_FROM_23 + "\", \"" + UPGRADE_FROM_24 + "\", \"" +
+        UPGRADE_FROM_25 + "\" (for upgrading from the corresponding old version).";
 
     /** {@code windowstore.changelog.additional.retention.ms} */
     @SuppressWarnings("WeakerAccess")
@@ -533,10 +571,16 @@ public class StreamsConfig extends AbstractConfig {
         " WARNING: This config is deprecated and will be removed in 3.0.0 release.";
 
 
-    private static final String[] NON_CONFIGURABLE_CONSUMER_DEFAULT_CONFIGS = new String[] {ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG};
-    private static final String[] NON_CONFIGURABLE_CONSUMER_EOS_CONFIGS = new String[] {ConsumerConfig.ISOLATION_LEVEL_CONFIG};
-    private static final String[] NON_CONFIGURABLE_PRODUCER_EOS_CONFIGS = new String[] {ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG,
-                                                                                        ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION};
+    private static final String[] NON_CONFIGURABLE_CONSUMER_DEFAULT_CONFIGS =
+        new String[] {ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG};
+    private static final String[] NON_CONFIGURABLE_CONSUMER_EOS_CONFIGS =
+        new String[] {ConsumerConfig.ISOLATION_LEVEL_CONFIG};
+    private static final String[] NON_CONFIGURABLE_PRODUCER_EOS_CONFIGS =
+        new String[] {
+            ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG,
+            ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION,
+            ProducerConfig.TRANSACTIONAL_ID_CONFIG
+    };
 
     static {
         CONFIG = new ConfigDef()
@@ -630,7 +674,7 @@ public class StreamsConfig extends AbstractConfig {
             .define(PROCESSING_GUARANTEE_CONFIG,
                     Type.STRING,
                     AT_LEAST_ONCE,
-                    in(AT_LEAST_ONCE, EXACTLY_ONCE),
+                    in(AT_LEAST_ONCE, EXACTLY_ONCE, EXACTLY_ONCE_BETA),
                     Importance.MEDIUM,
                     PROCESSING_GUARANTEE_DOC)
             .define(SECURITY_PROTOCOL_CONFIG,
@@ -793,7 +837,9 @@ public class StreamsConfig extends AbstractConfig {
                        UPGRADE_FROM_20,
                        UPGRADE_FROM_21,
                        UPGRADE_FROM_22,
-                       UPGRADE_FROM_23),
+                       UPGRADE_FROM_23,
+                       UPGRADE_FROM_24,
+                       UPGRADE_FROM_25),
                     Importance.LOW,
                     UPGRADE_FROM_DOC)
             .define(WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_CONFIG,
@@ -951,7 +997,7 @@ public class StreamsConfig extends AbstractConfig {
     protected StreamsConfig(final Map<?, ?> props,
                             final boolean doLog) {
         super(CONFIG, props, doLog);
-        eosEnabled = EXACTLY_ONCE.equals(getString(PROCESSING_GUARANTEE_CONFIG));
+        eosEnabled = StreamThread.eosEnabled(this);
         if (props.containsKey(PARTITION_GROUPER_CLASS_CONFIG)) {
             log.warn("Configuration parameter `{}` is deprecated and will be removed in 3.0.0 release.", PARTITION_GROUPER_CLASS_CONFIG);
         }
@@ -962,8 +1008,7 @@ public class StreamsConfig extends AbstractConfig {
         final Map<String, Object> configUpdates =
             CommonClientConfigs.postProcessReconnectBackoffConfigs(this, parsedValues);
 
-        final boolean eosEnabled = EXACTLY_ONCE.equals(parsedValues.get(PROCESSING_GUARANTEE_CONFIG));
-        if (eosEnabled && !originals().containsKey(COMMIT_INTERVAL_MS_CONFIG)) {
+        if (StreamThread.eosEnabled(this) && !originals().containsKey(COMMIT_INTERVAL_MS_CONFIG)) {
             log.debug("Using {} default value of {} as exactly once is enabled.",
                     COMMIT_INTERVAL_MS_CONFIG, EOS_DEFAULT_COMMIT_INTERVAL_MS);
             configUpdates.put(COMMIT_INTERVAL_MS_CONFIG, EOS_DEFAULT_COMMIT_INTERVAL_MS);
@@ -1020,7 +1065,7 @@ public class StreamsConfig extends AbstractConfig {
 
         for (final String config: nonConfigurableConfigs) {
             if (clientProvidedProps.containsKey(config)) {
-                final String eosMessage =  PROCESSING_GUARANTEE_CONFIG + " is set to " + EXACTLY_ONCE + ". Hence, ";
+                final String eosMessage =  PROCESSING_GUARANTEE_CONFIG + " is set to " + getString(PROCESSING_GUARANTEE_CONFIG) + ". Hence, ";
                 final String nonConfigurableConfigMessage = "Unexpected user-specified %s config: %s found. %sUser setting (%s) will be ignored and the Streams default setting (%s) will be used ";
 
                 if (CONSUMER_DEFAULT_OVERRIDES.containsKey(config)) {
@@ -1041,6 +1086,10 @@ public class StreamsConfig extends AbstractConfig {
                                     "producer", config, eosMessage, clientProvidedProps.get(config), PRODUCER_EOS_OVERRIDES.get(config)));
                             clientProvidedProps.remove(config);
                         }
+                    } else if (ProducerConfig.TRANSACTIONAL_ID_CONFIG.equals(config)) {
+                        log.warn(String.format(nonConfigurableConfigMessage,
+                            "producer", config, eosMessage, clientProvidedProps.get(config), "<appId>-<generatedSuffix>"));
+                        clientProvidedProps.remove(config);
                     }
                 }
             }
@@ -1220,6 +1269,9 @@ public class StreamsConfig extends AbstractConfig {
 
         // generate producer configs from original properties and overridden maps
         final Map<String, Object> props = new HashMap<>(eosEnabled ? PRODUCER_EOS_OVERRIDES : PRODUCER_DEFAULT_OVERRIDES);
+        if (StreamThread.eosBetaEnabled(this) && !StreamThread.eosUpgradeModeEnabled(this)) {
+            props.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, getString(StreamsConfig.APPLICATION_ID_CONFIG) + "-" + UUID.randomUUID());
+        }
         props.putAll(getClientCustomProps());
         props.putAll(clientProvidedProps);
 

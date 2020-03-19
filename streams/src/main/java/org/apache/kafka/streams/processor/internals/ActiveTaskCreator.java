@@ -44,8 +44,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-import static org.apache.kafka.streams.StreamsConfig.EXACTLY_ONCE;
-
 class ActiveTaskCreator {
     private final InternalTopologyBuilder builder;
     private final StreamsConfig config;
@@ -61,6 +59,7 @@ class ActiveTaskCreator {
     private final String applicationId;
     private final Producer<byte[], byte[]> threadProducer;
     private final Map<TaskId, StreamsProducer> taskProducers;
+    private final StreamsProducer eosBetaStreamsProducer;
 
     private static String getThreadProducerClientId(final String threadClientId) {
         return threadClientId + "-producer";
@@ -94,10 +93,13 @@ class ActiveTaskCreator {
         createTaskSensor = ThreadMetrics.createTaskSensor(threadId, streamsMetrics);
         applicationId = config.getString(StreamsConfig.APPLICATION_ID_CONFIG);
 
-        if (EXACTLY_ONCE.equals(config.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG))) {
+        if (StreamThread.eosAlphaEnabled(config) ||
+            (StreamThread.eosBetaEnabled(config) && StreamThread.eosUpgradeModeEnabled(config))) {
+
             threadProducer = null;
+            eosBetaStreamsProducer = null;
             taskProducers = new HashMap<>();
-        } else {
+        } else { // non-eos and eos-beta
             log.info("Creating thread producer client");
 
             final String threadProducerClientId = getThreadProducerClientId(threadId);
@@ -105,6 +107,13 @@ class ActiveTaskCreator {
 
             threadProducer = clientSupplier.getProducer(producerConfigs);
             taskProducers = Collections.emptyMap();
+            if (StreamThread.eosBetaEnabled(config)) {
+                final String threadIdPrefix = String.format("stream-thread [%s] ", Thread.currentThread().getName());
+                final LogContext logContext = new LogContext(threadIdPrefix);
+                 eosBetaStreamsProducer = new StreamsProducer(threadProducer, true, logContext);
+            } else {
+                 eosBetaStreamsProducer = null;
+            }
         }
     }
 
@@ -118,6 +127,13 @@ class ActiveTaskCreator {
             throw new IllegalStateException("Unknown TaskId: " + taskId);
         }
         return taskProducer;
+    }
+
+    StreamsProducer threadProducer() {
+        if (eosBetaStreamsProducer == null) {
+            throw new IllegalStateException("Exactly-once beta is not enabled.");
+        }
+        return eosBetaStreamsProducer;
     }
 
     Collection<Task> createTasks(final Consumer<byte[], byte[]> consumer,
@@ -136,7 +152,7 @@ class ActiveTaskCreator {
             final ProcessorStateManager stateManager = new ProcessorStateManager(
                 taskId,
                 Task.TaskType.ACTIVE,
-                EXACTLY_ONCE.equals(config.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG)),
+                StreamThread.eosEnabled(config),
                 logContext,
                 stateDirectory,
                 storeChangelogReader,
@@ -153,11 +169,12 @@ class ActiveTaskCreator {
                 streamsProducer = new StreamsProducer(
                     clientSupplier.getProducer(producerConfigs),
                     true,
-                    applicationId,
                     logContext);
                 taskProducers.put(taskId, streamsProducer);
+            } else if (eosBetaStreamsProducer == null) {
+                streamsProducer = new StreamsProducer(threadProducer, false, logContext);
             } else {
-                streamsProducer = new StreamsProducer(threadProducer, false, null, logContext);
+                streamsProducer = eosBetaStreamsProducer;
             }
 
             final RecordCollector recordCollector = new RecordCollectorImpl(
@@ -194,7 +211,7 @@ class ActiveTaskCreator {
             try {
                 threadProducer.close();
             } catch (final RuntimeException e) {
-                throw new StreamsException("Thread Producer encounter error trying to close", e);
+                throw new StreamsException("Thread producer encounter error trying to close.", e);
             }
         }
     }
@@ -205,7 +222,7 @@ class ActiveTaskCreator {
             try {
                 taskProducer.kafkaProducer().close();
             } catch (final RuntimeException e) {
-                throw new StreamsException("[" + id + "] Producer encounter error trying to close", e);
+                throw new StreamsException("[" + id + "] task producer encounter error trying to close.", e);
             }
         }
     }

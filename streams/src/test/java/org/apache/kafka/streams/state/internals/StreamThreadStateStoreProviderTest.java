@@ -377,7 +377,6 @@ public class StreamThreadStateStoreProviderTest {
             new StreamsProducer(
                 clientSupplier.getProducer(new HashMap<>()),
                 eosEnabled,
-                streamsConfig.getString(StreamsConfig.APPLICATION_ID_CONFIG),
                 logContext
             ),
             streamsConfig.defaultProductionExceptionHandler(),
