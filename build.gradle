@@ -50,6 +50,26 @@ spotless {
 }
 
 
+task copyGitHooks(type: Copy) {
+    description 'Copies the git hooks.'
+    from("${rootDir}/bin/git-hooks/") {
+        include '*'
+    }
+    into "${rootDir}/.git/hooks"
+}
+
+task installGitHooks(type: Exec) {
+    description 'Installs the git hooks.'
+    group 'git hooks'
+    workingDir rootDir
+    commandLine 'chmod'
+    args '-R', '+x', '.git/hooks/'
+    dependsOn copyGitHooks
+    doLast {
+        logger.info('Git hook installed successfully.')
+    }
+}
+
 allprojects {
 
   repositories {
@@ -97,6 +117,7 @@ ext {
   buildVersionFileName = "kafka-version.properties"
 
   userMaxForks = project.hasProperty('maxParallelForks') ? maxParallelForks.toInteger() : null
+  userIgnoreFailures = project.hasProperty('ignoreFailures') ? ignoreFailures : false
 
   userMaxTestRetries = project.hasProperty('maxTestRetries') ? maxTestRetries.toInteger() : 0
   userMaxTestRetryFailures = project.hasProperty('maxTestRetryFailures') ? maxTestRetryFailures.toInteger() : 0
@@ -136,7 +157,7 @@ if (file('.git').exists()) {
         'gradlew.bat',
         'gradle/wrapper/gradle-wrapper.properties',
         'TROGDOR.md',
-        '**/README.md',
+        '**/*README.md',
         '**/id_rsa',
         '**/id_rsa.pub',
         'checkstyle/suppressions.xml',
@@ -185,6 +206,7 @@ subprojects {
     // natively (https://github.com/gradle/gradle/issues/2510), we should switch to that.
     if (JavaVersion.current().isJava9Compatible())
       options.compilerArgs << "--release" << minJavaVersion
+    dependsOn installGitHooks
   }
 
   uploadArchives {
@@ -309,6 +331,7 @@ subprojects {
 
   task integrationTest(type: Test, dependsOn: compileJava) {
     maxParallelForks = userMaxForks ?: Runtime.runtime.availableProcessors()
+    ignoreFailures = userIgnoreFailures
 
     minHeapSize = "256m"
     maxHeapSize = "2048m"
@@ -328,6 +351,7 @@ subprojects {
 
   task unitTest(type: Test, dependsOn: compileJava) {
     maxParallelForks = userMaxForks ?: Runtime.runtime.availableProcessors()
+    ignoreFailures = userIgnoreFailures
 
     minHeapSize = "256m"
     maxHeapSize = "2048m"
@@ -1967,3 +1991,4 @@ task aggregatedJavadoc(type: Javadoc) {
   else
     options.links "https://docs.oracle.com/javase/8/docs/api/"
 }
+
