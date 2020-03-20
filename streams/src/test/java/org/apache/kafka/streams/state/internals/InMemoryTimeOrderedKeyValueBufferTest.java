@@ -44,8 +44,9 @@ public class InMemoryTimeOrderedKeyValueBufferTest {
         final String expect = "3";
         final Map<String, String> logConfig = new HashMap<>();
         logConfig.put("min.insync.replicas", expect);
-        final StoreBuilder builder = new InMemoryTimeOrderedKeyValueBuffer.Builder<>(null, null, null)
-            .withLoggingEnabled(logConfig);
+        final StoreBuilder<InMemoryTimeOrderedKeyValueBuffer<Object, Object>> builder =
+            new InMemoryTimeOrderedKeyValueBuffer.Builder<>(null, null, null)
+                .withLoggingEnabled(logConfig);
 
         assertThat(builder.logConfig(), is(singletonMap("min.insync.replicas", expect)));
         assertThat(builder.loggingEnabled(), is(true));
@@ -53,8 +54,9 @@ public class InMemoryTimeOrderedKeyValueBufferTest {
 
     @Test
     public void bufferShouldAllowLoggingDisablement() {
-        final StoreBuilder builder = new InMemoryTimeOrderedKeyValueBuffer.Builder<>(null, null, null)
-            .withLoggingDisabled();
+        final StoreBuilder<InMemoryTimeOrderedKeyValueBuffer<Object, Object>> builder
+            = new InMemoryTimeOrderedKeyValueBuffer.Builder<>(null, null, null)
+                .withLoggingDisabled();
 
         assertThat(builder.logConfig(), is(emptyMap()));
         assertThat(builder.loggingEnabled(), is(false));

@@ -176,10 +176,10 @@ class StreamsBuilder(inner: StreamsBuilderJ = new StreamsBuilderJ) {
    *
    * @see `org.apache.kafka.streams.StreamsBuilder#addGlobalStore`
    */
-  def addGlobalStore(storeBuilder: StoreBuilder[_ <: StateStore],
-                     topic: String,
-                     consumed: Consumed[_, _],
-                     stateUpdateSupplier: ProcessorSupplier[_, _]): StreamsBuilderJ =
+  def addGlobalStore[K, V](storeBuilder: StoreBuilder[_ <: StateStore],
+                           topic: String,
+                           consumed: Consumed[K, V],
+                           stateUpdateSupplier: ProcessorSupplier[K, V]): StreamsBuilderJ =
     inner.addGlobalStore(storeBuilder, topic, consumed, stateUpdateSupplier)
 
   def build(): Topology = inner.build()

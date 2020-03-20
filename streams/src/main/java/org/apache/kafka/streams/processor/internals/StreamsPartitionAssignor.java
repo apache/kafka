@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import java.util.Objects;
 import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor;
 import org.apache.kafka.common.Cluster;
@@ -24,7 +25,6 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.errors.StreamsException;
@@ -32,6 +32,7 @@ import org.apache.kafka.streams.errors.TaskAssignmentException;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.assignment.AssignmentInfo;
 import org.apache.kafka.streams.processor.internals.assignment.AssignorConfiguration;
+import org.apache.kafka.streams.processor.internals.assignment.AssignorConfiguration.AssignmentConfigs;
 import org.apache.kafka.streams.processor.internals.assignment.AssignorError;
 import org.apache.kafka.streams.processor.internals.assignment.ClientState;
 import org.apache.kafka.streams.processor.internals.assignment.CopartitionedTopicsEnforcer;
@@ -59,8 +60,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
 import static java.util.UUID.randomUUID;
-import static org.apache.kafka.common.utils.Utils.getHost;
-import static org.apache.kafka.common.utils.Utils.getPort;
 import static org.apache.kafka.streams.processor.internals.assignment.StreamsAssignmentProtocolVersions.EARLIEST_PROBEABLE_VERSION;
 import static org.apache.kafka.streams.processor.internals.assignment.StreamsAssignmentProtocolVersions.LATEST_SUPPORTED_VERSION;
 import static org.apache.kafka.streams.processor.internals.assignment.StreamsAssignmentProtocolVersions.UNKNOWN;
@@ -109,21 +108,8 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
 
         ClientMetadata(final String endPoint) {
 
-            // get the host info if possible
-            if (endPoint != null) {
-                final String host = getHost(endPoint);
-                final Integer port = getPort(endPoint);
-
-                if (host == null || port == null) {
-                    throw new ConfigException(
-                        String.format("Error parsing host address %s. Expected format host:port.", endPoint)
-                    );
-                }
-
-                hostInfo = new HostInfo(host, port);
-            } else {
-                hostInfo = null;
-            }
+            // get the host info, or null if no endpoint is configured (ie endPoint == null)
+            hostInfo = HostInfo.buildFromEndpoint(endPoint);
 
             // initialize the consumer memberIds
             consumers = new HashSet<>();
@@ -153,6 +139,53 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         }
     }
 
+    public static class RankedClient<ID extends Comparable<? super ID>> implements Comparable<RankedClient<ID>> {
+
+        private final ID clientId;
+        private final long rank;
+
+        public RankedClient(final ID clientId, final long rank) {
+            this.clientId = clientId;
+            this.rank = rank;
+        }
+
+        public ID clientId() {
+            return clientId;
+        }
+
+        public long rank() {
+            return rank;
+        }
+
+        @Override
+        public int compareTo(final RankedClient<ID> clientIdAndLag) {
+            if (rank < clientIdAndLag.rank) {
+                return -1;
+            } else if (rank > clientIdAndLag.rank) {
+                return 1;
+            } else {
+                return clientId.compareTo(clientIdAndLag.clientId);
+            }
+        }
+
+        @Override
+        public boolean equals(final Object o) {
+            if (this == o) {
+                return true;
+            }
+            if (o == null || getClass() != o.getClass()) {
+                return false;
+            }
+            final RankedClient other = (RankedClient) o;
+            return clientId == other.clientId() && rank == other.rank();
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(clientId, rank);
+        }
+    }
+
     // keep track of any future consumers in a "dummy" Client since we can't decipher their subscription
     private static final UUID FUTURE_ID = randomUUID();
 
@@ -160,7 +193,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         Comparator.comparing(TopicPartition::topic).thenComparingInt(TopicPartition::partition);
 
     private String userEndPoint;
-    private int numStandbyReplicas;
+    private AssignmentConfigs assignmentConfigs;
 
     private TaskManager taskManager;
     private StreamsMetadataState streamsMetadataState;
@@ -192,7 +225,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         taskManager = assignorConfiguration.getTaskManager();
         streamsMetadataState = assignorConfiguration.getStreamsMetadataState();
         assignmentErrorCode = assignorConfiguration.getAssignmentErrorCode(configs);
-        numStandbyReplicas = assignorConfiguration.getNumStandbyReplicas();
+        assignmentConfigs = assignorConfiguration.getAssignmentConfigs();
         partitionGrouper = assignorConfiguration.getPartitionGrouper();
         userEndPoint = assignorConfiguration.getUserEndPoint();
         internalTopicManager = assignorConfiguration.getInternalTopicManager();
@@ -716,12 +749,12 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         }
 
         log.debug("Assigning tasks {} to clients {} with number of replicas {}",
-            partitionsForTask.keySet(), states, numStandbyReplicas);
+            partitionsForTask.keySet(), states, assignmentConfigs.numStandbyReplicas);
 
         // assign tasks to clients
         final StickyTaskAssignor<UUID> taskAssignor =
             new StickyTaskAssignor<>(states, partitionsForTask.keySet(), standbyTaskIds);
-        taskAssignor.assign(numStandbyReplicas);
+        taskAssignor.assign(assignmentConfigs.numStandbyReplicas);
 
         log.info("Assigned tasks to clients as {}{}.", Utils.NL, states.entrySet().stream()
                                                                      .map(Map.Entry::toString).collect(Collectors.joining(Utils.NL)));
@@ -1234,7 +1267,8 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
 
         // Check if this was a version probing rebalance and check the error code to trigger another rebalance if so
         if (maybeUpdateSubscriptionVersion(receivedAssignmentMetadataVersion, latestCommonlySupportedVersion)) {
-            setAssignmentErrorCode(AssignorError.VERSION_PROBING.code());
+            log.info("Version probing detected. Rejoining the consumer group to trigger a new rebalance.");
+            setAssignmentErrorCode(AssignorError.REBALANCE_NEEDED.code());
         }
 
         // version 1 field
@@ -1280,12 +1314,33 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                 );
         }
 
+        verifyHostInfo(partitionsByHost.keySet());
+
         final Cluster fakeCluster = Cluster.empty().withPartitions(topicToPartitionInfo);
         streamsMetadataState.onChange(partitionsByHost, standbyPartitionsByHost, fakeCluster);
 
         // we do not capture any exceptions but just let the exception thrown from consumer.poll directly
         // since when stream thread captures it, either we close all tasks as dirty or we close thread
         taskManager.handleAssignment(activeTasks, info.standbyTasks());
+    }
+
+    /**
+     * Verify that this client's host info was included in the map returned in the assignment, and trigger a
+     * rebalance if not. This may be necessary when using static membership, as a rejoining client will be handed
+     * back its original assignment to avoid an unnecessary rebalance. If the client's endpoint has changed, we need
+     * to force a rebalance for the other members in the group to get the updated host info for this client.
+     *
+     * @param groupHostInfo the HostInfo of all clients in the group
+     */
+    private void verifyHostInfo(final Set<HostInfo> groupHostInfo) {
+        if (userEndPoint != null && !groupHostInfo.isEmpty()) {
+            final HostInfo myHostInfo = HostInfo.buildFromEndpoint(userEndPoint);
+
+            if (!groupHostInfo.contains(myHostInfo)) {
+                log.info("Triggering a rebalance to update group with new endpoint = {}", userEndPoint);
+                setAssignmentErrorCode(AssignorError.REBALANCE_NEEDED.code());
+            }
+        }
     }
 
     // protected for upgrade test
@@ -1299,7 +1354,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         return activeTasks;
     }
 
-    private static Map<TopicPartition, PartitionInfo> getTopicPartitionInfo(final Map<HostInfo, Set<TopicPartition>> partitionsByHost) {
+    static Map<TopicPartition, PartitionInfo> getTopicPartitionInfo(final Map<HostInfo, Set<TopicPartition>> partitionsByHost) {
         final Map<TopicPartition, PartitionInfo> topicToPartitionInfo = new HashMap<>();
         for (final Set<TopicPartition> value : partitionsByHost.values()) {
             for (final TopicPartition topicPartition : value) {
@@ -1393,6 +1448,10 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         assignmentErrorCode.set(errorCode);
     }
 
+    Integer assignmentErrorCode() {
+        return assignmentErrorCode.get();
+    }
+
     // following functions are for test only
     void setInternalTopicManager(final InternalTopicManager internalTopicManager) {
         this.internalTopicManager = internalTopicManager;
@@ -1412,6 +1471,26 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
 
     protected void handleRebalanceStart(final Set<String> topics) {
         taskManager.handleRebalanceStart(topics);
+    }
+
+    long acceptableRecoveryLag() {
+        return assignmentConfigs.acceptableRecoveryLag;
+    }
+
+    int balanceFactor() {
+        return assignmentConfigs.balanceFactor;
+    }
+
+    int maxWarmupReplicas() {
+        return assignmentConfigs.maxWarmupReplicas;
+    }
+
+    int numStandbyReplicas() {
+        return assignmentConfigs.numStandbyReplicas;
+    }
+
+    long probingRebalanceIntervalMs() {
+        return assignmentConfigs.probingRebalanceIntervalMs;
     }
 
 }

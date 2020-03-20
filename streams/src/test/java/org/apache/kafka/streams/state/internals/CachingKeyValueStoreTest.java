@@ -86,13 +86,13 @@ public class CachingKeyValueStoreTest extends AbstractKeyValueStoreTest {
     @SuppressWarnings("unchecked")
     @Override
     protected <K, V> KeyValueStore<K, V> createKeyValueStore(final ProcessorContext context) {
-        final StoreBuilder storeBuilder = Stores.keyValueStoreBuilder(
+        final StoreBuilder<KeyValueStore<K, V>> storeBuilder = Stores.keyValueStoreBuilder(
                 Stores.persistentKeyValueStore("cache-store"),
                 (Serde<K>) context.keySerde(),
                 (Serde<V>) context.valueSerde())
                 .withCachingEnabled();
 
-        final KeyValueStore<K, V> store = (KeyValueStore<K, V>) storeBuilder.build();
+        final KeyValueStore<K, V> store = storeBuilder.build();
         store.init(context, store);
         return store;
     }

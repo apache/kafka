@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.processor.internals;
 
 import java.io.File;
+
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.MockConsumer;
@@ -43,14 +44,22 @@ import org.junit.runner.RunWith;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
+import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.easymock.EasyMock.anyString;
 import static org.easymock.EasyMock.expect;
 import static org.easymock.EasyMock.mock;
 import static org.easymock.EasyMock.replay;
+import static org.easymock.EasyMock.same;
+import static org.hamcrest.CoreMatchers.equalTo;
+import static org.hamcrest.CoreMatchers.is;
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.core.IsNot.not;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertThrows;
 
 @RunWith(EasyMockRunner.class)
 public class ActiveTaskCreatorTest {
@@ -72,6 +81,122 @@ public class ActiveTaskCreatorTest {
     final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(new Metrics(), "clientId", StreamsConfig.METRICS_LATEST);
 
     private ActiveTaskCreator activeTaskCreator;
+
+    @Test
+    public void shouldFailForNonEosOnStreamsProducerPerTask() {
+        expect(config.getString(StreamsConfig.APPLICATION_ID_CONFIG)).andReturn("appId");
+        expect(config.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG)).andReturn(StreamsConfig.AT_LEAST_ONCE);
+        expect(config.getProducerConfigs(anyString())).andReturn(Collections.emptyMap());
+        replay(config);
+
+        activeTaskCreator = new ActiveTaskCreator(
+            builder,
+            config,
+            streamsMetrics,
+            stateDirectory,
+            changeLogReader,
+            new ThreadCache(new LogContext(), 0L, streamsMetrics),
+            new MockTime(),
+            mockClientSupplier,
+            "threadId",
+            new LogContext().logger(ActiveTaskCreator.class)
+        );
+
+        final IllegalStateException thrown = assertThrows(
+            IllegalStateException.class,
+            () -> activeTaskCreator.streamsProducerForTask(null)
+        );
+
+        assertThat(thrown.getMessage(), is("Producer per thread is used"));
+    }
+
+    @Test
+    public void shouldFailForUnknownTaskOnStreamsProducerPerTask() {
+        expect(config.getString(StreamsConfig.APPLICATION_ID_CONFIG)).andReturn("appId");
+        expect(config.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG)).andReturn(StreamsConfig.EXACTLY_ONCE);
+        expect(config.getProducerConfigs(anyString())).andReturn(Collections.emptyMap());
+        replay(config);
+
+        activeTaskCreator = new ActiveTaskCreator(
+            builder,
+            config,
+            streamsMetrics,
+            stateDirectory,
+            changeLogReader,
+            new ThreadCache(new LogContext(), 0L, streamsMetrics),
+            new MockTime(),
+            mockClientSupplier,
+            "threadId",
+            new LogContext().logger(ActiveTaskCreator.class)
+        );
+
+        {
+            final IllegalStateException thrown = assertThrows(
+                IllegalStateException.class,
+                () -> activeTaskCreator.streamsProducerForTask(null)
+            );
+
+            assertThat(thrown.getMessage(), is("Unknown TaskId: null"));
+        }
+        {
+            final IllegalStateException thrown = assertThrows(
+                IllegalStateException.class,
+                () -> activeTaskCreator.streamsProducerForTask(new TaskId(0, 0))
+            );
+
+            assertThat(thrown.getMessage(), is("Unknown TaskId: 0_0"));
+        }
+    }
+
+    @Test
+    public void shouldReturnStreamsProducerPerTask() {
+        final TaskId task00 = new TaskId(0, 0);
+        final TaskId task01 = new TaskId(0, 1);
+        final ProcessorTopology topology = mock(ProcessorTopology.class);
+
+        expect(config.getString(StreamsConfig.APPLICATION_ID_CONFIG)).andReturn("appId");
+        expect(config.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG)).andReturn(StreamsConfig.EXACTLY_ONCE);
+        expect(config.getProducerConfigs(anyString())).andReturn(new HashMap<>()).anyTimes();
+        expect(config.getLong(anyString())).andReturn(0L).anyTimes();
+        expect(config.getInt(anyString())).andReturn(0).anyTimes();
+        expect(builder.buildSubtopology(task00.topicGroupId)).andReturn(topology).anyTimes();
+        expect(stateDirectory.directoryForTask(task00)).andReturn(new File(task00.toString()));
+        expect(stateDirectory.directoryForTask(task01)).andReturn(new File(task01.toString()));
+        expect(topology.storeToChangelogTopic()).andReturn(Collections.emptyMap()).anyTimes();
+        expect(topology.source("topic")).andReturn(mock(SourceNode.class)).andReturn(mock(SourceNode.class));
+        expect(topology.globalStateStores()).andReturn(Collections.emptyList()).anyTimes();
+        replay(config, builder, stateDirectory, topology);
+
+        mockClientSupplier.setApplicationIdForProducer("appId");
+        activeTaskCreator = new ActiveTaskCreator(
+            builder,
+            config,
+            streamsMetrics,
+            stateDirectory,
+            changeLogReader,
+            new ThreadCache(new LogContext(), 0L, streamsMetrics),
+            new MockTime(),
+            mockClientSupplier,
+            "threadId",
+            new LogContext().logger(ActiveTaskCreator.class)
+        );
+
+        assertThat(
+            activeTaskCreator.createTasks(
+                null,
+                mkMap(
+                    mkEntry(task00, Collections.singleton(new TopicPartition("topic", 0))),
+                    mkEntry(task01, Collections.singleton(new TopicPartition("topic", 1)))
+                )
+            ).stream().map(Task::id).collect(Collectors.toSet()),
+            equalTo(mkSet(task00, task01))
+        );
+
+        final StreamsProducer streamsProducer1 = activeTaskCreator.streamsProducerForTask(new TaskId(0, 0));
+        final StreamsProducer streamsProducer2 = activeTaskCreator.streamsProducerForTask(new TaskId(0, 1));
+
+        assertThat(streamsProducer1, not(same(streamsProducer2)));
+    }
 
     @Test
     public void shouldConstructProducerMetricsWithoutEOS() {

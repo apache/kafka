@@ -1046,6 +1046,10 @@ public class StreamThreadTest {
 
         assertThat(thread.activeTasks().size(), equalTo(1));
 
+        // need to process a record to enable committing
+        addRecord(mockConsumer, 0L);
+        thread.runOnce();
+
         clientSupplier.producers.get(0).commitTransactionException = new ProducerFencedException("Producer is fenced");
         assertThrows(TaskMigratedException.class, () -> thread.rebalanceListener.onPartitionsRevoked(assignedPartitions));
         assertFalse(clientSupplier.producers.get(0).transactionCommitted());
@@ -1132,6 +1136,10 @@ public class StreamThreadTest {
         thread.runOnce();
 
         assertThat(thread.activeTasks().size(), equalTo(1));
+
+        // need to process a record to enable committing
+        addRecord(mockConsumer, 0L);
+        thread.runOnce();
 
         thread.rebalanceListener.onPartitionsRevoked(assignedPartitions);
         assertTrue(clientSupplier.producers.get(0).transactionCommitted());
@@ -1956,7 +1964,8 @@ public class StreamThreadTest {
         final Node broker2 = new Node(1, "dummyHost-2", 1234);
         final List<Node> cluster = Arrays.asList(broker1, broker2);
 
-        final MockAdminClient adminClient = new MockAdminClient(cluster, broker1, null);
+        final MockAdminClient adminClient = new MockAdminClient.Builder().
+            brokers(cluster).clusterId(null).build();
 
         final Consumer<byte[], byte[]> consumer = EasyMock.createNiceMock(Consumer.class);
         final TaskManager taskManager = EasyMock.createNiceMock(TaskManager.class);

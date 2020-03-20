@@ -23,7 +23,6 @@ import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.internals.graph.ProcessorParameters;
 import org.apache.kafka.streams.kstream.internals.graph.StatefulProcessorNode;
 import org.apache.kafka.streams.kstream.internals.graph.StreamsGraphNode;
-import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 
 import java.util.Collections;
@@ -68,7 +67,7 @@ class GroupedStreamAggregateBuilder<K, V> {
     }
 
     <KR, VR> KTable<KR, VR> build(final NamedInternal functionName,
-                                  final StoreBuilder<? extends StateStore> storeBuilder,
+                                  final StoreBuilder<?> storeBuilder,
                                   final KStreamAggProcessorSupplier<K, KR, V, VR> aggregateSupplier,
                                   final String queryableStoreName,
                                   final Serde<KR> keySerde,

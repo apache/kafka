@@ -21,7 +21,9 @@ import java.util.Collections;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.DeleteRecordsResult;
 import org.apache.kafka.clients.admin.RecordsToDelete;
+import org.apache.kafka.clients.consumer.CommitFailedException;
 import org.apache.kafka.clients.consumer.Consumer;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
@@ -71,6 +73,7 @@ public class TaskManager {
     private final InternalTopologyBuilder builder;
     private final Admin adminClient;
     private final StateDirectory stateDirectory;
+    private final boolean eosEnabled;
 
     private final Map<TaskId, Task> tasks = new TreeMap<>();
     // materializing this relationship because the lookup is on the hot path
@@ -93,7 +96,8 @@ public class TaskManager {
                 final StandbyTaskCreator standbyTaskCreator,
                 final InternalTopologyBuilder builder,
                 final Admin adminClient,
-                final StateDirectory stateDirectory) {
+                final StateDirectory stateDirectory,
+                final boolean eosEnabled) {
         this.changelogReader = changelogReader;
         this.processId = processId;
         this.logPrefix = logPrefix;
@@ -103,6 +107,7 @@ public class TaskManager {
         this.builder = builder;
         this.adminClient = adminClient;
         this.stateDirectory = stateDirectory;
+        this.eosEnabled = eosEnabled;
 
         final LogContext logContext = new LogContext(logPrefix);
         log = logContext.logger(getClass());
@@ -154,6 +159,7 @@ public class TaskManager {
             final Collection<TopicPartition> corruptedPartitions = entry.getValue();
             task.markChangelogAsCorrupted(corruptedPartitions);
 
+            task.prepareCloseDirty();
             task.closeDirty();
             task.revive();
         }
@@ -179,6 +185,11 @@ public class TaskManager {
 
         // first rectify all existing tasks
         final LinkedHashMap<TaskId, RuntimeException> taskCloseExceptions = new LinkedHashMap<>();
+
+        final Map<Task, Map<TopicPartition, Long>> checkpointPerTask = new HashMap<>();
+        final Map<TaskId, Map<TopicPartition, OffsetAndMetadata>> consumedOffsetsAndMetadataPerTask = new HashMap<>();
+        final Set<Task> dirtyTasks = new HashSet<>();
+
         final Iterator<Task> iterator = tasks.values().iterator();
         while (iterator.hasNext()) {
             final Task task = iterator.next();
@@ -192,28 +203,50 @@ public class TaskManager {
                 cleanupTask(task);
 
                 try {
-                    task.closeClean();
+                    final Map<TopicPartition, Long> checkpoint = task.prepareCloseClean();
+                    final Map<TopicPartition, OffsetAndMetadata> committableOffsets = task.committableOffsetsAndMetadata();
+
+                    checkpointPerTask.put(task, checkpoint);
+                    if (!committableOffsets.isEmpty()) {
+                        consumedOffsetsAndMetadataPerTask.put(task.id(), committableOffsets);
+                    }
                 } catch (final RuntimeException e) {
                     final String uncleanMessage = String.format("Failed to close task %s cleanly. Attempting to close remaining tasks before re-throwing:", task.id());
                     log.error(uncleanMessage, e);
                     taskCloseExceptions.put(task.id(), e);
                     // We've already recorded the exception (which is the point of clean).
                     // Now, we should go ahead and complete the close because a half-closed task is no good to anyone.
-                    task.closeDirty();
-                } finally {
-                    if (task.isActive()) {
-                        try {
-                            activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(task.id());
-                        } catch (final RuntimeException e) {
-                            final String uncleanMessage = String.format("Failed to close task %s cleanly. Attempting to close remaining tasks before re-throwing:", task.id());
-                            log.error(uncleanMessage, e);
-                            taskCloseExceptions.putIfAbsent(task.id(), e);
-                        }
-                    }
+                    task.prepareCloseDirty();
+                    dirtyTasks.add(task);
                 }
 
                 iterator.remove();
             }
+        }
+
+        if (!consumedOffsetsAndMetadataPerTask.isEmpty()) {
+            commitOffsetsOrTransaction(consumedOffsetsAndMetadataPerTask);
+        }
+
+        for (final Map.Entry<Task, Map<TopicPartition, Long>> taskAndCheckpoint : checkpointPerTask.entrySet()) {
+            final Task task = taskAndCheckpoint.getKey();
+            try {
+                task.closeClean(checkpointPerTask.get(task));
+            } catch (final RuntimeException e) {
+                final String uncleanMessage = String.format("Failed to close task %s cleanly. Attempting to close remaining tasks before re-throwing:", task.id());
+                log.error(uncleanMessage, e);
+                taskCloseExceptions.put(task.id(), e);
+                // We've already recorded the exception (which is the point of clean).
+                // Now, we should go ahead and complete the close because a half-closed task is no good to anyone.
+                task.closeDirty();
+            } finally {
+                cleanUpTaskProducer(task, taskCloseExceptions);
+            }
+        }
+
+        for (final Task task : dirtyTasks) {
+            task.closeDirty();
+            cleanUpTaskProducer(task, taskCloseExceptions);
         }
 
         if (!taskCloseExceptions.isEmpty()) {
@@ -255,6 +288,19 @@ public class TaskManager {
         );
 
         changelogReader.transitToRestoreActive();
+    }
+
+    private void cleanUpTaskProducer(final Task task,
+                                     final Map<TaskId, RuntimeException> taskCloseExceptions) {
+        if (task.isActive()) {
+            try {
+                activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(task.id());
+            } catch (final RuntimeException e) {
+                final String uncleanMessage = String.format("Failed to close task %s cleanly. Attempting to close remaining tasks before re-throwing:", task.id());
+                log.error(uncleanMessage, e);
+                taskCloseExceptions.putIfAbsent(task.id(), e);
+            }
+        }
     }
 
     private void addNewTask(final Task task) {
@@ -330,11 +376,26 @@ public class TaskManager {
     void handleRevocation(final Collection<TopicPartition> revokedPartitions) {
         final Set<TopicPartition> remainingPartitions = new HashSet<>(revokedPartitions);
 
+        final Map<TaskId, Map<TopicPartition, OffsetAndMetadata>> consumedOffsetsAndMetadataPerTask = new HashMap<>();
         for (final Task task : tasks.values()) {
             if (remainingPartitions.containsAll(task.inputPartitions())) {
-                task.suspend();
+                task.prepareSuspend();
+                final Map<TopicPartition, OffsetAndMetadata> committableOffsets = task.committableOffsetsAndMetadata();
+                if (!committableOffsets.isEmpty()) {
+                    consumedOffsetsAndMetadataPerTask.put(task.id(), committableOffsets);
+                }
             }
             remainingPartitions.removeAll(task.inputPartitions());
+        }
+
+        if (!consumedOffsetsAndMetadataPerTask.isEmpty()) {
+            commitOffsetsOrTransaction(consumedOffsetsAndMetadataPerTask);
+        }
+
+        for (final Task task : tasks.values()) {
+            if (consumedOffsetsAndMetadataPerTask.containsKey(task.id())) {
+                task.suspend();
+            }
         }
 
         if (!remainingPartitions.isEmpty()) {
@@ -362,6 +423,7 @@ public class TaskManager {
             // standby tasks while we rejoin.
             if (task.isActive()) {
                 cleanupTask(task);
+                task.prepareCloseDirty();
                 task.closeDirty();
                 iterator.remove();
                 try {
@@ -497,24 +559,52 @@ public class TaskManager {
 
     void shutdown(final boolean clean) {
         final AtomicReference<RuntimeException> firstException = new AtomicReference<>(null);
-        final Iterator<Task> iterator = tasks.values().iterator();
-        while (iterator.hasNext()) {
-            final Task task = iterator.next();
+
+        final Map<Task, Map<TopicPartition, Long>> checkpointPerTask = new HashMap<>();
+        final Map<TaskId, Map<TopicPartition, OffsetAndMetadata>> consumedOffsetsAndMetadataPerTask = new HashMap<>();
+
+        for (final Task task : tasks.values()) {
             cleanupTask(task);
 
             if (clean) {
                 try {
-                    task.closeClean();
+                    final Map<TopicPartition, Long> checkpoint = task.prepareCloseClean();
+                    final Map<TopicPartition, OffsetAndMetadata> committableOffsets = task.committableOffsetsAndMetadata();
+
+                    checkpointPerTask.put(task, checkpoint);
+                    if (!committableOffsets.isEmpty()) {
+                        consumedOffsetsAndMetadataPerTask.put(task.id(), committableOffsets);
+                    }
                 } catch (final TaskMigratedException e) {
                     // just ignore the exception as it doesn't matter during shutdown
+                    task.prepareCloseDirty();
                     task.closeDirty();
                 } catch (final RuntimeException e) {
                     firstException.compareAndSet(null, e);
+                    task.prepareCloseDirty();
                     task.closeDirty();
                 }
             } else {
+                task.prepareCloseDirty();
                 task.closeDirty();
             }
+        }
+
+        if (clean && !consumedOffsetsAndMetadataPerTask.isEmpty()) {
+            commitOffsetsOrTransaction(consumedOffsetsAndMetadataPerTask);
+        }
+
+        for (final Map.Entry<Task, Map<TopicPartition, Long>> taskAndCheckpoint : checkpointPerTask.entrySet()) {
+            final Task task = taskAndCheckpoint.getKey();
+            try {
+                task.closeClean(checkpointPerTask.get(task));
+            } catch (final RuntimeException e) {
+                firstException.compareAndSet(null, e);
+                task.closeDirty();
+            }
+        }
+
+        for (final Task task : tasks.values()) {
             if (task.isActive()) {
                 try {
                     activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(task.id());
@@ -526,8 +616,9 @@ public class TaskManager {
                     }
                 }
             }
-            iterator.remove();
         }
+
+        tasks.clear();
 
         try {
             activeTaskCreator.closeThreadProducerIfNeeded();
@@ -604,14 +695,28 @@ public class TaskManager {
         if (rebalanceInProgress) {
             return -1;
         } else {
-            int commits = 0;
+            int committed = 0;
+            final Map<TaskId, Map<TopicPartition, OffsetAndMetadata>> consumedOffsetsAndMetadataPerTask = new HashMap<>();
             for (final Task task : tasks.values()) {
                 if (task.commitNeeded()) {
-                    task.commit();
-                    commits++;
+                    task.prepareCommit();
+                    final Map<TopicPartition, OffsetAndMetadata> offsetAndMetadata = task.committableOffsetsAndMetadata();
+                    if (!offsetAndMetadata.isEmpty()) {
+                        consumedOffsetsAndMetadataPerTask.put(task.id(), offsetAndMetadata);
+                    }
                 }
             }
-            return commits;
+
+            commitOffsetsOrTransaction(consumedOffsetsAndMetadataPerTask);
+
+            for (final Task task : tasks.values()) {
+                if (task.commitNeeded()) {
+                    ++committed;
+                    task.postCommit();
+                }
+            }
+
+            return committed;
         }
     }
 
@@ -623,14 +728,49 @@ public class TaskManager {
         if (rebalanceInProgress) {
             return -1;
         } else {
-            int commits = 0;
+            final Map<TaskId, Map<TopicPartition, OffsetAndMetadata>> consumedOffsetsAndMetadataPerTask = new HashMap<>();
             for (final Task task : activeTaskIterable()) {
                 if (task.commitRequested() && task.commitNeeded()) {
-                    task.commit();
-                    commits++;
+                    task.prepareCommit();
+                    final Map<TopicPartition, OffsetAndMetadata> offsetAndMetadata = task.committableOffsetsAndMetadata();
+                    if (!offsetAndMetadata.isEmpty()) {
+                        consumedOffsetsAndMetadataPerTask.put(task.id(), offsetAndMetadata);
+                    }
                 }
             }
-            return commits;
+
+            commitOffsetsOrTransaction(consumedOffsetsAndMetadataPerTask);
+
+            for (final Task task : tasks.values()) {
+                if (consumedOffsetsAndMetadataPerTask.containsKey(task.id())) {
+                    task.postCommit();
+                }
+            }
+
+            return consumedOffsetsAndMetadataPerTask.size();
+        }
+    }
+
+    private void commitOffsetsOrTransaction(final Map<TaskId, Map<TopicPartition, OffsetAndMetadata>> offsetsPerTask) {
+        if (eosEnabled) {
+            for (final Map.Entry<TaskId, Map<TopicPartition, OffsetAndMetadata>> taskToCommit : offsetsPerTask.entrySet()) {
+                activeTaskCreator.streamsProducerForTask(taskToCommit.getKey()).commitTransaction(taskToCommit.getValue());
+            }
+        } else {
+            try {
+                final Map<TopicPartition, OffsetAndMetadata> allOffsets = offsetsPerTask.values().stream()
+                    .flatMap(e -> e.entrySet().stream()).collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+
+                mainConsumer.commitSync(allOffsets);
+            } catch (final CommitFailedException error) {
+                throw new TaskMigratedException("Consumer committing offsets failed, " +
+                    "indicating the corresponding thread is no longer part of the group", error);
+            } catch (final TimeoutException error) {
+                // TODO KIP-447: we can consider treating it as non-fatal and retry on the thread level
+                throw new StreamsException("Timed out while committing offsets via consumer", error);
+            } catch (final KafkaException error) {
+                throw new StreamsException("Error encountered committing offsets via consumer", error);
+            }
         }
     }
 

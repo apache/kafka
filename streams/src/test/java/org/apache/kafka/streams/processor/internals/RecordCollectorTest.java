@@ -16,11 +16,6 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import org.apache.kafka.clients.consumer.CommitFailedException;
-import org.apache.kafka.clients.consumer.KafkaConsumer;
-import org.apache.kafka.clients.consumer.MockConsumer;
-import org.apache.kafka.clients.consumer.OffsetAndMetadata;
-import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.clients.producer.MockProducer;
 import org.apache.kafka.clients.producer.ProducerRecord;
@@ -35,7 +30,6 @@ import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.ProducerFencedException;
-import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeader;
@@ -67,6 +61,7 @@ import java.util.Map;
 import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import static org.easymock.EasyMock.expect;
 import static org.easymock.EasyMock.expectLastCall;
 import static org.easymock.EasyMock.mock;
 import static org.easymock.EasyMock.replay;
@@ -104,10 +99,9 @@ public class RecordCollectorTest {
 
     private final StreamPartitioner<String, Object> streamPartitioner = (topic, key, value, numPartitions) -> Integer.parseInt(key) % numPartitions;
 
-    private final MockConsumer<byte[], byte[]> mockConsumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST);
     private final MockProducer<byte[], byte[]> mockProducer = new MockProducer<>(
         cluster, true, new DefaultPartitioner(), byteArraySerializer, byteArraySerializer);
-    private final StreamsProducer streamsProducer = new StreamsProducer(mockProducer, false, logContext, null);
+    private final StreamsProducer streamsProducer = new StreamsProducer(mockProducer, false, null, logContext);
 
     private RecordCollectorImpl collector;
 
@@ -116,10 +110,8 @@ public class RecordCollectorTest {
         collector = new RecordCollectorImpl(
             logContext,
             taskId,
-            mockConsumer,
             streamsProducer,
             productionExceptionHandler,
-            false,
             streamsMetrics);
     }
 
@@ -243,51 +235,9 @@ public class RecordCollectorTest {
     }
 
     @Test
-    public void shouldCommitViaConsumerIfEosDisabled() {
-        final KafkaConsumer<byte[], byte[]> consumer = mock(KafkaConsumer.class);
-        consumer.commitSync((Map<TopicPartition, OffsetAndMetadata>) null);
-        expectLastCall();
-        replay(consumer);
-
-        final RecordCollector collector = new RecordCollectorImpl(
-            logContext,
-            taskId,
-            consumer,
-            streamsProducer,
-            productionExceptionHandler,
-            false,
-            streamsMetrics);
-
-        collector.commit(null);
-
-        verify(consumer);
-
-    }
-
-    @Test
-    public void shouldCommitViaProducerIfEosEnabled() {
+    public void shouldForwardFlushToStreamsProducer() {
         final StreamsProducer streamsProducer = mock(StreamsProducer.class);
-        streamsProducer.commitTransaction(null);
-        expectLastCall();
-        replay(streamsProducer);
-
-        final RecordCollector collector = new RecordCollectorImpl(
-            logContext,
-            taskId,
-            mockConsumer,
-            streamsProducer,
-            productionExceptionHandler,
-            true,
-            streamsMetrics);
-
-        collector.commit(null);
-
-        verify(streamsProducer);
-    }
-
-    @Test
-    public void shouldForwardFlushToTransactionManager() {
-        final StreamsProducer streamsProducer = mock(StreamsProducer.class);
+        expect(streamsProducer.eosEnabled()).andReturn(false);
         streamsProducer.flush();
         expectLastCall();
         replay(streamsProducer);
@@ -295,10 +245,8 @@ public class RecordCollectorTest {
         final RecordCollector collector = new RecordCollectorImpl(
             logContext,
             taskId,
-            mockConsumer,
             streamsProducer,
             productionExceptionHandler,
-            true,
             streamsMetrics);
 
         collector.flush();
@@ -307,20 +255,21 @@ public class RecordCollectorTest {
     }
 
     @Test
-    public void shouldForwardCloseToTransactionManager() {
+    public void shouldForwardFlushToStreamsProducerEosEnabled() {
         final StreamsProducer streamsProducer = mock(StreamsProducer.class);
+        expect(streamsProducer.eosEnabled()).andReturn(true);
+        streamsProducer.flush();
+        expectLastCall();
         replay(streamsProducer);
 
         final RecordCollector collector = new RecordCollectorImpl(
             logContext,
             taskId,
-            mockConsumer,
             streamsProducer,
             productionExceptionHandler,
-            false,
             streamsMetrics);
 
-        collector.close();
+        collector.flush();
 
         verify(streamsProducer);
     }
@@ -328,16 +277,15 @@ public class RecordCollectorTest {
     @Test
     public void shouldAbortTxIfEosEnabled() {
         final StreamsProducer streamsProducer = mock(StreamsProducer.class);
+        expect(streamsProducer.eosEnabled()).andReturn(true);
         streamsProducer.abortTransaction();
         replay(streamsProducer);
 
         final RecordCollector collector = new RecordCollectorImpl(
             logContext,
             taskId,
-            mockConsumer,
             streamsProducer,
             productionExceptionHandler,
-            true,
             streamsMetrics);
 
         collector.close();
@@ -345,7 +293,7 @@ public class RecordCollectorTest {
         verify(streamsProducer);
     }
 
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings({"unchecked", "rawtypes"})
     @Test
     public void shouldThrowInformativeStreamsExceptionOnKeyClassCastException() {
         final StreamsException expected = assertThrows(
@@ -373,7 +321,7 @@ public class RecordCollectorTest {
         );
     }
 
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings({"unchecked", "rawtypes"})
     @Test
     public void shouldThrowInformativeStreamsExceptionOnKeyAndNullValueClassCastException() {
         final StreamsException expected = assertThrows(
@@ -401,7 +349,7 @@ public class RecordCollectorTest {
         );
     }
 
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings({"unchecked", "rawtypes"})
     @Test
     public void shouldThrowInformativeStreamsExceptionOnValueClassCastException() {
         final StreamsException expected = assertThrows(
@@ -429,7 +377,7 @@ public class RecordCollectorTest {
         );
     }
 
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings({"unchecked", "rawtypes"})
     @Test
     public void shouldThrowInformativeStreamsExceptionOnValueAndNullKeyClassCastException() {
         final StreamsException expected = assertThrows(
@@ -463,7 +411,6 @@ public class RecordCollectorTest {
         final RecordCollector collector = new RecordCollectorImpl(
             logContext,
             taskId,
-            mockConsumer,
             new StreamsProducer(
                 new MockProducer<byte[], byte[]>(cluster, true, new DefaultPartitioner(), byteArraySerializer, byteArraySerializer) {
                     @Override
@@ -473,11 +420,10 @@ public class RecordCollectorTest {
                     }
                 },
                 true,
-                logContext,
-                "appId"
+                "appId",
+                logContext
             ),
             productionExceptionHandler,
-            true,
             streamsMetrics
         );
         collector.initialize();
@@ -506,7 +452,6 @@ public class RecordCollectorTest {
         final RecordCollector collector = new RecordCollectorImpl(
             logContext,
             taskId,
-            mockConsumer,
             new StreamsProducer(
                 new MockProducer<byte[], byte[]>(cluster, true, new DefaultPartitioner(), byteArraySerializer, byteArraySerializer) {
                     @Override
@@ -516,11 +461,10 @@ public class RecordCollectorTest {
                     }
                 },
                 false,
-                logContext,
-                null
+                null,
+                logContext
             ),
             productionExceptionHandler,
-            false,
             streamsMetrics
         );
 
@@ -548,7 +492,6 @@ public class RecordCollectorTest {
         final RecordCollector collector = new RecordCollectorImpl(
             logContext,
             taskId,
-            mockConsumer,
             new StreamsProducer(
                 new MockProducer<byte[], byte[]>(cluster, true, new DefaultPartitioner(), byteArraySerializer, byteArraySerializer) {
                     @Override
@@ -558,11 +501,10 @@ public class RecordCollectorTest {
                     }
                 },
                 false,
-                logContext,
-                null
+                null,
+                logContext
             ),
             new AlwaysContinueProductionExceptionHandler(),
-            false,
             streamsMetrics
         );
 
@@ -591,7 +533,6 @@ public class RecordCollectorTest {
         final RecordCollector collector = new RecordCollectorImpl(
             logContext,
             taskId,
-            mockConsumer,
             new StreamsProducer(
                 new MockProducer<byte[], byte[]>(cluster, true, new DefaultPartitioner(), byteArraySerializer, byteArraySerializer) {
                     @Override
@@ -601,11 +542,10 @@ public class RecordCollectorTest {
                     }
                 },
                 false,
-                logContext,
-                null
+                null,
+                logContext
             ),
             new AlwaysContinueProductionExceptionHandler(),
-            false,
             streamsMetrics
         );
 
@@ -628,102 +568,11 @@ public class RecordCollectorTest {
     }
 
     @Test
-    public void shouldThrowTaskMigratedExceptionOnCommitFailed() {
-        final RecordCollector collector = new RecordCollectorImpl(
-            logContext,
-            taskId,
-            new MockConsumer<byte[], byte[]>(OffsetResetStrategy.EARLIEST) {
-                @Override
-                public void commitSync(final Map<TopicPartition, OffsetAndMetadata> offsets) {
-                    throw new CommitFailedException();
-                }
-            },
-            streamsProducer,
-            productionExceptionHandler,
-            false,
-            streamsMetrics
-        );
-
-        final TaskMigratedException thrown = assertThrows(TaskMigratedException.class, () -> collector.commit(null));
-
-        assertThat(thrown.getMessage(), equalTo("Consumer committing offsets failed, indicating the corresponding thread is no longer part of the group; it means all tasks belonging to this thread should be migrated."));
-    }
-
-    @Test
-    public void shouldThrowStreamsExceptionOnCommitTimeout() {
-        final RecordCollector collector = new RecordCollectorImpl(
-            logContext,
-            taskId,
-            new MockConsumer<byte[], byte[]>(OffsetResetStrategy.EARLIEST) {
-                @Override
-                public void commitSync(final Map<TopicPartition, OffsetAndMetadata> offsets) {
-                    throw new TimeoutException();
-                }
-            },
-            streamsProducer,
-            productionExceptionHandler,
-            false,
-            streamsMetrics
-        );
-
-        final StreamsException thrown = assertThrows(StreamsException.class, () -> collector.commit(null));
-
-        assertThat(thrown.getMessage(), equalTo("Timed out while committing offsets via consumer for task 0_0"));
-    }
-
-    @Test
-    public void shouldStreamsExceptionOnCommitError() {
-        final RecordCollector collector = new RecordCollectorImpl(
-            logContext,
-            taskId,
-            new MockConsumer<byte[], byte[]>(OffsetResetStrategy.EARLIEST) {
-                @Override
-                public void commitSync(final Map<TopicPartition, OffsetAndMetadata> offsets) {
-                    throw new KafkaException();
-                }
-            },
-            streamsProducer,
-            productionExceptionHandler,
-            false,
-            streamsMetrics
-        );
-        collector.initialize();
-
-        final StreamsException thrown = assertThrows(StreamsException.class, () -> collector.commit(null));
-
-        assertThat(thrown.getMessage(), equalTo("Error encountered committing offsets via consumer for task 0_0"));
-    }
-
-    @Test
-    public void shouldFailOnCommitFatal() {
-        final RecordCollector collector = new RecordCollectorImpl(
-            logContext,
-            taskId,
-            new MockConsumer<byte[], byte[]>(OffsetResetStrategy.EARLIEST) {
-                @Override
-                public void commitSync(final Map<TopicPartition, OffsetAndMetadata> offsets) {
-                    throw new RuntimeException("KABOOM!");
-                }
-            },
-            streamsProducer,
-            productionExceptionHandler,
-            false,
-            streamsMetrics
-        );
-        collector.initialize();
-
-        final RuntimeException thrown = assertThrows(RuntimeException.class, () -> collector.commit(null));
-
-        assertThat(thrown.getMessage(), equalTo("KABOOM!"));
-    }
-
-    @Test
     public void shouldNotAbortTxnOnEOSCloseIfNothingSent() {
         final AtomicBoolean functionCalled = new AtomicBoolean(false);
         final RecordCollector collector = new RecordCollectorImpl(
             logContext,
             taskId,
-            mockConsumer,
             new StreamsProducer(
                 new MockProducer<byte[], byte[]>(cluster, true, new DefaultPartitioner(), byteArraySerializer, byteArraySerializer) {
                     @Override
@@ -732,11 +581,10 @@ public class RecordCollectorTest {
                     }
                 },
                 true,
-                logContext,
-                "appId"
+                "appId",
+                logContext
             ),
             productionExceptionHandler,
-            true,
             streamsMetrics
         );
 
@@ -749,7 +597,6 @@ public class RecordCollectorTest {
         final RecordCollector collector = new RecordCollectorImpl(
             logContext,
             taskId,
-            mockConsumer,
             new StreamsProducer(
                 new MockProducer<byte[], byte[]>(cluster, true, new DefaultPartitioner(), byteArraySerializer, byteArraySerializer) {
                     @Override
@@ -758,11 +605,10 @@ public class RecordCollectorTest {
                     }
                 },
                 false,
-                logContext,
-                null
+                null,
+                logContext
             ),
             productionExceptionHandler,
-            false,
             streamsMetrics
         );
         collector.initialize();
@@ -779,10 +625,8 @@ public class RecordCollectorTest {
         final RecordCollector collector = new RecordCollectorImpl(
             logContext,
             taskId,
-            mockConsumer,
-            new StreamsProducer(mockProducer, true, logContext, "appId"),
+            new StreamsProducer(mockProducer, true, "appId", logContext),
             productionExceptionHandler,
-            true,
             streamsMetrics
         );
 
