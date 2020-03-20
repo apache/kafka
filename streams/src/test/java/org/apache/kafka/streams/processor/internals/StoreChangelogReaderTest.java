@@ -17,12 +17,14 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.MockConsumer;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.FencedInstanceIdException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
@@ -44,6 +46,7 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 
+import java.time.Duration;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Map;
@@ -941,6 +944,31 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
 
         thrown = assertThrows(StreamsException.class, changelogReader::restore);
         assertEquals(kaboom, thrown.getCause());
+    }
+
+    @Test
+    public void shouldThrowIfRestoreGetInstanceFenced() {
+        EasyMock.expect(storeMetadata.offset()).andReturn(5L).anyTimes();
+        EasyMock.replay(activeStateManager, storeMetadata, store);
+
+        final FencedInstanceIdException exception = new FencedInstanceIdException("KABOOM!");
+        final MockConsumer<byte[], byte[]> consumer = new MockConsumer<byte[], byte[]>(OffsetResetStrategy.EARLIEST) {
+            @Override
+            public Map<TopicPartition, Long> endOffsets(final Collection<TopicPartition> partitions) {
+                return partitions.stream().collect(Collectors.toMap(Function.identity(), partition -> 10L));
+            }
+
+            @Override
+            public ConsumerRecords<byte[], byte[]> poll(final Duration timeout) {
+                throw exception;
+            }
+        };
+        final StoreChangelogReader changelogReader = new StoreChangelogReader(time, config, logContext, consumer, callback);
+
+        changelogReader.register(tp, activeStateManager);
+
+        StreamsException thrown = assertThrows(StreamsException.class, changelogReader::restore);
+        assertEquals(exception, thrown.getCause());
     }
 
     private void setupConsumer(final long messages, final TopicPartition topicPartition) {
