@@ -47,7 +47,6 @@ import org.junit.runners.Parameterized;
 
 import java.util.Collection;
 import java.util.Collections;
-import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
@@ -947,7 +946,7 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
 
     @Test
     public void shouldNotThrowOnUnknownRevokedPartition() {
-        LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
+        final LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
         LogCaptureAppender.setClassLoggerToDebug(changelogReader.getClass());
 
         try {
