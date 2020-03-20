@@ -18,9 +18,11 @@ package org.apache.kafka.common.record;
 
 import org.junit.Test;
 import static org.junit.Assert.assertTrue;
-import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 
 public class CompressionRatioEstimatorTest {
+
     @Test
     public void testUpdateEstimation() {
         String topic = "tp";
@@ -37,17 +39,15 @@ public class CompressionRatioEstimatorTest {
         // COMPRESSION_RATIO_DETERIORATE_STEP 0.05, otherwise currentEstimation minus COMPRESSION_RATIO_IMPROVING_STEP
         // 0.005. There are four cases,and updatedCompressionRatio shouldn't smaller than observedRatio in all of cases.
         // Refer to non test code for more details.
-        ArrayList<EstimationsObservedRatios> estimationsObservedRatios = new ArrayList<EstimationsObservedRatios>();
-        estimationsObservedRatios.add(new EstimationsObservedRatios(0.8f, 0.84f));
-        estimationsObservedRatios.add(new EstimationsObservedRatios(0.6f, 0.7f));
-        estimationsObservedRatios.add(new EstimationsObservedRatios(0.6f, 0.4f));
-        estimationsObservedRatios.add(new EstimationsObservedRatios(0.004f, 0.001f));
-        float updatedCompressionRatio;
-        for(EstimationsObservedRatios estimationsObservedRatio:estimationsObservedRatios)
-        {
+        List<EstimationsObservedRatios> estimationsObservedRatios = Arrays.asList(
+                new EstimationsObservedRatios(0.8f, 0.84f),
+                new EstimationsObservedRatios(0.6f, 0.7f),
+                new EstimationsObservedRatios(0.6f, 0.4f),
+                new EstimationsObservedRatios(0.004f, 0.001f));
+            for (EstimationsObservedRatios estimationsObservedRatio : estimationsObservedRatios) {
             CompressionRatioEstimator.setEstimation(topic, CompressionType.ZSTD, estimationsObservedRatio.currentEstimation);
-            updatedCompressionRatio = CompressionRatioEstimator.updateEstimation(topic, CompressionType.ZSTD, estimationsObservedRatio.observedRatio);
-            assertTrue(updatedCompressionRatio < estimationsObservedRatio.observedRatio);
+            float updatedCompressionRatio = CompressionRatioEstimator.updateEstimation(topic, CompressionType.ZSTD, estimationsObservedRatio.observedRatio);
+            assertTrue(updatedCompressionRatio >= estimationsObservedRatio.observedRatio);
         }
     }
 }
