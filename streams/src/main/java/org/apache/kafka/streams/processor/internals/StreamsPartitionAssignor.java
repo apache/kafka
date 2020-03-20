@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import java.time.Duration;
 import java.util.Objects;
 import java.util.SortedSet;
 import java.util.TreeSet;
@@ -210,6 +211,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
     protected int usedSubscriptionMetadataVersion = LATEST_SUPPORTED_VERSION;
 
     private Admin adminClient;
+    private int adminClientTimeout;
     private InternalTopicManager internalTopicManager;
     private CopartitionedTopicsEnforcer copartitionedTopicsEnforcer;
     private RebalanceProtocol rebalanceProtocol;
@@ -236,6 +238,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         partitionGrouper = assignorConfiguration.getPartitionGrouper();
         userEndPoint = assignorConfiguration.getUserEndPoint();
         adminClient = assignorConfiguration.getAdminClient();
+        adminClientTimeout = assignorConfiguration.getAdminClientTimeout();
         internalTopicManager = assignorConfiguration.getInternalTopicManager();
         copartitionedTopicsEnforcer = assignorConfiguration.getCopartitionedTopicsEnforcer();
         rebalanceProtocol = assignorConfiguration.rebalanceProtocol();
@@ -789,7 +792,8 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             final Collection<TopicPartition> allChangelogPartitions = changelogsByStatefulTask.values().stream()
                                                                           .flatMap(Collection::stream)
                                                                           .collect(Collectors.toList());
-            final Map<TopicPartition, ListOffsetsResultInfo> endOffsets = fetchEndOffsets(allChangelogPartitions, adminClient);
+            final Map<TopicPartition, ListOffsetsResultInfo> endOffsets =
+                fetchEndOffsets(allChangelogPartitions, adminClient, Duration.ofMillis(adminClientTimeout));
             allTaskEndOffsetSums = computeEndOffsetSumsByTask(endOffsets, changelogsByStatefulTask);
             fetchEndOffsetsSuccessful = true;
         } catch (final StreamsException e) {

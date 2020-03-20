@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.common.utils;
 
-import static java.util.Arrays.asList;
-
 import java.util.SortedSet;
 import java.util.TreeSet;
 import org.apache.kafka.common.KafkaException;

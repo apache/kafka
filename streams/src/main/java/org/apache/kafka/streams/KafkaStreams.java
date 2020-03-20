@@ -19,6 +19,7 @@ package org.apache.kafka.streams;
 import java.util.LinkedList;
 import java.util.TreeMap;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeoutException;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import org.apache.kafka.clients.admin.Admin;
@@ -27,6 +28,7 @@ import org.apache.kafka.clients.admin.OffsetSpec;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
@@ -1217,7 +1219,7 @@ public class KafkaStreams implements AutoCloseable {
         }
 
         log.debug("Current changelog positions: {}", allChangelogPositions);
-        final Map<TopicPartition, ListOffsetsResultInfo> allEndOffsets = fetchEndOffsets(allPartitions, adminClient);
+        final Map<TopicPartition, ListOffsetsResultInfo> allEndOffsets = fetchEndOffsetsWithoutTimeout(allPartitions, adminClient);
         log.debug("Current end offsets :{}", allEndOffsets);
 
         for (final Map.Entry<TopicPartition, ListOffsetsResultInfo> entry : allEndOffsets.entrySet()) {
@@ -1237,14 +1239,27 @@ public class KafkaStreams implements AutoCloseable {
         return Collections.unmodifiableMap(localStorePartitionLags);
     }
 
+    static Map<TopicPartition, ListOffsetsResultInfo> fetchEndOffsetsWithoutTimeout(final Collection<TopicPartition> partitions,
+                                                                                    final Admin adminClient) {
+        return fetchEndOffsets(partitions, adminClient, null);
+    }
+
     public static Map<TopicPartition, ListOffsetsResultInfo> fetchEndOffsets(final Collection<TopicPartition> partitions,
-                                                                             final Admin adminClient) {
+                                                                             final Admin adminClient,
+                                                                             final Duration timeout) {
+        final Map<TopicPartition, ListOffsetsResultInfo> endOffsets;
         try {
-            return adminClient.listOffsets(
-                partitions.stream().collect(Collectors.toMap(Function.identity(), tp -> OffsetSpec.latest()))
-            ).all().get();
-        } catch (final RuntimeException | InterruptedException | ExecutionException e) {
+            final KafkaFuture<Map<TopicPartition, ListOffsetsResultInfo>> future =  adminClient.listOffsets(
+                partitions.stream().collect(Collectors.toMap(Function.identity(), tp -> OffsetSpec.latest())))
+                                                                                        .all();
+            if (timeout == null) {
+                endOffsets = future.get();
+            } else {
+                endOffsets = future.get(timeout.toMillis(), TimeUnit.MILLISECONDS);
+            }
+        } catch (final TimeoutException | RuntimeException | InterruptedException | ExecutionException e) {
             throw new StreamsException("Unable to obtain end offsets from kafka", e);
         }
+        return endOffsets;
     }
 }

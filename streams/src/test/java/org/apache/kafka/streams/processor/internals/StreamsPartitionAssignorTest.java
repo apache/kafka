@@ -20,6 +20,7 @@ import java.util.Map.Entry;
 import java.util.SortedSet;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClient;
+import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.ListOffsetsResult;
 import org.apache.kafka.clients.admin.ListOffsetsResult.ListOffsetsResultInfo;
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.Assignment;
@@ -47,6 +48,7 @@ import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.StreamsPartitionAssignor.RankedClient;
 import org.apache.kafka.streams.processor.internals.assignment.AssignmentInfo;
+import org.apache.kafka.streams.processor.internals.assignment.AssignorConfiguration;
 import org.apache.kafka.streams.processor.internals.assignment.AssignorError;
 import org.apache.kafka.streams.processor.internals.assignment.ClientState;
 import org.apache.kafka.streams.processor.internals.assignment.SubscriptionInfo;
@@ -1822,6 +1824,17 @@ public class StreamsPartitionAssignorTest {
         assertThat(partitionAssignor.maxWarmupReplicas(), equalTo(33));
         assertThat(partitionAssignor.numStandbyReplicas(), equalTo(44));
         assertThat(partitionAssignor.probingRebalanceIntervalMs(), equalTo(55 * 60 * 1000L));
+    }
+
+    @Test
+    public void shouldSetAdminClientTimeout() {
+        createDefaultMockTaskManager();
+
+        final Map<String, Object> props = configProps();
+        props.put(AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG, 2 * 60 * 1000);
+        final AssignorConfiguration assignorConfiguration = new AssignorConfiguration(props);
+
+        assertThat(assignorConfiguration.getAdminClientTimeout(), is(2 * 60 * 1000));
     }
 
     @Test
