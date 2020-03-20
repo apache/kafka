@@ -71,6 +71,7 @@ class ActiveTaskCreator {
 
     ActiveTaskCreator(final InternalTopologyBuilder builder,
                       final StreamsConfig config,
+                      final StreamThread.ProcessingMode processingMode,
                       final StreamsMetricsImpl streamsMetrics,
                       final StateDirectory stateDirectory,
                       final ChangelogReader storeChangelogReader,
@@ -82,6 +83,7 @@ class ActiveTaskCreator {
                       final Logger log) {
         this.builder = builder;
         this.config = config;
+        this.processingMode = processingMode;
         this.streamsMetrics = streamsMetrics;
         this.stateDirectory = stateDirectory;
         this.storeChangelogReader = storeChangelogReader;
@@ -94,8 +96,7 @@ class ActiveTaskCreator {
         createTaskSensor = ThreadMetrics.createTaskSensor(threadId, streamsMetrics);
         applicationId = config.getString(StreamsConfig.APPLICATION_ID_CONFIG);
 
-        if (StreamThread.eosAlphaEnabled(config)) {
-            processingMode = StreamThread.ProcessingMode.EXACTLY_ONCE_ALPHA;
+        if (processingMode == StreamThread.ProcessingMode.EXACTLY_ONCE_ALPHA) {
             threadProducer = null;
             taskProducers = new HashMap<>();
         } else { // non-eos and eos-beta
@@ -107,15 +108,12 @@ class ActiveTaskCreator {
             final String threadProducerClientId = getThreadProducerClientId(threadId);
             final Map<String, Object> producerConfigs = config.getProducerConfigs(threadProducerClientId);
 
-            final boolean eosBetaEnabled = StreamThread.eosBetaEnabled(config);
-            if (eosBetaEnabled) {
-                processingMode = StreamThread.ProcessingMode.EXACTLY_ONCE_BETA;
+            if (processingMode == StreamThread.ProcessingMode.EXACTLY_ONCE_BETA) {
                 producerConfigs.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, applicationId + "-" + processId);
+                threadProducer = new StreamsProducer(clientSupplier.getProducer(producerConfigs), true, logContext);
             } else {
-                processingMode = StreamThread.ProcessingMode.AT_LEAST_ONCE;
+                threadProducer = new StreamsProducer(clientSupplier.getProducer(producerConfigs), false, logContext);
             }
-
-            threadProducer = new StreamsProducer(clientSupplier.getProducer(producerConfigs), eosBetaEnabled, logContext);
             taskProducers = Collections.emptyMap();
         }
     }

@@ -311,9 +311,19 @@ public class StreamThread extends Thread {
 
         final ThreadCache cache = new ThreadCache(logContext, cacheSizeBytes, streamsMetrics);
 
+        final ProcessingMode processingMode;
+        if (StreamThread.eosAlphaEnabled(config)) {
+            processingMode = StreamThread.ProcessingMode.EXACTLY_ONCE_ALPHA;
+        } else if (StreamThread.eosBetaEnabled(config)) {
+            processingMode = StreamThread.ProcessingMode.EXACTLY_ONCE_BETA;
+        } else {
+            processingMode = StreamThread.ProcessingMode.AT_LEAST_ONCE;
+        }
+
         final ActiveTaskCreator activeTaskCreator = new ActiveTaskCreator(
             builder,
             config,
+            processingMode,
             streamsMetrics,
             stateDirectory,
             changelogReader,
@@ -343,7 +353,7 @@ public class StreamThread extends Thread {
             builder,
             adminClient,
             stateDirectory,
-            config
+            processingMode
         );
 
         log.info("Creating consumer client");

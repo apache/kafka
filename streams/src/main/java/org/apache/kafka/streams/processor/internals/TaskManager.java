@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import java.io.IOException;
-import java.util.Collections;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.DeleteRecordsResult;
 import org.apache.kafka.clients.admin.RecordsToDelete;
@@ -30,7 +28,6 @@ import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.utils.LogContext;
-import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.LockException;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskIdFormatException;
@@ -41,7 +38,9 @@ import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
 import org.slf4j.Logger;
 
 import java.io.File;
+import java.io.IOException;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -98,7 +97,7 @@ public class TaskManager {
                 final InternalTopologyBuilder builder,
                 final Admin adminClient,
                 final StateDirectory stateDirectory,
-                final StreamsConfig config) {
+                final StreamThread.ProcessingMode processingMode) {
         this.changelogReader = changelogReader;
         this.processId = processId;
         this.logPrefix = logPrefix;
@@ -108,13 +107,7 @@ public class TaskManager {
         this.builder = builder;
         this.adminClient = adminClient;
         this.stateDirectory = stateDirectory;
-        if (StreamThread.eosAlphaEnabled(config)) {
-            processingMode = StreamThread.ProcessingMode.EXACTLY_ONCE_ALPHA;
-        } else if (StreamThread.eosBetaEnabled(config)) {
-            processingMode = StreamThread.ProcessingMode.EXACTLY_ONCE_BETA;
-        } else {
-            processingMode = StreamThread.ProcessingMode.AT_LEAST_ONCE;
-        }
+        this.processingMode = processingMode;
 
         final LogContext logContext = new LogContext(logPrefix);
         log = logContext.logger(getClass());
@@ -195,6 +188,7 @@ public class TaskManager {
 
         final Map<Task, Map<TopicPartition, Long>> checkpointPerTask = new HashMap<>();
         final Map<TaskId, Map<TopicPartition, OffsetAndMetadata>> consumedOffsetsAndMetadataPerTask = new HashMap<>();
+        final Set<Task> additionalTasksForCommitting = new HashSet<>();
         final Set<Task> dirtyTasks = new HashSet<>();
 
         final Iterator<Task> iterator = tasks.values().iterator();
@@ -202,6 +196,9 @@ public class TaskManager {
             final Task task = iterator.next();
             if (activeTasks.containsKey(task.id()) && task.isActive()) {
                 task.resume();
+                if (task.commitNeeded()) {
+                    additionalTasksForCommitting.add(task);
+                }
                 activeTasksToCreate.remove(task.id());
             } else if (standbyTasks.containsKey(task.id()) && !task.isActive()) {
                 task.resume();
@@ -232,7 +229,19 @@ public class TaskManager {
         }
 
         if (!consumedOffsetsAndMetadataPerTask.isEmpty()) {
+            for (final Task task : additionalTasksForCommitting) {
+                task.prepareCommit();
+                final Map<TopicPartition, OffsetAndMetadata> committableOffsets = task.committableOffsetsAndMetadata();
+                if (!committableOffsets.isEmpty()) {
+                    consumedOffsetsAndMetadataPerTask.put(task.id(), committableOffsets);
+                }
+            }
+
             commitOffsetsOrTransaction(consumedOffsetsAndMetadataPerTask);
+
+            for (final Task task : additionalTasksForCommitting) {
+                task.postCommit();
+            }
         }
 
         for (final Map.Entry<Task, Map<TopicPartition, Long>> taskAndCheckpoint : checkpointPerTask.entrySet()) {
@@ -391,11 +400,13 @@ public class TaskManager {
                     consumedOffsetsAndMetadataPerTask.put(task.id(), committableOffsets);
                 }
                 suspended.add(task);
-            } else if (processingMode == StreamThread.ProcessingMode.EXACTLY_ONCE_BETA) {
-                task.prepareCommit();
-                final Map<TopicPartition, OffsetAndMetadata> committableOffsets = task.committableOffsetsAndMetadata();
-                if (!committableOffsets.isEmpty()) {
-                    consumedOffsetsAndMetadataPerTask.put(task.id(), committableOffsets);
+            } else {
+                if (task.isActive() && task.commitNeeded()) {
+                    task.prepareCommit();
+                    final Map<TopicPartition, OffsetAndMetadata> committableOffsets = task.committableOffsetsAndMetadata();
+                    if (!committableOffsets.isEmpty()) {
+                        consumedOffsetsAndMetadataPerTask.put(task.id(), committableOffsets);
+                    }
                 }
             }
             remainingPartitions.removeAll(task.inputPartitions());
@@ -709,10 +720,10 @@ public class TaskManager {
      * @return number of committed offsets, or -1 if we are in the middle of a rebalance and cannot commit
      */
     int commitAll() {
-        return commitAll(tasks.values());
+        return commitInternal(tasks.values());
     }
 
-    private int commitAll(final Collection<Task> tasks) {
+    private int commitInternal(final Collection<Task> tasks) {
 
         if (rebalanceInProgress) {
             return -1;
@@ -752,7 +763,7 @@ public class TaskManager {
         } else {
             for (final Task task : activeTaskIterable()) {
                 if (task.commitRequested() && task.commitNeeded()) {
-                    return commitAll(activeTaskIterable());
+                    return commitInternal(activeTaskIterable());
                 }
             }
             return 0;

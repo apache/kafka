@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import java.io.File;
-
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
@@ -39,6 +37,7 @@ import org.easymock.MockType;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
+import java.io.File;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
@@ -477,9 +476,22 @@ public class ActiveTaskCreatorTest {
         expect(topology.globalStateStores()).andReturn(Collections.emptyList()).anyTimes();
         replay(builder, stateDirectory, topology, sourceNode);
 
+        final StreamThread.ProcessingMode processingMode;
+        final String eosConfig = (String) properties.get(StreamsConfig.PROCESSING_GUARANTEE_CONFIG);
+        if (eosConfig == null || StreamsConfig.AT_LEAST_ONCE.equals(eosConfig)) {
+            processingMode = StreamThread.ProcessingMode.AT_LEAST_ONCE;
+        } else if (StreamsConfig.EXACTLY_ONCE.equals(eosConfig)) {
+            processingMode = StreamThread.ProcessingMode.EXACTLY_ONCE_ALPHA;
+        } else if (StreamsConfig.EXACTLY_ONCE_BETA.equals(eosConfig)) {
+            processingMode = StreamThread.ProcessingMode.EXACTLY_ONCE_BETA;
+        } else {
+            throw new IllegalArgumentException("argument `" + eosConfig + "` for config `processing.guarantees` invalid.");
+        }
+
         activeTaskCreator = new ActiveTaskCreator(
             builder,
             new StreamsConfig(properties),
+            processingMode,
             streamsMetrics,
             stateDirectory,
             changeLogReader,
