@@ -285,9 +285,9 @@ public class StoreChangelogReader implements ChangelogReader {
 
             // pause all partitions that are for standby tasks from the restore consumer
             pauseChangelogsFromRestoreConsumer(standbyRestoringChangelogs());
-        }
 
-        state = ChangelogReaderState.ACTIVE_RESTORING;
+            state = ChangelogReaderState.ACTIVE_RESTORING;
+        }
     }
 
     // Only after we've completed restoring all active tasks we'll then move back to resume updating standby tasks.
