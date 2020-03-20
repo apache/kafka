@@ -78,7 +78,7 @@ class ClassLoaderAwareRemoteStorageManager(val rsm: RemoteStorageManager,
     }
   }
 
-  override def deleteLogSegment(remoteLogSegmentMetadata: RemoteLogSegmentMetadata): Boolean = {
+  override def deleteLogSegment(remoteLogSegmentMetadata: RemoteLogSegmentMetadata): Unit = {
     withClassLoader {
       rsm.deleteLogSegment(remoteLogSegmentMetadata)
     }
