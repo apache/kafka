@@ -16,6 +16,9 @@
  */
 package org.apache.kafka.streams.processor.internals.assignment;
 
-public interface TaskAssignor<C> {
-    void assign(int numStandbyReplicas);
+public interface TaskAssignor {
+    /**
+     * @return whether the generated assignment requires a followup rebalance to satisfy all conditions
+     */
+    boolean assign();
 }

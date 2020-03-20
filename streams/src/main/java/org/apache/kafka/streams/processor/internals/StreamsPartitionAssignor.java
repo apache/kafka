@@ -42,8 +42,10 @@ import org.apache.kafka.streams.processor.internals.assignment.AssignorConfigura
 import org.apache.kafka.streams.processor.internals.assignment.AssignorError;
 import org.apache.kafka.streams.processor.internals.assignment.ClientState;
 import org.apache.kafka.streams.processor.internals.assignment.CopartitionedTopicsEnforcer;
+import org.apache.kafka.streams.processor.internals.assignment.HighAvailabilityTaskAssignor;
 import org.apache.kafka.streams.processor.internals.assignment.StickyTaskAssignor;
 import org.apache.kafka.streams.processor.internals.assignment.SubscriptionInfo;
+import org.apache.kafka.streams.processor.internals.assignment.TaskAssignor;
 import org.apache.kafka.streams.state.HostInfo;
 import org.slf4j.Logger;
 
@@ -748,24 +750,19 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         final boolean lagComputationSuccessful =
             populateClientStatesMap(clientStates, clientMetadataMap, taskForPartition, changelogsByStatefulTask);
 
-        // assign tasks to clients
         final Set<TaskId> allTasks = partitionsForTask.keySet();
-        final Set<TaskId> standbyTasks = changelogsByStatefulTask.keySet();
-
-        if (lagComputationSuccessful) {
-            final Map<TaskId, SortedSet<RankedClient<UUID>>> statefulTasksToRankedCandidates =
-                buildClientRankingsByTask(standbyTasks, clientStates, acceptableRecoveryLag());
-            log.trace("Computed statefulTasksToRankedCandidates map as {}", statefulTasksToRankedCandidates);
-        }
+        final Set<TaskId> statefulTasks = changelogsByStatefulTask.keySet();
 
         log.debug("Assigning tasks {} to clients {} with number of replicas {}",
             allTasks, clientStates, numStandbyReplicas());
 
-        final StickyTaskAssignor<UUID> taskAssignor = new StickyTaskAssignor<>(clientStates, allTasks, standbyTasks);
-        if (!lagComputationSuccessful) {
-            taskAssignor.preservePreviousTaskAssignment();
+        final TaskAssignor taskAssignor;
+        if (lagComputationSuccessful) {
+            taskAssignor = new HighAvailabilityTaskAssignor<>(clientStates, allTasks, statefulTasks, assignmentConfigs);
+        } else {
+            taskAssignor = new StickyTaskAssignor<>(clientStates, allTasks, statefulTasks, assignmentConfigs);
         }
-        taskAssignor.assign(numStandbyReplicas());
+        taskAssignor.assign();
 
         log.info("Assigned tasks to clients as {}{}.",
             Utils.NL, clientStates.entrySet().stream().map(Map.Entry::toString).collect(Collectors.joining(Utils.NL)));
@@ -856,42 +853,6 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             }
         }
         return taskEndOffsetSums;
-    }
-
-    /**
-     * Rankings are computed as follows, with lower being more caught up:
-     *      Rank -1: active running task
-     *      Rank 0: standby or restoring task whose overall lag is within the acceptableRecoveryLag bounds
-     *      Rank 1: tasks whose lag is unknown, eg because it was not encoded in an older version subscription
-     *      Rank 1+: all other tasks are ranked according to their actual total lag
-     * @return Sorted set of all client candidates for each stateful task, ranked by their overall lag
-     */
-    static Map<TaskId, SortedSet<RankedClient<UUID>>> buildClientRankingsByTask(final Set<TaskId> statefulTasks,
-                                                                                final Map<UUID, ClientState> states,
-                                                                                final long acceptableRecoveryLag) {
-        final Map<TaskId, SortedSet<RankedClient<UUID>>> statefulTasksToRankedCandidates = new TreeMap<>();
-
-        for (final TaskId task : statefulTasks) {
-            final SortedSet<RankedClient<UUID>> rankedClientCandidates = new TreeSet<>();
-            statefulTasksToRankedCandidates.put(task, rankedClientCandidates);
-
-            for (final Map.Entry<UUID, ClientState> clientEntry : states.entrySet()) {
-                final UUID clientId = clientEntry.getKey();
-                final long taskLag = clientEntry.getValue().lagFor(task);
-                final long clientRank;
-                if (taskLag == Task.LATEST_OFFSET) {
-                    clientRank = Task.LATEST_OFFSET;
-                } else if (taskLag == UNKNOWN_OFFSET_SUM) {
-                    clientRank = 1L;
-                } else if (taskLag <= acceptableRecoveryLag) {
-                    clientRank = 0L;
-                } else {
-                    clientRank = taskLag;
-                }
-                rankedClientCandidates.add(new RankedClient<>(clientId, clientRank));
-            }
-        }
-        return statefulTasksToRankedCandidates;
     }
 
     /**

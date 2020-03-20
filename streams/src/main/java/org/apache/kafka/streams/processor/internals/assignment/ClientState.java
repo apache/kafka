@@ -120,6 +120,12 @@ public class ClientState {
         assignedTasks.addAll(tasks);
     }
 
+    void reusePreviousAssignment() {
+        activeTasks.addAll(prevActiveTasks);
+        standbyTasks.addAll(prevStandbyTasks);
+        assignedTasks.addAll(prevAssignedTasks);
+    }
+
     public Set<TaskId> activeTasks() {
         return activeTasks;
     }
@@ -272,6 +278,10 @@ public class ClientState {
 
     boolean hasAssignedTask(final TaskId taskId) {
         return assignedTasks.contains(taskId);
+    }
+
+    boolean hasPrevActiveTask(final TaskId task) {
+        return prevActiveTasks.contains(task);
     }
 
     @Override

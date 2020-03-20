@@ -282,12 +282,26 @@ public final class AssignorConfiguration {
         public final int numStandbyReplicas;
         public final long probingRebalanceIntervalMs;
 
-        AssignmentConfigs(final StreamsConfig configs) {
-            acceptableRecoveryLag = configs.getLong(StreamsConfig.ACCEPTABLE_RECOVERY_LAG_CONFIG);
-            balanceFactor = configs.getInt(StreamsConfig.BALANCE_FACTOR_CONFIG);
-            maxWarmupReplicas = configs.getInt(StreamsConfig.MAX_WARMUP_REPLICAS_CONFIG);
-            numStandbyReplicas = configs.getInt(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG);
-            probingRebalanceIntervalMs = configs.getLong(StreamsConfig.PROBING_REBALANCE_INTERVAL_MS_CONFIG);
+        private AssignmentConfigs(final StreamsConfig configs) {
+            this(
+                configs.getLong(StreamsConfig.ACCEPTABLE_RECOVERY_LAG_CONFIG),
+                configs.getInt(StreamsConfig.BALANCE_FACTOR_CONFIG),
+                configs.getInt(StreamsConfig.MAX_WARMUP_REPLICAS_CONFIG),
+                configs.getInt(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG),
+                configs.getLong(StreamsConfig.PROBING_REBALANCE_INTERVAL_MS_CONFIG)
+            );
+        }
+
+        AssignmentConfigs(final Long acceptableRecoveryLag,
+                          final Integer balanceFactor,
+                          final Integer maxWarmupReplicas,
+                          final Integer numStandbyReplicas,
+                          final Long probingRebalanceIntervalMs) {
+            this.acceptableRecoveryLag = acceptableRecoveryLag;
+            this.balanceFactor = balanceFactor;
+            this.maxWarmupReplicas = maxWarmupReplicas;
+            this.numStandbyReplicas = numStandbyReplicas;
+            this.probingRebalanceIntervalMs = probingRebalanceIntervalMs;
         }
     }
 }

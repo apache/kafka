@@ -80,18 +80,13 @@ import static java.util.Arrays.asList;
 import static java.util.Collections.emptyList;
 import static java.util.Collections.emptyMap;
 import static java.util.Collections.emptySet;
-import static java.util.Collections.singleton;
 import static java.util.Collections.singletonList;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkSet;
-import static org.apache.kafka.common.utils.Utils.mkSortedSet;
-import static org.apache.kafka.streams.processor.internals.StreamsPartitionAssignor.buildClientRankingsByTask;
 import static org.apache.kafka.streams.processor.internals.assignment.StreamsAssignmentProtocolVersions.LATEST_SUPPORTED_VERSION;
-import static org.apache.kafka.streams.processor.internals.assignment.SubscriptionInfo.UNKNOWN_OFFSET_SUM;
 import static org.easymock.EasyMock.anyObject;
 import static org.easymock.EasyMock.expect;
-import static org.easymock.EasyMock.replay;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.not;
 import static org.hamcrest.Matchers.is;
@@ -178,7 +173,7 @@ public class StreamsPartitionAssignorTest {
 
     private final UUID uuid1 = UUID.randomUUID();
     private final UUID uuid2 = UUID.randomUUID();
-    private final UUID uuid3 = UUID.randomUUID();
+
     private final SubscriptionInfo defaultSubscriptionInfo = getInfo(uuid1, emptyTasks, emptyTasks);
 
     private final Cluster metadata = new Cluster(
@@ -193,7 +188,6 @@ public class StreamsPartitionAssignorTest {
     private static final String USER_END_POINT = "localhost:8080";
     private static final String OTHER_END_POINT = "other:9090";
     private static final String APPLICATION_ID = "stream-partition-assignor-test";
-    private static final long ACCEPTABLE_RECOVERY_LAG = 100L;
 
     private TaskManager taskManager;
     private Admin adminClient;
@@ -1835,126 +1829,6 @@ public class StreamsPartitionAssignorTest {
         final AssignorConfiguration assignorConfiguration = new AssignorConfiguration(props);
 
         assertThat(assignorConfiguration.getAdminClientTimeout(), is(2 * 60 * 1000));
-    }
-
-    @Test
-    public void shouldRankPreviousClientAboveEquallyCaughtUpClient() {
-        final ClientState client1 = EasyMock.createMock(ClientState.class);
-        final ClientState client2 = EasyMock.createMock(ClientState.class);
-
-        expect(client1.lagFor(task0_0)).andReturn(Task.LATEST_OFFSET);
-        expect(client2.lagFor(task0_0)).andReturn(0L);
-
-        final SortedSet<RankedClient<UUID>> expectedClientRanking = mkSortedSet(
-            new RankedClient<>(uuid1, Task.LATEST_OFFSET),
-            new RankedClient<>(uuid2, 0L)
-        );
-
-        replay(client1, client2);
-
-        final Map<UUID, ClientState> states = mkMap(
-            mkEntry(uuid1, client1),
-            mkEntry(uuid2, client2)
-        );
-
-        final Map<TaskId, SortedSet<RankedClient<UUID>>> statefulTasksToRankedCandidates =
-            buildClientRankingsByTask(singleton(task0_0), states, ACCEPTABLE_RECOVERY_LAG);
-
-        final SortedSet<RankedClient<UUID>> clientRanking = statefulTasksToRankedCandidates.get(task0_0);
-
-        EasyMock.verify(client1, client2);
-        assertThat(clientRanking, equalTo(expectedClientRanking));
-    }
-
-    @Test
-    public void shouldRankTaskWithUnknownOffsetSumBelowCaughtUpClientAndClientWithLargeLag() {
-        final ClientState client1 = EasyMock.createMock(ClientState.class);
-        final ClientState client2 = EasyMock.createMock(ClientState.class);
-        final ClientState client3 = EasyMock.createMock(ClientState.class);
-
-        expect(client1.lagFor(task0_0)).andReturn(UNKNOWN_OFFSET_SUM);
-        expect(client2.lagFor(task0_0)).andReturn(50L);
-        expect(client3.lagFor(task0_0)).andReturn(500L);
-
-        final SortedSet<RankedClient<UUID>> expectedClientRanking = mkSortedSet(
-            new RankedClient<>(uuid2, 0L),
-            new RankedClient<>(uuid1, 1L),
-            new RankedClient<>(uuid3, 500L)
-        );
-
-        replay(client1, client2, client3);
-
-        final Map<UUID, ClientState> states = mkMap(
-            mkEntry(uuid1, client1),
-            mkEntry(uuid2, client2),
-            mkEntry(uuid3, client3)
-        );
-
-        final Map<TaskId, SortedSet<RankedClient<UUID>>> statefulTasksToRankedCandidates =
-            buildClientRankingsByTask(singleton(task0_0), states, ACCEPTABLE_RECOVERY_LAG);
-
-        final SortedSet<RankedClient<UUID>> clientRanking = statefulTasksToRankedCandidates.get(task0_0);
-
-        EasyMock.verify(client1, client2, client3);
-        assertThat(clientRanking, equalTo(expectedClientRanking));
-    }
-
-    @Test
-    public void shouldRankAllClientsWithinAcceptableRecoveryLagWithRank0() {
-        final ClientState client1 = EasyMock.createMock(ClientState.class);
-        final ClientState client2 = EasyMock.createMock(ClientState.class);
-
-        expect(client1.lagFor(task0_0)).andReturn(100L);
-        expect(client2.lagFor(task0_0)).andReturn(0L);
-
-        final SortedSet<RankedClient<UUID>> expectedClientRanking = mkSortedSet(
-            new RankedClient<>(uuid1, 0L),
-            new RankedClient<>(uuid2, 0L)
-        );
-
-        replay(client1, client2);
-
-        final Map<UUID, ClientState> states = mkMap(
-            mkEntry(uuid1, client1),
-            mkEntry(uuid2, client2)
-        );
-
-        final Map<TaskId, SortedSet<RankedClient<UUID>>> statefulTasksToRankedCandidates =
-            buildClientRankingsByTask(singleton(task0_0), states, ACCEPTABLE_RECOVERY_LAG);
-
-        EasyMock.verify(client1, client2);
-        assertThat(statefulTasksToRankedCandidates.get(task0_0), equalTo(expectedClientRanking));
-    }
-
-    @Test
-    public void shouldRankNotCaughtUpClientsAccordingToLag() {
-        final ClientState client1 = EasyMock.createMock(ClientState.class);
-        final ClientState client2 = EasyMock.createMock(ClientState.class);
-        final ClientState client3 = EasyMock.createMock(ClientState.class);
-
-        expect(client1.lagFor(task0_0)).andReturn(900L);
-        expect(client2.lagFor(task0_0)).andReturn(800L);
-        expect(client3.lagFor(task0_0)).andReturn(500L);
-
-        final SortedSet<RankedClient<UUID>> expectedClientRanking = mkSortedSet(
-            new RankedClient<>(uuid3, 500L),
-            new RankedClient<>(uuid2, 800L),
-            new RankedClient<>(uuid1, 900L)
-        );
-
-        replay(client1, client2, client3);
-
-        final Map<UUID, ClientState> states = mkMap(
-            mkEntry(uuid1, client1),
-            mkEntry(uuid2, client2),
-            mkEntry(uuid3, client3)
-        );
-
-        final Map<TaskId, SortedSet<RankedClient<UUID>>> statefulTasksToRankedCandidates =
-            buildClientRankingsByTask(singleton(task0_0), states, ACCEPTABLE_RECOVERY_LAG);
-
-        EasyMock.verify(client1, client2, client3);
-        assertThat(statefulTasksToRankedCandidates.get(task0_0), equalTo(expectedClientRanking));
     }
 
     @Test
