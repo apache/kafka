@@ -43,6 +43,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
@@ -486,6 +487,7 @@ public class ActiveTaskCreatorTest {
             new MockTime(),
             mockClientSupplier,
             "threadId",
+            UUID.randomUUID(),
             new LogContext().logger(ActiveTaskCreator.class)
         );
 

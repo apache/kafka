@@ -104,6 +104,7 @@ import static org.junit.Assert.assertTrue;
 public class TaskManagerTest {
 
     private final String topic1 = "topic1";
+    private final String topic2 = "topic2";
 
     private final TaskId taskId00 = new TaskId(0, 0);
     private final TopicPartition t1p0 = new TopicPartition(topic1, 0);
@@ -124,6 +125,8 @@ public class TaskManagerTest {
     private final Set<TopicPartition> taskId03Partitions = mkSet(t1p3);
 
     private final TaskId taskId10 = new TaskId(1, 0);
+    private final TopicPartition t2p0 = new TopicPartition(topic2, 0);
+    private final Set<TopicPartition> taskId10Partitions = mkSet(t2p0);
 
     @Mock(type = MockType.STRICT)
     private InternalTopologyBuilder topologyBuilder;
@@ -1509,7 +1512,7 @@ public class TaskManagerTest {
     }
 
     @Test
-    public void shouldMaybeCommitActiveTasks() {
+    public void shouldMaybeCommitAllActiveTasksThatNeedCommit() {
         final StateMachineTask task00 = new StateMachineTask(taskId00, taskId00Partitions, true);
         final Map<TopicPartition, OffsetAndMetadata> offsets0 = singletonMap(t1p0, new OffsetAndMetadata(0L, null));
         task00.setCommittableOffsetsAndMetadata(offsets0);
@@ -1519,30 +1522,33 @@ public class TaskManagerTest {
         final StateMachineTask task02 = new StateMachineTask(taskId02, taskId02Partitions, true);
         final Map<TopicPartition, OffsetAndMetadata> offsets2 = singletonMap(t1p2, new OffsetAndMetadata(2L, null));
         task02.setCommittableOffsetsAndMetadata(offsets2);
-        final StateMachineTask task03 = new StateMachineTask(taskId03, taskId03Partitions, false);
-        final Map<TopicPartition, OffsetAndMetadata> offsets3 = singletonMap(t1p3, new OffsetAndMetadata(3L, null));
-        task03.setCommittableOffsetsAndMetadata(offsets3);
+        final StateMachineTask task03 = new StateMachineTask(taskId03, taskId03Partitions, true);
+        final StateMachineTask task04 = new StateMachineTask(taskId10, taskId10Partitions, false);
+
+        final Map<TopicPartition, OffsetAndMetadata> expectedCommittedOffsets = new HashMap<>();
+        expectedCommittedOffsets.putAll(offsets0);
+        expectedCommittedOffsets.putAll(offsets1);
 
         final Map<TaskId, Set<TopicPartition>> assignmentActive = mkMap(
             mkEntry(taskId00, taskId00Partitions),
             mkEntry(taskId01, taskId01Partitions),
-            mkEntry(taskId02, taskId02Partitions)
+            mkEntry(taskId02, taskId02Partitions),
+            mkEntry(taskId03, taskId03Partitions)
         );
 
         final Map<TaskId, Set<TopicPartition>> assignmentStandby = mkMap(
-            mkEntry(taskId03, taskId03Partitions)
+            mkEntry(taskId10, taskId10Partitions)
         );
 
         expectRestoreToBeCompleted(consumer, changeLogReader);
         expect(activeTaskCreator.createTasks(anyObject(), eq(assignmentActive)))
-            .andReturn(asList(task00, task01, task02)).anyTimes();
+            .andReturn(asList(task00, task01, task02, task03)).anyTimes();
         expect(standbyTaskCreator.createTasks(eq(assignmentStandby)))
-            .andReturn(singletonList(task03)).anyTimes();
-        consumer.commitSync(offsets0);
+            .andReturn(singletonList(task04)).anyTimes();
+        consumer.commitSync(expectedCommittedOffsets);
         expectLastCall();
 
         replay(activeTaskCreator, standbyTaskCreator, consumer, changeLogReader);
-
 
         taskManager.handleAssignment(assignmentActive, assignmentStandby);
         assertThat(taskManager.tryToCompleteRestoration(), is(true));
@@ -1551,6 +1557,7 @@ public class TaskManagerTest {
         assertThat(task01.state(), is(Task.State.RUNNING));
         assertThat(task02.state(), is(Task.State.RUNNING));
         assertThat(task03.state(), is(Task.State.RUNNING));
+        assertThat(task04.state(), is(Task.State.RUNNING));
 
         task00.setCommitNeeded();
         task00.setCommitRequested();
@@ -1562,7 +1569,10 @@ public class TaskManagerTest {
         task03.setCommitNeeded();
         task03.setCommitRequested();
 
-        assertThat(taskManager.maybeCommitActiveTasksPerUserRequested(), equalTo(1));
+        task04.setCommitNeeded();
+        task04.setCommitRequested();
+
+        assertThat(taskManager.maybeCommitActiveTasksPerUserRequested(), equalTo(3));
     }
 
     @Test
@@ -2068,7 +2078,7 @@ public class TaskManagerTest {
     }
 
     private static void expectRestoreToBeCompleted(final Consumer<byte[], byte[]> consumer,
-                                                             final ChangelogReader changeLogReader) {
+                                                   final ChangelogReader changeLogReader) {
         final Set<TopicPartition> assignment = singleton(new TopicPartition("assignment", 0));
         expect(consumer.assignment()).andReturn(assignment);
         consumer.resume(assignment);
@@ -2196,6 +2206,9 @@ public class TaskManagerTest {
         }
 
         void setCommittableOffsetsAndMetadata(final Map<TopicPartition, OffsetAndMetadata> committableOffsets) {
+            if (!active) {
+                throw new IllegalStateException("Cannot set CommittableOffsetsAndMetadate for StandbyTasks");
+            }
             this.committableOffsets = committableOffsets;
         }
 

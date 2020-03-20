@@ -50,7 +50,6 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
-import java.util.UUID;
 
 import static org.apache.kafka.common.IsolationLevel.READ_COMMITTED;
 import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
@@ -287,8 +286,8 @@ public class StreamsConfig extends AbstractConfig {
      * Config value for parameter {@link #PROCESSING_GUARANTEE_CONFIG "processing.guarantee"} for exactly-once processing guarantees.
      * <p>
      * Enabling exactly-once processing semantics requires broker version 0.11.0 or higher.
-     * If you enable this feature, Kafka Streams will use a producer per task
-     * (instead a producer per thread as for the {@link #AT_LEAST_ONCE} case).
+     * If you enable this feature Kafka Streams will use more resources (like broker connections)
+     * compared to the {@link #AT_LEAST_ONCE} case.
      *
      * @see #EXACTLY_ONCE_BETA
      */
@@ -299,8 +298,8 @@ public class StreamsConfig extends AbstractConfig {
      * Config value for parameter {@link #PROCESSING_GUARANTEE_CONFIG "processing.guarantee"} for exactly-once processing guarantees.
      * <p>
      * Enabling exactly-once (beta) requires broker version 2.5 or higher.
-     * In contrast to {@link #EXACTLY_ONCE} Kafka Streams uses a producer per thread model,
-     * similar to the {@link #AT_LEAST_ONCE} case.
+     * If you enable this feature Kafka Streams will use less resources (like broker connections)
+     * compare to the {@link #EXACTLY_ONCE} case.
      */
     @SuppressWarnings("WeakerAccess")
     public static final String EXACTLY_ONCE_BETA = "exactly_once_beta";
@@ -1026,7 +1025,7 @@ public class StreamsConfig extends AbstractConfig {
         // Streams will be used instead.
 
         final String nonConfigurableConfigMessage = "Unexpected user-specified %s config: %s found. %sUser setting (%s) will be ignored and the Streams default setting (%s) will be used ";
-        final String eosMessage =  PROCESSING_GUARANTEE_CONFIG + " is set to " + getString(PROCESSING_GUARANTEE_CONFIG) + ". Hence, ";
+        final String eosMessage = PROCESSING_GUARANTEE_CONFIG + " is set to " + getString(PROCESSING_GUARANTEE_CONFIG) + ". Hence, ";
 
         for (final String config: nonConfigurableConfigs) {
             if (clientProvidedProps.containsKey(config)) {
@@ -1256,9 +1255,6 @@ public class StreamsConfig extends AbstractConfig {
 
         // generate producer configs from original properties and overridden maps
         final Map<String, Object> props = new HashMap<>(eosEnabled ? PRODUCER_EOS_OVERRIDES : PRODUCER_DEFAULT_OVERRIDES);
-        if (StreamThread.eosBetaEnabled(this)) {
-            props.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, getString(StreamsConfig.APPLICATION_ID_CONFIG) + "-" + UUID.randomUUID());
-        }
         props.putAll(getClientCustomProps());
         props.putAll(clientProvidedProps);
 

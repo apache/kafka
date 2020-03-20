@@ -321,6 +321,7 @@ public class StreamThread extends Thread {
             time,
             clientSupplier,
             threadId,
+            processId,
             log
         );
         final StandbyTaskCreator standbyTaskCreator = new StandbyTaskCreator(
@@ -380,6 +381,20 @@ public class StreamThread extends Thread {
         );
 
         return streamThread.updateThreadMetadata(getSharedAdminClientId(clientId));
+    }
+
+    enum ProcessingMode {
+        AT_LEAST_ONCE("AT_LEAST_ONCE"),
+
+        EXACTLY_ONCE_ALPHA("EXACTLY_ONCE_ALPHA"),
+
+        EXACTLY_ONCE_BETA("EXACTLY_ONCE_BETA");
+
+        public final String name;
+
+        ProcessingMode(final String name) {
+            this.name = name;
+        }
     }
 
     static boolean eosAlphaEnabled(final StreamsConfig config) {

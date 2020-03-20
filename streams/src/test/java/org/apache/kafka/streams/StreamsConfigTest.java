@@ -57,7 +57,6 @@ import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.CoreMatchers.hasItem;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.nullValue;
-import static org.hamcrest.CoreMatchers.startsWith;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.IsEqual.equalTo;
 import static org.junit.Assert.assertEquals;
@@ -71,14 +70,13 @@ public class StreamsConfigTest {
     private final Properties props = new Properties();
     private StreamsConfig streamsConfig;
 
-    private final String applicationId = "streams-config-test";
     private final String groupId = "example-application";
     private final String clientId = "client";
     private final int threadIdx = 1;
 
     @Before
     public void setUp() {
-        props.put(StreamsConfig.APPLICATION_ID_CONFIG, applicationId);
+        props.put(StreamsConfig.APPLICATION_ID_CONFIG, "streams-config-test");
         props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
         props.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
         props.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
@@ -585,20 +583,16 @@ public class StreamsConfigTest {
     @Test
     public void shouldSetDifferentDefaultsIfEosAlphaEnabled() {
         props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, EXACTLY_ONCE);
-        final Map<String, Object> producerConfigs = shouldSetDifferentDefaultsIfEosEnabled();
-
-        assertThat(producerConfigs.get(ProducerConfig.TRANSACTIONAL_ID_CONFIG), is(nullValue()));
+        shouldSetDifferentDefaultsIfEosEnabled();
     }
 
     @Test
-    public void shouldSetDifferentDefaultsIfEosBetaEnabledUpgradingDisabled() {
+    public void shouldSetDifferentDefaultsIfEosBetaEnabled() {
         props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, EXACTLY_ONCE_BETA);
-        final Map<String, Object> producerConfigs = shouldSetDifferentDefaultsIfEosEnabled();
-
-        assertThat((String) producerConfigs.get(ProducerConfig.TRANSACTIONAL_ID_CONFIG), startsWith(applicationId + "-"));
+        shouldSetDifferentDefaultsIfEosEnabled();
     }
 
-    private  Map<String, Object> shouldSetDifferentDefaultsIfEosEnabled() {
+    private void shouldSetDifferentDefaultsIfEosEnabled() {
         final StreamsConfig streamsConfig = new StreamsConfig(props);
 
         final Map<String, Object> consumerConfigs = streamsConfig.getMainConsumerConfigs(groupId, clientId, threadIdx);
@@ -608,30 +602,27 @@ public class StreamsConfigTest {
         assertTrue((Boolean) producerConfigs.get(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG));
         assertThat(producerConfigs.get(ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG), equalTo(Integer.MAX_VALUE));
         assertThat(streamsConfig.getLong(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG), equalTo(100L));
-
-        return producerConfigs;
     }
 
     @Test
     public void shouldOverrideUserConfigTransactionalIdIfEosAlphaEnabled() {
         props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, EXACTLY_ONCE);
+        shouldOverrideUserConfigTransactionalIdIfEosEnable();
+    }
+
+    @Test
+    public void shouldOverrideUserConfigTransactionalIdIfEosBeatEnabled() {
+        props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, EXACTLY_ONCE_BETA);
+        shouldOverrideUserConfigTransactionalIdIfEosEnable();
+    }
+
+    private void shouldOverrideUserConfigTransactionalIdIfEosEnable() {
         props.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, "user-TxId");
         final StreamsConfig streamsConfig = new StreamsConfig(props);
 
         final Map<String, Object> producerConfigs = streamsConfig.getProducerConfigs(clientId);
 
         assertThat(producerConfigs.get(ProducerConfig.TRANSACTIONAL_ID_CONFIG), is(nullValue()));
-    }
-
-    @Test
-    public void shouldOverrideUserConfigTransactionalIdIfEosBetaEnabled() {
-        props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, EXACTLY_ONCE_BETA);
-        props.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, "user-TxId");
-        final StreamsConfig streamsConfig = new StreamsConfig(props);
-
-        final Map<String, Object> producerConfigs = streamsConfig.getProducerConfigs(clientId);
-
-        assertThat((String) producerConfigs.get(ProducerConfig.TRANSACTIONAL_ID_CONFIG), startsWith(applicationId + "-"));
     }
 
     @Test

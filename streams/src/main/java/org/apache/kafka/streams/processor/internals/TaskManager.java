@@ -74,8 +74,7 @@ public class TaskManager {
     private final InternalTopologyBuilder builder;
     private final Admin adminClient;
     private final StateDirectory stateDirectory;
-    private final boolean eosAlphaEnabled;
-    private final boolean eosBetaEnabled;
+    private final StreamThread.ProcessingMode processingMode;
 
     private final Map<TaskId, Task> tasks = new TreeMap<>();
     // materializing this relationship because the lookup is on the hot path
@@ -109,8 +108,13 @@ public class TaskManager {
         this.builder = builder;
         this.adminClient = adminClient;
         this.stateDirectory = stateDirectory;
-        this.eosAlphaEnabled = StreamThread.eosAlphaEnabled(config);
-        this.eosBetaEnabled = StreamThread.eosBetaEnabled(config);
+        if (StreamThread.eosAlphaEnabled(config)) {
+            processingMode = StreamThread.ProcessingMode.EXACTLY_ONCE_ALPHA;
+        } else if (StreamThread.eosBetaEnabled(config)) {
+            processingMode = StreamThread.ProcessingMode.EXACTLY_ONCE_BETA;
+        } else {
+            processingMode = StreamThread.ProcessingMode.AT_LEAST_ONCE;
+        }
 
         final LogContext logContext = new LogContext(logPrefix);
         log = logContext.logger(getClass());
@@ -387,7 +391,7 @@ public class TaskManager {
                     consumedOffsetsAndMetadataPerTask.put(task.id(), committableOffsets);
                 }
                 suspended.add(task);
-            } else if (eosBetaEnabled) {
+            } else if (processingMode == StreamThread.ProcessingMode.EXACTLY_ONCE_BETA) {
                 task.prepareCommit();
                 final Map<TopicPartition, OffsetAndMetadata> committableOffsets = task.committableOffsetsAndMetadata();
                 if (!committableOffsets.isEmpty()) {
@@ -705,12 +709,17 @@ public class TaskManager {
      * @return number of committed offsets, or -1 if we are in the middle of a rebalance and cannot commit
      */
     int commitAll() {
+        return commitAll(tasks.values());
+    }
+
+    private int commitAll(final Collection<Task> tasks) {
+
         if (rebalanceInProgress) {
             return -1;
         } else {
             int committed = 0;
             final Map<TaskId, Map<TopicPartition, OffsetAndMetadata>> consumedOffsetsAndMetadataPerTask = new HashMap<>();
-            for (final Task task : tasks.values()) {
+            for (final Task task : tasks) {
                 if (task.commitNeeded()) {
                     task.prepareCommit();
                     final Map<TopicPartition, OffsetAndMetadata> offsetAndMetadata = task.committableOffsetsAndMetadata();
@@ -722,7 +731,7 @@ public class TaskManager {
 
             commitOffsetsOrTransaction(consumedOffsetsAndMetadataPerTask);
 
-            for (final Task task : tasks.values()) {
+            for (final Task task : tasks) {
                 if (task.commitNeeded()) {
                     ++committed;
                     task.postCommit();
@@ -741,42 +750,17 @@ public class TaskManager {
         if (rebalanceInProgress) {
             return -1;
         } else {
-            if (eosBetaEnabled) {
-                for (final Task task : activeTaskIterable()) {
-                    if (task.commitRequested() && task.commitNeeded()) {
-                        return commitAll();
-                    }
+            for (final Task task : activeTaskIterable()) {
+                if (task.commitRequested() && task.commitNeeded()) {
+                    return commitAll(activeTaskIterable());
                 }
-
-                return 0;
-            } else {
-                final Map<TaskId, Map<TopicPartition, OffsetAndMetadata>> consumedOffsetsAndMetadataPerTask = new HashMap<>();
-
-                for (final Task task : activeTaskIterable()) {
-                    if (task.commitRequested() && task.commitNeeded()) {
-                        task.prepareCommit();
-                        final Map<TopicPartition, OffsetAndMetadata> offsetAndMetadata = task.committableOffsetsAndMetadata();
-                        if (!offsetAndMetadata.isEmpty()) {
-                            consumedOffsetsAndMetadataPerTask.put(task.id(), offsetAndMetadata);
-                        }
-                    }
-                }
-
-                commitOffsetsOrTransaction(consumedOffsetsAndMetadataPerTask);
-
-                for (final Task task : tasks.values()) {
-                    if (consumedOffsetsAndMetadataPerTask.containsKey(task.id())) {
-                        task.postCommit();
-                    }
-                }
-
-                return consumedOffsetsAndMetadataPerTask.size();
             }
+            return 0;
         }
     }
 
     private void commitOffsetsOrTransaction(final Map<TaskId, Map<TopicPartition, OffsetAndMetadata>> offsetsPerTask) {
-        if (eosAlphaEnabled) {
+        if (processingMode == StreamThread.ProcessingMode.EXACTLY_ONCE_ALPHA) {
             for (final Map.Entry<TaskId, Map<TopicPartition, OffsetAndMetadata>> taskToCommit : offsetsPerTask.entrySet()) {
                 activeTaskCreator.streamsProducerForTask(taskToCommit.getKey())
                     .commitTransaction(taskToCommit.getValue(), mainConsumer.groupMetadata());
@@ -785,7 +769,7 @@ public class TaskManager {
             final Map<TopicPartition, OffsetAndMetadata> allOffsets = offsetsPerTask.values().stream()
                 .flatMap(e -> e.entrySet().stream()).collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
 
-            if (eosBetaEnabled) {
+            if (processingMode == StreamThread.ProcessingMode.EXACTLY_ONCE_BETA) {
                 activeTaskCreator.threadProducer().commitTransaction(allOffsets, mainConsumer.groupMetadata());
             } else {
                 try {

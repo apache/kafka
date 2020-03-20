@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.clients.consumer.CommitFailedException;
 import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.producer.Callback;
@@ -166,7 +167,7 @@ public class StreamsProducer {
             producer.sendOffsetsToTransaction(offsets, consumerGroupMetadata);
             producer.commitTransaction();
             transactionInFlight = false;
-        } catch (final ProducerFencedException error) {
+        } catch (final ProducerFencedException | CommitFailedException error) {
             throw new TaskMigratedException(
                 formatException("Producer got fenced trying to commit a transaction"),
                 error
