@@ -1606,23 +1606,23 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         taskManager.handleRebalanceStart(topics);
     }
 
-    Long acceptableRecoveryLag() {
+    long acceptableRecoveryLag() {
         return assignmentConfigs.acceptableRecoveryLag;
     }
 
-    Integer balanceFactor() {
+    int balanceFactor() {
         return assignmentConfigs.balanceFactor;
     }
 
-    Integer maxWarmupReplicas() {
+    int maxWarmupReplicas() {
         return assignmentConfigs.maxWarmupReplicas;
     }
 
-    Integer numStandbyReplicas() {
+    int numStandbyReplicas() {
         return assignmentConfigs.numStandbyReplicas;
     }
 
-    Long probingRebalanceIntervalMs() {
+    long probingRebalanceIntervalMs() {
         return assignmentConfigs.probingRebalanceIntervalMs;
     }
 
