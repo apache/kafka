@@ -342,26 +342,25 @@ class AclAuthorizer extends Authorizer with Logging {
   }
 
   private def matchingAcls(resourceType: ResourceType, resourceName: String): AclSets = {
-    // snapshot immutable aclCache to avoid the need for a readLock that
-    // could be contended during AclChangedNotificationHandler updates
+    // save aclCache reference to a local val to get a consistent view of the cache during acl updates.
     val aclCacheSnapshot = aclCache
-      val wildcard = aclCacheSnapshot.get(new ResourcePattern(resourceType, ResourcePattern.WILDCARD_RESOURCE, PatternType.LITERAL))
-        .map(_.acls)
-        .getOrElse(Set.empty)
+    val wildcard = aclCacheSnapshot.get(new ResourcePattern(resourceType, ResourcePattern.WILDCARD_RESOURCE, PatternType.LITERAL))
+      .map(_.acls)
+      .getOrElse(Set.empty)
 
-      val literal = aclCacheSnapshot.get(new ResourcePattern(resourceType, resourceName, PatternType.LITERAL))
-        .map(_.acls)
-        .getOrElse(Set.empty)
+    val literal = aclCacheSnapshot.get(new ResourcePattern(resourceType, resourceName, PatternType.LITERAL))
+      .map(_.acls)
+      .getOrElse(Set.empty)
 
-      val prefixed = aclCacheSnapshot
-        .from(new ResourcePattern(resourceType, resourceName, PatternType.PREFIXED))
-        .to(new ResourcePattern(resourceType, resourceName.take(1), PatternType.PREFIXED))
-        .filterKeys(resource => resourceName.startsWith(resource.name))
-        .values
-        .flatMap { _.acls }
-        .toSet
+    val prefixed = aclCacheSnapshot
+      .from(new ResourcePattern(resourceType, resourceName, PatternType.PREFIXED))
+      .to(new ResourcePattern(resourceType, resourceName.take(1), PatternType.PREFIXED))
+      .filterKeys(resource => resourceName.startsWith(resource.name))
+      .values
+      .flatMap { _.acls }
+      .toSet
 
-      new AclSets(prefixed, wildcard, literal)
+    new AclSets(prefixed, wildcard, literal)
   }
 
   private def matchingAclExists(operation: AclOperation,
