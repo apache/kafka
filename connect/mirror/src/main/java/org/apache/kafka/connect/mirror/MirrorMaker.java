@@ -278,7 +278,7 @@ public class MirrorMaker {
             ns = parser.parseArgs(args);
         } catch (ArgumentParserException e) {
             parser.handleError(e);
-            System.exit(-1);
+            Exit.exit(-1);
             return;
         }
         File configFile = (File) ns.get("config");
