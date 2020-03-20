@@ -800,10 +800,16 @@ public class StoreChangelogReader implements ChangelogReader {
 
         for (final TopicPartition partition : revokedChangelogs) {
             final ChangelogMetadata changelogMetadata = changelogs.remove(partition);
-            if (changelogMetadata.state() != ChangelogState.REGISTERED) {
-                revokedInitializedChangelogs.add(partition);
+            if (changelogMetadata != null) {
+                if (changelogMetadata.state() != ChangelogState.REGISTERED) {
+                    revokedInitializedChangelogs.add(partition);
+                }
+                changelogMetadata.clear();
+            } else {
+                log.debug("Changelog partition {} could not be found, " +
+                    "it could be already cleaned up during the handling" +
+                    "of task corruption and never restore again", partition);
             }
-            changelogMetadata.clear();
         }
 
         removeChangelogsFromRestoreConsumer(revokedInitializedChangelogs);
