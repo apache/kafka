@@ -339,7 +339,7 @@ class ReplicaManager(val config: KafkaConfig,
           }
 
         case HostedPartition.None =>
-          stateChangeLogger.trace(s"Ignoring stop replica (delete=$deletePartition) for partition " +
+          stateChangeLogger.info(s"Ignoring stop replica (delete=$deletePartition) for partition " +
             s"$topicPartition as replica doesn't exist on broker")
       }
 
@@ -377,7 +377,9 @@ class ReplicaManager(val config: KafkaConfig,
         // First stop fetchers for all partitions, then stop the corresponding replicas
         replicaFetcherManager.removeFetcherForPartitions(partitions)
         replicaAlterLogDirsManager.removeFetcherForPartitions(partitions)
-        for (topicPartition <- partitions){
+
+        stateChangeLogger.info(s"Handling stop replica (delete=${stopReplicaRequest.deletePartitions()}) for ${partitions.size} partitions")
+        for (topicPartition <- partitions) {
           try {
             stopReplica(topicPartition, stopReplicaRequest.deletePartitions)
             responseMap.put(topicPartition, Errors.NONE)
@@ -1174,13 +1176,13 @@ class ReplicaManager(val config: KafkaConfig,
   def becomeLeaderOrFollower(correlationId: Int,
                              leaderAndIsrRequest: LeaderAndIsrRequest,
                              onLeadershipChange: (Iterable[Partition], Iterable[Partition]) => Unit): LeaderAndIsrResponse = {
-    if (stateChangeLogger.isTraceEnabled) {
+    if (stateChangeLogger.isTraceEnabled)
       leaderAndIsrRequest.partitionStates.asScala.foreach { partitionState =>
         stateChangeLogger.trace(s"Received LeaderAndIsr request $partitionState " +
           s"correlation id $correlationId from controller ${leaderAndIsrRequest.controllerId} " +
           s"epoch ${leaderAndIsrRequest.controllerEpoch}")
       }
-    }
+
     replicaStateChangeLock synchronized {
       if (leaderAndIsrRequest.controllerEpoch < controllerEpoch) {
         stateChangeLogger.warn(s"Ignoring LeaderAndIsr request from controller ${leaderAndIsrRequest.controllerId} with " +
@@ -1240,7 +1242,7 @@ class ReplicaManager(val config: KafkaConfig,
                 s"leader epoch $currentLeaderEpoch")
               responseMap.put(topicPartition, Errors.STALE_CONTROLLER_EPOCH)
             } else {
-              stateChangeLogger.debug(s"Ignoring LeaderAndIsr request from " +
+              stateChangeLogger.info(s"Ignoring LeaderAndIsr request from " +
                 s"controller $controllerId with correlation id $correlationId " +
                 s"epoch $controllerEpoch for partition $topicPartition since its associated " +
                 s"leader epoch $requestLeaderEpoch matches the current leader epoch")
@@ -1255,15 +1257,19 @@ class ReplicaManager(val config: KafkaConfig,
         val partitionsToBeFollower = partitionStates -- partitionsTobeLeader.keys
 
         val highWatermarkCheckpoints = new LazyOffsetCheckpoints(this.highWatermarkCheckpoints)
-        val partitionsBecomeLeader = if (partitionsTobeLeader.nonEmpty)
+        val partitionsBecomeLeader = if (partitionsTobeLeader.nonEmpty) {
+          stateChangeLogger.info(s"Handling LeaderAndIsr request correlationId $correlationId from controller $controllerId " +
+            s"epoch $controllerEpoch starting the become-leader transition for ${partitionsTobeLeader.size} partitions")
           makeLeaders(controllerId, controllerEpoch, partitionsTobeLeader, correlationId, responseMap,
             highWatermarkCheckpoints)
-        else
+        } else
           Set.empty[Partition]
-        val partitionsBecomeFollower = if (partitionsToBeFollower.nonEmpty)
+        val partitionsBecomeFollower = if (partitionsToBeFollower.nonEmpty) {
+          stateChangeLogger.info(s"Handling LeaderAndIsr request correlationId $correlationId from controller $controllerId " +
+            s"epoch $controllerEpoch starting the become-follower transition for ${partitionsToBeFollower.size} partitions")
           makeFollowers(controllerId, controllerEpoch, partitionsToBeFollower, correlationId, responseMap,
             highWatermarkCheckpoints)
-        else
+        } else
           Set.empty[Partition]
 
         /*
@@ -1352,29 +1358,29 @@ class ReplicaManager(val config: KafkaConfig,
                           correlationId: Int,
                           responseMap: mutable.Map[TopicPartition, Errors],
                           highWatermarkCheckpoints: OffsetCheckpoints): Set[Partition] = {
+    val traceEnabled = stateChangeLogger.isTraceEnabled
     partitionStates.keys.foreach { partition =>
-      stateChangeLogger.trace(s"Handling LeaderAndIsr request correlationId $correlationId from " +
-        s"controller $controllerId epoch $controllerEpoch starting the become-leader transition for " +
-        s"partition ${partition.topicPartition}")
-    }
-
-    for (partition <- partitionStates.keys)
+      if (traceEnabled)
+        stateChangeLogger.trace(s"Handling LeaderAndIsr request correlationId $correlationId from " +
+          s"controller $controllerId epoch $controllerEpoch starting the become-leader transition for " +
+          s"partition ${partition.topicPartition}")
       responseMap.put(partition.topicPartition, Errors.NONE)
+    }
 
     val partitionsToMakeLeaders = mutable.Set[Partition]()
 
     try {
       // First stop fetchers for all the partitions
       replicaFetcherManager.removeFetcherForPartitions(partitionStates.keySet.map(_.topicPartition))
+      stateChangeLogger.info(s"Stopped fetchers as part of LeaderAndIsr request correlationId $correlationId from " +
+        s"controller $controllerId epoch $controllerEpoch as part of the become-leader transition for " +
+        s"${partitionStates.size} partitions")
       // Update the partition information to be the leader
       partitionStates.foreach { case (partition, partitionState) =>
         try {
-          if (partition.makeLeader(partitionState, highWatermarkCheckpoints)) {
+          if (partition.makeLeader(partitionState, highWatermarkCheckpoints))
             partitionsToMakeLeaders += partition
-            stateChangeLogger.trace(s"Stopped fetchers as part of become-leader request from " +
-              s"controller $controllerId epoch $controllerEpoch with correlation id $correlationId for partition ${partition.topicPartition} " +
-              s"(last update controller epoch ${partitionState.controllerEpoch})")
-          } else
+          else
             stateChangeLogger.info(s"Skipped the become-leader state change after marking its " +
               s"partition as leader with correlation id $correlationId from controller $controllerId epoch $controllerEpoch for " +
               s"partition ${partition.topicPartition} (last update controller epoch ${partitionState.controllerEpoch}) " +
@@ -1401,10 +1407,11 @@ class ReplicaManager(val config: KafkaConfig,
         throw e
     }
 
-    partitionStates.keys.foreach { partition =>
-      stateChangeLogger.trace(s"Completed LeaderAndIsr request correlationId $correlationId from controller $controllerId " +
-        s"epoch $controllerEpoch for the become-leader transition for partition ${partition.topicPartition}")
-    }
+    if (traceEnabled)
+      partitionStates.keys.foreach { partition =>
+        stateChangeLogger.trace(s"Completed LeaderAndIsr request correlationId $correlationId from controller $controllerId " +
+          s"epoch $controllerEpoch for the become-leader transition for partition ${partition.topicPartition}")
+      }
 
     partitionsToMakeLeaders
   }
@@ -1433,14 +1440,14 @@ class ReplicaManager(val config: KafkaConfig,
                             correlationId: Int,
                             responseMap: mutable.Map[TopicPartition, Errors],
                             highWatermarkCheckpoints: OffsetCheckpoints) : Set[Partition] = {
+    val traceLoggingEnabled = stateChangeLogger.isTraceEnabled
     partitionStates.foreach { case (partition, partitionState) =>
-      stateChangeLogger.trace(s"Handling LeaderAndIsr request correlationId $correlationId from controller $controllerId " +
-        s"epoch $controllerEpoch starting the become-follower transition for partition ${partition.topicPartition} with leader " +
-        s"${partitionState.leader}")
-    }
-
-    for (partition <- partitionStates.keys)
+      if (traceLoggingEnabled)
+        stateChangeLogger.trace(s"Handling LeaderAndIsr request correlationId $correlationId from controller $controllerId " +
+          s"epoch $controllerEpoch starting the become-follower transition for partition ${partition.topicPartition} with leader " +
+          s"${partitionState.leader}")
       responseMap.put(partition.topicPartition, Errors.NONE)
+    }
 
     val partitionsToMakeFollower: mutable.Set[Partition] = mutable.Set()
     try {
@@ -1485,28 +1492,21 @@ class ReplicaManager(val config: KafkaConfig,
       }
 
       replicaFetcherManager.removeFetcherForPartitions(partitionsToMakeFollower.map(_.topicPartition))
-      partitionsToMakeFollower.foreach { partition =>
-        stateChangeLogger.trace(s"Stopped fetchers as part of become-follower request from controller $controllerId " +
-          s"epoch $controllerEpoch with correlation id $correlationId for partition ${partition.topicPartition} with leader " +
-          s"${partitionStates(partition).leader}")
-      }
+      stateChangeLogger.info(s"Stopped fetchers as part of become-follower request from controller $controllerId " +
+        s"epoch $controllerEpoch with correlation id $correlationId for ${partitionsToMakeFollower.size} partitions")
 
       partitionsToMakeFollower.foreach { partition =>
         completeDelayedFetchOrProduceRequests(partition.topicPartition)
       }
 
-      partitionsToMakeFollower.foreach { partition =>
-        stateChangeLogger.trace(s"Truncated logs and checkpointed recovery boundaries for partition " +
-          s"${partition.topicPartition} as part of become-follower request with correlation id $correlationId from " +
-          s"controller $controllerId epoch $controllerEpoch with leader ${partitionStates(partition).leader}")
-      }
-
       if (isShuttingDown.get()) {
-        partitionsToMakeFollower.foreach { partition =>
-          stateChangeLogger.trace(s"Skipped the adding-fetcher step of the become-follower state " +
-            s"change with correlation id $correlationId from controller $controllerId epoch $controllerEpoch for " +
-            s"partition ${partition.topicPartition} with leader ${partitionStates(partition).leader} " +
-            "since it is shutting down")
+        if (traceLoggingEnabled) {
+          partitionsToMakeFollower.foreach { partition =>
+            stateChangeLogger.trace(s"Skipped the adding-fetcher step of the become-follower state " +
+              s"change with correlation id $correlationId from controller $controllerId epoch $controllerEpoch for " +
+              s"partition ${partition.topicPartition} with leader ${partitionStates(partition).leader} " +
+              "since it is shutting down")
+          }
         }
       } else {
         // we do not need to check if the leader exists again since this has been done at the beginning of this process
@@ -1518,11 +1518,6 @@ class ReplicaManager(val config: KafkaConfig,
        }.toMap
 
         replicaFetcherManager.addFetcherForPartitions(partitionsToMakeFollowerWithLeaderAndOffset)
-        partitionsToMakeFollowerWithLeaderAndOffset.foreach { case (partition, initialFetchState) =>
-          stateChangeLogger.trace(s"Started fetcher to new leader as part of become-follower " +
-            s"request from controller $controllerId epoch $controllerEpoch with correlation id $correlationId for " +
-            s"partition $partition with leader ${initialFetchState.leader}")
-        }
       }
     } catch {
       case e: Throwable =>
@@ -1532,11 +1527,12 @@ class ReplicaManager(val config: KafkaConfig,
         throw e
     }
 
-    partitionStates.keys.foreach { partition =>
-      stateChangeLogger.trace(s"Completed LeaderAndIsr request correlationId $correlationId from controller $controllerId " +
-        s"epoch $controllerEpoch for the become-follower transition for partition ${partition.topicPartition} with leader " +
-        s"${partitionStates(partition).leader}")
-    }
+    if (traceLoggingEnabled)
+      partitionStates.keys.foreach { partition =>
+        stateChangeLogger.trace(s"Completed LeaderAndIsr request correlationId $correlationId from controller $controllerId " +
+          s"epoch $controllerEpoch for the become-follower transition for partition ${partition.topicPartition} with leader " +
+          s"${partitionStates(partition).leader}")
+      }
 
     partitionsToMakeFollower
   }
