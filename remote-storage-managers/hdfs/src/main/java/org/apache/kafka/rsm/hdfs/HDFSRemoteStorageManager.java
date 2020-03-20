@@ -36,7 +36,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.net.URI;
 import java.util.Map;
-import java.util.Optional;
 
 public class HDFSRemoteStorageManager implements RemoteStorageManager {
 
@@ -115,14 +114,20 @@ public class HDFSRemoteStorageManager implements RemoteStorageManager {
     }
 
     @Override
-    public boolean deleteLogSegment(RemoteLogSegmentMetadata remoteLogSegmentMetadata) throws RemoteStorageException {
+    public void deleteLogSegment(RemoteLogSegmentMetadata remoteLogSegmentMetadata) throws RemoteStorageException {
+        boolean delete;
         try {
             String path = getSegmentRemoteDir(remoteLogSegmentMetadata.remoteLogSegmentId());
 
-            FileSystem fs = getFS();
-            return fs.delete(new Path(path), true);
+            delete = getFS().delete(new Path(path), true);
         } catch (Exception e) {
-            throw new RemoteStorageException("Failed to delete remote log segment", e);
+            throw new RemoteStorageException( "Failed to delete remote log segment with id:" +
+                    remoteLogSegmentMetadata.remoteLogSegmentId(), e);
+        }
+
+        if(!delete) {
+            throw new RemoteStorageException("Failed to delete remote log segment with id:" +
+                    remoteLogSegmentMetadata.remoteLogSegmentId());
         }
     }
 

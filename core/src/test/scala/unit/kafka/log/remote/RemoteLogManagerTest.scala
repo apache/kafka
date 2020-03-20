@@ -222,5 +222,5 @@ class MockRemoteStorageManager extends RemoteStorageManager {
   override def fetchTimestampIndex(remoteLogSegmentMetadata: RemoteLogSegmentMetadata): InputStream = new ByteArrayInputStream(
     Array.emptyByteArray)
 
-  override def deleteLogSegment(remoteLogSegmentMetadata: RemoteLogSegmentMetadata): Boolean = true
+  override def deleteLogSegment(remoteLogSegmentMetadata: RemoteLogSegmentMetadata): Unit = true
 }

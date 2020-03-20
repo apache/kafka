@@ -88,13 +88,16 @@ public interface RemoteStorageManager extends Configurable, Closeable {
     InputStream fetchTimestampIndex(RemoteLogSegmentMetadata remoteLogSegmentMetadata) throws RemoteStorageException;
 
     /**
-     * Deletes the remote log segment for the given remoteLogSegmentId. Returns true if the deletion is successful.
+     * Deletes the remote log segment for the given remoteLogSegmentMetadata. Deletion is considered as successful if
+     * this call returns successfully without any exceptions. It will throw {@link RemoteStorageException} if there are
+     * any errors in deleting the file.
+     *
      * Broker pushes an event to __delete_failed_remote_log_segments topic for failed segment deletions so that users
      * can do the cleanup later.
      *
      * @param remoteLogSegmentMetadata
-     * @return
      * @throws IOException
      */
-    boolean deleteLogSegment(RemoteLogSegmentMetadata remoteLogSegmentMetadata) throws RemoteStorageException;
+    void deleteLogSegment(RemoteLogSegmentMetadata remoteLogSegmentMetadata) throws RemoteStorageException;
+
 }
