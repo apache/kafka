@@ -967,7 +967,7 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
 
         changelogReader.register(tp, activeStateManager);
 
-        StreamsException thrown = assertThrows(StreamsException.class, changelogReader::restore);
+        final StreamsException thrown = assertThrows(StreamsException.class, changelogReader::restore);
         assertEquals(exception, thrown.getCause());
     }
 
