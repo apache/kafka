@@ -286,8 +286,6 @@ public class TaskManager {
             activeTasks.values().stream().flatMap(Collection::stream).collect(Collectors.toList()),
             logPrefix
         );
-
-        changelogReader.transitToRestoreActive();
     }
 
     private void cleanUpTaskProducer(final Task task,

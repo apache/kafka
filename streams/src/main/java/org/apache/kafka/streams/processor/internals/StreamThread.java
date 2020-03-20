@@ -504,14 +504,14 @@ public class StreamThread extends Thread {
                     mainConsumer.enforceRebalance();
                 }
             } catch (final TaskCorruptedException e) {
-                log.warn("Detected the states of tasks {} are corrupted. " +
-                    "Will close the task as dirty and re-create and bootstrap from scratch.", e.corruptedTaskWithChangelogs());
+                log.warn("Detected the states of tasks " + e.corruptedTaskWithChangelogs() + " are corrupted. " +
+                             "Will close the task as dirty and re-create and bootstrap from scratch.", e);
 
                 taskManager.handleCorruption(e.corruptedTaskWithChangelogs());
             } catch (final TaskMigratedException e) {
                 log.warn("Detected that the thread is being fenced. " +
-                    "This implies that this thread missed a rebalance and dropped out of the consumer group. " +
-                    "Will close out all assigned tasks and rejoin the consumer group.");
+                             "This implies that this thread missed a rebalance and dropped out of the consumer group. " +
+                             "Will close out all assigned tasks and rejoin the consumer group.", e);
 
                 taskManager.handleLostAll();
                 mainConsumer.unsubscribe();
@@ -581,13 +581,13 @@ public class StreamThread extends Thread {
         // only try to initialize the assigned tasks
         // if the state is still in PARTITION_ASSIGNED after the poll call
         if (state == State.PARTITIONS_ASSIGNED) {
+            // transit to restore active is idempotent so we can call it multiple times
+            changelogReader.enforceRestoreActive();
+
             if (taskManager.tryToCompleteRestoration()) {
                 changelogReader.transitToUpdateStandby();
 
                 setState(State.RUNNING);
-            } else {
-                // transit to restore active is idempotent so we can call it multiple times
-                changelogReader.transitToRestoreActive();
             }
         }
 
