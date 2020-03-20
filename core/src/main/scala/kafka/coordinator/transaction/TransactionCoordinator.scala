@@ -516,24 +516,25 @@ class TransactionCoordinator(brokerId: Int,
 
   def partitionFor(transactionalId: String): Int = txnManager.partitionFor(transactionalId)
 
-  private def abortTimedOutTransactions(): Unit = {
-    def onComplete(txnIdAndPidEpoch: TransactionalIdAndProducerIdEpoch)(error: Errors): Unit = {
-      error match {
-        case Errors.NONE =>
-          info("Completed rollback of ongoing transaction for transactionalId " +
-            s"${txnIdAndPidEpoch.transactionalId} due to timeout")
+  def onEndTransactionComplete(txnIdAndPidEpoch: TransactionalIdAndProducerIdEpoch)(error: Errors): Unit = {
+    error match {
+      case Errors.NONE =>
+        info("Completed rollback of ongoing transaction for transactionalId " +
+          s"${txnIdAndPidEpoch.transactionalId} due to timeout")
 
-        case error@(Errors.INVALID_PRODUCER_ID_MAPPING |
-                    Errors.INVALID_PRODUCER_EPOCH |
-                    Errors.CONCURRENT_TRANSACTIONS) =>
-          debug(s"Rollback of ongoing transaction for transactionalId ${txnIdAndPidEpoch.transactionalId} " +
-            s"has been cancelled due to error $error")
+      case error@(Errors.INVALID_PRODUCER_ID_MAPPING |
+                  Errors.INVALID_PRODUCER_EPOCH |
+                  Errors.CONCURRENT_TRANSACTIONS) =>
+        debug(s"Rollback of ongoing transaction for transactionalId ${txnIdAndPidEpoch.transactionalId} " +
+          s"has been cancelled due to error $error")
 
-        case error =>
-          warn(s"Rollback of ongoing transaction for transactionalId ${txnIdAndPidEpoch.transactionalId} " +
-            s"failed due to error $error")
-      }
+      case error =>
+        warn(s"Rollback of ongoing transaction for transactionalId ${txnIdAndPidEpoch.transactionalId} " +
+          s"failed due to error $error")
     }
+  }
+
+  private[transaction] def abortTimedOutTransactions(onComplete: TransactionalIdAndProducerIdEpoch => EndTxnCallback): Unit = {
 
     txnManager.timedOutTransactions().foreach { txnIdAndPidEpoch =>
       txnManager.getTransactionState(txnIdAndPidEpoch.transactionalId).right.foreach {
@@ -576,7 +577,7 @@ class TransactionCoordinator(brokerId: Int,
     info("Starting up.")
     scheduler.startup()
     scheduler.schedule("transaction-abort",
-      abortTimedOutTransactions,
+      () => abortTimedOutTransactions(onEndTransactionComplete),
       txnConfig.abortTimedOutTransactionsIntervalMs,
       txnConfig.abortTimedOutTransactionsIntervalMs
     )

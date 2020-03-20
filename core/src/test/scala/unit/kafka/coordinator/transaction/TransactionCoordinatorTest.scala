@@ -16,13 +16,12 @@
  */
 package kafka.coordinator.transaction
 
-import kafka.utils.{LogCaptureAppender, MockScheduler}
+import kafka.utils.MockScheduler
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.RecordBatch
 import org.apache.kafka.common.requests.TransactionResult
 import org.apache.kafka.common.utils.{LogContext, MockTime, ProducerIdAndEpoch}
-import org.apache.log4j.Level
 import org.easymock.{Capture, EasyMock}
 import org.junit.Assert._
 import org.junit.Test
@@ -913,25 +912,14 @@ class TransactionCoordinatorTest {
     EasyMock.expect(transactionManager.getTransactionState(EasyMock.eq(transactionalId)))
       .andReturn(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, bumpedTxnMetadata))))
 
-    val appender = LogCaptureAppender.createAndRegister()
-    LogCaptureAppender.setClassLoggerLevel(coordinator.getClass, Level.DEBUG)
-    try {
+    EasyMock.replay(transactionManager, transactionMarkerChannelManager)
 
-      EasyMock.replay(transactionManager, transactionMarkerChannelManager)
-
-      coordinator.startup(false)
-      time.sleep(TransactionStateManager.DefaultAbortTimedOutTransactionsIntervalMs)
-      scheduler.tick()
-      EasyMock.verify(transactionManager)
-
-      val event = appender.getMessages.find(e => e.getMessage.equals("Rollback of " +
-        "ongoing transaction for transactionalId " +
-        "known has been cancelled due to error INVALID_PRODUCER_EPOCH"))
-
-      assertTrue(event.isDefined)
-    } finally {
-      LogCaptureAppender.unregister(appender)
+    def onEndTransactionComplete(txnIdAndPidEpoch: TransactionalIdAndProducerIdEpoch)(error: Errors): Unit = {
+      assertEquals(Errors.INVALID_PRODUCER_EPOCH, error)
     }
+    coordinator.abortTimedOutTransactions(onEndTransactionComplete)
+
+    EasyMock.verify(transactionManager)
   }
 
   @Test
