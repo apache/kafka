@@ -950,7 +950,8 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
         LogCaptureAppender.setClassLoggerToDebug(changelogReader.getClass());
 
         try {
-            changelogReader.remove(Collections.singletonList(new TopicPartition("unknown", 0)));
+            changelogReader.remove(
+                Collections.singletonList(new TopicPartition("unknown", 0)));
 
             assertEquals(Collections.singletonList(
                 "test-reader Changelog partition unknown-0 could not be found, " +

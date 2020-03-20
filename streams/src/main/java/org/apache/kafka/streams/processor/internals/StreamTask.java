@@ -120,7 +120,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
 
         this.time = time;
         this.recordCollector = recordCollector;
-        eosEnabled = !StreamsConfig.EXACTLY_ONCE.equals(config.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG));
+        eosEnabled = StreamsConfig.EXACTLY_ONCE.equals(config.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG));
 
         final String threadId = Thread.currentThread().getName();
         closeTaskSensor = ThreadMetrics.closeTaskSensor(threadId, streamsMetrics);
