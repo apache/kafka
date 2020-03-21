@@ -16,6 +16,6 @@
  */
 package org.apache.kafka.streams.processor.internals.assignment;
 
-public interface TaskAssignor<C, T extends Comparable<T>> {
+public interface TaskAssignor<C> {
     void assign(int numStandbyReplicas);
 }
