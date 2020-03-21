@@ -2500,6 +2500,27 @@ public class ConsumerCoordinatorTest {
     }
 
     @Test
+    public void shouldUpdateConsumerGroupMetadataBeforeCallbacks() {
+        final MockRebalanceListener rebalanceListener = new MockRebalanceListener() {
+            @Override
+            public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
+                assertEquals(2, coordinator.groupMetadata().generationId());
+            }
+        };
+
+        subscriptions.subscribe(singleton(topic1), rebalanceListener);
+        {
+            ByteBuffer buffer = ConsumerProtocol.serializeAssignment(
+                new ConsumerPartitionAssignor.Assignment(Collections.singletonList(t1p), ByteBuffer.wrap(new byte[0])));
+            coordinator.onJoinComplete(1, "memberId", partitionAssignor.name(), buffer);
+        }
+
+        ByteBuffer buffer = ConsumerProtocol.serializeAssignment(
+            new ConsumerPartitionAssignor.Assignment(Collections.emptyList(), ByteBuffer.wrap(new byte[0])));
+        coordinator.onJoinComplete(2, "memberId", partitionAssignor.name(), buffer);
+    }
+
+    @Test
     public void testConsumerRejoinAfterRebalance() {
         try (ConsumerCoordinator coordinator = prepareCoordinatorForCloseTest(true, false, Optional.of("group-id"))) {
             coordinator.ensureActiveGroup();
