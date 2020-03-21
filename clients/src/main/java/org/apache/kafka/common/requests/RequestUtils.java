@@ -131,4 +131,11 @@ public final class RequestUtils {
         buffer.rewind();
         return buffer;
     }
+
+    public static ByteBuffer serialize(Struct struct) {
+        ByteBuffer buffer = ByteBuffer.allocate(struct.sizeOf());
+        struct.writeTo(buffer);
+        buffer.rewind();
+        return buffer;
+    }
 }

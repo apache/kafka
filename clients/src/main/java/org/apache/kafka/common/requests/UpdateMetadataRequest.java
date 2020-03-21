@@ -26,6 +26,8 @@ import org.apache.kafka.common.message.UpdateMetadataRequestData.UpdateMetadataP
 import org.apache.kafka.common.message.UpdateMetadataRequestData.UpdateMetadataTopicState;
 import org.apache.kafka.common.message.UpdateMetadataResponseData;
 import org.apache.kafka.common.network.ListenerName;
+import org.apache.kafka.common.network.NetworkSend;
+import org.apache.kafka.common.network.Send;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
@@ -42,6 +44,8 @@ import java.util.Map;
 import static java.util.Collections.singletonList;
 
 public class UpdateMetadataRequest extends AbstractControlRequest {
+    private final ReentrantLock bodyBufferLock = new ReentrantLock();
+    private byte[] bodyBuffer;
 
     public static class Builder extends AbstractControlRequest.Builder<UpdateMetadataRequest> {
         private final List<UpdateMetadataPartitionState> partitionStates;
@@ -239,6 +243,22 @@ public class UpdateMetadataRequest extends AbstractControlRequest {
 
     public List<UpdateMetadataBroker> liveBrokers() {
         return data.liveBrokers();
+    }
+
+    @Override
+    public Send toSend(String destination, RequestHeader header) {
+        // For UpdateMetadataRequest, the toSend method on the same object will be called many times, each time with a different destination
+        // value and a header containing a different correlation id.
+        ByteBuffer headerBuffer = serialize(header);
+        bodyBufferLock.lock();
+        try {
+            if (bodyBuffer == null) {
+                bodyBuffer = RequestUtils.serialize(toStruct()).array();
+            }
+        } finally {
+            bodyBufferLock.unlock();
+        }
+        return new NetworkSend(destination, new ByteBuffer[]{headerBuffer, ByteBuffer.wrap(bodyBuffer)});
     }
 
     @Override

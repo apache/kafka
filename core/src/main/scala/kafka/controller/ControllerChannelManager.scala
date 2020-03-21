@@ -542,13 +542,25 @@ abstract class AbstractControllerBrokerRequestBatch(config: KafkaConfig,
         .setRack(broker.rack.orNull)
     }.toBuffer
 
-    val maxBrokerEpoch = controllerContext.maxBrokerEpoch
-    updateMetadataRequestBrokerSet.intersect(controllerContext.liveOrShuttingDownBrokerIds).foreach { broker =>
-      val brokerEpoch = controllerContext.liveBrokerIdAndEpochs(broker)
+    if (updateMetadataRequestVersion >= 6) {
+      // We should only create one copy UpdateMetadataRequest that should apply to all brokers.
+      // The goal is to reduce memory footprint on the controller.
+      val maxBrokerEpoch = controllerContext.maxBrokerEpoch
       val updateMetadataRequest = new UpdateMetadataRequest.Builder(updateMetadataRequestVersion, controllerId, controllerEpoch,
-        brokerEpoch, maxBrokerEpoch, partitionStates.asJava, liveBrokers.asJava)
-      sendRequest(broker, updateMetadataRequest)
+        AbstractControlRequest.UNKNOWN_BROKER_EPOCH, maxBrokerEpoch, partitionStates.asJava, liveBrokers.asJava)
+
+      updateMetadataRequestBrokerSet.intersect(controllerContext.liveOrShuttingDownBrokerIds).foreach { broker =>
+        sendRequest(broker, updateMetadataRequest)
+      }
+    } else {
+      updateMetadataRequestBrokerSet.intersect(controllerContext.liveOrShuttingDownBrokerIds).foreach { broker =>
+        val brokerEpoch = controllerContext.liveBrokerIdAndEpochs(broker)
+        val updateMetadataRequest = new UpdateMetadataRequest.Builder(updateMetadataRequestVersion, controllerId, controllerEpoch,
+          brokerEpoch, AbstractControlRequest.UNKNOWN_BROKER_EPOCH, partitionStates.asJava, liveBrokers.asJava)
+        sendRequest(broker, updateMetadataRequest)
+      }
     }
+
 
     updateMetadataRequestBrokerSet.clear()
     updateMetadataRequestPartitionInfoMap.clear()

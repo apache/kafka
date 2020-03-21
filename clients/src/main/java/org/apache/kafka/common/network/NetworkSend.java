@@ -27,6 +27,22 @@ public class NetworkSend extends ByteBufferSend {
         super(destination, sizeBuffer(buffer.remaining()), buffer);
     }
 
+    public NetworkSend(String destination, ByteBuffer[] buffers) {
+        super(destination, sizeDelimit(buffers));
+    }
+
+    private static ByteBuffer[] sizeDelimit(ByteBuffer[] buffers) {
+        int totalRemaining = 0;
+        for (ByteBuffer byteBuffer: buffers) {
+            totalRemaining += byteBuffer.remaining();
+        }
+
+        ByteBuffer[] result = new ByteBuffer[buffers.length + 1];
+        result[0] = sizeBuffer(totalRemaining);
+        System.arraycopy(buffers, 0, result, 1, buffers.length);
+        return result;
+    }
+
     private static ByteBuffer sizeBuffer(int size) {
         ByteBuffer sizeBuffer = ByteBuffer.allocate(4);
         sizeBuffer.putInt(size);
