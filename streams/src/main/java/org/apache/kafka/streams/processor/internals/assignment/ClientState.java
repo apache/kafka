@@ -26,9 +26,14 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
+
 import org.apache.kafka.streams.processor.internals.Task;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class ClientState {
+    private static final Logger LOG = LoggerFactory.getLogger(ClientState.class);
+
     private final Set<TaskId> activeTasks;
     private final Set<TaskId> standbyTasks;
     private final Set<TaskId> assignedTasks;
@@ -194,11 +199,12 @@ public class ClientState {
             final Long offsetSum = taskOffsetSums.getOrDefault(task, 0L);
 
             if (endOffsetSum < offsetSum) {
-                throw new IllegalStateException("Task " + task + " had endOffsetSum=" + endOffsetSum +
-                                                    " smaller than offsetSum=" + offsetSum);
-            }
-
-            if (offsetSum == Task.LATEST_OFFSET) {
+                LOG.warn("Task " + task + " had endOffsetSum=" + endOffsetSum +
+                             " smaller than offsetSum=" + offsetSum + ". This probably means the task is corrupted," +
+                             " which in turn indicates that it will need to restore from scratch, so we pin the lag" +
+                             " to the end offset of the log.");
+                taskLagTotals.put(task, endOffsetSum);
+            } else if (offsetSum == Task.LATEST_OFFSET) {
                 taskLagTotals.put(task, Task.LATEST_OFFSET);
             } else if (offsetSum == UNKNOWN_OFFSET_SUM) {
                 taskLagTotals.put(task, UNKNOWN_OFFSET_SUM);

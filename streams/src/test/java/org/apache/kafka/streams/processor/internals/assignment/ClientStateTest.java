@@ -233,11 +233,12 @@ public class ClientStateTest {
     }
 
     @Test
-    public void shouldThrowIllegalStateExceptionIfOffsetSumIsGreaterThanEndOffsetSum() {
+    public void shouldReturnEndOffsetSumIfOffsetSumIsGreaterThanEndOffsetSum() {
         final Map<TaskId, Long> taskOffsetSums = Collections.singletonMap(taskId01, 5L);
         final Map<TaskId, Long> allTaskEndOffsetSums = Collections.singletonMap(taskId01, 1L);
         client.addPreviousTasksAndOffsetSums(taskOffsetSums);
-        assertThrows(IllegalStateException.class, () -> client.computeTaskLags(allTaskEndOffsetSums));
+        client.computeTaskLags(allTaskEndOffsetSums);
+        assertThat(client.lagFor(taskId01), equalTo(1L));
     }
 
     @Test
