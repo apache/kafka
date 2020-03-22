@@ -747,7 +747,7 @@ public class IntegrationTestUtils {
      * {@link State#RUNNING} state at the same time. Note that states may change between the time
      * that this method returns and the calling function executes its next statement.<p>
      *
-     * When the application is already started use {@link #waitForApplicationState(List, Duration)}
+     * When the application is already started use {@link #waitForApplicationState(List, State, Duration)}
      * to wait for instances to reach {@link State#RUNNING} state.
      *
      * @param streamsList the list of streams instances to run.
