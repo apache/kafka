@@ -244,9 +244,12 @@ public class TaskManager {
                     task.postCommit();
                 }
             } catch (final RuntimeException e) {
-                log.error("Failed to commit tasks, closing all tasks as dirty", e);
+                log.error("Failed to commit tasks that are " +
+                    "prepared to close clean, will close them as dirty instead", e);
                 dirtyTasks.addAll(checkpointPerTask.keySet());
                 checkpointPerTask.clear();
+                // Just add first taskId to re-throw by the end.
+                taskCloseExceptions.put(consumedOffsetsAndMetadataPerTask.keySet().iterator().next(), e);
             }
         }
 
