@@ -120,7 +120,7 @@ public class StandbyTaskEOSIntegrationTest {
             new StreamsConfig(props), new MockTime(), true);
 
         new OffsetCheckpoint(new File(stateDirectory.directoryForTask(taskId), ".checkpoint"))
-            .write(Collections.singletonMap(new TopicPartition("unknown-topic", 0), 5L));
+            .write(Collections.singletonMap(new TopicPartition("unknown-topic", 0), 0L));
 
         assertTrue(new File(stateDirectory.directoryForTask(taskId),
             "rocksdb/KSTREAM-AGGREGATE-STATE-STORE-0000000001").mkdirs());
