@@ -120,7 +120,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
 
         this.time = time;
         this.recordCollector = recordCollector;
-        eosEnabled = StreamsConfig.EXACTLY_ONCE.equals(config.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG));
+        eosEnabled = StreamThread.eosEnabled(config);
 
         final String threadId = Thread.currentThread().getName();
         closeTaskSensor = ThreadMetrics.closeTaskSensor(threadId, streamsMetrics);
@@ -561,7 +561,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
      * @return true if this method processes a record, false if it does not process a record.
      * @throws TaskMigratedException if the task producer got fenced (EOS only)
      */
-    @SuppressWarnings({"unchecked", "rawtypes"})
+    @SuppressWarnings("unchecked")
     public boolean process(final long wallClockTime) {
         if (!isProcessable(wallClockTime)) {
             return false;

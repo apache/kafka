@@ -31,8 +31,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import static org.apache.kafka.streams.StreamsConfig.EXACTLY_ONCE;
-
 class StandbyTaskCreator {
     private final InternalTopologyBuilder builder;
     private final StreamsConfig config;
@@ -74,7 +72,7 @@ class StandbyTaskCreator {
                 final ProcessorStateManager stateManager = new ProcessorStateManager(
                     taskId,
                     Task.TaskType.STANDBY,
-                    EXACTLY_ONCE.equals(config.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG)),
+                    StreamThread.eosEnabled(config),
                     logContext,
                     stateDirectory,
                     storeChangelogReader,
