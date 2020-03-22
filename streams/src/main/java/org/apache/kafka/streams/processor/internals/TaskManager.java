@@ -237,10 +237,16 @@ public class TaskManager {
                 }
             }
 
-            commitOffsetsOrTransaction(consumedOffsetsAndMetadataPerTask);
+            try {
+                commitOffsetsOrTransaction(consumedOffsetsAndMetadataPerTask);
 
-            for (final Task task : additionalTasksForCommitting) {
-                task.postCommit();
+                for (final Task task : additionalTasksForCommitting) {
+                    task.postCommit();
+                }
+            } catch (final RuntimeException e) {
+                log.error("Failed to commit tasks, closing all tasks as dirty", e);
+                dirtyTasks.addAll(checkpointPerTask.keySet());
+                checkpointPerTask.clear();
             }
         }
 
