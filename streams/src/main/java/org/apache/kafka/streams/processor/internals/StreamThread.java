@@ -50,7 +50,6 @@ import java.time.Duration;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -59,10 +58,11 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.apache.kafka.streams.StreamsConfig.EXACTLY_ONCE;
 import static org.apache.kafka.streams.StreamsConfig.EXACTLY_ONCE_BETA;
+import static org.apache.kafka.streams.processor.internals.ClientUtils.getConsumerClientId;
+import static org.apache.kafka.streams.processor.internals.ClientUtils.getRestoreConsumerClientId;
+import static org.apache.kafka.streams.processor.internals.ClientUtils.getSharedAdminClientId;
 
 public class StreamThread extends Thread {
-
-    private final Admin adminClient;
 
     /**
      * Stream thread states are the possible states that a stream thread can be in.
@@ -270,6 +270,7 @@ public class StreamThread extends Thread {
     private volatile ThreadMetadata threadMetadata;
     private StreamThread.StateListener stateListener;
 
+    private final Admin adminClient;
     private final ChangelogReader changelogReader;
 
     // package-private for testing
@@ -480,19 +481,6 @@ public class StreamThread extends Thread {
         private InternalConsumerConfig(final Map<String, Object> props) {
             super(ConsumerConfig.addDeserializerToConfig(props, new ByteArrayDeserializer(), new ByteArrayDeserializer()), false);
         }
-    }
-
-    private static String getConsumerClientId(final String threadClientId) {
-        return threadClientId + "-consumer";
-    }
-
-    private static String getRestoreConsumerClientId(final String threadClientId) {
-        return threadClientId + "-restore-consumer";
-    }
-
-    // currently admin client is shared among all threads
-    public static String getSharedAdminClientId(final String clientId) {
-        return clientId + "-admin";
     }
 
     /**
@@ -983,17 +971,11 @@ public class StreamThread extends Thread {
     }
 
     public Map<MetricName, Metric> consumerMetrics() {
-        final Map<MetricName, ? extends Metric> consumerMetrics = mainConsumer.metrics();
-        final Map<MetricName, ? extends Metric> restoreConsumerMetrics = restoreConsumer.metrics();
-        final LinkedHashMap<MetricName, Metric> result = new LinkedHashMap<>();
-        result.putAll(consumerMetrics);
-        result.putAll(restoreConsumerMetrics);
-        return result;
+        return ClientUtils.consumerMetrics(mainConsumer, restoreConsumer);
     }
 
     public Map<MetricName, Metric> adminClientMetrics() {
-        final Map<MetricName, ? extends Metric> adminClientMetrics = adminClient.metrics();
-        return new LinkedHashMap<>(adminClientMetrics);
+        return ClientUtils.adminClientMetrics(adminClient);
     }
 
     // the following are for testing only
@@ -1008,4 +990,5 @@ public class StreamThread extends Thread {
     int currentNumIterations() {
         return numIterations;
     }
+
 }
