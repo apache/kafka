@@ -147,8 +147,8 @@ object TopicCommand extends Logging {
       print("\tReplicas: " + info.replicas.asScala.map(_.id).mkString(","))
       print("\tIsr: " + info.isr.asScala.map(_.id).mkString(","))
       if (reassignment.nonEmpty) {
-        print("\tAdding Replicas: " + reassignment.get.addingReplicas())
-        print("\tRemoving Replicas: " + reassignment.get.removingReplicas())
+        print("\tAdding Replicas: " + reassignment.get.addingReplicas().asScala.mkString(","))
+        print("\tRemoving Replicas: " + reassignment.get.removingReplicas().asScala.mkString(","))
       }
       print(if (markedForDeletion) "\tMarkedForDeletion: true" else "")
       println()
