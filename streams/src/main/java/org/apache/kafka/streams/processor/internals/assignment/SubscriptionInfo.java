@@ -46,7 +46,7 @@ public class SubscriptionInfo {
 
     static final int UNKNOWN = -1;
     static final int MIN_VERSION_OFFSET_SUM_SUBSCRIPTION = 7;
-    static final long UNKNOWN_OFFSET_SUM = -3L;
+    public static final long UNKNOWN_OFFSET_SUM = -3L;
 
     private final SubscriptionInfoData data;
     private Set<TaskId> prevTasksCache = null;
@@ -198,7 +198,7 @@ public class SubscriptionInfo {
         return standbyTasksCache;
     }
 
-    Map<TaskId, Long> taskOffsetSums() {
+    public Map<TaskId, Long> taskOffsetSums() {
         if (taskOffsetSumsCache == null) {
             taskOffsetSumsCache = new HashMap<>();
             if (data.version() >= MIN_VERSION_OFFSET_SUM_SUBSCRIPTION) {

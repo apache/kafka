@@ -674,6 +674,19 @@ public class StickyTaskAssignorTest {
         assertThat(newClient.activeTaskCount(), equalTo(2));
     }
 
+    @Test
+    public void shouldViolateBalanceToPreserveActiveTaskStickiness() {
+        final ClientState c1 = createClientWithPreviousActiveTasks(p1, 1, task00, task01, task02);
+        final ClientState c2 = createClient(p2, 1);
+
+        final StickyTaskAssignor<Integer> taskAssignor = createTaskAssignor(task00, task01, task02);
+        taskAssignor.preservePreviousTaskAssignment();
+        taskAssignor.assign(0);
+
+        assertThat(c1.activeTasks(), equalTo(Utils.mkSet(task00, task01, task02)));
+        assertTrue(c2.activeTasks().isEmpty());
+    }
+
     private StickyTaskAssignor<Integer> createTaskAssignor(final TaskId... tasks) {
         final List<TaskId> taskIds = Arrays.asList(tasks);
         Collections.shuffle(taskIds);

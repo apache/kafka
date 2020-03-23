@@ -42,6 +42,7 @@ public class StandbyTask extends AbstractTask implements Task {
     private final Logger log;
     private final String logPrefix;
     private final Sensor closeTaskSensor;
+    private final boolean eosEnabled;
     private final InternalProcessorContext processorContext;
 
     private Map<TopicPartition, Long> offsetSnapshotSinceLastCommit;
@@ -71,6 +72,7 @@ public class StandbyTask extends AbstractTask implements Task {
 
         processorContext = new StandbyContextImpl(id, config, stateMgr, metrics);
         closeTaskSensor = ThreadMetrics.closeTaskSensor(Thread.currentThread().getName(), metrics);
+        this.eosEnabled = StreamsConfig.EXACTLY_ONCE.equals(config.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG));
     }
 
     @Override
@@ -187,50 +189,41 @@ public class StandbyTask extends AbstractTask implements Task {
     @Override
     public void closeClean(final Map<TopicPartition, Long> checkpoint) {
         Objects.requireNonNull(checkpoint);
-        close(true, checkpoint);
+        close(true);
 
         log.info("Closed clean");
     }
 
     @Override
     public void closeDirty() {
-        close(false, null);
+        close(false);
 
         log.info("Closed dirty");
     }
 
-    private void close(final boolean clean,
-                       final Map<TopicPartition, Long> checkpoint) {
-        if (state() == State.CREATED) {
-            // the task is created and not initialized, do nothing
-            closeTaskSensor.record();
-            transitionTo(State.CLOSED);
-            return;
-        }
-
-        if (state() == State.RUNNING) {
+    private void close(final boolean clean) {
+        if (state() == State.CREATED || state() == State.RUNNING) {
             if (clean) {
                 // since there's no written offsets we can checkpoint with empty map,
                 // and the state current offset would be used to checkpoint
                 stateMgr.checkpoint(Collections.emptyMap());
                 offsetSnapshotSinceLastCommit = new HashMap<>(stateMgr.changelogOffsets());
             }
+            final boolean wipeStateStore = !clean && eosEnabled;
+            log.info("standby task clean {}, eos enabled {}", clean, eosEnabled);
 
-            executeAndMaybeSwallow(clean, () -> {
+            executeAndMaybeSwallow(clean, () ->
                 StateManagerUtil.closeStateManager(
                     log,
                     logPrefix,
                     clean,
-                    false,
+                    wipeStateStore,
                     stateMgr,
                     stateDirectory,
-                    TaskType.STANDBY);
-                },
+                    TaskType.STANDBY),
                 "state manager close",
                 log
             );
-
-            // TODO: if EOS is enabled, we should wipe out the state stores like we did for StreamTask too
         } else {
             throw new IllegalStateException("Illegal state " + state() + " while closing standby task " + id);
         }

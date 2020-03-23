@@ -17,14 +17,12 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.MockConsumer;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.errors.FencedInstanceIdException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
@@ -32,6 +30,7 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager.StateStoreMetadata;
+import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.test.MockStateRestoreListener;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.easymock.EasyMock;
@@ -46,7 +45,6 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 
-import java.time.Duration;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Map;
@@ -947,28 +945,22 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
     }
 
     @Test
-    public void shouldThrowIfRestoreGetInstanceFenced() {
-        EasyMock.expect(storeMetadata.offset()).andReturn(5L).anyTimes();
-        EasyMock.replay(activeStateManager, storeMetadata, store);
+    public void shouldNotThrowOnUnknownRevokedPartition() {
+        final LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
+        LogCaptureAppender.setClassLoggerToDebug(changelogReader.getClass());
 
-        final FencedInstanceIdException exception = new FencedInstanceIdException("KABOOM!");
-        final MockConsumer<byte[], byte[]> consumer = new MockConsumer<byte[], byte[]>(OffsetResetStrategy.EARLIEST) {
-            @Override
-            public Map<TopicPartition, Long> endOffsets(final Collection<TopicPartition> partitions) {
-                return partitions.stream().collect(Collectors.toMap(Function.identity(), partition -> 10L));
-            }
+        try {
+            changelogReader.remove(
+                Collections.singletonList(new TopicPartition("unknown", 0)));
 
-            @Override
-            public ConsumerRecords<byte[], byte[]> poll(final Duration timeout) {
-                throw exception;
-            }
-        };
-        final StoreChangelogReader changelogReader = new StoreChangelogReader(time, config, logContext, consumer, callback);
-
-        changelogReader.register(tp, activeStateManager);
-
-        final StreamsException thrown = assertThrows(StreamsException.class, changelogReader::restore);
-        assertEquals(exception, thrown.getCause());
+            assertEquals(Collections.singletonList(
+                "test-reader Changelog partition unknown-0 could not be found, " +
+                    "it could be already cleaned up during the handling" +
+                    "of task corruption and never restore again"), appender.getMessages()
+            );
+        } finally {
+            LogCaptureAppender.unregister(appender);
+        }
     }
 
     private void setupConsumer(final long messages, final TopicPartition topicPartition) {

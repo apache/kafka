@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import java.io.IOException;
-import java.util.Collections;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.DeleteRecordsResult;
 import org.apache.kafka.clients.admin.RecordsToDelete;
@@ -40,7 +38,9 @@ import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
 import org.slf4j.Logger;
 
 import java.io.File;
+import java.io.IOException;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -73,7 +73,7 @@ public class TaskManager {
     private final InternalTopologyBuilder builder;
     private final Admin adminClient;
     private final StateDirectory stateDirectory;
-    private final boolean eosEnabled;
+    private final StreamThread.ProcessingMode processingMode;
 
     private final Map<TaskId, Task> tasks = new TreeMap<>();
     // materializing this relationship because the lookup is on the hot path
@@ -97,7 +97,7 @@ public class TaskManager {
                 final InternalTopologyBuilder builder,
                 final Admin adminClient,
                 final StateDirectory stateDirectory,
-                final boolean eosEnabled) {
+                final StreamThread.ProcessingMode processingMode) {
         this.changelogReader = changelogReader;
         this.processId = processId;
         this.logPrefix = logPrefix;
@@ -107,7 +107,7 @@ public class TaskManager {
         this.builder = builder;
         this.adminClient = adminClient;
         this.stateDirectory = stateDirectory;
-        this.eosEnabled = eosEnabled;
+        this.processingMode = processingMode;
 
         final LogContext logContext = new LogContext(logPrefix);
         log = logContext.logger(getClass());
@@ -188,6 +188,7 @@ public class TaskManager {
 
         final Map<Task, Map<TopicPartition, Long>> checkpointPerTask = new HashMap<>();
         final Map<TaskId, Map<TopicPartition, OffsetAndMetadata>> consumedOffsetsAndMetadataPerTask = new HashMap<>();
+        final Set<Task> additionalTasksForCommitting = new HashSet<>();
         final Set<Task> dirtyTasks = new HashSet<>();
 
         final Iterator<Task> iterator = tasks.values().iterator();
@@ -195,6 +196,9 @@ public class TaskManager {
             final Task task = iterator.next();
             if (activeTasks.containsKey(task.id()) && task.isActive()) {
                 task.resume();
+                if (task.commitNeeded()) {
+                    additionalTasksForCommitting.add(task);
+                }
                 activeTasksToCreate.remove(task.id());
             } else if (standbyTasks.containsKey(task.id()) && !task.isActive()) {
                 task.resume();
@@ -225,7 +229,19 @@ public class TaskManager {
         }
 
         if (!consumedOffsetsAndMetadataPerTask.isEmpty()) {
+            for (final Task task : additionalTasksForCommitting) {
+                task.prepareCommit();
+                final Map<TopicPartition, OffsetAndMetadata> committableOffsets = task.committableOffsetsAndMetadata();
+                if (!committableOffsets.isEmpty()) {
+                    consumedOffsetsAndMetadataPerTask.put(task.id(), committableOffsets);
+                }
+            }
+
             commitOffsetsOrTransaction(consumedOffsetsAndMetadataPerTask);
+
+            for (final Task task : additionalTasksForCommitting) {
+                task.postCommit();
+            }
         }
 
         for (final Map.Entry<Task, Map<TopicPartition, Long>> taskAndCheckpoint : checkpointPerTask.entrySet()) {
@@ -331,7 +347,7 @@ public class TaskManager {
                     // it is possible that if there are multiple threads within the instance that one thread
                     // trying to grab the task from the other, while the other has not released the lock since
                     // it did not participate in the rebalance. In this case we can just retry in the next iteration
-                    log.debug("Could not initialize {} due to {}; will retry", task.id(), e);
+                    log.debug("Could not initialize {} due to the following exception; will retry", task.id(), e);
                     allRunning = false;
                 }
             }
@@ -375,12 +391,22 @@ public class TaskManager {
         final Set<TopicPartition> remainingPartitions = new HashSet<>(revokedPartitions);
 
         final Map<TaskId, Map<TopicPartition, OffsetAndMetadata>> consumedOffsetsAndMetadataPerTask = new HashMap<>();
+        final Set<Task> suspended = new HashSet<>();
         for (final Task task : tasks.values()) {
             if (remainingPartitions.containsAll(task.inputPartitions())) {
                 task.prepareSuspend();
                 final Map<TopicPartition, OffsetAndMetadata> committableOffsets = task.committableOffsetsAndMetadata();
                 if (!committableOffsets.isEmpty()) {
                     consumedOffsetsAndMetadataPerTask.put(task.id(), committableOffsets);
+                }
+                suspended.add(task);
+            } else {
+                if (task.isActive() && task.commitNeeded()) {
+                    task.prepareCommit();
+                    final Map<TopicPartition, OffsetAndMetadata> committableOffsets = task.committableOffsetsAndMetadata();
+                    if (!committableOffsets.isEmpty()) {
+                        consumedOffsetsAndMetadataPerTask.put(task.id(), committableOffsets);
+                    }
                 }
             }
             remainingPartitions.removeAll(task.inputPartitions());
@@ -392,7 +418,11 @@ public class TaskManager {
 
         for (final Task task : tasks.values()) {
             if (consumedOffsetsAndMetadataPerTask.containsKey(task.id())) {
-                task.suspend();
+                if (suspended.contains(task)) {
+                    task.suspend();
+                } else {
+                    task.postCommit();
+                }
             }
         }
 
@@ -690,12 +720,17 @@ public class TaskManager {
      * @return number of committed offsets, or -1 if we are in the middle of a rebalance and cannot commit
      */
     int commitAll() {
+        return commitInternal(tasks.values());
+    }
+
+    private int commitInternal(final Collection<Task> tasks) {
+
         if (rebalanceInProgress) {
             return -1;
         } else {
             int committed = 0;
             final Map<TaskId, Map<TopicPartition, OffsetAndMetadata>> consumedOffsetsAndMetadataPerTask = new HashMap<>();
-            for (final Task task : tasks.values()) {
+            for (final Task task : tasks) {
                 if (task.commitNeeded()) {
                     task.prepareCommit();
                     final Map<TopicPartition, OffsetAndMetadata> offsetAndMetadata = task.committableOffsetsAndMetadata();
@@ -707,7 +742,7 @@ public class TaskManager {
 
             commitOffsetsOrTransaction(consumedOffsetsAndMetadataPerTask);
 
-            for (final Task task : tasks.values()) {
+            for (final Task task : tasks) {
                 if (task.commitNeeded()) {
                     ++committed;
                     task.postCommit();
@@ -726,48 +761,39 @@ public class TaskManager {
         if (rebalanceInProgress) {
             return -1;
         } else {
-            final Map<TaskId, Map<TopicPartition, OffsetAndMetadata>> consumedOffsetsAndMetadataPerTask = new HashMap<>();
             for (final Task task : activeTaskIterable()) {
                 if (task.commitRequested() && task.commitNeeded()) {
-                    task.prepareCommit();
-                    final Map<TopicPartition, OffsetAndMetadata> offsetAndMetadata = task.committableOffsetsAndMetadata();
-                    if (!offsetAndMetadata.isEmpty()) {
-                        consumedOffsetsAndMetadataPerTask.put(task.id(), offsetAndMetadata);
-                    }
+                    return commitInternal(activeTaskIterable());
                 }
             }
-
-            commitOffsetsOrTransaction(consumedOffsetsAndMetadataPerTask);
-
-            for (final Task task : tasks.values()) {
-                if (consumedOffsetsAndMetadataPerTask.containsKey(task.id())) {
-                    task.postCommit();
-                }
-            }
-
-            return consumedOffsetsAndMetadataPerTask.size();
+            return 0;
         }
     }
 
     private void commitOffsetsOrTransaction(final Map<TaskId, Map<TopicPartition, OffsetAndMetadata>> offsetsPerTask) {
-        if (eosEnabled) {
+        if (processingMode == StreamThread.ProcessingMode.EXACTLY_ONCE_ALPHA) {
             for (final Map.Entry<TaskId, Map<TopicPartition, OffsetAndMetadata>> taskToCommit : offsetsPerTask.entrySet()) {
-                activeTaskCreator.streamsProducerForTask(taskToCommit.getKey()).commitTransaction(taskToCommit.getValue());
+                activeTaskCreator.streamsProducerForTask(taskToCommit.getKey())
+                    .commitTransaction(taskToCommit.getValue(), mainConsumer.groupMetadata());
             }
         } else {
-            try {
-                final Map<TopicPartition, OffsetAndMetadata> allOffsets = offsetsPerTask.values().stream()
-                    .flatMap(e -> e.entrySet().stream()).collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+            final Map<TopicPartition, OffsetAndMetadata> allOffsets = offsetsPerTask.values().stream()
+                .flatMap(e -> e.entrySet().stream()).collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
 
-                mainConsumer.commitSync(allOffsets);
-            } catch (final CommitFailedException error) {
-                throw new TaskMigratedException("Consumer committing offsets failed, " +
-                    "indicating the corresponding thread is no longer part of the group", error);
-            } catch (final TimeoutException error) {
-                // TODO KIP-447: we can consider treating it as non-fatal and retry on the thread level
-                throw new StreamsException("Timed out while committing offsets via consumer", error);
-            } catch (final KafkaException error) {
-                throw new StreamsException("Error encountered committing offsets via consumer", error);
+            if (processingMode == StreamThread.ProcessingMode.EXACTLY_ONCE_BETA) {
+                activeTaskCreator.threadProducer().commitTransaction(allOffsets, mainConsumer.groupMetadata());
+            } else {
+                try {
+                    mainConsumer.commitSync(allOffsets);
+                } catch (final CommitFailedException error) {
+                    throw new TaskMigratedException("Consumer committing offsets failed, " +
+                        "indicating the corresponding thread is no longer part of the group", error);
+                } catch (final TimeoutException error) {
+                    // TODO KIP-447: we can consider treating it as non-fatal and retry on the thread level
+                    throw new StreamsException("Timed out while committing offsets via consumer", error);
+                } catch (final KafkaException error) {
+                    throw new StreamsException("Error encountered committing offsets via consumer", error);
+                }
             }
         }
     }

@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.common.utils;
 
+import java.util.SortedSet;
+import java.util.TreeSet;
 import org.apache.kafka.common.KafkaException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -660,7 +662,7 @@ public final class Utils {
         return existingBuffer;
     }
 
-    /*
+    /**
      * Creates a set
      * @param elems the elements
      * @param <T> the type of element
@@ -669,6 +671,20 @@ public final class Utils {
     @SafeVarargs
     public static <T> Set<T> mkSet(T... elems) {
         Set<T> result = new HashSet<>((int) (elems.length / 0.75) + 1);
+        for (T elem : elems)
+            result.add(elem);
+        return result;
+    }
+
+    /**
+     * Creates a sorted set
+     * @param elems the elements
+     * @param <T> the type of element, must be comparable
+     * @return SortedSet
+     */
+    @SafeVarargs
+    public static <T extends Comparable<T>> SortedSet<T> mkSortedSet(T... elems) {
+        SortedSet<T> result = new TreeSet<>();
         for (T elem : elems)
             result.add(elem);
         return result;
