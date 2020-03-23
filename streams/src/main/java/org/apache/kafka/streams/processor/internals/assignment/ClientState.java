@@ -16,19 +16,24 @@
  */
 package org.apache.kafka.streams.processor.internals.assignment;
 
-import static org.apache.kafka.streams.processor.internals.assignment.SubscriptionInfo.UNKNOWN_OFFSET_SUM;
-
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.internals.Task;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
-import org.apache.kafka.streams.processor.internals.Task;
+import java.util.UUID;
+
+import static org.apache.kafka.streams.processor.internals.assignment.SubscriptionInfo.UNKNOWN_OFFSET_SUM;
 
 public class ClientState {
+    private static final Logger LOG = LoggerFactory.getLogger(ClientState.class);
+
     private final Set<TaskId> activeTasks;
     private final Set<TaskId> standbyTasks;
     private final Set<TaskId> assignedTasks;
@@ -56,7 +61,7 @@ public class ClientState {
              new HashMap<>(),
              new HashMap<>(),
              new HashMap<>(),
-            capacity);
+             capacity);
     }
 
     private ClientState(final Set<TaskId> activeTasks,
@@ -183,7 +188,7 @@ public class ClientState {
     /**
      * Compute the lag for each stateful task, including tasks this client did not previously have.
      */
-    public void computeTaskLags(final Map<TaskId, Long> allTaskEndOffsetSums) {
+    public void computeTaskLags(final UUID uuid, final Map<TaskId, Long> allTaskEndOffsetSums) {
         if (!taskLagTotals.isEmpty()) {
             throw new IllegalStateException("Already computed task lags for this client.");
         }
@@ -194,11 +199,13 @@ public class ClientState {
             final Long offsetSum = taskOffsetSums.getOrDefault(task, 0L);
 
             if (endOffsetSum < offsetSum) {
-                throw new IllegalStateException("Task " + task + " had endOffsetSum=" + endOffsetSum +
-                                                    " smaller than offsetSum=" + offsetSum);
-            }
-
-            if (offsetSum == Task.LATEST_OFFSET) {
+                LOG.warn("Task " + task + " had endOffsetSum=" + endOffsetSum + " smaller than offsetSum=" +
+                             offsetSum + " on member " + uuid + ". This probably means the task is corrupted," +
+                             " which in turn indicates that it will need to restore from scratch if it gets assigned." +
+                             " The assignor will de-prioritize returning this task to this member in the hopes that" +
+                             " some other member may be able to re-use its state.");
+                taskLagTotals.put(task, endOffsetSum);
+            } else if (offsetSum == Task.LATEST_OFFSET) {
                 taskLagTotals.put(task, Task.LATEST_OFFSET);
             } else if (offsetSum == UNKNOWN_OFFSET_SUM) {
                 taskLagTotals.put(task, UNKNOWN_OFFSET_SUM);
@@ -212,7 +219,7 @@ public class ClientState {
      * Returns the total lag across all logged stores in the task. Equal to the end offset sum if this client
      * did not have any state for this task on disk.
      *
-     * @return  end offset sum - offset sum
+     * @return end offset sum - offset sum
      *          Task.LATEST_OFFSET if this was previously an active running task on this client
      */
     public long lagFor(final TaskId task) {
@@ -270,15 +277,15 @@ public class ClientState {
     @Override
     public String toString() {
         return "[activeTasks: (" + activeTasks +
-                   ") standbyTasks: (" + standbyTasks +
-                   ") assignedTasks: (" + assignedTasks +
-                   ") prevActiveTasks: (" + prevActiveTasks +
-                   ") prevStandbyTasks: (" + prevStandbyTasks +
-                   ") prevAssignedTasks: (" + prevAssignedTasks +
-                   ") prevOwnedPartitionsByConsumerId: (" + ownedPartitions.keySet() +
-                   ") changelogOffsetTotalsByTask: (" + taskOffsetSums.entrySet() +
-                   ") capacity: " + capacity +
-                   "]";
+            ") standbyTasks: (" + standbyTasks +
+            ") assignedTasks: (" + assignedTasks +
+            ") prevActiveTasks: (" + prevActiveTasks +
+            ") prevStandbyTasks: (" + prevStandbyTasks +
+            ") prevAssignedTasks: (" + prevAssignedTasks +
+            ") prevOwnedPartitionsByConsumerId: (" + ownedPartitions.keySet() +
+            ") changelogOffsetTotalsByTask: (" + taskOffsetSums.entrySet() +
+            ") capacity: " + capacity +
+            "]";
     }
 
     // Visible for testing

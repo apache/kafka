@@ -82,29 +82,27 @@ public class StandbyTaskEOSIntegrationTest {
 
         final CountDownLatch instanceLatch = new CountDownLatch(1);
 
-        final String stateDirPathOne = stateDirPath + "/" + appId + "-1/";
-        final KafkaStreams streamInstanceOne =
-            buildStreamWithDirtyStateDir(appId, stateDirPathOne, instanceLatch);
+        try (
+            final KafkaStreams streamInstanceOne = buildStreamWithDirtyStateDir(appId, stateDirPath + "/" + appId + "-1/", instanceLatch);
+            final KafkaStreams streamInstanceTwo = buildStreamWithDirtyStateDir(appId, stateDirPath + "/" + appId + "-2/", instanceLatch);
+        ) {
 
-        final String stateDirPathTwo = stateDirPath + "/" + appId + "-2/";
-        final KafkaStreams streamInstanceTwo =
-            buildStreamWithDirtyStateDir(appId, stateDirPathTwo, instanceLatch);
 
-        streamInstanceOne.start();
+            streamInstanceOne.start();
 
-        streamInstanceTwo.start();
+            streamInstanceTwo.start();
 
-        // Wait for the record to be processed
-        assertTrue(instanceLatch.await(15, TimeUnit.SECONDS));
+            // Wait for the record to be processed
+            assertTrue(instanceLatch.await(15, TimeUnit.SECONDS));
 
-        waitForCondition(() -> streamInstanceOne.state().equals(KafkaStreams.State.RUNNING),
-            "Stream instance one should be up and running by now");
-        waitForCondition(() -> streamInstanceTwo.state().equals(KafkaStreams.State.RUNNING),
-            "Stream instance one should be up and running by now");
+            waitForCondition(() -> streamInstanceOne.state().equals(KafkaStreams.State.RUNNING),
+                             "Stream instance one should be up and running by now");
+            waitForCondition(() -> streamInstanceTwo.state().equals(KafkaStreams.State.RUNNING),
+                             "Stream instance two should be up and running by now");
 
-        streamInstanceOne.close(Duration.ofSeconds(30));
-        streamInstanceTwo.close(Duration.ofSeconds(30));
-
+            streamInstanceOne.close(Duration.ZERO);
+            streamInstanceTwo.close(Duration.ZERO);
+        }
     }
 
     private KafkaStreams buildStreamWithDirtyStateDir(final String appId,
@@ -123,14 +121,14 @@ public class StandbyTaskEOSIntegrationTest {
             .write(Collections.singletonMap(new TopicPartition("unknown-topic", 0), 5L));
 
         assertTrue(new File(stateDirectory.directoryForTask(taskId),
-            "rocksdb/KSTREAM-AGGREGATE-STATE-STORE-0000000001").mkdirs());
+                            "rocksdb/KSTREAM-AGGREGATE-STATE-STORE-0000000001").mkdirs());
 
         builder.stream(inputTopic,
-            Consumed.with(Serdes.Integer(), Serdes.Integer()))
-            .groupByKey()
-            .count()
-            .toStream()
-            .peek((key, value) -> recordProcessLatch.countDown());
+                       Consumed.with(Serdes.Integer(), Serdes.Integer()))
+               .groupByKey()
+               .count()
+               .toStream()
+               .peek((key, value) -> recordProcessLatch.countDown());
 
         return new KafkaStreams(builder.build(), props);
     }

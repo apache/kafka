@@ -825,7 +825,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             }
 
             if (fetchEndOffsetsSuccessful) {
-                state.computeTaskLags(allTaskEndOffsetSums);
+                state.computeTaskLags(uuid, allTaskEndOffsetSums);
             }
             clientStates.put(uuid, state);
         }
