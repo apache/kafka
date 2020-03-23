@@ -48,15 +48,14 @@ public class DefaultPartitioner implements Partitioner {
      * @param cluster The current cluster metadata
      */
     public int partition(String topic, Object key, byte[] keyBytes, Object value, byte[] valueBytes, Cluster cluster) {
-        return partition(topic, key, keyBytes, value, valueBytes, cluster, 0);
+        return partition(topic, key, keyBytes, value, valueBytes, cluster, cluster.partitionsForTopic(topic).size());
     }
 
     /**
      * Compute the partition for the given record.
      *
      * @param topic The topic name
-     * @param numPartitions The number of partitions of the given {@code topic}, or 0 to obtain this from
-     *                      the given {@code cluster}
+     * @param numPartitions The number of partitions of the given {@code topic}
      * @param key The key to partition on (or null if no key)
      * @param keyBytes serialized key to partition on (or null if no key)
      * @param value The value to partition on or null
@@ -67,9 +66,6 @@ public class DefaultPartitioner implements Partitioner {
                          int numPartitions) {
         if (keyBytes == null) {
             return stickyPartitionCache.partition(topic, cluster);
-        }
-        if (numPartitions <= 0) {
-            numPartitions = cluster.partitionsForTopic(topic).size();
         }
         // hash the keyBytes to choose a partition
         return Utils.toPositive(Utils.murmur2(keyBytes)) % numPartitions;
