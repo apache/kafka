@@ -17,6 +17,7 @@
 
 package kafka.log.remote
 
+import java.nio.file.Files
 import java.util.Optional
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.locks.ReentrantReadWriteLock
@@ -124,7 +125,9 @@ class RemoteLogReaderTest {
 }
 
 class MockRemoteLogManager(threads: Int, taskQueueSize: Int)
-  extends RemoteLogManager((tp) => None, (tp, segment) => {}, MockRemoteLogManager.rlmConfig(threads, taskQueueSize), new SystemTime, "localhost:9092", 1, "mock-cluster", "/tmp/kafka-logs") {
+  extends RemoteLogManager((tp) => None, (tp, segment) => {}, MockRemoteLogManager.rlmConfig(threads, taskQueueSize),
+    new SystemTime, "localhost:9092", 1, "mock-cluster",
+    Files.createTempDirectory("kafka-test-").toString) {
   private val lock = new ReentrantReadWriteLock
 
   override def read(fetchMaxByes: Int, minOneMessage: Boolean, tp: TopicPartition, fetchInfo: FetchRequest.PartitionData): FetchDataInfo = {
@@ -155,6 +158,7 @@ object MockRemoteLogManager {
 
   def rlmConfig(threads: Int, taskQueueSize: Int): RemoteLogManagerConfig = {
     RemoteLogManagerConfig(remoteLogStorageEnable = true, "kafka.log.remote.MockRemoteStorageManager", "",
-      1024, 60000, threads, taskQueueSize, rsmConfig, Defaults.RemoteLogManagerThreadPoolSize, Defaults.RemoteLogManagerTaskIntervalMs)
+      1024, 60000, threads, taskQueueSize, rsmConfig, Defaults.RemoteLogManagerThreadPoolSize,
+      Defaults.RemoteLogManagerTaskIntervalMs, "kafka.log.remote.MockRemoteLogMetadataManager")
   }
 }

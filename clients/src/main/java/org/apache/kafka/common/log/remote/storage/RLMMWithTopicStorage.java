@@ -298,14 +298,14 @@ public class RLMMWithTopicStorage implements RemoteLogMetadataManager {
                         .putAll(entry.getValue());
             }
         } catch (IOException | ClassNotFoundException e) {
-            //todo-tier if any exception occurs, then fallback to reading the data from topic by setting committed
-            //offsets to earliest
+            //todo-tier if any exception occurs, ignore that and fallback to reading the data from topic by setting
+            // committed offsets to earliest
             throw new RuntimeException(e);
         }
     }
 
     private void syncLogMetadataDataFile() throws IOException {
-        //todo-tier check whether a snapshot needs to be taken here as there may be few writes happening.
+        // idWithSegmentMetadata and partitionsWithSegmentIds are not going to be modified while this is being done.
         committedLogMetadataFile.write(idWithSegmentMetadata, partitionsWithSegmentIds);
     }
 

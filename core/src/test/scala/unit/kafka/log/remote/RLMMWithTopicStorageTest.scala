@@ -153,5 +153,6 @@ class RLMMWithTopicStorageTest extends IntegrationTestHarness {
     val tp = Range.inclusive(0, 2).map(x => new TopicPartition("foo", x))
 
     // Multiple RLMM instances publishes events and they should receive events from each other.
+
   }
 }
