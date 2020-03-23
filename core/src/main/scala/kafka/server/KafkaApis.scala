@@ -86,6 +86,7 @@ import scala.jdk.CollectionConverters._
 import scala.collection.mutable.ArrayBuffer
 import scala.collection.{Map, Seq, Set, immutable, mutable}
 import scala.util.{Failure, Success, Try}
+import kafka.coordinator.group.GroupOverview
 
 
 /**
@@ -1399,11 +1400,9 @@ class KafkaApis(val requestChannel: RequestChannel,
   def handleListGroupsRequest(request: RequestChannel.Request): Unit = {
     val listGroupsRequest = request.body[ListGroupsRequest]
     val states = listGroupsRequest.data.states.asScala.toList
-    val (error, groups) = groupCoordinator.handleListGroups(states)
-    if (authorize(request.context, DESCRIBE, CLUSTER, CLUSTER_NAME))
-      // With describe cluster access all groups are returned. We keep this alternative for backward compatibility.
-      sendResponseMaybeThrottle(request, requestThrottleMs =>
-        new ListGroupsResponse(new ListGroupsResponseData()
+
+    def createResponse(throttleMs: Int, groups: List[GroupOverview], error: Errors): AbstractResponse = {
+       new ListGroupsResponse(new ListGroupsResponseData()
             .setErrorCode(error.code)
             .setGroups(groups.map { group =>
                 val listedGroup = new ListGroupsResponseData.ListedGroup()
@@ -1413,23 +1412,18 @@ class KafkaApis(val requestChannel: RequestChannel,
                   listedGroup.setGroupState(group.state.toString)
                 listedGroup
             }.asJava)
-            .setThrottleTimeMs(requestThrottleMs)
-        ))
+            .setThrottleTimeMs(throttleMs)
+        )
+    }
+    val (error, groups) = groupCoordinator.handleListGroups(states)
+    if (authorize(request.context, DESCRIBE, CLUSTER, CLUSTER_NAME))
+      // With describe cluster access all groups are returned. We keep this alternative for backward compatibility.
+      sendResponseMaybeThrottle(request, requestThrottleMs =>
+        createResponse(requestThrottleMs, groups, error))
     else {
       val filteredGroups = groups.filter(group => authorize(request.context, DESCRIBE, GROUP, group.groupId))
       sendResponseMaybeThrottle(request, requestThrottleMs =>
-        new ListGroupsResponse(new ListGroupsResponseData()
-          .setErrorCode(error.code)
-          .setGroups(filteredGroups.map { group =>
-              val listedGroup = new ListGroupsResponseData.ListedGroup()
-                .setGroupId(group.groupId)
-                .setProtocolType(group.protocolType)
-              if (!states.isEmpty)
-                listedGroup.setGroupState(group.state.toString)
-              listedGroup
-            }.asJava)
-          .setThrottleTimeMs(requestThrottleMs)
-        ))
+        createResponse(requestThrottleMs, filteredGroups, error))
     }
   }
 

@@ -26,8 +26,8 @@
   "flexibleVersions": "3+",
   "fields": [
     { "name": "States", "type": "[]string", "versions": "4+", "tag": 0, "taggedVersions": "4+",
-      "about": "The states of the groups we want to list", "fields": [
-      { "name": "Name", "type": "string", "versions": "3+", "about": "The group state" }
+      "about": "The states of the groups we want to list. If empty, all groups are returned.", "fields": [
+      { "name": "Name", "type": "string", "versions": "4+", "about": "The group state" }
     ]}
   ]
 }

@@ -1322,19 +1322,17 @@ public class KafkaAdminClientTest {
             env.kafkaClient().prepareResponse(prepareMetadataResponse(env.cluster(), Errors.NONE));
 
             env.kafkaClient().prepareResponseFrom(
-                    new ListGroupsResponse(
-                            new ListGroupsResponseData()
-                            .setErrorCode(Errors.NONE.code())
-                            .setGroups(Arrays.asList(
-                                    new ListGroupsResponseData.ListedGroup()
-                                            .setGroupId("group-1")
-                                            .setProtocolType(ConsumerProtocol.PROTOCOL_TYPE)
-                                            .setGroupState("Stable"),
-                                    new ListGroupsResponseData.ListedGroup()
-                                            .setGroupId("group-2")
-                                            .setGroupState("Empty")
-                            ))),
-                    env.cluster().nodeById(0));
+                new ListGroupsResponse(new ListGroupsResponseData()
+                    .setErrorCode(Errors.NONE.code())
+                    .setGroups(Arrays.asList(
+                            new ListGroupsResponseData.ListedGroup()
+                                .setGroupId("group-1")
+                                .setProtocolType(ConsumerProtocol.PROTOCOL_TYPE)
+                                .setGroupState("Stable"),
+                            new ListGroupsResponseData.ListedGroup()
+                                .setGroupId("group-2")
+                                .setGroupState("Empty")))),
+                env.cluster().nodeById(0));
 
             final ListConsumerGroupsOptions options = new ListConsumerGroupsOptions().inAnyState();
             final ListConsumerGroupsResult result = env.adminClient().listConsumerGroups(options);

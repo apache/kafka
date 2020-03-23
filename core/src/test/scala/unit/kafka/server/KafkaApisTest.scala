@@ -28,6 +28,7 @@ import kafka.api.LeaderAndIsr
 import kafka.api.{ApiVersion, KAFKA_0_10_2_IV0, KAFKA_2_2_IV1}
 import kafka.cluster.Partition
 import kafka.controller.KafkaController
+import kafka.coordinator.group.{GroupOverview, GroupState}
 import kafka.coordinator.group.GroupCoordinatorConcurrencyTest.JoinGroupCallback
 import kafka.coordinator.group.GroupCoordinatorConcurrencyTest.SyncGroupCallback
 import kafka.coordinator.group.JoinGroupResult
@@ -1722,6 +1723,49 @@ class KafkaApisTest {
       .asInstanceOf[StopReplicaResponse]
     assertEquals(expectedError, stopReplicaResponse.error())
     EasyMock.verify(replicaManager)
+  }
+
+  def testListGroupsRequest(): Unit = {
+    val overviews = List(
+      GroupOverview("group1", "protocol1", "Stable"),
+      GroupOverview("goupp2", "qwerty", "Empty")
+    )
+    val response = listGroupRequest(Option.empty, overviews)
+    assertEquals(2, response.data.groups.size)
+    assertEquals("", response.data.groups.get(0).groupState)
+    assertEquals("", response.data.groups.get(1).groupState)
+  }
+
+  @Test
+  def testListGroupsRequestWithState(): Unit = {
+    val overviews = List(
+      GroupOverview("group1", "protocol1", "Stable")
+    )
+    val response = listGroupRequest(Option.apply("Stable"), overviews)
+    assertEquals(1, response.data.groups.size)
+    assertEquals("Stable", response.data.groups.get(0).groupState)
+  }
+
+  private def listGroupRequest(state: Option[String], overviews: List[GroupOverview]): ListGroupsResponse = {
+    EasyMock.reset(groupCoordinator, clientRequestQuotaManager, requestChannel)
+
+    val data = new ListGroupsRequestData()
+    if (state.isDefined)
+      data.setStates(Collections.singletonList(state.get))
+    val listGroupsRequest = new ListGroupsRequest.Builder(data).build()
+    val requestChannelRequest = buildRequest(listGroupsRequest)
+
+    val capturedResponse = expectNoThrottling()
+    val expectedStates = if (state.isDefined) List(state.get) else List()
+    EasyMock.expect(groupCoordinator.handleListGroups(expectedStates))
+      .andReturn((Errors.NONE, overviews))
+    EasyMock.replay(groupCoordinator, clientRequestQuotaManager, requestChannel)
+
+    createKafkaApis().handleListGroupsRequest(requestChannelRequest)
+
+    val response = readResponse(ApiKeys.LIST_GROUPS, listGroupsRequest, capturedResponse).asInstanceOf[ListGroupsResponse]
+    assertEquals(Errors.NONE.code, response.data.errorCode)
+    return response
   }
 
   /**

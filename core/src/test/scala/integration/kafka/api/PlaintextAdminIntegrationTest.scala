@@ -1064,7 +1064,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
             val matching = client.listConsumerGroups.all.get.asScala.filter(group =>
                 group.groupId == testGroupId &&
                 group.state == ConsumerGroupState.UNKNOWN)
-            matching.nonEmpty && matching.size == 1
+            matching.size == 1
           }, s"Expected to be able to list $testGroupId")
 
           TestUtils.waitUntilTrue(() => {
@@ -1072,7 +1072,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
             val matching = client.listConsumerGroups(options).all.get.asScala.filter(group =>
                 group.groupId == testGroupId &&
                 group.state == ConsumerGroupState.STABLE)
-            matching.nonEmpty && matching.size == 1
+            matching.size == 1
           }, s"Expected to be able to list $testGroupId in state Stable")
 
           TestUtils.waitUntilTrue(() => {

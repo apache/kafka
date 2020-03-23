@@ -3211,7 +3211,7 @@ class GroupCoordinatorTest {
     val (error, groups) = groupCoordinator.handleListGroups(List())
     assertEquals(Errors.NONE, error)
     assertEquals(1, groups.size)
-    assertEquals(GroupOverview("groupId", "consumer", Stable), groups.head)
+    assertEquals(GroupOverview("groupId", "consumer", Stable.toString), groups.head)
   }
 
   @Test
@@ -3223,7 +3223,7 @@ class GroupCoordinatorTest {
     val (error, groups) = groupCoordinator.handleListGroups(List())
     assertEquals(Errors.NONE, error)
     assertEquals(1, groups.size)
-    assertEquals(GroupOverview("groupId", "consumer", CompletingRebalance), groups.head)
+    assertEquals(GroupOverview("groupId", "consumer", CompletingRebalance.toString), groups.head)
   }
 
   @Test
