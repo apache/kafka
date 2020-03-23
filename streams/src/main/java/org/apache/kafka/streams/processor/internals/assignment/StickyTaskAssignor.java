@@ -31,7 +31,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 
-public class StickyTaskAssignor<ID> implements TaskAssignor<ID, TaskId> {
+public class StickyTaskAssignor<ID> implements TaskAssignor<ID> {
 
     private static final Logger log = LoggerFactory.getLogger(StickyTaskAssignor.class);
     private final Map<ID, ClientState> clients;
@@ -41,12 +41,15 @@ public class StickyTaskAssignor<ID> implements TaskAssignor<ID, TaskId> {
     private final Map<TaskId, Set<ID>> previousStandbyTaskAssignment = new HashMap<>();
     private final TaskPairs taskPairs;
 
+    private boolean mustPreserveActiveTaskAssignment;
+
     public StickyTaskAssignor(final Map<ID, ClientState> clients,
                               final Set<TaskId> allTaskIds,
                               final Set<TaskId> standbyTaskIds) {
         this.clients = clients;
         this.allTaskIds = allTaskIds;
         this.standbyTaskIds = standbyTaskIds;
+        this.mustPreserveActiveTaskAssignment = false;
 
         final int maxPairs = allTaskIds.size() * (allTaskIds.size() - 1) / 2;
         taskPairs = new TaskPairs(maxPairs);
@@ -57,6 +60,10 @@ public class StickyTaskAssignor<ID> implements TaskAssignor<ID, TaskId> {
     public void assign(final int numStandbyReplicas) {
         assignActive();
         assignStandby(numStandbyReplicas);
+    }
+
+    public void preservePreviousTaskAssignment() {
+        mustPreserveActiveTaskAssignment = true;
     }
 
     private void assignStandby(final int numStandbyReplicas) {
@@ -88,7 +95,7 @@ public class StickyTaskAssignor<ID> implements TaskAssignor<ID, TaskId> {
             final TaskId taskId = entry.getKey();
             if (allTaskIds.contains(taskId)) {
                 final ClientState client = clients.get(entry.getValue());
-                if (client.hasUnfulfilledQuota(tasksPerThread)) {
+                if (mustPreserveActiveTaskAssignment || client.hasUnfulfilledQuota(tasksPerThread)) {
                     assignTaskToClient(assigned, taskId, client);
                 }
             }
@@ -125,12 +132,16 @@ public class StickyTaskAssignor<ID> implements TaskAssignor<ID, TaskId> {
     private void allocateTaskWithClientCandidates(final TaskId taskId, final Set<ID> clientsWithin, final boolean active) {
         final ClientState client = findClient(taskId, clientsWithin);
         taskPairs.addPairs(taskId, client.assignedTasks());
-        client.assign(taskId, active);
+        if (active) {
+            client.assignActive(taskId);
+        } else {
+            client.assignStandby(taskId);
+        }
     }
 
     private void assignTaskToClient(final Set<TaskId> assigned, final TaskId taskId, final ClientState client) {
         taskPairs.addPairs(taskId, client.assignedTasks());
-        client.assign(taskId, true);
+        client.assignActive(taskId);
         assigned.add(taskId);
     }
 

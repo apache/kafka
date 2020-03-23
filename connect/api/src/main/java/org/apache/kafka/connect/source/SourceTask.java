@@ -123,7 +123,7 @@ public abstract class SourceTask implements Task {
      * in their own system.
      * </p>
      * <p>
-     * The default implementation just calls @{link commitRecord(SourceRecord)}, which is a nop by default. It is
+     * The default implementation just calls {@link #commitRecord(SourceRecord)}, which is a nop by default. It is
      * not necessary to implement both methods.
      * </p>
      *

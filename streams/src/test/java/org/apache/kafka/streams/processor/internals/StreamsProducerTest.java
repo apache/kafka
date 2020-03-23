@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.producer.MockProducer;
 import org.apache.kafka.clients.producer.Producer;
@@ -73,12 +74,12 @@ public class StreamsProducerTest {
     private final MockProducer<byte[], byte[]> nonEosMockProducer = new MockProducer<>(
         cluster, true, new DefaultPartitioner(), byteArraySerializer, byteArraySerializer);
     private final StreamsProducer nonEosStreamsProducer =
-        new StreamsProducer(nonEosMockProducer, false, null, logContext);
+        new StreamsProducer(nonEosMockProducer, false, logContext);
 
     private final MockProducer<byte[], byte[]> eosMockProducer = new MockProducer<>(
         cluster, true, new DefaultPartitioner(), byteArraySerializer, byteArraySerializer);
     private final StreamsProducer eosStreamsProducer =
-        new StreamsProducer(eosMockProducer, true, "appId", logContext);
+        new StreamsProducer(eosMockProducer, true, logContext);
 
     private final ProducerRecord<byte[], byte[]> record =
         new ProducerRecord<>(topic, 0, 0L, new byte[0], new byte[0], new RecordHeaders());
@@ -103,7 +104,7 @@ public class StreamsProducerTest {
         replay(producer);
 
         final StreamsProducer streamsProducer =
-            new StreamsProducer(producer, false, null, logContext);
+            new StreamsProducer(producer, false, logContext);
 
         final List<PartitionInfo> partitionInfo = streamsProducer.partitionsFor(topic);
 
@@ -120,7 +121,7 @@ public class StreamsProducerTest {
         replay(producer);
 
         final StreamsProducer streamsProducer =
-            new StreamsProducer(producer, false, null, logContext);
+            new StreamsProducer(producer, false, logContext);
 
         streamsProducer.flush();
 
@@ -134,7 +135,7 @@ public class StreamsProducerTest {
         {
             final NullPointerException thrown = assertThrows(
                 NullPointerException.class,
-                () -> new StreamsProducer(null, false, "appId", logContext)
+                () -> new StreamsProducer(null, false, logContext)
             );
 
             assertThat(thrown.getMessage(), is("producer cannot be null"));
@@ -143,7 +144,7 @@ public class StreamsProducerTest {
         {
             final NullPointerException thrown = assertThrows(
                 NullPointerException.class,
-                () -> new StreamsProducer(null, true, "appId", logContext)
+                () -> new StreamsProducer(null, true, logContext)
             );
 
             assertThat(thrown.getMessage(), is("producer cannot be null"));
@@ -154,7 +155,7 @@ public class StreamsProducerTest {
     public void shouldFailIfLogContextIsNull() {
         final NullPointerException thrown = assertThrows(
             NullPointerException.class,
-            () -> new StreamsProducer(nonEosMockProducer, false, "appId", null)
+            () -> new StreamsProducer(nonEosMockProducer, false, null)
         );
 
         assertThat(thrown.getMessage(), is("logContext cannot be null"));
@@ -224,7 +225,7 @@ public class StreamsProducerTest {
     public void shouldFailOnCommitIfEosDisabled() {
         final IllegalStateException thrown = assertThrows(
             IllegalStateException.class,
-            () -> nonEosStreamsProducer.commitTransaction(null)
+            () -> nonEosStreamsProducer.commitTransaction(null, new ConsumerGroupMetadata("appId"))
         );
 
         assertThat(thrown.getMessage(), is("EOS is disabled [test]"));
@@ -279,23 +280,23 @@ public class StreamsProducerTest {
 
         producer.initTransactions();
         producer.beginTransaction();
-        producer.sendOffsetsToTransaction(offsetsAndMetadata, "appId");
+        producer.sendOffsetsToTransaction(offsetsAndMetadata, new ConsumerGroupMetadata("appId"));
         producer.commitTransaction();
         expectLastCall();
         replay(producer);
 
         final StreamsProducer streamsProducer =
-            new StreamsProducer(producer, true, "appId", logContext);
+            new StreamsProducer(producer, true, logContext);
         streamsProducer.initTransaction();
 
-        streamsProducer.commitTransaction(offsetsAndMetadata);
+        streamsProducer.commitTransaction(offsetsAndMetadata, new ConsumerGroupMetadata("appId"));
 
         verify(producer);
     }
 
     @Test
     public void shouldSendOffsetToTxOnEosCommit() {
-        eosStreamsProducer.commitTransaction(offsetsAndMetadata);
+        eosStreamsProducer.commitTransaction(offsetsAndMetadata, new ConsumerGroupMetadata("appId"));
         assertThat(eosMockProducer.sentOffsets(), is(true));
     }
 
@@ -304,7 +305,7 @@ public class StreamsProducerTest {
         eosStreamsProducer.send(record, null);
         assertThat(eosMockProducer.transactionInFlight(), is(true));
 
-        eosStreamsProducer.commitTransaction(offsetsAndMetadata);
+        eosStreamsProducer.commitTransaction(offsetsAndMetadata, new ConsumerGroupMetadata("appId"));
 
         assertThat(eosMockProducer.transactionInFlight(), is(false));
         assertThat(eosMockProducer.uncommittedRecords().isEmpty(), is(true));
@@ -313,6 +314,58 @@ public class StreamsProducerTest {
         assertThat(eosMockProducer.history().get(0), is(record));
         assertThat(eosMockProducer.consumerGroupOffsetsHistory().size(), is(1));
         assertThat(eosMockProducer.consumerGroupOffsetsHistory().get(0).get("appId"), is(offsetsAndMetadata));
+    }
+
+    @Test
+    public void shouldCommitTxWithApplicationIdOnEosAlphaCommit() {
+        final Producer<byte[], byte[]> producer = mock(Producer.class);
+
+        producer.initTransactions();
+        expectLastCall();
+        producer.beginTransaction();
+        expectLastCall();
+        expect(producer.send(record, null)).andReturn(null);
+        producer.sendOffsetsToTransaction(null, new ConsumerGroupMetadata("appId"));
+        expectLastCall();
+        producer.commitTransaction();
+        expectLastCall();
+        replay(producer);
+
+        final StreamsProducer streamsProducer =
+            new StreamsProducer(producer, true, logContext);
+        streamsProducer.initTransaction();
+        // call `send()` to start a transaction
+        streamsProducer.send(record, null);
+
+        streamsProducer.commitTransaction(null, new ConsumerGroupMetadata("appId"));
+
+        verify(producer);
+    }
+
+    @Test
+    public void shouldCommitTxWithConsumerGroupMetadataOnEosBetaCommit() {
+        final Producer<byte[], byte[]> producer = mock(Producer.class);
+
+        producer.initTransactions();
+        expectLastCall();
+        producer.beginTransaction();
+        expectLastCall();
+        expect(producer.send(record, null)).andReturn(null);
+        producer.sendOffsetsToTransaction(null, new ConsumerGroupMetadata("appId"));
+        expectLastCall();
+        producer.commitTransaction();
+        expectLastCall();
+        replay(producer);
+
+        final StreamsProducer streamsProducer =
+            new StreamsProducer(producer, true, logContext);
+        streamsProducer.initTransaction();
+        // call `send()` to start a transaction
+        streamsProducer.send(record, null);
+
+        streamsProducer.commitTransaction(null, new ConsumerGroupMetadata("appId"));
+
+        verify(producer);
     }
 
     @Test
@@ -341,7 +394,7 @@ public class StreamsProducerTest {
         replay(producer);
 
         final StreamsProducer streamsProducer =
-            new StreamsProducer(producer, true, "appId", logContext);
+            new StreamsProducer(producer, true, logContext);
         streamsProducer.initTransaction();
 
         streamsProducer.abortTransaction();
@@ -352,21 +405,11 @@ public class StreamsProducerTest {
     // error handling tests
 
     @Test
-    public void shouldFailIfApplicationIdIsNullOnEos() {
-        final IllegalArgumentException thrown = assertThrows(
-            IllegalArgumentException.class,
-            () -> new StreamsProducer(eosMockProducer, true, null, logContext)
-        );
-
-        assertThat(thrown.getMessage(), is("applicationId cannot be null if EOS is enabled"));
-    }
-
-    @Test
     public void shouldThrowTimeoutExceptionOnEosInitTxTimeout() {
         // use `mockProducer` instead of `eosMockProducer` to avoid double Tx-Init
         nonEosMockProducer.initTransactionException = new TimeoutException("KABOOM!");
         final StreamsProducer streamsProducer =
-            new StreamsProducer(nonEosMockProducer, true, "appId", logContext);
+            new StreamsProducer(nonEosMockProducer, true, logContext);
 
         final TimeoutException thrown = assertThrows(
             TimeoutException.class,
@@ -381,7 +424,7 @@ public class StreamsProducerTest {
         // use `mockProducer` instead of `eosMockProducer` to avoid double Tx-Init
         nonEosMockProducer.initTransactionException = new KafkaException("KABOOM!");
         final StreamsProducer streamsProducer =
-            new StreamsProducer(nonEosMockProducer, true, "appId", logContext);
+            new StreamsProducer(nonEosMockProducer, true, logContext);
 
         final StreamsException thrown = assertThrows(
             StreamsException.class,
@@ -397,7 +440,7 @@ public class StreamsProducerTest {
         // use `mockProducer` instead of `eosMockProducer` to avoid double Tx-Init
         nonEosMockProducer.initTransactionException = new RuntimeException("KABOOM!");
         final StreamsProducer streamsProducer =
-            new StreamsProducer(nonEosMockProducer, true, "appId", logContext);
+            new StreamsProducer(nonEosMockProducer, true, logContext);
 
         final RuntimeException thrown = assertThrows(
             RuntimeException.class,
@@ -499,7 +542,7 @@ public class StreamsProducerTest {
             TaskMigratedException.class,
             // we pass in `null` to verify that `sendOffsetsToTransaction()` fails instead of `commitTransaction()`
             // `sendOffsetsToTransaction()` would throw an NPE on `null` offsets
-            () -> eosStreamsProducer.commitTransaction(null)
+            () -> eosStreamsProducer.commitTransaction(null, new ConsumerGroupMetadata("appId"))
         );
 
         assertThat(thrown.getCause(), is(eosMockProducer.sendOffsetsToTransactionException));
@@ -518,7 +561,7 @@ public class StreamsProducerTest {
             StreamsException.class,
             // we pass in `null` to verify that `sendOffsetsToTransaction()` fails instead of `commitTransaction()`
             // `sendOffsetsToTransaction()` would throw an NPE on `null` offsets
-            () -> eosStreamsProducer.commitTransaction(null)
+            () -> eosStreamsProducer.commitTransaction(null, new ConsumerGroupMetadata("appId"))
         );
 
         assertThat(thrown.getCause(), is(eosMockProducer.sendOffsetsToTransactionException));
@@ -536,7 +579,7 @@ public class StreamsProducerTest {
             RuntimeException.class,
             // we pass in `null` to verify that `sendOffsetsToTransaction()` fails instead of `commitTransaction()`
             // `sendOffsetsToTransaction()` would throw an NPE on `null` offsets
-            () -> eosStreamsProducer.commitTransaction(null)
+            () -> eosStreamsProducer.commitTransaction(null, new ConsumerGroupMetadata("appId"))
         );
 
         assertThat(thrown.getMessage(), is("KABOOM!"));
@@ -549,7 +592,7 @@ public class StreamsProducerTest {
 
         final TaskMigratedException thrown = assertThrows(
             TaskMigratedException.class,
-            () -> eosStreamsProducer.commitTransaction(offsetsAndMetadata)
+            () -> eosStreamsProducer.commitTransaction(offsetsAndMetadata, new ConsumerGroupMetadata("appId"))
         );
 
         assertThat(eosMockProducer.sentOffsets(), is(true));
@@ -568,7 +611,7 @@ public class StreamsProducerTest {
 
         final StreamsException thrown = assertThrows(
             StreamsException.class,
-            () -> eosStreamsProducer.commitTransaction(offsetsAndMetadata)
+            () -> eosStreamsProducer.commitTransaction(offsetsAndMetadata, new ConsumerGroupMetadata("appId"))
         );
 
         assertThat(eosMockProducer.sentOffsets(), is(true));
@@ -582,7 +625,7 @@ public class StreamsProducerTest {
 
         final StreamsException thrown = assertThrows(
             StreamsException.class,
-            () -> eosStreamsProducer.commitTransaction(offsetsAndMetadata)
+            () -> eosStreamsProducer.commitTransaction(offsetsAndMetadata, new ConsumerGroupMetadata("appId"))
         );
 
         assertThat(eosMockProducer.sentOffsets(), is(true));
@@ -599,7 +642,7 @@ public class StreamsProducerTest {
 
         final RuntimeException thrown = assertThrows(
             RuntimeException.class,
-            () -> eosStreamsProducer.commitTransaction(offsetsAndMetadata)
+            () -> eosStreamsProducer.commitTransaction(offsetsAndMetadata, new ConsumerGroupMetadata("appId"))
         );
 
         assertThat(eosMockProducer.sentOffsets(), is(true));
@@ -618,7 +661,7 @@ public class StreamsProducerTest {
         replay(producer);
 
         final StreamsProducer streamsProducer =
-            new StreamsProducer(producer, true, "appId", logContext);
+            new StreamsProducer(producer, true, logContext);
         streamsProducer.initTransaction();
         // call `send()` to start a transaction
         streamsProducer.send(record, null);

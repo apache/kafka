@@ -39,6 +39,7 @@ import org.apache.kafka.streams.errors.ProductionExceptionHandler;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.FailOnInvalidTimestamp;
 import org.apache.kafka.streams.processor.TimestampExtractor;
+import org.apache.kafka.streams.processor.internals.StreamThread;
 import org.apache.kafka.streams.processor.internals.StreamsPartitionAssignor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -283,9 +284,25 @@ public class StreamsConfig extends AbstractConfig {
 
     /**
      * Config value for parameter {@link #PROCESSING_GUARANTEE_CONFIG "processing.guarantee"} for exactly-once processing guarantees.
+     * <p>
+     * Enabling exactly-once processing semantics requires broker version 0.11.0 or higher.
+     * If you enable this feature Kafka Streams will use more resources (like broker connections)
+     * compared to the {@link #AT_LEAST_ONCE} case.
+     *
+     * @see #EXACTLY_ONCE_BETA
      */
     @SuppressWarnings("WeakerAccess")
     public static final String EXACTLY_ONCE = "exactly_once";
+
+    /**
+     * Config value for parameter {@link #PROCESSING_GUARANTEE_CONFIG "processing.guarantee"} for exactly-once processing guarantees.
+     * <p>
+     * Enabling exactly-once (beta) requires broker version 2.5 or higher.
+     * If you enable this feature Kafka Streams will use less resources (like broker connections)
+     * compare to the {@link #EXACTLY_ONCE} case.
+     */
+    @SuppressWarnings("WeakerAccess")
+    public static final String EXACTLY_ONCE_BETA = "exactly_once_beta";
 
     /**
      * Config value for parameter {@link #BUILT_IN_METRICS_VERSION_CONFIG "built.in.metrics.version"} for built-in metrics from version 0.10.0. to 2.4
@@ -450,8 +467,11 @@ public class StreamsConfig extends AbstractConfig {
     /** {@code processing.guarantee} */
     @SuppressWarnings("WeakerAccess")
     public static final String PROCESSING_GUARANTEE_CONFIG = "processing.guarantee";
-    private static final String PROCESSING_GUARANTEE_DOC = "The processing guarantee that should be used. Possible values are <code>" + AT_LEAST_ONCE + "</code> (default) and <code>" + EXACTLY_ONCE + "</code>. " +
-        "Note that exactly-once processing requires a cluster of at least three brokers by default what is the recommended setting for production; for development you can change this, by adjusting broker setting " +
+    private static final String PROCESSING_GUARANTEE_DOC = "The processing guarantee that should be used. " +
+        "Possible values are <code>" + AT_LEAST_ONCE + "</code> (default), <code>" + EXACTLY_ONCE + "</code>, " +
+        "and <code>" + EXACTLY_ONCE_BETA + "</code> (requires brokers version 2.5 or higher). " +
+        "Note that exactly-once processing requires a cluster of at least three brokers by default what is the " +
+        "recommended setting for production; for development you can change this, by adjusting broker setting " +
         "<code>transaction.state.log.replication.factor</code> and <code>transaction.state.log.min.isr</code>.";
 
     /** {@code receive.buffer.bytes} */
@@ -515,8 +535,11 @@ public class StreamsConfig extends AbstractConfig {
     public static final String UPGRADE_FROM_CONFIG = "upgrade.from";
     private static final String UPGRADE_FROM_DOC = "Allows upgrading in a backward compatible way. " +
         "This is needed when upgrading from [0.10.0, 1.1] to 2.0+, or when upgrading from [2.0, 2.3] to 2.4+. " +
-        "When upgrading from 2.4 to a newer version it is not required to specify this config. " +
-        "Default is null. Accepted values are \"" + UPGRADE_FROM_0100 + "\", \"" + UPGRADE_FROM_0101 + "\", \"" + UPGRADE_FROM_0102 + "\", \"" + UPGRADE_FROM_0110 + "\", \"" + UPGRADE_FROM_10 + "\", \"" + UPGRADE_FROM_11 + "\", \"" + UPGRADE_FROM_20 + "\", \"" + UPGRADE_FROM_21 + "\", \"" + UPGRADE_FROM_22 + "\", \"" + UPGRADE_FROM_23 + "\" (for upgrading from the corresponding old version).";
+        "When upgrading from 2.4 to a newer version it is not required to specify this config. Default is `null`. " +
+        "Accepted values are \"" + UPGRADE_FROM_0100 + "\", \"" + UPGRADE_FROM_0101 + "\", \"" +
+        UPGRADE_FROM_0102 + "\", \"" + UPGRADE_FROM_0110 + "\", \"" + UPGRADE_FROM_10 + "\", \"" +
+        UPGRADE_FROM_11 + "\", \"" + UPGRADE_FROM_20 + "\", \"" + UPGRADE_FROM_21 + "\", \"" +
+        UPGRADE_FROM_22 + "\", \"" + UPGRADE_FROM_23 + "\" (for upgrading from the corresponding old version).";
 
     /** {@code windowstore.changelog.additional.retention.ms} */
     @SuppressWarnings("WeakerAccess")
@@ -533,10 +556,16 @@ public class StreamsConfig extends AbstractConfig {
         " WARNING: This config is deprecated and will be removed in 3.0.0 release.";
 
 
-    private static final String[] NON_CONFIGURABLE_CONSUMER_DEFAULT_CONFIGS = new String[] {ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG};
-    private static final String[] NON_CONFIGURABLE_CONSUMER_EOS_CONFIGS = new String[] {ConsumerConfig.ISOLATION_LEVEL_CONFIG};
-    private static final String[] NON_CONFIGURABLE_PRODUCER_EOS_CONFIGS = new String[] {ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG,
-                                                                                        ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION};
+    private static final String[] NON_CONFIGURABLE_CONSUMER_DEFAULT_CONFIGS =
+        new String[] {ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG};
+    private static final String[] NON_CONFIGURABLE_CONSUMER_EOS_CONFIGS =
+        new String[] {ConsumerConfig.ISOLATION_LEVEL_CONFIG};
+    private static final String[] NON_CONFIGURABLE_PRODUCER_EOS_CONFIGS =
+        new String[] {
+            ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG,
+            ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION,
+            ProducerConfig.TRANSACTIONAL_ID_CONFIG
+        };
 
     static {
         CONFIG = new ConfigDef()
@@ -630,7 +659,7 @@ public class StreamsConfig extends AbstractConfig {
             .define(PROCESSING_GUARANTEE_CONFIG,
                     Type.STRING,
                     AT_LEAST_ONCE,
-                    in(AT_LEAST_ONCE, EXACTLY_ONCE),
+                    in(AT_LEAST_ONCE, EXACTLY_ONCE, EXACTLY_ONCE_BETA),
                     Importance.MEDIUM,
                     PROCESSING_GUARANTEE_DOC)
             .define(SECURITY_PROTOCOL_CONFIG,
@@ -951,7 +980,7 @@ public class StreamsConfig extends AbstractConfig {
     protected StreamsConfig(final Map<?, ?> props,
                             final boolean doLog) {
         super(CONFIG, props, doLog);
-        eosEnabled = EXACTLY_ONCE.equals(getString(PROCESSING_GUARANTEE_CONFIG));
+        eosEnabled = StreamThread.eosEnabled(this);
         if (props.containsKey(PARTITION_GROUPER_CLASS_CONFIG)) {
             log.warn("Configuration parameter `{}` is deprecated and will be removed in 3.0.0 release.", PARTITION_GROUPER_CLASS_CONFIG);
         }
@@ -962,8 +991,7 @@ public class StreamsConfig extends AbstractConfig {
         final Map<String, Object> configUpdates =
             CommonClientConfigs.postProcessReconnectBackoffConfigs(this, parsedValues);
 
-        final boolean eosEnabled = EXACTLY_ONCE.equals(parsedValues.get(PROCESSING_GUARANTEE_CONFIG));
-        if (eosEnabled && !originals().containsKey(COMMIT_INTERVAL_MS_CONFIG)) {
+        if (StreamThread.eosEnabled(this) && !originals().containsKey(COMMIT_INTERVAL_MS_CONFIG)) {
             log.debug("Using {} default value of {} as exactly once is enabled.",
                     COMMIT_INTERVAL_MS_CONFIG, EOS_DEFAULT_COMMIT_INTERVAL_MS);
             configUpdates.put(COMMIT_INTERVAL_MS_CONFIG, EOS_DEFAULT_COMMIT_INTERVAL_MS);
@@ -988,40 +1016,19 @@ public class StreamsConfig extends AbstractConfig {
         return consumerProps;
     }
 
-    private void checkIfUnexpectedUserSpecifiedConsumerConfig(final Map<String, Object> clientProvidedProps, final String[] nonConfigurableConfigs) {
+    private void checkIfUnexpectedUserSpecifiedConsumerConfig(final Map<String, Object> clientProvidedProps,
+                                                              final String[] nonConfigurableConfigs) {
         // Streams does not allow users to configure certain consumer/producer configurations, for example,
         // enable.auto.commit. In cases where user tries to override such non-configurable
         // consumer/producer configurations, log a warning and remove the user defined value from the Map.
         // Thus the default values for these consumer/producer configurations that are suitable for
         // Streams will be used instead.
 
-        if (eosEnabled) {
-            final Object maxInFlightRequests = clientProvidedProps.get(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION);
-
-            if (maxInFlightRequests != null) {
-                final int maxInFlightRequestsAsInteger;
-                if (maxInFlightRequests instanceof Integer) {
-                    maxInFlightRequestsAsInteger = (Integer) maxInFlightRequests;
-                } else if (maxInFlightRequests instanceof String) {
-                    try {
-                        maxInFlightRequestsAsInteger = Integer.parseInt(((String) maxInFlightRequests).trim());
-                    } catch (final NumberFormatException e) {
-                        throw new ConfigException(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, maxInFlightRequests, "String value could not be parsed as 32-bit integer");
-                    }
-                } else {
-                    throw new ConfigException(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, maxInFlightRequests, "Expected value to be a 32-bit integer, but it was a " + maxInFlightRequests.getClass().getName());
-                }
-
-                if (maxInFlightRequestsAsInteger > 5) {
-                    throw new ConfigException(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, maxInFlightRequestsAsInteger, "Can't exceed 5 when exactly-once processing is enabled");
-                }
-            }
-        }
+        final String nonConfigurableConfigMessage = "Unexpected user-specified %s config: %s found. %sUser setting (%s) will be ignored and the Streams default setting (%s) will be used ";
+        final String eosMessage = PROCESSING_GUARANTEE_CONFIG + " is set to " + getString(PROCESSING_GUARANTEE_CONFIG) + ". Hence, ";
 
         for (final String config: nonConfigurableConfigs) {
             if (clientProvidedProps.containsKey(config)) {
-                final String eosMessage =  PROCESSING_GUARANTEE_CONFIG + " is set to " + EXACTLY_ONCE + ". Hence, ";
-                final String nonConfigurableConfigMessage = "Unexpected user-specified %s config: %s found. %sUser setting (%s) will be ignored and the Streams default setting (%s) will be used ";
 
                 if (CONSUMER_DEFAULT_OVERRIDES.containsKey(config)) {
                     if (!clientProvidedProps.get(config).equals(CONSUMER_DEFAULT_OVERRIDES.get(config))) {
@@ -1041,10 +1048,38 @@ public class StreamsConfig extends AbstractConfig {
                                     "producer", config, eosMessage, clientProvidedProps.get(config), PRODUCER_EOS_OVERRIDES.get(config)));
                             clientProvidedProps.remove(config);
                         }
+                    } else if (ProducerConfig.TRANSACTIONAL_ID_CONFIG.equals(config)) {
+                        log.warn(String.format(nonConfigurableConfigMessage,
+                            "producer", config, eosMessage, clientProvidedProps.get(config), "<appId>-<generatedSuffix>"));
+                        clientProvidedProps.remove(config);
                     }
                 }
             }
+        }
 
+        if (eosEnabled) {
+            verifyMaxInFlightRequestPerConnection(clientProvidedProps.get(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION));
+        }
+    }
+
+    private void verifyMaxInFlightRequestPerConnection(final Object maxInFlightRequests) {
+        if (maxInFlightRequests != null) {
+            final int maxInFlightRequestsAsInteger;
+            if (maxInFlightRequests instanceof Integer) {
+                maxInFlightRequestsAsInteger = (Integer) maxInFlightRequests;
+            } else if (maxInFlightRequests instanceof String) {
+                try {
+                    maxInFlightRequestsAsInteger = Integer.parseInt(((String) maxInFlightRequests).trim());
+                } catch (final NumberFormatException e) {
+                    throw new ConfigException(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, maxInFlightRequests, "String value could not be parsed as 32-bit integer");
+                }
+            } else {
+                throw new ConfigException(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, maxInFlightRequests, "Expected value to be a 32-bit integer, but it was a " + maxInFlightRequests.getClass().getName());
+            }
+
+            if (maxInFlightRequestsAsInteger > 5) {
+                throw new ConfigException(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, maxInFlightRequestsAsInteger, "Can't exceed 5 when exactly-once processing is enabled");
+            }
         }
     }
 

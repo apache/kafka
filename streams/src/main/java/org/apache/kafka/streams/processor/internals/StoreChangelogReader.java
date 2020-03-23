@@ -21,18 +21,18 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.InvalidOffsetException;
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.FencedInstanceIdException;
 import org.apache.kafka.common.errors.TimeoutException;
-import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskCorruptedException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
+import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager.StateStoreMetadata;
-import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.slf4j.Logger;
 
 import java.time.Duration;
@@ -279,15 +279,15 @@ public class StoreChangelogReader implements ChangelogReader {
     // NOTE: even if the newly created tasks do not need any restoring, we still first transit to this state and then
     // immediately transit back -- there's no overhead of transiting back and forth but simplifies the logic a lot.
     @Override
-    public void transitToRestoreActive() {
+    public void enforceRestoreActive() {
         if (state != ChangelogReaderState.ACTIVE_RESTORING) {
             log.debug("Transiting to restore active tasks: {}", changelogs);
+
+            // pause all partitions that are for standby tasks from the restore consumer
+            pauseChangelogsFromRestoreConsumer(standbyRestoringChangelogs());
+
+            state = ChangelogReaderState.ACTIVE_RESTORING;
         }
-
-        // pause all partitions that are for standby tasks from the restore consumer
-        pauseChangelogsFromRestoreConsumer(standbyRestoringChangelogs());
-
-        state = ChangelogReaderState.ACTIVE_RESTORING;
     }
 
     // Only after we've completed restoring all active tasks we'll then move back to resume updating standby tasks.
@@ -300,8 +300,10 @@ public class StoreChangelogReader implements ChangelogReader {
     @Override
     public void transitToUpdateStandby() {
         if (state != ChangelogReaderState.ACTIVE_RESTORING) {
-            throw new IllegalStateException("The changelog reader is not restoring active tasks while trying to " +
-                "transit to update standby tasks: " + changelogs);
+            throw new IllegalStateException(
+                "The changelog reader is not restoring active tasks (is " + state + ") while trying to " +
+                    "transit to update standby tasks: " + changelogs
+            );
         }
 
         log.debug("Transiting to update standby tasks: {}", changelogs);
@@ -798,10 +800,16 @@ public class StoreChangelogReader implements ChangelogReader {
 
         for (final TopicPartition partition : revokedChangelogs) {
             final ChangelogMetadata changelogMetadata = changelogs.remove(partition);
-            if (changelogMetadata.state() != ChangelogState.REGISTERED) {
-                revokedInitializedChangelogs.add(partition);
+            if (changelogMetadata != null) {
+                if (changelogMetadata.state() != ChangelogState.REGISTERED) {
+                    revokedInitializedChangelogs.add(partition);
+                }
+                changelogMetadata.clear();
+            } else {
+                log.debug("Changelog partition {} could not be found, " +
+                    "it could be already cleaned up during the handling" +
+                    "of task corruption and never restore again", partition);
             }
-            changelogMetadata.clear();
         }
 
         removeChangelogsFromRestoreConsumer(revokedInitializedChangelogs);

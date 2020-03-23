@@ -324,6 +324,10 @@ subprojects {
       includeCategories 'org.apache.kafka.test.IntegrationTest'
     }
 
+    retry {
+      maxRetries = userMaxTestRetries
+      maxFailures = userMaxTestRetryFailures
+    }
   }
 
   task unitTest(type: Test, dependsOn: compileJava) {
@@ -343,6 +347,11 @@ subprojects {
       useJUnit {
         excludeCategories 'org.apache.kafka.test.IntegrationTest'
       }
+    }
+
+    retry {
+      maxRetries = userMaxTestRetries
+      maxFailures = userMaxTestRetryFailures
     }
   }
 

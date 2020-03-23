@@ -18,6 +18,7 @@ package org.apache.kafka.streams.processor.internals.assignment;
 
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.RebalanceProtocol;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.ConfigException;
@@ -45,6 +46,8 @@ public final class AssignorConfiguration {
     private final String userEndPoint;
     private final TaskManager taskManager;
     private final StreamsMetadataState streamsMetadataState;
+    private final Admin adminClient;
+    private final int adminClientTimeout;
     private final InternalTopicManager internalTopicManager;
     private final CopartitionedTopicsEnforcer copartitionedTopicsEnforcer;
     private final StreamsConfig streamsConfig;
@@ -144,9 +147,11 @@ public final class AssignorConfiguration {
                 throw fatalException;
             }
 
-            internalTopicManager = new InternalTopicManager((Admin) o, streamsConfig);
+            adminClient = (Admin) o;
+            internalTopicManager = new InternalTopicManager(adminClient, streamsConfig);
         }
 
+        adminClientTimeout = streamsConfig.getInt(AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG);
 
         copartitionedTopicsEnforcer = new CopartitionedTopicsEnforcer(logPrefix);
     }
@@ -248,6 +253,14 @@ public final class AssignorConfiguration {
 
     public String getUserEndPoint() {
         return userEndPoint;
+    }
+
+    public Admin getAdminClient() {
+        return adminClient;
+    }
+
+    public int getAdminClientTimeout() {
+        return adminClientTimeout;
     }
 
     public InternalTopicManager getInternalTopicManager() {
