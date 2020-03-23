@@ -1199,6 +1199,9 @@ public class StreamsConfig extends AbstractConfig {
 
         // no need to set group id for a restore consumer
         baseConsumerProps.remove(ConsumerConfig.GROUP_ID_CONFIG);
+        // no need to set instance id for a restore consumer
+        baseConsumerProps.remove(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG);
+
         // add client id with stream client id prefix
         baseConsumerProps.put(CommonClientConfigs.CLIENT_ID_CONFIG, clientId);
         baseConsumerProps.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "none");
@@ -1231,6 +1234,9 @@ public class StreamsConfig extends AbstractConfig {
 
         // no need to set group id for a global consumer
         baseConsumerProps.remove(ConsumerConfig.GROUP_ID_CONFIG);
+        // no need to set instance id for a restore consumer
+        baseConsumerProps.remove(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG);
+
         // add client id with stream client id prefix
         baseConsumerProps.put(CommonClientConfigs.CLIENT_ID_CONFIG, clientId + "-global-consumer");
         baseConsumerProps.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "none");
