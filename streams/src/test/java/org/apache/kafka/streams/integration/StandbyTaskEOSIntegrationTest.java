@@ -98,7 +98,7 @@ public class StandbyTaskEOSIntegrationTest {
             waitForCondition(() -> streamInstanceOne.state().equals(KafkaStreams.State.RUNNING),
                              "Stream instance one should be up and running by now");
             waitForCondition(() -> streamInstanceTwo.state().equals(KafkaStreams.State.RUNNING),
-                             "Stream instance one should be up and running by now");
+                             "Stream instance two should be up and running by now");
 
             streamInstanceOne.close(Duration.ZERO);
             streamInstanceTwo.close(Duration.ZERO);
