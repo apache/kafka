@@ -370,13 +370,20 @@ public class StreamThreadStateStoreProviderTest {
                 clientSupplier.restoreConsumer,
                 new MockStateRestoreListener()),
             topology.storeToChangelogTopic(), partitions);
-        final boolean eosEnabled = StreamsConfig.EXACTLY_ONCE.equals(streamsConfig.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG));
+        final StreamThread.ProcessingMode processingMode;
+        if (StreamThread.eosAlphaEnabled(streamsConfig)) {
+            processingMode = StreamThread.ProcessingMode.EXACTLY_ONCE_ALPHA;
+        } else if (StreamThread.eosBetaEnabled(streamsConfig)) {
+            processingMode = StreamThread.ProcessingMode.EXACTLY_ONCE_BETA;
+        } else {
+            processingMode = StreamThread.ProcessingMode.AT_LEAST_ONCE;
+        }
         final RecordCollector recordCollector = new RecordCollectorImpl(
             logContext,
             taskId,
             new StreamsProducer(
                 clientSupplier.getProducer(new HashMap<>()),
-                eosEnabled,
+                processingMode,
                 logContext
             ),
             streamsConfig.defaultProductionExceptionHandler(),

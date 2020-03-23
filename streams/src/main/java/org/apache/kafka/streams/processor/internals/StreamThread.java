@@ -398,7 +398,7 @@ public class StreamThread extends Thread {
         return streamThread.updateThreadMetadata(getSharedAdminClientId(clientId));
     }
 
-    enum ProcessingMode {
+    public enum ProcessingMode {
         AT_LEAST_ONCE("AT_LEAST_ONCE"),
 
         EXACTLY_ONCE_ALPHA("EXACTLY_ONCE_ALPHA"),
@@ -412,11 +412,11 @@ public class StreamThread extends Thread {
         }
     }
 
-    private static boolean eosAlphaEnabled(final StreamsConfig config) {
+    public static boolean eosAlphaEnabled(final StreamsConfig config) {
         return EXACTLY_ONCE.equals(config.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG));
     }
 
-    private static boolean eosBetaEnabled(final StreamsConfig config) {
+    public static boolean eosBetaEnabled(final StreamsConfig config) {
         return EXACTLY_ONCE_BETA.equals(config.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG));
     }
 

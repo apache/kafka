@@ -39,6 +39,7 @@ import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.processor.internals.RecordCollector;
 import org.apache.kafka.streams.processor.internals.RecordCollectorImpl;
+import org.apache.kafka.streams.processor.internals.StreamThread;
 import org.apache.kafka.streams.processor.internals.StreamsProducer;
 import org.apache.kafka.streams.state.internals.MeteredKeyValueStore;
 import org.apache.kafka.streams.state.internals.RocksDBKeyValueStoreTest;
@@ -200,7 +201,7 @@ public class KeyValueStoreTestDriver<K, V> {
         final RecordCollector recordCollector = new RecordCollectorImpl(
             logContext,
             new TaskId(0, 0),
-            new StreamsProducer(producer, false, logContext),
+            new StreamsProducer(producer, StreamThread.ProcessingMode.AT_LEAST_ONCE, logContext),
             new DefaultProductionExceptionHandler(),
             new MockStreamsMetrics(new Metrics())
         ) {
