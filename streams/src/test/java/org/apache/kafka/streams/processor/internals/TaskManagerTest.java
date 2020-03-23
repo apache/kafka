@@ -1212,7 +1212,7 @@ public class TaskManagerTest {
             topologyBuilder,
             adminClient,
             stateDirectory,
-            true
+            StreamThread.ProcessingMode.EXACTLY_ONCE_ALPHA
         );
         taskManager.setMainConsumer(consumer);
 
@@ -2250,11 +2250,6 @@ public class TaskManagerTest {
     }
 
     @Test
-    public void shouldNotCloseTasksIfCommittingFailsDuringAssignment() {
-        shouldNotCloseTaskIfCommitFailsDuringAction(() -> taskManager.handleAssignment(Collections.emptyMap(), Collections.emptyMap()));
-    }
-
-    @Test
     public void shouldNotCloseTasksIfCommittingFailsDuringRevocation() {
         shouldNotCloseTaskIfCommitFailsDuringAction(() -> taskManager.handleRevocation(singletonList(t1p0)));
     }
@@ -2281,7 +2276,7 @@ public class TaskManagerTest {
 
         taskManager.handleAssignment(taskId00Assignment, Collections.emptyMap());
 
-        final RuntimeException thrown =  assertThrows(RuntimeException.class, action);
+        final RuntimeException thrown = assertThrows(RuntimeException.class, action);
 
         assertThat(thrown.getMessage(), is("KABOOM!"));
         assertThat(task00.state(), is(Task.State.CREATED));
