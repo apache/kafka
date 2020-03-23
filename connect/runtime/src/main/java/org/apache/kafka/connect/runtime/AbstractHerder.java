@@ -300,6 +300,11 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
 
     @Override
     public ConfigInfos validateConnectorConfig(Map<String, String> connectorProps) {
+        return validateConnectorConfig(connectorProps, true);
+    }
+
+    @Override
+    public ConfigInfos validateConnectorConfig(Map<String, String> connectorProps, boolean doLog) {
         if (worker.configTransformer() != null) {
             connectorProps = worker.configTransformer().transform(connectorProps);
         }
@@ -354,7 +359,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
             configValues.addAll(config.configValues());
             ConfigInfos configInfos =  generateResult(connType, configKeys, configValues, new ArrayList<>(allGroups));
 
-            AbstractConfig connectorConfig = new AbstractConfig(new ConfigDef(), connectorProps);
+            AbstractConfig connectorConfig = new AbstractConfig(new ConfigDef(), connectorProps, doLog);
             String connName = connectorProps.get(ConnectorConfig.NAME_CONFIG);
             ConfigInfos producerConfigInfos = null;
             ConfigInfos consumerConfigInfos = null;

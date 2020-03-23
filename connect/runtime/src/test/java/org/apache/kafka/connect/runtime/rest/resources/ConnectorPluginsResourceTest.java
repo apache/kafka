@@ -198,7 +198,7 @@ public class ConnectorPluginsResourceTest {
 
     @Test
     public void testValidateConfigWithSingleErrorDueToMissingConnectorClassname() throws Throwable {
-        herder.validateConnectorConfig(EasyMock.eq(partialProps));
+        herder.validateConnectorConfig(EasyMock.eq(partialProps), EasyMock.anyBoolean());
 
         PowerMock.expectLastCall().andAnswer((IAnswer<ConfigInfos>) () -> {
             ConfigDef connectorConfigDef = ConnectorConfig.configDef();
@@ -243,7 +243,7 @@ public class ConnectorPluginsResourceTest {
 
     @Test
     public void testValidateConfigWithSimpleName() throws Throwable {
-        herder.validateConnectorConfig(EasyMock.eq(props));
+        herder.validateConnectorConfig(EasyMock.eq(props), EasyMock.anyBoolean());
 
         PowerMock.expectLastCall().andAnswer((IAnswer<ConfigInfos>) () -> {
             ConfigDef connectorConfigDef = ConnectorConfig.configDef();
@@ -284,7 +284,7 @@ public class ConnectorPluginsResourceTest {
 
     @Test
     public void testValidateConfigWithAlias() throws Throwable {
-        herder.validateConnectorConfig(EasyMock.eq(props));
+        herder.validateConnectorConfig(EasyMock.eq(props), EasyMock.anyBoolean());
 
         PowerMock.expectLastCall().andAnswer((IAnswer<ConfigInfos>) () -> {
             ConfigDef connectorConfigDef = ConnectorConfig.configDef();
@@ -325,7 +325,7 @@ public class ConnectorPluginsResourceTest {
 
     @Test(expected = BadRequestException.class)
     public void testValidateConfigWithNonExistentName() throws Throwable {
-        herder.validateConnectorConfig(EasyMock.eq(props));
+        herder.validateConnectorConfig(EasyMock.eq(props), EasyMock.anyBoolean());
 
         PowerMock.expectLastCall().andAnswer((IAnswer<ConfigInfos>) () -> {
             ConfigDef connectorConfigDef = ConnectorConfig.configDef();
@@ -362,7 +362,7 @@ public class ConnectorPluginsResourceTest {
 
     @Test(expected = BadRequestException.class)
     public void testValidateConfigWithNonExistentAlias() throws Throwable {
-        herder.validateConnectorConfig(EasyMock.eq(props));
+        herder.validateConnectorConfig(EasyMock.eq(props), EasyMock.anyBoolean());
 
         PowerMock.expectLastCall().andAnswer((IAnswer<ConfigInfos>) () -> {
             ConfigDef connectorConfigDef = ConnectorConfig.configDef();
