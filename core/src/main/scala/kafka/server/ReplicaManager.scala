@@ -1303,7 +1303,7 @@ class ReplicaManager(val config: KafkaConfig,
               val leader = BrokerEndPoint(config.brokerId, "localhost", -1)
 
               // Add future replica to partition's map
-              partition.createLogIfNotExists(Request.FutureLocalReplicaId, isNew = false, isFutureReplica = true,
+              partition.createLogIfNotExists(isNew = false, isFutureReplica = true,
                 highWatermarkCheckpoints)
 
               // pause cleaning for partitions that are being moved and start ReplicaAlterDirThread to move
@@ -1369,7 +1369,7 @@ class ReplicaManager(val config: KafkaConfig,
       // Update the partition information to be the leader
       partitionStates.foreach { case (partition, partitionState) =>
         try {
-          if (partition.makeLeader(controllerId, partitionState, correlationId, highWatermarkCheckpoints)) {
+          if (partition.makeLeader(partitionState, highWatermarkCheckpoints)) {
             partitionsToMakeLeaders += partition
             stateChangeLogger.trace(s"Stopped fetchers as part of become-leader request from " +
               s"controller $controllerId epoch $controllerEpoch with correlation id $correlationId for partition ${partition.topicPartition} " +
@@ -1451,7 +1451,7 @@ class ReplicaManager(val config: KafkaConfig,
           metadataCache.getAliveBrokers.find(_.id == newLeaderBrokerId) match {
             // Only change partition state when the leader is available
             case Some(_) =>
-              if (partition.makeFollower(controllerId, partitionState, correlationId, highWatermarkCheckpoints))
+              if (partition.makeFollower(partitionState, highWatermarkCheckpoints))
                 partitionsToMakeFollower += partition
               else
                 stateChangeLogger.info(s"Skipped the become-follower state change after marking its partition as " +
@@ -1468,7 +1468,7 @@ class ReplicaManager(val config: KafkaConfig,
                 s"but cannot become follower since the new leader $newLeaderBrokerId is unavailable.")
               // Create the local replica even if the leader is unavailable. This is required to ensure that we include
               // the partition's high watermark in the checkpoint file (see KAFKA-1647)
-              partition.createLogIfNotExists(localBrokerId, isNew = partitionState.isNew, isFutureReplica = false,
+              partition.createLogIfNotExists(isNew = partitionState.isNew, isFutureReplica = false,
                 highWatermarkCheckpoints)
           }
         } catch {
@@ -1600,22 +1600,22 @@ class ReplicaManager(val config: KafkaConfig,
 
   // Flushes the highwatermark value for all partitions to the highwatermark file
   def checkpointHighWatermarks(): Unit = {
-    def populateHwMap(logDirToCheckpoints: mutable.AnyRefMap[String, mutable.AnyRefMap[TopicPartition, Long]],
-                      log: Log): Unit = {
+    def putHw(logDirToCheckpoints: mutable.AnyRefMap[String, mutable.AnyRefMap[TopicPartition, Long]],
+              log: Log): Unit = {
       val checkpoints = logDirToCheckpoints.getOrElseUpdate(log.parentDir,
         new mutable.AnyRefMap[TopicPartition, Long]())
       checkpoints.put(log.topicPartition, log.highWatermark)
     }
 
-    val logDirToCheckpoints = new mutable.AnyRefMap[String, mutable.AnyRefMap[TopicPartition, Long]](
+    val logDirToHws = new mutable.AnyRefMap[String, mutable.AnyRefMap[TopicPartition, Long]](
       allPartitions.size)
     nonOfflinePartitionsIterator.foreach { partition =>
-      partition.log.foreach(populateHwMap(logDirToCheckpoints, _))
-      partition.futureLog.foreach(populateHwMap(logDirToCheckpoints, _))
+      partition.log.foreach(putHw(logDirToHws, _))
+      partition.futureLog.foreach(putHw(logDirToHws, _))
     }
 
-    for ((logDir, checkpoints) <- logDirToCheckpoints) {
-      try highWatermarkCheckpoints.get(logDir).foreach(_.write(checkpoints))
+    for ((logDir, hws) <- logDirToHws) {
+      try highWatermarkCheckpoints.get(logDir).foreach(_.write(hws))
       catch {
         case e: KafkaStorageException =>
           error(s"Error while writing to highwatermark file in directory $logDir", e)

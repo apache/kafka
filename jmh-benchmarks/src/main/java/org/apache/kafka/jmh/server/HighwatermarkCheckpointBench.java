@@ -16,10 +16,11 @@
  */
 package org.apache.kafka.jmh.server;
 
+import java.util.HashMap;
+import java.util.Properties;
 import kafka.cluster.Partition;
-import kafka.cluster.Replica;
+import kafka.cluster.PartitionStateStore;
 import kafka.log.CleanerConfig;
-import kafka.log.Log;
 import kafka.log.LogConfig;
 import kafka.log.LogManager;
 import kafka.server.BrokerTopicStats;
@@ -28,13 +29,19 @@ import kafka.server.LogDirFailureChannel;
 import kafka.server.MetadataCache;
 import kafka.server.QuotaFactory;
 import kafka.server.ReplicaManager;
+import kafka.server.checkpoints.LazyOffsetCheckpoints;
+import kafka.server.checkpoints.OffsetCheckpoints;
 import kafka.utils.KafkaScheduler;
 import kafka.utils.MockTime;
 import kafka.utils.Scheduler;
 import kafka.utils.TestUtils;
+import kafka.zk.AdminZkClient;
+import kafka.zk.KafkaZkClient;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+import org.mockito.Mockito;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.Fork;
 import org.openjdk.jmh.annotations.Level;
@@ -48,7 +55,6 @@ import org.openjdk.jmh.annotations.TearDown;
 import org.openjdk.jmh.annotations.Threads;
 import org.openjdk.jmh.annotations.Warmup;
 import scala.Option;
-import scala.collection.JavaConversions;
 
 import java.io.File;
 import java.util.ArrayList;
@@ -56,6 +62,7 @@ import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
+import scala.collection.JavaConverters;
 
 
 @Warmup(iterations = 5)
@@ -64,8 +71,10 @@ import java.util.stream.Collectors;
 @OutputTimeUnit(TimeUnit.MILLISECONDS)
 @State(Scope.Benchmark)
 public class HighwatermarkCheckpointBench {
+
     @Param({"100", "1000", "2000"})
     public int numTopics;
+
     @Param({"3"})
     public int numPartitions;
 
@@ -90,13 +99,13 @@ public class HighwatermarkCheckpointBench {
         this.scheduler = new KafkaScheduler(1, "scheduler-thread", true);
         this.brokerProperties = KafkaConfig.fromProps(TestUtils.createBrokerConfig(
                 0, TestUtils.MockZkConnect(), true, true, 9092, Option.empty(), Option.empty(),
-                Option.empty(), true, false, 0, false, 0, false, 0, Option.empty(), 1, true));
+                Option.empty(), true, false, 0, false, 0, false, 0, Option.empty(), 1, true, 1, (short) 1));
         this.metrics = new Metrics();
         this.time = new MockTime();
         this.failureChannel = new LogDirFailureChannel(brokerProperties.logDirs().size());
         final List<File> files =
-                JavaConversions.seqAsJavaList(brokerProperties.logDirs()).stream().map(File::new).collect(Collectors.toList());
-        this.logManager = TestUtils.createLogManager(JavaConversions.asScalaBuffer(files),
+            JavaConverters.seqAsJavaList(brokerProperties.logDirs()).stream().map(File::new).collect(Collectors.toList());
+        this.logManager = TestUtils.createLogManager(JavaConverters.asScalaBuffer(files),
                 LogConfig.apply(), CleanerConfig.apply(1, 4 * 1024 * 1024L, 0.9d,
                         1024 * 1024, 32 * 1024 * 1024,
                         Double.MAX_VALUE, 15 * 1000, true, "MD5"), time);
@@ -108,11 +117,17 @@ public class HighwatermarkCheckpointBench {
                 QuotaFactory.instantiate(this.brokerProperties,
                         this.metrics,
                         this.time, "");
+        KafkaZkClient zkClient = new KafkaZkClient(null, false, Time.SYSTEM) {
+            @Override
+            public Properties getEntityConfigs(String rootEntityType, String sanitizedEntityName) {
+                return new Properties();
+            }
+        };
         this.replicaManager = new ReplicaManager(
                 this.brokerProperties,
                 this.metrics,
                 this.time,
-                null,
+                zkClient,
                 this.scheduler,
                 this.logManager,
                 new AtomicBoolean(false),
@@ -121,7 +136,7 @@ public class HighwatermarkCheckpointBench {
                 metadataCache,
                 this.failureChannel,
                 Option.empty());
-        this.replicaManager.startup();
+        replicaManager.startup();
 
         List<TopicPartition> topicPartitions = new ArrayList<>();
         for (int topicNum = 0; topicNum < numTopics; topicNum++) {
@@ -130,16 +145,16 @@ public class HighwatermarkCheckpointBench {
                 topicPartitions.add(new TopicPartition(topicName, partitionNum));
             }
         }
-        this.replicaManager.checkpointHighWatermarks();
+
+        PartitionStateStore partitionStateStore = Mockito.mock(PartitionStateStore.class);
+        Mockito.when(partitionStateStore.fetchTopicConfig()).thenReturn(new Properties());
+        OffsetCheckpoints checkpoints = (logDir, topicPartition) -> Option.apply(0L);
         for (TopicPartition topicPartition : topicPartitions) {
-            final Partition partition =
-                    this.replicaManager.getOrCreatePartition(topicPartition);
-            final Log log = this.logManager.getOrCreateLog(topicPartition,
-                    LogConfig.apply(), true, false);
-            final Replica replica = new Replica(this.brokerProperties.brokerId(),
-                    topicPartition, this.time, 0, Option.apply(log));
-            partition.addReplicaIfNotExists(replica);
+            final Partition partition = this.replicaManager.createPartition(topicPartition);
+            partition.createLogIfNotExists(true, false, checkpoints);
         }
+
+        replicaManager.checkpointHighWatermarks();
     }
 
     @TearDown(Level.Trial)
@@ -148,7 +163,7 @@ public class HighwatermarkCheckpointBench {
         this.metrics.close();
         this.scheduler.shutdown();
         this.quotaManagers.shutdown();
-        for (File dir : JavaConversions.asJavaCollection(logManager.liveLogDirs())) {
+        for (File dir : JavaConverters.asJavaCollection(logManager.liveLogDirs())) {
             Utils.delete(dir);
         }
     }
