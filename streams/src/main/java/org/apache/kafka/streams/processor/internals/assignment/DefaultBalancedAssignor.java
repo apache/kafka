@@ -51,7 +51,7 @@ public class DefaultBalancedAssignor<ID extends Comparable<? super ID>> implemen
                 if (task == null) {
                     break;
                 }
-                assignment.computeIfAbsent(client, ignored -> new ArrayList<>()).add(task);
+                assignment.get(client).add(task);
             }
         }
     }
