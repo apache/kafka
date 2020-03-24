@@ -66,7 +66,7 @@ private[group] class MemberMetadata(var memberId: String,
   var assignment: Array[Byte] = Array.empty[Byte]
   var awaitingJoinCallback: JoinGroupResult => Unit = null
   var awaitingSyncCallback: SyncGroupResult => Unit = null
-  var latestHeartbeat: Long = -1
+  var heartbeatSatisfied: Boolean = false
   var isLeaving: Boolean = false
   var isNew: Boolean = false
   val isStaticMember: Boolean = groupInstanceId.isDefined
@@ -85,16 +85,16 @@ private[group] class MemberMetadata(var memberId: String,
     }
   }
 
-  def shouldKeepAlive(deadlineMs: Long): Boolean = {
+  def hasSatisfiedHeartbeat: Boolean = {
     if (isNew) {
-      // New members are expired after the static join timeout
-      latestHeartbeat + GroupCoordinator.NewMemberJoinTimeoutMs > deadlineMs
+      // New members can be expired while awaiting join, so we have to check this first
+      heartbeatSatisfied
     } else if (isAwaitingJoin || isAwaitingSync) {
-      // Don't remove members as long as they have a request in purgatory
+      // Members that are awaiting a rebalance automatically satisfy expected heartbeats
       true
     } else {
-      // Otherwise check for session expiration
-      latestHeartbeat + sessionTimeoutMs > deadlineMs
+      // Otherwise we require the next heartbeat
+      heartbeatSatisfied
     }
   }
 
