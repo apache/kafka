@@ -66,10 +66,16 @@ private[group] class MemberMetadata(var memberId: String,
   var assignment: Array[Byte] = Array.empty[Byte]
   var awaitingJoinCallback: JoinGroupResult => Unit = null
   var awaitingSyncCallback: SyncGroupResult => Unit = null
-  var heartbeatSatisfied: Boolean = false
   var isLeaving: Boolean = false
   var isNew: Boolean = false
   val isStaticMember: Boolean = groupInstanceId.isDefined
+
+  // This variable is used to track heartbeat completion through the delayed
+  // heartbeat purgatory. When scheduling a new heartbeat expiration, we set
+  // this value to `false`. Upon receiving the heartbeat (or any other event
+  // indicating the liveness of the client), we set it to `true` so that the
+  // delayed heartbeat can be completed.
+  var heartbeatSatisfied: Boolean = false
 
   def isAwaitingJoin = awaitingJoinCallback != null
   def isAwaitingSync = awaitingSyncCallback != null
