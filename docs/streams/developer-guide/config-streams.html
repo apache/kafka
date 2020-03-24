@@ -483,7 +483,7 @@
           <span id="streams-developer-guide-rocksdb-config"></span><h4><a class="toc-backref" href="#id20">rocksdb.config.setter</a><a class="headerlink" href="#rocksdb-config-setter" title="Permalink to this headline"></a></h4>
           <blockquote>
             <div><p>The RocksDB configuration. Kafka Streams uses RocksDB as the default storage engine for persistent stores. To change the default
-              configuration for RocksDB, implement <code class="docutils literal"><span class="pre">RocksDBConfigSetter</span></code> and provide your custom class via <a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/state/RocksDBConfigSetter.html">rocksdb.config.setter</a>.</p>
+              configuration for RocksDB, you can implement <code class="docutils literal"><span class="pre">RocksDBConfigSetter</span></code> and provide your custom class via <a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/state/RocksDBConfigSetter.html">rocksdb.config.setter</a>.</p>
               <p>Here is an example that adjusts the memory size consumed by RocksDB.</p>
               <div class="highlight-java"><div class="highlight"><pre><span></span>    <span class="kd">public</span> <span class="kd">static</span> <span class="kd">class</span> <span class="nc">CustomRocksDBConfig</span> <span class="kd">implements</span> <span class="n">RocksDBConfigSetter</span> <span class="o">{</span>
                     <span class="c1">// This object should be a member variable so it can be closed in RocksDBConfigSetter#close.</span>
@@ -732,10 +732,12 @@
           </table>
         </div>
         <div class="section" id="parameters-controlled-by-kafka-streams">
-          <h3><a class="toc-backref" href="#id26">Required configuration parameters</a><a class="headerlink" href="#parameters-controlled-by-kafka-streams" title="Permalink to this headline"></a></h3>
+          <h3><a class="toc-backref" href="#id26">Parameters controlled by Kafka Streams</a><a class="headerlink" href="#parameters-controlled-by-kafka-streams" title="Permalink to this headline"></a></h3>
           <p>Kafka Streams assigns the following configuration parameters. If you try to change
-            these settings, your values are ignored and setting them has no effect in a
-            Kafka Streams application.
+            <code class="docutils literal"><span class="pre">allow.auto.create.topics</span></code>, your value
+            is ignored and setting it has no effect in a Kafka Streams application. You can set the other parameters.
+            Kafka Streams sets them to different default values than a plain
+            <code class="docutils literal"><span class="pre">KafkaConsumer</span></code>.
           <p>Kafka Streams uses the <code class="docutils literal"><span class="pre">client.id</span></code>
             parameter to compute derived client IDs for internal clients. If you don't set
             <code class="docutils literal"><span class="pre">client.id</span></code>, Kafka Streams sets it to
@@ -753,7 +755,7 @@
               </tr>
               </thead>
               <tbody valign="top">
-              <tr class="row-even"><td>auto.create.topics.enable</td>
+              <tr class="row-odd"><td>allow.auto.create.topics</td>
               <td>Consumer</td>
               <td>false</td>
               </tr>
