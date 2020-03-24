@@ -160,9 +160,21 @@ public class ClientState {
         return activeTasks.size();
     }
 
+    void addPreviousActiveTask(final TaskId task) {
+        prevActiveTasks.add(task);
+        prevAssignedTasks.add(task);
+    }
+
+    void addPreviousStandbyTask(final TaskId task) {
+        prevStandbyTasks.add(task);
+        prevAssignedTasks.add(task);
+    }
+
     public void addPreviousActiveTasks(final Set<TaskId> prevTasks) {
         prevActiveTasks.addAll(prevTasks);
         prevAssignedTasks.addAll(prevTasks);
+        // We need to remove from prevStandbyTasks as we may have initially added the task as a standby, before
+        // learning that it was in fact an active (eg from encoded ownedPartitions)
         prevStandbyTasks.removeAll(prevTasks);
     }
 

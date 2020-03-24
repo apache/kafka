@@ -43,7 +43,7 @@ public class StickyTaskAssignor<ID> implements TaskAssignor {
     private final TaskPairs taskPairs;
     private final int numStandbyReplicas;
 
-    private boolean mustPreserveActiveTaskAssignment;
+    private boolean mustPreserveActiveTaskAssignment = false;
 
     public StickyTaskAssignor(final Map<ID, ClientState> clients,
                               final Set<TaskId> allTaskIds,

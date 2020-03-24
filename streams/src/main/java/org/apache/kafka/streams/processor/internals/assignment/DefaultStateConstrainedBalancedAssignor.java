@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals.assignment;
 
+import java.util.HashSet;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.StreamsPartitionAssignor.RankedClient;
 import org.apache.kafka.streams.processor.internals.Task;
@@ -39,18 +40,16 @@ public class DefaultStateConstrainedBalancedAssignor<ID extends Comparable<? sup
      *
      * @param statefulTasksToRankedClients ranked clients map
      * @param balanceFactor balance factor (at least 1)
+     * @param clients set of clients to assign tasks to
      * @param clientsToNumberOfStreamThreads map of clients to their number of stream threads
      * @return assignment
      */
     @Override
     public Map<ID, List<TaskId>> assign(final SortedMap<TaskId, SortedSet<RankedClient<ID>>> statefulTasksToRankedClients,
                                         final int balanceFactor,
+                                        final Set<ID> clients,
                                         final Map<ID, Integer> clientsToNumberOfStreamThreads) {
-        if (clientsToNumberOfStreamThreads.isEmpty()) {
-            throw new IllegalStateException("Map from clients to their number of stream threads must not be empty");
-        }
-        
-        final Set<ID> clients = clientsToNumberOfStreamThreads.keySet();
+        checkClientsAndNumberOfStreamThreads(clientsToNumberOfStreamThreads, clients);
         final Map<ID, List<TaskId>> assignment = initAssignment(clients);
         final Map<TaskId, List<ID>> tasksToCaughtUpClients = tasksToCaughtUpClients(statefulTasksToRankedClients);
         assignTasksWithCaughtUpClients(
@@ -72,7 +71,25 @@ public class DefaultStateConstrainedBalancedAssignor<ID extends Comparable<? sup
         );
         return assignment;
     }
-    
+
+    private void checkClientsAndNumberOfStreamThreads(final Map<ID, Integer> clientsToNumberOfStreamThreads,
+                                                      final Set<ID> clients) {
+        if (clients.isEmpty()) {
+            throw new IllegalStateException("Set of clients must not be empty");
+        }
+        if (clientsToNumberOfStreamThreads.isEmpty()) {
+            throw new IllegalStateException("Map from clients to their number of stream threads must not be empty");
+        }
+        final Set<ID> copyOfClients = new HashSet<>(clients);
+        copyOfClients.removeAll(clientsToNumberOfStreamThreads.keySet());
+        if (!copyOfClients.isEmpty()) {
+            throw new IllegalStateException(
+                "Map from clients to their number of stream threads must contain an entry for each client involved in "
+                    + "the assignment."
+            );
+        }
+    }
+
     /**
      * Initialises the assignment with an empty list for each client.
      *

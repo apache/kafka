@@ -20,13 +20,13 @@ import static org.apache.kafka.streams.processor.internals.assignment.Subscripti
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map.Entry;
 import java.util.PriorityQueue;
-import java.util.Queue;
 import java.util.SortedMap;
 import java.util.SortedSet;
 import java.util.TreeMap;
@@ -48,11 +48,9 @@ public class HighAvailabilityTaskAssignor<ID extends Comparable<ID>> implements 
 
     private final Map<ID, ClientState> clientStates;
     private final AssignmentConfigs configs;
+    private final Set<TaskId> allTasks;
     private final Set<TaskId> statelessTasks;
     private final SortedMap<TaskId, SortedSet<RankedClient<ID>>> statefulTasksToRankedCandidates;
-
-    final static Comparator<TaskId> dataParallelTaskComparator =
-        Comparator.comparingInt((TaskId task) -> task.partition).thenComparingInt(task -> task.topicGroupId);
 
     public HighAvailabilityTaskAssignor(final Map<ID, ClientState> clientStates,
                                         final Set<TaskId> allTasks,
@@ -60,12 +58,13 @@ public class HighAvailabilityTaskAssignor<ID extends Comparable<ID>> implements 
                                         final AssignmentConfigs configs) {
         this.configs = configs;
         this.clientStates = clientStates;
+        this.allTasks = allTasks;
 
         statelessTasks = new HashSet<>(allTasks);
         statelessTasks.removeAll(statefulTasks);
 
         statefulTasksToRankedCandidates =
-            buildClientRankingsByTask(clientStates, statefulTasks, configs.acceptableRecoveryLag);
+            buildClientRankingsByTask(statefulTasks, clientStates, configs.acceptableRecoveryLag);
     }
 
     @Override
@@ -74,16 +73,21 @@ public class HighAvailabilityTaskAssignor<ID extends Comparable<ID>> implements 
         final Map<ID, List<TaskId>> standbyTaskAssignment = initializeEmptyTaskAssignmentMap();
         final Map<ID, List<TaskId>> statelessActiveTaskAssignment = initializeEmptyTaskAssignmentMap();
 
-        final Map<ID, Integer> clientsToNumberOfThreads = getClientsToNumberOfThreads(clientStates);
+        final Map<ID, Integer> clientsToNumberOfThreads = new HashMap<>();
+        clientStates.forEach((client, state) -> clientsToNumberOfThreads.put(client, state.capacity()));
+        final SortedSet<ID> sortedClients = new TreeSet<>(clientsToNumberOfThreads.keySet());
+        final SortedSet<TaskId> sortedTasks = new TreeSet<>(statefulTasksToRankedCandidates.keySet());
 
         final Map<ID, List<TaskId>> statefulActiveTaskAssignment =
             new DefaultStateConstrainedBalancedAssignor<ID>().assign(
                 statefulTasksToRankedCandidates,
                 configs.balanceFactor,
+                sortedClients,
                 clientsToNumberOfThreads);
         final Map<ID, List<TaskId>> balancedStatefulActiveTaskAssignment =
             new DefaultBalancedAssignor<ID>().assign(
-                new TreeSet<>(statefulTasksToRankedCandidates.keySet()),
+                sortedClients,
+                sortedTasks,
                 clientsToNumberOfThreads,
                 configs.balanceFactor);
 
@@ -99,8 +103,8 @@ public class HighAvailabilityTaskAssignor<ID extends Comparable<ID>> implements 
         final PriorityQueue<ID> clientsByStandbyTaskLoad =
             new PriorityQueue<>(Comparator.comparingInt(client -> standbyTaskAssignment.get(client).size()));
 
-        for (final Map.Entry<TaskId, SortedSet<RankedClient<ID>>> taskEntry : statefulTasksToRankedCandidates.entrySet()) {
-            final TaskId task = taskEntry.getKey();
+        //TODO-soph account for individual client capacities! maybe check out StickyTaskAssignor
+        for (final TaskId task : statefulTasksToRankedCandidates.keySet()) {
             final Set<ID> standbyHostClients = getNumStandbyLeastLoadedCandidates(
                 task,
                 configs.numStandbyReplicas,
@@ -142,6 +146,11 @@ public class HighAvailabilityTaskAssignor<ID extends Comparable<ID>> implements 
         return followupRebalanceRequired;
     }
 
+    /**
+     * Returns a list of the movements of tasks from statefulActiveTaskAssignment to balancedStatefulActiveTaskAssignment
+     * @param statefulActiveTaskAssignment the initial assignment, with source clients
+     * @param balancedStatefulActiveTaskAssignment the final assignment, with destination clients
+     */
     static <ID> List<Movement<ID>> getMovements(final Map<ID, List<TaskId>> statefulActiveTaskAssignment,
                                                 final Map<ID, List<TaskId>> balancedStatefulActiveTaskAssignment) {
         if (statefulActiveTaskAssignment.size() != balancedStatefulActiveTaskAssignment.size()) {
@@ -175,7 +184,7 @@ public class HighAvailabilityTaskAssignor<ID extends Comparable<ID>> implements 
 
     /**
      * @param taskId the standby task id
-     * @param numStandbyReplicas the number of clients to return
+     * @param numStandbyReplicas the number of clients to return (may be fewer if there is insufficient capacity)
      * @param clientsByStandbyTaskLoad all clients, ordered by standby task load
      * @return the clients that should be assigned this standby task
      */
@@ -229,13 +238,60 @@ public class HighAvailabilityTaskAssignor<ID extends Comparable<ID>> implements 
     }
 
     /**
-     * @return true iff the previous assignment is a viable candidate, ie all active tasks with caught-up clients
-     *             are assigned to one of those clients.
+     * @return true iff all active tasks with caught-up client are assigned to one of them, and all tasks are assigned
      */
-    private boolean completePreviousAssignment() {
-        //TODO-soph complete previous assignment by assigning ALL tasks (ie tasks remaining due to missing member)
-        //TODO-soph look into refactoring and reusing code in StickyTaskAssignor
-        return true;
+    private boolean previousAssignmentIsValid() {
+        final Set<TaskId> unassignedActiveTasks = new HashSet<>(allTasks);
+        final Map<TaskId, Integer> unassignedStandbyTasks =
+            configs.numStandbyReplicas == 0 ?
+                Collections.emptyMap() :
+                new HashMap<>(allTasks.stream().collect(Collectors.toMap(task -> task, task -> configs.numStandbyReplicas)));
+
+        for (final Map.Entry<ID, ClientState> clientEntry : clientStates.entrySet()) {
+            final ID client = clientEntry.getKey();
+            final ClientState state = clientEntry.getValue();
+
+            // Verify that this client was caught-up on all active tasks
+            for (final TaskId activeTask : state.prevActiveTasks()) {
+                if (!taskIsCaughtUpOnClientOrHasNoCaughtUpClients(activeTask, client)) {
+                    return false;
+                }
+            }
+            unassignedActiveTasks.removeAll(state.prevActiveTasks());
+
+            if (!unassignedStandbyTasks.isEmpty()) {
+                for (final TaskId task : state.prevStandbyTasks()) {
+                    final Integer remainingStandbys = unassignedStandbyTasks.get(task);
+                    if (remainingStandbys != null) {
+                        if (remainingStandbys == 1) {
+                            unassignedStandbyTasks.remove(task);
+                        } else {
+                            unassignedStandbyTasks.put(task, remainingStandbys - 1);
+                        }
+                    }
+                }
+            }
+        }
+        return unassignedActiveTasks.isEmpty() && unassignedStandbyTasks.isEmpty();
+    }
+
+    private boolean taskIsCaughtUpOnClientOrHasNoCaughtUpClients(final TaskId task, final ID client) {
+        boolean hasNoCaughtUpClients = true;
+        for (final RankedClient rankedClient : statefulTasksToRankedCandidates.get(task)) {
+            if (rankedClient.rank() <= 0L) {
+                if (rankedClient.clientId().equals(client)) {
+                    return true;
+                } else {
+                    hasNoCaughtUpClients = false;
+                }
+            }
+
+            // If we haven't found our client yet, it must not be caught-up
+            if (rankedClient.rank() > 0L) {
+                break;
+            }
+        }
+        return hasNoCaughtUpClients;
     }
 
     private void assignTasksToClientStates(final Map<ID, List<TaskId>> statefulActiveTasks,
@@ -265,13 +321,11 @@ public class HighAvailabilityTaskAssignor<ID extends Comparable<ID>> implements 
      *      Rank 1: tasks whose lag is unknown, eg because it was not encoded in an older version subscription
      *      Rank 1+: all other tasks are ranked according to their actual total lag
      * @return Sorted set of all client candidates for each stateful task, ranked by their overall lag. Tasks are
-     *          sorted by partition number instead of by subtopology to aid data parallelism during distribution
      */
-    static <ID extends Comparable<ID>> SortedMap<TaskId, SortedSet<RankedClient<ID>>> buildClientRankingsByTask(final Map<ID, ClientState> clientStates,
-                                                                                                                final Set<TaskId> statefulTasks,
+    static <ID extends Comparable<ID>> SortedMap<TaskId, SortedSet<RankedClient<ID>>> buildClientRankingsByTask(final Set<TaskId> statefulTasks,
+                                                                                                                final Map<ID, ClientState> clientStates,
                                                                                                                 final long acceptableRecoveryLag) {
-        final SortedMap<TaskId, SortedSet<RankedClient<ID>>> statefulTasksToRankedCandidates =
-            new TreeMap<>(dataParallelTaskComparator);
+        final SortedMap<TaskId, SortedSet<RankedClient<ID>>> statefulTasksToRankedCandidates = new TreeMap<>();
 
         for (final TaskId task : statefulTasks) {
             final SortedSet<RankedClient<ID>> rankedClientCandidates = new TreeSet<>();
@@ -300,24 +354,17 @@ public class HighAvailabilityTaskAssignor<ID extends Comparable<ID>> implements 
 
     /**
      * Determines whether to use the new proposed assignment or just return the group's previous assignment. The
-     * previous assignment will be chosen iff both of the following are true:
+     * previous assignment will be chosen iff all of the following are true:
      *   1) it satisfies the state constraint, ie all tasks with caught up clients are assigned to one of those clients
      *   2) it satisfies the balance factor
+     *   3) there are no unassigned tasks (eg due to a client that dropped out of the group)
      */
     private boolean shouldUsePreviousAssignment() {
-        final boolean previousAssignmentIsValid = completePreviousAssignment();
-        if (previousAssignmentIsValid) {
+        if (previousAssignmentIsValid()) {
             return computePreviousAssignmentBalanceFactor() <= configs.balanceFactor;
         } else {
             return false;
         }
-    }
-
-    private static <ID> Map<ID, Integer> getClientsToNumberOfThreads(final Map<ID, ClientState> clientStates) {
-        return clientStates.entrySet().stream().collect(Collectors.toMap(
-            Entry::getKey,
-            client -> client.getValue().capacity())
-        );
     }
 
     private int computePreviousAssignmentBalanceFactor() {
