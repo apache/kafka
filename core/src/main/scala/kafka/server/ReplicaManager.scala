@@ -17,8 +17,7 @@
 package kafka.server
 
 import java.io.File
-import java.util
-import java.util.{Optional, function}
+import java.util.Optional
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicLong}
 import java.util.concurrent.locks.Lock
@@ -481,7 +480,7 @@ class ReplicaManager(val config: KafkaConfig,
   }
 
   def getLogDir(topicPartition: TopicPartition): Option[String] = {
-    localLog(topicPartition).map(_.dir.getParent)
+    localLog(topicPartition).map(_.parentDir)
   }
 
   /**
@@ -662,7 +661,7 @@ class ReplicaManager(val config: KafkaConfig,
    *    are included. There may be future logs (which will replace the current logs of the partition in the future) on the broker after KIP-113 is implemented.
    */
   def describeLogDirs(partitions: Set[TopicPartition]): List[DescribeLogDirsResponseData.DescribeLogDirsResult] = {
-    val logsByDir = logManager.allLogs.groupBy(log => log.dir.getParent)
+    val logsByDir = logManager.allLogs.groupBy(log => log.parentDir)
 
     config.logDirs.toSet.map { logDir: String =>
       val absolutePath = new File(logDir).getAbsolutePath
@@ -1599,34 +1598,27 @@ class ReplicaManager(val config: KafkaConfig,
   def getLogEndOffset(topicPartition: TopicPartition): Option[Long] =
     nonOfflinePartition(topicPartition).flatMap(_.leaderLogIfLocal.map(_.logEndOffset))
 
-  private def populateHWMMap(mapping: java.util.HashMap[String, util.HashMap[TopicPartition, Long]], optReplica: Option[Replica]): Unit = {
-    optReplica.foreach(replica => {
-      if (replica.log.isDefined) {
-        val dir = replica.log.get.parentDir
-        val tp = replica.topicPartition
-        val slot = mapping.computeIfAbsent(dir, new function.Function[String, util.HashMap[TopicPartition, Long]] {
-          override def apply(t: String): util.HashMap[TopicPartition, Long] = {
-            return new util.HashMap[TopicPartition, Long]()
-          }
-        })
-        slot.put(tp, replica.highWatermark.messageOffset)
-      }
-    })
-  }
-
   // Flushes the highwatermark value for all partitions to the highwatermark file
   def checkpointHighWatermarks(): Unit = {
-    val hwmMap = new util.HashMap[String, util.HashMap[TopicPartition, Long]](allPartitions.size)
-    nonOfflinePartitionsIterator.foreach(partition => {
-      populateHWMMap(hwmMap, partition.localReplica)
-      populateHWMMap(hwmMap, partition.futureLocalReplica)
-    })
-    for ((dir, checkpoints) <- hwmMap.asScala) {
-      try {
-        highWatermarkCheckpoints.get(dir).foreach(_.write(checkpoints.asScala))
-      } catch {
+    def populateHwMap(logDirToCheckpoints: mutable.AnyRefMap[String, mutable.AnyRefMap[TopicPartition, Long]],
+                      log: Log): Unit = {
+      val checkpoints = logDirToCheckpoints.getOrElseUpdate(log.parentDir,
+        new mutable.AnyRefMap[TopicPartition, Long]())
+      checkpoints.put(log.topicPartition, log.highWatermark)
+    }
+
+    val logDirToCheckpoints = new mutable.AnyRefMap[String, mutable.AnyRefMap[TopicPartition, Long]](
+      allPartitions.size)
+    nonOfflinePartitionsIterator.foreach { partition =>
+      partition.log.foreach(populateHwMap(logDirToCheckpoints, _))
+      partition.futureLog.foreach(populateHwMap(logDirToCheckpoints, _))
+    }
+
+    for ((logDir, checkpoints) <- logDirToCheckpoints) {
+      try highWatermarkCheckpoints.get(logDir).foreach(_.write(checkpoints))
+      catch {
         case e: KafkaStorageException =>
-          error(s"Error while writing to highwatermark file in directory $dir", e)
+          error(s"Error while writing to highwatermark file in directory $logDir", e)
       }
     }
   }
@@ -1645,11 +1637,11 @@ class ReplicaManager(val config: KafkaConfig,
     warn(s"Stopping serving replicas in dir $dir")
     replicaStateChangeLock synchronized {
       val newOfflinePartitions = nonOfflinePartitionsIterator.filter { partition =>
-        partition.log.exists { _.dir.getParent == dir }
+        partition.log.exists { _.parentDir == dir }
       }.map(_.topicPartition).toSet
 
       val partitionsWithOfflineFutureReplica = nonOfflinePartitionsIterator.filter { partition =>
-        partition.futureLog.exists { _.dir.getParent == dir }
+        partition.futureLog.exists { _.parentDir == dir }
       }.toSet
 
       replicaFetcherManager.removeFetcherForPartitions(newOfflinePartitions)

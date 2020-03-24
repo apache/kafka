@@ -1293,7 +1293,7 @@ class ReplicaManagerTest {
     val mockBrokerTopicStats = new BrokerTopicStats
     val mockLogDirFailureChannel = new LogDirFailureChannel(config.logDirs.size)
     val mockLog = new Log(
-      dir = new File(new File(config.logDirs.head), s"$topic-0"),
+      _dir = new File(new File(config.logDirs.head), s"$topic-0"),
       config = LogConfig(),
       logStartOffset = 0L,
       recoveryPoint = 0L,

@@ -266,7 +266,7 @@ class Partition(val topicPartition: TopicPartition,
     // current replica and the existence of the future replica, no other thread can update the log directory of the
     // current replica or remove the future replica.
     inWriteLock(leaderIsrUpdateLock) {
-      val currentLogDir = localLogOrException.dir.getParent
+      val currentLogDir = localLogOrException.parentDir
       if (currentLogDir == logDir) {
         info(s"Current log directory $currentLogDir is same as requested log dir $logDir. " +
           s"Skipping future replica creation.")
@@ -274,7 +274,7 @@ class Partition(val topicPartition: TopicPartition,
       } else {
         futureLog match {
           case Some(partitionFutureLog) =>
-            val futureLogDir = partitionFutureLog.dir.getParent
+            val futureLogDir = partitionFutureLog.parentDir
             if (futureLogDir != logDir)
               throw new IllegalStateException(s"The future log dir $futureLogDir of $topicPartition is " +
                 s"different from the requested log dir $logDir")
@@ -310,7 +310,7 @@ class Partition(val topicPartition: TopicPartition,
     var maybeLog: Option[Log] = None
     try {
       val log = logManager.getOrCreateLog(topicPartition, fetchLogConfig(), isNew, isFutureReplica)
-      val checkpointHighWatermark = offsetCheckpoints.fetch(log.dir.getParent, topicPartition).getOrElse {
+      val checkpointHighWatermark = offsetCheckpoints.fetch(log.parentDir, topicPartition).getOrElse {
         info(s"No checkpointed highwatermark is found for partition $topicPartition")
         0L
       }
@@ -410,7 +410,7 @@ class Partition(val topicPartition: TopicPartition,
 
   def futureReplicaDirChanged(newDestinationDir: String): Boolean = {
     inReadLock(leaderIsrUpdateLock) {
-      futureLog.exists(_.dir.getParent != newDestinationDir)
+      futureLog.exists(_.parentDir != newDestinationDir)
     }
   }
 
