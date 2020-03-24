@@ -914,10 +914,10 @@ class TransactionCoordinatorTest {
 
     EasyMock.replay(transactionManager, transactionMarkerChannelManager)
 
-    def onEndTransactionComplete(txnIdAndPidEpoch: TransactionalIdAndProducerIdEpoch)(error: Errors): Unit = {
+    def checkOnEndTransactionComplete(txnIdAndPidEpoch: TransactionalIdAndProducerIdEpoch)(error: Errors): Unit = {
       assertEquals(Errors.INVALID_PRODUCER_EPOCH, error)
     }
-    coordinator.abortTimedOutTransactions(onEndTransactionComplete)
+    coordinator.abortTimedOutTransactions(checkOnEndTransactionComplete)
 
     EasyMock.verify(transactionManager)
   }
