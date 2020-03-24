@@ -819,6 +819,7 @@ object DynamicListenerConfig {
     KafkaConfig.SslEndpointIdentificationAlgorithmProp,
     KafkaConfig.SslSecureRandomImplementationProp,
     KafkaConfig.SslClientAuthProp,
+    KafkaConfig.SslEngineFactoryClassProp,
 
     // SASL configs
     KafkaConfig.SaslMechanismInterBrokerProtocolProp,

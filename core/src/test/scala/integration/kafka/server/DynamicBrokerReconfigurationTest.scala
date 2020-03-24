@@ -1524,6 +1524,7 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
     value match {
       case password: Password => password.value
       case list: util.List[_] => list.asScala.map(_.toString).mkString(",")
+      case clazz: Class[_] => clazz.getName()
       case _ => value.toString
     }
   }
