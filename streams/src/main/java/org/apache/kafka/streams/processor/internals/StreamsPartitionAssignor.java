@@ -18,8 +18,6 @@ package org.apache.kafka.streams.processor.internals;
 
 import java.time.Duration;
 import java.util.Objects;
-import java.util.SortedSet;
-import java.util.TreeSet;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.ListOffsetsResult.ListOffsetsResultInfo;
 import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
@@ -72,7 +70,6 @@ import static org.apache.kafka.streams.processor.internals.ClientUtils.fetchEndO
 import static org.apache.kafka.streams.processor.internals.assignment.StreamsAssignmentProtocolVersions.EARLIEST_PROBEABLE_VERSION;
 import static org.apache.kafka.streams.processor.internals.assignment.StreamsAssignmentProtocolVersions.LATEST_SUPPORTED_VERSION;
 import static org.apache.kafka.streams.processor.internals.assignment.StreamsAssignmentProtocolVersions.UNKNOWN;
-import static org.apache.kafka.streams.processor.internals.assignment.SubscriptionInfo.UNKNOWN_OFFSET_SUM;
 
 public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Configurable {
 
@@ -218,6 +215,8 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
     private CopartitionedTopicsEnforcer copartitionedTopicsEnforcer;
     private RebalanceProtocol rebalanceProtocol;
 
+    private boolean highAvailabilityEnabled;
+
     /**
      * We need to have the PartitionAssignor and its StreamThread to be mutually accessible since the former needs
      * later's cached metadata while sending subscriptions, and the latter needs former's returned assignment when
@@ -244,6 +243,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         internalTopicManager = assignorConfiguration.getInternalTopicManager();
         copartitionedTopicsEnforcer = assignorConfiguration.getCopartitionedTopicsEnforcer();
         rebalanceProtocol = assignorConfiguration.rebalanceProtocol();
+        highAvailabilityEnabled = assignorConfiguration.isHighAvailabilityEnabled();
     }
 
     @Override
@@ -757,10 +757,14 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             allTasks, clientStates, numStandbyReplicas());
 
         final TaskAssignor taskAssignor;
-        if (lagComputationSuccessful) {
+        if (lagComputationSuccessful && highAvailabilityEnabled) {
             taskAssignor = new HighAvailabilityTaskAssignor<>(clientStates, allTasks, statefulTasks, assignmentConfigs);
         } else {
             taskAssignor = new StickyTaskAssignor<>(clientStates, allTasks, statefulTasks, assignmentConfigs);
+            if (highAvailabilityEnabled) {
+                // Once high availability is permanently enabled, this will be the default behavior of StickyTaskAssignor
+                ((StickyTaskAssignor) taskAssignor).preservePreviousTaskAssignment();
+            }
         }
         taskAssignor.assign();
 

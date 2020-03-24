@@ -681,6 +681,7 @@ public class StickyTaskAssignorTest {
         final ClientState c2 = createClient(p2, 1);
 
         final StickyTaskAssignor<Integer> taskAssignor = createTaskAssignor(task00, task01, task02);
+        taskAssignor.preservePreviousTaskAssignment();
         taskAssignor.assign();
 
         assertThat(c1.activeTasks(), equalTo(Utils.mkSet(task00, task01, task02)));

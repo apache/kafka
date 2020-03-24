@@ -43,6 +43,8 @@ public class StickyTaskAssignor<ID> implements TaskAssignor {
     private final TaskPairs taskPairs;
     private final int numStandbyReplicas;
 
+    private boolean mustPreserveActiveTaskAssignment;
+
     public StickyTaskAssignor(final Map<ID, ClientState> clients,
                               final Set<TaskId> allTaskIds,
                               final Set<TaskId> standbyTaskIds,
@@ -62,6 +64,10 @@ public class StickyTaskAssignor<ID> implements TaskAssignor {
         assignActive();
         assignStandby(numStandbyReplicas);
         return false;
+    }
+
+    public void preservePreviousTaskAssignment() {
+        mustPreserveActiveTaskAssignment = true;
     }
 
     private void assignStandby(final int numStandbyReplicas) {
@@ -108,7 +114,7 @@ public class StickyTaskAssignor<ID> implements TaskAssignor {
             if (clientIds != null) {
                 for (final ID clientId : clientIds) {
                     final ClientState client = clients.get(clientId);
-                    if (client.hasUnfulfilledQuota(tasksPerThread)) {
+                    if (mustPreserveActiveTaskAssignment || client.hasUnfulfilledQuota(tasksPerThread)) {
                         assignTaskToClient(assigned, taskId, client);
                         iterator.remove();
                         break;
