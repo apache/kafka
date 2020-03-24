@@ -183,8 +183,8 @@ public interface Herder {
     /**
      * Validate the provided connector config values against the configuration definition.
      * @param connectorConfig the provided connector config values
-     * @param doLog set it to true to log all connectorConfig with INFO level. false to log nothing.
-     *              Noted: there are many endpoints requiring this method but not all configs are worth being logged.
+     * @param doLog if true log all the connector configurations at INFO level; if false, no connector configurations are logged.
+     *              Note that logging of configuration is not necessary in every endpoint that uses this method.
      */
     default ConfigInfos validateConnectorConfig(Map<String, String> connectorConfig, boolean doLog) {
         return validateConnectorConfig(connectorConfig);

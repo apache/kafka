@@ -78,7 +78,7 @@ public class ConnectorPluginsResource {
             );
         }
 
-        // the validated configs don't need to be logger.
+        // the validated configs don't need to be logged
         return herder.validateConnectorConfig(connectorConfig, false);
     }
 
