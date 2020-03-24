@@ -3871,7 +3871,7 @@ public class KafkaAdminClient extends AdminClient {
                             TopicPartition::topic).collect(Collectors.toSet());
                         MetadataOperationContext<ListOffsetsResultInfo, ListOffsetsOptions> retryContext =
                             new MetadataOperationContext<>(retryTopics, context.options(), context.deadline(), futures);
-                        rescheduleMetadataTask(retryContext, () -> getListOffsetsCalls(retryContext, retryTopicPartitionOffsets, futures));
+                        rescheduleMetadataTask(retryContext, () -> getListOffsetsCalls(retryContext, retryTopicPartitionOffsets, futures, this));
                     }
                 }
 
@@ -3884,6 +3884,18 @@ public class KafkaAdminClient extends AdminClient {
                 }
             });
         }
+        return calls;
+    }
+
+    private List<Call> getListOffsetsCalls(MetadataOperationContext<ListOffsetsResultInfo, ListOffsetsOptions> context,
+                                           Map<TopicPartition, OffsetSpec> topicPartitionOffsets,
+                                           Map<TopicPartition, KafkaFutureImpl<ListOffsetsResultInfo>> futures,
+                                           Call failedCall) {
+        List<Call> calls = getListOffsetsCalls(context, topicPartitionOffsets, futures);
+        calls.forEach(call -> {
+            call.tries = failedCall.tries + 1;
+            call.nextAllowedTryMs = calculateNextAllowedRetryMs();
+        });
         return calls;
     }
 
