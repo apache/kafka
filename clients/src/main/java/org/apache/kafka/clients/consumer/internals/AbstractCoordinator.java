@@ -913,7 +913,8 @@ public abstract class AbstractCoordinator implements Closeable {
     }
 
     private boolean isProtocolNameInconsistent(String protocolName) {
-        return protocolName != null && !protocolName.equals(generation().protocolName);
+        return protocolName != null && generation() != Generation.NO_GENERATION
+                   && !protocolName.equals(generation().protocolName);
     }
 
     /**

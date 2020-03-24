@@ -101,7 +101,7 @@ public class RecordCollectorTest {
 
     private final MockProducer<byte[], byte[]> mockProducer = new MockProducer<>(
         cluster, true, new DefaultPartitioner(), byteArraySerializer, byteArraySerializer);
-    private final StreamsProducer streamsProducer = new StreamsProducer(mockProducer, false, null, logContext);
+    private final StreamsProducer streamsProducer = new StreamsProducer(mockProducer, false, logContext);
 
     private RecordCollectorImpl collector;
 
@@ -420,7 +420,6 @@ public class RecordCollectorTest {
                     }
                 },
                 true,
-                "appId",
                 logContext
             ),
             productionExceptionHandler,
@@ -461,7 +460,6 @@ public class RecordCollectorTest {
                     }
                 },
                 false,
-                null,
                 logContext
             ),
             productionExceptionHandler,
@@ -501,7 +499,6 @@ public class RecordCollectorTest {
                     }
                 },
                 false,
-                null,
                 logContext
             ),
             new AlwaysContinueProductionExceptionHandler(),
@@ -542,7 +539,6 @@ public class RecordCollectorTest {
                     }
                 },
                 false,
-                null,
                 logContext
             ),
             new AlwaysContinueProductionExceptionHandler(),
@@ -581,7 +577,6 @@ public class RecordCollectorTest {
                     }
                 },
                 true,
-                "appId",
                 logContext
             ),
             productionExceptionHandler,
@@ -605,7 +600,6 @@ public class RecordCollectorTest {
                     }
                 },
                 false,
-                null,
                 logContext
             ),
             productionExceptionHandler,
@@ -625,7 +619,7 @@ public class RecordCollectorTest {
         final RecordCollector collector = new RecordCollectorImpl(
             logContext,
             taskId,
-            new StreamsProducer(mockProducer, true, "appId", logContext),
+            new StreamsProducer(mockProducer, true, logContext),
             productionExceptionHandler,
             streamsMetrics
         );

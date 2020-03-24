@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.clients.consumer.CommitFailedException;
+import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.clients.producer.Producer;
@@ -51,7 +53,6 @@ public class StreamsProducer {
     private final String logPrefix;
 
     private final Producer<byte[], byte[]> producer;
-    private final String applicationId;
     private final boolean eosEnabled;
 
     private boolean transactionInFlight = false;
@@ -59,14 +60,9 @@ public class StreamsProducer {
 
     public StreamsProducer(final Producer<byte[], byte[]> producer,
                            final boolean eosEnabled,
-                           final String applicationId,
                            final LogContext logContext) {
         this.producer = Objects.requireNonNull(producer, "producer cannot be null");
         this.eosEnabled = eosEnabled;
-        this.applicationId = applicationId;
-        if (eosEnabled && applicationId == null) {
-            throw new IllegalArgumentException("applicationId cannot be null if EOS is enabled");
-        }
 
         log = Objects.requireNonNull(logContext, "logContext cannot be null").logger(getClass());
         logPrefix = logContext.logPrefix().trim();
@@ -161,16 +157,17 @@ public class StreamsProducer {
      * @throws IllegalStateException if EOS is disabled
      * @throws TaskMigratedException
      */
-    void commitTransaction(final Map<TopicPartition, OffsetAndMetadata> offsets) throws ProducerFencedException {
+    void commitTransaction(final Map<TopicPartition, OffsetAndMetadata> offsets,
+                           final ConsumerGroupMetadata consumerGroupMetadata) throws ProducerFencedException {
         if (!eosEnabled) {
             throw new IllegalStateException(formatException("EOS is disabled"));
         }
         maybeBeginTransaction();
         try {
-            producer.sendOffsetsToTransaction(offsets, applicationId);
+            producer.sendOffsetsToTransaction(offsets, consumerGroupMetadata);
             producer.commitTransaction();
             transactionInFlight = false;
-        } catch (final ProducerFencedException error) {
+        } catch (final ProducerFencedException | CommitFailedException error) {
             throw new TaskMigratedException(
                 formatException("Producer got fenced trying to commit a transaction"),
                 error

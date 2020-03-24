@@ -78,7 +78,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     // we want to abstract eos logic out of StreamTask, however
     // there's still an optimization that requires this info to be
     // leaked into this class, which is to checkpoint after committing if EOS is not enabled.
-    private final boolean eosDisabled;
+    private final boolean eosEnabled;
 
     private final long maxTaskIdleMs;
     private final int maxBufferedSize;
@@ -120,7 +120,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
 
         this.time = time;
         this.recordCollector = recordCollector;
-        eosDisabled = !StreamsConfig.EXACTLY_ONCE.equals(config.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG));
+        eosEnabled = StreamThread.eosEnabled(config);
 
         final String threadId = Thread.currentThread().getName();
         closeTaskSensor = ThreadMetrics.closeTaskSensor(threadId, streamsMetrics);
@@ -326,7 +326,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                 commitNeeded = false;
                 commitRequested = false;
 
-                if (eosDisabled) {
+                if (!eosEnabled) {
                     stateMgr.checkpoint(checkpointableOffsets());
                 }
 
@@ -487,7 +487,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             case SUSPENDED:
                 // if EOS is enabled, we wipe out the whole state store for unclean close
                 // since they are invalid to use anymore
-                final boolean wipeStateStore = !clean && !eosDisabled;
+                final boolean wipeStateStore = !clean && eosEnabled;
 
                 // first close state manager (which is idempotent) then close the record collector (which could throw),
                 // if the latter throws and we re-close dirty which would close the state manager again.
@@ -561,7 +561,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
      * @return true if this method processes a record, false if it does not process a record.
      * @throws TaskMigratedException if the task producer got fenced (EOS only)
      */
-    @SuppressWarnings({"unchecked", "rawtypes"})
+    @SuppressWarnings("unchecked")
     public boolean process(final long wallClockTime) {
         if (!isProcessable(wallClockTime)) {
             return false;

@@ -1072,22 +1072,22 @@
       <tr>
         <td>Max time to load group metadata</td>
         <td>kafka.server:type=group-coordinator-metrics,name=partition-load-time-max</td>
-        <td>maximum time, in milliseconds, it took to load offsets and group metadata from the consumer offset partitions loaded in the last 30 seconds</td>
+        <td>maximum time, in milliseconds, it took to load offsets and group metadata from the consumer offset partitions loaded in the last 30 seconds (including time spent waiting for the loading task to be scheduled)</td>
       </tr>
       <tr>
         <td>Avg time to load group metadata</td>
         <td>kafka.server:type=group-coordinator-metrics,name=partition-load-time-avg</td>
-        <td>average time, in milliseconds, it took to load offsets and group metadata from the consumer offset partitions loaded in the last 30 seconds</td>
+        <td>average time, in milliseconds, it took to load offsets and group metadata from the consumer offset partitions loaded in the last 30 seconds (including time spent waiting for the loading task to be scheduled)</td>
       </tr>
       <tr>
         <td>Max time to load transaction metadata</td>
         <td>kafka.server:type=transaction-coordinator-metrics,name=partition-load-time-max</td>
-        <td>maximum time, in milliseconds, it took to load transaction metadata from the consumer offset partitions loaded in the last 30 seconds</td>
+        <td>maximum time, in milliseconds, it took to load transaction metadata from the consumer offset partitions loaded in the last 30 seconds (including time spent waiting for the loading task to be scheduled)</td>
       </tr>
       <tr>
         <td>Avg time to load transaction metadata</td>
         <td>kafka.server:type=transaction-coordinator-metrics,name=partition-load-time-avg</td>
-        <td>average time, in milliseconds, it took to load transaction metadata from the consumer offset partitions loaded in the last 30 seconds</td>
+        <td>average time, in milliseconds, it took to load transaction metadata from the consumer offset partitions loaded in the last 30 seconds (including time spent waiting for the loading task to be scheduled)</td>
       </tr>
       <tr>
         <td>Consumer Group Offset Count</td>

@@ -947,7 +947,7 @@
                                 <a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/kstream/KGroupedTable.html">KGroupedTable details</a>
                                 <a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/kstream/CogroupedKStream.html">KGroupedTable details</a>)</p>
                                 <p>When aggregating a <em>grouped stream</em>, you must provide an initializer (e.g., <code class="docutils literal"><span class="pre">aggValue</span> <span class="pre">=</span> <span class="pre">0</span></code>) and an &#8220;adder&#8221;
-                                    aggregator (e.g., <code class="docutils literal"><span class="pre">aggValue</span> <span class="pre">+</span> <span class="pre">curValue</span></code>).  When aggregating a <em>grouped table</em>, you must provide a
+                                    aggregator (e.g., <code class="docutils literal"><span class="pre">aggValue</span> <span class="pre">+</span> <span class="pre">curValue</span></code>).  When aggregating a <em>grouped table</em>, you must additionally provide a
                                     &#8220;subtractor&#8221; aggregator (think: <code class="docutils literal"><span class="pre">aggValue</span> <span class="pre">-</span> <span class="pre">oldValue</span></code>).</p>
                                 <p>When aggregating a <em>cogrouped stream</em>, the actual aggregators are provided for each input stream in the prior <code>cogroup()</code>calls, and thus you only need to provide an initializer (e.g., <code class="docutils literal"><span class="pre">aggValue</span> <span class="pre">=</span> <span class="pre">0</span></code>)
 

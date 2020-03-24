@@ -34,8 +34,8 @@ public class ConnectUtilsTest {
         final Node broker1 = new Node(0, "dummyHost-1", 1234);
         final Node broker2 = new Node(1, "dummyHost-2", 1234);
         List<Node> cluster = Arrays.asList(broker1, broker2);
-        MockAdminClient adminClient = new MockAdminClient(cluster, broker1);
-
+        MockAdminClient adminClient = new MockAdminClient.Builder().
+            brokers(cluster).build();
         assertEquals(MockAdminClient.DEFAULT_CLUSTER_ID, ConnectUtils.lookupKafkaClusterId(adminClient));
     }
 
@@ -44,8 +44,8 @@ public class ConnectUtilsTest {
         final Node broker1 = new Node(0, "dummyHost-1", 1234);
         final Node broker2 = new Node(1, "dummyHost-2", 1234);
         List<Node> cluster = Arrays.asList(broker1, broker2);
-        MockAdminClient adminClient = new MockAdminClient(cluster, broker1, null);
-
+        MockAdminClient adminClient = new MockAdminClient.Builder().
+            brokers(cluster).clusterId(null).build();
         assertNull(ConnectUtils.lookupKafkaClusterId(adminClient));
     }
 
@@ -54,7 +54,8 @@ public class ConnectUtilsTest {
         final Node broker1 = new Node(0, "dummyHost-1", 1234);
         final Node broker2 = new Node(1, "dummyHost-2", 1234);
         List<Node> cluster = Arrays.asList(broker1, broker2);
-        MockAdminClient adminClient = new MockAdminClient(cluster, broker1);
+        MockAdminClient adminClient = new MockAdminClient.Builder().
+            brokers(cluster).build();
         adminClient.timeoutNextRequest(1);
 
         ConnectUtils.lookupKafkaClusterId(adminClient);

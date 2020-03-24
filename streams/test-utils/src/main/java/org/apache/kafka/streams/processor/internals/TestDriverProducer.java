@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.common.TopicPartition;
@@ -28,12 +29,13 @@ public class TestDriverProducer extends StreamsProducer {
 
     public TestDriverProducer(final Producer<byte[], byte[]> producer,
                               final boolean eosEnabled,
-                              final String applicationId,
                               final LogContext logContext) {
-        super(producer, eosEnabled, applicationId, logContext);
+        super(producer, eosEnabled, logContext);
     }
 
-    public void commitTransaction(final Map<TopicPartition, OffsetAndMetadata> offsets) throws ProducerFencedException {
-        super.commitTransaction(offsets);
+    @Override
+    public void commitTransaction(final Map<TopicPartition, OffsetAndMetadata> offsets,
+                                  final ConsumerGroupMetadata consumerGroupMetadata) throws ProducerFencedException {
+        super.commitTransaction(offsets, consumerGroupMetadata);
     }
 }
