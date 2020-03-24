@@ -237,10 +237,19 @@ public class TaskManager {
                 }
             }
 
-            commitOffsetsOrTransaction(consumedOffsetsAndMetadataPerTask);
+            try {
+                commitOffsetsOrTransaction(consumedOffsetsAndMetadataPerTask);
 
-            for (final Task task : additionalTasksForCommitting) {
-                task.postCommit();
+                for (final Task task : additionalTasksForCommitting) {
+                    task.postCommit();
+                }
+            } catch (final RuntimeException e) {
+                log.error("Failed to commit tasks that are " +
+                    "prepared to close clean, will close them as dirty instead", e);
+                dirtyTasks.addAll(checkpointPerTask.keySet());
+                checkpointPerTask.clear();
+                // Just add first taskId to re-throw by the end.
+                taskCloseExceptions.put(consumedOffsetsAndMetadataPerTask.keySet().iterator().next(), e);
             }
         }
 
