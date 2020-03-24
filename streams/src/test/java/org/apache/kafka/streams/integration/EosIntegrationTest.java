@@ -279,7 +279,6 @@ public class EosIntegrationTest {
         for (final Long key : allKeys) {
             assertThat(getAllRecordPerKey(key, result), equalTo(getAllRecordPerKey(key, expectedResult)));
         }
-
     }
 
     private void addAllKeys(final Set<Long> allKeys, final List<KeyValue<Long, Long>> records) {
