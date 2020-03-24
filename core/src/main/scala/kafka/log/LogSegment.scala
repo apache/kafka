@@ -17,11 +17,13 @@
 package kafka.log
 
 import java.io.{File, IOException}
-import java.nio.file.{Files, NoSuchFileException}
+import java.nio.file.{Files, NoSuchFileException, Path}
 import java.nio.file.attribute.FileTime
+import java.util
+import java.util.Comparator
 import java.util.concurrent.TimeUnit
 
-import kafka.common.LogSegmentOffsetOverflowException
+import kafka.common.{KafkaException, LogSegmentOffsetOverflowException}
 import kafka.metrics.{KafkaMetricsGroup, KafkaTimer}
 import kafka.server.epoch.LeaderEpochFileCache
 import kafka.server.{FetchDataInfo, LogOffsetMetadata}
@@ -34,6 +36,7 @@ import org.apache.kafka.common.utils.Time
 
 import scala.collection.JavaConverters._
 import scala.math._
+import scala.util.Random
 
 /**
  * A segment of the log. Each segment has two components: a log and an index. The log is a FileRecords containing
@@ -60,11 +63,13 @@ class LogSegment private[log] (val log: FileRecords,
                                val baseOffset: Long,
                                val indexIntervalBytes: Int,
                                val rollJitterMs: Long,
-                               val time: Time) extends Logging {
+                               val time: Time, dir: File) extends Logging {
 
   def offsetIndex: OffsetIndex = lazyOffsetIndex.get
 
   def timeIndex: TimeIndex = lazyTimeIndex.get
+
+  def segDir: File = dir
 
   def shouldRoll(rollParams: RollParams): Boolean = {
     val reachedRollMs = timeWaitedForRoll(rollParams.now, rollParams.maxTimestampInMessages) > rollParams.maxSegmentMs - rollJitterMs
@@ -488,6 +493,37 @@ class LogSegment private[log] (val log: FileRecords,
   }
 
   /**
+   * Get the status for the for this log segment
+   * IOException from this method should be handled by the caller
+   */
+  def getSegmentStatus(): SegmentStatus = {
+    SegmentStatusHandler.getStatus(new File(segDir, SegmentFile.STATUS.getName))
+  }
+
+
+  /**
+   * Change the status for the for this log segment
+   * IOException from this method should be handled by the caller
+   */
+  def changeSegmentStatus(segmentStatus: SegmentStatus): Unit = {
+    changeSegmentStatus(SegmentStatus.HOT, segmentStatus)
+  }
+
+  /**
+   * Change the status for the for this log segment
+   * IOException from this method should be handled by the caller
+   */
+  def changeSegmentStatus(oldStatus: SegmentStatus, newStatus: SegmentStatus): Unit = {
+    val file = new File(segDir, SegmentFile.STATUS.getName)
+    val segStatus = SegmentStatusHandler.getStatus(file)
+    if(segStatus == oldStatus){
+      SegmentStatusHandler.setStatus(file, newStatus)
+    }else{
+      throw new KafkaException(s"Invalid Segment Status $segStatus, expected $oldStatus")
+    }
+  }
+
+  /**
    * Change the suffix for the index and log file for this log segment
    * IOException from this method should be handled by the caller
    */
@@ -650,26 +686,113 @@ class LogSegment private[log] (val log: FileRecords,
 
 object LogSegment {
 
-  def open(dir: File, baseOffset: Long, config: LogConfig, time: Time, fileAlreadyExists: Boolean = false,
-           initFileSize: Int = 0, preallocate: Boolean = false, fileSuffix: String = ""): LogSegment = {
+  private val random = scala.util.Random
+  def open(segDir: File, baseOffset: Long, config: LogConfig, time: Time, fileAlreadyExists: Boolean = false,
+           initFileSize: Int = 0, preallocate: Boolean = false, segmentStatus: SegmentStatus = SegmentStatus.HOT): LogSegment = {
     val maxIndexSize = config.maxIndexSize
+    if(!fileAlreadyExists){
+      segDir.mkdirs()
+      SegmentStatusHandler.setStatus(new File(segDir, SegmentFile.STATUS.getName), segmentStatus)
+    }
     new LogSegment(
-      FileRecords.open(Log.logFile(dir, baseOffset, fileSuffix), fileAlreadyExists, initFileSize, preallocate),
-      LazyIndex.forOffset(Log.offsetIndexFile(dir, baseOffset, fileSuffix), baseOffset = baseOffset, maxIndexSize = maxIndexSize),
-      LazyIndex.forTime(Log.timeIndexFile(dir, baseOffset, fileSuffix), baseOffset = baseOffset, maxIndexSize = maxIndexSize),
-      new TransactionIndex(baseOffset, Log.transactionIndexFile(dir, baseOffset, fileSuffix)),
+      FileRecords.open(new File(segDir, SegmentFile.LOG.getName), fileAlreadyExists, initFileSize, preallocate),
+      LazyIndex.forOffset(new File(segDir, SegmentFile.OFFSET_INDEX.getName), baseOffset = baseOffset, maxIndexSize = maxIndexSize),
+      LazyIndex.forTime(new File(segDir, SegmentFile.TIME_INDEX.getName), baseOffset = baseOffset, maxIndexSize = maxIndexSize),
+      new TransactionIndex(baseOffset, new File(segDir, SegmentFile.TXN_INDEX.getName)),
       baseOffset,
       indexIntervalBytes = config.indexInterval,
       rollJitterMs = config.randomSegmentJitter,
-      time)
+      time, segDir)
   }
 
-  def deleteIfExists(dir: File, baseOffset: Long, fileSuffix: String = ""): Unit = {
-    Log.deleteFileIfExists(Log.offsetIndexFile(dir, baseOffset, fileSuffix))
-    Log.deleteFileIfExists(Log.timeIndexFile(dir, baseOffset, fileSuffix))
-    Log.deleteFileIfExists(Log.transactionIndexFile(dir, baseOffset, fileSuffix))
-    Log.deleteFileIfExists(Log.logFile(dir, baseOffset, fileSuffix))
+  def isSegmentDir(file: File): Boolean = {
+    file.isDirectory && !file.getName.equals("snapshot")
   }
+
+  def getCleanedSegmentFiles(logDir: File, offset: Long): Array[File] = {
+    val fNameDir = String.valueOf(offset)
+    val fNameDyn = fNameDir+"-"
+    logDir.listFiles( file => (file.getName.startsWith(fNameDyn) || file.getName.equals(fNameDir)) && getStatus(file) == SegmentStatus.CLEANED)
+  }
+
+  def getSegmentDir(logDir: File, baseOffset: Long, randomDigits: Boolean = false): File = {
+    new File(logDir, if(randomDigits) baseOffset+"-"+random.nextInt(100000) else String.valueOf(baseOffset))
+  }
+
+  def getSegmentOffset(segDir: File): Long ={
+    val name = segDir.getName
+    val index = name.indexOf("-")
+    if(index > -1){
+      name.substring(0, index).toLong
+    }else{
+      name.toLong
+    }
+  }
+
+  def deleteIfExists(segDir: File): Unit = {
+    if(segDir.exists()){
+      val files = segDir.listFiles()
+      if(files != null){
+        files.foreach( file => Files.deleteIfExists(file.toPath))
+      }
+      Files.deleteIfExists(segDir.toPath)
+    }
+  }
+
+  def deleteIndicesIfExist(segDir: File): Unit = {
+    Files.deleteIfExists(new File(segDir, SegmentFile.OFFSET_INDEX.getName).toPath)
+    Files.deleteIfExists(new File(segDir, SegmentFile.TIME_INDEX.getName).toPath)
+    Files.deleteIfExists(new File(segDir, SegmentFile.TXN_INDEX.getName).toPath)
+  }
+
+  def getSnapshotDir(logDir: File): File = {
+    new File(logDir, "snapshot")
+  }
+
+  def getSnapshotFile(logDir: File, baseOffset: Long): File = {
+    val segDir = new File(logDir, "snapshot")
+    new File(segDir, String.valueOf(baseOffset))
+  }
+
+  def getSnapshotOffset(snapshot : File): Long = {
+      snapshot.getName.toLong
+  }
+
+  def getStatus(segDir: File): SegmentStatus = {
+    val statusFile = new File(segDir, SegmentFile.STATUS.getName)
+    if(statusFile.exists()){
+      SegmentStatusHandler.getStatus(statusFile)
+    }else{
+      SegmentStatus.UNKNOWN;
+    }
+  }
+
+  def setStatus(segDir: File, status: SegmentStatus): Unit = {
+    val statusFile = new File(segDir, SegmentFile.STATUS.getName)
+    SegmentStatusHandler.setStatus(statusFile, status)
+  }
+
+
+  def isSegmentFileExists(dir: File, baseOffset: Long, segmentFile: SegmentFile): Boolean = {
+    val segDir = new File(dir, String.valueOf(baseOffset))
+    new File(segDir, segmentFile.getName).exists
+  }
+  def isSegmentFileExists(segDir: File, segmentFile: SegmentFile): Boolean = {
+    new File(segDir, segmentFile.getName).exists
+  }
+
+  def canReadSegment(segDir: File): Boolean = {
+    val files = segDir.listFiles
+    var status = true
+    if(files != null){
+      for (file <- files if file.isFile){
+        status = status && file.canRead
+      }
+    }
+    status
+  }
+
+
 }
 
 object LogFlushStats extends KafkaMetricsGroup {
