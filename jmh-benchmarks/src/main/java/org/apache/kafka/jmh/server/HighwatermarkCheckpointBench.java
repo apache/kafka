@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.jmh.server;
 
-import java.util.HashMap;
 import java.util.Properties;
 import kafka.cluster.Partition;
 import kafka.cluster.PartitionStateStore;
@@ -29,13 +28,11 @@ import kafka.server.LogDirFailureChannel;
 import kafka.server.MetadataCache;
 import kafka.server.QuotaFactory;
 import kafka.server.ReplicaManager;
-import kafka.server.checkpoints.LazyOffsetCheckpoints;
 import kafka.server.checkpoints.OffsetCheckpoints;
 import kafka.utils.KafkaScheduler;
 import kafka.utils.MockTime;
 import kafka.utils.Scheduler;
 import kafka.utils.TestUtils;
-import kafka.zk.AdminZkClient;
 import kafka.zk.KafkaZkClient;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.Metrics;
