@@ -1547,7 +1547,6 @@ project(':jmh-benchmarks') {
     compile libs.mockitoCore
     annotationProcessor libs.jmhGeneratorAnnProcess
     compile libs.jmhCoreBenchmarks
-    compile group: 'org.slf4j', name: 'slf4j-nop', version: '1.7.26'
   }
 
   jar {
