@@ -373,10 +373,6 @@ public class StreamThreadTest {
             mkMap(mkEntry("task-id", "all"), mkEntry(getThreadTagKey(builtInMetricsVersion), thread.getName()));
         if (builtInMetricsVersion.equals(StreamsConfig.METRICS_0100_TO_24)) {
             assertNotNull(metrics.metrics().get(metrics.metricName(
-                "commit-latency-avg", taskGroupName, descriptionIsNotVerified, taskTags)));
-            assertNotNull(metrics.metrics().get(metrics.metricName(
-                "commit-latency-max", taskGroupName, descriptionIsNotVerified, taskTags)));
-            assertNotNull(metrics.metrics().get(metrics.metricName(
                 "commit-rate", taskGroupName, descriptionIsNotVerified, taskTags)));
         } else {
             assertNull(metrics.metrics().get(metrics.metricName(
