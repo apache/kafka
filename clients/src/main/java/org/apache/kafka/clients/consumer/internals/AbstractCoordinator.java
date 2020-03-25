@@ -910,13 +910,15 @@ public abstract class AbstractCoordinator implements Closeable {
         return protocolType != null && !protocolType.equals(protocolType());
     }
 
-    private synchronized boolean isProtocolNameInconsistent(ApiKeys key, String protocolName) {
+    private boolean isProtocolNameInconsistent(ApiKeys key, String protocolName) {
+        final Generation currentGeneration = generation();
         final boolean protocolNameInconsistent = protocolName != null &&
-            generation() != Generation.NO_GENERATION && !protocolName.equals(generation().protocolName);
+            currentGeneration != Generation.NO_GENERATION &&
+            !protocolName.equals(currentGeneration.protocolName);
 
         if (protocolNameInconsistent) {
             log.error("{} failed due to inconsistent Protocol Name, received {} but expected {}",
-                key, protocolName, generation().protocolName);
+                key, protocolName, currentGeneration.protocolName);
         }
         return protocolNameInconsistent;
     }
