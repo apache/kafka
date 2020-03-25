@@ -849,6 +849,20 @@
                             </div>
                         </td>
                     </tr>
+                    <tr class="row-even"><td><p class="first"><strong>Stream to Table</strong></p>
+                        <ul class="last simple">
+                            <li>KStream &rarr; KTable</li>
+                        </ul>
+                    </td>
+                        <td><p class="first">Convert an event stream into a table, or say a changelog stream.
+                            (<a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/kstream/KStream.html#toTable--">details</a>)</p>
+                            <div class="last highlight-java"><div class="highlight"><pre><span></span><span class="n">KStream</span><span class="o">&lt;</span><span class="kt">byte</span><span class="o">[],</span> <span class="n">String</span><span class="o">&gt;</span> <span class="n">stream</span> <span class="o">=</span> <span class="o">...;</span>
+
+<span class="n">KTable</span><span class="o">&lt;</span><span class="kt">byte</span><span class="o">[],</span> <span class="n">String</span><span class="o">&gt;</span> <span class="n">table</span> <span class="o">=</span> <span class="n">stream</span><span class="o">.</span><span class="na">toTable</span><span class="o">();</span>
+</pre></div>
+                            </div>
+                        </td>
+                    </tr>
                     </tbody>
                 </table>
             </div>
