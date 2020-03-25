@@ -195,6 +195,6 @@ public class InsertFieldTest {
 
         final SourceRecord transformedRecord = xformKey.apply(record);
 
-        assertEquals(record, transformedRecord);
+        assertSame(record, transformedRecord);
     }
 }
