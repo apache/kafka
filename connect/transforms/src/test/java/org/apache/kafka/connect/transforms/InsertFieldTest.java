@@ -153,4 +153,50 @@ public class InsertFieldTest {
         assertEquals(null, transformedRecord.value());
         assertEquals(simpleStructSchema, transformedRecord.valueSchema());
     }
+
+    @Test
+    public void insertConfiguredFieldsIntoNullKeyWithoutKeySchemaReturnsSameRecord() {
+        final Map<String, Object> props = new HashMap<>();
+        props.put("topic.field", "topic_field!");
+        props.put("partition.field", "partition_field");
+        props.put("timestamp.field", "timestamp_field?");
+        props.put("static.field", "instance_id");
+        props.put("static.value", "my-instance-id");
+
+        xform = new InsertField.Key<>();
+        xform.configure(props);
+
+        final Schema simpleStructSchema = SchemaBuilder.struct().name("name").version(1).doc("doc").field("magic", Schema.OPTIONAL_INT64_SCHEMA).build();
+        final Struct simpleStruct = new Struct(simpleStructSchema).put("magic", 42L);
+
+        final SourceRecord record = new SourceRecord(null, null, "test", 0,
+                null, null, simpleStructSchema, simpleStruct);
+
+        final SourceRecord transformedRecord = xform.apply(record);
+
+        assertSame(record, transformedRecord);
+    }
+
+    @Test
+    public void insertConfiguredFieldsIntoNullKeyWithKeySchemaReturnsSameRecord() {
+        final Map<String, Object> props = new HashMap<>();
+        props.put("topic.field", "topic_field!");
+        props.put("partition.field", "partition_field");
+        props.put("timestamp.field", "timestamp_field?");
+        props.put("static.field", "instance_id");
+        props.put("static.value", "my-instance-id");
+
+        xform = new InsertField.Key<>();
+        xform.configure(props);
+
+        final Schema simpleStructSchema = SchemaBuilder.struct().name("name").version(1).doc("doc").field("magic", Schema.OPTIONAL_INT64_SCHEMA).build();
+        final Struct simpleStruct = new Struct(simpleStructSchema).put("magic", 42L);
+
+        final SourceRecord record = new SourceRecord(null, null, "test", 0,
+                Schema.STRING_SCHEMA, null, simpleStructSchema, simpleStruct);
+
+        final SourceRecord transformedRecord = xform.apply(record);
+
+        assertSame(record, transformedRecord);
+    }
 }
