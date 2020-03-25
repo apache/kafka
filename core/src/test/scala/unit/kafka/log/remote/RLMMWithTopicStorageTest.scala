@@ -108,6 +108,32 @@ class RLMMWithTopicStorageTest extends IntegrationTestHarness {
     }
   }
 
+  @Test
+  @throws[Exception]
+  def testDeleteRemoteLogSegment(): Unit = {
+    val rlSegIdTp0_0 = new RemoteLogSegmentId(tp0, UUID.randomUUID)
+    val rlSegMetTp0_0 = new RemoteLogSegmentMetadata(rlSegIdTp0_0, 10L, 100L, -1L, 1, tp0.toString.getBytes)
+
+    val rlmmWithTopicStorage = createRLMMWithTopicStorage(tmpLogDirPath, 1)
+    try {
+      rlmmWithTopicStorage.putRemoteLogSegmentData(rlSegIdTp0_0, rlSegMetTp0_0)
+
+      // get the non existing offset, below base offset
+      val rlSegMetTp0_15 = rlmmWithTopicStorage.getRemoteLogSegmentId(tp0, 15L)
+      Assert.assertEquals(rlSegIdTp0_0, rlSegMetTp0_15)
+
+      // delete the segment
+      rlmmWithTopicStorage.deleteRemoteLogSegmentMetadata(rlSegIdTp0_0)
+
+      // there should not be any entry as it is already deleted.
+      val rlSegMetTp0_15_2 = rlmmWithTopicStorage.getRemoteLogSegmentId(tp0, 15L)
+      Assert.assertNull(rlSegMetTp0_15_2)
+
+    } finally {
+      rlmmWithTopicStorage.close()
+    }
+  }
+
   private def createRLMMWithTopicStorage(tmpLogDirPath: String, brokerId: Int = 1): RLMMWithTopicStorage = {
     val rlmmWithTopicStorage = new RLMMWithTopicStorage
     val configs = new util.HashMap[String, Any]
@@ -127,5 +153,6 @@ class RLMMWithTopicStorageTest extends IntegrationTestHarness {
     val tp = Range.inclusive(0, 2).map(x => new TopicPartition("foo", x))
 
     // Multiple RLMM instances publishes events and they should receive events from each other.
+
   }
 }

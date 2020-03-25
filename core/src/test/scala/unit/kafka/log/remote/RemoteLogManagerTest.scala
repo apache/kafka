@@ -17,6 +17,7 @@
 package kafka.log.remote
 
 import java.io.{ByteArrayInputStream, File, InputStream}
+import java.nio.file.Files
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.function.Consumer
 import java.util.{Collections, Optional, Properties}
@@ -30,7 +31,7 @@ import kafka.server.checkpoints.LazyOffsetCheckpoints
 import kafka.utils.{MockScheduler, MockTime, TestUtils}
 import kafka.zk.KafkaZkClient
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.log.remote.storage.{LogSegmentData, RemoteLogSegmentContext, RemoteLogSegmentId, RemoteLogSegmentMetadata, RemoteStorageManager}
+import org.apache.kafka.common.log.remote.storage.{LogSegmentData, RemoteLogMetadataManager, RemoteLogSegmentContext, RemoteLogSegmentId, RemoteLogSegmentMetadata, RemoteStorageManager}
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.record._
@@ -51,7 +52,7 @@ class RemoteLogManagerTest {
   val rsmConfig: Map[String, Any] = Map(REMOTE_STORAGE_MANAGER_CONFIG_PREFIX + "url" -> "foo.url",
     REMOTE_STORAGE_MANAGER_CONFIG_PREFIX + "timout.ms" -> 1000L)
   val rlmConfig = RemoteLogManagerConfig(remoteLogStorageEnable = true, "kafka.log.remote.MockRemoteStorageManager", "",
-    1024, 60000, 2, 10, rsmConfig, 10, 30000)
+    1024, 60000, 2, 10, rsmConfig, 10, 30000, "kafka.log.remote.MockRemoteLogMetadataManager")
 
   var logConfig: LogConfig = _
   var tmpDir: File = _
@@ -119,7 +120,8 @@ class RemoteLogManagerTest {
     def lsoUpdater(tp: TopicPartition, los: Long): Unit = {}
 
     // this should initialize RSM
-    new RemoteLogManager(logFetcher, lsoUpdater, rlmConfig, time, "localhost:9092", 1, "", "/tmp/logs")
+    val logsDirTmp = Files.createTempDirectory("kafka-").toString
+    new RemoteLogManager(logFetcher, lsoUpdater, rlmConfig, time, "localhost:9092", 1, "", logsDirTmp)
 
     assertTrue(rsmConfig.count { case (k, v) => MockRemoteStorageManager.configs.get(k) == v } == rsmConfig.size)
     assertEquals(MockRemoteStorageManager.configs.get(KafkaConfig.RemoteLogRetentionBytesProp),
@@ -223,4 +225,42 @@ class MockRemoteStorageManager extends RemoteStorageManager {
     Array.emptyByteArray)
 
   override def deleteLogSegment(remoteLogSegmentMetadata: RemoteLogSegmentMetadata): Unit = true
+}
+
+class MockRemoteLogMetadataManager extends RemoteLogMetadataManager {
+  override def putRemoteLogSegmentData(remoteLogSegmentId: RemoteLogSegmentId,
+                                       remoteLogSegmentMetadata: RemoteLogSegmentMetadata): Unit = {}
+
+  override def getRemoteLogSegmentId(topicPartition: TopicPartition,
+                                     offset: Long): RemoteLogSegmentId = {
+    null
+  }
+
+  override def getRemoteLogSegmentMetadata(remoteLogSegmentId: RemoteLogSegmentId): RemoteLogSegmentMetadata = {
+    null
+  }
+
+  override def earliestLogOffset(tp: TopicPartition): Optional[lang.Long] = {
+    Optional.empty()
+  }
+
+  override def highestLogOffset(tp: TopicPartition): Optional[lang.Long] = {
+    Optional.empty()
+  }
+
+  override def deleteRemoteLogSegmentMetadata(remoteLogSegmentId: RemoteLogSegmentId): Unit = {}
+
+  override def listRemoteLogSegments(topicPartition: TopicPartition,
+                                     minOffset: Long): util.List[RemoteLogSegmentMetadata] = Collections.emptyList()
+
+  override def onPartitionLeadershipChanges(leaderPartitions: util.Set[TopicPartition],
+                                            followerPartitions: util.Set[TopicPartition]): Unit = {}
+
+  override def onStopPartitions(partitions: util.Set[TopicPartition]): Unit = {}
+
+  override def onServerStarted(): Unit = {}
+
+  override def configure(configs: util.Map[String, _]): Unit = {}
+
+  override def close(): Unit = {}
 }
