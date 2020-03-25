@@ -180,7 +180,7 @@ public class InsertFieldTest {
     }
 
     @Test
-    public void insertIntoNullKeyLeavesKeyUnchanged() {
+    public void insertIntoNullKeyLeavesRecordUnchanged() {
         final Map<String, Object> props = new HashMap<>();
         props.put("topic.field", "topic_field!");
         props.put("partition.field", "partition_field");
@@ -195,7 +195,6 @@ public class InsertFieldTest {
 
         final SourceRecord transformedRecord = xformKey.apply(record);
 
-        assertEquals(null, transformedRecord.key());
-        assertEquals(42L, ((Map<?, ?>) transformedRecord.value()).get("magic"));
+        assertEquals(record, transformedRecord);
     }
 }
