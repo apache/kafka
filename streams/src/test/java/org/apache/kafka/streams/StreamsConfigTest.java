@@ -49,6 +49,7 @@ import static org.apache.kafka.streams.StreamsConfig.TOPOLOGY_OPTIMIZATION;
 import static org.apache.kafka.streams.StreamsConfig.adminClientPrefix;
 import static org.apache.kafka.streams.StreamsConfig.consumerPrefix;
 import static org.apache.kafka.streams.StreamsConfig.producerPrefix;
+import static org.apache.kafka.streams.StreamsConfig.topicPrefix;
 import static org.apache.kafka.test.StreamsTestUtils.minimalStreamsConfig;
 import static org.hamcrest.core.IsEqual.equalTo;
 import static org.junit.Assert.assertEquals;
@@ -111,7 +112,7 @@ public class StreamsConfigTest {
         props.put(StreamsConfig.APPLICATION_SERVER_CONFIG, "dummy:host");
         props.put(StreamsConfig.RETRIES_CONFIG, 10);
         props.put(StreamsConfig.adminClientPrefix(StreamsConfig.RETRIES_CONFIG), 5);
-        props.put(StreamsConfig.topicPrefix(TopicConfig.SEGMENT_BYTES_CONFIG), 100);
+        props.put(topicPrefix(TopicConfig.SEGMENT_BYTES_CONFIG), 100);
         final StreamsConfig streamsConfig = new StreamsConfig(props);
 
         final String groupId = "example-application";
@@ -123,15 +124,17 @@ public class StreamsConfigTest {
         assertEquals(StreamsPartitionAssignor.class.getName(), returnedProps.get(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG));
         assertEquals(7L, returnedProps.get(StreamsConfig.WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_CONFIG));
         assertEquals("dummy:host", returnedProps.get(StreamsConfig.APPLICATION_SERVER_CONFIG));
-        assertEquals(null, returnedProps.get(StreamsConfig.RETRIES_CONFIG));
+        assertNull(returnedProps.get(StreamsConfig.RETRIES_CONFIG));
         assertEquals(5, returnedProps.get(StreamsConfig.adminClientPrefix(StreamsConfig.RETRIES_CONFIG)));
-        assertEquals(100, returnedProps.get(StreamsConfig.topicPrefix(TopicConfig.SEGMENT_BYTES_CONFIG)));
+        assertEquals(100, returnedProps.get(topicPrefix(TopicConfig.SEGMENT_BYTES_CONFIG)));
     }
 
     @Test
-    public void consumerConfigMustUseAdminClientConfigForRetries() {
+    public void consumerConfigShouldContainAdminClientConfigsForRetriesAndRetryBackOffMsWithAdminPrefix() {
         props.put(StreamsConfig.adminClientPrefix(StreamsConfig.RETRIES_CONFIG), 20);
+        props.put(StreamsConfig.adminClientPrefix(StreamsConfig.RETRY_BACKOFF_MS_CONFIG), 200L);
         props.put(StreamsConfig.RETRIES_CONFIG, 10);
+        props.put(StreamsConfig.RETRY_BACKOFF_MS_CONFIG, 100L);
         final StreamsConfig streamsConfig = new StreamsConfig(props);
 
         final String groupId = "example-application";
@@ -139,6 +142,7 @@ public class StreamsConfigTest {
         final Map<String, Object> returnedProps = streamsConfig.getMainConsumerConfigs(groupId, clientId);
 
         assertEquals(20, returnedProps.get(StreamsConfig.adminClientPrefix(StreamsConfig.RETRIES_CONFIG)));
+        assertEquals(200L, returnedProps.get(StreamsConfig.adminClientPrefix(StreamsConfig.RETRY_BACKOFF_MS_CONFIG)));
     }
 
     @Test
@@ -232,7 +236,6 @@ public class StreamsConfigTest {
         final Map<String, Object> producerConfigs = streamsConfig.getProducerConfigs("clientId");
         assertEquals("host", producerConfigs.get("interceptor.statsd.host"));
     }
-
 
     @Test
     public void shouldSupportPrefixedProducerConfigs() {
@@ -427,7 +430,7 @@ public class StreamsConfigTest {
     public void shouldSetInternalLeaveGroupOnCloseConfigToFalseInConsumer() {
         final StreamsConfig streamsConfig = new StreamsConfig(props);
         final Map<String, Object> consumerConfigs = streamsConfig.getMainConsumerConfigs("groupId", "clientId");
-        assertThat(consumerConfigs.get("internal.leave.group.on.close"), CoreMatchers.<Object>equalTo(false));
+        assertThat(consumerConfigs.get("internal.leave.group.on.close"), CoreMatchers.equalTo(false));
     }
 
     @Test
@@ -572,15 +575,36 @@ public class StreamsConfigTest {
     }
 
     @Test
-    public void shouldThrowExceptionIfMaxInflightRequestsGreatherThanFiveIfEosEnabled() {
-        props.put(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, 7);
+    public void shouldThrowExceptionIfMaxInFlightRequestsGreaterThanFiveIfEosEnabled() {
         props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, EXACTLY_ONCE);
+        props.put(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, 7);
         final StreamsConfig streamsConfig = new StreamsConfig(props);
         try {
             streamsConfig.getProducerConfigs("clientId");
-            fail("Should throw ConfigException when Eos is enabled and maxInFlight requests exceeds 5");
+            fail("Should throw ConfigException when ESO is enabled and maxInFlight requests exceeds 5");
         } catch (final ConfigException e) {
-            assertEquals("max.in.flight.requests.per.connection can't exceed 5 when using the idempotent producer", e.getMessage());
+            assertEquals("Invalid value 7 for configuration max.in.flight.requests.per.connection: Can't exceed 5 when exactly-once processing is enabled", e.getMessage());
+        }
+    }
+
+    @Test
+    public void shouldAllowToSpecifyMaxInFlightRequestsPerConnectionAsStringIfEosEnabled() {
+        props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, EXACTLY_ONCE);
+        props.put(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, "3");
+
+        new StreamsConfig(props).getProducerConfigs("clientId");
+    }
+
+    @Test
+    public void shouldThrowConfigExceptionIfMaxInFlightRequestsPerConnectionIsInvalidStringIfEosEnabled() {
+        props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, EXACTLY_ONCE);
+        props.put(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, "not-a-number");
+
+        try {
+            new StreamsConfig(props).getProducerConfigs("clientId");
+            fail("Should throw ConfigException when EOS is enabled and maxInFlight cannot be paresed into an integer");
+        } catch (final ConfigException e) {
+            assertEquals("Invalid value not-a-number for configuration max.in.flight.requests.per.connection: String value could not be parsed as 32-bit integer", e.getMessage());
         }
     }
 
@@ -604,6 +628,13 @@ public class StreamsConfigTest {
     public void shouldThrowConfigExceptionWhenOptimizationConfigNotValueInRange() {
         props.put(TOPOLOGY_OPTIMIZATION, "maybe");
         new StreamsConfig(props);
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void testThrowIllegalArgumentExceptionWhenTopicSegmentSizeSmallerThanProducerBatchSize() {
+        props.put(topicPrefix(TopicConfig.SEGMENT_BYTES_CONFIG), 100);
+        props.put(producerPrefix(ProducerConfig.BATCH_SIZE_CONFIG), 101);
+        new StreamsConfig(props).getMainConsumerConfigs("groupId", "clientId");
     }
 
     static class MisconfiguredSerde implements Serde {

@@ -21,6 +21,7 @@ import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.InvalidOffsetException;
 import org.apache.kafka.clients.consumer.MockConsumer;
+import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.clients.producer.MockProducer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.common.Cluster;
@@ -56,11 +57,15 @@ import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.TaskMetadata;
 import org.apache.kafka.streams.processor.ThreadMetadata;
+import org.apache.kafka.streams.processor.internals.StreamThread.StreamsMetricsThreadImpl;
 import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
 import org.apache.kafka.test.MockClientSupplier;
+import org.apache.kafka.test.MockProcessor;
 import org.apache.kafka.test.MockStateRestoreListener;
+import org.apache.kafka.test.MockStoreBuilder;
 import org.apache.kafka.test.MockTimestampExtractor;
 import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
@@ -68,6 +73,7 @@ import org.easymock.EasyMock;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
+import org.slf4j.Logger;
 
 import java.io.File;
 import java.io.IOException;
@@ -88,12 +94,14 @@ import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkProperties;
 import static org.apache.kafka.streams.processor.internals.AbstractStateManager.CHECKPOINT_FILE_NAME;
 import static org.hamcrest.CoreMatchers.equalTo;
+import static org.hamcrest.CoreMatchers.not;
+import static org.hamcrest.CoreMatchers.nullValue;
+import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertSame;
-import static org.junit.Assert.assertThat;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -687,8 +695,7 @@ public class StreamThreadTest {
         assertThat(producer.commitCount(), equalTo(2L));
     }
 
-    @Test
-    public void shouldCloseTaskAsZombieAndRemoveFromActiveTasksIfProducerGotFencedAtBeginTransactionWhenTaskIsResumed() {
+    private StreamThread setupStreamThread() {
         internalTopologyBuilder.addSource(null, "name", null, null, null, topic1);
         internalTopologyBuilder.addSink("out", "output", null, null, null, "name");
 
@@ -714,15 +721,32 @@ public class StreamThreadTest {
         thread.runOnce(-1);
 
         assertThat(thread.tasks().size(), equalTo(1));
+        return thread;
+    }
 
-        thread.rebalanceListener.onPartitionsRevoked(null);
+    @Test
+    public void shouldCloseTaskAsZombieAndRemoveFromActiveTasksIfProducerGotFencedInCommitTransactionWhenSuspendingTaks() {
+        final StreamThread thread = setupStreamThread();
+
         clientSupplier.producers.get(0).fenceProducer();
-        thread.rebalanceListener.onPartitionsAssigned(assignedPartitions);
-        try {
-            thread.runOnce(-1);
-            fail("Should have thrown TaskMigratedException");
-        } catch (final TaskMigratedException expected) { /* ignore */ }
+        thread.rebalanceListener.onPartitionsRevoked(null);
 
+        assertTrue(clientSupplier.producers.get(0).transactionInFlight());
+        assertFalse(clientSupplier.producers.get(0).transactionCommitted());
+        assertTrue(clientSupplier.producers.get(0).closed());
+        assertTrue(thread.tasks().isEmpty());
+    }
+
+    @Test
+    public void shouldCloseTaskAsZombieAndRemoveFromActiveTasksIfProducerGotFencedInCloseTransactionWhenSuspendingTaks() {
+        final StreamThread thread = setupStreamThread();
+
+        clientSupplier.producers.get(0).fenceProducerOnClose();
+        thread.rebalanceListener.onPartitionsRevoked(null);
+
+        assertFalse(clientSupplier.producers.get(0).transactionInFlight());
+        assertTrue(clientSupplier.producers.get(0).transactionCommitted());
+        assertFalse(clientSupplier.producers.get(0).closed());
         assertTrue(thread.tasks().isEmpty());
     }
 
@@ -889,6 +913,61 @@ public class StreamThreadTest {
         assertEquals(10L, store1.approximateNumEntries());
         assertEquals(5L, store2.approximateNumEntries());
         assertEquals(0, thread.standbyRecords().size());
+    }
+
+    @Test
+    public void shouldCreateStandbyTask() {
+        setupInternalTopologyWithoutState();
+        internalTopologyBuilder.addStateStore(new MockStoreBuilder("myStore", true), "processor1");
+
+        final StandbyTask standbyTask = createStandbyTask();
+
+        assertThat(standbyTask, not(nullValue()));
+    }
+
+    @Test
+    public void shouldNotCreateStandbyTaskWithoutStateStores() {
+        setupInternalTopologyWithoutState();
+
+        final StandbyTask standbyTask = createStandbyTask();
+
+        assertThat(standbyTask, nullValue());
+    }
+
+    @Test
+    public void shouldNotCreateStandbyTaskIfStateStoresHaveLoggingDisabled() {
+        setupInternalTopologyWithoutState();
+        final StoreBuilder storeBuilder = new MockStoreBuilder("myStore", true);
+        storeBuilder.withLoggingDisabled();
+        internalTopologyBuilder.addStateStore(storeBuilder, "processor1");
+
+        final StandbyTask standbyTask = createStandbyTask();
+
+        assertThat(standbyTask, nullValue());
+    }
+
+    private void setupInternalTopologyWithoutState() {
+        final MockProcessor mockProcessor = new MockProcessor();
+        internalTopologyBuilder.addSource(null, "source1", null, null, null, topic1);
+        internalTopologyBuilder.addProcessor("processor1", () -> mockProcessor, "source1");
+    }
+
+    private StandbyTask createStandbyTask() {
+        final LogContext logContext = new LogContext("test");
+        final Logger log = logContext.logger(StreamThreadTest.class);
+        final StreamsMetricsThreadImpl streamsMetrics = new StreamsMetricsThreadImpl(metrics, clientId);
+        final StreamThread.StandbyTaskCreator standbyTaskCreator = new StreamThread.StandbyTaskCreator(
+            internalTopologyBuilder,
+            config,
+            streamsMetrics,
+            stateDirectory,
+            new MockChangelogReader(),
+            mockTime,
+            log);
+        return standbyTaskCreator.createTask(
+            new MockConsumer<>(OffsetResetStrategy.EARLIEST),
+            new TaskId(1, 2),
+            Collections.emptySet());
     }
 
     @Test
@@ -1105,7 +1184,7 @@ public class StreamThreadTest {
                 }
             }, "Never restore first record");
 
-            mockRestoreConsumer.setException(new InvalidOffsetException("Try Again!") {
+            mockRestoreConsumer.setPollException(new InvalidOffsetException("Try Again!") {
                 @Override
                 public Set<TopicPartition> partitions() {
                     return changelogPartitionSet;

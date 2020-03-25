@@ -129,9 +129,15 @@ class CachingKeyValueStore<K, V> extends WrappedStateStore.AbstractStateStore im
 
     @Override
     public void close() {
-        flush();
-        underlying.close();
-        cache.close(cacheName);
+        try {
+            flush();
+        } finally {
+            try {
+                underlying.close();
+            } finally {
+                cache.close(cacheName);
+            }
+        }
     }
 
     @Override

@@ -31,18 +31,18 @@ import ImplicitConversions._
 import scala.collection.JavaConverters._
 
 /**
-  * Wraps the Java class StreamsBuilder and delegates method calls to the underlying Java object.
-  */
+ * Wraps the Java class StreamsBuilder and delegates method calls to the underlying Java object.
+ */
 class StreamsBuilder(inner: StreamsBuilderJ = new StreamsBuilderJ) {
 
   /**
    * Create a [[kstream.KStream]] from the specified topic.
    * <p>
-   * The `implicit Consumed` instance provides the values of `auto.offset.reset` strategy, `TimestampExtractor`, 
+   * The `implicit Consumed` instance provides the values of `auto.offset.reset` strategy, `TimestampExtractor`,
    * key and value deserializers etc. If the implicit is not found in scope, compiler error will result.
    * <p>
    * A convenient alternative is to have the necessary implicit serdes in scope, which will be implicitly
-   * converted to generate an instance of `Consumed`. @see [[ImplicitConversions]]. 
+   * converted to generate an instance of `Consumed`. @see [[ImplicitConversions]].
    * {{{
    * // Brings all implicit conversions in scope
    * import ImplicitConversions._
@@ -88,11 +88,11 @@ class StreamsBuilder(inner: StreamsBuilderJ = new StreamsBuilderJ) {
   /**
    * Create a [[kstream.KTable]] from the specified topic.
    * <p>
-   * The `implicit Consumed` instance provides the values of `auto.offset.reset` strategy, `TimestampExtractor`, 
+   * The `implicit Consumed` instance provides the values of `auto.offset.reset` strategy, `TimestampExtractor`,
    * key and value deserializers etc. If the implicit is not found in scope, compiler error will result.
    * <p>
    * A convenient alternative is to have the necessary implicit serdes in scope, which will be implicitly
-   * converted to generate an instance of `Consumed`. @see [[ImplicitConversions]]. 
+   * converted to generate an instance of `Consumed`. @see [[ImplicitConversions]].
    * {{{
    * // Brings all implicit conversions in scope
    * import ImplicitConversions._
@@ -123,8 +123,9 @@ class StreamsBuilder(inner: StreamsBuilderJ = new StreamsBuilderJ) {
    * @see #table(String)
    * @see `org.apache.kafka.streams.StreamsBuilder#table`
    */
-  def table[K, V](topic: String, materialized: Materialized[K, V, ByteArrayKeyValueStore])
-    (implicit consumed: Consumed[K, V]): KTable[K, V] =
+  def table[K, V](topic: String, materialized: Materialized[K, V, ByteArrayKeyValueStore])(
+    implicit consumed: Consumed[K, V]
+  ): KTable[K, V] =
     inner.table[K, V](topic, consumed, materialized)
 
   /**
@@ -139,8 +140,8 @@ class StreamsBuilder(inner: StreamsBuilderJ = new StreamsBuilderJ) {
     inner.globalTable(topic, consumed)
 
   /**
-   * Create a `GlobalKTable` from the specified topic. The resulting `GlobalKTable` will be materialized 
-   * in a local `KeyValueStore` configured with the provided instance of `Materialized`. The serializers 
+   * Create a `GlobalKTable` from the specified topic. The resulting `GlobalKTable` will be materialized
+   * in a local `KeyValueStore` configured with the provided instance of `Materialized`. The serializers
    * from the implicit `Consumed` instance will be used.
    *
    * @param topic the topic name
@@ -148,12 +149,13 @@ class StreamsBuilder(inner: StreamsBuilderJ = new StreamsBuilderJ) {
    * @return a `GlobalKTable` for the specified topic
    * @see `org.apache.kafka.streams.StreamsBuilder#globalTable`
    */
-  def globalTable[K, V](topic: String, materialized: Materialized[K, V, ByteArrayKeyValueStore])
-    (implicit consumed: Consumed[K, V]): GlobalKTable[K, V] =
+  def globalTable[K, V](topic: String, materialized: Materialized[K, V, ByteArrayKeyValueStore])(
+    implicit consumed: Consumed[K, V]
+  ): GlobalKTable[K, V] =
     inner.globalTable(topic, consumed, materialized)
 
   /**
-   * Adds a state store to the underlying `Topology`. The store must still be "connected" to a `Processor`, 
+   * Adds a state store to the underlying `Topology`. The store must still be "connected" to a `Processor`,
    * `Transformer`, or `ValueTransformer` before it can be used.
    *
    * @param builder the builder used to obtain this state store `StateStore` instance
@@ -164,11 +166,11 @@ class StreamsBuilder(inner: StreamsBuilderJ = new StreamsBuilderJ) {
   def addStateStore(builder: StoreBuilder[_ <: StateStore]): StreamsBuilderJ = inner.addStateStore(builder)
 
   /**
-   * Adds a global `StateStore` to the topology. Global stores should not be added to `Processor, `Transformer`, 
+   * Adds a global `StateStore` to the topology. Global stores should not be added to `Processor, `Transformer`,
    * or `ValueTransformer` (in contrast to regular stores).
    *
    * @see `org.apache.kafka.streams.StreamsBuilder#addGlobalStore`
-   */ 
+   */
   def addGlobalStore(storeBuilder: StoreBuilder[_ <: StateStore],
                      topic: String,
                      consumed: Consumed[_, _],

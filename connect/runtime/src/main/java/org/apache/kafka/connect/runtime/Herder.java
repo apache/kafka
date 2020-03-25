@@ -149,12 +149,6 @@ public interface Herder {
     void restartTask(ConnectorTaskId id, Callback<Void> cb);
 
     /**
-     * Get the configuration reload action.
-     * @param connName name of the connector
-     */
-    ConfigReloadAction connectorConfigReloadAction(final String connName);
-
-    /**
      * Restart the connector.
      * @param connName name of the connector
      * @param cb callback to invoke upon completion

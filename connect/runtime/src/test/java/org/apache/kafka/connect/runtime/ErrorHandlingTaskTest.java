@@ -46,7 +46,7 @@ import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.kafka.connect.source.SourceTask;
 import org.apache.kafka.connect.storage.Converter;
 import org.apache.kafka.connect.storage.HeaderConverter;
-import org.apache.kafka.connect.storage.OffsetStorageReader;
+import org.apache.kafka.connect.storage.OffsetStorageReaderImpl;
 import org.apache.kafka.connect.storage.OffsetStorageWriter;
 import org.apache.kafka.connect.transforms.Transformation;
 import org.apache.kafka.connect.transforms.util.SimpleConfig;
@@ -126,7 +126,7 @@ public class ErrorHandlingTaskTest {
     private KafkaProducer<byte[], byte[]> producer;
 
     @Mock
-    OffsetStorageReader offsetReader;
+    OffsetStorageReaderImpl offsetReader;
     @Mock
     OffsetStorageWriter offsetWriter;
 
@@ -166,8 +166,7 @@ public class ErrorHandlingTaskTest {
         Map<String, String> reportProps = new HashMap<>();
         reportProps.put(ConnectorConfig.ERRORS_LOG_ENABLE_CONFIG, "true");
         reportProps.put(ConnectorConfig.ERRORS_LOG_INCLUDE_MESSAGES_CONFIG, "true");
-        LogReporter reporter = new LogReporter(taskId, connConfig(reportProps));
-        reporter.metrics(errorHandlingMetrics);
+        LogReporter reporter = new LogReporter(taskId, connConfig(reportProps), errorHandlingMetrics);
 
         RetryWithToleranceOperator retryWithToleranceOperator = operator();
         retryWithToleranceOperator.metrics(errorHandlingMetrics);
@@ -218,8 +217,7 @@ public class ErrorHandlingTaskTest {
         Map<String, String> reportProps = new HashMap<>();
         reportProps.put(ConnectorConfig.ERRORS_LOG_ENABLE_CONFIG, "true");
         reportProps.put(ConnectorConfig.ERRORS_LOG_INCLUDE_MESSAGES_CONFIG, "true");
-        LogReporter reporter = new LogReporter(taskId, connConfig(reportProps));
-        reporter.metrics(errorHandlingMetrics);
+        LogReporter reporter = new LogReporter(taskId, connConfig(reportProps), errorHandlingMetrics);
 
         RetryWithToleranceOperator retryWithToleranceOperator = operator();
         retryWithToleranceOperator.metrics(errorHandlingMetrics);
@@ -283,8 +281,7 @@ public class ErrorHandlingTaskTest {
         Map<String, String> reportProps = new HashMap<>();
         reportProps.put(ConnectorConfig.ERRORS_LOG_ENABLE_CONFIG, "true");
         reportProps.put(ConnectorConfig.ERRORS_LOG_INCLUDE_MESSAGES_CONFIG, "true");
-        LogReporter reporter = new LogReporter(taskId, connConfig(reportProps));
-        reporter.metrics(errorHandlingMetrics);
+        LogReporter reporter = new LogReporter(taskId, connConfig(reportProps), errorHandlingMetrics);
 
         RetryWithToleranceOperator retryWithToleranceOperator = operator();
         retryWithToleranceOperator.metrics(errorHandlingMetrics);

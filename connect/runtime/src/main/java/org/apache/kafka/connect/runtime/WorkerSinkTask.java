@@ -288,6 +288,7 @@ class WorkerSinkTask extends WorkerTask {
 
         if (SinkConnectorConfig.hasTopicsConfig(taskConfig)) {
             String[] topics = taskConfig.get(SinkTask.TOPICS_CONFIG).split(",");
+            Arrays.setAll(topics, i -> topics[i].trim());
             consumer.subscribe(Arrays.asList(topics), new HandleRebalance());
             log.debug("{} Initializing and starting task for topics {}", this, topics);
         } else {
@@ -648,7 +649,7 @@ class WorkerSinkTask extends WorkerTask {
                 long pos = consumer.position(tp);
                 lastCommittedOffsets.put(tp, new OffsetAndMetadata(pos));
                 currentOffsets.put(tp, new OffsetAndMetadata(pos));
-                log.debug("{} Assigned topic partition {} with offset {}", this, tp, pos);
+                log.debug("{} Assigned topic partition {} with offset {}", WorkerSinkTask.this, tp, pos);
             }
             sinkTaskMetricsGroup.assignedOffsets(currentOffsets);
 

@@ -30,6 +30,8 @@ import org.apache.kafka.clients.consumer.RetriableCommitFailedException;
 import org.apache.kafka.clients.consumer.RoundRobinAssignor;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.Metric;
+import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.ApiException;
@@ -55,6 +57,7 @@ import org.apache.kafka.common.requests.SyncGroupRequest;
 import org.apache.kafka.common.requests.SyncGroupResponse;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Before;
@@ -77,6 +80,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Pattern;
 
 import static java.util.Collections.singleton;
@@ -442,7 +446,7 @@ public class ConsumerCoordinatorTest {
         coordinator.poll(Long.MAX_VALUE);
 
         assertFalse(coordinator.rejoinNeededOrPending());
-        assertEquals(2, subscriptions.assignedPartitions().size());
+        assertEquals(2, subscriptions.numAssignedPartitions());
         assertEquals(2, subscriptions.groupSubscription().size());
         assertEquals(2, subscriptions.subscription().size());
         assertEquals(1, rebalanceListener.revokedCount);
@@ -511,6 +515,50 @@ public class ConsumerCoordinatorTest {
         assertEquals(singleton(t1p), rebalanceListener.revoked);
         assertEquals(2, rebalanceListener.assignedCount);
         assertEquals(newAssignmentSet, rebalanceListener.assigned);
+    }
+
+    @Test
+    public void testForceMetadataRefreshForPatternSubscriptionDuringRebalance() {
+        // Set up a non-leader consumer with pattern subscription and a cluster containing one topic matching the
+        // pattern.
+        final String consumerId = "consumer";
+
+        subscriptions.subscribe(Pattern.compile(".*"), rebalanceListener);
+        metadata.update(TestUtils.singletonCluster(topic1, 1), Collections.<String>emptySet(),
+            time.milliseconds());
+        assertEquals(singleton(topic1), subscriptions.subscription());
+
+        client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
+        coordinator.ensureCoordinatorReady(Long.MAX_VALUE);
+
+        // Instrument the test so that metadata will contain two topics after next refresh.
+        client.prepareMetadataUpdate(cluster, Collections.emptySet());
+
+        client.prepareResponse(joinGroupFollowerResponse(1, consumerId, "leader", Errors.NONE));
+        client.prepareResponse(new MockClient.RequestMatcher() {
+            @Override
+            public boolean matches(AbstractRequest body) {
+                SyncGroupRequest sync = (SyncGroupRequest) body;
+                return sync.memberId().equals(consumerId) &&
+                    sync.generationId() == 1 &&
+                    sync.groupAssignment().isEmpty();
+            }
+        }, syncGroupResponse(singletonList(t1p), Errors.NONE));
+
+        partitionAssignor.prepare(singletonMap(consumerId, singletonList(t1p)));
+
+        // This will trigger rebalance.
+        coordinator.poll(Long.MAX_VALUE);
+
+        // Make sure that the metadata was refreshed during the rebalance and thus subscriptions now contain two topics.
+        final Set<String> updatedSubscriptionSet = new HashSet<>(Arrays.asList(topic1, topic2));
+        assertEquals(updatedSubscriptionSet, subscriptions.subscription());
+
+        // Refresh the metadata again. Since there have been no changes since the last refresh, it won't trigger
+        // rebalance again.
+        metadata.requestUpdate();
+        client.poll(Long.MAX_VALUE, time.milliseconds());
+        assertFalse(coordinator.rejoinNeededOrPending());
     }
 
     @Test
@@ -643,7 +691,7 @@ public class ConsumerCoordinatorTest {
         coordinator.joinGroupIfNeeded(Long.MAX_VALUE, time.milliseconds());
 
         assertFalse(coordinator.rejoinNeededOrPending());
-        assertEquals(2, subscriptions.assignedPartitions().size());
+        assertEquals(2, subscriptions.numAssignedPartitions());
         assertEquals(2, subscriptions.subscription().size());
         assertEquals(1, rebalanceListener.revokedCount);
         assertEquals(1, rebalanceListener.assignedCount);
@@ -1691,6 +1739,60 @@ public class ConsumerCoordinatorTest {
             assertEquals(range.name(), metadata.get(0).name());
             assertEquals(roundRobin.name(), metadata.get(1).name());
         }
+    }
+
+    @Test
+    public void testThreadSafeAssignedPartitionsMetric() throws Exception {
+        // Get the assigned-partitions metric
+        final Metric metric = metrics.metric(new MetricName("assigned-partitions", "consumer" + groupId + "-coordinator-metrics",
+                "", Collections.<String, String>emptyMap()));
+
+        // Start polling the metric in the background
+        final AtomicBoolean doStop = new AtomicBoolean();
+        final AtomicReference<Exception> exceptionHolder = new AtomicReference<>();
+        final AtomicInteger observedSize = new AtomicInteger();
+
+        Thread poller = new Thread() {
+            @Override
+            public void run() {
+                // Poll as fast as possible to reproduce ConcurrentModificationException
+                while (!doStop.get()) {
+                    try {
+                        int size = ((Double) metric.metricValue()).intValue();
+                        observedSize.set(size);
+                    } catch (Exception e) {
+                        exceptionHolder.set(e);
+                        return;
+                    }
+                }
+            }
+        };
+        poller.start();
+
+        // Assign two partitions to trigger a metric change that can lead to ConcurrentModificationException
+        client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
+        coordinator.ensureCoordinatorReady(Long.MAX_VALUE);
+
+        // Change the assignment several times to increase likelihood of concurrent updates
+        Set<TopicPartition> partitions = new HashSet<>();
+        int totalPartitions = 10;
+        for (int partition = 0; partition < totalPartitions; partition++) {
+            partitions.add(new TopicPartition(topic1, partition));
+            subscriptions.assignFromUser(partitions);
+        }
+
+        // Wait for the metric poller to observe the final assignment change or raise an error
+        TestUtils.waitForCondition(new TestCondition() {
+            @Override
+            public boolean conditionMet() {
+                return observedSize.get() == totalPartitions || exceptionHolder.get() != null;
+            }
+        }, "Failed to observe expected assignment change");
+
+        doStop.set(true);
+        poller.join();
+
+        assertNull("Failed fetching the metric at least once", exceptionHolder.get());
     }
 
     @Test

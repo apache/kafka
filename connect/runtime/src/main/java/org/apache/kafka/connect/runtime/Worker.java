@@ -43,10 +43,10 @@ import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTask;
 import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.kafka.connect.source.SourceTask;
+import org.apache.kafka.connect.storage.CloseableOffsetStorageReader;
 import org.apache.kafka.connect.storage.Converter;
 import org.apache.kafka.connect.storage.HeaderConverter;
 import org.apache.kafka.connect.storage.OffsetBackingStore;
-import org.apache.kafka.connect.storage.OffsetStorageReader;
 import org.apache.kafka.connect.storage.OffsetStorageReaderImpl;
 import org.apache.kafka.connect.storage.OffsetStorageWriter;
 import org.apache.kafka.connect.util.ConnectorTaskId;
@@ -103,8 +103,20 @@ public class Worker {
             WorkerConfig config,
             OffsetBackingStore offsetBackingStore
     ) {
+        this(workerId, time, plugins, config, offsetBackingStore, Executors.newCachedThreadPool());
+    }
+
+    @SuppressWarnings("deprecation")
+    Worker(
+            String workerId,
+            Time time,
+            Plugins plugins,
+            WorkerConfig config,
+            OffsetBackingStore offsetBackingStore,
+            ExecutorService executorService
+    ) {
         this.metrics = new ConnectMetrics(workerId, config, time);
-        this.executor = Executors.newCachedThreadPool();
+        this.executor = executorService;
         this.workerId = workerId;
         this.time = time;
         this.plugins = plugins;
@@ -401,10 +413,10 @@ public class Worker {
         final WorkerTask workerTask;
         ClassLoader savedLoader = plugins.currentThreadLoader();
         try {
-            final ConnectorConfig connConfig = new ConnectorConfig(plugins, connProps);
-            String connType = connConfig.getString(ConnectorConfig.CONNECTOR_CLASS_CONFIG);
+            String connType = connProps.get(ConnectorConfig.CONNECTOR_CLASS_CONFIG);
             ClassLoader connectorLoader = plugins.delegatingLoader().connectorLoader(connType);
             savedLoader = Plugins.compareAndSwapLoaders(connectorLoader);
+            final ConnectorConfig connConfig = new ConnectorConfig(plugins, connProps);
             final TaskConfig taskConfig = new TaskConfig(taskProps);
             final Class<? extends Task> taskClass = taskConfig.getClass(TaskConfig.TASK_CLASS_CONFIG).asSubclass(Task.class);
             final Task task = plugins.newTask(taskClass);
@@ -493,7 +505,8 @@ public class Worker {
         if (task instanceof SourceTask) {
             retryWithToleranceOperator.reporters(sourceTaskReporters(id, connConfig, errorHandlingMetrics));
             TransformationChain<SourceRecord> transformationChain = new TransformationChain<>(connConfig.<SourceRecord>transformations(), retryWithToleranceOperator);
-            OffsetStorageReader offsetReader = new OffsetStorageReaderImpl(offsetBackingStore, id.connector(),
+            log.info("Initializing: {}", transformationChain);
+            CloseableOffsetStorageReader offsetReader = new OffsetStorageReaderImpl(offsetBackingStore, id.connector(),
                     internalKeyConverter, internalValueConverter);
             OffsetStorageWriter offsetWriter = new OffsetStorageWriter(offsetBackingStore, id.connector(),
                     internalKeyConverter, internalValueConverter);
@@ -505,6 +518,7 @@ public class Worker {
                     time, retryWithToleranceOperator);
         } else if (task instanceof SinkTask) {
             TransformationChain<SinkRecord> transformationChain = new TransformationChain<>(connConfig.<SinkRecord>transformations(), retryWithToleranceOperator);
+            log.info("Initializing: {}", transformationChain);
             SinkConnectorConfig sinkConfig = new SinkConnectorConfig(plugins, connConfig.originalsStrings());
             retryWithToleranceOperator.reporters(sinkTaskReporters(id, sinkConfig, errorHandlingMetrics));
             return new WorkerSinkTask(id, (SinkTask) task, statusListener, initialState, config, configState, metrics, keyConverter,
@@ -523,14 +537,13 @@ public class Worker {
     private List<ErrorReporter> sinkTaskReporters(ConnectorTaskId id, SinkConnectorConfig connConfig,
                                                   ErrorHandlingMetrics errorHandlingMetrics) {
         ArrayList<ErrorReporter> reporters = new ArrayList<>();
-        LogReporter logReporter = new LogReporter(id, connConfig);
-        logReporter.metrics(errorHandlingMetrics);
+        LogReporter logReporter = new LogReporter(id, connConfig, errorHandlingMetrics);
         reporters.add(logReporter);
 
         // check if topic for dead letter queue exists
         String topic = connConfig.dlqTopicName();
         if (topic != null && !topic.isEmpty()) {
-            DeadLetterQueueReporter reporter = DeadLetterQueueReporter.createAndSetup(config, id, connConfig, producerProps);
+            DeadLetterQueueReporter reporter = DeadLetterQueueReporter.createAndSetup(config, id, connConfig, producerProps, errorHandlingMetrics);
             reporters.add(reporter);
         }
 
@@ -540,8 +553,7 @@ public class Worker {
     private List<ErrorReporter> sourceTaskReporters(ConnectorTaskId id, ConnectorConfig connConfig,
                                                       ErrorHandlingMetrics errorHandlingMetrics) {
         List<ErrorReporter> reporters = new ArrayList<>();
-        LogReporter logReporter = new LogReporter(id, connConfig);
-        logReporter.metrics(errorHandlingMetrics);
+        LogReporter logReporter = new LogReporter(id, connConfig, errorHandlingMetrics);
         reporters.add(logReporter);
 
         return reporters;

@@ -197,4 +197,20 @@ public interface KafkaClient extends Closeable {
                                    int requestTimeoutMs,
                                    RequestCompletionHandler callback);
 
+
+
+    /**
+     * Initiates shutdown of this client. This method may be invoked from another thread while this
+     * client is being polled. No further requests may be sent using the client. The current poll()
+     * will be terminated using wakeup(). The client should be explicitly shutdown using {@link #close()}
+     * after poll returns. Note that {@link #close()} should not be invoked concurrently while polling.
+     */
+    void initiateClose();
+
+    /**
+     * Returns true if the client is still active. Returns false if {@link #initiateClose()} or {@link #close()}
+     * was invoked for this client.
+     */
+    boolean active();
+
 }

@@ -69,6 +69,10 @@ object TestUtils extends Logging {
   /* 0 gives a random port; you can then retrieve the assigned port from the Socket object. */
   val RandomPort = 0
 
+  /* Incorrect broker port which can used by kafka clients in tests. This port should not be used
+   by any other service and hence we use a reserved port. */
+  val IncorrectBrokerPort = 225
+
   /** Port to use for unit tests that mock/don't require a real ZK server. */
   val MockZkPort = 1
   /** ZooKeeper connection string to use for unit tests that mock/don't require a real ZK server. */
@@ -375,10 +379,11 @@ object TestUtils extends Logging {
               producerId: Long = RecordBatch.NO_PRODUCER_ID,
               producerEpoch: Short = RecordBatch.NO_PRODUCER_EPOCH,
               sequence: Int = RecordBatch.NO_SEQUENCE,
-              baseOffset: Long = 0L): MemoryRecords = {
+              baseOffset: Long = 0L,
+              partitionLeaderEpoch: Int = RecordBatch.NO_PARTITION_LEADER_EPOCH): MemoryRecords = {
     val buf = ByteBuffer.allocate(DefaultRecordBatch.sizeInBytes(records.asJava))
     val builder = MemoryRecords.builder(buf, magicValue, codec, TimestampType.CREATE_TIME, baseOffset,
-      System.currentTimeMillis, producerId, producerEpoch, sequence)
+      System.currentTimeMillis, producerId, producerEpoch, sequence, false, partitionLeaderEpoch)
     records.foreach(builder.append)
     builder.build()
   }
@@ -1381,5 +1386,12 @@ object TestUtils extends Logging {
         assertTrue("Expected an exception of type " + clazz.getName + "; got type " +
             cause.getClass().getName, clazz.isInstance(cause))
     }
+  }
+
+  def totalMetricValue(server: KafkaServer, metricName: String): Long = {
+    val allMetrics = server.metrics.metrics
+    val total = allMetrics.values().asScala.filter(_.metricName().name() == metricName)
+      .foldLeft(0.0)((total, metric) => total + metric.metricValue.asInstanceOf[Double])
+    total.toLong
   }
 }

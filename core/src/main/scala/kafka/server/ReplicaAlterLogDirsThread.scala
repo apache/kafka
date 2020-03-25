@@ -25,7 +25,7 @@ import kafka.cluster.BrokerEndPoint
 import kafka.server.AbstractFetcherThread.ResultWithPartitions
 import kafka.server.QuotaFactory.UnboundedQuota
 import kafka.server.ReplicaAlterLogDirsThread.{FetchRequest, PartitionData}
-import kafka.server.epoch.LeaderEpochCache
+import kafka.server.epoch.LeaderEpochFileCache
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.KafkaStorageException
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
@@ -141,17 +141,19 @@ class ReplicaAlterLogDirsThread(name: String,
    * Builds offset for leader epoch requests for partitions that are in the truncating phase based
    * on latest epochs of the future replicas (the one that is fetching)
    */
-  def buildLeaderEpochRequest(allPartitions: Seq[(TopicPartition, PartitionFetchState)]): ResultWithPartitions[Map[TopicPartition, Int]] = {
-    def epochCacheOpt(tp: TopicPartition): Option[LeaderEpochCache] = replicaMgr.getReplica(tp, Request.FutureLocalReplicaId).map(_.epochs.get)
+  def buildLeaderEpochRequest(allPartitions: Seq[(TopicPartition, PartitionFetchState)]): (Map[TopicPartition, Int], Set[TopicPartition]) = {
+    def epochCacheOpt(tp: TopicPartition): Option[LeaderEpochFileCache] = replicaMgr.getReplica(tp, Request.FutureLocalReplicaId).flatMap(_.epochs)
 
     val partitionEpochOpts = allPartitions
       .filter { case (_, state) => state.isTruncatingLog }
       .map { case (tp, _) => tp -> epochCacheOpt(tp) }.toMap
 
-    val (partitionsWithEpoch, partitionsWithoutEpoch) = partitionEpochOpts.partition { case (_, epochCacheOpt) => epochCacheOpt.nonEmpty }
+    val (partitionsWithEpoch, partitionsWithoutEpoch) = partitionEpochOpts.partition { case (_, epochCacheOpt) =>
+      epochCacheOpt.exists(_.latestEpoch != UNDEFINED_EPOCH)
+    }
 
-    val result = partitionsWithEpoch.map { case (tp, epochCacheOpt) => tp -> epochCacheOpt.get.latestEpoch() }
-    ResultWithPartitions(result, partitionsWithoutEpoch.keys.toSet)
+    val result = partitionsWithEpoch.map { case (tp, epochCacheOpt) => tp -> epochCacheOpt.get.latestEpoch }
+    (result, partitionsWithoutEpoch.keys.toSet)
   }
 
   /**
@@ -162,7 +164,7 @@ class ReplicaAlterLogDirsThread(name: String,
   def fetchEpochsFromLeader(partitions: Map[TopicPartition, Int]): Map[TopicPartition, EpochEndOffset] = {
     partitions.map { case (tp, epoch) =>
       try {
-        val (leaderEpoch, leaderOffset) = replicaMgr.getReplicaOrException(tp).epochs.get.endOffsetFor(epoch)
+        val (leaderEpoch, leaderOffset) = replicaMgr.getReplicaOrException(tp).endOffsetFor(epoch)
         tp -> new EpochEndOffset(Errors.NONE, leaderEpoch, leaderOffset)
       } catch {
         case t: Throwable =>

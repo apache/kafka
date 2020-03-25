@@ -517,7 +517,9 @@ class GroupMetadataManager(brokerId: Int,
 
       case Some(log) =>
         var currOffset = log.logStartOffset
-        lazy val buffer = ByteBuffer.allocate(config.loadBufferSize)
+
+        // buffer may not be needed if records are read from memory
+        var buffer = ByteBuffer.allocate(0)
 
         // loop breaks if leader changes at any time during the load, since getHighWatermark is -1
         val loadedOffsets = mutable.Map[GroupTopicPartition, CommitRecordMetadataAndOffset]()
@@ -531,7 +533,20 @@ class GroupMetadataManager(brokerId: Int,
           val memRecords = fetchDataInfo.records match {
             case records: MemoryRecords => records
             case fileRecords: FileRecords =>
-              buffer.clear()
+              val sizeInBytes = fileRecords.sizeInBytes
+              val bytesNeeded = Math.max(config.loadBufferSize, sizeInBytes)
+
+              // minOneMessage = true in the above log.read means that the buffer may need to be grown to ensure progress can be made
+              if (buffer.capacity < bytesNeeded) {
+                if (config.loadBufferSize < bytesNeeded)
+                  warn(s"Loaded offsets and group metadata from $topicPartition with buffer larger ($bytesNeeded bytes) than " +
+                    s"configured offsets.load.buffer.size (${config.loadBufferSize} bytes)")
+
+                buffer = ByteBuffer.allocate(bytesNeeded)
+              } else {
+                buffer.clear()
+              }
+
               fileRecords.readInto(buffer, 0)
               MemoryRecords.readableRecords(buffer)
           }
@@ -539,17 +554,20 @@ class GroupMetadataManager(brokerId: Int,
           memRecords.batches.asScala.foreach { batch =>
             val isTxnOffsetCommit = batch.isTransactional
             if (batch.isControlBatch) {
-              val record = batch.iterator.next()
-              val controlRecord = ControlRecordType.parse(record.key)
-              if (controlRecord == ControlRecordType.COMMIT) {
-                pendingOffsets.getOrElse(batch.producerId, mutable.Map[GroupTopicPartition, CommitRecordMetadataAndOffset]())
-                  .foreach {
-                    case (groupTopicPartition, commitRecordMetadataAndOffset) =>
-                      if (!loadedOffsets.contains(groupTopicPartition) || loadedOffsets(groupTopicPartition).olderThan(commitRecordMetadataAndOffset))
-                        loadedOffsets.put(groupTopicPartition, commitRecordMetadataAndOffset)
-                  }
+              val recordIterator = batch.iterator
+              if (recordIterator.hasNext) {
+                val record = recordIterator.next()
+                val controlRecord = ControlRecordType.parse(record.key)
+                if (controlRecord == ControlRecordType.COMMIT) {
+                  pendingOffsets.getOrElse(batch.producerId, mutable.Map[GroupTopicPartition, CommitRecordMetadataAndOffset]())
+                    .foreach {
+                      case (groupTopicPartition, commitRecordMetadataAndOffset) =>
+                        if (!loadedOffsets.contains(groupTopicPartition) || loadedOffsets(groupTopicPartition).olderThan(commitRecordMetadataAndOffset))
+                          loadedOffsets.put(groupTopicPartition, commitRecordMetadataAndOffset)
+                    }
+                }
+                pendingOffsets.remove(batch.producerId)
               }
-              pendingOffsets.remove(batch.producerId)
             } else {
               var batchBaseOffset: Option[Long] = None
               for (record <- batch.asScala) {

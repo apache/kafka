@@ -104,14 +104,14 @@ import static org.apache.kafka.common.utils.Utils.getPort;
  * <p>
  * A simple example might look like this:
  * <pre>{@code
- * Map<String, Object> props = new HashMap<>();
+ * Properties props = new Properties();
  * props.put(StreamsConfig.APPLICATION_ID_CONFIG, "my-stream-processing-application");
  * props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
  * props.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass());
  * props.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
  *
  * StreamsBuilder builder = new StreamsBuilder();
- * builder.<String, String>stream("my-input-topic").mapValues(value -> value.length().toString()).to("my-output-topic");
+ * builder.<String, String>stream("my-input-topic").mapValues(value -> String.valueOf(value.length())).to("my-output-topic");
  *
  * KafkaStreams streams = new KafkaStreams(builder.build(), props);
  * streams.start();
@@ -765,6 +765,7 @@ public class KafkaStreams {
      * This function is expected to be called only once during the life cycle of the client.
      * <p>
      * Because threads are started in the background, this method does not block.
+     * However, if you have global stores in your topology, this method blocks until all global stores are restored.
      * As a consequence, any fatal exception that happens during processing is by default only logged.
      * If you want to be notified about dying threads, you can
      * {@link #setUncaughtExceptionHandler(Thread.UncaughtExceptionHandler) register an uncaught exception handler}

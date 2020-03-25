@@ -42,7 +42,6 @@ import org.slf4j.LoggerFactory;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.Executors;
@@ -135,7 +134,7 @@ public class StandaloneHerder extends AbstractHerder {
     private ConnectorInfo createConnectorInfo(String connector) {
         if (!configState.contains(connector))
             return null;
-        Map<String, String> config = configState.connectorConfig(connector);
+        Map<String, String> config = configState.rawConnectorConfig(connector);
         return new ConnectorInfo(connector, config, configState.tasks(connector),
             connectorTypeForClass(config.get(ConnectorConfig.CONNECTOR_CLASS_CONFIG)));
     }
@@ -201,7 +200,9 @@ public class StandaloneHerder extends AbstractHerder {
                 created = true;
             }
 
-            if (!startConnector(config)) {
+            configBackingStore.putConnectorConfig(connName, config);
+
+            if (!startConnector(connName)) {
                 callback.onCompletion(new ConnectException("Failed to start connector: " + connName), null);
                 return;
             }
@@ -231,7 +232,7 @@ public class StandaloneHerder extends AbstractHerder {
 
         List<TaskInfo> result = new ArrayList<>();
         for (ConnectorTaskId taskId : configState.tasks(connName))
-            result.add(new TaskInfo(taskId, configState.taskConfig(taskId)));
+            result.add(new TaskInfo(taskId, configState.rawTaskConfig(taskId)));
         callback.onCompletion(null, result);
     }
 
@@ -259,20 +260,12 @@ public class StandaloneHerder extends AbstractHerder {
     }
 
     @Override
-    public ConfigReloadAction connectorConfigReloadAction(final String connName) {
-        return ConfigReloadAction.valueOf(
-                configState.connectorConfig(connName).get(ConnectorConfig.CONFIG_RELOAD_ACTION_CONFIG)
-                        .toUpperCase(Locale.ROOT));
-    }
-
-    @Override
     public synchronized void restartConnector(String connName, Callback<Void> cb) {
         if (!configState.contains(connName))
             cb.onCompletion(new NotFoundException("Connector " + connName + " not found", null), null);
 
-        Map<String, String> config = configState.connectorConfig(connName);
         worker.stopConnector(connName);
-        if (startConnector(config))
+        if (startConnector(connName))
             cb.onCompletion(null, null);
         else
             cb.onCompletion(new ConnectException("Failed to start connector: " + connName), null);
@@ -290,9 +283,7 @@ public class StandaloneHerder extends AbstractHerder {
         return new StandaloneHerderRequest(requestSeqNum.incrementAndGet(), future);
     }
 
-    private boolean startConnector(Map<String, String> connectorProps) {
-        String connName = connectorProps.get(ConnectorConfig.NAME_CONFIG);
-        configBackingStore.putConnectorConfig(connName, connectorProps);
+    private boolean startConnector(String connName) {
         Map<String, String> connConfigs = configState.connectorConfig(connName);
         TargetState targetState = configState.targetState(connName);
         return worker.startConnector(connName, connConfigs, new HerderConnectorContext(this, connName), this, targetState);
@@ -336,7 +327,8 @@ public class StandaloneHerder extends AbstractHerder {
 
         if (!newTaskConfigs.equals(oldTaskConfigs)) {
             removeConnectorTasks(connName);
-            configBackingStore.putTaskConfigs(connName, newTaskConfigs);
+            List<Map<String, String>> rawTaskConfigs = reverseTransform(connName, configState, newTaskConfigs);
+            configBackingStore.putTaskConfigs(connName, rawTaskConfigs);
             createConnectorTasks(connName, configState.targetState(connName));
         }
     }

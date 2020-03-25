@@ -133,6 +133,22 @@ class StreamsBrokerBounceTest(Test):
         for num in range(0, num_failures - 1):
             signal_node(self, self.kafka.nodes[num], sig)
 
+    def confirm_topics_on_all_brokers(self, expected_topic_set):
+        for node in self.kafka.nodes:
+            match_count = 0
+            # need to iterate over topic_list_generator as kafka.list_topics()
+            # returns a python generator so values are fetched lazily
+            # so we can't just compare directly we must iterate over what's returned
+            topic_list_generator = self.kafka.list_topics("placeholder", node)
+            for topic in topic_list_generator:
+                if topic in expected_topic_set:
+                    match_count += 1
+
+            if len(expected_topic_set) != match_count:
+                return False
+
+        return True
+
         
     def setup_system(self, start_processor=True):
         # Setup phase
@@ -141,6 +157,12 @@ class StreamsBrokerBounceTest(Test):
 
         self.kafka = KafkaService(self.test_context, num_nodes=self.replication, zk=self.zk, topics=self.topics)
         self.kafka.start()
+
+        # allow some time for topics to be created
+        wait_until(lambda: self.confirm_topics_on_all_brokers(set(self.topics.keys())),
+                   timeout_sec=60,
+                   err_msg="Broker did not create all topics in 60 seconds ")
+
         # Start test harness
         self.driver = StreamsSmokeTestDriverService(self.test_context, self.kafka)
         self.processor1 = StreamsSmokeTestJobRunnerService(self.test_context, self.kafka)

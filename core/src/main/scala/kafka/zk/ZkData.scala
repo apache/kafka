@@ -429,14 +429,20 @@ object PreferredReplicaElectionZNode {
   }.map(_.toSet).getOrElse(Set.empty)
 }
 
+//old consumer path znode
+object ConsumerPathZNode {
+  def path = "/consumers"
+}
+
 object ConsumerOffset {
-  def path(group: String, topic: String, partition: Integer) = s"/consumers/${group}/offsets/${topic}/${partition}"
+  def path(group: String, topic: String, partition: Integer) = s"${ConsumerPathZNode.path}/${group}/offsets/${topic}/${partition}"
   def encode(offset: Long): Array[Byte] = offset.toString.getBytes(UTF_8)
   def decode(bytes: Array[Byte]): Option[Long] = Option(bytes).map(new String(_, UTF_8).toLong)
 }
 
 object ZkVersion {
-  val NoVersion = -1
+  val MatchAnyVersion = -1 // if used in a conditional set, matches any version (the value should match ZooKeeper codebase)
+  val UnknownVersion = -2  // Version returned from get if node does not exist (internal constant for Kafka codebase, unused value in ZK)
 }
 
 object ZkStat {
@@ -720,7 +726,7 @@ object ZkData {
 
   // These are persistent ZK paths that should exist on kafka broker startup.
   val PersistentZkPaths = Seq(
-    "/consumers", // old consumer path
+    ConsumerPathZNode.path, // old consumer path
     BrokerIdsZNode.path,
     TopicsZNode.path,
     ConfigEntityChangeNotificationZNode.path,
@@ -742,7 +748,8 @@ object ZkData {
   }
 
   def defaultAcls(isSecure: Boolean, path: String): Seq[ACL] = {
-    if (isSecure) {
+    //Old Consumer path is kept open as different consumers will write under this node.
+    if (!ConsumerPathZNode.path.equals(path) && isSecure) {
       val acls = new ArrayBuffer[ACL]
       acls ++= ZooDefs.Ids.CREATOR_ALL_ACL.asScala
       if (!sensitivePath(path))

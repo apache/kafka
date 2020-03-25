@@ -125,7 +125,8 @@ public class TransactionManagerTest {
         Metrics metrics = new Metrics(metricConfig, time);
         SenderMetricsRegistry senderMetrics = new SenderMetricsRegistry(metrics);
 
-        this.accumulator = new RecordAccumulator(logContext, batchSize, 1024 * 1024, CompressionType.NONE, 0L, 0L, metrics, time, apiVersions, transactionManager);
+        this.accumulator = new RecordAccumulator(logContext, batchSize, 1024 * 1024, CompressionType.NONE,
+                0L, 0L, metrics, time, apiVersions, transactionManager);
         this.sender = new Sender(logContext, this.client, this.metadata, this.accumulator, true, MAX_REQUEST_SIZE, ACKS_ALL,
                 MAX_RETRIES, senderMetrics, this.time, REQUEST_TIMEOUT, 50, transactionManager, apiVersions);
         this.metadata.update(this.cluster, Collections.<String>emptySet(), time.milliseconds());
@@ -575,6 +576,18 @@ public class TransactionManagerTest {
     }
 
     @Test
+    public void testSequenceNumberOverflow() {
+        TransactionManager transactionManager = new TransactionManager();
+        assertEquals((int) transactionManager.sequenceNumber(tp0), 0);
+        transactionManager.incrementSequenceNumber(tp0, Integer.MAX_VALUE);
+        assertEquals((int) transactionManager.sequenceNumber(tp0), Integer.MAX_VALUE);
+        transactionManager.incrementSequenceNumber(tp0, 100);
+        assertEquals((int) transactionManager.sequenceNumber(tp0), 99);
+        transactionManager.incrementSequenceNumber(tp0, Integer.MAX_VALUE);
+        assertEquals((int) transactionManager.sequenceNumber(tp0), 98);
+    }
+
+    @Test
     public void testProducerIdReset() {
         TransactionManager transactionManager = new TransactionManager();
         assertEquals((int) transactionManager.sequenceNumber(tp0), 0);
@@ -916,13 +929,13 @@ public class TransactionManagerTest {
         final String consumerGroupId = "consumer";
         final long pid = 13131L;
         final short epoch = 1;
-        final TopicPartition tp = new TopicPartition("foo", 0);
+        final TopicPartition tp1 = new TopicPartition("foo", 0);
 
         doInitTransactions(pid, epoch);
 
         transactionManager.beginTransaction();
         TransactionalRequestResult sendOffsetsResult = transactionManager.sendOffsetsToTransaction(
-                singletonMap(tp, new OffsetAndMetadata(39L)), consumerGroupId);
+                singletonMap(tp1, new OffsetAndMetadata(39L)), consumerGroupId);
 
         prepareAddOffsetsToTxnResponse(Errors.NONE, consumerGroupId, pid, epoch);
         sender.run(time.milliseconds());  // AddOffsetsToTxn Handled, TxnOffsetCommit Enqueued
@@ -931,7 +944,7 @@ public class TransactionManagerTest {
         prepareFindCoordinatorResponse(Errors.NONE, false, CoordinatorType.GROUP, consumerGroupId);
         sender.run(time.milliseconds());  // FindCoordinator Returned
 
-        prepareTxnOffsetCommitResponse(consumerGroupId, pid, epoch, singletonMap(tp, Errors.GROUP_AUTHORIZATION_FAILED));
+        prepareTxnOffsetCommitResponse(consumerGroupId, pid, epoch, singletonMap(tp1, Errors.GROUP_AUTHORIZATION_FAILED));
         sender.run(time.milliseconds());  // TxnOffsetCommit Handled
 
         assertTrue(transactionManager.hasError());
@@ -939,6 +952,7 @@ public class TransactionManagerTest {
         assertTrue(sendOffsetsResult.isCompleted());
         assertFalse(sendOffsetsResult.isSuccessful());
         assertTrue(sendOffsetsResult.error() instanceof GroupAuthorizationException);
+        assertFalse(transactionManager.hasPendingOffsetCommits());
 
         GroupAuthorizationException exception = (GroupAuthorizationException) sendOffsetsResult.error();
         assertEquals(consumerGroupId, exception.groupId());
@@ -1749,7 +1763,16 @@ public class TransactionManagerTest {
     }
 
     @Test
-    public void testHandlingOfUnknownTopicPartitionErrorOnTxnOffsetCommit() throws InterruptedException {
+    public void testHandlingOfUnknownTopicPartitionErrorOnTxnOffsetCommit() {
+        testRetriableErrorInTxnOffsetCommit(Errors.UNKNOWN_TOPIC_OR_PARTITION);
+    }
+
+    @Test
+    public void testHandlingOfCoordinatorLoadingErrorOnTxnOffsetCommit() {
+        testRetriableErrorInTxnOffsetCommit(Errors.COORDINATOR_LOAD_IN_PROGRESS);
+    }
+
+    private void testRetriableErrorInTxnOffsetCommit(Errors error) {
         final long pid = 13131L;
         final short epoch = 1;
 
@@ -1758,6 +1781,7 @@ public class TransactionManagerTest {
         transactionManager.beginTransaction();
 
         Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
+        offsets.put(tp0, new OffsetAndMetadata(1));
         offsets.put(tp1, new OffsetAndMetadata(1));
         final String consumerGroupId = "myconsumergroup";
 
@@ -1769,12 +1793,13 @@ public class TransactionManagerTest {
         assertFalse(addOffsetsResult.isCompleted());  // The request should complete only after the TxnOffsetCommit completes.
 
         Map<TopicPartition, Errors> txnOffsetCommitResponse = new HashMap<>();
-        txnOffsetCommitResponse.put(tp1, Errors.UNKNOWN_TOPIC_OR_PARTITION);
+        txnOffsetCommitResponse.put(tp0, Errors.NONE);
+        txnOffsetCommitResponse.put(tp1, error);
 
         prepareFindCoordinatorResponse(Errors.NONE, false, CoordinatorType.GROUP, consumerGroupId);
         prepareTxnOffsetCommitResponse(consumerGroupId, pid, epoch, txnOffsetCommitResponse);
 
-        assertEquals(null, transactionManager.coordinator(CoordinatorType.GROUP));
+        assertNull(transactionManager.coordinator(CoordinatorType.GROUP));
         sender.run(time.milliseconds());  // try to send TxnOffsetCommitRequest, but find we don't have a group coordinator.
         sender.run(time.milliseconds());  // send find coordinator for group request
         assertNotNull(transactionManager.coordinator(CoordinatorType.GROUP));
@@ -1799,7 +1824,7 @@ public class TransactionManagerTest {
     }
 
     @Test
-    public void shouldNotSendAbortTxnRequestWhenOnlyAddPartitionsRequestFailed() throws Exception {
+    public void shouldNotSendAbortTxnRequestWhenOnlyAddPartitionsRequestFailed() {
         final long pid = 13131L;
         final short epoch = 1;
 
@@ -2395,7 +2420,9 @@ public class TransactionManagerTest {
         };
     }
 
-    private void prepareAddOffsetsToTxnResponse(Errors error, final String consumerGroupId, final long producerId,
+    private void prepareAddOffsetsToTxnResponse(final Errors error,
+                                                final String consumerGroupId,
+                                                final long producerId,
                                                 final short producerEpoch) {
         client.prepareResponse(new MockClient.RequestMatcher() {
             @Override
@@ -2445,7 +2472,7 @@ public class TransactionManagerTest {
 
     private void assertAbortableError(Class<? extends RuntimeException> cause) {
         try {
-            transactionManager.beginTransaction();
+            transactionManager.beginCommit();
             fail("Should have raised " + cause.getSimpleName());
         } catch (KafkaException e) {
             assertTrue(cause.isAssignableFrom(e.getCause().getClass()));

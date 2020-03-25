@@ -190,24 +190,10 @@ public class QueryableStateIntegrationTest {
         streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100);
         // override this to make the rebalances happen quickly
         streamsConfiguration.put(IntegrationTestUtils.INTERNAL_LEAVE_GROUP_ON_CLOSE, true);
+        
+        stringComparator = Comparator.comparing((KeyValue<String, String> o) -> o.key).thenComparing(o -> o.value);
+        stringLongComparator = Comparator.comparing((KeyValue<String, Long> o) -> o.key).thenComparingLong(o -> o.value);
 
-
-        stringComparator = new Comparator<KeyValue<String, String>>() {
-
-            @Override
-            public int compare(final KeyValue<String, String> o1,
-                               final KeyValue<String, String> o2) {
-                return o1.key.compareTo(o2.key);
-            }
-        };
-        stringLongComparator = new Comparator<KeyValue<String, Long>>() {
-
-            @Override
-            public int compare(final KeyValue<String, Long> o1,
-                               final KeyValue<String, Long> o2) {
-                return o1.key.compareTo(o2.key);
-            }
-        };
         inputValues = getInputValues();
         inputValuesKeys = new HashSet<>();
         for (final String sentence : inputValues) {

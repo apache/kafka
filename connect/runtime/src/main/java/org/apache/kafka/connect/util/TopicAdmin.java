@@ -22,6 +22,7 @@ import org.apache.kafka.clients.admin.CreateTopicsOptions;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.errors.ClusterAuthorizationException;
+import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicExistsException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
@@ -243,6 +244,12 @@ public class TopicAdmin implements AutoCloseable {
                 if (cause instanceof ClusterAuthorizationException) {
                     log.debug("Not authorized to create topic(s) '{}'." +
                             " Falling back to assume topic(s) exist or will be auto-created by the broker.",
+                            topicNameList, bootstrapServers);
+                    return Collections.emptySet();
+                }
+                if (cause instanceof TopicAuthorizationException) {
+                    log.debug("Not authorized to create topic(s) '{}'." +
+                                    " Falling back to assume topic(s) exist or will be auto-created by the broker.",
                             topicNameList, bootstrapServers);
                     return Collections.emptySet();
                 }

@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import java.util.Collections;
 import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerRecord;
@@ -51,7 +52,7 @@ public class RecordCollectorImpl implements RecordCollector {
     private final Logger log;
     private final String logPrefix;
     private final Sensor skippedRecordsSensor;
-    private final Producer<byte[], byte[]> producer;
+    private Producer<byte[], byte[]> producer;
     private final Map<TopicPartition, Long> offsets;
     private final ProductionExceptionHandler productionExceptionHandler;
 
@@ -61,17 +62,20 @@ public class RecordCollectorImpl implements RecordCollector {
     private final static String PARAMETER_HINT = "\nYou can increase producer parameter `retries` and `retry.backoff.ms` to avoid this error.";
     private volatile KafkaException sendException;
 
-    public RecordCollectorImpl(final Producer<byte[], byte[]> producer,
-                               final String streamTaskId,
+    public RecordCollectorImpl(final String streamTaskId,
                                final LogContext logContext,
                                final ProductionExceptionHandler productionExceptionHandler,
                                final Sensor skippedRecordsSensor) {
-        this.producer = producer;
         this.offsets = new HashMap<>();
         this.logPrefix = String.format("task [%s] ", streamTaskId);
         this.log = logContext.logger(getClass());
         this.productionExceptionHandler = productionExceptionHandler;
         this.skippedRecordsSensor = skippedRecordsSensor;
+    }
+
+    @Override
+    public void init(final Producer<byte[], byte[]> producer) {
+        this.producer = producer;
     }
 
     @Override
@@ -201,24 +205,41 @@ public class RecordCollectorImpl implements RecordCollector {
                 }
             });
         } catch (final TimeoutException e) {
-            log.error("Timeout exception caught when sending record to topic {}. " +
-                "This might happen if the producer cannot send data to the Kafka cluster and thus, " +
-                "its internal buffer fills up. " +
-                "You can increase producer parameter `max.block.ms` to increase this timeout.", topic);
-            throw new StreamsException(String.format("%sFailed to send record to topic %s due to timeout.", logPrefix, topic));
-        } catch (final Exception uncaughtException) {
+            log.error(
+                "Timeout exception caught when sending record to topic {}. " +
+                    "This might happen if the producer cannot send data to the Kafka cluster and thus, " +
+                    "its internal buffer fills up. " +
+                    "This can also happen if the broker is slow to respond, if the network connection to " +
+                    "the broker was interrupted, or if similar circumstances arise. " +
+                    "You can increase producer parameter `max.block.ms` to increase this timeout.",
+                topic,
+                e
+            );
             throw new StreamsException(
-                String.format(
-                    EXCEPTION_MESSAGE,
-                    logPrefix,
-                    "an error caught",
-                    key,
-                    value,
-                    timestamp,
-                    topic,
-                    uncaughtException.toString()
-                ),
-                uncaughtException);
+                String.format("%sFailed to send record to topic %s due to timeout.", logPrefix, topic),
+                e
+            );
+        } catch (final Exception uncaughtException) {
+            if (uncaughtException instanceof KafkaException &&
+                uncaughtException.getCause() instanceof ProducerFencedException) {
+                final KafkaException kafkaException = (KafkaException) uncaughtException;
+                // producer.send() call may throw a KafkaException which wraps a FencedException,
+                // in this case we should throw its wrapped inner cause so that it can be captured and re-wrapped as TaskMigrationException
+                throw (ProducerFencedException) kafkaException.getCause();
+            } else {
+                throw new StreamsException(
+                    String.format(
+                        EXCEPTION_MESSAGE,
+                        logPrefix,
+                        "an error caught",
+                        key,
+                        value,
+                        timestamp,
+                        topic,
+                        uncaughtException.toString()
+                    ),
+                    uncaughtException);
+            }
         }
     }
 
@@ -238,13 +259,16 @@ public class RecordCollectorImpl implements RecordCollector {
     @Override
     public void close() {
         log.debug("Closing producer");
-        producer.close();
+        if (producer != null) {
+            producer.close();
+            producer = null;
+        }
         checkForException();
     }
 
     @Override
     public Map<TopicPartition, Long> offsets() {
-        return offsets;
+        return Collections.unmodifiableMap(offsets);
     }
 
     // for testing only

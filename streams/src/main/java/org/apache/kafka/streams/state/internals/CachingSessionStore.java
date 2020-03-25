@@ -147,7 +147,7 @@ class CachingSessionStore<K, AGG> extends WrappedStateStore.AbstractStateStore i
                 context.headers(),
                 true,
                 context.offset(),
-                key.window().end(),
+                context.timestamp(),
                 context.partition(),
                 context.topic());
         cache.put(cacheName, cacheFunction.cacheKey(binaryKey), entry);

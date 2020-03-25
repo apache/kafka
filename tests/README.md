@@ -461,6 +461,7 @@ the test driver machine.
         ec2_instance_type = "..." # Pick something appropriate for your
                                   # test. Note that the default m3.medium has
                                   # a small disk.
+        ec2_spot_max_price = "0.123"  # On-demand price for instance type
         enable_hostmanager = false
         num_zookeepers = 0
         num_kafka = 0

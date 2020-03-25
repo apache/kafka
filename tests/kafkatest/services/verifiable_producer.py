@@ -20,6 +20,7 @@ import time
 from ducktape.cluster.remoteaccount import RemoteCommandError
 from ducktape.services.background_thread import BackgroundThreadService
 from kafkatest.directory_layout.kafka_path import KafkaPathResolverMixin
+from kafkatest.services.kafka import TopicPartition
 from kafkatest.services.verifiable_client import VerifiableClientMixin
 from kafkatest.utils import is_int, is_int_with_prefix
 from kafkatest.version import DEV_BRANCH
@@ -84,6 +85,7 @@ class VerifiableProducer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
         for node in self.nodes:
             node.version = version
         self.acked_values = []
+        self._last_acked_offsets = {}
         self.not_acked_values = []
         self.produced_count = {}
         self.clean_shutdown_nodes = set()
@@ -156,7 +158,9 @@ class VerifiableProducer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
                         self.produced_count[idx] += 1
 
                     elif data["name"] == "producer_send_success":
+                        partition = TopicPartition(data["topic"], data["partition"])
                         self.acked_values.append(self.message_validator(data["value"]))
+                        self._last_acked_offsets[partition] = data["offset"]
                         self.produced_count[idx] += 1
 
                         # Log information if there is a large gap between successively acknowledged messages
@@ -218,6 +222,11 @@ class VerifiableProducer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
         return len(self.pids(node)) > 0
 
     @property
+    def last_acked_offsets(self):
+        with self.lock:
+            return self._last_acked_offsets
+
+    @property
     def acked(self):
         with self.lock:
             return self.acked_values
@@ -245,7 +254,11 @@ class VerifiableProducer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
             return True
 
     def stop_node(self, node):
-        self.kill_node(node, clean_shutdown=True, allow_fail=False)
+        # There is a race condition on shutdown if using `max_messages` since the
+        # VerifiableProducer will shutdown automatically when all messages have been
+        # written. In this case, the process will be gone and the signal will fail.
+        allow_fail = self.max_messages > 0
+        self.kill_node(node, clean_shutdown=True, allow_fail=allow_fail)
 
         stopped = self.wait_node(node, timeout_sec=self.stop_timeout_sec)
         assert stopped, "Node %s: did not stop within the specified timeout of %s seconds" % \

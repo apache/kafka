@@ -43,19 +43,19 @@ public class TaskId implements Comparable<TaskId> {
     }
 
     /**
-     * @throws TaskIdFormatException if the string is not a valid {@link TaskId}
+     * @throws TaskIdFormatException if the taskIdStr is not a valid {@link TaskId}
      */
-    public static TaskId parse(String string) {
-        int index = string.indexOf('_');
-        if (index <= 0 || index + 1 >= string.length()) throw new TaskIdFormatException(string);
+    public static TaskId parse(final String taskIdStr) {
+        final int index = taskIdStr.indexOf('_');
+        if (index <= 0 || index + 1 >= taskIdStr.length()) throw new TaskIdFormatException(taskIdStr);
 
         try {
-            int topicGroupId = Integer.parseInt(string.substring(0, index));
-            int partition = Integer.parseInt(string.substring(index + 1));
+            final int topicGroupId = Integer.parseInt(taskIdStr.substring(0, index));
+            final int partition = Integer.parseInt(taskIdStr.substring(index + 1));
 
             return new TaskId(topicGroupId, partition);
-        } catch (Exception e) {
-            throw new TaskIdFormatException(string);
+        } catch (final Exception e) {
+            throw new TaskIdFormatException(taskIdStr);
         }
     }
 
@@ -103,12 +103,8 @@ public class TaskId implements Comparable<TaskId> {
     }
 
     @Override
-    public int compareTo(TaskId other) {
-        return
-            this.topicGroupId < other.topicGroupId ? -1 :
-                (this.topicGroupId > other.topicGroupId ? 1 :
-                    (this.partition < other.partition ? -1 :
-                        (this.partition > other.partition ? 1 :
-                            0)));
+    public int compareTo(final TaskId other) {
+        final int compare = Integer.compare(this.topicGroupId, other.topicGroupId);
+        return compare != 0 ? compare : Integer.compare(this.partition, other.partition);
     }
 }

@@ -330,8 +330,10 @@ class ReplicaManager(val config: KafkaConfig,
 
     if (deletePartition) {
       val removedPartition = allPartitions.remove(topicPartition)
-      if (removedPartition eq ReplicaManager.OfflinePartition)
+      if (removedPartition eq ReplicaManager.OfflinePartition) {
+        allPartitions.put(topicPartition, ReplicaManager.OfflinePartition)
         throw new KafkaStorageException(s"Partition $topicPartition is on an offline disk")
+      }
 
       if (removedPartition != null) {
         val topicHasPartitions = allPartitions.values.exists(partition => topicPartition.topic == partition.topic)
@@ -1398,7 +1400,8 @@ class ReplicaManager(val config: KafkaConfig,
   }
 
   // logDir should be an absolute path
-  def handleLogDirFailure(dir: String) {
+  // sendZkNotification is needed for unit test
+  def handleLogDirFailure(dir: String, sendZkNotification: Boolean = true) {
     if (!logManager.isLogDirOnline(dir))
       return
     info(s"Stopping serving replicas in dir $dir")
@@ -1434,7 +1437,9 @@ class ReplicaManager(val config: KafkaConfig,
            s"for partitions ${partitionsWithOfflineFutureReplica.mkString(",")} because they are in the failed log directory $dir.")
     }
     logManager.handleLogDirFailure(dir)
-    zkClient.propagateLogDirEvent(localBrokerId)
+
+    if (sendZkNotification)
+      zkClient.propagateLogDirEvent(localBrokerId)
     info(s"Stopped serving replicas in dir $dir")
   }
 

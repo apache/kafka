@@ -364,6 +364,19 @@ public class SelectorTest {
     }
 
     @Test
+    public void testIdleExpiryWithoutReadyKeys() throws IOException {
+        String id = "0";
+        selector.connect(id, new InetSocketAddress("localhost", server.port), BUFFER_SIZE, BUFFER_SIZE);
+        KafkaChannel channel = selector.channel(id);
+        channel.selectionKey().interestOps(0);
+
+        time.sleep(6000); // The max idle time is 5000ms
+        selector.poll(0);
+        assertTrue("The idle connection should have been closed", selector.disconnected().containsKey(id));
+        assertEquals(ChannelState.EXPIRED, selector.disconnected().get(id));
+    }
+
+    @Test
     public void testImmediatelyConnectedCleaned() throws Exception {
         Metrics metrics = new Metrics(); // new metrics object to avoid metric registration conflicts
         Selector selector = new Selector(5000, metrics, time, "MetricGroup", channelBuilder, new LogContext()) {
@@ -625,6 +638,32 @@ public class SelectorTest {
         assertEquals((double) conns, getMetric("connection-creation-total").metricValue());
         assertEquals((double) conns, getMetric("connection-count").metricValue());
     }
+
+    @Test
+    public void testMetricsCleanupOnSelectorClose() throws Exception {
+        Metrics metrics = new Metrics();
+        Selector selector = new Selector(5000, metrics, time, "MetricGroup", channelBuilder, new LogContext()) {
+            @Override
+            public void close(String id) {
+                throw new RuntimeException();
+            }
+        };
+        assertTrue(metrics.metrics().size() > 1);
+        String id = "0";
+        selector.connect(id, new InetSocketAddress("localhost", server.port), BUFFER_SIZE, BUFFER_SIZE);
+
+        // Close the selector and ensure a RuntimeException has been throw
+        try {
+            selector.close();
+            fail();
+        } catch (RuntimeException e) {
+            // Expected
+        }
+
+        // We should only have one remaining metric for kafka-metrics-count, which is a global metric
+        assertEquals(1, metrics.metrics().size());
+    }
+
 
     private String blockingRequest(String node, String s) throws IOException {
         selector.send(createSend(node, s));

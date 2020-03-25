@@ -433,7 +433,7 @@ public class StreamThread extends Thread {
                 stateDirectory,
                 cache,
                 time,
-                createProducer(taskId)
+                () -> createProducer(taskId)
             );
         }
 
@@ -487,7 +487,7 @@ public class StreamThread extends Thread {
 
             final ProcessorTopology topology = builder.build(taskId.topicGroupId);
 
-            if (!topology.stateStores().isEmpty()) {
+            if (!topology.stateStores().isEmpty() && !topology.storeToChangelogTopic().isEmpty()) {
                 return new StandbyTask(
                     taskId,
                     partitions,
@@ -927,9 +927,16 @@ public class StreamThread extends Thread {
         for (final TopicPartition partition : records.partitions()) {
             final StreamTask task = taskManager.activeTask(partition);
 
-            if (task.isClosed()) {
+            if (task == null) {
+                log.error(
+                    "Unable to locate active task for received-record partition {}. Current tasks: {}",
+                    partition,
+                    taskManager.toString(">")
+                );
+                throw new NullPointerException("Task was unexpectedly missing for partition " + partition);
+            } else if (task.isClosed()) {
                 log.info("Stream task {} is already closed, probably because it got unexpectedly migrated to another thread already. " +
-                    "Notifying the thread to trigger a new rebalance immediately.", task.id());
+                             "Notifying the thread to trigger a new rebalance immediately.", task.id());
                 throw new TaskMigratedException(task);
             }
 
@@ -1124,7 +1131,7 @@ public class StreamThread extends Thread {
                         throw new TaskMigratedException(task);
                     }
 
-                    log.info("Reinitializing StandbyTask {}", task);
+                    log.info("Reinitializing StandbyTask {} from changelogs {}", task, recoverableException.partitions());
                     task.reinitializeStateStoresForPartitions(recoverableException.partitions());
                 }
                 restoreConsumer.seekToBeginning(partitions);

@@ -26,9 +26,17 @@ buildscript {
     // For Apache Rat plugin to ignore non-Git files
     classpath "org.ajoberstar:grgit:1.9.3"
     classpath 'com.github.ben-manes:gradle-versions-plugin:0.17.0'
-    classpath 'org.scoverage:gradle-scoverage:2.3.0'
     classpath 'com.github.jengelman.gradle.plugins:shadow:2.0.4'
     classpath 'org.owasp:dependency-check-gradle:3.1.2'
+    classpath "com.diffplug.spotless:spotless-plugin-gradle:3.10.0"
+  }
+}
+
+apply plugin: "com.diffplug.gradle.spotless"
+spotless {
+  scala {
+    target 'streams/**/*.scala'
+    scalafmt('1.5.1').configFile('checkstyle/.scalafmt.conf')
   }
 }
 
@@ -76,7 +84,7 @@ allprojects {
 }
 
 ext {
-  gradleVersion = "4.8.1"
+  gradleVersion = "$versions.gradle"
   minJavaVersion = "8"
   buildVersionFileName = "kafka-version.properties"
 
@@ -121,7 +129,8 @@ if (new File('.git').exists()) {
         '**/id_rsa.pub',
         'checkstyle/suppressions.xml',
         'streams/quickstart/java/src/test/resources/projects/basic/goal.txt',
-        'streams/streams-scala/logs/*'
+        'streams/streams-scala/logs/*',
+        '**/generated/**'
     ])
   }
 }
@@ -393,13 +402,12 @@ subprojects {
     }
   }
 
-  def coverageGen = it.path == ':core' ? 'reportScoverage' : 'jacocoTestReport'
-  task reportCoverage(dependsOn: [coverageGen])
-
+  def coverageGen = it.path == ':core' ? [] : ['jacocoTestReport']
+  task reportCoverage(dependsOn: coverageGen)
 }
 
 gradle.taskGraph.whenReady { taskGraph ->
-  taskGraph.getAllTasks().findAll { it.name.contains('findbugsScoverage') || it.name.contains('findbugsTest') }.each { task ->
+  taskGraph.getAllTasks().findAll { it.name.contains('findbugsTest') }.each { task ->
     task.enabled = false
   }
 }
@@ -535,7 +543,6 @@ project(':core') {
   println "Building project 'core' with Scala version ${versions.scala}"
 
   apply plugin: 'scala'
-  apply plugin: "org.scoverage"
   archivesBaseName = "kafka_${versions.baseScala}"
 
   dependencies {
@@ -577,20 +584,8 @@ project(':core') {
     testCompile libs.scalatest
     testCompile libs.slf4jlog4j
     testCompile libs.jfreechart
-
-    scoverage libs.scoveragePlugin
-    scoverage libs.scoverageRuntime
   }
   
-  scoverage {
-    reportDir = file("${rootProject.buildDir}/scoverage")
-    highlighting = false
-  }
-  checkScoverage {
-    minimumRate = 0.0
-  }
-  checkScoverage.shouldRunAfter('test')
-
   configurations {
     // manually excludes some unnecessary dependencies
     compile.exclude module: 'javax'
@@ -934,7 +929,13 @@ project(':streams') {
 
   dependencies {
     compile project(':clients')
-    compile project(':connect:json')  // this dependency should be removed after we unify data API
+
+    // this dependency should be removed after we unify data API
+    compile(project(':connect:json')) {
+      // this transitive dependency is not used in Streams, and it breaks SBT builds
+      exclude module: 'javax.ws.rs-api'
+    }
+
     compile libs.slf4jApi
     compile libs.rocksDBJni
 
@@ -999,9 +1000,11 @@ project(':streams:streams-scala') {
     testCompile project(':core').sourceSets.test.output
     testCompile project(':streams').sourceSets.test.output
     testCompile project(':clients').sourceSets.test.output
+    testCompile project(':streams:test-utils')
 
     testCompile libs.junit
     testCompile libs.scalatest
+    testCompile libs.easymock
 
     testRuntime libs.slf4jlog4j
   }
@@ -1173,7 +1176,7 @@ project(':jmh-benchmarks') {
     compile project(':clients')
     compile project(':streams')
     compile libs.jmhCore
-    compile libs.jmhGeneratorAnnProcess
+    annotationProcessor libs.jmhGeneratorAnnProcess
     compile libs.jmhCoreBenchmarks
   }
 
@@ -1361,8 +1364,11 @@ project(':connect:runtime') {
     testCompile libs.junit
     testCompile libs.powermockJunit4
     testCompile libs.powermockEasymock
+    testCompile libs.httpclient
 
     testCompile project(':clients').sourceSets.test.output
+    testCompile project(':core')
+    testCompile project(':core').sourceSets.test.output
 
     testRuntime libs.slf4jlog4j
   }

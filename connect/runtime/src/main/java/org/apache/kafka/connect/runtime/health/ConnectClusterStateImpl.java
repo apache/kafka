@@ -17,6 +17,7 @@
 
 package org.apache.kafka.connect.runtime.health;
 
+import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.health.ConnectClusterState;
 import org.apache.kafka.connect.health.ConnectorHealth;
 import org.apache.kafka.connect.health.ConnectorState;
@@ -24,32 +25,35 @@ import org.apache.kafka.connect.health.ConnectorType;
 import org.apache.kafka.connect.health.TaskState;
 import org.apache.kafka.connect.runtime.Herder;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
-import org.apache.kafka.connect.util.Callback;
+import org.apache.kafka.connect.util.FutureCallback;
 
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 public class ConnectClusterStateImpl implements ConnectClusterState {
+    
+    private final long herderRequestTimeoutMs;
+    private final Herder herder;
 
-    private Herder herder;
-
-    public ConnectClusterStateImpl(Herder herder) {
+    public ConnectClusterStateImpl(long connectorsTimeoutMs, Herder herder) {
+        this.herderRequestTimeoutMs = connectorsTimeoutMs;
         this.herder = herder;
     }
 
     @Override
     public Collection<String> connectors() {
-        final Collection<String> connectors = new ArrayList<>();
-        herder.connectors(new Callback<java.util.Collection<String>>() {
-            @Override
-            public void onCompletion(Throwable error, Collection<String> result) {
-                connectors.addAll(result);
-            }
-        });
-        return connectors;
+        FutureCallback<Collection<String>> connectorsCallback = new FutureCallback<>();
+        herder.connectors(connectorsCallback);
+        try {
+            return connectorsCallback.get(herderRequestTimeoutMs, TimeUnit.MILLISECONDS);
+        } catch (InterruptedException | ExecutionException | TimeoutException e) {
+            throw new ConnectException("Failed to retrieve list of connectors", e);
+        }
     }
 
     @Override
@@ -78,7 +82,7 @@ public class ConnectClusterStateImpl implements ConnectClusterState {
         for (ConnectorStateInfo.TaskState state : states) {
             taskStates.put(
                 state.id(),
-                new TaskState(state.id(), state.workerId(), state.state(), state.trace())
+                new TaskState(state.id(), state.state(), state.workerId(), state.trace())
             );
         }
         return taskStates;

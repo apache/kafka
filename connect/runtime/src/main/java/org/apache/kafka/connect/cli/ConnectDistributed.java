@@ -38,6 +38,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.net.URI;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Map;
 
@@ -53,62 +54,26 @@ import java.util.Map;
 public class ConnectDistributed {
     private static final Logger log = LoggerFactory.getLogger(ConnectDistributed.class);
 
-    public static void main(String[] args) throws Exception {
-        if (args.length < 1) {
+    private final Time time = Time.SYSTEM;
+    private final long initStart = time.hiResClockMs();
+
+    public static void main(String[] args) {
+
+        if (args.length < 1 || Arrays.asList(args).contains("--help")) {
             log.info("Usage: ConnectDistributed worker.properties");
             Exit.exit(1);
         }
 
         try {
-            Time time = Time.SYSTEM;
-            log.info("Kafka Connect distributed worker initializing ...");
-            long initStart = time.hiResClockMs();
             WorkerInfo initInfo = new WorkerInfo();
             initInfo.logAll();
 
             String workerPropsFile = args[0];
             Map<String, String> workerProps = !workerPropsFile.isEmpty() ?
-                    Utils.propsToStringMap(Utils.loadProps(workerPropsFile)) : Collections.<String, String>emptyMap();
+                    Utils.propsToStringMap(Utils.loadProps(workerPropsFile)) : Collections.emptyMap();
 
-            log.info("Scanning for plugin classes. This might take a moment ...");
-            Plugins plugins = new Plugins(workerProps);
-            plugins.compareAndSwapWithDelegatingLoader();
-            DistributedConfig config = new DistributedConfig(workerProps);
-
-            String kafkaClusterId = ConnectUtils.lookupKafkaClusterId(config);
-            log.debug("Kafka cluster ID: {}", kafkaClusterId);
-
-            RestServer rest = new RestServer(config);
-            URI advertisedUrl = rest.advertisedUrl();
-            String workerId = advertisedUrl.getHost() + ":" + advertisedUrl.getPort();
-
-            KafkaOffsetBackingStore offsetBackingStore = new KafkaOffsetBackingStore();
-            offsetBackingStore.configure(config);
-
-            Worker worker = new Worker(workerId, time, plugins, config, offsetBackingStore);
-            WorkerConfigTransformer configTransformer = worker.configTransformer();
-
-            Converter internalValueConverter = worker.getInternalValueConverter();
-            StatusBackingStore statusBackingStore = new KafkaStatusBackingStore(time, internalValueConverter);
-            statusBackingStore.configure(config);
-
-            ConfigBackingStore configBackingStore = new KafkaConfigBackingStore(
-                    internalValueConverter,
-                    config,
-                    configTransformer);
-
-            DistributedHerder herder = new DistributedHerder(config, time, worker,
-                    kafkaClusterId, statusBackingStore, configBackingStore,
-                    advertisedUrl.toString());
-            final Connect connect = new Connect(herder, rest);
-            log.info("Kafka Connect distributed worker initialization took {}ms", time.hiResClockMs() - initStart);
-            try {
-                connect.start();
-            } catch (Exception e) {
-                log.error("Failed to start Connect", e);
-                connect.stop();
-                Exit.exit(3);
-            }
+            ConnectDistributed connectDistributed = new ConnectDistributed();
+            Connect connect = connectDistributed.startConnect(workerProps);
 
             // Shutdown will be triggered by Ctrl-C or via HTTP shutdown request
             connect.awaitStop();
@@ -118,4 +83,52 @@ public class ConnectDistributed {
             Exit.exit(2);
         }
     }
+
+    public Connect startConnect(Map<String, String> workerProps) {
+        log.info("Scanning for plugin classes. This might take a moment ...");
+        Plugins plugins = new Plugins(workerProps);
+        plugins.compareAndSwapWithDelegatingLoader();
+        DistributedConfig config = new DistributedConfig(workerProps);
+
+        String kafkaClusterId = ConnectUtils.lookupKafkaClusterId(config);
+        log.debug("Kafka cluster ID: {}", kafkaClusterId);
+
+        RestServer rest = new RestServer(config);
+        rest.initializeServer();
+
+        URI advertisedUrl = rest.advertisedUrl();
+        String workerId = advertisedUrl.getHost() + ":" + advertisedUrl.getPort();
+
+        KafkaOffsetBackingStore offsetBackingStore = new KafkaOffsetBackingStore();
+        offsetBackingStore.configure(config);
+
+        Worker worker = new Worker(workerId, time, plugins, config, offsetBackingStore);
+        WorkerConfigTransformer configTransformer = worker.configTransformer();
+
+        Converter internalValueConverter = worker.getInternalValueConverter();
+        StatusBackingStore statusBackingStore = new KafkaStatusBackingStore(time, internalValueConverter);
+        statusBackingStore.configure(config);
+
+        ConfigBackingStore configBackingStore = new KafkaConfigBackingStore(
+                internalValueConverter,
+                config,
+                configTransformer);
+
+        DistributedHerder herder = new DistributedHerder(config, time, worker,
+                kafkaClusterId, statusBackingStore, configBackingStore,
+                advertisedUrl.toString());
+
+        final Connect connect = new Connect(herder, rest);
+        log.info("Kafka Connect distributed worker initialization took {}ms", time.hiResClockMs() - initStart);
+        try {
+            connect.start();
+        } catch (Exception e) {
+            log.error("Failed to start Connect", e);
+            connect.stop();
+            Exit.exit(3);
+        }
+
+        return connect;
+    }
+
 }

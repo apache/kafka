@@ -564,8 +564,9 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
         final KTableValueGetterSupplier<K1, V1> valueGetterSupplier = ((GlobalKTableImpl<K1, V1>) globalTable).valueGetterSupplier();
         final String name = builder.newProcessorName(LEFTJOIN_NAME);
+
         builder.internalTopologyBuilder.addProcessor(name, new KStreamGlobalKTableJoin<>(valueGetterSupplier, joiner, keyMapper, leftJoin), this.name);
-        return new KStreamImpl<>(builder, name, sourceNodes, false);
+        return new KStreamImpl<>(builder, name, sourceNodes, repartitionRequired);
     }
 
     @SuppressWarnings("unchecked")

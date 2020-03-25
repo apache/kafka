@@ -123,10 +123,10 @@ class MiniKdc(KafkaPathResolverMixin, Service):
 
     def stop_node(self, node):
         self.logger.info("Stopping %s on %s" % (type(self).__name__, node.account.hostname))
-        node.account.kill_process("apacheds", allow_fail=False)
+        node.account.kill_java_processes("MiniKdc", clean_shutdown=True, allow_fail=False)
 
     def clean_node(self, node):
-        node.account.kill_process("apacheds", clean_shutdown=False, allow_fail=False)
+        node.account.kill_java_processes("MiniKdc", clean_shutdown=False, allow_fail=True)
         node.account.ssh("rm -rf " + MiniKdc.WORK_DIR, allow_fail=False)
         if os.path.exists(MiniKdc.LOCAL_KEYTAB_FILE):
             os.remove(MiniKdc.LOCAL_KEYTAB_FILE)

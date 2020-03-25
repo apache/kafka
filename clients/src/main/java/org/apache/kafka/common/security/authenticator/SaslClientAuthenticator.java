@@ -42,6 +42,7 @@ import org.apache.kafka.common.requests.SaslHandshakeRequest;
 import org.apache.kafka.common.requests.SaslHandshakeResponse;
 import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
+import org.apache.kafka.common.security.kerberos.KerberosError;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -360,11 +361,9 @@ public class SaslClientAuthenticator implements Authenticator {
                 });
         } catch (PrivilegedActionException e) {
             String error = "An error: (" + e + ") occurred when evaluating SASL token received from the Kafka Broker.";
+            KerberosError kerberosError = KerberosError.fromException(e);
             // Try to provide hints to use about what went wrong so they can fix their configuration.
-            // TODO: introspect about e: look for GSS information.
-            final String unknownServerErrorText =
-                "(Mechanism level: Server not found in Kerberos database (7) - UNKNOWN_SERVER)";
-            if (e.toString().contains(unknownServerErrorText)) {
+            if (kerberosError == KerberosError.SERVER_NOT_FOUND) {
                 error += " This may be caused by Java's being unable to resolve the Kafka Broker's" +
                     " hostname correctly. You may want to try to adding" +
                     " '-Dsun.net.spi.nameservice.provider.1=dns,sun' to your client's JVMFLAGS environment." +
@@ -373,7 +372,13 @@ public class SaslClientAuthenticator implements Authenticator {
             }
             error += " Kafka Client will go to AUTHENTICATION_FAILED state.";
             //Unwrap the SaslException inside `PrivilegedActionException`
-            throw new SaslAuthenticationException(error, e.getCause());
+            Throwable cause = e.getCause();
+            // Treat transient Kerberos errors as non-fatal SaslExceptions that are processed as I/O exceptions
+            // and all other failures as fatal SaslAuthenticationException.
+            if (kerberosError != null && kerberosError.retriable())
+                throw new SaslException(error, cause);
+            else
+                throw new SaslAuthenticationException(error, cause);
         }
     }
 
@@ -436,4 +441,5 @@ public class SaslClientAuthenticator implements Authenticator {
                 throw new KafkaException("Principal could not be determined from Subject, this may be a transient failure due to Kerberos re-login");
         }
     }
+
 }

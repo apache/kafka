@@ -57,8 +57,8 @@ class OffsetIndex(_file: File, baseOffset: Long, maxIndexSize: Int = -1, writabl
   /* the last offset in the index */
   private[this] var _lastOffset = lastEntry.offset
 
-  debug("Loaded index file %s with maxEntries = %d, maxIndexSize = %d, entries = %d, lastOffset = %d, file position = %d"
-    .format(file.getAbsolutePath, maxEntries, maxIndexSize, _entries, _lastOffset, mmap.position()))
+  debug(s"Loaded index file ${file.getAbsolutePath} with maxEntries = $maxEntries, " +
+    s"maxIndexSize = $maxIndexSize, entries = ${_entries}, lastOffset = ${_lastOffset}, file position = ${mmap.position()}")
 
   /**
    * The last entry in the index
@@ -126,7 +126,8 @@ class OffsetIndex(_file: File, baseOffset: Long, maxIndexSize: Int = -1, writabl
   def entry(n: Int): OffsetPosition = {
     maybeLock(lock) {
       if(n >= _entries)
-        throw new IllegalArgumentException("Attempt to fetch the %dth entry from an index of size %d.".format(n, _entries))
+        throw new IllegalArgumentException(s"Attempt to fetch the ${n}th entry from index ${file.getAbsolutePath}, " +
+          s"which has size ${_entries}.")
       val idx = mmap.duplicate
       OffsetPosition(relativeOffset(idx, n), physical(idx, n))
     }
@@ -134,21 +135,21 @@ class OffsetIndex(_file: File, baseOffset: Long, maxIndexSize: Int = -1, writabl
 
   /**
    * Append an entry for the given offset/location pair to the index. This entry must have a larger offset than all subsequent entries.
-   * @throws IndexOffsetOverflowException if the offset causes index offset to overflow
+   * @throws InvalidOffsetException if the offset causes index offset to overflow
    */
   def append(offset: Long, position: Int) {
     inLock(lock) {
       require(!isFull, "Attempt to append to a full index (size = " + _entries + ").")
       if (_entries == 0 || offset > _lastOffset) {
-        debug("Adding index entry %d => %d to %s.".format(offset, position, file.getName))
+        trace(s"Adding index entry $offset => $position to ${file.getAbsolutePath}")
         mmap.putInt(relativeOffset(offset))
         mmap.putInt(position)
         _entries += 1
         _lastOffset = offset
         require(_entries * entrySize == mmap.position(), entries + " entries but file position in index is " + mmap.position() + ".")
       } else {
-        throw new InvalidOffsetException("Attempt to append an offset (%d) to position %d no larger than the last offset appended (%d) to %s."
-          .format(offset, entries, _lastOffset, file.getAbsolutePath))
+        throw new InvalidOffsetException(s"Attempt to append an offset ($offset) to position $entries no larger than" +
+          s" the last offset appended (${_lastOffset}) to ${file.getAbsolutePath}.")
       }
     }
   }
@@ -184,6 +185,8 @@ class OffsetIndex(_file: File, baseOffset: Long, maxIndexSize: Int = -1, writabl
       _entries = entries
       mmap.position(_entries * entrySize)
       _lastOffset = lastEntry.offset
+      debug(s"Truncated index ${file.getAbsolutePath} to $entries entries;" +
+        s" position is now ${mmap.position()} and last offset is now ${_lastOffset}")
     }
   }
 

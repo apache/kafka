@@ -352,6 +352,17 @@ public class SchemaProjectorTest {
         projected = SchemaProjector.project(Timestamp.SCHEMA, 34567L, Timestamp.SCHEMA);
         assertEquals(34567L, projected);
 
+        java.util.Date date = new java.util.Date();
+
+        projected = SchemaProjector.project(Date.SCHEMA, date, Date.SCHEMA);
+        assertEquals(date, projected);
+
+        projected = SchemaProjector.project(Time.SCHEMA, date, Time.SCHEMA);
+        assertEquals(date, projected);
+
+        projected = SchemaProjector.project(Timestamp.SCHEMA, date, Timestamp.SCHEMA);
+        assertEquals(date, projected);
+
         Schema namedSchema = SchemaBuilder.int32().name("invalidLogicalTypeName").build();
         for (Schema logicalTypeSchema: logicalTypeSchemas) {
             try {

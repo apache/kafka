@@ -15,7 +15,7 @@
 
 import random
 import time
-from ducktape.mark import ignore, matrix
+from ducktape.mark import matrix, ignore
 from ducktape.mark.resource import cluster
 from ducktape.tests.test import Test
 from kafkatest.services.kafka import KafkaService
@@ -28,10 +28,10 @@ broker_upgrade_versions = [str(LATEST_0_10_1), str(LATEST_0_10_2), str(LATEST_0_
 
 metadata_1_versions = [str(LATEST_0_10_0)]
 metadata_2_versions = [str(LATEST_0_10_1), str(LATEST_0_10_2), str(LATEST_0_11_0), str(LATEST_1_0), str(LATEST_1_1)]
-# we can add the following versions to `backward_compatible_metadata_2_versions` after the corresponding
-# bug-fix release 0.10.1.2, 0.10.2.2, 0.11.0.3, 1.0.2, and 1.1.1 are available:
-# str(LATEST_0_10_1), str(LATEST_0_10_2), str(LATEST_0_11_0), str(LATEST_1_0), str(LATEST_1_1)
-backward_compatible_metadata_2_versions = []
+# once 0.10.0.1.2 is released we can replace
+# backward_compatible_metadata_2_versions with metadata_2_versions
+
+backward_compatible_metadata_2_versions = [str(LATEST_0_10_2), str(LATEST_0_11_0), str(LATEST_1_0), str(LATEST_1_1)]
 metadata_3_versions = [str(DEV_VERSION)]
 
 class StreamsUpgradeTest(Test):
@@ -125,7 +125,6 @@ class StreamsUpgradeTest(Test):
         node.account.ssh("grep ALL-RECORDS-DELIVERED %s" % self.driver.STDOUT_FILE, allow_fail=False)
         self.processor1.node.account.ssh_capture("grep SMOKE-TEST-CLIENT-CLOSED %s" % self.processor1.STDOUT_FILE, allow_fail=False)
 
-    @ignore
     @matrix(from_version=metadata_2_versions, to_version=metadata_2_versions)
     def test_simple_upgrade_downgrade(self, from_version, to_version):
         """

@@ -41,6 +41,8 @@ import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 
+import static java.util.Collections.emptyList;
+
 /**
  * A registry of sensors and metrics.
  * <p>
@@ -446,6 +448,9 @@ public class Metrics implements Closeable {
                             removeMetric(metric.metricName());
                         log.debug("Removed sensor with name {}", name);
                         childSensors = childrenSensors.remove(sensor);
+                        for (final Sensor parent : sensor.parents()) {
+                            childrenSensors.getOrDefault(parent, emptyList()).remove(sensor);
+                        }
                     }
                 }
             }

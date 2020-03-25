@@ -93,7 +93,6 @@ public class ProcessorNodeTest {
             anyStateSerde,
             new RecordCollectorImpl(
                 null,
-                null,
                 new LogContext("processnode-test "),
                 new DefaultProductionExceptionHandler(),
                 metrics.sensor("skipped-records")

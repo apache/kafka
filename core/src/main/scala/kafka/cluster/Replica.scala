@@ -18,10 +18,13 @@
 package kafka.cluster
 
 import kafka.log.Log
+import kafka.server.epoch.LeaderEpochFileCache
 import kafka.utils.Logging
 import kafka.server.{LogOffsetMetadata, LogReadResult}
 import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.apache.kafka.common.errors.OffsetOutOfRangeException
+import org.apache.kafka.common.record.RecordVersion
+import org.apache.kafka.common.requests.EpochEndOffset
 import org.apache.kafka.common.utils.Time
 
 class Replica(val brokerId: Int,
@@ -54,7 +57,21 @@ class Replica(val brokerId: Int,
 
   def lastCaughtUpTimeMs = _lastCaughtUpTimeMs
 
-  val epochs = log.map(_.leaderEpochCache)
+  def epochs: Option[LeaderEpochFileCache] = {
+    log.flatMap { log =>
+      if (log.supportsLeaderEpoch)
+        Some(log.leaderEpochCache)
+      else
+        None
+    }
+  }
+
+  def endOffsetFor(requestedEpoch: Int): (Int, Long) = {
+    epochs match {
+      case Some(cache) => cache.endOffsetFor(requestedEpoch)
+      case None => (EpochEndOffset.UNDEFINED_EPOCH, EpochEndOffset.UNDEFINED_EPOCH_OFFSET)
+    }
+  }
 
   info(s"Replica loaded for partition $topicPartition with initial high watermark $initialHighWatermarkValue")
   log.foreach(_.onHighWatermarkIncremented(initialHighWatermarkValue))

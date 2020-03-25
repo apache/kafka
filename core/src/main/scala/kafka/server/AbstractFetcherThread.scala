@@ -36,7 +36,7 @@ import java.util.concurrent.atomic.AtomicLong
 
 import com.yammer.metrics.core.Gauge
 import org.apache.kafka.common.{KafkaException, TopicPartition}
-import org.apache.kafka.common.internals.{FatalExitError, PartitionStates}
+import org.apache.kafka.common.internals.PartitionStates
 import org.apache.kafka.common.record.MemoryRecords
 import org.apache.kafka.common.requests.EpochEndOffset
 
@@ -75,7 +75,7 @@ abstract class AbstractFetcherThread(name: String,
   // deal with partitions with errors, potentially due to leadership changes
   protected def handlePartitionsWithErrors(partitions: Iterable[TopicPartition])
 
-  protected def buildLeaderEpochRequest(allPartitions: Seq[(TopicPartition, PartitionFetchState)]): ResultWithPartitions[Map[TopicPartition, Int]]
+  protected def buildLeaderEpochRequest(allPartitions: Seq[(TopicPartition, PartitionFetchState)]): (Map[TopicPartition, Int], Set[TopicPartition])
 
   protected def fetchEpochsFromLeader(partitions: Map[TopicPartition, Int]): Map[TopicPartition, EpochEndOffset]
 
@@ -124,15 +124,22 @@ abstract class AbstractFetcherThread(name: String,
     *   occur during truncation.
     */
   def maybeTruncate(): Unit = {
-    val ResultWithPartitions(epochRequests, partitionsWithError) = inLock(partitionMapLock) { buildLeaderEpochRequest(states) }
-    handlePartitionsWithErrors(partitionsWithError)
+    val (partitionsWithEpochs, partitionsWithoutEpochs) = inLock(partitionMapLock) { buildLeaderEpochRequest(states) }
+    val epochEndOffsets = mutable.Map[TopicPartition, EpochEndOffset]()
 
-    if (epochRequests.nonEmpty) {
-      val fetchedEpochs = fetchEpochsFromLeader(epochRequests)
+    // If the latest epoch is not available, then we are likely on an older format and should
+    // use the high watermark for truncation
+    for (tp <- partitionsWithoutEpochs)
+      epochEndOffsets.put(tp, new EpochEndOffset(Errors.NONE, UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET))
+
+    if (partitionsWithEpochs.nonEmpty)
+      epochEndOffsets ++= fetchEpochsFromLeader(partitionsWithEpochs)
+
+    if (epochEndOffsets.nonEmpty) {
       //Ensure we hold a lock during truncation.
       inLock(partitionMapLock) {
         //Check no leadership changes happened whilst we were unlocked, fetching epochs
-        val leaderEpochs = fetchedEpochs.filter { case (tp, _) => partitionStates.contains(tp) }
+        val leaderEpochs = epochEndOffsets.filter { case (tp, _) => partitionStates.contains(tp) }
         val ResultWithPartitions(fetchOffsets, partitionsWithError) = maybeTruncate(leaderEpochs)
         handlePartitionsWithErrors(partitionsWithError)
         updateFetchOffsetAndMaybeMarkTruncationComplete(fetchOffsets)
@@ -214,7 +221,6 @@ abstract class AbstractFetcherThread(name: String,
                     info(s"Current offset ${currentPartitionFetchState.fetchOffset} for partition $topicPartition is " +
                       s"out of range, which typically implies a leader change. Reset fetch offset to $newOffset")
                   } catch {
-                    case e: FatalExitError => throw e
                     case e: Throwable =>
                       error(s"Error getting offset for partition $topicPartition", e)
                       partitionsWithError += topicPartition
@@ -339,7 +345,7 @@ abstract class AbstractFetcherThread(name: String,
     } else {
       // get (leader epoch, end offset) pair that corresponds to the largest leader epoch
       // less than or equal to the requested epoch.
-      val (followerEpoch, followerEndOffset) = replica.epochs.get.endOffsetFor(leaderEpochOffset.leaderEpoch)
+      val (followerEpoch, followerEndOffset) = replica.endOffsetFor(leaderEpochOffset.leaderEpoch)
       if (followerEndOffset == UNDEFINED_EPOCH_OFFSET) {
         // This can happen if the follower was not tracking leader epochs at that point (before the
         // upgrade, or if this broker is new). Since the leader replied with epoch <

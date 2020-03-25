@@ -53,11 +53,11 @@ class TimeWindowedKStream[K, V](val inner: TimeWindowedKStreamJ[K, V]) {
   /**
    * Count the number of records in this stream by the grouped key and the defined windows.
    *
-   * @param materialized  an instance of `Materialized` used to materialize a state store. 
+   * @param materialized  an instance of `Materialized` used to materialize a state store.
    * @return a [[KTable]] that contains "update" records with unmodified keys and `Long` values that
    * represent the latest (rolling) count (i.e., number of records) for each key
    * @see `org.apache.kafka.streams.kstream.TimeWindowedKStream#count`
-   */ 
+   */
   def count()(implicit materialized: Materialized[K, Long, ByteArrayWindowStore]): KTable[Windowed[K], Long] = {
     val c: KTable[Windowed[K], java.lang.Long] =
       inner.count(materialized.asInstanceOf[Materialized[K, java.lang.Long, ByteArrayWindowStore]])
@@ -68,7 +68,7 @@ class TimeWindowedKStream[K, V](val inner: TimeWindowedKStreamJ[K, V]) {
    * Combine the values of records in this stream by the grouped key.
    *
    * @param reducer   a function that computes a new aggregate result
-   * @param materialized  an instance of `Materialized` used to materialize a state store. 
+   * @param materialized  an instance of `Materialized` used to materialize a state store.
    * @return a [[KTable]] that contains "update" records with unmodified keys, and values that represent the
    * latest (rolling) aggregate for each key
    * @see `org.apache.kafka.streams.kstream.TimeWindowedKStream#reduce`

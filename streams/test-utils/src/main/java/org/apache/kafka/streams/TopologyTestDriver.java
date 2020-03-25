@@ -316,7 +316,7 @@ public class TopologyTestDriver implements Closeable {
                 new LogContext()
             );
             globalStateTask.initialize();
-            globalProcessorContext.setRecordContext(new ProcessorRecordContext(0L, -1L, -1, null, new RecordHeaders()));
+            globalProcessorContext.setRecordContext(new ProcessorRecordContext(0L, -1L, -1, ProcessorContextImpl.NONEXIST_TOPIC, new RecordHeaders()));
         } else {
             globalStateManager = null;
             globalStateTask = null;
@@ -338,11 +338,11 @@ public class TopologyTestDriver implements Closeable {
                 stateDirectory,
                 cache,
                 mockWallClockTime,
-                producer);
+                () -> producer);
             task.initializeStateStores();
             task.initializeTopology();
             context = (InternalProcessorContext) task.context();
-            context.setRecordContext(new ProcessorRecordContext(0L, -1L, -1, null, new RecordHeaders()));
+            context.setRecordContext(new ProcessorRecordContext(0L, -1L, -1, ProcessorContextImpl.NONEXIST_TOPIC, new RecordHeaders()));
         } else {
             task = null;
             context = null;
@@ -677,6 +677,10 @@ public class TopologyTestDriver implements Closeable {
             producer.close();
         }
         stateDirectory.clean();
+    }
+
+    private Producer<byte[], byte[]> get() {
+        return producer;
     }
 
     static class MockTime implements Time {

@@ -190,7 +190,7 @@ public interface KStream<K, V> {
      * The provided {@link ValueMapperWithKey} is applied to each input record value and computes a new value for it.
      * Thus, an input record {@code <K,V>} can be transformed into an output record {@code <K:V'>}.
      * This is a stateless record-by-record operation (cf.
-     * {@link #transformValues(ValueTransformerSupplier, String...)} for stateful value transformation).
+     * {@link #transformValues(ValueTransformerWithKeySupplier, String...)} for stateful value transformation).
      * <p>
      * The example below counts the number of tokens of key and value strings.
      * <pre>{@code
@@ -317,7 +317,7 @@ public interface KStream<K, V> {
      * stream (value type can be altered arbitrarily).
      * The provided {@link ValueMapperWithKey} is applied to each input record and computes zero or more output values.
      * Thus, an input record {@code <K,V>} can be transformed into output records {@code <K:V'>, <K:V''>, ...}.
-     * This is a stateless record-by-record operation (cf. {@link #transformValues(ValueTransformerSupplier, String...)}
+     * This is a stateless record-by-record operation (cf. {@link #transformValues(ValueTransformerWithKeySupplier, String...)}
      * for stateful value transformation).
      * <p>
      * The example below splits input records {@code <Integer:String>}, with key=1, containing sentences as values
@@ -440,8 +440,8 @@ public interface KStream<K, V> {
      * This is equivalent to calling {@link #to(String, Produced) to(someTopic, Produced.with(keySerde, valueSerde)}
      * and {@link StreamsBuilder#stream(String, Consumed) StreamsBuilder#stream(someTopicName, Consumed.with(keySerde, valueSerde))}.
      *
-     * @param topic
-     * @param produced
+     * @param topic     the topic name
+     * @param produced  the options to use when producing to the topic
      * @return a {@code KStream} that contains the exact same (and potentially repartitioned) records as this {@code KStream}
      */
     KStream<K, V> through(final String topic,

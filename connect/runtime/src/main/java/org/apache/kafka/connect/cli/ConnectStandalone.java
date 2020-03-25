@@ -82,6 +82,8 @@ public class ConnectStandalone {
             log.debug("Kafka cluster ID: {}", kafkaClusterId);
 
             RestServer rest = new RestServer(config);
+            rest.initializeServer();
+
             URI advertisedUrl = rest.advertisedUrl();
             String workerId = advertisedUrl.getHost() + ":" + advertisedUrl.getPort();
 

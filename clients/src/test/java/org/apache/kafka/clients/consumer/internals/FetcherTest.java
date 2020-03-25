@@ -19,6 +19,7 @@ package org.apache.kafka.clients.consumer.internals;
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.ClientRequest;
 import org.apache.kafka.clients.ClientUtils;
+import org.apache.kafka.clients.FetchSessionHandler;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.NetworkClient;
@@ -84,10 +85,12 @@ import org.apache.kafka.test.DelayedReceive;
 import org.apache.kafka.test.MockSelector;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
+import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 
 import java.io.DataOutputStream;
+import java.lang.reflect.Field;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -100,6 +103,13 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 import static java.util.Collections.singleton;
 import static org.apache.kafka.common.requests.FetchMetadata.INVALID_SESSION_ID;
@@ -107,8 +117,10 @@ import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
+
 
 @SuppressWarnings("deprecation")
 public class FetcherTest {
@@ -147,38 +159,30 @@ public class FetcherTest {
     private Fetcher<byte[], byte[]> fetcher = createFetcher(subscriptions, metrics);
     private Metrics fetcherMetrics = new Metrics(time);
     private Fetcher<byte[], byte[]> fetcherNoAutoReset = createFetcher(subscriptionsNoAutoReset, fetcherMetrics);
+    private ExecutorService executorService;
 
     @Before
     public void setup() throws Exception {
         metadata.update(cluster, Collections.<String>emptySet(), time.milliseconds());
         client.setNode(node);
 
-        MemoryRecordsBuilder builder = MemoryRecords.builder(ByteBuffer.allocate(1024), CompressionType.NONE, TimestampType.CREATE_TIME, 1L);
-        builder.append(0L, "key".getBytes(), "value-1".getBytes());
-        builder.append(0L, "key".getBytes(), "value-2".getBytes());
-        builder.append(0L, "key".getBytes(), "value-3".getBytes());
-        records = builder.build();
-
-        builder = MemoryRecords.builder(ByteBuffer.allocate(1024), CompressionType.NONE, TimestampType.CREATE_TIME, 4L);
-        builder.append(0L, "key".getBytes(), "value-4".getBytes());
-        builder.append(0L, "key".getBytes(), "value-5".getBytes());
-        nextRecords = builder.build();
-
-        builder = MemoryRecords.builder(ByteBuffer.allocate(1024), CompressionType.NONE, TimestampType.CREATE_TIME, 0L);
-        emptyRecords = builder.build();
-
-        builder = MemoryRecords.builder(ByteBuffer.allocate(1024), CompressionType.NONE, TimestampType.CREATE_TIME, 4L);
-        builder.append(0L, "key".getBytes(), "value-0".getBytes());
-        partialRecords = builder.build();
+        records = buildRecords(1L, 3, 1);
+        nextRecords = buildRecords(4L, 2, 4);
+        emptyRecords = buildRecords(0L, 0, 0);
+        partialRecords = buildRecords(4L, 1, 0);
         partialRecords.buffer().putInt(Records.SIZE_OFFSET, 10000);
     }
 
     @After
-    public void teardown() {
+    public void teardown() throws Exception {
         this.metrics.close();
         this.fetcherMetrics.close();
         this.fetcher.close();
         this.fetcherMetrics.close();
+        if (executorService != null) {
+            executorService.shutdownNow();
+            assertTrue(executorService.awaitTermination(5, TimeUnit.SECONDS));
+        }
     }
 
     @Test
@@ -1388,6 +1392,51 @@ public class FetcherTest {
         assertTrue(topicMetadata.containsKey(topicName));
     }
 
+    @Test
+    public void testGetTopicMetadataOfflinePartitions() {
+        MetadataResponse originalResponse = newMetadataResponse(topicName, Errors.NONE); //baseline ok response
+
+        //create a response based on the above one with all partitions being leaderless
+        List<MetadataResponse.TopicMetadata> altTopics = new ArrayList<>();
+        for (MetadataResponse.TopicMetadata item : originalResponse.topicMetadata()) {
+            List<MetadataResponse.PartitionMetadata> partitions = item.partitionMetadata();
+            List<MetadataResponse.PartitionMetadata> altPartitions = new ArrayList<>();
+            for (MetadataResponse.PartitionMetadata p : partitions) {
+                altPartitions.add(new MetadataResponse.PartitionMetadata(
+                    p.error(),
+                    p.partition(),
+                    null, //no leader
+                    p.replicas(),
+                    p.isr(),
+                    p.offlineReplicas())
+                );
+            }
+            MetadataResponse.TopicMetadata alteredTopic = new MetadataResponse.TopicMetadata(
+                item.error(),
+                item.topic(),
+                item.isInternal(),
+                altPartitions
+            );
+            altTopics.add(alteredTopic);
+        }
+        Node controller = originalResponse.controller();
+        MetadataResponse altered = new MetadataResponse(
+            (List<Node>) originalResponse.brokers(),
+            originalResponse.clusterId(),
+            controller != null ? controller.id() : MetadataResponse.NO_CONTROLLER_ID,
+            altTopics);
+
+        client.prepareResponse(altered);
+
+        Map<String, List<PartitionInfo>> topicMetadata =
+            fetcher.getTopicMetadata(new MetadataRequest.Builder(Collections.singletonList(topicName), false), 5000L);
+
+        Assert.assertNotNull(topicMetadata);
+        Assert.assertNotNull(topicMetadata.get(topicName));
+        //noinspection ConstantConditions
+        Assert.assertEquals((int) cluster.partitionCountForTopic(topicName), topicMetadata.get(topicName).size());
+    }
+
     /*
      * Send multiple requests. Verify that the client side quota metrics have the right values
      */
@@ -1792,6 +1841,48 @@ public class FetcherTest {
         testGetOffsetsForTimesWithError(Errors.BROKER_NOT_AVAILABLE, Errors.NONE, 10L, 100L, 10L, 100L);
     }
 
+    @Test
+    public void testGetOffsetsForTimesWhenSomeTopicPartitionLeadersNotKnownInitially() {
+        final String anotherTopic = "another-topic";
+        final TopicPartition t2p0 = new TopicPartition(anotherTopic, 0);
+
+        client.reset();
+
+        // Metadata initially has one topic
+        Cluster cluster = TestUtils.clusterWith(3, topicName, 2);
+        metadata.update(cluster, Collections.<String>emptySet(), time.milliseconds());
+
+        // The first metadata refresh should contain one topic
+        client.prepareMetadataUpdate(cluster, Collections.<String>emptySet(), false);
+        client.prepareResponseFrom(listOffsetResponse(tp0, Errors.NONE, 1000L, 11L), cluster.leaderFor(tp0));
+        client.prepareResponseFrom(listOffsetResponse(tp1, Errors.NONE, 1000L, 32L), cluster.leaderFor(tp1));
+
+        // Second metadata refresh should contain two topics
+        Map<String, Integer> partitionNumByTopic = new HashMap<>();
+        partitionNumByTopic.put(topicName, 2);
+        partitionNumByTopic.put(anotherTopic, 1);
+        Cluster updatedCluster = TestUtils.clusterWith(3, partitionNumByTopic);
+        client.prepareMetadataUpdate(updatedCluster, Collections.<String>emptySet(), false);
+        client.prepareResponseFrom(listOffsetResponse(t2p0, Errors.NONE, 1000L, 54L), cluster.leaderFor(t2p0));
+
+        Map<TopicPartition, Long> timestampToSearch = new HashMap<>();
+        timestampToSearch.put(tp0, ListOffsetRequest.LATEST_TIMESTAMP);
+        timestampToSearch.put(tp1, ListOffsetRequest.LATEST_TIMESTAMP);
+        timestampToSearch.put(t2p0, ListOffsetRequest.LATEST_TIMESTAMP);
+        Map<TopicPartition, OffsetAndTimestamp> offsetAndTimestampMap =
+            fetcher.offsetsByTimes(timestampToSearch, Long.MAX_VALUE);
+
+        assertNotNull("Expect Fetcher.offsetsByTimes() to return non-null result for " + tp0,
+                      offsetAndTimestampMap.get(tp0));
+        assertNotNull("Expect Fetcher.offsetsByTimes() to return non-null result for " + tp1,
+                      offsetAndTimestampMap.get(tp1));
+        assertNotNull("Expect Fetcher.offsetsByTimes() to return non-null result for " + t2p0,
+                      offsetAndTimestampMap.get(t2p0));
+        assertEquals(11L, offsetAndTimestampMap.get(tp0).offset());
+        assertEquals(32L, offsetAndTimestampMap.get(tp1).offset());
+        assertEquals(54L, offsetAndTimestampMap.get(t2p0).offset());
+    }
+
     @Test(expected = TimeoutException.class)
     public void testBatchedListOffsetsMetadataErrors() {
         Map<TopicPartition, ListOffsetResponse.PartitionData> partitionData = new HashMap<>();
@@ -2066,8 +2157,8 @@ public class FetcherTest {
                 return record.key() != null;
             }
         }, ByteBuffer.allocate(1024), Integer.MAX_VALUE, BufferSupplier.NO_CACHING);
-        result.output.flip();
-        MemoryRecords compactedRecords = MemoryRecords.readableRecords(result.output);
+        result.outputBuffer().flip();
+        MemoryRecords compactedRecords = MemoryRecords.readableRecords(result.outputBuffer());
 
         subscriptions.assignFromUser(singleton(tp0));
         subscriptions.seek(tp0, 0);
@@ -2317,6 +2408,187 @@ public class FetcherTest {
         assertEquals(1L, subscriptions.position(tp1).longValue());
         assertEquals(4, records.get(0).offset());
         assertEquals(5, records.get(1).offset());
+    }
+
+    @Test
+    public void testFetcherConcurrency() throws Exception {
+        int numPartitions = 20;
+        Set<TopicPartition> topicPartitions = new HashSet<>();
+        for (int i = 0; i < numPartitions; i++)
+            topicPartitions.add(new TopicPartition(topicName, i));
+        cluster = TestUtils.singletonCluster(topicName, numPartitions);
+        metadata.update(cluster, Collections.emptySet(), time.milliseconds());
+        client.setNode(node);
+        fetchSize = 10000;
+
+        Fetcher<byte[], byte[]> fetcher = new Fetcher<byte[], byte[]>(
+                new LogContext(),
+                consumerClient,
+                minBytes,
+                maxBytes,
+                maxWaitMs,
+                fetchSize,
+                2 * numPartitions,
+                true,
+                new ByteArrayDeserializer(),
+                new ByteArrayDeserializer(),
+                metadata,
+                subscriptions,
+                metrics,
+                metricsRegistry,
+                time,
+                retryBackoffMs,
+                requestTimeoutMs,
+                IsolationLevel.READ_UNCOMMITTED) {
+            @Override
+            protected FetchSessionHandler sessionHandler(int id) {
+                final FetchSessionHandler handler = super.sessionHandler(id);
+                if (handler == null)
+                    return null;
+                else {
+                    return new FetchSessionHandler(new LogContext(), id) {
+                        @Override
+                        public Builder newBuilder() {
+                            verifySessionPartitions();
+                            return handler.newBuilder();
+                        }
+
+                        @Override
+                        public boolean handleResponse(FetchResponse response) {
+                            verifySessionPartitions();
+                            return handler.handleResponse(response);
+                        }
+
+                        @Override
+                        public void handleError(Throwable t) {
+                            verifySessionPartitions();
+                            handler.handleError(t);
+                        }
+
+                        // Verify that session partitions can be traversed safely.
+                        private void verifySessionPartitions() {
+                            try {
+                                Field field = FetchSessionHandler.class.getDeclaredField("sessionPartitions");
+                                field.setAccessible(true);
+                                LinkedHashMap<TopicPartition, FetchRequest.PartitionData> sessionPartitions =
+                                        (LinkedHashMap<TopicPartition, FetchRequest.PartitionData>) field.get(handler);
+                                for (Map.Entry<TopicPartition, FetchRequest.PartitionData> entry : sessionPartitions.entrySet()) {
+                                    // If `sessionPartitions` are modified on another thread, Thread.yield will increase the
+                                    // possibility of ConcurrentModificationException if appropriate synchronization is not used.
+                                    Thread.yield();
+                                }
+                            } catch (Exception e) {
+                                throw new RuntimeException(e);
+                            }
+                        }
+                    };
+                }
+            }
+        };
+
+        subscriptions.assignFromUser(topicPartitions);
+        topicPartitions.forEach(tp -> subscriptions.seek(tp, 0L));
+
+        AtomicInteger fetchesRemaining = new AtomicInteger(1000);
+        executorService = Executors.newSingleThreadExecutor();
+        Future<?> future = executorService.submit(() -> {
+            while (fetchesRemaining.get() > 0) {
+                synchronized (consumerClient) {
+                    if (!client.requests().isEmpty()) {
+                        ClientRequest request = client.requests().peek();
+                        FetchRequest fetchRequest = (FetchRequest) request.requestBuilder().build();
+                        LinkedHashMap<TopicPartition, FetchResponse.PartitionData<MemoryRecords>> responseMap = new LinkedHashMap<>();
+                        for (Map.Entry<TopicPartition, FetchRequest.PartitionData> entry : fetchRequest.fetchData().entrySet()) {
+                            TopicPartition tp = entry.getKey();
+                            long offset = entry.getValue().fetchOffset;
+                            responseMap.put(tp, new FetchResponse.PartitionData<>(Errors.NONE, offset + 2L, offset + 2,
+                                    0L, null, buildRecords(offset, 2, offset)));
+                        }
+                        client.respondToRequest(request, new FetchResponse<>(Errors.NONE, responseMap, 0, 123));
+                        consumerClient.poll(0);
+                    }
+                }
+            }
+            return fetchesRemaining.get();
+        });
+        Map<TopicPartition, Long> nextFetchOffsets = topicPartitions.stream()
+                .collect(Collectors.toMap(Function.identity(), t -> 0L));
+        while (fetchesRemaining.get() > 0 && !future.isDone()) {
+            if (fetcher.sendFetches() == 1) {
+                synchronized (consumerClient) {
+                    consumerClient.poll(0);
+                }
+            }
+            if (fetcher.hasCompletedFetches()) {
+                Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> fetchedRecords = fetcher.fetchedRecords();
+                if (!fetchedRecords.isEmpty()) {
+                    fetchesRemaining.decrementAndGet();
+                    fetchedRecords.entrySet().forEach(entry -> {
+                        TopicPartition tp = entry.getKey();
+                        List<ConsumerRecord<byte[], byte[]>> records = entry.getValue();
+                        assertEquals(2, records.size());
+                        long nextOffset = nextFetchOffsets.get(tp);
+                        assertEquals(nextOffset, records.get(0).offset());
+                        assertEquals(nextOffset + 1, records.get(1).offset());
+                        nextFetchOffsets.put(tp, nextOffset + 2);
+                    });
+                }
+            }
+        }
+        assertEquals(0, future.get());
+    }
+
+    @Test
+    public void testEmptyControlBatch() {
+        Fetcher<byte[], byte[]> fetcher = createFetcher(subscriptions, new Metrics(), new ByteArrayDeserializer(),
+                new ByteArrayDeserializer(), Integer.MAX_VALUE, IsolationLevel.READ_COMMITTED);
+        ByteBuffer buffer = ByteBuffer.allocate(1024);
+        int currentOffset = 1;
+
+        // Empty control batch should not cause an exception
+        DefaultRecordBatch.writeEmptyHeader(buffer, RecordBatch.MAGIC_VALUE_V2, 1L,
+                (short) 0, -1, 0, 0,
+                RecordBatch.NO_PARTITION_LEADER_EPOCH, TimestampType.CREATE_TIME, time.milliseconds(),
+                true, true);
+
+        currentOffset += appendTransactionalRecords(buffer, 1L, currentOffset,
+                new SimpleRecord(time.milliseconds(), "key".getBytes(), "value".getBytes()),
+                new SimpleRecord(time.milliseconds(), "key".getBytes(), "value".getBytes()));
+
+        commitTransaction(buffer, 1L, currentOffset);
+        buffer.flip();
+
+        List<FetchResponse.AbortedTransaction> abortedTransactions = new ArrayList<>();
+        MemoryRecords records = MemoryRecords.readableRecords(buffer);
+        subscriptions.assignFromUser(singleton(tp0));
+
+        subscriptions.seek(tp0, 0);
+
+        // normal fetch
+        assertEquals(1, fetcher.sendFetches());
+        assertFalse(fetcher.hasCompletedFetches());
+        client.prepareResponse(new MockClient.RequestMatcher() {
+            @Override
+            public boolean matches(AbstractRequest body) {
+                FetchRequest request = (FetchRequest) body;
+                assertEquals(IsolationLevel.READ_COMMITTED, request.isolationLevel());
+                return true;
+            }
+        }, fullFetchResponseWithAbortedTransactions(records, abortedTransactions, Errors.NONE, 100L, 100L, 0));
+
+        consumerClient.poll(0);
+        assertTrue(fetcher.hasCompletedFetches());
+
+        Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> fetchedRecords = fetcher.fetchedRecords();
+        assertTrue(fetchedRecords.containsKey(tp0));
+        assertEquals(fetchedRecords.get(tp0).size(), 2);
+    }
+
+    private MemoryRecords buildRecords(long baseOffset, int count, long firstMessageId) {
+        MemoryRecordsBuilder builder = MemoryRecords.builder(ByteBuffer.allocate(1024), CompressionType.NONE, TimestampType.CREATE_TIME, baseOffset);
+        for (int i = 0; i < count; i++)
+            builder.append(0L, "key".getBytes(), ("value-" + (firstMessageId + i)).getBytes());
+        return builder.build();
     }
 
     private int appendTransactionalRecords(ByteBuffer buffer, long pid, long baseOffset, int baseSequence, SimpleRecord... records) {

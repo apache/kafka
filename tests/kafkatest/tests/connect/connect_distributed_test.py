@@ -302,7 +302,7 @@ class ConnectDistributedTest(Test):
 
         # we should still be paused after restarting
         for node in self.cc.nodes:
-            wait_until(lambda: self.is_paused(self.source, node), timeout_sec=30,
+            wait_until(lambda: self.is_paused(self.source, node), timeout_sec=70,
                        err_msg="Failed to see connector startup in PAUSED state")
 
     @cluster(num_nodes=5)
@@ -339,7 +339,7 @@ class ConnectDistributedTest(Test):
             node.account.ssh("echo -e -n " + repr(self.SECOND_INPUTS) + " >> " + self.INPUT_FILE)
         wait_until(lambda: self._validate_file_output(self.FIRST_INPUT_LIST + self.SECOND_INPUT_LIST), timeout_sec=70, err_msg="Sink output file never converged to the same state as the input file")
 
-    @cluster(num_nodes=5)
+    @cluster(num_nodes=6)
     @matrix(clean=[True, False])
     def test_bounce(self, clean):
         """

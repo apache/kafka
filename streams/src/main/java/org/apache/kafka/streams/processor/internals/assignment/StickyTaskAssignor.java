@@ -270,7 +270,7 @@ public class StickyTaskAssignor<ID> implements TaskAssignor<ID, TaskId> {
                 if (!active && !pairs.contains(pair(task1, taskId))) {
                     return true;
                 }
-                if (!pairs.contains(pair(task1, taskId)) && task1.topicGroupId != taskId.topicGroupId) {
+                if (!pairs.contains(pair(task1, taskId))) {
                     return true;
                 }
             }

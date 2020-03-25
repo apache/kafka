@@ -28,12 +28,4 @@ public interface ErrorReporter {
      */
     void report(ProcessingContext context);
 
-    /**
-     * Provides the container for error handling metrics to implementations. This method will be called once the error
-     * reporter object is instantiated.
-     *
-     * @param errorHandlingMetrics metrics for error handling (cannot be null).
-     */
-    void metrics(ErrorHandlingMetrics errorHandlingMetrics);
-
 }

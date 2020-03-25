@@ -118,7 +118,7 @@ public class StreamThreadStateStoreProviderTest {
     public void shouldFindKeyValueStores() {
         mockThread(true);
         final List<ReadOnlyKeyValueStore<String, String>> kvStores =
-            provider.stores("kv-store", QueryableStoreTypes.<String, String>keyValueStore());
+            provider.stores("kv-store", QueryableStoreTypes.keyValueStore());
         assertEquals(2, kvStores.size());
     }
 
@@ -184,7 +184,7 @@ public class StreamThreadStateStoreProviderTest {
             stateDirectory,
             null,
             new MockTime(),
-            clientSupplier.getProducer(new HashMap<String, Object>())
+            () -> clientSupplier.getProducer(new HashMap<>())
         ) {
             @Override
             protected void updateOffsetLimits() {}

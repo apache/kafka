@@ -46,8 +46,7 @@ class SessionWindowedKStream[K, V](val inner: SessionWindowedKStreamJ[K, V]) {
    * the latest (rolling) aggregate for each key within a window
    * @see `org.apache.kafka.streams.kstream.SessionWindowedKStream#aggregate`
    */
-  def aggregate[VR](initializer: => VR)(aggregator: (K, V, VR) => VR,
-                                        merger: (K, VR, VR) => VR)(
+  def aggregate[VR](initializer: => VR)(aggregator: (K, V, VR) => VR, merger: (K, VR, VR) => VR)(
     implicit materialized: Materialized[K, VR, ByteArraySessionStore]
   ): KTable[Windowed[K], VR] =
     inner.aggregate((() => initializer).asInitializer, aggregator.asAggregator, merger.asMerger, materialized)
@@ -55,7 +54,7 @@ class SessionWindowedKStream[K, V](val inner: SessionWindowedKStreamJ[K, V]) {
   /**
    * Count the number of records in this stream by the grouped key into `SessionWindows`.
    *
-   * @param materialized  an instance of `Materialized` used to materialize a state store. 
+   * @param materialized  an instance of `Materialized` used to materialize a state store.
    * @return a windowed [[KTable]] that contains "update" records with unmodified keys and `Long` values
    * that represent the latest (rolling) count (i.e., number of records) for each key within a window
    * @see `org.apache.kafka.streams.kstream.SessionWindowedKStream#count`
@@ -69,8 +68,8 @@ class SessionWindowedKStream[K, V](val inner: SessionWindowedKStreamJ[K, V]) {
   /**
    * Combine values of this stream by the grouped key into {@link SessionWindows}.
    *
-   * @param reducer           a reducer function that computes a new aggregate result. 
-   * @param materialized  an instance of `Materialized` used to materialize a state store. 
+   * @param reducer           a reducer function that computes a new aggregate result.
+   * @param materialized  an instance of `Materialized` used to materialize a state store.
    * @return a windowed [[KTable]] that contains "update" records with unmodified keys, and values that represent
    * the latest (rolling) aggregate for each key within a window
    * @see `org.apache.kafka.streams.kstream.SessionWindowedKStream#reduce`

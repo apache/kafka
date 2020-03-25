@@ -91,7 +91,21 @@ import static java.util.Collections.emptyList;
 import static org.apache.kafka.common.serialization.ExtendedDeserializer.Wrapper.ensureExtended;
 
 /**
- * This class manage the fetching process with the brokers.
+ * This class manages the fetching process with the brokers.
+ * <p>
+ * Thread-safety:
+ * Requests and responses of Fetcher may be processed by different threads since heartbeat
+ * thread may process responses. Other operations are single-threaded and invoked only from
+ * the thread polling the consumer.
+ * <ul>
+ *     <li>If a response handler accesses any shared state of the Fetcher (e.g. FetchSessionHandler),
+ *     all access to that state must be synchronized on the Fetcher instance.</li>
+ *     <li>If a response handler accesses any shared state of the coordinator (e.g. SubscriptionState),
+ *     it is assumed that all access to that state is synchronized on the coordinator instance by
+ *     the caller.</li>
+ *     <li>Responses that collate partial responses from multiple brokers (e.g. to list offsets) are
+ *     synchronized on the response future.</li>
+ * </ul>
  */
 public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
     private final Logger log;
@@ -187,7 +201,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
      * an in-flight fetch or pending fetch data.
      * @return number of fetches sent
      */
-    public int sendFetches() {
+    public synchronized int sendFetches() {
         Map<Node, FetchSessionHandler.FetchRequestData> fetchRequestMap = prepareFetchRequests();
         for (Map.Entry<Node, FetchSessionHandler.FetchRequestData> entry : fetchRequestMap.entrySet()) {
             final Node fetchTarget = entry.getKey();
@@ -205,39 +219,43 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                     .addListener(new RequestFutureListener<ClientResponse>() {
                         @Override
                         public void onSuccess(ClientResponse resp) {
-                            FetchResponse<Records> response = (FetchResponse<Records>) resp.responseBody();
-                            FetchSessionHandler handler = sessionHandlers.get(fetchTarget.id());
-                            if (handler == null) {
-                                log.error("Unable to find FetchSessionHandler for node {}. Ignoring fetch response.",
-                                    fetchTarget.id());
-                                return;
+                            synchronized (Fetcher.this) {
+                                FetchResponse<Records> response = (FetchResponse<Records>) resp.responseBody();
+                                FetchSessionHandler handler = sessionHandler(fetchTarget.id());
+                                if (handler == null) {
+                                    log.error("Unable to find FetchSessionHandler for node {}. Ignoring fetch response.",
+                                            fetchTarget.id());
+                                    return;
+                                }
+                                if (!handler.handleResponse(response)) {
+                                    return;
+                                }
+
+                                Set<TopicPartition> partitions = new HashSet<>(response.responseData().keySet());
+                                FetchResponseMetricAggregator metricAggregator = new FetchResponseMetricAggregator(sensors, partitions);
+
+                                for (Map.Entry<TopicPartition, FetchResponse.PartitionData<Records>> entry : response.responseData().entrySet()) {
+                                    TopicPartition partition = entry.getKey();
+                                    long fetchOffset = data.sessionPartitions().get(partition).fetchOffset;
+                                    FetchResponse.PartitionData fetchData = entry.getValue();
+
+                                    log.debug("Fetch {} at offset {} for partition {} returned fetch data {}",
+                                            isolationLevel, fetchOffset, partition, fetchData);
+                                    completedFetches.add(new CompletedFetch(partition, fetchOffset, fetchData, metricAggregator,
+                                            resp.requestHeader().apiVersion()));
+                                }
+
+                                sensors.fetchLatency.record(resp.requestLatencyMs());
                             }
-                            if (!handler.handleResponse(response)) {
-                                return;
-                            }
-
-                            Set<TopicPartition> partitions = new HashSet<>(response.responseData().keySet());
-                            FetchResponseMetricAggregator metricAggregator = new FetchResponseMetricAggregator(sensors, partitions);
-
-                            for (Map.Entry<TopicPartition, FetchResponse.PartitionData<Records>> entry : response.responseData().entrySet()) {
-                                TopicPartition partition = entry.getKey();
-                                long fetchOffset = data.sessionPartitions().get(partition).fetchOffset;
-                                FetchResponse.PartitionData fetchData = entry.getValue();
-
-                                log.debug("Fetch {} at offset {} for partition {} returned fetch data {}",
-                                        isolationLevel, fetchOffset, partition, fetchData);
-                                completedFetches.add(new CompletedFetch(partition, fetchOffset, fetchData, metricAggregator,
-                                        resp.requestHeader().apiVersion()));
-                            }
-
-                            sensors.fetchLatency.record(resp.requestLatencyMs());
                         }
 
                         @Override
                         public void onFailure(RuntimeException e) {
-                            FetchSessionHandler handler = sessionHandlers.get(fetchTarget.id());
-                            if (handler != null) {
-                                handler.handleError(e);
+                            synchronized (Fetcher.this) {
+                                FetchSessionHandler handler = sessionHandler(fetchTarget.id());
+                                if (handler != null) {
+                                    handler.handleError(e);
+                                }
                             }
                         }
                     });
@@ -313,7 +331,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                 if (!shouldRetry) {
                     HashMap<String, List<PartitionInfo>> topicsPartitionInfos = new HashMap<>();
                     for (String topic : cluster.topics())
-                        topicsPartitionInfos.put(topic, cluster.availablePartitionsForTopic(topic));
+                        topicsPartitionInfos.put(topic, cluster.partitionsForTopic(topic));
                     return topicsPartitionInfos;
                 }
             }
@@ -422,7 +440,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                 if (value.partitionsToRetry.isEmpty())
                     return result;
 
-                remainingToSearch.keySet().removeAll(result.fetchedOffsets.keySet());
+                remainingToSearch.keySet().retainAll(value.partitionsToRetry);
             } else if (!future.isRetriable()) {
                 throw future.exception();
             }
@@ -590,7 +608,8 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
         for (TopicPartition tp : partitionResetTimestamps.keySet())
             metadata.add(tp.topic());
 
-        Map<Node, Map<TopicPartition, Long>> timestampsToSearchByNode = groupListOffsetRequests(partitionResetTimestamps);
+        Map<Node, Map<TopicPartition, Long>> timestampsToSearchByNode =
+                groupListOffsetRequests(partitionResetTimestamps, new HashSet<>());
         for (Map.Entry<Node, Map<TopicPartition, Long>> entry : timestampsToSearchByNode.entrySet()) {
             Node node = entry.getKey();
             final Map<TopicPartition, Long> resetTimestamps = entry.getValue();
@@ -639,18 +658,19 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
         for (TopicPartition tp : timestampsToSearch.keySet())
             metadata.add(tp.topic());
 
-        Map<Node, Map<TopicPartition, Long>> timestampsToSearchByNode = groupListOffsetRequests(timestampsToSearch);
+        final Set<TopicPartition> partitionsToRetry = new HashSet<>();
+        Map<Node, Map<TopicPartition, Long>> timestampsToSearchByNode =
+                groupListOffsetRequests(timestampsToSearch, partitionsToRetry);
         if (timestampsToSearchByNode.isEmpty())
             return RequestFuture.failure(new StaleMetadataException());
 
         final RequestFuture<ListOffsetResult> listOffsetRequestsFuture = new RequestFuture<>();
         final Map<TopicPartition, OffsetData> fetchedTimestampOffsets = new HashMap<>();
-        final Set<TopicPartition> partitionsToRetry = new HashSet<>();
         final AtomicInteger remainingResponses = new AtomicInteger(timestampsToSearchByNode.size());
 
         for (Map.Entry<Node, Map<TopicPartition, Long>> entry : timestampsToSearchByNode.entrySet()) {
             RequestFuture<ListOffsetResult> future =
-                    sendListOffsetRequest(entry.getKey(), entry.getValue(), requireTimestamps);
+                sendListOffsetRequest(entry.getKey(), entry.getValue(), requireTimestamps);
             future.addListener(new RequestFutureListener<ListOffsetResult>() {
                 @Override
                 public void onSuccess(ListOffsetResult partialResult) {
@@ -677,7 +697,16 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
         return listOffsetRequestsFuture;
     }
 
-    private Map<Node, Map<TopicPartition, Long>> groupListOffsetRequests(Map<TopicPartition, Long> timestampsToSearch) {
+        /**
+         * Groups timestamps to search by node for topic partitions in `timestampsToSearch` that have
+         * leaders available. Topic partitions from `timestampsToSearch` that do not have their leader
+         * available are added to `partitionsToRetry`
+         * @param timestampsToSearch The mapping from partitions ot the target timestamps
+         * @param partitionsToRetry A set of topic partitions that will be extended with partitions
+         *                          that need metadata update or re-connect to the leader.
+         */
+    private Map<Node, Map<TopicPartition, Long>> groupListOffsetRequests(
+            Map<TopicPartition, Long> timestampsToSearch, Set<TopicPartition> partitionsToRetry) {
         final Map<Node, Map<TopicPartition, Long>> timestampsToSearchByNode = new HashMap<>();
         for (Map.Entry<TopicPartition, Long> entry: timestampsToSearch.entrySet()) {
             TopicPartition tp  = entry.getKey();
@@ -686,9 +715,11 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                 metadata.add(tp.topic());
                 log.debug("Leader for partition {} is unknown for fetching offset", tp);
                 metadata.requestUpdate();
+                partitionsToRetry.add(tp);
             } else if (info.leader() == null) {
                 log.debug("Leader for partition {} is unavailable for fetching offset", tp);
                 metadata.requestUpdate();
+                partitionsToRetry.add(tp);
             } else if (client.isUnavailable(info.leader())) {
                 client.maybeThrowAuthFailure(info.leader());
 
@@ -696,7 +727,8 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                 // try again. No need to request a metadata update since the disconnect will have
                 // done so already.
                 log.debug("Leader {} for partition {} is unavailable for fetching offset until reconnect backoff expires",
-                        info.leader(), tp);
+                          info.leader(), tp);
+                partitionsToRetry.add(tp);
             } else {
                 Node node = info.leader();
                 Map<TopicPartition, Long> topicData = timestampsToSearchByNode.get(node);
@@ -866,7 +898,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                 // if there is a leader and no in-flight requests, issue a new fetch
                 FetchSessionHandler.Builder builder = fetchable.get(node);
                 if (builder == null) {
-                    FetchSessionHandler handler = sessionHandlers.get(node.id());
+                    FetchSessionHandler handler = sessionHandler(node.id());
                     if (handler == null) {
                         handler = new FetchSessionHandler(logContext, node.id());
                         sessionHandlers.put(node.id(), handler);
@@ -1021,6 +1053,11 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
     @Override
     public void onAssignment(Set<TopicPartition> assignment) {
         sensors.updatePartitionLagAndLeadSensors(assignment);
+    }
+
+    // Visibilty for testing
+    protected FetchSessionHandler sessionHandler(int node) {
+        return sessionHandlers.get(node);
     }
 
     public static Sensor throttleTimeSensor(Metrics metrics, FetcherMetricsRegistry metricsRegistry) {
@@ -1242,8 +1279,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
 
             Iterator<Record> batchIterator = batch.iterator();
             if (!batchIterator.hasNext())
-                throw new InvalidRecordException("Invalid batch for partition " + partition + " at offset " +
-                        batch.baseOffset() + " with control sequence set, but no records");
+                return false;
 
             Record firstRecord = batchIterator.next();
             return ControlRecordType.ABORT == ControlRecordType.parse(firstRecord.key());

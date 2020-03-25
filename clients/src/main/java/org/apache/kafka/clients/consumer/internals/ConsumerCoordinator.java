@@ -323,6 +323,16 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 // we need to ensure that the metadata is fresh before joining initially. This ensures
                 // that we have matched the pattern against the cluster's topics at least once before joining.
                 if (subscriptions.hasPatternSubscription()) {
+                    // For consumer group that uses pattern-based subscription, after a topic is created,
+                    // any consumer that discovers the topic after metadata refresh can trigger rebalance
+                    // across the entire consumer group. Multiple rebalances can be triggered after one topic
+                    // creation if consumers refresh metadata at vastly different times. We can significantly
+                    // reduce the number of rebalances caused by single topic creation by asking consumer to
+                    // refresh metadata before re-joining the group as long as the refresh backoff time has
+                    // passed.
+                    if (this.metadata.timeToAllowUpdate(currentTime) == 0) {
+                        this.metadata.requestUpdate();
+                    }
                     if (!client.ensureFreshMetadata(remainingTimeAtLeastZero(timeoutMs, elapsed))) {
                         return false;
                     }
@@ -830,7 +840,11 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 if (error == Errors.NONE) {
                     log.debug("Committed offset {} for partition {}", offset, tp);
                 } else {
-                    log.error("Offset commit failed on partition {} at offset {}: {}", tp, offset, error.message());
+                    if (error.exception() instanceof RetriableException) {
+                        log.warn("Offset commit failed on partition {} at offset {}: {}", tp, offset, error.message());
+                    } else {
+                        log.error("Offset commit failed on partition {} at offset {}: {}", tp, offset, error.message());
+                    }
 
                     if (error == Errors.GROUP_AUTHORIZATION_FAILED) {
                         future.raise(new GroupAuthorizationException(groupId));
@@ -965,7 +979,8 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             Measurable numParts =
                 new Measurable() {
                     public double measure(MetricConfig config, long now) {
-                        return subscriptions.assignedPartitions().size();
+                        // Get the number of assigned partitions in a thread safe manner
+                        return subscriptions.numAssignedPartitions();
                     }
                 };
             metrics.addMetric(metrics.metricName("assigned-partitions",

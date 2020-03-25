@@ -97,7 +97,7 @@ public class Consumed<K, V> {
     /**
      * Create an instance of {@link Consumed} with key and value {@link Serde}s.
      *
-     * @param keySerde   the key serde. If {@code null}the default key serde from config will be used
+     * @param keySerde   the key serde. If {@code null} the default key serde from config will be used
      * @param valueSerde the value serde. If {@code null} the default value serde from config will be used
      * @param <K>        key type
      * @param <V>        value type

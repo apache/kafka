@@ -422,7 +422,7 @@ public class Sender implements Runnable {
     }
 
     private void maybeWaitForProducerId() {
-        while (!transactionManager.hasProducerId() && !transactionManager.hasError()) {
+        while (!forceClose && !transactionManager.hasProducerId() && !transactionManager.hasError()) {
             try {
                 Node node = awaitLeastLoadedNodeReady(requestTimeoutMs);
                 if (node != null) {

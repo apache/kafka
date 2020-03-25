@@ -24,7 +24,6 @@ import org.apache.kafka.streams.kstream.{KGroupedStream => KGroupedStreamJ, _}
 import org.apache.kafka.streams.scala.ImplicitConversions._
 import org.apache.kafka.streams.scala.FunctionConversions._
 
-
 /**
  * Wraps the Java class KGroupedStream and delegates method calls to the underlying Java object.
  *
@@ -41,7 +40,7 @@ class KGroupedStream[K, V](val inner: KGroupedStreamJ[K, V]) {
    * The result is written into a local `KeyValueStore` (which is basically an ever-updating materialized view)
    * provided by the given `materialized`.
    *
-   * @param materialized  an instance of `Materialized` used to materialize a state store. 
+   * @param materialized  an instance of `Materialized` used to materialize a state store.
    * @return a [[KTable]] that contains "update" records with unmodified keys and `Long` values that
    * represent the latest (rolling) count (i.e., number of records) for each key
    * @see `org.apache.kafka.streams.kstream.KGroupedStream#count`
@@ -55,8 +54,8 @@ class KGroupedStream[K, V](val inner: KGroupedStreamJ[K, V]) {
   /**
    * Combine the values of records in this stream by the grouped key.
    *
-   * @param reducer   a function `(V, V) => V` that computes a new aggregate result. 
-   * @param materialized  an instance of `Materialized` used to materialize a state store. 
+   * @param reducer   a function `(V, V) => V` that computes a new aggregate result.
+   * @param materialized  an instance of `Materialized` used to materialize a state store.
    * @return a [[KTable]] that contains "update" records with unmodified keys, and values that represent the
    * latest (rolling) aggregate for each key
    * @see `org.apache.kafka.streams.kstream.KGroupedStream#reduce`

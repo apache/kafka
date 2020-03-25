@@ -27,7 +27,7 @@ import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, Produce
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record.{MemoryRecords, Record, RecordBatch}
-import org.apache.kafka.common.requests.{FetchRequest, FetchResponse, FetchMetadata => JFetchMetadata}
+import org.apache.kafka.common.requests.{FetchRequest, FetchResponse, IsolationLevel, FetchMetadata => JFetchMetadata}
 import org.apache.kafka.common.serialization.{ByteArraySerializer, StringSerializer}
 import org.junit.Assert._
 import org.junit.Test
@@ -167,6 +167,22 @@ class FetchRequestTest extends BaseRequestTest {
     assertTrue(partitionData.highWatermark > 0)
     assertEquals(maxPartitionBytes, partitionData.records.sizeInBytes)
     assertEquals(0, records(partitionData).map(_.sizeInBytes).sum)
+  }
+
+  @Test
+  def testFetchRequestV4WithReadCommitted(): Unit = {
+    initProducer()
+    val maxPartitionBytes = 200
+    val (topicPartition, leaderId) = createTopics(numTopics = 1, numPartitions = 1).head
+    producer.send(new ProducerRecord(topicPartition.topic, topicPartition.partition,
+      "key", new String(new Array[Byte](maxPartitionBytes + 1)))).get
+    val fetchRequest = FetchRequest.Builder.forConsumer(Int.MaxValue, 0, createPartitionMap(maxPartitionBytes,
+      Seq(topicPartition))).isolationLevel(IsolationLevel.READ_COMMITTED).build(4)
+    val fetchResponse = sendFetchRequest(leaderId, fetchRequest)
+    val partitionData = fetchResponse.responseData.get(topicPartition)
+    assertEquals(Errors.NONE, partitionData.error)
+    assertTrue(partitionData.lastStableOffset > 0)
+    assertTrue(records(partitionData).map(_.sizeInBytes).sum > 0)
   }
 
   @Test

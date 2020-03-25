@@ -96,6 +96,7 @@ public class MockClient implements KafkaClient {
     private final Queue<MetadataUpdate> metadataUpdates = new ConcurrentLinkedDeque<>();
     private volatile NodeApiVersions nodeApiVersions = NodeApiVersions.create();
     private volatile int numBlockingWakeups = 0;
+    private volatile boolean active = true;
 
     public MockClient(Time time) {
         this(time, null);
@@ -279,8 +280,6 @@ public class MockClient implements KafkaClient {
         maybeAwaitWakeup();
         checkTimeoutOfPendingRequests(now);
 
-        List<ClientResponse> copy = new ArrayList<>(this.responses);
-
         if (metadata != null && metadata.updateRequested()) {
             MetadataUpdate metadataUpdate = metadataUpdates.poll();
             if (cluster != null)
@@ -299,9 +298,11 @@ public class MockClient implements KafkaClient {
             }
         }
 
+        List<ClientResponse> copy = new ArrayList<>();
         ClientResponse response;
         while ((response = this.responses.poll()) != null) {
             response.onComplete();
+            copy.add(response);
         }
 
         return copy;
@@ -532,7 +533,18 @@ public class MockClient implements KafkaClient {
     }
 
     @Override
+    public void initiateClose() {
+        close();
+    }
+
+    @Override
+    public boolean active() {
+        return active;
+    }
+
+    @Override
     public void close() {
+        active = false;
         metadata.close();
     }
 

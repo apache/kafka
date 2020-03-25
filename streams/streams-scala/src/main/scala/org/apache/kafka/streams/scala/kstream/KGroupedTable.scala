@@ -39,7 +39,7 @@ class KGroupedTable[K, V](inner: KGroupedTableJ[K, V]) {
    * Count number of records of the original [[KTable]] that got [[KTable#groupBy]] to
    * the same key into a new instance of [[KTable]].
    *
-   * @param materialized  an instance of `Materialized` used to materialize a state store. 
+   * @param materialized  an instance of `Materialized` used to materialize a state store.
    * @return a [[KTable]] that contains "update" records with unmodified keys and `Long` values that
    * represent the latest (rolling) count (i.e., number of records) for each key
    * @see `org.apache.kafka.streams.kstream.KGroupedTable#count`
