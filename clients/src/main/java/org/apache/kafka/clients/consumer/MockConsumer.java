@@ -434,7 +434,6 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
 
     @Override
     public synchronized void close(long timeout, TimeUnit unit) {
-        ensureNotClosed();
         this.closed = true;
     }
 

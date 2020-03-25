@@ -144,7 +144,7 @@ public class KafkaStreams {
     private final QueryableStoreProvider queryableStoreProvider;
     private final AdminClient adminClient;
 
-    private GlobalStreamThread globalStreamThread;
+    GlobalStreamThread globalStreamThread;
     private KafkaStreams.StateListener stateListener;
     private StateRestoreListener globalStateRestoreListener;
 
@@ -424,7 +424,7 @@ public class KafkaStreams {
         private void maybeSetRunning() {
             // one thread is running, check others, including global thread
             for (final StreamThread.State state : threadState.values()) {
-                if (state != StreamThread.State.RUNNING) {
+                if (state != StreamThread.State.RUNNING && state != StreamThread.State.DEAD) {
                     return;
                 }
             }
@@ -852,45 +852,43 @@ public class KafkaStreams {
             // wait for all threads to join in a separate thread;
             // save the current thread so that if it is a stream thread
             // we don't attempt to join it and cause a deadlock
-            final Thread shutdownThread = new Thread(new Runnable() {
-                @Override
-                public void run() {
-                    // notify all the threads to stop; avoid deadlocks by stopping any
-                    // further state reports from the thread since we're shutting down
-                    for (final StreamThread thread : threads) {
-                        thread.setStateListener(null);
-                        thread.shutdown();
-                    }
+            final Thread shutdownThread = new Thread(() -> {
 
-                    for (final StreamThread thread : threads) {
-                        try {
-                            if (!thread.isRunning()) {
-                                thread.join();
-                            }
-                        } catch (final InterruptedException ex) {
-                            Thread.currentThread().interrupt();
-                        }
-                    }
-
-                    if (globalStreamThread != null) {
-                        globalStreamThread.setStateListener(null);
-                        globalStreamThread.shutdown();
-                    }
-
-                    if (globalStreamThread != null && !globalStreamThread.stillRunning()) {
-                        try {
-                            globalStreamThread.join();
-                        } catch (final InterruptedException e) {
-                            Thread.currentThread().interrupt();
-                        }
-                        globalStreamThread = null;
-                    }
-
-                    adminClient.close();
-
-                    metrics.close();
-                    setState(State.NOT_RUNNING);
+                // notify all the threads to stop; avoid deadlocks by stopping any
+                // further state reports from the thread since we're shutting down
+                for (final StreamThread thread : threads) {
+                    thread.setStateListener(null);
+                    thread.shutdown();
                 }
+
+                for (final StreamThread thread : threads) {
+                    try {
+                        if (!thread.isRunning()) {
+                            thread.join();
+                        }
+                    } catch (final InterruptedException ex) {
+                        Thread.currentThread().interrupt();
+                    }
+                }
+
+                if (globalStreamThread != null) {
+                    globalStreamThread.setStateListener(null);
+                    globalStreamThread.shutdown();
+                }
+
+                if (globalStreamThread != null && !globalStreamThread.stillRunning()) {
+                    try {
+                        globalStreamThread.join();
+                    } catch (final InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                    }
+                    globalStreamThread = null;
+                }
+
+                adminClient.close();
+
+                metrics.close();
+                setState(State.NOT_RUNNING);
             }, "kafka-streams-close-thread");
 
             shutdownThread.setDaemon(true);
