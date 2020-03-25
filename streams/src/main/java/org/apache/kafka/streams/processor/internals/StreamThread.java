@@ -526,6 +526,8 @@ public class StreamThread extends Thread {
             try {
                 runOnce();
                 if (assignmentErrorCode.get() == AssignorError.REBALANCE_NEEDED.code()) {
+                    log.info("Detected that the assignor requested a rebalance. Rejoining the consumer group to " +
+                                 "trigger a new rebalance.");
                     assignmentErrorCode.set(AssignorError.NONE.code());
                     mainConsumer.enforceRebalance();
                 }
