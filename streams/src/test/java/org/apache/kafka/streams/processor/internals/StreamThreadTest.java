@@ -483,10 +483,7 @@ public class StreamThreadTest {
         final TaskId task1 = new TaskId(0, t1p1.partition());
         final Set<TopicPartition> assignedPartitions = Collections.singleton(t1p1);
 
-        thread.taskManager().handleAssignment(
-            Collections.singletonMap(task1, assignedPartitions),
-            emptyMap()
-        );
+        thread.taskManager().handleAssignment(Collections.singletonMap(task1, assignedPartitions), emptyMap());
 
         final MockConsumer<byte[], byte[]> mockConsumer = (MockConsumer<byte[], byte[]>) thread.mainConsumer;
         mockConsumer.assign(Collections.singleton(t1p1));
@@ -511,18 +508,25 @@ public class StreamThreadTest {
         thread.runOnce();
         assertThat(thread.currentNumIterations(), equalTo(2));
 
-        // system time based punctutation halves to 1
+        // system time based punctutation without processing any record, iteration stays as 2
         mockTime.sleep(11L);
+
+        thread.runOnce();
+        assertThat(thread.currentNumIterations(), equalTo(2));
+
+        // system time based punctutation after processing a record, half iteration to 1
+        mockTime.sleep(11L);
+        addRecord(mockConsumer, ++offset, 5L);
 
         thread.runOnce();
         assertThat(thread.currentNumIterations(), equalTo(1));
 
-        // processed two records, bumping up iterations to 2
+        // processed two records, bumping up iterations to 3 (1 + 2)
         addRecord(mockConsumer, ++offset, 5L);
         addRecord(mockConsumer, ++offset, 6L);
         thread.runOnce();
 
-        assertThat(thread.currentNumIterations(), equalTo(2));
+        assertThat(thread.currentNumIterations(), equalTo(3));
 
         // stream time based punctutation halves to 1
         addRecord(mockConsumer, ++offset, 11L);
@@ -542,15 +546,29 @@ public class StreamThreadTest {
         addRecord(mockConsumer, ++offset, 15L);
         thread.runOnce();
 
-        // user requested commit should not impact on iteration adjustment
+        // user requested commit should half iteration to 1
+        assertThat(thread.currentNumIterations(), equalTo(1));
+
+        // processed three records, bumping up iterations to 3 (1 + 2)
+        addRecord(mockConsumer, ++offset, 15L);
+        addRecord(mockConsumer, ++offset, 16L);
+        addRecord(mockConsumer, ++offset, 17L);
+        thread.runOnce();
+
         assertThat(thread.currentNumIterations(), equalTo(3));
 
-        // time based commit, halves iterations to 3 / 2 = 1
+        // time based commit without processing, should keep the iteration as 3
         mockTime.sleep(90L);
         thread.runOnce();
 
-        assertThat(thread.currentNumIterations(), equalTo(1));
+        assertThat(thread.currentNumIterations(), equalTo(3));
 
+        // time based commit without processing, should half the iteration to 1
+        mockTime.sleep(90L);
+        addRecord(mockConsumer, ++offset, 18L);
+        thread.runOnce();
+
+        assertThat(thread.currentNumIterations(), equalTo(1));
     }
 
     @Test
@@ -1373,8 +1391,7 @@ public class StreamThreadTest {
             }
 
             @Override
-            public void process(final Object key,
-                                final Object value) {}
+            public void process(final Object key, final Object value) {}
 
             @Override
             public void close() {}

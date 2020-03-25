@@ -412,11 +412,11 @@ public class StreamThread extends Thread {
         }
     }
 
-    static boolean eosAlphaEnabled(final StreamsConfig config) {
+    private static boolean eosAlphaEnabled(final StreamsConfig config) {
         return EXACTLY_ONCE.equals(config.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG));
     }
 
-    public static boolean eosBetaEnabled(final StreamsConfig config) {
+    private static boolean eosBetaEnabled(final StreamsConfig config) {
         return EXACTLY_ONCE_BETA.equals(config.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG));
     }
 
@@ -640,16 +640,14 @@ public class StreamThread extends Thread {
             /*
              * Within an iteration, after processing up to N (N initialized as 1 upon start up) records for each applicable tasks, check the current time:
              *  1. If it is time to punctuate, do it;
-             *  2. If it is time to commit, do it; this should be after 1) since punctuate may trigger commit
-             *  3. If elapsed time is close to consumer's max.poll.interval.ms,
-             *     end the current iteration immediately and half N for next iteration; otherwise, increment N.
+             *  2. If it is time to commit, do it, this should be after 1) since punctuate may trigger commit;
+             *  3. If there's no records processed, end the current iteration immediately;
+             *  4. If we are close to consumer's next poll deadline, end the current iteration immediately;
+             *  5. If any of 1), 2) and 4) happens, half N for next iteration;
+             *  6. Otherwise, increment N.
              */
-            int processed;
-
             do {
-                advanceNowAndComputeLatency();
-                processed = taskManager.process(numIterations, now);
-
+                final int processed = taskManager.process(numIterations, now);
                 if (processed > 0) {
                     // It makes no difference to the outcome of these metrics when we record "0",
                     // so we can just avoid the method call when we didn't process anything.
@@ -661,25 +659,36 @@ public class StreamThread extends Thread {
                     final long processLatency = advanceNowAndComputeLatency();
                     processLatencySensor.record(processLatency / (double) processed, now);
                     totalProcessLatency += processLatency;
-                } else {
-                    // if there is no records to be processed, exit immediately
-                    break;
                 }
 
-                final long punctuateLatency = maybePunctuate();
-                if (punctuateLatency > 0L) {
+                final int punctuated = maybePunctuate();
+                if (punctuated > 0) {
+                    final long punctuateLatency = advanceNowAndComputeLatency();
+                    punctuateSensor.record(punctuateLatency / (double) punctuated, now);
                     totalPunctuateLatency += punctuateLatency;
                 }
 
-                final long commitLatency = maybeCommit();
-                if (commitLatency > 0L) {
+                final int committed = maybeCommit();
+                if (committed > 0) {
+                    final long commitLatency = advanceNowAndComputeLatency();
+                    commitSensor.record(commitLatency / (double) committed, now);
+
+                    if (log.isDebugEnabled()) {
+                        log.debug("Committed all active tasks {} and standby tasks {} in {}ms",
+                            taskManager.activeTaskIds(), taskManager.standbyTaskIds(), commitLatency);
+                    }
+
                     totalCommitLatency += commitLatency;
                 }
 
-                final long timeSinceLastPoll = Math.max(now - lastPollMs, 0);
-                if (timeSinceLastPoll > maxPollTimeMs / 2) {
+                if (processed == 0) {
+                    // if there is no records to be processed, exit after punctuate / commit
+                    break;
+                } else if (Math.max(now - lastPollMs, 0) > maxPollTimeMs / 2) {
                     numIterations = numIterations > 1 ? numIterations / 2 : numIterations;
                     break;
+                } else if (punctuated > 0 || committed > 0) {
+                    numIterations = numIterations > 1 ? numIterations / 2 : numIterations;
                 } else {
                     numIterations++;
                 }
@@ -779,17 +788,8 @@ public class StreamThread extends Thread {
     /**
      * @throws TaskMigratedException if the task producer got fenced (EOS only)
      */
-    private long maybePunctuate() {
-        final long punctuateLatency;
-        final int punctuated;
-        if ((punctuated = taskManager.punctuate()) > 0) {
-            punctuateLatency = advanceNowAndComputeLatency();
-            punctuateSensor.record(punctuateLatency / (double) punctuated, now);
-        } else {
-            punctuateLatency = 0L;
-        }
-
-        return punctuateLatency;
+    private int maybePunctuate() {
+        return taskManager.punctuate();
     }
 
     /**
@@ -800,8 +800,7 @@ public class StreamThread extends Thread {
      * @throws TaskMigratedException if committing offsets failed (non-EOS)
      *                               or if the task producer got fenced (EOS)
      */
-    long maybeCommit() {
-        final long commitLatency;
+    int maybeCommit() {
         final int committed;
         if (now - lastCommitMs > commitTimeMs) {
             if (log.isTraceEnabled()) {
@@ -811,18 +810,8 @@ public class StreamThread extends Thread {
 
             committed = taskManager.commitAll();
             if (committed > 0) {
-                commitLatency = advanceNowAndComputeLatency();
-                commitSensor.record(commitLatency / (double) committed, now);
-
                 // try to purge the committed records for repartition topics if possible
                 taskManager.maybePurgeCommittedRecords();
-
-                if (log.isDebugEnabled()) {
-                    log.debug("Committed all active tasks {} and standby tasks {} in {}ms",
-                              taskManager.activeTaskIds(), taskManager.standbyTaskIds(), commitLatency);
-                }
-            } else {
-                commitLatency = 0L;
             }
 
             if (committed == -1) {
@@ -832,15 +821,9 @@ public class StreamThread extends Thread {
             }
         } else {
             committed = taskManager.maybeCommitActiveTasksPerUserRequested();
-            if (committed > 0) {
-                commitLatency = advanceNowAndComputeLatency();
-                commitSensor.record(commitLatency / (double) committed, now);
-            } else {
-                commitLatency = 0L;
-            }
         }
 
-        return commitLatency;
+        return committed;
     }
 
     /**
