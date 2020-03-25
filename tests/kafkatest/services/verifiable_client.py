@@ -21,6 +21,7 @@ import importlib
 import os
 import subprocess
 import signal
+from kafkatest.services.kafka.util import fix_opts_for_new_jvm
 
 
 """This module abstracts the implementation of a verifiable client, allowing
@@ -243,6 +244,7 @@ class VerifiableClientJava (VerifiableClientMixin):
             cmd += "for file in %s; do CLASSPATH=$CLASSPATH:$file; done; " % tools_jar
             cmd += "for file in %s; do CLASSPATH=$CLASSPATH:$file; done; " % tools_dependant_libs_jar
             cmd += "export CLASSPATH; "
+        cmd += fix_opts_for_new_jvm(node)
         cmd += self.parent.path.script("kafka-run-class.sh", node) + " org.apache.kafka.tools." + self.java_class_name
         return cmd
 
