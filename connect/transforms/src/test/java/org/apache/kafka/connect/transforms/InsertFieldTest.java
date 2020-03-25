@@ -156,7 +156,7 @@ public class InsertFieldTest {
     }
 
     @Test
-    public void insertkeyFieldsIntoTombstoneEvent() {
+    public void insertKeyFieldsIntoTombstoneEvent() {
         final Map<String, Object> props = new HashMap<>();
         props.put("topic.field", "topic_field!");
         props.put("partition.field", "partition_field");
@@ -177,5 +177,25 @@ public class InsertFieldTest {
         assertEquals(null, ((Map<?, ?>) transformedRecord.key()).get("timestamp_field"));
         assertEquals("my-instance-id", ((Map<?, ?>) transformedRecord.key()).get("instance_id"));
         assertEquals(null, transformedRecord.value());
+    }
+
+    @Test
+    public void insertIntoNullKeyLeavesKeyUnchanged() {
+        final Map<String, Object> props = new HashMap<>();
+        props.put("topic.field", "topic_field!");
+        props.put("partition.field", "partition_field");
+        props.put("timestamp.field", "timestamp_field?");
+        props.put("static.field", "instance_id");
+        props.put("static.value", "my-instance-id");
+
+        xformKey.configure(props);
+
+        final SourceRecord record = new SourceRecord(null, null, "test", 0,
+          null, null, null, Collections.singletonMap("magic", 42L));
+
+        final SourceRecord transformedRecord = xformKey.apply(record);
+
+        assertEquals(null, transformedRecord.key());
+        assertEquals(42L, ((Map<?, ?>) transformedRecord.value()).get("magic"));
     }
 }
