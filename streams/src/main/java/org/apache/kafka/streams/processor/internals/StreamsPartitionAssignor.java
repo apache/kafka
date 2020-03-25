@@ -17,7 +17,6 @@
 package org.apache.kafka.streams.processor.internals;
 
 import java.time.Duration;
-import java.util.Objects;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.ListOffsetsResult.ListOffsetsResultInfo;
 import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
@@ -142,53 +141,6 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                 ", consumers=" + consumers +
                 ", state=" + state +
                 '}';
-        }
-    }
-
-    public static class RankedClient<ID extends Comparable<? super ID>> implements Comparable<RankedClient<ID>> {
-
-        private final ID clientId;
-        private final long rank;
-
-        public RankedClient(final ID clientId, final long rank) {
-            this.clientId = clientId;
-            this.rank = rank;
-        }
-
-        public ID clientId() {
-            return clientId;
-        }
-
-        public long rank() {
-            return rank;
-        }
-
-        @Override
-        public int compareTo(final RankedClient<ID> clientIdAndLag) {
-            if (rank < clientIdAndLag.rank) {
-                return -1;
-            } else if (rank > clientIdAndLag.rank) {
-                return 1;
-            } else {
-                return clientId.compareTo(clientIdAndLag.clientId);
-            }
-        }
-
-        @Override
-        public boolean equals(final Object o) {
-            if (this == o) {
-                return true;
-            }
-            if (o == null || getClass() != o.getClass()) {
-                return false;
-            }
-            final RankedClient other = (RankedClient) o;
-            return clientId == other.clientId() && rank == other.rank();
-        }
-
-        @Override
-        public int hashCode() {
-            return Objects.hash(clientId, rank);
         }
     }
 

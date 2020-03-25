@@ -23,7 +23,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.SortedMap;
 import java.util.SortedSet;
-import org.apache.kafka.streams.processor.internals.StreamsPartitionAssignor.RankedClient;
+import org.apache.kafka.streams.processor.internals.assignment.HighAvailabilityTaskAssignor.RankedClient;
 
 public interface StateConstrainedBalancedAssignor<ID extends Comparable<? super ID>> {
 

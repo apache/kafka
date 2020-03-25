@@ -17,7 +17,6 @@
 package org.apache.kafka.streams.processor.internals;
 
 import java.util.Map.Entry;
-import java.util.SortedSet;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.AdminClientConfig;
@@ -46,7 +45,6 @@ import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.processor.TaskId;
-import org.apache.kafka.streams.processor.internals.StreamsPartitionAssignor.RankedClient;
 import org.apache.kafka.streams.processor.internals.assignment.AssignmentInfo;
 import org.apache.kafka.streams.processor.internals.assignment.AssignorConfiguration;
 import org.apache.kafka.streams.processor.internals.assignment.AssignorError;
@@ -84,6 +82,37 @@ import static java.util.Collections.singletonList;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkSet;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.emptyTasks;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.t1p0;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.t1p1;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.t1p2;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.t1p3;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.t2p0;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.t2p1;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.t2p2;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.t2p3;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.t3p0;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.t3p1;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.t3p2;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.t3p3;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.t4p0;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.t4p1;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.t4p2;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.t4p3;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.task0_0;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.task0_1;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.task0_2;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.task0_3;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.task1_0;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.task1_1;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.task1_2;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.task1_3;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.task2_0;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.task2_1;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.task2_2;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.task2_3;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.uuid1;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.uuid2;
 import static org.apache.kafka.streams.processor.internals.assignment.StreamsAssignmentProtocolVersions.LATEST_SUPPORTED_VERSION;
 import static org.easymock.EasyMock.anyObject;
 import static org.easymock.EasyMock.expect;
@@ -104,36 +133,6 @@ public class StreamsPartitionAssignorTest {
     private static final String CONSUMER_2 = "consumer2";
     private static final String CONSUMER_3 = "consumer3";
     private static final String CONSUMER_4 = "consumer4";
-
-    private final TopicPartition t1p0 = new TopicPartition("topic1", 0);
-    private final TopicPartition t1p1 = new TopicPartition("topic1", 1);
-    private final TopicPartition t1p2 = new TopicPartition("topic1", 2);
-    private final TopicPartition t1p3 = new TopicPartition("topic1", 3);
-    private final TopicPartition t2p0 = new TopicPartition("topic2", 0);
-    private final TopicPartition t2p1 = new TopicPartition("topic2", 1);
-    private final TopicPartition t2p2 = new TopicPartition("topic2", 2);
-    private final TopicPartition t2p3 = new TopicPartition("topic2", 3);
-    private final TopicPartition t3p0 = new TopicPartition("topic3", 0);
-    private final TopicPartition t3p1 = new TopicPartition("topic3", 1);
-    private final TopicPartition t3p2 = new TopicPartition("topic3", 2);
-    private final TopicPartition t3p3 = new TopicPartition("topic3", 3);
-    private final TopicPartition t4p0 = new TopicPartition("topic4", 0);
-    private final TopicPartition t4p1 = new TopicPartition("topic4", 1);
-    private final TopicPartition t4p2 = new TopicPartition("topic4", 2);
-    private final TopicPartition t4p3 = new TopicPartition("topic4", 3);
-
-    private final TaskId task0_0 = new TaskId(0, 0);
-    private final TaskId task0_1 = new TaskId(0, 1);
-    private final TaskId task0_2 = new TaskId(0, 2);
-    private final TaskId task0_3 = new TaskId(0, 3);
-    private final TaskId task1_0 = new TaskId(1, 0);
-    private final TaskId task1_1 = new TaskId(1, 1);
-    private final TaskId task1_2 = new TaskId(1, 2);
-    private final TaskId task1_3 = new TaskId(1, 3);
-    private final TaskId task2_0 = new TaskId(2, 0);
-    private final TaskId task2_1 = new TaskId(2, 1);
-    private final TaskId task2_2 = new TaskId(2, 2);
-    private final TaskId task2_3 = new TaskId(2, 3);
 
     private final Map<TaskId, Set<TopicPartition>> partitionsForTask = mkMap(
         mkEntry(task0_0, mkSet(t1p0, t2p0)),
@@ -167,12 +166,8 @@ public class StreamsPartitionAssignorTest {
         new PartitionInfo("topic3", 3, Node.noNode(), new Node[0], new Node[0])
     );
 
-    private final Set<TaskId> emptyTasks = emptySet();
     private final Map<TaskId, Long> emptyTaskOffsetSums = emptyMap();
     private final Map<TopicPartition, Long> emptyChangelogEndOffsets = new HashMap<>();
-
-    private final UUID uuid1 = UUID.randomUUID();
-    private final UUID uuid2 = UUID.randomUUID();
 
     private final SubscriptionInfo defaultSubscriptionInfo = getInfo(uuid1, emptyTasks, emptyTasks);
 

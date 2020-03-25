@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals.assignment;
 
+import static java.util.Arrays.asList;
 import static org.apache.kafka.streams.processor.internals.assignment.SubscriptionInfo.UNKNOWN_OFFSET_SUM;
 
 import java.util.ArrayList;
@@ -25,7 +26,7 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Map.Entry;
+import java.util.Objects;
 import java.util.PriorityQueue;
 import java.util.SortedMap;
 import java.util.SortedSet;
@@ -34,7 +35,6 @@ import java.util.TreeSet;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import org.apache.kafka.streams.processor.TaskId;
-import org.apache.kafka.streams.processor.internals.StreamsPartitionAssignor.RankedClient;
 import org.apache.kafka.streams.processor.internals.Task;
 import org.apache.kafka.streams.processor.internals.assignment.AssignorConfiguration.AssignmentConfigs;
 import org.slf4j.Logger;
@@ -100,15 +100,14 @@ public class HighAvailabilityTaskAssignor<ID extends Comparable<ID>> implements 
             ++totalWarmupReplicasAssigned;
         }
 
-        final PriorityQueue<ID> clientsByStandbyTaskLoad =
-            new PriorityQueue<>(Comparator.comparingInt(client -> standbyTaskAssignment.get(client).size()));
+        final PriorityQueue<ID> clientsByStandbyTaskLoadPerThread =
+            new PriorityQueue<>(taskLoadPerThreadComparator(Collections.singletonList(standbyTaskAssignment)));
 
-        //TODO-soph account for individual client capacities! maybe check out StickyTaskAssignor
         for (final TaskId task : statefulTasksToRankedCandidates.keySet()) {
             final Set<ID> standbyHostClients = getNumStandbyLeastLoadedCandidates(
                 task,
                 configs.numStandbyReplicas,
-                clientsByStandbyTaskLoad,
+                clientsByStandbyTaskLoadPerThread,
                 warmupTaskAssignment,
                 standbyTaskAssignment,
                 statelessActiveTaskAssignment
@@ -118,15 +117,16 @@ public class HighAvailabilityTaskAssignor<ID extends Comparable<ID>> implements 
             }
         }
 
-        final PriorityQueue<ID> clientsByActiveTaskLoad =
-            new PriorityQueue<>(Comparator.comparingInt(client ->
-                statefulActiveTaskAssignment.get(client).size() + statelessActiveTaskAssignment.get(client).size())
+        final PriorityQueue<ID> clientsByActiveTaskLoadPerThread =
+            new PriorityQueue<>(taskLoadPerThreadComparator(asList(
+                statefulActiveTaskAssignment,
+                statelessActiveTaskAssignment))
             );
 
         for (final TaskId task : statelessTasks) {
-            final ID client = clientsByActiveTaskLoad.poll();
+            final ID client = clientsByActiveTaskLoadPerThread.poll();
             statelessActiveTaskAssignment.get(client).add(task);
-            clientsByActiveTaskLoad.offer(client);
+            clientsByActiveTaskLoadPerThread.offer(client);
         }
 
         final boolean followupRebalanceRequired;
@@ -140,7 +140,8 @@ public class HighAvailabilityTaskAssignor<ID extends Comparable<ID>> implements 
                 standbyTaskAssignment,
                 warmupTaskAssignment
             );
-            final int assignmentBalanceFactor = computeActualAssignmentBalanceFactor();
+            final int assignmentBalanceFactor =
+                computeBalanceFactor(clientStates.values(), statelessTasks, ClientState::activeTasks);
             followupRebalanceRequired = assignmentBalanceFactor <= configs.balanceFactor;
         }
         return followupRebalanceRequired;
@@ -151,8 +152,8 @@ public class HighAvailabilityTaskAssignor<ID extends Comparable<ID>> implements 
      * @param statefulActiveTaskAssignment the initial assignment, with source clients
      * @param balancedStatefulActiveTaskAssignment the final assignment, with destination clients
      */
-    static <ID> List<Movement<ID>> getMovements(final Map<ID, List<TaskId>> statefulActiveTaskAssignment,
-                                                final Map<ID, List<TaskId>> balancedStatefulActiveTaskAssignment) {
+    static <ID> Set<Movement<ID>> getMovements(final Map<ID, List<TaskId>> statefulActiveTaskAssignment,
+                                               final Map<ID, List<TaskId>> balancedStatefulActiveTaskAssignment) {
         if (statefulActiveTaskAssignment.size() != balancedStatefulActiveTaskAssignment.size()) {
             throw new IllegalStateException("Tried to compute movements but assignments differ in size.");
         }
@@ -165,7 +166,7 @@ public class HighAvailabilityTaskAssignor<ID extends Comparable<ID>> implements 
             }
         }
 
-        final List<Movement<ID>> movements = new ArrayList<>();
+        final Set<Movement<ID>> movements = new HashSet<>();
         for (final Map.Entry<ID, List<TaskId>> sourceClientEntry : statefulActiveTaskAssignment.entrySet()) {
             final ID source = sourceClientEntry.getKey();
 
@@ -175,8 +176,9 @@ public class HighAvailabilityTaskAssignor<ID extends Comparable<ID>> implements 
                     log.error("Task {} is assigned to client {} in initial assignment but has no owner in the final " +
                                   "balanced assignment.", task, source);
                     throw new IllegalStateException("Found task in initial assignment that was not assigned in the final.");
+                } else if (source != destination) {
+                    movements.add(new Movement<>(task, source, destination));
                 }
-                movements.add(new Movement<>(task, source, destination));
             }
         }
         return movements;
@@ -224,40 +226,28 @@ public class HighAvailabilityTaskAssignor<ID extends Comparable<ID>> implements 
     }
 
     /**
-     * @return true iff this client is allowed to host this task
-     *         false iff it has already been assigned an active, standby, or warmup version of this task
-     */
-    private static <ID> boolean canBeAssignedToClient(final TaskId task,
-                                                      final ID client,
-                                                      final Map<ID, List<TaskId>> warmupTaskAssignment,
-                                                      final Map<ID, List<TaskId>> standbyTaskAssignment,
-                                                      final Map<ID, List<TaskId>> statelessActiveTaskAssignment) {
-        return !warmupTaskAssignment.get(client).contains(task)
-                   && !standbyTaskAssignment.get(client).contains(task)
-                   && !statelessActiveTaskAssignment.get(client).contains(task);
-    }
-
-    /**
      * @return true iff all active tasks with caught-up client are assigned to one of them, and all tasks are assigned
      */
-    private boolean previousAssignmentIsValid() {
+    boolean previousAssignmentIsValid() {
         final Set<TaskId> unassignedActiveTasks = new HashSet<>(allTasks);
         final Map<TaskId, Integer> unassignedStandbyTasks =
             configs.numStandbyReplicas == 0 ?
                 Collections.emptyMap() :
-                new HashMap<>(allTasks.stream().collect(Collectors.toMap(task -> task, task -> configs.numStandbyReplicas)));
+                new HashMap<>(statefulTasksToRankedCandidates.keySet().stream()
+                                  .collect(Collectors.toMap(task -> task, task -> configs.numStandbyReplicas)));
 
         for (final Map.Entry<ID, ClientState> clientEntry : clientStates.entrySet()) {
             final ID client = clientEntry.getKey();
             final ClientState state = clientEntry.getValue();
+            final Set<TaskId> prevActiveTasks = state.prevActiveTasks();
 
-            // Verify that this client was caught-up on all active tasks
-            for (final TaskId activeTask : state.prevActiveTasks()) {
-                if (!taskIsCaughtUpOnClientOrHasNoCaughtUpClients(activeTask, client)) {
+            // Verify that this client was caught-up on all stateful active tasks
+            for (final TaskId activeTask : prevActiveTasks) {
+                if (!taskIsCaughtUpOnClient(activeTask, client)) {
                     return false;
                 }
             }
-            unassignedActiveTasks.removeAll(state.prevActiveTasks());
+            unassignedActiveTasks.removeAll(prevActiveTasks);
 
             if (!unassignedStandbyTasks.isEmpty()) {
                 for (final TaskId task : state.prevStandbyTasks()) {
@@ -275,9 +265,16 @@ public class HighAvailabilityTaskAssignor<ID extends Comparable<ID>> implements 
         return unassignedActiveTasks.isEmpty() && unassignedStandbyTasks.isEmpty();
     }
 
-    private boolean taskIsCaughtUpOnClientOrHasNoCaughtUpClients(final TaskId task, final ID client) {
+    /**
+     * @return true if this client is caught-up for this task, or the task has no caught-up clients
+     */
+    boolean taskIsCaughtUpOnClient(final TaskId task, final ID client) {
         boolean hasNoCaughtUpClients = true;
-        for (final RankedClient rankedClient : statefulTasksToRankedCandidates.get(task)) {
+        final SortedSet<RankedClient<ID>> rankedClients = statefulTasksToRankedCandidates.get(task);
+        if (rankedClients == null) {
+            return true;
+        }
+        for (final RankedClient rankedClient : rankedClients) {
             if (rankedClient.rank() <= 0L) {
                 if (rankedClient.clientId().equals(client)) {
                     return true;
@@ -292,26 +289,6 @@ public class HighAvailabilityTaskAssignor<ID extends Comparable<ID>> implements 
             }
         }
         return hasNoCaughtUpClients;
-    }
-
-    private void assignTasksToClientStates(final Map<ID, List<TaskId>> statefulActiveTasks,
-                                           final Map<ID, List<TaskId>> statelessActiveTasks,
-                                           final Map<ID, List<TaskId>> standbyTasks,
-                                           final Map<ID, List<TaskId>> warmupTasks) {
-        for (final Map.Entry<ID, ClientState> clientEntry : clientStates.entrySet()) {
-            final ID clientId = clientEntry.getKey();
-            final ClientState state = clientEntry.getValue();
-            state.assignActiveTasks(statefulActiveTasks.get(clientId));
-            state.assignActiveTasks(statelessActiveTasks.get(clientId));
-            state.assignStandbyTasks(standbyTasks.get(clientId));
-            state.assignStandbyTasks(warmupTasks.get(clientId));
-        }
-    }
-
-    private void assignPreviousTasksToClientStates() {
-        for (final ClientState clientState : clientStates.values()) {
-            clientState.reusePreviousAssignment();
-        }
     }
 
     /**
@@ -359,47 +336,138 @@ public class HighAvailabilityTaskAssignor<ID extends Comparable<ID>> implements 
      *   2) it satisfies the balance factor
      *   3) there are no unassigned tasks (eg due to a client that dropped out of the group)
      */
-    private boolean shouldUsePreviousAssignment() {
+    boolean shouldUsePreviousAssignment() {
         if (previousAssignmentIsValid()) {
-            return computePreviousAssignmentBalanceFactor() <= configs.balanceFactor;
+            final int previousAssignmentBalanceFactor =
+                computeBalanceFactor(clientStates.values(), statelessTasks, ClientState::prevActiveTasks);
+            return previousAssignmentBalanceFactor <= configs.balanceFactor;
         } else {
             return false;
         }
     }
 
-    private int computePreviousAssignmentBalanceFactor() {
-        return computeBalanceFactor(clientStates.values(), statelessTasks, ClientState::prevActiveTasks);
-    }
-
-    private int computeActualAssignmentBalanceFactor() {
-        return computeBalanceFactor(clientStates.values(), statelessTasks, ClientState::activeTasks);
-    }
-
+    /**
+     * Compute the balance factor as the difference in stateful active task count per thread between the most and
+     * least loaded clients
+     */
     static int computeBalanceFactor(final Collection<ClientState> clientStates,
                                     final Set<TaskId> statelessTasks,
                                     final Function<ClientState, Set<TaskId>> activeTaskSet) {
-        int minActiveStatefulTaskCount = Integer.MAX_VALUE;
-        int maxActiveStatefulTaskCount = 0;
+        int minActiveStatefulTasksPerThreadCount = Integer.MAX_VALUE;
+        int maxActiveStatefulTasksPerThreadCount = 0;
 
         for (final ClientState state : clientStates) {
-            final Set<TaskId> prevActiveTasks = new HashSet<>(activeTaskSet.apply(state));
-            prevActiveTasks.removeAll(statelessTasks);
-            final int taskCount = prevActiveTasks.size();
-            if (taskCount < minActiveStatefulTaskCount) {
-                minActiveStatefulTaskCount = taskCount;
-            } else if (taskCount > maxActiveStatefulTaskCount) {
-                maxActiveStatefulTaskCount = taskCount;
+            final Set<TaskId> activeTasks = new HashSet<>(activeTaskSet.apply(state));
+            activeTasks.removeAll(statelessTasks);
+            final int taskPerThreadCount = activeTasks.size() / state.capacity();
+            if (taskPerThreadCount < minActiveStatefulTasksPerThreadCount) {
+                minActiveStatefulTasksPerThreadCount = taskPerThreadCount;
+            }
+            if (taskPerThreadCount > maxActiveStatefulTasksPerThreadCount) {
+                maxActiveStatefulTasksPerThreadCount = taskPerThreadCount;
             }
         }
 
-        return maxActiveStatefulTaskCount - minActiveStatefulTaskCount;
+        return maxActiveStatefulTasksPerThreadCount - minActiveStatefulTasksPerThreadCount;
+    }
+
+    /**
+     * @return true iff this client is allowed to host this task
+     *         false iff it has already been assigned an active, standby, or warmup version of this task
+     */
+    private static <ID> boolean canBeAssignedToClient(final TaskId task,
+                                                      final ID client,
+                                                      final Map<ID, List<TaskId>> warmupTaskAssignment,
+                                                      final Map<ID, List<TaskId>> standbyTaskAssignment,
+                                                      final Map<ID, List<TaskId>> statelessActiveTaskAssignment) {
+        return !warmupTaskAssignment.get(client).contains(task)
+                   && !standbyTaskAssignment.get(client).contains(task)
+                   && !statelessActiveTaskAssignment.get(client).contains(task);
     }
 
     private Map<ID, List<TaskId>> initializeEmptyTaskAssignmentMap() {
         return clientStates.keySet().stream().collect(Collectors.toMap(id -> id, id -> new ArrayList<>()));
     }
 
-    public static class Movement<ID> {
+    private void assignTasksToClientStates(final Map<ID, List<TaskId>> statefulActiveTasks,
+                                           final Map<ID, List<TaskId>> statelessActiveTasks,
+                                           final Map<ID, List<TaskId>> standbyTasks,
+                                           final Map<ID, List<TaskId>> warmupTasks) {
+        for (final Map.Entry<ID, ClientState> clientEntry : clientStates.entrySet()) {
+            final ID clientId = clientEntry.getKey();
+            final ClientState state = clientEntry.getValue();
+            state.assignActiveTasks(statefulActiveTasks.get(clientId));
+            state.assignActiveTasks(statelessActiveTasks.get(clientId));
+            state.assignStandbyTasks(standbyTasks.get(clientId));
+            state.assignStandbyTasks(warmupTasks.get(clientId));
+        }
+    }
+
+    private void assignPreviousTasksToClientStates() {
+        for (final ClientState clientState : clientStates.values()) {
+            clientState.reusePreviousAssignment();
+        }
+    }
+
+    private Comparator<ID> taskLoadPerThreadComparator(final List<Map<ID, List<TaskId>>> taskAssignments) {
+        return Comparator.comparingInt(
+            client -> {
+                double numTasks = 0;
+                for (final Map<ID, List<TaskId>> assignment : taskAssignments) {
+                    numTasks += assignment.get(client).size();
+                }
+                final double numThreads = clientStates.get(client).capacity();
+                return (int) Math.ceil(numTasks / numThreads);
+            });
+    }
+
+    static class RankedClient<ID extends Comparable<? super ID>> implements Comparable<RankedClient<ID>> {
+
+        private final ID clientId;
+        private final long rank;
+
+        RankedClient(final ID clientId, final long rank) {
+            this.clientId = clientId;
+            this.rank = rank;
+        }
+
+        ID clientId() {
+            return clientId;
+        }
+
+        long rank() {
+            return rank;
+        }
+
+        @Override
+        public int compareTo(final RankedClient<ID> clientIdAndLag) {
+            if (rank < clientIdAndLag.rank) {
+                return -1;
+            } else if (rank > clientIdAndLag.rank) {
+                return 1;
+            } else {
+                return clientId.compareTo(clientIdAndLag.clientId);
+            }
+        }
+
+        @Override
+        public boolean equals(final Object o) {
+            if (this == o) {
+                return true;
+            } else if (o == null || getClass() != o.getClass()) {
+                return false;
+            }
+            final RankedClient other = (RankedClient) o;
+            return clientId == other.clientId() && rank == other.rank();
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(rank, clientId);
+        }
+    }
+
+    static class Movement<ID> {
         final TaskId task;
         final ID source;
         final ID destination;
@@ -409,5 +477,22 @@ public class HighAvailabilityTaskAssignor<ID extends Comparable<ID>> implements 
             this.source = source;
             this.destination = destination;
         }
+
+        @Override
+        public boolean equals(final Object o) {
+            if (this == o) {
+                return true;
+            } else if (o == null || getClass() != o.getClass()) {
+                return false;
+            }
+            final Movement other = (Movement) o;
+            return task == other.task && source == other.source && destination == other.destination;
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(task, source, destination);
+        }
+
     }
 }

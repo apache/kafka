@@ -69,7 +69,7 @@ public class StickyTaskAssignorTest {
         createClient(p2, 1);
         createClient(p3, 1);
 
-        final StickyTaskAssignor taskAssignor = createTaskAssignor(0,task00, task01, task02);
+        final StickyTaskAssignor taskAssignor = createTaskAssignor(task00, task01, task02);
         taskAssignor.assign();
 
         for (final Integer processId : clients.keySet()) {
@@ -201,8 +201,6 @@ public class StickyTaskAssignorTest {
         assertThat(clients.get(p2).activeTasks(), equalTo(Collections.singleton(task00)));
         assertThat(clients.get(p4).activeTasks(), equalTo(Collections.singleton(task02)));
         assertThat(clients.get(p5).activeTasks(), equalTo(Collections.singleton(task01)));
-
-
     }
 
     @Test
@@ -266,8 +264,6 @@ public class StickyTaskAssignorTest {
         assertThat(allStandbyTasks(), equalTo(Arrays.asList(task00, task01, task02, task03)));
     }
 
-
-
     @Test
     public void shouldAssignMultipleReplicasOfStandbyTask() {
         createClientWithPreviousActiveTasks(p1, 1, task00);
@@ -302,7 +298,6 @@ public class StickyTaskAssignorTest {
         assertThat(allActiveTasks(), equalTo(Arrays.asList(task00, task01, task02)));
         assertThat(allStandbyTasks(), equalTo(Arrays.asList(task00, task01, task02)));
     }
-
 
     @Test
     public void shouldAssignAtLeastOneTaskToEachClientIfPossible() {
@@ -407,7 +402,6 @@ public class StickyTaskAssignorTest {
         assertThat(sortedAssignments.get(p3), equalTo(expectedClientThreeAssignment));
         assertThat(sortedAssignments.get(p4), equalTo(expectedClientFourAssignment));
     }
-
 
     @Test
     public void shouldNotHaveSameAssignmentOnAnyTwoHosts() {

@@ -18,8 +18,8 @@ package org.apache.kafka.streams.processor.internals.assignment;
 
 
 import org.apache.kafka.streams.processor.TaskId;
-import org.apache.kafka.streams.processor.internals.StreamsPartitionAssignor.RankedClient;
 import org.apache.kafka.streams.processor.internals.Task;
+import org.apache.kafka.streams.processor.internals.assignment.HighAvailabilityTaskAssignor.RankedClient;
 import org.junit.Test;
 
 import java.util.Arrays;
@@ -718,7 +718,7 @@ public class DefaultStateConstrainedBalancedAssignorTest {
             mkEntry(CLIENT_2, numberOfStreamThread2)
         );
     }
-    
+
     private static Map<String, Integer> threeClientsToNumberOfStreamThreads(final int numberOfStreamThread1,
                                                                             final int numberOfStreamThread2,
                                                                             final int numberOfStreamThread3) {
