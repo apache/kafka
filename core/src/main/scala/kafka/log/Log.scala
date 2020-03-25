@@ -1467,7 +1467,6 @@ class Log(@volatile var dir: File,
       if (startOffset > endOffset || segmentEntry == null || startOffset < logStartOffset) {
         val msg = s"Received request for offset $startOffset for partition $topicPartition, " +
           s"but we only have log segments in the range $logStartOffset to $endOffset."
-        assert(logStartOffset == 0, "logStartOffset = " + logStartOffset)
         info(msg)
         throw new OffsetOutOfRangeExceptionWithOffsetValues(msg, startOffset, logStartOffset, lastStableOffset, highWatermark)
       }

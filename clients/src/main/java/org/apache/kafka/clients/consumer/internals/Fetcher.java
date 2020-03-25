@@ -1257,15 +1257,11 @@ public class Fetcher<K, V> implements Closeable {
                                 "does not match the current offset {}", tp, fetchOffset, subscriptions.position(tp));
                     } else if (subscriptions.hasDefaultOffsetResetPolicy()) {
                         if (partition.logStartOffset > 0) {
-                            if (isolationLevel == IsolationLevel.READ_COMMITTED) {
-                                log.info("Fetch offset {} is out of range for partition {}. We only have log segments in " +
-                                                "the range from {} to {}. Resetting offset",
-                                        fetchOffset, tp, partition.logStartOffset, partition.lastStableOffset);
-                            } else {
-                                log.info("Fetch offset {} is out of range for partition {}. We only have log segments in " +
-                                                "the range from {} to {}. Resetting offset",
-                                        fetchOffset, tp, partition.logStartOffset, partition.highWatermark);
-                            }
+                            log.info("Fetch offset {} is out of range for partition {}. We only have log segments in " +
+                                            "the range from {} to {}. Resetting offset",
+                                    fetchOffset, tp, partition.logStartOffset,
+                                    isolationLevel == IsolationLevel.READ_COMMITTED ?
+                                            partition.lastStableOffset : partition.highWatermark);
                         }
                         subscriptions.requestOffsetReset(tp);
                     } else {
