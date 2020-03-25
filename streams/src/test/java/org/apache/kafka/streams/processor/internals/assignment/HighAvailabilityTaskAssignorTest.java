@@ -51,8 +51,10 @@ import static org.junit.Assert.assertTrue;
 
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Queue;
 import java.util.Set;
 import java.util.SortedSet;
 import java.util.UUID;
@@ -217,11 +219,11 @@ public class HighAvailabilityTaskAssignorTest {
             mkEntry(uuid2, asList(task0_1, task1_1)),
             mkEntry(uuid3, asList(task0_2, task1_2))
         );
-        final Set<Movement<UUID>> expectedMovements = mkSet(
-            new Movement<>(task1_0, uuid2, uuid1),
-            new Movement<>(task1_1, uuid3, uuid2),
-            new Movement<>(task1_2, uuid1, uuid3)
-        );
+        final Queue<Movement<UUID>> expectedMovements = new LinkedList<>();
+        expectedMovements.add(new Movement<>(task1_2, uuid1, uuid3));
+        expectedMovements.add(new Movement<>(task1_0, uuid2, uuid1));
+        expectedMovements.add(new Movement<>(task1_1, uuid3, uuid2));
+
         assertThat(getMovements(stateConstrainedAssignment, balancedAssignment), equalTo(expectedMovements));
     }
 
