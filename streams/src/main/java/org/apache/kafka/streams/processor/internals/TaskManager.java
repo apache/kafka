@@ -810,12 +810,12 @@ public class TaskManager {
     /**
      * @throws TaskMigratedException if the task producer got fenced (EOS only)
      */
-    int process(final long now) {
+    int process(final int maxNumRecords, final long now) {
         int processed = 0;
 
         for (final Task task : activeTaskIterable()) {
             try {
-                if (task.process(now)) {
+                while (processed < maxNumRecords && task.process(now)) {
                     processed++;
                 }
             } catch (final TaskMigratedException e) {

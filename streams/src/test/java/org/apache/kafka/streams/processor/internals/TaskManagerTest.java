@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import java.util.Arrays;
 import java.util.HashSet;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
@@ -1819,10 +1820,21 @@ public class TaskManagerTest {
         final TopicPartition partition = taskId00Partitions.iterator().next();
         task00.addRecords(
             partition,
-            singletonList(new ConsumerRecord<>(partition.topic(), partition.partition(), 0L, null, null))
+            Arrays.asList(
+                getConsumerRecord(partition, 0L),
+                getConsumerRecord(partition, 1L),
+                getConsumerRecord(partition, 2L),
+                getConsumerRecord(partition, 3L),
+                getConsumerRecord(partition, 4L),
+                getConsumerRecord(partition, 5L)
+            )
         );
 
-        assertThat(taskManager.process(0L), is(1));
+        // check that we should be processing at most max num records
+        assertThat(taskManager.process(5, 0L), is(5));
+
+        // check that if there's no records proccesible, we would stop early
+        assertThat(taskManager.process(5, 0L), is(1));
     }
 
     @Test
@@ -1846,12 +1858,9 @@ public class TaskManagerTest {
         assertThat(task00.state(), is(Task.State.RUNNING));
 
         final TopicPartition partition = taskId00Partitions.iterator().next();
-        task00.addRecords(
-            partition,
-            singletonList(new ConsumerRecord<>(partition.topic(), partition.partition(), 0L, null, null))
-        );
+        task00.addRecords(partition, singletonList(getConsumerRecord(partition, 0L)));
 
-        assertThrows(TaskMigratedException.class, () -> taskManager.process(0L));
+        assertThrows(TaskMigratedException.class, () -> taskManager.process(1, 0L));
     }
 
     @Test
@@ -1875,12 +1884,9 @@ public class TaskManagerTest {
         assertThat(task00.state(), is(Task.State.RUNNING));
 
         final TopicPartition partition = taskId00Partitions.iterator().next();
-        task00.addRecords(
-            partition,
-            singletonList(new ConsumerRecord<>(partition.topic(), partition.partition(), 0L, null, null))
-        );
+        task00.addRecords(partition, singletonList(getConsumerRecord(partition, 0L)));
 
-        final RuntimeException exception = assertThrows(RuntimeException.class, () -> taskManager.process(0L));
+        final RuntimeException exception = assertThrows(RuntimeException.class, () -> taskManager.process(1, 0L));
         assertThat(exception.getMessage(), is("oops"));
     }
 
@@ -2330,6 +2336,10 @@ public class TaskManagerTest {
 
     private File getCheckpointFile(final TaskId task) {
         return new File(new File(testFolder.getRoot(), task.toString()), StateManagerUtil.CHECKPOINT_FILE_NAME);
+    }
+
+    private static ConsumerRecord<byte[], byte[]> getConsumerRecord(final TopicPartition topicPartition, final long offset) {
+        return new ConsumerRecord<>(topicPartition.topic(), topicPartition.partition(), offset, null, null);
     }
 
     private static class StateMachineTask extends AbstractTask implements Task {
