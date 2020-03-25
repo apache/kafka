@@ -43,7 +43,7 @@ import org.apache.kafka.common.utils.Utils
   * documentation to establish their thread safety.
   *
   * @param loadIndex A function that takes a `File` pointing to an index and returns a loaded
- *                  `AbstractIndex` instance.
+  *                  `AbstractIndex` instance.
   */
 @threadsafe
 class LazyIndex[T <: AbstractIndex] private (@volatile private var indexWrapper: IndexWrapper, loadIndex: File => T) {
