@@ -39,6 +39,7 @@ import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Measurable;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.LockException;
 import org.apache.kafka.streams.errors.StreamsException;
@@ -146,6 +147,7 @@ public class TaskManagerTest {
     private Admin adminClient;
 
     private TaskManager taskManager;
+    private final Time time = new MockTime();
 
     @Rule
     public final TemporaryFolder testFolder = new TemporaryFolder();
@@ -1846,11 +1848,11 @@ public class TaskManagerTest {
         );
 
         // check that we should be processing at most max num records
-        assertThat(taskManager.process(3, 0L), is(6));
+        assertThat(taskManager.process(3, time), is(6));
 
         // check that if there's no records proccssible, we would stop early
-        assertThat(taskManager.process(3, 0L), is(5));
-        assertThat(taskManager.process(3, 0L), is(0));
+        assertThat(taskManager.process(3, time), is(5));
+        assertThat(taskManager.process(3, time), is(0));
     }
 
     @Test
@@ -1876,7 +1878,7 @@ public class TaskManagerTest {
         final TopicPartition partition = taskId00Partitions.iterator().next();
         task00.addRecords(partition, singletonList(getConsumerRecord(partition, 0L)));
 
-        assertThrows(TaskMigratedException.class, () -> taskManager.process(1, 0L));
+        assertThrows(TaskMigratedException.class, () -> taskManager.process(1, time));
     }
 
     @Test
@@ -1902,7 +1904,7 @@ public class TaskManagerTest {
         final TopicPartition partition = taskId00Partitions.iterator().next();
         task00.addRecords(partition, singletonList(getConsumerRecord(partition, 0L)));
 
-        final RuntimeException exception = assertThrows(RuntimeException.class, () -> taskManager.process(1, 0L));
+        final RuntimeException exception = assertThrows(RuntimeException.class, () -> taskManager.process(1, time));
         assertThat(exception.getMessage(), is("oops"));
     }
 
