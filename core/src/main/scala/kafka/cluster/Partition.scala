@@ -21,7 +21,7 @@ import java.util.{Optional, Properties}
 
 import kafka.api.{ApiVersion, LeaderAndIsr}
 import kafka.common.UnexpectedAppendOffsetException
-import kafka.controller.KafkaController
+import kafka.controller.{KafkaController, StateChangeLogger}
 import kafka.log._
 import kafka.metrics.KafkaMetricsGroup
 import kafka.server._
@@ -202,6 +202,7 @@ class Partition(val topicPartition: TopicPartition,
   def topic: String = topicPartition.topic
   def partitionId: Int = topicPartition.partition
 
+  private val stateChangeLogger = new StateChangeLogger(localBrokerId, inControllerContext = false, None)
   private val remoteReplicasMap = new Pool[Int, Replica]
   // The read lock is only required when multiple reads are executed and needs to be in a consistent manner
   private val leaderIsrUpdateLock = new ReentrantReadWriteLock
@@ -485,18 +486,22 @@ class Partition(val topicPartition: TopicPartition,
       // to maintain the decision maker controller's epoch in the zookeeper path
       controllerEpoch = partitionState.controllerEpoch
 
+      val isr = partitionState.isr.asScala.map(_.toInt).toSet
+      val addingReplicas = partitionState.addingReplicas.asScala.map(_.toInt)
+      val removingReplicas = partitionState.removingReplicas.asScala.map(_.toInt)
       updateAssignmentAndIsr(
         assignment = partitionState.replicas.asScala.map(_.toInt),
-        isr = partitionState.isr.asScala.map(_.toInt).toSet,
-        addingReplicas = partitionState.addingReplicas.asScala.map(_.toInt),
-        removingReplicas = partitionState.removingReplicas.asScala.map(_.toInt)
+        isr = isr,
+        addingReplicas = addingReplicas,
+        removingReplicas = removingReplicas
       )
       createLogIfNotExists(partitionState.isNew, isFutureReplica = false, highWatermarkCheckpoints)
 
       val leaderLog = localLogOrException
       val leaderEpochStartOffset = leaderLog.logEndOffset
-      info(s"$topicPartition starts at leader epoch ${partitionState.leaderEpoch} from " +
-        s"offset $leaderEpochStartOffset with high watermark ${leaderLog.highWatermark}. " +
+      stateChangeLogger.info(s"Leader $topicPartition starts at leader epoch ${partitionState.leaderEpoch} from " +
+        s"offset $leaderEpochStartOffset with high watermark ${leaderLog.highWatermark} " +
+        s"ISR ${isr.mkString(",")} addingReplicas ${addingReplicas.mkString(",")} removingReplicas ${removingReplicas.mkString(",")}." +
         s"Previous leader epoch was $leaderEpoch.")
 
       //We cache the leader epoch here, persisting it only if it's local (hence having a log dir)
@@ -563,6 +568,12 @@ class Partition(val topicPartition: TopicPartition,
         removingReplicas = partitionState.removingReplicas.asScala.map(_.toInt)
       )
       createLogIfNotExists(partitionState.isNew, isFutureReplica = false, highWatermarkCheckpoints)
+
+      val followerLog = localLogOrException
+      val leaderEpochEndOffset = followerLog.logEndOffset
+      stateChangeLogger.info(s"Follower $topicPartition starts at leader epoch ${partitionState.leaderEpoch} from " +
+        s"offset $leaderEpochEndOffset with high watermark ${followerLog.highWatermark}. " +
+        s"Previous leader epoch was $leaderEpoch.")
 
       leaderEpoch = partitionState.leaderEpoch
       leaderEpochStartOffsetOpt = None
