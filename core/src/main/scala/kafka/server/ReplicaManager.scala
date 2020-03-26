@@ -643,7 +643,7 @@ class ReplicaManager(val config: KafkaConfig,
                   _: LogDirNotFoundException |
                   _: ReplicaNotAvailableException |
                   _: KafkaStorageException) =>
-            error("Unable to alter log dirs for %s".format(topicPartition), e)
+            warn("Unable to alter log dirs for %s".format(topicPartition), e)
             (topicPartition, Errors.forException(e))
           case t: Throwable =>
             error("Error while changing replica dir for partition %s".format(topicPartition), t)
@@ -693,7 +693,8 @@ class ReplicaManager(val config: KafkaConfig,
         }
 
       } catch {
-        case _: KafkaStorageException =>
+        case e: KafkaStorageException =>
+          warn("Unable to describe replica dirs for %s".format(absolutePath), e)
           new DescribeLogDirsResponseData.DescribeLogDirsResult()
             .setLogDir(absolutePath)
             .setErrorCode(Errors.KAFKA_STORAGE_ERROR.code)
