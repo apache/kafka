@@ -169,8 +169,10 @@ public class MockAdminClient extends AdminClient {
             }
         }
         ArrayList<String> logDirs = new ArrayList<>();
-        for (int i = 0; i < partitions.size(); i++) {
-            logDirs.add(brokerLogDirs.get(partitions.get(i).leader().id()).get(0));
+        for (TopicPartitionInfo partition : partitions) {
+            if (partition.leader() != null) {
+                logDirs.add(brokerLogDirs.get(partition.leader().id()).get(0));
+            }
         }
         allTopics.put(name, new TopicMetadata(internal, partitions, logDirs, configs));
     }
