@@ -54,3 +54,5 @@ systest/
 clients/src/generated
 clients/src/generated-test
 streams/src/generated/
+jmh-benchmarks/generated
+jmh-benchmarks/src/main/generated

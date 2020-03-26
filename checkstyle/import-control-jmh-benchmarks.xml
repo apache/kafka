@@ -36,6 +36,12 @@
     <allow pkg="kafka.log"/>
     <allow pkg="kafka.server"/>
     <allow pkg="kafka.api"/>
+    <allow pkg="kafka.controller"/>
+    <allow pkg="kafka.coordinator"/>
+    <allow pkg="kafka.network"/>
+    <allow pkg="kafka.utils"/>
+    <allow pkg="kafka.zk"/>
+    <allow class="kafka.utils.Pool"/>
     <allow class="kafka.utils.KafkaScheduler"/>
     <allow pkg="org.mockito"/>
 

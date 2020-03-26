@@ -119,7 +119,7 @@ public class UpdateFollowerFetchStateBenchmark {
                 ApiVersion$.MODULE$.latestVersion(), 0, Time.SYSTEM,
                 partitionStateStore, delayedOperations,
                 Mockito.mock(MetadataCache.class), logManager);
-        partition.makeLeader(0, partitionState, 0, offsetCheckpoints);
+        partition.makeLeader(partitionState, offsetCheckpoints);
     }
 
     // avoid mocked DelayedOperations to avoid mocked class affecting benchmark results
