@@ -17,7 +17,6 @@
 package org.apache.kafka.streams.processor.internals.assignment;
 
 import static java.util.Arrays.asList;
-import static java.util.Collections.singletonList;
 import static org.apache.kafka.streams.processor.internals.assignment.SubscriptionInfo.UNKNOWN_OFFSET_SUM;
 
 import java.util.ArrayList;
@@ -61,11 +60,10 @@ public class HighAvailabilityTaskAssignor<ID extends Comparable<ID>> implements 
 
     private final SortedMap<TaskId, SortedSet<RankedClient<ID>>> statefulTasksToRankedCandidates;
 
-
     public HighAvailabilityTaskAssignor(final Map<ID, ClientState> clientStates,
-                                        final Set<TaskId> allTasks,
-                                        final Set<TaskId> statefulTasks,
-                                        final AssignmentConfigs configs) {
+                                 final Set<TaskId> allTasks,
+                                 final Set<TaskId> statefulTasks,
+                                 final AssignmentConfigs configs) {
         this.configs = configs;
         this.clientStates = clientStates;
         this.allTasks = allTasks;
@@ -87,29 +85,28 @@ public class HighAvailabilityTaskAssignor<ID extends Comparable<ID>> implements 
 
     @Override
     public boolean assign() {
+        final Map<ID, List<TaskId>> warmupTaskAssignment = initializeEmptyTaskAssignmentMap();
+        final Map<ID, List<TaskId>> standbyTaskAssignment = initializeEmptyTaskAssignmentMap();
+        final Map<ID, List<TaskId>> statelessActiveTaskAssignment = initializeEmptyTaskAssignmentMap();
+
+        // ---------------- Stateful Active Tasks ---------------- //
+
         final Map<ID, List<TaskId>> statefulActiveTaskAssignment =
             new DefaultStateConstrainedBalancedAssignor<ID>().assign(
                 statefulTasksToRankedCandidates,
                 configs.balanceFactor,
                 sortedClients,
-                clientsToNumberOfThreads);
+                clientsToNumberOfThreads
+            );
+
+        // ---------------- Warmup Replica Tasks ---------------- //
+
         final Map<ID, List<TaskId>> balancedStatefulActiveTaskAssignment =
             new DefaultBalancedAssignor<ID>().assign(
                 sortedClients,
                 statefulTasks,
                 clientsToNumberOfThreads,
                 configs.balanceFactor);
-
-        final Map<ID, List<TaskId>> warmupTaskAssignment = initializeEmptyTaskAssignmentMap();
-        final Map<ID, List<TaskId>> standbyTaskAssignment = initializeEmptyTaskAssignmentMap();
-        final Map<ID, List<TaskId>> statelessActiveTaskAssignment = initializeEmptyTaskAssignmentMap();
-
-        final List<Map<ID, List<TaskId>>> allTaskAssignmentMaps = asList(
-            statefulActiveTaskAssignment,
-            warmupTaskAssignment,
-            standbyTaskAssignment,
-            statelessActiveTaskAssignment
-        );
 
         final Queue<Movement<ID>> movements = getMovements(statefulActiveTaskAssignment, balancedStatefulActiveTaskAssignment);
         for (int numWarmupReplicas = 0; numWarmupReplicas < configs.maxWarmupReplicas; ++numWarmupReplicas) {
@@ -120,11 +117,20 @@ public class HighAvailabilityTaskAssignor<ID extends Comparable<ID>> implements 
             warmupTaskAssignment.get(movement.destination).add(movement.task);
         }
 
+        // ---------------- Standby Replica Tasks ---------------- //
+
+        final List<Map<ID, List<TaskId>>> allStatefulTaskAssignments = asList(
+            statefulActiveTaskAssignment,
+            warmupTaskAssignment,
+            standbyTaskAssignment
+        );
         final ClientValidatingPriorityQueue<ID> standbyTaskClientsQueue =
             new ClientValidatingPriorityQueue<>(
                 configs.numStandbyReplicas,
-                getClientPriorityQueueByTaskLoad(singletonList(standbyTaskAssignment)),
-                allTaskAssignmentMaps);
+                getClientPriorityQueueByTaskLoad(asList(warmupTaskAssignment, standbyTaskAssignment)),
+                allStatefulTaskAssignments
+            );
+
         for (final TaskId task : statefulTasksToRankedCandidates.keySet()) {
             final List<ID> clients = standbyTaskClientsQueue.poll(task);
             for (final ID client : clients) {
@@ -140,6 +146,8 @@ public class HighAvailabilityTaskAssignor<ID extends Comparable<ID>> implements 
             }
         }
 
+        // ---------------- Stateless Active Tasks ---------------- //
+
         final PriorityQueue<ID> statelessActiveTaskClientsQueue =
             getClientPriorityQueueByTaskLoad(asList(statefulActiveTaskAssignment, statelessActiveTaskAssignment));
 
@@ -147,6 +155,8 @@ public class HighAvailabilityTaskAssignor<ID extends Comparable<ID>> implements 
             final ID client = statelessActiveTaskClientsQueue.poll();
             statelessActiveTaskAssignment.get(client).add(task);
         }
+
+        // ---------------- Assign Tasks To Clients ---------------- //
 
         final boolean followupRebalanceRequired;
         if (shouldUsePreviousAssignment()) {
@@ -308,23 +318,6 @@ public class HighAvailabilityTaskAssignor<ID extends Comparable<ID>> implements 
     }
 
     /**
-     * Determines whether to use the new proposed assignment or just return the group's previous assignment. The
-     * previous assignment will be chosen iff all of the following are true:
-     *   1) it satisfies the state constraint, ie all tasks with caught up clients are assigned to one of those clients
-     *   2) it satisfies the balance factor
-     *   3) there are no unassigned tasks (eg due to a client that dropped out of the group)
-     */
-    boolean shouldUsePreviousAssignment() {
-        if (previousAssignmentIsValid()) {
-            final int previousAssignmentBalanceFactor =
-                computeBalanceFactor(clientStates.values(), statelessTasks, ClientState::prevActiveTasks);
-            return previousAssignmentBalanceFactor <= configs.balanceFactor;
-        } else {
-            return false;
-        }
-    }
-
-    /**
      * Compute the balance factor as the difference in stateful active task count per thread between the most and
      * least loaded clients
      */
@@ -349,8 +342,25 @@ public class HighAvailabilityTaskAssignor<ID extends Comparable<ID>> implements 
         return maxActiveStatefulTasksPerThreadCount - minActiveStatefulTasksPerThreadCount;
     }
 
+    /**
+     * Determines whether to use the new proposed assignment or just return the group's previous assignment. The
+     * previous assignment will be chosen and returned iff all of the following are true:
+     *   1) it satisfies the state constraint, ie all tasks with caught up clients are assigned to one of those clients
+     *   2) it satisfies the balance factor
+     *   3) there are no unassigned tasks (eg due to a client that dropped out of the group)
+     */
+    private boolean shouldUsePreviousAssignment() {
+        if (previousAssignmentIsValid()) {
+            final int previousAssignmentBalanceFactor =
+                computeBalanceFactor(clientStates.values(), statelessTasks, ClientState::prevActiveTasks);
+            return previousAssignmentBalanceFactor <= configs.balanceFactor;
+        } else {
+            return false;
+        }
+    }
+
     private Map<ID, List<TaskId>> initializeEmptyTaskAssignmentMap() {
-        return clientStates.keySet().stream().collect(Collectors.toMap(id -> id, id -> new ArrayList<>()));
+        return sortedClients.stream().collect(Collectors.toMap(id -> id, id -> new ArrayList<>()));
     }
 
     private void assignTasksToClientStates(final Map<ID, List<TaskId>> statefulActiveTasks,
@@ -459,21 +469,26 @@ public class HighAvailabilityTaskAssignor<ID extends Comparable<ID>> implements 
 
     }
 
+    /**
+     * Wraps a priority queue of clients and returns the next valid candidate(s) based on the current task assignment
+     */
     static class ClientValidatingPriorityQueue<ID> {
-        private final Logger log = LoggerFactory.getLogger(ClientValidatingPriorityQueue.class);
-
         private final int numClientsPerTask;
         private final PriorityQueue<ID> clientsByTaskLoad;
-        private final List<Map<ID, List<TaskId>>> allTaskAssignments;
+        private final List<Map<ID, List<TaskId>>> allStatefulTaskAssignments;
 
         ClientValidatingPriorityQueue(final int numClientsPerTask,
                                       final PriorityQueue<ID> clientsByTaskLoad,
-                                      final List<Map<ID, List<TaskId>>> allTaskAssignments) {
+                                      final List<Map<ID, List<TaskId>>> allStatefulTaskAssignments) {
             this.numClientsPerTask = numClientsPerTask;
             this.clientsByTaskLoad = clientsByTaskLoad;
-            this.allTaskAssignments = allTaskAssignments;
+            this.allStatefulTaskAssignments = allStatefulTaskAssignments;
         }
 
+        /**
+         * @return the next N <= {@code numClientsPerTask} clients in the underlying priority queue that are valid
+         * candidates for the given task (ie do not already have any version of this task assigned)
+         */
         List<ID> poll(final TaskId task) {
             final List<ID> nextLeastLoadedValidClients = new LinkedList<>();
             final Set<ID> polledClients = new HashSet<>();
@@ -498,7 +513,7 @@ public class HighAvailabilityTaskAssignor<ID extends Comparable<ID>> implements 
         }
 
         private boolean canBeAssignedToClient(final TaskId task, final ID client) {
-            for (final Map<ID, List<TaskId>> taskAssignment : allTaskAssignments) {
+            for (final Map<ID, List<TaskId>> taskAssignment : allStatefulTaskAssignments) {
                 if (taskAssignment.get(client).contains(task)) {
                     return false;
                 }

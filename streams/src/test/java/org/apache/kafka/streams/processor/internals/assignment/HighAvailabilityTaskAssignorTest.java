@@ -17,26 +17,13 @@
 package org.apache.kafka.streams.processor.internals.assignment;
 
 import static java.util.Arrays.asList;
+import static java.util.Collections.emptySet;
 import static java.util.Collections.singleton;
 import static java.util.Collections.singletonMap;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.common.utils.Utils.mkSortedSet;
-import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.emptyTasks;
-import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.task0_0;
-import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.task0_1;
-import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.task0_2;
-import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.task0_3;
-import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.task1_0;
-import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.task1_1;
-import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.task1_2;
-import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.task2_0;
-import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.task2_1;
-import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.task2_3;
-import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.uuid1;
-import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.uuid2;
-import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.uuid3;
 import static org.apache.kafka.streams.processor.internals.assignment.HighAvailabilityTaskAssignor.buildClientRankingsByTask;
 import static org.apache.kafka.streams.processor.internals.assignment.HighAvailabilityTaskAssignor.computeBalanceFactor;
 import static org.apache.kafka.streams.processor.internals.assignment.HighAvailabilityTaskAssignor.getMovements;
@@ -78,6 +65,29 @@ public class HighAvailabilityTaskAssignorTest {
     private Set<TaskId> allTasks = new HashSet<>();
     private Set<TaskId> statefulTasks = new HashSet<>();
 
+    private static final TaskId task0_0 = new TaskId(0, 0);
+    private static final TaskId task0_1 = new TaskId(0, 1);
+    private static final TaskId task0_2 = new TaskId(0, 2);
+    private static final TaskId task0_3 = new TaskId(0, 3);
+    private static final TaskId task1_0 = new TaskId(1, 0);
+    private static final TaskId task1_1 = new TaskId(1, 1);
+    private static final TaskId task1_2 = new TaskId(1, 2);
+    private static final TaskId task1_3 = new TaskId(1, 3);
+    private static final TaskId task2_0 = new TaskId(2, 0);
+    private static final TaskId task2_1 = new TaskId(2, 1);
+    private static final TaskId task2_2 = new TaskId(2, 2);
+    private static final TaskId task2_3 = new TaskId(2, 3);
+
+    private static final UUID uuid1 = UUID.randomUUID();
+    private static final UUID uuid2 = UUID.randomUUID();
+    private static final UUID uuid3 = UUID.randomUUID();
+
+    private static final Set<TaskId> emptyTasks = emptySet();
+
+    private final ClientState client1 = EasyMock.createMock(ClientState.class);
+    private final ClientState client2 = EasyMock.createMock(ClientState.class);
+    private final ClientState client3 = EasyMock.createMock(ClientState.class);
+
     private HighAvailabilityTaskAssignor<UUID> taskAssignor;
 
     private void createTaskAssignor() {
@@ -88,14 +98,15 @@ public class HighAvailabilityTaskAssignorTest {
             numStandbyReplicas,
             probingRebalanceInterval
         );
-        taskAssignor = new HighAvailabilityTaskAssignor<>(clientStates, allTasks, statefulTasks, configs);
+        taskAssignor = new HighAvailabilityTaskAssignor<>(
+            clientStates,
+            allTasks,
+            statefulTasks,
+            configs);
     }
 
     @Test
     public void shouldRankPreviousClientAboveEquallyCaughtUpClient() {
-        final ClientState client1 = EasyMock.createMock(ClientState.class);
-        final ClientState client2 = EasyMock.createMock(ClientState.class);
-
         expect(client1.lagFor(task0_0)).andReturn(Task.LATEST_OFFSET);
         expect(client2.lagFor(task0_0)).andReturn(0L);
         replay(client1, client2);
@@ -121,10 +132,6 @@ public class HighAvailabilityTaskAssignorTest {
 
     @Test
     public void shouldRankTaskWithUnknownOffsetSumBelowCaughtUpClientAndClientWithLargeLag() {
-        final ClientState client1 = EasyMock.createMock(ClientState.class);
-        final ClientState client2 = EasyMock.createMock(ClientState.class);
-        final ClientState client3 = EasyMock.createMock(ClientState.class);
-
         expect(client1.lagFor(task0_0)).andReturn(UNKNOWN_OFFSET_SUM);
         expect(client2.lagFor(task0_0)).andReturn(50L);
         expect(client3.lagFor(task0_0)).andReturn(500L);
@@ -153,9 +160,6 @@ public class HighAvailabilityTaskAssignorTest {
 
     @Test
     public void shouldRankAllClientsWithinAcceptableRecoveryLagWithRank0() {
-        final ClientState client1 = EasyMock.createMock(ClientState.class);
-        final ClientState client2 = EasyMock.createMock(ClientState.class);
-
         expect(client1.lagFor(task0_0)).andReturn(100L);
         expect(client2.lagFor(task0_0)).andReturn(0L);
         replay(client1, client2);
@@ -179,10 +183,6 @@ public class HighAvailabilityTaskAssignorTest {
 
     @Test
     public void shouldRankNotCaughtUpClientsAccordingToLag() {
-        final ClientState client1 = EasyMock.createMock(ClientState.class);
-        final ClientState client2 = EasyMock.createMock(ClientState.class);
-        final ClientState client3 = EasyMock.createMock(ClientState.class);
-
         expect(client1.lagFor(task0_0)).andReturn(900L);
         expect(client2.lagFor(task0_0)).andReturn(800L);
         expect(client3.lagFor(task0_0)).andReturn(500L);
@@ -208,7 +208,7 @@ public class HighAvailabilityTaskAssignorTest {
     }
 
     @Test
-    public void testGetMovements() {
+    public void shouldGetMovementsFromStateConstrainedToBalancedAssignment() {
         final Map<UUID, List<TaskId>> stateConstrainedAssignment = mkMap(
             mkEntry(uuid1, asList(task0_0, task1_2)),
             mkEntry(uuid2, asList(task0_1, task1_0)),
@@ -240,12 +240,26 @@ public class HighAvailabilityTaskAssignorTest {
     }
 
     @Test
-    public void testGetNumStandbyLeastLoadedCandidates() {
-        //TODO-soph -- need to fix implementation first, account for capacity
+    public void shouldAssignWarmupReplicasEvenIfNoStandbyReplicasConfigured() {
+
     }
 
     @Test
-    public void testGetNumStandbyLeastLoadedCandidatesWithInsufficientCapacity() {
+    public void testStandbyTaskAssignment() {
+    }
+
+    @Test
+    public void testStandbyTaskAssignmentWithInsufficientCapacity() {
+
+    }
+
+    @Test
+    public void testStatelessActiveTaskAssignment() {
+
+    }
+
+    @Test
+    public void shouldDistributeActiveTasksEvenlyOverClientsOfDifferentThreadCountIfClusterIsOverCapacity() {
 
     }
 
