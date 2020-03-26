@@ -100,7 +100,7 @@ def job = {
                             propagate: true, wait: true
                     downstreamBuildFailureOutput = "cp-downstream-builds result: " + buildResult.getResult();
                     return downstreamBuildFailureOutput
-                } catch (ignored) {
+                } catch (Exception e) {
                     currentBuild.result = 'UNSTABLE'
                     downstreamBuildFailureOutput = "cp-downstream-builds result: " + e.getMessage()
                     writeFile file: "downstream/cp-downstream-build-failure.txt", text: downstreamBuildFailureOutput
