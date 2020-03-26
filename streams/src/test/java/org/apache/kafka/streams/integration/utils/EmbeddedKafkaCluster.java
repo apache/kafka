@@ -122,16 +122,16 @@ public class EmbeddedKafkaCluster extends ExternalResource {
     private void stop() {
         if (brokers.length > 1) {
             // delete the topics first to avoid cascading leader elections while shutting down the brokers
-            try {
-                final Set<String> topics = JavaConverters.setAsJavaSetConverter(brokers[0].kafkaServer().zkClient().getAllTopicsInCluster(false)).asJava();
-                final Admin adminClient = brokers[0].createAdminClient();
-                adminClient.deleteTopics(topics).all().get();
-                adminClient.close();
-            } catch (final InterruptedException e) {
-                log.warn("Got interrupted while deleting topics in preparation for stopping embedded brokers", e);
-                throw new RuntimeException(e);
-            } catch (final ExecutionException | RuntimeException e) {
-                log.warn("Couldn't delete all topics before stopping brokers", e);
+            final Set<String> topics = getAllTopicsInCluster();
+            if (!topics.isEmpty()) {
+                try (final Admin adminClient = brokers[0].createAdminClient()) {
+                    adminClient.deleteTopics(topics).all().get();
+                } catch (final InterruptedException e) {
+                    log.warn("Got interrupted while deleting topics in preparation for stopping embedded brokers", e);
+                    throw new RuntimeException(e);
+                } catch (final ExecutionException | RuntimeException e) {
+                    log.warn("Couldn't delete all topics before stopping brokers", e);
+                }
             }
         }
         for (final KafkaEmbedded broker : brokers) {
