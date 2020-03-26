@@ -1176,29 +1176,32 @@ class ReplicaManager(val config: KafkaConfig,
   def becomeLeaderOrFollower(correlationId: Int,
                              leaderAndIsrRequest: LeaderAndIsrRequest,
                              onLeadershipChange: (Iterable[Partition], Iterable[Partition]) => Unit): LeaderAndIsrResponse = {
+    val controllerId = leaderAndIsrRequest.controllerId
+    val requestPartitionStates = leaderAndIsrRequest.partitionStates.asScala
+    stateChangeLogger.info(s"Handling LeaderAndIsr request correlationId $correlationId from controller " +
+      s"$controllerId for ${requestPartitionStates.size} partitions")
     if (stateChangeLogger.isTraceEnabled)
       leaderAndIsrRequest.partitionStates.asScala.foreach { partitionState =>
         stateChangeLogger.trace(s"Received LeaderAndIsr request $partitionState " +
-          s"correlation id $correlationId from controller ${leaderAndIsrRequest.controllerId} " +
+          s"correlation id $correlationId from controller $controllerId " +
           s"epoch ${leaderAndIsrRequest.controllerEpoch}")
       }
 
     replicaStateChangeLock synchronized {
       if (leaderAndIsrRequest.controllerEpoch < controllerEpoch) {
-        stateChangeLogger.warn(s"Ignoring LeaderAndIsr request from controller ${leaderAndIsrRequest.controllerId} with " +
+        stateChangeLogger.warn(s"Ignoring LeaderAndIsr request from controller $controllerId with " +
           s"correlation id $correlationId since its controller epoch ${leaderAndIsrRequest.controllerEpoch} is old. " +
           s"Latest known controller epoch is $controllerEpoch")
         leaderAndIsrRequest.getErrorResponse(0, Errors.STALE_CONTROLLER_EPOCH.exception)
       } else {
         val responseMap = new mutable.HashMap[TopicPartition, Errors]
-        val controllerId = leaderAndIsrRequest.controllerId
         controllerEpoch = leaderAndIsrRequest.controllerEpoch
 
         // First check partition's leader epoch
         val partitionStates = new mutable.HashMap[Partition, LeaderAndIsrPartitionState]()
         val updatedPartitions = new mutable.HashSet[Partition]
 
-        leaderAndIsrRequest.partitionStates.asScala.foreach { partitionState =>
+        requestPartitionStates.foreach { partitionState =>
           val topicPartition = new TopicPartition(partitionState.topicName, partitionState.partitionIndex)
           val partitionOpt = getPartition(topicPartition) match {
             case HostedPartition.Offline =>
@@ -1257,19 +1260,15 @@ class ReplicaManager(val config: KafkaConfig,
         val partitionsToBeFollower = partitionStates -- partitionsTobeLeader.keys
 
         val highWatermarkCheckpoints = new LazyOffsetCheckpoints(this.highWatermarkCheckpoints)
-        val partitionsBecomeLeader = if (partitionsTobeLeader.nonEmpty) {
-          stateChangeLogger.info(s"Handling LeaderAndIsr request correlationId $correlationId from controller $controllerId " +
-            s"epoch $controllerEpoch starting the become-leader transition for ${partitionsTobeLeader.size} partitions")
+        val partitionsBecomeLeader = if (partitionsTobeLeader.nonEmpty)
           makeLeaders(controllerId, controllerEpoch, partitionsTobeLeader, correlationId, responseMap,
             highWatermarkCheckpoints)
-        } else
+        else
           Set.empty[Partition]
-        val partitionsBecomeFollower = if (partitionsToBeFollower.nonEmpty) {
-          stateChangeLogger.info(s"Handling LeaderAndIsr request correlationId $correlationId from controller $controllerId " +
-            s"epoch $controllerEpoch starting the become-follower transition for ${partitionsToBeFollower.size} partitions")
+        val partitionsBecomeFollower = if (partitionsToBeFollower.nonEmpty)
           makeFollowers(controllerId, controllerEpoch, partitionsToBeFollower, correlationId, responseMap,
             highWatermarkCheckpoints)
-        } else
+        else
           Set.empty[Partition]
 
         /*
