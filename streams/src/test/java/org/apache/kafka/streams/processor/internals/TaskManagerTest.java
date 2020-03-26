@@ -1805,36 +1805,52 @@ public class TaskManagerTest {
     @Test
     public void shouldProcessActiveTasks() {
         final StateMachineTask task00 = new StateMachineTask(taskId00, taskId00Partitions, true);
+        final StateMachineTask task01 = new StateMachineTask(taskId01, taskId01Partitions, true);
+
+        final Map<TaskId, Set<TopicPartition>> assignment = new HashMap<>();
+        assignment.put(taskId00, taskId00Partitions);
+        assignment.put(taskId01, taskId01Partitions);
 
         expectRestoreToBeCompleted(consumer, changeLogReader);
-        expect(activeTaskCreator.createTasks(anyObject(), eq(taskId00Assignment)))
-            .andReturn(singletonList(task00)).anyTimes();
+        expect(activeTaskCreator.createTasks(anyObject(), eq(assignment)))
+            .andReturn(Arrays.asList(task00, task01)).anyTimes();
 
         replay(activeTaskCreator, consumer, changeLogReader);
 
-        taskManager.handleAssignment(taskId00Assignment, emptyMap());
+        taskManager.handleAssignment(assignment, emptyMap());
         assertThat(taskManager.tryToCompleteRestoration(), is(true));
 
         assertThat(task00.state(), is(Task.State.RUNNING));
+        assertThat(task01.state(), is(Task.State.RUNNING));
 
-        final TopicPartition partition = taskId00Partitions.iterator().next();
         task00.addRecords(
-            partition,
+            t1p0,
             Arrays.asList(
-                getConsumerRecord(partition, 0L),
-                getConsumerRecord(partition, 1L),
-                getConsumerRecord(partition, 2L),
-                getConsumerRecord(partition, 3L),
-                getConsumerRecord(partition, 4L),
-                getConsumerRecord(partition, 5L)
+                getConsumerRecord(t1p0, 0L),
+                getConsumerRecord(t1p0, 1L),
+                getConsumerRecord(t1p0, 2L),
+                getConsumerRecord(t1p0, 3L),
+                getConsumerRecord(t1p0, 4L),
+                getConsumerRecord(t1p0, 5L)
+            )
+        );
+        task01.addRecords(
+            t1p1,
+            Arrays.asList(
+                getConsumerRecord(t1p1, 0L),
+                getConsumerRecord(t1p1, 1L),
+                getConsumerRecord(t1p1, 2L),
+                getConsumerRecord(t1p1, 3L),
+                getConsumerRecord(t1p1, 4L)
             )
         );
 
         // check that we should be processing at most max num records
-        assertThat(taskManager.process(5, 0L), is(5));
+        assertThat(taskManager.process(3, 0L), is(6));
 
-        // check that if there's no records proccesible, we would stop early
-        assertThat(taskManager.process(5, 0L), is(1));
+        // check that if there's no records proccssible, we would stop early
+        assertThat(taskManager.process(3, 0L), is(5));
+        assertThat(taskManager.process(3, 0L), is(0));
     }
 
     @Test

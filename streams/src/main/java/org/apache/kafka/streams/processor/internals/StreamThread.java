@@ -565,6 +565,17 @@ public class StreamThread extends Thread {
     }
 
     /**
+     * One iteration of a thread includes the following steps:
+     *
+     * 1. poll records from main consumer and add to buffer;
+     * 2. restore from restore consumer and update standby tasks if necessary;
+     * 3. process active tasks from the buffers;
+     * 4. punctuate active tasks if necessary;
+     * 5. commit all tasks if necessary;
+     *
+     * Among them, step 3/4/5 is done in batches in which we try to process as much as possible while trying to
+     * stop iteration to call the next iteration when it's close to the next main consumer's poll deadline
+     *
      * @throws IllegalStateException If store gets registered after initialized is already finished
      * @throws StreamsException      If the store's change log does not contain the partition
      * @throws TaskMigratedException If another thread wrote to the changelog topic that is currently restored
@@ -661,7 +672,7 @@ public class StreamThread extends Thread {
                     totalProcessLatency += processLatency;
                 }
 
-                final int punctuated = maybePunctuate();
+                final int punctuated = taskManager.punctuate();
                 if (punctuated > 0) {
                     final long punctuateLatency = advanceNowAndComputeLatency();
                     punctuateSensor.record(punctuateLatency / (double) punctuated, now);
@@ -783,13 +794,6 @@ public class StreamThread extends Thread {
 
             task.addRecords(partition, records.records(partition));
         }
-    }
-
-    /**
-     * @throws TaskMigratedException if the task producer got fenced (EOS only)
-     */
-    private int maybePunctuate() {
-        return taskManager.punctuate();
     }
 
     /**
