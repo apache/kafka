@@ -30,13 +30,13 @@
         <code>zookeeper.session.timeout.ms</code> has been increased from 6s to 18s and
         <code>replica.lag.time.max.ms</code> from 10s to 30s.</li>
     <li>New DSL operator <code>cogroup()</code> has been added for aggregating multiple streams together at once.</li>
-    <li>Added a new <code>KStream.toTable()</code> API to translate an input event stream into a changelog stream.</li>
+    <li>Added a new <code>KStream.toTable()</code> API to translate an input event stream into a KTable.</li>
     <li>Added a new Serde type <code>Void</code> to represent null keys or null values from input topic.</li>
     <li>Deprecated <code>UsePreviousTimeOnInvalidTimestamp</code> and replaced it with <code>UsePartitionTimeOnInvalidTimeStamp</code>.</li>
-    <li>In Kafka 2.5.0, we improved EOS semantic in Kafka by adding a pending offset fencing mechanism and stronger transactional commit
-        consistency check. The impact is that now a consumer-producer group could use the subscription mode to collaborate
-        under EOS instead of manual partition assignment. We also added a new EOS skeleton code under <code>examples</code> folder, feel
-        free to have a try and use it as a starting point. Check out
+    <li>Improved exactly-once semantics by adding a pending offset fencing mechanism and stronger transactional commit
+        consistency check, which greatly simplifies the implementation of a scalable exactly-once application.
+        We also added a new exactly-once semantics code example under
+        <a href="https://github.com/apache/kafka/tree/2.5/examples">examples</a> folder. Check out
         <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-447%3A+Producer+scalability+for+exactly+once+semantics">KIP-447</a>
         for the full details.</li>
     <li>Scala 2.11 is no longer supported. See
