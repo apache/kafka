@@ -315,7 +315,7 @@ class LogCleaner(initialConfig: CleanerConfig,
       } catch {
         case e: LogCleaningException =>
           warn(s"Unexpected exception thrown when cleaning log ${e.log}. Marking its partition (${e.log.topicPartition}) as uncleanable", e)
-          cleanerManager.markPartitionUncleanable(e.log.dir.getParent, e.log.topicPartition)
+          cleanerManager.markPartitionUncleanable(e.log.parentDir, e.log.topicPartition)
 
           false
       }
@@ -365,11 +365,11 @@ class LogCleaner(initialConfig: CleanerConfig,
         case _: LogCleaningAbortedException => // task can be aborted, let it go.
         case _: KafkaStorageException => // partition is already offline. let it go.
         case e: IOException =>
-          val logDirectory = cleanable.log.dir.getParent
+          val logDirectory = cleanable.log.parentDir
           val msg = s"Failed to clean up log for ${cleanable.topicPartition} in dir ${logDirectory} due to IOException"
           logDirFailureChannel.maybeAddOfflineLogDir(logDirectory, msg, e)
       } finally {
-        cleanerManager.doneCleaning(cleanable.topicPartition, cleanable.log.dir.getParentFile, endOffset)
+        cleanerManager.doneCleaning(cleanable.topicPartition, cleanable.log.parentDirFile, endOffset)
       }
     }
 
