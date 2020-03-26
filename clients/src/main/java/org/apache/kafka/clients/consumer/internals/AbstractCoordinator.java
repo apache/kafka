@@ -720,9 +720,7 @@ public abstract class AbstractCoordinator implements Closeable {
                     log.error("SyncGroup failed due to inconsistent Protocol Type, received {} but expected {}",
                         syncResponse.data.protocolType(), protocolType());
                     future.raise(Errors.INCONSISTENT_GROUP_PROTOCOL);
-                } else if (isProtocolNameInconsistent(syncResponse.data.protocolName())) {
-                    log.error("SyncGroup failed due to inconsistent Protocol Name, received {} but expected {}",
-                        syncResponse.data.protocolName(), generation().protocolName);
+                } else if (isProtocolNameInconsistent(ApiKeys.SYNC_GROUP, syncResponse.data.protocolName())) {
                     future.raise(Errors.INCONSISTENT_GROUP_PROTOCOL);
                 } else {
                     sensors.syncSensor.record(response.requestLatencyMs());
@@ -912,9 +910,17 @@ public abstract class AbstractCoordinator implements Closeable {
         return protocolType != null && !protocolType.equals(protocolType());
     }
 
-    private boolean isProtocolNameInconsistent(String protocolName) {
-        return protocolName != null && generation() != Generation.NO_GENERATION
-                   && !protocolName.equals(generation().protocolName);
+    private boolean isProtocolNameInconsistent(ApiKeys key, String protocolName) {
+        final Generation currentGeneration = generation();
+        final boolean protocolNameInconsistent = protocolName != null &&
+            currentGeneration != Generation.NO_GENERATION &&
+            !protocolName.equals(currentGeneration.protocolName);
+
+        if (protocolNameInconsistent) {
+            log.error("{} failed due to inconsistent Protocol Name, received {} but expected {}",
+                key, protocolName, currentGeneration.protocolName);
+        }
+        return protocolNameInconsistent;
     }
 
     /**
