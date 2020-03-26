@@ -118,8 +118,19 @@ public class EmbeddedKafkaCluster extends ExternalResource {
      * Stop the Kafka cluster.
      */
     private void stop() {
+        if (brokers.length > 1) {
+            // delete the topics first to avoid cascading leader elections while shutting down the brokers
+            try {
+                deleteAllTopicsAndWait(60_000L);
+            } catch (final InterruptedException e) {
+                log.warn("Couldn't delete all topics before stopping brokers", e);
+            }
+        }
         for (final KafkaEmbedded broker : brokers) {
-            broker.stop();
+            broker.stopAsync();
+        }
+        for (final KafkaEmbedded broker : brokers) {
+            broker.awaitStoppedAndPurge();
         }
         zookeeper.shutdown();
     }
