@@ -327,6 +327,7 @@ class MetadataCache(brokerId: Int) extends Logging {
         val controllerEpoch = updateMetadataRequest.controllerEpoch
         val newStates = updateMetadataRequest.partitionStates.asScala
         newStates.foreach { state =>
+          // per-partition logging here can be very expensive due going through all partitions in the cluster
           val tp = new TopicPartition(state.topicName, state.partitionIndex)
           if (state.leader == LeaderAndIsr.LeaderDuringDelete) {
             removePartitionInfo(partitionStates, tp.topic, tp.partition)
@@ -342,9 +343,8 @@ class MetadataCache(brokerId: Int) extends Logging {
           }
         }
         val cachedPartitionsCount = newStates.size - deletedPartitions.size
-        stateChangeLogger.info(s"Deleted ${deletedPartitions.size} partitions and " +
-          s"add $cachedPartitionsCount partitions in metadata cache in response to UpdateMetadata " +
-          s"request sent by controller $controllerId epoch $controllerEpoch with correlation id $correlationId")
+        stateChangeLogger.info(s"Add $cachedPartitionsCount partitions and deleted ${deletedPartitions.size} partitions from metadata cache " +
+          s"in response to UpdateMetadata request sent by controller $controllerId epoch $controllerEpoch with correlation id $correlationId")
 
         metadataSnapshot = MetadataSnapshot(partitionStates, controllerIdOpt, aliveBrokers, aliveNodes)
       }
