@@ -191,7 +191,7 @@ public class InsertFieldTest {
         xformKey.configure(props);
 
         final SourceRecord record = new SourceRecord(null, null, "test", 0,
-          null, null, null, Collections.singletonMap("magic", 42L));
+            null, null, null, Collections.singletonMap("magic", 42L));
 
         final SourceRecord transformedRecord = xformKey.apply(record);
 
