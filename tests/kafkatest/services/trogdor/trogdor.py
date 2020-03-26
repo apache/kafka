@@ -17,7 +17,7 @@ import json
 import os.path
 import requests
 from requests.adapters import HTTPAdapter
-from requests.packages.urllib3 import Retry
+from urllib3 import Retry
 
 from ducktape.services.service import Service
 from ducktape.utils.util import wait_until

@@ -48,6 +48,12 @@ class ProduceConsumeValidateTest(Test):
         # Allow tests to tolerate some data loss by overriding this for tests using older message formats
         self.may_truncate_acked_records = False
 
+        # These need to be provided by the subclass
+        self.consumer = None
+        self.producer = None
+        self.kafka = None
+        self.topic = None
+
     def start_producer_and_consumer(self):
         # Start background producer and consumer
         self.consumer.start()

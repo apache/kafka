@@ -13,6 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# pylint: skip-file
 
 from distutils.version import LooseVersion
 from kafkatest.utils import kafkatest_version
