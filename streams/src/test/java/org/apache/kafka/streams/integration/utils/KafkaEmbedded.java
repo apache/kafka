@@ -124,6 +124,13 @@ public class KafkaEmbedded {
     }
 
     @SuppressWarnings("WeakerAccess")
+    public void stopAsync() {
+        log.debug("Shutting down embedded Kafka broker at {} (with ZK ensemble at {}) ...",
+                  brokerList(), zookeeperConnect());
+        kafka.shutdown();
+    }
+
+    @SuppressWarnings("WeakerAccess")
     public void awaitStoppedAndPurge() {
         kafka.awaitShutdown();
         log.debug("Removing log dir at {} ...", logDir);
@@ -135,13 +142,6 @@ public class KafkaEmbedded {
         tmpFolder.delete();
         log.debug("Shutdown of embedded Kafka broker at {} completed (with ZK ensemble at {}) ...",
             brokerList(), zookeeperConnect());
-    }
-
-    @SuppressWarnings("WeakerAccess")
-    public void stopAsync() {
-        log.debug("Shutting down embedded Kafka broker at {} (with ZK ensemble at {}) ...",
-            brokerList(), zookeeperConnect());
-        kafka.shutdown();
     }
 
     /**

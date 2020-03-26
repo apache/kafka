@@ -21,6 +21,7 @@ import kafka.server.KafkaConfig$;
 import kafka.server.KafkaServer;
 import kafka.utils.MockTime;
 import kafka.zk.EmbeddedZookeeper;
+import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.test.TestCondition;
@@ -39,6 +40,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
+import java.util.concurrent.ExecutionException;
 
 /**
  * Runs an in-memory, "embedded" Kafka cluster with 1 ZooKeeper instance and supplied number of Kafka brokers.
@@ -121,8 +123,14 @@ public class EmbeddedKafkaCluster extends ExternalResource {
         if (brokers.length > 1) {
             // delete the topics first to avoid cascading leader elections while shutting down the brokers
             try {
-                deleteAllTopicsAndWait(60_000L);
+                final Set<String> topics = JavaConverters.setAsJavaSetConverter(brokers[0].kafkaServer().zkClient().getAllTopicsInCluster(false)).asJava();
+                final Admin adminClient = brokers[0].createAdminClient();
+                adminClient.deleteTopics(topics).all().get();
+                adminClient.close();
             } catch (final InterruptedException e) {
+                log.warn("Got interrupted while deleting topics in preparation for stopping embedded brokers", e);
+                throw new RuntimeException(e);
+            } catch (final ExecutionException | RuntimeException e) {
                 log.warn("Couldn't delete all topics before stopping brokers", e);
             }
         }
