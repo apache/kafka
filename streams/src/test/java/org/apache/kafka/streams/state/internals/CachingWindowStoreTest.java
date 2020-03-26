@@ -44,6 +44,7 @@ import org.apache.kafka.streams.state.WindowStoreIterator;
 import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.TestUtils;
+import org.easymock.EasyMock;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -78,19 +79,22 @@ public class CachingWindowStoreTest {
     private static final long DEFAULT_TIMESTAMP = 10L;
     private static final Long WINDOW_SIZE = 10L;
     private static final long SEGMENT_INTERVAL = 100L;
+    private final static String TOPIC = "topic";
+    private static final String CACHE_NAMESPACE = "0_0-store-name";
+
     private InternalMockProcessorContext context;
     private RocksDBSegmentedBytesStore underlying;
+    private WindowStore<Bytes, byte[]> windowStore;
     private CachingWindowStore cachingStore;
     private CachingKeyValueStoreTest.CacheFlushListenerStub<Windowed<String>, String> cacheListener;
     private ThreadCache cache;
-    private String topic;
     private WindowKeySchema keySchema;
 
     @Before
     public void setUp() {
         keySchema = new WindowKeySchema();
         underlying = new RocksDBSegmentedBytesStore("test", "metrics-scope", 0, SEGMENT_INTERVAL, keySchema);
-        final RocksDBWindowStore windowStore = new RocksDBWindowStore(
+        windowStore = new RocksDBWindowStore(
             underlying,
             false,
             WINDOW_SIZE);
@@ -100,9 +104,8 @@ public class CachingWindowStoreTest {
         cachingStore = new CachingWindowStore(windowStore, WINDOW_SIZE, SEGMENT_INTERVAL);
         cachingStore.setFlushListener(cacheListener, false);
         cache = new ThreadCache(new LogContext("testCache "), MAX_CACHE_SIZE_BYTES, new MockStreamsMetrics(new Metrics()));
-        topic = "topic";
         context = new InternalMockProcessorContext(TestUtils.tempDirectory(), null, null, null, cache);
-        context.setRecordContext(new ProcessorRecordContext(DEFAULT_TIMESTAMP, 0, 0, topic, null));
+        context.setRecordContext(new ProcessorRecordContext(DEFAULT_TIMESTAMP, 0, 0, TOPIC, null));
         cachingStore.init(context, cachingStore);
     }
 
@@ -123,7 +126,7 @@ public class CachingWindowStoreTest {
 
         builder.addStateStore(storeBuilder);
 
-        builder.stream(topic,
+        builder.stream(TOPIC,
             Consumed.with(Serdes.String(), Serdes.String()))
             .transform(() -> new Transformer<String, String, KeyValue<String, String>>() {
                 private WindowStore<String, String> store;
@@ -181,7 +184,7 @@ public class CachingWindowStoreTest {
         final Instant initialWallClockTime = Instant.ofEpochMilli(0L);
         final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), streamsConfiguration, initialWallClockTime);
 
-        final TestInputTopic<String, String> inputTopic = driver.createInputTopic(topic,
+        final TestInputTopic<String, String> inputTopic = driver.createInputTopic(TOPIC,
             Serdes.String().serializer(),
             Serdes.String().serializer(),
             initialWallClockTime,
@@ -623,6 +626,72 @@ public class CachingWindowStoreTest {
             + "Note that the built-in numerical serdes do not follow this for negative numbers"));
     }
 
+    @Test
+    public void shouldCloseWrappedStoreAfterErrorDuringCacheFlush() {
+        setUpCloseTests();
+        cache.flush(CACHE_NAMESPACE);
+        EasyMock.expectLastCall().andThrow(new NullPointerException("Simulating an error on flush"));
+        EasyMock.replay(cache);
+        EasyMock.reset(windowStore);
+        windowStore.close();
+        EasyMock.replay(windowStore);
+
+        try {
+            cachingStore.close();
+        } catch (final NullPointerException npe) {
+            EasyMock.verify(windowStore);
+        }
+    }
+
+    @Test
+    public void shouldCloseWrappedStoreAfterErrorDuringCacheClose() {
+        setUpCloseTests();
+        cache.flush(CACHE_NAMESPACE);
+        cache.close(CACHE_NAMESPACE);
+        EasyMock.expectLastCall().andThrow(new NullPointerException("Simulating an error on close"));
+        EasyMock.replay(cache);
+        EasyMock.reset(windowStore);
+        windowStore.close();
+        EasyMock.replay(windowStore);
+
+        try {
+            cachingStore.close();
+        } catch (final NullPointerException npe) {
+            EasyMock.verify(windowStore);
+        }
+    }
+
+    @Test
+    public void shouldCloseCacheAfterErrorDuringStateStoreClose() {
+        setUpCloseTests();
+        EasyMock.reset(cache);
+        cache.flush(CACHE_NAMESPACE);
+        cache.close(CACHE_NAMESPACE);
+        EasyMock.replay(cache);
+        EasyMock.reset(windowStore);
+        windowStore.close();
+        EasyMock.expectLastCall().andThrow(new NullPointerException("Simulating an error on close"));
+        EasyMock.replay(windowStore);
+
+        try {
+            cachingStore.close();
+        } catch (final NullPointerException npe) {
+            EasyMock.verify(cache);
+        }
+    }
+
+    private void setUpCloseTests() {
+        windowStore = EasyMock.createNiceMock(WindowStore.class);
+        EasyMock.expect(windowStore.name()).andStubReturn("store-name");
+        EasyMock.expect(windowStore.isOpen()).andStubReturn(true);
+        EasyMock.replay(windowStore);
+        cachingStore = new CachingWindowStore(windowStore, WINDOW_SIZE, SEGMENT_INTERVAL);
+        cache = EasyMock.niceMock(ThreadCache.class);
+        context = new InternalMockProcessorContext(TestUtils.tempDirectory(), null, null, null, cache);
+        context.setRecordContext(new ProcessorRecordContext(10, 0, 0, TOPIC, null));
+        cachingStore.init(context, cachingStore);
+    }
+
     private static KeyValue<Windowed<Bytes>, byte[]> windowedPair(final String key, final String value, final long timestamp) {
         return KeyValue.pair(
             new Windowed<>(bytesKey(key), new TimeWindow(timestamp, timestamp + WINDOW_SIZE)),
@@ -636,7 +705,7 @@ public class CachingWindowStoreTest {
         while (cachedSize < MAX_CACHE_SIZE_BYTES) {
             final String kv = String.valueOf(i++);
             cachingStore.put(bytesKey(kv), bytesValue(kv));
-            cachedSize += memoryCacheEntrySize(kv.getBytes(), kv.getBytes(), topic) +
+            cachedSize += memoryCacheEntrySize(kv.getBytes(), kv.getBytes(), TOPIC) +
                 8 + // timestamp
                 4; // sequenceNumber
         }

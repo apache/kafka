@@ -294,9 +294,15 @@ class CachingWindowStore
 
     @Override
     public void close() {
-        flush();
-        cache.close(name);
-        wrapped().close();
+        try {
+            flush();
+        } finally {
+            try {
+                wrapped().close();
+            } finally {
+                cache.close(name);
+            }
+        }
     }
 
     private class CacheIteratorWrapper implements PeekingKeyValueIterator<Bytes, LRUCacheEntry> {

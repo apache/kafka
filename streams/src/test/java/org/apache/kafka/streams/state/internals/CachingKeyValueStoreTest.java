@@ -33,6 +33,7 @@ import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.test.InternalMockProcessorContext;
+import org.apache.kafka.test.TestUtils;
 import org.easymock.EasyMock;
 import org.junit.After;
 import org.junit.Before;
@@ -56,25 +57,25 @@ import static org.junit.Assert.fail;
 
 public class CachingKeyValueStoreTest extends AbstractKeyValueStoreTest {
 
+    private final static String TOPIC = "topic";
+    private static final String CACHE_NAMESPACE = "0_0-store-name";
     private final int maxCacheSizeBytes = 150;
     private InternalMockProcessorContext context;
     private CachingKeyValueStore store;
-    private InMemoryKeyValueStore underlyingStore;
+    private KeyValueStore<Bytes, byte[]> keyValueStore;
     private ThreadCache cache;
     private CacheFlushListenerStub<String, String> cacheFlushListener;
-    private String topic;
 
     @Before
     public void setUp() {
         final String storeName = "store";
-        underlyingStore = new InMemoryKeyValueStore(storeName);
+        keyValueStore = new InMemoryKeyValueStore(storeName);
         cacheFlushListener = new CacheFlushListenerStub<>(new StringDeserializer(), new StringDeserializer());
-        store = new CachingKeyValueStore(underlyingStore);
+        store = new CachingKeyValueStore(keyValueStore);
         store.setFlushListener(cacheFlushListener, false);
         cache = new ThreadCache(new LogContext("testCache "), maxCacheSizeBytes, new MockStreamsMetrics(new Metrics()));
         context = new InternalMockProcessorContext(null, null, null, null, cache);
-        topic = "topic";
-        context.setRecordContext(new ProcessorRecordContext(10, 0, 0, topic, null));
+        context.setRecordContext(new ProcessorRecordContext(10, 0, 0, TOPIC, null));
         store.init(context, null);
     }
 
@@ -107,17 +108,83 @@ public class CachingKeyValueStoreTest extends AbstractKeyValueStoreTest {
     public void shouldAvoidFlushingDeletionsWithoutDirtyKeys() {
         final int added = addItemsToCache();
         // all dirty entries should have been flushed
-        assertEquals(added, underlyingStore.approximateNumEntries());
+        assertEquals(added, keyValueStore.approximateNumEntries());
         assertEquals(added, cacheFlushListener.forwarded.size());
 
         store.put(bytesKey("key"), bytesValue("value"));
-        assertEquals(added, underlyingStore.approximateNumEntries());
+        assertEquals(added, keyValueStore.approximateNumEntries());
         assertEquals(added, cacheFlushListener.forwarded.size());
 
         store.put(bytesKey("key"), null);
         store.flush();
-        assertEquals(added, underlyingStore.approximateNumEntries());
+        assertEquals(added, keyValueStore.approximateNumEntries());
         assertEquals(added, cacheFlushListener.forwarded.size());
+    }
+
+    @Test
+    public void shouldCloseWrappedStoreAfterErrorDuringCacheFlush() {
+        setUpCloseTests();
+        cache.flush(CACHE_NAMESPACE);
+        EasyMock.expectLastCall().andThrow(new NullPointerException("Simulating an error on flush"));
+        EasyMock.replay(cache);
+        EasyMock.reset(keyValueStore);
+        keyValueStore.close();
+        EasyMock.replay(keyValueStore);
+
+        try {
+            store.close();
+        } catch (final NullPointerException npe) {
+            EasyMock.verify(keyValueStore);
+        }
+    }
+
+    @Test
+    public void shouldCloseWrappedStoreAfterErrorDuringCacheClose() {
+        setUpCloseTests();
+        cache.flush(CACHE_NAMESPACE);
+        cache.close(CACHE_NAMESPACE);
+        EasyMock.expectLastCall().andThrow(new NullPointerException("Simulating an error on close"));
+        EasyMock.replay(cache);
+        EasyMock.reset(keyValueStore);
+        keyValueStore.close();
+        EasyMock.replay(keyValueStore);
+
+        try {
+            store.close();
+        } catch (final NullPointerException npe) {
+            EasyMock.verify(keyValueStore);
+        }
+    }
+
+    @Test
+    public void shouldCloseCacheAfterErrorDuringStateStoreClose() {
+        setUpCloseTests();
+        EasyMock.reset(cache);
+        cache.flush(CACHE_NAMESPACE);
+        cache.close(CACHE_NAMESPACE);
+        EasyMock.replay(cache);
+        EasyMock.reset(keyValueStore);
+        keyValueStore.close();
+        EasyMock.expectLastCall().andThrow(new NullPointerException("Simulating an error on close"));
+        EasyMock.replay(keyValueStore);
+
+        try {
+            store.close();
+        } catch (final NullPointerException npe) {
+            EasyMock.verify(cache);
+        }
+    }
+
+    private void setUpCloseTests() {
+        keyValueStore = EasyMock.createNiceMock(KeyValueStore.class);
+        EasyMock.expect(keyValueStore.name()).andStubReturn("store-name");
+        EasyMock.expect(keyValueStore.isOpen()).andStubReturn(true);
+        EasyMock.replay(keyValueStore);
+        store = new CachingKeyValueStore(keyValueStore);
+        cache = EasyMock.niceMock(ThreadCache.class);
+        context = new InternalMockProcessorContext(TestUtils.tempDirectory(), null, null, null, cache);
+        context.setRecordContext(new ProcessorRecordContext(10, 0, 0, TOPIC, null));
+        store.init(context, store);
     }
 
     @Test
@@ -125,14 +192,14 @@ public class CachingKeyValueStoreTest extends AbstractKeyValueStoreTest {
         try {
             cache = EasyMock.niceMock(ThreadCache.class);
             context = new InternalMockProcessorContext(null, null, null, null, cache);
-            context.setRecordContext(new ProcessorRecordContext(10, 0, 0, topic, null));
+            context.setRecordContext(new ProcessorRecordContext(10, 0, 0, TOPIC, null));
             store.init(context, null);
             cache.flush("0_0-store");
             EasyMock.expectLastCall().andThrow(new NullPointerException("Simulating an error on flush"));
             EasyMock.replay(cache);
             store.close();
         } catch (final NullPointerException npe) {
-            assertFalse(underlyingStore.isOpen());
+            assertFalse(keyValueStore.isOpen());
         }
     }
 
@@ -144,7 +211,7 @@ public class CachingKeyValueStoreTest extends AbstractKeyValueStoreTest {
         assertThat(store.get(bytesKey("key2")), equalTo(bytesValue("value2")));
         // nothing evicted so underlying store should be empty
         assertEquals(2, cache.size());
-        assertEquals(0, underlyingStore.approximateNumEntries());
+        assertEquals(0, keyValueStore.approximateNumEntries());
     }
 
     private byte[] bytesValue(final String value) {
@@ -159,9 +226,9 @@ public class CachingKeyValueStoreTest extends AbstractKeyValueStoreTest {
     public void shouldFlushEvictedItemsIntoUnderlyingStore() {
         final int added = addItemsToCache();
         // all dirty entries should have been flushed
-        assertEquals(added, underlyingStore.approximateNumEntries());
+        assertEquals(added, keyValueStore.approximateNumEntries());
         assertEquals(added, store.approximateNumEntries());
-        assertNotNull(underlyingStore.get(Bytes.wrap("0".getBytes())));
+        assertNotNull(keyValueStore.get(Bytes.wrap("0".getBytes())));
     }
 
     @Test
@@ -359,7 +426,7 @@ public class CachingKeyValueStoreTest extends AbstractKeyValueStoreTest {
 
     @Test
     public void shouldReturnUnderlying() {
-        assertEquals(underlyingStore, store.wrapped());
+        assertEquals(keyValueStore, store.wrapped());
     }
 
     @Test(expected = InvalidStateStoreException.class)
@@ -374,7 +441,7 @@ public class CachingKeyValueStoreTest extends AbstractKeyValueStoreTest {
         while (cachedSize < maxCacheSizeBytes) {
             final String kv = String.valueOf(i++);
             store.put(bytesKey(kv), bytesValue(kv));
-            cachedSize += memoryCacheEntrySize(kv.getBytes(), kv.getBytes(), topic);
+            cachedSize += memoryCacheEntrySize(kv.getBytes(), kv.getBytes(), TOPIC);
         }
         return i;
     }

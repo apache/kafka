@@ -232,9 +232,15 @@ class CachingSessionStore
     }
 
     public void close() {
-        flush();
-        cache.close(cacheName);
-        super.close();
+        try {
+            flush();
+        } finally {
+            try {
+                super.close();
+            } finally {
+                cache.close(cacheName);
+            }
+        }
     }
 
     private class CacheIteratorWrapper implements PeekingKeyValueIterator<Bytes, LRUCacheEntry> {
