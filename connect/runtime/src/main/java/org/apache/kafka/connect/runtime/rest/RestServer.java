@@ -419,7 +419,7 @@ public class RestServer {
     ServerConnector findConnector(String protocol) {
         for (Connector connector : jettyServer.getConnectors()) {
             String connectorName = connector.getName();
-            if (connectorName.startsWith(protocol) && !ADMIN_SERVER_CONNECTOR_NAME.equals(connectorName))
+            if (connectorName.startsWith(protocol + "_") && !ADMIN_SERVER_CONNECTOR_NAME.equals(connectorName))
                 return (ServerConnector) connector;
         }
 
