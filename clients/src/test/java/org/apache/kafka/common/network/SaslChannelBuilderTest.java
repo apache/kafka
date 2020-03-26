@@ -17,14 +17,18 @@
 package org.apache.kafka.common.network;
 
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.config.SslConfigs;
+import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
 import org.apache.kafka.common.security.TestSecurityConfig;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.security.JaasContext;
 import org.apache.kafka.common.security.authenticator.TestJaasConfig;
+import org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule;
 import org.apache.kafka.common.security.plain.PlainLoginModule;
+import org.apache.kafka.common.security.scram.ScramLoginModule;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.ietf.jgss.GSSContext;
@@ -40,6 +44,7 @@ import javax.security.auth.Subject;
 import javax.security.auth.callback.CallbackHandler;
 import javax.security.auth.login.LoginException;
 import javax.security.auth.spi.LoginModule;
+import java.lang.reflect.Field;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
@@ -60,7 +65,7 @@ public class SaslChannelBuilderTest {
 
     @Test
     public void testCloseBeforeConfigureIsIdempotent() {
-        SaslChannelBuilder builder = createChannelBuilder(SecurityProtocol.SASL_PLAINTEXT);
+        SaslChannelBuilder builder = createChannelBuilder(SecurityProtocol.SASL_PLAINTEXT, "PLAIN");
         builder.close();
         assertTrue(builder.loginManagers().isEmpty());
         builder.close();
@@ -69,7 +74,7 @@ public class SaslChannelBuilderTest {
 
     @Test
     public void testCloseAfterConfigIsIdempotent() {
-        SaslChannelBuilder builder = createChannelBuilder(SecurityProtocol.SASL_PLAINTEXT);
+        SaslChannelBuilder builder = createChannelBuilder(SecurityProtocol.SASL_PLAINTEXT, "PLAIN");
         builder.configure(new HashMap<>());
         assertNotNull(builder.loginManagers().get("PLAIN"));
         builder.close();
@@ -80,7 +85,7 @@ public class SaslChannelBuilderTest {
 
     @Test
     public void testLoginManagerReleasedIfConfigureThrowsException() {
-        SaslChannelBuilder builder = createChannelBuilder(SecurityProtocol.SASL_SSL);
+        SaslChannelBuilder builder = createChannelBuilder(SecurityProtocol.SASL_SSL, "PLAIN");
         try {
             // Use invalid config so that an exception is thrown
             builder.configure(Collections.singletonMap(SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG, "1"));
@@ -121,6 +126,38 @@ public class SaslChannelBuilderTest {
                 .createCredential(gssName, GSSContext.INDEFINITE_LIFETIME, oid, GSSCredential.ACCEPT_ONLY);
     }
 
+    /**
+     * Verify that unparsed broker configs don't break clients. This is to ensure that clients
+     * created by brokers are not broken if broker configs are passed to clients.
+     */
+    @Test
+    public void testClientChannelBuilderWithBrokerConfigs() throws Exception {
+        Map<String, Object> configs = new HashMap<>();
+        CertStores certStores = new CertStores(false, "client", "localhost");
+        configs.putAll(certStores.getTrustingConfig(certStores));
+        configs.put(SaslConfigs.SASL_KERBEROS_SERVICE_NAME, "kafka");
+        configs.putAll(new ConfigDef().withClientSaslSupport().parse(configs));
+        for (Field field : BrokerSecurityConfigs.class.getFields()) {
+            if (field.getName().endsWith("_CONFIG"))
+                configs.put(field.get(BrokerSecurityConfigs.class).toString(), "somevalue");
+        }
+
+        SaslChannelBuilder plainBuilder = createChannelBuilder(SecurityProtocol.SASL_PLAINTEXT, "PLAIN");
+        plainBuilder.configure(configs);
+
+        SaslChannelBuilder gssapiBuilder = createChannelBuilder(SecurityProtocol.SASL_PLAINTEXT, "GSSAPI");
+        gssapiBuilder.configure(configs);
+
+        SaslChannelBuilder oauthBearerBuilder = createChannelBuilder(SecurityProtocol.SASL_PLAINTEXT, "OAUTHBEARER");
+        oauthBearerBuilder.configure(configs);
+
+        SaslChannelBuilder scramBuilder = createChannelBuilder(SecurityProtocol.SASL_PLAINTEXT, "SCRAM-SHA-256");
+        scramBuilder.configure(configs);
+
+        SaslChannelBuilder saslSslBuilder = createChannelBuilder(SecurityProtocol.SASL_SSL, "PLAIN");
+        saslSslBuilder.configure(configs);
+    }
+
     private SaslChannelBuilder createGssapiChannelBuilder(Map<String, JaasContext> jaasContexts, GSSManager gssManager) {
         SaslChannelBuilder channelBuilder = new SaslChannelBuilder(Mode.SERVER, jaasContexts,
                 SecurityProtocol.SASL_PLAINTEXT,
@@ -137,14 +174,30 @@ public class SaslChannelBuilderTest {
         return channelBuilder;
     }
 
-
-    private SaslChannelBuilder createChannelBuilder(SecurityProtocol securityProtocol) {
+    private SaslChannelBuilder createChannelBuilder(SecurityProtocol securityProtocol, String saslMechanism) {
+        Class<?> loginModule = null;
+        switch (saslMechanism) {
+            case "PLAIN":
+                loginModule = PlainLoginModule.class;
+                break;
+            case "SCRAM-SHA-256":
+                loginModule = ScramLoginModule.class;
+                break;
+            case "OAUTHBEARER":
+                loginModule = OAuthBearerLoginModule.class;
+                break;
+            case "GSSAPI":
+                loginModule = TestGssapiLoginModule.class;
+                break;
+            default:
+                throw new IllegalArgumentException("Unsupported SASL mechanism " + saslMechanism);
+        }
         TestJaasConfig jaasConfig = new TestJaasConfig();
-        jaasConfig.addEntry("jaasContext", PlainLoginModule.class.getName(), new HashMap<>());
+        jaasConfig.addEntry("jaasContext", loginModule.getName(), new HashMap<>());
         JaasContext jaasContext = new JaasContext("jaasContext", JaasContext.Type.SERVER, jaasConfig, null);
-        Map<String, JaasContext> jaasContexts = Collections.singletonMap("PLAIN", jaasContext);
-        return new SaslChannelBuilder(Mode.CLIENT, jaasContexts, securityProtocol, new ListenerName("PLAIN"),
-                false, "PLAIN", true, null,
+        Map<String, JaasContext> jaasContexts = Collections.singletonMap(saslMechanism, jaasContext);
+        return new SaslChannelBuilder(Mode.CLIENT, jaasContexts, securityProtocol, new ListenerName(saslMechanism),
+                false, saslMechanism, true, null,
                 null, Time.SYSTEM, new LogContext());
     }
 
