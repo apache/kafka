@@ -996,7 +996,7 @@ class Log(@volatile private var _dir: File,
         if (renamedDir != dir) {
           _dir = renamedDir
           _parentDir = renamedDir.getParent
-          logSegments.foreach(_.updateDir(renamedDir))
+          logSegments.foreach(_.updateParentDir(renamedDir))
           producerStateManager.logDir = dir
           // re-initialize leader epoch cache so that LeaderEpochCheckpointFile.checkpoint can correctly reference
           // the checkpoint file in renamed log directory
