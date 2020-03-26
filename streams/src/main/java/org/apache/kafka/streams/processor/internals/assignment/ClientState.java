@@ -160,16 +160,6 @@ public class ClientState {
         return activeTasks.size();
     }
 
-    void addPreviousActiveTask(final TaskId task) {
-        prevActiveTasks.add(task);
-        prevAssignedTasks.add(task);
-    }
-
-    void addPreviousStandbyTask(final TaskId task) {
-        prevStandbyTasks.add(task);
-        prevAssignedTasks.add(task);
-    }
-
     public void addPreviousActiveTasks(final Set<TaskId> prevTasks) {
         prevActiveTasks.addAll(prevTasks);
         prevAssignedTasks.addAll(prevTasks);
@@ -240,7 +230,7 @@ public class ClientState {
      * @return end offset sum - offset sum
      *          Task.LATEST_OFFSET if this was previously an active running task on this client
      */
-    public long lagFor(final TaskId task) {
+    long lagFor(final TaskId task) {
         final Long totalLag = taskLagTotals.get(task);
 
         if (totalLag == null) {
@@ -290,10 +280,6 @@ public class ClientState {
 
     boolean hasAssignedTask(final TaskId taskId) {
         return assignedTasks.contains(taskId);
-    }
-
-    boolean hasPrevActiveTask(final TaskId task) {
-        return prevActiveTasks.contains(task);
     }
 
     @Override
