@@ -22,6 +22,7 @@ import org.junit.Test
 import kafka.utils.TestUtils
 import org.apache.kafka.common.ConsumerGroupState
 import org.apache.kafka.clients.admin.ConsumerGroupListing
+import java.util.Optional
 
 class ListConsumerGroupTest extends ConsumerGroupCommandTest {
 
@@ -58,8 +59,8 @@ class ListConsumerGroupTest extends ConsumerGroupCommandTest {
     val service = getConsumerGroupService(cgcArgs)
 
     val expectedListing = Set(
-        new ConsumerGroupListing(simpleGroup, true, ConsumerGroupState.EMPTY),
-        new ConsumerGroupListing(group, false, ConsumerGroupState.STABLE))
+        new ConsumerGroupListing(simpleGroup, true, Optional.of(ConsumerGroupState.EMPTY)),
+        new ConsumerGroupListing(group, false, Optional.of(ConsumerGroupState.STABLE)))
 
     var foundListing = Set.empty[ConsumerGroupListing]
     TestUtils.waitUntilTrue(() => {
@@ -68,7 +69,7 @@ class ListConsumerGroupTest extends ConsumerGroupCommandTest {
     }, s"Expected to show groups $expectedListing, but found $foundListing")
 
     val expectedListingStable = Set(
-        new ConsumerGroupListing(group, false, ConsumerGroupState.STABLE))
+        new ConsumerGroupListing(group, false, Optional.of(ConsumerGroupState.STABLE)))
 
     foundListing = Set.empty[ConsumerGroupListing]
     TestUtils.waitUntilTrue(() => {
@@ -79,20 +80,32 @@ class ListConsumerGroupTest extends ConsumerGroupCommandTest {
 
   @Test
   def testConsumerGroupStatesFromString(): Unit = {
-    var result = ConsumerGroupCommand.consumerGroupStatesFromString("bad, wrong")
-    assertEquals(List(ConsumerGroupState.UNKNOWN), result)
-
-    result = ConsumerGroupCommand.consumerGroupStatesFromString("  bad, ")
-    assertEquals(List(ConsumerGroupState.UNKNOWN), result)
-
-    result = ConsumerGroupCommand.consumerGroupStatesFromString("  bad, stable")
-    assertEquals(List(ConsumerGroupState.UNKNOWN, ConsumerGroupState.STABLE), result)
-
-    result = ConsumerGroupCommand.consumerGroupStatesFromString("STABLE, stable, Stable, eMpTy")
+    val result = ConsumerGroupCommand.consumerGroupStatesFromString("STABLE, stable, Stable, eMpTy")
     assertEquals(List(ConsumerGroupState.STABLE, ConsumerGroupState.EMPTY), result)
 
-    result = ConsumerGroupCommand.consumerGroupStatesFromString("   ,   ,")
-    assertEquals(List(ConsumerGroupState.UNKNOWN), result)
+    try {
+      ConsumerGroupCommand.consumerGroupStatesFromString("bad, wrong")
+    } catch {
+      case e: IllegalArgumentException => //Expected
+    }
+
+    try {
+      ConsumerGroupCommand.consumerGroupStatesFromString("  bad, ")
+    } catch {
+      case e: IllegalArgumentException => //Expected
+    }
+
+    try {
+      ConsumerGroupCommand.consumerGroupStatesFromString("  bad, stable")
+    } catch {
+      case e: IllegalArgumentException => //Expected
+    }
+
+    try {
+      ConsumerGroupCommand.consumerGroupStatesFromString("   ,   ,")
+    } catch {
+      case e: IllegalArgumentException => //Expected
+    }
   }
 
 }

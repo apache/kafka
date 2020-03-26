@@ -18,6 +18,7 @@
 package org.apache.kafka.clients.admin;
 
 import java.util.Objects;
+import java.util.Optional;
 
 import org.apache.kafka.common.ConsumerGroupState;
 
@@ -27,7 +28,7 @@ import org.apache.kafka.common.ConsumerGroupState;
 public class ConsumerGroupListing {
     private final String groupId;
     private final boolean isSimpleConsumerGroup;
-    private final ConsumerGroupState state;
+    private final Optional<ConsumerGroupState> state;
 
     /**
      * Create an instance with the specified parameters.
@@ -36,7 +37,7 @@ public class ConsumerGroupListing {
      * @param isSimpleConsumerGroup If consumer group is simple or not.
      * @param state The state of the consumer group
      */
-    public ConsumerGroupListing(String groupId, boolean isSimpleConsumerGroup, ConsumerGroupState state) {
+    public ConsumerGroupListing(String groupId, boolean isSimpleConsumerGroup, Optional<ConsumerGroupState> state) {
         this.groupId = groupId;
         this.isSimpleConsumerGroup = isSimpleConsumerGroup;
         this.state = state;
@@ -59,7 +60,7 @@ public class ConsumerGroupListing {
     /**
      * Consumer Group state
      */
-    public ConsumerGroupState state() {
+    public Optional<ConsumerGroupState> state() {
         return state;
     }
 
@@ -78,18 +79,25 @@ public class ConsumerGroupListing {
     }
 
     @Override
-    public boolean equals(final Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-        final ConsumerGroupListing that = (ConsumerGroupListing) o;
+    public boolean equals(Object obj) {
+        if (this == obj)
+            return true;
+        if (obj == null)
+            return false;
+        if (getClass() != obj.getClass())
+            return false;
+        ConsumerGroupListing other = (ConsumerGroupListing) obj;
         if (groupId == null) {
-            if (that.groupId != null)
+            if (other.groupId != null)
                 return false;
-        } else if (!groupId.equals(that.groupId))
+        } else if (!groupId.equals(other.groupId))
             return false;
-        if (isSimpleConsumerGroup != that.isSimpleConsumerGroup)
+        if (isSimpleConsumerGroup != other.isSimpleConsumerGroup)
             return false;
-        if (state != that.state)
+        if (state == null) {
+            if (other.state != null)
+                return false;
+        } else if (!state.equals(other.state))
             return false;
         return true;
     }
