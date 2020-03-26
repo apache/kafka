@@ -1540,7 +1540,6 @@ project(':jmh-benchmarks') {
     compile project(':core')
     compile project(':clients')
     compile project(':streams')
-    compile project(':core')
     compile project(':clients').sourceSets.test.output
     compile project(':core').sourceSets.test.output
     compile libs.jmhCore
