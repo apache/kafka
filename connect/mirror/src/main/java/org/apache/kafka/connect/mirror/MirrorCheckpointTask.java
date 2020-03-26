@@ -47,7 +47,6 @@ public class MirrorCheckpointTask extends SourceTask {
     private String checkpointsTopic;
     private Duration interval;
     private Duration pollTimeout;
-    private Duration adminTimeout;
     private TopicFilter topicFilter;
     private Set<String> consumerGroups;
     private ReplicationPolicy replicationPolicy;
@@ -78,7 +77,6 @@ public class MirrorCheckpointTask extends SourceTask {
         replicationPolicy = config.replicationPolicy();
         interval = config.emitCheckpointsInterval();
         pollTimeout = config.consumerPollTimeout();
-        adminTimeout = config.adminTimeout();
         offsetSyncStore = new OffsetSyncStore(config);
         sourceAdminClient = AdminClient.create(config.sourceAdminConfig());
         metrics = config.metrics();

@@ -807,12 +807,6 @@ public class StreamsMetricsImpl implements StreamsMetrics {
         }
     }
 
-    public static void maybeMeasureLatency(final double elapsedNs, final Sensor sensor) {
-        if (sensor.shouldRecord() && sensor.hasMetrics()) {
-            sensor.record(elapsedNs);
-        }
-    }
-
     public static <T> T maybeMeasureLatency(final Supplier<T> actionToMeasure,
                                             final Time time,
                                             final Sensor sensor) {

@@ -585,7 +585,8 @@ public class StreamThread extends Thread {
     // Visible for testing
     void runOnce() {
         final ConsumerRecords<byte[], byte[]> records;
-        now = time.milliseconds();
+        final long startMs = time.milliseconds();
+        now = startMs;
 
         if (state == State.PARTITIONS_ASSIGNED) {
             // try to fetch some records with zero poll millis
@@ -659,6 +660,8 @@ public class StreamThread extends Thread {
              */
             do {
                 final int processed = taskManager.process(numIterations, time);
+                final long processLatency = advanceNowAndComputeLatency();
+                totalProcessLatency += processLatency;
                 if (processed > 0) {
                     // It makes no difference to the outcome of these metrics when we record "0",
                     // so we can just avoid the method call when we didn't process anything.
@@ -667,29 +670,26 @@ public class StreamThread extends Thread {
                     // This metric is scaled to represent the _average_ processing time of _each_
                     // task. Note, it's hard to interpret this as defined, but we would need a KIP
                     // to change it to simply report the overall time spent processing all tasks.
-                    final long processLatency = advanceNowAndComputeLatency();
                     processLatencySensor.record(processLatency / (double) processed, now);
-                    totalProcessLatency += processLatency;
                 }
 
                 final int punctuated = taskManager.punctuate();
+                final long punctuateLatency = advanceNowAndComputeLatency();
+                totalPunctuateLatency += punctuateLatency;
                 if (punctuated > 0) {
-                    final long punctuateLatency = advanceNowAndComputeLatency();
                     punctuateSensor.record(punctuateLatency / (double) punctuated, now);
-                    totalPunctuateLatency += punctuateLatency;
                 }
 
                 final int committed = maybeCommit();
+                final long commitLatency = advanceNowAndComputeLatency();
+                totalCommitLatency += commitLatency;
                 if (committed > 0) {
-                    final long commitLatency = advanceNowAndComputeLatency();
                     commitSensor.record(commitLatency / (double) committed, now);
 
                     if (log.isDebugEnabled()) {
                         log.debug("Committed all active tasks {} and standby tasks {} in {}ms",
                             taskManager.activeTaskIds(), taskManager.standbyTaskIds(), commitLatency);
                     }
-
-                    totalCommitLatency += commitLatency;
                 }
 
                 if (processed == 0) {
@@ -708,7 +708,8 @@ public class StreamThread extends Thread {
 
         taskManager.recordTaskProcessRatio(totalProcessLatency);
 
-        final long runOnceLatency = pollLatency + restoreLatency + totalCommitLatency + totalProcessLatency + totalPunctuateLatency;
+        now = time.milliseconds();
+        final long runOnceLatency = now - startMs;
         processRatioSensor.record((double) totalProcessLatency / runOnceLatency);
         punctuateRatioSensor.record((double) totalPunctuateLatency / runOnceLatency);
         pollRatioSensor.record((double) pollLatency / runOnceLatency);
