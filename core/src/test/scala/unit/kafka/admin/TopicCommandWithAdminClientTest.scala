@@ -682,7 +682,7 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
 
     val underReplicatedOutput = TestUtils.grabConsoleOutput(
       topicService.describeTopic(new TopicCommandOptions(Array("--under-replicated-partitions"))))
-    assertEquals("--under-replicated-partitions shouldn't return anything", "", underReplicatedOutput)
+    assertEquals(s"--under-replicated-partitions shouldn't return anything: '$underReplicatedOutput'", "", underReplicatedOutput)
 
     TestUtils.removeReplicationThrottleForPartitions(adminClient, brokerIds, Set(tp))
     TestUtils.waitForAllReassignmentsToComplete(adminClient)
