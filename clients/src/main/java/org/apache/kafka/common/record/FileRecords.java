@@ -208,11 +208,11 @@ public class FileRecords extends AbstractRecords implements Closeable {
     }
 
     /**
-     * Update the file reference (to be used with caution since this does not reopen the file channel)
-     * @param file The new file to use
+     * Update the parent directory (to be used with caution since this does not reopen the file channel)
+     * @param parentDir The new parent directory
      */
-    public void setFile(File file) {
-        this.file = file;
+    public void updateParentDir(File parentDir) {
+        this.file = new File(parentDir, file.getName());
     }
 
     /**

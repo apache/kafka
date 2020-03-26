@@ -182,7 +182,7 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
             val offsetsToClean = cleanableOffsets(log, lastCleanOffset, now)
             // update checkpoint for logs with invalid checkpointed offsets
             if (offsetsToClean.forceUpdateCheckpoint)
-              updateCheckpoints(log.dir.getParentFile(), Option(topicPartition, offsetsToClean.firstDirtyOffset))
+              updateCheckpoints(log.parentDirFile, Option(topicPartition, offsetsToClean.firstDirtyOffset))
             val compactionDelayMs = maxCompactionDelay(log, offsetsToClean.firstDirtyOffset, now)
             preCleanStats.updateMaxCompactionDelay(compactionDelayMs)
 
@@ -379,7 +379,7 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
           case Some(offset) =>
             // Remove this partition from the checkpoint file in the source log directory
             updateCheckpoints(sourceLogDir, None)
-            // Add offset for this partition to the checkpoint file in the source log directory
+            // Add offset for this partition to the checkpoint file in the destination log directory
             updateCheckpoints(destLogDir, Option(topicPartition, offset))
           case None =>
         }
@@ -478,7 +478,7 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
 
   private def isUncleanablePartition(log: Log, topicPartition: TopicPartition): Boolean = {
     inLock(lock) {
-      uncleanablePartitions.get(log.dir.getParent).exists(partitions => partitions.contains(topicPartition))
+      uncleanablePartitions.get(log.parentDir).exists(partitions => partitions.contains(topicPartition))
     }
   }
 }

@@ -1540,10 +1540,14 @@ project(':jmh-benchmarks') {
     compile project(':core')
     compile project(':clients')
     compile project(':streams')
+    compile project(':core')
+    compile project(':clients').sourceSets.test.output
+    compile project(':core').sourceSets.test.output
     compile libs.jmhCore
-    compile libs.mockitoCore
     annotationProcessor libs.jmhGeneratorAnnProcess
     compile libs.jmhCoreBenchmarks
+    compile libs.mockitoCore
+    compile libs.slf4jlog4j
   }
 
   jar {

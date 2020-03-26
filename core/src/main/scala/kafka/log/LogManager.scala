@@ -199,7 +199,7 @@ class LogManager(logDirs: Seq[File],
         cleaner.handleLogDirFailure(dir)
 
       val offlineCurrentTopicPartitions = currentLogs.collect {
-        case (tp, log) if log.dir.getParent == dir => tp
+        case (tp, log) if log.parentDir == dir => tp
       }
       offlineCurrentTopicPartitions.foreach { topicPartition => {
         val removedLog = currentLogs.remove(topicPartition)
@@ -210,7 +210,7 @@ class LogManager(logDirs: Seq[File],
       }}
 
       val offlineFutureTopicPartitions = futureLogs.collect {
-        case (tp, log) if log.dir.getParent == dir => tp
+        case (tp, log) if log.parentDir == dir => tp
       }
       offlineFutureTopicPartitions.foreach { topicPartition => {
         val removedLog = futureLogs.remove(topicPartition)
@@ -282,7 +282,7 @@ class LogManager(logDirs: Seq[File],
       }
       if (previous != null) {
         if (log.isFuture)
-          throw new IllegalStateException("Duplicate log directories found: %s, %s!".format(log.dir.getAbsolutePath, previous.dir.getAbsolutePath))
+          throw new IllegalStateException(s"Duplicate log directories found: ${log.dir.getAbsolutePath}, ${previous.dir.getAbsolutePath}")
         else
           throw new IllegalStateException(s"Duplicate log directories for $topicPartition are found in both ${log.dir.getAbsolutePath} " +
             s"and ${previous.dir.getAbsolutePath}. It is likely because log directory failure happened while broker was " +
@@ -514,7 +514,7 @@ class LogManager(logDirs: Seq[File],
           if (log.truncateTo(truncateOffset))
             affectedLogs += log
           if (needToStopCleaner && !isFuture)
-            cleaner.maybeTruncateCheckpoint(log.dir.getParentFile, topicPartition, log.activeSegment.baseOffset)
+            cleaner.maybeTruncateCheckpoint(log.parentDirFile, topicPartition, log.activeSegment.baseOffset)
         } finally {
           if (needToStopCleaner && !isFuture) {
             cleaner.resumeCleaning(Seq(topicPartition))
@@ -524,7 +524,7 @@ class LogManager(logDirs: Seq[File],
       }
     }
 
-    for ((dir, logs) <- affectedLogs.groupBy(_.dir.getParentFile)) {
+    for ((dir, logs) <- affectedLogs.groupBy(_.parentDirFile)) {
       checkpointRecoveryOffsetsAndCleanSnapshot(dir, logs)
     }
   }
@@ -551,7 +551,7 @@ class LogManager(logDirs: Seq[File],
       try {
         log.truncateFullyAndStartAt(newOffset)
         if (cleaner != null && !isFuture) {
-          cleaner.maybeTruncateCheckpoint(log.dir.getParentFile, topicPartition, log.activeSegment.baseOffset)
+          cleaner.maybeTruncateCheckpoint(log.parentDirFile, topicPartition, log.activeSegment.baseOffset)
         }
       } finally {
         if (cleaner != null && !isFuture) {
@@ -559,7 +559,7 @@ class LogManager(logDirs: Seq[File],
           info(s"Compaction for partition $topicPartition is resumed")
         }
       }
-      checkpointRecoveryOffsetsAndCleanSnapshot(log.dir.getParentFile, Seq(log))
+      checkpointRecoveryOffsetsAndCleanSnapshot(log.parentDirFile, Seq(log))
     }
   }
 
@@ -633,8 +633,8 @@ class LogManager(logDirs: Seq[File],
   // The logDir should be an absolute path
   def maybeUpdatePreferredLogDir(topicPartition: TopicPartition, logDir: String): Unit = {
     // Do not cache the preferred log directory if either the current log or the future log for this partition exists in the specified logDir
-    if (!getLog(topicPartition).exists(_.dir.getParent == logDir) &&
-        !getLog(topicPartition, isFuture = true).exists(_.dir.getParent == logDir))
+    if (!getLog(topicPartition).exists(_.parentDir == logDir) &&
+        !getLog(topicPartition, isFuture = true).exists(_.parentDir == logDir))
       preferredLogDirs.put(topicPartition, logDir)
   }
 
@@ -723,7 +723,7 @@ class LogManager(logDirs: Seq[File],
           if (isFuture) {
             if (preferredLogDir == null)
               throw new IllegalStateException(s"Can not create the future log for $topicPartition without having a preferred log directory")
-            else if (getLog(topicPartition).get.dir.getParent == preferredLogDir)
+            else if (getLog(topicPartition).get.parentDir == preferredLogDir)
               throw new IllegalStateException(s"Can not create the future log for $topicPartition in the current log directory of this partition")
           }
 
@@ -818,7 +818,7 @@ class LogManager(logDirs: Seq[File],
             info(s"Deleted log for partition ${removedLog.topicPartition} in ${removedLog.dir.getAbsolutePath}.")
           } catch {
             case e: KafkaStorageException =>
-              error(s"Exception while deleting $removedLog in dir ${removedLog.dir.getParent}.", e)
+              error(s"Exception while deleting $removedLog in dir ${removedLog.parentDir}.", e)
           }
         }
       }
@@ -866,7 +866,7 @@ class LogManager(logDirs: Seq[File],
       futureLogs.remove(topicPartition)
       currentLogs.put(topicPartition, destLog)
       if (cleaner != null) {
-        cleaner.alterCheckpointDir(topicPartition, sourceLog.dir.getParentFile, destLog.dir.getParentFile)
+        cleaner.alterCheckpointDir(topicPartition, sourceLog.parentDirFile, destLog.parentDirFile)
         cleaner.resumeCleaning(Seq(topicPartition))
         info(s"Compaction for partition $topicPartition is resumed")
       }
@@ -876,8 +876,8 @@ class LogManager(logDirs: Seq[File],
         // Now that replica in source log directory has been successfully renamed for deletion.
         // Close the log, update checkpoint files, and enqueue this log to be deleted.
         sourceLog.close()
-        checkpointRecoveryOffsetsAndCleanSnapshot(sourceLog.dir.getParentFile, ArrayBuffer.empty)
-        checkpointLogStartOffsetsInDir(sourceLog.dir.getParentFile)
+        checkpointRecoveryOffsetsAndCleanSnapshot(sourceLog.parentDirFile, ArrayBuffer.empty)
+        checkpointLogStartOffsetsInDir(sourceLog.parentDirFile)
         addLogToBeDeleted(sourceLog)
       } catch {
         case e: KafkaStorageException =>
@@ -911,11 +911,11 @@ class LogManager(logDirs: Seq[File],
       //We need to wait until there is no more cleaning task on the log to be deleted before actually deleting it.
       if (cleaner != null && !isFuture) {
         cleaner.abortCleaning(topicPartition)
-        cleaner.updateCheckpoints(removedLog.dir.getParentFile)
+        cleaner.updateCheckpoints(removedLog.parentDirFile)
       }
       removedLog.renameDir(Log.logDeleteDirName(topicPartition))
-      checkpointRecoveryOffsetsAndCleanSnapshot(removedLog.dir.getParentFile, ArrayBuffer.empty)
-      checkpointLogStartOffsetsInDir(removedLog.dir.getParentFile)
+      checkpointRecoveryOffsetsAndCleanSnapshot(removedLog.parentDirFile, ArrayBuffer.empty)
+      checkpointLogStartOffsetsInDir(removedLog.parentDirFile)
       addLogToBeDeleted(removedLog)
       info(s"Log for partition ${removedLog.topicPartition} is renamed to ${removedLog.dir.getAbsolutePath} and is scheduled for deletion")
     } else if (offlineLogDirs.nonEmpty) {
@@ -934,7 +934,7 @@ class LogManager(logDirs: Seq[File],
       List(_liveLogDirs.peek())
     } else {
       // count the number of logs in each parent directory (including 0 for empty directories
-      val logCounts = allLogs.groupBy(_.dir.getParent).mapValues(_.size)
+      val logCounts = allLogs.groupBy(_.parentDir).mapValues(_.size)
       val zeros = _liveLogDirs.asScala.map(dir => (dir.getPath, 0)).toMap
       val dirCounts = (zeros ++ logCounts).toBuffer
 
@@ -1005,7 +1005,7 @@ class LogManager(logDirs: Seq[File],
    */
   private def logsByDir: Map[String, Map[TopicPartition, Log]] = {
     (this.currentLogs.toList ++ this.futureLogs.toList).toMap
-      .groupBy { case (_, log) => log.dir.getParent }
+      .groupBy { case (_, log) => log.parentDir }
   }
 
   // logDir should be an absolute path

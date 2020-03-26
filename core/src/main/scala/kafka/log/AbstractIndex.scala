@@ -32,11 +32,11 @@ import org.apache.kafka.common.utils.{ByteBufferUnmapper, OperatingSystem, Utils
 /**
  * The abstract index class which holds entry format agnostic methods.
  *
- * @param file The index file
+ * @param _file The index file
  * @param baseOffset the base offset of the segment that this index is corresponding to.
  * @param maxIndexSize The maximum index size in bytes.
  */
-abstract class AbstractIndex(@volatile var file: File, val baseOffset: Long, val maxIndexSize: Int = -1,
+abstract class AbstractIndex(@volatile private var _file: File, val baseOffset: Long, val maxIndexSize: Int = -1,
                              val writable: Boolean) extends Closeable {
   import AbstractIndex._
 
@@ -153,11 +153,15 @@ abstract class AbstractIndex(@volatile var file: File, val baseOffset: Long, val
    */
   def isFull: Boolean = _entries >= _maxEntries
 
+  def file: File = _file
+
   def maxEntries: Int = _maxEntries
 
   def entries: Int = _entries
 
   def length: Long = _length
+
+  def updateParentDir(parentDir: File): Unit = _file = new File(parentDir, file.getName)
 
   /**
    * Reset the size of the memory map and the underneath file. This is used in two kinds of cases: (1) in
@@ -205,7 +209,7 @@ abstract class AbstractIndex(@volatile var file: File, val baseOffset: Long, val
    */
   def renameTo(f: File): Unit = {
     try Utils.atomicMoveWithFallback(file.toPath, f.toPath)
-    finally file = f
+    finally _file = f
   }
 
   /**

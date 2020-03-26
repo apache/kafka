@@ -23,6 +23,7 @@ from ducktape.utils.util import wait_until
 from kafkatest.directory_layout.kafka_path import KafkaPathResolverMixin
 from kafkatest.services.monitor.jmx import JmxMixin, JmxTool
 from kafkatest.version import DEV_BRANCH, LATEST_0_8_2, LATEST_0_9, LATEST_0_10_0, V_0_9_0_0, V_0_10_0_0, V_0_11_0_0, V_2_0_0
+from kafkatest.services.kafka.util import fix_opts_for_new_jvm
 
 """
 The console consumer is a tool that reads data from Kafka and outputs it to standard output.
@@ -167,7 +168,8 @@ class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService)
         else:
             args['kafka_opts'] = self.security_config.kafka_opts
 
-        cmd = "export JMX_PORT=%(jmx_port)s; " \
+        cmd = fix_opts_for_new_jvm(node)
+        cmd += "export JMX_PORT=%(jmx_port)s; " \
               "export LOG_DIR=%(log_dir)s; " \
               "export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:%(log4j_config)s\"; " \
               "export KAFKA_OPTS=%(kafka_opts)s; " \
