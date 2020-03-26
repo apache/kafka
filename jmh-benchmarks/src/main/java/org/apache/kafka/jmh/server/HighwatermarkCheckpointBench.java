@@ -51,7 +51,6 @@ import org.openjdk.jmh.annotations.State;
 import org.openjdk.jmh.annotations.TearDown;
 import org.openjdk.jmh.annotations.Threads;
 import org.openjdk.jmh.annotations.Warmup;
-import scala.Option;
 
 import java.io.File;
 import java.util.ArrayList;
@@ -59,8 +58,9 @@ import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
-import scala.jdk.CollectionConverters;
 
+import scala.collection.JavaConverters;
+import scala.Option;
 
 @Warmup(iterations = 5)
 @Measurement(iterations = 5)
@@ -91,6 +91,7 @@ public class HighwatermarkCheckpointBench {
     private LogManager logManager;
 
 
+    @SuppressWarnings("deprecation")
     @Setup(Level.Trial)
     public void setup() {
         this.scheduler = new KafkaScheduler(1, "scheduler-thread", true);
@@ -101,8 +102,8 @@ public class HighwatermarkCheckpointBench {
         this.time = new MockTime();
         this.failureChannel = new LogDirFailureChannel(brokerProperties.logDirs().size());
         final List<File> files =
-            CollectionConverters.seqAsJavaList(brokerProperties.logDirs()).stream().map(File::new).collect(Collectors.toList());
-        this.logManager = TestUtils.createLogManager(CollectionConverters.asScalaBuffer(files),
+            JavaConverters.seqAsJavaList(brokerProperties.logDirs()).stream().map(File::new).collect(Collectors.toList());
+        this.logManager = TestUtils.createLogManager(JavaConverters.asScalaBuffer(files),
                 LogConfig.apply(), CleanerConfig.apply(1, 4 * 1024 * 1024L, 0.9d,
                         1024 * 1024, 32 * 1024 * 1024,
                         Double.MAX_VALUE, 15 * 1000, true, "MD5"), time);
@@ -160,7 +161,7 @@ public class HighwatermarkCheckpointBench {
         this.metrics.close();
         this.scheduler.shutdown();
         this.quotaManagers.shutdown();
-        for (File dir : CollectionConverters.asJavaCollection(logManager.liveLogDirs())) {
+        for (File dir : JavaConverters.asJavaCollection(logManager.liveLogDirs())) {
             Utils.delete(dir);
         }
     }
