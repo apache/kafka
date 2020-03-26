@@ -87,13 +87,13 @@ public class ThreadMetrics {
     private static final String COMMIT_OVER_TASKS_MAX_LATENCY_DESCRIPTION =
         "The maximum commit latency over all tasks assigned to one stream thread";
     private static final String PROCESS_RATIO_DESCRIPTION =
-        "The fraction of time stream thread is spending on processing active tasks.";
+        "The fraction of time the thread spent on processing active tasks.";
     private static final String PUNCTUATE_RATIO_DESCRIPTION =
-        "The fraction of time stream thread is spending on punctuating active tasks.";
+        "The fraction of time the thread spent on punctuating active tasks.";
     private static final String POLL_RATIO_DESCRIPTION =
-        "The fraction of time stream thread is spending on polling records from consumer.";
+        "The fraction of time the thread spent on polling records from consumer.";
     private static final String COMMIT_RATIO_DESCRIPTION =
-        "The fraction of time stream thread is spending on committing all tasks.";
+        "The fraction of time the thread spent on committing all tasks.";
 
     public static Sensor createTaskSensor(final String threadId,
                                           final StreamsMetricsImpl streamsMetrics) {
