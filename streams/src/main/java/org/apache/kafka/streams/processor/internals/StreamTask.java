@@ -90,6 +90,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     private final PunctuationQueue systemTimePunctuationQueue;
 
     private final Sensor closeTaskSensor;
+    private final Sensor processRatioSensor;
     private final Sensor processLatencySensor;
     private final Sensor punctuateLatencySensor;
     private final Sensor enforcedProcessingSensor;
@@ -131,6 +132,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         } else {
             enforcedProcessingSensor = TaskMetrics.enforcedProcessingSensor(threadId, taskId, streamsMetrics);
         }
+        processRatioSensor = TaskMetrics.activeProcessRatioSensor(threadId, taskId, streamsMetrics);
         processLatencySensor = TaskMetrics.processLatencySensor(threadId, taskId, streamsMetrics);
         punctuateLatencySensor = TaskMetrics.punctuateSensor(threadId, taskId, streamsMetrics);
 
@@ -206,6 +208,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             initializeTopology();
             processorContext.initialize();
             idleStartTimeMs = RecordQueue.UNKNOWN;
+
             transitionTo(State.RUNNING);
 
             log.info("Restored and ready to run");
@@ -614,6 +617,13 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         }
 
         return true;
+    }
+
+    @Override
+    public void recordTotalLatency(final long elapsedLatencyMs) {
+        // do not record anything, just reset the recorded process latency
+        processRatioSensor.record((double) processLatencyMs / elapsedLatencyMs);
+        processLatencyMs = 0L;
     }
 
     private String getStacktraceString(final RuntimeException e) {

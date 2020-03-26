@@ -234,7 +234,7 @@ public class ThreadMetrics {
     public static Sensor processRatioSensor(final String threadId,
                                             final StreamsMetricsImpl streamsMetrics) {
         final Sensor sensor =
-            streamsMetrics.threadLevelSensor(threadId, PROCESS + RATIO_SUFFIX, Sensor.RecordingLevel.DEBUG);
+            streamsMetrics.threadLevelSensor(threadId, PROCESS + RATIO_SUFFIX, Sensor.RecordingLevel.INFO);
         final Map<String, String> tagMap = streamsMetrics.threadLevelTagMap(threadId);
         sensor.add(
             new MetricName(
@@ -250,7 +250,7 @@ public class ThreadMetrics {
     public static Sensor punctuateRatioSensor(final String threadId,
                                               final StreamsMetricsImpl streamsMetrics) {
         final Sensor sensor =
-            streamsMetrics.threadLevelSensor(threadId, PUNCTUATE + RATIO_SUFFIX, Sensor.RecordingLevel.DEBUG);
+            streamsMetrics.threadLevelSensor(threadId, PUNCTUATE + RATIO_SUFFIX, Sensor.RecordingLevel.INFO);
         final Map<String, String> tagMap = streamsMetrics.threadLevelTagMap(threadId);
         sensor.add(
             new MetricName(
@@ -266,7 +266,7 @@ public class ThreadMetrics {
     public static Sensor pollRatioSensor(final String threadId,
                                          final StreamsMetricsImpl streamsMetrics) {
         final Sensor sensor =
-            streamsMetrics.threadLevelSensor(threadId, POLL + RATIO_SUFFIX, Sensor.RecordingLevel.DEBUG);
+            streamsMetrics.threadLevelSensor(threadId, POLL + RATIO_SUFFIX, Sensor.RecordingLevel.INFO);
         final Map<String, String> tagMap = streamsMetrics.threadLevelTagMap(threadId);
         sensor.add(
             new MetricName(
@@ -282,7 +282,7 @@ public class ThreadMetrics {
     public static Sensor commitRatioSensor(final String threadId,
                                            final StreamsMetricsImpl streamsMetrics) {
         final Sensor sensor =
-            streamsMetrics.threadLevelSensor(threadId, COMMIT + RATIO_SUFFIX, Sensor.RecordingLevel.DEBUG);
+            streamsMetrics.threadLevelSensor(threadId, COMMIT + RATIO_SUFFIX, Sensor.RecordingLevel.INFO);
         final Map<String, String> tagMap = streamsMetrics.threadLevelTagMap(threadId);
         sensor.add(
             new MetricName(

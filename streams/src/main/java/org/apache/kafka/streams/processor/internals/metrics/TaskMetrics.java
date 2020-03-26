@@ -16,14 +16,17 @@
  */
 package org.apache.kafka.streams.processor.internals.metrics;
 
+import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.Sensor.RecordingLevel;
+import org.apache.kafka.common.metrics.stats.Value;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.Version;
 import org.apache.kafka.streams.state.internals.metrics.StateStoreMetrics;
 
 import java.util.Map;
 
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.LATENCY_SUFFIX;
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.RATIO_SUFFIX;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.TASK_LEVEL_GROUP;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.TOTAL_DESCRIPTION;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addAvgAndMaxToSensor;
@@ -36,6 +39,7 @@ public class TaskMetrics {
     private static final String MAX_LATENCY_DESCRIPTION = "The maximum latency of ";
     private static final String RATE_DESCRIPTION_PREFIX = "The average number of ";
     private static final String RATE_DESCRIPTION_SUFFIX = " per second";
+    private static final String ACTIVE_TASK_PREFIX = "active-";
 
     private static final String COMMIT = "commit";
     private static final String COMMIT_DESCRIPTION = "calls to commit";
@@ -79,6 +83,9 @@ public class TaskMetrics {
     private static final String PROCESS_AVG_LATENCY_DESCRIPTION = AVG_LATENCY_DESCRIPTION + PROCESS_DESCRIPTION;
     private static final String PROCESS_MAX_LATENCY_DESCRIPTION = MAX_LATENCY_DESCRIPTION + PROCESS_DESCRIPTION;
 
+    private static final String PROCESS_RATIO_DESCRIPTION = "The fraction of time stream thread is spending " +
+        "on processing this task among all assigned active tasks";
+
     public static Sensor processLatencySensor(final String threadId,
                                               final String taskId,
                                               final StreamsMetricsImpl streamsMetrics) {
@@ -94,6 +101,22 @@ public class TaskMetrics {
             );
         }
         return emptySensor(threadId, taskId, PROCESS_LATENCY, RecordingLevel.DEBUG, streamsMetrics);
+    }
+
+    public static Sensor activeProcessRatioSensor(final String threadId,
+                                                  final String taskId,
+                                                  final StreamsMetricsImpl streamsMetrics) {
+        final String name = ACTIVE_TASK_PREFIX + PROCESS + RATIO_SUFFIX;
+        final Sensor sensor = streamsMetrics.taskLevelSensor(threadId, taskId, name, Sensor.RecordingLevel.INFO);
+        sensor.add(
+            new MetricName(
+                name,
+                TASK_LEVEL_GROUP,
+                PROCESS_RATIO_DESCRIPTION,
+                streamsMetrics.taskLevelTagMap(threadId, taskId)),
+            new Value()
+        );
+        return sensor;
     }
 
     public static Sensor punctuateSensor(final String threadId,

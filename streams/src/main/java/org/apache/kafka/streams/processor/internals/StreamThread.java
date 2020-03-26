@@ -658,7 +658,7 @@ public class StreamThread extends Thread {
              *  6. Otherwise, increment N.
              */
             do {
-                final int processed = taskManager.process(numIterations, now);
+                final int processed = taskManager.process(numIterations, time);
                 if (processed > 0) {
                     // It makes no difference to the outcome of these metrics when we record "0",
                     // so we can just avoid the method call when we didn't process anything.
@@ -705,6 +705,8 @@ public class StreamThread extends Thread {
                 }
             } while (true);
         }
+
+        taskManager.recordTaskProcessRatio(totalProcessLatency);
 
         final long runOnceLatency = pollLatency + restoreLatency + totalCommitLatency + totalProcessLatency + totalPunctuateLatency;
         processRatioSensor.record((double) totalProcessLatency / runOnceLatency);
