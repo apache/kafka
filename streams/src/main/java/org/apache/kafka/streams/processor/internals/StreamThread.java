@@ -643,7 +643,7 @@ public class StreamThread extends Thread {
         // if there's no active restoring or standby updating it would not try to fetch any data
         changelogReader.restore();
 
-        final long restoreLatency = advanceNowAndComputeLatency();
+        advanceNowAndComputeLatency();
 
         long totalCommitLatency = 0L;
         long totalProcessLatency = 0L;
