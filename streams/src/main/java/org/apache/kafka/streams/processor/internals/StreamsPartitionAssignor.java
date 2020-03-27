@@ -760,24 +760,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         for (final Map.Entry<UUID, ClientMetadata> entry : clientMetadataMap.entrySet()) {
             final UUID uuid = entry.getKey();
             final ClientState state = entry.getValue().state;
-
-            // there are three cases where we need to construct some or all of the prevTasks from the ownedPartitions:
-            // 1) COOPERATIVE clients on version 2.4-2.5 do not encode active tasks at all and rely on ownedPartitions
-            // 2) future client during version probing, when we can't decode the future subscription info's prev tasks
-            // 3) stateless tasks are not encoded in the task lags, and must be figured out from the ownedPartitions
-            if (!state.ownedPartitions().isEmpty()) {
-                final Set<TaskId> previousActiveTasks = new HashSet<>();
-                for (final Map.Entry<TopicPartition, String> partitionEntry : state.ownedPartitions().entrySet()) {
-                    final TopicPartition tp = partitionEntry.getKey();
-                    final TaskId task = taskForPartition.get(tp);
-                    if (task != null) {
-                        previousActiveTasks.add(task);
-                    } else {
-                        log.error("No task found for topic partition {}", tp);
-                    }
-                }
-                state.addPreviousActiveTasks(previousActiveTasks);
-            }
+            state.initializePrevTasks(taskForPartition);
 
             if (fetchEndOffsetsSuccessful) {
                 state.computeTaskLags(uuid, allTaskEndOffsetSums);
