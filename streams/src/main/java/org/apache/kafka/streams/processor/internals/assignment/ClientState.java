@@ -160,6 +160,10 @@ public class ClientState {
         return activeTasks.size();
     }
 
+    int standbyTaskCount() {
+        return standbyTasks.size();
+    }
+
     public void addPreviousActiveTasks(final Set<TaskId> prevTasks) {
         prevActiveTasks.addAll(prevTasks);
         prevAssignedTasks.addAll(prevTasks);

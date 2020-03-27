@@ -154,6 +154,7 @@ public class HighAvailabilityTaskAssignor<ID extends Comparable<ID>> implements 
         for (final TaskId task : statelessTasks) {
             final ID client = statelessActiveTaskClientsQueue.poll();
             statelessActiveTaskAssignment.get(client).add(task);
+            statelessActiveTaskClientsQueue.offer(client);
         }
 
         // ---------------- Assign Tasks To Clients ---------------- //
@@ -384,15 +385,27 @@ public class HighAvailabilityTaskAssignor<ID extends Comparable<ID>> implements 
     }
 
     private PriorityQueue<ID> getClientPriorityQueueByTaskLoad(final List<Map<ID, List<TaskId>>> taskLoadsByClient) {
-        return new PriorityQueue<>(Comparator.comparingInt(
-            client -> {
-                double numTasks = 0;
-                for (final Map<ID, List<TaskId>> assignment : taskLoadsByClient) {
-                    numTasks += assignment.get(client).size();
+        final PriorityQueue<ID> queue = new PriorityQueue<>(
+            (client, other) -> {
+                final int clientTasksPerThread = tasksPerThread(client, taskLoadsByClient);
+                final int otherTasksPerThread = tasksPerThread(other, taskLoadsByClient);
+                if (clientTasksPerThread != otherTasksPerThread) {
+                    return clientTasksPerThread - otherTasksPerThread;
+                } else {
+                    return client.compareTo(other);
                 }
-                return (int) Math.ceil(numTasks / clientsToNumberOfThreads.get(client));
-            })
-        );
+            });
+
+        queue.addAll(sortedClients);
+        return queue;
+    }
+
+    private int tasksPerThread(final ID client, final List<Map<ID, List<TaskId>>> taskLoadsByClient) {
+        double numTasks = 0;
+        for (final Map<ID, List<TaskId>> assignment : taskLoadsByClient) {
+            numTasks += assignment.get(client).size();
+        }
+        return (int) Math.ceil(numTasks / clientsToNumberOfThreads.get(client));
     }
 
     static class RankedClient<ID extends Comparable<? super ID>> implements Comparable<RankedClient<ID>> {
@@ -497,6 +510,7 @@ public class HighAvailabilityTaskAssignor<ID extends Comparable<ID>> implements 
                 while (true) {
                     candidateClient = clientsByTaskLoad.poll();
                     if (candidateClient == null) {
+                        returnPolledClientsToQueue(polledClients);
                         return nextLeastLoadedValidClients;
                     }
 

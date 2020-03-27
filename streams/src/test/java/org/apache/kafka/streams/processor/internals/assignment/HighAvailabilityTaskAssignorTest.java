@@ -446,50 +446,187 @@ public class HighAvailabilityTaskAssignorTest {
     }
 
     @Test
+    public void shouldAssignStandbysForStatefulTasks() {
+        // technically this can't be set to 0, but we force it to skip warmup replicas for testing of standby assignment
+        // since we can't control how the balanced assignor will assign things and ensure there are no movements
+        maxWarmupReplicas = 0;
+        numStandbyReplicas = 1;
+        allTasks = mkSet(task0_0, task0_1);
+        statefulTasks = mkSet(task0_0, task0_1);
+
+        client1 = getMockClientWithPreviousRunningStatefulTasks(mkSet(task0_0));
+        client2 = getMockClientWithPreviousRunningStatefulTasks(mkSet(task0_1));
+
+        clientStates = getClientStatesWithTwoClients();
+        createTaskAssignor();
+        taskAssignor.assign();
+
+        assertThat(client1.activeTasks(), equalTo(mkSet(task0_0)));
+        assertThat(client2.activeTasks(), equalTo(mkSet(task0_1)));
+        assertThat(client1.standbyTasks(), equalTo(mkSet(task0_1)));
+        assertThat(client2.standbyTasks(), equalTo(mkSet(task0_0)));
+    }
+
+    @Test
+    public void shouldNotAssignStandbysForStatelessTasks() {
+        numStandbyReplicas = 1;
+        allTasks = mkSet(task0_0, task0_1);
+        statefulTasks = emptyTasks;
+
+        client1 = getMockClientWithPreviousRunningStatefulTasks(emptyTasks);
+        client2 = getMockClientWithPreviousRunningStatefulTasks(emptyTasks);
+
+        clientStates = getClientStatesWithTwoClients();
+        createTaskAssignor();
+        taskAssignor.assign();
+
+        assertThat(client1.activeTasks(), equalTo(mkSet(task0_0)));
+        assertThat(client2.activeTasks(), equalTo(mkSet(task0_1)));
+        assertHasNoStandbyTasks(client1, client2);
+    }
+
+    @Test
     public void shouldAssignWarmupReplicasEvenIfNoStandbyReplicasConfigured() {
         allTasks = mkSet(task0_0, task0_1);
         statefulTasks = mkSet(task0_0, task0_1);
-        client1 = getMockClientWithRunningTasks(mkSet(task0_0, task0_1));
-        client2 = getMockClientWithRunningTasks(emptyTasks);
-        clientStates = getClientStatesWithTwoClients();
+        client1 = getMockClientWithPreviousRunningStatefulTasks(mkSet(task0_0, task0_1));
+        client2 = getMockClientWithPreviousRunningStatefulTasks(emptyTasks);
 
+        clientStates = getClientStatesWithTwoClients();
         createTaskAssignor();
         taskAssignor.assign();
         
         assertThat(client1.activeTasks(), equalTo(mkSet(task0_0, task0_1)));
-        assertTrue(client1.standbyTasks().isEmpty());
-        assertTrue(client2.activeTasks().isEmpty());
         assertThat(client2.standbyTasks(), equalTo(mkSet(task0_1)));
+        assertHasNoStandbyTasks(client1);
+        assertHasNoActiveTasks(client2);
     }
 
     @Test
     public void shouldNotAssignMoreThanMaxWarmupReplicas() {
         maxWarmupReplicas = 1;
+        allTasks = mkSet(task0_0, task0_1, task0_2, task0_3);
+        statefulTasks = mkSet(task0_0, task0_1, task0_2, task0_3);
+        client1 = getMockClientWithPreviousRunningStatefulTasks(mkSet(task0_0, task0_1, task0_2, task0_3));
+        client2 = getMockClientWithPreviousRunningStatefulTasks(emptyTasks);
+
+        clientStates = getClientStatesWithTwoClients();
+        createTaskAssignor();
+        taskAssignor.assign();
+
+        assertThat(client1.activeTasks(), equalTo(mkSet(task0_0, task0_1, task0_2, task0_3)));
+        assertThat(client2.standbyTasks(), equalTo(mkSet(task0_1)));
+        assertHasNoStandbyTasks(client1);
+        assertHasNoActiveTasks(client2);
     }
 
     @Test
-    public void shouldNotAssignAnyWarmupReplicas() {
-        maxWarmupReplicas = 0;
+    public void shouldAssignStandbyReplicasInAdditionToWarmupReplicas() {
+        numStandbyReplicas = 1;
+        maxWarmupReplicas = 1;
 
+        allTasks = mkSet(task0_0, task0_1, task0_2, task0_3);
+        statefulTasks = mkSet(task0_0, task0_1, task0_2, task0_3);
+        client1 = getMockClientWithPreviousRunningStatefulTasks(mkSet(task0_0, task0_1, task0_2, task0_3));
+        client2 = getMockClientWithPreviousRunningStatefulTasks(emptyTasks);
+
+        clientStates = getClientStatesWithTwoClients();
+        createTaskAssignor();
+        taskAssignor.assign();
+
+        assertThat(client1.activeTasks(), equalTo(mkSet(task0_0, task0_1, task0_2, task0_3)));
+        assertThat(client2.standbyTasks(), equalTo(mkSet(task0_0, task0_1, task0_2, task0_3)));
+        assertHasNoStandbyTasks(client1);
+        assertHasNoActiveTasks(client2);
     }
 
     @Test
-    public void testStandbyTaskAssignment() {
+    public void shouldNotAssignAnyStandbysWithInsufficientCapacity() {
+        numStandbyReplicas = 1;
+        allTasks = mkSet(task0_0, task0_1);
+        statefulTasks = mkSet(task0_0, task0_1);
+        client1 = getMockClientWithPreviousRunningStatefulTasks(mkSet(task0_0, task0_1));
+
+        clientStates = getClientStatesWithOneClient();
+        createTaskAssignor();
+        taskAssignor.assign();
+
+        assertThat(client1.activeTasks(), equalTo(mkSet(task0_0, task0_1)));
+        assertHasNoStandbyTasks(client1);
     }
 
     @Test
-    public void testStandbyTaskAssignmentWithInsufficientCapacity() {
+    public void shouldAssignActiveTasksToNotCaughtUpClientIfNoneExist() {
+        numStandbyReplicas = 1;
+        allTasks = mkSet(task0_0, task0_1);
+        statefulTasks = mkSet(task0_0, task0_1);
+        client1 = getMockClientWithPreviousRunningStatefulTasks(emptyTasks);
 
+        clientStates = getClientStatesWithOneClient();
+        createTaskAssignor();
+        taskAssignor.assign();
+
+        assertThat(client1.activeTasks(), equalTo(mkSet(task0_0, task0_1)));
+        assertHasNoStandbyTasks(client1);
     }
 
     @Test
-    public void testStatelessActiveTaskAssignment() {
+    public void shouldNotAssignMoreThanMaxWarmupReplicasWithStandbys() {
+        numStandbyReplicas = 1;
 
+        allTasks = mkSet(task0_0, task0_1, task0_2, task0_3);
+        statefulTasks = mkSet(task0_0, task0_1, task0_2, task0_3);
+        client1 = getMockClientWithPreviousRunningStatefulTasks(mkSet(task0_0, task0_1, task0_2, task0_3));
+        client2 = getMockClientWithPreviousRunningStatefulTasks(emptyTasks);
+        client3 = getMockClientWithPreviousRunningStatefulTasks(emptyTasks);
+
+        clientStates = getClientStatesWithThreeClients();
+        createTaskAssignor();
+        taskAssignor.assign();
+
+        assertThat(client1.activeTaskCount(), equalTo(4));
+        assertThat(client2.standbyTaskCount(), equalTo(3));
+        assertThat(client3.standbyTaskCount(), equalTo(3));
+        assertHasNoStandbyTasks(client1);
+        assertHasNoActiveTasks(client2, client3);
+    }
+
+    @Test
+    public void shouldDistributeStatelessTasksToBalanceTotalActiveTaskLoad() {
+        allTasks = mkSet(task0_0, task0_1, task0_2, task0_3, task1_0, task1_1, task1_2);
+        statefulTasks = mkSet(task0_0, task0_1, task0_2, task0_3);
+
+        client1 = getMockClientWithPreviousRunningStatefulTasks(mkSet(task0_0, task0_1, task0_2, task0_3));
+        client2 = getMockClientWithPreviousRunningStatefulTasks(emptyTasks);
+
+        clientStates = getClientStatesWithTwoClients();
+        createTaskAssignor();
+        taskAssignor.assign();
+
+        assertThat(client1.activeTasks(), equalTo(mkSet(task0_0, task0_1, task0_2, task0_3)));
+        assertThat(client2.activeTasks(), equalTo(mkSet(task1_0, task1_1, task1_2)));
+    }
+
+    @Test
+    public void shouldAssignStatelessTasksImmediatelyWithoutWarmups() {
+        allTasks = mkSet(task0_0, task0_1);
+        statefulTasks = emptyTasks;
+
+        client1 = getMockClientWithPreviousRunningStatefulTasks(mkSet(task0_0, task0_1));
+        client2 = getMockClientWithPreviousRunningStatefulTasks(emptyTasks);
+
+        clientStates = getClientStatesWithTwoClients();
+        createTaskAssignor();
+        taskAssignor.assign();
+
+        assertThat(client1.activeTasks(), equalTo(mkSet(task0_0)));
+        assertThat(client2.activeTasks(), equalTo(mkSet(task0_1)));
+        assertHasNoStandbyTasks(client1, client2);
     }
 
     @Test
     public void shouldDistributeActiveTasksEvenlyOverClientsOfDifferentThreadCountIfClusterIsOverCapacity() {
-
+        //TODO
     }
 
     private Map<UUID, ClientState> getClientStatesWithOneClient() {
@@ -504,8 +641,20 @@ public class HighAvailabilityTaskAssignorTest {
         return mkMap(mkEntry(uuid1, client1), mkEntry(uuid2, client2), mkEntry(uuid3, client3));
     }
 
-    ClientState getMockClientWithRunningTasks(final Set<TaskId> runningTasks) {
-        if (statefulTasks.isEmpty() || !statefulTasks.containsAll(runningTasks)) {
+    private static void assertHasNoActiveTasks(final ClientState... clients) {
+        for (final ClientState client : clients) {
+            assertTrue(client.activeTasks().isEmpty());
+        }
+    }
+
+    private static void assertHasNoStandbyTasks(final ClientState... clients) {
+        for (final ClientState client : clients) {
+            assertTrue(client.standbyTasks().isEmpty());
+        }
+    }
+
+    ClientState getMockClientWithPreviousRunningStatefulTasks(final Set<TaskId> runningTasks) {
+        if (!statefulTasks.containsAll(runningTasks)) {
             throw new IllegalArgumentException("Need to initialize stateful tasks set before creating mock clients");
         }
         final Map<TaskId, Long> taskLags = new HashMap<>();
