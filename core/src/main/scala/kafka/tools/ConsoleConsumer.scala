@@ -460,6 +460,7 @@ class DefaultMessageFormatter extends MessageFormatter {
   var printKey = false
   var printValue = true
   var printTimestamp = false
+  var printOffset = false
   var keySeparator = "\t".getBytes(StandardCharsets.UTF_8)
   var lineSeparator = "\n".getBytes(StandardCharsets.UTF_8)
 
@@ -469,6 +470,8 @@ class DefaultMessageFormatter extends MessageFormatter {
   override def init(props: Properties): Unit = {
     if (props.containsKey("print.timestamp"))
       printTimestamp = props.getProperty("print.timestamp").trim.equalsIgnoreCase("true")
+    if(props.containsKey("print.offset"))
+      printOffset = props.getProperty("print.offset").trim.equalsIgnoreCase("true")
     if (props.containsKey("print.key"))
       printKey = props.getProperty("print.key").trim.equalsIgnoreCase("true")
     if (props.containsKey("print.value"))
@@ -517,6 +520,13 @@ class DefaultMessageFormatter extends MessageFormatter {
     }
 
     import consumerRecord._
+
+    def writeOffset = {
+      output.write(consumerRecord.offset().toString.getBytes)
+      output.write(":".getBytes())
+    }
+
+    writeOffset
 
     if (printTimestamp) {
       if (timestampType != TimestampType.NO_TIMESTAMP_TYPE)
