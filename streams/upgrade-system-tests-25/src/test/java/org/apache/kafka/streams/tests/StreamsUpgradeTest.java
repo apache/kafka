@@ -38,7 +38,7 @@ public class StreamsUpgradeTest {
 
         final Properties streamsProperties = Utils.loadProps(propFileName);
 
-        System.out.println("StreamsTest instance started (StreamsUpgradeTest v2.3)");
+        System.out.println("StreamsTest instance started (StreamsUpgradeTest v2.5)");
         System.out.println("props=" + streamsProperties);
 
         final StreamsBuilder builder = new StreamsBuilder();
@@ -67,7 +67,7 @@ public class StreamsUpgradeTest {
 
             @Override
             public void init(final ProcessorContext context) {
-                System.out.println("[2.3] initializing processor: topic=data taskId=" + context.taskId());
+                System.out.println("[2.5] initializing processor: topic=data taskId=" + context.taskId());
                 numRecordsProcessed = 0;
             }
 
