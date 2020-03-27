@@ -210,7 +210,7 @@ class GroupMetadataManager(brokerId: Int,
                    | Errors.INVALID_FETCH_SIZE =>
 
                 error(s"Appending metadata message for group ${group.groupId} generation $generationId failed due to " +
-                  s"${status.error.exceptionName}, returning UNKNOWN error code to the client")
+                  s"${status.error.exceptionName}, returning ${status.error.code} + error code to the client")
 
                 Errors.UNKNOWN
 
