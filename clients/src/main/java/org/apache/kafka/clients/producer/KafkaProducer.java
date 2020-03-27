@@ -646,7 +646,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      * {@link #sendOffsetsToTransaction(Map, String)} which only sends with consumer group id.
      * If broker doesn't support this new transactional API (i.e. if its version is lower than 2.5.0),
      * this call will silently downgrade to the equivalent of {@link #sendOffsetsToTransaction(Map, String)}.
-     *
+     * <p>
      * Note, that the consumer should have {@code enable.auto.commit=false} and should
      * also not commit offsets manually (via {@link KafkaConsumer#commitSync(Map) sync} or
      * {@link KafkaConsumer#commitAsync(Map, OffsetCommitCallback) async} commits).
