@@ -29,8 +29,6 @@ import org.apache.kafka.streams.processor.StreamPartitioner;
  * @param <V> value type
  * @see KStream#repartition()
  * @see KStream#repartition(Repartitioned)
- * @see KStream#repartition(KeyValueMapper)
- * @see KStream#repartition(KeyValueMapper, Repartitioned)
  */
 public class Repartitioned<K, V> implements NamedOperation<Repartitioned<K, V>> {
 
@@ -70,7 +68,6 @@ public class Repartitioned<K, V> implements NamedOperation<Repartitioned<K, V>> 
      * @param <V>  value type
      * @return A new {@code Repartitioned} instance configured with processor name and repartition topic name
      * @see KStream#repartition(Repartitioned)
-     * @see KStream#repartition(KeyValueMapper, Repartitioned)
      */
     public static <K, V> Repartitioned<K, V> as(final String name) {
         return new Repartitioned<>(name, null, null, null, null);
@@ -85,7 +82,6 @@ public class Repartitioned<K, V> implements NamedOperation<Repartitioned<K, V>> 
      * @param <V>        value type
      * @return A new {@code Repartitioned} instance configured with key serde and value serde
      * @see KStream#repartition(Repartitioned)
-     * @see KStream#repartition(KeyValueMapper, Repartitioned)
      */
     public static <K, V> Repartitioned<K, V> with(final Serde<K> keySerde,
                                                   final Serde<V> valueSerde) {
@@ -102,7 +98,6 @@ public class Repartitioned<K, V> implements NamedOperation<Repartitioned<K, V>> 
      * @param <V>         value type
      * @return A new {@code Repartitioned} instance configured with partitioner
      * @see KStream#repartition(Repartitioned)
-     * @see KStream#repartition(KeyValueMapper, Repartitioned)
      */
     public static <K, V> Repartitioned<K, V> streamPartitioner(final StreamPartitioner<K, V> partitioner) {
         return new Repartitioned<>(null, null, null, null, partitioner);
@@ -116,7 +111,6 @@ public class Repartitioned<K, V> implements NamedOperation<Repartitioned<K, V>> 
      * @param <V>                value type
      * @return A new {@code Repartitioned} instance configured number of partitions
      * @see KStream#repartition(Repartitioned)
-     * @see KStream#repartition(KeyValueMapper, Repartitioned)
      */
     public static <K, V> Repartitioned<K, V> numberOfPartitions(final int numberOfPartitions) {
         return new Repartitioned<>(null, null, null, numberOfPartitions, null);

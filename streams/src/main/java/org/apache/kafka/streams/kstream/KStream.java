@@ -817,8 +817,6 @@ public interface KStream<K, V> {
      * @return a {@code KStream} that contains the exact same (and potentially repartitioned) records as this {@code KStream}
      * @see #repartition()
      * @see #repartition(Repartitioned)
-     * @see #repartition(KeyValueMapper)
-     * @see #repartition(KeyValueMapper, Repartitioned)
      */
     KStream<K, V> through(final String topic);
 
@@ -839,8 +837,6 @@ public interface KStream<K, V> {
      * @return a {@code KStream} that contains the exact same (and potentially repartitioned) records as this {@code KStream}
      * @see #repartition()
      * @see #repartition(Repartitioned)
-     * @see #repartition(KeyValueMapper)
-     * @see #repartition(KeyValueMapper, Repartitioned)
      */
     KStream<K, V> through(final String topic,
                           final Produced<K, V> produced);
