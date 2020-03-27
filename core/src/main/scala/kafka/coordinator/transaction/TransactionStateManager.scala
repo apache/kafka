@@ -111,8 +111,6 @@ class TransactionStateManager(brokerId: Int,
       loadingPartitions.add(partitionAndLeaderEpoch)
     }
   }
-  private[transaction] def stateReadLock = stateLock.readLock
-
   // this is best-effort expiration of an ongoing transaction which has been open for more than its
   // txn timeout value, we do not need to grab the lock on the metadata object upon checking its state
   // since the timestamp is volatile and we will get the lock when actually trying to transit the transaction
