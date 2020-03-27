@@ -810,14 +810,16 @@ public class TaskManager {
     /**
      * @throws TaskMigratedException if the task producer got fenced (EOS only)
      */
-    int process(final long now) {
-        int processed = 0;
+    int process(final int maxNumRecords, final long now) {
+        int totalProcessed = 0;
 
         for (final Task task : activeTaskIterable()) {
             try {
-                if (task.process(now)) {
+                int processed = 0;
+                while (processed < maxNumRecords && task.process(now)) {
                     processed++;
                 }
+                totalProcessed += processed;
             } catch (final TaskMigratedException e) {
                 log.info("Failed to process stream task {} since it got migrated to another thread already. " +
                              "Will trigger a new rebalance and close all tasks as zombies together.", task.id());
@@ -828,7 +830,7 @@ public class TaskManager {
             }
         }
 
-        return processed;
+        return totalProcessed;
     }
 
     /**
@@ -854,6 +856,7 @@ public class TaskManager {
                 throw e;
             }
         }
+
         return punctuated;
     }
 
