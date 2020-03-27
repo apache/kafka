@@ -621,7 +621,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
 
     @Override
     public void recordTotalLatency(final long elapsedLatencyMs) {
-        // do not record anything, just reset the recorded process latency
         processRatioSensor.record((double) processLatencyMs / elapsedLatencyMs);
         processLatencyMs = 0L;
     }

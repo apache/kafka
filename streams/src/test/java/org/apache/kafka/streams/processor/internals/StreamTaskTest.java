@@ -442,8 +442,9 @@ public class StreamTaskTest {
         assertNull(getMetric("commit", "%s-rate", "all", builtInMetricsVersion));
         assertNull(getMetric("commit", "%s-total", "all", builtInMetricsVersion));
 
-        assertNotNull(getMetric("process", "%s-latency-avg", task.id().toString(), builtInMetricsVersion));
+        assertNotNull(getMetric("active-process", "%s-ratio", task.id().toString(), builtInMetricsVersion));
         assertNotNull(getMetric("process", "%s-latency-max", task.id().toString(), builtInMetricsVersion));
+        assertNotNull(getMetric("process", "%s-latency-avg", task.id().toString(), builtInMetricsVersion));
 
         assertNotNull(getMetric("punctuate", "%s-latency-avg", task.id().toString(), builtInMetricsVersion));
         assertNotNull(getMetric("punctuate", "%s-latency-max", task.id().toString(), builtInMetricsVersion));

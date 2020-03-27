@@ -83,7 +83,7 @@ public class TaskMetrics {
     private static final String PROCESS_AVG_LATENCY_DESCRIPTION = AVG_LATENCY_DESCRIPTION + PROCESS_DESCRIPTION;
     private static final String PROCESS_MAX_LATENCY_DESCRIPTION = MAX_LATENCY_DESCRIPTION + PROCESS_DESCRIPTION;
 
-    private static final String PROCESS_RATIO_DESCRIPTION = "The fraction of time stream thread is spending " +
+    private static final String PROCESS_RATIO_DESCRIPTION = "The fraction of time the thread spent " +
         "on processing this task among all assigned active tasks";
 
     public static Sensor processLatencySensor(final String threadId,
