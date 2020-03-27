@@ -24,9 +24,6 @@ import org.junit.Test;
 import org.junit.rules.TestName;
 
 import static java.lang.String.format;
-import static org.apache.kafka.common.log.remote.storage.LocalRemoteStorageManager.DELETE_ON_CLOSE_PROP;
-import static org.apache.kafka.common.log.remote.storage.LocalRemoteStorageManager.ENABLE_DELETE_API_PROP;
-import static org.apache.kafka.common.log.remote.storage.LocalRemoteStorageManager.STORAGE_ID_PROP;
 import static org.junit.Assert.assertThrows;
 
 import java.io.File;
@@ -56,8 +53,8 @@ public final class LocalRemoteStorageManagerTest {
         remoteStorageVerifier = new LocalRemoteStorageVerifier(remoteStorage, topicPartition);
 
         Map<String, Object> config = new HashMap<>();
-        config.put(STORAGE_ID_PROP, generateStorageId());
-        config.put(DELETE_ON_CLOSE_PROP, "true");
+        config.put(LocalRemoteStorageManager.STORAGE_ID_PROP, generateStorageId());
+        config.put(LocalRemoteStorageManager.STORAGE_ID_PROP, "true");
         config.putAll(extraConfig);
 
         remoteStorage.configure(config);
@@ -141,7 +138,7 @@ public final class LocalRemoteStorageManagerTest {
 
     @Test
     public void segmentsAreNotDeletedIfDeleteApiIsDisabled() throws RemoteStorageException {
-        init(Collections.singletonMap(ENABLE_DELETE_API_PROP, "false"));
+        init(Collections.singletonMap(LocalRemoteStorageManager.STORAGE_ID_PROP, "false"));
 
         final RemoteLogSegmentId id = newRemoteLogSegmentId();
         final LogSegmentData segment = localLogSegments.nextSegment();
@@ -158,7 +155,7 @@ public final class LocalRemoteStorageManagerTest {
         final RemoteLogSegmentMetadata metadata = newRemoteLogSegmentMetadata(newRemoteLogSegmentId());
 
         assertThrows(RemoteResourceNotFoundException.class,
-                () -> remoteStorage.fetchLogSegmentData(metadata, 0L, null));
+            () -> remoteStorage.fetchLogSegmentData(metadata, 0L, null));
         assertThrows(RemoteResourceNotFoundException.class, () -> remoteStorage.fetchOffsetIndex(metadata));
         assertThrows(RemoteResourceNotFoundException.class, () -> remoteStorage.fetchTimestampIndex(metadata));
     }

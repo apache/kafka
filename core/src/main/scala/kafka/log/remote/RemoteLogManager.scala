@@ -368,9 +368,8 @@ class RemoteLogManager(fetchLog: TopicPartition => Option[Log],
     def handleExpiredRemoteLogSegments(): Unit = {
 
       def handleLogStartOffsetUpdate(topicPartition: TopicPartition, remoteLogStartOffset: Long): Unit = {
+        debug(s"Updating $topicPartition with remoteLogStartOffset: $remoteLogStartOffset")
         updateRemoteLogStartOffset(topicPartition, remoteLogStartOffset)
-        debug(s"Cleaning remote log indexes of partition $topicPartition till remoteLogStartOffset:" +
-          s"$remoteLogStartOffset")
       }
 
       try {
@@ -388,7 +387,7 @@ class RemoteLogManager(fetchLog: TopicPartition => Option[Log],
                   maxOffset = Math.max(m.endOffset(), maxOffset)
                 })
 
-              if(maxOffset == Long.MinValue) None else Some(maxOffset)
+              if(maxOffset == Long.MinValue) None else Some(maxOffset+1)
             }
           } else {
             val result = remoteLogMetadataManager.earliestLogOffset(tp)

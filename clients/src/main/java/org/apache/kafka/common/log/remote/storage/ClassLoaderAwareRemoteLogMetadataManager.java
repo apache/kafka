@@ -87,7 +87,8 @@ public class ClassLoaderAwareRemoteLogMetadataManager implements RemoteLogMetada
             return delegate.highestLogOffset(tp);
         } finally {
             Thread.currentThread().setContextClassLoader(originalClassLoader);
-        }    }
+        }
+    }
 
     @Override
     public void deleteRemoteLogSegmentMetadata(RemoteLogSegmentId remoteLogSegmentId) throws IOException {

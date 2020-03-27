@@ -1263,10 +1263,14 @@ class Log(@volatile var dir: File,
     }
   }
 
+  private def maybeIncrementLocalLogStartOffset(newLogStartOffset: Long): Unit = {
+    maybeIncrementLogStartOffset(newLogStartOffset, onlyLocalLogStartOffsetUpdate = true)
+  }
+
   /**
    * Increment the log start offset if the provided offset is larger.
    */
-  def maybeIncrementLogStartOffset(newLogStartOffset: Long): Unit = {
+  def maybeIncrementLogStartOffset(newLogStartOffset: Long, onlyLocalLogStartOffsetUpdate:Boolean = false): Unit = {
     if (newLogStartOffset > highWatermark)
       throw new OffsetOutOfRangeException(s"Cannot increment the log start offset to $newLogStartOffset of partition $topicPartition " +
         s"since it is larger than the high watermark $highWatermark")
@@ -1280,10 +1284,14 @@ class Log(@volatile var dir: File,
         checkIfMemoryMappedBufferClosed()
         if (newLogStartOffset > logStartOffset) {
           info(s"Incrementing log start offset to $newLogStartOffset")
-          logStartOffset = newLogStartOffset
           localLogStartOffset = math.max(newLogStartOffset, localLogStartOffset)
-          leaderEpochCache.foreach(_.truncateFromStart(logStartOffset))
-          maybeIncrementFirstUnstableOffset()
+
+          // it should always get updated  if tiered-storage is not enabled.
+          if(!onlyLocalLogStartOffsetUpdate || !remoteLogEnabled()) {
+            logStartOffset = newLogStartOffset
+            leaderEpochCache.foreach(_.truncateFromStart(logStartOffset))
+            maybeIncrementFirstUnstableOffset()
+          }
         }
       }
     }
@@ -1753,7 +1761,7 @@ class Log(@volatile var dir: File,
           checkIfMemoryMappedBufferClosed()
           // remove the segments for lookups
           removeAndDeleteSegments(deletable, asyncDelete = true)
-          maybeIncrementLogStartOffset(segments.firstEntry.getValue.baseOffset)
+          maybeIncrementLocalLogStartOffset(segments.firstEntry.getValue.baseOffset)
         }
       }
       numToDelete

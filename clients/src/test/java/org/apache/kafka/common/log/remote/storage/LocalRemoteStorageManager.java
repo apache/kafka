@@ -26,7 +26,7 @@ import static java.nio.file.Files.newInputStream;
 import static java.nio.file.StandardOpenOption.READ;
 import static java.util.Arrays.asList;
 import static java.util.Objects.requireNonNull;
-import static org.apache.kafka.common.log.remote.storage.RemoteLogSegmentContext.EMPTY_CONTEXT;
+
 
 import java.io.File;
 import java.io.IOException;
@@ -41,15 +41,15 @@ import java.util.concurrent.Callable;
 /**
  * An implementation of {@link RemoteStorageManager} which relies on the local file system to store offloaded
  * log segments and associated data.
- *
+ * <p>
  * Due to the consistency semantic of POSIX-compliant file systems, this remote storage provides strong
  * read-after-write consistency and a segment's data can be accessed once the copy to the storage succeeded.
- *
+ * <p>
  * In order to guarantee isolation, independence, reproducibility and consistency of unit and integration
  * tests, the scope of a storage implemented by this class, and identified via the storage ID provided to the
  * constructor, should be limited to a test or well-defined self-contained use-case.
  */
-public final class LocalRemoteStorageManager implements RemoteStorageManager  {
+public final class LocalRemoteStorageManager implements RemoteStorageManager {
     public static final String STORAGE_ID_PROP = "remote.log.storage.local.id";
     public static final String DELETE_ON_CLOSE_PROP = "remote.log.storage.local.delete.on.close";
     public static final String TRANSFERER_CLASS_PROP = "remote.log.storage.local.transferer";
@@ -132,7 +132,7 @@ public final class LocalRemoteStorageManager implements RemoteStorageManager  {
     @Override
     public RemoteLogSegmentContext copyLogSegment(final RemoteLogSegmentId id, final LogSegmentData data)
             throws RemoteStorageException {
-        
+
         return wrap(() -> {
             final RemoteLogSegmentFiles remote = new RemoteLogSegmentFiles(id, false);
             try {
@@ -155,7 +155,7 @@ public final class LocalRemoteStorageManager implements RemoteStorageManager  {
                 throw e;
             }
 
-            return EMPTY_CONTEXT;
+            return RemoteLogSegmentContext.EMPTY_CONTEXT;
         });
     }
 
@@ -201,7 +201,7 @@ public final class LocalRemoteStorageManager implements RemoteStorageManager  {
         wrap(() -> {
             if (deleteEnabled) {
                 final RemoteLogSegmentFiles remote = new RemoteLogSegmentFiles(metadata.remoteLogSegmentId(), true);
-                if(!remote.deleteAll()) {
+                if (!remote.deleteAll()) {
                     throw new RemoteStorageException("Failed to delete remote log segment with id:" +
                             metadata.remoteLogSegmentId());
                 }
@@ -212,47 +212,47 @@ public final class LocalRemoteStorageManager implements RemoteStorageManager  {
 
     @Override
     public void close() {
-       if (deleteOnClose) {
-           try {
-               final File[] files = storageDirectory.listFiles();
-               final Optional<File> notADirectory = Arrays.stream(files).filter(f -> !f.isDirectory()).findAny();
+        if (deleteOnClose) {
+            try {
+                final File[] files = storageDirectory.listFiles();
+                final Optional<File> notADirectory = Arrays.stream(files).filter(f -> !f.isDirectory()).findAny();
 
-               if (notADirectory.isPresent()) {
-                   LOGGER.warn("Found file %s which is not a remote topic-partition directory. " +
-                           "Stopping the deletion process.", notADirectory.get());
-                   //
-                   // If an unexpected state is encountered, do not proceed with the delete of the local storage,
-                   // keeping it for post-mortem analysis. Do not throw either, in an attempt to keep the close()
-                   // method quiet.
-                   //
-                   return;
+                if (notADirectory.isPresent()) {
+                    LOGGER.warn("Found file %s which is not a remote topic-partition directory. " +
+                            "Stopping the deletion process.", notADirectory.get());
+                    //
+                    // If an unexpected state is encountered, do not proceed with the delete of the local storage,
+                    // keeping it for post-mortem analysis. Do not throw either, in an attempt to keep the close()
+                    // method quiet.
+                    //
+                    return;
 
-               }
+                }
 
-               final boolean success = Arrays.stream(files).map(topicPartitionDirectory -> {
-                   //
-                   // The topic-partition directory is deleted only if all files inside it have been deleted
-                   // successfully thanks to the short-circuit operand. Yes, this is bad to rely on that to
-                   // drive the execution flow.
-                   //
-                   return deleteFilesOnly(asList(topicPartitionDirectory.listFiles()))
-                           && deleteQuietly(topicPartitionDirectory);
+                final boolean success = Arrays.stream(files).map(topicPartitionDirectory -> {
+                    //
+                    // The topic-partition directory is deleted only if all files inside it have been deleted
+                    // successfully thanks to the short-circuit operand. Yes, this is bad to rely on that to
+                    // drive the execution flow.
+                    //
+                    return deleteFilesOnly(asList(topicPartitionDirectory.listFiles()))
+                            && deleteQuietly(topicPartitionDirectory);
 
-               }).reduce(true, Boolean::logicalAnd);
+                }).reduce(true, Boolean::logicalAnd);
 
-               if (success) {
-                   deleteQuietly(storageDirectory);
-               }
+                if (success) {
+                    deleteQuietly(storageDirectory);
+                }
 
-               File root = new File(ROOT_STORAGES_DIR_NAME);
-               if (root.exists() && root.isDirectory() && root.list().length == 0) {
-                   root.delete();
-               }
+                File root = new File(ROOT_STORAGES_DIR_NAME);
+                if (root.exists() && root.isDirectory() && root.list().length == 0) {
+                    root.delete();
+                }
 
-           } catch (final Exception e) {
-               LOGGER.error("Error while deleting remote storage. Stopping the deletion process.", e);
-           }
-       }
+            } catch (final Exception e) {
+                LOGGER.error("Error while deleting remote storage. Stopping the deletion process.", e);
+            }
+        }
     }
 
     String getStorageDirectoryRoot() throws RemoteStorageException {
@@ -261,8 +261,9 @@ public final class LocalRemoteStorageManager implements RemoteStorageManager  {
 
     private <U> U wrap(Callable<U> f) throws RemoteStorageException {
         if (storageDirectory == null) {
-            throw new RemoteStorageException("No storage directory was defined for the local remote storage. Make sure " +
-                    "the instance was configured correctly via the configure(configs: util.Map[String, _]) method.");
+            throw new RemoteStorageException(
+                    "No storage directory was defined for the local remote storage. Make sure " +
+                            "the instance was configured correctly via the configure(configs: util.Map[String, _]) method.");
         }
 
         try {
@@ -278,7 +279,7 @@ public final class LocalRemoteStorageManager implements RemoteStorageManager  {
 
     interface Transferer {
 
-         void transfer(File from, File to) throws IOException;
+        void transfer(File from, File to) throws IOException;
 
     }
 
