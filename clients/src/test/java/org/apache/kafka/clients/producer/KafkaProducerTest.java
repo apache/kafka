@@ -19,6 +19,7 @@ package org.apache.kafka.clients.producer;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.MockClient;
+import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
 import org.apache.kafka.clients.producer.internals.ProducerInterceptors;
 import org.apache.kafka.clients.producer.internals.ProducerMetadata;
@@ -39,6 +40,7 @@ import org.apache.kafka.common.message.InitProducerIdResponseData;
 import org.apache.kafka.common.message.TxnOffsetCommitRequestData;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.network.Selectable;
+import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.AddOffsetsToTxnResponse;
 import org.apache.kafka.common.requests.EndTxnResponse;
@@ -83,11 +85,13 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.stream.Stream;
 
 import static java.util.Collections.emptyMap;
 import static java.util.Collections.singletonMap;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
@@ -138,8 +142,8 @@ public class KafkaProducerTest {
 
         ProducerConfig config = new ProducerConfig(props);
         assertTrue(config.getBoolean(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG));
-        assertTrue(Arrays.asList("-1", "all").stream().anyMatch(each -> each.equalsIgnoreCase(config.getString(ProducerConfig.ACKS_CONFIG))));
-        assertTrue(config.getInt(ProducerConfig.RETRIES_CONFIG) == Integer.MAX_VALUE);
+        assertTrue(Stream.of("-1", "all").anyMatch(each -> each.equalsIgnoreCase(config.getString(ProducerConfig.ACKS_CONFIG))));
+        assertEquals((int) config.getInt(ProducerConfig.RETRIES_CONFIG), Integer.MAX_VALUE);
         assertTrue(config.getString(ProducerConfig.CLIENT_ID_CONFIG).equalsIgnoreCase("producer-" +
                 config.getString(ProducerConfig.TRANSACTIONAL_ID_CONFIG)));
     }
@@ -620,7 +624,7 @@ public class KafkaProducerTest {
             });
             t.start();
             exchanger.exchange(null);  // 1
-            assertTrue(producer.partitionsFor(topic) != null);
+            assertNotNull(producer.partitionsFor(topic));
             exchanger.exchange(null);  // 2
             exchanger.exchange(null);  // 3
             assertThrows(TimeoutException.class, () -> producer.partitionsFor(topic));
@@ -844,6 +848,15 @@ public class KafkaProducerTest {
 
     @Test
     public void testSendTxnOffsetsWithGroupMetadata() {
+        sendOffsetsWithGroupMetadata((short) 3);
+    }
+
+    @Test
+    public void testSendTxnOffsetsWithGroupMetadataDowngrade() {
+        sendOffsetsWithGroupMetadata((short) 2);
+    }
+
+    private void sendOffsetsWithGroupMetadata(final short maxVersion) {
         Map<String, Object> configs = new HashMap<>();
         configs.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, "some.id");
         configs.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, 10000);
@@ -855,6 +868,7 @@ public class KafkaProducerTest {
 
         MockClient client = new MockClient(time, metadata);
         client.updateMetadata(initialUpdateResponse);
+        client.setNodeApiVersions(NodeApiVersions.create(ApiKeys.TXN_OFFSET_COMMIT.id, (short) 0, maxVersion));
 
         Node node = metadata.fetch().nodes().get(0);
         client.throttle(node, 5000);
@@ -869,10 +883,17 @@ public class KafkaProducerTest {
         String groupInstanceId = "instance";
         client.prepareResponse(request -> {
             TxnOffsetCommitRequestData data = ((TxnOffsetCommitRequest) request).data;
-            return data.groupId().equals(groupId) &&
-                       data.memberId().equals(memberId) &&
-                       data.generationId() == generationId &&
-                       data.groupInstanceId().equals(groupInstanceId);
+            if (maxVersion < 3) {
+                return data.groupId().equals(groupId) &&
+                           data.memberId().equals(JoinGroupRequest.UNKNOWN_MEMBER_ID) &&
+                           data.generationId() == JoinGroupRequest.UNKNOWN_GENERATION_ID &&
+                           data.groupInstanceId() == null;
+            } else {
+                return data.groupId().equals(groupId) &&
+                           data.memberId().equals(memberId) &&
+                           data.generationId() == generationId &&
+                           data.groupInstanceId().equals(groupInstanceId);
+            }
         },
             txnOffsetsCommitResponse(Collections.singletonMap(
                 new TopicPartition("topic", 0), Errors.NONE)));

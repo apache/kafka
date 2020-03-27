@@ -33,6 +33,7 @@ import java.util.Map;
 import java.util.Optional;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
 
 public class TxnOffsetCommitRequestTest extends OffsetCommitRequestTest {
 
@@ -40,36 +41,38 @@ public class TxnOffsetCommitRequestTest extends OffsetCommitRequestTest {
     private static int producerId = 10;
     private static short producerEpoch = 1;
     private static int generationId = 5;
+    private static Map<TopicPartition, CommittedOffset> offsets = new HashMap<>();
+    private static TxnOffsetCommitRequest.Builder builder;
+    private static TxnOffsetCommitRequest.Builder builderWithGroupMetadata;
 
     @Before
     @Override
     public void setUp() {
         super.setUp();
-    }
-
-    @Test
-    @Override
-    public void testConstructor() {
-        Map<TopicPartition, CommittedOffset> offsets = new HashMap<>();
+        offsets.clear();
         offsets.put(new TopicPartition(topicOne, partitionOne),
-                            new CommittedOffset(
-                                offset,
-                                metadata,
-                                Optional.of((int) leaderEpoch)));
+            new CommittedOffset(
+                offset,
+                metadata,
+                Optional.of((int) leaderEpoch)));
         offsets.put(new TopicPartition(topicTwo, partitionTwo),
-                            new CommittedOffset(
-                                offset,
-                                metadata,
-                                Optional.of((int) leaderEpoch)));
+            new CommittedOffset(
+                offset,
+                metadata,
+                Optional.of((int) leaderEpoch)));
 
-        TxnOffsetCommitRequest.Builder builder = new TxnOffsetCommitRequest.Builder(
+        builder = new TxnOffsetCommitRequest.Builder(
             transactionalId,
             groupId,
             producerId,
             producerEpoch,
             offsets);
 
-        TxnOffsetCommitRequest.Builder builderWithGroupMetadata = new TxnOffsetCommitRequest.Builder(
+        initializeBuilderWithGroupMetadata();
+    }
+
+    private void initializeBuilderWithGroupMetadata() {
+        builderWithGroupMetadata = new TxnOffsetCommitRequest.Builder(
             transactionalId,
             groupId,
             producerId,
@@ -78,6 +81,11 @@ public class TxnOffsetCommitRequestTest extends OffsetCommitRequestTest {
             memberId,
             generationId,
             Optional.of(groupInstanceId));
+    }
+
+    @Test
+    @Override
+    public void testConstructor() {
 
         Map<TopicPartition, Errors> errorsMap = new HashMap<>();
         errorsMap.put(new TopicPartition(topicOne, partitionOne), Errors.NOT_COORDINATOR);
@@ -120,6 +128,23 @@ public class TxnOffsetCommitRequestTest extends OffsetCommitRequestTest {
             assertEquals(errorsMap, response.errors());
             assertEquals(Collections.singletonMap(Errors.NOT_COORDINATOR, 2), response.errorCounts());
             assertEquals(throttleTimeMs, response.throttleTimeMs());
+        }
+    }
+
+    @Test
+    public void testGroupMetadataDowngrade() {
+        for (short version = 0; version <= ApiKeys.TXN_OFFSET_COMMIT.latestVersion(); version++) {
+            initializeBuilderWithGroupMetadata();
+            final TxnOffsetCommitRequest request = builderWithGroupMetadata.build(version);
+            if (version < 3) {
+                assertEquals(JoinGroupRequest.UNKNOWN_MEMBER_ID, request.data.memberId());
+                assertEquals(JoinGroupRequest.UNKNOWN_GENERATION_ID, request.data.generationId());
+                assertNull(request.data.groupInstanceId());
+            } else {
+                assertEquals(memberId, request.data.memberId());
+                assertEquals(generationId, request.data.generationId());
+                assertEquals(groupInstanceId, request.data.groupInstanceId());
+            }
         }
     }
 }

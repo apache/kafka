@@ -642,7 +642,11 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      * This method should be used when you need to batch consumed and produced messages
      * together, typically in a consume-transform-produce pattern. Thus, the specified
      * {@code groupMetadata} should be extracted from the used {@link KafkaConsumer consumer} via
-     * {@link KafkaConsumer#groupMetadata()} to leverage consumer group metadata for proper fencing.
+     * {@link KafkaConsumer#groupMetadata()} to leverage consumer group metadata for stronger fencing than
+     * {@link #sendOffsetsToTransaction(Map, String)} which only sends with consumer group id.
+     * If broker doesn't support this new transactional API (i.e. if its version is lower than 2.5.0),
+     * this call will silently downgrade to the equivalent of {@link #sendOffsetsToTransaction(Map, String)}.
+     *
      * Note, that the consumer should have {@code enable.auto.commit=false} and should
      * also not commit offsets manually (via {@link KafkaConsumer#commitSync(Map) sync} or
      * {@link KafkaConsumer#commitAsync(Map, OffsetCommitCallback) async} commits).
@@ -650,9 +654,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      * @throws IllegalStateException if no transactional.id has been configured or no transaction has been started.
      * @throws ProducerFencedException fatal error indicating another producer with the same transactional.id is active
      * @throws org.apache.kafka.common.errors.UnsupportedVersionException fatal error indicating the broker
-     *         does not support transactions (i.e. if its version is lower than 0.11.0.0) or
-     *         the broker doesn't support latest version of transactional API with consumer group metadata (i.e. if its version is
-     *         lower than 2.5.0).
+     *         does not support transactions (i.e. if its version is lower than 0.11.0.0).
      * @throws org.apache.kafka.common.errors.UnsupportedForMessageFormatException fatal error indicating the message
      *         format used for the offsets topic on the broker does not support transactions
      * @throws org.apache.kafka.common.errors.AuthorizationException fatal error indicating that the configured

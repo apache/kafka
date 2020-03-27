@@ -27,6 +27,8 @@ import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.record.RecordBatch;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -38,6 +40,8 @@ import java.util.Optional;
 import java.util.stream.Collectors;
 
 public class TxnOffsetCommitRequest extends AbstractRequest {
+
+    private static final Logger log = LoggerFactory.getLogger(TxnOffsetCommitRequest.class);
 
     public final TxnOffsetCommitRequestData data;
 
@@ -82,6 +86,20 @@ public class TxnOffsetCommitRequest extends AbstractRequest {
 
         @Override
         public TxnOffsetCommitRequest build(short version) {
+            if (version < 3) {
+                log.trace("Downgrade the request by resetting group metadata fields: " +
+                              "[member.id:{}, generation.id:{}, group.instance.id:{}], because broker " +
+                              "only supports TxnOffsetCommit version {}. Need " +
+                              "v3 or newer to enable this feature",
+                    data.memberId(), data.generationId(), data.groupInstanceId(), version);
+
+                return new TxnOffsetCommitRequest(
+                    data.setGenerationId(JoinGroupRequest.UNKNOWN_GENERATION_ID)
+                        .setMemberId(JoinGroupRequest.UNKNOWN_MEMBER_ID)
+                        .setGroupInstanceId(null),
+                    version);
+
+            }
             return new TxnOffsetCommitRequest(data, version);
         }
 
