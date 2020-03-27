@@ -3617,18 +3617,35 @@ public class FetcherTest {
         apiVersions.update(node.idString(), NodeApiVersions.create(
             ApiKeys.OFFSET_FOR_LEADER_EPOCH.id, (short) 0, (short) 2));
 
-        // Seek with a position and leader+epoch
-        Metadata.LeaderAndEpoch leaderAndEpoch = new Metadata.LeaderAndEpoch(
-                metadata.currentLeader(tp0).leader, Optional.of(epochOne));
-        subscriptions.seekUnvalidated(tp0, new SubscriptionState.FetchPosition(0, Optional.of(epochOne), leaderAndEpoch));
+        {
+            // Seek with a position and leader+epoch
+            Metadata.LeaderAndEpoch leaderAndEpoch = new Metadata.LeaderAndEpoch(
+                    metadata.currentLeader(tp0).leader, Optional.of(epochOne));
+            subscriptions.seekUnvalidated(tp0, new SubscriptionState.FetchPosition(0, Optional.of(epochOne), leaderAndEpoch));
 
-        // Update metadata to epoch=2, enter validation
-        metadata.updateWithCurrentRequestVersion(TestUtils.metadataUpdateWith("dummy", 1,
-                Collections.emptyMap(), partitionCounts, tp -> epochTwo), false, 0L);
-        fetcher.validateOffsetsIfNeeded();
+            // Update metadata to epoch=2, enter validation
+            metadata.updateWithCurrentRequestVersion(TestUtils.metadataUpdateWith("dummy", 1,
+                    Collections.emptyMap(), partitionCounts, tp -> epochTwo), false, 0L);
+            fetcher.validateOffsetsIfNeeded();
 
-        // Offset validation is skipped
-        assertFalse(subscriptions.awaitingValidation(tp0));
+            // Offset validation is skipped
+            assertFalse(subscriptions.awaitingValidation(tp0));
+        }
+
+        {
+            // Seek with a position and leader+epoch
+            Metadata.LeaderAndEpoch leaderAndEpoch = new Metadata.LeaderAndEpoch(
+                    metadata.currentLeader(tp0).leader, Optional.of(epochOne));
+            subscriptions.seekUnvalidated(tp0, new SubscriptionState.FetchPosition(0, Optional.of(epochOne), leaderAndEpoch));
+
+            // Update metadata to epoch=2, enter validation
+            metadata.updateWithCurrentRequestVersion(TestUtils.metadataUpdateWith("dummy", 1,
+                    Collections.emptyMap(), partitionCounts, tp -> epochTwo), false, 0L);
+
+            // Subscription should not stay in AWAITING_VALIDATION in prepareFetchRequest
+            assertEquals(1, fetcher.sendFetches());
+            assertFalse(subscriptions.awaitingValidation(tp0));
+        }
     }
 
     @Test
