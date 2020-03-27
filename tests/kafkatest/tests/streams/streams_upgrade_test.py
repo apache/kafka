@@ -539,7 +539,7 @@ class StreamsUpgradeTest(Test):
                                                         timeout_sec=60,
                                                         err_msg="Never saw output 'Upgrade metadata to version 8' on" + str(second_other_node.account))
 
-                    log_monitor.wait_until("Version probing detected. Rejoining the consumer group to trigger a new rebalance.",
+                    log_monitor.wait_until("Detected that the assignor requested a rebalance. Rejoining the consumer group to trigger a new rebalance.",
                                            timeout_sec=60,
                                            err_msg="Could not detect 'Triggering new rebalance' at upgrading node " + str(node.account))
 

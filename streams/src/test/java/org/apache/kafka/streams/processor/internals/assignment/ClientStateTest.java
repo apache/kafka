@@ -199,7 +199,7 @@ public class ClientStateTest {
             mkEntry(taskId02, 100L)
         );
         client.addPreviousTasksAndOffsetSums(taskOffsetSums);
-        client.computeTaskLags(allTaskEndOffsetSums);
+        client.computeTaskLags(null, allTaskEndOffsetSums);
 
         assertThat(client.lagFor(taskId01), equalTo(500L));
         assertThat(client.lagFor(taskId02), equalTo(0L));
@@ -210,7 +210,7 @@ public class ClientStateTest {
         final Map<TaskId, Long> taskOffsetSums = Collections.emptyMap();
         final Map<TaskId, Long> allTaskEndOffsetSums = Collections.singletonMap(taskId01, 500L);
         client.addPreviousTasksAndOffsetSums(taskOffsetSums);
-        client.computeTaskLags(allTaskEndOffsetSums);
+        client.computeTaskLags(null, allTaskEndOffsetSums);
         assertThat(client.lagFor(taskId01), equalTo(500L));
     }
 
@@ -219,7 +219,7 @@ public class ClientStateTest {
         final Map<TaskId, Long> taskOffsetSums = Collections.singletonMap(taskId01, Task.LATEST_OFFSET);
         final Map<TaskId, Long> allTaskEndOffsetSums = Collections.singletonMap(taskId01, 500L);
         client.addPreviousTasksAndOffsetSums(taskOffsetSums);
-        client.computeTaskLags(allTaskEndOffsetSums);
+        client.computeTaskLags(null, allTaskEndOffsetSums);
         assertThat(client.lagFor(taskId01), equalTo(Task.LATEST_OFFSET));
     }
 
@@ -228,24 +228,25 @@ public class ClientStateTest {
         final Map<TaskId, Long> taskOffsetSums = Collections.singletonMap(taskId01, UNKNOWN_OFFSET_SUM);
         final Map<TaskId, Long> allTaskEndOffsetSums = Collections.singletonMap(taskId01, 500L);
         client.addPreviousTasksAndOffsetSums(taskOffsetSums);
-        client.computeTaskLags(allTaskEndOffsetSums);
+        client.computeTaskLags(null, allTaskEndOffsetSums);
         assertThat(client.lagFor(taskId01), equalTo(UNKNOWN_OFFSET_SUM));
     }
 
     @Test
-    public void shouldThrowIllegalStateExceptionIfOffsetSumIsGreaterThanEndOffsetSum() {
+    public void shouldReturnEndOffsetSumIfOffsetSumIsGreaterThanEndOffsetSum() {
         final Map<TaskId, Long> taskOffsetSums = Collections.singletonMap(taskId01, 5L);
         final Map<TaskId, Long> allTaskEndOffsetSums = Collections.singletonMap(taskId01, 1L);
         client.addPreviousTasksAndOffsetSums(taskOffsetSums);
-        assertThrows(IllegalStateException.class, () -> client.computeTaskLags(allTaskEndOffsetSums));
+        client.computeTaskLags(null, allTaskEndOffsetSums);
+        assertThat(client.lagFor(taskId01), equalTo(1L));
     }
 
     @Test
     public void shouldThrowIllegalStateExceptionIfTaskLagsMapIsNotEmpty() {
         final Map<TaskId, Long> taskOffsetSums = Collections.singletonMap(taskId01, 5L);
         final Map<TaskId, Long> allTaskEndOffsetSums = Collections.singletonMap(taskId01, 1L);
-        client.computeTaskLags(taskOffsetSums);
-        assertThrows(IllegalStateException.class, () -> client.computeTaskLags(allTaskEndOffsetSums));
+        client.computeTaskLags(null, taskOffsetSums);
+        assertThrows(IllegalStateException.class, () -> client.computeTaskLags(null, allTaskEndOffsetSums));
     }
 
     @Test
@@ -253,7 +254,7 @@ public class ClientStateTest {
         final Map<TaskId, Long> taskOffsetSums = Collections.singletonMap(taskId01, 0L);
         final Map<TaskId, Long> allTaskEndOffsetSums = Collections.singletonMap(taskId01, 500L);
         client.addPreviousTasksAndOffsetSums(taskOffsetSums);
-        client.computeTaskLags(allTaskEndOffsetSums);
+        client.computeTaskLags(null, allTaskEndOffsetSums);
         assertThrows(IllegalStateException.class, () -> client.lagFor(taskId02));
     }
 

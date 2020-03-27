@@ -95,7 +95,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     private final Sensor enforcedProcessingSensor;
     private final InternalProcessorContext processorContext;
 
-    private long idleStartTime;
+    private long idleStartTimeMs;
     private boolean commitNeeded = false;
     private boolean commitRequested = false;
 
@@ -205,7 +205,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             initializeMetadata();
             initializeTopology();
             processorContext.initialize();
-            idleStartTime = RecordQueue.UNKNOWN;
+            idleStartTimeMs = RecordQueue.UNKNOWN;
             transitionTo(State.RUNNING);
 
             log.info("Restored and ready to run");
@@ -534,14 +534,14 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         }
 
         if (partitionGroup.allPartitionsBuffered()) {
-            idleStartTime = RecordQueue.UNKNOWN;
+            idleStartTimeMs = RecordQueue.UNKNOWN;
             return true;
         } else if (partitionGroup.numBuffered() > 0) {
-            if (idleStartTime == RecordQueue.UNKNOWN) {
-                idleStartTime = wallClockTime;
+            if (idleStartTimeMs == RecordQueue.UNKNOWN) {
+                idleStartTimeMs = wallClockTime;
             }
 
-            if (wallClockTime - idleStartTime >= maxTaskIdleMs) {
+            if (wallClockTime - idleStartTimeMs >= maxTaskIdleMs) {
                 enforcedProcessingSensor.record();
                 return true;
             } else {
@@ -550,7 +550,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         } else {
             // there's no data in any of the topics; we should reset the enforced
             // processing timer
-            idleStartTime = RecordQueue.UNKNOWN;
+            idleStartTimeMs = RecordQueue.UNKNOWN;
             return false;
         }
     }

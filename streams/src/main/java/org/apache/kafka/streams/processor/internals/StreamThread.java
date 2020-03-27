@@ -50,7 +50,6 @@ import java.time.Duration;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -59,10 +58,11 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.apache.kafka.streams.StreamsConfig.EXACTLY_ONCE;
 import static org.apache.kafka.streams.StreamsConfig.EXACTLY_ONCE_BETA;
+import static org.apache.kafka.streams.processor.internals.ClientUtils.getConsumerClientId;
+import static org.apache.kafka.streams.processor.internals.ClientUtils.getRestoreConsumerClientId;
+import static org.apache.kafka.streams.processor.internals.ClientUtils.getSharedAdminClientId;
 
 public class StreamThread extends Thread {
-
-    private final Admin adminClient;
 
     /**
      * Stream thread states are the possible states that a stream thread can be in.
@@ -261,6 +261,10 @@ public class StreamThread extends Thread {
     private final Sensor punctuateSensor;
     private final Sensor processLatencySensor;
     private final Sensor processRateSensor;
+    private final Sensor pollRatioSensor;
+    private final Sensor processRatioSensor;
+    private final Sensor punctuateRatioSensor;
+    private final Sensor commitRatioSensor;
 
     private long now;
     private long lastPollMs;
@@ -270,6 +274,7 @@ public class StreamThread extends Thread {
     private volatile ThreadMetadata threadMetadata;
     private StreamThread.StateListener stateListener;
 
+    private final Admin adminClient;
     private final ChangelogReader changelogReader;
 
     // package-private for testing
@@ -407,11 +412,11 @@ public class StreamThread extends Thread {
         }
     }
 
-    static boolean eosAlphaEnabled(final StreamsConfig config) {
+    private static boolean eosAlphaEnabled(final StreamsConfig config) {
         return EXACTLY_ONCE.equals(config.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG));
     }
 
-    public static boolean eosBetaEnabled(final StreamsConfig config) {
+    private static boolean eosBetaEnabled(final StreamsConfig config) {
         return EXACTLY_ONCE_BETA.equals(config.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG));
     }
 
@@ -442,6 +447,10 @@ public class StreamThread extends Thread {
         this.processLatencySensor = ThreadMetrics.processLatencySensor(threadId, streamsMetrics);
         this.processRateSensor = ThreadMetrics.processRateSensor(threadId, streamsMetrics);
         this.punctuateSensor = ThreadMetrics.punctuateSensor(threadId, streamsMetrics);
+        this.processRatioSensor = ThreadMetrics.processRatioSensor(threadId, streamsMetrics);
+        this.punctuateRatioSensor = ThreadMetrics.punctuateRatioSensor(threadId, streamsMetrics);
+        this.pollRatioSensor = ThreadMetrics.pollRatioSensor(threadId, streamsMetrics);
+        this.commitRatioSensor = ThreadMetrics.commitRatioSensor(threadId, streamsMetrics);
 
         // The following sensors are created here but their references are not stored in this object, since within
         // this object they are not recorded. The sensors are created here so that the stream threads starts with all
@@ -480,19 +489,6 @@ public class StreamThread extends Thread {
         private InternalConsumerConfig(final Map<String, Object> props) {
             super(ConsumerConfig.addDeserializerToConfig(props, new ByteArrayDeserializer(), new ByteArrayDeserializer()), false);
         }
-    }
-
-    private static String getConsumerClientId(final String threadClientId) {
-        return threadClientId + "-consumer";
-    }
-
-    private static String getRestoreConsumerClientId(final String threadClientId) {
-        return threadClientId + "-restore-consumer";
-    }
-
-    // currently admin client is shared among all threads
-    public static String getSharedAdminClientId(final String clientId) {
-        return clientId + "-admin";
     }
 
     /**
@@ -538,6 +534,8 @@ public class StreamThread extends Thread {
             try {
                 runOnce();
                 if (assignmentErrorCode.get() == AssignorError.REBALANCE_NEEDED.code()) {
+                    log.info("Detected that the assignor requested a rebalance. Rejoining the consumer group to " +
+                                 "trigger a new rebalance.");
                     assignmentErrorCode.set(AssignorError.NONE.code());
                     mainConsumer.enforceRebalance();
                 }
@@ -567,6 +565,17 @@ public class StreamThread extends Thread {
     }
 
     /**
+     * One iteration of a thread includes the following steps:
+     *
+     * 1. poll records from main consumer and add to buffer;
+     * 2. restore from restore consumer and update standby tasks if necessary;
+     * 3. process active tasks from the buffers;
+     * 4. punctuate active tasks if necessary;
+     * 5. commit all tasks if necessary;
+     *
+     * Among them, step 3/4/5 is done in batches in which we try to process as much as possible while trying to
+     * stop iteration to call the next iteration when it's close to the next main consumer's poll deadline
+     *
      * @throws IllegalStateException If store gets registered after initialized is already finished
      * @throws StreamsException      If the store's change log does not contain the partition
      * @throws TaskMigratedException If another thread wrote to the changelog topic that is currently restored
@@ -576,7 +585,8 @@ public class StreamThread extends Thread {
     // Visible for testing
     void runOnce() {
         final ConsumerRecords<byte[], byte[]> records;
-        now = time.milliseconds();
+        final long startMs = time.milliseconds();
+        now = startMs;
 
         if (state == State.PARTITIONS_ASSIGNED) {
             // try to fetch some records with zero poll millis
@@ -635,61 +645,73 @@ public class StreamThread extends Thread {
 
         advanceNowAndComputeLatency();
 
+        long totalCommitLatency = 0L;
+        long totalProcessLatency = 0L;
+        long totalPunctuateLatency = 0L;
         if (state == State.RUNNING) {
             /*
-             * Within an iteration, after N (N initialized as 1 upon start up) round of processing one-record-each on the applicable tasks, check the current time:
-             *  1. If it is time to commit, do it;
-             *  2. If it is time to punctuate, do it;
-             *  3. If elapsed time is close to consumer's max.poll.interval.ms, end the current iteration immediately.
-             *  4. If none of the the above happens, increment N.
-             *  5. If one of the above happens, half the value of N.
+             * Within an iteration, after processing up to N (N initialized as 1 upon start up) records for each applicable tasks, check the current time:
+             *  1. If it is time to punctuate, do it;
+             *  2. If it is time to commit, do it, this should be after 1) since punctuate may trigger commit;
+             *  3. If there's no records processed, end the current iteration immediately;
+             *  4. If we are close to consumer's next poll deadline, end the current iteration immediately;
+             *  5. If any of 1), 2) and 4) happens, half N for next iteration;
+             *  6. Otherwise, increment N.
              */
-            int processed = 0;
-            long timeSinceLastPoll;
-
             do {
-                for (int i = 0; i < numIterations; i++) {
-                    advanceNowAndComputeLatency();
-                    processed = taskManager.process(now);
+                final int processed = taskManager.process(numIterations, now);
+                final long processLatency = advanceNowAndComputeLatency();
+                totalProcessLatency += processLatency;
+                if (processed > 0) {
+                    // It makes no difference to the outcome of these metrics when we record "0",
+                    // so we can just avoid the method call when we didn't process anything.
+                    processRateSensor.record(processed, now);
 
-                    if (processed > 0) {
-                        // It makes no difference to the outcome of these metrics when we record "0",
-                        // so we can just avoid the method call when we didn't process anything.
-                        processRateSensor.record(processed, now);
+                    // This metric is scaled to represent the _average_ processing time of _each_
+                    // task. Note, it's hard to interpret this as defined, but we would need a KIP
+                    // to change it to simply report the overall time spent processing all tasks.
+                    processLatencySensor.record(processLatency / (double) processed, now);
+                }
 
-                        // This metric is scaled to represent the _average_ processing time of _each_
-                        // task. Note, it's hard to interpret this as defined, but we would need a KIP
-                        // to change it to simply report the overall time spent processing all tasks.
-                        final long processLatency = advanceNowAndComputeLatency();
-                        processLatencySensor.record(processLatency / (double) processed, now);
+                final int punctuated = taskManager.punctuate();
+                final long punctuateLatency = advanceNowAndComputeLatency();
+                totalPunctuateLatency += punctuateLatency;
+                if (punctuated > 0) {
+                    punctuateSensor.record(punctuateLatency / (double) punctuated, now);
+                }
 
-                        // commit any tasks that have requested a commit
-                        final int committed = taskManager.maybeCommitActiveTasksPerUserRequested();
+                final int committed = maybeCommit();
+                final long commitLatency = advanceNowAndComputeLatency();
+                totalCommitLatency += commitLatency;
+                if (committed > 0) {
+                    commitSensor.record(commitLatency / (double) committed, now);
 
-                        if (committed > 0) {
-                            final long commitLatency = advanceNowAndComputeLatency();
-                            commitSensor.record(commitLatency / (double) committed, now);
-                        }
-                    } else {
-                        // if there is no records to be processed, exit immediately
-                        break;
+                    if (log.isDebugEnabled()) {
+                        log.debug("Committed all active tasks {} and standby tasks {} in {}ms",
+                            taskManager.activeTaskIds(), taskManager.standbyTaskIds(), commitLatency);
                     }
                 }
 
-                timeSinceLastPoll = Math.max(now - lastPollMs, 0);
-
-                if (maybePunctuate() || maybeCommit()) {
-                    numIterations = numIterations > 1 ? numIterations / 2 : numIterations;
-                } else if (timeSinceLastPoll > maxPollTimeMs / 2) {
+                if (processed == 0) {
+                    // if there is no records to be processed, exit after punctuate / commit
+                    break;
+                } else if (Math.max(now - lastPollMs, 0) > maxPollTimeMs / 2) {
                     numIterations = numIterations > 1 ? numIterations / 2 : numIterations;
                     break;
-                } else if (processed > 0) {
+                } else if (punctuated > 0 || committed > 0) {
+                    numIterations = numIterations > 1 ? numIterations / 2 : numIterations;
+                } else {
                     numIterations++;
                 }
-            } while (processed > 0);
-
-            maybeCommit();
+            } while (true);
         }
+
+        now = time.milliseconds();
+        final long runOnceLatency = now - startMs;
+        processRatioSensor.record((double) totalProcessLatency / runOnceLatency);
+        punctuateRatioSensor.record((double) totalPunctuateLatency / runOnceLatency);
+        pollRatioSensor.record((double) pollLatency / runOnceLatency);
+        commitRatioSensor.record((double) totalCommitLatency / runOnceLatency);
     }
 
     /**
@@ -776,19 +798,6 @@ public class StreamThread extends Thread {
     }
 
     /**
-     * @throws TaskMigratedException if the task producer got fenced (EOS only)
-     */
-    private boolean maybePunctuate() {
-        final int punctuated = taskManager.punctuate();
-        if (punctuated > 0) {
-            final long punctuateLatency = advanceNowAndComputeLatency();
-            punctuateSensor.record(punctuateLatency / (double) punctuated, now);
-        }
-
-        return punctuated > 0;
-    }
-
-    /**
      * Try to commit all active tasks owned by this thread.
      *
      * Visible for testing.
@@ -796,9 +805,8 @@ public class StreamThread extends Thread {
      * @throws TaskMigratedException if committing offsets failed (non-EOS)
      *                               or if the task producer got fenced (EOS)
      */
-    boolean maybeCommit() {
+    int maybeCommit() {
         final int committed;
-
         if (now - lastCommitMs > commitTimeMs) {
             if (log.isTraceEnabled()) {
                 log.trace("Committing all active tasks {} and standby tasks {} since {}ms has elapsed (commit interval is {}ms)",
@@ -807,16 +815,8 @@ public class StreamThread extends Thread {
 
             committed = taskManager.commitAll();
             if (committed > 0) {
-                final long intervalCommitLatency = advanceNowAndComputeLatency();
-                commitSensor.record(intervalCommitLatency / (double) committed, now);
-
                 // try to purge the committed records for repartition topics if possible
                 taskManager.maybePurgeCommittedRecords();
-
-                if (log.isDebugEnabled()) {
-                    log.debug("Committed all active tasks {} and standby tasks {} in {}ms",
-                              taskManager.activeTaskIds(), taskManager.standbyTaskIds(), intervalCommitLatency);
-                }
             }
 
             if (committed == -1) {
@@ -826,13 +826,9 @@ public class StreamThread extends Thread {
             }
         } else {
             committed = taskManager.maybeCommitActiveTasksPerUserRequested();
-            if (committed > 0) {
-                final long requestCommitLatency = advanceNowAndComputeLatency();
-                commitSensor.record(requestCommitLatency / (double) committed, now);
-            }
         }
 
-        return committed > 0;
+        return committed;
     }
 
     /**
@@ -983,17 +979,11 @@ public class StreamThread extends Thread {
     }
 
     public Map<MetricName, Metric> consumerMetrics() {
-        final Map<MetricName, ? extends Metric> consumerMetrics = mainConsumer.metrics();
-        final Map<MetricName, ? extends Metric> restoreConsumerMetrics = restoreConsumer.metrics();
-        final LinkedHashMap<MetricName, Metric> result = new LinkedHashMap<>();
-        result.putAll(consumerMetrics);
-        result.putAll(restoreConsumerMetrics);
-        return result;
+        return ClientUtils.consumerMetrics(mainConsumer, restoreConsumer);
     }
 
     public Map<MetricName, Metric> adminClientMetrics() {
-        final Map<MetricName, ? extends Metric> adminClientMetrics = adminClient.metrics();
-        return new LinkedHashMap<>(adminClientMetrics);
+        return ClientUtils.adminClientMetrics(adminClient);
     }
 
     // the following are for testing only
@@ -1008,4 +998,5 @@ public class StreamThread extends Thread {
     int currentNumIterations() {
         return numIterations;
     }
+
 }

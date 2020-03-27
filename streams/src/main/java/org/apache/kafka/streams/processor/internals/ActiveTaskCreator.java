@@ -37,12 +37,14 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
+
+import static org.apache.kafka.streams.processor.internals.ClientUtils.getTaskProducerClientId;
+import static org.apache.kafka.streams.processor.internals.ClientUtils.getThreadProducerClientId;
 
 class ActiveTaskCreator {
     private final InternalTopologyBuilder builder;
@@ -60,14 +62,6 @@ class ActiveTaskCreator {
     private final StreamsProducer threadProducer;
     private final Map<TaskId, StreamsProducer> taskProducers;
     private final StreamThread.ProcessingMode processingMode;
-
-    private static String getThreadProducerClientId(final String threadClientId) {
-        return threadClientId + "-producer";
-    }
-
-    private static String getTaskProducerClientId(final String threadClientId, final TaskId taskId) {
-        return threadClientId + "-" + taskId + "-producer";
-    }
 
     ActiveTaskCreator(final InternalTopologyBuilder builder,
                       final StreamsConfig config,
@@ -227,22 +221,13 @@ class ActiveTaskCreator {
     }
 
     Map<MetricName, Metric> producerMetrics() {
-        final Map<MetricName, Metric> result = new LinkedHashMap<>();
-        if (threadProducer != null) {
-            final Map<MetricName, ? extends Metric> producerMetrics = threadProducer.kafkaProducer().metrics();
-            if (producerMetrics != null) {
-                result.putAll(producerMetrics);
-            }
-        } else {
-            // When EOS is turned on, each task will have its own producer client
-            // and the producer object passed in here will be null. We would then iterate through
-            // all the active tasks and add their metrics to the output metrics map.
-            for (final Map.Entry<TaskId, StreamsProducer> entry : taskProducers.entrySet()) {
-                final Map<MetricName, ? extends Metric> taskProducerMetrics = entry.getValue().kafkaProducer().metrics();
-                result.putAll(taskProducerMetrics);
-            }
-        }
-        return result;
+        // When EOS is turned on, each task will have its own producer client
+        // and the producer object passed in here will be null. We would then iterate through
+        // all the active tasks and add their metrics to the output metrics map.
+        final Collection<StreamsProducer> producers = threadProducer != null ?
+                Collections.singleton(threadProducer) :
+                taskProducers.values();
+        return ClientUtils.producerMetrics(producers);
     }
 
     Set<String> producerClientIds() {
