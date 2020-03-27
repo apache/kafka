@@ -208,12 +208,9 @@ public class Sender implements Runnable {
 
     private void addToInflightBatches(List<ProducerBatch> batches) {
         for (ProducerBatch batch : batches) {
-            List<ProducerBatch> inflightBatchList = inFlightBatches.get(batch.topicPartition);
-            if (inflightBatchList == null) {
-                inflightBatchList = new ArrayList<>();
-                inFlightBatches.put(batch.topicPartition, inflightBatchList);
-            }
-            inflightBatchList.add(batch);
+            Objects.requireNonNull(inFlightBatches.computeIfAbsent(batch.topicPartition,
+                    k -> inFlightBatches.put(k, new ArrayList<>()))
+            ).add(batch);
         }
     }
 
