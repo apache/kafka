@@ -522,8 +522,8 @@ class DefaultMessageFormatter extends MessageFormatter {
     import consumerRecord._
 
     def writeOffset = {
-      output.write(consumerRecord.offset().toString.getBytes)
-      output.write(":".getBytes())
+      output.write(consumerRecord.offset().toString.getBytes("UTF-8"))
+      output.write(":".getBytes("UTF-8"))
     }
 
     writeOffset

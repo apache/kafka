@@ -73,14 +73,15 @@ import java.util.stream.IntStream;
 
 /**
  * Topic based implementation for {@link RemoteLogMetadataManager}.
- *
+ * <p>
  * This implementation is not efficient for now. We will improve once the basic end to end usecase is working fine.
  */
 public class RLMMWithTopicStorage implements RemoteLogMetadataManager {
 
     private static final Logger log = LoggerFactory.getLogger(RLMMWithTopicStorage.class);
 
-    public static final String REMOTE_LOG_METADATA_TOPIC_REPLICATION_FACTOR_PROP = "remote.log.metadata.topic.replication.factor";
+    public static final String REMOTE_LOG_METADATA_TOPIC_REPLICATION_FACTOR_PROP =
+            "remote.log.metadata.topic.replication.factor";
     public static final String REMOTE_LOG_METADATA_TOPIC_PARTITIONS_PROP = "remote.log.metadata.topic.partitions";
     public static final int DEFAULT_REMOTE_LOG_METADATA_TOPIC_PARTITIONS = 3;
     public static final int DEFAULT_REMOTE_LOG_METADATA_TOPIC_REPLICATION_FACTOR = 3;
@@ -147,7 +148,7 @@ public class RLMMWithTopicStorage implements RemoteLogMetadataManager {
 
             waitTillConsumerCatchesUp(recordMetadata);
         } catch (ExecutionException e) {
-            throw new KafkaException( "Exception occurred while publishing message for remote-log-segment-id"
+            throw new KafkaException("Exception occurred while publishing message for remote-log-segment-id"
                     + remoteLogSegmentId, e.getCause());
         } catch (KafkaException e) {
             throw e;
@@ -161,7 +162,7 @@ public class RLMMWithTopicStorage implements RemoteLogMetadataManager {
         final int partition = recordMetadata.partition();
         final long offset = recordMetadata.offset();
         final long sleepTimeMs = 1000L;
-        while(consumerTask.committedOffset(partition) < offset) {
+        while (consumerTask.committedOffset(partition) < offset) {
             log.debug("Did not receive the messages till the expected offset [{}] for partition [{}], Sleeping for [{}]",
                     offset, partition, sleepTimeMs);
             Thread.sleep(sleepTimeMs);
@@ -275,7 +276,8 @@ public class RLMMWithTopicStorage implements RemoteLogMetadataManager {
         this.configs = configs;
 
         Object propVal = configs.get(REMOTE_LOG_METADATA_TOPIC_PARTITIONS_PROP);
-        noOfMetadataTopicPartitions = (propVal == null) ?  DEFAULT_REMOTE_LOG_METADATA_TOPIC_PARTITIONS : Integer.parseInt(propVal.toString());;
+        noOfMetadataTopicPartitions =
+                (propVal == null) ? DEFAULT_REMOTE_LOG_METADATA_TOPIC_PARTITIONS : Integer.parseInt(propVal.toString());
 
         logDir = (String) configs.get("log.dir");
         if (logDir == null || logDir.trim().isEmpty()) {
@@ -312,24 +314,24 @@ public class RLMMWithTopicStorage implements RemoteLogMetadataManager {
     private void initConsumerThread() {
         try {
             Set<TopicPartition> assignedPartitions = IntStream.range(0, noOfMetadataTopicPartitions)
-                    .mapToObj( x -> new TopicPartition(Topic.REMOTE_LOG_METADATA_TOPIC_NAME, x))
+                    .mapToObj(x -> new TopicPartition(Topic.REMOTE_LOG_METADATA_TOPIC_NAME, x))
                     .collect(Collectors.toSet());
             noOfMetadataTopicPartitions = assignedPartitions.size();
 
             // start a thread to continuously consume records from topic partitions.
             consumerTask = new ConsumerTask(consumer, assignedPartitions, logDir,
-                    (tp, metadata) -> {
-                        final NavigableMap<Long, RemoteLogSegmentId> map = partitionsWithSegmentIds
-                                        .computeIfAbsent(tp, topicPartition -> new ConcurrentSkipListMap<>());
-                        if(metadata.markedForDeletion()) {
-                            idWithSegmentMetadata.remove(metadata.remoteLogSegmentId());
-                            // todo-tier check for concurrent updates when leader/follower switches occur
-                            map.remove(metadata.startOffset());
-                        } else {
-                            map.put(metadata.startOffset(), metadata.remoteLogSegmentId());
-                            idWithSegmentMetadata.put(metadata.remoteLogSegmentId(), metadata);
-                        }
-                    });
+                (tp, metadata) -> {
+                    final NavigableMap<Long, RemoteLogSegmentId> map = partitionsWithSegmentIds
+                            .computeIfAbsent(tp, topicPartition -> new ConcurrentSkipListMap<>());
+                    if (metadata.markedForDeletion()) {
+                        idWithSegmentMetadata.remove(metadata.remoteLogSegmentId());
+                        // todo-tier check for concurrent updates when leader/follower switches occur
+                        map.remove(metadata.startOffset());
+                    } else {
+                        map.put(metadata.startOffset(), metadata.remoteLogSegmentId());
+                        idWithSegmentMetadata.put(metadata.remoteLogSegmentId(), metadata);
+                    }
+                });
             Executors.newSingleThreadExecutor().submit(consumerTask);
         } catch (RuntimeException e) {
             throw e;
@@ -508,7 +510,8 @@ public class RLMMWithTopicStorage implements RemoteLogMetadataManager {
                 } else {
                     for (Map.Entry<Integer, Long> entry : entries) {
                         committedOffsets.put(entry.getKey(), entry.getValue());
-                        consumer.seek(new TopicPartition(Topic.REMOTE_LOG_METADATA_TOPIC_NAME, entry.getKey()), entry.getValue());
+                        consumer.seek(new TopicPartition(Topic.REMOTE_LOG_METADATA_TOPIC_NAME, entry.getKey()),
+                                entry.getValue());
                     }
                 }
 
@@ -522,7 +525,8 @@ public class RLMMWithTopicStorage implements RemoteLogMetadataManager {
                     if (reassign) {
                         consumer.assign(assignedTopicPartitions);
                     }
-                    ConsumerRecords<String, RemoteLogSegmentMetadata> consumerRecords = consumer.poll(Duration.ofSeconds(30L));
+                    ConsumerRecords<String, RemoteLogSegmentMetadata> consumerRecords = consumer.poll(
+                            Duration.ofSeconds(30L));
                     for (ConsumerRecord<String, RemoteLogSegmentMetadata> record : consumerRecords) {
                         try {
                             String key = record.key();
@@ -544,7 +548,7 @@ public class RLMMWithTopicStorage implements RemoteLogMetadataManager {
                     log.info("ConsumerTask is closed");
                 }
             } finally {
-                if(!closed) {
+                if (!closed) {
                     // sync this only if it is not closed as it comes here in a non-graceful error.
                     syncCommittedDataAndOffsets(true);
                 }
@@ -626,7 +630,7 @@ public class RLMMWithTopicStorage implements RemoteLogMetadataManager {
         // Added hasCode as part of client-id here to differentiate between multiple runs of broker.
         // Broker epoch could not be used as it is created only after RemoteLogManager and ReplicaManager are
         // created.
-        return REMOTE_LOG_METADATA_CLIENT_PREFIX +"_"+ suffix + configs.get("broker.id") + "_" + hashCode();
+        return REMOTE_LOG_METADATA_CLIENT_PREFIX + "_" + suffix + configs.get("broker.id") + "_" + hashCode();
     }
 
     private void createConsumer() {
