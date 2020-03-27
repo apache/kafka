@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from ducktape.mark import parametrize
+from ducktape.mark import parametrize, ignore
 from ducktape.tests.test import Test
 from ducktape.utils.util import wait_until
 from kafkatest.services.kafka import KafkaService
@@ -29,6 +29,7 @@ class StreamsBrokerCompatibility(Test):
     These tests validates that
     - Streams works for older brokers 0.11 (or newer)
     - Streams w/ EOS-alpha works for older brokers 0.11 (or newer)
+    - (TODO) Streams w/ EOS-beta works for older brokers 2.5 (or newer)
     - Streams fails fast for older brokers 0.10.0, 0.10.2, and 0.10.1
     - Streams w/ EOS-beta fails fast for older brokers 2.4 or older
     """
@@ -45,7 +46,11 @@ class StreamsBrokerCompatibility(Test):
                                   topics={
                                       self.input: {'partitions': 1, 'replication-factor': 1},
                                       self.output: {'partitions': 1, 'replication-factor': 1}
-                                  })
+                                  },
+                                  server_prop_overides=[
+                                      ["transaction.state.log.replication.factor", "1"],
+                                      ["transaction.state.log.min.isr", "1"]
+                                  ])
         self.consumer = VerifiableConsumer(test_context,
                                            1,
                                            self.kafka,
@@ -55,7 +60,7 @@ class StreamsBrokerCompatibility(Test):
     def setUp(self):
         self.zk.start()
 
-   
+
     @parametrize(broker_version=str(LATEST_2_4))
     @parametrize(broker_version=str(LATEST_2_3))
     @parametrize(broker_version=str(LATEST_2_2))
@@ -80,6 +85,8 @@ class StreamsBrokerCompatibility(Test):
         self.consumer.stop()
         self.kafka.stop()
 
+    # Can be enabled after KAFKA-9776 is fixed
+    @ignore
     @parametrize(broker_version=str(LATEST_2_4))
     @parametrize(broker_version=str(LATEST_2_3))
     @parametrize(broker_version=str(LATEST_2_2))
@@ -88,7 +95,7 @@ class StreamsBrokerCompatibility(Test):
     @parametrize(broker_version=str(LATEST_1_1))
     @parametrize(broker_version=str(LATEST_1_0))
     @parametrize(broker_version=str(LATEST_0_11_0))
-    def test_compatible_brokers_eos_enabled(self, broker_version):
+    def test_compatible_brokers_eos_alpha_enabled(self, broker_version):
         self.kafka.set_version(KafkaVersion(broker_version))
         self.kafka.start()
 
@@ -103,6 +110,24 @@ class StreamsBrokerCompatibility(Test):
 
         self.consumer.stop()
         self.kafka.stop()
+
+    # TODO enable after 2.5 is released
+    # @parametrize(broker_version=str(LATEST_2_5))
+    # def test_compatible_brokers_eos_beta_enabled(self, broker_version):
+    #     self.kafka.set_version(KafkaVersion(broker_version))
+    #     self.kafka.start()
+    #
+    #     processor = StreamsBrokerCompatibilityService(self.test_context, self.kafka, "exactly_once_beta")
+    #     processor.start()
+    #
+    #     self.consumer.start()
+    #
+    #     processor.wait()
+    #
+    #     wait_until(lambda: self.consumer.total_consumed() > 0, timeout_sec=30, err_msg="Did expect to read a message but got none within 30 seconds.")
+    #
+    #     self.consumer.stop()
+    #     self.kafka.stop()
 
     @parametrize(broker_version=str(LATEST_0_10_2))
     @parametrize(broker_version=str(LATEST_0_10_1))

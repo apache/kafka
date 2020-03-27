@@ -413,11 +413,11 @@ public class StreamThread extends Thread {
         }
     }
 
-    private static boolean eosAlphaEnabled(final StreamsConfig config) {
+    public static boolean eosAlphaEnabled(final StreamsConfig config) {
         return EXACTLY_ONCE.equals(config.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG));
     }
 
-    private static boolean eosBetaEnabled(final StreamsConfig config) {
+    public static boolean eosBetaEnabled(final StreamsConfig config) {
         return EXACTLY_ONCE_BETA.equals(config.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG));
     }
 

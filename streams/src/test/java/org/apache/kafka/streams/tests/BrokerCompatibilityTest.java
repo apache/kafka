@@ -102,19 +102,29 @@ public class BrokerCompatibilityTest {
         System.out.println("start Kafka Streams");
         streams.start();
 
+        final boolean eosEnabled = processingMode.startsWith(StreamsConfig.EXACTLY_ONCE);
 
         System.out.println("send data");
         final Properties producerProperties = new Properties();
         producerProperties.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, kafka);
         producerProperties.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
         producerProperties.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
+        if (eosEnabled) {
+            producerProperties.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, "broker-compatibility-producer-tx");
+        }
 
         try {
             try (final KafkaProducer<String, String> producer = new KafkaProducer<>(producerProperties)) {
+                if (eosEnabled) {
+                    producer.initTransactions();
+                    producer.beginTransaction();
+                }
                 producer.send(new ProducerRecord<>(SOURCE_TOPIC, "key", "value"));
+                if (eosEnabled) {
+                    producer.commitTransaction();
+                }
 
                 System.out.println("wait for result");
-                final boolean eosEnabled = processingMode.startsWith(StreamsConfig.EXACTLY_ONCE);
                 loopUntilRecordReceived(kafka, eosEnabled);
                 System.out.println("close Kafka Streams");
                 streams.close();
