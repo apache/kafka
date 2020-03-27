@@ -709,14 +709,16 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             allTasks, clientStates, numStandbyReplicas());
 
         final TaskAssignor taskAssignor;
-        if (lagComputationSuccessful && highAvailabilityEnabled) {
-            taskAssignor = new HighAvailabilityTaskAssignor<>(clientStates, allTasks, statefulTasks, assignmentConfigs);
-        } else {
-            taskAssignor = new StickyTaskAssignor<>(clientStates, allTasks, statefulTasks, assignmentConfigs);
-            if (highAvailabilityEnabled) {
-                // Once high availability is permanently enabled, this will be the default behavior of StickyTaskAssignor
+        if (highAvailabilityEnabled) {
+            if (lagComputationSuccessful) {
+                taskAssignor = new HighAvailabilityTaskAssignor<>(clientStates, allTasks, statefulTasks,
+                    assignmentConfigs);
+            } else {
+                taskAssignor = new StickyTaskAssignor<>(clientStates, allTasks, statefulTasks, assignmentConfigs);
                 ((StickyTaskAssignor) taskAssignor).preservePreviousTaskAssignment();
             }
+        } else {
+            taskAssignor = new StickyTaskAssignor<>(clientStates, allTasks, statefulTasks, assignmentConfigs);
         }
         taskAssignor.assign();
 
