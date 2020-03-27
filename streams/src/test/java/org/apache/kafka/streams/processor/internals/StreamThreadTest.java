@@ -528,13 +528,6 @@ public class StreamThreadTest {
         addRecord(mockConsumer, ++offset, 5L);
 
         thread.runOnce();
-        assertThat(thread.currentNumIterations(), equalTo(2));
-
-        // system time based punctutation after processing a record, half iteration to 1
-        mockTime.sleep(11L);
-        addRecord(mockConsumer, ++offset, 5L);
-
-        thread.runOnce();
         assertThat(thread.currentNumIterations(), equalTo(1));
 
         // processed two records, bumping up iterations to 3 (1 + 2)

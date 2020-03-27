@@ -707,11 +707,11 @@ public class StreamThread extends Thread {
                     numIterations++;
                 }
             } while (true);
-        }
 
-        // we record the ratio out of the while loop so that the accumulated latency spans over
-        // multiple iterations with reasonably large max.num.records and hence is less vulnerable to outliers
-        taskManager.recordTaskProcessRatio(totalProcessLatency);
+            // we record the ratio out of the while loop so that the accumulated latency spans over
+            // multiple iterations with reasonably large max.num.records and hence is less vulnerable to outliers
+            taskManager.recordTaskProcessRatio(totalProcessLatency);
+        }
 
         now = time.milliseconds();
         final long runOnceLatency = now - startMs;
