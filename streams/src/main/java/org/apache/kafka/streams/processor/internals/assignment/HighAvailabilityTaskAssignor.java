@@ -99,23 +99,34 @@ public class HighAvailabilityTaskAssignor<ID extends Comparable<ID>> implements 
                 clientsToNumberOfThreads
             );
 
+        assignActiveTasksToClients(statefulActiveTaskAssignment);
+
         // ---------------- Warmup Replica Tasks ---------------- //
 
-        final Map<ID, List<TaskId>> balancedStatefulActiveTaskAssignment =
-            new DefaultBalancedAssignor<ID>().assign(
-                sortedClients,
-                statefulTasks,
-                clientsToNumberOfThreads,
-                configs.balanceFactor);
+        // If we have already satisfied the balance factor with the state constrained assignment, we can skip warmups
+        final int stateConstrainedAssignmentBalanceFactor =
+            computeBalanceFactor(clientStates.values(), statefulTasks, ClientState::activeTasks);
 
-        final Queue<Movement<ID>> movements = getMovements(statefulActiveTaskAssignment, balancedStatefulActiveTaskAssignment);
-        for (int numWarmupReplicas = 0; numWarmupReplicas < configs.maxWarmupReplicas; ++numWarmupReplicas) {
-            final Movement<ID> movement = movements.poll();
-            if (movement == null) {
-                break;
+        if (stateConstrainedAssignmentBalanceFactor > configs.balanceFactor) {
+            final Map<ID, List<TaskId>> balancedStatefulActiveTaskAssignment =
+                new DefaultBalancedAssignor<ID>().assign(
+                    sortedClients,
+                    statefulTasks,
+                    clientsToNumberOfThreads,
+                    configs.balanceFactor);
+
+            final Queue<Movement<ID>> movements = getMovements(statefulActiveTaskAssignment,
+                balancedStatefulActiveTaskAssignment);
+            for (int numWarmupReplicas = 0; numWarmupReplicas < configs.maxWarmupReplicas; ++numWarmupReplicas) {
+                final Movement<ID> movement = movements.poll();
+                if (movement == null) {
+                    break;
+                }
+                warmupTaskAssignment.get(movement.destination).add(movement.task);
             }
-            warmupTaskAssignment.get(movement.destination).add(movement.task);
         }
+
+        assignStandbyTasksToClients(warmupTaskAssignment);
 
         // ---------------- Standby Replica Tasks ---------------- //
 
@@ -146,6 +157,8 @@ public class HighAvailabilityTaskAssignor<ID extends Comparable<ID>> implements 
             }
         }
 
+        assignStandbyTasksToClients(standbyTaskAssignment);
+
         // ---------------- Stateless Active Tasks ---------------- //
 
         final PriorityQueue<ID> statelessActiveTaskClientsQueue =
@@ -157,6 +170,8 @@ public class HighAvailabilityTaskAssignor<ID extends Comparable<ID>> implements 
             statelessActiveTaskClientsQueue.offer(client);
         }
 
+        assignActiveTasksToClients(statelessActiveTaskAssignment);
+
         // ---------------- Assign Tasks To Clients ---------------- //
 
         final boolean followupRebalanceRequired;
@@ -164,14 +179,8 @@ public class HighAvailabilityTaskAssignor<ID extends Comparable<ID>> implements 
             assignPreviousTasksToClientStates();
             followupRebalanceRequired = false;
         } else {
-            assignTasksToClientStates(
-                statefulActiveTaskAssignment,
-                statelessActiveTaskAssignment,
-                standbyTaskAssignment,
-                warmupTaskAssignment
-            );
             final int assignmentBalanceFactor =
-                computeBalanceFactor(clientStates.values(), statelessTasks, ClientState::activeTasks);
+                computeBalanceFactor(clientStates.values(), statefulTasks, ClientState::activeTasks);
             followupRebalanceRequired = assignmentBalanceFactor <= configs.balanceFactor;
         }
         return followupRebalanceRequired;
@@ -323,14 +332,14 @@ public class HighAvailabilityTaskAssignor<ID extends Comparable<ID>> implements 
      * least loaded clients
      */
     static int computeBalanceFactor(final Collection<ClientState> clientStates,
-                                    final Set<TaskId> statelessTasks,
+                                    final Set<TaskId> statefulTasks,
                                     final Function<ClientState, Set<TaskId>> activeTaskSet) {
         int minActiveStatefulTasksPerThreadCount = Integer.MAX_VALUE;
         int maxActiveStatefulTasksPerThreadCount = 0;
 
         for (final ClientState state : clientStates) {
             final Set<TaskId> activeTasks = new HashSet<>(activeTaskSet.apply(state));
-            activeTasks.removeAll(statelessTasks);
+            activeTasks.retainAll(statefulTasks);
             final int taskPerThreadCount = activeTasks.size() / state.capacity();
             if (taskPerThreadCount < minActiveStatefulTasksPerThreadCount) {
                 minActiveStatefulTasksPerThreadCount = taskPerThreadCount;
@@ -353,7 +362,7 @@ public class HighAvailabilityTaskAssignor<ID extends Comparable<ID>> implements 
     private boolean shouldUsePreviousAssignment() {
         if (previousAssignmentIsValid()) {
             final int previousAssignmentBalanceFactor =
-                computeBalanceFactor(clientStates.values(), statelessTasks, ClientState::prevActiveTasks);
+                computeBalanceFactor(clientStates.values(), statefulTasks, ClientState::prevActiveTasks);
             return previousAssignmentBalanceFactor <= configs.balanceFactor;
         } else {
             return false;
@@ -364,17 +373,19 @@ public class HighAvailabilityTaskAssignor<ID extends Comparable<ID>> implements 
         return sortedClients.stream().collect(Collectors.toMap(id -> id, id -> new ArrayList<>()));
     }
 
-    private void assignTasksToClientStates(final Map<ID, List<TaskId>> statefulActiveTasks,
-                                           final Map<ID, List<TaskId>> statelessActiveTasks,
-                                           final Map<ID, List<TaskId>> standbyTasks,
-                                           final Map<ID, List<TaskId>> warmupTasks) {
+    private void assignActiveTasksToClients(final Map<ID, List<TaskId>> activeTasks) {
         for (final Map.Entry<ID, ClientState> clientEntry : clientStates.entrySet()) {
             final ID clientId = clientEntry.getKey();
             final ClientState state = clientEntry.getValue();
-            state.assignActiveTasks(statefulActiveTasks.get(clientId));
-            state.assignActiveTasks(statelessActiveTasks.get(clientId));
+            state.assignActiveTasks(activeTasks.get(clientId));
+        }
+    }
+
+    private void assignStandbyTasksToClients(final Map<ID, List<TaskId>> standbyTasks) {
+        for (final Map.Entry<ID, ClientState> clientEntry : clientStates.entrySet()) {
+            final ID clientId = clientEntry.getKey();
+            final ClientState state = clientEntry.getValue();
             state.assignStandbyTasks(standbyTasks.get(clientId));
-            state.assignStandbyTasks(warmupTasks.get(clientId));
         }
     }
 

@@ -121,6 +121,7 @@ public class ClientState {
     }
 
     void reusePreviousAssignment() {
+        clearAllAssignedTasks();
         activeTasks.addAll(prevActiveTasks);
         standbyTasks.addAll(prevStandbyTasks);
         assignedTasks.addAll(prevAssignedTasks);
@@ -284,6 +285,12 @@ public class ClientState {
 
     boolean hasAssignedTask(final TaskId taskId) {
         return assignedTasks.contains(taskId);
+    }
+
+    private void clearAllAssignedTasks() {
+        activeTasks.clear();
+        standbyTasks.clear();
+        assignedTasks.clear();
     }
 
     @Override
