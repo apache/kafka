@@ -409,7 +409,8 @@ public class KStreamRepartitionIntegrationTest {
         final StreamsBuilder builder = new StreamsBuilder();
 
         builder.stream(inputTopic, Consumed.with(Serdes.Integer(), Serdes.String()))
-               .repartition((key, value) -> Integer.valueOf(value))
+               .selectKey((key, value) -> Integer.valueOf(value))
+               .repartition()
                .to(outputTopic);
 
         startStreams(builder);
@@ -483,7 +484,8 @@ public class KStreamRepartitionIntegrationTest {
             .withKeySerde(Serdes.String());
 
         builder.stream(inputTopic, Consumed.with(Serdes.Integer(), Serdes.String()))
-               .repartition((key, value) -> key.toString(), repartitioned)
+               .selectKey((key, value) -> key.toString(), Named.as(repartitionedName))
+               .repartition(repartitioned)
                .groupByKey()
                .count()
                .toStream()

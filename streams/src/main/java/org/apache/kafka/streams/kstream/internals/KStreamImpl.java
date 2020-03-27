@@ -565,31 +565,15 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
 
     @Override
     public KStream<K, V> repartition() {
-        return doRepartition(Repartitioned.as(null), null);
+        return doRepartition(Repartitioned.as(null));
     }
 
     @Override
     public KStream<K, V> repartition(final Repartitioned<K, V> repartitioned) {
-        return doRepartition(repartitioned, null);
+        return doRepartition(repartitioned);
     }
 
-    @Override
-    public <KR> KStream<KR, V> repartition(final KeyValueMapper<? super K, ? super V, ? extends KR> keySelector) {
-        Objects.requireNonNull(keySelector, "selector can't be null");
-
-        return doRepartition(Repartitioned.as(null), keySelector);
-    }
-
-    @Override
-    public <KR> KStream<KR, V> repartition(final KeyValueMapper<? super K, ? super V, ? extends KR> keySelector,
-                                           final Repartitioned<KR, V> repartitioned) {
-        Objects.requireNonNull(keySelector, "selector can't be null");
-
-        return doRepartition(repartitioned, keySelector);
-    }
-
-    private <KR> KStream<KR, V> doRepartition(final Repartitioned<KR, V> repartitioned,
-                                              final KeyValueMapper<? super K, ? super V, ? extends KR> selector) {
+    private <KR> KStream<KR, V> doRepartition(final Repartitioned<KR, V> repartitioned) {
         Objects.requireNonNull(repartitioned, "repartitioned can't be null");
 
         final RepartitionedInternal<KR, V> repartitionedInternal = new RepartitionedInternal<>(repartitioned);
@@ -615,19 +599,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
 
         final UnoptimizableRepartitionNode<KR, V> unoptimizableRepartitionNode = unoptimizableRepartitionNodeBuilder.build();
 
-        if (selector == null) {
-            builder.addGraphNode(streamsGraphNode, unoptimizableRepartitionNode);
-        } else {
-            final NamedInternal namedInternal = new NamedInternal(repartitionedInternal.name());
-
-            final ProcessorGraphNode<K, V> selectKeyNode = internalSelectKey(selector, namedInternal);
-
-            selectKeyNode.keyChangingOperation(true);
-
-            builder.addGraphNode(streamsGraphNode, selectKeyNode);
-
-            builder.addGraphNode(selectKeyNode, unoptimizableRepartitionNode);
-        }
+        builder.addGraphNode(streamsGraphNode, unoptimizableRepartitionNode);
 
         final Set<String> sourceNodes = new HashSet<>();
         sourceNodes.add(unoptimizableRepartitionNode.nodeName());

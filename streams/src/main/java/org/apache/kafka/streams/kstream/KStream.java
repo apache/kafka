@@ -886,55 +886,6 @@ public interface KStream<K, V> {
     KStream<K, V> repartition(final Repartitioned<K, V> repartitioned);
 
     /**
-     * Materialize this stream to an auto-generated repartition topic and create a new {@code KStream}
-     * from the auto-generated topic using default serializers, deserializers, and producers {@link DefaultPartitioner}.
-     * The number of partitions is determined based on the upstream topics partition numbers.
-     * <p>
-     * This operation is similar to {@link #through(String)}, however, Kafka Streams manages the used topic automatically.
-     * The Created topic is considered as an internal topic and is meant to be used only by current Kafka Streams instance.
-     * Similar to auto-repartitioning, the topic will be created with infinite retention time and data will be purged by Kafka Streams explicitly.
-     * The topic will be named as "${applicationId}-&lt;name&gt;-repartition", where "applicationId" is user-specified in
-     * {@link StreamsConfig} via parameter {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG},
-     * "&lt;name&gt;" is an internally generated name, and "-repartition" is a fixed suffix.
-     * <p>
-     * The provided {@link KeyValueMapper} is applied to each input record and computes a new key for it.
-     * Thus, an input record {@code <K,V>} can be transformed into an output record {@code <K':V>}.
-     *
-     * @param keySelector      a {@link KeyValueMapper} that computes a new key for each record
-     * @return a {@code KStream} that contains records with new key (possibly of different type) and unmodified value
-     * @see #through(String)
-     * @see #through(String, Produced)
-     */
-    <KR> KStream<KR, V> repartition(final KeyValueMapper<? super K, ? super V, ? extends KR> keySelector);
-
-    /**
-     * Materialize this stream to an auto-generated repartition topic and create a new {@code KStream}
-     * from the auto-generated topic using {@link Serde key serde}, {@link Serde value serde}, {@link StreamPartitioner},
-     * number of partitions, and topic name part as defined by {@link Repartitioned}.
-     * <p>
-     * This operation is similar to {@link #through(String)}, however, Kafka Streams manages the used topic automatically.
-     * The Created topic is considered as an internal topic and is meant to be used only by current Kafka Streams instance.
-     * Similar to auto-repartitioning, the topic will be created with infinite retention time and data will be purged by Kafka Streams explicitly.
-     * The topic will be named as "${applicationId}-&lt;name&gt;-repartition", where "applicationId" is user-specified in
-     * {@link StreamsConfig} via parameter {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG},
-     * "&lt;name&gt;" is either provided via {@link Repartitioned#as(String)} or an internally
-     * generated name, and "-repartition" is a fixed suffix.
-     * <p>
-     * The provided {@link KeyValueMapper} is applied to each input record and computes a new key for it.
-     * Thus, an input record {@code <K,V>} can be transformed into an output record {@code <K':V>}.
-     *
-     * @param keySelector      a {@link KeyValueMapper} that computes a new key for each record
-     * @param repartitioned the {@link Repartitioned} instance used to specify {@link Serdes},
-     *                      {@link StreamPartitioner} which determines how records are distributed among partitions of the topic,
-     *                      part of the topic name, and number of partitions for a repartition topic.
-     * @return a {@code KStream} that contains records with new key (possibly of different type) and unmodified value
-     * @see #through(String)
-     * @see #through(String, Produced)
-     */
-    <KR> KStream<KR, V> repartition(final KeyValueMapper<? super K, ? super V, ? extends KR> keySelector,
-                                    final Repartitioned<KR, V> repartitioned);
-
-    /**
      * Materialize this stream to a topic using default serializers specified in the config and producer's
      * {@link DefaultPartitioner}.
      * The specified topic should be manually created before it is used (i.e., before the Kafka Streams application is
