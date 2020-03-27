@@ -200,18 +200,23 @@ class TransactionStateManager(brokerId: Int,
           }
         }
 
-        replicaManager.appendRecords(
-          config.requestTimeoutMs,
-          TransactionLog.EnforcedRequiredAcks,
-          internalTopicsAllowed = true,
-          origin = AppendOrigin.Coordinator,
-          recordsPerPartition,
-          removeFromCacheCallback,
-          Some(stateLock.readLock)
-        )
+        appendToTransactionLog(recordsPerPartition, removeFromCacheCallback)
       }
 
     }, delay = config.removeExpiredTransactionalIdsIntervalMs, period = config.removeExpiredTransactionalIdsIntervalMs)
+  }
+
+  private def appendToTransactionLog(recordsPerPartition: Map[TopicPartition, MemoryRecords],
+                                     responseCallback: scala.collection.Map[TopicPartition, PartitionResponse] => Unit): Unit = {
+    replicaManager.appendRecords(
+      config.requestTimeoutMs,
+      TransactionLog.EnforcedRequiredAcks,
+      internalTopicsAllowed = true,
+      origin = AppendOrigin.Coordinator,
+      recordsPerPartition,
+      responseCallback,
+      Some(stateLock.readLock)
+    )
   }
 
   def getTransactionState(transactionalId: String): Either[Errors, Option[CoordinatorEpochAndTxnMetadata]] = {
@@ -625,16 +630,9 @@ class TransactionStateManager(brokerId: Int,
             }
           }
           if (append) {
-            replicaManager.appendRecords(
-                newMetadata.txnTimeoutMs.toLong,
-                TransactionLog.EnforcedRequiredAcks,
-                internalTopicsAllowed = true,
-                origin = AppendOrigin.Coordinator,
-                recordsPerPartition,
-                updateCacheCallback,
-                delayedProduceLock = Some(stateLock.readLock))
-
-              trace(s"Appending new metadata $newMetadata for transaction id $transactionalId with coordinator epoch $coordinatorEpoch to the local transaction log")
+            appendToTransactionLog(recordsPerPartition, updateCacheCallback)
+            trace(s"Appending new metadata $newMetadata for transaction id $transactionalId with " +
+              s"coordinator epoch $coordinatorEpoch to the local transaction log")
           }
       }
     }

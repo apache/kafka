@@ -21,7 +21,7 @@ import java.util.concurrent.locks.ReentrantReadWriteLock
 
 import kafka.server.{DelayedOperationPurgatory, KafkaConfig, MetadataCache}
 import kafka.utils.timer.MockTimer
-import kafka.utils.TestUtils
+import kafka.utils.{MockScheduler, TestUtils}
 import org.apache.kafka.clients.{ClientResponse, NetworkClient}
 import org.apache.kafka.common.requests.{RequestHeader, TransactionResult, WriteTxnMarkersRequest, WriteTxnMarkersResponse}
 import org.apache.kafka.common.utils.MockTime
@@ -69,6 +69,7 @@ class TransactionMarkerChannelManagerTest {
     new MockTimer,
     reaperEnabled = false)
   private val time = new MockTime
+  private val txnCompletionScheduler = new MockScheduler(time)
 
   private val channelManager = new TransactionMarkerChannelManager(
     KafkaConfig.fromProps(TestUtils.createBrokerConfig(1, "localhost:2181")),
@@ -76,6 +77,7 @@ class TransactionMarkerChannelManagerTest {
     networkClient,
     txnStateManager,
     txnMarkerPurgatory,
+    txnCompletionScheduler,
     time)
 
   private def mockCache(): Unit = {

@@ -23,12 +23,12 @@ import kafka.server.DelayedOperation
 import org.apache.kafka.common.protocol.Errors
 
 /**
-  * Delayed transaction state change operations that are added to the purgatory without timeout (i.e. these operations should never time out)
-  */
+ * Delayed transaction state change operations that are added to the purgatory without
+ * timeout (i.e. these operations should never time out)
+ */
 private[transaction] class DelayedTxnMarker(txnMetadata: TransactionMetadata,
-                                           completionCallback: Errors => Unit,
-                                           lock: Lock)
-  extends DelayedOperation(TimeUnit.DAYS.toMillis(100 * 365), Some(lock)) {
+                                            completionCallback: Errors => Unit)
+  extends DelayedOperation(TimeUnit.DAYS.toMillis(100 * 365)) {
 
   override def tryComplete(): Boolean = {
     txnMetadata.inLock {
