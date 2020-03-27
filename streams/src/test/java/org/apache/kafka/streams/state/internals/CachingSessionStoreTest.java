@@ -77,7 +77,7 @@ public class CachingSessionStoreTest {
     private final Bytes keyAA = Bytes.wrap("aa".getBytes());
     private final Bytes keyB = Bytes.wrap("b".getBytes());
 
-    private SessionStore<org.apache.kafka.common.utils.Bytes, byte[]> sessionStore =
+    private SessionStore<Bytes, byte[]> underlyingStore =
         new InMemorySessionStore("store-name", Long.MAX_VALUE, "metric-scope");
     private InternalMockProcessorContext context;
     private CachingSessionStore cachingStore;
@@ -85,7 +85,7 @@ public class CachingSessionStoreTest {
 
     @Before
     public void before() {
-        cachingStore = new CachingSessionStore(sessionStore, SEGMENT_INTERVAL);
+        cachingStore = new CachingSessionStore(underlyingStore, SEGMENT_INTERVAL);
         cache = new ThreadCache(new LogContext("testCache "), MAX_CACHE_SIZE_BYTES, new MockStreamsMetrics(new Metrics()));
         final InternalMockProcessorContext context = new InternalMockProcessorContext(TestUtils.tempDirectory(), null, null, null, cache);
         context.setRecordContext(new ProcessorRecordContext(DEFAULT_TIMESTAMP, 0, 0, TOPIC, null));
@@ -135,14 +135,14 @@ public class CachingSessionStoreTest {
         cache.flush(CACHE_NAMESPACE);
         EasyMock.expectLastCall().andThrow(new NullPointerException("Simulating an error on flush"));
         EasyMock.replay(cache);
-        EasyMock.reset(sessionStore);
-        sessionStore.close();
-        EasyMock.replay(sessionStore);
+        EasyMock.reset(underlyingStore);
+        underlyingStore.close();
+        EasyMock.replay(underlyingStore);
 
         try {
             cachingStore.close();
-        } catch (final NullPointerException npe) {
-            EasyMock.verify(sessionStore);
+        } catch (final RuntimeException exception) {
+            EasyMock.verify(underlyingStore);
         }
     }
 
@@ -153,14 +153,14 @@ public class CachingSessionStoreTest {
         cache.close(CACHE_NAMESPACE);
         EasyMock.expectLastCall().andThrow(new NullPointerException("Simulating an error on close"));
         EasyMock.replay(cache);
-        EasyMock.reset(sessionStore);
-        sessionStore.close();
-        EasyMock.replay(sessionStore);
+        EasyMock.reset(underlyingStore);
+        underlyingStore.close();
+        EasyMock.replay(underlyingStore);
 
         try {
             cachingStore.close();
-        } catch (final NullPointerException npe) {
-            EasyMock.verify(sessionStore);
+        } catch (final RuntimeException exception) {
+            EasyMock.verify(underlyingStore);
         }
     }
 
@@ -171,24 +171,24 @@ public class CachingSessionStoreTest {
         cache.flush(CACHE_NAMESPACE);
         cache.close(CACHE_NAMESPACE);
         EasyMock.replay(cache);
-        EasyMock.reset(sessionStore);
-        sessionStore.close();
+        EasyMock.reset(underlyingStore);
+        underlyingStore.close();
         EasyMock.expectLastCall().andThrow(new NullPointerException("Simulating an error on close"));
-        EasyMock.replay(sessionStore);
+        EasyMock.replay(underlyingStore);
 
         try {
             cachingStore.close();
-        } catch (final NullPointerException npe) {
+        } catch (final RuntimeException exception) {
             EasyMock.verify(cache);
         }
     }
 
     private void setUpCloseTests() {
-        sessionStore = EasyMock.createNiceMock(SessionStore.class);
-        EasyMock.expect(sessionStore.name()).andStubReturn("store-name");
-        EasyMock.expect(sessionStore.isOpen()).andStubReturn(true);
-        EasyMock.replay(sessionStore);
-        cachingStore = new CachingSessionStore(sessionStore, SEGMENT_INTERVAL);
+        underlyingStore = EasyMock.createNiceMock(SessionStore.class);
+        EasyMock.expect(underlyingStore.name()).andStubReturn("store-name");
+        EasyMock.expect(underlyingStore.isOpen()).andStubReturn(true);
+        EasyMock.replay(underlyingStore);
+        cachingStore = new CachingSessionStore(underlyingStore, SEGMENT_INTERVAL);
         cache = EasyMock.niceMock(ThreadCache.class);
         context = new InternalMockProcessorContext(TestUtils.tempDirectory(), null, null, null, cache);
         context.setRecordContext(new ProcessorRecordContext(10, 0, 0, TOPIC, null));

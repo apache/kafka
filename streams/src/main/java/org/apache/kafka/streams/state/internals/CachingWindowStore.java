@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.NoSuchElementException;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
@@ -294,14 +296,17 @@ class CachingWindowStore
 
     @Override
     public void close() {
-        try {
-            flush();
-        } finally {
-            try {
-                wrapped().close();
-            } finally {
-                cache.close(name);
+        final List<RuntimeException> suppressed = new ArrayList<>();
+        captureException(this::flush, suppressed);
+        captureException(() -> cache.close(name), suppressed);
+        captureException(super::close, suppressed);
+        if (!suppressed.isEmpty()) {
+            final RuntimeException toThrow =
+                new RuntimeException("Caught an exception while closing caching window store for store " + name());
+            for (final RuntimeException e : suppressed) {
+                toThrow.addSuppressed(e);
             }
+            throw toThrow;
         }
     }
 

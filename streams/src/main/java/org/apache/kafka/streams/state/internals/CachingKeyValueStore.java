@@ -27,6 +27,7 @@ import org.apache.kafka.streams.state.KeyValueStore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.locks.Lock;
@@ -278,14 +279,17 @@ public class CachingKeyValueStore
 
     @Override
     public void close() {
-        try {
-            flush();
-        } finally {
-            try {
-                super.close();
-            } finally {
-                cache.close(cacheName);
+        final List<RuntimeException> suppressed = new ArrayList<>();
+        captureException(this::flush, suppressed);
+        captureException(() -> cache.close(cacheName), suppressed);
+        captureException(super::close, suppressed);
+        if (!suppressed.isEmpty()) {
+            final RuntimeException toThrow =
+                new RuntimeException("Caught an exception while closing caching key value store for store " + name());
+            for (final RuntimeException e : suppressed) {
+                toThrow.addSuppressed(e);
             }
+            throw toThrow;
         }
     }
 }

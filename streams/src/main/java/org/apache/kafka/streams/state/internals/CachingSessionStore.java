@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import java.util.NoSuchElementException;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.Windowed;
@@ -28,9 +27,13 @@ import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.RecordQueue;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.SessionStore;
-import java.util.Objects;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.NoSuchElementException;
+import java.util.Objects;
 
 class CachingSessionStore
     extends WrappedStateStore<SessionStore<Bytes, byte[]>, byte[], byte[]>
@@ -232,14 +235,17 @@ class CachingSessionStore
     }
 
     public void close() {
-        try {
-            flush();
-        } finally {
-            try {
-                super.close();
-            } finally {
-                cache.close(cacheName);
+        final List<RuntimeException> suppressed = new ArrayList<>();
+        captureException(this::flush, suppressed);
+        captureException(() -> cache.close(cacheName), suppressed);
+        captureException(super::close, suppressed);
+        if (!suppressed.isEmpty()) {
+            final RuntimeException toThrow =
+                new RuntimeException("Caught an exception while closing caching session store for store " + name());
+            for (final RuntimeException e : suppressed) {
+                toThrow.addSuppressed(e);
             }
+            throw toThrow;
         }
     }
 

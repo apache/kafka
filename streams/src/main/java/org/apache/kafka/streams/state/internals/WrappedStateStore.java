@@ -21,6 +21,8 @@ import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.TimestampedBytesStore;
 
+import java.util.List;
+
 /**
  * A storage engine wrapper for utilities like logging, caching, and metering.
  */
@@ -91,5 +93,13 @@ public abstract class WrappedStateStore<S extends StateStore, K, V> implements S
 
     public S wrapped() {
         return wrapped;
+    }
+
+    protected static void captureException(final Runnable action, final List<RuntimeException> suppressed) {
+        try {
+            action.run();
+        } catch (final RuntimeException exception) {
+            suppressed.add(exception);
+        }
     }
 }

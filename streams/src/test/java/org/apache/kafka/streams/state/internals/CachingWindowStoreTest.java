@@ -83,8 +83,8 @@ public class CachingWindowStoreTest {
     private static final String CACHE_NAMESPACE = "0_0-store-name";
 
     private InternalMockProcessorContext context;
-    private RocksDBSegmentedBytesStore underlying;
-    private WindowStore<Bytes, byte[]> windowStore;
+    private RocksDBSegmentedBytesStore bytesStore;
+    private WindowStore<Bytes, byte[]> underlyingStore;
     private CachingWindowStore cachingStore;
     private CachingKeyValueStoreTest.CacheFlushListenerStub<Windowed<String>, String> cacheListener;
     private ThreadCache cache;
@@ -93,15 +93,15 @@ public class CachingWindowStoreTest {
     @Before
     public void setUp() {
         keySchema = new WindowKeySchema();
-        underlying = new RocksDBSegmentedBytesStore("test", "metrics-scope", 0, SEGMENT_INTERVAL, keySchema);
-        windowStore = new RocksDBWindowStore(
-            underlying,
+        bytesStore = new RocksDBSegmentedBytesStore("test", "metrics-scope", 0, SEGMENT_INTERVAL, keySchema);
+        underlyingStore = new RocksDBWindowStore(
+            bytesStore,
             false,
             WINDOW_SIZE);
         final TimeWindowedDeserializer<String> keyDeserializer = new TimeWindowedDeserializer<>(new StringDeserializer(), WINDOW_SIZE);
         keyDeserializer.setIsChangelogTopic(true);
         cacheListener = new CachingKeyValueStoreTest.CacheFlushListenerStub<>(keyDeserializer, new StringDeserializer());
-        cachingStore = new CachingWindowStore(windowStore, WINDOW_SIZE, SEGMENT_INTERVAL);
+        cachingStore = new CachingWindowStore(underlyingStore, WINDOW_SIZE, SEGMENT_INTERVAL);
         cachingStore.setFlushListener(cacheListener, false);
         cache = new ThreadCache(new LogContext("testCache "), MAX_CACHE_SIZE_BYTES, new MockStreamsMetrics(new Metrics()));
         context = new InternalMockProcessorContext(TestUtils.tempDirectory(), null, null, null, cache);
@@ -339,7 +339,7 @@ public class CachingWindowStoreTest {
     public void shouldFlushEvictedItemsIntoUnderlyingStore() {
         final int added = addItemsToCache();
         // all dirty entries should have been flushed
-        final KeyValueIterator<Bytes, byte[]> iter = underlying.fetch(
+        final KeyValueIterator<Bytes, byte[]> iter = bytesStore.fetch(
             Bytes.wrap("0".getBytes(StandardCharsets.UTF_8)),
             DEFAULT_TIMESTAMP,
             DEFAULT_TIMESTAMP);
@@ -456,7 +456,7 @@ public class CachingWindowStoreTest {
     @Test
     public void shouldIterateCacheAndStore() {
         final Bytes key = Bytes.wrap("1".getBytes());
-        underlying.put(WindowKeySchema.toStoreKeyBinary(key, DEFAULT_TIMESTAMP, 0), "a".getBytes());
+        bytesStore.put(WindowKeySchema.toStoreKeyBinary(key, DEFAULT_TIMESTAMP, 0), "a".getBytes());
         cachingStore.put(key, bytesValue("b"), DEFAULT_TIMESTAMP + WINDOW_SIZE);
         final WindowStoreIterator<byte[]> fetch =
             cachingStore.fetch(bytesKey("1"), ofEpochMilli(DEFAULT_TIMESTAMP), ofEpochMilli(DEFAULT_TIMESTAMP + WINDOW_SIZE));
@@ -468,7 +468,7 @@ public class CachingWindowStoreTest {
     @Test
     public void shouldIterateCacheAndStoreKeyRange() {
         final Bytes key = Bytes.wrap("1".getBytes());
-        underlying.put(WindowKeySchema.toStoreKeyBinary(key, DEFAULT_TIMESTAMP, 0), "a".getBytes());
+        bytesStore.put(WindowKeySchema.toStoreKeyBinary(key, DEFAULT_TIMESTAMP, 0), "a".getBytes());
         cachingStore.put(key, bytesValue("b"), DEFAULT_TIMESTAMP + WINDOW_SIZE);
 
         final KeyValueIterator<Windowed<Bytes>, byte[]> fetchRange =
@@ -632,14 +632,14 @@ public class CachingWindowStoreTest {
         cache.flush(CACHE_NAMESPACE);
         EasyMock.expectLastCall().andThrow(new NullPointerException("Simulating an error on flush"));
         EasyMock.replay(cache);
-        EasyMock.reset(windowStore);
-        windowStore.close();
-        EasyMock.replay(windowStore);
+        EasyMock.reset(underlyingStore);
+        underlyingStore.close();
+        EasyMock.replay(underlyingStore);
 
         try {
             cachingStore.close();
-        } catch (final NullPointerException npe) {
-            EasyMock.verify(windowStore);
+        } catch (final RuntimeException exception) {
+            EasyMock.verify(underlyingStore);
         }
     }
 
@@ -650,14 +650,14 @@ public class CachingWindowStoreTest {
         cache.close(CACHE_NAMESPACE);
         EasyMock.expectLastCall().andThrow(new NullPointerException("Simulating an error on close"));
         EasyMock.replay(cache);
-        EasyMock.reset(windowStore);
-        windowStore.close();
-        EasyMock.replay(windowStore);
+        EasyMock.reset(underlyingStore);
+        underlyingStore.close();
+        EasyMock.replay(underlyingStore);
 
         try {
             cachingStore.close();
-        } catch (final NullPointerException npe) {
-            EasyMock.verify(windowStore);
+        } catch (final RuntimeException exception) {
+            EasyMock.verify(underlyingStore);
         }
     }
 
@@ -668,24 +668,24 @@ public class CachingWindowStoreTest {
         cache.flush(CACHE_NAMESPACE);
         cache.close(CACHE_NAMESPACE);
         EasyMock.replay(cache);
-        EasyMock.reset(windowStore);
-        windowStore.close();
+        EasyMock.reset(underlyingStore);
+        underlyingStore.close();
         EasyMock.expectLastCall().andThrow(new NullPointerException("Simulating an error on close"));
-        EasyMock.replay(windowStore);
+        EasyMock.replay(underlyingStore);
 
         try {
             cachingStore.close();
-        } catch (final NullPointerException npe) {
+        } catch (final RuntimeException exception) {
             EasyMock.verify(cache);
         }
     }
 
     private void setUpCloseTests() {
-        windowStore = EasyMock.createNiceMock(WindowStore.class);
-        EasyMock.expect(windowStore.name()).andStubReturn("store-name");
-        EasyMock.expect(windowStore.isOpen()).andStubReturn(true);
-        EasyMock.replay(windowStore);
-        cachingStore = new CachingWindowStore(windowStore, WINDOW_SIZE, SEGMENT_INTERVAL);
+        underlyingStore = EasyMock.createNiceMock(WindowStore.class);
+        EasyMock.expect(underlyingStore.name()).andStubReturn("store-name");
+        EasyMock.expect(underlyingStore.isOpen()).andStubReturn(true);
+        EasyMock.replay(underlyingStore);
+        cachingStore = new CachingWindowStore(underlyingStore, WINDOW_SIZE, SEGMENT_INTERVAL);
         cache = EasyMock.niceMock(ThreadCache.class);
         context = new InternalMockProcessorContext(TestUtils.tempDirectory(), null, null, null, cache);
         context.setRecordContext(new ProcessorRecordContext(10, 0, 0, TOPIC, null));
