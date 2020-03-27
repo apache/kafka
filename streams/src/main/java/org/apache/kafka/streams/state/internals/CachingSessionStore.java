@@ -242,7 +242,7 @@ class CachingSessionStore
             () -> cache.close(cacheName),
             wrapped()::close
         );
-        if (!suppressed.isEmpty()) {
+        if (suppressed != null && !suppressed.isEmpty()) {
             throwSuppressed("Caught an exception while closing caching session store for store " + name(),
                             suppressed);
         }
