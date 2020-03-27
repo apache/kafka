@@ -32,6 +32,11 @@ def retryFlagsString(jobConfig) {
 }
 
 def downstreamBuildFailureOutput = ""
+def publishStep(String configSettings) {
+  configFileProvider([configFile(fileId: configSettings, variable: 'GRADLE_NEXUS_SETTINGS')]) {
+          sh "./gradlew --init-script ${GRADLE_NEXUS_SETTINGS} --no-daemon uploadArchivesAll"
+  }
+}
 def job = {
     // https://github.com/confluentinc/common-tools/blob/master/confluent/config/dev/versions.json
     def kafkaMuckrakeVersionMap = [
@@ -47,11 +52,13 @@ def job = {
                 "--no-daemon --stacktrace --continue -PxmlSpotBugsReport=true"
     }
 
-    if (config.publish && config.isDevJob) {
-      configFileProvider([configFile(fileId: 'Gradle-Artifactory-Settings', variable: 'GRADLE_NEXUS_SETTINGS')]) {
-          stage("Publish to artifactory") {
-              sh "./gradlew --init-script ${GRADLE_NEXUS_SETTINGS} --no-daemon uploadArchivesAll"
-          }
+    if (config.publish) {
+      stage("Publish to artifactory") {
+        if (config.isDevJob) {
+          publishStep('Gradle-Artifactory-Settings')
+        } else if (config.isPreviewJob) {
+          publishStep('Gradle-Artifactory-Preview-Release-Settings')
+        }
       }
     }
 
