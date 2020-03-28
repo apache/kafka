@@ -149,7 +149,6 @@ public class ClientState {
         capacity++;
     }
 
-    @SuppressWarnings("WeakerAccess")
     public int activeTaskCount() {
         return activeTasks.size();
     }
