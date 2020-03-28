@@ -22,14 +22,11 @@ final class ExceptionUtils {
     private ExceptionUtils() {}
 
     static LinkedList<RuntimeException> executeAll(final Runnable... actions) {
-        LinkedList<RuntimeException> suppressed = null;
+        final LinkedList<RuntimeException> suppressed = new LinkedList<>();
         for (final Runnable action : actions) {
             try {
                 action.run();
             } catch (final RuntimeException exception) {
-                if (suppressed == null) {
-                    suppressed = new LinkedList<>();
-                }
                 suppressed.add(exception);
             }
         }
@@ -37,7 +34,7 @@ final class ExceptionUtils {
     }
 
     static void throwSuppressed(final String message, final LinkedList<RuntimeException> suppressed) {
-        if (suppressed != null && !suppressed.isEmpty()) {
+        if (!suppressed.isEmpty()) {
             final RuntimeException firstCause = suppressed.pollFirst();
             final RuntimeException toThrow = new RuntimeException(message, firstCause);
             for (final RuntimeException e : suppressed) {

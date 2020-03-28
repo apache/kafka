@@ -297,7 +297,7 @@ public class CachingKeyValueStore
                 () -> cache.close(cacheName),
                 wrapped()::close
             );
-            if (suppressed != null && !suppressed.isEmpty()) {
+            if (!suppressed.isEmpty()) {
                 throwSuppressed("Caught an exception while closing caching key value store for store " + name(),
                                 suppressed);
             }

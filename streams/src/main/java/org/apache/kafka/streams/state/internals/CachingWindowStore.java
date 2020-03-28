@@ -304,7 +304,7 @@ class CachingWindowStore
             () -> cache.close(name),
             wrapped()::close
         );
-        if (suppressed != null && !suppressed.isEmpty()) {
+        if (!suppressed.isEmpty()) {
             throwSuppressed("Caught an exception while closing caching window store for store " + name(),
                             suppressed);
         }
