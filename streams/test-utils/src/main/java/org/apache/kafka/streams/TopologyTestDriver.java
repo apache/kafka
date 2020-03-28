@@ -299,13 +299,7 @@ public class TopologyTestDriver implements Closeable {
 
         logContext = new LogContext("topology-test-driver ");
         mockWallClockTime = new MockTime(initialWallClockTimeMs);
-        if (StreamThread.eosAlphaEnabled(streamsConfig)) {
-            processingMode = EXACTLY_ONCE_ALPHA;
-        } else if (StreamThread.eosBetaEnabled(streamsConfig)) {
-            processingMode = EXACTLY_ONCE_BETA;
-        } else {
-            processingMode = AT_LEAST_ONCE;
-        }
+        processingMode = StreamThread.processingMode(streamsConfig);
 
         final StreamsMetricsImpl streamsMetrics = setupMetrics(streamsConfig);
         setupTopology(builder, streamsConfig);
@@ -325,8 +319,28 @@ public class TopologyTestDriver implements Closeable {
             }
         };
         testDriverProducer = new TestDriverProducer(
-            producer,
-            processingMode,
+            streamsConfig,
+            new KafkaClientSupplier() {
+                @Override
+                public Producer<byte[], byte[]> getProducer(final Map<String, Object> config) {
+                    return producer;
+                }
+
+                @Override
+                public Consumer<byte[], byte[]> getConsumer(final Map<String, Object> config) {
+                    throw new IllegalStateException();
+                }
+
+                @Override
+                public Consumer<byte[], byte[]> getRestoreConsumer(final Map<String, Object> config) {
+                    throw new IllegalStateException();
+                }
+
+                @Override
+                public Consumer<byte[], byte[]> getGlobalConsumer(final Map<String, Object> config) {
+                    throw new IllegalStateException();
+                }
+            },
             logContext
         );
 
