@@ -641,6 +641,36 @@ public class HighAvailabilityTaskAssignorTest {
     }
 
     @Test
+    public void testAssignWithMultipleNumStandbys() {
+        numStandbyReplicas = 1;
+
+        //TODO
+        allTasks = mkSet(task0_0, task0_1, task0_2, task0_3);
+        statefulTasks = mkSet(task0_0, task0_1, task0_2, task0_3);
+        client1 = getMockClientWithPreviousCaughtUpTasks(mkSet(task0_0, task0_1, task0_2, task0_3));
+        client2 = getMockClientWithPreviousCaughtUpTasks(emptyTasks);
+
+        clientStates = getClientStatesWithTwoClients();
+        createTaskAssignor();
+        taskAssignor.assign();
+
+        assertThat(client1.activeTasks(), equalTo(mkSet(task0_0, task0_1, task0_2, task0_3)));
+        assertThat(client2.standbyTasks(), equalTo(mkSet(task0_0, task0_1, task0_2, task0_3)));
+        assertHasNoStandbyTasks(client1);
+        assertHasNoActiveTasks(client2);
+    }
+
+    @Test
+    public void shouldReturnFalseIfPreviousAssignmentIsReused() {
+
+    }
+
+    @Test
+    public void shouldReturnFalseIfNoWarmupTasksAreAssigned() {
+
+    }
+
+    @Test
     public void statefulActiveTaskAssignmentShouldBeDeterministic() {
         // TODO
     }

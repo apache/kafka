@@ -22,7 +22,6 @@ import static org.apache.kafka.streams.processor.internals.assignment.Subscripti
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedList;
@@ -99,34 +98,24 @@ public class HighAvailabilityTaskAssignor<ID extends Comparable<ID>> implements 
                 clientsToNumberOfThreads
             );
 
-        assignActiveTasksToClients(statefulActiveTaskAssignment);
-
         // ---------------- Warmup Replica Tasks ---------------- //
 
-        // If we have already satisfied the balance factor with the state constrained assignment, we can skip warmups
-        final int stateConstrainedAssignmentBalanceFactor =
-            computeBalanceFactor(clientStates.values(), statefulTasks, ClientState::activeTasks);
-
-        if (stateConstrainedAssignmentBalanceFactor > configs.balanceFactor) {
-            final Map<ID, List<TaskId>> balancedStatefulActiveTaskAssignment =
+         final Map<ID, List<TaskId>> balancedStatefulActiveTaskAssignment =
                 new DefaultBalancedAssignor<ID>().assign(
                     sortedClients,
                     statefulTasks,
                     clientsToNumberOfThreads,
                     configs.balanceFactor);
 
-            final Queue<Movement<ID>> movements = getMovements(statefulActiveTaskAssignment,
-                balancedStatefulActiveTaskAssignment);
-            for (int numWarmupReplicas = 0; numWarmupReplicas < configs.maxWarmupReplicas; ++numWarmupReplicas) {
-                final Movement<ID> movement = movements.poll();
-                if (movement == null) {
-                    break;
-                }
-                warmupTaskAssignment.get(movement.destination).add(movement.task);
-            }
-        }
-
-        assignStandbyTasksToClients(warmupTaskAssignment);
+         final Queue<Movement<ID>> movements =
+             getMovements(statefulActiveTaskAssignment, balancedStatefulActiveTaskAssignment);
+         for (int numWarmupReplicas = 0; numWarmupReplicas < configs.maxWarmupReplicas; ++numWarmupReplicas) {
+             final Movement<ID> movement = movements.poll();
+             if (movement == null) {
+                 break;
+             }
+             warmupTaskAssignment.get(movement.destination).add(movement.task);
+         }
 
         // ---------------- Standby Replica Tasks ---------------- //
 
@@ -157,8 +146,6 @@ public class HighAvailabilityTaskAssignor<ID extends Comparable<ID>> implements 
             }
         }
 
-        assignStandbyTasksToClients(standbyTaskAssignment);
-
         // ---------------- Stateless Active Tasks ---------------- //
 
         final PriorityQueue<ID> statelessActiveTaskClientsQueue =
@@ -170,8 +157,6 @@ public class HighAvailabilityTaskAssignor<ID extends Comparable<ID>> implements 
             statelessActiveTaskClientsQueue.offer(client);
         }
 
-        assignActiveTasksToClients(statelessActiveTaskAssignment);
-
         // ---------------- Assign Tasks To Clients ---------------- //
 
         final boolean followupRebalanceRequired;
@@ -179,6 +164,11 @@ public class HighAvailabilityTaskAssignor<ID extends Comparable<ID>> implements 
             assignPreviousTasksToClientStates();
             followupRebalanceRequired = false;
         } else {
+            assignActiveTasksToClients(statefulActiveTaskAssignment);
+            assignStandbyTasksToClients(warmupTaskAssignment);
+            assignStandbyTasksToClients(standbyTaskAssignment);
+            assignActiveTasksToClients(statelessActiveTaskAssignment);
+
             final int assignmentBalanceFactor =
                 computeBalanceFactor(clientStates.values(), statefulTasks, ClientState::activeTasks);
             followupRebalanceRequired = assignmentBalanceFactor <= configs.balanceFactor;
@@ -391,7 +381,8 @@ public class HighAvailabilityTaskAssignor<ID extends Comparable<ID>> implements 
 
     private void assignPreviousTasksToClientStates() {
         for (final ClientState clientState : clientStates.values()) {
-            clientState.reusePreviousAssignment();
+            clientState.assignActiveTasks(clientState.prevActiveTasks());
+            clientState.assignStandbyTasks(clientState.prevStandbyTasks());
         }
     }
 

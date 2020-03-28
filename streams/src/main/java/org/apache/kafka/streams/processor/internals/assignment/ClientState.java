@@ -120,13 +120,6 @@ public class ClientState {
         assignedTasks.addAll(tasks);
     }
 
-    void reusePreviousAssignment() {
-        clearAllAssignedTasks();
-        activeTasks.addAll(prevActiveTasks);
-        standbyTasks.addAll(prevStandbyTasks);
-        assignedTasks.addAll(prevAssignedTasks);
-    }
-
     public Set<TaskId> activeTasks() {
         return activeTasks;
     }
@@ -314,12 +307,6 @@ public class ClientState {
                 }
             }
         }
-    }
-
-    private void clearAllAssignedTasks() {
-        activeTasks.clear();
-        standbyTasks.clear();
-        assignedTasks.clear();
     }
 
     private void addPreviousActiveTask(final TaskId task) {

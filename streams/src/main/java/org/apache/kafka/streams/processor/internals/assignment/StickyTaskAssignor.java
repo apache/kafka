@@ -99,7 +99,9 @@ public class StickyTaskAssignor<ID> implements TaskAssignor {
             final TaskId taskId = entry.getKey();
             if (allTaskIds.contains(taskId)) {
                 final ClientState client = clients.get(entry.getValue());
-                assignTaskToClient(assigned, taskId, client);
+                if (mustPreserveActiveTaskAssignment || client.hasUnfulfilledQuota(tasksPerThread)) {
+                    assignTaskToClient(assigned, taskId, client);
+                }
             }
         }
 
@@ -114,7 +116,7 @@ public class StickyTaskAssignor<ID> implements TaskAssignor {
             if (clientIds != null) {
                 for (final ID clientId : clientIds) {
                     final ClientState client = clients.get(clientId);
-                    if (mustPreserveActiveTaskAssignment || client.hasUnfulfilledQuota(tasksPerThread)) {
+                    if (client.hasUnfulfilledQuota(tasksPerThread)) {
                         assignTaskToClient(assigned, taskId, client);
                         iterator.remove();
                         break;
