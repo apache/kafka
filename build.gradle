@@ -327,6 +327,7 @@ subprojects {
     // The suites are for running sets of tests in IDEs.
     // Gradle will run each test class, so we exclude the suites to avoid redundantly running the tests twice.
     exclude '**/*Suite.class'
+
     useJUnit {
       includeCategories 'org.apache.kafka.test.IntegrationTest'
     }
@@ -349,11 +350,12 @@ subprojects {
       exceptionFormat = testExceptionFormat
     }
     logTestStdout.rehydrate(delegate, owner, this)()
+    
+    // The suites are for running sets of tests in IDEs.
+    // Gradle will run each test class, so we exclude the suites to avoid redundantly running the tests twice.
+    exclude '**/*Suite.class'
 
     if (it.project.name != 'generator') {
-      // The suites are for running sets of tests in IDEs.
-      // Gradle will run each test class, so we exclude the suites to avoid redundantly running the tests twice.
-      exclude '**/*Suite.class'
       useJUnit {
         excludeCategories 'org.apache.kafka.test.IntegrationTest'
       }
