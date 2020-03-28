@@ -164,10 +164,11 @@ class TransactionCoordinator(brokerId: Int,
               }
             }
 
-            handleEndTransaction(transactionalId,
+            endTransaction(transactionalId,
               newMetadata.producerId,
               newMetadata.producerEpoch,
               TransactionResult.ABORT,
+              isFromClient = false,
               sendRetriableErrorCallback)
           } else {
             def sendPidResponseCallback(error: Errors): Unit = {
@@ -352,6 +353,20 @@ class TransactionCoordinator(brokerId: Int,
                            producerEpoch: Short,
                            txnMarkerResult: TransactionResult,
                            responseCallback: EndTxnCallback): Unit = {
+    endTransaction(transactionalId,
+      producerId,
+      producerEpoch,
+      txnMarkerResult,
+      isFromClient = true,
+      responseCallback)
+  }
+
+  private def endTransaction(transactionalId: String,
+                             producerId: Long,
+                             producerEpoch: Short,
+                             txnMarkerResult: TransactionResult,
+                             isFromClient: Boolean,
+                             responseCallback: EndTxnCallback): Unit = {
     if (transactionalId == null || transactionalId.isEmpty)
       responseCallback(Errors.INVALID_REQUEST)
     else {
@@ -366,7 +381,8 @@ class TransactionCoordinator(brokerId: Int,
           txnMetadata.inLock {
             if (txnMetadata.producerId != producerId)
               Left(Errors.INVALID_PRODUCER_ID_MAPPING)
-            else if (producerEpoch < txnMetadata.producerEpoch)
+            // Strict equality is enforced on the client side requests, as they shouldn't bump the producer epoch.
+            else if ((isFromClient && producerEpoch != txnMetadata.producerEpoch) || producerEpoch < txnMetadata.producerEpoch)
               Left(Errors.INVALID_PRODUCER_EPOCH)
             else if (txnMetadata.pendingTransitionInProgress && txnMetadata.pendingState.get != PrepareEpochFence)
               Left(Errors.CONCURRENT_TRANSACTIONS)
@@ -500,24 +516,25 @@ class TransactionCoordinator(brokerId: Int,
 
   def partitionFor(transactionalId: String): Int = txnManager.partitionFor(transactionalId)
 
-  private def abortTimedOutTransactions(): Unit = {
-    def onComplete(txnIdAndPidEpoch: TransactionalIdAndProducerIdEpoch)(error: Errors): Unit = {
-      error match {
-        case Errors.NONE =>
-          info("Completed rollback of ongoing transaction for transactionalId " +
-            s"${txnIdAndPidEpoch.transactionalId} due to timeout")
+  private def onEndTransactionComplete(txnIdAndPidEpoch: TransactionalIdAndProducerIdEpoch)(error: Errors): Unit = {
+    error match {
+      case Errors.NONE =>
+        info("Completed rollback of ongoing transaction for transactionalId " +
+          s"${txnIdAndPidEpoch.transactionalId} due to timeout")
 
-        case error@(Errors.INVALID_PRODUCER_ID_MAPPING |
-                    Errors.INVALID_PRODUCER_EPOCH |
-                    Errors.CONCURRENT_TRANSACTIONS) =>
-          debug(s"Rollback of ongoing transaction for transactionalId ${txnIdAndPidEpoch.transactionalId} " +
-            s"has been cancelled due to error $error")
+      case error@(Errors.INVALID_PRODUCER_ID_MAPPING |
+                  Errors.INVALID_PRODUCER_EPOCH |
+                  Errors.CONCURRENT_TRANSACTIONS) =>
+        debug(s"Rollback of ongoing transaction for transactionalId ${txnIdAndPidEpoch.transactionalId} " +
+          s"has been cancelled due to error $error")
 
-        case error =>
-          warn(s"Rollback of ongoing transaction for transactionalId ${txnIdAndPidEpoch.transactionalId} " +
-            s"failed due to error $error")
-      }
+      case error =>
+        warn(s"Rollback of ongoing transaction for transactionalId ${txnIdAndPidEpoch.transactionalId} " +
+          s"failed due to error $error")
     }
+  }
+
+  private[transaction] def abortTimedOutTransactions(onComplete: TransactionalIdAndProducerIdEpoch => EndTxnCallback): Unit = {
 
     txnManager.timedOutTransactions().foreach { txnIdAndPidEpoch =>
       txnManager.getTransactionState(txnIdAndPidEpoch.transactionalId).right.foreach {
@@ -542,10 +559,11 @@ class TransactionCoordinator(brokerId: Int,
           }
 
           transitMetadataOpt.foreach { txnTransitMetadata =>
-            handleEndTransaction(txnMetadata.transactionalId,
+            endTransaction(txnMetadata.transactionalId,
               txnTransitMetadata.producerId,
               txnTransitMetadata.producerEpoch,
               TransactionResult.ABORT,
+              isFromClient = false,
               onComplete(txnIdAndPidEpoch))
           }
       }
@@ -559,7 +577,7 @@ class TransactionCoordinator(brokerId: Int,
     info("Starting up.")
     scheduler.startup()
     scheduler.schedule("transaction-abort",
-      abortTimedOutTransactions,
+      () => abortTimedOutTransactions(onEndTransactionComplete),
       txnConfig.abortTimedOutTransactionsIntervalMs,
       txnConfig.abortTimedOutTransactionsIntervalMs
     )
