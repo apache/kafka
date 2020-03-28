@@ -608,26 +608,11 @@ public class HighAvailabilityTaskAssignorTest {
     }
 
     @Test
-    public void shouldGiveEachClientAtLeastOneTask() {
-        allTasks = mkSet(task0_0, task0_1, task0_2, task0_3, task1_0, task1_1, task1_2, task1_3, task2_0);
-        statefulTasks = new HashSet<>(allTasks);
-        client1 = getMockClientWithPreviousCaughtUpTasks(allTasks).withCapacity(1);
-        client2 = getMockClientWithPreviousCaughtUpTasks(allTasks).withCapacity(100);
-
-        clientStates = getClientStatesWithTwoClients();
-        createTaskAssignor();
-        taskAssignor.assign();
-
-        assertThat(client1.activeTaskCount(), equalTo(1));
-        assertThat(client2.activeTaskCount(), equalTo(8));
-    }
-
-    @Test
-    public void shouldDistributeStatefulActiveTasksOverAllClients() {
+    public void shouldDistributeStatefulActiveTasksToAllClients() {
         allTasks = mkSet(task0_0, task0_1, task0_2, task0_3, task1_0, task1_1, task1_2, task1_3, task2_0); // 9 total
         statefulTasks = new HashSet<>(allTasks);
-        client1 = getMockClientWithPreviousCaughtUpTasks(allTasks).withCapacity(10);
-        client2 = getMockClientWithPreviousCaughtUpTasks(allTasks).withCapacity(5);
+        client1 = getMockClientWithPreviousCaughtUpTasks(allTasks).withCapacity(100);
+        client2 = getMockClientWithPreviousCaughtUpTasks(allTasks).withCapacity(50);
         client3 = getMockClientWithPreviousCaughtUpTasks(allTasks).withCapacity(1);
 
         clientStates = getClientStatesWithThreeClients();
@@ -640,8 +625,49 @@ public class HighAvailabilityTaskAssignorTest {
     }
 
     @Test
+    public void shouldReturnFalIfPreviousAssignmentIsReused() {
+        allTasks = mkSet(task0_0, task0_1, task0_2, task0_3);
+        statefulTasks = new HashSet<>(allTasks);
+        client1 = getMockClientWithPreviousCaughtUpTasks(allTasks);
+        client2 = getMockClientWithPreviousCaughtUpTasks(allTasks);
+
+        clientStates = getClientStatesWithTwoClients();
+        createTaskAssignor();
+        assertFalse(taskAssignor.assign());
+
+        assertThat(client1.activeTasks(), equalTo(client1.prevActiveTasks()));
+        assertThat(client2.activeTasks(), equalTo(client2.prevActiveTasks()));
+    }
+
+    @Test
+    public void shouldReturnFalseIfNoWarmupTasksAreAssigned() {
+        allTasks = mkSet(task0_0, task0_1, task0_2, task0_3);
+        statefulTasks = emptyTasks;
+        client1 = getMockClientWithPreviousCaughtUpTasks(emptyTasks);
+        client2 = getMockClientWithPreviousCaughtUpTasks(emptyTasks);
+
+        clientStates = getClientStatesWithTwoClients();
+        createTaskAssignor();
+        assertFalse(taskAssignor.assign());
+        assertHasNoStandbyTasks(client1, client2);
+    }
+
+    @Test
+    public void shouldReturnTrueIfNoWarmupTasksAreAssigned() {
+        allTasks = mkSet(task0_0, task0_1, task0_2, task0_3);
+        statefulTasks = emptyTasks;
+        client1 = getMockClientWithPreviousCaughtUpTasks(emptyTasks);
+        client2 = getMockClientWithPreviousCaughtUpTasks(emptyTasks);
+
+        clientStates = getClientStatesWithTwoClients();
+        createTaskAssignor();
+        assertFalse(taskAssignor.assign());
+        assertHasNoStandbyTasks(client1, client2);
+    }
+
+    @Test
     public void testAssignWithMultipleNumStandbys() {
-        numStandbyReplicas = 1;
+        numStandbyReplicas = 2;
 
         //TODO
         allTasks = mkSet(task0_0, task0_1, task0_2, task0_3);
@@ -649,7 +675,7 @@ public class HighAvailabilityTaskAssignorTest {
         client1 = getMockClientWithPreviousCaughtUpTasks(mkSet(task0_0, task0_1, task0_2, task0_3));
         client2 = getMockClientWithPreviousCaughtUpTasks(emptyTasks);
 
-        clientStates = getClientStatesWithTwoClients();
+        clientStates = getClientStatesWithThreeClients();
         createTaskAssignor();
         taskAssignor.assign();
 
@@ -657,16 +683,6 @@ public class HighAvailabilityTaskAssignorTest {
         assertThat(client2.standbyTasks(), equalTo(mkSet(task0_0, task0_1, task0_2, task0_3)));
         assertHasNoStandbyTasks(client1);
         assertHasNoActiveTasks(client2);
-    }
-
-    @Test
-    public void shouldReturnFalseIfPreviousAssignmentIsReused() {
-
-    }
-
-    @Test
-    public void shouldReturnFalseIfNoWarmupTasksAreAssigned() {
-
     }
 
     @Test

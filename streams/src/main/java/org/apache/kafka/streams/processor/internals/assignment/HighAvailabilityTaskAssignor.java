@@ -44,7 +44,7 @@ import org.slf4j.LoggerFactory;
 import java.util.Map;
 import java.util.Set;
 
-public class HighAvailabilityTaskAssignor<ID extends Comparable<ID>> implements TaskAssignor {
+public class HighAvailabilityTaskAssignor<ID extends Comparable<ID>> implements TaskAssignor<ID> {
     private static final Logger log = LoggerFactory.getLogger(HighAvailabilityTaskAssignor.class);
 
     private final Map<ID, ClientState> clientStates;
@@ -169,9 +169,7 @@ public class HighAvailabilityTaskAssignor<ID extends Comparable<ID>> implements 
             assignStandbyTasksToClients(standbyTaskAssignment);
             assignActiveTasksToClients(statelessActiveTaskAssignment);
 
-            final int assignmentBalanceFactor =
-                computeBalanceFactor(clientStates.values(), statefulTasks, ClientState::activeTasks);
-            followupRebalanceRequired = assignmentBalanceFactor <= configs.balanceFactor;
+            followupRebalanceRequired = !warmupTaskAssignment.isEmpty();
         }
         return followupRebalanceRequired;
     }

@@ -32,7 +32,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 
-public class StickyTaskAssignor<ID> implements TaskAssignor {
+public class StickyTaskAssignor<ID> implements TaskAssignor<ID> {
 
     private static final Logger log = LoggerFactory.getLogger(StickyTaskAssignor.class);
     private final Map<ID, ClientState> clients;
