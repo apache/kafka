@@ -100,22 +100,22 @@ public class HighAvailabilityTaskAssignor<ID extends Comparable<ID>> implements 
 
         // ---------------- Warmup Replica Tasks ---------------- //
 
-         final Map<ID, List<TaskId>> balancedStatefulActiveTaskAssignment =
+        final Map<ID, List<TaskId>> balancedStatefulActiveTaskAssignment =
                 new DefaultBalancedAssignor<ID>().assign(
                     sortedClients,
                     statefulTasks,
                     clientsToNumberOfThreads,
                     configs.balanceFactor);
 
-         final Queue<Movement<ID>> movements =
-             getMovements(statefulActiveTaskAssignment, balancedStatefulActiveTaskAssignment);
-         for (int numWarmupReplicas = 0; numWarmupReplicas < configs.maxWarmupReplicas; ++numWarmupReplicas) {
-             final Movement<ID> movement = movements.poll();
-             if (movement == null) {
-                 break;
-             }
-             warmupTaskAssignment.get(movement.destination).add(movement.task);
-         }
+        final Queue<Movement<ID>> movements =
+            getMovements(statefulActiveTaskAssignment, balancedStatefulActiveTaskAssignment);
+        for (int numWarmupReplicas = 0; numWarmupReplicas < configs.maxWarmupReplicas; ++numWarmupReplicas) {
+            final Movement<ID> movement = movements.poll();
+            if (movement == null) {
+                break;
+            }
+            warmupTaskAssignment.get(movement.destination).add(movement.task);
+        }
 
         // ---------------- Standby Replica Tasks ---------------- //
 
