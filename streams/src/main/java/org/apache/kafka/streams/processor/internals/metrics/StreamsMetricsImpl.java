@@ -402,11 +402,13 @@ public class StreamsMetricsImpl implements StreamsMetrics {
         final String key = storeSensorPrefix(threadId, taskId, storeName);
         synchronized (storeLevelSensors) {
             final String fullSensorName = key + SENSOR_NAME_DELIMITER + sensorName;
-            return Optional.ofNullable(metrics.getSensor(fullSensorName))
-                .orElseGet(() -> {
-                    storeLevelSensors.computeIfAbsent(key, ignored -> new LinkedList<>()).push(fullSensorName);
-                    return metrics.sensor(fullSensorName, recordingLevel, parents);
-                });
+            final Sensor sensor = metrics.getSensor(fullSensorName);
+            if (sensor == null) {
+                storeLevelSensors.computeIfAbsent(key, ignored -> new LinkedList<>()).push(fullSensorName);
+                return metrics.sensor(fullSensorName, recordingLevel, parents);
+            } else {
+                return sensor;
+            }
         }
     }
 
