@@ -35,8 +35,6 @@ class TestUpgrade(ProduceConsumeValidateTest):
         self.topic = "test_topic"
         self.partitions = 3
         self.replication_factor = 3
-        self.zk = ZookeeperService(self.test_context, num_nodes=1)
-        self.zk.start()
 
         # Producer and consumer
         self.producer_throughput = 1000
@@ -49,6 +47,9 @@ class TestUpgrade(ProduceConsumeValidateTest):
                     backoff_sec=1, err_msg="Replicas did not rejoin the ISR in a reasonable amount of time")
 
     def perform_upgrade(self, from_kafka_version, to_message_format_version=None):
+        self.logger.info("Upgrade ZooKeeper from %s to %s" % (str(self.zk.nodes[0].version), str(DEV_BRANCH)))
+        self.zk.set_version(DEV_BRANCH)
+        self.zk.restart_cluster()
         self.logger.info("First pass bounce - rolling upgrade")
         for node in self.kafka.nodes:
             self.kafka.stop_node(node)
@@ -124,6 +125,7 @@ class TestUpgrade(ProduceConsumeValidateTest):
             to_message_format_version, otherwise remove log.message.format.version config
         - Finally, validate that every message acked by the producer was consumed by the consumer
         """
+        self.zk = ZookeeperService(self.test_context, num_nodes=1, version=KafkaVersion(from_kafka_version))
         self.kafka = KafkaService(self.test_context, num_nodes=3, zk=self.zk,
                                   version=KafkaVersion(from_kafka_version),
                                   topics={self.topic: {"partitions": self.partitions,
@@ -138,6 +140,7 @@ class TestUpgrade(ProduceConsumeValidateTest):
             self.logger.info("Test ignored! Kafka " + from_kafka_version + " not support jdk " + str(jdk_version))
             return
 
+        self.zk.start()
         self.kafka.start()
 
         self.producer = VerifiableProducer(self.test_context, self.num_producers, self.kafka,
