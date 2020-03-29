@@ -178,6 +178,7 @@ public class StreamsGraphTest {
         branches[1].map(KeyValue::pair).to("retryTopic", Produced.with(Serdes.String(), Serdes.String()));
 
         final Topology topology = builder.build(properties);
+        System.out.println(topology.describe().toString());
         assertEquals(expectedComplexMergeOptimizeTopology, topology.describe().toString());
     }
 
@@ -377,20 +378,20 @@ public class StreamsGraphTest {
             "    Source: KSTREAM-SOURCE-0000000000 (topics: [retryTopic])\n" +
             "      --> KSTREAM-TRANSFORM-0000000001\n" +
             "    Processor: KSTREAM-TRANSFORM-0000000001 (stores: [])\n" +
-            "      --> KSTREAM-FILTER-0000000040\n" +
+            "      --> KSTREAM-AGGREGATE-STATE-STORE-0000000002-repartition-filter\n" +
             "      <-- KSTREAM-SOURCE-0000000000\n" +
-            "    Processor: KSTREAM-FILTER-0000000040 (stores: [])\n" +
-            "      --> KSTREAM-SINK-0000000039\n" +
+            "    Processor: KSTREAM-AGGREGATE-STATE-STORE-0000000002-repartition-filter (stores: [])\n" +
+            "      --> KSTREAM-AGGREGATE-STATE-STORE-0000000002-repartition-sink\n" +
             "      <-- KSTREAM-TRANSFORM-0000000001\n" +
-            "    Sink: KSTREAM-SINK-0000000039 (topic: KSTREAM-AGGREGATE-STATE-STORE-0000000002-repartition)\n" +
-            "      <-- KSTREAM-FILTER-0000000040\n" +
+            "    Sink: KSTREAM-AGGREGATE-STATE-STORE-0000000002-repartition-sink (topic: KSTREAM-AGGREGATE-STATE-STORE-0000000002-repartition)\n" +
+            "      <-- KSTREAM-AGGREGATE-STATE-STORE-0000000002-repartition-filter\n" +
             "\n" +
             "  Sub-topology: 1\n" +
-            "    Source: KSTREAM-SOURCE-0000000041 (topics: [KSTREAM-AGGREGATE-STATE-STORE-0000000002-repartition])\n" +
+            "    Source: KSTREAM-AGGREGATE-STATE-STORE-0000000002-repartition-source (topics: [KSTREAM-AGGREGATE-STATE-STORE-0000000002-repartition])\n" +
             "      --> KSTREAM-AGGREGATE-0000000003\n" +
             "    Processor: KSTREAM-AGGREGATE-0000000003 (stores: [KSTREAM-AGGREGATE-STATE-STORE-0000000002])\n" +
             "      --> KTABLE-SUPPRESS-0000000007\n" +
-            "      <-- KSTREAM-SOURCE-0000000041\n" +
+            "      <-- KSTREAM-AGGREGATE-STATE-STORE-0000000002-repartition-source\n" +
             "    Source: KSTREAM-SOURCE-0000000019 (topics: [internal-topic-command])\n" +
             "      --> KSTREAM-PEEK-0000000020\n" +
             "    Processor: KTABLE-SUPPRESS-0000000007 (stores: [KTABLE-SUPPRESS-STATE-STORE-0000000008])\n" +
@@ -421,13 +422,13 @@ public class StreamsGraphTest {
             "    Source: KSTREAM-SOURCE-0000000011 (topics: [id-table-topic])\n" +
             "      --> KSTREAM-FLATMAP-0000000012\n" +
             "    Processor: KSTREAM-FLATMAP-0000000012 (stores: [])\n" +
-            "      --> KSTREAM-FILTER-0000000043\n" +
+            "      --> KSTREAM-AGGREGATE-STATE-STORE-0000000014-repartition-filter\n" +
             "      <-- KSTREAM-SOURCE-0000000011\n" +
-            "    Processor: KSTREAM-FILTER-0000000043 (stores: [])\n" +
-            "      --> KSTREAM-SINK-0000000042\n" +
+            "    Processor: KSTREAM-AGGREGATE-STATE-STORE-0000000014-repartition-filter (stores: [])\n" +
+            "      --> KSTREAM-AGGREGATE-STATE-STORE-0000000014-repartition-sink\n" +
             "      <-- KSTREAM-FLATMAP-0000000012\n" +
-            "    Sink: KSTREAM-SINK-0000000042 (topic: KSTREAM-AGGREGATE-STATE-STORE-0000000014-repartition)\n" +
-            "      <-- KSTREAM-FILTER-0000000043\n" +
+            "    Sink: KSTREAM-AGGREGATE-STATE-STORE-0000000014-repartition-sink (topic: KSTREAM-AGGREGATE-STATE-STORE-0000000014-repartition)\n" +
+            "      <-- KSTREAM-AGGREGATE-STATE-STORE-0000000014-repartition-filter\n" +
             "\n" +
             "  Sub-topology: 3\n" +
             "    Source: KSTREAM-SOURCE-0000000025 (topics: [KSTREAM-MERGE-0000000022-repartition])\n" +
@@ -447,14 +448,14 @@ public class StreamsGraphTest {
             "    Processor: KSTREAM-FILTER-0000000033 (stores: [])\n" +
             "      --> KSTREAM-PEEK-0000000034\n" +
             "      <-- KSTREAM-BRANCHCHILD-0000000029\n" +
+            "    Source: KSTREAM-AGGREGATE-STATE-STORE-0000000014-repartition-source (topics: [KSTREAM-AGGREGATE-STATE-STORE-0000000014-repartition])\n" +
+            "      --> KSTREAM-PEEK-0000000013\n" +
             "    Processor: KSTREAM-MAP-0000000030 (stores: [])\n" +
             "      --> KSTREAM-PEEK-0000000031\n" +
             "      <-- KSTREAM-BRANCHCHILD-0000000028\n" +
             "    Processor: KSTREAM-PEEK-0000000034 (stores: [])\n" +
             "      --> KSTREAM-MAPVALUES-0000000035\n" +
             "      <-- KSTREAM-FILTER-0000000033\n" +
-            "    Source: KSTREAM-SOURCE-0000000044 (topics: [KSTREAM-AGGREGATE-STATE-STORE-0000000014-repartition])\n" +
-            "      --> KSTREAM-PEEK-0000000013\n" +
             "    Processor: KSTREAM-MAP-0000000037 (stores: [])\n" +
             "      --> KSTREAM-SINK-0000000038\n" +
             "      <-- KSTREAM-BRANCHCHILD-0000000029\n" +
@@ -463,7 +464,7 @@ public class StreamsGraphTest {
             "      <-- KSTREAM-PEEK-0000000034\n" +
             "    Processor: KSTREAM-PEEK-0000000013 (stores: [])\n" +
             "      --> KSTREAM-AGGREGATE-0000000015\n" +
-            "      <-- KSTREAM-SOURCE-0000000044\n" +
+            "      <-- KSTREAM-AGGREGATE-STATE-STORE-0000000014-repartition-source\n" +
             "    Processor: KSTREAM-PEEK-0000000031 (stores: [])\n" +
             "      --> KSTREAM-SINK-0000000032\n" +
             "      <-- KSTREAM-MAP-0000000030\n" +
@@ -476,5 +477,4 @@ public class StreamsGraphTest {
             "      <-- KSTREAM-MAPVALUES-0000000035\n" +
             "    Sink: KSTREAM-SINK-0000000038 (topic: retryTopic)\n" +
             "      <-- KSTREAM-MAP-0000000037\n\n";
-
 }

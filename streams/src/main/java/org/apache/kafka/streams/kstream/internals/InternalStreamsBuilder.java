@@ -427,7 +427,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
     }
 
     private boolean mergeNodeHasRepartitionChildren(final StreamsGraphNode mergeNode,
-                                                    final LinkedHashSet<OptimizableRepartitionNode> repartitionNodes) {
+                                                    final LinkedHashSet<OptimizableRepartitionNode<?, ?>> repartitionNodes) {
         return repartitionNodes.stream().anyMatch(n -> findParentNodeMatching(n, gn -> gn.parentNodes().contains(mergeNode)) != null);
     }
 
