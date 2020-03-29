@@ -491,7 +491,7 @@
     Schema schema = SchemaBuilder.struct().name(NAME)
         .field("name", Schema.STRING_SCHEMA)
         .field("age", Schema.INT_SCHEMA)
-        .field("admin", new SchemaBuilder.boolean().defaultValue(false).build())
+        .field("admin", SchemaBuilder.bool().defaultValue(false).build())
         .build();
 
     Struct struct = new Struct(schema)
