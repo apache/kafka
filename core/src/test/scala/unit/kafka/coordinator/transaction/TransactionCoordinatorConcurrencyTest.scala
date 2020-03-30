@@ -22,8 +22,7 @@ import kafka.coordinator.AbstractCoordinatorConcurrencyTest
 import kafka.coordinator.AbstractCoordinatorConcurrencyTest._
 import kafka.coordinator.transaction.TransactionCoordinatorConcurrencyTest._
 import kafka.log.Log
-import kafka.server.{DelayedOperationPurgatory, FetchDataInfo, FetchLogEnd, KafkaConfig, LogOffsetMetadata, MetadataCache}
-import kafka.utils.timer.MockTimer
+import kafka.server.{FetchDataInfo, FetchLogEnd, KafkaConfig, LogOffsetMetadata, MetadataCache}
 import kafka.utils.{Pool, TestUtils}
 import org.apache.kafka.clients.{ClientResponse, NetworkClient}
 import org.apache.kafka.common.internals.Topic.TRANSACTION_STATE_TOPIC_NAME
@@ -80,9 +79,6 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
     EasyMock.expect(pidManager.generateProducerId())
       .andAnswer(() => if (bumpProducerId) producerId + 1 else producerId)
       .anyTimes()
-    val txnMarkerPurgatory = new DelayedOperationPurgatory[DelayedTxnMarker]("txn-purgatory-name",
-      new MockTimer,
-      reaperEnabled = false)
     val brokerNode = new Node(0, "host", 10)
     val metadataCache: MetadataCache = EasyMock.createNiceMock(classOf[MetadataCache])
     EasyMock.expect(metadataCache.getPartitionLeaderEndpoint(
@@ -96,12 +92,7 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
       metadataCache,
       networkClient,
       txnStateManager,
-      txnMarkerPurgatory,
-      time) {
-        override def shutdown(): Unit = {
-          txnMarkerPurgatory.shutdown()
-        }
-    }
+      time)
 
     transactionCoordinator = new TransactionCoordinator(brokerId = 0,
       txnConfig,
