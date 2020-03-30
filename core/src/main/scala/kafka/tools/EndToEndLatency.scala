@@ -147,7 +147,7 @@ object EndToEndLatency {
 
       //Report progress
       if (i % 1000 == 0)
-        println(i + "\t" + elapsed / 1000.0 / 1000.0)
+        println(i.toString + "\t" + elapsed / 1000.0 / 1000.0)
       totalTime += elapsed
       latencies(i) = elapsed / 1000 / 1000
     }

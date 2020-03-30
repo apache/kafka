@@ -176,7 +176,7 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
   private[server] val throttledChannelReaper = new ThrottledChannelReaper(delayQueue, threadNamePrefix)
   private val quotaCallback = clientQuotaCallback.getOrElse(new DefaultQuotaCallback)
 
-  private val delayQueueSensor = metrics.sensor(quotaType + "-delayQueue")
+  private val delayQueueSensor = metrics.sensor(quotaType.toString + "-delayQueue")
   delayQueueSensor.add(metrics.metricName("queue-size",
     quotaType.toString,
     "Tracks the size of the delay queue"), new CumulativeSum())

@@ -624,7 +624,7 @@ case object LiteralAclChangeStore extends ZkAclChangeStore {
     if (resource.patternType != PatternType.LITERAL)
       throw new IllegalArgumentException("Only literal resource patterns can be encoded")
 
-    val legacyName = resource.resourceType + AclEntry.ResourceSeparator + resource.name
+    val legacyName = resource.resourceType.toString + AclEntry.ResourceSeparator + resource.name
     legacyName.getBytes(UTF_8)
   }
 

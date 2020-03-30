@@ -1511,7 +1511,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
 
     consumer.assign(List(tp2).asJava)
     awaitNonEmptyRecords(consumer, tp2)
-    assertNull(consumer.metrics.get(new MetricName(tp + ".records-lag", "consumer-fetch-manager-metrics", "", tags)))
+    assertNull(consumer.metrics.get(new MetricName(tp.toString + ".records-lag", "consumer-fetch-manager-metrics", "", tags)))
     assertNull(consumer.metrics.get(new MetricName("records-lag", "consumer-fetch-manager-metrics", "", tags)))
   }
 
