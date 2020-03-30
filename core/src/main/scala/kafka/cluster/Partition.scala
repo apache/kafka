@@ -971,7 +971,7 @@ class Partition(val topicPartition: TopicPartition,
 
           // Avoid writing to leader if replication factor < min insync replicas
           if (replicationFactor < minIsr && requiredAcks == -1) {
-            throw new InconsistentReplicaConfigurationException(s"Replication factor [$replicationFactor] is < min.isr [$minIsr]" +
+            throw new InconsistentReplicationFactorException(s"Replication factor [$replicationFactor] is < min.isr [$minIsr]" +
               s"for topic ${topicPartition.topic()}. Acks requirements cannot be satisfied when requiredAcks=$requiredAcks")
           }
 

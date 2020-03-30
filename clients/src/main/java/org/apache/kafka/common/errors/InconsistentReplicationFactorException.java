@@ -19,22 +19,22 @@ package org.apache.kafka.common.errors;
 /**
  * Replication factor for the topic is lower than min.insync.replicas. Messages are rejected when acks=all.
  */
-public class InconsistentReplicaConfigurationException extends ApiException {
+public class InconsistentReplicationFactorException extends ApiException {
     private static final long serialVersionUID = 1L;
 
-    public InconsistentReplicaConfigurationException() {
+    public InconsistentReplicationFactorException() {
         super();
     }
 
-    public InconsistentReplicaConfigurationException(String message, Throwable cause) {
+    public InconsistentReplicationFactorException(String message, Throwable cause) {
         super(message, cause);
     }
 
-    public InconsistentReplicaConfigurationException(String message) {
+    public InconsistentReplicationFactorException(String message) {
         super(message);
     }
 
-    public InconsistentReplicaConfigurationException(Throwable cause) {
+    public InconsistentReplicationFactorException(Throwable cause) {
         super(cause);
     }
 }
