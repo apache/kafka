@@ -17,6 +17,7 @@
 package kafka.coordinator.transaction
 
 import java.nio.ByteBuffer
+import java.util.concurrent.atomic.AtomicBoolean
 
 import kafka.coordinator.AbstractCoordinatorConcurrencyTest
 import kafka.coordinator.AbstractCoordinatorConcurrencyTest._
@@ -115,6 +116,28 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
     } finally {
       super.tearDown()
     }
+  }
+
+  @Test
+  def testConcurrentGoodPathWithConcurrentPartitionLoading(): Unit = {
+    // This is a somewhat contrived test case which reproduces the bug in KAFKA-9777.
+    // When a new partition needs to be loaded, we acquire the write lock in order to
+    // add the partition to the set of loading partitions. We should still be able to
+    // make progress with transactions even while this is ongoing.
+
+    val keepRunning = new AtomicBoolean(true)
+    val t = new Thread() {
+      override def run(): Unit = {
+        while (keepRunning.get()) {
+          txnStateManager.addLoadingPartition(numPartitions + 1, coordinatorEpoch)
+        }
+      }
+    }
+    t.start()
+
+    verifyConcurrentOperations(createTransactions, allOperations)
+    keepRunning.set(false)
+    t.join()
   }
 
   @Test
