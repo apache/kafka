@@ -111,8 +111,9 @@ public class StreamsGraphTest {
         builder.build(properties);
     }
 
-    @Test
+    @Test 
     @SuppressWarnings("unchecked")
+    // Topology in this test from https://issues.apache.org/jira/browse/KAFKA-9739
     public void shouldNotThrowNPEWithMergeNodes() {
         final Properties properties = new Properties();
         properties.setProperty(StreamsConfig.APPLICATION_ID_CONFIG, "test-application");
@@ -178,7 +179,6 @@ public class StreamsGraphTest {
         branches[1].map(KeyValue::pair).to("retryTopic", Produced.with(Serdes.String(), Serdes.String()));
 
         final Topology topology = builder.build(properties);
-        System.out.println(topology.describe().toString());
         assertEquals(expectedComplexMergeOptimizeTopology, topology.describe().toString());
     }
 
