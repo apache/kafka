@@ -103,7 +103,7 @@ class CoreUtilsTest extends Logging {
     assertEquals(2, itl.next())
     assertEquals(1, itl.next())
     assertEquals(2, itl.next())
-    assertFalse(itl.hasDefiniteSize)
+    assertFalse(itl.isEmpty)
 
     val s = Set(1, 2)
     val its = CoreUtils.circularIterator(s)

@@ -302,7 +302,7 @@ object LogCompactionTester {
 
   def consumeMessages(brokerUrl: String, topics: Array[String]): Path = {
     val consumer = createConsumer(brokerUrl)
-    consumer.subscribe(topics.seq.asJava)
+    consumer.subscribe(topics.toSeq.asJava)
     val consumedFilePath = Files.createTempFile("kafka-log-cleaner-consumed-", ".txt")
     println(s"Logging consumed messages to $consumedFilePath")
     val consumedWriter: BufferedWriter = Files.newBufferedWriter(consumedFilePath, UTF_8)
