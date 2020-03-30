@@ -54,7 +54,7 @@ import org.junit.Assert._
 import org.junit._
 import org.scalatest.Assertions.fail
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
 import scala.util.control.ControlThrowable

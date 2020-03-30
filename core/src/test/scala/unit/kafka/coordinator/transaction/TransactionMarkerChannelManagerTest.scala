@@ -32,7 +32,7 @@ import org.easymock.{Capture, EasyMock}
 import org.junit.Assert._
 import org.junit.Test
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import scala.collection.mutable
 
 class TransactionMarkerChannelManagerTest {

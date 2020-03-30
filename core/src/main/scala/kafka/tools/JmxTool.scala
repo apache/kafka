@@ -26,7 +26,7 @@ import javax.rmi.ssl.SslRMIClientSocketFactory
 
 import joptsimple.OptionParser
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import scala.collection.mutable
 import scala.math._
 import kafka.utils.{CommandLineUtils, Exit, Logging}

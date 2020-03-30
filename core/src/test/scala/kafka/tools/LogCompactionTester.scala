@@ -34,7 +34,7 @@ import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.serialization.{ByteArraySerializer, StringDeserializer}
 import org.apache.kafka.common.utils.{AbstractIterator, Utils}
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 
 /**
  * This is a torture test that runs against an existing broker

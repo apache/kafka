@@ -22,7 +22,7 @@ import java.util.concurrent._
 import org.apache.kafka.common.KafkaException
 
 import collection.mutable
-import collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 
 class Pool[K,V](valueFactory: Option[K => V] = None) extends Iterable[(K, V)] {
 

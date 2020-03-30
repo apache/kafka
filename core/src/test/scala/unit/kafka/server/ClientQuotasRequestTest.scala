@@ -26,7 +26,7 @@ import org.junit.Test
 
 import java.util.concurrent.{ExecutionException, TimeUnit}
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 
 class ClientQuotasRequestTest extends BaseRequestTest {
   private val ConsumerByteRateProp = DynamicConfig.Client.ConsumerByteRateOverrideProp

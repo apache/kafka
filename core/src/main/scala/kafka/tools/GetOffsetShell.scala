@@ -27,7 +27,7 @@ import org.apache.kafka.common.{PartitionInfo, TopicPartition}
 import org.apache.kafka.common.requests.ListOffsetRequest
 import org.apache.kafka.common.serialization.ByteArrayDeserializer
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import scala.collection.Seq
 
 object GetOffsetShell {

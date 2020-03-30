@@ -29,7 +29,7 @@ import kafka.server._
 import kafka.utils._
 
 import scala.collection._
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import kafka.log.LogConfig
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.metrics.JmxReporter

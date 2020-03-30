@@ -39,8 +39,8 @@ import org.apache.kafka.server.authorizer.AclDeleteResult.AclBindingDeleteResult
 import org.apache.kafka.server.authorizer._
 import org.apache.zookeeper.client.ZKClientConfig
 
-import scala.collection.mutable
-import scala.collection.JavaConverters._
+import scala.collection.{mutable, Seq}
+import scala.jdk.CollectionConverters._
 import scala.util.{Failure, Random, Success, Try}
 
 object AclAuthorizer {

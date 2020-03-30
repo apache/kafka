@@ -35,7 +35,7 @@ import org.junit.Assert._
 import org.junit.Test
 import org.scalatest.Assertions.{assertThrows, intercept}
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 
 class LogValidatorTest {
 

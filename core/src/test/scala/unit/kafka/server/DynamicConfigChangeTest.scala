@@ -32,7 +32,7 @@ import kafka.zk.ConfigEntityChangeNotificationZNode
 import org.apache.kafka.common.TopicPartition
 
 import scala.collection.{Map, Seq}
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 
 class DynamicConfigChangeTest extends KafkaServerTestHarness {
   def generateConfigs = List(KafkaConfig.fromProps(TestUtils.createBrokerConfig(0, zkConnect)))

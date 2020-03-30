@@ -46,7 +46,7 @@ import org.junit.{After, Before, Test}
 import org.scalatest.Assertions
 
 import scala.collection.{Iterable, mutable}
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import scala.collection.mutable.ListBuffer
 import org.scalatest.Assertions.{assertThrows, intercept, withClue}
 

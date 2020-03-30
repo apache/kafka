@@ -29,7 +29,7 @@ import kafka.server.{BaseRequestTest, KafkaConfig}
 import org.junit.Assert._
 import org.junit.Before
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import scala.collection.mutable.{ArrayBuffer, Buffer}
 import org.apache.kafka.clients.producer.KafkaProducer
 import org.apache.kafka.common.errors.WakeupException

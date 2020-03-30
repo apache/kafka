@@ -43,7 +43,7 @@ import org.junit.Assert._
 import org.junit.{After, Before, Test}
 import org.scalatest.Assertions.{assertThrows, fail, intercept}
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 
 /**
   * The test cases here verify that a producer authorized to publish to a topic

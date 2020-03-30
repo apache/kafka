@@ -36,7 +36,7 @@ import org.apache.kafka.common.security.authenticator.LoginManager
 import org.apache.kafka.common.utils.Utils
 
 import scala.collection._
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 
 /**
   * Dynamic broker configurations are stored in ZooKeeper and may be defined at two levels:

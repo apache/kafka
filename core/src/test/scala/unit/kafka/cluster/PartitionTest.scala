@@ -45,7 +45,7 @@ import org.mockito.ArgumentMatchers
 import org.mockito.invocation.InvocationOnMock
 import unit.kafka.cluster.AbstractPartitionTest
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import scala.collection.mutable.ListBuffer
 
 class PartitionTest extends AbstractPartitionTest {

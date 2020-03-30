@@ -32,8 +32,8 @@ import org.junit.function.ThrowingRunnable
 import org.junit.rules.Timeout
 import org.junit.{After, Assert, Before, Rule, Test}
 
-import scala.collection.JavaConverters._
 import scala.collection.mutable
+import scala.jdk.CollectionConverters._
 
 class ReassignPartitionsUnitTest {
   @Rule

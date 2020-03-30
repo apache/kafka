@@ -35,7 +35,7 @@ import kafka.utils.LogCaptureAppender
 import org.apache.kafka.common.metrics.KafkaMetric
 import org.scalatest.Assertions.fail
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import scala.collection.mutable
 import scala.collection.Seq
 import scala.util.{Failure, Success, Try}

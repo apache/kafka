@@ -35,7 +35,7 @@ import org.apache.kafka.common.utils.Time
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 
 class BrokerEpochIntegrationTest extends ZooKeeperTestHarness {
   val brokerId1 = 0

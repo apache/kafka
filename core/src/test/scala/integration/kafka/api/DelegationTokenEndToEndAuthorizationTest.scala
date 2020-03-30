@@ -29,7 +29,7 @@ import org.apache.kafka.common.security.scram.internals.ScramMechanism
 import org.apache.kafka.common.security.token.delegation.DelegationToken
 import org.junit.Before
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 
 class DelegationTokenEndToEndAuthorizationTest extends EndToEndAuthorizationTest {
 

@@ -22,7 +22,7 @@ import java.util.{Collections}
 import java.util.concurrent.locks.ReentrantReadWriteLock
 
 import scala.collection.{mutable, Seq, Set}
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import kafka.cluster.{Broker, EndPoint}
 import kafka.api._
 import kafka.controller.StateChangeLogger

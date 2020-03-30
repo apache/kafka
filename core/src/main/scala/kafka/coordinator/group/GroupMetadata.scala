@@ -30,7 +30,7 @@ import org.apache.kafka.common.protocol.types.SchemaException
 import org.apache.kafka.common.utils.Time
 
 import scala.collection.{Seq, immutable, mutable}
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 
 private[group] sealed trait GroupState {
   val validPreviousStates: Set[GroupState]

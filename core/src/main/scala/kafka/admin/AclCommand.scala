@@ -34,7 +34,7 @@ import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.utils.{Utils, SecurityUtils => JSecurityUtils}
 import org.apache.kafka.server.authorizer.Authorizer
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import scala.compat.java8.OptionConverters._
 import scala.collection.mutable
 import scala.io.StdIn

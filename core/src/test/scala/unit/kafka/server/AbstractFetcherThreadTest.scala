@@ -38,7 +38,7 @@ import org.apache.kafka.common.utils.Time
 import org.junit.Assert._
 import org.junit.{Before, Test}
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import scala.collection.{mutable, Map, Set}
 import scala.util.Random
 import org.scalatest.Assertions.assertThrows

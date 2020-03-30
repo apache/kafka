@@ -37,7 +37,7 @@ import org.easymock.EasyMock._
 import org.junit.Assert._
 import org.junit._
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 
 class RequestChannelTest {
 

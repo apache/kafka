@@ -81,7 +81,7 @@ import org.apache.kafka.common.message.MetadataResponseData.{MetadataResponsePar
 import org.apache.kafka.server.authorizer._
 
 import scala.compat.java8.OptionConverters._
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import scala.collection.mutable.ArrayBuffer
 import scala.collection.{Map, Seq, Set, immutable, mutable}
 import scala.util.{Failure, Success, Try}

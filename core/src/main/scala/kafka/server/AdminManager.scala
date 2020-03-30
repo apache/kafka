@@ -46,7 +46,7 @@ import org.apache.kafka.common.requests.{AlterConfigsRequest, ApiError, Describe
 import org.apache.kafka.common.utils.Sanitizer
 
 import scala.collection.{Map, mutable, _}
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 
 class AdminManager(val config: KafkaConfig,
                    val metrics: Metrics,

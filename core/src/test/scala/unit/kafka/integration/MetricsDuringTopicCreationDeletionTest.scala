@@ -22,7 +22,7 @@ import java.util.Properties
 import kafka.server.KafkaConfig
 import kafka.utils.{Logging, TestUtils}
 
-import scala.collection.JavaConverters.mapAsScalaMapConverter
+import scala.jdk.CollectionConverters._
 import org.scalatest.Assertions.fail
 import org.junit.{Before, Test}
 import com.yammer.metrics.core.Gauge

@@ -19,7 +19,7 @@ package kafka.server
 
 import org.apache.kafka.common.TopicPartition
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import kafka.api.LeaderAndIsr
 import org.apache.kafka.common.requests._
 import org.junit.Assert._

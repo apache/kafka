@@ -65,7 +65,7 @@ import org.scalatest.Assertions.intercept
 
 import scala.collection._
 import scala.collection.mutable.ArrayBuffer
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import scala.collection.Seq
 
 object DynamicBrokerReconfigurationTest {

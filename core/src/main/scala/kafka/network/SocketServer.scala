@@ -51,7 +51,7 @@ import org.apache.kafka.common.utils.{KafkaThread, LogContext, Time}
 import org.slf4j.event.Level
 
 import scala.collection._
-import JavaConverters._
+import scala.jdk.CollectionConverters._
 import scala.collection.mutable.{ArrayBuffer, Buffer}
 import scala.util.control.ControlThrowable
 

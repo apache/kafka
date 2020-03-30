@@ -30,7 +30,7 @@ import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.junit.Assert._
 import org.junit.{Before, Test}
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 
 abstract class BaseQuotaTest extends IntegrationTestHarness {
 
