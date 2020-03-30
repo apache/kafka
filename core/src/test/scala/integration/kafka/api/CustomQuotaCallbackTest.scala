@@ -159,7 +159,7 @@ class CustomQuotaCallbackTest extends IntegrationTestHarness with SaslSetup {
     val newProps = new Properties
     newProps.put(GroupedUserQuotaCallback.DefaultProduceQuotaProp, "8000")
     newProps.put(GroupedUserQuotaCallback.DefaultFetchQuotaProp, "2500")
-    TestUtils.alterConfigs(servers, adminClient, newProps, perBrokerConfig = false)
+    TestUtils.incrementalAlterConfigs(servers, adminClient, newProps, perBrokerConfig = false)
     user.waitForQuotaUpdate(8000, 2500, defaultRequestQuota)
     user.produceConsume(expectProduceThrottle = true, expectConsumeThrottle = true)
 

@@ -168,8 +168,8 @@ object DynamicBrokerConfig {
   }
 
   private[server] def addDynamicConfigs(configDef: ConfigDef): Unit = {
-    KafkaConfig.configKeys.foreach { case (configKey, config) =>
-      if (AllDynamicConfigs.contains(configKey)) {
+    KafkaConfig.configKeys.foreach { case (configName, config) =>
+      if (AllDynamicConfigs.contains(configName)) {
         configDef.define(config.name, config.`type`, config.defaultValue, config.validator,
           config.importance, config.documentation, config.group, config.orderInGroup, config.width,
           config.displayName, config.dependents, config.recommender)

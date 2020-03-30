@@ -1465,21 +1465,6 @@ object TestUtils extends Logging {
     }
   }
 
-  def alterConfigs(servers: Seq[KafkaServer], adminClient: Admin, props: Properties,
-                   perBrokerConfig: Boolean): AlterConfigsResult = {
-    val configEntries = props.asScala.map { case (k, v) => new ConfigEntry(k, v) }.toList.asJava
-    val newConfig = new Config(configEntries)
-    val configs = if (perBrokerConfig) {
-      servers.map { server =>
-        val resource = new ConfigResource(ConfigResource.Type.BROKER, server.config.brokerId.toString)
-        (resource, newConfig)
-      }.toMap.asJava
-    } else {
-      Map(new ConfigResource(ConfigResource.Type.BROKER, "") -> newConfig).asJava
-    }
-    adminClient.alterConfigs(configs)
-  }
-
   def incrementalAlterConfigs(servers: Seq[KafkaServer], adminClient: Admin, props: Properties,
                               perBrokerConfig: Boolean, opType: OpType = OpType.SET): AlterConfigsResult  = {
     val configEntries = props.asScala.map { case (k, v) => new AlterConfigOp(new ConfigEntry(k, v), opType) }.toList.asJavaCollection
@@ -1492,13 +1477,6 @@ object TestUtils extends Logging {
       Map(new ConfigResource(ConfigResource.Type.BROKER, "") -> configEntries).asJava
     }
     adminClient.incrementalAlterConfigs(configs)
-  }
-
-  def alterTopicConfigs(adminClient: Admin, topic: String, topicConfigs: Properties): AlterConfigsResult = {
-    val configEntries = topicConfigs.asScala.map { case (k, v) => new ConfigEntry(k, v) }.toList.asJava
-    val newConfig = new Config(configEntries)
-    val configs = Map(new ConfigResource(ConfigResource.Type.TOPIC, topic) -> newConfig).asJava
-    adminClient.alterConfigs(configs)
   }
 
   def assertLeader(client: Admin, topicPartition: TopicPartition, expectedLeader: Int): Unit = {

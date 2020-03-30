@@ -166,7 +166,7 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
   private def reconfigureServers(newProps: Properties, perBrokerConfig: Boolean, aPropToVerify: (String, String)): Unit = {
     val initialConnectionCount = connectionCount
     val adminClient = createAdminClient()
-    TestUtils.alterConfigs(servers, adminClient, newProps, perBrokerConfig).all.get()
+    TestUtils.incrementalAlterConfigs(servers, adminClient, newProps, perBrokerConfig).all.get()
     waitForConfigOnServer(aPropToVerify._1, aPropToVerify._2)
     adminClient.close()
     TestUtils.waitUntilTrue(() => initialConnectionCount == connectionCount, "Admin client connection not closed")
