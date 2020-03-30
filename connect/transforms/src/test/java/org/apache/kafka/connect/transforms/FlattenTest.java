@@ -303,8 +303,7 @@ public class FlattenTest {
         xformValue.configure(Collections.<String, String>emptyMap());
 
         final SourceRecord record = new SourceRecord(null, null, "test", 0,
-            null, null);
-
+                null, null);
         final SourceRecord transformedRecord = xformValue.apply(record);
 
         assertEquals(null, transformedRecord.value());
@@ -316,10 +315,8 @@ public class FlattenTest {
         xformValue.configure(Collections.<String, String>emptyMap());
 
         final Schema simpleStructSchema = SchemaBuilder.struct().name("name").version(1).doc("doc").field("magic", Schema.OPTIONAL_INT64_SCHEMA).build();
-
         final SourceRecord record = new SourceRecord(null, null, "test", 0,
-            simpleStructSchema, null);
-
+                simpleStructSchema, null);
         final SourceRecord transformedRecord = xformValue.apply(record);
 
         assertEquals(null, transformedRecord.value());
