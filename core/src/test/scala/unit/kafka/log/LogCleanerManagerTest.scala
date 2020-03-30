@@ -640,11 +640,11 @@ class LogCleanerManagerTest extends Logging {
   private def createCleanerManager(log: Log): LogCleanerManager = {
     val logs = new Pool[TopicPartition, Log]()
     logs.put(topicPartition, log)
-    new LogCleanerManager(Array(logDir), logs, null)
+    new LogCleanerManager(Seq(logDir), logs, null)
   }
 
   private def createCleanerManagerMock(pool: Pool[TopicPartition, Log]): LogCleanerManagerMock = {
-    new LogCleanerManagerMock(Array(logDir), pool, null)
+    new LogCleanerManagerMock(Seq(logDir), pool, null)
   }
 
   private def createLog(segmentSize: Int,
