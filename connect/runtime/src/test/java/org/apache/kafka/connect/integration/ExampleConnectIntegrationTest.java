@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.integration;
 
+import org.apache.kafka.connect.runtime.rest.entities.ConfigInfos;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
 import org.apache.kafka.connect.storage.StringConverter;
 import org.apache.kafka.connect.util.clusters.EmbeddedConnectCluster;
@@ -60,6 +61,8 @@ public class ExampleConnectIntegrationTest {
     private static final int NUM_TASKS = 3;
     private static final int NUM_WORKERS = 3;
     private static final String CONNECTOR_NAME = "simple-conn";
+    private static final String SINK_CONNECTOR_CLASS_NAME = MonitorableSinkConnector.class.getSimpleName();
+    private static final String SOURCE_CONNECTOR_CLASS_NAME = MonitorableSourceConnector.class.getSimpleName();
 
     private EmbeddedConnectCluster connect;
     private ConnectorHandle connectorHandle;
@@ -110,7 +113,7 @@ public class ExampleConnectIntegrationTest {
 
         // setup up props for the sink connector
         Map<String, String> props = new HashMap<>();
-        props.put(CONNECTOR_CLASS_CONFIG, MonitorableSinkConnector.class.getSimpleName());
+        props.put(CONNECTOR_CLASS_CONFIG, SINK_CONNECTOR_CLASS_NAME);
         props.put(TASKS_MAX_CONFIG, String.valueOf(NUM_TASKS));
         props.put(TOPICS_CONFIG, "test-topic");
         props.put(KEY_CONVERTER_CLASS_CONFIG, StringConverter.class.getName());
@@ -121,6 +124,13 @@ public class ExampleConnectIntegrationTest {
 
         // expect all records to be consumed by the connector
         connectorHandle.expectedCommits(NUM_RECORDS_PRODUCED);
+
+        // validate the intended connector configuration
+        ConfigInfos configInfosError = connect.validateConnectorConfig(SINK_CONNECTOR_CLASS_NAME, props);
+        assertEquals(1, configInfosError.errorCount());
+        props.put("name", CONNECTOR_NAME);
+        ConfigInfos configInfosValid = connect.validateConnectorConfig(SINK_CONNECTOR_CLASS_NAME, props);
+        assertEquals(0, configInfosValid.errorCount());
 
         // start a sink connector
         connect.configureConnector(CONNECTOR_NAME, props);
@@ -159,7 +169,7 @@ public class ExampleConnectIntegrationTest {
 
         // setup up props for the sink connector
         Map<String, String> props = new HashMap<>();
-        props.put(CONNECTOR_CLASS_CONFIG, MonitorableSourceConnector.class.getSimpleName());
+        props.put(CONNECTOR_CLASS_CONFIG, SOURCE_CONNECTOR_CLASS_NAME);
         props.put(TASKS_MAX_CONFIG, String.valueOf(NUM_TASKS));
         props.put("topic", "test-topic");
         props.put("throughput", String.valueOf(500));
@@ -171,6 +181,13 @@ public class ExampleConnectIntegrationTest {
 
         // expect all records to be produced by the connector
         connectorHandle.expectedCommits(NUM_RECORDS_PRODUCED);
+
+        // validate the intended connector configuration
+        ConfigInfos configInfosError = connect.validateConnectorConfig(SOURCE_CONNECTOR_CLASS_NAME, props);
+        assertEquals(1, configInfosError.errorCount());
+        props.put("name", CONNECTOR_NAME);
+        ConfigInfos configInfosValid = connect.validateConnectorConfig(SOURCE_CONNECTOR_CLASS_NAME, props);
+        assertEquals(0, configInfosValid.errorCount());
 
         // start a source connector
         connect.configureConnector(CONNECTOR_NAME, props);

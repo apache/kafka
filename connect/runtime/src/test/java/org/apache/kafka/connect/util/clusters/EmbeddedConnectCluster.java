@@ -21,6 +21,7 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.connect.errors.ConnectException;
+import org.apache.kafka.connect.runtime.Connect;
 import org.apache.kafka.connect.runtime.rest.entities.ActiveTopicsInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigInfos;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
@@ -288,14 +289,19 @@ public class EmbeddedConnectCluster {
      *
      * @param connClassName the name of the connector class
      * @param connConfig    the intended configuration
-     * @throws JsonProcessingException if the response failed to deserialize into a {@link ConfigInfos} instance
      * @throws ConnectRestException if the REST api returns error status
-     * @throws ConnectException if the configuration fails to be serialized or if the request could not be sent
+     * @throws ConnectException if the configuration fails to serialize/deserialize or if the request failed to send
      */
-    public ConfigInfos validateConnectorConfig(String connClassName, Map<String, String> connConfig)
-        throws JsonProcessingException {
+    public ConfigInfos validateConnectorConfig(String connClassName, Map<String, String> connConfig) {
         String url = endpointForResource(String.format("connector-plugins/%s/config/validate", connClassName));
-        return new ObjectMapper().readValue(putConnectorConfig(url, connConfig), ConfigInfos.class);
+        String response = putConnectorConfig(url, connConfig);
+        ConfigInfos configInfos;
+        try{
+            configInfos = new ObjectMapper().readValue(response, ConfigInfos.class);
+        } catch (IOException e) {
+            throw new ConnectException("Could not deserialize connector configuration");
+        }
+        return configInfos;
     }
 
     /**
