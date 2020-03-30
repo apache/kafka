@@ -299,7 +299,7 @@ public class EmbeddedConnectCluster {
         try{
             configInfos = new ObjectMapper().readValue(response, ConfigInfos.class);
         } catch (IOException e) {
-            throw new ConnectException("Could not deserialize connector configuration");
+            throw new ConnectException("Unable deserialize response into a ConfigInfos object");
         }
         return configInfos;
     }
