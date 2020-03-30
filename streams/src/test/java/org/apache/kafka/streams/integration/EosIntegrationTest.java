@@ -553,7 +553,6 @@ public class EosIntegrationTest {
             checkResultPerKey(committedRecords, committedDataBeforeGC);
             checkResultPerKey(uncommittedRecords, dataBeforeGC);
 
-            System.err.println("mjsax: start GC");
             gcInjected.set(true);
             writeInputData(dataToTriggerFirstRebalance);
 
@@ -563,12 +562,10 @@ public class EosIntegrationTest {
                     && (streams1.allMetadata().iterator().next().topicPartitions().size() == 2
                         || streams2.allMetadata().iterator().next().topicPartitions().size() == 2),
                 MAX_WAIT_TIME_MS, "Should have rebalanced.");
-            System.err.println("mjsax: rebalanced 1");
 
             final List<KeyValue<Long, Long>> committedRecordsAfterRebalance = readResult(
                 uncommittedDataBeforeGC.size() + dataToTriggerFirstRebalance.size(),
                 CONSUMER_GROUP_ID);
-            System.err.println("mjsax: read uncommitted result");
 
             final List<KeyValue<Long, Long>> expectedCommittedRecordsAfterRebalance = new ArrayList<>();
             expectedCommittedRecordsAfterRebalance.addAll(uncommittedDataBeforeGC);
@@ -576,7 +573,6 @@ public class EosIntegrationTest {
 
             checkResultPerKey(committedRecordsAfterRebalance, expectedCommittedRecordsAfterRebalance);
 
-            System.err.println("mjsax: stop GC");
             doGC = false;
             waitForCondition(
                 () -> streams1.allMetadata().size() == 1
@@ -585,7 +581,6 @@ public class EosIntegrationTest {
                     && streams2.allMetadata().iterator().next().topicPartitions().size() == 1,
                 MAX_WAIT_TIME_MS,
                 "Should have rebalanced.");
-            System.err.println("mjsax: rebalanced 2");
 
             writeInputData(dataAfterSecondRebalance);
 
@@ -621,7 +616,7 @@ public class EosIntegrationTest {
     private KafkaStreams getKafkaStreams(final boolean withState,
                                          final String appDir,
                                          final int numberOfStreamsThreads,
-                                         final String eosConfig) throws Exception {
+                                         final String eosConfig) {
         commitRequested = new AtomicInteger(0);
         errorInjected = new AtomicBoolean(false);
         gcInjected = new AtomicBoolean(false);
@@ -635,7 +630,6 @@ public class EosIntegrationTest {
                 .withCachingEnabled();
 
             builder.addStateStore(storeBuilder);
-//            CLUSTER.deleteTopicsAndWait(applicationId + "-" + storeName + "-changelog");
         }
 
         final KStream<Long, Long> input = builder.stream(MULTI_PARTITION_INPUT_TOPIC);
@@ -725,7 +719,6 @@ public class EosIntegrationTest {
             properties);
 
         final KafkaStreams streams = new KafkaStreams(builder.build(), config);
-        streams.cleanUp();
 
         streams.setUncaughtExceptionHandler((t, e) -> {
             if (uncaughtException != null) {

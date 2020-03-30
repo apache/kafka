@@ -99,7 +99,7 @@ public class StreamsProducerTest {
 
 
 
-    // generic tests (non-EOS and EOS-alpha/beta)
+    // common tests (non-EOS and EOS-alpha/beta)
 
     // functional tests
 
