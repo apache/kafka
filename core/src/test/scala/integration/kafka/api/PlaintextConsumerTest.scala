@@ -579,7 +579,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     assertTrue(consumer.poll(Duration.ofMillis(50)).isEmpty)
 
     consumer.seekToBeginning(List(tp).asJava)
-    assertEquals(0, consumer.position(tp), 0)
+    assertEquals(0L, consumer.position(tp))
     consumeAndVerifyRecords(consumer, numRecords = 1, startingOffset = 0)
 
     consumer.seek(tp, mid)
@@ -597,7 +597,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     assertTrue(consumer.poll(Duration.ofMillis(50)).isEmpty)
 
     consumer.seekToBeginning(List(tp2).asJava)
-    assertEquals(0, consumer.position(tp2), 0)
+    assertEquals(0L, consumer.position(tp2))
     consumeAndVerifyRecords(consumer, numRecords = 1, startingOffset = 0, tp = tp2)
 
     consumer.seek(tp2, mid)
