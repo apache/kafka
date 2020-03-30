@@ -125,10 +125,14 @@ public class ExampleConnectIntegrationTest {
         // expect all records to be consumed by the connector
         connectorHandle.expectedCommits(NUM_RECORDS_PRODUCED);
 
-        // validate the intended connector configuration
+        // validate the intended connector configuration, a config that errors
         ConfigInfos configInfosError = connect.validateConnectorConfig(SINK_CONNECTOR_CLASS_NAME, props);
         assertEquals(1, configInfosError.errorCount());
+
+        // add missing configuration to make the config valid
         props.put("name", CONNECTOR_NAME);
+
+        // validate the intended connector configuration, a valid config
         ConfigInfos configInfosValid = connect.validateConnectorConfig(SINK_CONNECTOR_CLASS_NAME, props);
         assertEquals(0, configInfosValid.errorCount());
 
@@ -182,10 +186,14 @@ public class ExampleConnectIntegrationTest {
         // expect all records to be produced by the connector
         connectorHandle.expectedCommits(NUM_RECORDS_PRODUCED);
 
-        // validate the intended connector configuration
+        // validate the intended connector configuration, a config that errors
         ConfigInfos configInfosError = connect.validateConnectorConfig(SOURCE_CONNECTOR_CLASS_NAME, props);
         assertEquals(1, configInfosError.errorCount());
+
+        // add missing configuration to make the config valid
         props.put("name", CONNECTOR_NAME);
+
+        // validate the intended connector configuration, a valid config
         ConfigInfos configInfosValid = connect.validateConnectorConfig(SOURCE_CONNECTOR_CLASS_NAME, props);
         assertEquals(0, configInfosValid.errorCount());
 
