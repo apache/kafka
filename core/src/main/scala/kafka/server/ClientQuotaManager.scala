@@ -506,8 +506,8 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
       }
     } else {
       val quotaMetricName = clientRateMetricName(Map.empty)
-      allMetrics.asScala.filterKeys(n => n.name == quotaMetricName.name && n.group == quotaMetricName.group).foreach {
-        case (metricName, metric) =>
+      allMetrics.asScala.foreach { case (metricName, metric) =>
+        if (metricName.name == quotaMetricName.name && metricName.group == quotaMetricName.group) {
           val metricTags = metricName.tags
           Option(quotaLimit(metricTags)).foreach { newQuota =>
             if (newQuota != metric.config.quota.bound) {
@@ -515,6 +515,7 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
               metric.config(getQuotaMetricConfig(newQuota))
             }
           }
+        }
       }
     }
   }

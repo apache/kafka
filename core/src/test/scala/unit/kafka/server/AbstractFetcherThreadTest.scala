@@ -720,7 +720,7 @@ class AbstractFetcherThreadTest {
     val fetcher = new MockFetcherThread {
       override def fetchEpochEndOffsets(partitions: Map[TopicPartition, EpochData]): Map[TopicPartition, EpochEndOffset] = {
         val unrequestedTp = new TopicPartition("topic2", 0)
-        super.fetchEpochEndOffsets(partitions) + (unrequestedTp -> new EpochEndOffset(0, 0))
+        super.fetchEpochEndOffsets(partitions).toMap + (unrequestedTp -> new EpochEndOffset(0, 0))
       }
     }
 

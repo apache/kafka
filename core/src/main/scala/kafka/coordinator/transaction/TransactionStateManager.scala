@@ -439,7 +439,7 @@ class TransactionStateManager(brokerId: Int,
   def removeTransactionsForTxnTopicPartition(partitionId: Int): Unit = {
     val topicPartition = new TopicPartition(Topic.TRANSACTION_STATE_TOPIC_NAME, partitionId)
     inWriteLock(stateLock) {
-      loadingPartitions.retain(_.txnPartitionId != partitionId)
+      loadingPartitions --= loadingPartitions.filter(_.txnPartitionId == partitionId)
       transactionMetadataCache.remove(partitionId).foreach { txnMetadataCacheEntry =>
         info(s"Unloaded transaction metadata $txnMetadataCacheEntry for $topicPartition following " +
           s"local partition deletion")

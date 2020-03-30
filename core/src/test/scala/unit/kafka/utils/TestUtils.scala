@@ -1455,7 +1455,7 @@ object TestUtils extends Logging {
   }
 
   def resetToCommittedPositions(consumer: KafkaConsumer[Array[Byte], Array[Byte]]): Unit = {
-    val committed = consumer.committed(consumer.assignment).asScala.filter(_._2 != null).mapValues(_.offset)
+    val committed = consumer.committed(consumer.assignment).asScala.filter(_._2 != null).map { case (k, v) => k -> v.offset }
 
     consumer.assignment.asScala.foreach { topicPartition =>
       if (committed.contains(topicPartition))
@@ -1630,7 +1630,7 @@ object TestUtils extends Logging {
 
   def meterCount(metricName: String): Long = {
     KafkaYammerMetrics.defaultRegistry.allMetrics.asScala
-      .filterKeys(_.getMBeanName.endsWith(metricName))
+      .filter { case (k, _) => k.getMBeanName.endsWith(metricName) }
       .values
       .headOption
       .getOrElse(fail(s"Unable to find metric $metricName"))

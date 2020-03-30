@@ -90,7 +90,7 @@ class LogCleanerIntegrationTest extends AbstractLogCleanerIntegrationTest with K
 
   private def getGauge[T](filter: MetricName => Boolean): Gauge[T] = {
     KafkaYammerMetrics.defaultRegistry.allMetrics.asScala
-      .filterKeys(filter(_))
+      .filter { case (k, _) => filter(k) }
       .headOption
       .getOrElse { fail(s"Unable to find metric") }
       .asInstanceOf[(Any, Gauge[Any])]

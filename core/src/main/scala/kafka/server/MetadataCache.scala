@@ -199,7 +199,7 @@ class MetadataCache(brokerId: Int) extends Logging {
   }
 
   def getNonExistingTopics(topics: Set[String]): Set[String] = {
-    topics -- metadataSnapshot.partitionStates.keySet
+    topics.diff(metadataSnapshot.partitionStates.keySet)
   }
 
   def getAliveBroker(brokerId: Int): Option[Broker] = {

@@ -531,8 +531,8 @@ class Log(@volatile private var _dir: File,
       Files.deleteIfExists(Log.transactionIndexFile(dir, offset, suffix).toPath)
     }
 
-    var swapFiles = Set[File]()
-    var cleanFiles = Set[File]()
+    val swapFiles = mutable.Set[File]()
+    val cleanFiles = mutable.Set[File]()
     var minCleanedFileOffset = Long.MaxValue
 
     for (file <- dir.listFiles if file.isFile) {

@@ -1155,7 +1155,7 @@ object ReassignPartitionsCommand extends Logging {
   def currentPartitionReplicaAssignmentToString(proposedParts: Map[TopicPartition, Seq[Int]],
                                                 currentParts: Map[TopicPartition, Seq[Int]]): String = {
     "Current partition replica assignment%n%n%s%n%nSave this to use as the %s".
-        format(formatAsReassignmentJson(currentParts.filterKeys(proposedParts.contains(_)).toMap, Map.empty),
+        format(formatAsReassignmentJson(currentParts.filter { case (k, _) => proposedParts.contains(k) }.toMap, Map.empty),
               "--reassignment-json-file option during rollback")
   }
 

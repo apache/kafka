@@ -580,8 +580,9 @@ class ProducerStateManager(val topicPartition: TopicPartition,
    * Expire any producer ids which have been idle longer than the configured maximum expiration timeout.
    */
   def removeExpiredProducers(currentTimeMs: Long): Unit = {
-    producers.retain { case (_, lastEntry) =>
-      !isProducerExpired(currentTimeMs, lastEntry)
+    producers.toArray.foreach { case (k, lastEntry) =>
+      if (isProducerExpired(currentTimeMs, lastEntry))
+        producers -= k
     }
   }
 

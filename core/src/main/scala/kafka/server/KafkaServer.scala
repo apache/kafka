@@ -307,9 +307,13 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
         authorizer.foreach(_.configure(config.originals))
         val authorizerFutures: Map[Endpoint, CompletableFuture[Void]] = authorizer match {
           case Some(authZ) =>
-            authZ.start(brokerInfo.broker.toServerInfo(clusterId, config)).asScala.mapValues(_.toCompletableFuture).toMap
+            authZ.start(brokerInfo.broker.toServerInfo(clusterId, config)).asScala.map { case (ep, cs) =>
+              ep -> cs.toCompletableFuture
+            }
           case None =>
-            brokerInfo.broker.endPoints.map { ep => ep.toJava -> CompletableFuture.completedFuture[Void](null) }.toMap
+            brokerInfo.broker.endPoints.map { ep =>
+              ep.toJava -> CompletableFuture.completedFuture[Void](null)
+            }.toMap
         }
 
         val fetchManager = new FetchManager(Time.SYSTEM,

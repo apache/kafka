@@ -188,9 +188,9 @@ object ReplicationQuotasTestRig {
 
       //Long stats
       println("The replicas are " + replicas.toSeq.sortBy(_._1).map("\n" + _))
-      println("This is the current replica assignment:\n" + actual.mapValues(_.replicas).toMap.toSeq)
+      println("This is the current replica assignment:\n" + actual.map { case (k, v) => k -> v.replicas })
       println("proposed assignment is: \n" + newAssignment)
-      println("This is the assignment we ended up with" + actual.mapValues(_.replicas).toMap)
+      println("This is the assignment we ended up with" + actual.map { case (k, v) => k -> v.replicas })
 
       //Test Stats
       println(s"numBrokers: ${config.brokers}")

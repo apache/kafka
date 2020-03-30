@@ -996,7 +996,7 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
       val config = server.config
       val oldSecret = "old-dynamic-config-secret"
       config.dynamicConfig.staticBrokerConfigs.put(KafkaConfig.PasswordEncoderOldSecretProp, oldSecret)
-      val passwordConfigs = props.asScala.filterKeys(DynamicBrokerConfig.isPasswordConfig)
+      val passwordConfigs = props.asScala.filter { case (k, _) => DynamicBrokerConfig.isPasswordConfig(k) }
       assertTrue("Password configs not found", passwordConfigs.nonEmpty)
       val passwordDecoder = createPasswordEncoder(config, config.passwordEncoderSecret)
       val passwordEncoder = createPasswordEncoder(config, Some(new Password(oldSecret)))
@@ -1134,7 +1134,7 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
       .map(e => s"${e.listenerName.value}://${e.host}:${e.port}")
       .mkString(",")
     val listenerMap = config.listenerSecurityProtocolMap
-      .filterKeys(listenerName => listenerName.value != securityProtocol.name)
+      .filter { case (listenerName, _) => listenerName.value != securityProtocol.name }
       .map { case (listenerName, protocol) => s"${listenerName.value}:${protocol.name}" }
       .mkString(",")
 

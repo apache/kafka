@@ -64,12 +64,12 @@ class ConsumerGroupCommandTest extends KafkaServerTestHarness {
     super.tearDown()
   }
 
-  def committedOffsets(topic: String = topic, group: String = group): Map[TopicPartition, Long] = {
+  def committedOffsets(topic: String = topic, group: String = group): collection.Map[TopicPartition, Long] = {
     val consumer = createNoAutoCommitConsumer(group)
     try {
       val partitions: Set[TopicPartition] = consumer.partitionsFor(topic)
         .asScala.toSet.map {partitionInfo : PartitionInfo => new TopicPartition(partitionInfo.topic, partitionInfo.partition)}
-      consumer.committed(partitions.asJava).asScala.filter(_._2 != null).mapValues(_.offset()).toMap
+      consumer.committed(partitions.asJava).asScala.filter(_._2 != null).map { case (k, v) => k -> v.offset }
     } finally {
       consumer.close()
     }

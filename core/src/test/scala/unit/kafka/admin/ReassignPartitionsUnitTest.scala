@@ -111,7 +111,7 @@ class ReassignPartitionsUnitTest {
         ),
         alterPartitionReassignments(adminClient, Map(
           new TopicPartition("foo", 0) -> Seq(0,1,3),
-          new TopicPartition("quux", 0) -> Seq(1,2,3))).mapValues(_.getClass).toMap)
+          new TopicPartition("quux", 0) -> Seq(1,2,3))).map { case (k, v) => k -> v.getClass })
       assertEquals((Map(
           new TopicPartition("foo", 0) -> new PartitionReassignmentState(Seq(0,1,2), Seq(0,1,3), false),
           new TopicPartition("foo", 1) -> new PartitionReassignmentState(Seq(1,2,3), Seq(1,2,3), true)
@@ -126,10 +126,10 @@ class ReassignPartitionsUnitTest {
         ),
         cancelPartitionReassignments(adminClient, Set(
           new TopicPartition("foo", 0),
-          new TopicPartition("quux", 2))).mapValues(_.getClass).toMap)
+          new TopicPartition("quux", 2))).map { case (k, v) => k -> v.getClass })
       assertEquals((Map(
-          new TopicPartition("foo", 0) -> new PartitionReassignmentState(Seq(0,1,2), Seq(0,1,3), true),
-          new TopicPartition("foo", 1) -> new PartitionReassignmentState(Seq(1,2,3), Seq(1,2,3), true)
+          new TopicPartition("foo", 0) -> PartitionReassignmentState(Seq(0,1,2), Seq(0,1,3), true),
+          new TopicPartition("foo", 1) -> PartitionReassignmentState(Seq(1,2,3), Seq(1,2,3), true)
         ), false),
           findPartitionReassignmentStates(adminClient, Seq(
             (new TopicPartition("foo", 0), Seq(0,1,3)),
@@ -558,7 +558,7 @@ class ReassignPartitionsUnitTest {
         alterPartitionReassignments(adminClient, Map(
           new TopicPartition("foo", 1) -> Seq(4,5,3),
           new TopicPartition("foo", 0) -> Seq(0,1,4,2),
-          new TopicPartition("bar", 0) -> Seq(2,3))).mapValues(_.getClass).toMap)
+          new TopicPartition("bar", 0) -> Seq(2,3))).map { case (k, v) => k -> v.getClass })
       assertEquals(Seq("Current partition reassignments:",
                        "bar-0: replicas: 2,3,0. removing: 0.",
                        "foo-0: replicas: 0,1,2. adding: 4.",

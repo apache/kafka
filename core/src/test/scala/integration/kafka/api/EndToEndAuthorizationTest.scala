@@ -233,7 +233,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
 
   private def getGauge(metricName: String) = {
     KafkaYammerMetrics.defaultRegistry.allMetrics.asScala
-           .filterKeys(k => k.getName == metricName)
+           .filter { case (k, _) => k.getName == metricName }
            .headOption
            .getOrElse { fail( "Unable to find metric " + metricName ) }
            ._2.asInstanceOf[Gauge[Double]]

@@ -134,7 +134,7 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
           case _: TimeoutException =>
             Try(consumerWrapper.consumer.listTopics) match {
               case Success(visibleTopics) =>
-                consumerWrapper.offsets.retain((tp, _) => visibleTopics.containsKey(tp.topic))
+                consumerWrapper.offsets --= consumerWrapper.offsets.keySet.filter(tp => !visibleTopics.containsKey(tp.topic))
               case Failure(e) =>
                 warn("Failed to list all authorized topics after committing offsets timed out: ", e)
             }

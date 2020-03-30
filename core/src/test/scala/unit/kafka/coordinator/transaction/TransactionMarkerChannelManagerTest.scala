@@ -414,11 +414,11 @@ class TransactionMarkerChannelManagerTest {
   def shouldCreateMetricsOnStarting(): Unit = {
     val metrics = KafkaYammerMetrics.defaultRegistry.allMetrics.asScala
 
-    assertEquals(1, metrics
-      .filterKeys(_.getMBeanName == "kafka.coordinator.transaction:type=TransactionMarkerChannelManager,name=UnknownDestinationQueueSize")
-      .size)
-    assertEquals(1, metrics
-      .filterKeys(_.getMBeanName == "kafka.coordinator.transaction:type=TransactionMarkerChannelManager,name=LogAppendRetryQueueSize")
-      .size)
+    assertEquals(1, metrics.filter { case (k, _) =>
+      k.getMBeanName == "kafka.coordinator.transaction:type=TransactionMarkerChannelManager,name=UnknownDestinationQueueSize"
+    }.size)
+    assertEquals(1, metrics.filter { case (k, _) =>
+      k.getMBeanName == "kafka.coordinator.transaction:type=TransactionMarkerChannelManager,name=LogAppendRetryQueueSize"
+    }.size)
   }
 }
