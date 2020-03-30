@@ -1287,7 +1287,6 @@ class LogValidatorTest {
         RecordBatch.MAGIC_VALUE_V0, CompressionType.GZIP, CompressionType.GZIP)
     }
 
-    e.recordErrors.foreach(e => println(e.batchIndex + " " + e.message))
     assertTrue(e.invalidException.isInstanceOf[InvalidRecordException])
     assertTrue(e.recordErrors.nonEmpty)
     // recordsWithInvalidInnerMagic creates 20 records
