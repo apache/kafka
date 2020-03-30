@@ -71,6 +71,7 @@ import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
 public class CachingWindowStoreTest {
@@ -627,38 +628,35 @@ public class CachingWindowStoreTest {
     }
 
     @Test
-    public void shouldCloseWrappedStoreAfterErrorDuringCacheFlush() {
+    public void shouldCloseCacheAndWrappedStoreAfterErrorDuringCacheFlush() {
         setUpCloseTests();
+        EasyMock.reset(cache);
         cache.flush(CACHE_NAMESPACE);
-        EasyMock.expectLastCall().andThrow(new NullPointerException("Simulating an error on flush"));
+        EasyMock.expectLastCall().andThrow(new RuntimeException("Simulating an error on flush"));
+        cache.close(CACHE_NAMESPACE);
         EasyMock.replay(cache);
         EasyMock.reset(underlyingStore);
         underlyingStore.close();
         EasyMock.replay(underlyingStore);
 
-        try {
-            cachingStore.close();
-        } catch (final RuntimeException exception) {
-            EasyMock.verify(underlyingStore);
-        }
+        assertThrows(RuntimeException.class, cachingStore::close);
+        EasyMock.verify(cache, underlyingStore);
     }
 
     @Test
     public void shouldCloseWrappedStoreAfterErrorDuringCacheClose() {
         setUpCloseTests();
+        EasyMock.reset(cache);
         cache.flush(CACHE_NAMESPACE);
         cache.close(CACHE_NAMESPACE);
-        EasyMock.expectLastCall().andThrow(new NullPointerException("Simulating an error on close"));
+        EasyMock.expectLastCall().andThrow(new RuntimeException("Simulating an error on close"));
         EasyMock.replay(cache);
         EasyMock.reset(underlyingStore);
         underlyingStore.close();
         EasyMock.replay(underlyingStore);
 
-        try {
-            cachingStore.close();
-        } catch (final RuntimeException exception) {
-            EasyMock.verify(underlyingStore);
-        }
+        assertThrows(RuntimeException.class, cachingStore::close);
+        EasyMock.verify(cache, underlyingStore);
     }
 
     @Test
@@ -670,14 +668,11 @@ public class CachingWindowStoreTest {
         EasyMock.replay(cache);
         EasyMock.reset(underlyingStore);
         underlyingStore.close();
-        EasyMock.expectLastCall().andThrow(new NullPointerException("Simulating an error on close"));
+        EasyMock.expectLastCall().andThrow(new RuntimeException("Simulating an error on close"));
         EasyMock.replay(underlyingStore);
 
-        try {
-            cachingStore.close();
-        } catch (final RuntimeException exception) {
-            EasyMock.verify(cache);
-        }
+        assertThrows(RuntimeException.class, cachingStore::close);
+        EasyMock.verify(cache, underlyingStore);
     }
 
     private void setUpCloseTests() {
@@ -686,7 +681,7 @@ public class CachingWindowStoreTest {
         EasyMock.expect(underlyingStore.isOpen()).andStubReturn(true);
         EasyMock.replay(underlyingStore);
         cachingStore = new CachingWindowStore(underlyingStore, WINDOW_SIZE, SEGMENT_INTERVAL);
-        cache = EasyMock.niceMock(ThreadCache.class);
+        cache = EasyMock.createNiceMock(ThreadCache.class);
         context = new InternalMockProcessorContext(TestUtils.tempDirectory(), null, null, null, cache);
         context.setRecordContext(new ProcessorRecordContext(10, 0, 0, TOPIC, null));
         cachingStore.init(context, cachingStore);
