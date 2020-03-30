@@ -169,7 +169,7 @@ public class HighAvailabilityTaskAssignor<ID extends Comparable<ID>> implements 
             assignStandbyTasksToClients(standbyTaskAssignment);
             assignActiveTasksToClients(statelessActiveTaskAssignment);
 
-            followupRebalanceRequired = !warmupTaskAssignment.isEmpty();
+            followupRebalanceRequired = warmupTaskAssignment.entrySet().stream().anyMatch(tasks -> !tasks.getValue().isEmpty());
         }
         return followupRebalanceRequired;
     }
