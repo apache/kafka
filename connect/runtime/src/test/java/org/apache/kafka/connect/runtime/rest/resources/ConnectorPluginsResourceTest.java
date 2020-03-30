@@ -479,7 +479,7 @@ public class ConnectorPluginsResourceTest {
         public MockConnectorPluginDesc(Class<? extends Connector> klass) throws Exception {
             super(
                     klass,
-                    klass.newInstance().version(),
+                    klass.getConstructor().newInstance().version(),
                     new MockPluginClassLoader(null, new URL[0])
             );
         }
