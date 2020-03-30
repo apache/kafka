@@ -441,7 +441,7 @@ object ReassignPartitionsZNode {
   }
 
   def decode(bytes: Array[Byte]): Either[JsonProcessingException, collection.Map[TopicPartition, Seq[Int]]] =
-    Json.parseBytesAs[LegacyPartitionAssignment](bytes).right.map { partitionAssignment =>
+    Json.parseBytesAs[LegacyPartitionAssignment](bytes).map { partitionAssignment =>
       partitionAssignment.partitions.asScala.iterator.map { replicaAssignment =>
         new TopicPartition(replicaAssignment.topic, replicaAssignment.partition) -> replicaAssignment.replicas.asScala
       }.toMap

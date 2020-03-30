@@ -216,8 +216,8 @@ class TransactionStateManager(brokerId: Int,
   }
 
   def putTransactionStateIfNotExists(txnMetadata: TransactionMetadata): Either[Errors, CoordinatorEpochAndTxnMetadata] = {
-    getAndMaybeAddTransactionState(txnMetadata.transactionalId, Some(txnMetadata))
-      .right.map(_.getOrElse(throw new IllegalStateException(s"Unexpected empty transaction metadata returned while putting $txnMetadata")))
+    getAndMaybeAddTransactionState(txnMetadata.transactionalId, Some(txnMetadata)).map(_.getOrElse(
+      throw new IllegalStateException(s"Unexpected empty transaction metadata returned while putting $txnMetadata")))
   }
 
   /**
