@@ -43,7 +43,7 @@ import scala.jdk.CollectionConverters._
   * Anything over 100MB/s tends to fail as this is the non-throttled replication rate
   */
 class ReplicationQuotasTest extends ZooKeeperTestHarness {
-  def percentError(percent: Int, value: Long): Long = Math.round(value * percent / 100)
+  def percentError(percent: Int, value: Long): Long = Math.round(value * percent / 100.0)
 
   val msg100KB = new Array[Byte](100000)
   var brokers: Seq[KafkaServer] = null

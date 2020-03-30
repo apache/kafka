@@ -128,7 +128,7 @@ object ReplicationQuotasTestRig {
       experimentName = config.name
       val brokers = (100 to 100 + config.brokers)
       var count = 0
-      val shift = Math.round(config.brokers / 2)
+      val shift = Math.round(config.brokers / 2f)
 
       def nextReplicaRoundRobin(): Int = {
         count = count + 1
@@ -302,7 +302,7 @@ object ReplicationQuotasTestRig {
       val message = s"\n\n<h3>${config.name}</h3>" +
         s"<p>- BrokerCount: ${config.brokers}" +
         s"<p>- PartitionCount: ${config.partitions}" +
-        f"<p>- Throttle: ${config.throttle}%,.0f MB/s" +
+        f"<p>- Throttle: ${config.throttle.toDouble}%,.0f MB/s" +
         f"<p>- MsgCount: ${config.msgsPerPartition}%,.0f " +
         f"<p>- MsgSize: ${config.msgSize}%,.0f" +
         s"<p>- TargetBytesPerBrokerMB: ${config.targetBytesPerBrokerMB}<p>"

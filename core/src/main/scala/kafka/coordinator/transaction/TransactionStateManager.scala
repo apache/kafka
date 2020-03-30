@@ -391,7 +391,7 @@ class TransactionStateManager(brokerId: Int,
       val loadedTransactions = loadTransactionMetadata(topicPartition, coordinatorEpoch)
       val endTimeMs = time.milliseconds()
       val totalLoadingTimeMs = endTimeMs - startTimeMs
-      partitionLoadSensor.record(totalLoadingTimeMs, endTimeMs, false)
+      partitionLoadSensor.record(totalLoadingTimeMs.toDouble, endTimeMs, false)
       info(s"Finished loading ${loadedTransactions.size} transaction metadata from $topicPartition in " +
         s"$totalLoadingTimeMs milliseconds, of which $schedulerTimeMs milliseconds was spent in the scheduler.")
 

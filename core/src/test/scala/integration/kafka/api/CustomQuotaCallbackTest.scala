@@ -365,8 +365,8 @@ class GroupedUserQuotaCallback extends ClientQuotaCallback with Reconfigurable w
   }
 
   override def reconfigure(configs: util.Map[String, _]): Unit = {
-    configValue(configs, DefaultProduceQuotaProp).foreach(value => quotas(ClientQuotaType.PRODUCE).put("", value))
-    configValue(configs, DefaultFetchQuotaProp).foreach(value => quotas(ClientQuotaType.FETCH).put("", value))
+    configValue(configs, DefaultProduceQuotaProp).foreach(value => quotas(ClientQuotaType.PRODUCE).put("", value.toDouble))
+    configValue(configs, DefaultFetchQuotaProp).foreach(value => quotas(ClientQuotaType.FETCH).put("", value.toDouble))
     customQuotasUpdated.values.foreach(_.set(true))
   }
 

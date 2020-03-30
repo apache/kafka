@@ -175,7 +175,7 @@ object ConsumerPerformance extends LazyLogging {
                                  startMs: Long,
                                  endMs: Long,
                                  dateFormat: SimpleDateFormat): Unit = {
-    val elapsedMs: Double = endMs - startMs
+    val elapsedMs: Double = (endMs - startMs).toDouble
     val totalMbRead = (bytesRead * 1.0) / (1024 * 1024)
     val intervalMbRead = ((bytesRead - lastBytesRead) * 1.0) / (1024 * 1024)
     val intervalMbPerSec = 1000.0 * intervalMbRead / elapsedMs

@@ -162,7 +162,7 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
                          private val time: Time,
                          threadNamePrefix: String,
                          clientQuotaCallback: Option[ClientQuotaCallback] = None) extends Logging {
-  private val staticConfigClientIdQuota = Quota.upperBound(config.quotaBytesPerSecondDefault)
+  private val staticConfigClientIdQuota = Quota.upperBound(config.quotaBytesPerSecondDefault.toDouble)
   private val clientQuotaType = quotaTypeToClientQuotaType(quotaType)
   @volatile private var quotaTypesEnabled = clientQuotaCallback match {
     case Some(_) => QuotaTypes.CustomQuotas
