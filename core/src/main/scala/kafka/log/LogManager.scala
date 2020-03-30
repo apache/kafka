@@ -741,7 +741,7 @@ class LogManager(logDirs: Seq[File],
         }
 
         val logDir = logDirs
-          .toStream // to prevent actually mapping the whole list, lazy map
+          .iterator // to prevent actually mapping the whole list, lazy map
           .map(createLogDirectory(_, logDirName))
           .find(_.isSuccess)
           .getOrElse(Failure(new KafkaStorageException("No log directories available. Tried " + logDirs.map(_.getAbsolutePath).mkString(", "))))
