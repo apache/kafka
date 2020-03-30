@@ -231,6 +231,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
@@ -2257,6 +2258,13 @@ public class KafkaAdminClient extends AdminClient {
         }
 
         return new AlterReplicaLogDirsResult(new HashMap<>(futures));
+    }
+
+    @Override
+    synchronized public boolean topicExists(String topic) throws ExecutionException, InterruptedException {
+        ListTopicsResult listTopics = this.listTopics();
+        Set<String> topics = listTopics.names().get();
+        return topics.contains(topic);
     }
 
     @Override

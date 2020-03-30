@@ -50,6 +50,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.ExecutionException;
 
 public class MockAdminClient extends AdminClient {
     public static final String DEFAULT_CLUSTER_ID = "I4ZmrWqfT2e-upky_4fdPA";
@@ -474,7 +475,7 @@ public class MockAdminClient extends AdminClient {
         switch (resource.type()) {
             case BROKER: {
                 Map<String, String> map =
-                    brokerConfigs.get(Integer.valueOf(resource.name()));
+                    brokerConfigs.get(Integer.parseInt(resource.name()));
                 if (map == null) {
                     throw new InvalidRequestException("Broker " + resource.name() +
                         " not found.");
@@ -534,7 +535,7 @@ public class MockAdminClient extends AdminClient {
             case BROKER: {
                 int brokerId;
                 try {
-                    brokerId = Integer.valueOf(resource.name());
+                    brokerId = Integer.parseInt(resource.name());
                 } catch (NumberFormatException e) {
                     return e;
                 }
@@ -621,6 +622,11 @@ public class MockAdminClient extends AdminClient {
     }
 
     @Override
+    public boolean topicExists(String topic) {
+        return false;
+    }
+
+    @Override
     synchronized public DescribeLogDirsResult describeLogDirs(Collection<Integer> brokers,
                                                               DescribeLogDirsOptions options) {
         throw new UnsupportedOperationException("Not implemented yet");
@@ -674,7 +680,7 @@ public class MockAdminClient extends AdminClient {
                 newReassignments.entrySet()) {
             TopicPartition partition = entry.getKey();
             Optional<NewPartitionReassignment> newReassignment = entry.getValue();
-            KafkaFutureImpl<Void> future = new KafkaFutureImpl<Void>();
+            KafkaFutureImpl<Void> future = new KafkaFutureImpl<>();
             futures.put(partition, future);
             TopicMetadata topicMetadata = allTopics.get(partition.topic());
             if (partition.partition() < 0 ||

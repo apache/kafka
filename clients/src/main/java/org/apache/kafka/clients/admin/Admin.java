@@ -24,6 +24,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
@@ -489,6 +490,13 @@ public interface Admin extends AutoCloseable {
     default DescribeLogDirsResult describeLogDirs(Collection<Integer> brokers) {
         return describeLogDirs(brokers, new DescribeLogDirsOptions());
     }
+
+
+    /**
+     * Get boolean value topic exists from Kafka Cluster
+     * @topic Name of topic
+     */
+    boolean topicExists(String topic) throws ExecutionException, InterruptedException;
 
     /**
      * Query the information of all log directories on the given set of brokers
