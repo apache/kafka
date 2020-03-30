@@ -21,6 +21,12 @@ import org.apache.kafka.common.record.RecordBatch;
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertThrows;
+import static org.junit.Assert.assertTrue;
+
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.IntStream;
 
 public class ApiVersionsTest {
 
@@ -37,6 +43,19 @@ public class ApiVersionsTest {
 
         apiVersions.remove("1");
         assertEquals(RecordBatch.CURRENT_MAGIC_VALUE, apiVersions.maxUsableProduceMagic());
+    }
+
+    @Test
+    public void testConcMapsIter() {
+        Map<Integer, String> map = new ConcurrentHashMap<>();
+        IntStream.range(0, 10).forEach( x -> map.put(x, x+""));
+
+        for (Map.Entry<Integer, String> entry : map.entrySet()) {
+
+                map.remove(entry.getKey());
+
+        }
+        assertTrue(map.isEmpty());
     }
 
 }

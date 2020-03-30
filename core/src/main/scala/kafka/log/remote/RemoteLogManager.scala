@@ -245,6 +245,8 @@ class RemoteLogManager(fetchLog: TopicPartition => Option[Log],
               deleteRemoteLogSegment(t)
             }
           })
+
+          remoteLogMetadataManager.onStopPartitions(topicPartitions.asJava)
         } catch {
           case ex: Exception => error(s"Error occurred while deleting topic partition: $tp", ex)
         }

@@ -16,9 +16,10 @@
  */
 package kafka.log.remote
 
-import java.nio.file.Files
+import java.io.File
+import java.nio.file.{Files, Path}
 import java.util
-import java.util.UUID
+import java.util.{Collections, UUID}
 
 import kafka.api.IntegrationTestHarness
 import org.apache.kafka.clients.CommonClientConfigs
@@ -26,6 +27,11 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.log.remote.storage.{RLMMWithTopicStorage, RemoteLogMetadataManager, RemoteLogSegmentId, RemoteLogSegmentMetadata}
 import org.junit.{Assert, Before, Test}
 
+import scala.collection.JavaConverters._
+
+/**
+ *
+ */
 class RLMMWithTopicStorageTest extends IntegrationTestHarness {
 
   override def brokerCount: Int = 3
@@ -33,14 +39,20 @@ class RLMMWithTopicStorageTest extends IntegrationTestHarness {
   // user topic partitions
   val tp0 = new TopicPartition("foo", 0)
   val tp1 = new TopicPartition("foo", 1)
-  val tp2 = new TopicPartition("bar", 1)
+  val tp2 = new TopicPartition("bar", 0)
+  val tp3 = new TopicPartition("bar", 1)
 
-  var tmpLogDirPath: String = _
+  val allTopicPartitions: util.Set[TopicPartition] = Set(tp0, tp1, tp2, tp3).asJava
+
+  def tmpLogDirPathAsStr: String = tmpLogDirPath.toString
+
+  var tmpLogDirPath: Path = _
 
   @Before
   override def setUp(): Unit = {
     super.setUp()
-    tmpLogDirPath = Files.createTempDirectory("kafka-").toString
+    tmpLogDirPath = Files.createTempDirectory("kafka-")
+
   }
 
   @Test
@@ -58,9 +70,13 @@ class RLMMWithTopicStorageTest extends IntegrationTestHarness {
 
     val rlSegIdTp2_401 = new RemoteLogSegmentId(tp2, UUID.randomUUID)
     val rlSegMetTp2_401 = new RemoteLogSegmentMetadata(rlSegIdTp2_401, 401L, 700L, -1L, 1, tp1.toString.getBytes)
+    var mayBeRlmmWithTopicStorage: Option[RLMMWithTopicStorage] = None
 
-    val rlmmWithTopicStorage = createRLMMWithTopicStorage(tmpLogDirPath, 1)
     try {
+      mayBeRlmmWithTopicStorage = Some(createRLMMWithTopicStorage(tmpLogDirPathAsStr, 1))
+      val rlmmWithTopicStorage = mayBeRlmmWithTopicStorage.get
+      rlmmWithTopicStorage.onPartitionLeadershipChanges(allTopicPartitions, Set.empty[TopicPartition].asJava)
+
       rlmmWithTopicStorage.putRemoteLogSegmentData(rlSegIdTp0_0, rlSegMetTp0_0)
       rlmmWithTopicStorage.putRemoteLogSegmentData(rlSegIdTp0_101, rlSegMetTp0_101)
       rlmmWithTopicStorage.putRemoteLogSegmentData(rlSegIdTp1_101, rlSegMetTp1_101)
@@ -73,11 +89,11 @@ class RLMMWithTopicStorageTest extends IntegrationTestHarness {
       val rlSegIdTp0_300 = rlmmWithTopicStorage.getRemoteLogSegmentId(tp0, 300)
       Assert.assertEquals(rlSegIdTp0_101, rlSegIdTp0_300)
     } finally {
-      rlmmWithTopicStorage.close()
+      mayBeRlmmWithTopicStorage.foreach(x => x.close())
     }
 
     // reload RLMM by reading from the data and committed offsets file.
-    val rlmmWithTopicStorageReloaded = createRLMMWithTopicStorage(tmpLogDirPath)
+    val rlmmWithTopicStorageReloaded = createRLMMWithTopicStorage(tmpLogDirPathAsStr)
     try {
       val remoteLogSegmentId170 = rlmmWithTopicStorageReloaded.getRemoteLogSegmentId(tp0, 170)
       Assert.assertEquals(rlSegIdTp0_101, remoteLogSegmentId170)
@@ -92,8 +108,11 @@ class RLMMWithTopicStorageTest extends IntegrationTestHarness {
 
     val rlSegIdTp0_0 = new RemoteLogSegmentId(tp0, UUID.randomUUID)
     val rlSegMetTp0_0 = new RemoteLogSegmentMetadata(rlSegIdTp0_0, 10L, 100L, -1L, 1, tp0.toString.getBytes)
-    val rlmmWithTopicStorage = createRLMMWithTopicStorage(tmpLogDirPath, 1)
+    var mayBeRlmmWithTopicStorage: Option[RLMMWithTopicStorage] = None
     try {
+      mayBeRlmmWithTopicStorage = Some(createRLMMWithTopicStorage(tmpLogDirPathAsStr, 1))
+      val rlmmWithTopicStorage = mayBeRlmmWithTopicStorage.get
+      rlmmWithTopicStorage.onPartitionLeadershipChanges(allTopicPartitions, Set.empty[TopicPartition].asJava)
       rlmmWithTopicStorage.putRemoteLogSegmentData(rlSegIdTp0_0, rlSegMetTp0_0)
 
       // get the non existing offset, below base offset
@@ -104,7 +123,7 @@ class RLMMWithTopicStorageTest extends IntegrationTestHarness {
       val remoteLogSegmentId200 = rlmmWithTopicStorage.getRemoteLogSegmentId(tp0, 200L)
       Assert.assertEquals(rlSegIdTp0_0, remoteLogSegmentId200)
     } finally {
-      rlmmWithTopicStorage.close()
+      mayBeRlmmWithTopicStorage.foreach(x => x.close())
     }
   }
 
@@ -114,8 +133,12 @@ class RLMMWithTopicStorageTest extends IntegrationTestHarness {
     val rlSegIdTp0_0 = new RemoteLogSegmentId(tp0, UUID.randomUUID)
     val rlSegMetTp0_0 = new RemoteLogSegmentMetadata(rlSegIdTp0_0, 10L, 100L, -1L, 1, tp0.toString.getBytes)
 
-    val rlmmWithTopicStorage = createRLMMWithTopicStorage(tmpLogDirPath, 1)
+    var mayBeRlmmWithTopicStorage: Option[RLMMWithTopicStorage] = None
+
     try {
+      mayBeRlmmWithTopicStorage = Some(createRLMMWithTopicStorage(tmpLogDirPathAsStr, 1))
+      val rlmmWithTopicStorage = mayBeRlmmWithTopicStorage.get
+      rlmmWithTopicStorage.onPartitionLeadershipChanges(allTopicPartitions, Set.empty[TopicPartition].asJava)
       rlmmWithTopicStorage.putRemoteLogSegmentData(rlSegIdTp0_0, rlSegMetTp0_0)
 
       // get the non existing offset, below base offset
@@ -130,7 +153,7 @@ class RLMMWithTopicStorageTest extends IntegrationTestHarness {
       Assert.assertNull(rlSegMetTp0_15_2)
 
     } finally {
-      rlmmWithTopicStorage.close()
+      mayBeRlmmWithTopicStorage.foreach(x => x.close())
     }
   }
 
@@ -155,4 +178,57 @@ class RLMMWithTopicStorageTest extends IntegrationTestHarness {
     // Multiple RLMM instances publishes events and they should receive events from each other.
 
   }
+
+  @Test
+  def testLeaderFollowerFailover(): Unit = {
+
+    val brokerId1 = 1
+    val logDirs1 = new File(tmpLogDirPath.toFile, brokerId1.toString)
+    logDirs1.mkdirs()
+    var mayBeRlmm1: Option[RLMMWithTopicStorage] = None
+
+    val brokerId2 = 2
+    val logDirs2 = new File(tmpLogDirPath.toFile, brokerId2.toString)
+    logDirs2.mkdirs()
+    var mayBeRlmm2: Option[RLMMWithTopicStorage] = None
+
+    try {
+      mayBeRlmm1 = Some(createRLMMWithTopicStorage(logDirs1.getAbsolutePath, brokerId1));
+      val rlmm1 = mayBeRlmm1.get
+      // make tp0 and tp3 as leader for rlmm1, and tp1 follower for rlmm1
+      val leaderSet1 = new util.HashSet[TopicPartition]()
+      leaderSet1.add(tp0)
+      leaderSet1.add(tp3)
+      rlmm1.onPartitionLeadershipChanges(leaderSet1, Collections.singleton(tp1))
+
+      val rlSegIdTp0_0 = new RemoteLogSegmentId(tp0, UUID.randomUUID)
+      val rlSegMetTp0_0 = new RemoteLogSegmentMetadata(rlSegIdTp0_0, 0L, 100L, -1L, 1, tp0.toString.getBytes)
+
+      val rlSegIdTp0_101 = new RemoteLogSegmentId(tp0, UUID.randomUUID)
+      val rlSegMetTp0_101 = new RemoteLogSegmentMetadata(rlSegIdTp0_101, 101L, 200L, -1L, 1, tp0.toString.getBytes)
+
+      val rlSegIdTp3_101 = new RemoteLogSegmentId(tp3, UUID.randomUUID)
+      val rlSegMetTp3_101 = new RemoteLogSegmentMetadata(rlSegIdTp3_101, 101L, 200L, -1L, 1, tp3.toString.getBytes)
+
+      // make tp1 and tp2 as leaders for rlmm2
+      val leaderSet2 = new util.HashSet[TopicPartition]()
+      leaderSet2.add(tp1)
+      leaderSet2.add(tp2)
+      mayBeRlmm2 = Some(createRLMMWithTopicStorage(logDirs2.getAbsolutePath, brokerId2))
+      val rlmm2 = mayBeRlmm2.get
+      rlmm2.onPartitionLeadershipChanges(leaderSet2, Collections.emptySet())
+
+      // reassign tp0 from rlmm1 to rlmm2. rlmm1 should not receive any updates of tp0 as it should have been
+      // unsubscribed.
+
+
+      // change follower of tp1 from rlmm1 to rlmm2
+
+      // make tp3 as follower in rlmm1 and leadership to rlmm2.
+    } finally {
+      mayBeRlmm1.foreach(x => x.close())
+      mayBeRlmm2.foreach(x => x.close())
+    }
+  }
+
 }
