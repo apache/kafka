@@ -1883,7 +1883,7 @@ public class StreamsPartitionAssignorTest {
         createMockTaskManager(allTasks, emptyTasks);
         adminClient = EasyMock.createMock(AdminClient.class);
         expect(adminClient.listOffsets(anyObject())).andThrow(new StreamsException("Should be handled"));
-        configureDefaultPartitionAssignor();
+        configurePartitionAssignorWith(Collections.singletonMap(AssignorConfiguration.HIGH_AVAILABILITY_ENABLED_CONFIG, true));
 
         final String firstConsumer = "consumer1";
         final String newConsumer = "consumer2";

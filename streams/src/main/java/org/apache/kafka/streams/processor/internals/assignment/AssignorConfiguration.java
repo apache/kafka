@@ -38,7 +38,7 @@ import static org.apache.kafka.common.utils.Utils.getPort;
 import static org.apache.kafka.streams.processor.internals.assignment.StreamsAssignmentProtocolVersions.LATEST_SUPPORTED_VERSION;
 
 public final class AssignorConfiguration {
-    public static final String HIGH_AVAILABILITY_FLAG_CONFIG = "internal.high.availability.enabled";
+    public static final String HIGH_AVAILABILITY_ENABLED_CONFIG = "internal.high.availability.enabled";
     private final boolean highAvailabilityEnabled;
 
     private final String logPrefix;
@@ -158,7 +158,14 @@ public final class AssignorConfiguration {
 
         copartitionedTopicsEnforcer = new CopartitionedTopicsEnforcer(logPrefix);
 
-        highAvailabilityEnabled = configs.containsKey(HIGH_AVAILABILITY_FLAG_CONFIG) && streamsConfig.getBoolean(HIGH_AVAILABILITY_FLAG_CONFIG);
+        {
+            final Object o = configs.get(HIGH_AVAILABILITY_ENABLED_CONFIG);
+            if (o == null) {
+                highAvailabilityEnabled = false;
+            } else {
+                highAvailabilityEnabled = (Boolean) o;
+            }
+        }
     }
 
     public AtomicInteger getAssignmentErrorCode(final Map<String, ?> configs) {
