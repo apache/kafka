@@ -699,7 +699,7 @@ class ControllerChannelManagerTest {
       Broker(brokerId, Seq(endpoint), rack = None) -> 1L
     }.toMap
 
-    context.setLiveBrokerAndEpochs(brokerEpochs)
+    context.setLiveBrokers(brokerEpochs)
 
     // Simple round-robin replica assignment
     var leaderIndex = 0
