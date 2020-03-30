@@ -67,6 +67,8 @@ class ReplicaManagerTest {
   var controllerEpoch = 0
   val brokerEpoch = 0L
 
+  private[this] val brokerTopicStats = new BrokerTopicStats
+
   @Before
   def setUp(): Unit = {
     kafkaZkClient = EasyMock.createMock(classOf[KafkaZkClient])
@@ -77,6 +79,7 @@ class ReplicaManagerTest {
   @After
   def tearDown(): Unit = {
     metrics.close()
+    brokerTopicStats.close()
   }
 
   @Test
@@ -85,7 +88,7 @@ class ReplicaManagerTest {
     val config = KafkaConfig.fromProps(props)
     val mockLogMgr = TestUtils.createLogManager(config.logDirs.map(new File(_)))
     val rm = new ReplicaManager(config, metrics, time, kafkaZkClient, new MockScheduler(time), mockLogMgr,
-      new AtomicBoolean(false), QuotaFactory.instantiate(config, metrics, time, ""), new BrokerTopicStats,
+      new AtomicBoolean(false), QuotaFactory.instantiate(config, metrics, time, ""), brokerTopicStats,
       new MetadataCache(config.brokerId), new LogDirFailureChannel(config.logDirs.size))
     try {
       val partition = rm.createPartition(new TopicPartition(topic, 1))
@@ -105,7 +108,7 @@ class ReplicaManagerTest {
     val config = KafkaConfig.fromProps(props)
     val mockLogMgr = TestUtils.createLogManager(config.logDirs.map(new File(_)))
     val rm = new ReplicaManager(config, metrics, time, kafkaZkClient, new MockScheduler(time), mockLogMgr,
-      new AtomicBoolean(false), QuotaFactory.instantiate(config, metrics, time, ""), new BrokerTopicStats,
+      new AtomicBoolean(false), QuotaFactory.instantiate(config, metrics, time, ""), brokerTopicStats,
       new MetadataCache(config.brokerId), new LogDirFailureChannel(config.logDirs.size))
     try {
       val partition = rm.createPartition(new TopicPartition(topic, 1))
@@ -124,7 +127,7 @@ class ReplicaManagerTest {
     val config = KafkaConfig.fromProps(props)
     val mockLogMgr = TestUtils.createLogManager(config.logDirs.map(new File(_)))
     val rm = new ReplicaManager(config, metrics, time, kafkaZkClient, new MockScheduler(time), mockLogMgr,
-      new AtomicBoolean(false), QuotaFactory.instantiate(config, metrics, time, ""), new BrokerTopicStats,
+      new AtomicBoolean(false), QuotaFactory.instantiate(config, metrics, time, ""), brokerTopicStats,
       new MetadataCache(config.brokerId), new LogDirFailureChannel(config.logDirs.size), Option(this.getClass.getName))
     try {
       def callback(responseStatus: Map[TopicPartition, PartitionResponse]) = {
@@ -157,7 +160,7 @@ class ReplicaManagerTest {
     EasyMock.expect(metadataCache.getAliveBrokers).andReturn(aliveBrokers).anyTimes()
     EasyMock.replay(metadataCache)
     val rm = new ReplicaManager(config, metrics, time, kafkaZkClient, new MockScheduler(time), mockLogMgr,
-      new AtomicBoolean(false), QuotaFactory.instantiate(config, metrics, time, ""), new BrokerTopicStats,
+      new AtomicBoolean(false), QuotaFactory.instantiate(config, metrics, time, ""), brokerTopicStats,
       metadataCache, new LogDirFailureChannel(config.logDirs.size))
 
     try {
@@ -1297,7 +1300,7 @@ class ReplicaManagerTest {
     val offsetFromLeader = 5
     val leaderEpochFromLeader = 3
     val mockScheduler = new MockScheduler(time)
-    val mockBrokerTopicStats = new BrokerTopicStats
+    val mockBrokerTopicStats = brokerTopicStats
     val mockLogDirFailureChannel = new LogDirFailureChannel(config.logDirs.size)
     val mockLog = new Log(
       _dir = new File(new File(config.logDirs.head), s"$topic-0"),
@@ -1553,7 +1556,7 @@ class ReplicaManagerTest {
       purgatoryName = "DelayedElectLeader", timer, reaperEnabled = false)
 
     new ReplicaManager(config, metrics, time, kafkaZkClient, new MockScheduler(time), mockLogMgr,
-      new AtomicBoolean(false), QuotaFactory.instantiate(config, metrics, time, ""), new BrokerTopicStats,
+      new AtomicBoolean(false), QuotaFactory.instantiate(config, metrics, time, ""), brokerTopicStats,
       metadataCache, new LogDirFailureChannel(config.logDirs.size), mockProducePurgatory, mockFetchPurgatory,
       mockDeleteRecordsPurgatory, mockDelayedElectLeaderPurgatory, Option(this.getClass.getName))
   }

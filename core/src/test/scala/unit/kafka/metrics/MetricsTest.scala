@@ -104,8 +104,8 @@ class MetricsTest extends KafkaServerTestHarness with Logging {
     createTopic(topic, 2, 1)
 
     // The broker metrics for all topics should be greedily registered
-    assertTrue("General topic metrics don't exist", topicMetrics(None).nonEmpty)
-    assertEquals(servers.head.brokerTopicStats.allTopicsStats.metricMap.size, topicMetrics(None).size)
+    assertTrue("General topic metrics don't exist", generalTopicMetrics().nonEmpty)
+    assertEquals(servers.head.brokerTopicStats.allTopicsStats.metricMap.size, generalTopicMetrics().size)
     // topic metrics should be lazily registered
     assertTrue("Topic metrics aren't lazily registered", topicMetricGroups(topic).isEmpty)
     TestUtils.generateAndProduceMessages(servers, topic, nMessages)
@@ -197,10 +197,9 @@ class MetricsTest extends KafkaServerTestHarness with Logging {
     assertEquals(metrics.keySet.asScala.count(_.getMBeanName == "kafka.server:type=SessionExpireListener,name=ZooKeeperDisconnectsPerSec"), 1)
   }
 
-  private def topicMetrics(topic: Option[String]): Set[String] = {
-    val metricNames = KafkaYammerMetrics.defaultRegistry.allMetrics().keySet.asScala.map(_.getMBeanName)
-    filterByTopicMetricRegex(metricNames, topic)
-  }
+  private def generalTopicMetrics(): Set[String] =
+    filterByTopicMetricRegex(KafkaYammerMetrics.defaultRegistry.allMetrics().keySet.asScala.map(_.getMBeanName), None)
+      .filterNot(_.contains("topic="))
 
   private def topicMetricGroups(topic: String): Set[String] = {
     val metricGroups = KafkaYammerMetrics.defaultRegistry.groupedMetrics(MetricPredicate.ALL).keySet.asScala
