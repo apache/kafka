@@ -1302,6 +1302,7 @@ project(':streams:streams-scala') {
     compile project(':streams')
 
     compile libs.scalaLibrary
+    compile libs.scalaCollectionCompat
 
     testCompile project(':core')
     testCompile project(':core').sourceSets.test.output
