@@ -137,9 +137,9 @@ class TransactionMarkerChannelManager(config: KafkaConfig,
 
   private val markersQueueForUnknownBroker = new TxnMarkerQueue(Node.noNode)
 
-  private val txnLogAppendRetryQueue = new LinkedBlockingQueue[PendingCommitTxn]()
+  private val txnLogAppendRetryQueue = new LinkedBlockingQueue[PendingCompleteTxn]()
 
-  private val transactionsWithPendingMarkers = new ConcurrentHashMap[String, PendingCommitTxn]
+  private val transactionsWithPendingMarkers = new ConcurrentHashMap[String, PendingCompleteTxn]
 
   override val requestTimeoutMs: Int = config.requestTimeoutMs
 
@@ -175,7 +175,7 @@ class TransactionMarkerChannelManager(config: KafkaConfig,
   }
 
   def retryLogAppends(): Unit = {
-    val txnLogAppendRetries: java.util.List[PendingCommitTxn] = new util.ArrayList[PendingCommitTxn]()
+    val txnLogAppendRetries: java.util.List[PendingCompleteTxn] = new util.ArrayList[PendingCompleteTxn]()
     txnLogAppendRetryQueue.drainTo(txnLogAppendRetries)
     txnLogAppendRetries.asScala.foreach { txnLogAppend =>
       debug(s"Retry appending $txnLogAppend transaction log")
@@ -214,7 +214,7 @@ class TransactionMarkerChannelManager(config: KafkaConfig,
     }
   }
 
-  private def writeTxnCompletion(pendingCommitTxn: PendingCommitTxn): Unit = {
+  private def writeTxnCompletion(pendingCommitTxn: PendingCompleteTxn): Unit = {
     transactionsWithPendingMarkers.remove(pendingCommitTxn.transactionalId)
 
     val transactionalId = pendingCommitTxn.transactionalId
@@ -243,7 +243,7 @@ class TransactionMarkerChannelManager(config: KafkaConfig,
           debug(s"Sending $transactionalId's transaction markers for $txnMetadata with " +
             s"coordinator epoch $coordinatorEpoch succeeded, trying to append complete transaction log now")
 
-          tryAppendToLog(PendingCommitTxn(transactionalId, coordinatorEpoch, txnMetadata, newMetadata))
+          tryAppendToLog(PendingCompleteTxn(transactionalId, coordinatorEpoch, txnMetadata, newMetadata))
         } else {
           info(s"The cached metadata $txnMetadata has changed to $epochAndMetadata after " +
             s"completed sending the markers with coordinator epoch $coordinatorEpoch; abort " +
@@ -264,7 +264,7 @@ class TransactionMarkerChannelManager(config: KafkaConfig,
                           newMetadata: TxnTransitMetadata): Unit = {
     val transactionalId = txnMetadata.transactionalId
 
-    val pendingCommitTxn = PendingCommitTxn(
+    val pendingCommitTxn = PendingCompleteTxn(
       transactionalId,
       coordinatorEpoch,
       txnMetadata,
@@ -293,7 +293,7 @@ class TransactionMarkerChannelManager(config: KafkaConfig,
     }
   }
 
-  private def tryAppendToLog(txnLogAppend: PendingCommitTxn) = {
+  private def tryAppendToLog(txnLogAppend: PendingCompleteTxn) = {
     // try to append to the transaction log
     def appendCallback(error: Errors): Unit =
       error match {
@@ -412,7 +412,7 @@ class TransactionMarkerChannelManager(config: KafkaConfig,
 
 case class TxnIdAndMarkerEntry(txnId: String, txnMarkerEntry: TxnMarkerEntry)
 
-case class PendingCommitTxn(transactionalId: String, coordinatorEpoch: Int, txnMetadata: TransactionMetadata, newMetadata: TxnTransitMetadata) {
+case class PendingCompleteTxn(transactionalId: String, coordinatorEpoch: Int, txnMetadata: TransactionMetadata, newMetadata: TxnTransitMetadata) {
 
   override def toString: String = {
     "TxnLogAppend(" +
