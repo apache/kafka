@@ -730,7 +730,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
     }
 
     if (brokerMetadataSet.size > 1) {
-      val builder = StringBuilder.newBuilder
+      val builder = new StringBuilder
 
       for ((logDir, brokerMetadata) <- brokerMetadataMap)
         builder ++= s"- $logDir -> $brokerMetadata\n"
