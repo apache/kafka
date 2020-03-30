@@ -62,11 +62,11 @@ import scala.collection.{Map, Seq, Set, mutable}
 import scala.compat.java8.OptionConverters._
 
 
-class OffsetOutOfRangeExceptionWithOffsetValues(message: String,
-                                                startOffset: Long,
-                                                logStartOffset: Long,
-                                                lastStableOffset: Long,
-                                                highWaterMark: Long) extends OffsetOutOfRangeException(message) {
+class OffsetOutOfRangeExceptionWithOffsetValues(val message: String,
+                                                val startOffset: Long,
+                                                val logStartOffset: Long,
+                                                val lastStableOffset: Long,
+                                                val highWaterMark: Long) extends OffsetOutOfRangeException(message) {
 
   def getStartOffset: Long = startOffset
 
@@ -1040,6 +1040,7 @@ class ReplicaManager(val config: KafkaConfig,
           LogReadResult(info = FetchDataInfo(LogOffsetMetadata.UnknownOffsetMetadata, MemoryRecords.EMPTY),
               highWatermark = e.getHighWaterMark,
               leaderLogStartOffset = e.getLogStartOffset,
+              // leaderLogEndOffset is not needed as highWatermark and LSO are being set
               leaderLogEndOffset = Log.UnknownOffset,
               followerLogStartOffset = followerLogStartOffset,
               fetchTimeMs = -1L,
