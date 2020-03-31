@@ -78,6 +78,30 @@ public class TaskMetricsTest {
     }
 
     @Test
+    public void shouldGetActiveProcessRatioSensor() {
+        final String operation = "active-process-ratio";
+        expect(streamsMetrics.taskLevelSensor(THREAD_ID, TASK_ID, operation, RecordingLevel.INFO))
+            .andReturn(expectedSensor);
+        final String ratioDescription = "The fraction of time the thread spent " +
+            "on processing this task among all assigned active tasks";
+        expect(streamsMetrics.taskLevelTagMap(THREAD_ID, TASK_ID)).andReturn(tagMap);
+        StreamsMetricsImpl.addValueMetricToSensor(
+            expectedSensor,
+            TASK_LEVEL_GROUP,
+            tagMap,
+            operation,
+            ratioDescription
+        );
+
+        replay(StreamsMetricsImpl.class, streamsMetrics);
+
+        final Sensor sensor = TaskMetrics.activeProcessRatioSensor(THREAD_ID, TASK_ID, streamsMetrics);
+
+        verify(StreamsMetricsImpl.class, streamsMetrics);
+        assertThat(sensor, is(expectedSensor));
+    }
+
+    @Test
     public void shouldGetProcessLatencySensor() {
         final String operation = "process-latency";
         expect(streamsMetrics.taskLevelSensor(THREAD_ID, TASK_ID, operation, RecordingLevel.DEBUG))

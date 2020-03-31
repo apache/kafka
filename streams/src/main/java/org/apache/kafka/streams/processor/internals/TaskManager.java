@@ -28,6 +28,7 @@ import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.errors.LockException;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskIdFormatException;
@@ -810,16 +811,20 @@ public class TaskManager {
     /**
      * @throws TaskMigratedException if the task producer got fenced (EOS only)
      */
-    int process(final int maxNumRecords, final long now) {
+    int process(final int maxNumRecords, final Time time) {
         int totalProcessed = 0;
 
+        long now = time.milliseconds();
         for (final Task task : activeTaskIterable()) {
             try {
                 int processed = 0;
+                final long then = now;
                 while (processed < maxNumRecords && task.process(now)) {
                     processed++;
                 }
+                now = time.milliseconds();
                 totalProcessed += processed;
+                task.recordProcessBatchTime(then - now);
             } catch (final TaskMigratedException e) {
                 log.info("Failed to process stream task {} since it got migrated to another thread already. " +
                              "Will trigger a new rebalance and close all tasks as zombies together.", task.id());
@@ -831,6 +836,12 @@ public class TaskManager {
         }
 
         return totalProcessed;
+    }
+
+    void recordTaskProcessRatio(final long totalProcessLatencyMs) {
+        for (final Task task : activeTaskIterable()) {
+            task.recordProcessTimeRatio(totalProcessLatencyMs);
+        }
     }
 
     /**

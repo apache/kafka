@@ -659,6 +659,8 @@ public class StreamThread extends Thread {
         // if there's no active restoring or standby updating it would not try to fetch any data
         changelogReader.restore();
 
+        // TODO: we should record the restore latency and its relative time spent ratio after
+        //       we figure out how to move this method out of the stream thread
         advanceNowAndComputeLatency();
 
         long totalCommitLatency = 0L;
@@ -675,7 +677,7 @@ public class StreamThread extends Thread {
              *  6. Otherwise, increment N.
              */
             do {
-                final int processed = taskManager.process(numIterations, now);
+                final int processed = taskManager.process(numIterations, time);
                 final long processLatency = advanceNowAndComputeLatency();
                 totalProcessLatency += processLatency;
                 if (processed > 0) {
@@ -684,8 +686,9 @@ public class StreamThread extends Thread {
                     processRateSensor.record(processed, now);
 
                     // This metric is scaled to represent the _average_ processing time of _each_
-                    // task. Note, it's hard to interpret this as defined, but we would need a KIP
-                    // to change it to simply report the overall time spent processing all tasks.
+                    // task. Note, it's hard to interpret this as defined; the per-task process-ratio
+                    // as well as total time ratio spent on processing compared with polling / committing etc
+                    // are reported on other metrics.
                     processLatencySensor.record(processLatency / (double) processed, now);
                 }
 
@@ -720,6 +723,10 @@ public class StreamThread extends Thread {
                     numIterations++;
                 }
             } while (true);
+
+            // we record the ratio out of the while loop so that the accumulated latency spans over
+            // multiple iterations with reasonably large max.num.records and hence is less vulnerable to outliers
+            taskManager.recordTaskProcessRatio(totalProcessLatency);
         }
 
         now = time.milliseconds();

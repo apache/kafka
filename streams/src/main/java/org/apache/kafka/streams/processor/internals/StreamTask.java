@@ -89,7 +89,10 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     private final PunctuationQueue streamTimePunctuationQueue;
     private final PunctuationQueue systemTimePunctuationQueue;
 
+    private long processTimeMs = 0L;
+
     private final Sensor closeTaskSensor;
+    private final Sensor processRatioSensor;
     private final Sensor processLatencySensor;
     private final Sensor punctuateLatencySensor;
     private final Sensor enforcedProcessingSensor;
@@ -131,6 +134,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         } else {
             enforcedProcessingSensor = TaskMetrics.enforcedProcessingSensor(threadId, taskId, streamsMetrics);
         }
+        processRatioSensor = TaskMetrics.activeProcessRatioSensor(threadId, taskId, streamsMetrics);
         processLatencySensor = TaskMetrics.processLatencySensor(threadId, taskId, streamsMetrics);
         punctuateLatencySensor = TaskMetrics.punctuateSensor(threadId, taskId, streamsMetrics);
 
@@ -206,6 +210,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             initializeTopology();
             processorContext.initialize();
             idleStartTimeMs = RecordQueue.UNKNOWN;
+
             transitionTo(State.RUNNING);
 
             log.info("Restored and ready to run");
@@ -614,6 +619,17 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         }
 
         return true;
+    }
+
+    @Override
+    public void recordProcessBatchTime(final long processBatchTime) {
+        processTimeMs += processBatchTime;
+    }
+
+    @Override
+    public void recordProcessTimeRatio(final long allTaskProcessMs) {
+        processRatioSensor.record((double) processTimeMs / allTaskProcessMs);
+        processTimeMs = 0L;
     }
 
     private String getStacktraceString(final RuntimeException e) {
