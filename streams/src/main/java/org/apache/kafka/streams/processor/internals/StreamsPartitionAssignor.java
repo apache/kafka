@@ -711,14 +711,16 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         final TaskAssignor<UUID> taskAssignor;
         if (highAvailabilityEnabled) {
             if (lagComputationSuccessful) {
-                taskAssignor = new HighAvailabilityTaskAssignor<>(clientStates, allTasks, statefulTasks,
+                taskAssignor = new HighAvailabilityTaskAssignor<>(
+                    clientStates,
+                    allTasks,
+                    statefulTasks,
                     assignmentConfigs);
             } else {
-                taskAssignor = new StickyTaskAssignor<>(clientStates, allTasks, statefulTasks, assignmentConfigs);
-                ((StickyTaskAssignor) taskAssignor).preservePreviousTaskAssignment();
+                taskAssignor = new StickyTaskAssignor<>(clientStates, allTasks, statefulTasks, assignmentConfigs, true);
             }
         } else {
-            taskAssignor = new StickyTaskAssignor<>(clientStates, allTasks, statefulTasks, assignmentConfigs);
+            taskAssignor = new StickyTaskAssignor<>(clientStates, allTasks, statefulTasks, assignmentConfigs, false);
         }
         taskAssignor.assign();
 

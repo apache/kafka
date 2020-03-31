@@ -43,16 +43,18 @@ public class StickyTaskAssignor<ID> implements TaskAssignor<ID> {
     private final TaskPairs taskPairs;
     private final int numStandbyReplicas;
 
-    private boolean mustPreserveActiveTaskAssignment = false;
+    private final boolean mustPreserveActiveTaskAssignment;
 
     public StickyTaskAssignor(final Map<ID, ClientState> clients,
                               final Set<TaskId> allTaskIds,
                               final Set<TaskId> standbyTaskIds,
-                              final AssignmentConfigs configs) {
+                              final AssignmentConfigs configs,
+                              final boolean mustPreserveActiveTaskAssignment) {
         this.clients = clients;
         this.allTaskIds = allTaskIds;
         this.standbyTaskIds = standbyTaskIds;
         numStandbyReplicas = configs.numStandbyReplicas;
+        this.mustPreserveActiveTaskAssignment = mustPreserveActiveTaskAssignment;
 
         final int maxPairs = allTaskIds.size() * (allTaskIds.size() - 1) / 2;
         taskPairs = new TaskPairs(maxPairs);
@@ -64,10 +66,6 @@ public class StickyTaskAssignor<ID> implements TaskAssignor<ID> {
         assignActive();
         assignStandby(numStandbyReplicas);
         return false;
-    }
-
-    public void preservePreviousTaskAssignment() {
-        mustPreserveActiveTaskAssignment = true;
     }
 
     private void assignStandby(final int numStandbyReplicas) {

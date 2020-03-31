@@ -674,8 +674,7 @@ public class StickyTaskAssignorTest {
         final ClientState c1 = createClientWithPreviousActiveTasks(p1, 1, task00, task01, task02);
         final ClientState c2 = createClient(p2, 1);
 
-        final StickyTaskAssignor<Integer> taskAssignor = createTaskAssignor(task00, task01, task02);
-        taskAssignor.preservePreviousTaskAssignment();
+        final StickyTaskAssignor<Integer> taskAssignor = createTaskAssignor(0, true, task00, task01, task02);
         taskAssignor.assign();
 
         assertThat(c1.activeTasks(), equalTo(Utils.mkSet(task00, task01, task02)));
@@ -683,17 +682,24 @@ public class StickyTaskAssignorTest {
     }
 
     private StickyTaskAssignor<Integer> createTaskAssignor(final TaskId... tasks) {
-        return createTaskAssignor(0, tasks);
+        return createTaskAssignor(0, false, tasks);
     }
     
     private StickyTaskAssignor<Integer> createTaskAssignor(final int numStandbys, final TaskId... tasks) {
+        return createTaskAssignor(numStandbys, false, tasks);
+    }
+
+    private StickyTaskAssignor<Integer> createTaskAssignor(final int numStandbys,
+                                                           final boolean mustPreserveActiveTaskAssignment,
+                                                           final TaskId... tasks) {
         final List<TaskId> taskIds = Arrays.asList(tasks);
         Collections.shuffle(taskIds);
         return new StickyTaskAssignor<>(
             clients,
             new HashSet<>(taskIds),
             new HashSet<>(taskIds),
-            new AssignmentConfigs(0L, 0, 0, numStandbys, 0L)
+            new AssignmentConfigs(0L, 0, 0, numStandbys, 0L),
+            mustPreserveActiveTaskAssignment
         );
     }
 

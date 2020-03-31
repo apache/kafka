@@ -28,7 +28,6 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Objects;
 import java.util.PriorityQueue;
-import java.util.Queue;
 import java.util.SortedMap;
 import java.util.SortedSet;
 import java.util.TreeMap;
@@ -60,9 +59,9 @@ public class HighAvailabilityTaskAssignor<ID extends Comparable<ID>> implements 
     private final SortedMap<TaskId, SortedSet<RankedClient<ID>>> statefulTasksToRankedCandidates;
 
     public HighAvailabilityTaskAssignor(final Map<ID, ClientState> clientStates,
-                                 final Set<TaskId> allTasks,
-                                 final Set<TaskId> statefulTasks,
-                                 final AssignmentConfigs configs) {
+                                        final Set<TaskId> allTasks,
+                                        final Set<TaskId> statefulTasks,
+                                        final AssignmentConfigs configs) {
         this.configs = configs;
         this.clientStates = clientStates;
         this.allTasks = allTasks;
@@ -107,13 +106,9 @@ public class HighAvailabilityTaskAssignor<ID extends Comparable<ID>> implements 
                     clientsToNumberOfThreads,
                     configs.balanceFactor);
 
-        final Queue<Movement<ID>> movements =
-            getMovements(statefulActiveTaskAssignment, balancedStatefulActiveTaskAssignment);
-        for (int numWarmupReplicas = 0; numWarmupReplicas < configs.maxWarmupReplicas; ++numWarmupReplicas) {
-            final Movement<ID> movement = movements.poll();
-            if (movement == null) {
-                break;
-            }
+        final List<Movement<ID>> movements =
+            getMovements(statefulActiveTaskAssignment, balancedStatefulActiveTaskAssignment, configs.maxWarmupReplicas);
+        for (final Movement<ID> movement : movements) {
             warmupTaskAssignment.get(movement.destination).add(movement.task);
         }
 
@@ -124,15 +119,15 @@ public class HighAvailabilityTaskAssignor<ID extends Comparable<ID>> implements 
             warmupTaskAssignment,
             standbyTaskAssignment
         );
-        final ClientValidatingPriorityQueue<ID> standbyTaskClientsQueue =
-            new ClientValidatingPriorityQueue<>(
+        final ValidClientsByTaskLoadQueue<ID> clientsByStandbyTaskLoad =
+            new ValidClientsByTaskLoadQueue<>(
                 configs.numStandbyReplicas,
                 getClientPriorityQueueByTaskLoad(asList(warmupTaskAssignment, standbyTaskAssignment)),
                 allStatefulTaskAssignments
             );
 
         for (final TaskId task : statefulTasksToRankedCandidates.keySet()) {
-            final List<ID> clients = standbyTaskClientsQueue.poll(task);
+            final List<ID> clients = clientsByStandbyTaskLoad.poll(task);
             for (final ID client : clients) {
                 standbyTaskAssignment.get(client).add(task);
             }
@@ -169,7 +164,7 @@ public class HighAvailabilityTaskAssignor<ID extends Comparable<ID>> implements 
             assignStandbyTasksToClients(standbyTaskAssignment);
             assignActiveTasksToClients(statelessActiveTaskAssignment);
 
-            followupRebalanceRequired = warmupTaskAssignment.entrySet().stream().anyMatch(tasks -> !tasks.getValue().isEmpty());
+            followupRebalanceRequired = !movements.isEmpty();
         }
         return followupRebalanceRequired;
     }
@@ -179,8 +174,9 @@ public class HighAvailabilityTaskAssignor<ID extends Comparable<ID>> implements 
      * @param statefulActiveTaskAssignment the initial assignment, with source clients
      * @param balancedStatefulActiveTaskAssignment the final assignment, with destination clients
      */
-    static <ID> Queue<Movement<ID>> getMovements(final Map<ID, List<TaskId>> statefulActiveTaskAssignment,
-                                                 final Map<ID, List<TaskId>> balancedStatefulActiveTaskAssignment) {
+    static <ID> List<Movement<ID>> getMovements(final Map<ID, List<TaskId>> statefulActiveTaskAssignment,
+                                                final Map<ID, List<TaskId>> balancedStatefulActiveTaskAssignment,
+                                                final int maxWarmupReplicas) {
         if (statefulActiveTaskAssignment.size() != balancedStatefulActiveTaskAssignment.size()) {
             throw new IllegalStateException("Tried to compute movements but assignments differ in size.");
         }
@@ -193,7 +189,7 @@ public class HighAvailabilityTaskAssignor<ID extends Comparable<ID>> implements 
             }
         }
 
-        final Queue<Movement<ID>> movements = new LinkedList<>();
+        final List<Movement<ID>> movements = new LinkedList<>();
         for (final Map.Entry<ID, List<TaskId>> sourceClientEntry : statefulActiveTaskAssignment.entrySet()) {
             final ID source = sourceClientEntry.getKey();
 
@@ -203,8 +199,11 @@ public class HighAvailabilityTaskAssignor<ID extends Comparable<ID>> implements 
                     log.error("Task {} is assigned to client {} in initial assignment but has no owner in the final " +
                                   "balanced assignment.", task, source);
                     throw new IllegalStateException("Found task in initial assignment that was not assigned in the final.");
-                } else if (source != destination) {
+                } else if (!source.equals(destination)) {
                     movements.add(new Movement<>(task, source, destination));
+                    if (movements.size() == maxWarmupReplicas) {
+                        return movements;
+                    }
                 }
             }
         }
@@ -260,7 +259,7 @@ public class HighAvailabilityTaskAssignor<ID extends Comparable<ID>> implements 
         if (rankedClients == null) {
             return true;
         }
-        for (final RankedClient rankedClient : rankedClients) {
+        for (final RankedClient<ID> rankedClient : rankedClients) {
             if (rankedClient.rank() <= 0L) {
                 if (rankedClient.clientId().equals(client)) {
                     return true;
@@ -281,7 +280,8 @@ public class HighAvailabilityTaskAssignor<ID extends Comparable<ID>> implements 
      * Rankings are computed as follows, with lower being more caught up:
      *      Rank -1: active running task
      *      Rank 0: standby or restoring task whose overall lag is within the acceptableRecoveryLag bounds
-     *      Rank 1: tasks whose lag is unknown, eg because it was not encoded in an older version subscription
+     *      Rank 1: tasks whose lag is unknown, eg because it was not encoded in an older version subscription.
+     *                  this is
      *      Rank 1+: all other tasks are ranked according to their actual total lag
      * @return Sorted set of all client candidates for each stateful task, ranked by their overall lag. Tasks are
      */
@@ -471,7 +471,7 @@ public class HighAvailabilityTaskAssignor<ID extends Comparable<ID>> implements 
             } else if (o == null || getClass() != o.getClass()) {
                 return false;
             }
-            final Movement other = (Movement) o;
+            final Movement<ID> other = (Movement<ID>) o;
             return task == other.task && source == other.source && destination == other.destination;
         }
 
@@ -485,12 +485,12 @@ public class HighAvailabilityTaskAssignor<ID extends Comparable<ID>> implements 
     /**
      * Wraps a priority queue of clients and returns the next valid candidate(s) based on the current task assignment
      */
-    static class ClientValidatingPriorityQueue<ID> {
+    static class ValidClientsByTaskLoadQueue<ID> {
         private final int numClientsPerTask;
         private final PriorityQueue<ID> clientsByTaskLoad;
         private final List<Map<ID, List<TaskId>>> allStatefulTaskAssignments;
 
-        ClientValidatingPriorityQueue(final int numClientsPerTask,
+        ValidClientsByTaskLoadQueue(final int numClientsPerTask,
                                       final PriorityQueue<ID> clientsByTaskLoad,
                                       final List<Map<ID, List<TaskId>>> allStatefulTaskAssignments) {
             this.numClientsPerTask = numClientsPerTask;
