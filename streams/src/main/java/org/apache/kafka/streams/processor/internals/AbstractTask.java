@@ -71,17 +71,6 @@ public abstract class AbstractTask implements Task {
     }
 
     @Override
-    public void recordProcessLatency(final long elapsedLatencyMs) {
-        processLatencyMs += elapsedLatencyMs;
-    }
-
-    @Override
-    public void recordTotalLatency(final long elapsedLatencyMs) {
-        // do not record anything, just reset the recorded process latency
-        processLatencyMs = 0L;
-    }
-
-    @Override
     public StateStore getStore(final String name) {
         return stateMgr.getStore(name);
     }

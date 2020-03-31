@@ -192,10 +192,6 @@ public interface Task {
 
     void markChangelogAsCorrupted(final Collection<TopicPartition> partitions);
 
-    void recordProcessLatency(final long elapsedLatencyMs);
-
-    void recordTotalLatency(final long elapsedLatencyMs);
-
     default Map<TopicPartition, Long> purgeableOffsets() {
         return Collections.emptyMap();
     }
