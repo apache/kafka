@@ -43,6 +43,8 @@ import java.util.Optional;
  *      "bootstrapServers": "localhost:9092",
  *      "targetMessagesPerSec": 10,
  *      "maxMessages": 100,
+ *      "topicVerificationRetries": 3,
+ *      "ignoreProduceErrors": false,
  *      "activeTopics": {
  *        "foo[1-3]": {
  *          "numPartitions": 3,
@@ -73,6 +75,7 @@ public class ProduceBenchSpec extends TaskSpec {
     private final TopicsSpec inactiveTopics;
     private final boolean useConfiguredPartitioner;
     private final boolean ignoreProduceErrors;
+    private final int topicVerificationRetries;
     private final boolean skipFlush;
 
     @JsonCreator
@@ -91,8 +94,9 @@ public class ProduceBenchSpec extends TaskSpec {
                          @JsonProperty("activeTopics") TopicsSpec activeTopics,
                          @JsonProperty("inactiveTopics") TopicsSpec inactiveTopics,
                          @JsonProperty("useConfiguredPartitioner") boolean useConfiguredPartitioner,
+                         @JsonProperty("skipFlush") boolean skipFlush,
                          @JsonProperty("ignoreProduceErrors") boolean ignoreProduceErrors,
-                         @JsonProperty("skipFlush") boolean skipFlush) {
+                         @JsonProperty("topicVerificationRetries") int topicVerificationRetries) {
         super(startMs, durationMs);
         this.producerNode = (producerNode == null) ? "" : producerNode;
         this.bootstrapServers = (bootstrapServers == null) ? "" : bootstrapServers;
@@ -112,6 +116,7 @@ public class ProduceBenchSpec extends TaskSpec {
             TopicsSpec.EMPTY : inactiveTopics.immutableCopy();
         this.useConfiguredPartitioner = useConfiguredPartitioner;
         this.ignoreProduceErrors = ignoreProduceErrors;
+        this.topicVerificationRetries = (topicVerificationRetries == 0) ? 3 : topicVerificationRetries;
         this.skipFlush = skipFlush;
     }
 
@@ -188,6 +193,11 @@ public class ProduceBenchSpec extends TaskSpec {
     @JsonProperty
     public boolean skipFlush() {
         return skipFlush;
+    }
+
+    @JsonProperty
+    public int topicVerificationRetries() {
+        return topicVerificationRetries;
     }
 
     @Override

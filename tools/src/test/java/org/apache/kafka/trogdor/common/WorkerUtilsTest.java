@@ -73,7 +73,7 @@ public class WorkerUtilsTest {
     public void testCreateOneTopic() throws Throwable {
         Map<String, NewTopic> newTopics = Collections.singletonMap(TEST_TOPIC, NEW_TEST_TOPIC);
 
-        WorkerUtils.createTopics(log, adminClient, newTopics, true);
+        WorkerUtils.createTopics(log, adminClient, newTopics, true, 3, 2500);
         assertEquals(Collections.singleton(TEST_TOPIC), adminClient.listTopics().names().get());
         assertEquals(
             new TopicDescription(
@@ -90,7 +90,7 @@ public class WorkerUtilsTest {
         adminClient.timeoutNextRequest(1);
 
         WorkerUtils.createTopics(
-            log, adminClient, Collections.singletonMap(TEST_TOPIC, NEW_TEST_TOPIC), true);
+            log, adminClient, Collections.singletonMap(TEST_TOPIC, NEW_TEST_TOPIC), true, 3, 2500);
 
         assertEquals(
             new TopicDescription(
@@ -104,7 +104,7 @@ public class WorkerUtilsTest {
 
     @Test
     public void testCreateZeroTopicsDoesNothing() throws Throwable {
-        WorkerUtils.createTopics(log, adminClient, Collections.<String, NewTopic>emptyMap(), true);
+        WorkerUtils.createTopics(log, adminClient, Collections.<String, NewTopic>emptyMap(), true, 3, 2500);
         assertEquals(0, adminClient.listTopics().names().get().size());
     }
 
@@ -123,7 +123,7 @@ public class WorkerUtilsTest {
         newTopics.put("one-more-topic",
                       new NewTopic("one-more-topic", TEST_PARTITIONS, TEST_REPLICATION_FACTOR));
 
-        WorkerUtils.createTopics(log, adminClient, newTopics, true);
+        WorkerUtils.createTopics(log, adminClient, newTopics, true, 3, 2500);
     }
 
     @Test(expected = RuntimeException.class)
@@ -138,7 +138,7 @@ public class WorkerUtilsTest {
             null);
 
         WorkerUtils.createTopics(
-            log, adminClient, Collections.singletonMap(TEST_TOPIC, NEW_TEST_TOPIC), false);
+            log, adminClient, Collections.singletonMap(TEST_TOPIC, NEW_TEST_TOPIC), false, 3, 2500);
     }
 
     @Test
@@ -158,7 +158,8 @@ public class WorkerUtilsTest {
             log, adminClient,
             Collections.singletonMap(
                 existingTopic,
-                new NewTopic(existingTopic, tpInfo.size(), TEST_REPLICATION_FACTOR)), false);
+                new NewTopic(existingTopic, tpInfo.size(), TEST_REPLICATION_FACTOR)), false,
+            3, 2500);
 
         assertEquals(Collections.singleton(existingTopic), adminClient.listTopics().names().get());
     }
@@ -169,7 +170,7 @@ public class WorkerUtilsTest {
         assertEquals(0, adminClient.listTopics().names().get().size());
 
         WorkerUtils.createTopics(
-            log, adminClient, Collections.singletonMap(TEST_TOPIC, NEW_TEST_TOPIC), false);
+            log, adminClient, Collections.singletonMap(TEST_TOPIC, NEW_TEST_TOPIC), false, 3, 2500);
 
         assertEquals(Collections.singleton(TEST_TOPIC), adminClient.listTopics().names().get());
         assertEquals(
@@ -198,7 +199,7 @@ public class WorkerUtilsTest {
                    new NewTopic(existingTopic, tpInfo.size(), TEST_REPLICATION_FACTOR));
         topics.put(TEST_TOPIC, NEW_TEST_TOPIC);
 
-        WorkerUtils.createTopics(log, adminClient, topics, false);
+        WorkerUtils.createTopics(log, adminClient, topics, false, 3, 2500);
 
         assertEquals(Utils.mkSet(existingTopic, TEST_TOPIC), adminClient.listTopics().names().get());
     }
@@ -206,7 +207,7 @@ public class WorkerUtilsTest {
     @Test
     public void testCreateNonExistingTopicsWithZeroTopicsDoesNothing() throws Throwable {
         WorkerUtils.createTopics(
-            log, adminClient, Collections.<String, NewTopic>emptyMap(), false);
+            log, adminClient, Collections.<String, NewTopic>emptyMap(), false, 3, 2500);
         assertEquals(0, adminClient.listTopics().names().get().size());
     }
 
@@ -320,7 +321,7 @@ public class WorkerUtilsTest {
     @Test
     public void testVerifyTopics() throws Throwable {
         Map<String, NewTopic> newTopics = Collections.singletonMap(TEST_TOPIC, NEW_TEST_TOPIC);
-        WorkerUtils.createTopics(log, adminClient, newTopics, true);
+        WorkerUtils.createTopics(log, adminClient, newTopics, true, 3, 2500);
         adminClient.setFetchesRemainingUntilVisible(TEST_TOPIC, 2);
         WorkerUtils.verifyTopics(log, adminClient, Collections.singleton(TEST_TOPIC),
             Collections.singletonMap(TEST_TOPIC, NEW_TEST_TOPIC), 3, 1);
