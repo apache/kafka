@@ -16,12 +16,10 @@
  */
 package org.apache.kafka.connect.util.clusters;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.connect.errors.ConnectException;
-import org.apache.kafka.connect.runtime.Connect;
 import org.apache.kafka.connect.runtime.rest.entities.ActiveTopicsInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigInfos;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
@@ -296,7 +294,7 @@ public class EmbeddedConnectCluster {
         String url = endpointForResource(String.format("connector-plugins/%s/config/validate", connClassName));
         String response = putConnectorConfig(url, connConfig);
         ConfigInfos configInfos;
-        try{
+        try {
             configInfos = new ObjectMapper().readValue(response, ConfigInfos.class);
         } catch (IOException e) {
             throw new ConnectException("Unable deserialize response into a ConfigInfos object");
