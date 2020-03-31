@@ -17,8 +17,6 @@
 
 package org.apache.kafka.message;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
-
 import java.util.Collections;
 import java.util.function.Function;
 
