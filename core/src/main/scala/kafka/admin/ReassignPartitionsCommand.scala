@@ -1062,17 +1062,16 @@ object ReassignPartitionsCommand extends Logging {
   def curReassignmentsToString(adminClient: Admin): String = {
     val currentReassignments = adminClient.
       listPartitionReassignments().reassignments().get().asScala
-    val text = currentReassignments.keySet.toBuffer.sortWith(compareTopicPartitions).map {
-      case part =>
-        val reassignment = currentReassignments(part)
-        val replicas = reassignment.replicas().asScala
-        val addingReplicas = reassignment.addingReplicas().asScala
-        val removingReplicas = reassignment.removingReplicas().asScala
-        "%s: replicas: %s.%s%s".format(part, replicas.mkString(","),
-          if (addingReplicas.isEmpty) "" else
-            " adding: %s.".format(addingReplicas.mkString(",")),
-          if (removingReplicas.isEmpty) "" else
-            " removing: %s.".format(removingReplicas.mkString(",")))
+    val text = currentReassignments.keySet.toBuffer.sortWith(compareTopicPartitions).map { part =>
+      val reassignment = currentReassignments(part)
+      val replicas = reassignment.replicas().asScala
+      val addingReplicas = reassignment.addingReplicas().asScala
+      val removingReplicas = reassignment.removingReplicas().asScala
+      "%s: replicas: %s.%s%s".format(part, replicas.mkString(","),
+        if (addingReplicas.isEmpty) "" else
+          " adding: %s.".format(addingReplicas.mkString(",")),
+        if (removingReplicas.isEmpty) "" else
+          " removing: %s.".format(removingReplicas.mkString(",")))
     }.mkString(System.lineSeparator())
     if (text.isEmpty) {
       "No partition reassignments found."
@@ -1192,13 +1191,10 @@ object ReassignPartitionsCommand extends Logging {
    * @return                  A map from partition objects to error strings.
    */
   def alterPartitionReassignments(adminClient: Admin,
-                                  reassignments: Map[TopicPartition, Seq[Int]])
-                                  : Map[TopicPartition, Throwable] = {
+                                  reassignments: Map[TopicPartition, Seq[Int]]): Map[TopicPartition, Throwable] = {
     val results: Map[TopicPartition, KafkaFuture[Void]] =
-      adminClient.alterPartitionReassignments(reassignments.map {
-        case (part, replicas) => {
-          (part, Optional.of(new NewPartitionReassignment(replicas.map(Integer.valueOf(_)).asJava)))
-        }
+      adminClient.alterPartitionReassignments(reassignments.map { case (part, replicas) =>
+        (part, Optional.of(new NewPartitionReassignment(replicas.map(Integer.valueOf(_)).asJava)))
       }.asJava).values().asScala
     results.flatMap {
       case (part, future) => {
