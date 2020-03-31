@@ -113,7 +113,6 @@ public class TransactionManagerTest {
     private static final int REQUEST_TIMEOUT = 1000;
     private static final long DEFAULT_RETRY_BACKOFF_MS = 100L;
 
-
     private final String transactionalId = "foobar";
     private final int transactionTimeoutMs = 1121;
 
@@ -3111,7 +3110,7 @@ public class TransactionManagerTest {
         try {
             result.await(MAX_BLOCK_TIMEOUT, TimeUnit.MILLISECONDS);
             fail("Should have raised TimeoutException");
-        } catch (TimeoutException e) {
+        } catch (TimeoutException ignored) {
         }
 
         prepareFindCoordinatorResponse(Errors.NONE, false, CoordinatorType.TRANSACTION, transactionalId);
@@ -3123,10 +3122,6 @@ public class TransactionManagerTest {
         prepareEndTxnResponse(Errors.NONE, retryTransactionResult, producerId, epoch, false);
         runUntil(retryResult::isCompleted);
         assertFalse(transactionManager.hasOngoingTransaction());
-    }
-
-    private void verifyAddPartitionsFailsWithPartitionLevelError(final Errors error) throws InterruptedException {
-
     }
 
     private void prepareAddPartitionsToTxn(final Map<TopicPartition, Errors> errors) {
@@ -3180,10 +3175,6 @@ public class TransactionManagerTest {
 
     private void prepareProduceResponse(Errors error, final long producerId, final short producerEpoch, TopicPartition tp) {
         client.prepareResponse(produceRequestMatcher(producerId, producerEpoch, tp), produceResponse(tp, 0, error, 0));
-    }
-
-    private MockClient.RequestMatcher produceRequestMatcher(final long producerId, final short epoch) {
-        return produceRequestMatcher(producerId, epoch, tp0);
     }
 
     private MockClient.RequestMatcher produceRequestMatcher(final long producerId, final short epoch, TopicPartition tp) {

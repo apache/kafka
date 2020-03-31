@@ -261,11 +261,11 @@ public class ProducerConfig extends AbstractConfig {
     /**
      * <code>internal.auto.downgrade.txn.commit</code>
      * Whether or not the producer should automatically downgrade the transactional commit request when the new group metadata
-     * feature is supported not the broker, when set to <code>true</code>.
+     * feature is supported by the broker.
      * <p>
-     * The purpose of this flag is to make Kafka Streams capable of working with old brokers when applying the
-     * Producer Commit API. Non-stream user should be careful playing around with config as there is a risk of
-     * violating EOS semantics when being turned on for a customized EOS app.
+     * The purpose of this flag is to make Kafka Streams being capable of working with old brokers when applying this new API.
+     * Non Kafka Streams users who are building their own EOS applications should be careful playing around
+     * with config as there is a risk of violating EOS semantics when turning on this flag.
      *
      * <p>
      * Note: this is an internal configuration and could be changed in the future in a backward incompatible way

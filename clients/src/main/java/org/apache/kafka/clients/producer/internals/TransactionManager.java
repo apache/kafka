@@ -284,7 +284,7 @@ public class TransactionManager {
         }
     }
 
-    public TransactionManager(LogContext logContext,
+    public TransactionManager(final LogContext logContext,
                               final String transactionalId,
                               final int transactionTimeoutMs,
                               final long retryBackoffMs,
