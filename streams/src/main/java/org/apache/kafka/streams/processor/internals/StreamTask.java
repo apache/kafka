@@ -89,6 +89,8 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     private final PunctuationQueue streamTimePunctuationQueue;
     private final PunctuationQueue systemTimePunctuationQueue;
 
+    private long processTimeMs = 0L;
+
     private final Sensor closeTaskSensor;
     private final Sensor processRatioSensor;
     private final Sensor processLatencySensor;
@@ -620,9 +622,14 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     }
 
     @Override
-    public void recordTotalLatency(final long elapsedLatencyMs) {
-        processRatioSensor.record((double) processLatencyMs / elapsedLatencyMs);
-        processLatencyMs = 0L;
+    public void recordProcessBatchTime(final long processBatchTime) {
+        processTimeMs += processBatchTime;
+    }
+
+    @Override
+    public void recordProcessTimeRatio(final long allTaskProcessMs) {
+        processRatioSensor.record((double) processTimeMs / allTaskProcessMs);
+        processTimeMs = 0L;
     }
 
     private String getStacktraceString(final RuntimeException e) {
