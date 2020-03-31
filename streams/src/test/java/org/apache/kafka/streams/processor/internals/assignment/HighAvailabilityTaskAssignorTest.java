@@ -217,6 +217,7 @@ public class HighAvailabilityTaskAssignorTest {
 
     @Test
     public void shouldGetMovementsFromStateConstrainedToBalancedAssignment() {
+        maxWarmupReplicas = Integer.MAX_VALUE;
         final Map<String, List<TaskId>> stateConstrainedAssignment = mkMap(
             mkEntry(String1, asList(task0_0, task1_2)),
             mkEntry(String2, asList(task0_1, task1_0)),
@@ -232,7 +233,26 @@ public class HighAvailabilityTaskAssignorTest {
         expectedMovements.add(new Movement<>(task1_0, String2, String1));
         expectedMovements.add(new Movement<>(task1_1, String3, String2));
 
-        assertThat(getMovements(stateConstrainedAssignment, balancedAssignment), equalTo(expectedMovements));
+        assertThat(getMovements(stateConstrainedAssignment, balancedAssignment, maxWarmupReplicas), equalTo(expectedMovements));
+    }
+
+    @Test
+    public void shouldOnlyGetUpToMaxWarmupReplicaMovements() {
+        maxWarmupReplicas = 1;
+        final Map<String, List<TaskId>> stateConstrainedAssignment = mkMap(
+            mkEntry(String1, asList(task0_0, task1_2)),
+            mkEntry(String2, asList(task0_1, task1_0)),
+            mkEntry(String3, asList(task0_2, task1_1))
+        );
+        final Map<String, List<TaskId>> balancedAssignment = mkMap(
+            mkEntry(String1, asList(task0_0, task1_0)),
+            mkEntry(String2, asList(task0_1, task1_1)),
+            mkEntry(String3, asList(task0_2, task1_2))
+        );
+        final Queue<Movement<String>> expectedMovements = new LinkedList<>();
+        expectedMovements.add(new Movement<>(task1_2, String1, String3));
+
+        assertThat(getMovements(stateConstrainedAssignment, balancedAssignment, maxWarmupReplicas), equalTo(expectedMovements));
     }
 
     @Test
@@ -244,7 +264,7 @@ public class HighAvailabilityTaskAssignorTest {
             mkEntry(String1, asList(task0_0, task1_0)),
             mkEntry(String2, asList(task0_1, task1_1))
         );
-        assertThrows(IllegalStateException.class, () -> getMovements(stateConstrainedAssignment, balancedAssignment));
+        assertThrows(IllegalStateException.class, () -> getMovements(stateConstrainedAssignment, balancedAssignment, maxWarmupReplicas));
     }
 
     @Test
@@ -376,16 +396,16 @@ public class HighAvailabilityTaskAssignorTest {
         final Set<TaskId> statefulTasks = mkSet(task0_0, task0_1, task0_2, task0_3, task1_0, task1_1, task2_0, task2_1, task2_3);
 
         expect(client1.capacity()).andReturn(1);
-        expect(client1.activeTasks()).andReturn(mkSet(task0_0, task0_1, task0_2, task0_3));
+        expect(client1.prevActiveTasks()).andReturn(mkSet(task0_0, task0_1, task0_2, task0_3));
 
         expect(client2.capacity()).andReturn(1);
-        expect(client2.activeTasks()).andReturn(mkSet(task1_0, task1_1));
+        expect(client2.prevActiveTasks()).andReturn(mkSet(task1_0, task1_1));
 
         expect(client3.capacity()).andReturn(1);
-        expect(client3.activeTasks()).andReturn(mkSet(task2_0, task2_1, task2_3));
+        expect(client3.prevActiveTasks()).andReturn(mkSet(task2_0, task2_1, task2_3));
 
         replay(client1, client2, client3);
-        assertThat(computeBalanceFactor(states, statefulTasks, ClientState::activeTasks), equalTo(2));
+        assertThat(computeBalanceFactor(states, statefulTasks), equalTo(2));
     }
 
     @Test
@@ -398,18 +418,18 @@ public class HighAvailabilityTaskAssignorTest {
 
         // client 1: 4 tasks per thread
         expect(client1.capacity()).andReturn(1);
-        expect(client1.activeTasks()).andReturn(mkSet(task0_0, task0_1, task0_2, task0_3));
+        expect(client1.prevActiveTasks()).andReturn(mkSet(task0_0, task0_1, task0_2, task0_3));
 
         // client 2: 1 task per thread
         expect(client2.capacity()).andReturn(2);
-        expect(client2.activeTasks()).andReturn(mkSet(task1_0, task1_1));
+        expect(client2.prevActiveTasks()).andReturn(mkSet(task1_0, task1_1));
 
         // client 3: 1 task per thread
         expect(client3.capacity()).andReturn(3);
-        expect(client3.activeTasks()).andReturn(mkSet(task2_0, task2_1, task2_3));
+        expect(client3.prevActiveTasks()).andReturn(mkSet(task2_0, task2_1, task2_3));
 
         replay(client1, client2, client3);
-        assertThat(computeBalanceFactor(states, statefulTasks, ClientState::activeTasks), equalTo(3));
+        assertThat(computeBalanceFactor(states, statefulTasks), equalTo(3));
     }
 
     @Test
@@ -424,18 +444,18 @@ public class HighAvailabilityTaskAssignorTest {
 
         // client 1: 2 stateful tasks per thread
         expect(client1.capacity()).andReturn(1);
-        expect(client1.activeTasks()).andReturn(mkSet(task0_0, task0_1, task0_2, task0_3));
+        expect(client1.prevActiveTasks()).andReturn(mkSet(task0_0, task0_1, task0_2, task0_3));
 
         // client 2: 1 stateful task per thread
         expect(client2.capacity()).andReturn(2);
-        expect(client2.activeTasks()).andReturn(mkSet(task1_0, task1_1));
+        expect(client2.prevActiveTasks()).andReturn(mkSet(task1_0, task1_1));
 
         // client 3: 1 stateful task per thread
         expect(client3.capacity()).andReturn(3);
-        expect(client3.activeTasks()).andReturn(mkSet(task2_0, task2_1, task2_3));
+        expect(client3.prevActiveTasks()).andReturn(mkSet(task2_0, task2_1, task2_3));
 
         replay(client1, client2, client3);
-        assertThat(computeBalanceFactor(states, statefulTasks, ClientState::activeTasks), equalTo(1));
+        assertThat(computeBalanceFactor(states, statefulTasks), equalTo(1));
     }
 
     @Test
@@ -443,9 +463,9 @@ public class HighAvailabilityTaskAssignorTest {
         final Set<TaskId> statefulTasks = mkSet(task0_0, task0_1, task0_2, task0_3);
         client1 = EasyMock.createNiceMock(ClientState.class);
         expect(client1.capacity()).andReturn(1);
-        expect(client1.activeTasks()).andReturn(mkSet(task0_0, task0_1, task0_2, task0_3));
+        expect(client1.prevActiveTasks()).andReturn(mkSet(task0_0, task0_1, task0_2, task0_3));
         replay(client1);
-        assertThat(computeBalanceFactor(singleton(client1), statefulTasks, ClientState::activeTasks), equalTo(0));
+        assertThat(computeBalanceFactor(singleton(client1), statefulTasks), equalTo(0));
     }
 
     @Test

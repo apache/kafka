@@ -320,13 +320,12 @@ public class HighAvailabilityTaskAssignor<ID extends Comparable<ID>> implements 
      * least loaded clients
      */
     static int computeBalanceFactor(final Collection<ClientState> clientStates,
-                                    final Set<TaskId> statefulTasks,
-                                    final Function<ClientState, Set<TaskId>> activeTaskSet) {
+                                    final Set<TaskId> statefulTasks) {
         int minActiveStatefulTasksPerThreadCount = Integer.MAX_VALUE;
         int maxActiveStatefulTasksPerThreadCount = 0;
 
         for (final ClientState state : clientStates) {
-            final Set<TaskId> activeTasks = new HashSet<>(activeTaskSet.apply(state));
+            final Set<TaskId> activeTasks = new HashSet<>(state.prevActiveTasks());
             activeTasks.retainAll(statefulTasks);
             final int taskPerThreadCount = activeTasks.size() / state.capacity();
             if (taskPerThreadCount < minActiveStatefulTasksPerThreadCount) {
@@ -350,7 +349,7 @@ public class HighAvailabilityTaskAssignor<ID extends Comparable<ID>> implements 
     private boolean shouldUsePreviousAssignment() {
         if (previousAssignmentIsValid()) {
             final int previousAssignmentBalanceFactor =
-                computeBalanceFactor(clientStates.values(), statefulTasks, ClientState::prevActiveTasks);
+                computeBalanceFactor(clientStates.values(), statefulTasks);
             return previousAssignmentBalanceFactor <= configs.balanceFactor;
         } else {
             return false;
