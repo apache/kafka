@@ -23,9 +23,9 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
 
+import org.apache.kafka.clients.producer.BufferExhaustedException;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.MetricName;
-import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Meter;
@@ -151,7 +151,7 @@ public class BufferPool {
                             throw new KafkaException("Producer closed while allocating memory");
 
                         if (waitingTimeElapsed) {
-                            throw new TimeoutException("Failed to allocate memory within the configured max blocking time " + maxTimeToBlockMs + " ms.");
+                            throw new BufferExhaustedException("Failed to allocate memory within the configured max blocking time " + maxTimeToBlockMs + " ms.");
                         }
 
                         remainingTimeToBlockNs -= timeNs;

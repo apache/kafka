@@ -947,6 +947,8 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             // for other exceptions throw directly
         } catch (ApiException e) {
             log.debug("Exception occurred during message send:", e);
+            if (e instanceof BufferExhaustedException)
+                this.metrics.sensor("buffer-exhausted-records").record();
             if (callback != null)
                 callback.onCompletion(null, e);
             this.errors.record();
@@ -956,11 +958,6 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             this.errors.record();
             this.interceptors.onSendError(record, tp, e);
             throw new InterruptException(e);
-        } catch (BufferExhaustedException e) {
-            this.errors.record();
-            this.metrics.sensor("buffer-exhausted-records").record();
-            this.interceptors.onSendError(record, tp, e);
-            throw e;
         } catch (KafkaException e) {
             this.errors.record();
             this.interceptors.onSendError(record, tp, e);

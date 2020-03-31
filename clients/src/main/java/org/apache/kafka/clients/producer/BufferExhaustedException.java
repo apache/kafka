@@ -16,13 +16,13 @@
  */
 package org.apache.kafka.clients.producer;
 
-import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.errors.TimeoutException;
 
 /**
  * This exception is thrown if the producer is in non-blocking mode and the rate of data production exceeds the rate at
  * which data can be sent for long enough for the allocated buffer to be exhausted.
  */
-public class BufferExhaustedException extends KafkaException {
+public class BufferExhaustedException extends TimeoutException {
 
     private static final long serialVersionUID = 1L;
 
