@@ -607,12 +607,12 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             final String stackTrace = getStacktraceString(e);
             throw new StreamsException(String.format("Exception caught in process. taskId=%s, " +
                                                   "processor=%s, topic=%s, partition=%d, offset=%d, stacktrace=%s",
-                                               id(),
-                                               processorContext.currentNode().name(),
-                                               record.topic(),
-                                               record.partition(),
-                                               record.offset(),
-                                               stackTrace
+                                              id(),
+                                              processorContext.currentNode().name(),
+                                              record.topic(),
+                                              record.partition(),
+                                              record.offset(),
+                                              stackTrace
             ), e);
         } finally {
             processorContext.setCurrentNode(null);
