@@ -78,8 +78,6 @@ object ResourceType {
     rType.getOrElse(throw new KafkaException(resourceType + " not a valid resourceType name. The valid names are " + values.mkString(",")))
   }
 
-  def values: Seq[ResourceType] = List(Topic, Group, Cluster, TransactionalId, DelegationToken)
-
   def fromJava(resourceType: JResourceType): ResourceType = {
     resourceType match {
       case JResourceType.TOPIC => Topic
@@ -87,7 +85,9 @@ object ResourceType {
       case JResourceType.CLUSTER => Cluster
       case JResourceType.TRANSACTIONAL_ID => TransactionalId
       case JResourceType.DELEGATION_TOKEN => DelegationToken
-      case _ => throw new KafkaException("Unexpected conversion of operation " + resourceType)
+      case _ => throw new KafkaException(resourceType + " is not a convertible resource type. The valid types are " + values.mkString(","))
     }
   }
+
+  def values: Seq[ResourceType] = List(Topic, Group, Cluster, TransactionalId, DelegationToken)
 }

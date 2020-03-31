@@ -104,7 +104,7 @@ object Operation {
       case AclOperation.DESCRIBE_CONFIGS => DescribeConfigs
       case AclOperation.IDEMPOTENT_WRITE => IdempotentWrite
       case AclOperation.ALL => All
-      case _ => throw new KafkaException("Unexpected conversion of operation " + operation)
+      case _ => throw new KafkaException(operation + " is not a convertible operation name. The valid names are " + values.mkString(","))
     }
   }
 
