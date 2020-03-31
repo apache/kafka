@@ -93,8 +93,9 @@
     </p>
     <p>
         Deprecated <code>KafkaStreams.store(String, QueryableStoreType)</code> and replaced it with <code>KafkaStreams.store(StoreQueryParameters)</code> to allow querying
-        for specific partition and specific task type as per
-        <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-562%3A+Allow+fetching+a+key+from+a+single+partition+rather+than+iterating+over+all+the+stores+on+an+instance">KIP-562</a>.
+        for a store with variety of parameters, including querying a specific task and stale stores, as per
+        <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-562%3A+Allow+fetching+a+key+from+a+single+partition+rather+than+iterating+over+all+the+stores+on+an+instance">KIP-562</a> and
+        <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-535%3A+Allow+state+stores+to+serve+stale+reads+during+rebalance">KIP-535</a> respectively.
     </p>
 
     <h3><a id="streams_api_changes_240" href="#streams_api_changes_240">Streams API changes in 2.4.0</a></h3>
