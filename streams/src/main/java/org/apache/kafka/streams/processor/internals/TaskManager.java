@@ -758,7 +758,9 @@ public class TaskManager {
                 }
             }
 
-            commitOffsetsOrTransaction(consumedOffsetsAndMetadataPerTask);
+            if (!consumedOffsetsAndMetadataPerTask.isEmpty()) {
+                commitOffsetsOrTransaction(consumedOffsetsAndMetadataPerTask);
+            }
 
             for (final Task task : tasks) {
                 if (task.commitNeeded()) {
