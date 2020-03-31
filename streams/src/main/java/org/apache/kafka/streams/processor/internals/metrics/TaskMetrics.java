@@ -16,10 +16,8 @@
  */
 package org.apache.kafka.streams.processor.internals.metrics;
 
-import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.Sensor.RecordingLevel;
-import org.apache.kafka.common.metrics.stats.Value;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.Version;
 import org.apache.kafka.streams.state.internals.metrics.StateStoreMetrics;
 
@@ -31,6 +29,7 @@ import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetric
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.TOTAL_DESCRIPTION;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addAvgAndMaxToSensor;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addInvocationRateAndCountToSensor;
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addValueMetricToSensor;
 
 public class TaskMetrics {
     private TaskMetrics() {}
@@ -108,13 +107,12 @@ public class TaskMetrics {
                                                   final StreamsMetricsImpl streamsMetrics) {
         final String name = ACTIVE_TASK_PREFIX + PROCESS + RATIO_SUFFIX;
         final Sensor sensor = streamsMetrics.taskLevelSensor(threadId, taskId, name, Sensor.RecordingLevel.INFO);
-        sensor.add(
-            new MetricName(
-                name,
-                TASK_LEVEL_GROUP,
-                PROCESS_RATIO_DESCRIPTION,
-                streamsMetrics.taskLevelTagMap(threadId, taskId)),
-            new Value()
+        addValueMetricToSensor(
+            sensor,
+            TASK_LEVEL_GROUP,
+            streamsMetrics.taskLevelTagMap(threadId, taskId),
+            name,
+            PROCESS_RATIO_DESCRIPTION
         );
         return sensor;
     }
