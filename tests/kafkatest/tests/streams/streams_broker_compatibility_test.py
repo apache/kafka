@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from ducktape.mark import parametrize, ignore
+from ducktape.mark import parametrize
 from ducktape.tests.test import Test
 from ducktape.utils.util import wait_until
 from kafkatest.services.kafka import KafkaService
@@ -29,7 +29,7 @@ class StreamsBrokerCompatibility(Test):
     These tests validates that
     - Streams works for older brokers 0.11 (or newer)
     - Streams w/ EOS-alpha works for older brokers 0.11 (or newer)
-    - (TODO) Streams w/ EOS-beta works for older brokers 2.5 (or newer)
+    - Streams w/ EOS-beta works for older brokers 2.5 (or newer)
     - Streams fails fast for older brokers 0.10.0, 0.10.2, and 0.10.1
     - Streams w/ EOS-beta fails fast for older brokers 2.4 or older
     """
@@ -85,8 +85,6 @@ class StreamsBrokerCompatibility(Test):
         self.consumer.stop()
         self.kafka.stop()
 
-    # Can be enabled after KAFKA-9776 is fixed
-    @ignore
     @parametrize(broker_version=str(LATEST_2_4))
     @parametrize(broker_version=str(LATEST_2_3))
     @parametrize(broker_version=str(LATEST_2_2))
