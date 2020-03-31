@@ -723,6 +723,7 @@ public abstract class AbstractCoordinator implements Closeable {
                 } else if (isProtocolNameInconsistent(ApiKeys.SYNC_GROUP, syncResponse.data.protocolName())) {
                     future.raise(Errors.INCONSISTENT_GROUP_PROTOCOL);
                 } else {
+                    log.debug("Received successful SyncGroup response: {}", syncResponse);
                     sensors.syncSensor.record(response.requestLatencyMs());
                     future.complete(ByteBuffer.wrap(syncResponse.data.assignment()));
                 }
