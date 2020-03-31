@@ -192,10 +192,6 @@ public interface Task {
 
     void markChangelogAsCorrupted(final Collection<TopicPartition> partitions);
 
-    void recordProcessLatency(final long elapsedLatencyMs);
-
-    void recordTotalLatency(final long elapsedLatencyMs);
-
     default Map<TopicPartition, Long> purgeableOffsets() {
         return Collections.emptyMap();
     }
@@ -203,6 +199,10 @@ public interface Task {
     default Map<TopicPartition, OffsetAndMetadata> committableOffsetsAndMetadata() {
         return Collections.emptyMap();
     }
+
+    default void recordProcessBatchTime(final long processBatchTime) {}
+
+    default void recordProcessTimeRatio(final long allTaskProcessMs) {}
 
     default boolean process(final long wallClockTime) {
         return false;

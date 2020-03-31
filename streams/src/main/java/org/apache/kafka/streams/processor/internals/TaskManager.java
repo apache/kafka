@@ -824,7 +824,7 @@ public class TaskManager {
                 }
                 now = time.milliseconds();
                 totalProcessed += processed;
-                task.recordProcessLatency(then - now);
+                task.recordProcessBatchTime(then - now);
             } catch (final TaskMigratedException e) {
                 log.info("Failed to process stream task {} since it got migrated to another thread already. " +
                              "Will trigger a new rebalance and close all tasks as zombies together.", task.id());
@@ -840,7 +840,7 @@ public class TaskManager {
 
     void recordTaskProcessRatio(final long totalProcessLatencyMs) {
         for (final Task task : activeTaskIterable()) {
-            task.recordTotalLatency(totalProcessLatencyMs);
+            task.recordProcessTimeRatio(totalProcessLatencyMs);
         }
     }
 

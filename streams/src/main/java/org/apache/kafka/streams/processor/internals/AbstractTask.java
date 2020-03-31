@@ -36,8 +36,6 @@ public abstract class AbstractTask implements Task {
     protected final Set<TopicPartition> partitions;
     protected final ProcessorStateManager stateMgr;
 
-    protected long processLatencyMs = 0L;
-
     AbstractTask(final TaskId id,
                  final ProcessorTopology topology,
                  final StateDirectory stateDirectory,
@@ -68,17 +66,6 @@ public abstract class AbstractTask implements Task {
     @Override
     public void markChangelogAsCorrupted(final Collection<TopicPartition> partitions) {
         stateMgr.markChangelogAsCorrupted(partitions);
-    }
-
-    @Override
-    public void recordProcessLatency(final long elapsedLatencyMs) {
-        processLatencyMs += elapsedLatencyMs;
-    }
-
-    @Override
-    public void recordTotalLatency(final long elapsedLatencyMs) {
-        // do not record anything, just reset the recorded process latency
-        processLatencyMs = 0L;
     }
 
     @Override
