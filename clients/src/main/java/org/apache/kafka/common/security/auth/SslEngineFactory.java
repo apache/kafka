@@ -52,10 +52,19 @@ public interface SslEngineFactory extends Configurable, Closeable {
     SSLEngine createServerSslEngine(String peerHost, int peerPort);
 
     /**
-     * Returns true if SSLEngine needs to be rebuilt.
+     * Returns true if SSLEngine needs to be rebuilt. This method will be called when reconfiguration is triggered on
+     * {@link org.apache.kafka.common.security.ssl.SslFactory}. Based on the <i>nextConfigs</i>, this method will
+     * decide whether underlying SSLEngine object needs to be rebuilt. If this method returns true, the
+     * {@link org.apache.kafka.common.security.ssl.SslFactory} will re-create instance of this object and run other
+     * checks before deciding to use the new object.
+     *
+     * <pre>
+     *     Example: If the implementation depends on the file based key material it can check if the file is updated
+     *     compared to the previous/last-loaded timestamp and return true.
+     * </pre>
      *
      * @param nextConfigs       The configuration we want to use.
-     * @return                  True only if this builder should be rebuilt.
+     * @return                  True only if the underlying SSLEngine object should be rebuilt.
      */
     boolean shouldBeRebuilt(Map<String, Object> nextConfigs);
 
