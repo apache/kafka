@@ -72,6 +72,7 @@ public class ProduceBenchSpec extends TaskSpec {
     private final TopicsSpec activeTopics;
     private final TopicsSpec inactiveTopics;
     private final boolean useConfiguredPartitioner;
+    private final boolean ignoreProduceErrors;
     private final boolean skipFlush;
 
     @JsonCreator
@@ -89,7 +90,8 @@ public class ProduceBenchSpec extends TaskSpec {
                          @JsonProperty("adminClientConf") Map<String, String> adminClientConf,
                          @JsonProperty("activeTopics") TopicsSpec activeTopics,
                          @JsonProperty("inactiveTopics") TopicsSpec inactiveTopics,
-                         @JsonProperty("useConfiguredPartitioner") boolean useConfiguredPartitioner, 
+                         @JsonProperty("useConfiguredPartitioner") boolean useConfiguredPartitioner,
+                         @JsonProperty("ignoreProduceErrors") boolean ignoreProduceErrors,
                          @JsonProperty("skipFlush") boolean skipFlush) {
         super(startMs, durationMs);
         this.producerNode = (producerNode == null) ? "" : producerNode;
@@ -109,6 +111,7 @@ public class ProduceBenchSpec extends TaskSpec {
         this.inactiveTopics = (inactiveTopics == null) ?
             TopicsSpec.EMPTY : inactiveTopics.immutableCopy();
         this.useConfiguredPartitioner = useConfiguredPartitioner;
+        this.ignoreProduceErrors = ignoreProduceErrors;
         this.skipFlush = skipFlush;
     }
 
@@ -175,6 +178,11 @@ public class ProduceBenchSpec extends TaskSpec {
     @JsonProperty
     public boolean useConfiguredPartitioner() {
         return useConfiguredPartitioner;
+    }
+
+    @JsonProperty
+    public boolean ignoreProduceErrors() {
+        return ignoreProduceErrors;
     }
 
     @JsonProperty
