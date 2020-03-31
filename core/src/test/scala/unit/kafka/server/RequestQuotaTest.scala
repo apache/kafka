@@ -60,7 +60,7 @@ class RequestQuotaTest extends BaseRequestTest {
   private val smallQuotaProducerClientId = "small-quota-producer-client"
   private val smallQuotaConsumerClientId = "small-quota-consumer-client"
   private val brokerId: Integer = 0
-  private var leaderNode: KafkaServer = null
+  private var leaderNode: KafkaServer = _
 
   // Run tests concurrently since a throttle could be up to 1 second because quota percentage allocated is very low
   case class Task(apiKey: ApiKeys, future: Future[_])
@@ -82,7 +82,7 @@ class RequestQuotaTest extends BaseRequestTest {
     RequestQuotaTest.principal = KafkaPrincipal.ANONYMOUS
     super.setUp()
 
-    createTopic(topic, numPartitions, 1)
+    createTopic(topic, numPartitions)
     leaderNode = servers.head
 
     // Change default client-id request quota to a small value and a single unthrottledClient with a large quota
@@ -213,7 +213,7 @@ class RequestQuotaTest extends BaseRequestTest {
             collection.mutable.Map(tp -> MemoryRecords.withRecords(CompressionType.NONE, new SimpleRecord("test".getBytes))).asJava)
 
         case ApiKeys.FETCH =>
-          val partitionMap = new LinkedHashMap[TopicPartition, FetchRequest.PartitionData]
+          val partitionMap = new util.LinkedHashMap[TopicPartition, FetchRequest.PartitionData]
           partitionMap.put(tp, new FetchRequest.PartitionData(0, 0, 100, Optional.of(15)))
           FetchRequest.Builder.forConsumer(0, 0, partitionMap)
 
@@ -358,13 +358,12 @@ class RequestQuotaTest extends BaseRequestTest {
         case ApiKeys.API_VERSIONS =>
           new ApiVersionsRequest.Builder()
 
-        case ApiKeys.CREATE_TOPICS => {
+        case ApiKeys.CREATE_TOPICS =>
           new CreateTopicsRequest.Builder(
             new CreateTopicsRequestData().setTopics(
               new CreatableTopicCollection(Collections.singleton(
                 new CreatableTopic().setName("topic-2").setNumPartitions(1).
                   setReplicationFactor(1.toShort)).iterator())))
-        }
 
         case ApiKeys.DELETE_TOPICS =>
           new DeleteTopicsRequest.Builder(
@@ -415,7 +414,8 @@ class RequestQuotaTest extends BaseRequestTest {
             "test-txn-group",
             2,
             0,
-            Map.empty[TopicPartition, TxnOffsetCommitRequest.CommittedOffset].asJava)
+            Map.empty[TopicPartition, TxnOffsetCommitRequest.CommittedOffset].asJava,
+            false)
 
         case ApiKeys.DESCRIBE_ACLS =>
           new DescribeAclsRequest.Builder(AclBindingFilter.ANY)
@@ -581,10 +581,9 @@ class RequestQuotaTest extends BaseRequestTest {
       try {
         task.future.get(15, TimeUnit.SECONDS)
       } catch {
-        case e: Throwable => {
+        case e: Throwable =>
           error(s"Test failed for api-key ${task.apiKey} with exception $e")
           throw e
-        }
       }
     }
   }

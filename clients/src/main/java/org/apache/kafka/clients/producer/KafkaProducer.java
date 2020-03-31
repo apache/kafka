@@ -256,6 +256,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     private final ApiVersions apiVersions;
     private final TransactionManager transactionManager;
 
+
     /**
      * A producer is instantiated by providing a set of key-value pairs as configuration. Valid configuration strings
      * are documented <a href="http://kafka.apache.org/documentation.html#producerconfigs">here</a>. Values can be
@@ -510,18 +511,24 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
 
         TransactionManager transactionManager = null;
 
-        boolean userConfiguredIdempotence = config.originals().containsKey(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG);
-        boolean userConfiguredTransactions = config.originals().containsKey(ProducerConfig.TRANSACTIONAL_ID_CONFIG);
+        final boolean userConfiguredIdempotence = config.originals().containsKey(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG);
+        final boolean userConfiguredTransactions = config.originals().containsKey(ProducerConfig.TRANSACTIONAL_ID_CONFIG);
         if (userConfiguredTransactions && !userConfiguredIdempotence)
             log.info("Overriding the default {} to true since {} is specified.", ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG,
                     ProducerConfig.TRANSACTIONAL_ID_CONFIG);
 
         if (config.idempotenceEnabled()) {
-            String transactionalId = config.getString(ProducerConfig.TRANSACTIONAL_ID_CONFIG);
-            int transactionTimeoutMs = config.getInt(ProducerConfig.TRANSACTION_TIMEOUT_CONFIG);
-            long retryBackoffMs = config.getLong(ProducerConfig.RETRY_BACKOFF_MS_CONFIG);
-            transactionManager = new TransactionManager(logContext, transactionalId, transactionTimeoutMs,
-                    retryBackoffMs, apiVersions);
+            final String transactionalId = config.getString(ProducerConfig.TRANSACTIONAL_ID_CONFIG);
+            final int transactionTimeoutMs = config.getInt(ProducerConfig.TRANSACTION_TIMEOUT_CONFIG);
+            final long retryBackoffMs = config.getLong(ProducerConfig.RETRY_BACKOFF_MS_CONFIG);
+            final boolean autoDowngradeTxnCommit = config.getBoolean(ProducerConfig.AUTO_DOWNGRADE_TXN_COMMIT);
+            transactionManager = new TransactionManager(logContext,
+                transactionalId,
+                transactionTimeoutMs,
+                retryBackoffMs,
+                apiVersions,
+                autoDowngradeTxnCommit);
+
             if (transactionManager.isTransactional())
                 log.info("Instantiated a transactional producer.");
             else

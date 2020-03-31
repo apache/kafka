@@ -66,12 +66,13 @@ public class TxnOffsetCommitRequestTest extends OffsetCommitRequestTest {
             groupId,
             producerId,
             producerEpoch,
-            offsets);
+            offsets,
+            false);
 
-        initializeBuilderWithGroupMetadata();
+        initializeBuilderWithGroupMetadata(false);
     }
 
-    private void initializeBuilderWithGroupMetadata() {
+    private void initializeBuilderWithGroupMetadata(final boolean autoDowngrade) {
         builderWithGroupMetadata = new TxnOffsetCommitRequest.Builder(
             transactionalId,
             groupId,
@@ -80,7 +81,8 @@ public class TxnOffsetCommitRequestTest extends OffsetCommitRequestTest {
             offsets,
             memberId,
             generationId,
-            Optional.of(groupInstanceId));
+            Optional.of(groupInstanceId),
+            autoDowngrade);
     }
 
     @Test
@@ -132,9 +134,9 @@ public class TxnOffsetCommitRequestTest extends OffsetCommitRequestTest {
     }
 
     @Test
-    public void testGroupMetadataDowngrade() {
+    public void testGroupMetadataAutoDowngrade() {
         for (short version = 0; version <= ApiKeys.TXN_OFFSET_COMMIT.latestVersion(); version++) {
-            initializeBuilderWithGroupMetadata();
+            initializeBuilderWithGroupMetadata(true);
             final TxnOffsetCommitRequest request = builderWithGroupMetadata.build(version);
             if (version < 3) {
                 assertEquals(JoinGroupRequest.UNKNOWN_MEMBER_ID, request.data.memberId());

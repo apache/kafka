@@ -258,6 +258,21 @@ public class ProducerConfig extends AbstractConfig {
     public static final String SECURITY_PROVIDERS_CONFIG = SecurityConfig.SECURITY_PROVIDERS_CONFIG;
     private static final String SECURITY_PROVIDERS_DOC = SecurityConfig.SECURITY_PROVIDERS_DOC;
 
+    /**
+     * <code>internal.auto.downgrade.txn.commit</code>
+     * Whether or not the producer should automatically downgrade the transactional commit request when the new group metadata
+     * feature is supported not the broker, when set to <code>true</code>.
+     * <p>
+     * The purpose of this flag is to make Kafka Streams capable of working with old brokers when applying the
+     * Producer Commit API. Non-stream user should be careful playing around with config as there is a risk of
+     * violating EOS semantics when being turned on for a customized EOS app.
+     *
+     * <p>
+     * Note: this is an internal configuration and could be changed in the future in a backward incompatible way
+     *
+     */
+    static final String AUTO_DOWNGRADE_TXN_COMMIT = "internal.auto.downgrade.txn.commit";
+
     private static final AtomicInteger PRODUCER_CLIENT_ID_SEQUENCE = new AtomicInteger(1);
 
     static {
@@ -389,7 +404,11 @@ public class ProducerConfig extends AbstractConfig {
                                         null,
                                         new ConfigDef.NonEmptyString(),
                                         Importance.LOW,
-                                        TRANSACTIONAL_ID_DOC);
+                                        TRANSACTIONAL_ID_DOC)
+                                .defineInternal(AUTO_DOWNGRADE_TXN_COMMIT,
+                                        Type.BOOLEAN,
+                                        false,
+                                        Importance.LOW);
     }
 
     @Override

@@ -146,7 +146,7 @@ public class TransactionManagerTest {
                 new ApiVersion(ApiKeys.INIT_PRODUCER_ID.id, (short) 0, (short) 3),
                 new ApiVersion(ApiKeys.PRODUCE.id, (short) 0, (short) 7))));
         this.transactionManager = new TransactionManager(logContext, transactionalId.orElse(null),
-                transactionTimeoutMs, DEFAULT_RETRY_BACKOFF_MS, apiVersions);
+                transactionTimeoutMs, DEFAULT_RETRY_BACKOFF_MS, apiVersions, false);
 
         int batchSize = 16 * 1024;
         int deliveryTimeoutMs = 3000;

@@ -179,7 +179,8 @@ class KafkaApisTest {
         "groupId",
         15L,
         0.toShort,
-        Map(invalidTopicPartition -> partitionOffsetCommitData).asJava
+        Map(invalidTopicPartition -> partitionOffsetCommitData).asJava,
+        false
       ).build()
       val request = buildRequest(offsetCommitRequest)
 
@@ -215,7 +216,8 @@ class KafkaApisTest {
       groupId,
       15L,
       0.toShort,
-      Map(topicPartition -> partitionOffsetCommitData).asJava
+      Map(topicPartition -> partitionOffsetCommitData).asJava,
+      false
     ).build(1)
     val request = buildRequest(offsetCommitRequest)
 
