@@ -565,7 +565,7 @@ object TopicCommand extends Logging {
     def isReassignmentInProgress(ra: PartitionReassignment): Boolean = {
       // Reassignment is still in progress as long as the removing and adding replicas are still present
       val allReplicaIds = tpi.replicas.asScala.map(_.id).toSet
-      val changingReplicaIds = ra.removingReplicas.asScala.map(Int.unbox).toSet ++ ra.addingReplicas.asScala.map(Int.unbox).toSet
+      val changingReplicaIds = ra.removingReplicas.asScala.map(_.intValue).toSet ++ ra.addingReplicas.asScala.map(_.intValue).toSet
       allReplicaIds.exists(changingReplicaIds.contains)
     }
 
