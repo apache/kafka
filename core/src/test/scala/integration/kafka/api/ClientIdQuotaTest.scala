@@ -26,6 +26,10 @@ class ClientIdQuotaTest extends BaseQuotaTest {
   override def producerClientId = "QuotasTestProducer-!@#$%^&*()"
   override def consumerClientId = "QuotasTestConsumer-!@#$%^&*()"
 
+  // The test does not setup a default request limit and thus default to Long.MaxValue
+  // which is the default value used when a quota does not exist.
+  override def defaultRequestQuota: Double = Long.MaxValue
+
   @Before
   override def setUp(): Unit = {
     this.serverConfig.setProperty(KafkaConfig.ProducerQuotaBytesPerSecondDefaultProp, defaultProducerQuota.toString)

@@ -57,9 +57,9 @@ abstract class BaseQuotaTest extends IntegrationTestHarness {
   this.consumerConfig.setProperty(ConsumerConfig.FETCH_MAX_WAIT_MS_CONFIG, "0")
 
   // Low enough quota that a producer sending a small payload in a tight loop should get throttled
-  val defaultProducerQuota = 8000
-  val defaultConsumerQuota = 2500
-  val defaultRequestQuota = Int.MaxValue
+  protected def defaultProducerQuota: Long = 8000
+  protected def defaultConsumerQuota: Long = 2500
+  protected def defaultRequestQuota: Double = Int.MaxValue
 
   val topic1 = "topic-1"
   var leaderNode: KafkaServer = _
@@ -139,6 +139,7 @@ abstract class BaseQuotaTest extends IntegrationTestHarness {
     // Delete producer and consumer quota overrides. Consumer and producer should now be
     // throttled since broker defaults are very small
     quotaTestClients.removeQuotaOverrides()
+    quotaTestClients.waitForQuotaUpdate(defaultProducerQuota, defaultConsumerQuota, defaultRequestQuota)
     val produced = quotaTestClients.produceUntilThrottled(numRecords)
     quotaTestClients.verifyProduceThrottle(expectThrottle = true)
 
