@@ -17,6 +17,7 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.TxnOffsetCommitRequestData.TxnOffsetCommitRequestPartition;
 import org.apache.kafka.common.message.TxnOffsetCommitRequestData.TxnOffsetCommitRequestTopic;
 import org.apache.kafka.common.protocol.ApiKeys;
@@ -34,6 +35,7 @@ import java.util.Optional;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThrows;
 
 public class TxnOffsetCommitRequestTest extends OffsetCommitRequestTest {
 
@@ -134,19 +136,23 @@ public class TxnOffsetCommitRequestTest extends OffsetCommitRequestTest {
     }
 
     @Test
-    public void testGroupMetadataAutoDowngrade() {
-        for (short version = 0; version <= ApiKeys.TXN_OFFSET_COMMIT.latestVersion(); version++) {
+    public void testEnableGroupMetadataAutoDowngrade() {
+        for (short version = 0; version <= 2; version++) {
             initializeBuilderWithGroupMetadata(true);
             final TxnOffsetCommitRequest request = builderWithGroupMetadata.build(version);
-            if (version < 3) {
-                assertEquals(JoinGroupRequest.UNKNOWN_MEMBER_ID, request.data.memberId());
-                assertEquals(JoinGroupRequest.UNKNOWN_GENERATION_ID, request.data.generationId());
-                assertNull(request.data.groupInstanceId());
-            } else {
-                assertEquals(memberId, request.data.memberId());
-                assertEquals(generationId, request.data.generationId());
-                assertEquals(groupInstanceId, request.data.groupInstanceId());
-            }
+
+            assertEquals(JoinGroupRequest.UNKNOWN_MEMBER_ID, request.data.memberId());
+            assertEquals(JoinGroupRequest.UNKNOWN_GENERATION_ID, request.data.generationId());
+            assertNull(request.data.groupInstanceId());
+        }
+    }
+
+    @Test
+    public void testDisableGroupMetadataAutoDowngrade() {
+        for (short version = 0; version <= 2; version++) {
+            initializeBuilderWithGroupMetadata(false);
+            final short finalVersion = version;
+            assertThrows(UnsupportedVersionException.class, () -> builderWithGroupMetadata.build(finalVersion));
         }
     }
 }

@@ -112,6 +112,10 @@ public class TransactionManagerTest {
     private static final int MAX_BLOCK_TIMEOUT = 1000;
     private static final int REQUEST_TIMEOUT = 1000;
     private static final long DEFAULT_RETRY_BACKOFF_MS = 100L;
+    private static final long PRODUCER_ID = 13131L;
+    private static final short EPOCH = 1;
+    private static final String CONSUMER_GROUP_ID = "myconsumergroup";
+
     private final String transactionalId = "foobar";
     private final int transactionTimeoutMs = 1121;
 
@@ -165,9 +169,7 @@ public class TransactionManagerTest {
 
     @Test
     public void testSenderShutdownWithPendingTransactions() throws Exception {
-        long pid = 13131L;
-        short epoch = 1;
-        doInitTransactions(pid, epoch);
+        doInitTransactions();
         transactionManager.beginTransaction();
 
         transactionManager.failIfNotReadyForSend();
@@ -175,23 +177,21 @@ public class TransactionManagerTest {
         FutureRecordMetadata sendFuture = appendToAccumulator(tp0);
 
         prepareAddPartitionsToTxn(tp0, Errors.NONE);
-        prepareProduceResponse(Errors.NONE, pid, epoch);
+        prepareProduceResponse(Errors.NONE, PRODUCER_ID, EPOCH);
         runUntil(() -> !client.hasPendingResponses());
 
         sender.initiateClose();
         sender.runOnce();
 
         TransactionalRequestResult result = transactionManager.beginCommit();
-        prepareEndTxnResponse(Errors.NONE, TransactionResult.COMMIT, pid, epoch);
+        prepareEndTxnResponse(Errors.NONE, TransactionResult.COMMIT, PRODUCER_ID, EPOCH);
         runUntil(result::isCompleted);
         runUntil(sendFuture::isDone);
     }
 
     @Test
     public void testEndTxnNotSentIfIncompleteBatches() {
-        long pid = 13131L;
-        short epoch = 1;
-        doInitTransactions(pid, epoch);
+        doInitTransactions();
         transactionManager.beginTransaction();
 
         transactionManager.failIfNotReadyForSend();
@@ -226,7 +226,7 @@ public class TransactionManagerTest {
     public void testFailIfNotReadyForSendNoOngoingTransaction() {
         long pid = 13131L;
         short epoch = 1;
-        doInitTransactions(pid, epoch);
+        doInitTransactions();
         transactionManager.failIfNotReadyForSend();
     }
 
@@ -234,7 +234,7 @@ public class TransactionManagerTest {
     public void testFailIfNotReadyForSendAfterAbortableError() {
         long pid = 13131L;
         short epoch = 1;
-        doInitTransactions(pid, epoch);
+        doInitTransactions();
         transactionManager.beginTransaction();
         transactionManager.transitionToAbortableError(new KafkaException());
         transactionManager.failIfNotReadyForSend();
@@ -244,7 +244,7 @@ public class TransactionManagerTest {
     public void testFailIfNotReadyForSendAfterFatalError() {
         long pid = 13131L;
         short epoch = 1;
-        doInitTransactions(pid, epoch);
+        doInitTransactions();
         transactionManager.transitionToFatalError(new KafkaException());
         transactionManager.failIfNotReadyForSend();
     }
@@ -256,7 +256,7 @@ public class TransactionManagerTest {
         TopicPartition partition = new TopicPartition("foo", 0);
 
         assertFalse(transactionManager.hasOngoingTransaction());
-        doInitTransactions(pid, epoch);
+        doInitTransactions();
         assertFalse(transactionManager.hasOngoingTransaction());
 
         transactionManager.beginTransaction();
@@ -283,7 +283,7 @@ public class TransactionManagerTest {
         TopicPartition partition = new TopicPartition("foo", 0);
 
         assertFalse(transactionManager.hasOngoingTransaction());
-        doInitTransactions(pid, epoch);
+        doInitTransactions();
         assertFalse(transactionManager.hasOngoingTransaction());
 
         transactionManager.beginTransaction();
@@ -310,7 +310,7 @@ public class TransactionManagerTest {
         TopicPartition partition = new TopicPartition("foo", 0);
 
         assertFalse(transactionManager.hasOngoingTransaction());
-        doInitTransactions(pid, epoch);
+        doInitTransactions();
         assertFalse(transactionManager.hasOngoingTransaction());
 
         transactionManager.beginTransaction();
@@ -340,7 +340,7 @@ public class TransactionManagerTest {
         TopicPartition partition = new TopicPartition("foo", 0);
 
         assertFalse(transactionManager.hasOngoingTransaction());
-        doInitTransactions(pid, epoch);
+        doInitTransactions();
         assertFalse(transactionManager.hasOngoingTransaction());
 
         transactionManager.beginTransaction();
@@ -362,7 +362,7 @@ public class TransactionManagerTest {
         long pid = 13131L;
         short epoch = 1;
         TopicPartition partition = new TopicPartition("foo", 0);
-        doInitTransactions(pid, epoch);
+        doInitTransactions();
         transactionManager.beginTransaction();
 
         transactionManager.failIfNotReadyForSend();
@@ -391,7 +391,7 @@ public class TransactionManagerTest {
         long pid = 13131L;
         short epoch = 1;
         TopicPartition partition = new TopicPartition("foo", 0);
-        doInitTransactions(pid, epoch);
+        doInitTransactions();
         transactionManager.beginTransaction();
 
         transactionManager.failIfNotReadyForSend();
@@ -413,7 +413,7 @@ public class TransactionManagerTest {
         long pid = 13131L;
         short epoch = 1;
         TopicPartition partition = new TopicPartition("foo", 0);
-        doInitTransactions(pid, epoch);
+        doInitTransactions();
         transactionManager.beginTransaction();
 
         transactionManager.failIfNotReadyForSend();
@@ -435,7 +435,7 @@ public class TransactionManagerTest {
         long pid = 13131L;
         short epoch = 1;
         TopicPartition partition = new TopicPartition("foo", 0);
-        doInitTransactions(pid, epoch);
+        doInitTransactions();
         transactionManager.beginTransaction();
 
         transactionManager.failIfNotReadyForSend();
@@ -467,7 +467,7 @@ public class TransactionManagerTest {
     public void testMaybeAddPartitionToTransactionBeforeBeginTransaction() {
         long pid = 13131L;
         short epoch = 1;
-        doInitTransactions(pid, epoch);
+        doInitTransactions();
         transactionManager.failIfNotReadyForSend();
         transactionManager.maybeAddPartitionToTransaction(new TopicPartition("foo", 0));
     }
@@ -476,7 +476,7 @@ public class TransactionManagerTest {
     public void testMaybeAddPartitionToTransactionAfterAbortableError() {
         long pid = 13131L;
         short epoch = 1;
-        doInitTransactions(pid, epoch);
+        doInitTransactions();
         transactionManager.beginTransaction();
         transactionManager.transitionToAbortableError(new KafkaException());
         transactionManager.failIfNotReadyForSend();
@@ -487,7 +487,7 @@ public class TransactionManagerTest {
     public void testMaybeAddPartitionToTransactionAfterFatalError() {
         long pid = 13131L;
         short epoch = 1;
-        doInitTransactions(pid, epoch);
+        doInitTransactions();
         transactionManager.transitionToFatalError(new KafkaException());
         transactionManager.failIfNotReadyForSend();
         transactionManager.maybeAddPartitionToTransaction(new TopicPartition("foo", 0));
@@ -498,7 +498,7 @@ public class TransactionManagerTest {
         final long pid = 13131L;
         final short epoch = 1;
 
-        doInitTransactions(pid, epoch);
+        doInitTransactions();
 
         transactionManager.beginTransaction();
         transactionManager.failIfNotReadyForSend();
@@ -514,7 +514,7 @@ public class TransactionManagerTest {
         final long pid = 13131L;
         final short epoch = 1;
 
-        doInitTransactions(pid, epoch);
+        doInitTransactions();
 
         transactionManager.beginTransaction();
         transactionManager.failIfNotReadyForSend();
@@ -533,7 +533,7 @@ public class TransactionManagerTest {
         final long pid = 13131L;
         final short epoch = 1;
 
-        doInitTransactions(pid, epoch);
+        doInitTransactions();
 
         transactionManager.beginTransaction();
         transactionManager.failIfNotReadyForSend();
@@ -549,7 +549,7 @@ public class TransactionManagerTest {
         final long pid = 13131L;
         final short epoch = 1;
 
-        doInitTransactions(pid, epoch);
+        doInitTransactions();
 
         transactionManager.beginTransaction();
         transactionManager.failIfNotReadyForSend();
@@ -568,7 +568,7 @@ public class TransactionManagerTest {
         final long pid = 13131L;
         final short epoch = 1;
 
-        doInitTransactions(pid, epoch);
+        doInitTransactions();
 
         transactionManager.beginTransaction();
 
@@ -588,7 +588,7 @@ public class TransactionManagerTest {
         final long pid = 13131L;
         final short epoch = 1;
 
-        doInitTransactions(pid, epoch);
+        doInitTransactions();
 
         transactionManager.beginTransaction();
         transactionManager.failIfNotReadyForSend();
@@ -606,7 +606,7 @@ public class TransactionManagerTest {
     public void testIsSendToPartitionAllowedWithPartitionNotAdded() {
         final long pid = 13131L;
         final short epoch = 1;
-        doInitTransactions(pid, epoch);
+        doInitTransactions();
         transactionManager.beginTransaction();
         assertFalse(transactionManager.isSendToPartitionAllowed(tp0));
     }
@@ -788,10 +788,7 @@ public class TransactionManagerTest {
 
     @Test
     public void testBasicTransaction() throws InterruptedException {
-        final long pid = 13131L;
-        final short epoch = 1;
-
-        doInitTransactions(pid, epoch);
+        doInitTransactions();
 
         transactionManager.beginTransaction();
         transactionManager.failIfNotReadyForSend();
@@ -800,9 +797,9 @@ public class TransactionManagerTest {
         Future<RecordMetadata> responseFuture = appendToAccumulator(tp0);
 
         assertFalse(responseFuture.isDone());
-        prepareAddPartitionsToTxnResponse(Errors.NONE, tp0, epoch, pid);
+        prepareAddPartitionsToTxnResponse(Errors.NONE, tp0, EPOCH, PRODUCER_ID);
 
-        prepareProduceResponse(Errors.NONE, pid, epoch);
+        prepareProduceResponse(Errors.NONE, PRODUCER_ID, EPOCH);
         assertFalse(transactionManager.transactionContainsPartition(tp0));
         assertFalse(transactionManager.isSendToPartitionAllowed(tp0));
         runUntil(() -> transactionManager.transactionContainsPartition(tp0));
@@ -813,13 +810,12 @@ public class TransactionManagerTest {
         Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
         offsets.put(tp1, new OffsetAndMetadata(1));
 
-        final String consumerGroupId = "myconsumergroup";
         TransactionalRequestResult addOffsetsResult = transactionManager.sendOffsetsToTransaction(
-            offsets, new ConsumerGroupMetadata(consumerGroupId));
+            offsets, new ConsumerGroupMetadata(CONSUMER_GROUP_ID));
 
         assertFalse(transactionManager.hasPendingOffsetCommits());
 
-        prepareAddOffsetsToTxnResponse(Errors.NONE, consumerGroupId, pid, epoch);
+        prepareAddOffsetsToTxnResponse(Errors.NONE, CONSUMER_GROUP_ID, PRODUCER_ID, EPOCH);
 
         runUntil(transactionManager::hasPendingOffsetCommits);
         assertFalse(addOffsetsResult.isCompleted()); // the result doesn't complete until TxnOffsetCommit returns
@@ -827,8 +823,8 @@ public class TransactionManagerTest {
         Map<TopicPartition, Errors> txnOffsetCommitResponse = new HashMap<>();
         txnOffsetCommitResponse.put(tp1, Errors.NONE);
 
-        prepareFindCoordinatorResponse(Errors.NONE, false, CoordinatorType.GROUP, consumerGroupId);
-        prepareTxnOffsetCommitResponse(consumerGroupId, pid, epoch, txnOffsetCommitResponse);
+        prepareFindCoordinatorResponse(Errors.NONE, false, CoordinatorType.GROUP, CONSUMER_GROUP_ID);
+        prepareTxnOffsetCommitResponse(CONSUMER_GROUP_ID, PRODUCER_ID, EPOCH, txnOffsetCommitResponse);
 
         assertNull(transactionManager.coordinator(CoordinatorType.GROUP));
         runUntil(() -> transactionManager.coordinator(CoordinatorType.GROUP) != null);
@@ -838,7 +834,7 @@ public class TransactionManagerTest {
         assertTrue(addOffsetsResult.isCompleted());  // We should only be done after both RPCs complete.
 
         transactionManager.beginCommit();
-        prepareEndTxnResponse(Errors.NONE, TransactionResult.COMMIT, pid, epoch);
+        prepareEndTxnResponse(Errors.NONE, TransactionResult.COMMIT, PRODUCER_ID, EPOCH);
         runUntil(() -> !transactionManager.hasOngoingTransaction());
         assertFalse(transactionManager.isCompleting());
         assertFalse(transactionManager.transactionContainsPartition(tp0));
@@ -907,7 +903,7 @@ public class TransactionManagerTest {
         final short epoch = 1;
         final TopicPartition tp = new TopicPartition("foo", 0);
 
-        doInitTransactions(pid, epoch);
+        doInitTransactions();
 
         transactionManager.beginTransaction();
         TransactionalRequestResult sendOffsetsResult = transactionManager.sendOffsetsToTransaction(
@@ -935,7 +931,7 @@ public class TransactionManagerTest {
         final String fencedMemberId = "fenced_member";
         final String instanceId = "instance";
 
-        doInitTransactions(pid, epoch);
+        doInitTransactions();
 
         transactionManager.beginTransaction();
 
@@ -973,7 +969,7 @@ public class TransactionManagerTest {
         final String memberId = "member";
         final String unknownMemberId = "unknownMember";
 
-        doInitTransactions(pid, epoch);
+        doInitTransactions();
 
         transactionManager.beginTransaction();
 
@@ -1010,7 +1006,7 @@ public class TransactionManagerTest {
         final int generationId = 5;
         final int illegalGenerationId = 1;
 
-        doInitTransactions(pid, epoch);
+        doInitTransactions();
 
         transactionManager.beginTransaction();
 
@@ -1174,7 +1170,7 @@ public class TransactionManagerTest {
         final long pid = 13131L;
         final short epoch = 1;
 
-        doInitTransactions(pid, epoch);
+        doInitTransactions();
 
         transactionManager.beginTransaction();
         TransactionalRequestResult sendOffsetsResult = transactionManager.sendOffsetsToTransaction(
@@ -1204,7 +1200,7 @@ public class TransactionManagerTest {
         final short epoch = 1;
         final TopicPartition tp1 = new TopicPartition("foo", 0);
 
-        doInitTransactions(pid, epoch);
+        doInitTransactions();
 
         transactionManager.beginTransaction();
         TransactionalRequestResult sendOffsetsResult = transactionManager.sendOffsetsToTransaction(
@@ -1236,7 +1232,7 @@ public class TransactionManagerTest {
         final short epoch = 1;
         final TopicPartition tp = new TopicPartition("foo", 0);
 
-        doInitTransactions(pid, epoch);
+        doInitTransactions();
 
         transactionManager.beginTransaction();
         TransactionalRequestResult sendOffsetsResult = transactionManager.sendOffsetsToTransaction(
@@ -1259,7 +1255,7 @@ public class TransactionManagerTest {
         final short epoch = 1;
         final TopicPartition tp = new TopicPartition("foo", 0);
 
-        doInitTransactions(pid, epoch);
+        doInitTransactions();
 
         transactionManager.beginTransaction();
         TransactionalRequestResult sendOffsetsResult = transactionManager.sendOffsetsToTransaction(
@@ -1287,7 +1283,7 @@ public class TransactionManagerTest {
         final TopicPartition tp0 = new TopicPartition("foo", 0);
         final TopicPartition tp1 = new TopicPartition("bar", 0);
 
-        doInitTransactions(pid, epoch);
+        doInitTransactions();
 
         transactionManager.beginTransaction();
         transactionManager.failIfNotReadyForSend();
@@ -1328,7 +1324,7 @@ public class TransactionManagerTest {
         final TopicPartition tp0 = new TopicPartition("foo", 0);
         final TopicPartition tp1 = new TopicPartition("bar", 0);
 
-        doInitTransactions(pid, epoch);
+        doInitTransactions();
 
         // Begin a transaction, send two records, and begin commit
         transactionManager.beginTransaction();
@@ -1376,7 +1372,7 @@ public class TransactionManagerTest {
         final short epoch = 1;
         final TopicPartition unauthorizedPartition = new TopicPartition("foo", 0);
 
-        doInitTransactions(pid, epoch);
+        doInitTransactions();
 
         transactionManager.beginTransaction();
         transactionManager.failIfNotReadyForSend();
@@ -1424,7 +1420,7 @@ public class TransactionManagerTest {
         final short epoch = 1;
         final TopicPartition unauthorizedPartition = new TopicPartition("foo", 0);
 
-        doInitTransactions(pid, epoch);
+        doInitTransactions();
 
         transactionManager.beginTransaction();
         transactionManager.failIfNotReadyForSend();
@@ -1480,7 +1476,7 @@ public class TransactionManagerTest {
         final short epoch = 1;
         final TopicPartition unauthorizedPartition = new TopicPartition("foo", 0);
 
-        doInitTransactions(pid, epoch);
+        doInitTransactions();
 
         transactionManager.beginTransaction();
         transactionManager.failIfNotReadyForSend();
@@ -1547,7 +1543,7 @@ public class TransactionManagerTest {
         final short epoch = 1;
         final TopicPartition tp = new TopicPartition("foo", 0);
 
-        doInitTransactions(pid, epoch);
+        doInitTransactions();
 
         transactionManager.beginTransaction();
         transactionManager.failIfNotReadyForSend();
@@ -1565,7 +1561,7 @@ public class TransactionManagerTest {
         final long pid = 13131L;
         final short epoch = 1;
 
-        doInitTransactions(pid, epoch);
+        doInitTransactions();
 
         transactionManager.beginTransaction();
         transactionManager.failIfNotReadyForSend();
@@ -1606,7 +1602,7 @@ public class TransactionManagerTest {
         final long pid = 13131L;
         final short epoch = 1;
 
-        doInitTransactions(pid, epoch);
+        doInitTransactions();
 
         transactionManager.beginTransaction();
         // User does one producer.send
@@ -1652,7 +1648,7 @@ public class TransactionManagerTest {
         final long pid = 13131L;
         final short epoch = 1;
 
-        doInitTransactions(pid, epoch);
+        doInitTransactions();
 
         transactionManager.beginTransaction();
         transactionManager.failIfNotReadyForSend();
@@ -1688,7 +1684,7 @@ public class TransactionManagerTest {
         final long pid = 13131L;
         final short epoch = 1;
 
-        doInitTransactions(pid, epoch);
+        doInitTransactions();
 
         transactionManager.beginTransaction();
         transactionManager.failIfNotReadyForSend();
@@ -1731,7 +1727,7 @@ public class TransactionManagerTest {
         final long pid = 13131L;
         final short epoch = 1;
 
-        doInitTransactions(pid, epoch);
+        doInitTransactions();
 
         transactionManager.beginTransaction();
         transactionManager.failIfNotReadyForSend();
@@ -1758,7 +1754,7 @@ public class TransactionManagerTest {
         final long pid = 13131L;
         final short epoch = 1;
 
-        doInitTransactions(pid, epoch);
+        doInitTransactions();
 
         transactionManager.beginTransaction();
         transactionManager.failIfNotReadyForSend();
@@ -1792,7 +1788,7 @@ public class TransactionManagerTest {
         final long pid = 13131L;
         final short epoch = 1;
 
-        doInitTransactions(pid, epoch);
+        doInitTransactions();
 
         transactionManager.beginTransaction();
         transactionManager.failIfNotReadyForSend();
@@ -1839,7 +1835,7 @@ public class TransactionManagerTest {
         final long pid = 13131L;
         final short epoch = 1;
 
-        doInitTransactions(pid, epoch);
+        doInitTransactions();
 
         transactionManager.beginTransaction();
         transactionManager.failIfNotReadyForSend();
@@ -1885,7 +1881,7 @@ public class TransactionManagerTest {
         final long pid = 13131L;
         final short epoch = 1;
 
-        doInitTransactions(pid, epoch);
+        doInitTransactions();
 
         transactionManager.beginTransaction();
         transactionManager.failIfNotReadyForSend();
@@ -1911,7 +1907,7 @@ public class TransactionManagerTest {
         final long pid = 13131L;
         final short epoch = 1;
 
-        doInitTransactions(pid, epoch);
+        doInitTransactions();
 
         transactionManager.beginTransaction();
         transactionManager.failIfNotReadyForSend();
@@ -2008,7 +2004,7 @@ public class TransactionManagerTest {
         final long pid = 13131L;
         final short epoch = 1;
 
-        doInitTransactions(pid, epoch);
+        doInitTransactions();
 
         transactionManager.beginTransaction();
         transactionManager.failIfNotReadyForSend();
@@ -2042,7 +2038,7 @@ public class TransactionManagerTest {
         final long pid = 13131L;
         final short epoch = 1;
 
-        doInitTransactions(pid, epoch);
+        doInitTransactions();
 
         transactionManager.beginTransaction();
 
@@ -2079,7 +2075,20 @@ public class TransactionManagerTest {
 
     @Test
     public void shouldNotAddPartitionsToTransactionWhenTopicAuthorizationFailed() throws Exception {
-        verifyAddPartitionsFailsWithPartitionLevelError(Errors.TOPIC_AUTHORIZATION_FAILED);
+        final long pid = 1L;
+        final short epoch = 1;
+
+        doInitTransactions(pid, epoch);
+
+        transactionManager.beginTransaction();
+        transactionManager.failIfNotReadyForSend();
+        transactionManager.maybeAddPartitionToTransaction(tp0);
+
+        Future<RecordMetadata> responseFuture = appendToAccumulator(tp0);
+        assertFalse(responseFuture.isDone());
+        prepareAddPartitionsToTxn(tp0, Errors.TOPIC_AUTHORIZATION_FAILED);
+        runUntil(transactionManager::hasError);
+        assertFalse(transactionManager.transactionContainsPartition(tp0));
     }
 
     @Test
@@ -2087,7 +2096,7 @@ public class TransactionManagerTest {
         final long pid = 13131L;
         final short epoch = 1;
 
-        doInitTransactions(pid, epoch);
+        doInitTransactions();
 
         transactionManager.beginTransaction();
         transactionManager.failIfNotReadyForSend();
@@ -2108,7 +2117,7 @@ public class TransactionManagerTest {
         final long pid = 13131L;
         final short epoch = 1;
 
-        doInitTransactions(pid, epoch);
+        doInitTransactions();
 
         transactionManager.beginTransaction();
         Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
@@ -2131,7 +2140,7 @@ public class TransactionManagerTest {
         final long pid = 13131L;
         final short epoch = 1;
 
-        doInitTransactions(pid, epoch);
+        doInitTransactions();
 
         transactionManager.beginTransaction();
         Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
@@ -2151,10 +2160,35 @@ public class TransactionManagerTest {
 
     @Test
     public void testSendOffsetsWithGroupMetadata() {
-        final long pid = 13131L;
-        final short epoch = 1;
+        final String consumerGroupId = "myconsumergroup";
+        final String groupInstanceId = "instance";
+        final String memberId = "member";
+        final int generationId = 5;
 
-        doInitTransactions(pid, epoch);
+        Map<TopicPartition, Errors> txnOffsetCommitResponse = new HashMap<>();
+        txnOffsetCommitResponse.put(tp0, Errors.NONE);
+        txnOffsetCommitResponse.put(tp1, Errors.COORDINATOR_LOAD_IN_PROGRESS);
+
+        TransactionalRequestResult addOffsetsResult = prepareGroupMetadataCommit(txnOffsetCommitResponse);
+
+        sender.runOnce();  // send TxnOffsetCommitRequest request.
+
+        assertTrue(transactionManager.hasPendingOffsetCommits());  // The TxnOffsetCommit failed.
+        assertFalse(addOffsetsResult.isCompleted());  // We should only be done after both RPCs complete successfully.
+
+        txnOffsetCommitResponse.put(tp1, Errors.NONE);
+        prepareTxnOffsetCommitResponse(consumerGroupId, PRODUCER_ID, EPOCH, groupInstanceId, memberId, generationId, txnOffsetCommitResponse);
+        sender.runOnce();  // send TxnOffsetCommitRequest again.
+
+        assertTrue(addOffsetsResult.isCompleted());
+        assertTrue(addOffsetsResult.isSuccessful());
+    }
+
+    @Test
+    public void testSendOffsetWithGroupMetadataFailAsAutoDowngradeTxnCommitNotEnabled() {
+        client.setNodeApiVersions(NodeApiVersions.create(ApiKeys.TXN_OFFSET_COMMIT.id, (short) 0, (short) 2));
+
+        doInitTransactions();
 
         transactionManager.beginTransaction();
         Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
@@ -2167,7 +2201,7 @@ public class TransactionManagerTest {
 
         TransactionalRequestResult addOffsetsResult = transactionManager.sendOffsetsToTransaction(
             offsets, new ConsumerGroupMetadata(consumerGroupId, generationId, memberId, Optional.of(groupInstanceId)));
-        prepareAddOffsetsToTxnResponse(Errors.NONE, consumerGroupId, pid, epoch);
+        prepareAddOffsetsToTxnResponse(Errors.NONE, consumerGroupId, PRODUCER_ID, EPOCH);
 
         sender.runOnce();  // send AddOffsetsToTxnResult
 
@@ -2178,7 +2212,7 @@ public class TransactionManagerTest {
         txnOffsetCommitResponse.put(tp1, Errors.COORDINATOR_LOAD_IN_PROGRESS);
 
         prepareFindCoordinatorResponse(Errors.NONE, false, CoordinatorType.GROUP, consumerGroupId);
-        prepareTxnOffsetCommitResponse(consumerGroupId, pid, epoch, groupInstanceId, memberId, generationId, txnOffsetCommitResponse);
+        prepareTxnOffsetCommitResponse(consumerGroupId, PRODUCER_ID, EPOCH, groupInstanceId, memberId, generationId, txnOffsetCommitResponse);
 
         assertNull(transactionManager.coordinator(CoordinatorType.GROUP));
         sender.runOnce();  // try to send TxnOffsetCommitRequest, but find we don't have a group coordinator.
@@ -2186,24 +2220,47 @@ public class TransactionManagerTest {
         assertNotNull(transactionManager.coordinator(CoordinatorType.GROUP));
         assertTrue(transactionManager.hasPendingOffsetCommits());
 
-        sender.runOnce();  // send TxnOffsetCommitRequest request.
+        // send TxnOffsetCommitRequest request.
 
-        assertTrue(transactionManager.hasPendingOffsetCommits());  // The TxnOffsetCommit failed.
-        assertFalse(addOffsetsResult.isCompleted());  // We should only be done after both RPCs complete successfully.
+        assertThrows(UnsupportedVersionException.class, () -> sender.runOnce());
+    }
 
-        txnOffsetCommitResponse.put(tp1, Errors.NONE);
-        prepareTxnOffsetCommitResponse(consumerGroupId, pid, epoch, groupInstanceId, memberId, generationId, txnOffsetCommitResponse);
-        sender.runOnce();  // Send TxnOffsetCommitRequest again.
+    private TransactionalRequestResult prepareGroupMetadataCommit(final Map<TopicPartition, Errors> txnOffsetCommitResponse) {
+        doInitTransactions();
 
-        assertTrue(addOffsetsResult.isCompleted());
-        assertTrue(addOffsetsResult.isSuccessful());
+        transactionManager.beginTransaction();
+        Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
+        offsets.put(tp0, new OffsetAndMetadata(1));
+        offsets.put(tp1, new OffsetAndMetadata(1));
+        final String consumerGroupId = "myconsumergroup";
+        final String groupInstanceId = "instance";
+        final String memberId = "member";
+        final int generationId = 5;
+
+        TransactionalRequestResult addOffsetsResult = transactionManager.sendOffsetsToTransaction(
+            offsets, new ConsumerGroupMetadata(consumerGroupId, generationId, memberId, Optional.of(groupInstanceId)));
+        prepareAddOffsetsToTxnResponse(Errors.NONE, consumerGroupId, PRODUCER_ID, EPOCH);
+
+        sender.runOnce();  // send AddOffsetsToTxnResult
+
+        assertFalse(addOffsetsResult.isCompleted());  // The request should complete only after the TxnOffsetCommit completes
+
+        prepareFindCoordinatorResponse(Errors.NONE, false, CoordinatorType.GROUP, consumerGroupId);
+        prepareTxnOffsetCommitResponse(consumerGroupId, PRODUCER_ID, EPOCH, groupInstanceId, memberId, generationId, txnOffsetCommitResponse);
+
+        assertNull(transactionManager.coordinator(CoordinatorType.GROUP));
+        sender.runOnce();  // try to send TxnOffsetCommitRequest, but find we don't have a group coordinator
+        sender.runOnce();  // send find coordinator for group request
+        assertNotNull(transactionManager.coordinator(CoordinatorType.GROUP));
+        assertTrue(transactionManager.hasPendingOffsetCommits());
+        return addOffsetsResult;
     }
 
     @Test
     public void testNoDrainWhenPartitionsPending() throws InterruptedException {
         final long pid = 13131L;
         final short epoch = 1;
-        doInitTransactions(pid, epoch);
+        doInitTransactions();
         transactionManager.beginTransaction();
         transactionManager.failIfNotReadyForSend();
         transactionManager.maybeAddPartitionToTransaction(tp0);
@@ -2240,7 +2297,7 @@ public class TransactionManagerTest {
     public void testAllowDrainInAbortableErrorState() throws InterruptedException {
         final long pid = 13131L;
         final short epoch = 1;
-        doInitTransactions(pid, epoch);
+        doInitTransactions();
         transactionManager.beginTransaction();
         transactionManager.failIfNotReadyForSend();
         transactionManager.maybeAddPartitionToTransaction(tp1);
@@ -2274,7 +2331,7 @@ public class TransactionManagerTest {
     public void testRaiseErrorWhenNoPartitionsPendingOnDrain() throws InterruptedException {
         final long pid = 13131L;
         final short epoch = 1;
-        doInitTransactions(pid, epoch);
+        doInitTransactions();
         transactionManager.beginTransaction();
         // Don't execute transactionManager.maybeAddPartitionToTransaction(tp0). This should result in an error on drain.
         appendToAccumulator(tp0);
@@ -2297,7 +2354,7 @@ public class TransactionManagerTest {
     public void resendFailedProduceRequestAfterAbortableError() throws Exception {
         final long pid = 13131L;
         final short epoch = 1;
-        doInitTransactions(pid, epoch);
+        doInitTransactions();
         transactionManager.beginTransaction();
 
         transactionManager.failIfNotReadyForSend();
@@ -2322,7 +2379,7 @@ public class TransactionManagerTest {
         final long pid = 13131L;
         final short epoch = 1;
 
-        doInitTransactions(pid, epoch);
+        doInitTransactions();
 
         transactionManager.beginTransaction();
         transactionManager.failIfNotReadyForSend();
@@ -2366,7 +2423,7 @@ public class TransactionManagerTest {
         final long pid = 13131L;
         final short epoch = 1;
 
-        doInitTransactions(pid, epoch);
+        doInitTransactions();
 
         transactionManager.beginTransaction();
         transactionManager.failIfNotReadyForSend();
@@ -2429,7 +2486,7 @@ public class TransactionManagerTest {
         final long pid = 13131L;
         final short epoch = 1;
 
-        doInitTransactions(pid, epoch);
+        doInitTransactions();
 
         transactionManager.beginTransaction();
         transactionManager.failIfNotReadyForSend();
@@ -2493,7 +2550,7 @@ public class TransactionManagerTest {
                 new ApiVersion(ApiKeys.INIT_PRODUCER_ID.id, (short) 0, (short) 1),
                 new ApiVersion(ApiKeys.PRODUCE.id, (short) 0, (short) 7))));
 
-        doInitTransactions(pid, epoch);
+        doInitTransactions();
 
         transactionManager.beginTransaction();
         transactionManager.failIfNotReadyForSend();
@@ -2692,7 +2749,7 @@ public class TransactionManagerTest {
                 new ApiVersion(ApiKeys.INIT_PRODUCER_ID.id, (short) 0, (short) 1),
                 new ApiVersion(ApiKeys.PRODUCE.id, (short) 0, (short) 7))));
 
-        doInitTransactions(pid, epoch);
+        doInitTransactions();
 
         transactionManager.beginTransaction();
         transactionManager.failIfNotReadyForSend();
@@ -2742,7 +2799,7 @@ public class TransactionManagerTest {
                 new ApiVersion(ApiKeys.INIT_PRODUCER_ID.id, (short) 0, (short) 1),
                 new ApiVersion(ApiKeys.PRODUCE.id, (short) 0, (short) 7))));
 
-        doInitTransactions(pid, epoch);
+        doInitTransactions();
 
         transactionManager.beginTransaction();
         transactionManager.failIfNotReadyForSend();
@@ -3237,7 +3294,7 @@ public class TransactionManagerTest {
         final long pid = 13131L;
         final short epoch = 1;
 
-        doInitTransactions(pid, epoch);
+        doInitTransactions();
 
         transactionManager.beginTransaction();
         transactionManager.failIfNotReadyForSend();
@@ -3273,20 +3330,7 @@ public class TransactionManagerTest {
     }
 
     private void verifyAddPartitionsFailsWithPartitionLevelError(final Errors error) throws InterruptedException {
-        final long pid = 1L;
-        final short epoch = 1;
 
-        doInitTransactions(pid, epoch);
-
-        transactionManager.beginTransaction();
-        transactionManager.failIfNotReadyForSend();
-        transactionManager.maybeAddPartitionToTransaction(tp0);
-
-        Future<RecordMetadata> responseFuture = appendToAccumulator(tp0);
-        assertFalse(responseFuture.isDone());
-        prepareAddPartitionsToTxn(tp0, error);
-        runUntil(transactionManager::hasError);
-        assertFalse(transactionManager.transactionContainsPartition(tp0));
     }
 
     private void prepareAddPartitionsToTxn(final Map<TopicPartition, Errors> errors) {
@@ -3490,6 +3534,10 @@ public class TransactionManagerTest {
         }, new InitProducerIdResponse(responseData), false);
 
         runUntil(transactionManager::hasProducerId);
+    }
+
+    private void doInitTransactions() {
+        doInitTransactions(PRODUCER_ID, EPOCH);
     }
 
     private void doInitTransactions(long pid, short epoch) {

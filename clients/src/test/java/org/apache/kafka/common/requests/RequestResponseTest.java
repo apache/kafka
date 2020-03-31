@@ -400,9 +400,9 @@ public class RequestResponseTest {
         checkRequest(createTxnOffsetCommitRequest(0), true);
         checkRequest(createTxnOffsetCommitRequest(3), true);
         checkRequest(createTxnOffsetCommitRequestWithAutoDowngrade(2), true);
-        checkRequest(createTxnOffsetCommitRequestWithAutoDowngrade(3), true);
         checkErrorResponse(createTxnOffsetCommitRequest(0), new UnknownServerException(), true);
         checkErrorResponse(createTxnOffsetCommitRequest(3), new UnknownServerException(), true);
+        checkErrorResponse(createTxnOffsetCommitRequestWithAutoDowngrade(2), new UnknownServerException(), true);
         checkResponse(createTxnOffsetCommitResponse(), 0, true);
         checkRequest(createDescribeAclsRequest(), true);
         checkErrorResponse(createDescribeAclsRequest(), new SecurityDisabledException("Security is not enabled."), true);
@@ -874,9 +874,7 @@ public class RequestResponseTest {
                 setTransactionalId("abracadabra").
                 setProducerId(123));
         final UnsupportedVersionException exception = assertThrows(
-            UnsupportedVersionException.class, () -> {
-                bld.build((short) 2).toStruct();
-            });
+            UnsupportedVersionException.class, () -> bld.build((short) 2).toStruct());
         assertTrue(exception.getMessage().contains("Attempted to write a non-default producerId at version 2"));
         bld.build((short) 3);
     }

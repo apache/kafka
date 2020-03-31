@@ -17,6 +17,7 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.TxnOffsetCommitRequestData;
 import org.apache.kafka.common.message.TxnOffsetCommitRequestData.TxnOffsetCommitRequestPartition;
 import org.apache.kafka.common.message.TxnOffsetCommitRequestData.TxnOffsetCommitRequestTopic;
@@ -92,18 +93,29 @@ public class TxnOffsetCommitRequest extends AbstractRequest {
 
         @Override
         public TxnOffsetCommitRequest build(short version) {
-            if (version < 3 && autoDowngrade) {
-                log.trace("Downgrade the request by resetting group metadata fields: " +
-                              "[member.id:{}, generation.id:{}, group.instance.id:{}], because broker " +
-                              "only supports TxnOffsetCommit version {}. Need " +
-                              "v3 or newer to enable this feature",
-                    data.memberId(), data.generationId(), data.groupInstanceId(), version);
+            if (version < 3 && groupMetadataSet()) {
+                if (autoDowngrade) {
+                    log.trace("Downgrade the request by resetting group metadata fields: " +
+                                  "[member.id:{}, generation.id:{}, group.instance.id:{}], because broker " +
+                                  "only supports TxnOffsetCommit version {}. Need " +
+                                  "v3 or newer to enable this feature",
+                        data.memberId(), data.generationId(), data.groupInstanceId(), version);
 
-                data.setGenerationId(JoinGroupRequest.UNKNOWN_GENERATION_ID)
-                    .setMemberId(JoinGroupRequest.UNKNOWN_MEMBER_ID)
-                    .setGroupInstanceId(null);
+                    data.setGenerationId(JoinGroupRequest.UNKNOWN_GENERATION_ID)
+                        .setMemberId(JoinGroupRequest.UNKNOWN_MEMBER_ID)
+                        .setGroupInstanceId(null);
+                } else {
+                    throw new UnsupportedVersionException("Broker unexpectedly " +
+                        "doesn't support group metadata commit API on version " + version);
+                }
             }
             return new TxnOffsetCommitRequest(data, version);
+        }
+
+        private boolean groupMetadataSet() {
+            return !data.memberId().equals(JoinGroupRequest.UNKNOWN_MEMBER_ID) ||
+                       data.generationId() != JoinGroupRequest.UNKNOWN_GENERATION_ID ||
+                       data.groupInstanceId() != null;
         }
 
         @Override
