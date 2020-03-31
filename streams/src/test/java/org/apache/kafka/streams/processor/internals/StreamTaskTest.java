@@ -372,6 +372,30 @@ public class StreamTaskTest {
     }
 
     @Test
+    public void shouldRecordProcessRatio() {
+        task = createStatelessTask(createConfig(false, "0"), StreamsConfig.METRICS_LATEST);
+
+        final KafkaMetric metric = getMetric("active-process", "%s-ratio", task.id().toString(), StreamsConfig.METRICS_LATEST);
+
+        assertEquals(0.0d, (double) metric.metricValue(), 0.0001d);
+
+        task.recordProcessBatchTime(10L);
+        task.recordProcessBatchTime(15L);
+        task.recordProcessTimeRatio(100L);
+
+        assertEquals(0.25d, (double) metric.metricValue(), 0.0001d);
+
+        task.recordProcessBatchTime(10L);
+
+        assertEquals(0.25d, (double) metric.metricValue(), 0.0001d);
+
+        task.recordProcessBatchTime(10L);
+        task.recordProcessTimeRatio(20L);
+
+        assertEquals(1.0d, (double) metric.metricValue(), 0.0001d);
+    }
+
+    @Test
     public void shouldConstructMetricsWithBuiltInMetricsVersion0100To24() {
         testMetrics(StreamsConfig.METRICS_0100_TO_24);
     }

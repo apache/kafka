@@ -138,8 +138,8 @@ get_kafka 2.2.2 2.12
 chmod a+rw /opt/kafka-2.2.2
 get_kafka 2.3.1 2.12
 chmod a+rw /opt/kafka-2.3.1
-get_kafka 2.4.0 2.12
-chmod a+rw /opt/kafka-2.4.0
+get_kafka 2.4.1 2.12
+chmod a+rw /opt/kafka-2.4.1
 
 # For EC2 nodes, we want to use /mnt, which should have the local disk. On local
 # VMs, we can just create it if it doesn't exist and use it like we'd use

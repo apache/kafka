@@ -43,10 +43,14 @@ import org.junit.runners.Parameterized.Parameters;
 
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 import static java.time.Instant.ofEpochMilli;
 import static java.util.Collections.singletonMap;
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.ROLLUP_VALUE;
 import static org.apache.kafka.test.StreamsTestUtils.getMetricByNameFilterByTags;
 import static org.easymock.EasyMock.anyObject;
@@ -57,9 +61,13 @@ import static org.easymock.EasyMock.expectLastCall;
 import static org.easymock.EasyMock.mock;
 import static org.easymock.EasyMock.replay;
 import static org.easymock.EasyMock.verify;
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.empty;
+import static org.hamcrest.Matchers.not;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
 @RunWith(Parameterized.class)
@@ -87,6 +95,7 @@ public class MeteredWindowStoreTest {
     private final Metrics metrics = new Metrics(new MetricConfig().recordLevel(Sensor.RecordingLevel.DEBUG));
     private String storeLevelGroup;
     private String threadIdTagKey;
+    private Map<String, String> tags;
 
     {
         expect(innerStoreMock.name()).andReturn(STORE_NAME).anyTimes();
@@ -121,6 +130,11 @@ public class MeteredWindowStoreTest {
             StreamsConfig.METRICS_0100_TO_24.equals(builtInMetricsVersion) ? STORE_LEVEL_GROUP_FROM_0100_TO_24 : STORE_LEVEL_GROUP;
         threadIdTagKey =
             StreamsConfig.METRICS_0100_TO_24.equals(builtInMetricsVersion) ? THREAD_ID_TAG_KEY_FROM_0100_TO_24 : THREAD_ID_TAG_KEY;
+        tags = mkMap(
+            mkEntry(threadIdTagKey, threadId),
+            mkEntry("task-id", context.taskId().toString()),
+            mkEntry(STORE_TYPE + "-state-id", STORE_NAME)
+        );
     }
 
     @Test
@@ -279,17 +293,6 @@ public class MeteredWindowStoreTest {
     }
 
     @Test
-    public void shouldCloseUnderlyingStore() {
-        innerStoreMock.close();
-        expectLastCall();
-        replay(innerStoreMock);
-
-        store.init(context, store);
-        store.close();
-        verify(innerStoreMock);
-    }
-
-    @Test
     public void shouldNotThrowNullPointerExceptionIfFetchReturnsNull() {
         expect(innerStoreMock.fetch(Bytes.wrap("a".getBytes()), 0)).andReturn(null);
         replay(innerStoreMock);
@@ -324,5 +327,51 @@ public class MeteredWindowStoreTest {
     @Test
     public void shouldNotSetFlushListenerOnWrappedNoneCachingStore() {
         assertFalse(store.setFlushListener(null, false));
+    }
+
+    @Test
+    public void shouldCloseUnderlyingStore() {
+        innerStoreMock.close();
+        expectLastCall();
+        replay(innerStoreMock);
+        store.init(context, store);
+
+        store.close();
+        verify(innerStoreMock);
+    }
+
+    @Test
+    public void shouldRemoveMetricsOnClose() {
+        innerStoreMock.close();
+        expectLastCall();
+        replay(innerStoreMock);
+        store.init(context, store);
+
+        assertThat(storeMetrics(), not(empty()));
+        store.close();
+        assertThat(storeMetrics(), empty());
+        verify(innerStoreMock);
+    }
+
+    @Test
+    public void shouldRemoveMetricsEvenIfWrappedStoreThrowsOnClose() {
+        innerStoreMock.close();
+        expectLastCall().andThrow(new RuntimeException("Oops!"));
+        replay(innerStoreMock);
+        store.init(context, store);
+
+        // There's always a "count" metric registered
+        assertThat(storeMetrics(), not(empty()));
+        assertThrows(RuntimeException.class, store::close);
+        assertThat(storeMetrics(), empty());
+        verify(innerStoreMock);
+    }
+
+    private List<MetricName> storeMetrics() {
+        return metrics.metrics()
+                      .keySet()
+                      .stream()
+                      .filter(name -> name.group().equals(storeLevelGroup) && name.tags().equals(tags))
+                      .collect(Collectors.toList());
     }
 }

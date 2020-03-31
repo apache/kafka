@@ -31,6 +31,7 @@ import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetric
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.TOTAL_DESCRIPTION;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addAvgAndMaxToSensor;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addInvocationRateAndCountToSensor;
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addValueMetricToSensor;
 
 public class TaskMetrics {
     private TaskMetrics() {}
@@ -87,6 +88,7 @@ public class TaskMetrics {
 
     private static final String PROCESS_RATIO_DESCRIPTION = "The fraction of time the thread spent " +
         "on processing this task among all assigned active tasks";
+    private static final String NUM_BUFFERED_RECORDS_DESCRIPTION = "Number of buffered records for this active task";
 
     public static Sensor processLatencySensor(final String threadId,
                                               final String taskId,
@@ -110,13 +112,12 @@ public class TaskMetrics {
                                                   final StreamsMetricsImpl streamsMetrics) {
         final String name = ACTIVE_TASK_PREFIX + PROCESS + RATIO_SUFFIX;
         final Sensor sensor = streamsMetrics.taskLevelSensor(threadId, taskId, name, Sensor.RecordingLevel.INFO);
-        sensor.add(
-            new MetricName(
-                name,
-                TASK_LEVEL_GROUP,
-                PROCESS_RATIO_DESCRIPTION,
-                streamsMetrics.taskLevelTagMap(threadId, taskId)),
-            new Value()
+        addValueMetricToSensor(
+            sensor,
+            TASK_LEVEL_GROUP,
+            streamsMetrics.taskLevelTagMap(threadId, taskId),
+            name,
+            PROCESS_RATIO_DESCRIPTION
         );
         return sensor;
     }
@@ -126,13 +127,12 @@ public class TaskMetrics {
                                                      final StreamsMetricsImpl streamsMetrics) {
         final String name = ACTIVE_TASK_PREFIX + BUFFERED_RECORDS;
         final Sensor sensor = streamsMetrics.taskLevelSensor(threadId, taskId, name, Sensor.RecordingLevel.DEBUG);
-        sensor.add(
-            new MetricName(
-                name,
-                TASK_LEVEL_GROUP,
-                PROCESS_RATIO_DESCRIPTION,
-                streamsMetrics.taskLevelTagMap(threadId, taskId)),
-            new Value()
+        addValueMetricToSensor(
+            sensor,
+            TASK_LEVEL_GROUP,
+            streamsMetrics.taskLevelTagMap(threadId, taskId),
+            name,
+            NUM_BUFFERED_RECORDS_DESCRIPTION
         );
         return sensor;
     }

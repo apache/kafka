@@ -21,7 +21,7 @@ import java.util.concurrent.{CompletableFuture, CompletionStage}
 
 import com.typesafe.scalalogging.Logger
 import kafka.api.KAFKA_2_0_IV1
-import kafka.security.authorizer.AclAuthorizer.{AclSets, ResourceOrdering, VersionedAcls}
+import kafka.security.authorizer.AclAuthorizer.{AclBuffers, ResourceOrdering, VersionedAcls}
 import kafka.security.authorizer.AclEntry.ResourceSeparator
 import kafka.server.{KafkaConfig, KafkaServer}
 import kafka.utils._
@@ -62,9 +62,9 @@ object AclAuthorizer {
     def exists: Boolean = zkVersion != ZkVersion.UnknownVersion
   }
 
-  class AclSets(sets: Set[AclEntry]*) {
-    def find(p: AclEntry => Boolean): Option[AclEntry] = sets.flatMap(_.find(p)).headOption
-    def isEmpty: Boolean = !sets.exists(_.nonEmpty)
+  class AclBuffers(classes: mutable.Buffer[AclEntry]*) {
+    def find(p: AclEntry => Boolean): Option[AclEntry] = classes.flatMap(_.find(p)).headOption
+    def isEmpty: Boolean = !classes.exists(_.nonEmpty)
   }
 
   val NoAcls = VersionedAcls(Set.empty, ZkVersion.UnknownVersion)
@@ -295,7 +295,7 @@ class AclAuthorizer extends Authorizer with Logging {
     val host = requestContext.clientAddress.getHostAddress
     val operation = action.operation
 
-    def isEmptyAclAndAuthorized(acls: AclSets): Boolean = {
+    def isEmptyAclAndAuthorized(acls: AclBuffers): Boolean = {
       if (acls.isEmpty) {
         // No ACLs found for this resource, permission is determined by value of config allow.everyone.if.no.acl.found
         authorizerLogger.debug(s"No acl found for resource $resource, authorized = $shouldAllowEveryoneIfNoAclIsFound")
@@ -303,12 +303,12 @@ class AclAuthorizer extends Authorizer with Logging {
       } else false
     }
 
-    def denyAclExists(acls: AclSets): Boolean = {
+    def denyAclExists(acls: AclBuffers): Boolean = {
       // Check if there are any Deny ACLs which would forbid this operation.
       matchingAclExists(operation, resource, principal, host, DENY, acls)
     }
 
-    def allowAclExists(acls: AclSets): Boolean = {
+    def allowAclExists(acls: AclBuffers): Boolean = {
       // Check if there are any Allow ACLs which would allow this operation.
       // Allowing read, write, delete, or alter implies allowing describe.
       // See #{org.apache.kafka.common.acl.AclOperation} for more details about ACL inheritance.
@@ -341,26 +341,26 @@ class AclAuthorizer extends Authorizer with Logging {
     } else false
   }
 
-  private def matchingAcls(resourceType: ResourceType, resourceName: String): AclSets = {
+  private def matchingAcls(resourceType: ResourceType, resourceName: String): AclBuffers = {
     // save aclCache reference to a local val to get a consistent view of the cache during acl updates.
     val aclCacheSnapshot = aclCache
     val wildcard = aclCacheSnapshot.get(new ResourcePattern(resourceType, ResourcePattern.WILDCARD_RESOURCE, PatternType.LITERAL))
-      .map(_.acls)
-      .getOrElse(Set.empty)
+      .map(_.acls.toBuffer)
+      .getOrElse(mutable.Buffer.empty)
 
     val literal = aclCacheSnapshot.get(new ResourcePattern(resourceType, resourceName, PatternType.LITERAL))
-      .map(_.acls)
-      .getOrElse(Set.empty)
+      .map(_.acls.toBuffer)
+      .getOrElse(mutable.Buffer.empty)
 
     val prefixed = aclCacheSnapshot
       .from(new ResourcePattern(resourceType, resourceName, PatternType.PREFIXED))
       .to(new ResourcePattern(resourceType, resourceName.take(1), PatternType.PREFIXED))
       .filterKeys(resource => resourceName.startsWith(resource.name))
       .values
-      .flatMap { _.acls }
-      .toSet
+      .flatMap { _.acls.toBuffer }
+      .toBuffer
 
-    new AclSets(prefixed, wildcard, literal)
+    new AclBuffers(prefixed, wildcard, literal)
   }
 
   private def matchingAclExists(operation: AclOperation,
@@ -368,7 +368,7 @@ class AclAuthorizer extends Authorizer with Logging {
                                 principal: KafkaPrincipal,
                                 host: String,
                                 permissionType: AclPermissionType,
-                                acls: AclSets): Boolean = {
+                                acls: AclBuffers): Boolean = {
     acls.find { acl =>
       acl.permissionType == permissionType &&
         (acl.kafkaPrincipal == principal || acl.kafkaPrincipal == AclEntry.WildcardPrincipal) &&
