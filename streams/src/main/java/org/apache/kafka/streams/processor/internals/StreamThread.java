@@ -26,6 +26,7 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.utils.LogContext;
@@ -412,11 +413,11 @@ public class StreamThread extends Thread {
         }
     }
 
-    private static boolean eosAlphaEnabled(final StreamsConfig config) {
+    public static boolean eosAlphaEnabled(final StreamsConfig config) {
         return EXACTLY_ONCE.equals(config.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG));
     }
 
-    private static boolean eosBetaEnabled(final StreamsConfig config) {
+    public static boolean eosBetaEnabled(final StreamsConfig config) {
         return EXACTLY_ONCE_BETA.equals(config.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG));
     }
 
@@ -511,6 +512,21 @@ public class StreamThread extends Thread {
         } catch (final Exception e) {
             // we have caught all Kafka related exceptions, and other runtime exceptions
             // should be due to user application errors
+
+            if (e instanceof UnsupportedVersionException) {
+                final String errorMessage = e.getMessage();
+                if (errorMessage != null &&
+                    errorMessage.startsWith("Broker unexpectedly doesn't support requireStable flag on version ")) {
+
+                    log.error("Shutting down because the Kafka cluster seems to be on a too old version. " +
+                        "Setting {}=\"{}\" requires broker version 2.5 or higher.",
+                        StreamsConfig.PROCESSING_GUARANTEE_CONFIG,
+                        EXACTLY_ONCE_BETA);
+
+                    throw e;
+                }
+            }
+
             log.error("Encountered the following exception during processing " +
                 "and the thread is going to shut down: ", e);
             throw e;

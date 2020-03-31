@@ -33,6 +33,7 @@ import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.test.InternalMockProcessorContext;
+import org.apache.kafka.test.TestUtils;
 import org.easymock.EasyMock;
 import org.junit.After;
 import org.junit.Before;
@@ -56,13 +57,14 @@ import static org.junit.Assert.fail;
 
 public class CachingKeyValueStoreTest extends AbstractKeyValueStoreTest {
 
+    private final static String TOPIC = "topic";
+    private static final String CACHE_NAMESPACE = "0_0-store-name";
     private final int maxCacheSizeBytes = 150;
     private InternalMockProcessorContext context;
     private CachingKeyValueStore store;
-    private InMemoryKeyValueStore underlyingStore;
+    private KeyValueStore<Bytes, byte[]> underlyingStore;
     private ThreadCache cache;
     private CacheFlushListenerStub<String, String> cacheFlushListener;
-    private String topic;
 
     @Before
     public void setUp() {
@@ -73,8 +75,7 @@ public class CachingKeyValueStoreTest extends AbstractKeyValueStoreTest {
         store.setFlushListener(cacheFlushListener, false);
         cache = new ThreadCache(new LogContext("testCache "), maxCacheSizeBytes, new MockStreamsMetrics(new Metrics()));
         context = new InternalMockProcessorContext(null, null, null, null, cache);
-        topic = "topic";
-        context.setRecordContext(new ProcessorRecordContext(10, 0, 0, topic, null));
+        context.setRecordContext(new ProcessorRecordContext(10, 0, 0, TOPIC, null));
         store.init(context, null);
     }
 
@@ -121,19 +122,69 @@ public class CachingKeyValueStoreTest extends AbstractKeyValueStoreTest {
     }
 
     @Test
-    public void shouldCloseAfterErrorWithFlush() {
+    public void shouldCloseWrappedStoreAfterErrorDuringCacheFlush() {
+        setUpCloseTests();
+        cache.flush(CACHE_NAMESPACE);
+        EasyMock.expectLastCall().andThrow(new NullPointerException("Simulating an error on flush"));
+        EasyMock.replay(cache);
+        EasyMock.reset(underlyingStore);
+        underlyingStore.close();
+        EasyMock.replay(underlyingStore);
+
         try {
-            cache = EasyMock.niceMock(ThreadCache.class);
-            context = new InternalMockProcessorContext(null, null, null, null, cache);
-            context.setRecordContext(new ProcessorRecordContext(10, 0, 0, topic, null));
-            store.init(context, null);
-            cache.flush("0_0-store");
-            EasyMock.expectLastCall().andThrow(new NullPointerException("Simulating an error on flush"));
-            EasyMock.replay(cache);
             store.close();
-        } catch (final NullPointerException npe) {
-            assertFalse(underlyingStore.isOpen());
+        } catch (final RuntimeException exception) {
+            EasyMock.verify(underlyingStore);
         }
+    }
+
+    @Test
+    public void shouldCloseWrappedStoreAfterErrorDuringCacheClose() {
+        setUpCloseTests();
+        cache.flush(CACHE_NAMESPACE);
+        cache.close(CACHE_NAMESPACE);
+        EasyMock.expectLastCall().andThrow(new NullPointerException("Simulating an error on close"));
+        EasyMock.replay(cache);
+        EasyMock.reset(underlyingStore);
+        underlyingStore.close();
+        EasyMock.replay(underlyingStore);
+
+        try {
+            store.close();
+        } catch (final RuntimeException exception) {
+            EasyMock.verify(underlyingStore);
+        }
+    }
+
+    @Test
+    public void shouldCloseCacheAfterErrorDuringStateStoreClose() {
+        setUpCloseTests();
+        EasyMock.reset(cache);
+        cache.flush(CACHE_NAMESPACE);
+        cache.close(CACHE_NAMESPACE);
+        EasyMock.replay(cache);
+        EasyMock.reset(underlyingStore);
+        underlyingStore.close();
+        EasyMock.expectLastCall().andThrow(new NullPointerException("Simulating an error on close"));
+        EasyMock.replay(underlyingStore);
+
+        try {
+            store.close();
+        } catch (final RuntimeException exception) {
+            EasyMock.verify(cache);
+        }
+    }
+
+    private void setUpCloseTests() {
+        underlyingStore = EasyMock.createNiceMock(KeyValueStore.class);
+        EasyMock.expect(underlyingStore.name()).andStubReturn("store-name");
+        EasyMock.expect(underlyingStore.isOpen()).andStubReturn(true);
+        EasyMock.replay(underlyingStore);
+        store = new CachingKeyValueStore(underlyingStore);
+        cache = EasyMock.niceMock(ThreadCache.class);
+        context = new InternalMockProcessorContext(TestUtils.tempDirectory(), null, null, null, cache);
+        context.setRecordContext(new ProcessorRecordContext(10, 0, 0, TOPIC, null));
+        store.init(context, store);
     }
 
     @Test
@@ -374,7 +425,7 @@ public class CachingKeyValueStoreTest extends AbstractKeyValueStoreTest {
         while (cachedSize < maxCacheSizeBytes) {
             final String kv = String.valueOf(i++);
             store.put(bytesKey(kv), bytesValue(kv));
-            cachedSize += memoryCacheEntrySize(kv.getBytes(), kv.getBytes(), topic);
+            cachedSize += memoryCacheEntrySize(kv.getBytes(), kv.getBytes(), TOPIC);
         }
         return i;
     }

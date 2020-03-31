@@ -116,43 +116,37 @@ public class BufferPoolTest {
 
     private CountDownLatch asyncDeallocate(final BufferPool pool, final ByteBuffer buffer) {
         final CountDownLatch latch = new CountDownLatch(1);
-        Thread thread = new Thread() {
-            public void run() {
-                try {
-                    latch.await();
-                } catch (InterruptedException e) {
-                    e.printStackTrace();
-                }
-                pool.deallocate(buffer);
+        Thread thread = new Thread(() -> {
+            try {
+                latch.await();
+            } catch (InterruptedException e) {
+                e.printStackTrace();
             }
-        };
+            pool.deallocate(buffer);
+        });
         thread.start();
         return latch;
     }
 
     private void delayedDeallocate(final BufferPool pool, final ByteBuffer buffer, final long delayMs) {
-        Thread thread = new Thread() {
-            public void run() {
-                Time.SYSTEM.sleep(delayMs);
-                pool.deallocate(buffer);
-            }
-        };
+        Thread thread = new Thread(() -> {
+            Time.SYSTEM.sleep(delayMs);
+            pool.deallocate(buffer);
+        });
         thread.start();
     }
 
     private CountDownLatch asyncAllocate(final BufferPool pool, final int size) {
         final CountDownLatch completed = new CountDownLatch(1);
-        Thread thread = new Thread() {
-            public void run() {
-                try {
-                    pool.allocate(size, maxBlockTimeMs);
-                } catch (InterruptedException e) {
-                    e.printStackTrace();
-                } finally {
-                    completed.countDown();
-                }
+        Thread thread = new Thread(() -> {
+            try {
+                pool.allocate(size, maxBlockTimeMs);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            } finally {
+                completed.countDown();
             }
-        };
+        });
         thread.start();
         return completed;
     }
@@ -362,6 +356,7 @@ public class BufferPoolTest {
             this.pool = pool;
         }
 
+        @Override
         public void run() {
             try {
                 for (int i = 0; i < iterations; i++) {
