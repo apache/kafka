@@ -568,65 +568,62 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
      */
     @SuppressWarnings("unchecked")
     public boolean process(final long wallClockTime) {
-        try {
-            if (!isProcessable(wallClockTime)) {
-                return false;
-            }
-
-            // get the next record to process
-            final StampedRecord record = partitionGroup.nextRecord(recordInfo);
-
-            // if there is no record to process, return immediately
-            if (record == null) {
-                return false;
-            }
-
-            try {
-                // process the record by passing to the source node of the topology
-                final ProcessorNode<Object, Object> currNode = (ProcessorNode<Object, Object>) recordInfo.node();
-                final TopicPartition partition = recordInfo.partition();
-
-                log.trace("Start processing one record [{}]", record);
-
-                updateProcessorContext(record, currNode);
-                maybeMeasureLatency(() -> currNode.process(record.key(), record.value()), time, processLatencySensor);
-
-                log.trace("Completed processing one record [{}]", record);
-
-                // update the consumed offset map after processing is done
-                consumedOffsets.put(partition, record.offset());
-                commitNeeded = true;
-
-                // after processing this record, if its partition queue's buffered size has been
-                // decreased to the threshold, we can then resume the consumption on this partition
-                if (recordInfo.queue().size() == maxBufferedSize) {
-                    mainConsumer.resume(singleton(partition));
-                }
-            } catch (final StreamsException e) {
-                throw e;
-            } catch (final RuntimeException e) {
-                final String stackTrace = getStacktraceString(e);
-                throw new StreamsException(String.format("Exception caught in process. taskId=%s, " +
-                                                             "processor=%s, topic=%s, partition=%d, offset=%d, stacktrace=%s",
-                                                         id(),
-                                                         processorContext.currentNode().name(),
-                                                         record.topic(),
-                                                         record.partition(),
-                                                         record.offset(),
-                                                         stackTrace
-                ), e);
-            } finally {
-                processorContext.setCurrentNode(null);
-            }
-
-            return true;
-        } finally {
-            recordProcessTime(time.milliseconds() - wallClockTime);
+        if (!isProcessable(wallClockTime)) {
+            return false;
         }
+
+        // get the next record to process
+        final StampedRecord record = partitionGroup.nextRecord(recordInfo);
+
+        // if there is no record to process, return immediately
+        if (record == null) {
+            return false;
+        }
+
+        try {
+            // process the record by passing to the source node of the topology
+            final ProcessorNode<Object, Object> currNode = (ProcessorNode<Object, Object>) recordInfo.node();
+            final TopicPartition partition = recordInfo.partition();
+
+            log.trace("Start processing one record [{}]", record);
+
+            updateProcessorContext(record, currNode);
+            maybeMeasureLatency(() -> currNode.process(record.key(), record.value()), time, processLatencySensor);
+
+            log.trace("Completed processing one record [{}]", record);
+
+            // update the consumed offset map after processing is done
+            consumedOffsets.put(partition, record.offset());
+            commitNeeded = true;
+
+            // after processing this record, if its partition queue's buffered size has been
+            // decreased to the threshold, we can then resume the consumption on this partition
+            if (recordInfo.queue().size() == maxBufferedSize) {
+                mainConsumer.resume(singleton(partition));
+            }
+        } catch (final StreamsException e) {
+            throw e;
+        } catch (final RuntimeException e) {
+            final String stackTrace = getStacktraceString(e);
+            throw new StreamsException(String.format("Exception caught in process. taskId=%s, " +
+                                                         "processor=%s, topic=%s, partition=%d, offset=%d, stacktrace=%s",
+                                                     id(),
+                                                     processorContext.currentNode().name(),
+                                                     record.topic(),
+                                                     record.partition(),
+                                                     record.offset(),
+                                                     stackTrace
+            ), e);
+        } finally {
+            processorContext.setCurrentNode(null);
+        }
+
+        return true;
     }
 
-    private void recordProcessTime(final long taskProcessMs) {
-        processTimeMs += taskProcessMs;
+    @Override
+    public void recordProcessBatchTime(final long processBatchTime) {
+        processTimeMs += processBatchTime;
     }
 
     @Override

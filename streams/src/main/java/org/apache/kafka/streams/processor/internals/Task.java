@@ -200,6 +200,8 @@ public interface Task {
         return Collections.emptyMap();
     }
 
+    default void recordProcessBatchTime(final long processBatchTime) {}
+
     default void recordProcessTimeRatio(final long allTaskProcessMs) {}
 
     default boolean process(final long wallClockTime) {

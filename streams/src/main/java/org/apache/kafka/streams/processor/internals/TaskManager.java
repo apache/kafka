@@ -814,13 +814,17 @@ public class TaskManager {
     int process(final int maxNumRecords, final Time time) {
         int totalProcessed = 0;
 
+        long now = time.milliseconds();
         for (final Task task : activeTaskIterable()) {
             try {
                 int processed = 0;
-                while (processed < maxNumRecords && task.process(time.milliseconds())) {
+                final long then = now;
+                while (processed < maxNumRecords && task.process(now)) {
                     processed++;
                 }
+                now = time.milliseconds();
                 totalProcessed += processed;
+                task.recordProcessBatchTime(then - now);
             } catch (final TaskMigratedException e) {
                 log.info("Failed to process stream task {} since it got migrated to another thread already. " +
                              "Will trigger a new rebalance and close all tasks as zombies together.", task.id());
