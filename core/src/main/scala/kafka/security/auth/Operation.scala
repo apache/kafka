@@ -91,7 +91,22 @@ object Operation {
     op.getOrElse(throw new KafkaException(operation + " not a valid operation name. The valid names are " + values.mkString(",")))
   }
 
-  def fromJava(operation: AclOperation): Operation = fromString(operation.toString.replaceAll("_", ""))
+  def fromJava(operation: AclOperation): Operation = {
+    operation match {
+      case AclOperation.READ => Read
+      case AclOperation.WRITE => Write
+      case AclOperation.CREATE => Create
+      case AclOperation.DELETE => Delete
+      case AclOperation.ALTER => Alter
+      case AclOperation.DESCRIBE => Describe
+      case AclOperation.CLUSTER_ACTION => ClusterAction
+      case AclOperation.ALTER_CONFIGS => AlterConfigs
+      case AclOperation.DESCRIBE_CONFIGS => DescribeConfigs
+      case AclOperation.IDEMPOTENT_WRITE => IdempotentWrite
+      case AclOperation.ALL => All
+      case _ => throw new KafkaException("Unexpected conversion of operation " + operation)
+    }
+  }
 
   def values: Seq[Operation] = List(Read, Write, Create, Delete, Alter, Describe, ClusterAction, AlterConfigs,
      DescribeConfigs, IdempotentWrite, All)

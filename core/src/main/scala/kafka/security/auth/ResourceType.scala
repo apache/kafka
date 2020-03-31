@@ -80,5 +80,14 @@ object ResourceType {
 
   def values: Seq[ResourceType] = List(Topic, Group, Cluster, TransactionalId, DelegationToken)
 
-  def fromJava(operation: JResourceType): ResourceType = fromString(operation.toString.replaceAll("_", ""))
+  def fromJava(operation: JResourceType): ResourceType = {
+    operation match {
+      case JResourceType.TOPIC => Topic
+      case JResourceType.GROUP => Group
+      case JResourceType.CLUSTER => Cluster
+      case JResourceType.TRANSACTIONAL_ID => TransactionalId
+      case JResourceType.DELEGATION_TOKEN => DelegationToken
+      case _ => throw new KafkaException("Unexpected conversion of operation " + operation)
+    }
+  }
 }
