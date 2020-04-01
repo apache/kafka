@@ -28,9 +28,9 @@ import java.util.Map;
 public class TestDriverProducer extends StreamsProducer {
 
     public TestDriverProducer(final Producer<byte[], byte[]> producer,
-                              final boolean eosEnabled,
+                              final StreamThread.ProcessingMode processingMode,
                               final LogContext logContext) {
-        super(producer, eosEnabled, logContext);
+        super(producer, processingMode, logContext);
     }
 
     @Override

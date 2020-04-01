@@ -399,7 +399,7 @@ public class StreamThread extends Thread {
         return streamThread.updateThreadMetadata(getSharedAdminClientId(clientId));
     }
 
-    enum ProcessingMode {
+    public enum ProcessingMode {
         AT_LEAST_ONCE("AT_LEAST_ONCE"),
 
         EXACTLY_ONCE_ALPHA("EXACTLY_ONCE_ALPHA"),

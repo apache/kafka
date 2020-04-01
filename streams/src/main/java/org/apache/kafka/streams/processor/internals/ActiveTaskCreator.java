@@ -45,6 +45,9 @@ import java.util.stream.Collectors;
 
 import static org.apache.kafka.streams.processor.internals.ClientUtils.getTaskProducerClientId;
 import static org.apache.kafka.streams.processor.internals.ClientUtils.getThreadProducerClientId;
+import static org.apache.kafka.streams.processor.internals.StreamThread.ProcessingMode.AT_LEAST_ONCE;
+import static org.apache.kafka.streams.processor.internals.StreamThread.ProcessingMode.EXACTLY_ONCE_ALPHA;
+import static org.apache.kafka.streams.processor.internals.StreamThread.ProcessingMode.EXACTLY_ONCE_BETA;
 
 class ActiveTaskCreator {
     private final InternalTopologyBuilder builder;
@@ -62,6 +65,7 @@ class ActiveTaskCreator {
     private final StreamsProducer threadProducer;
     private final Map<TaskId, StreamsProducer> taskProducers;
     private final StreamThread.ProcessingMode processingMode;
+    private final String transactionalId;
 
     ActiveTaskCreator(final InternalTopologyBuilder builder,
                       final StreamsConfig config,
@@ -89,8 +93,9 @@ class ActiveTaskCreator {
 
         createTaskSensor = ThreadMetrics.createTaskSensor(threadId, streamsMetrics);
         applicationId = config.getString(StreamsConfig.APPLICATION_ID_CONFIG);
+        transactionalId = applicationId + "-" + processId + "-StreamThread-" + threadId.split("-StreamThread-")[1];
 
-        if (processingMode == StreamThread.ProcessingMode.EXACTLY_ONCE_ALPHA) {
+        if (processingMode == EXACTLY_ONCE_ALPHA) {
             threadProducer = null;
             taskProducers = new HashMap<>();
         } else { // non-eos and eos-beta
@@ -102,19 +107,33 @@ class ActiveTaskCreator {
             final String threadProducerClientId = getThreadProducerClientId(threadId);
             final Map<String, Object> producerConfigs = config.getProducerConfigs(threadProducerClientId);
 
-            if (processingMode == StreamThread.ProcessingMode.EXACTLY_ONCE_BETA) {
-                producerConfigs.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, applicationId + "-" + processId);
-                threadProducer = new StreamsProducer(clientSupplier.getProducer(producerConfigs), true, logContext);
+            if (processingMode == EXACTLY_ONCE_BETA) {
+                producerConfigs.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, transactionalId);
+                threadProducer = new StreamsProducer(clientSupplier.getProducer(producerConfigs), EXACTLY_ONCE_BETA, logContext);
             } else {
-                threadProducer = new StreamsProducer(clientSupplier.getProducer(producerConfigs), false, logContext);
+                threadProducer = new StreamsProducer(clientSupplier.getProducer(producerConfigs), AT_LEAST_ONCE, logContext);
             }
             taskProducers = Collections.emptyMap();
         }
     }
 
+    public void reInitializeThreadProducer() {
+        if (processingMode != EXACTLY_ONCE_BETA) {
+            throw new IllegalStateException("Exactly-once beta is not enabled.");
+        }
+
+        threadProducer.kafkaProducer().close();
+
+        final String threadProducerClientId = getThreadProducerClientId(threadId);
+        final Map<String, Object> producerConfigs = config.getProducerConfigs(threadProducerClientId);
+        producerConfigs.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, transactionalId);
+
+        threadProducer.resetProducer(clientSupplier.getProducer(producerConfigs));
+    }
+
     StreamsProducer streamsProducerForTask(final TaskId taskId) {
-        if (processingMode != StreamThread.ProcessingMode.EXACTLY_ONCE_ALPHA) {
-            throw new IllegalStateException("Producer per thread is used");
+        if (processingMode != EXACTLY_ONCE_ALPHA) {
+            throw new IllegalStateException("Producer per thread is used.");
         }
 
         final StreamsProducer taskProducer = taskProducers.get(taskId);
@@ -125,7 +144,7 @@ class ActiveTaskCreator {
     }
 
     StreamsProducer threadProducer() {
-        if (processingMode != StreamThread.ProcessingMode.EXACTLY_ONCE_BETA) {
+        if (processingMode != EXACTLY_ONCE_BETA) {
             throw new IllegalStateException("Exactly-once beta is not enabled.");
         }
         return threadProducer;
@@ -156,14 +175,14 @@ class ActiveTaskCreator {
             );
 
             final StreamsProducer streamsProducer;
-            if (processingMode == StreamThread.ProcessingMode.EXACTLY_ONCE_ALPHA) {
+            if (processingMode == EXACTLY_ONCE_ALPHA) {
                 final String taskProducerClientId = getTaskProducerClientId(threadId, taskId);
                 final Map<String, Object> producerConfigs = config.getProducerConfigs(taskProducerClientId);
                 producerConfigs.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, applicationId + "-" + taskId);
                 log.info("Creating producer client for task {}", taskId);
                 streamsProducer = new StreamsProducer(
                     clientSupplier.getProducer(producerConfigs),
-                    true,
+                    EXACTLY_ONCE_ALPHA,
                     logContext);
                 taskProducers.put(taskId, streamsProducer);
             } else {

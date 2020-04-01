@@ -56,6 +56,8 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.kafka.streams.processor.internals.StreamThread.ProcessingMode.EXACTLY_ONCE_ALPHA;
+import static org.apache.kafka.streams.processor.internals.StreamThread.ProcessingMode.EXACTLY_ONCE_BETA;
 import static org.apache.kafka.streams.processor.internals.Task.State.CREATED;
 import static org.apache.kafka.streams.processor.internals.Task.State.RESTORING;
 import static org.apache.kafka.streams.processor.internals.Task.State.RUNNING;
@@ -475,6 +477,10 @@ public class TaskManager {
                 partitionToTask.remove(inputPartition);
             }
         }
+
+        if (processingMode == EXACTLY_ONCE_BETA) {
+            activeTaskCreator.reInitializeThreadProducer();
+        }
     }
 
     /**
@@ -781,7 +787,7 @@ public class TaskManager {
     }
 
     private void commitOffsetsOrTransaction(final Map<TaskId, Map<TopicPartition, OffsetAndMetadata>> offsetsPerTask) {
-        if (processingMode == StreamThread.ProcessingMode.EXACTLY_ONCE_ALPHA) {
+        if (processingMode == EXACTLY_ONCE_ALPHA) {
             for (final Map.Entry<TaskId, Map<TopicPartition, OffsetAndMetadata>> taskToCommit : offsetsPerTask.entrySet()) {
                 activeTaskCreator.streamsProducerForTask(taskToCommit.getKey())
                     .commitTransaction(taskToCommit.getValue(), mainConsumer.groupMetadata());
@@ -790,7 +796,7 @@ public class TaskManager {
             final Map<TopicPartition, OffsetAndMetadata> allOffsets = offsetsPerTask.values().stream()
                 .flatMap(e -> e.entrySet().stream()).collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
 
-            if (processingMode == StreamThread.ProcessingMode.EXACTLY_ONCE_BETA) {
+            if (processingMode == EXACTLY_ONCE_BETA) {
                 activeTaskCreator.threadProducer().commitTransaction(allOffsets, mainConsumer.groupMetadata());
             } else {
                 try {

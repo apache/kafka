@@ -54,9 +54,14 @@ import org.junit.Before;
 import org.junit.ClassRule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
+import org.junit.runner.RunWith;
+import org.junit.runners.Parameterized;
+import org.junit.runners.Parameterized.Parameter;
+import org.junit.runners.Parameterized.Parameters;
 
 import java.io.File;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -80,7 +85,7 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
-
+@RunWith(Parameterized.class)
 @Category({IntegrationTest.class})
 public class EosIntegrationTest {
     private static final int NUM_BROKERS = 3;
@@ -93,7 +98,7 @@ public class EosIntegrationTest {
         Utils.mkProperties(Collections.singletonMap("auto.create.topics.enable", "false"))
     );
 
-    private static String applicationId;
+    private String applicationId;
     private final static int NUM_TOPIC_PARTITIONS = 2;
     private final static String CONSUMER_GROUP_ID = "readCommitted";
     private final static String SINGLE_PARTITION_INPUT_TOPIC = "singlePartitionInputTopic";
@@ -110,11 +115,22 @@ public class EosIntegrationTest {
     private AtomicInteger commitRequested;
     private Throwable uncaughtException;
 
-    private int testNumber = 0;
+    private static final AtomicInteger TEST_NUMBER = new AtomicInteger(0);
+
+    @Parameters(name = "{0}")
+    public static Collection<String[]> data() {
+        return Arrays.asList(new String[][] {
+            {StreamsConfig.EXACTLY_ONCE},
+            {StreamsConfig.EXACTLY_ONCE_BETA}
+        });
+    }
+
+    @Parameter
+    public String eosConfig;
 
     @Before
     public void createTopics() throws Exception {
-        applicationId = "appId-" + ++testNumber;
+        applicationId = "appId-" + TEST_NUMBER.getAndIncrement();
         CLUSTER.deleteTopicsAndWait(
             SINGLE_PARTITION_INPUT_TOPIC, MULTI_PARTITION_INPUT_TOPIC,
             SINGLE_PARTITION_THROUGH_TOPIC, MULTI_PARTITION_THROUGH_TOPIC,
@@ -128,12 +144,12 @@ public class EosIntegrationTest {
 
     @Test
     public void shouldBeAbleToRunWithEosEnabled() throws Exception {
-        runSimpleCopyTest(1, SINGLE_PARTITION_INPUT_TOPIC, null, SINGLE_PARTITION_OUTPUT_TOPIC, false);
+        runSimpleCopyTest(1, SINGLE_PARTITION_INPUT_TOPIC, null, SINGLE_PARTITION_OUTPUT_TOPIC, false, eosConfig);
     }
 
     @Test
     public void shouldCommitCorrectOffsetIfInputTopicIsTransactional() throws Exception {
-        runSimpleCopyTest(1, SINGLE_PARTITION_INPUT_TOPIC, null, SINGLE_PARTITION_OUTPUT_TOPIC, true);
+        runSimpleCopyTest(1, SINGLE_PARTITION_INPUT_TOPIC, null, SINGLE_PARTITION_OUTPUT_TOPIC, true, eosConfig);
 
         try (final Admin adminClient = Admin.create(mkMap(mkEntry(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers())));
              final Consumer<byte[], byte[]> consumer = new KafkaConsumer<>(mkMap(
@@ -160,34 +176,35 @@ public class EosIntegrationTest {
 
     @Test
     public void shouldBeAbleToRestartAfterClose() throws Exception {
-        runSimpleCopyTest(2, SINGLE_PARTITION_INPUT_TOPIC, null, SINGLE_PARTITION_OUTPUT_TOPIC, false);
+        runSimpleCopyTest(2, SINGLE_PARTITION_INPUT_TOPIC, null, SINGLE_PARTITION_OUTPUT_TOPIC, false, eosConfig);
     }
 
     @Test
     public void shouldBeAbleToCommitToMultiplePartitions() throws Exception {
-        runSimpleCopyTest(1, SINGLE_PARTITION_INPUT_TOPIC, null, MULTI_PARTITION_OUTPUT_TOPIC, false);
+        runSimpleCopyTest(1, SINGLE_PARTITION_INPUT_TOPIC, null, MULTI_PARTITION_OUTPUT_TOPIC, false, eosConfig);
     }
 
     @Test
     public void shouldBeAbleToCommitMultiplePartitionOffsets() throws Exception {
-        runSimpleCopyTest(1, MULTI_PARTITION_INPUT_TOPIC, null, SINGLE_PARTITION_OUTPUT_TOPIC, false);
+        runSimpleCopyTest(1, MULTI_PARTITION_INPUT_TOPIC, null, SINGLE_PARTITION_OUTPUT_TOPIC, false, eosConfig);
     }
 
     @Test
     public void shouldBeAbleToRunWithTwoSubtopologies() throws Exception {
-        runSimpleCopyTest(1, SINGLE_PARTITION_INPUT_TOPIC, SINGLE_PARTITION_THROUGH_TOPIC, SINGLE_PARTITION_OUTPUT_TOPIC, false);
+        runSimpleCopyTest(1, SINGLE_PARTITION_INPUT_TOPIC, SINGLE_PARTITION_THROUGH_TOPIC, SINGLE_PARTITION_OUTPUT_TOPIC, false, eosConfig);
     }
 
     @Test
     public void shouldBeAbleToRunWithTwoSubtopologiesAndMultiplePartitions() throws Exception {
-        runSimpleCopyTest(1, MULTI_PARTITION_INPUT_TOPIC, MULTI_PARTITION_THROUGH_TOPIC, MULTI_PARTITION_OUTPUT_TOPIC, false);
+        runSimpleCopyTest(1, MULTI_PARTITION_INPUT_TOPIC, MULTI_PARTITION_THROUGH_TOPIC, MULTI_PARTITION_OUTPUT_TOPIC, false, eosConfig);
     }
 
     private void runSimpleCopyTest(final int numberOfRestarts,
                                    final String inputTopic,
                                    final String throughTopic,
                                    final String outputTopic,
-                                   final boolean inputTopicTransactional) throws Exception {
+                                   final boolean inputTopicTransactional,
+                                   final String eosConfig) throws Exception {
         final StreamsBuilder builder = new StreamsBuilder();
         final KStream<Long, Long> input = builder.stream(inputTopic);
         KStream<Long, Long> output = input;
@@ -197,7 +214,7 @@ public class EosIntegrationTest {
         output.to(outputTopic);
 
         final Properties properties = new Properties();
-        properties.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE);
+        properties.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, eosConfig);
         properties.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
         properties.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100);
         properties.put(StreamsConfig.consumerPrefix(ConsumerConfig.MAX_POLL_RECORDS_CONFIG), 1);
@@ -285,7 +302,7 @@ public class EosIntegrationTest {
         builder.stream(SINGLE_PARTITION_INPUT_TOPIC).to(SINGLE_PARTITION_OUTPUT_TOPIC);
 
         final Properties properties = new Properties();
-        properties.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE);
+        properties.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, eosConfig);
         properties.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
         properties.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100);
         properties.put(ConsumerConfig.METADATA_MAX_AGE_CONFIG, "1000");
@@ -364,7 +381,7 @@ public class EosIntegrationTest {
         // -> the failure only kills one thread
         // after fail over, we should read 40 committed records (even if 50 record got written)
 
-        try (final KafkaStreams streams = getKafkaStreams(false, "appDir", 2)) {
+        try (final KafkaStreams streams = getKafkaStreams(false, "appDir", 2, eosConfig)) {
             startKafkaStreamsAndWaitForRunningState(streams, MAX_WAIT_TIME_MS);
 
             final List<KeyValue<Long, Long>> committedDataBeforeFailure = prepareData(0L, 10L, 0L, 1L);
@@ -432,7 +449,7 @@ public class EosIntegrationTest {
         // after fail over, we should read 40 committed records and the state stores should contain the correct sums
         // per key (even if some records got processed twice)
 
-        try (final KafkaStreams streams = getKafkaStreams(true, "appDir", 2)) {
+        try (final KafkaStreams streams = getKafkaStreams(true, "appDir", 2, eosConfig)) {
             startKafkaStreamsAndWaitForRunningState(streams, MAX_WAIT_TIME_MS);
 
             final List<KeyValue<Long, Long>> committedDataBeforeFailure = prepareData(0L, 10L, 0L, 1L);
@@ -505,8 +522,8 @@ public class EosIntegrationTest {
         // we write the remaining 20 records and verify to read 60 result records
 
         try (
-            final KafkaStreams streams1 = getKafkaStreams(false, "appDir1", 1);
-            final KafkaStreams streams2 = getKafkaStreams(false, "appDir2", 1)
+            final KafkaStreams streams1 = getKafkaStreams(false, "appDir1", 1, eosConfig);
+            final KafkaStreams streams2 = getKafkaStreams(false, "appDir2", 1, eosConfig)
         ) {
             startKafkaStreamsAndWaitForRunningState(streams1, MAX_WAIT_TIME_MS);
             startKafkaStreamsAndWaitForRunningState(streams2, MAX_WAIT_TIME_MS);
@@ -598,7 +615,8 @@ public class EosIntegrationTest {
 
     private KafkaStreams getKafkaStreams(final boolean withState,
                                          final String appDir,
-                                         final int numberOfStreamsThreads) {
+                                         final int numberOfStreamsThreads,
+                                         final String eosConfig) {
         commitRequested = new AtomicInteger(0);
         errorInjected = new AtomicBoolean(false);
         gcInjected = new AtomicBoolean(false);
@@ -681,7 +699,7 @@ public class EosIntegrationTest {
             .to(SINGLE_PARTITION_OUTPUT_TOPIC);
 
         final Properties properties = new Properties();
-        properties.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE);
+        properties.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, eosConfig);
         properties.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, numberOfStreamsThreads);
         properties.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, Long.MAX_VALUE);
         properties.put(StreamsConfig.consumerPrefix(ConsumerConfig.METADATA_MAX_AGE_CONFIG), "1000");
