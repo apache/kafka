@@ -19,6 +19,7 @@ package org.apache.kafka.trogdor.workload;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import org.apache.kafka.trogdor.common.WorkerUtils;
 import org.apache.kafka.trogdor.task.TaskController;
 import org.apache.kafka.trogdor.task.TaskSpec;
 import org.apache.kafka.trogdor.task.TaskWorker;
@@ -116,7 +117,8 @@ public class ProduceBenchSpec extends TaskSpec {
             TopicsSpec.EMPTY : inactiveTopics.immutableCopy();
         this.useConfiguredPartitioner = useConfiguredPartitioner;
         this.ignoreProduceErrors = ignoreProduceErrors;
-        this.topicVerificationRetries = (topicVerificationRetries == 0) ? 3 : topicVerificationRetries;
+        this.topicVerificationRetries = (topicVerificationRetries == 0) ?
+            WorkerUtils.DEFAULT_TOPIC_VERIFY_RETRIES : topicVerificationRetries;
         this.skipFlush = skipFlush;
     }
 

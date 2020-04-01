@@ -104,35 +104,10 @@ public final class WorkerUtils {
     }
 
     public static final int DEFAULT_TOPIC_VERIFY_BACKOFF = 2500;
+    public static final int DEFAULT_TOPIC_VERIFY_RETRIES = 3;
     private static final int ADMIN_REQUEST_TIMEOUT = 25000;
     private static final int CREATE_TOPICS_CALL_TIMEOUT = 180000;
     private static final int MAX_CREATE_TOPICS_BATCH_SIZE = 10;
-
-            //Map<String, Map<Integer, List<Integer>>> topics) throws Throwable {
-
-    /**
-     * Create some Kafka topics.
-     *
-     * @param log               The logger to use.
-     * @param bootstrapServers  The bootstrap server list.
-     * @param commonClientConf  Common client config
-     * @param adminClientConf   AdminClient config. This config has precedence over fields in
-     *                          common client config.
-     * @param topics            Maps topic names to partition assignments.
-     * @param failOnExisting    If true, the method will throw TopicExistsException if one or
-     *                          more topics already exist. Otherwise, the existing topics are
-     *                          verified for number of partitions. In this case, if number of
-     *                          partitions of an existing topic does not match the requested
-     *                          number of partitions, the method throws RuntimeException.
-     */
-    public static void createTopics(
-        Logger log, String bootstrapServers, Map<String, String> commonClientConf,
-        Map<String, String> adminClientConf,
-        Map<String, NewTopic> topics, boolean failOnExisting) throws Throwable {
-        // This method allows backward compatibility with the original signature of createTopics.
-        createTopics(log, bootstrapServers, commonClientConf, adminClientConf, topics, failOnExisting, 3,
-                DEFAULT_TOPIC_VERIFY_BACKOFF);
-    }
 
     /**
      * Create some Kafka topics.
