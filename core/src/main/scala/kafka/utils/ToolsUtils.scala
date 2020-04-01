@@ -56,14 +56,12 @@ object ToolsUtils {
     }
     println(s"\n%-${maxLengthOfDisplayName}s   %s".format("Metric Name", "Value"))
     sortedMap.foreach {
-      case (metricName, value) => {
-        val fmt =
-          if (value.isInstanceOf[java.lang.Float] || value.isInstanceOf[java.lang.Double])
-            s"%-${maxLengthOfDisplayName}s : %.3f"
-          else
-            s"%-${maxLengthOfDisplayName}s : %s"
+      case (metricName, value) =>
+        val fmt = value match {
+          case _ @ (_: java.lang.Float | _: java.lang.Double) => s"%-${maxLengthOfDisplayName}s : %.3f"
+          case _ => s"%-${maxLengthOfDisplayName}s : %s"
+        }
         println(fmt.format(metricName, value))
-      }
     }
   }
 }
