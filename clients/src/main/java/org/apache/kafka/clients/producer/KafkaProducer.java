@@ -521,7 +521,8 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             final int transactionTimeoutMs = config.getInt(ProducerConfig.TRANSACTION_TIMEOUT_CONFIG);
             final long retryBackoffMs = config.getLong(ProducerConfig.RETRY_BACKOFF_MS_CONFIG);
             final boolean autoDowngradeTxnCommit = config.getBoolean(ProducerConfig.AUTO_DOWNGRADE_TXN_COMMIT);
-            transactionManager = new TransactionManager(logContext,
+            transactionManager = new TransactionManager(
+                logContext,
                 transactionalId,
                 transactionTimeoutMs,
                 retryBackoffMs,
