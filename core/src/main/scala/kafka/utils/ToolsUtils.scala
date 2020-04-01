@@ -57,11 +57,11 @@ object ToolsUtils {
     println(s"\n%-${maxLengthOfDisplayName}s   %s".format("Metric Name", "Value"))
     sortedMap.foreach {
       case (metricName, value) =>
-        val fmt = value match {
-          case _ @ (_: java.lang.Float | _: java.lang.Double) => s"%-${maxLengthOfDisplayName}s : %.3f"
-          case _ => s"%-${maxLengthOfDisplayName}s : %s"
+        val specifier = value match {
+          case _ @ (_: java.lang.Float | _: java.lang.Double) => "%.3f"
+          case _ => "%s"
         }
-        println(fmt.format(metricName, value))
+        println(s"%-${maxLengthOfDisplayName}s : $specifier".format(metricName, value))
     }
   }
 }
