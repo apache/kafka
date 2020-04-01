@@ -386,7 +386,7 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
                            groupInstanceId: Option[String]): Boolean = {
     if (hasStaticMember(groupInstanceId)
       && getStaticMemberId(groupInstanceId) != memberId) {
-        error(s"given member.id $memberId is identified as a known static member ${groupInstanceId.get}," +
+        error(s"given member.id $memberId is identified as a known static member ${groupInstanceId.get}, " +
           s"but not matching the expected member.id ${getStaticMemberId(groupInstanceId)}")
         true
     } else
