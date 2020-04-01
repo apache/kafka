@@ -440,16 +440,17 @@ public class HighAvailabilityTaskAssignor<ID extends Comparable<ID>> implements 
         public boolean equals(final Object o) {
             if (this == o) {
                 return true;
-            } else if (o == null || getClass() != o.getClass()) {
+            }
+            if (o == null || getClass() != o.getClass()) {
                 return false;
             }
-            final RankedClient<?> other = (RankedClient<?>) o;
-            return clientId.equals(other.clientId()) && rank == other.rank();
+            final RankedClient<?> that = (RankedClient<?>) o;
+            return rank == that.rank && Objects.equals(clientId, that.clientId);
         }
 
         @Override
         public int hashCode() {
-            return Objects.hash(rank, clientId);
+            return Objects.hash(clientId, rank);
         }
     }
 
@@ -468,18 +469,20 @@ public class HighAvailabilityTaskAssignor<ID extends Comparable<ID>> implements 
         public boolean equals(final Object o) {
             if (this == o) {
                 return true;
-            } else if (o == null || getClass() != o.getClass()) {
+            }
+            if (o == null || getClass() != o.getClass()) {
                 return false;
             }
-            final Movement<?> other = (Movement<?>) o;
-            return task.equals(other.task) && source.equals(other.source) && destination.equals(other.destination);
+            final Movement<?> movement = (Movement<?>) o;
+            return Objects.equals(task, movement.task) &&
+                       Objects.equals(source, movement.source) &&
+                       Objects.equals(destination, movement.destination);
         }
 
         @Override
         public int hashCode() {
             return Objects.hash(task, source, destination);
         }
-
     }
 
     /**
