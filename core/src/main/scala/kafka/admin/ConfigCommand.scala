@@ -17,7 +17,7 @@
 
 package kafka.admin
 
-import java.io.{File, FileInputStream}
+import java.io.{File, FileInputStream, FileNotFoundException}
 import java.util.concurrent.TimeUnit
 import java.util.{Collections, Properties}
 
@@ -27,6 +27,7 @@ import kafka.log.LogConfig
 import kafka.server.{ConfigEntityName, ConfigType, Defaults, DynamicBrokerConfig, DynamicConfig, KafkaConfig}
 import kafka.utils.{CommandDefaultOptions, CommandLineUtils, Exit, PasswordEncoder}
 import kafka.utils.Implicits._
+import kafka.utils.{CommandDefaultOptions, CommandLineUtils, Exit, PasswordEncoder}
 import kafka.zk.{AdminZkClient, KafkaZkClient}
 import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.clients.admin.{Admin, AlterClientQuotasOptions, AlterConfigOp, AlterConfigsOptions, ConfigEntry, DescribeClusterOptions, DescribeConfigsOptions, ListTopicsOptions, Config => JConfig}
@@ -250,7 +251,10 @@ object ConfigCommand extends Config {
     val props = new Properties
     if (opts.options.has(opts.addConfigFile)) {
       val file = opts.options.valueOf(opts.addConfigFile)
-      val inputStream = new FileInputStream(file)
+      val inputStream = try new FileInputStream(file) catch {
+        case _: FileNotFoundException =>
+          throw new IllegalArgumentException(s"No such file or directory: $file")
+      }
       try {
         props.load(inputStream)
       } finally {
@@ -784,7 +788,7 @@ object ConfigCommand extends Config {
         if(isAddConfigPresent && isAddConfigFilePresent)
           throw new IllegalArgumentException("Only one of --add-config or --add-config-file must be specified")
 
-        if(!isAddConfigPresent && !isAddConfigFilePresent && ! isDeleteConfigPresent)
+        if(!isAddConfigPresent && !isAddConfigFilePresent && !isDeleteConfigPresent)
           throw new IllegalArgumentException("At least one of --add-config, --add-config-file, or --delete-config must be specified with --alter")
       }
     }

@@ -242,7 +242,6 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
 
   @Test(expected = classOf[IllegalArgumentException])
   def shouldFailIfAddAndAddFile(): Unit = {
-
     // Should not parse correctly
     val createOpts = new ConfigCommandOptions(Array("--bootstrap-server", "localhost:9092",
       "--entity-name", "1",
