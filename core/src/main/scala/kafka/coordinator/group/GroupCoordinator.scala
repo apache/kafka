@@ -426,6 +426,10 @@ class GroupCoordinator(val brokerId: Int,
               val missing = group.allMembers -- groupAssignment.keySet
               val assignment = groupAssignment ++ missing.map(_ -> Array.empty[Byte]).toMap
 
+              if (missing.nonEmpty) {
+                warn(s"Setting empty assignments for members $missing of ${group.groupId} for generation ${group.generationId}")
+              }
+
               groupManager.storeGroup(group, assignment, (error: Errors) => {
                 group.inLock {
                   // another member may have joined the group while we were awaiting this callback,
@@ -936,6 +940,10 @@ class GroupCoordinator(val brokerId: Int,
     else
       (None, None)
     for (member <- group.allMemberMetadata) {
+      if (member.assignment.isEmpty && error == Errors.NONE) {
+        warn(s"Sending empty assignment to member ${member.memberId} of ${group.groupId} for generation ${group.generationId} with no errors")
+      }
+
       if (group.maybeInvokeSyncCallback(member, SyncGroupResult(protocolType, protocolName, member.assignment, error))) {
         // reset the session timeout for members after propagating the member's assignment.
         // This is because if any member's session expired while we were still awaiting either
