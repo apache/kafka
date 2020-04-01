@@ -27,6 +27,7 @@ import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.connector.ConnectRecord;
 import org.apache.kafka.connect.data.Schema;
+import org.apache.kafka.connect.data.SchemaAndValue;
 import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.errors.RetriableException;
@@ -99,6 +100,7 @@ public class ErrorHandlingTaskTest {
     public static final long OPERATOR_RETRY_TIMEOUT_MILLIS = 60000;
     public static final long OPERATOR_RETRY_MAX_DELAY_MILLIS = 5000;
     public static final ToleranceType OPERATOR_TOLERANCE_TYPE = ToleranceType.ALL;
+    public static final ToleranceType CONTINUE_OPERATOR_TOLERANCE_TYPE = ToleranceType.CONTINUE;
 
     private static final TaskConfig TASK_CONFIG = new TaskConfig(TASK_PROPS);
 
@@ -213,8 +215,109 @@ public class ErrorHandlingTaskTest {
         PowerMock.verifyAll();
     }
 
+    @Test
+    public void testErrorHandlingInSinkTasksWithContinueOperator() throws Exception {
+        Map<String, String> reportProps = new HashMap<>();
+        reportProps.put(ConnectorConfig.ERRORS_LOG_ENABLE_CONFIG, "true");
+        reportProps.put(ConnectorConfig.ERRORS_LOG_INCLUDE_MESSAGES_CONFIG, "true");
+        LogReporter reporter = new LogReporter(taskId, connConfig(reportProps), errorHandlingMetrics);
+
+        RetryWithToleranceOperator retryWithToleranceOperator = continueOperator();
+        retryWithToleranceOperator.metrics(errorHandlingMetrics);
+        retryWithToleranceOperator.reporters(singletonList(reporter));
+        createSinkTask(initialState, retryWithToleranceOperator);
+
+        expectInitializeTask();
+        expectTaskGetTopic(true);
+
+        // valid json
+        ConsumerRecord<byte[], byte[]> record1 = new ConsumerRecord<>(TOPIC, PARTITION1, FIRST_OFFSET, null, "{\"a\": 10}".getBytes());
+        // bad json
+        ConsumerRecord<byte[], byte[]> record2 = new ConsumerRecord<>(TOPIC, PARTITION2, FIRST_OFFSET, null, "{\"a\" 10}".getBytes());
+
+        EasyMock.expect(consumer.poll(Duration.ofMillis(EasyMock.anyLong()))).andReturn(records(record1));
+        EasyMock.expect(consumer.poll(Duration.ofMillis(EasyMock.anyLong()))).andReturn(records(record2));
+
+        sinkTask.put(EasyMock.anyObject());
+        EasyMock.expectLastCall().times(2);
+
+        PowerMock.replayAll();
+
+        workerSinkTask.initialize(TASK_CONFIG);
+        workerSinkTask.initializeAndStart();
+        workerSinkTask.iteration();
+
+        workerSinkTask.iteration();
+
+        // two records were consumed from Kafka
+        assertSinkMetricValue("sink-record-read-total", 2.0);
+        // one correct record and one raw byte record were written to the task
+        assertSinkMetricValue("sink-record-send-total", 2.0);
+        // one record completely failed (converter issues)
+        assertErrorHandlingMetricValue("total-record-errors", 1.0);
+        // 2 failures in the transformation, and 1 in the converter
+        assertErrorHandlingMetricValue("total-record-failures", 3.0);
+        // zero record is skipped, because raw byte record is written to task when converter fails
+        assertErrorHandlingMetricValue("total-records-skipped", 0.0);
+
+        PowerMock.verifyAll();
+    }
+
+    @Test
+    public void testErrorHandlingInSinkTasksWithContinueOperatorAndBadConverter() throws Exception {
+        Map<String, String> reportProps = new HashMap<>();
+        reportProps.put(ConnectorConfig.ERRORS_LOG_ENABLE_CONFIG, "true");
+        reportProps.put(ConnectorConfig.ERRORS_LOG_INCLUDE_MESSAGES_CONFIG, "true");
+        LogReporter reporter = new LogReporter(taskId, connConfig(reportProps), errorHandlingMetrics);
+
+        RetryWithToleranceOperator retryWithToleranceOperator = continueOperator();
+        retryWithToleranceOperator.metrics(errorHandlingMetrics);
+        retryWithToleranceOperator.reporters(singletonList(reporter));
+        createSinkTask(initialState, retryWithToleranceOperator, badConverter());
+
+        expectInitializeTask();
+        expectTaskGetTopic(true);
+
+        // valid json
+        ConsumerRecord<byte[], byte[]> record1 = new ConsumerRecord<>(TOPIC, PARTITION1, FIRST_OFFSET, null, "{\"a\": 10}".getBytes());
+        // bad json
+        ConsumerRecord<byte[], byte[]> record2 = new ConsumerRecord<>(TOPIC, PARTITION2, FIRST_OFFSET, null, "{\"a\" 10}".getBytes());
+
+        EasyMock.expect(consumer.poll(Duration.ofMillis(EasyMock.anyLong()))).andReturn(records(record1));
+        EasyMock.expect(consumer.poll(Duration.ofMillis(EasyMock.anyLong()))).andReturn(records(record2));
+
+        sinkTask.put(EasyMock.anyObject());
+        EasyMock.expectLastCall().times(2);
+
+        PowerMock.replayAll();
+
+        workerSinkTask.initialize(TASK_CONFIG);
+        workerSinkTask.initializeAndStart();
+        workerSinkTask.iteration();
+
+        workerSinkTask.iteration();
+
+        // two records were consumed from Kafka
+        assertSinkMetricValue("sink-record-read-total", 2.0);
+        // two raw byte records were written to the task
+        assertSinkMetricValue("sink-record-send-total", 2.0);
+        // one records completely failed (converter NonRetriableException)
+        assertErrorHandlingMetricValue("total-record-errors", 1.0);
+        // First record: two failures in transformation, two failures in converter (RetriableException)
+        // Second record: two failures in converter (RetriableException), one failure in converter (NonRetriableException)
+        assertErrorHandlingMetricValue("total-record-failures", 7.0);
+        // zero record is skipped, because raw byte record is written to task when converter fails
+        assertErrorHandlingMetricValue("total-records-skipped", 0.0);
+
+        PowerMock.verifyAll();
+    }
+
     private RetryWithToleranceOperator operator() {
         return new RetryWithToleranceOperator(OPERATOR_RETRY_TIMEOUT_MILLIS, OPERATOR_RETRY_MAX_DELAY_MILLIS, OPERATOR_TOLERANCE_TYPE, SYSTEM);
+    }
+
+    private RetryWithToleranceOperator continueOperator() {
+        return new RetryWithToleranceOperator(OPERATOR_RETRY_TIMEOUT_MILLIS, OPERATOR_RETRY_MAX_DELAY_MILLIS, CONTINUE_OPERATOR_TOLERANCE_TYPE, SYSTEM);
     }
 
     @Test
@@ -395,12 +498,17 @@ public class ErrorHandlingTaskTest {
         oo.put("schemas.enable", "false");
         converter.configure(oo);
 
+        createSinkTask(initialState, retryWithToleranceOperator, converter);
+
+    }
+
+    private void createSinkTask(TargetState initialState, RetryWithToleranceOperator retryWithToleranceOperator, Converter converter) {
         TransformationChain<SinkRecord> sinkTransforms = new TransformationChain<>(singletonList(new FaultyPassthrough<SinkRecord>()), retryWithToleranceOperator);
 
         workerSinkTask = new WorkerSinkTask(
-            taskId, sinkTask, statusListener, initialState, workerConfig,
-            ClusterConfigState.EMPTY, metrics, converter, converter,
-            headerConverter, sinkTransforms, consumer, pluginLoader, time,
+                taskId, sinkTask, statusListener, initialState, workerConfig,
+                ClusterConfigState.EMPTY, metrics, converter, converter,
+                headerConverter, sinkTransforms, consumer, pluginLoader, time,
                 retryWithToleranceOperator, statusBackingStore);
     }
 
@@ -454,6 +562,20 @@ public class ErrorHandlingTaskTest {
             if (invocations % 3 == 0) {
                 log.debug("Succeeding record: {} where invocations={}", value, invocations);
                 return super.fromConnectData(topic, schema, value);
+            } else {
+                log.debug("Failing record: {} at invocations={}", value, invocations);
+                throw new RetriableException("Bad invocations " + invocations + " for mod 3");
+            }
+        }
+
+        public SchemaAndValue toConnectData(String topic, byte[] value) {
+            if (value == null) {
+                return super.toConnectData(topic, null);
+            }
+            invocations++;
+            if (invocations % 3 == 0) {
+                log.debug("Succeeding record: {} where invocations={}", value, invocations);
+                return super.toConnectData(topic, value);
             } else {
                 log.debug("Failing record: {} at invocations={}", value, invocations);
                 throw new RetriableException("Bad invocations " + invocations + " for mod 3");
