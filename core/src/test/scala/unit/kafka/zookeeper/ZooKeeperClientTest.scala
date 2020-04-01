@@ -37,7 +37,7 @@ import org.junit.Assert.{assertArrayEquals, assertEquals, assertFalse, assertTru
 import org.junit.{After, Before, Test}
 import org.scalatest.Assertions.{fail, intercept}
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 
 class ZooKeeperClientTest extends ZooKeeperTestHarness {
   private val mockPath = "/foo"
@@ -151,7 +151,6 @@ class ZooKeeperClientTest extends ZooKeeperTestHarness {
 
   @Test
   def testExistsExistingZNode(): Unit = {
-    import scala.collection.JavaConverters._
     val createResponse = zooKeeperClient.handleRequest(CreateRequest(mockPath, Array.empty[Byte],
       ZooDefs.Ids.OPEN_ACL_UNSAFE.asScala, CreateMode.PERSISTENT))
     assertEquals("Response code for create should be OK", Code.OK, createResponse.resultCode)
@@ -167,7 +166,6 @@ class ZooKeeperClientTest extends ZooKeeperTestHarness {
 
   @Test
   def testGetDataExistingZNode(): Unit = {
-    import scala.collection.JavaConverters._
     val data = bytes
     val createResponse = zooKeeperClient.handleRequest(CreateRequest(mockPath, data, ZooDefs.Ids.OPEN_ACL_UNSAFE.asScala,
       CreateMode.PERSISTENT))
@@ -185,7 +183,6 @@ class ZooKeeperClientTest extends ZooKeeperTestHarness {
 
   @Test
   def testSetDataExistingZNode(): Unit = {
-    import scala.collection.JavaConverters._
     val data = bytes
     val createResponse = zooKeeperClient.handleRequest(CreateRequest(mockPath, Array.empty[Byte],
       ZooDefs.Ids.OPEN_ACL_UNSAFE.asScala, CreateMode.PERSISTENT))
@@ -205,7 +202,6 @@ class ZooKeeperClientTest extends ZooKeeperTestHarness {
 
   @Test
   def testGetAclExistingZNode(): Unit = {
-    import scala.collection.JavaConverters._
     val createResponse = zooKeeperClient.handleRequest(CreateRequest(mockPath, Array.empty[Byte], ZooDefs.Ids.OPEN_ACL_UNSAFE.asScala, CreateMode.PERSISTENT))
     assertEquals("Response code for create should be OK", Code.OK, createResponse.resultCode)
     val getAclResponse = zooKeeperClient.handleRequest(GetAclRequest(mockPath))
@@ -215,7 +211,6 @@ class ZooKeeperClientTest extends ZooKeeperTestHarness {
 
   @Test
   def testSetAclNonExistentZNode(): Unit = {
-    import scala.collection.JavaConverters._
     val setAclResponse = zooKeeperClient.handleRequest(SetAclRequest(mockPath, ZooDefs.Ids.OPEN_ACL_UNSAFE.asScala, -1))
     assertEquals("Response code should be NONODE", Code.NONODE, setAclResponse.resultCode)
   }
@@ -228,7 +223,6 @@ class ZooKeeperClientTest extends ZooKeeperTestHarness {
 
   @Test
   def testGetChildrenExistingZNode(): Unit = {
-    import scala.collection.JavaConverters._
     val createResponse = zooKeeperClient.handleRequest(CreateRequest(mockPath, Array.empty[Byte],
       ZooDefs.Ids.OPEN_ACL_UNSAFE.asScala, CreateMode.PERSISTENT))
     assertEquals("Response code for create should be OK", Code.OK, createResponse.resultCode)
@@ -239,7 +233,6 @@ class ZooKeeperClientTest extends ZooKeeperTestHarness {
 
   @Test
   def testGetChildrenExistingZNodeWithChildren(): Unit = {
-    import scala.collection.JavaConverters._
     val child1 = "child1"
     val child2 = "child2"
     val child1Path = mockPath + "/" + child1
@@ -261,7 +254,6 @@ class ZooKeeperClientTest extends ZooKeeperTestHarness {
 
   @Test
   def testPipelinedGetData(): Unit = {
-    import scala.collection.JavaConverters._
     val createRequests = (1 to 3).map(x => CreateRequest("/" + x, (x * 2).toString.getBytes, ZooDefs.Ids.OPEN_ACL_UNSAFE.asScala, CreateMode.PERSISTENT))
     val createResponses = createRequests.map(zooKeeperClient.handleRequest)
     createResponses.foreach(createResponse => assertEquals("Response code for create should be OK", Code.OK, createResponse.resultCode))
@@ -277,7 +269,6 @@ class ZooKeeperClientTest extends ZooKeeperTestHarness {
 
   @Test
   def testMixedPipeline(): Unit = {
-    import scala.collection.JavaConverters._
     val createResponse = zooKeeperClient.handleRequest(CreateRequest(mockPath, Array.empty[Byte],
       ZooDefs.Ids.OPEN_ACL_UNSAFE.asScala, CreateMode.PERSISTENT))
     assertEquals("Response code for create should be OK", Code.OK, createResponse.resultCode)
@@ -291,7 +282,6 @@ class ZooKeeperClientTest extends ZooKeeperTestHarness {
 
   @Test
   def testZNodeChangeHandlerForCreation(): Unit = {
-    import scala.collection.JavaConverters._
     val znodeChangeHandlerCountDownLatch = new CountDownLatch(1)
     val zNodeChangeHandler = new ZNodeChangeHandler {
       override def handleCreation(): Unit = {
@@ -311,7 +301,6 @@ class ZooKeeperClientTest extends ZooKeeperTestHarness {
 
   @Test
   def testZNodeChangeHandlerForDeletion(): Unit = {
-    import scala.collection.JavaConverters._
     val znodeChangeHandlerCountDownLatch = new CountDownLatch(1)
     val zNodeChangeHandler = new ZNodeChangeHandler {
       override def handleDeletion(): Unit = {
@@ -333,7 +322,6 @@ class ZooKeeperClientTest extends ZooKeeperTestHarness {
 
   @Test
   def testZNodeChangeHandlerForDataChange(): Unit = {
-    import scala.collection.JavaConverters._
     val znodeChangeHandlerCountDownLatch = new CountDownLatch(1)
     val zNodeChangeHandler = new ZNodeChangeHandler {
       override def handleDataChange(): Unit = {
@@ -433,7 +421,6 @@ class ZooKeeperClientTest extends ZooKeeperTestHarness {
 
   @Test
   def testZNodeChildChangeHandlerForChildChange(): Unit = {
-    import scala.collection.JavaConverters._
     val zNodeChildChangeHandlerCountDownLatch = new CountDownLatch(1)
     val zNodeChildChangeHandler = new ZNodeChildChangeHandler {
       override def handleChildChange(): Unit = {
@@ -459,7 +446,6 @@ class ZooKeeperClientTest extends ZooKeeperTestHarness {
 
   @Test
   def testZNodeChildChangeHandlerForChildChangeNotTriggered(): Unit = {
-    import scala.collection.JavaConverters._
     val zNodeChildChangeHandlerCountDownLatch = new CountDownLatch(1)
     val zNodeChildChangeHandler = new ZNodeChildChangeHandler {
       override def handleChildChange(): Unit = {

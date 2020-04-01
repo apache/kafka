@@ -34,7 +34,7 @@ import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.serialization.{ByteArraySerializer, StringDeserializer}
 import org.apache.kafka.common.utils.{AbstractIterator, Utils}
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 
 /**
  * This is a torture test that runs against an existing broker
@@ -302,7 +302,7 @@ object LogCompactionTester {
 
   def consumeMessages(brokerUrl: String, topics: Array[String]): Path = {
     val consumer = createConsumer(brokerUrl)
-    consumer.subscribe(topics.seq.asJava)
+    consumer.subscribe(topics.toSeq.asJava)
     val consumedFilePath = Files.createTempFile("kafka-log-cleaner-consumed-", ".txt")
     println(s"Logging consumed messages to $consumedFilePath")
     val consumedWriter: BufferedWriter = Files.newBufferedWriter(consumedFilePath, UTF_8)

@@ -31,7 +31,7 @@ import org.junit.Test
 import org.apache.kafka.common.utils.Utils
 import org.slf4j.event.Level
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import scala.collection.mutable
 import scala.concurrent.duration.Duration
 import scala.concurrent.{Await, ExecutionContext, Future}
@@ -103,7 +103,7 @@ class CoreUtilsTest extends Logging {
     assertEquals(2, itl.next())
     assertEquals(1, itl.next())
     assertEquals(2, itl.next())
-    assertFalse(itl.hasDefiniteSize)
+    assertFalse(itl.isEmpty)
 
     val s = Set(1, 2)
     val its = CoreUtils.circularIterator(s)

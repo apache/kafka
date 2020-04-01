@@ -48,7 +48,7 @@ import org.apache.kafka.streams.{KeyValue, StreamsConfig, TopologyDescription, S
 import org.junit.Assert._
 import org.junit._
 
-import _root_.scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 
 /**
  * Test suite that verifies that the topology built by the Java and Scala APIs match.

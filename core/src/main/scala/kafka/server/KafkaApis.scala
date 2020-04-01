@@ -81,7 +81,7 @@ import org.apache.kafka.common.message.MetadataResponseData.{MetadataResponsePar
 import org.apache.kafka.server.authorizer._
 
 import scala.compat.java8.OptionConverters._
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import scala.collection.mutable.ArrayBuffer
 import scala.collection.{Map, Seq, Set, immutable, mutable}
 import scala.util.{Failure, Success, Try}
@@ -892,9 +892,9 @@ class KafkaApis(val requestChannel: RequestChannel,
       case (topicPartition, _) => authorizedTopics.contains(topicPartition.topic)
     }
 
-    val unauthorizedResponseStatus = unauthorizedRequestInfo.mapValues(_ =>
-      new ListOffsetResponse.PartitionData(Errors.TOPIC_AUTHORIZATION_FAILED, List[JLong]().asJava)
-    )
+    val unauthorizedResponseStatus = unauthorizedRequestInfo.map { case (k, _) =>
+      k -> new ListOffsetResponse.PartitionData(Errors.TOPIC_AUTHORIZATION_FAILED, Seq.empty[JLong].asJava)
+    }
 
     val responseMap = authorizedRequestInfo.map {case (topicPartition, partitionData) =>
       try {
@@ -932,12 +932,12 @@ class KafkaApis(val requestChannel: RequestChannel,
       case (topicPartition, _) => authorizedTopics.contains(topicPartition.topic)
     }
 
-    val unauthorizedResponseStatus = unauthorizedRequestInfo.mapValues(_ => {
-      new ListOffsetResponse.PartitionData(Errors.TOPIC_AUTHORIZATION_FAILED,
+    val unauthorizedResponseStatus = unauthorizedRequestInfo.map { case (k, _) =>
+      k -> new ListOffsetResponse.PartitionData(Errors.TOPIC_AUTHORIZATION_FAILED,
         ListOffsetResponse.UNKNOWN_TIMESTAMP,
         ListOffsetResponse.UNKNOWN_OFFSET,
         Optional.empty())
-    })
+    }
 
     val responseMap = authorizedRequestInfo.map { case (topicPartition, partitionData) =>
       if (offsetRequest.duplicatePartitions.contains(topicPartition)) {
@@ -1081,7 +1081,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     if (topics.isEmpty || topicResponses.size == topics.size) {
       topicResponses
     } else {
-      val nonExistentTopics = topics -- topicResponses.map(_.name).toSet
+      val nonExistentTopics = topics.diff(topicResponses.map(_.name).toSet)
       val responsesForNonExistentTopics = nonExistentTopics.map { topic =>
         if (isInternal(topic)) {
           val topicMetadata = createInternalTopic(topic)
@@ -1120,8 +1120,8 @@ class KafkaApis(val requestChannel: RequestChannel,
       if (metadataRequest.allowAutoTopicCreation && config.autoCreateTopicsEnable && nonExistingTopics.nonEmpty) {
         if (!authorize(request, CREATE, CLUSTER, CLUSTER_NAME, logIfDenied = false)) {
           val authorizedForCreateTopics = filterAuthorized(request, CREATE, TOPIC, nonExistingTopics.toSeq)
-          unauthorizedForCreateTopics = nonExistingTopics -- authorizedForCreateTopics
-          authorizedTopics --= unauthorizedForCreateTopics
+          unauthorizedForCreateTopics = nonExistingTopics.diff(authorizedForCreateTopics)
+          authorizedTopics = authorizedTopics.diff(unauthorizedForCreateTopics)
         }
       }
     }
@@ -2201,7 +2201,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 
       // the callback for sending an offset commit response
       def sendResponseCallback(authorizedTopicErrors: Map[TopicPartition, Errors]): Unit = {
-        var combinedCommitStatus = authorizedTopicErrors ++ unauthorizedTopicErrors ++ nonExistingTopicErrors
+        val combinedCommitStatus = mutable.Map() ++= authorizedTopicErrors ++= unauthorizedTopicErrors ++= nonExistingTopicErrors
         if (isDebugEnabled)
           combinedCommitStatus.foreach { case (topicPartition, error) =>
             if (error != Errors.NONE) {
@@ -2216,10 +2216,8 @@ class KafkaApis(val requestChannel: RequestChannel,
         // txn commit protocol >= 2 (version 2.3 and onwards) are guaranteed to have
         // the fix to check for the loading error.
         if (txnOffsetCommitRequest.version < 2) {
-          combinedCommitStatus.foreach { case (topicPartition, error) =>
-            if (error == Errors.COORDINATOR_LOAD_IN_PROGRESS) {
-              combinedCommitStatus += topicPartition -> Errors.COORDINATOR_NOT_AVAILABLE
-            }
+          combinedCommitStatus ++= combinedCommitStatus.collect {
+            case (tp, error) if error == Errors.COORDINATOR_LOAD_IN_PROGRESS => tp -> Errors.COORDINATOR_NOT_AVAILABLE
           }
         }
 
@@ -2370,9 +2368,10 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
 
     val endOffsetsForAuthorizedPartitions = replicaManager.lastOffsetForLeaderEpoch(authorizedPartitions)
-    val endOffsetsForUnauthorizedPartitions = unauthorizedPartitions.mapValues(_ =>
-      new EpochEndOffset(Errors.TOPIC_AUTHORIZATION_FAILED, EpochEndOffset.UNDEFINED_EPOCH,
-        EpochEndOffset.UNDEFINED_EPOCH_OFFSET))
+    val endOffsetsForUnauthorizedPartitions = unauthorizedPartitions.map { case (k, _) =>
+      k -> new EpochEndOffset(Errors.TOPIC_AUTHORIZATION_FAILED, EpochEndOffset.UNDEFINED_EPOCH,
+        EpochEndOffset.UNDEFINED_EPOCH_OFFSET)
+    }
 
     val endOffsetsForAllPartitions = endOffsetsForAuthorizedPartitions ++ endOffsetsForUnauthorizedPartitions
     sendResponseMaybeThrottle(request, requestThrottleMs =>
@@ -2844,8 +2843,9 @@ class KafkaApis(val requestChannel: RequestChannel,
     val describeClientQuotasRequest = request.body[DescribeClientQuotasRequest]
 
     if (authorize(request, DESCRIBE_CONFIGS, CLUSTER, CLUSTER_NAME)) {
-      val result = adminManager.describeClientQuotas(
-        describeClientQuotasRequest.filter).mapValues(_.mapValues(Double.box).toMap.asJava).toMap.asJava
+      val result = adminManager.describeClientQuotas(describeClientQuotasRequest.filter).map { case (quotaEntity, quotaConfigs) =>
+        quotaEntity -> quotaConfigs.map { case (key, value) => key -> Double.box(value) }.asJava
+      }.asJava
       sendResponseMaybeThrottle(request, requestThrottleMs =>
         new DescribeClientQuotasResponse(result, requestThrottleMs))
     } else {
@@ -2890,15 +2890,16 @@ class KafkaApis(val requestChannel: RequestChannel,
                                logIfDenied: Boolean = true): Set[String] = {
     authorizer match {
       case Some(authZ) =>
-        val resources = resourceNames.groupBy(identity).mapValues(_.size).toList
-        val actions = resources.map { case (resourceName, count) =>
+        val groupedResourceNames = resourceNames.groupBy(identity)
+        val actions = resourceNames.map { resourceName =>
+          val count = groupedResourceNames(resourceName).size
           val resource = new ResourcePattern(resourceType, resourceName, PatternType.LITERAL)
           new Action(operation, resource, count, logIfAllowed, logIfDenied)
         }
         authZ.authorize(request.context, actions.asJava).asScala
-          .zip(resources.map(_._1)) // zip with resource name
-          .filter(_._1 == AuthorizationResult.ALLOWED) // filter authorized resources
-          .map(_._2).toSet
+          .zip(resourceNames)
+          .filter { case (authzResult, _) => authzResult == AuthorizationResult.ALLOWED }
+          .map { case (_, resourceName) => resourceName }.toSet
       case None =>
         resourceNames.toSet
     }

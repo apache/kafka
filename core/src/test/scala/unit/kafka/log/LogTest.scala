@@ -46,7 +46,7 @@ import org.junit.{After, Before, Test}
 import org.scalatest.Assertions
 
 import scala.collection.{Iterable, mutable}
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import scala.collection.mutable.ListBuffer
 import org.scalatest.Assertions.{assertThrows, intercept, withClue}
 
@@ -1373,9 +1373,9 @@ class LogTest {
                             producerId: Long,
                             epoch: Short,
                             offset: Long = 0L,
-                            coordinatorEpoch: Int = 0,
+                            coordinatorEpoch: Int,
                             partitionLeaderEpoch: Int = 0,
-                            timestamp: Long = mockTime.milliseconds()): MemoryRecords = {
+                            timestamp: Long): MemoryRecords = {
     val marker = new EndTransactionMarker(controlRecordType, coordinatorEpoch)
     MemoryRecords.withEndTransactionMarker(offset, timestamp, partitionLeaderEpoch, producerId, epoch, marker)
   }
@@ -3119,7 +3119,7 @@ class LogTest {
   def testParseTopicPartitionNameForMissingPartition(): Unit = {
     val topic = "test_topic"
     val partition = ""
-    val dir = new File(logDir + topicPartitionName(topic, partition))
+    val dir = new File(logDir.getPath + topicPartitionName(topic, partition))
     try {
       Log.parseTopicPartitionName(dir)
       fail("KafkaException should have been thrown for dir: " + dir.getCanonicalPath)
@@ -3159,14 +3159,14 @@ class LogTest {
 
   @Test
   def testParseTopicPartitionNameForExistingInvalidDir(): Unit = {
-    val dir1 = new File(logDir + "/non_kafka_dir")
+    val dir1 = new File(logDir.getPath + "/non_kafka_dir")
     try {
       Log.parseTopicPartitionName(dir1)
       fail("KafkaException should have been thrown for dir: " + dir1.getCanonicalPath)
     } catch {
       case _: KafkaException => // should only throw KafkaException
     }
-    val dir2 = new File(logDir + "/non_kafka_dir-delete")
+    val dir2 = new File(logDir.getPath + "/non_kafka_dir-delete")
     try {
       Log.parseTopicPartitionName(dir2)
       fail("KafkaException should have been thrown for dir: " + dir2.getCanonicalPath)

@@ -38,7 +38,7 @@ import org.apache.kafka.common.requests.TransactionResult
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{KafkaException, TopicPartition}
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import scala.collection.mutable
 
 
@@ -216,8 +216,8 @@ class TransactionStateManager(brokerId: Int,
   }
 
   def putTransactionStateIfNotExists(txnMetadata: TransactionMetadata): Either[Errors, CoordinatorEpochAndTxnMetadata] = {
-    getAndMaybeAddTransactionState(txnMetadata.transactionalId, Some(txnMetadata))
-      .right.map(_.getOrElse(throw new IllegalStateException(s"Unexpected empty transaction metadata returned while putting $txnMetadata")))
+    getAndMaybeAddTransactionState(txnMetadata.transactionalId, Some(txnMetadata)).map(_.getOrElse(
+      throw new IllegalStateException(s"Unexpected empty transaction metadata returned while putting $txnMetadata")))
   }
 
   /**
@@ -391,7 +391,7 @@ class TransactionStateManager(brokerId: Int,
       val loadedTransactions = loadTransactionMetadata(topicPartition, coordinatorEpoch)
       val endTimeMs = time.milliseconds()
       val totalLoadingTimeMs = endTimeMs - startTimeMs
-      partitionLoadSensor.record(totalLoadingTimeMs, endTimeMs, false)
+      partitionLoadSensor.record(totalLoadingTimeMs.toDouble, endTimeMs, false)
       info(s"Finished loading ${loadedTransactions.size} transaction metadata from $topicPartition in " +
         s"$totalLoadingTimeMs milliseconds, of which $schedulerTimeMs milliseconds was spent in the scheduler.")
 
@@ -439,7 +439,7 @@ class TransactionStateManager(brokerId: Int,
   def removeTransactionsForTxnTopicPartition(partitionId: Int): Unit = {
     val topicPartition = new TopicPartition(Topic.TRANSACTION_STATE_TOPIC_NAME, partitionId)
     inWriteLock(stateLock) {
-      loadingPartitions.retain(_.txnPartitionId != partitionId)
+      loadingPartitions --= loadingPartitions.filter(_.txnPartitionId == partitionId)
       transactionMetadataCache.remove(partitionId).foreach { txnMetadataCacheEntry =>
         info(s"Unloaded transaction metadata $txnMetadataCacheEntry for $topicPartition following " +
           s"local partition deletion")

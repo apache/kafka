@@ -28,7 +28,7 @@ import org.apache.kafka.streams.state.StoreBuilder
 import org.apache.kafka.streams.{StreamsBuilder => StreamsBuilderJ, Topology}
 import org.apache.kafka.streams.scala.kstream.{Consumed, KStream, KTable, Materialized}
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 
 /**
  * Wraps the Java class StreamsBuilder and delegates method calls to the underlying Java object.

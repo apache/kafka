@@ -32,7 +32,7 @@ import org.junit.Assert._
 import org.junit.Test
 import org.scalatest.Assertions.fail
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 
 /**
   * Subclasses of `BaseProduceSendRequestTest` exercise the producer and produce request/response. This class

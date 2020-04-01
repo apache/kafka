@@ -524,8 +524,8 @@ public class AbstractHerderTest {
         EasyMock.expect(worker.getPlugins()).andStubReturn(plugins);
         final Connector connector;
         try {
-            connector = connectorClass.newInstance();
-        } catch (InstantiationException | IllegalAccessException e) {
+            connector = connectorClass.getConstructor().newInstance();
+        } catch (ReflectiveOperationException e) {
             throw new RuntimeException("Couldn't create connector", e);
         }
         EasyMock.expect(plugins.newConnector(connectorClass.getName())).andReturn(connector);

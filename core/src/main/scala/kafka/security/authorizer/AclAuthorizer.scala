@@ -21,7 +21,7 @@ import java.util.concurrent.{CompletableFuture, CompletionStage}
 
 import com.typesafe.scalalogging.Logger
 import kafka.api.KAFKA_2_0_IV1
-import kafka.security.authorizer.AclAuthorizer.{AclBuffers, ResourceOrdering, VersionedAcls}
+import kafka.security.authorizer.AclAuthorizer.{AclSeqs, ResourceOrdering, VersionedAcls}
 import kafka.security.authorizer.AclEntry.ResourceSeparator
 import kafka.server.{KafkaConfig, KafkaServer}
 import kafka.utils._
@@ -39,8 +39,8 @@ import org.apache.kafka.server.authorizer.AclDeleteResult.AclBindingDeleteResult
 import org.apache.kafka.server.authorizer._
 import org.apache.zookeeper.client.ZKClientConfig
 
-import scala.collection.mutable
-import scala.collection.JavaConverters._
+import scala.collection.{mutable, Seq}
+import scala.jdk.CollectionConverters._
 import scala.util.{Failure, Random, Success, Try}
 
 object AclAuthorizer {
@@ -62,7 +62,7 @@ object AclAuthorizer {
     def exists: Boolean = zkVersion != ZkVersion.UnknownVersion
   }
 
-  class AclBuffers(classes: mutable.Buffer[AclEntry]*) {
+  class AclSeqs(classes: Seq[AclEntry]*) {
     def find(p: AclEntry => Boolean): Option[AclEntry] = classes.flatMap(_.find(p)).headOption
     def isEmpty: Boolean = !classes.exists(_.nonEmpty)
   }
@@ -255,8 +255,9 @@ class AclAuthorizer extends Authorizer with Logging {
         }
       }
     }
-    val deletedResult = deletedBindings.groupBy(_._2)
-      .mapValues(_.map { case (binding, _) => new AclBindingDeleteResult(binding, deleteExceptions.getOrElse(binding, null)) })
+    val deletedResult = deletedBindings.groupBy(_._2).map { case (k, bindings) =>
+      k -> bindings.keys.map { binding => new AclBindingDeleteResult(binding, deleteExceptions.get(binding).orNull) }
+    }
     (0 until aclBindingFilters.size).map { i =>
       new AclDeleteResult(deletedResult.getOrElse(i, Set.empty[AclBindingDeleteResult]).toSet.asJava)
     }.map(CompletableFuture.completedFuture[AclDeleteResult]).asJava
@@ -295,7 +296,7 @@ class AclAuthorizer extends Authorizer with Logging {
     val host = requestContext.clientAddress.getHostAddress
     val operation = action.operation
 
-    def isEmptyAclAndAuthorized(acls: AclBuffers): Boolean = {
+    def isEmptyAclAndAuthorized(acls: AclSeqs): Boolean = {
       if (acls.isEmpty) {
         // No ACLs found for this resource, permission is determined by value of config allow.everyone.if.no.acl.found
         authorizerLogger.debug(s"No acl found for resource $resource, authorized = $shouldAllowEveryoneIfNoAclIsFound")
@@ -303,12 +304,12 @@ class AclAuthorizer extends Authorizer with Logging {
       } else false
     }
 
-    def denyAclExists(acls: AclBuffers): Boolean = {
+    def denyAclExists(acls: AclSeqs): Boolean = {
       // Check if there are any Deny ACLs which would forbid this operation.
       matchingAclExists(operation, resource, principal, host, DENY, acls)
     }
 
-    def allowAclExists(acls: AclBuffers): Boolean = {
+    def allowAclExists(acls: AclSeqs): Boolean = {
       // Check if there are any Allow ACLs which would allow this operation.
       // Allowing read, write, delete, or alter implies allowing describe.
       // See #{org.apache.kafka.common.acl.AclOperation} for more details about ACL inheritance.
@@ -341,7 +342,7 @@ class AclAuthorizer extends Authorizer with Logging {
     } else false
   }
 
-  private def matchingAcls(resourceType: ResourceType, resourceName: String): AclBuffers = {
+  private def matchingAcls(resourceType: ResourceType, resourceName: String): AclSeqs = {
     // save aclCache reference to a local val to get a consistent view of the cache during acl updates.
     val aclCacheSnapshot = aclCache
     val wildcard = aclCacheSnapshot.get(new ResourcePattern(resourceType, ResourcePattern.WILDCARD_RESOURCE, PatternType.LITERAL))
@@ -355,12 +356,10 @@ class AclAuthorizer extends Authorizer with Logging {
     val prefixed = aclCacheSnapshot
       .from(new ResourcePattern(resourceType, resourceName, PatternType.PREFIXED))
       .to(new ResourcePattern(resourceType, resourceName.take(1), PatternType.PREFIXED))
-      .filterKeys(resource => resourceName.startsWith(resource.name))
-      .values
-      .flatMap { _.acls.toBuffer }
+      .flatMap { case (resource, acls) => if (resourceName.startsWith(resource.name)) acls.acls else Seq.empty }
       .toBuffer
 
-    new AclBuffers(prefixed, wildcard, literal)
+    new AclSeqs(prefixed, wildcard, literal)
   }
 
   private def matchingAclExists(operation: AclOperation,
@@ -368,7 +367,7 @@ class AclAuthorizer extends Authorizer with Logging {
                                 principal: KafkaPrincipal,
                                 host: String,
                                 permissionType: AclPermissionType,
-                                acls: AclBuffers): Boolean = {
+                                acls: AclSeqs): Boolean = {
     acls.find { acl =>
       acl.permissionType == permissionType &&
         (acl.kafkaPrincipal == principal || acl.kafkaPrincipal == AclEntry.WildcardPrincipal) &&
