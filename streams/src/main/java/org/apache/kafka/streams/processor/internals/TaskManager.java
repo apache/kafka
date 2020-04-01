@@ -232,24 +232,26 @@ public class TaskManager {
         }
 
         if (!consumedOffsetsAndMetadataPerTask.isEmpty()) {
-            for (final Task task : additionalTasksForCommitting) {
-                task.prepareCommit();
-                final Map<TopicPartition, OffsetAndMetadata> committableOffsets = task.committableOffsetsAndMetadata();
-                if (!committableOffsets.isEmpty()) {
-                    consumedOffsetsAndMetadataPerTask.put(task.id(), committableOffsets);
-                }
-            }
-
             try {
+                for (final Task task : additionalTasksForCommitting) {
+                    task.prepareCommit();
+                    final Map<TopicPartition, OffsetAndMetadata> committableOffsets = task.committableOffsetsAndMetadata();
+                    if (!committableOffsets.isEmpty()) {
+                        consumedOffsetsAndMetadataPerTask.put(task.id(), committableOffsets);
+                    }
+                }
+
                 commitOffsetsOrTransaction(consumedOffsetsAndMetadataPerTask);
 
                 for (final Task task : additionalTasksForCommitting) {
                     task.postCommit();
                 }
             } catch (final RuntimeException e) {
-                log.error("Failed to commit tasks that are " +
-                    "prepared to close clean, will close them as dirty instead", e);
+                log.error("Failed to batch commit tasks, " +
+                    "will close all tasks involved in this commit as dirty by the end", e);
+                dirtyTasks.addAll(additionalTasksForCommitting);
                 dirtyTasks.addAll(checkpointPerTask.keySet());
+
                 checkpointPerTask.clear();
                 // Just add first taskId to re-throw by the end.
                 taskCloseExceptions.put(consumedOffsetsAndMetadataPerTask.keySet().iterator().next(), e);
