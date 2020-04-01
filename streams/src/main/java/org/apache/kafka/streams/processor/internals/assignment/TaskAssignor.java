@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals.assignment;
 
-public interface TaskAssignor<C> {
+public interface TaskAssignor<ID> {
     /**
      * @return whether the generated assignment requires a followup rebalance to satisfy all conditions
      */

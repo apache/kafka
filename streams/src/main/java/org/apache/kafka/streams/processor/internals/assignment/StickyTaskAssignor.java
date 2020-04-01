@@ -172,8 +172,7 @@ public class StickyTaskAssignor<ID> implements TaskAssignor<ID> {
 
         if (shouldBalanceLoad(previous)) {
             final ClientState standby = findLeastLoadedClientWithPreviousStandByTask(taskId, clientsWithin);
-            if (standby == null
-                    || shouldBalanceLoad(standby)) {
+            if (standby == null || shouldBalanceLoad(standby)) {
                 return leastLoaded(taskId, clientsWithin);
             }
             return standby;
@@ -195,8 +194,7 @@ public class StickyTaskAssignor<ID> implements TaskAssignor<ID> {
         return false;
     }
 
-    private ClientState findClientsWithPreviousAssignedTask(final TaskId taskId,
-                                                                    final Set<ID> clientsWithin) {
+    private ClientState findClientsWithPreviousAssignedTask(final TaskId taskId, final Set<ID> clientsWithin) {
         final ID previous = previousActiveTaskAssignment.get(taskId);
         if (previous != null && clientsWithin.contains(previous)) {
             return clients.get(previous);
