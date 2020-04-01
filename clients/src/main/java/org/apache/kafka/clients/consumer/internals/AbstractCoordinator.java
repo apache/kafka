@@ -451,8 +451,9 @@ public abstract class AbstractCoordinator implements Closeable {
                     return false;
                 }
             } else {
-                resetJoinGroupFuture();
                 final RuntimeException exception = future.exception();
+                log.info("Join group failed with {}", exception.toString());
+                resetJoinGroupFuture();
                 if (exception instanceof UnknownMemberIdException ||
                     exception instanceof RebalanceInProgressException ||
                     exception instanceof IllegalGenerationException ||
