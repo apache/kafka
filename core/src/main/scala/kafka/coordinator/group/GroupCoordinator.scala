@@ -246,7 +246,7 @@ class GroupCoordinator(val brokerId: Int,
           addPendingMemberExpiration(group, newMemberId, sessionTimeoutMs)
           responseCallback(JoinGroupResult(newMemberId, Errors.MEMBER_ID_REQUIRED))
         } else {
-          debug(s"${if (groupInstanceId.isDefined) "Static" else "Dynamic"} Member with unknown member id joins group ${group.groupId} in " +
+          info(s"${if (groupInstanceId.isDefined) "Static" else "Dynamic"} Member with unknown member id joins group ${group.groupId} in " +
             s"${group.currentState} state. Created a new member id $newMemberId for this member and add to the group.")
           addMemberAndRebalance(rebalanceTimeoutMs, sessionTimeoutMs, newMemberId, groupInstanceId,
             clientId, clientHost, protocolType, protocols, group, responseCallback)
@@ -287,7 +287,7 @@ class GroupCoordinator(val brokerId: Int,
         }
       } else {
         val groupInstanceIdNotFound = groupInstanceId.isDefined && !group.hasStaticMember(groupInstanceId)
-        if (group.isStaticMemberFenced(memberId, groupInstanceId)) {
+        if (group.isStaticMemberFenced(memberId, groupInstanceId, "join-group")) {
           // given member id doesn't match with the groupInstanceId. Inform duplicate instance to shut down immediately.
           responseCallback(JoinGroupResult(memberId, Errors.FENCED_INSTANCE_ID))
         } else if (!group.has(memberId) || groupInstanceIdNotFound) {
@@ -397,7 +397,7 @@ class GroupCoordinator(val brokerId: Int,
         // coordinator OR the group is in a transient unstable phase. Let the member retry
         // finding the correct coordinator and rejoin.
         responseCallback(SyncGroupResult(Errors.COORDINATOR_NOT_AVAILABLE))
-      } else if (group.isStaticMemberFenced(memberId, groupInstanceId)) {
+      } else if (group.isStaticMemberFenced(memberId, groupInstanceId, "sync-group")) {
         responseCallback(SyncGroupResult(Errors.FENCED_INSTANCE_ID))
       } else if (!group.has(memberId)) {
         responseCallback(SyncGroupResult(Errors.UNKNOWN_MEMBER_ID))
@@ -483,7 +483,7 @@ class GroupCoordinator(val brokerId: Int,
                   val memberId = leavingMember.memberId
                   val groupInstanceId = Option(leavingMember.groupInstanceId)
                   if (memberId != JoinGroupRequest.UNKNOWN_MEMBER_ID
-                    && group.isStaticMemberFenced(memberId, groupInstanceId)) {
+                    && group.isStaticMemberFenced(memberId, groupInstanceId, "leave-group")) {
                     memberLeaveError(leavingMember, Errors.FENCED_INSTANCE_ID)
                   } else if (group.isPendingMember(memberId)) {
                     if (groupInstanceId.isDefined) {
@@ -640,7 +640,7 @@ class GroupCoordinator(val brokerId: Int,
           // coordinator OR the group is in a transient unstable phase. Let the member retry
           // finding the correct coordinator and rejoin.
           responseCallback(Errors.COORDINATOR_NOT_AVAILABLE)
-        } else if (group.isStaticMemberFenced(memberId, groupInstanceId)) {
+        } else if (group.isStaticMemberFenced(memberId, groupInstanceId, "heartbeat")) {
           responseCallback(Errors.FENCED_INSTANCE_ID)
         } else if (!group.has(memberId)) {
           responseCallback(Errors.UNKNOWN_MEMBER_ID)
@@ -739,7 +739,7 @@ class GroupCoordinator(val brokerId: Int,
         // coordinator OR the group is in a transient unstable phase. Let the member retry
         // finding the correct coordinator and rejoin.
         responseCallback(offsetMetadata.map { case (k, _) => k -> Errors.COORDINATOR_NOT_AVAILABLE })
-      } else if (group.isStaticMemberFenced(memberId, groupInstanceId)) {
+      } else if (group.isStaticMemberFenced(memberId, groupInstanceId, "txn-commit-offsets")) {
         responseCallback(offsetMetadata.map { case (k, _) => k -> Errors.FENCED_INSTANCE_ID })
       } else if (memberId != JoinGroupRequest.UNKNOWN_MEMBER_ID && !group.has(memberId)) {
         // Enforce member id when it is set.
@@ -766,7 +766,7 @@ class GroupCoordinator(val brokerId: Int,
         // coordinator OR the group is in a transient unstable phase. Let the member retry
         // finding the correct coordinator and rejoin.
         responseCallback(offsetMetadata.map { case (k, _) => k -> Errors.COORDINATOR_NOT_AVAILABLE })
-      } else if (group.isStaticMemberFenced(memberId, groupInstanceId)) {
+      } else if (group.isStaticMemberFenced(memberId, groupInstanceId, "commit-offsets")) {
         responseCallback(offsetMetadata.map { case (k, _) => k -> Errors.FENCED_INSTANCE_ID })
       } else if (generationId < 0 && group.is(Empty)) {
         // The group is only using Kafka to store offsets.
@@ -1025,7 +1025,7 @@ class GroupCoordinator(val brokerId: Int,
     } else {
       group.removePendingMember(memberId)
     }
-    maybePrepareRebalance(group, s"Adding new member $memberId with group instanceid $groupInstanceId")
+    maybePrepareRebalance(group, s"Adding new member $memberId with group instance id $groupInstanceId")
   }
 
   private def updateMemberAndRebalance(group: GroupMetadata,
