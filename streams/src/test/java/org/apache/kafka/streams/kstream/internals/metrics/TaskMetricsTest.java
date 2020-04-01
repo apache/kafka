@@ -167,11 +167,8 @@ public class TaskMetricsTest {
     @Test
     public void shouldGetCommitSensor() {
         final String operation = "commit";
-        final String operationLatency = operation + StreamsMetricsImpl.LATENCY_SUFFIX;
         final String totalDescription = "The total number of calls to commit";
         final String rateDescription = "The average number of calls to commit per second";
-        final String avgLatencyDescription = "The average latency of calls to commit";
-        final String maxLatencyDescription = "The maximum latency of calls to commit";
         expect(streamsMetrics.taskLevelSensor(THREAD_ID, TASK_ID, operation, RecordingLevel.DEBUG)).andReturn(expectedSensor);
         expect(streamsMetrics.taskLevelTagMap(THREAD_ID, TASK_ID)).andReturn(tagMap);
         StreamsMetricsImpl.addInvocationRateAndCountToSensor(
@@ -181,14 +178,6 @@ public class TaskMetricsTest {
             operation,
             rateDescription,
             totalDescription
-        );
-        StreamsMetricsImpl.addAvgAndMaxToSensor(
-            expectedSensor,
-            TASK_LEVEL_GROUP,
-            tagMap,
-            operationLatency,
-            avgLatencyDescription,
-            maxLatencyDescription
         );
         replay(StreamsMetricsImpl.class, streamsMetrics);
 

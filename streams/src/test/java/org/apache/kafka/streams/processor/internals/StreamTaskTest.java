@@ -478,8 +478,6 @@ public class StreamTaskTest {
 
     private void testMetricsForBuiltInMetricsVersion0100To24() {
         final String builtInMetricsVersion = StreamsConfig.METRICS_0100_TO_24;
-        assertNotNull(getMetric("commit", "%s-latency-avg", "all", builtInMetricsVersion));
-        assertNotNull(getMetric("commit", "%s-latency-max", "all", builtInMetricsVersion));
         assertNotNull(getMetric("commit", "%s-rate", "all", builtInMetricsVersion));
 
         assertNull(getMetric("process", "%s-latency-avg", task.id().toString(), builtInMetricsVersion));
