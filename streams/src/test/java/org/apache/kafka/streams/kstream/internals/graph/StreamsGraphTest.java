@@ -129,7 +129,7 @@ public class StreamsGraphTest {
     public void shouldOptimizeSeveralMergeNodesWithCommonKeyChangingParent() {
         final StreamsBuilder streamsBuilder = new StreamsBuilder();
         final KStream<Integer, Integer> parentStream = streamsBuilder.stream("input_topic", Consumed.with(Serdes.Integer(), Serdes.Integer()))
-                                                                     .selectKey(Integer::sum);
+            .selectKey(Integer::sum);
 
         final KStream<Integer, Integer> childStream1 = parentStream.mapValues(v -> v + 1);
         final KStream<Integer, Integer> childStream2 = parentStream.mapValues(v -> v + 2);
