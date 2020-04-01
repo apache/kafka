@@ -136,7 +136,6 @@ public class QueryableStateIntegrationTest {
     private static final int NUM_REPLICAS = NUM_BROKERS;
     private Properties streamsConfiguration;
     private List<String> inputValues;
-    private int numberOfWordsPerIteration = 0;
     private Set<String> inputValuesKeys;
     private KafkaStreams kafkaStreams;
     private Comparator<KeyValue<String, String>> stringComparator;
@@ -214,7 +213,6 @@ public class QueryableStateIntegrationTest {
         inputValuesKeys = new HashSet<>();
         for (final String sentence : inputValues) {
             final String[] words = sentence.split("\\W+");
-            numberOfWordsPerIteration += words.length;
             Collections.addAll(inputValuesKeys, words);
         }
     }
@@ -646,8 +644,7 @@ public class QueryableStateIntegrationTest {
 
         try {
             waitUntilAtLeastNumRecordProcessed(outputTopicConcurrent, 1);
-            waitUntilAtLeastNumRecordProcessed(outputTopicConcurrentWindowed, 1);
-
+            
             final ReadOnlyKeyValueStore<String, Long> keyValueStore =
                 kafkaStreams.store(StoreQueryParameters.fromNameAndType(storeName + "-" + streamConcurrent, QueryableStoreTypes.keyValueStore()));
 
