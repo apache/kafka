@@ -36,8 +36,6 @@ public abstract class AbstractTask implements Task {
     protected final Set<TopicPartition> partitions;
     protected final ProcessorStateManager stateMgr;
 
-    protected long processLatencyMs = 0L;
-
     AbstractTask(final TaskId id,
                  final ProcessorTopology topology,
                  final StateDirectory stateDirectory,

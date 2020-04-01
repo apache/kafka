@@ -35,6 +35,8 @@ public class ClientMetrics {
     private static final String APPLICATION_ID = "application-id";
     private static final String TOPOLOGY_DESCRIPTION = "topology-description";
     private static final String STATE = "state";
+    private static final String ALIVE_STREAM_THREADS = "alive-stream-threads";
+    private static final String ALIVE_CLEANUP_THREADS = "alive-cleanup-threads";
     private static final String VERSION_FROM_FILE;
     private static final String COMMIT_ID_FROM_FILE;
     private static final String DEFAULT_VALUE = "unknown";
@@ -58,6 +60,8 @@ public class ClientMetrics {
     private static final String TOPOLOGY_DESCRIPTION_DESCRIPTION =
         "The description of the topology executed in the Kafka Streams client";
     private static final String STATE_DESCRIPTION = "The state of the Kafka Streams client";
+    private static final String ALIVE_STREAM_THREADS_DESCRIPTION = "The number of alive stream threads";
+    private static final String ALIVE_CLEANUP_THREADS_DESCRIPTION = "The number of alive cleanup threads";
 
     public static String version() {
         return VERSION_FROM_FILE;
@@ -113,4 +117,25 @@ public class ClientMetrics {
             stateProvider
         );
     }
+
+    public static void addNumAliveStreamThreadMetric(final StreamsMetricsImpl streamsMetrics,
+                                                     final Gauge<Integer> stateProvider) {
+        streamsMetrics.addClientLevelMutableMetric(
+            ALIVE_STREAM_THREADS,
+            ALIVE_STREAM_THREADS_DESCRIPTION,
+            RecordingLevel.INFO,
+            stateProvider
+        );
+    }
+
+    public static void addNumAliveCleanupThreadMetric(final StreamsMetricsImpl streamsMetrics,
+                                                      final Gauge<Integer> stateProvider) {
+        streamsMetrics.addClientLevelMutableMetric(
+            ALIVE_CLEANUP_THREADS,
+            ALIVE_CLEANUP_THREADS_DESCRIPTION,
+            RecordingLevel.INFO,
+            stateProvider
+        );
+    }
+
 }

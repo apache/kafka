@@ -16,10 +16,8 @@
  */
 package org.apache.kafka.streams.processor.internals.metrics;
 
-import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.Sensor.RecordingLevel;
-import org.apache.kafka.common.metrics.stats.Value;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.Version;
 import org.apache.kafka.streams.state.internals.metrics.StateStoreMetrics;
 
