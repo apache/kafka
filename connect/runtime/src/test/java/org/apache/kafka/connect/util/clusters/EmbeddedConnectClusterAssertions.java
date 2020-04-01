@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.util.clusters;
 
+import java.util.Map;
 import org.apache.kafka.connect.runtime.AbstractStatus;
 import org.apache.kafka.connect.runtime.rest.entities.ActiveTopicsInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
@@ -38,6 +39,7 @@ public class EmbeddedConnectClusterAssertions {
 
     private static final Logger log = LoggerFactory.getLogger(EmbeddedConnectClusterAssertions.class);
     public static final long WORKER_SETUP_DURATION_MS = TimeUnit.SECONDS.toMillis(60);
+    public static final long VALIDATION_DURATION_MS = TimeUnit.SECONDS.toMillis(30);
     private static final long CONNECTOR_SETUP_DURATION_MS = TimeUnit.SECONDS.toMillis(30);
     private static final long CONNECT_INTERNAL_TOPIC_UPDATES_DURATION_MS = TimeUnit.SECONDS.toMillis(60);
 
@@ -91,6 +93,49 @@ public class EmbeddedConnectClusterAssertions {
             return Optional.of(comp.apply(numUp, numWorkers));
         } catch (Exception e) {
             log.error("Could not check active workers.", e);
+            return Optional.empty();
+        }
+    }
+
+    /**
+     * Assert that the required number of errors are produced by a connector config validation.
+     *
+     * @param connectorClass the class of the connector to validate
+     * @param connConfig     the intended configuration
+     * @param numErrors      the number of errors expected
+     */
+    public void assertExactlyNumErrorsOnConnectorConfigValidation(String connectorClass, Map<String, String> connConfig,
+        int numErrors, String detailMessage) throws InterruptedException {
+        try {
+            waitForCondition(
+                () -> checkValidationErrors(
+                    connectorClass,
+                    connConfig,
+                    numErrors,
+                    (actual, expected) -> actual == expected
+                ).orElse(false),
+                VALIDATION_DURATION_MS,
+                "Didn't meet the exact requested number of validation errors: " + numErrors);
+        } catch (AssertionError e) {
+            throw new AssertionError(detailMessage, e);
+        }
+    }
+
+    /**
+     * Confirm that the requested number of errors are produced by {@link EmbeddedConnectCluster#validateConnectorConfig}.
+     *
+     * @param connectorClass the class of the connector to validate
+     * @param connConfig     the intended configuration
+     * @param numErrors      the number of errors expected
+     * @return true if exactly {@code numErrors} are produced by the validation; false otherwise
+     */
+    protected Optional<Boolean> checkValidationErrors(String connectorClass, Map<String, String> connConfig,
+        int numErrors, BiFunction<Integer, Integer, Boolean> comp) {
+        try {
+            int numErrorsProduced = connect.validateConnectorConfig(connectorClass, connConfig).errorCount();
+            return Optional.of(comp.apply(numErrorsProduced, numErrors));
+        } catch (Exception e) {
+            log.error("Could not check config validation error count.", e);
             return Optional.empty();
         }
     }

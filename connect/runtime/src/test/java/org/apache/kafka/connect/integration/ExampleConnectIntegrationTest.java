@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.connect.integration;
 
-import org.apache.kafka.connect.runtime.rest.entities.ConfigInfos;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
 import org.apache.kafka.connect.storage.StringConverter;
 import org.apache.kafka.connect.util.clusters.EmbeddedConnectCluster;
@@ -126,15 +125,15 @@ public class ExampleConnectIntegrationTest {
         connectorHandle.expectedCommits(NUM_RECORDS_PRODUCED);
 
         // validate the intended connector configuration, a config that errors
-        ConfigInfos configInfosError = connect.validateConnectorConfig(SINK_CONNECTOR_CLASS_NAME, props);
-        assertEquals(1, configInfosError.errorCount());
+        connect.assertions().assertExactlyNumErrorsOnConnectorConfigValidation(SINK_CONNECTOR_CLASS_NAME, props, 1,
+            "Validating connector configuration produced an unexpected number or errors.");
 
         // add missing configuration to make the config valid
         props.put("name", CONNECTOR_NAME);
 
         // validate the intended connector configuration, a valid config
-        ConfigInfos configInfosValid = connect.validateConnectorConfig(SINK_CONNECTOR_CLASS_NAME, props);
-        assertEquals(0, configInfosValid.errorCount());
+        connect.assertions().assertExactlyNumErrorsOnConnectorConfigValidation(SINK_CONNECTOR_CLASS_NAME, props, 0,
+            "Validating connector configuration produced an unexpected number or errors.");
 
         // start a sink connector
         connect.configureConnector(CONNECTOR_NAME, props);
@@ -187,15 +186,15 @@ public class ExampleConnectIntegrationTest {
         connectorHandle.expectedCommits(NUM_RECORDS_PRODUCED);
 
         // validate the intended connector configuration, a config that errors
-        ConfigInfos configInfosError = connect.validateConnectorConfig(SOURCE_CONNECTOR_CLASS_NAME, props);
-        assertEquals(1, configInfosError.errorCount());
+        connect.assertions().assertExactlyNumErrorsOnConnectorConfigValidation(SOURCE_CONNECTOR_CLASS_NAME, props, 1,
+            "Validating connector configuration produced an unexpected number or errors.");
 
         // add missing configuration to make the config valid
         props.put("name", CONNECTOR_NAME);
 
         // validate the intended connector configuration, a valid config
-        ConfigInfos configInfosValid = connect.validateConnectorConfig(SOURCE_CONNECTOR_CLASS_NAME, props);
-        assertEquals(0, configInfosValid.errorCount());
+        connect.assertions().assertExactlyNumErrorsOnConnectorConfigValidation(SOURCE_CONNECTOR_CLASS_NAME, props, 0,
+            "Validating connector configuration produced an unexpected number or errors.");
 
         // start a source connector
         connect.configureConnector(CONNECTOR_NAME, props);
