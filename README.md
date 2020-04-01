@@ -190,6 +190,12 @@ You can run checkstyle using:
 The checkstyle warnings will be found in `reports/checkstyle/reports/main.html` and `reports/checkstyle/reports/test.html` files in the
 subproject build directories. They are also printed to the console. The build will fail if Checkstyle fails.
 
+If you are using an IDE, you can use a plugin that provides real-time feedback and (possibly) automatic formatting. For detailed information, refer to the following links:
+
+- [Eclipse](https://checkstyle.org/eclipse-cs)
+- [Intellij](https://plugins.jetbrains.com/plugin/1065-checkstyle-idea)
+- [Vscode](https://marketplace.visualstudio.com/items?itemName=shengchen.vscode-checkstyle)
+
 #### Spotbugs ####
 Spotbugs uses static analysis to look for bugs in the code.
 You can run spotbugs using:
