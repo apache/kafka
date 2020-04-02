@@ -89,7 +89,7 @@ class AbstractFetcherManagerTest {
     assertEquals(0, getMetricValue(metricName))
 
     // partition marked as failed increments the count for failed partitions
-    fetcherManager.failedPartitions.add(tp)
+    fetcherManager.failedPartitions.add(tp, new Exception())
     assertEquals(1, getMetricValue(metricName))
 
     // removing fetcher for the partition would remove the partition from set of failed partitions and decrement the

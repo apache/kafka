@@ -1202,6 +1202,7 @@ class ReplicaManager(val config: KafkaConfig,
         // First check partition's leader epoch
         val partitionStates = new mutable.HashMap[Partition, LeaderAndIsrPartitionState]()
         val updatedPartitions = new mutable.HashSet[Partition]
+        val newPartitions = new mutable.HashSet[Partition]
 
         requestPartitionStates.foreach { partitionState =>
           val topicPartition = new TopicPartition(partitionState.topicName, partitionState.partitionIndex)
@@ -1221,7 +1222,7 @@ class ReplicaManager(val config: KafkaConfig,
             case HostedPartition.None =>
               val partition = Partition(topicPartition, time, this)
               allPartitions.putIfNotExists(topicPartition, HostedPartition.Online(partition))
-              updatedPartitions.add(partition)
+              newPartitions.add(partition)
               Some(partition)
           }
 
@@ -1303,7 +1304,7 @@ class ReplicaManager(val config: KafkaConfig,
         startHighWatermarkCheckPointThread()
 
         val futureReplicasAndInitialOffset = new mutable.HashMap[TopicPartition, InitialFetchState]
-        for (partition <- updatedPartitions) {
+        for (partition <- newPartitions) {
           val topicPartition = partition.topicPartition
           if (logManager.getLog(topicPartition, isFuture = true).isDefined) {
             partition.log.foreach { log =>
@@ -1323,6 +1324,25 @@ class ReplicaManager(val config: KafkaConfig,
           }
         }
         replicaAlterLogDirsManager.addFetcherForPartitions(futureReplicasAndInitialOffset)
+
+        /**
+         * updates the epoch of existent threads. There are two cases.
+         * 1) the thread is completed successfully so nothing is updated
+         * 2) the thread is failed due to fenced error so this update can bring the failed partition back
+         *
+         * we don't treat this case as above "futureReplicasAndInitialOffset". In the case.1 the future log is
+         * removed so adding new partition to alter thread causes terrible error due to nonexistent future log
+         */
+        replicaAlterLogDirsManager.updateEpochs(updatedPartitions.flatMap {
+          partition =>
+            partition.log match {
+              case Some(log) =>
+                Some(partition.topicPartition -> InitialFetchState(BrokerEndPoint(config.brokerId, "localhost", -1),
+                  partition.getLeaderEpoch,
+                  log.highWatermark))
+              case None => None
+            }
+        }.toMap)
 
         replicaFetcherManager.shutdownIdleFetcherThreads()
         replicaAlterLogDirsManager.shutdownIdleFetcherThreads()

@@ -114,6 +114,10 @@ abstract class AbstractFetcherManager[T <: AbstractFetcherThread](val name: Stri
   // to be defined in subclass to create a specific fetcher
   def createFetcherThread(fetcherId: Int, sourceBroker: BrokerEndPoint): T
 
+  def updateEpochs(partitionAndOffsets: Map[TopicPartition, InitialFetchState]): Unit = lock synchronized {
+    fetcherThreadMap.values.foreach(_.updateEpochs(partitionAndOffsets))
+  }
+
   def addFetcherForPartitions(partitionAndOffsets: Map[TopicPartition, InitialFetchState]): Unit = {
     lock synchronized {
       val partitionsPerFetcher = partitionAndOffsets.groupBy { case (topicPartition, brokerAndInitialFetchOffset) =>
@@ -201,14 +205,14 @@ abstract class AbstractFetcherManager[T <: AbstractFetcherThread](val name: Stri
   * taken offline.
   */
 class FailedPartitions {
-  private val failedPartitionsSet = new mutable.HashSet[TopicPartition]
+  private val failedPartitionsSet = new mutable.HashMap[TopicPartition, Throwable]
 
   def size: Int = synchronized {
     failedPartitionsSet.size
   }
 
-  def add(topicPartition: TopicPartition): Unit = synchronized {
-    failedPartitionsSet += topicPartition
+  def add(topicPartition: TopicPartition, exception: Throwable): Unit = synchronized {
+    failedPartitionsSet += (topicPartition -> exception)
   }
 
   def removeAll(topicPartitions: Set[TopicPartition]): Unit = synchronized {
@@ -217,6 +221,10 @@ class FailedPartitions {
 
   def contains(topicPartition: TopicPartition): Boolean = synchronized {
     failedPartitionsSet.contains(topicPartition)
+  }
+
+  def exception(topicPartition: TopicPartition): Option[Throwable] = synchronized {
+    failedPartitionsSet.get(topicPartition)
   }
 }
 

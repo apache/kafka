@@ -184,12 +184,12 @@ abstract class AbstractFetcherThread(name: String,
     catch {
       case e: KafkaStorageException =>
         error(s"Failed to truncate $topicPartition at offset ${truncationState.offset}", e)
-        markPartitionFailed(topicPartition)
+        markPartitionFailed(topicPartition, e)
         false
       case t: Throwable =>
         error(s"Unexpected error occurred during truncation for $topicPartition "
           + s"at offset ${truncationState.offset}", t)
-        markPartitionFailed(topicPartition)
+        markPartitionFailed(topicPartition, t)
         false
     }
   }
@@ -279,9 +279,10 @@ abstract class AbstractFetcherThread(name: String,
     Option(partitionStates.stateValue(tp)).exists { currentFetchState =>
       val currentLeaderEpoch = currentFetchState.currentLeaderEpoch
       if (requestEpoch.contains(currentLeaderEpoch)) {
-        info(s"Partition $tp has an older epoch ($currentLeaderEpoch) than the current leader. Will await " +
-          s"the new LeaderAndIsr state before resuming fetching.")
-        markPartitionFailed(tp)
+        val errorMessage = s"Partition $tp has an older epoch ($currentLeaderEpoch) than the current leader. Will await " +
+          s"the new LeaderAndIsr state before resuming fetching."
+        info(errorMessage)
+        markPartitionFailed(tp, Errors.FENCED_LEADER_EPOCH.exception(errorMessage))
         false
       } else {
         info(s"Partition $tp has an new epoch ($currentLeaderEpoch) than the current leader. retry the partition later")
@@ -358,12 +359,12 @@ abstract class AbstractFetcherThread(name: String,
                     case e: KafkaStorageException =>
                       error(s"Error while processing data for partition $topicPartition " +
                         s"at offset ${currentFetchState.fetchOffset}", e)
-                      markPartitionFailed(topicPartition)
+                      markPartitionFailed(topicPartition, e)
                     case t: Throwable =>
                       // stop monitoring this partition and add it to the set of failed partitions
                       error(s"Unexpected error occurred while processing data for partition $topicPartition " +
                         s"at offset ${currentFetchState.fetchOffset}", t)
-                      markPartitionFailed(topicPartition)
+                      markPartitionFailed(topicPartition, t)
                   }
                 case Errors.OFFSET_OUT_OF_RANGE =>
                   if (handleOutOfRangeError(topicPartition, currentFetchState, requestEpoch))
@@ -410,15 +411,42 @@ abstract class AbstractFetcherThread(name: String,
     } finally partitionMapLock.unlock()
   }
 
-  private def markPartitionFailed(topicPartition: TopicPartition): Unit = {
+  private def markPartitionFailed(topicPartition: TopicPartition, exception: Throwable): Unit = {
     partitionMapLock.lock()
     try {
-      failedPartitions.add(topicPartition)
+      failedPartitions.add(topicPartition, exception)
       removePartitions(Set(topicPartition))
     } finally partitionMapLock.unlock()
     warn(s"Partition $topicPartition marked as failed")
   }
 
+  /**
+   * update the epoch of pending partition. If the partition was failed due to fenced error, the partition is added
+   * back to pending pool with new epoch and offset.
+   * @param partitionAndOffsets partitions to update
+   */
+  def updateEpochs(partitionAndOffsets: Map[TopicPartition, InitialFetchState]): Unit = {
+    partitionMapLock.lockInterruptibly()
+    try {
+      partitionAndOffsets.foreach {
+        case (tp, state) =>
+          failedPartitions.exception(tp) match {
+            case Some(e) =>
+              Errors.forException(e) match {
+                case Errors.FENCED_LEADER_EPOCH =>
+                  addPartitions(Map(tp -> OffsetAndEpoch(state.initOffset, state.currentLeaderEpoch)))
+                  failedPartitions.removeAll(Set(tp))
+                case _ =>
+                  // the exception is NOT caused by inconsistent epoch so we can't resume the error
+              }
+            case None =>
+              Option(partitionStates.stateValue(tp)).map(_.copy(currentLeaderEpoch = state.currentLeaderEpoch))
+                .foreach(partitionStates.updateAndMoveToEnd(tp, _))
+          }
+      }
+    }
+    finally partitionMapLock.unlock()
+  }
 
   def addPartitions(initialFetchStates: Map[TopicPartition, OffsetAndEpoch]): Unit = {
     partitionMapLock.lockInterruptibly()
