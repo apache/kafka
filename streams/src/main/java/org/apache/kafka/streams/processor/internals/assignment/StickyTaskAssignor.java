@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.processor.internals.assignment;
 
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.internals.assignment.AssignorConfiguration.AssignmentConfigs;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -40,16 +41,20 @@ public class StickyTaskAssignor<ID> implements TaskAssignor<ID> {
     private final Map<TaskId, ID> previousActiveTaskAssignment = new HashMap<>();
     private final Map<TaskId, Set<ID>> previousStandbyTaskAssignment = new HashMap<>();
     private final TaskPairs taskPairs;
+    private final int numStandbyReplicas;
 
-    private boolean mustPreserveActiveTaskAssignment;
+    private final boolean mustPreserveActiveTaskAssignment;
 
     public StickyTaskAssignor(final Map<ID, ClientState> clients,
                               final Set<TaskId> allTaskIds,
-                              final Set<TaskId> standbyTaskIds) {
+                              final Set<TaskId> standbyTaskIds,
+                              final AssignmentConfigs configs,
+                              final boolean mustPreserveActiveTaskAssignment) {
         this.clients = clients;
         this.allTaskIds = allTaskIds;
         this.standbyTaskIds = standbyTaskIds;
-        this.mustPreserveActiveTaskAssignment = false;
+        numStandbyReplicas = configs.numStandbyReplicas;
+        this.mustPreserveActiveTaskAssignment = mustPreserveActiveTaskAssignment;
 
         final int maxPairs = allTaskIds.size() * (allTaskIds.size() - 1) / 2;
         taskPairs = new TaskPairs(maxPairs);
@@ -57,13 +62,10 @@ public class StickyTaskAssignor<ID> implements TaskAssignor<ID> {
     }
 
     @Override
-    public void assign(final int numStandbyReplicas) {
+    public boolean assign() {
         assignActive();
         assignStandby(numStandbyReplicas);
-    }
-
-    public void preservePreviousTaskAssignment() {
-        mustPreserveActiveTaskAssignment = true;
+        return false;
     }
 
     private void assignStandby(final int numStandbyReplicas) {
@@ -170,8 +172,7 @@ public class StickyTaskAssignor<ID> implements TaskAssignor<ID> {
 
         if (shouldBalanceLoad(previous)) {
             final ClientState standby = findLeastLoadedClientWithPreviousStandByTask(taskId, clientsWithin);
-            if (standby == null
-                    || shouldBalanceLoad(standby)) {
+            if (standby == null || shouldBalanceLoad(standby)) {
                 return leastLoaded(taskId, clientsWithin);
             }
             return standby;
@@ -193,8 +194,7 @@ public class StickyTaskAssignor<ID> implements TaskAssignor<ID> {
         return false;
     }
 
-    private ClientState findClientsWithPreviousAssignedTask(final TaskId taskId,
-                                                                    final Set<ID> clientsWithin) {
+    private ClientState findClientsWithPreviousAssignedTask(final TaskId taskId, final Set<ID> clientsWithin) {
         final ID previous = previousActiveTaskAssignment.get(taskId);
         if (previous != null && clientsWithin.contains(previous)) {
             return clients.get(previous);

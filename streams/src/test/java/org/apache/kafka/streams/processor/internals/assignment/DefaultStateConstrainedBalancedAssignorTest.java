@@ -19,7 +19,7 @@ package org.apache.kafka.streams.processor.internals.assignment;
 
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.Task;
-import org.apache.kafka.streams.processor.internals.assignment.StateConstrainedBalancedAssignor.ClientIdAndRank;
+import org.apache.kafka.streams.processor.internals.assignment.HighAvailabilityTaskAssignor.RankedClient;
 import org.junit.Test;
 
 import java.util.Arrays;
@@ -718,7 +718,7 @@ public class DefaultStateConstrainedBalancedAssignorTest {
             mkEntry(CLIENT_2, numberOfStreamThread2)
         );
     }
-    
+
     private static Map<String, Integer> threeClientsToNumberOfStreamThreads(final int numberOfStreamThread1,
                                                                             final int numberOfStreamThread2,
                                                                             final int numberOfStreamThread3) {
@@ -729,26 +729,26 @@ public class DefaultStateConstrainedBalancedAssignorTest {
         );
     }
 
-    private static SortedMap<TaskId, SortedSet<ClientIdAndRank<String>>> oneStatefulTasksToTwoRankedClients(final long rankOfClient1,
+    private static SortedMap<TaskId, SortedSet<RankedClient<String>>> oneStatefulTasksToTwoRankedClients(final long rankOfClient1,
                                                                                                             final long rankOfClient2) {
-        final SortedSet<ClientIdAndRank<String>> rankedClients01 = new TreeSet<>();
-        rankedClients01.add(ClientIdAndRank.make(CLIENT_1, rankOfClient1));
-        rankedClients01.add(ClientIdAndRank.make(CLIENT_2, rankOfClient2));
+        final SortedSet<RankedClient<String>> rankedClients01 = new TreeSet<>();
+        rankedClients01.add(new RankedClient<>(CLIENT_1, rankOfClient1));
+        rankedClients01.add(new RankedClient<>(CLIENT_2, rankOfClient2));
         return new TreeMap<>(
             mkMap(mkEntry(TASK_01, rankedClients01))
         );
     }
 
-    private static SortedMap<TaskId, SortedSet<ClientIdAndRank<String>>> twoStatefulTasksToTwoRankedClients(final long rankForTask01OnClient1,
+    private static SortedMap<TaskId, SortedSet<RankedClient<String>>> twoStatefulTasksToTwoRankedClients(final long rankForTask01OnClient1,
                                                                                                             final long rankForTask01OnClient2,
                                                                                                             final long rankForTask12OnClient1,
                                                                                                             final long rankForTask12OnClient2) {
-        final SortedSet<ClientIdAndRank<String>> rankedClients01 = new TreeSet<>();
-        rankedClients01.add(ClientIdAndRank.make(CLIENT_1, rankForTask01OnClient1));
-        rankedClients01.add(ClientIdAndRank.make(CLIENT_2, rankForTask01OnClient2));
-        final SortedSet<ClientIdAndRank<String>> rankedClients12 = new TreeSet<>();
-        rankedClients12.add(ClientIdAndRank.make(CLIENT_1, rankForTask12OnClient1));
-        rankedClients12.add(ClientIdAndRank.make(CLIENT_2, rankForTask12OnClient2));
+        final SortedSet<RankedClient<String>> rankedClients01 = new TreeSet<>();
+        rankedClients01.add(new RankedClient<>(CLIENT_1, rankForTask01OnClient1));
+        rankedClients01.add(new RankedClient<>(CLIENT_2, rankForTask01OnClient2));
+        final SortedSet<RankedClient<String>> rankedClients12 = new TreeSet<>();
+        rankedClients12.add(new RankedClient<>(CLIENT_1, rankForTask12OnClient1));
+        rankedClients12.add(new RankedClient<>(CLIENT_2, rankForTask12OnClient2));
         return new TreeMap<>(
             mkMap(
                 mkEntry(TASK_01, rankedClients01),
@@ -757,21 +757,21 @@ public class DefaultStateConstrainedBalancedAssignorTest {
         );
     }
 
-    private static SortedMap<TaskId, SortedSet<ClientIdAndRank<String>>> threeStatefulTasksToTwoRankedClients(final long rankForTask01OnClient1,
+    private static SortedMap<TaskId, SortedSet<RankedClient<String>>> threeStatefulTasksToTwoRankedClients(final long rankForTask01OnClient1,
                                                                                                               final long rankForTask01OnClient2,
                                                                                                               final long rankForTask12OnClient1,
                                                                                                               final long rankForTask12OnClient2,
                                                                                                               final long rankForTask23OnClient1,
                                                                                                               final long rankForTask23OnClient2) {
-        final SortedSet<ClientIdAndRank<String>> rankedClients01 = new TreeSet<>();
-        rankedClients01.add(ClientIdAndRank.make(CLIENT_1, rankForTask01OnClient1));
-        rankedClients01.add(ClientIdAndRank.make(CLIENT_2, rankForTask01OnClient2));
-        final SortedSet<ClientIdAndRank<String>> rankedClients12 = new TreeSet<>();
-        rankedClients12.add(ClientIdAndRank.make(CLIENT_1, rankForTask12OnClient1));
-        rankedClients12.add(ClientIdAndRank.make(CLIENT_2, rankForTask12OnClient2));
-        final SortedSet<ClientIdAndRank<String>> rankedClients23 = new TreeSet<>();
-        rankedClients23.add(ClientIdAndRank.make(CLIENT_1, rankForTask23OnClient1));
-        rankedClients23.add(ClientIdAndRank.make(CLIENT_2, rankForTask23OnClient2));
+        final SortedSet<RankedClient<String>> rankedClients01 = new TreeSet<>();
+        rankedClients01.add(new RankedClient<>(CLIENT_1, rankForTask01OnClient1));
+        rankedClients01.add(new RankedClient<>(CLIENT_2, rankForTask01OnClient2));
+        final SortedSet<RankedClient<String>> rankedClients12 = new TreeSet<>();
+        rankedClients12.add(new RankedClient<>(CLIENT_1, rankForTask12OnClient1));
+        rankedClients12.add(new RankedClient<>(CLIENT_2, rankForTask12OnClient2));
+        final SortedSet<RankedClient<String>> rankedClients23 = new TreeSet<>();
+        rankedClients23.add(new RankedClient<>(CLIENT_1, rankForTask23OnClient1));
+        rankedClients23.add(new RankedClient<>(CLIENT_2, rankForTask23OnClient2));
         return new TreeMap<>(
             mkMap(
                 mkEntry(TASK_01, rankedClients01),
@@ -781,7 +781,7 @@ public class DefaultStateConstrainedBalancedAssignorTest {
         );
     }
 
-    private static SortedMap<TaskId, SortedSet<ClientIdAndRank<String>>> threeStatefulTasksToThreeRankedClients(final long rankForTask01OnClient1,
+    private static SortedMap<TaskId, SortedSet<RankedClient<String>>> threeStatefulTasksToThreeRankedClients(final long rankForTask01OnClient1,
                                                                                                                 final long rankForTask01OnClient2,
                                                                                                                 final long rankForTask01OnClient3,
                                                                                                                 final long rankForTask12OnClient1,
@@ -790,18 +790,18 @@ public class DefaultStateConstrainedBalancedAssignorTest {
                                                                                                                 final long rankForTask23OnClient1,
                                                                                                                 final long rankForTask23OnClient2,
                                                                                                                 final long rankForTask23OnClient3) {
-        final SortedSet<ClientIdAndRank<String>> rankedClients01 = new TreeSet<>();
-        rankedClients01.add(ClientIdAndRank.make(CLIENT_1, rankForTask01OnClient1));
-        rankedClients01.add(ClientIdAndRank.make(CLIENT_2, rankForTask01OnClient2));
-        rankedClients01.add(ClientIdAndRank.make(CLIENT_3, rankForTask01OnClient3));
-        final SortedSet<ClientIdAndRank<String>> rankedClients12 = new TreeSet<>();
-        rankedClients12.add(ClientIdAndRank.make(CLIENT_1, rankForTask12OnClient1));
-        rankedClients12.add(ClientIdAndRank.make(CLIENT_2, rankForTask12OnClient2));
-        rankedClients12.add(ClientIdAndRank.make(CLIENT_3, rankForTask12OnClient3));
-        final SortedSet<ClientIdAndRank<String>> rankedClients23 = new TreeSet<>();
-        rankedClients23.add(ClientIdAndRank.make(CLIENT_1, rankForTask23OnClient1));
-        rankedClients23.add(ClientIdAndRank.make(CLIENT_2, rankForTask23OnClient2));
-        rankedClients23.add(ClientIdAndRank.make(CLIENT_3, rankForTask23OnClient3));
+        final SortedSet<RankedClient<String>> rankedClients01 = new TreeSet<>();
+        rankedClients01.add(new RankedClient<>(CLIENT_1, rankForTask01OnClient1));
+        rankedClients01.add(new RankedClient<>(CLIENT_2, rankForTask01OnClient2));
+        rankedClients01.add(new RankedClient<>(CLIENT_3, rankForTask01OnClient3));
+        final SortedSet<RankedClient<String>> rankedClients12 = new TreeSet<>();
+        rankedClients12.add(new RankedClient<>(CLIENT_1, rankForTask12OnClient1));
+        rankedClients12.add(new RankedClient<>(CLIENT_2, rankForTask12OnClient2));
+        rankedClients12.add(new RankedClient<>(CLIENT_3, rankForTask12OnClient3));
+        final SortedSet<RankedClient<String>> rankedClients23 = new TreeSet<>();
+        rankedClients23.add(new RankedClient<>(CLIENT_1, rankForTask23OnClient1));
+        rankedClients23.add(new RankedClient<>(CLIENT_2, rankForTask23OnClient2));
+        rankedClients23.add(new RankedClient<>(CLIENT_3, rankForTask23OnClient3));
         return new TreeMap<>(
             mkMap(
                 mkEntry(TASK_01, rankedClients01),
@@ -811,7 +811,7 @@ public class DefaultStateConstrainedBalancedAssignorTest {
         );
     }
 
-    private static SortedMap<TaskId, SortedSet<ClientIdAndRank<String>>> fourStatefulTasksToTwoRankedClients(final long rankForTask01OnClient1,
+    private static SortedMap<TaskId, SortedSet<RankedClient<String>>> fourStatefulTasksToTwoRankedClients(final long rankForTask01OnClient1,
                                                                                                              final long rankForTask01OnClient2,
                                                                                                              final long rankForTask12OnClient1,
                                                                                                              final long rankForTask12OnClient2,
@@ -819,18 +819,18 @@ public class DefaultStateConstrainedBalancedAssignorTest {
                                                                                                              final long rankForTask23OnClient2,
                                                                                                              final long rankForTask34OnClient1,
                                                                                                              final long rankForTask34OnClient2) {
-        final SortedSet<ClientIdAndRank<String>> rankedClients01 = new TreeSet<>();
-        rankedClients01.add(ClientIdAndRank.make(CLIENT_1, rankForTask01OnClient1));
-        rankedClients01.add(ClientIdAndRank.make(CLIENT_2, rankForTask01OnClient2));
-        final SortedSet<ClientIdAndRank<String>> rankedClients12 = new TreeSet<>();
-        rankedClients12.add(ClientIdAndRank.make(CLIENT_1, rankForTask12OnClient1));
-        rankedClients12.add(ClientIdAndRank.make(CLIENT_2, rankForTask12OnClient2));
-        final SortedSet<ClientIdAndRank<String>> rankedClients23 = new TreeSet<>();
-        rankedClients23.add(ClientIdAndRank.make(CLIENT_1, rankForTask23OnClient1));
-        rankedClients23.add(ClientIdAndRank.make(CLIENT_2, rankForTask23OnClient2));
-        final SortedSet<ClientIdAndRank<String>> rankedClients34 = new TreeSet<>();
-        rankedClients34.add(ClientIdAndRank.make(CLIENT_1, rankForTask34OnClient1));
-        rankedClients34.add(ClientIdAndRank.make(CLIENT_2, rankForTask34OnClient2));
+        final SortedSet<RankedClient<String>> rankedClients01 = new TreeSet<>();
+        rankedClients01.add(new RankedClient<>(CLIENT_1, rankForTask01OnClient1));
+        rankedClients01.add(new RankedClient<>(CLIENT_2, rankForTask01OnClient2));
+        final SortedSet<RankedClient<String>> rankedClients12 = new TreeSet<>();
+        rankedClients12.add(new RankedClient<>(CLIENT_1, rankForTask12OnClient1));
+        rankedClients12.add(new RankedClient<>(CLIENT_2, rankForTask12OnClient2));
+        final SortedSet<RankedClient<String>> rankedClients23 = new TreeSet<>();
+        rankedClients23.add(new RankedClient<>(CLIENT_1, rankForTask23OnClient1));
+        rankedClients23.add(new RankedClient<>(CLIENT_2, rankForTask23OnClient2));
+        final SortedSet<RankedClient<String>> rankedClients34 = new TreeSet<>();
+        rankedClients34.add(new RankedClient<>(CLIENT_1, rankForTask34OnClient1));
+        rankedClients34.add(new RankedClient<>(CLIENT_2, rankForTask34OnClient2));
         return new TreeMap<>(
             mkMap(
                 mkEntry(TASK_01, rankedClients01),
@@ -841,7 +841,7 @@ public class DefaultStateConstrainedBalancedAssignorTest {
         );
     }
 
-    private static SortedMap<TaskId, SortedSet<ClientIdAndRank<String>>> fourStatefulTasksToThreeRankedClients(final long rankForTask01OnClient1,
+    private static SortedMap<TaskId, SortedSet<RankedClient<String>>> fourStatefulTasksToThreeRankedClients(final long rankForTask01OnClient1,
                                                                                                                final long rankForTask01OnClient2,
                                                                                                                final long rankForTask01OnClient3,
                                                                                                                final long rankForTask12OnClient1,
@@ -853,22 +853,22 @@ public class DefaultStateConstrainedBalancedAssignorTest {
                                                                                                                final long rankForTask34OnClient1,
                                                                                                                final long rankForTask34OnClient2,
                                                                                                                final long rankForTask34OnClient3) {
-        final SortedSet<ClientIdAndRank<String>> rankedClients01 = new TreeSet<>();
-        rankedClients01.add(ClientIdAndRank.make(CLIENT_1, rankForTask01OnClient1));
-        rankedClients01.add(ClientIdAndRank.make(CLIENT_2, rankForTask01OnClient2));
-        rankedClients01.add(ClientIdAndRank.make(CLIENT_3, rankForTask01OnClient3));
-        final SortedSet<ClientIdAndRank<String>> rankedClients12 = new TreeSet<>();
-        rankedClients12.add(ClientIdAndRank.make(CLIENT_1, rankForTask12OnClient1));
-        rankedClients12.add(ClientIdAndRank.make(CLIENT_2, rankForTask12OnClient2));
-        rankedClients12.add(ClientIdAndRank.make(CLIENT_3, rankForTask12OnClient3));
-        final SortedSet<ClientIdAndRank<String>> rankedClients23 = new TreeSet<>();
-        rankedClients23.add(ClientIdAndRank.make(CLIENT_1, rankForTask23OnClient1));
-        rankedClients23.add(ClientIdAndRank.make(CLIENT_2, rankForTask23OnClient2));
-        rankedClients23.add(ClientIdAndRank.make(CLIENT_3, rankForTask23OnClient3));
-        final SortedSet<ClientIdAndRank<String>> rankedClients34 = new TreeSet<>();
-        rankedClients34.add(ClientIdAndRank.make(CLIENT_1, rankForTask34OnClient1));
-        rankedClients34.add(ClientIdAndRank.make(CLIENT_2, rankForTask34OnClient2));
-        rankedClients34.add(ClientIdAndRank.make(CLIENT_3, rankForTask34OnClient3));
+        final SortedSet<RankedClient<String>> rankedClients01 = new TreeSet<>();
+        rankedClients01.add(new RankedClient<>(CLIENT_1, rankForTask01OnClient1));
+        rankedClients01.add(new RankedClient<>(CLIENT_2, rankForTask01OnClient2));
+        rankedClients01.add(new RankedClient<>(CLIENT_3, rankForTask01OnClient3));
+        final SortedSet<RankedClient<String>> rankedClients12 = new TreeSet<>();
+        rankedClients12.add(new RankedClient<>(CLIENT_1, rankForTask12OnClient1));
+        rankedClients12.add(new RankedClient<>(CLIENT_2, rankForTask12OnClient2));
+        rankedClients12.add(new RankedClient<>(CLIENT_3, rankForTask12OnClient3));
+        final SortedSet<RankedClient<String>> rankedClients23 = new TreeSet<>();
+        rankedClients23.add(new RankedClient<>(CLIENT_1, rankForTask23OnClient1));
+        rankedClients23.add(new RankedClient<>(CLIENT_2, rankForTask23OnClient2));
+        rankedClients23.add(new RankedClient<>(CLIENT_3, rankForTask23OnClient3));
+        final SortedSet<RankedClient<String>> rankedClients34 = new TreeSet<>();
+        rankedClients34.add(new RankedClient<>(CLIENT_1, rankForTask34OnClient1));
+        rankedClients34.add(new RankedClient<>(CLIENT_2, rankForTask34OnClient2));
+        rankedClients34.add(new RankedClient<>(CLIENT_3, rankForTask34OnClient3));
         return new TreeMap<>(
             mkMap(
                 mkEntry(TASK_01, rankedClients01),
