@@ -144,10 +144,9 @@ abstract class AbstractFetcherManager[T <: AbstractFetcherThread](val name: Stri
           tp -> OffsetAndEpoch(brokerAndInitOffset.initOffset, brokerAndInitOffset.currentLeaderEpoch)
         }
 
-        fetcherThread.addPartitions(initialOffsetAndEpochs)
-        info(s"Added fetcher to broker ${brokerAndFetcherId.broker} for partitions $initialOffsetAndEpochs")
-
-        failedPartitions.removeAll(partitionAndOffsets.keySet)
+        val addedPartitions = fetcherThread.addPartitions(initialOffsetAndEpochs)
+        info(s"Added fetcher to broker ${brokerAndFetcherId.broker} for partitions " +
+          s"${initialOffsetAndEpochs.filterKeys(addedPartitions)}")
       }
     }
   }

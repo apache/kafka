@@ -477,6 +477,10 @@ class ReplicaManager(val config: KafkaConfig,
     getPartitionOrException(topicPartition, expectLeader = false).futureLocalLogOrException
   }
 
+  def futureLogExists(topicPartition: TopicPartition): Boolean = {
+    getPartitionOrException(topicPartition, expectLeader = false).futureLog.isDefined
+  }
+
   def localLog(topicPartition: TopicPartition): Option[Log] = {
     nonOfflinePartition(topicPartition).flatMap(_.log)
   }
