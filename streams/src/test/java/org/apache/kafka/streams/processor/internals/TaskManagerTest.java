@@ -1259,6 +1259,8 @@ public class TaskManagerTest {
         taskManager.tasks().put(taskId01, task01);
         taskManager.tasks().put(taskId02, task02);
 
+        checkOrder(activeTaskCreator, false);
+
         activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(taskId01);
         expectLastCall();
 
