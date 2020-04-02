@@ -55,6 +55,10 @@ class KafkaVersion(LooseVersion):
     def topic_command_supports_bootstrap_server(self):
         return self >= V_2_3_0
 
+    def supports_tls_to_zookeeper(self):
+        # indicate if KIP-515 is available
+        return self > LATEST_2_4
+
 def get_version(node=None):
     """Return the version attached to the given node.
     Default to DEV_BRANCH if node or node.version is undefined (aka None)
