@@ -278,7 +278,7 @@ public class StreamsPartitionAssignorTest {
     }
 
     @Parameterized.Parameters(name = "high availability enabled = {0}")
-    private Collection<Object[]> parameters() {
+    public static Collection<Object[]> parameters() {
         return asList(
             new Object[]{true},
             new Object[]{false}
