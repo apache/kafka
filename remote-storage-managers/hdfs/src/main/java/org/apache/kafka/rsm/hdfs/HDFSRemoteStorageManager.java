@@ -149,7 +149,7 @@ public class HDFSRemoteStorageManager implements RemoteStorageManager {
         @Override
         public int read() throws IOException {
             if (currentPos >= fileLen)
-                throw new EOFException();
+                return -1;
             byte[] data = getCachedData(currentPos);
             return data[(int) ((currentPos++) % cacheLineSize)];
         }
@@ -159,6 +159,10 @@ public class HDFSRemoteStorageManager implements RemoteStorageManager {
             int pos = 0;
             if (len > fileLen - currentPos)
                 len = (int) (fileLen - currentPos);
+
+            if (len <= 0)
+                return -1;
+
             while (pos < len) {
                 byte[] data = getCachedData(currentPos + pos);
                 int length = (int) Math.min(len - pos, data.length - (currentPos + pos) % cacheLineSize);
@@ -169,6 +173,15 @@ public class HDFSRemoteStorageManager implements RemoteStorageManager {
             }
             currentPos += pos;
             return pos;
+        }
+
+        @Override
+        public int available() throws IOException {
+            long available = (fileLen - currentPos);
+            if (available > Integer.MAX_VALUE)
+                return Integer.MAX_VALUE;
+
+            return (int)available;
         }
 
         private byte[] getCachedData(long position) throws IOException {
