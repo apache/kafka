@@ -90,7 +90,12 @@ public class KTableSource<K, V> implements ProcessorSupplier<K, V> {
             metrics = (StreamsMetricsImpl) context.metrics();
             droppedRecordsSensor = droppedRecordsSensorOrSkippedRecordsSensor(Thread.currentThread().getName(), context.taskId().toString(), metrics);
             if (queryableName != null) {
-                store = (TimestampedSerializedKeyValueStore<K, V>) context.getStateStore(queryableName);
+                final StateStore stateStore = context.getStateStore(queryableName);
+                try {
+                    store = ((WrappedStateStore<MeteredTimestampedKeyValueStore<K, V>, K, V>) stateStore).wrapped();
+                } catch (final ClassCastException e) {
+                    throw new IllegalStateException("Unexpected store type: " + stateStore.getClass() + " for store: " + queryableName, e);
+                }
                 tupleForwarder = new TimestampedTupleForwarder<>(
                     store,
                     context,
