@@ -26,7 +26,6 @@ import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.internals.MeteredTimestampedKeyValueStore;
-import org.apache.kafka.streams.state.internals.TimestampedSerializedKeyValueStore.RawAndDeserializedValue;
 import org.apache.kafka.streams.state.internals.WrappedStateStore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
