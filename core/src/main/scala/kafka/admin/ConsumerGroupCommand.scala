@@ -198,7 +198,7 @@ object ConsumerGroupCommand extends Logging {
            else
              consumerGroupStatesFromString(stateValue)
            val listings = listConsumerGroupsWithState(states)
-           printGroupStates(listings.map(e => (e.groupId, e.state.toString)).toList)
+           printGroupStates(listings.map(e => (e.groupId, e.state.get.toString)).toList)
         } else
          listConsumerGroups().foreach(println(_))
     }
