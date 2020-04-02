@@ -38,8 +38,8 @@ import org.apache.kafka.streams.state.ValueAndTimestamp;
  * @param <V>
  */
 public class MeteredTimestampedKeyValueStore<K, V>
-    extends MeteredKeyValueStore<K, ValueAndTimestamp<V>>
-    implements TimestampedSerializedKeyValueStore<K, V> {
+    extends MeteredKeyValueStore<K, ValueAndTimestamp<V>> 
+    implements TimestampedKeyValueStore<K, V> {
 
     MeteredTimestampedKeyValueStore(final KeyValueStore<Bytes, byte[]> inner,
                                     final String metricScope,
@@ -88,6 +88,15 @@ public class MeteredTimestampedKeyValueStore<K, V>
         } catch (final ProcessorStateException e) {
             final String message = String.format(e.getMessage(), key, newValue);
             throw new ProcessorStateException(message, e);
+        }
+    }
+
+    public class RawAndDeserializedValue<ValueType> {
+        public final byte[] serializedValue;
+        public final ValueAndTimestamp<ValueType> value;
+        public RawAndDeserializedValue(final byte[] serializedValue, final ValueAndTimestamp<ValueType> value) {
+            this.serializedValue = serializedValue;
+            this.value = value;
         }
     }
 }

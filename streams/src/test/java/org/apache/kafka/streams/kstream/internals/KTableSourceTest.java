@@ -16,8 +16,10 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
+import org.apache.kafka.common.serialization.IntegerDeserializer;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.streams.KeyValueTimestamp;
 import org.apache.kafka.streams.StreamsBuilder;
@@ -32,7 +34,9 @@ import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
+import org.apache.kafka.streams.test.TestRecord;
 import org.apache.kafka.streams.TestInputTopic;
+import org.apache.kafka.streams.TestOutputTopic;
 import org.apache.kafka.test.MockProcessor;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.StreamsTestUtils;
@@ -86,7 +90,7 @@ public class KTableSourceTest {
     }
 
     @Test
-    public void testKTableEmitOnChange() {
+    public void testKTableSourceEmitOnChange() {
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic1 = "topic1";
 
@@ -105,18 +109,16 @@ public class KTableSourceTest {
             inputTopic.pipeInput("A", 1, 12L);
             inputTopic.pipeInput("B", 3, 13L);
 
-            assertThat(
-                getMetricByName(driver.metrics(), "idempotent-update-skip-total", "stream-processor-node-metrics").metricValue(),
-                is(1.0)
+            assertEquals(
+                1.0,
+                getMetricByName(driver.metrics(), "idempotent-update-skip-total", "stream-processor-node-metrics").metricValue()
             );
 
-            assertThat(
-                outputTopic.readRecordsToList(),
-                is(
-                    asList(new TestRecord<>("A", 1, Instant.ofEpochMilli(10L)),
+            assertEquals(
+                asList(new TestRecord<>("A", 1, Instant.ofEpochMilli(10L)),
                            new TestRecord<>("B", 2, Instant.ofEpochMilli(11L)),
-                           new TestRecord<>("B", 3, Instant.ofEpochMilli(13L)))
-                )
+                           new TestRecord<>("B", 3, Instant.ofEpochMilli(13L))),
+                outputTopic.readRecordsToList()
             );
         }
     }

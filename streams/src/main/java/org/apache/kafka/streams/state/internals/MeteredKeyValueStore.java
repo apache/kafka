@@ -54,7 +54,7 @@ public class MeteredKeyValueStore<K, V>
 
     private final String metricsScope;
     protected final Time time;
-    private Sensor putSensor;
+    protected Sensor putSensor;
     private Sensor putIfAbsentSensor;
     protected Sensor getSensor;
     private Sensor deleteSensor;

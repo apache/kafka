@@ -34,6 +34,25 @@ public class ValueAndTimestampSerializer<V> implements Serializer<ValueAndTimest
         timestampSerializer = new LongSerializer();
     }
 
+    public static boolean maskTimestampAndCompareValues(final byte[] left, final byte[] right) {
+        // adapted from Arrays.equals
+        if (left == right)
+            return true;
+        if (left == null || right == null)
+            return false;
+
+        final int length = left.length;
+        if (right.length != length)
+            return false;
+
+        // skip the timestamp when comparing just the values
+        for (int i = Long.BYTES; i < length; i++)
+            if (left[i] != right[i])
+                return false;
+
+        return true;
+    }
+
     @Override
     public void configure(final Map<String, ?> configs,
                           final boolean isKey) {

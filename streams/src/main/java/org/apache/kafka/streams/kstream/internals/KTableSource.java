@@ -21,11 +21,13 @@ import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
+import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
-import org.apache.kafka.streams.state.internals.TimestampedSerializedKeyValueStore;
+import org.apache.kafka.streams.state.internals.MeteredTimestampedKeyValueStore;
 import org.apache.kafka.streams.state.internals.TimestampedSerializedKeyValueStore.RawAndDeserializedValue;
+import org.apache.kafka.streams.state.internals.WrappedStateStore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -77,7 +79,7 @@ public class KTableSource<K, V> implements ProcessorSupplier<K, V> {
 
     private class KTableSourceProcessor extends AbstractProcessor<K, V> {
 
-        private TimestampedSerializedKeyValueStore<K, V> store;
+        private MeteredTimestampedKeyValueStore<K, V> store;
         private TimestampedTupleForwarder<K, V> tupleForwarder;
         private StreamsMetricsImpl metrics;
         private Sensor droppedRecordsSensor;
@@ -121,7 +123,7 @@ public class KTableSource<K, V> implements ProcessorSupplier<K, V> {
             }
 
             if (queryableName != null) {
-                final RawAndDeserializedValue<V> tuple = store.getWithBinary(key); 
+                final MeteredTimestampedKeyValueStore<K, V>.RawAndDeserializedValue<V> tuple = store.getWithBinary(key); 
                 final ValueAndTimestamp<V> oldValueAndTimestamp = tuple.value;
                 final V oldValue;
                 if (oldValueAndTimestamp != null) {
@@ -134,7 +136,7 @@ public class KTableSource<K, V> implements ProcessorSupplier<K, V> {
                     oldValue = null;
                 }
                 final boolean isDifferentValue = 
-                    store.putIfDifferent(key, ValueAndTimestamp.make(value, context().timestamp()), tuple.serializedValue);
+                    store.putIfDifferentValues(key, ValueAndTimestamp.make(value, context().timestamp()), tuple.serializedValue);
                 if (isDifferentValue) {
                     tupleForwarder.maybeForward(key, value, oldValue);
                 }  else {
