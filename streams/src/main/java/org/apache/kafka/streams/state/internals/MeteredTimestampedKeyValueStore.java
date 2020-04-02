@@ -68,16 +68,26 @@ public class MeteredTimestampedKeyValueStore<K, V>
         }
     }
 
-    public boolean putIfDifferent(final K key,
-                                  final ValueAndTimestamp<V> newValue,
-                                  final byte[] oldSerializedValue) {
-        final Bytes serializedNewValueBytes = Bytes.wrap(serdes.rawValue(newValue));
-        final Bytes serializedOldValueBytes = Bytes.wrap(oldSerializedValue);
-        if (serializedNewValueBytes == null ||
-            !serializedNewValueBytes.equals(serializedOldValueBytes)) {
-            super.put(key, newValue);
-            return true;
+    public boolean putIfDifferentValues(final K key,
+                                        final ValueAndTimestamp<V> newValue,
+                                        final byte[] oldSerializedValue) {
+        try {
+            return maybeMeasureLatency(
+                () -> {
+                    final byte[] newSerializedValue = serdes.rawValue(newValue);
+                    if (ValueAndTimestampSerializer.maskTimestampAndCompareValues(oldSerializedValue, newSerializedValue)) {
+                        return false;
+                    } else {
+                        wrapped().put(keyBytes(key), newSerializedValue);
+                        return true;
+                    }
+                },
+                time,
+                putSensor
+            );
+        } catch (final ProcessorStateException e) {
+            final String message = String.format(e.getMessage(), key, newValue);
+            throw new ProcessorStateException(message, e);
         }
-        return false;
     }
 }
