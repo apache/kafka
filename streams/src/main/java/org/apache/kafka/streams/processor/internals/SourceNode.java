@@ -30,7 +30,7 @@ public class SourceNode<K, V> extends ProcessorNode<K, V> {
 
     private final List<String> topics;
 
-    private ProcessorContext context;
+    private ProcessorContext<Object, Object> context;
     private Deserializer<K> keyDeserializer;
     private Deserializer<V> valDeserializer;
     private final TimestampExtractor timestampExtractor;

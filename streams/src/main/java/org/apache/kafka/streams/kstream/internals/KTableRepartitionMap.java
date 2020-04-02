@@ -104,14 +104,14 @@ public class KTableRepartitionMap<K, V, K1, V1> implements KTableProcessorSuppli
     private class KTableMapValueGetter implements KTableValueGetter<K, KeyValue<K1, V1>> {
 
         private final KTableValueGetter<K, V> parentGetter;
-        private ProcessorContext context;
+        private ProcessorContext<Void, Void> context;
 
         KTableMapValueGetter(final KTableValueGetter<K, V> parentGetter) {
             this.parentGetter = parentGetter;
         }
 
         @Override
-        public void init(final ProcessorContext context) {
+        public void init(final ProcessorContext<Void, Void> context) {
             this.context = context;
             parentGetter.init(context);
         }
