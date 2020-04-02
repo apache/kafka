@@ -353,7 +353,6 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
         isStartingUp.set(false)
         AppInfoParser.registerAppInfo(jmxPrefix, config.brokerId.toString, metrics, time.milliseconds())
 
-        // todo-tier start RLMM by saying broker is ready
         remoteLogManager.foreach(rlm => rlm.onServerStarted())
         info("started")
       }

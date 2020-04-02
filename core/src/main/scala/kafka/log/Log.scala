@@ -1283,7 +1283,6 @@ class Log(@volatile var dir: File,
       lock synchronized {
         checkIfMemoryMappedBufferClosed()
         if (newLogStartOffset > logStartOffset) {
-          info(s"Incrementing log start offset to $newLogStartOffset")
           localLogStartOffset = math.max(newLogStartOffset, localLogStartOffset)
 
           // it should always get updated  if tiered-storage is not enabled.
@@ -1291,6 +1290,9 @@ class Log(@volatile var dir: File,
             logStartOffset = newLogStartOffset
             leaderEpochCache.foreach(_.truncateFromStart(logStartOffset))
             maybeIncrementFirstUnstableOffset()
+            info(s"Incrementing log start offset to $logStartOffset")
+          } else {
+            info(s"Incrementing local log start offset to $localLogStartOffset")
           }
         }
       }

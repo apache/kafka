@@ -33,6 +33,7 @@ import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.internals.Topic;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.common.utils.KafkaThread;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -86,7 +87,9 @@ public class RLMMWithTopicStorage implements RemoteLogMetadataManager, RemoteLog
     public static final String REMOTE_LOG_METADATA_TOPIC_REPLICATION_FACTOR_PROP =
             "remote.log.metadata.topic.replication.factor";
     public static final String REMOTE_LOG_METADATA_TOPIC_PARTITIONS_PROP = "remote.log.metadata.topic.partitions";
+    public static final String REMOTE_LOG_METADATA_TOPIC_RETENTION_MINS_PROP = "remote.log.metadata.topic.retention.mins";
     public static final int DEFAULT_REMOTE_LOG_METADATA_TOPIC_PARTITIONS = 3;
+    public static final int DEFAULT_REMOTE_LOG_METADATA_TOPIC_RETENTION_MINS = 365 * 24 * 60;
     public static final int DEFAULT_REMOTE_LOG_METADATA_TOPIC_REPLICATION_FACTOR = 3;
 
     private static final String COMMITTED_LOG_METADATA_FILE_NAME = "_rlmm_committed_metadata_log";
@@ -107,6 +110,7 @@ public class RLMMWithTopicStorage implements RemoteLogMetadataManager, RemoteLog
 
     private CommittedLogMetadataFile committedLogMetadataFile;
     private ConsumerTask consumerTask;
+    private boolean initialized;
 
     private static class ProducerCallback implements Callback {
         private volatile RecordMetadata recordMetadata;
@@ -248,6 +252,8 @@ public class RLMMWithTopicStorage implements RemoteLogMetadataManager, RemoteLog
         Objects.requireNonNull(leaderPartitions, "leaderPartitions can not be null");
         Objects.requireNonNull(followerPartitions, "followerPartitions can not be null");
 
+        initialize();
+
         final HashSet<TopicPartition> allPartitions = new HashSet<>(leaderPartitions);
         allPartitions.addAll(followerPartitions);
         consumerTask.reassignForPartitions(allPartitions);
@@ -261,16 +267,24 @@ public class RLMMWithTopicStorage implements RemoteLogMetadataManager, RemoteLog
 
     @Override
     public void onServerStarted() {
-        //create clients
-        createAdminClient();
-        createProducer();
-        createConsumer();
+        initialize();
+    }
 
-        // todo-tier use rocksdb
-        //load the stored data
-        loadMetadataStore();
+    private synchronized void initialize() {
+        if(!initialized) {
+            //create clients
+            createAdminClient();
+            createProducer();
+            createConsumer();
 
-        initConsumerThread();
+            // todo-tier use rocksdb
+            //load the stored data
+            loadMetadataStore();
+
+            initConsumerThread();
+
+            initialized = true;
+        }
     }
 
     @Override
@@ -326,7 +340,7 @@ public class RLMMWithTopicStorage implements RemoteLogMetadataManager, RemoteLog
         try {
             // start a thread to continuously consume records from topic partitions.
             consumerTask = new ConsumerTask(consumer, logDir, this);
-            Executors.newSingleThreadExecutor().submit(consumerTask);
+            KafkaThread.daemon("RLMM-Consumer-Task", consumerTask).start();
         } catch (RuntimeException e) {
             throw e;
         } catch (Exception e) {
@@ -522,6 +536,7 @@ public class RLMMWithTopicStorage implements RemoteLogMetadataManager, RemoteLog
     }
 
     private static class ConsumerTask implements Runnable, Closeable {
+        private static final Logger log = LoggerFactory.getLogger(ConsumerTask.class);
         private final KafkaConsumer<String, RemoteLogSegmentMetadata> consumer;
         private final RemoteLogSegmentMetadataUpdater remoteLogSegmentMetadataUpdater;
         private final CommittedOffsetsFile committedOffsetsFile;
@@ -582,11 +597,13 @@ public class RLMMWithTopicStorage implements RemoteLogMetadataManager, RemoteLog
 
         @Override
         public void run() {
+            log.info("Started Consumer task thread.");
             try {
                 while (!closed) {
                     synchronized (lock) {
                         while (assignedMetaPartitions.isEmpty()) {
                             // if no partitions are assigned, wait till they are assigned.
+                            log.info("Waiting for assigned meta partitions");
                             try {
                                 lock.wait();
                             } catch (InterruptedException e) {
@@ -600,9 +617,10 @@ public class RLMMWithTopicStorage implements RemoteLogMetadataManager, RemoteLog
                             Set<TopicPartition> assignedTopicPartitions = assignedMetaPartitions.stream()
                                     .map(x -> new TopicPartition(Topic.REMOTE_LOG_METADATA_TOPIC_NAME, x))
                                     .collect(Collectors.toSet());
+                            log.info("reassigning partitions to consumer task[{}]", assignedTopicPartitions);
                             consumer.assign(assignedTopicPartitions);
                             for (Map.Entry<TopicPartition, Long> entry
-                                    : consumer.endOffsets(assignedTopicPartitions).entrySet()) {
+                                    : consumer.endOffsets(assignedTopicPartitions, Duration.ofMillis(Long.MAX_VALUE)).entrySet()) {
                                 if (entry.getValue() > 0) {
                                     receivedTillEndOffsets.put(entry.getKey().partition(), entry.getValue());
                                 }
@@ -610,6 +628,8 @@ public class RLMMWithTopicStorage implements RemoteLogMetadataManager, RemoteLog
                             reassign = false;
                         }
                     }
+
+                    log.info("POlling consumer to receive remote log metadata topic records");
                     ConsumerRecords<String, RemoteLogSegmentMetadata> consumerRecords
                             = consumer.poll(Duration.ofSeconds(30L));
                     for (ConsumerRecord<String, RemoteLogSegmentMetadata> record : consumerRecords) {
@@ -645,6 +665,7 @@ public class RLMMWithTopicStorage implements RemoteLogMetadataManager, RemoteLog
                     log.error("Error occurred in consumer task", e);
                 }
             } finally {
+                log.info("Exiting from consumer task thread");
                 if (!closed) {
                     // sync this only if it is not closed as it comes here in a non-graceful error.
                     syncCommittedDataAndOffsets(true);

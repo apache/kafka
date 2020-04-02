@@ -22,7 +22,7 @@ import java.nio.ByteBuffer
 import java.util
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
-import java.util.{Collections, Optional}
+import java.util.{Collections, Optional, Properties}
 
 import kafka.admin.{AdminUtils, RackAwareMode}
 import kafka.api.{ApiVersion, ElectLeadersRequestOps, KAFKA_0_11_0_IV0, KAFKA_2_3_IV0}
@@ -31,6 +31,7 @@ import kafka.common.OffsetAndMetadata
 import kafka.controller.{KafkaController, PartitionReplicaAssignment}
 import kafka.coordinator.group.{GroupCoordinator, JoinGroupResult, LeaveGroupResult, SyncGroupResult}
 import kafka.coordinator.transaction.{InitProducerIdResult, TransactionCoordinator}
+import kafka.log.LogConfig
 import kafka.message.ZStdCompressionCodec
 import kafka.network.RequestChannel
 import kafka.security.authorizer.AuthorizerUtils
@@ -1050,7 +1051,15 @@ class KafkaApis(val requestChannel: RequestChannel,
           new MetadataResponse.TopicMetadata(Errors.COORDINATOR_NOT_AVAILABLE, topic, true,
             util.Collections.emptyList())
         } else {
-          createTopic(topic, config.remoteLogMetadataTopicPartitions, config.remoteLogMetadataTopicReplicationFactor)
+          //todo-tier extract these as props and pass them.
+          // enforce disabled unclean leader election, no compression types, and compact cleanup policy
+          val props = new Properties()
+          props.put(LogConfig.UncleanLeaderElectionEnableProp, "false")
+          props.put(LogConfig.MinInSyncReplicasProp, ((config.remoteLogMetadataTopicReplicationFactor/2) + 1).toString)
+          //set 1 year as the retention period for remote log metadata.
+          props.put(LogConfig.RetentionMsProp, (365 * 24 * 60 * 60 * 1000).toString)
+
+          createTopic(topic, config.remoteLogMetadataTopicPartitions, config.remoteLogMetadataTopicReplicationFactor, props)
         }
       case _ => throw new IllegalArgumentException(s"Unexpected internal topic name: $topic")
     }
