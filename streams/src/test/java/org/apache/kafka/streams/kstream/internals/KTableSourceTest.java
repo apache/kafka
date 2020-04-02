@@ -90,29 +90,35 @@ public class KTableSourceTest {
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic1 = "topic1";
 
-        final KTable<String, Integer> table1 =
-            builder.table(topic1, Consumed.with(Serdes.String(), Serdes.Integer()), Materialized.as("store"));
-
-        final MockProcessorSupplier<String, Integer> supplier = new MockProcessorSupplier<>();
-        table1.toStream().process(supplier);
+        builder.table(topic1, Consumed.with(Serdes.String(), Serdes.Integer()), Materialized.as("store"))
+               .toStream()
+               .to("output");
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             final TestInputTopic<String, Integer> inputTopic =
-                    driver.createInputTopic(topic1, new StringSerializer(), new IntegerSerializer());
+                driver.createInputTopic(topic1, new StringSerializer(), new IntegerSerializer());
+            final TestOutputTopic<String, Integer> outputTopic =
+                driver.createOutputTopic("output", new StringDeserializer(), new IntegerDeserializer());
+
             inputTopic.pipeInput("A", 1, 10L);
             inputTopic.pipeInput("B", 2, 11L);
-            inputTopic.pipeInput("A", 1, 10L);
+            inputTopic.pipeInput("A", 1, 12L);
             inputTopic.pipeInput("B", 3, 13L);
 
-            assertEquals(1.0,
-                getMetricByName(driver.metrics(), "idempotent-update-skip-total", "stream-processor-node-metrics").metricValue());
-        }
+            assertThat(
+                getMetricByName(driver.metrics(), "idempotent-update-skip-total", "stream-processor-node-metrics").metricValue(),
+                is(1.0)
+            );
 
-        assertEquals(
-            asList(new KeyValueTimestamp<>("A", 1, 10L),
-                new KeyValueTimestamp<>("B", 2, 11L),
-                new KeyValueTimestamp<>("B", 3, 13L)),
-            supplier.theCapturedProcessor().processed);
+            assertThat(
+                outputTopic.readRecordsToList(),
+                is(
+                    asList(new TestRecord<>("A", 1, Instant.ofEpochMilli(10L)),
+                           new TestRecord<>("B", 2, Instant.ofEpochMilli(11L)),
+                           new TestRecord<>("B", 3, Instant.ofEpochMilli(13L)))
+                )
+            );
+        }
     }
 
     @Test
