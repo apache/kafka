@@ -202,41 +202,43 @@ class GroupCoordinator(val brokerId: Int,
         val newMemberId = group.generateMemberId(clientId, groupInstanceId)
 
         if (group.hasStaticMember(groupInstanceId)) {
-          val oldMemberId = group.getStaticMemberId(groupInstanceId)
-          info(s"Static member $groupInstanceId of group ${group.groupId} with unknown member id rejoins, assigning new member id $newMemberId, while " +
-            s"old member id $oldMemberId will be removed.")
+          updateStaticMemberAndRebalance(group, newMemberId, groupInstanceId, protocols, responseCallback)
 
-          val currentLeader = group.leaderOrNull
-          val member = group.replaceGroupInstance(oldMemberId, newMemberId, groupInstanceId)
-          // Heartbeat of old member id will expire without effect since the group no longer contains that member id.
-          // New heartbeat shall be scheduled with new member id.
-          completeAndScheduleNextHeartbeatExpiration(group, member)
-
-          val knownStaticMember = group.get(newMemberId)
-          group.updateMember(knownStaticMember, protocols, responseCallback)
-
-          group.currentState match {
-            case Stable | CompletingRebalance =>
-              info(s"Static member joins during ${group.currentState} stage will not trigger rebalance.")
-              group.maybeInvokeJoinCallback(member, JoinGroupResult(
-                members = List.empty,
-                memberId = newMemberId,
-                generationId = group.generationId,
-                protocolType = group.protocolType,
-                protocolName = group.protocolName,
-                // We want to avoid current leader performing trivial assignment while the group
-                // is in stable/awaiting sync stage, because the new assignment in leader's next sync call
-                // won't be broadcast by a stable/awaiting sync group. This could be guaranteed by
-                // always returning the old leader id so that the current leader won't assume itself
-                // as a leader based on the returned message, since the new member.id won't match
-                // returned leader id, therefore no assignment will be performed.
-                leaderId = currentLeader,
-                error = Errors.NONE))
-            case Empty | Dead =>
-              throw new IllegalStateException(s"Group ${group.groupId} was not supposed to be " +
-                s"in the state ${group.currentState} when the unknown static member $groupInstanceId rejoins.")
-            case PreparingRebalance =>
-          }
+//          val oldMemberId = group.getStaticMemberId(groupInstanceId)
+//          info(s"Static member $groupInstanceId of group ${group.groupId} with unknown member id rejoins, assigning new member id $newMemberId, while " +
+//            s"old member id $oldMemberId will be removed.")
+//
+//          val currentLeader = group.leaderOrNull
+//          val member = group.replaceGroupInstance(oldMemberId, newMemberId, groupInstanceId)
+//          // Heartbeat of old member id will expire without effect since the group no longer contains that member id.
+//          // New heartbeat shall be scheduled with new member id.
+//          completeAndScheduleNextHeartbeatExpiration(group, member)
+//
+//          val knownStaticMember = group.get(newMemberId)
+//          group.updateMember(knownStaticMember, protocols, responseCallback)
+//
+//          group.currentState match {
+//            case Stable | CompletingRebalance =>
+//              info(s"Static member joins during ${group.currentState} stage will not trigger rebalance.")
+//              group.maybeInvokeJoinCallback(member, JoinGroupResult(
+//                members = List.empty,
+//                memberId = newMemberId,
+//                generationId = group.generationId,
+//                protocolType = group.protocolType,
+//                protocolName = group.protocolName,
+//                // We want to avoid current leader performing trivial assignment while the group
+//                // is in stable/awaiting sync stage, because the new assignment in leader's next sync call
+//                // won't be broadcast by a stable/awaiting sync group. This could be guaranteed by
+//                // always returning the old leader id so that the current leader won't assume itself
+//                // as a leader based on the returned message, since the new member.id won't match
+//                // returned leader id, therefore no assignment will be performed.
+//                leaderId = currentLeader,
+//                error = Errors.NONE))
+//            case Empty | Dead =>
+//              throw new IllegalStateException(s"Group ${group.groupId} was not supposed to be " +
+//                s"in the state ${group.currentState} when the unknown static member $groupInstanceId rejoins.")
+//            case PreparingRebalance =>
+//          }
         } else if (requireKnownMemberId) {
             // If member id required (dynamic membership), register the member in the pending member list
             // and send back a response to call for another join group request with allocated member id.
@@ -1026,6 +1028,50 @@ class GroupCoordinator(val brokerId: Int,
       group.removePendingMember(memberId)
     }
     maybePrepareRebalance(group, s"Adding new member $memberId with group instance id $groupInstanceId")
+  }
+
+  private def updateStaticMemberAndRebalance(group: GroupMetadata,
+                                             newMemberId: String,
+                                             groupInstanceId: Option[String],
+                                             protocols: List[(String, Array[Byte])],
+                                             responseCallback: JoinCallback): Unit = {
+    val oldMemberId = group.getStaticMemberId(groupInstanceId)
+    info(s"Static member $groupInstanceId of group ${group.groupId} with unknown member id rejoins, assigning new member id $newMemberId, while " +
+      s"old member id $oldMemberId will be removed.")
+
+    val currentLeader = group.leaderOrNull
+    val member = group.replaceGroupInstance(oldMemberId, newMemberId, groupInstanceId)
+    // Heartbeat of old member id will expire without effect since the group no longer contains that member id.
+    // New heartbeat shall be scheduled with new member id.
+    completeAndScheduleNextHeartbeatExpiration(group, member)
+
+    val knownStaticMember = group.get(newMemberId)
+    group.updateMember(knownStaticMember, protocols, responseCallback)
+
+    group.currentState match {
+      case Stable =>
+        info(s"Static member joins during Stable stage will not trigger rebalance.")
+        group.maybeInvokeJoinCallback(member, JoinGroupResult(
+          members = List.empty,
+          memberId = newMemberId,
+          generationId = group.generationId,
+          protocolType = group.protocolType,
+          protocolName = group.protocolName,
+          // We want to avoid current leader performing trivial assignment while the group
+          // is in stable sync stage, because the new assignment in leader's next sync call
+          // won't be broadcast by a stable group. This could be guaranteed by
+          // always returning the old leader id so that the current leader won't assume itself
+          // as a leader based on the returned message, since the new member.id won't match
+          // returned leader id, therefore no assignment will be performed.
+          leaderId = currentLeader,
+          error = Errors.NONE))
+      case CompletingRebalance =>
+        prepareRebalance(group, s"Updating metadata for static member ${member.memberId} with instance id $groupInstanceId")
+      case Empty | Dead =>
+        throw new IllegalStateException(s"Group ${group.groupId} was not supposed to be " +
+          s"in the state ${group.currentState} when the unknown static member $groupInstanceId rejoins.")
+      case PreparingRebalance =>
+    }
   }
 
   private def updateMemberAndRebalance(group: GroupMetadata,
