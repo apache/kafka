@@ -56,7 +56,8 @@ public interface SslEngineFactory extends Configurable, Closeable {
      * {@link org.apache.kafka.common.security.ssl.SslFactory}. Based on the <i>nextConfigs</i>, this method will
      * decide whether underlying SSLEngine object needs to be rebuilt. If this method returns true, the
      * {@link org.apache.kafka.common.security.ssl.SslFactory} will re-create instance of this object and run other
-     * checks before deciding to use the new object.
+     * checks before deciding to use the new object for the <i>new incoming connection</i> requests.The existing connections
+     * are not impacted by this and will not see any changes done as part of reconfiguration.
      *
      * <pre>
      *     Example: If the implementation depends on the file based key material it can check if the file is updated
