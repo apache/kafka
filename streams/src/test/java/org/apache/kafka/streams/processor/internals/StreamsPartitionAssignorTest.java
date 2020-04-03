@@ -17,7 +17,7 @@
 package org.apache.kafka.streams.processor.internals;
 
 import java.util.Map.Entry;
-import java.util.Optional;
+import java.util.concurrent.atomic.AtomicLong;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.AdminClientConfig;
@@ -203,7 +203,7 @@ public class StreamsPartitionAssignorTest {
         configurationMap.put(StreamsConfig.InternalConfig.STREAMS_METADATA_STATE_FOR_PARTITION_ASSIGNOR, streamsMetadataState);
         configurationMap.put(StreamsConfig.InternalConfig.STREAMS_ADMIN_CLIENT, adminClient);
         configurationMap.put(StreamsConfig.InternalConfig.ASSIGNMENT_ERROR_CODE, new AtomicInteger());
-        configurationMap.put(StreamsConfig.InternalConfig.NEXT_PROBING_REBALANCE_MS, Optional.empty());
+        configurationMap.put(StreamsConfig.InternalConfig.NEXT_PROBING_REBALANCE_MS, new AtomicLong(Long.MAX_VALUE));
         configurationMap.put(AssignorConfiguration.HIGH_AVAILABILITY_ENABLED_CONFIG, highAvailabilityEnabled);
         return configurationMap;
     }
