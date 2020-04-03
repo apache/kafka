@@ -721,6 +721,9 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                     statefulTasks,
                     assignmentConfigs);
             } else {
+                log.info("Failed to fetch end offsets for changelogs, will return previous assignment to clients and "
+                             + "trigger another rebalance to retry.");
+                setAssignmentErrorCode(AssignorError.REBALANCE_NEEDED.code());
                 taskAssignor = new StickyTaskAssignor(clientStates, allTasks, statefulTasks, assignmentConfigs, true);
             }
         } else {
@@ -762,9 +765,6 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         } catch (final StreamsException e) {
             allTaskEndOffsetSums = null;
             fetchEndOffsetsSuccessful = false;
-            log.info("Failed to fetch end offsets for changelogs, will return previous assignment to clients and "
-                         + "trigger another rebalance to retry.");
-            setAssignmentErrorCode(AssignorError.REBALANCE_NEEDED.code());
         }
 
         for (final Map.Entry<UUID, ClientMetadata> entry : clientMetadataMap.entrySet()) {
