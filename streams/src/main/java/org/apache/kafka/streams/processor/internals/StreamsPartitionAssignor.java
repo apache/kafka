@@ -158,6 +158,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
     @SuppressWarnings("deprecation")
     private org.apache.kafka.streams.processor.PartitionGrouper partitionGrouper;
     private AtomicInteger assignmentErrorCode;
+    private Optional<Long> nextProbingRebalanceMs;
 
     protected int usedSubscriptionMetadataVersion = LATEST_SUPPORTED_VERSION;
 
@@ -187,6 +188,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         taskManager = assignorConfiguration.getTaskManager();
         streamsMetadataState = assignorConfiguration.getStreamsMetadataState();
         assignmentErrorCode = assignorConfiguration.getAssignmentErrorCode(configs);
+        nextProbingRebalanceMs = assignorConfiguration.getNextProbingRebalanceMs(configs);
         assignmentConfigs = assignorConfiguration.getAssignmentConfigs();
         partitionGrouper = assignorConfiguration.getPartitionGrouper();
         userEndPoint = assignorConfiguration.getUserEndPoint();
@@ -1374,6 +1376,13 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                 topicToPartitionInfo = getTopicPartitionInfo(partitionsByHost);
                 break;
             case 6:
+                validateActiveTaskEncoding(partitions, info, logPrefix);
+
+                activeTasks = getActiveTasks(partitions, info);
+                partitionsByHost = info.partitionsByHost();
+                standbyPartitionsByHost = info.standbyPartitionByHost();
+                topicToPartitionInfo = getTopicPartitionInfo(partitionsByHost);
+                break;
             case 7:
                 validateActiveTaskEncoding(partitions, info, logPrefix);
 
@@ -1381,6 +1390,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                 partitionsByHost = info.partitionsByHost();
                 standbyPartitionsByHost = info.standbyPartitionByHost();
                 topicToPartitionInfo = getTopicPartitionInfo(partitionsByHost);
+                nextProbingRebalanceMs = info.nextRebalanceMs();
                 break;
             default:
                 throw new IllegalStateException(

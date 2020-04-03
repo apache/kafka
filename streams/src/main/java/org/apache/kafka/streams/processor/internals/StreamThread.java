@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import java.util.Optional;
+import java.util.concurrent.atomic.AtomicLong;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
@@ -255,6 +257,7 @@ public class StreamThread extends Thread {
     private final String originalReset;
     private final TaskManager taskManager;
     private final AtomicInteger assignmentErrorCode;
+    private final Optional<Long> nextProbingRebalanceMs;
 
     private final StreamsMetricsImpl streamsMetrics;
     private final Sensor commitSensor;
@@ -362,6 +365,8 @@ public class StreamThread extends Thread {
         consumerConfigs.put(StreamsConfig.InternalConfig.STREAMS_ADMIN_CLIENT, adminClient);
         final AtomicInteger assignmentErrorCode = new AtomicInteger();
         consumerConfigs.put(StreamsConfig.InternalConfig.ASSIGNMENT_ERROR_CODE, assignmentErrorCode);
+        final Optional<Long> nextProbingRebalanceMs = Optional.empty();
+        consumerConfigs.put(StreamsConfig.InternalConfig.NEXT_PROBING_REBALANCE_MS, nextProbingRebalanceMs);
         String originalReset = null;
         if (!builder.latestResetTopicsPattern().pattern().equals("") || !builder.earliestResetTopicsPattern().pattern().equals("")) {
             originalReset = (String) consumerConfigs.get(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG);
@@ -385,7 +390,8 @@ public class StreamThread extends Thread {
             builder,
             threadId,
             logContext,
-            assignmentErrorCode
+            assignmentErrorCode,
+            nextProbingRebalanceMs
         );
 
         return streamThread.updateThreadMetadata(getSharedAdminClientId(clientId));
@@ -433,7 +439,8 @@ public class StreamThread extends Thread {
                         final InternalTopologyBuilder builder,
                         final String threadId,
                         final LogContext logContext,
-                        final AtomicInteger assignmentErrorCode) {
+                        final AtomicInteger assignmentErrorCode,
+                        final Optional<Long> nextProbingRebalanceMs) {
         super(threadId);
         this.stateLock = new Object();
 
@@ -474,6 +481,7 @@ public class StreamThread extends Thread {
         this.changelogReader = changelogReader;
         this.originalReset = originalReset;
         this.assignmentErrorCode = assignmentErrorCode;
+        this.nextProbingRebalanceMs = nextProbingRebalanceMs;
 
         this.pollTime = Duration.ofMillis(config.getLong(StreamsConfig.POLL_MS_CONFIG));
         final int dummyThreadIdx = 1;
@@ -551,6 +559,10 @@ public class StreamThread extends Thread {
                     log.info("Detected that the assignor requested a rebalance. Rejoining the consumer group to " +
                                  "trigger a new rebalance.");
                     assignmentErrorCode.set(AssignorError.NONE.code());
+                    mainConsumer.enforceRebalance();
+                } else if (nextProbingRebalanceMs.isPresent() && nextProbingRebalanceMs.get() < System.currentTimeMillis()) {
+                    log.info("The probing rebalance interval has elapsed since the last rebalance, triggering a " +
+                                "rebalance to probe for newly aught-up clients");
                     mainConsumer.enforceRebalance();
                 }
             } catch (final TaskCorruptedException e) {

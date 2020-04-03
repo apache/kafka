@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals.assignment;
 
+import java.util.Optional;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
@@ -24,6 +25,7 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.StreamsConfig.InternalConfig;
 import org.apache.kafka.streams.internals.QuietStreamsConfig;
 import org.apache.kafka.streams.processor.internals.InternalTopicManager;
 import org.apache.kafka.streams.processor.internals.StreamsMetadataState;
@@ -184,6 +186,24 @@ public final class AssignorConfiguration {
             throw fatalException;
         }
         return (AtomicInteger) ai;
+    }
+
+    public Optional<Long> getNextProbingRebalanceMs(final Map<String, ?> configs) {
+        final Object o = configs.get(InternalConfig.NEXT_PROBING_REBALANCE_MS);
+        if (o == null) {
+            final KafkaException fatalException = new KafkaException("nextProbingRebalanceMs is not specified");
+            log.error(fatalException.getMessage(), fatalException);
+            throw fatalException;
+        }
+
+        if (!(o instanceof Optional<?>)) {
+            final KafkaException fatalException = new KafkaException(
+                String.format("%s is not an instance of %s", o.getClass().getName(), Optional.class.getName())
+            );
+            log.error(fatalException.getMessage(), fatalException);
+            throw fatalException;
+        }
+        return (Optional<Long>) o;
     }
 
     public TaskManager getTaskManager() {
