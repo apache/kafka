@@ -38,6 +38,9 @@ import static org.apache.kafka.common.utils.Utils.getPort;
 import static org.apache.kafka.streams.processor.internals.assignment.StreamsAssignmentProtocolVersions.LATEST_SUPPORTED_VERSION;
 
 public final class AssignorConfiguration {
+    public static final String HIGH_AVAILABILITY_ENABLED_CONFIG = "internal.high.availability.enabled";
+    private final boolean highAvailabilityEnabled;
+
     private final String logPrefix;
     private final Logger log;
     private final AssignmentConfigs assignmentConfigs;
@@ -154,6 +157,15 @@ public final class AssignorConfiguration {
         adminClientTimeout = streamsConfig.getInt(AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG);
 
         copartitionedTopicsEnforcer = new CopartitionedTopicsEnforcer(logPrefix);
+
+        {
+            final Object o = configs.get(HIGH_AVAILABILITY_ENABLED_CONFIG);
+            if (o == null) {
+                highAvailabilityEnabled = false;
+            } else {
+                highAvailabilityEnabled = (Boolean) o;
+            }
+        }
     }
 
     public AtomicInteger getAssignmentErrorCode(final Map<String, ?> configs) {
@@ -275,6 +287,10 @@ public final class AssignorConfiguration {
         return assignmentConfigs;
     }
 
+    public boolean isHighAvailabilityEnabled() {
+        return highAvailabilityEnabled;
+    }
+
     public static class AssignmentConfigs {
         public final long acceptableRecoveryLag;
         public final int balanceFactor;
@@ -282,12 +298,26 @@ public final class AssignorConfiguration {
         public final int numStandbyReplicas;
         public final long probingRebalanceIntervalMs;
 
-        AssignmentConfigs(final StreamsConfig configs) {
-            acceptableRecoveryLag = configs.getLong(StreamsConfig.ACCEPTABLE_RECOVERY_LAG_CONFIG);
-            balanceFactor = configs.getInt(StreamsConfig.BALANCE_FACTOR_CONFIG);
-            maxWarmupReplicas = configs.getInt(StreamsConfig.MAX_WARMUP_REPLICAS_CONFIG);
-            numStandbyReplicas = configs.getInt(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG);
-            probingRebalanceIntervalMs = configs.getLong(StreamsConfig.PROBING_REBALANCE_INTERVAL_MS_CONFIG);
+        private AssignmentConfigs(final StreamsConfig configs) {
+            this(
+                configs.getLong(StreamsConfig.ACCEPTABLE_RECOVERY_LAG_CONFIG),
+                configs.getInt(StreamsConfig.BALANCE_FACTOR_CONFIG),
+                configs.getInt(StreamsConfig.MAX_WARMUP_REPLICAS_CONFIG),
+                configs.getInt(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG),
+                configs.getLong(StreamsConfig.PROBING_REBALANCE_INTERVAL_MS_CONFIG)
+            );
+        }
+
+        AssignmentConfigs(final Long acceptableRecoveryLag,
+                          final Integer balanceFactor,
+                          final Integer maxWarmupReplicas,
+                          final Integer numStandbyReplicas,
+                          final Long probingRebalanceIntervalMs) {
+            this.acceptableRecoveryLag = acceptableRecoveryLag;
+            this.balanceFactor = balanceFactor;
+            this.maxWarmupReplicas = maxWarmupReplicas;
+            this.numStandbyReplicas = numStandbyReplicas;
+            this.probingRebalanceIntervalMs = probingRebalanceIntervalMs;
         }
     }
 }

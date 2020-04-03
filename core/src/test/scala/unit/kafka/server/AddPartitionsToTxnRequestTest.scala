@@ -25,7 +25,7 @@ import org.apache.kafka.common.requests.{AddPartitionsToTxnRequest, AddPartition
 import org.junit.Assert._
 import org.junit.{Before, Test}
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 
 class AddPartitionsToTxnRequestTest extends BaseRequestTest {
   private val topic1 = "foobartopic"

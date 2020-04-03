@@ -27,7 +27,7 @@ import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.server.authorizer.AuthorizerServerInfo
 
 import scala.collection.Seq
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 
 object Broker {
   private[cluster] case class ServerInfo(clusterResource: ClusterResource,

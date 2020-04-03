@@ -25,7 +25,7 @@ import org.easymock.EasyMock
 import org.junit.{Before, Test}
 import org.junit.Assert._
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 
 class AbstractFetcherManagerTest {
 
@@ -35,7 +35,7 @@ class AbstractFetcherManagerTest {
   }
 
   private def getMetricValue(name: String): Any = {
-    KafkaYammerMetrics.defaultRegistry.allMetrics.asScala.filterKeys(_.getName == name).values.headOption.get.
+    KafkaYammerMetrics.defaultRegistry.allMetrics.asScala.filter { case (k, _) => k.getName == name }.values.headOption.get.
       asInstanceOf[Gauge[Int]].value()
   }
 

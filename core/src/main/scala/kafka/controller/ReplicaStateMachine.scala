@@ -332,14 +332,14 @@ class ZkReplicaStateMachine(config: KafkaConfig,
   ): (Map[TopicPartition, Either[Exception, LeaderIsrAndControllerEpoch]], Seq[TopicPartition]) = {
     val (leaderAndIsrs, partitionsWithNoLeaderAndIsrInZk) = getTopicPartitionStatesFromZk(partitions)
     val (leaderAndIsrsWithReplica, leaderAndIsrsWithoutReplica) = leaderAndIsrs.partition { case (_, result) =>
-      result.right.map { leaderAndIsr =>
+      result.map { leaderAndIsr =>
         leaderAndIsr.isr.contains(replicaId)
-      }.right.getOrElse(false)
+      }.getOrElse(false)
     }
 
     val adjustedLeaderAndIsrs: Map[TopicPartition, LeaderAndIsr] = leaderAndIsrsWithReplica.flatMap {
       case (partition, result) =>
-        result.right.toOption.map { leaderAndIsr =>
+        result.toOption.map { leaderAndIsr =>
           val newLeader = if (replicaId == leaderAndIsr.leader) LeaderAndIsr.NoLeader else leaderAndIsr.leader
           val adjustedIsr = if (leaderAndIsr.isr.size == 1) leaderAndIsr.isr else leaderAndIsr.isr.filter(_ != replicaId)
           partition -> leaderAndIsr.newLeaderAndIsr(newLeader, adjustedIsr)
@@ -347,10 +347,7 @@ class ZkReplicaStateMachine(config: KafkaConfig,
     }
 
     val UpdateLeaderAndIsrResult(finishedPartitions, updatesToRetry) = zkClient.updateLeaderAndIsr(
-      adjustedLeaderAndIsrs,
-      controllerContext.epoch,
-      controllerContext.epochZkVersion
-    )
+      adjustedLeaderAndIsrs, controllerContext.epoch, controllerContext.epochZkVersion)
 
     val exceptionsForPartitionsWithNoLeaderAndIsrInZk: Map[TopicPartition, Either[Exception, LeaderIsrAndControllerEpoch]] =
       partitionsWithNoLeaderAndIsrInZk.iterator.flatMap { partition =>
@@ -364,21 +361,15 @@ class ZkReplicaStateMachine(config: KafkaConfig,
       }.toMap
 
     val leaderIsrAndControllerEpochs: Map[TopicPartition, Either[Exception, LeaderIsrAndControllerEpoch]] =
-      (leaderAndIsrsWithoutReplica ++ finishedPartitions).map { case (partition, result: Either[Exception, LeaderAndIsr]) =>
-        (
-          partition,
-          result.right.map { leaderAndIsr =>
-            val leaderIsrAndControllerEpoch = LeaderIsrAndControllerEpoch(leaderAndIsr, controllerContext.epoch)
-            controllerContext.partitionLeadershipInfo.put(partition, leaderIsrAndControllerEpoch)
-            leaderIsrAndControllerEpoch
-          }
-          )
+      (leaderAndIsrsWithoutReplica ++ finishedPartitions).map { case (partition, result) =>
+        (partition, result.map { leaderAndIsr =>
+          val leaderIsrAndControllerEpoch = LeaderIsrAndControllerEpoch(leaderAndIsr, controllerContext.epoch)
+          controllerContext.partitionLeadershipInfo.put(partition, leaderIsrAndControllerEpoch)
+          leaderIsrAndControllerEpoch
+        })
       }
 
-    (
-      leaderIsrAndControllerEpochs ++ exceptionsForPartitionsWithNoLeaderAndIsrInZk,
-      updatesToRetry
-    )
+    (leaderIsrAndControllerEpochs ++ exceptionsForPartitionsWithNoLeaderAndIsrInZk, updatesToRetry)
   }
 
   /**

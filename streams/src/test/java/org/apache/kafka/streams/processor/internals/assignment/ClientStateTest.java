@@ -171,6 +171,7 @@ public class ClientStateTest {
     public void shouldAddTasksWithLatestOffsetToPrevActiveTasks() {
         final Map<TaskId, Long> taskOffsetSums = Collections.singletonMap(taskId01, Task.LATEST_OFFSET);
         client.addPreviousTasksAndOffsetSums(taskOffsetSums);
+        client.initializePrevTasks(Collections.emptyMap());
         assertThat(client.prevActiveTasks(), equalTo(Collections.singleton(taskId01)));
         assertThat(client.previousAssignedTasks(), equalTo(Collections.singleton(taskId01)));
         assertTrue(client.prevStandbyTasks().isEmpty());
@@ -183,6 +184,7 @@ public class ClientStateTest {
             mkEntry(taskId02, 100L)
         );
         client.addPreviousTasksAndOffsetSums(taskOffsetSums);
+        client.initializePrevTasks(Collections.emptyMap());
         assertThat(client.prevStandbyTasks(), equalTo(mkSet(taskId01, taskId02)));
         assertThat(client.previousAssignedTasks(), equalTo(mkSet(taskId01, taskId02)));
         assertTrue(client.prevActiveTasks().isEmpty());
@@ -256,6 +258,12 @@ public class ClientStateTest {
         client.addPreviousTasksAndOffsetSums(taskOffsetSums);
         client.computeTaskLags(null, allTaskEndOffsetSums);
         assertThrows(IllegalStateException.class, () -> client.lagFor(taskId02));
+    }
+
+    @Test
+    public void shouldThrowIllegalStateExceptionIfAttemptingToInitializeNonEmptyPrevTaskSets() {
+        client.addPreviousActiveTasks(Collections.singleton(taskId01));
+        assertThrows(IllegalStateException.class, () -> client.initializePrevTasks(Collections.emptyMap()));
     }
 
 }

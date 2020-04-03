@@ -118,6 +118,9 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import static java.util.Arrays.asList;
+import static java.util.Collections.emptyList;
+import static java.util.Collections.emptyMap;
 import static java.util.Collections.singleton;
 import static java.util.Collections.singletonMap;
 import static org.apache.kafka.common.requests.FetchMetadata.INVALID_SESSION_ID;
@@ -3932,6 +3935,74 @@ public class FetcherTest {
         });
     }
 
+    @Test
+    public void testBeginningOffsets() {
+        buildFetcher();
+        assignFromUser(singleton(tp0));
+        client.prepareResponse(listOffsetResponse(tp0, Errors.NONE, ListOffsetRequest.EARLIEST_TIMESTAMP, 2L));
+        assertEquals(singletonMap(tp0, 2L), fetcher.beginningOffsets(singleton(tp0), time.timer(5000L)));
+    }
+
+    @Test
+    public void testBeginningOffsetsDuplicateTopicPartition() {
+        buildFetcher();
+        assignFromUser(singleton(tp0));
+        client.prepareResponse(listOffsetResponse(tp0, Errors.NONE, ListOffsetRequest.EARLIEST_TIMESTAMP, 2L));
+        assertEquals(singletonMap(tp0, 2L), fetcher.beginningOffsets(asList(tp0, tp0), time.timer(5000L)));
+    }
+
+    @Test
+    public void testBeginningOffsetsMultipleTopicPartitions() {
+        buildFetcher();
+        Map<TopicPartition, Long> expectedOffsets = new HashMap<>();
+        expectedOffsets.put(tp0, 2L);
+        expectedOffsets.put(tp1, 4L);
+        expectedOffsets.put(tp2, 6L);
+        assignFromUser(expectedOffsets.keySet());
+        client.prepareResponse(listOffsetResponse(Errors.NONE, ListOffsetRequest.EARLIEST_TIMESTAMP, expectedOffsets));
+        assertEquals(expectedOffsets, fetcher.beginningOffsets(asList(tp0, tp1, tp2), time.timer(5000L)));
+    }
+
+    @Test
+    public void testBeginningOffsetsEmpty() {
+        buildFetcher();
+        assertEquals(emptyMap(), fetcher.beginningOffsets(emptyList(), time.timer(5000L)));
+    }
+
+    @Test
+    public void testEndOffsets() {
+        buildFetcher();
+        assignFromUser(singleton(tp0));
+        client.prepareResponse(listOffsetResponse(tp0, Errors.NONE, ListOffsetRequest.LATEST_TIMESTAMP, 5L));
+        assertEquals(singletonMap(tp0, 5L), fetcher.endOffsets(singleton(tp0), time.timer(5000L)));
+    }
+
+    @Test
+    public void testEndOffsetsDuplicateTopicPartition() {
+        buildFetcher();
+        assignFromUser(singleton(tp0));
+        client.prepareResponse(listOffsetResponse(tp0, Errors.NONE, ListOffsetRequest.LATEST_TIMESTAMP, 5L));
+        assertEquals(singletonMap(tp0, 5L), fetcher.endOffsets(asList(tp0, tp0), time.timer(5000L)));
+    }
+
+    @Test
+    public void testEndOffsetsMultipleTopicPartitions() {
+        buildFetcher();
+        Map<TopicPartition, Long> expectedOffsets = new HashMap<>();
+        expectedOffsets.put(tp0, 5L);
+        expectedOffsets.put(tp1, 7L);
+        expectedOffsets.put(tp2, 9L);
+        assignFromUser(expectedOffsets.keySet());
+        client.prepareResponse(listOffsetResponse(Errors.NONE, ListOffsetRequest.LATEST_TIMESTAMP, expectedOffsets));
+        assertEquals(expectedOffsets, fetcher.endOffsets(asList(tp0, tp1, tp2), time.timer(5000L)));
+    }
+
+    @Test
+    public void testEndOffsetsEmpty() {
+        buildFetcher();
+        assertEquals(emptyMap(), fetcher.endOffsets(emptyList(), time.timer(5000L)));
+    }
+
     private MockClient.RequestMatcher listOffsetRequestMatcher(final long timestamp) {
         // matches any list offset request with the provided timestamp
         return body -> {
@@ -3950,6 +4021,16 @@ public class FetcherTest {
                 Optional.empty());
         Map<TopicPartition, ListOffsetResponse.PartitionData> allPartitionData = new HashMap<>();
         allPartitionData.put(tp, partitionData);
+        return new ListOffsetResponse(allPartitionData);
+    }
+
+    private ListOffsetResponse listOffsetResponse(Errors error, long timestamp, Map<TopicPartition, Long> offsets) {
+        Map<TopicPartition, ListOffsetResponse.PartitionData> allPartitionData = new HashMap<>();
+        for (Map.Entry<TopicPartition, Long> entry : offsets.entrySet()) {
+            ListOffsetResponse.PartitionData partitionData = new ListOffsetResponse.PartitionData(error, timestamp,
+                entry.getValue(), Optional.empty());
+            allPartitionData.put(entry.getKey(), partitionData);
+        }
         return new ListOffsetResponse(allPartitionData);
     }
 

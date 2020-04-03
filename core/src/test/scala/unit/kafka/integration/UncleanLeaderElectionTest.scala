@@ -17,12 +17,12 @@
 
 package kafka.integration
 
-import org.apache.kafka.common.config.ConfigException
+import org.apache.kafka.common.config.{ConfigException, ConfigResource}
 import org.junit.{After, Before, Test}
 
 import scala.util.Random
-import scala.collection.JavaConverters._
-import scala.collection.Seq
+import scala.jdk.CollectionConverters._
+import scala.collection.{Map, Seq}
 import org.apache.log4j.{Level, Logger}
 import java.util.Properties
 import java.util.concurrent.ExecutionException
@@ -36,7 +36,7 @@ import org.apache.kafka.common.errors.TimeoutException
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.serialization.StringDeserializer
-import org.apache.kafka.clients.admin.{Admin, AdminClientConfig}
+import org.apache.kafka.clients.admin.{Admin, AdminClientConfig, AlterConfigsResult, Config, ConfigEntry}
 import org.junit.Assert._
 import org.scalatest.Assertions.intercept
 
@@ -334,7 +334,7 @@ class UncleanLeaderElectionTest extends ZooKeeperTestHarness {
     val adminClient = createAdminClient()
     val newProps = new Properties
     newProps.put(KafkaConfig.UncleanLeaderElectionEnableProp, "true")
-    TestUtils.alterTopicConfigs(adminClient, topic, newProps).all.get
+    alterTopicConfigs(adminClient, topic, newProps).all.get
     adminClient.close()
 
     // wait until new leader is (uncleanly) elected
@@ -345,6 +345,13 @@ class UncleanLeaderElectionTest extends ZooKeeperTestHarness {
 
     // second message was lost due to unclean election
     assertEquals(List("first", "third"), consumeAllMessages(topic, 2))
+  }
+
+  private def alterTopicConfigs(adminClient: Admin, topic: String, topicConfigs: Properties): AlterConfigsResult = {
+    val configEntries = topicConfigs.asScala.map { case (k, v) => new ConfigEntry(k, v) }.toList.asJava
+    val newConfig = new Config(configEntries)
+    val configs = Map(new ConfigResource(ConfigResource.Type.TOPIC, topic) -> newConfig).asJava
+    adminClient.alterConfigs(configs)
   }
 
   private def createAdminClient(): Admin = {

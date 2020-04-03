@@ -427,6 +427,7 @@ public class ThreadMetricsTest {
         final String rateDescription = "The average per-second number of newly created tasks";
         expect(streamsMetrics.threadLevelSensor(THREAD_ID, operation, RecordingLevel.INFO)).andReturn(expectedSensor);
         expect(streamsMetrics.threadLevelTagMap(THREAD_ID)).andReturn(tagMap);
+
         StreamsMetricsImpl.addInvocationRateAndCountToSensor(
             expectedSensor,
             threadLevelGroup,
@@ -435,6 +436,7 @@ public class ThreadMetricsTest {
             rateDescription,
             totalDescription
         );
+
         replay(StreamsMetricsImpl.class, streamsMetrics);
 
         final Sensor sensor = ThreadMetrics.createTaskSensor(THREAD_ID, streamsMetrics);
@@ -458,6 +460,7 @@ public class ThreadMetricsTest {
             rateDescription,
             totalDescription
         );
+
         replay(StreamsMetricsImpl.class, streamsMetrics);
 
         final Sensor sensor = ThreadMetrics.closeTaskSensor(THREAD_ID, streamsMetrics);

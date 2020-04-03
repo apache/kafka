@@ -24,7 +24,7 @@ import org.apache.kafka.common.requests._
 import org.junit.Assert._
 import org.junit.Test
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 
 class StopReplicaRequestTest extends BaseRequestTest {
   override val logDirCount = 2

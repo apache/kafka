@@ -40,6 +40,9 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.Future;
 
+import static org.apache.kafka.streams.processor.internals.StreamThread.ProcessingMode.EXACTLY_ONCE_ALPHA;
+import static org.apache.kafka.streams.processor.internals.StreamThread.ProcessingMode.EXACTLY_ONCE_BETA;
+
 /**
  * {@code StreamsProducer} manages the producers within a Kafka Streams application.
  * <p>
@@ -52,17 +55,17 @@ public class StreamsProducer {
     private final Logger log;
     private final String logPrefix;
 
-    private final Producer<byte[], byte[]> producer;
-    private final boolean eosEnabled;
+    private Producer<byte[], byte[]> producer;
+    private final StreamThread.ProcessingMode processingMode;
 
     private boolean transactionInFlight = false;
     private boolean transactionInitialized = false;
 
     public StreamsProducer(final Producer<byte[], byte[]> producer,
-                           final boolean eosEnabled,
+                           final StreamThread.ProcessingMode processingMode,
                            final LogContext logContext) {
         this.producer = Objects.requireNonNull(producer, "producer cannot be null");
-        this.eosEnabled = eosEnabled;
+        this.processingMode = Objects.requireNonNull(processingMode, "processingMode cannot be null");
 
         log = Objects.requireNonNull(logContext, "logContext cannot be null").logger(getClass());
         logPrefix = logContext.logPrefix().trim();
@@ -72,12 +75,16 @@ public class StreamsProducer {
         return message + " [" + logPrefix + "]";
     }
 
+    boolean eosEnabled() {
+        return processingMode == EXACTLY_ONCE_ALPHA || processingMode == EXACTLY_ONCE_BETA;
+    }
+
     /**
      * @throws IllegalStateException if EOS is disabled
      */
     void initTransaction() {
-        if (!eosEnabled) {
-            throw new IllegalStateException(formatException("EOS is disabled"));
+        if (!eosEnabled()) {
+            throw new IllegalStateException(formatException("Exactly-once is not enabled"));
         }
         if (!transactionInitialized) {
             // initialize transactions if eos is turned on, which will block if the previous transaction has not
@@ -106,8 +113,17 @@ public class StreamsProducer {
         }
     }
 
-    void maybeBeginTransaction() throws ProducerFencedException {
-        if (eosEnabled && !transactionInFlight) {
+    public void resetProducer(final Producer<byte[], byte[]> producer) {
+        if (processingMode != EXACTLY_ONCE_BETA) {
+            throw new IllegalStateException(formatException("Exactly-once beta is not enabled"));
+        }
+
+        this.producer = Objects.requireNonNull(producer, "producer cannot be null");
+        transactionInitialized = false;
+    }
+
+    private void maybeBeginTransaction() throws ProducerFencedException {
+        if (eosEnabled() && !transactionInFlight) {
             try {
                 producer.beginTransaction();
                 transactionInFlight = true;
@@ -159,8 +175,8 @@ public class StreamsProducer {
      */
     void commitTransaction(final Map<TopicPartition, OffsetAndMetadata> offsets,
                            final ConsumerGroupMetadata consumerGroupMetadata) throws ProducerFencedException {
-        if (!eosEnabled) {
-            throw new IllegalStateException(formatException("EOS is disabled"));
+        if (!eosEnabled()) {
+            throw new IllegalStateException(formatException("Exactly-once is not enabled"));
         }
         maybeBeginTransaction();
         try {
@@ -187,8 +203,8 @@ public class StreamsProducer {
      * @throws IllegalStateException if EOS is disabled
      */
     void abortTransaction() throws ProducerFencedException {
-        if (!eosEnabled) {
-            throw new IllegalStateException(formatException("EOS is disabled"));
+        if (!eosEnabled()) {
+            throw new IllegalStateException(formatException("Exactly-once is not enabled"));
         }
         if (transactionInFlight) {
             try {
@@ -219,10 +235,6 @@ public class StreamsProducer {
 
     void flush() {
         producer.flush();
-    }
-
-    boolean eosEnabled() {
-        return eosEnabled;
     }
 
     Producer<byte[], byte[]> kafkaProducer() {

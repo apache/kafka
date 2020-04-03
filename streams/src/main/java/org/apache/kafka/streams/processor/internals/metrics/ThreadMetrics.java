@@ -41,7 +41,6 @@ public class ThreadMetrics {
     private ThreadMetrics() {}
 
     private static final String COMMIT = "commit";
-    private static final String COMMIT_LATENCY = COMMIT + LATENCY_SUFFIX;
     private static final String POLL = "poll";
     private static final String PROCESS = "process";
     private static final String PUNCTUATE = "punctuate";
@@ -86,10 +85,6 @@ public class ThreadMetrics {
         "calls to commit over all tasks assigned to one stream thread";
     private static final String COMMIT_OVER_TASKS_TOTAL_DESCRIPTION = TOTAL_DESCRIPTION + COMMIT_OVER_TASKS_DESCRIPTION;
     private static final String COMMIT_OVER_TASKS_RATE_DESCRIPTION = RATE_DESCRIPTION + COMMIT_OVER_TASKS_DESCRIPTION;
-    private static final String COMMIT_OVER_TASKS_AVG_LATENCY_DESCRIPTION =
-        "The average commit latency over all tasks assigned to one stream thread";
-    private static final String COMMIT_OVER_TASKS_MAX_LATENCY_DESCRIPTION =
-        "The maximum commit latency over all tasks assigned to one stream thread";
     private static final String PROCESS_RATIO_DESCRIPTION =
         "The fraction of time the thread spent on processing active tasks";
     private static final String PUNCTUATE_RATIO_DESCRIPTION =
@@ -250,14 +245,6 @@ public class ThreadMetrics {
         final Sensor commitOverTasksSensor =
             streamsMetrics.threadLevelSensor(threadId, COMMIT, Sensor.RecordingLevel.DEBUG);
         final Map<String, String> tagMap = streamsMetrics.taskLevelTagMap(threadId, ROLLUP_VALUE);
-        addAvgAndMaxToSensor(
-            commitOverTasksSensor,
-            TASK_LEVEL_GROUP,
-            tagMap,
-            COMMIT_LATENCY,
-            COMMIT_OVER_TASKS_AVG_LATENCY_DESCRIPTION,
-            COMMIT_OVER_TASKS_MAX_LATENCY_DESCRIPTION
-        );
         addInvocationRateAndCountToSensor(
             commitOverTasksSensor,
             TASK_LEVEL_GROUP,

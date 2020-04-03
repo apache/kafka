@@ -18,6 +18,7 @@ package org.apache.kafka.streams.processor.internals.assignment;
 
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.internals.assignment.AssignorConfiguration.AssignmentConfigs;
 import org.junit.Test;
 
 import java.util.ArrayList;
@@ -69,7 +70,7 @@ public class StickyTaskAssignorTest {
         createClient(p3, 1);
 
         final StickyTaskAssignor taskAssignor = createTaskAssignor(task00, task01, task02);
-        taskAssignor.assign(0);
+        taskAssignor.assign();
 
         for (final Integer processId : clients.keySet()) {
             assertThat(clients.get(processId).activeTaskCount(), equalTo(1));
@@ -83,7 +84,7 @@ public class StickyTaskAssignorTest {
         createClient(p3, 2);
 
         final StickyTaskAssignor taskAssignor = createTaskAssignor(task10, task11, task22, task20, task21, task12);
-        taskAssignor.assign(0);
+        taskAssignor.assign();
         assertActiveTaskTopicGroupIdsEvenlyDistributed();
     }
 
@@ -93,8 +94,8 @@ public class StickyTaskAssignorTest {
         createClient(p2, 2);
         createClient(p3, 2);
 
-        final StickyTaskAssignor taskAssignor = createTaskAssignor(task20, task11, task12, task10, task21, task22);
-        taskAssignor.assign(1);
+        final StickyTaskAssignor taskAssignor = createTaskAssignor(1, task20, task11, task12, task10, task21, task22);
+        taskAssignor.assign();
         assertActiveTaskTopicGroupIdsEvenlyDistributed();
     }
 
@@ -104,7 +105,7 @@ public class StickyTaskAssignorTest {
         createClientWithPreviousActiveTasks(p2, 1, task01);
 
         final StickyTaskAssignor firstAssignor = createTaskAssignor(task00, task01, task02);
-        firstAssignor.assign(0);
+        firstAssignor.assign();
 
         assertThat(clients.get(p1).activeTasks(), hasItems(task00));
         assertThat(clients.get(p2).activeTasks(), hasItems(task01));
@@ -117,7 +118,7 @@ public class StickyTaskAssignorTest {
         createClientWithPreviousActiveTasks(p2, 1, task02);
 
         final StickyTaskAssignor secondAssignor = createTaskAssignor(task00, task01, task02);
-        secondAssignor.assign(0);
+        secondAssignor.assign();
 
         assertThat(clients.get(p1).activeTasks(), hasItems(task01));
         assertThat(clients.get(p2).activeTasks(), hasItems(task02));
@@ -132,7 +133,7 @@ public class StickyTaskAssignorTest {
 
         final StickyTaskAssignor taskAssignor = createTaskAssignor(task00, task01, task02);
 
-        taskAssignor.assign(0);
+        taskAssignor.assign();
 
         assertThat(clients.get(p2).activeTasks(), equalTo(Collections.singleton(task01)));
         assertThat(clients.get(p1).activeTasks().size(), equalTo(1));
@@ -146,7 +147,7 @@ public class StickyTaskAssignorTest {
         createClient(p2, 2);
         final StickyTaskAssignor taskAssignor = createTaskAssignor(task00, task01, task02);
 
-        taskAssignor.assign(0);
+        taskAssignor.assign();
         assertThat(clients.get(p1).activeTasks().size(), equalTo(1));
         assertThat(clients.get(p2).activeTasks().size(), equalTo(2));
     }
@@ -164,7 +165,7 @@ public class StickyTaskAssignorTest {
         final Set<TaskId> expectedClientITasks = new HashSet<>(Arrays.asList(task00, task01, task10, task05));
         final Set<TaskId> expectedClientIITasks = new HashSet<>(Arrays.asList(task02, task03, task04));
 
-        taskAssignor.assign(0);
+        taskAssignor.assign();
 
         assertThat(clients.get(p1).activeTasks(), equalTo(expectedClientITasks));
         assertThat(clients.get(p2).activeTasks(), equalTo(expectedClientIITasks));
@@ -180,7 +181,7 @@ public class StickyTaskAssignorTest {
         createClient(p5, 1);
 
         final StickyTaskAssignor taskAssignor = createTaskAssignor(task00, task01, task02);
-        taskAssignor.assign(0);
+        taskAssignor.assign();
 
         assertThat(clients.get(p1).activeTasks(), equalTo(Collections.singleton(task00)));
         assertThat(clients.get(p2).activeTasks(), equalTo(Collections.singleton(task02)));
@@ -195,13 +196,11 @@ public class StickyTaskAssignorTest {
         createClientWithPreviousActiveTasks(p5, 1, task01);
 
         final StickyTaskAssignor secondAssignor = createTaskAssignor(task00, task01, task02);
-        secondAssignor.assign(0);
+        secondAssignor.assign();
 
         assertThat(clients.get(p2).activeTasks(), equalTo(Collections.singleton(task00)));
         assertThat(clients.get(p4).activeTasks(), equalTo(Collections.singleton(task02)));
         assertThat(clients.get(p5).activeTasks(), equalTo(Collections.singleton(task01)));
-
-
     }
 
     @Test
@@ -215,7 +214,7 @@ public class StickyTaskAssignorTest {
 
         final StickyTaskAssignor taskAssignor = createTaskAssignor(task00, task01, task02);
 
-        taskAssignor.assign(0);
+        taskAssignor.assign();
 
         assertThat(clients.get(p1).activeTasks(), equalTo(Collections.singleton(task02)));
         assertThat(clients.get(p2).activeTasks(), equalTo(Collections.singleton(task01)));
@@ -231,7 +230,7 @@ public class StickyTaskAssignorTest {
 
         final StickyTaskAssignor taskAssignor = createTaskAssignor(task00, task01, task02);
 
-        taskAssignor.assign(0);
+        taskAssignor.assign();
 
         assertThat(clients.get(p1).activeTasks(), equalTo(Collections.singleton(task00)));
         assertThat(clients.get(p2).activeTasks(), equalTo(Utils.mkSet(task02, task01)));
@@ -244,8 +243,8 @@ public class StickyTaskAssignorTest {
         createClientWithPreviousActiveTasks(p3, 1, task02);
         createClientWithPreviousActiveTasks(p4, 1, task03);
 
-        final StickyTaskAssignor taskAssignor = createTaskAssignor(task00, task01, task02, task03);
-        taskAssignor.assign(1);
+        final StickyTaskAssignor taskAssignor = createTaskAssignor(1, task00, task01, task02, task03);
+        taskAssignor.assign();
 
         assertThat(clients.get(p1).standbyTasks(), not(hasItems(task00)));
         assertTrue(clients.get(p1).standbyTasks().size() <= 2);
@@ -265,16 +264,14 @@ public class StickyTaskAssignorTest {
         assertThat(allStandbyTasks(), equalTo(Arrays.asList(task00, task01, task02, task03)));
     }
 
-
-
     @Test
     public void shouldAssignMultipleReplicasOfStandbyTask() {
         createClientWithPreviousActiveTasks(p1, 1, task00);
         createClientWithPreviousActiveTasks(p2, 1, task01);
         createClientWithPreviousActiveTasks(p3, 1, task02);
 
-        final StickyTaskAssignor taskAssignor = createTaskAssignor(task00, task01, task02);
-        taskAssignor.assign(2);
+        final StickyTaskAssignor taskAssignor = createTaskAssignor(2, task00, task01, task02);
+        taskAssignor.assign();
 
         assertThat(clients.get(p1).standbyTasks(), equalTo(Utils.mkSet(task01, task02)));
         assertThat(clients.get(p2).standbyTasks(), equalTo(Utils.mkSet(task02, task00)));
@@ -284,8 +281,8 @@ public class StickyTaskAssignorTest {
     @Test
     public void shouldNotAssignStandbyTaskReplicasWhenNoClientAvailableWithoutHavingTheTaskAssigned() {
         createClient(p1, 1);
-        final StickyTaskAssignor taskAssignor = createTaskAssignor(task00);
-        taskAssignor.assign(1);
+        final StickyTaskAssignor taskAssignor = createTaskAssignor(1, task00);
+        taskAssignor.assign();
         assertThat(clients.get(p1).standbyTasks().size(), equalTo(0));
     }
 
@@ -295,13 +292,12 @@ public class StickyTaskAssignorTest {
         createClient(p2, 1);
         createClient(p3, 1);
 
-        final StickyTaskAssignor<Integer> taskAssignor = createTaskAssignor(task00, task01, task02);
-        taskAssignor.assign(1);
+        final StickyTaskAssignor<Integer> taskAssignor = createTaskAssignor(1, task00, task01, task02);
+        taskAssignor.assign();
 
         assertThat(allActiveTasks(), equalTo(Arrays.asList(task00, task01, task02)));
         assertThat(allStandbyTasks(), equalTo(Arrays.asList(task00, task01, task02)));
     }
-
 
     @Test
     public void shouldAssignAtLeastOneTaskToEachClientIfPossible() {
@@ -310,7 +306,7 @@ public class StickyTaskAssignorTest {
         createClient(p3, 1);
 
         final StickyTaskAssignor<Integer> taskAssignor = createTaskAssignor(task00, task01, task02);
-        taskAssignor.assign(0);
+        taskAssignor.assign();
         assertThat(clients.get(p1).assignedTaskCount(), equalTo(1));
         assertThat(clients.get(p2).assignedTaskCount(), equalTo(1));
         assertThat(clients.get(p3).assignedTaskCount(), equalTo(1));
@@ -326,7 +322,7 @@ public class StickyTaskAssignorTest {
         createClient(6, 1);
 
         final StickyTaskAssignor<Integer> taskAssignor = createTaskAssignor(task00, task01, task02);
-        taskAssignor.assign(0);
+        taskAssignor.assign();
 
         assertThat(allActiveTasks(), equalTo(Arrays.asList(task00, task01, task02)));
     }
@@ -340,8 +336,8 @@ public class StickyTaskAssignorTest {
         createClient(5, 1);
         createClient(6, 1);
 
-        final StickyTaskAssignor<Integer> taskAssignor = createTaskAssignor(task00, task01, task02);
-        taskAssignor.assign(1);
+        final StickyTaskAssignor<Integer> taskAssignor = createTaskAssignor(1, task00, task01, task02);
+        taskAssignor.assign();
 
         for (final ClientState clientState : clients.values()) {
             assertThat(clientState.assignedTaskCount(), equalTo(1));
@@ -366,7 +362,7 @@ public class StickyTaskAssignorTest {
                                                                             new TaskId(3, 1),
                                                                             new TaskId(3, 2));
 
-        taskAssignor.assign(0);
+        taskAssignor.assign();
         assertThat(clients.get(p2).assignedTaskCount(), equalTo(8));
         assertThat(clients.get(p1).assignedTaskCount(), equalTo(4));
     }
@@ -391,7 +387,7 @@ public class StickyTaskAssignorTest {
         taskIds.toArray(taskIdArray);
 
         final StickyTaskAssignor<Integer> taskAssignor = createTaskAssignor(taskIdArray);
-        taskAssignor.assign(0);
+        taskAssignor.assign();
 
         Collections.sort(taskIds);
         final Set<TaskId> expectedClientOneAssignment = getExpectedTaskIdAssignment(taskIds, 0, 4, 8, 12);
@@ -407,7 +403,6 @@ public class StickyTaskAssignorTest {
         assertThat(sortedAssignments.get(p4), equalTo(expectedClientFourAssignment));
     }
 
-
     @Test
     public void shouldNotHaveSameAssignmentOnAnyTwoHosts() {
         createClient(p1, 1);
@@ -415,8 +410,8 @@ public class StickyTaskAssignorTest {
         createClient(p3, 1);
         createClient(p4, 1);
 
-        final StickyTaskAssignor<Integer> taskAssignor = createTaskAssignor(task00, task02, task01, task03);
-        taskAssignor.assign(1);
+        final StickyTaskAssignor<Integer> taskAssignor = createTaskAssignor(1, task00, task02, task01, task03);
+        taskAssignor.assign();
 
         for (int i = p1; i <= p4; i++) {
             final Set<TaskId> taskIds = clients.get(i).assignedTasks();
@@ -437,8 +432,8 @@ public class StickyTaskAssignorTest {
         createClientWithPreviousActiveTasks(p3, 1, task00);
         createClient(p4, 1);
 
-        final StickyTaskAssignor<Integer> taskAssignor = createTaskAssignor(task00, task02, task01, task03);
-        taskAssignor.assign(1);
+        final StickyTaskAssignor<Integer> taskAssignor = createTaskAssignor(1, task00, task02, task01, task03);
+        taskAssignor.assign();
 
         for (int i = p1; i <= p4; i++) {
             final Set<TaskId> taskIds = clients.get(i).assignedTasks();
@@ -462,8 +457,8 @@ public class StickyTaskAssignorTest {
         createClient(p3, 1);
         createClient(p4, 1);
 
-        final StickyTaskAssignor<Integer> taskAssignor = createTaskAssignor(task00, task02, task01, task03);
-        taskAssignor.assign(1);
+        final StickyTaskAssignor<Integer> taskAssignor = createTaskAssignor(1, task00, task02, task01, task03);
+        taskAssignor.assign();
 
         for (int i = p1; i <= p4; i++) {
             final Set<TaskId> taskIds = clients.get(i).assignedTasks();
@@ -485,7 +480,7 @@ public class StickyTaskAssignorTest {
         createClient(p4, 1);
 
         final StickyTaskAssignor<Integer> taskAssignor = createTaskAssignor(task00, task02, task01, task03);
-        taskAssignor.assign(0);
+        taskAssignor.assign();
 
         assertThat(clients.get(p1).assignedTaskCount(), equalTo(1));
         assertThat(clients.get(p2).assignedTaskCount(), equalTo(1));
@@ -500,7 +495,7 @@ public class StickyTaskAssignorTest {
         createClient(p2, 1);
 
         final StickyTaskAssignor<Integer> taskAssignor = createTaskAssignor(task00, task02, task01, task03);
-        taskAssignor.assign(0);
+        taskAssignor.assign();
 
         assertThat(clients.get(p3).assignedTaskCount(), equalTo(2));
         assertThat(clients.get(p1).assignedTaskCount(), equalTo(1));
@@ -512,7 +507,7 @@ public class StickyTaskAssignorTest {
         createClientWithPreviousActiveTasks(p2, 1, task00, task03, task02);
         createClient(p3, 2);
         final StickyTaskAssignor<Integer> taskAssignor = createTaskAssignor(task00, task02, task03);
-        taskAssignor.assign(0);
+        taskAssignor.assign();
         assertThat(clients.get(p2).assignedTaskCount(), equalTo(1));
         assertThat(clients.get(p3).assignedTaskCount(), equalTo(2));
     }
@@ -527,7 +522,7 @@ public class StickyTaskAssignorTest {
         createClientWithPreviousActiveTasks(p3, 1);
 
         final StickyTaskAssignor<Integer> taskAssignor = createTaskAssignor(task00, task02, task01, task03);
-        taskAssignor.assign(0);
+        taskAssignor.assign();
 
         final Set<TaskId> p3ActiveTasks = clients.get(p3).activeTasks();
         assertThat(p3ActiveTasks.size(), equalTo(1));
@@ -544,7 +539,7 @@ public class StickyTaskAssignorTest {
         createClientWithPreviousActiveTasks(p2, 1, task02, task03);
 
         final StickyTaskAssignor<Integer> taskAssignor = createTaskAssignor(task03, task01, task04, task02, task00, task05);
-        taskAssignor.assign(0);
+        taskAssignor.assign();
 
         assertThat(clients.get(p1).activeTasks(), hasItems(task00, task01));
         assertThat(clients.get(p2).activeTasks(), hasItems(task02, task03));
@@ -558,7 +553,7 @@ public class StickyTaskAssignorTest {
         createClient(p3, 1);
 
         final StickyTaskAssignor<Integer> taskAssignor = createTaskAssignor(task03, task01, task04, task02, task00, task05);
-        taskAssignor.assign(0);
+        taskAssignor.assign();
 
         assertThat(clients.get(p1).activeTasks(), hasItems(task02, task01));
         assertThat(clients.get(p2).activeTasks(), hasItems(task00, task03));
@@ -587,7 +582,7 @@ public class StickyTaskAssignorTest {
         newClient.addPreviousStandbyTasks(Utils.mkSet(task00, task10, task01, task02, task11, task20, task03, task12, task21, task13, task22, task23));
 
         final StickyTaskAssignor<Integer> taskAssignor = createTaskAssignor(task00, task10, task01, task02, task11, task20, task03, task12, task21, task13, task22, task23);
-        taskAssignor.assign(0);
+        taskAssignor.assign();
 
         assertThat(c1.activeTasks(), equalTo(Utils.mkSet(task01, task12, task13)));
         assertThat(c2.activeTasks(), equalTo(Utils.mkSet(task00, task11, task22)));
@@ -618,7 +613,7 @@ public class StickyTaskAssignorTest {
         bounce2.addPreviousStandbyTasks(Utils.mkSet(task02, task03, task10));
 
         final StickyTaskAssignor<Integer> taskAssignor = createTaskAssignor(task00, task10, task01, task02, task11, task20, task03, task12, task21, task13, task22, task23);
-        taskAssignor.assign(0);
+        taskAssignor.assign();
 
         assertThat(c1.activeTasks(), equalTo(Utils.mkSet(task01, task12, task13)));
         assertThat(c2.activeTasks(), equalTo(Utils.mkSet(task00, task11, task22)));
@@ -630,7 +625,7 @@ public class StickyTaskAssignorTest {
     public void shouldAssignTasksToNewClient() {
         createClientWithPreviousActiveTasks(p1, 1, task01, task02);
         createClient(p2, 1);
-        createTaskAssignor(task01, task02).assign(0);
+        createTaskAssignor(task01, task02).assign();
         assertThat(clients.get(p1).activeTaskCount(), equalTo(1));
     }
 
@@ -641,7 +636,7 @@ public class StickyTaskAssignorTest {
         final ClientState newClient = createClient(p3, 1);
 
         final StickyTaskAssignor<Integer> taskAssignor = createTaskAssignor(task00, task01, task02, task03, task04, task05);
-        taskAssignor.assign(0);
+        taskAssignor.assign();
         assertThat(c1.activeTasks(), not(hasItem(task03)));
         assertThat(c1.activeTasks(), not(hasItem(task04)));
         assertThat(c1.activeTasks(), not(hasItem(task05)));
@@ -662,7 +657,7 @@ public class StickyTaskAssignorTest {
         final ClientState newClient = createClient(p3, 1);
 
         final StickyTaskAssignor<Integer> taskAssignor = createTaskAssignor(task00, task01, task02, task03, task04, task05, task06);
-        taskAssignor.assign(0);
+        taskAssignor.assign();
         assertThat(c1.activeTasks(), not(hasItem(task03)));
         assertThat(c1.activeTasks(), not(hasItem(task04)));
         assertThat(c1.activeTasks(), not(hasItem(task05)));
@@ -679,20 +674,33 @@ public class StickyTaskAssignorTest {
         final ClientState c1 = createClientWithPreviousActiveTasks(p1, 1, task00, task01, task02);
         final ClientState c2 = createClient(p2, 1);
 
-        final StickyTaskAssignor<Integer> taskAssignor = createTaskAssignor(task00, task01, task02);
-        taskAssignor.preservePreviousTaskAssignment();
-        taskAssignor.assign(0);
+        final StickyTaskAssignor<Integer> taskAssignor = createTaskAssignor(0, true, task00, task01, task02);
+        taskAssignor.assign();
 
         assertThat(c1.activeTasks(), equalTo(Utils.mkSet(task00, task01, task02)));
         assertTrue(c2.activeTasks().isEmpty());
     }
 
     private StickyTaskAssignor<Integer> createTaskAssignor(final TaskId... tasks) {
+        return createTaskAssignor(0, false, tasks);
+    }
+    
+    private StickyTaskAssignor<Integer> createTaskAssignor(final int numStandbys, final TaskId... tasks) {
+        return createTaskAssignor(numStandbys, false, tasks);
+    }
+
+    private StickyTaskAssignor<Integer> createTaskAssignor(final int numStandbys,
+                                                           final boolean mustPreserveActiveTaskAssignment,
+                                                           final TaskId... tasks) {
         final List<TaskId> taskIds = Arrays.asList(tasks);
         Collections.shuffle(taskIds);
-        return new StickyTaskAssignor<>(clients,
-                                        new HashSet<>(taskIds),
-                                        new HashSet<>(taskIds));
+        return new StickyTaskAssignor<>(
+            clients,
+            new HashSet<>(taskIds),
+            new HashSet<>(taskIds),
+            new AssignmentConfigs(0L, 0, 0, numStandbys, 0L),
+            mustPreserveActiveTaskAssignment
+        );
     }
 
     private List<TaskId> allActiveTasks() {

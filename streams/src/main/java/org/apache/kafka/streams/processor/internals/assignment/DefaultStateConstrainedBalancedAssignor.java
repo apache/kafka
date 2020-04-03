@@ -16,9 +16,6 @@
  */
 package org.apache.kafka.streams.processor.internals.assignment;
 
-import org.apache.kafka.streams.processor.TaskId;
-import org.apache.kafka.streams.processor.internals.Task;
-
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -29,6 +26,9 @@ import java.util.Set;
 import java.util.SortedMap;
 import java.util.SortedSet;
 import java.util.TreeSet;
+import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.internals.Task;
+import org.apache.kafka.streams.processor.internals.assignment.HighAvailabilityTaskAssignor.RankedClient;
 
 public class DefaultStateConstrainedBalancedAssignor<ID extends Comparable<? super ID>> implements StateConstrainedBalancedAssignor<ID> {
 
@@ -44,7 +44,7 @@ public class DefaultStateConstrainedBalancedAssignor<ID extends Comparable<? sup
      * @return assignment
      */
     @Override
-    public Map<ID, List<TaskId>> assign(final SortedMap<TaskId, SortedSet<ClientIdAndRank<ID>>> statefulTasksToRankedClients,
+    public Map<ID, List<TaskId>> assign(final SortedMap<TaskId, SortedSet<RankedClient<ID>>> statefulTasksToRankedClients,
                                         final int balanceFactor,
                                         final Set<ID> clients,
                                         final Map<ID, Integer> clientsToNumberOfStreamThreads) {
@@ -107,14 +107,14 @@ public class DefaultStateConstrainedBalancedAssignor<ID extends Comparable<? sup
      * @param statefulTasksToRankedClients ranked clients map
      * @return map from tasks with caught-up clients to the list of client candidates
      */
-    private Map<TaskId, List<ID>> tasksToCaughtUpClients(final SortedMap<TaskId, SortedSet<ClientIdAndRank<ID>>> statefulTasksToRankedClients) {
+    private Map<TaskId, List<ID>> tasksToCaughtUpClients(final SortedMap<TaskId, SortedSet<RankedClient<ID>>> statefulTasksToRankedClients) {
         final Map<TaskId, List<ID>> taskToCaughtUpClients = new HashMap<>();
-        for (final SortedMap.Entry<TaskId, SortedSet<ClientIdAndRank<ID>>> taskToRankedClients : statefulTasksToRankedClients.entrySet()) {
-            final SortedSet<ClientIdAndRank<ID>> rankedClients = taskToRankedClients.getValue();
-            for (final ClientIdAndRank<ID> clientIdAndRank : rankedClients) {
-                if (clientIdAndRank.rank() == Task.LATEST_OFFSET || clientIdAndRank.rank() == 0) {
+        for (final SortedMap.Entry<TaskId, SortedSet<RankedClient<ID>>> taskToRankedClients : statefulTasksToRankedClients.entrySet()) {
+            final SortedSet<RankedClient<ID>> rankedClients = taskToRankedClients.getValue();
+            for (final RankedClient<ID> rankedClient : rankedClients) {
+                if (rankedClient.rank() == Task.LATEST_OFFSET || rankedClient.rank() == 0) {
                     final TaskId taskId = taskToRankedClients.getKey();
-                    taskToCaughtUpClients.computeIfAbsent(taskId, ignored -> new ArrayList<>()).add(clientIdAndRank.clientId());
+                    taskToCaughtUpClients.computeIfAbsent(taskId, ignored -> new ArrayList<>()).add(rankedClient.clientId());
                 } else {
                     break;
                 }
@@ -128,10 +128,10 @@ public class DefaultStateConstrainedBalancedAssignor<ID extends Comparable<? sup
      *
      * @return map from task IDs to clients hosting the corresponding task
      */
-    private Map<TaskId, ID> previouslyRunningTasksToPreviousClients(final Map<TaskId, SortedSet<ClientIdAndRank<ID>>> statefulTasksToRankedClients) {
+    private Map<TaskId, ID> previouslyRunningTasksToPreviousClients(final Map<TaskId, SortedSet<RankedClient<ID>>> statefulTasksToRankedClients) {
         final Map<TaskId, ID> tasksToPreviousClients = new HashMap<>();
-        for (final Map.Entry<TaskId, SortedSet<ClientIdAndRank<ID>>> taskToRankedClients : statefulTasksToRankedClients.entrySet()) {
-            final ClientIdAndRank<ID> topRankedClient = taskToRankedClients.getValue().first();
+        for (final Map.Entry<TaskId, SortedSet<RankedClient<ID>>> taskToRankedClients : statefulTasksToRankedClients.entrySet()) {
+            final RankedClient<ID> topRankedClient = taskToRankedClients.getValue().first();
             if (topRankedClient.rank() == Task.LATEST_OFFSET) {
                 tasksToPreviousClients.put(taskToRankedClients.getKey(), topRankedClient.clientId());
             }
@@ -146,7 +146,7 @@ public class DefaultStateConstrainedBalancedAssignor<ID extends Comparable<? sup
      */
     private void assignTasksWithCaughtUpClients(final Map<ID, List<TaskId>> assignment,
                                                 final Map<TaskId, List<ID>> tasksToCaughtUpClients,
-                                                final Map<TaskId, SortedSet<ClientIdAndRank<ID>>> statefulTasksToRankedClients) {
+                                                final Map<TaskId, SortedSet<RankedClient<ID>>> statefulTasksToRankedClients) {
         // If a task was previously assigned to a client that is caught-up and still exists, give it back to the client
         final Map<TaskId, ID> previouslyRunningTasksToPreviousClients =
             previouslyRunningTasksToPreviousClients(statefulTasksToRankedClients);
@@ -180,17 +180,17 @@ public class DefaultStateConstrainedBalancedAssignor<ID extends Comparable<? sup
      */
     private void assignTasksWithoutCaughtUpClients(final Map<ID, List<TaskId>> assignment,
                                                    final Map<TaskId, List<ID>> tasksToCaughtUpClients,
-                                                   final Map<TaskId, SortedSet<ClientIdAndRank<ID>>> statefulTasksToRankedClients) {
+                                                   final Map<TaskId, SortedSet<RankedClient<ID>>> statefulTasksToRankedClients) {
         final SortedSet<TaskId> unassignedTasksWithoutCaughtUpClients = new TreeSet<>(statefulTasksToRankedClients.keySet());
         unassignedTasksWithoutCaughtUpClients.removeAll(tasksToCaughtUpClients.keySet());
         for (final TaskId taskId : unassignedTasksWithoutCaughtUpClients) {
-            final SortedSet<ClientIdAndRank<ID>> rankedClients = statefulTasksToRankedClients.get(taskId);
+            final SortedSet<RankedClient<ID>> rankedClients = statefulTasksToRankedClients.get(taskId);
             final long topRank = rankedClients.first().rank();
             int minTasksPerStreamThread = Integer.MAX_VALUE;
             ID clientWithLeastTasks = rankedClients.first().clientId();
-            for (final ClientIdAndRank<ID> clientIdAndRank : rankedClients) {
-                if (clientIdAndRank.rank() == topRank) {
-                    final ID clientId = clientIdAndRank.clientId();
+            for (final RankedClient<ID> rankedClient : rankedClients) {
+                if (rankedClient.rank() == topRank) {
+                    final ID clientId = rankedClient.clientId();
                     final int assignedTasks = assignment.get(clientId).size();
                     if (minTasksPerStreamThread > assignedTasks) {
                         clientWithLeastTasks = clientId;
@@ -214,7 +214,7 @@ public class DefaultStateConstrainedBalancedAssignor<ID extends Comparable<? sup
      */
     private void balance(final Map<ID, List<TaskId>> assignment,
                          final int balanceFactor,
-                         final Map<TaskId, SortedSet<ClientIdAndRank<ID>>> statefulTasksToRankedClients,
+                         final Map<TaskId, SortedSet<RankedClient<ID>>> statefulTasksToRankedClients,
                          final Map<TaskId, List<ID>> tasksToCaughtUpClients,
                          final Map<ID, Integer> clientsToNumberOfStreamThreads) {
         final List<ID> clients = new ArrayList<>(assignment.keySet());
@@ -243,7 +243,7 @@ public class DefaultStateConstrainedBalancedAssignor<ID extends Comparable<? sup
 
     private void maybeMoveSourceTasksWithoutCaughtUpClients(final Map<ID, List<TaskId>> assignment,
                                                             final int balanceFactor,
-                                                            final Map<TaskId, SortedSet<ClientIdAndRank<ID>>> statefulTasksToRankedClients,
+                                                            final Map<TaskId, SortedSet<RankedClient<ID>>> statefulTasksToRankedClients,
                                                             final Map<TaskId, List<ID>> tasksToCaughtUpClients,
                                                             final Map<ID, Integer> clientsToNumberOfStreamThreads,
                                                             final ID sourceClientId,
@@ -251,7 +251,7 @@ public class DefaultStateConstrainedBalancedAssignor<ID extends Comparable<? sup
         for (final TaskId task : assignedTasksWithoutCaughtUpClientsThatMightBeMoved(sourceTasks, tasksToCaughtUpClients)) {
             final int assignedTasksPerStreamThreadAtSource =
                 sourceTasks.size() / clientsToNumberOfStreamThreads.get(sourceClientId);
-            for (final ClientIdAndRank<ID> clientAndRank : statefulTasksToRankedClients.get(task)) {
+            for (final RankedClient<ID> clientAndRank : statefulTasksToRankedClients.get(task)) {
                 final ID destinationClientId = clientAndRank.clientId();
                 final List<TaskId> destination = assignment.get(destinationClientId);
                 final int assignedTasksPerStreamThreadAtDestination =

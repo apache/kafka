@@ -35,7 +35,7 @@ import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.utils.Time
 
-import scala.collection.{Map, Seq, immutable}
+import scala.collection.{Map, Seq, immutable, mutable}
 import scala.math.max
 
 /**
@@ -423,7 +423,7 @@ class GroupCoordinator(val brokerId: Int,
               info(s"Assignment received from leader for group ${group.groupId} for generation ${group.generationId}")
 
               // fill any missing members with an empty assignment
-              val missing = group.allMembers -- groupAssignment.keySet
+              val missing = group.allMembers.diff(groupAssignment.keySet)
               val assignment = groupAssignment ++ missing.map(_ -> Array.empty[Byte]).toMap
 
               if (missing.nonEmpty) {
@@ -519,8 +519,8 @@ class GroupCoordinator(val brokerId: Int,
   }
 
   def handleDeleteGroups(groupIds: Set[String]): Map[String, Errors] = {
-    var groupErrors: Map[String, Errors] = Map()
-    var groupsEligibleForDeletion: Seq[GroupMetadata] = Seq()
+    val groupErrors = mutable.Map.empty[String, Errors]
+    val groupsEligibleForDeletion = mutable.ArrayBuffer[GroupMetadata]()
 
     groupIds.foreach { groupId =>
       validateGroupStatus(groupId, ApiKeys.DELETE_GROUPS) match {
@@ -540,9 +540,9 @@ class GroupCoordinator(val brokerId: Int,
                       (if (groupManager.groupNotExists(groupId)) Errors.GROUP_ID_NOT_FOUND else Errors.NOT_COORDINATOR)
                   case Empty =>
                     group.transitionTo(Dead)
-                    groupsEligibleForDeletion :+= group
+                    groupsEligibleForDeletion += group
                   case Stable | PreparingRebalance | CompletingRebalance =>
-                    groupErrors += groupId -> Errors.NON_EMPTY_GROUP
+                    groupErrors(groupId) = Errors.NON_EMPTY_GROUP
                 }
               }
           }
