@@ -26,7 +26,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.slf4j.LoggerFactory
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 
 class ToolsUtilsTest {
   private val log = LoggerFactory.getLogger(classOf[ToolsUtilsTest])
