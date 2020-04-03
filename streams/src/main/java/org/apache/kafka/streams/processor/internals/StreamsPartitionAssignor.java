@@ -255,22 +255,18 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
     /*
      * This assigns tasks to consumer clients in the following steps.
      *
-     * 0. check all repartition source topics and use internal topic manager to make sure
-     *    they have been created with the right number of partitions.
+     * 0. decode the subscriptions to assemble the metadata for each client and check for version probing
      *
-     * 1. using user customized partition grouper to generate tasks along with their
-     *    assigned partitions; also make sure that the task's corresponding changelog topics
-     *    have been created with the right number of partitions.
+     * 1. check all repartition source topics and use internal topic manager to make sure
+     *    they have been created with the right number of partitions. also verify and/or create
+     *    any changelog topics with the correct number of partitions.
      *
-     * 2. using TaskAssignor to assign tasks to consumer clients.
-     *    - Assign a task to a client which was running it previously.
-     *      If there is no such client, assign a task to a client which has its valid local state.
-     *    - A client may have more than one stream threads.
-     *      The assignor tries to assign tasks to a client proportionally to the number of threads.
-     *    - We try not to assign the same set of tasks to two different clients
-     *    We do the assignment in one-pass. The result may not satisfy above all.
+     * 2. use the partition grouper to generate tasks along with their assigned partitions, then use
+     *    the configured TaskAssignor to construct the mapping of tasks to clients.
      *
-     * 3. within each client, tasks are assigned to consumer clients in round-robin manner.
+     * 3. construct the global mapping of host to partitions to enable query routing.
+     *
+     * 4. within each client, assign tasks to consumer clients.
      */
     @Override
     public GroupAssignment assign(final Cluster metadata, final GroupSubscription groupSubscription) {
@@ -362,7 +358,8 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         final Map<TaskId, Set<TopicPartition>> partitionsForTask =
             partitionGrouper.partitionGroups(sourceTopicsByGroup, fullMetadata);
 
-        final boolean followupRebalanceNeeded = assignTasksToClients(allSourceTopics, partitionsForTask, topicGroups, clientMetadataMap, fullMetadata);
+        final boolean followupRebalanceNeeded =
+            assignTasksToClients(allSourceTopics, partitionsForTask, topicGroups, clientMetadataMap, fullMetadata);
 
         // ---------------- Step Three ---------------- //
 
@@ -687,8 +684,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
     }
 
     /**
-     * Assigns a set of tasks to each client (Streams instance) using the sticky assignor to prioritize clients
-     * based on the previous state and overall lag.
+     * Assigns a set of tasks to each client (Streams instance) using the configured task assignor
      * @return true if a followup rebalance should be triggered
      */
     private boolean assignTasksToClients(final Set<String> allSourceTopics,
