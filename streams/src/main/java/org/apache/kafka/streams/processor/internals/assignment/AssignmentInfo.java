@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.processor.internals.assignment;
 
-import java.util.Optional;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.ByteBufferInputStream;
 import org.apache.kafka.streams.errors.TaskAssignmentException;
@@ -54,7 +53,7 @@ public class AssignmentInfo {
     private Map<HostInfo, Set<TopicPartition>> partitionsByHost;
     private Map<HostInfo, Set<TopicPartition>> standbyPartitionsByHost;
     private int errCode;
-    private Optional<Long> nextRebalanceMs = Optional.empty();
+    private Long nextRebalanceMs = Long.MAX_VALUE;
 
     // used for decoding and "future consumer" assignments during version probing
     public AssignmentInfo(final int version,
@@ -99,7 +98,7 @@ public class AssignmentInfo {
     }
 
     public void setNextRebalanceTime(final long nextRebalanceTimeMs) {
-        this.nextRebalanceMs = Optional.of(nextRebalanceTimeMs);
+        this.nextRebalanceMs = nextRebalanceTimeMs;
     }
 
     public int version() {
@@ -130,7 +129,7 @@ public class AssignmentInfo {
         return standbyPartitionsByHost;
     }
 
-    public Optional<Long> nextRebalanceMs() {
+    public long nextRebalanceMs() {
         return nextRebalanceMs;
     }
 
@@ -185,7 +184,7 @@ public class AssignmentInfo {
                     encodeActiveAndStandbyTaskAssignment(out);
                     encodeActiveAndStandbyHostPartitions(out);
                     out.writeInt(errCode);
-                    encodeOptionalRebalanceTime(out);
+                    out.writeLong(nextRebalanceMs);
                     break;
                 default:
                     throw new IllegalStateException("Unknown metadata version: " + usedVersion
@@ -296,15 +295,6 @@ public class AssignmentInfo {
         }
     }
 
-    private void encodeOptionalRebalanceTime(final DataOutputStream out) throws IOException {
-        if (nextRebalanceMs.isPresent()) {
-            out.writeBoolean(true);
-            out.writeLong(nextRebalanceMs.get());
-        } else {
-            out.writeBoolean(false);
-        }
-    }
-
     /**
      * @throws TaskAssignmentException if method fails to decode the data or if the data version is unknown
      */
@@ -368,7 +358,7 @@ public class AssignmentInfo {
                     decodeStandbyTasks(assignmentInfo, in);
                     decodeActiveAndStandbyHostPartitions(assignmentInfo, in);
                     assignmentInfo.errCode = in.readInt();
-                    decodeOptionalRebalanceTime(assignmentInfo, in);
+                    assignmentInfo.nextRebalanceMs = in.readLong();
                     break;
                 default:
                     final TaskAssignmentException fatalException = new TaskAssignmentException("Unable to decode assignment data: " +
@@ -462,11 +452,6 @@ public class AssignmentInfo {
             partitions.add(new TopicPartition(topicIndexDict.get(in.readInt()), in.readInt()));
         }
         return partitions;
-    }
-
-    private static void decodeOptionalRebalanceTime(final AssignmentInfo assignmentInfo,
-                                                    final DataInputStream in) throws IOException {
-        assignmentInfo.nextRebalanceMs = in.readBoolean() ? Optional.of(in.readLong()) : Optional.empty();
     }
 
     @Override

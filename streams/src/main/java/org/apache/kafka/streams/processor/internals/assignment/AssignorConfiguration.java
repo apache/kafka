@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.processor.internals.assignment;
 
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicLong;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
@@ -188,34 +189,23 @@ public final class AssignorConfiguration {
         return (AtomicInteger) ai;
     }
 
-    public Optional<Long> getNextProbingRebalanceMs(final Map<String, ?> configs) {
-        final Object o = configs.get(InternalConfig.NEXT_PROBING_REBALANCE_MS);
-        if (o == null) {
+    public AtomicLong getNextProbingRebalanceMs(final Map<String, ?> configs) {
+        final Object al = configs.get(InternalConfig.NEXT_PROBING_REBALANCE_MS);
+        if (al == null) {
             final KafkaException fatalException = new KafkaException("nextProbingRebalanceMs is not specified");
             log.error(fatalException.getMessage(), fatalException);
             throw fatalException;
         }
 
-        if (!(o instanceof Optional<?>)) {
+        if (!(al instanceof AtomicLong)) {
             final KafkaException fatalException = new KafkaException(
-                String.format("%s is not an instance of %s", o.getClass().getName(), Optional.class.getName())
+                String.format("%s is not an instance of %s", al.getClass().getName(), AtomicLong.class.getName())
             );
             log.error(fatalException.getMessage(), fatalException);
             throw fatalException;
         }
 
-        return getLongOptional(o);
-    }
-
-    @SuppressWarnings("unchecked")
-    private Optional<Long> getLongOptional(final Object o) {
-        final Optional<?> optional = (Optional<?>) o;
-        if (optional.isPresent() && !(optional.get() instanceof Long)) {
-            final KafkaException fatalException = new KafkaException("nextProbingRebalanceMs is not specified");
-            log.error(fatalException.getMessage(), fatalException);
-            throw fatalException;
-        }
-        return (Optional<Long>) optional;
+        return (AtomicLong) al;
     }
 
     public TaskManager getTaskManager() {

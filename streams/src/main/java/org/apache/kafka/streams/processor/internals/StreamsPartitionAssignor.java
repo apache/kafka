@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.processor.internals;
 
 import java.time.Duration;
+import java.util.concurrent.atomic.AtomicLong;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.ListOffsetsResult.ListOffsetsResultInfo;
 import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
@@ -158,7 +159,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
     @SuppressWarnings("deprecation")
     private org.apache.kafka.streams.processor.PartitionGrouper partitionGrouper;
     private AtomicInteger assignmentErrorCode;
-    private Optional<Long> nextProbingRebalanceMs;
+    private AtomicLong nextProbingRebalanceMs;
 
     protected int usedSubscriptionMetadataVersion = LATEST_SUPPORTED_VERSION;
 
@@ -1390,7 +1391,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                 partitionsByHost = info.partitionsByHost();
                 standbyPartitionsByHost = info.standbyPartitionByHost();
                 topicToPartitionInfo = getTopicPartitionInfo(partitionsByHost);
-                nextProbingRebalanceMs = info.nextRebalanceMs();
+                nextProbingRebalanceMs.set(info.nextRebalanceMs());
                 break;
             default:
                 throw new IllegalStateException(

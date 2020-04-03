@@ -37,7 +37,6 @@ import static org.apache.kafka.streams.processor.internals.assignment.Assignment
 import static org.apache.kafka.streams.processor.internals.assignment.StreamsAssignmentProtocolVersions.LATEST_SUPPORTED_VERSION;
 import static org.apache.kafka.streams.processor.internals.assignment.StreamsAssignmentProtocolVersions.UNKNOWN;
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
 
 public class AssignmentInfoTest {
     private final List<TaskId> activeTasks = Arrays.asList(
@@ -161,22 +160,21 @@ public class AssignmentInfoTest {
     }
 
     @Test
-    public void nextRebalanceTimeShouldBeEmptyByDefault() {
+    public void nextRebalanceTimeShouldBeMxValueByDefault() {
         final AssignmentInfo info = new AssignmentInfo(7, activeTasks, standbyTasks, activeAssignment, standbyAssignment, 0);
-        assertFalse(info.nextRebalanceMs().isPresent());
+        assertEquals(info.nextRebalanceMs(), Long.MAX_VALUE);
     }
 
     @Test
-    public void shouldDecodeEmptyNextRebalanceTime() {
+    public void shouldDecodeDefaultNextRebalanceTime() {
         final AssignmentInfo info = new AssignmentInfo(7, activeTasks, standbyTasks, activeAssignment, standbyAssignment, 0);
-        assertFalse(AssignmentInfo.decode(info.encode()).nextRebalanceMs().isPresent());
+        assertEquals(info.nextRebalanceMs(), Long.MAX_VALUE);
     }
 
     @Test
     public void shouldEncodeAndDecodeNextRebalanceTime() {
-        final Long expectedRebalanceTime = 1000L;
         final AssignmentInfo info = new AssignmentInfo(7, activeTasks, standbyTasks, activeAssignment, standbyAssignment, 0);
-        info.setNextRebalanceTime(expectedRebalanceTime);
-        assertEquals(expectedRebalanceTime, AssignmentInfo.decode(info.encode()).nextRebalanceMs().get());
+        info.setNextRebalanceTime(1000L);
+        assertEquals(1000L, AssignmentInfo.decode(info.encode()).nextRebalanceMs());
     }
 }

@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import java.util.Optional;
+import java.util.concurrent.atomic.AtomicLong;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
@@ -256,7 +256,7 @@ public class StreamThread extends Thread {
     private final String originalReset;
     private final TaskManager taskManager;
     private final AtomicInteger assignmentErrorCode;
-    private final Optional<Long> nextProbingRebalanceMs;
+    private final AtomicLong nextProbingRebalanceMs;
 
     private final StreamsMetricsImpl streamsMetrics;
     private final Sensor commitSensor;
@@ -364,7 +364,7 @@ public class StreamThread extends Thread {
         consumerConfigs.put(StreamsConfig.InternalConfig.STREAMS_ADMIN_CLIENT, adminClient);
         final AtomicInteger assignmentErrorCode = new AtomicInteger();
         consumerConfigs.put(StreamsConfig.InternalConfig.ASSIGNMENT_ERROR_CODE, assignmentErrorCode);
-        final Optional<Long> nextProbingRebalanceMs = Optional.empty();
+        final AtomicLong nextProbingRebalanceMs = new AtomicLong(Long.MAX_VALUE);
         consumerConfigs.put(StreamsConfig.InternalConfig.NEXT_PROBING_REBALANCE_MS, nextProbingRebalanceMs);
         String originalReset = null;
         if (!builder.latestResetTopicsPattern().pattern().equals("") || !builder.earliestResetTopicsPattern().pattern().equals("")) {
@@ -439,7 +439,7 @@ public class StreamThread extends Thread {
                         final String threadId,
                         final LogContext logContext,
                         final AtomicInteger assignmentErrorCode,
-                        final Optional<Long> nextProbingRebalanceMs) {
+                        final AtomicLong nextProbingRebalanceMs) {
         super(threadId);
         this.stateLock = new Object();
 
@@ -559,7 +559,7 @@ public class StreamThread extends Thread {
                                  "trigger a new rebalance.");
                     assignmentErrorCode.set(AssignorError.NONE.code());
                     mainConsumer.enforceRebalance();
-                } else if (nextProbingRebalanceMs.isPresent() && nextProbingRebalanceMs.get() < System.currentTimeMillis()) {
+                } else if (nextProbingRebalanceMs.get() < System.currentTimeMillis()) {
                     log.info("The probing rebalance interval has elapsed since the last rebalance, triggering a " +
                                 "rebalance to probe for newly aught-up clients");
                     mainConsumer.enforceRebalance();
