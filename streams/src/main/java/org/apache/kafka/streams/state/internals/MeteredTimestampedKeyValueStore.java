@@ -59,9 +59,10 @@ public class MeteredTimestampedKeyValueStore<K, V>
 
     public RawAndDeserializedValue<V> getWithBinary(final K key) {
         try {
-            final byte[] serializedValue = wrapped().get(keyBytes(key));
-            return new RawAndDeserializedValue<V>(serializedValue,
-                maybeMeasureLatency(() -> outerValue(serializedValue), time, getSensor));
+            return maybeMeasureLatency(() -> { 
+                final byte[] serializedValue = wrapped().get(keyBytes(key));
+                return new RawAndDeserializedValue<V>(serializedValue, outerValue(serializedValue));
+            }, time, getSensor);
         } catch (final ProcessorStateException e) {
             final String message = String.format(e.getMessage(), key);
             throw new ProcessorStateException(message, e);
