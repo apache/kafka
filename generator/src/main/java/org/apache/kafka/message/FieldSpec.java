@@ -101,11 +101,7 @@ public final class FieldSpec {
         this.entityType.verifyTypeMatches(name, this.type);
 
         this.about = about == null ? "" : about;
-        if (!this.fields().isEmpty()) {
-            if (!this.type.isArray()) {
-                throw new RuntimeException("Non-array field " + name + " cannot have fields");
-            }
-        }
+
         if (flexibleVersions == null || flexibleVersions.isEmpty()) {
             this.flexibleVersions = Optional.empty();
         } else {

@@ -168,6 +168,13 @@ public final class MessageDataGenerator {
                             structRegistry.findStruct(field),
                             parentVersions.intersect(struct.versions()));
                 }
+            } else if (field.type().isStruct()) {
+                if (!structRegistry.commonStructNames().contains(field.name())) {
+                    generateClass(Optional.empty(),
+                            field.type().toString(),
+                            structRegistry.findStruct(field),
+                            parentVersions.intersect(struct.versions()));
+                }
             }
         }
         if (isSetElement) {
@@ -477,7 +484,7 @@ public final class MessageDataGenerator {
                     buffer.printf("this.%s = %s;%n", field.camelCaseName(), fieldDefault(field));
                 }).
                 ifMember(presentAndUntaggedVersions -> {
-                    if (field.type().isVariableLength()) {
+                    if (field.type().isVariableLength() && !field.type().isStruct()) {
                         ClauseGenerator callGenerateVariableLengthReader = versions -> {
                             generateVariableLengthReader(fieldFlexibleVersions(field),
                                 field.camelCaseName(),
@@ -531,7 +538,7 @@ public final class MessageDataGenerator {
                         buffer.incrementIndent();
                         VersionConditional.forVersions(validTaggedVersions, curFlexibleVersions).
                             ifMember(presentAndTaggedVersions -> {
-                                if (field.type().isVariableLength()) {
+                                if (field.type().isVariableLength() && !field.type().isStruct()) {
                                     // All tagged fields are serialized using the new-style
                                     // flexible versions serialization.
                                     generateVariableLengthReader(fieldFlexibleVersions(field),
@@ -1220,7 +1227,7 @@ public final class MessageDataGenerator {
                 ifMember(presentVersions -> {
                     VersionConditional.forVersions(field.taggedVersions(), presentVersions).
                         ifNotMember(presentAndUntaggedVersions -> {
-                            if (field.type().isVariableLength()) {
+                            if (field.type().isVariableLength() && !field.type().isStruct()) {
                                 ClauseGenerator callGenerateVariableLengthWriter = versions -> {
                                     generateVariableLengthWriter(fieldFlexibleVersions(field),
                                         field.camelCaseName(),
@@ -1633,6 +1640,9 @@ public final class MessageDataGenerator {
                     buffer.printf("struct.set(\"%s\", (Object[]) _nestedObjects);%n",
                         field.snakeCaseName());
                 }).generate(buffer);
+        } else if (field.type().isStruct()) {
+            buffer.printf("struct.set(\"%s\", this.%s.toStruct(_version));%n",
+                    field.snakeCaseName(), field.camelCaseName());
         } else {
             throw new RuntimeException("Unsupported field type " + field.type());
         }
@@ -1957,6 +1967,8 @@ public final class MessageDataGenerator {
                     } else {
                         buffer.printf("_size += _bytesSize;%n");
                     }
+                } else if (field.type().isStruct()) {
+                    buffer.printf("_size += this.%s.size(_cache, _version);%n", field.camelCaseName());
                 } else {
                     throw new RuntimeException("unhandled type " + field.type());
                 }
