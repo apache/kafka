@@ -843,12 +843,12 @@ public interface KStream<K, V> {
 
     /**
      * Materialize this stream to an auto-generated repartition topic and create a new {@code KStream}
-     * from the auto-generated topic using default serializers, deserializers, and producers {@link DefaultPartitioner}.
+     * from the auto-generated topic using default serializers, deserializers, and producer's {@link DefaultPartitioner}.
      * The number of partitions is determined based on the upstream topics partition numbers.
      * <p>
      * This operation is similar to {@link #through(String)}, however, Kafka Streams manages the used topic automatically.
-     * The Created topic is considered as an internal topic and is meant to be used only by current Kafka Streams instance.
-     * Similar to auto-repartitioning, the topic will be created with infinite retention time and data will be purged by Kafka Streams explicitly.
+     * The created topic is considered as an internal topic and is meant to be used only by the current Kafka Streams instance.
+     * Similar to auto-repartitioning, the topic will be created with infinite retention time and data will be automatically purged by Kafka Streams.
      * The topic will be named as "${applicationId}-&lt;name&gt;-repartition", where "applicationId" is user-specified in
      * {@link StreamsConfig} via parameter {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG},
      * "&lt;name&gt;" is an internally generated name, and "-repartition" is a fixed suffix.
@@ -865,8 +865,8 @@ public interface KStream<K, V> {
      * number of partitions, and topic name part as defined by {@link Repartitioned}.
      * <p>
      * This operation is similar to {@link #through(String)}, however, Kafka Streams manages the used topic automatically.
-     * The Created topic is considered as an internal topic and is meant to be used only by current Kafka Streams instance.
-     * Similar to auto-repartitioning, the topic will be created with infinite retention time and data will be purged by Kafka Streams explicitly.
+     * The created topic is considered as an internal topic and is meant to be used only by the current Kafka Streams instance.
+     * Similar to auto-repartitioning, the topic will be created with infinite retention time and data will be automatically purged by Kafka Streams.
      * The topic will be named as "${applicationId}-&lt;name&gt;-repartition", where "applicationId" is user-specified in
      * {@link StreamsConfig} via parameter {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG},
      * "&lt;name&gt;" is either provided via {@link Repartitioned#as(String)} or an internally

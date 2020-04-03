@@ -573,17 +573,18 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
         return doRepartition(repartitioned);
     }
 
-    private <KR> KStream<KR, V> doRepartition(final Repartitioned<KR, V> repartitioned) {
+    private KStream<K, V> doRepartition(final Repartitioned<K, V> repartitioned) {
         Objects.requireNonNull(repartitioned, "repartitioned can't be null");
 
-        final RepartitionedInternal<KR, V> repartitionedInternal = new RepartitionedInternal<>(repartitioned);
+        final RepartitionedInternal<K, V> repartitionedInternal = new RepartitionedInternal<>(repartitioned);
 
         final String name = repartitionedInternal.name() != null ? repartitionedInternal.name() : builder
             .newProcessorName(REPARTITION_NAME);
 
         final Serde<V> valueSerde = repartitionedInternal.valueSerde() == null ? valSerde : repartitionedInternal.valueSerde();
+        final Serde<K> keySerde = repartitionedInternal.keySerde() == null ? this.keySerde : repartitionedInternal.keySerde();
 
-        final UnoptimizableRepartitionNodeBuilder<KR, V> unoptimizableRepartitionNodeBuilder = UnoptimizableRepartitionNode
+        final UnoptimizableRepartitionNodeBuilder<K, V> unoptimizableRepartitionNodeBuilder = UnoptimizableRepartitionNode
             .unoptimizableRepartitionNodeBuilder();
 
         final InternalTopicProperties internalTopicProperties = repartitionedInternal.toInternalTopicProperties();
@@ -597,7 +598,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
             unoptimizableRepartitionNodeBuilder.withInternalTopicProperties(internalTopicProperties)
         );
 
-        final UnoptimizableRepartitionNode<KR, V> unoptimizableRepartitionNode = unoptimizableRepartitionNodeBuilder.build();
+        final UnoptimizableRepartitionNode<K, V> unoptimizableRepartitionNode = unoptimizableRepartitionNodeBuilder.build();
 
         builder.addGraphNode(streamsGraphNode, unoptimizableRepartitionNode);
 
@@ -606,7 +607,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
 
         return new KStreamImpl<>(
             repartitionSourceName,
-            repartitionedInternal.keySerde(),
+            keySerde,
             valueSerde,
             Collections.unmodifiableSet(sourceNodes),
             false,
@@ -713,6 +714,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
                 keySerdeOverride,
                 valueSerdeOverride,
                 name,
+                null,
                 repartitionNodeBuilder
             );
 
@@ -984,6 +986,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
             repartitionKeySerde,
             repartitionValueSerde,
             repartitionName,
+            null,
             optimizableRepartitionNodeBuilder);
 
         final OptimizableRepartitionNode<K, V> optimizableRepartitionNode = optimizableRepartitionNodeBuilder.build();
@@ -997,19 +1000,6 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
             false,
             optimizableRepartitionNode,
             builder);
-    }
-
-    static <K1, V1, RN extends BaseRepartitionNode<K1, V1>> String createRepartitionedSource(final InternalStreamsBuilder builder,
-                                                                                             final Serde<K1> keySerde,
-                                                                                             final Serde<V1> valSerde,
-                                                                                             final String repartitionTopicNamePrefix,
-                                                                                             final BaseRepartitionNodeBuilder<K1, V1, RN> baseRepartitionNodeBuilder) {
-        return createRepartitionedSource(builder,
-                                         keySerde,
-                                         valSerde,
-                                         repartitionTopicNamePrefix,
-                                         null,
-                                         baseRepartitionNodeBuilder);
     }
 
     static <K1, V1, RN extends BaseRepartitionNode<K1, V1>> String createRepartitionedSource(final InternalStreamsBuilder builder,

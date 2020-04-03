@@ -32,8 +32,7 @@ public class OptimizableRepartitionNode<K, V> extends BaseRepartitionNode<K, V> 
                                        final Serde<V> valueSerde,
                                        final String sinkName,
                                        final String repartitionTopic,
-                                       final StreamPartitioner<K, V> partitioner,
-                                       final InternalTopicProperties internalTopicProperties) {
+                                       final StreamPartitioner<K, V> partitioner) {
         super(
             nodeName,
             sourceName,
@@ -43,7 +42,7 @@ public class OptimizableRepartitionNode<K, V> extends BaseRepartitionNode<K, V> 
             sinkName,
             repartitionTopic,
             partitioner,
-            internalTopicProperties
+            InternalTopicProperties.empty()
         );
     }
 
@@ -112,8 +111,7 @@ public class OptimizableRepartitionNode<K, V> extends BaseRepartitionNode<K, V> 
                 valueSerde,
                 sinkName,
                 repartitionTopic,
-                partitioner,
-                internalTopicProperties
+                partitioner
             );
 
         }

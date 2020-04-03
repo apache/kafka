@@ -435,6 +435,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
                 keySerde,
                 valueSerde,
                 repartitionTopicName,
+                null,
                 repartitionNodeBuilder
         );
 
