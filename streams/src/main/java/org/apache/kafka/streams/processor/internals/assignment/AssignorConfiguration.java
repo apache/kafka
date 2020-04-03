@@ -203,7 +203,19 @@ public final class AssignorConfiguration {
             log.error(fatalException.getMessage(), fatalException);
             throw fatalException;
         }
-        return (Optional<Long>) o;
+
+        return getLongOptional(o);
+    }
+
+    @SuppressWarnings("unchecked")
+    private Optional<Long> getLongOptional(final Object o) {
+        final Optional<?> optional = (Optional<?>) o;
+        if (optional.isPresent() && !(optional.get() instanceof Long)) {
+            final KafkaException fatalException = new KafkaException("nextProbingRebalanceMs is not specified");
+            log.error(fatalException.getMessage(), fatalException);
+            throw fatalException;
+        }
+        return (Optional<Long>) optional;
     }
 
     public TaskManager getTaskManager() {
