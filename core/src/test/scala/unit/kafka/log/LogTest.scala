@@ -3662,47 +3662,45 @@ class LogTest {
 
     // Thread 1 writes single-record transactions and attempts to read them
     // before they have been aborted, and then aborts them
-    val txnVerifier = new Callable[Int]() {
-      override def call(): Int = {
-        var nonEmptyReads = 0
-        while (log.logEndOffset < lastOffset) {
-          val currentLogEndOffset = log.logEndOffset
+    val txnWriteAndReadLoop: Callable[Int] = () => {
+      var nonEmptyReads = 0
+      while (log.logEndOffset < lastOffset) {
+        val currentLogEndOffset = log.logEndOffset
 
-          appendProducer(1)
+        appendProducer(1)
 
-          val readInfo = log.read(
-            startOffset = currentLogEndOffset,
-            maxLength = Int.MaxValue,
-            isolation = FetchTxnCommitted,
-            minOneMessage = false)
+        val readInfo = log.read(
+          startOffset = currentLogEndOffset,
+          maxLength = Int.MaxValue,
+          isolation = FetchTxnCommitted,
+          minOneMessage = false)
 
-          if (readInfo.records.sizeInBytes() > 0)
-            nonEmptyReads += 1
+        if (readInfo.records.sizeInBytes() > 0)
+          nonEmptyReads += 1
 
-          appendEndTxnMarkerAsLeader(log, producerId, producerEpoch, ControlRecordType.ABORT)
-        }
-        nonEmptyReads
+        appendEndTxnMarkerAsLeader(log, producerId, producerEpoch, ControlRecordType.ABORT)
       }
+      nonEmptyReads
     }
 
     // Thread 2 watches the log and updates the high watermark
-    val hwUpdater = new Runnable() {
-      override def run(): Unit = {
-        while (log.logEndOffset < lastOffset) {
-          log.updateHighWatermark(log.logEndOffset)
-        }
+    val hwUpdateLoop: Runnable = () => {
+      while (log.logEndOffset < lastOffset) {
+        log.updateHighWatermark(log.logEndOffset)
       }
     }
 
     val executor = Executors.newFixedThreadPool(2)
-    executor.submit(hwUpdater)
+    try {
+      executor.submit(hwUpdateLoop)
 
-    val future = executor.submit(txnVerifier)
-    val nonEmptyReads = future.get()
+      val future = executor.submit(txnWriteAndReadLoop)
+      val nonEmptyReads = future.get()
 
-    assertEquals(0, nonEmptyReads)
-
-    executor.shutdownNow()
+      assertEquals(0, nonEmptyReads)
+    } finally {
+      executor.shutdownNow()
+    }
   }
 
   @Test
