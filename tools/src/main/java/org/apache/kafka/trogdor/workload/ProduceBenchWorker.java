@@ -230,7 +230,7 @@ public class ProduceBenchWorker implements TaskWorker {
                         producer.initTransactions();
 
                     long sentMessages = 0;
-                    while (sentMessages < spec.maxMessages()) {
+                    while (sentMessages < spec.maxMessages() || spec.maxMessages() == 0) {
                         if (enableTransactions) {
                             boolean tookAction = takeTransactionAction();
                             if (tookAction)
@@ -307,7 +307,9 @@ public class ProduceBenchWorker implements TaskWorker {
             }
             sendFuture = producer.send(record,
                 new SendRecordsCallback(this, Time.SYSTEM.milliseconds()));
-            throttle.increment();
+            if (spec.targetMessagesPerSec() > 0) {
+                throttle.increment();
+            }
         }
 
         void recordDuration(long durationMs) {
