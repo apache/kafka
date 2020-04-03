@@ -1277,6 +1277,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       sendErrorResponseMaybeThrottle(request, Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED.exception)
     else {
       // get metadata (and create the topic if necessary)
+      authorizeClusterOperation(request, CLUSTER_ACTION)
       val (partition, topicMetadata) = CoordinatorType.forId(findCoordinatorRequest.data.keyType) match {
         case CoordinatorType.GROUP =>
           val partition = groupCoordinator.partitionFor(findCoordinatorRequest.data.key)
