@@ -483,12 +483,33 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
 
   @Test
   def shouldAlterTopicConfig(): Unit = {
+    doShouldAlterTopicConfig(false)
+  }
+
+  @Test
+  def shouldAlterTopicConfigFile(): Unit = {
+    doShouldAlterTopicConfig(true)
+  }
+
+  def doShouldAlterTopicConfig(file: Boolean): Unit = {
+    var filePath = ""
+    val addedConfigs = Seq("delete.retention.ms=1000000", "min.insync.replicas=2")
+    if (file) {
+      val file = File.createTempFile("testParseConfigsToBeAddedForAddConfigFile", ".properties")
+      file.deleteOnExit()
+      val writer = new FileWriter(file)
+      writer.write(addedConfigs.mkString("\n"))
+      writer.close()
+      filePath = file.getPath
+    }
+
     val resourceName = "my-topic"
     val alterOpts = new ConfigCommandOptions(Array("--bootstrap-server", "localhost:9092",
       "--entity-name", resourceName,
       "--entity-type", "topics",
       "--alter",
-      "--add-config", "delete.retention.ms=1000000,min.insync.replicas=2",
+      if (file) "--add-config-file" else "--add-config",
+      if (file) filePath else addedConfigs.mkString(","),
       "--delete-config", "unclean.leader.election.enable"))
     var alteredConfigs = false
 
