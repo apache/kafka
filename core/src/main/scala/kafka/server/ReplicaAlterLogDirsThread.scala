@@ -140,7 +140,6 @@ class ReplicaAlterLogDirsThread(name: String,
         replicaMgr.futureLogExists(tp)
       }
       super.addPartitions(filteredFetchStates)
-      filteredFetchStates.keySet
     } finally {
       partitionMapLock.unlock()
     }
