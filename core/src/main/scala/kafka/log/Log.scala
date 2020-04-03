@@ -420,8 +420,11 @@ class Log(@volatile private var _dir: File,
   private def fetchLastStableOffsetMetadata: LogOffsetMetadata = {
     checkIfMemoryMappedBufferClosed()
 
+    // cache the current high watermark to avoid a concurrent update invalidating the range check
+    val highWatermarkMetadata = fetchHighWatermarkMetadata
+
     firstUnstableOffsetMetadata match {
-      case Some(offsetMetadata) if offsetMetadata.messageOffset < highWatermark =>
+      case Some(offsetMetadata) if offsetMetadata.messageOffset < highWatermarkMetadata.messageOffset =>
         if (offsetMetadata.messageOffsetOnly) {
           lock synchronized {
             val fullOffset = convertToOffsetMetadataOrThrow(offsetMetadata.messageOffset)
@@ -432,7 +435,7 @@ class Log(@volatile private var _dir: File,
         } else {
           offsetMetadata
         }
-      case _ => fetchHighWatermarkMetadata
+      case _ => highWatermarkMetadata
     }
   }
 
