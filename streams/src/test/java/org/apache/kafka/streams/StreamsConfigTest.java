@@ -503,6 +503,28 @@ public class StreamsConfigTest {
     }
 
     @Test
+    public void shouldNotSetInternalAutoDowngradeTxnCommitToTrueInProducerForEosDisabled() {
+        final Map<String, Object> producerConfigs = streamsConfig.getProducerConfigs(clientId);
+        assertThat(producerConfigs.get("internal.auto.downgrade.txn.commit"), is(nullValue()));
+    }
+
+    @Test
+    public void shouldSetInternalAutoDowngradeTxnCommitToTrueInProducerForEosAlpha() {
+        props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, EXACTLY_ONCE);
+        final StreamsConfig streamsConfig = new StreamsConfig(props);
+        final Map<String, Object> producerConfigs = streamsConfig.getProducerConfigs(clientId);
+        assertThat(producerConfigs.get("internal.auto.downgrade.txn.commit"), is(true));
+    }
+
+    @Test
+    public void shouldNotSetInternalAutoDowngradeTxnCommitToTrueInProducerForEosBeta() {
+        props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, EXACTLY_ONCE_BETA);
+        final StreamsConfig streamsConfig = new StreamsConfig(props);
+        final Map<String, Object> producerConfigs = streamsConfig.getProducerConfigs(clientId);
+        assertThat(producerConfigs.get("internal.auto.downgrade.txn.commit"), is(nullValue()));
+    }
+
+    @Test
     public void shouldAcceptAtLeastOnce() {
         // don't use `StreamsConfig.AT_LEAST_ONCE` to actually do a useful test
         props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, "at_least_once");
