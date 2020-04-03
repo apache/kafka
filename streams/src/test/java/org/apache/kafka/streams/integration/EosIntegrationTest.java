@@ -41,6 +41,7 @@ import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.Transformer;
 import org.apache.kafka.streams.kstream.TransformerSupplier;
 import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.internals.StreamThread;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
@@ -654,6 +655,10 @@ public class EosIntegrationTest {
                     public KeyValue<Long, Long> transform(final Long key, final Long value) {
                         if (gcInjected.compareAndSet(true, false)) {
                             while (doGC) {
+                                final StreamThread thread = (StreamThread) Thread.currentThread();
+                                if (thread.isInterrupted() || !thread.isRunning()) {
+                                    throw new RuntimeException("Detected we've been interrupted.");
+                                }
                                 try {
                                     Thread.sleep(100);
                                 } catch (final InterruptedException e) {
