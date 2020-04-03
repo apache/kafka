@@ -61,7 +61,6 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
@@ -83,15 +82,23 @@ public class KStreamRepartitionIntegrationTest {
     @ClassRule
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS);
 
-    private final String inputTopic = "input-topic-" + TEST_NUM.get();
-    private final String outputTopic = "output-topic-" + TEST_NUM.get();
-    private final String applicationId = "kstream-repartition-stream-test-" + TEST_NUM.get();
+    private String topicB;
+    private String inputTopic;
+    private String outputTopic;
+    private String applicationId;
 
     private Properties streamsConfiguration;
     private List<KafkaStreams> kafkaStreamsInstances;
 
     @Before
     public void before() throws InterruptedException {
+        final int testNum = TEST_NUM.incrementAndGet();
+
+        topicB = "topic-b-" + testNum;
+        inputTopic = "input-topic-" + testNum;
+        outputTopic = "output-topic-" + testNum;
+        applicationId = "kstream-repartition-stream-test-" + testNum;
+
         CLUSTER.createTopic(inputTopic, 4, 1);
         CLUSTER.createTopic(outputTopic, 1, 1);
 
@@ -115,12 +122,10 @@ public class KStreamRepartitionIntegrationTest {
                              .forEach(KafkaStreams::close);
 
         IntegrationTestUtils.purgeLocalStreamsState(streamsConfiguration);
-        TEST_NUM.incrementAndGet();
     }
 
     @Test
     public void shouldThrowAnExceptionWhenNumberOfPartitionsOfRepartitionOperationsDoNotMatchWhenJoining() throws InterruptedException {
-        final String topicB = "topic-b-" + TEST_NUM.get();
         final String topicBRepartitionedName = "topic-b-scale-up";
         final String inputTopicRepartitionedName = "input-topic-scale-up";
         final int topicBNumberOfPartitions = 2;
@@ -165,7 +170,6 @@ public class KStreamRepartitionIntegrationTest {
 
     @Test
     public void shouldThrowAnExceptionWhenNumberOfPartitionsOfRepartitionOperationDoNotMatchSourceTopicWhenJoining() throws InterruptedException {
-        final String topicB = "topic-b-" + TEST_NUM.get();
         final int topicBNumberOfPartitions = 6;
         final String inputTopicRepartitionName = "join-repartition-test";
         final AtomicReference<Throwable> expectedThrowable = new AtomicReference<>();
@@ -201,9 +205,8 @@ public class KStreamRepartitionIntegrationTest {
     }
 
     @Test
-    public void shouldDeductNumberOfPartitionsFromRepartitionOperation() throws InterruptedException, ExecutionException {
+    public void shouldDeductNumberOfPartitionsFromRepartitionOperation() throws Exception {
         final String topicBMapperName = "topic-b-mapper";
-        final String topicB = "topic-b-" + TEST_NUM.get();
         final int topicBNumberOfPartitions = 6;
         final String inputTopicRepartitionName = "join-repartition-test";
         final int inputTopicRepartitionedNumOfPartitions = 3;
@@ -253,8 +256,7 @@ public class KStreamRepartitionIntegrationTest {
     }
 
     @Test
-    public void shouldDoProperJoiningWhenNumberOfPartitionsAreValidWhenUsingRepartitionOperation() throws ExecutionException, InterruptedException {
-        final String topicB = "topic-b-" + TEST_NUM.get();
+    public void shouldDoProperJoiningWhenNumberOfPartitionsAreValidWhenUsingRepartitionOperation() throws Exception {
         final String topicBRepartitionedName = "topic-b-scale-up";
         final String inputTopicRepartitionedName = "input-topic-scale-up";
 
@@ -302,59 +304,7 @@ public class KStreamRepartitionIntegrationTest {
     }
 
     @Test
-    public void shouldDoJoiningWhenNumberOfPartitionsOfRepartitionOperationMatchesNumberOfPartitionsOfSourceTopic() throws ExecutionException, InterruptedException {
-        final String topicBMapperName = "topic-b-mapper";
-        final String topicB = "topic-b-" + TEST_NUM.get();
-        final int topicBNumberOfPartitions = 6;
-        final String inputTopicRepartitionName = "join-repartition-test";
-
-        final long timestamp = System.currentTimeMillis();
-
-        CLUSTER.createTopic(topicB, topicBNumberOfPartitions, 1);
-
-        final List<KeyValue<Integer, String>> expectedRecords = Arrays.asList(
-            new KeyValue<>(1, "A"),
-            new KeyValue<>(2, "B")
-        );
-
-        sendEvents(inputTopic, timestamp, expectedRecords);
-        sendEvents(topicB, timestamp, expectedRecords);
-
-        final StreamsBuilder builder = new StreamsBuilder();
-
-        final Repartitioned<Integer, String> inputTopicRepartitioned = Repartitioned
-            .<Integer, String>as(inputTopicRepartitionName)
-            .withNumberOfPartitions(6);
-
-        final KStream<Integer, String> topicBStream = builder
-            .stream(topicB, Consumed.with(Serdes.Integer(), Serdes.String()))
-            .map(KeyValue::new, Named.as(topicBMapperName));
-
-        builder.stream(inputTopic, Consumed.with(Serdes.Integer(), Serdes.String()))
-               .repartition(inputTopicRepartitioned)
-               .join(topicBStream, (value1, value2) -> value2, JoinWindows.of(Duration.ofSeconds(10)))
-               .to(outputTopic);
-
-        startStreams(builder);
-
-        final String repartitionTopicName = toRepartitionTopicName(inputTopicRepartitionName);
-        final String mapperRepartitionTopicName = toRepartitionTopicName(topicBMapperName);
-
-        final int mapperNumOfPartitions = getNumberOfPartitionsForTopic(mapperRepartitionTopicName);
-        final int repartitionTopicNumOfPartitions = getNumberOfPartitionsForTopic(repartitionTopicName);
-
-        validateReceivedMessages(
-            new IntegerDeserializer(),
-            new StringDeserializer(),
-            expectedRecords
-        );
-
-        assertEquals(topicBNumberOfPartitions, mapperNumOfPartitions);
-        assertEquals(topicBNumberOfPartitions, repartitionTopicNumOfPartitions);
-    }
-
-    @Test
-    public void shouldUseStreamPartitionerForRepartitionOperation() throws ExecutionException, InterruptedException {
+    public void shouldUseStreamPartitionerForRepartitionOperation() throws Exception {
         final int partition = 1;
         final String repartitionName = "partitioner-test";
         final long timestamp = System.currentTimeMillis();
@@ -395,7 +345,7 @@ public class KStreamRepartitionIntegrationTest {
     }
 
     @Test
-    public void shouldPerformSelectKeyWithRepartitionOperation() throws ExecutionException, InterruptedException {
+    public void shouldPerformSelectKeyWithRepartitionOperation() throws Exception {
         final long timestamp = System.currentTimeMillis();
 
         sendEvents(
@@ -430,7 +380,7 @@ public class KStreamRepartitionIntegrationTest {
     }
 
     @Test
-    public void shouldCreateRepartitionTopicIfKeyChangingOperationWasNotPerformed() throws ExecutionException, InterruptedException {
+    public void shouldCreateRepartitionTopicIfKeyChangingOperationWasNotPerformed() throws Exception {
         final String repartitionName = "dummy";
         final long timestamp = System.currentTimeMillis();
 
@@ -466,7 +416,7 @@ public class KStreamRepartitionIntegrationTest {
     }
 
     @Test
-    public void shouldPerformKeySelectOperationWhenRepartitionOperationIsUsedWithKeySelector() throws ExecutionException, InterruptedException {
+    public void shouldPerformKeySelectOperationWhenRepartitionOperationIsUsedWithKeySelector() throws Exception {
         final String repartitionedName = "new-key";
         final long timestamp = System.currentTimeMillis();
 
@@ -511,7 +461,7 @@ public class KStreamRepartitionIntegrationTest {
     }
 
     @Test
-    public void shouldCreateRepartitionTopicWithSpecifiedNumberOfPartitions() throws ExecutionException, InterruptedException {
+    public void shouldCreateRepartitionTopicWithSpecifiedNumberOfPartitions() throws Exception {
         final String repartitionName = "new-partitions";
         final long timestamp = System.currentTimeMillis();
 
@@ -550,7 +500,7 @@ public class KStreamRepartitionIntegrationTest {
     }
 
     @Test
-    public void shouldInheritRepartitionTopicPartitionNumberFromUpstreamTopicWhenNumberOfPartitionsIsNotSpecified() throws InterruptedException, ExecutionException {
+    public void shouldInheritRepartitionTopicPartitionNumberFromUpstreamTopicWhenNumberOfPartitionsIsNotSpecified() throws Exception {
         final String repartitionName = "new-topic";
         final long timestamp = System.currentTimeMillis();
 
@@ -589,7 +539,7 @@ public class KStreamRepartitionIntegrationTest {
     }
 
     @Test
-    public void shouldCreateOnlyOneRepartitionTopicWhenRepartitionIsFollowedByGroupByKey() throws ExecutionException, InterruptedException {
+    public void shouldCreateOnlyOneRepartitionTopicWhenRepartitionIsFollowedByGroupByKey() throws Exception {
         final String repartitionName = "new-partitions";
         final long timestamp = System.currentTimeMillis();
 
@@ -634,7 +584,7 @@ public class KStreamRepartitionIntegrationTest {
     }
 
     @Test
-    public void shouldGenerateRepartitionTopicWhenNameIsNotSpecified() throws ExecutionException, InterruptedException {
+    public void shouldGenerateRepartitionTopicWhenNameIsNotSpecified() throws Exception {
         final long timestamp = System.currentTimeMillis();
 
         sendEvents(
@@ -669,7 +619,7 @@ public class KStreamRepartitionIntegrationTest {
     }
 
     @Test
-    public void shouldGoThroughRebalancingCorrectly() throws ExecutionException, InterruptedException {
+    public void shouldGoThroughRebalancingCorrectly() throws Exception {
         final String repartitionName = "rebalancing-test";
         final long timestamp = System.currentTimeMillis();
 
@@ -733,7 +683,7 @@ public class KStreamRepartitionIntegrationTest {
         assertEquals(2, getNumberOfPartitionsForTopic(repartitionTopicName));
     }
 
-    private int getNumberOfPartitionsForTopic(final String topic) throws ExecutionException, InterruptedException {
+    private int getNumberOfPartitionsForTopic(final String topic) throws Exception {
         try (final AdminClient adminClient = createAdminClient()) {
             final TopicDescription topicDescription = adminClient.describeTopics(Collections.singleton(topic))
                                                                  .values()
@@ -744,7 +694,7 @@ public class KStreamRepartitionIntegrationTest {
         }
     }
 
-    private boolean topicExists(final String topic) throws InterruptedException, ExecutionException {
+    private boolean topicExists(final String topic) throws Exception {
         try (final AdminClient adminClient = createAdminClient()) {
             final Set<String> topics = adminClient.listTopics()
                                                   .names()
@@ -778,13 +728,13 @@ public class KStreamRepartitionIntegrationTest {
     }
 
     private void sendEvents(final long timestamp,
-                            final List<KeyValue<Integer, String>> events) throws ExecutionException, InterruptedException {
+                            final List<KeyValue<Integer, String>> events) throws Exception {
         sendEvents(inputTopic, timestamp, events);
     }
 
     private void sendEvents(final String topic,
                             final long timestamp,
-                            final List<KeyValue<Integer, String>> events) throws ExecutionException, InterruptedException {
+                            final List<KeyValue<Integer, String>> events) throws Exception {
         IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(
             topic,
             events,

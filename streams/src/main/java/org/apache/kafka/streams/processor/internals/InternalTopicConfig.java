@@ -41,11 +41,9 @@ public abstract class InternalTopicConfig {
     }
 
     InternalTopicConfig(final String name, final Map<String, String> topicConfigs) {
-        Objects.requireNonNull(name, "name can't be null");
+        this.name = Objects.requireNonNull(name, "name can't be null");
         Topic.validate(name);
-
-        this.name = name;
-        this.topicConfigs = topicConfigs;
+        this.topicConfigs = Objects.requireNonNull(topicConfigs, "topicConfigs can't be null");
         this.enforceNumberOfPartitions = false;
     }
 
@@ -53,7 +51,7 @@ public abstract class InternalTopicConfig {
                         final Map<String, String> topicConfigs,
                         final int numberOfPartitions,
                         final boolean enforceNumberOfPartitions) {
-        this.name =  Objects.requireNonNull(name, "name can't be null");
+        this.name = Objects.requireNonNull(name, "name can't be null");
         Topic.validate(name);
         validateNumberOfPartitions(numberOfPartitions);
         this.topicConfigs = Objects.requireNonNull(topicConfigs, "topicConfigs can't be null");
