@@ -199,6 +199,10 @@ public interface FieldType {
             return true;
         }
 
+        public boolean canBeNullable() {
+            return true;
+        }
+
         @Override
         public String toString() {
             return type;

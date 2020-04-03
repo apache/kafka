@@ -281,10 +281,53 @@ public class SimpleExampleMessageTest {
                 message.taggedLong()));
     }
 
+    @Test
+    public void testMyStruct() {
+        // Verify that we can set and retrieve a nullable struct object.
+        SimpleExampleMessageData.MyStruct myStruct =
+            new SimpleExampleMessageData.MyStruct().setStructId(10).setArrayInStruct(
+                Collections.singletonList(new SimpleExampleMessageData.StructArray().setArrayFieldId(20))
+            );
+        testRoundTrip(new SimpleExampleMessageData().setMyStruct(myStruct),
+            message -> assertEquals(myStruct, message.myStruct()), (short) 2);
+    }
+
+    @Test(expected = UnsupportedVersionException.class)
+    public void testMyStructUnsupportedVersion() {
+        SimpleExampleMessageData.MyStruct myStruct =
+                new SimpleExampleMessageData.MyStruct().setStructId(10);
+        // Check serialization throws exception for unsupported version
+        testRoundTrip(new SimpleExampleMessageData().setMyStruct(myStruct),
+            __ -> { }, (short) 1);
+    }
+
+    @Test
+    public void testMyNullableStruct() {
+        // Verify that we can set and retrieve a nullable struct object.
+        SimpleExampleMessageData.MyNullableStruct myNullableStruct =
+                new SimpleExampleMessageData.MyNullableStruct().setStructId(10);
+        testRoundTrip(new SimpleExampleMessageData().setMyNullableStruct(myNullableStruct),
+            message -> assertEquals(myNullableStruct, message.myNullableStruct()), (short) 2);
+    }
+
+    @Test(expected = UnsupportedVersionException.class)
+    public void testMyNullableStructUnsupportedVersion() {
+        SimpleExampleMessageData.MyNullableStruct myNullableStruct =
+                new SimpleExampleMessageData.MyNullableStruct().setStructId(10);
+        // Check serialization throws exception for unsupported version
+        testRoundTrip(new SimpleExampleMessageData().setMyNullableStruct(myNullableStruct),
+            message -> assertEquals(myNullableStruct, message.myNullableStruct()), (short) 1);
+    }
+
     private void testRoundTrip(SimpleExampleMessageData message,
                                Consumer<SimpleExampleMessageData> validator) {
+        testRoundTrip(message, validator, (short) 1);
+    }
+
+    private void testRoundTrip(SimpleExampleMessageData message,
+                               Consumer<SimpleExampleMessageData> validator,
+                               short version) {
         validator.accept(message);
-        short version = 1;
         ObjectSerializationCache cache = new ObjectSerializationCache();
         int size = message.size(cache, version);
         ByteBuffer buf = ByteBuffer.allocate(size);
