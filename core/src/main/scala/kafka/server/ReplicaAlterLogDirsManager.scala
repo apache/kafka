@@ -18,6 +18,7 @@
 package kafka.server
 
 import kafka.cluster.BrokerEndPoint
+import org.apache.kafka.common.TopicPartition
 
 class ReplicaAlterLogDirsManager(brokerConfig: KafkaConfig,
                                  replicaManager: ReplicaManager,
@@ -32,6 +33,12 @@ class ReplicaAlterLogDirsManager(brokerConfig: KafkaConfig,
     val threadName = s"ReplicaAlterLogDirsThread-$fetcherId"
     new ReplicaAlterLogDirsThread(threadName, sourceBroker, brokerConfig, failedPartitions, replicaManager,
       quotaManager, brokerTopicStats)
+  }
+
+  override protected def addPartitionsToFetcherThread(fetcherThread: ReplicaAlterLogDirsThread,
+                                                      initialOffsetAndEpochs: collection.Map[TopicPartition, OffsetAndEpoch]): Unit = {
+    val addedPartitions = fetcherThread.addPartitions(initialOffsetAndEpochs)
+    info(s"Added log dir fetcher for partitions ${initialOffsetAndEpochs.filterKeys(addedPartitions)}")
   }
 
   def shutdown(): Unit = {

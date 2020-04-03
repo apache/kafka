@@ -136,7 +136,9 @@ class ReplicaAlterLogDirsThread(name: String,
     try {
       // It is possible that the log dir fetcher completed just before this call, so we
       // filter only the partitions which still have a future log dir.
-      val filteredFetchStates = initialFetchStates.filterKeys(replicaMgr.futureLogExists)
+      val filteredFetchStates = initialFetchStates.filter { case (tp, _) =>
+        replicaMgr.futureLogExists(tp)
+      }
       super.addPartitions(filteredFetchStates)
       filteredFetchStates.keySet
     } finally {
