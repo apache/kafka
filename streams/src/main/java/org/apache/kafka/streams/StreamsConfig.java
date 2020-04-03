@@ -1271,6 +1271,9 @@ public class StreamsConfig extends AbstractConfig {
         // add client id with stream client id prefix
         props.put(CommonClientConfigs.CLIENT_ID_CONFIG, clientId);
 
+        // Reduce the transaction timeout for quicker pending offset expiration on broker side.
+        props.put(ProducerConfig.TRANSACTION_TIMEOUT_CONFIG, 10000);
+
         return props;
     }
 
