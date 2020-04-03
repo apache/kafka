@@ -43,6 +43,7 @@ class AbstractFetcherManagerTest {
 
     EasyMock.expect(fetcher.start())
     EasyMock.expect(fetcher.addPartitions(Map(tp -> OffsetAndEpoch(fetchOffset, leaderEpoch))))
+        .andReturn(Set(tp))
     EasyMock.expect(fetcher.fetchState(tp))
       .andReturn(Some(PartitionFetchState(fetchOffset, leaderEpoch, Truncating)))
     EasyMock.expect(fetcher.removePartitions(Set(tp)))

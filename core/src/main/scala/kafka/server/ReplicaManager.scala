@@ -452,6 +452,10 @@ class ReplicaManager(val config: KafkaConfig,
     nonOfflinePartition(topicPartition).flatMap(_.localReplica)
   }
 
+  def futureLogExists(topicPartition: TopicPartition): Boolean = {
+    getPartitionOrException(topicPartition, expectLeader = false).futureLocalReplica.isDefined
+  }
+
   def getLogDir(topicPartition: TopicPartition): Option[String] = {
     localReplica(topicPartition).flatMap(_.log).map(_.dir.getParent)
   }

@@ -18,6 +18,7 @@
 package kafka.server
 
 import kafka.cluster.BrokerEndPoint
+import org.apache.kafka.common.TopicPartition
 
 class ReplicaAlterLogDirsManager(brokerConfig: KafkaConfig,
                                  replicaManager: ReplicaManager,
@@ -34,7 +35,22 @@ class ReplicaAlterLogDirsManager(brokerConfig: KafkaConfig,
       quotaManager, brokerTopicStats)
   }
 
-  def shutdown() {
+  override protected def addPartitionsToFetcherThread(fetcherThread: ReplicaAlterLogDirsThread,
+                                                      initialOffsetAndEpochs: collection.Map[TopicPartition, OffsetAndEpoch]): Unit = {
+    val addedPartitions = fetcherThread.addPartitions(initialOffsetAndEpochs)
+    val (addedInitialOffsets, notAddedInitialOffsets) = initialOffsetAndEpochs.partition { case (tp, _) =>
+      addedPartitions.contains(tp)
+    }
+
+    if (addedInitialOffsets.nonEmpty)
+      info(s"Added log dir fetcher for partitions with initial offsets $addedInitialOffsets")
+
+    if (notAddedInitialOffsets.nonEmpty)
+      info(s"Failed to add log dir fetch for partitions ${notAddedInitialOffsets.keySet} " +
+        s"since the log dir reassignment has already completed")
+  }
+
+  def shutdown(): Unit = {
     info("shutting down")
     closeAllFetchers()
     info("shutdown completed")
