@@ -339,6 +339,8 @@ public class KafkaAdminClient extends AdminClient {
 
     private final long retryBackoffMs;
 
+    private final long retryBackoffMaxMs;
+
     /**
      * Get or create a list value from a map.
      *
@@ -541,6 +543,7 @@ public class KafkaAdminClient extends AdminClient {
             new TimeoutProcessorFactory() : timeoutProcessorFactory;
         this.maxRetries = config.getInt(AdminClientConfig.RETRIES_CONFIG);
         this.retryBackoffMs = config.getLong(AdminClientConfig.RETRY_BACKOFF_MS_CONFIG);
+        this.retryBackoffMaxMs = config.getLong(AdminClientConfig.RETRY_BACKOFF_MAX_MS_CONFIG);
         config.logUnused();
         AppInfoParser.registerAppInfo(JMX_PREFIX, clientId, metrics, time.milliseconds());
         log.debug("Kafka admin client initialized");
@@ -683,21 +686,58 @@ public class KafkaAdminClient extends AdminClient {
         }
     }
 
+    class RetryContext {
+
+        private int tries = 0;
+        private long nextAllowedTryMs = 0;
+
+        public int getTries() {
+            return tries;
+        }
+
+        public long getNextAllowedTryMs() {
+            return nextAllowedTryMs;
+        }
+
+        private void updateTries(int currentTries) {
+            this.tries = currentTries + 1;
+        }
+
+        private void updateNextAllowTryMs() {
+            // TODO: change the calculation to exponential backoff
+            this.nextAllowedTryMs = time.milliseconds() + retryBackoffMs;
+            /*
+            double jitter = Math.random() * 0.4 + 0.8;
+            int failures = tries - 1;
+            double exp = Math.pow(2, failures);
+            this.nextAllowedTryMs = time.milliseconds() +
+                    (long) Math.min(retryBackoffMaxMs, jitter * exp * retryBackoffMs);
+             */
+        }
+
+        public void update(RetryContext failedCallRetryContext) {
+            // updateTries should go before updateNextAllowTryMs as we calculate failures by tries - 1
+            updateTries(failedCallRetryContext.getTries());
+            updateNextAllowTryMs();
+        }
+    }
+
     abstract class Call {
         private final boolean internal;
         private final String callName;
         private final long deadlineMs;
         private final NodeProvider nodeProvider;
-        private int tries = 0;
         private boolean aborted = false;
         private Node curNode = null;
-        private long nextAllowedTryMs = 0;
+        private RetryContext retryContext;
 
         Call(boolean internal, String callName, long deadlineMs, NodeProvider nodeProvider) {
             this.internal = internal;
             this.callName = callName;
             this.deadlineMs = deadlineMs;
             this.nodeProvider = nodeProvider;
+            // TODO: change the hard-coded 10000 to retryBackoffMaxMs
+            this.retryContext = new RetryContext();
         }
 
         Call(String callName, long deadlineMs, NodeProvider nodeProvider) {
@@ -706,6 +746,28 @@ public class KafkaAdminClient extends AdminClient {
 
         protected Node curNode() {
             return curNode;
+        }
+
+        public RetryContext getRetryContext() {
+            return retryContext;
+        }
+
+        public void retry(Call failedCall, Throwable throwable) {
+            long now = time.milliseconds();
+            RetryContext failedCallRetryContext = failedCall.getRetryContext();
+            this.retryContext.update(failedCallRetryContext);
+
+            if (this.retryContext.getTries() > maxRetries) {
+                failWithTimeout(now, throwable);
+                return;
+            }
+
+            if (log.isDebugEnabled()) {
+                log.debug("{} failed: {}. Beginning retry #{}",
+                        this, prettyPrintException(throwable), retryContext.getTries());
+            }
+
+            runnable.call(this, now);
         }
 
         /**
@@ -723,7 +785,6 @@ public class KafkaAdminClient extends AdminClient {
                 // If the call was aborted while in flight due to a timeout, deliver a
                 // TimeoutException. In this case, we do not get any more retries - the call has
                 // failed. We increment tries anyway in order to display an accurate log message.
-                tries++;
                 failWithTimeout(now, throwable);
                 return;
             }
@@ -736,42 +797,27 @@ public class KafkaAdminClient extends AdminClient {
                 runnable.enqueue(this, now);
                 return;
             }
-            tries++;
-            nextAllowedTryMs = now + retryBackoffMs;
 
             // If the call has timed out, fail.
             if (calcTimeoutMsRemainingAsInt(now, deadlineMs) < 0) {
                 failWithTimeout(now, throwable);
                 return;
             }
-            // If the exception is not retriable, fail.
-            if (!(throwable instanceof RetriableException)) {
-                if (log.isDebugEnabled()) {
-                    log.debug("{} failed with non-retriable exception after {} attempt(s)", this, tries,
-                        new Exception(prettyPrintException(throwable)));
-                }
-                handleFailure(throwable);
-                return;
-            }
-            // If we are out of retries, fail.
-            if (tries > maxRetries) {
-                failWithTimeout(now, throwable);
-                return;
-            }
+
             if (log.isDebugEnabled()) {
-                log.debug("{} failed: {}. Beginning retry #{}",
-                    this, prettyPrintException(throwable), tries);
+                log.debug("{} failed with non-retriable exception after {} attempt(s)", this,
+                        getRetryContext().getTries(), new Exception(prettyPrintException(throwable)));
             }
-            runnable.enqueue(this, now);
+            handleFailure(throwable);
         }
 
         private void failWithTimeout(long now, Throwable cause) {
             if (log.isDebugEnabled()) {
-                log.debug("{} timed out at {} after {} attempt(s)", this, now, tries,
+                log.debug("{} timed out at {} after {} attempt(s)", this, now, retryContext.getTries() + 1,
                     new Exception(prettyPrintException(cause)));
             }
             handleFailure(new TimeoutException(this + " timed out at " + now
-                + " after " + tries + " attempt(s)", cause));
+                + " after " + getRetryContext().getTries() + " attempt(s)", cause));
         }
 
         /**
@@ -814,7 +860,8 @@ public class KafkaAdminClient extends AdminClient {
         @Override
         public String toString() {
             return "Call(callName=" + callName + ", deadlineMs=" + deadlineMs +
-                ", tries=" + tries + ", nextAllowedTryMs=" + nextAllowedTryMs + ")";
+                ", tries=" + getRetryContext().getTries() + ", nextAllowedTryMs=" +
+                getRetryContext().getNextAllowedTryMs() + ")";
         }
 
         public boolean isInternal() {
@@ -980,10 +1027,11 @@ public class KafkaAdminClient extends AdminClient {
             Iterator<Call> pendingIter = pendingCalls.iterator();
             while (pendingIter.hasNext()) {
                 Call call = pendingIter.next();
+                long nextAllowedTryMs = call.getRetryContext().getNextAllowedTryMs();
 
                 // If the call is being retried, await the proper backoff before finding the node
-                if (now < call.nextAllowedTryMs) {
-                    pollTimeout = Math.min(pollTimeout, call.nextAllowedTryMs - now);
+                if (now < nextAllowedTryMs) {
+                    pollTimeout = Math.min(pollTimeout, nextAllowedTryMs - now);
                 } else if (maybeDrainPendingCall(call, now)) {
                     pendingIter.remove();
                 }
@@ -1011,7 +1059,11 @@ public class KafkaAdminClient extends AdminClient {
             } catch (Throwable t) {
                 // Handle authentication errors while choosing nodes.
                 log.debug("Unable to choose node for {}", call, t);
-                call.fail(now, t);
+                if (t instanceof RetriableException) {
+                    call.retry(call, t);
+                } else {
+                    call.fail(now, t);
+                }
                 return true;
             }
         }
@@ -1135,7 +1187,7 @@ public class KafkaAdminClient extends AdminClient {
                     if (authException != null) {
                         call.fail(now, authException);
                     } else {
-                        call.fail(now, new DisconnectException(String.format(
+                        call.retry(call, new DisconnectException(String.format(
                             "Cancelled %s request with correlation id %s due to node %s being disconnected",
                             call.callName, correlationId, response.destination())));
                     }
@@ -1148,7 +1200,11 @@ public class KafkaAdminClient extends AdminClient {
                     } catch (Throwable t) {
                         if (log.isTraceEnabled())
                             log.trace("{} handleResponse failed with {}", call, prettyPrintException(t));
-                        call.fail(now, t);
+                        if (t instanceof RetriableException) {
+                            call.retry(call, t);
+                        } else {
+                            call.fail(now, t);
+                        }
                     }
                 }
             }
@@ -1309,7 +1365,8 @@ public class KafkaAdminClient extends AdminClient {
          * @param now       The current time in milliseconds.
          */
         void enqueue(Call call, long now) {
-            if (call.tries > maxRetries) {
+            // TODO: May refactor the redundant judgement
+            if (call.getRetryContext().getTries() > maxRetries) {
                 log.debug("Max retries {} for {} reached", maxRetries, call);
                 call.fail(time.milliseconds(), new TimeoutException());
                 return;
@@ -2734,11 +2791,8 @@ public class KafkaAdminClient extends AdminClient {
         // Requeue the task so that we can try with new coordinator
         context.setNode(null);
 
-        Call call = nextCall.get();
-        call.tries = failedCall.tries + 1;
-        call.nextAllowedTryMs = calculateNextAllowedRetryMs();
-
         Call findCoordinatorCall = getFindCoordinatorCall(context, nextCall);
+        nextCall.get().getRetryContext().update(failedCall.getRetryContext());
         runnable.call(findCoordinatorCall, time.milliseconds());
     }
 
